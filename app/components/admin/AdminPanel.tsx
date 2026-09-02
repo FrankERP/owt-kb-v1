@@ -672,10 +672,22 @@ export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole })
   const [photoTarget, setPhotoTarget]       = useState<string | null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
+  // Same contract as leaving one (see ImpersonationBanner): `update()` was
+  // awaited and never checked, so a refused impersonation still navigated to
+  // /me — showing the admin their OWN profile, indistinguishable from a
+  // successful switch until they wondered why the banner was missing.
   const handleImpersonate = async (memberId: string) => {
-    await update({ impersonating: memberId });
-    router.push("/me");
-    router.refresh();
+    try {
+      const next = await update({ impersonating: memberId });
+      if (!next?.user?.isImpersonating) {
+        showToast("No se pudo suplantar a este miembro.");
+        return;
+      }
+      router.push("/me");
+      router.refresh();
+    } catch {
+      showToast("No se pudo suplantar a este miembro.");
+    }
   };
 
   // Ministry scope first, so the type/role filter and the Fuse index below both

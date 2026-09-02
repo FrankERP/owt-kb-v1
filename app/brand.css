@@ -551,6 +551,16 @@
   isolation: isolate;
 }
 
+/*
+ * The impersonation banner is `sticky top-0` in the layout, OUTSIDE <main>,
+ * and the navbar is `sticky top-0` inside it — same 32px, and the banner's
+ * higher z-index won. `ImpersonationBanner` puts this class on <html> while a
+ * session is being impersonated so the navbar stacks under it instead.
+ */
+.impersonating .brand-navbar {
+  top: 2rem;
+}
+
 .brand-navbar::before {
   position: absolute;
   z-index: 0;
