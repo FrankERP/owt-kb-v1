@@ -28,7 +28,7 @@
 // it is rewritten.
 
 import { randomBytes } from "node:crypto";
-import { chmodSync, copyFileSync, existsSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, lstatSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -54,12 +54,34 @@ const emailArg = (() => {
 
 const die = (msg) => { console.error(`dev-verify-rotate: ${msg}`); process.exit(2); };
 
-// The symlink in a worktree must not be replaced by a regular file — resolve to
-// the primary checkout's real file and write THAT.
+// Secrets belong to the PRIMARY checkout, never to a worktree, and this resolves
+// there WITHOUT relying on the symlink being present. `--git-common-dir` is the
+// primary's `.git` from anywhere in the repo, worktrees included, so its parent
+// is the primary checkout. A worktree that was created without the symlink still
+// reads and writes the one real file, instead of quietly minting a second copy
+// that dies with `git worktree remove` — which is exactly how these credentials
+// were lost on 2026-09-01.
+const PRIMARY_ROOT = (() => {
+  const r = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd: REPO_ROOT, encoding: "utf8" });
+  if (r.status !== 0) die("not a git repository, so the primary checkout cannot be located.");
+  return path.dirname(r.stdout.trim());
+})();
+
 const envPath = (() => {
-  const p = path.join(REPO_ROOT, ".env.local");
-  if (!existsSync(p)) die(".env.local not found. It lives in the primary checkout; a worktree symlinks to it.");
-  return realpathSync(p);
+  const primary = path.join(PRIMARY_ROOT, ".env.local");
+  const local = path.join(REPO_ROOT, ".env.local");
+
+  // A REAL file in a worktree is the trap this script exists to close. Refuse
+  // rather than pick one: writing the primary would leave a stale password
+  // shadowing it here, and writing this one re-arms the loss.
+  if (PRIMARY_ROOT !== REPO_ROOT && existsSync(local) && !lstatSync(local).isSymbolicLink()) {
+    die(`${local}\n  is a REAL file inside a worktree, not a symlink to the primary checkout.\n` +
+        `  A worktree copy is destroyed by \`git worktree remove\`, with no warning and no Papelera.\n` +
+        `  Fix:  rm ${local} && ln -s ${path.relative(REPO_ROOT, primary)} ${local}\n` +
+        `  Copy anything only that file has into ${primary} FIRST.`);
+  }
+  if (!existsSync(primary)) die(`${primary} not found — the primary checkout holds the secrets.`);
+  return realpathSync(primary);
 })();
 
 const raw = readFileSync(envPath, "utf8");
