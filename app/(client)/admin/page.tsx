@@ -20,7 +20,11 @@ export default async function AdminPage({
   // client render agree, and so the role filter runs where the role is known
   // for certain. `resolveAdminTab` lives in a neutral module for the same
   // reason `paintsDayCard` does (ADR-0028).
-  const initialTab = resolveAdminTab((await searchParams).tab, role);
+  const tabParam = (await searchParams).tab;
+  const initialTab = resolveAdminTab(tabParam, role);
+  // Whether the URL NAMED this tab or merely fell back to it. The panel follows
+  // the URL only in the first case; see the re-sync in AdminPanel.
+  const tabNamedInUrl = typeof tabParam === "string" && tabParam === initialTab;
 
   return (
     <>
@@ -49,7 +53,7 @@ export default async function AdminPage({
           </div>
         </header>
         <div className="brand-admin-shell">
-          <AdminPanel role={role} initialTab={initialTab} />
+          <AdminPanel role={role} initialTab={initialTab} tabNamedInUrl={tabNamedInUrl} />
         </div>
       </div>
     </>

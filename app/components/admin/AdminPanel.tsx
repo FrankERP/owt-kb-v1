@@ -616,10 +616,13 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
 export default function AdminPanel({
   role = "super-admin",
   initialTab,
+  tabNamedInUrl = false,
 }: {
   role?: OWTRole;
   /** Resolved from `?tab=` on the server; see `adminTabs.resolveAdminTab`. */
   initialTab?: Tab;
+  /** True only when the URL actually named that tab, rather than falling back. */
+  tabNamedInUrl?: boolean;
 }) {
   const { data: session, update } = useSession();
   const viewerId = session?.user?.sanityId ?? null;
@@ -638,15 +641,24 @@ export default function AdminPanel({
     [],
   );
 
-  // A soft navigation to /admin re-renders this panel in place with a new
-  // `initialTab` rather than remounting it, and `useReducer`'s initial value is
-  // read once. Without this, tapping "Admin" in the nav while already on
-  // `/admin?tab=activity` left the URL saying /admin and the panel still
-  // showing Actividad — and the next reload then landed on Miembros, which is
-  // the bug this feature exists to fix. Adjusted during render, the documented
-  // React pattern for reacting to a changed prop, so no extra commit.
+  // A soft navigation re-renders this panel in place with a new `initialTab`
+  // rather than remounting it, and `useReducer`'s initial value is read once.
+  //
+  // Gated on `tabNamedInUrl`, which is the difference between "the URL asked
+  // for a tab" and "the server fell back to one". Without that gate the same
+  // gesture had two outcomes: tapping "Admin" in the nav sent the admin back to
+  // Miembros or left them where they were, depending only on how they had
+  // arrived at /admin minutes earlier — invisible to them, and it also cleared
+  // any pending handoff target. Now a link that NAMES a tab moves the panel,
+  // and a link to plain /admin is the no-op it looks like; the effect below
+  // keeps the address bar honest either way.
+  //
+  // Adjusted during render, the documented React pattern for a changed prop, so
+  // it costs no extra commit. Known and accepted edge: re-navigating to the
+  // exact URL you are already on cannot be told apart by value, so it does not
+  // move the panel.
   const [lastResolvedTab, setLastResolvedTab] = useState(initialTab);
-  if (initialTab !== undefined && initialTab !== lastResolvedTab) {
+  if (tabNamedInUrl && initialTab !== undefined && initialTab !== lastResolvedTab) {
     setLastResolvedTab(initialTab);
     dispatchReview({ type: "select_tab", tab: initialTab });
   }
@@ -664,9 +676,9 @@ export default function AdminPanel({
    *     member list and holds filters, and re-running that on every tab press
    *     is a real cost for a purely local change.
    * Rewriting the current entry keeps the URL honest for reload and Back
-   * without any navigation at all. It also means the tab cannot be driven by
-   * the browser's Back button WITHIN /admin — there are no such entries to go
-   * back to, which is consistent rather than broken.
+   * without any navigation at all. The panel itself creates no history entries;
+   * the router still creates one per nav-menu tap, all carrying this same URL,
+   * so a Back press out of /admin may need repeating after several taps.
    *
    * PASSING THE EXISTING `history.state` IS DELIBERATE, and it has a cost worth
    * knowing before anyone "fixes" it. Next patches `replaceState` and returns

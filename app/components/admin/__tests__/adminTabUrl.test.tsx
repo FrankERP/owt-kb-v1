@@ -108,17 +108,34 @@ describe("AdminPanel — the tab in the URL", () => {
     expect(window.history.length).toBe(before);
   });
 
-  it("follows a soft navigation back to bare /admin instead of desyncing", async () => {
-    // Tapping "Admin" in the nav while already on /admin?tab=activity
-    // re-renders this panel in place with a new initialTab; useReducer's
-    // initial value is read once, so without a render-time adjustment the URL
-    // said /admin while the panel still showed Actividad.
-    const { rerender } = render(<AdminPanel role="super-admin" initialTab="activity" />);
+  it("follows a link that NAMES a different tab", async () => {
+    // A soft navigation re-renders this panel in place with a new initialTab;
+    // useReducer's initial value is read once, so without a render-time
+    // adjustment the panel would ignore where the URL just sent it.
+    const { rerender } = render(
+      <AdminPanel role="super-admin" initialTab="activity" tabNamedInUrl />,
+    );
     expect(currentTab()).toBe("Actividad");
 
-    rerender(<AdminPanel role="super-admin" initialTab="members" />);
-    expect(currentTab()).toBe("Miembros");
-    await waitFor(() => expect(tabParam()).toBe("members"));
+    rerender(<AdminPanel role="super-admin" initialTab="content" tabNamedInUrl />);
+    expect(currentTab()).toBe("Contenido");
+    await waitFor(() => expect(tabParam()).toBe("content"));
+  });
+
+  it("treats a link to plain /admin as the no-op it looks like", async () => {
+    // The server falls back to Miembros for bare /admin, so before the
+    // `tabNamedInUrl` gate this yanked the admin out of the tab they were
+    // working in — but only if they had arrived via a ?tab= URL, which they
+    // could not see. Same gesture, two outcomes.
+    const { rerender } = render(
+      <AdminPanel role="super-admin" initialTab="activity" tabNamedInUrl />,
+    );
+    expect(currentTab()).toBe("Actividad");
+
+    // What tapping "Admin" delivers: the fallback tab, not named in the URL.
+    rerender(<AdminPanel role="super-admin" initialTab="members" tabNamedInUrl={false} />);
+    expect(currentTab()).toBe("Actividad");
+    await waitFor(() => expect(tabParam()).toBe("activity"));
   });
 
   it("re-asserts the param when something else wipes it from the URL", async () => {
@@ -141,12 +158,14 @@ describe("AdminPanel — the tab in the URL", () => {
   });
 
   it("leaves a manually chosen tab alone while the resolved one is unchanged", async () => {
-    const { rerender } = render(<AdminPanel role="super-admin" initialTab="members" />);
+    const { rerender } = render(
+      <AdminPanel role="super-admin" initialTab="members" tabNamedInUrl />,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Actividad" }));
     expect(currentTab()).toBe("Actividad");
 
     // An unrelated re-render must not yank the admin back to the server's tab.
-    rerender(<AdminPanel role="super-admin" initialTab="members" />);
+    rerender(<AdminPanel role="super-admin" initialTab="members" tabNamedInUrl />);
     expect(currentTab()).toBe("Actividad");
   });
 
