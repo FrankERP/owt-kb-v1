@@ -12,7 +12,9 @@
 // time — so a role document can legitimately exist with nothing in it.
 
 import { describe, it, expect } from "vitest";
-import { paintsDayCard } from "../DayCard";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { paintsDayCard } from "../../utils/paintsDayCard";
 
 // Every key is REQUIRED on the predicate, so a call site that forgets one is a
 // compile error rather than a silently-false answer. That is the whole point of
@@ -52,5 +54,27 @@ describe("paintsDayCard", () => {
     expect(
       paintsDayCard({ setlist: { songs: [] }, leads: [], instruments: [], fohTeam: [], bgvs: [], chorus: [] }),
     ).toBe(false);
+  });
+});
+
+/**
+ * Regression guard for the 2026-09-02 production outage: `paintsDayCard` lived
+ * in `DayCard.tsx`, which is `"use client"`. The home page is a Server
+ * Component and calls it directly — in production that threw "Attempted to call
+ * paintsDayCard() from the server" on every render of `/`, so the whole page
+ * fell to the error boundary. The unit tests above stayed green throughout,
+ * because they import the function, not the boundary.
+ */
+describe("paintsDayCard module boundary", () => {
+  const read = (p: string) => readFileSync(join(__dirname, "..", "..", "..", p), "utf8");
+
+  it("lives in a module with no 'use client' directive", () => {
+    expect(read("app/utils/paintsDayCard.ts")).not.toMatch(/^\s*["']use client["']/m);
+  });
+
+  it("is imported by the home page from that module, not from DayCard", () => {
+    const page = read("app/(client)/page.tsx");
+    expect(page).toMatch(/import \{ paintsDayCard \} from "\.\.\/utils\/paintsDayCard"/);
+    expect(page).not.toMatch(/paintsDayCard[^\n]*from "\.\.\/components\/DayCard"/);
   });
 });
