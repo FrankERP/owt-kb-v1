@@ -63,6 +63,32 @@ function snapshot(dates: Set<string>, notes: Map<string, string>): string {
 
 interface Popover { iso: string; x: number; y: number; above: boolean }
 
+/** Height the popover is laid out against; it has no measured height until it exists. */
+const POPOVER_H = 160;
+const POPOVER_W = 272;
+
+/**
+ * Where the note popover sits for a day cell, in viewport coordinates.
+ *
+ * Pure and exported so the placement can be tested without a layout engine —
+ * jsdom reports every rect as zero, so the only way to prove the flip and the
+ * clamps is to feed them rects directly.
+ */
+export function popoverPosition(
+  rect: { top: number; bottom: number; left: number },
+  viewportW: number,
+  viewportH: number,
+): { x: number; y: number; above: boolean } {
+  const above = rect.bottom + POPOVER_H > viewportH - 16;
+  return {
+    // Clamped at both ends: the right clamp alone goes negative on a viewport
+    // narrower than the popover.
+    x: Math.max(8, Math.min(rect.left, viewportW - POPOVER_W)),
+    y: above ? rect.top - POPOVER_H - 6 : rect.bottom + 6,
+    above,
+  };
+}
+
 export default function AvailabilityCalendar({ initialRev, initialDates, serviceDates = [], initialNotes = [] }: Props) {
   const [dates, setDates]   = useState<Set<string>>(new Set(initialDates));
   const serviceSet = new Set(serviceDates);
@@ -81,6 +107,9 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
   );
   const [popover, setPopover] = useState<Popover | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The day button the open popover belongs to, so its position can be
+  // recomputed rather than frozen at click time.
+  const anchorRef = useRef<HTMLButtonElement | null>(null);
 
   const [recurOpen, setRecurOpen]         = useState(false);
   const [recurDow, setRecurDow]           = useState(0); // 0 = Domingo
@@ -112,6 +141,41 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
     }
   }, [popover?.iso]);
 
+  /**
+   * Keep the popover attached to its day.
+   *
+   * It is `position: fixed` at coordinates captured on click, so anything that
+   * scrolls leaves it floating over an unrelated part of the page while still
+   * bound to the original date — the member then types a reason for the wrong
+   * day, or gives up on one they meant to explain. On a phone this is the
+   * common path, not the edge: the on-screen keyboard scrolls the page as they
+   * reach for the note field.
+   *
+   * Closing on scroll is the tempting one-liner and it is WORSE — that same
+   * keyboard fires scroll and resize, so the popover would vanish at the moment
+   * it opened. Recompute from the anchor instead. Capture phase, because the
+   * scroll may happen in an ancestor rather than the window.
+   */
+  const popoverOpen = !!popover;
+  useEffect(() => {
+    if (!popoverOpen) return;
+    const reposition = () => {
+      const el = anchorRef.current;
+      if (!el) return;
+      const p = popoverPosition(el.getBoundingClientRect(), window.innerWidth, window.innerHeight);
+      // Only write on a real move, or the state update re-arms this effect forever.
+      setPopover(prev =>
+        prev && (prev.x !== p.x || prev.y !== p.y || prev.above !== p.above) ? { ...prev, ...p } : prev,
+      );
+    };
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    return () => {
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+    };
+  }, [popoverOpen]);
+
   // Close popover on Escape
   useEffect(() => {
     if (!popover) return;
@@ -137,12 +201,9 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
       clearSaved();
     }
     // Open popover (whether newly selected or re-clicking to edit note)
-    const rect = e.currentTarget.getBoundingClientRect();
-    const POPOVER_H = 160;
-    const above = rect.bottom + POPOVER_H > window.innerHeight - 16;
-    const x = Math.min(rect.left, window.innerWidth - 272);
-    const y = above ? rect.top - POPOVER_H - 6 : rect.bottom + 6;
-    setPopover({ iso, x, y, above });
+    anchorRef.current = e.currentTarget;
+    const pos = popoverPosition(e.currentTarget.getBoundingClientRect(), window.innerWidth, window.innerHeight);
+    setPopover({ iso, ...pos });
   }
 
   function removeDate(iso: string) {
