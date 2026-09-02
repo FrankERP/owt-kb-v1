@@ -18,6 +18,7 @@ import {
   type IntegrityIssueTarget,
   type ProposalReviewTarget,
 } from "./proposalHandoff";
+import { visibleAdminTabs } from "./adminTabs";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
@@ -582,17 +583,8 @@ function PasswordForm({
 // one reducer owns both and a manual tab change cannot leave a stale target.
 type Tab = AdminTabId;
 
-const ALL_TABS: { id: Tab; label: string; roles: OWTRole[] }[] = [
-  { id: "members",      label: "Miembros",       roles: ["super-admin"] },
-  { id: "services",     label: "Servicios",      roles: ["super-admin", "admin"] },
-  { id: "proposals",    label: "Propuestas",     roles: ["super-admin", "admin"] },
-  { id: "availability", label: "Disponibilidad", roles: ["super-admin", "admin"] },
-  { id: "activity",     label: "Actividad",      roles: ["super-admin", "admin"] },
-  { id: "content",      label: "Contenido",      roles: ["super-admin", "admin", "content-editor"] },
-];
-
 function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) => void; role: OWTRole }) {
-  const visible = ALL_TABS.filter((t) => t.roles.includes(role));
+  const visible = visibleAdminTabs(role);
   return (
     <div className="relative">
       <div className="overflow-x-auto -mx-2 px-2 pb-1">
@@ -621,20 +613,54 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
 }
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
-export default function AdminPanel({ role = "super-admin" }: { role?: OWTRole }) {
+export default function AdminPanel({
+  role = "super-admin",
+  initialTab,
+}: {
+  role?: OWTRole;
+  /** Resolved from `?tab=` on the server; see `adminTabs.resolveAdminTab`. */
+  initialTab?: Tab;
+}) {
   const { data: session, update } = useSession();
   const viewerId = session?.user?.sanityId ?? null;
   const router = useRouter();
-  const firstTab = ALL_TABS.filter((t) => t.roles.includes(role))[0]?.id ?? "content";
+  const firstTab = visibleAdminTabs(role)[0]?.id ?? "content";
   // `{ tab, target }` in ONE reducer: a manual tab change always clears the
   // transient handoff target, and a successful focus consumes it, so a remount
   // can never resurrect an obsolete filter/highlight.
-  const [review, dispatchReview] = useReducer(reduceReviewTarget, { tab: firstTab, target: null });
+  const [review, dispatchReview] = useReducer(reduceReviewTarget, {
+    tab: initialTab ?? firstTab,
+    target: null,
+  });
   const tab = review.tab;
   const setTab = useCallback(
     (next: Tab) => dispatchReview({ type: "select_tab", tab: next }),
     [],
   );
+
+  /**
+   * Keep `?tab=` in step with the visible tab, so a reload or a Back into
+   * /admin lands where the admin was instead of on the first tab. Before this
+   * the tab lived only in the reducer, and an admin deep in Servicios who
+   * refreshed was dropped to Miembros mid-task.
+   *
+   * `history.replaceState`, deliberately, not the router:
+   *   - `router.push` would make Back walk the tabs one by one, so leaving
+   *     /admin would take as many presses as tabs visited.
+   *   - `router.replace` re-renders the route segment; this panel fetches the
+   *     member list and holds filters, and re-running that on every tab press
+   *     is a real cost for a purely local change.
+   * Rewriting the current entry keeps the URL honest for reload and Back
+   * without any navigation at all. It also means the tab cannot be driven by
+   * the browser's Back button WITHIN /admin — there are no such entries to go
+   * back to, which is consistent rather than broken.
+   */
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("tab") === tab) return;
+    url.searchParams.set("tab", tab);
+    window.history.replaceState(window.history.state, "", url);
+  }, [tab]);
   const onReviewResolved = useCallback(
     (outcome: string) => dispatchReview({ type: "resolved", outcome }),
     [],
