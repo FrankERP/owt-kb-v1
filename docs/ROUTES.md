@@ -70,7 +70,7 @@ anonymous internet, deliberately, because it is prerendered and reads nothing.
 | Route | Guard |
 |-------|-------|
 | `/me` | `requireActiveSession()` → redirect `/auth/signin?callbackUrl=/me` |
-| `/me/propose/[roleId]` | `requireActiveSession()` + GROQ requires user in `Lead[]`, else `notFound()` |
+| `/me/propose/[roleId]` | `requireWorshipPage()` + GROQ requires user in `Lead[]`, else `notFound()` |
 | `/admin` | `requireActiveManager()` → `redirect("/")` |
 | `/studio/*` | `proxy.ts` role check (admin/super-admin) + Sanity Studio's own auth |
 

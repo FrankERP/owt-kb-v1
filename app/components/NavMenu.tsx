@@ -44,7 +44,7 @@ function MenuItem({ href, onClick, children }: { href?: string; onClick?: () => 
   const cls =
     "w-full text-left flex items-center gap-3 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-mono-500 dark:text-mono-400 hover:text-accent hover:bg-accent-deep/10 dark:hover:bg-accent/10 transition-colors";
   if (href) return <Link href={href} className={cls}>{children}</Link>;
-  return <button onClick={onClick} className={cls}>{children}</button>;
+  return <button type="button" onClick={onClick} className={cls}>{children}</button>;
 }
 
 export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
@@ -107,7 +107,6 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
       <button
         onClick={() => setOpen((v) => !v)}
         className="relative flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base group"
-        aria-haspopup="menu"
         aria-expanded={open}
         aria-label={
           notifCount > 0
@@ -138,9 +137,14 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
         )}
       </button>
 
-      {/* Dropdown */}
+      {/* Dropdown. A disclosure of navigation links, not a menu widget: there
+          is no arrow-key navigation, so `role="menu"` — and `aria-haspopup`,
+          whose "true" token is defined as "menu" — would promise behaviour
+          that does not exist. `<nav>` is a real landmark, so unlike a generic
+          div it also exposes the label. */}
       {open && (
-        <div
+        <nav
+          aria-label="Menú de cuenta"
           className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-surface-accent-20 bg-surface-raised-alt shadow-2xl overflow-hidden z-50"
           onClick={() => setOpen(false)}
         >
@@ -177,7 +181,7 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
               Cerrar sesión
             </MenuItem>
           </div>
-        </div>
+        </nav>
       )}
     </div>
   );
