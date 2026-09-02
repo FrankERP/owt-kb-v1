@@ -3,7 +3,7 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import { Setlist, SetlistSong, SpecialRole } from "../utils/interface";
 import Navbar from "../components/Navbar";
 import SongSearchList from "../components/SongSearchList";
-import { DayCard } from "../components/DayCard";
+import { DayCard, paintsDayCard } from "../components/DayCard";
 import { publishedSetlist } from "../utils/draftGating";
 import { pickUnique } from "../utils/serviceReadSelect";
 import { requireWorshipPage } from "../utils/worshipPageGate";
@@ -115,16 +115,26 @@ export default async function Home() {
   const hasSaturday = !!satRole;
   const hasSpecials = specials.length > 0;
 
-  // DayCard renders nothing for a service with no published setlist and no
-  // assigned seat (a role whose seats were all cleared is a normal stored
-  // state), so a quiet week would otherwise show the "Esta semana" heading
-  // over an empty grid. Mirror DayCard's guard per card and count only the
-  // cards that will actually paint — that count also picks the grid layout.
-  const hasSeat = (r: { Lead?: unknown[]; instruments?: unknown[]; foh_team?: unknown[]; BGVs?: unknown[]; Chorus?: unknown[] } | null | undefined) =>
-    !!(r && (r.Lead?.length || r.instruments?.length || r.foh_team?.length || r.BGVs?.length || r.Chorus?.length));
-  const hasSunday = !!sunSetlist?.songs?.length || hasSeat(sunRole);
-  const hasSaturdayCard = hasSaturday && (!!satSetlist?.songs?.length || hasSeat(satRole));
-  const specialCards = specials.filter((sp) => !!sp.songs?.length || hasSeat(sp)).length;
+  // A quiet week would otherwise show the "Esta semana" heading over an empty
+  // grid: DayCard renders nothing for a service with no published setlist and
+  // no assigned seat. Ask DayCard itself rather than re-deriving its guard, and
+  // count only the cards that will actually paint — that count also picks the
+  // grid layout.
+  const paints = (
+    setlist: { songs?: unknown[] } | null | undefined,
+    role: { Lead?: unknown[]; instruments?: unknown[]; foh_team?: unknown[]; BGVs?: unknown[]; Chorus?: unknown[] } | null | undefined,
+  ) =>
+    paintsDayCard({
+      setlist,
+      leads: role?.Lead,
+      instruments: role?.instruments,
+      fohTeam: role?.foh_team,
+      bgvs: role?.BGVs,
+      chorus: role?.Chorus,
+    });
+  const hasSunday = paints(sunSetlist, sunRole);
+  const hasSaturdayCard = hasSaturday && paints(satSetlist, satRole);
+  const specialCards = specials.filter((sp) => paints({ songs: sp.songs }, sp)).length;
   const totalCards = (hasSaturdayCard ? 1 : 0) + (hasSunday ? 1 : 0) + specialCards;
   const hasAnyCard = totalCards > 0;
 
