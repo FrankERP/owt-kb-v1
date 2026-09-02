@@ -516,6 +516,39 @@ describe("notifySetlistSaved", () => {
     expect(operationalFetch.mock.calls[1][1]).toEqual({ week: "2026-08-09" });
   });
 
+  it("still pushes a worship-retired member who is assigned to the service that week", async () => {
+    // The broadcast query filters out worship-retired members, so the first fetch
+    // (all-pref audience) never returns them. But retirement keeps the services
+    // they were already assigned to, so the third fetch resolves the assigned ids'
+    // prefs by id (no retirement filter) and merges them back in.
+    operationalFetch
+      .mockResolvedValueOnce([{ _id: "mem-all" }])                                  // broadcast (retiree absent)
+      .mockResolvedValueOnce(["mem-retired-assigned", "mem-off-assigned"])          // assigned ids
+      .mockResolvedValueOnce([
+        { _id: "mem-retired-assigned", setlist: "assigned" },
+        { _id: "mem-off-assigned", setlist: "off" },
+      ]);                                                                            // assigned-id prefs
+    await notifySetlistSaved("2026-08-09");
+    // The retiree with pref "assigned" is notified; the assigned member with pref
+    // "off" is still silent. Order: broadcast members first, then merged assignees.
+    expect(sendPushMock).toHaveBeenCalledWith(
+      ["mem-all", "mem-retired-assigned"],
+      "setlist",
+      expect.objectContaining({ path: "/" }),
+    );
+    // The third read resolves by id (retirement never filters a resolution).
+    const idRead = String(operationalFetch.mock.calls[2][0]);
+    expect(idRead).toContain("_id in $assigned");
+    expect(operationalFetch.mock.calls[2][1]).toEqual({ assigned: ["mem-retired-assigned", "mem-off-assigned"] });
+  });
+
+  it("makes no id-resolution read when nobody is assigned", async () => {
+    operationalFetch.mockResolvedValueOnce([{ _id: "mem-all" }]).mockResolvedValueOnce([]);
+    await notifySetlistSaved("2026-08-09");
+    expect(operationalFetch).toHaveBeenCalledTimes(2);
+    expect(sendPushMock).toHaveBeenCalledWith(["mem-all"], "setlist", expect.objectContaining({ path: "/" }));
+  });
+
   it("does not wait on the push, and swallows its rejection (no unhandled rejection)", async () => {
     operationalFetch.mockResolvedValueOnce([{ _id: "mem-all" }]).mockResolvedValueOnce([]);
     sendPushMock.mockRejectedValueOnce(new Error("fcm down"));
