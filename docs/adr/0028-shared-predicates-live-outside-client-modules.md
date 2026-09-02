@@ -70,7 +70,22 @@ in practice — every production importer is a client component — so nothing m
 what changes is that a future server-side caller fails loudly at the import rather
 than at render time in front of the team.
 
-This ADR covers one class of bug the build cannot see. A repo-wide guard that
-walks `app/**` and flags any non-client module calling a value imported from a
-`"use client"` module would generalise it; the two guards here cover only this
-site.
+This ADR covers one class of bug the build cannot see, so the rule is enforced
+rather than remembered. `app/utils/clientBoundary.ts` walks `app/**` and
+`sanity/**`, resolving relative and `@/` imports, and flags any module without a
+`"use client"` directive that CALLS a value imported from one that has it;
+`app/utils/__tests__/clientBoundary.test.ts` fails the gates on a new violation
+anywhere, not just at the two sites that already burned us.
+
+It flags calls only. A client component rendered as JSX is legal, and so is a
+client value forwarded as a prop to another client component — the Studio page's
+`<NextStudio config={config}/>` is the canonical next-sanity scaffold and does
+exactly that. Keeping the rule that tight is what lets it run with no allowlist
+of judgement calls, and calls are what actually threw.
+
+The guard was verified against the outage itself, not merely against a clean
+tree: the test extracts commit `103c935b` with `git archive` and asserts the
+analyser flags `app/(client)/page.tsx:127`. Run over that tree it also finds
+`moveOccupant.ts` unaided — the latent second instance a human reviewer had
+found by hand — which is the evidence that it detects the class rather than the
+one incident.
