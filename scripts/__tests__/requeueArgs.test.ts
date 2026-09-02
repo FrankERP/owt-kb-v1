@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { membersToQueue, parseRequeueArgs } from "../lib/requeueArgs.mjs";
+import { membersToQueue, parseRequeueArgs, unknownFlags } from "../lib/requeueArgs.mjs";
+
+describe("unknownFlags", () => {
+  it("passes the accepted boolean flags and role ids through", () => {
+    expect(unknownFlags(["r1", "--apply", "--now"], ["--apply", "--now"])).toEqual([]);
+  });
+
+  it("names a misspelt flag instead of letting it fall through as a role id", () => {
+    // `--befor m1=Líder r1` would otherwise leave `before` empty and queue every
+    // stored member of r1 with an empty snapshot.
+    const { rest } = parseRequeueArgs(["--befor", "m1=Líder", "r1", "--apply"]);
+    expect(unknownFlags(rest, ["--apply", "--now"])).toEqual(["--befor"]);
+  });
+});
 
 describe("parseRequeueArgs", () => {
   it("leaves argv untouched when neither flag is given", () => {

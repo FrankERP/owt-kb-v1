@@ -68,10 +68,31 @@ export function parseRequeueArgs(argv) {
 }
 
 /**
+ * The `--` tokens left in `rest` that the script does not understand. A
+ * misspelt flag (`--befor m1=Líder`) would otherwise fall through the
+ * `!a.startsWith("--")` role-id filter, leave `before` empty, and queue every
+ * stored member with an EMPTY snapshot — the exact outcome `--before` exists to
+ * prevent, on a dry run that looks plausible. The script refuses the invocation
+ * instead.
+ *
+ * @param {string[]} rest      argv after `parseRequeueArgs`
+ * @param {string[]} allowed   the boolean flags the script accepts
+ * @returns {string[]}
+ */
+export function unknownFlags(rest, allowed) {
+  return rest.filter((a) => a.startsWith("--") && !allowed.includes(a));
+}
+
+/**
  * The members one invocation queues, in a stable order: the stored assignees
  * (or the `--only` set), then every `--before` member not already named. A
  * member removed by the edit is in `before` only, and is exactly who a plain
  * enumeration of stored seats would drop.
+ *
+ * An `--only` member who is neither stored nor in `--before` is queued with an
+ * empty snapshot against a live state that does not hold them; the classifier
+ * reads that as `[] → []` and stays silent. Harmless, and not worth a guard
+ * that would have to re-read the role here.
  *
  * @param {string[]} stored   `seatAssignees(normalizeStoredSeats(role))`
  * @param {Set<string> | null} only

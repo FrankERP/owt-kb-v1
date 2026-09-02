@@ -57,16 +57,28 @@ import { createClient } from "@sanity/client";
 
 import { buildUpsert, outboxId } from "../app/utils/outboxNotice.ts";
 import { normalizeStoredSeats, seatAssignees, storedRoleDate } from "../app/utils/roleWriteRequest.ts";
-import { membersToQueue, parseRequeueArgs } from "./lib/requeueArgs.mjs";
+import { membersToQueue, parseRequeueArgs, unknownFlags } from "./lib/requeueArgs.mjs";
+
+const USAGE =
+  "usage: requeue-role-notices.mjs <roleId> [<roleId>...] [--before <memberId>=<label>[,<label>]]... [--only <memberId>[,<memberId>]]... [--now] [--apply]";
 
 let parsed;
 try {
   parsed = parseRequeueArgs(process.argv.slice(2));
 } catch (err) {
   console.error(String(err instanceof Error ? err.message : err));
+  console.error(USAGE);
   process.exit(2);
 }
 const { before: BEFORE, only: ONLY, rest: ARGV } = parsed;
+
+// A misspelt flag must not degrade into "queue everyone with an empty snapshot".
+const unknown = unknownFlags(ARGV, ["--apply", "--now"]);
+if (unknown.length) {
+  console.error(`unknown flag(s): ${unknown.join(" ")}`);
+  console.error(USAGE);
+  process.exit(2);
+}
 
 const APPLY = ARGV.includes("--apply");
 // `--now` collapses the 15-minute debounce to zero so the batch is due
@@ -77,9 +89,7 @@ const NOW_FLAG = ARGV.includes("--now");
 const roleIds = ARGV.filter((a) => !a.startsWith("--"));
 
 if (!roleIds.length) {
-  console.error(
-    "usage: requeue-role-notices.mjs <roleId> [<roleId>...] [--before <memberId>=<label>[,<label>]]... [--only <memberId>[,<memberId>]]... [--now] [--apply]",
-  );
+  console.error(USAGE);
   process.exit(2);
 }
 // A `--before` snapshot or an `--only` set names members of ONE service; applying
