@@ -118,9 +118,14 @@ export default async function Home() {
 
   // A quiet week would otherwise show the "Esta semana" heading over an empty
   // grid: DayCard renders nothing for a service with no published setlist and
-  // no assigned seat. Ask DayCard itself rather than re-deriving its guard, and
+  // no assigned seat. Share DayCard's own guard rather than re-deriving it, and
   // count only the cards that will actually paint — that count also picks the
   // grid layout.
+  //
+  // The guard lives in `utils/paintsDayCard`, NOT in `DayCard.tsx`, because this
+  // page is a Server Component and `DayCard.tsx` is `"use client"`. Importing it
+  // from there yields a client reference, not the function, and calling it threw
+  // on every render of `/` in production on 2026-09-02.
   const paints = (
     setlist: { songs?: unknown[] } | null | undefined,
     role: { Lead?: unknown[]; instruments?: unknown[]; foh_team?: unknown[]; BGVs?: unknown[]; Chorus?: unknown[] } | null | undefined,
