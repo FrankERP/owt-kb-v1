@@ -38,12 +38,12 @@ export interface DayCardProps {
  * corrupt one: person-less seats are dropped at write time.
  */
 export function paintsDayCard(card: {
-  setlist?: { songs?: unknown[] } | null;
-  leads?: unknown[];
-  instruments?: unknown[];
-  fohTeam?: unknown[];
-  bgvs?: unknown[];
-  chorus?: unknown[];
+  setlist: { songs?: unknown[] } | null | undefined;
+  leads: unknown[] | undefined;
+  instruments: unknown[] | undefined;
+  fohTeam: unknown[] | undefined;
+  bgvs: unknown[] | undefined;
+  chorus: unknown[] | undefined;
 }): boolean {
   return !!(
     card.setlist?.songs?.length ||

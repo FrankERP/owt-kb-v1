@@ -125,6 +125,23 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   — `{ toPatch, toNotify }`; only `false → published` notifies.
 - **`draftToDayCardProps`** ([draftToDayCardProps.ts](../app/utils/draftToDayCardProps.ts)) — maps
   a solver-generated draft service into `DayCard` props for preview.
+- **`paintsDayCard(card)`** ([DayCard.tsx](../app/components/DayCard.tsx)) — whether a
+  `DayCard` will render anything or return `null`. `DayCard` guards on it and the home
+  page asks it before choosing between the "Esta semana" grid and an empty state, so the
+  two can never disagree. Every key is required, so a call site that forgets one fails to
+  compile.
+
+### Unsaved-work fingerprints
+Two editors warn before discarding work, and each compares a stable fingerprint of the
+state a save actually persists against the last saved one.
+- **`proposalSnapshot(songs, teamNotes, leadNotes, proposalId)`**
+  ([ProposalEditor.tsx](../app/\(client\)/me/propose/[roleId]/ProposalEditor.tsx)) — takes the
+  proposal id because `lead_notes` is only sent while no proposal document exists.
+- **`popoverPosition(rect, viewportW, viewportH)`**
+  ([AvailabilityCalendar.tsx](../app/components/AvailabilityCalendar.tsx)) — placement for the
+  availability note popover, pure so the flip and the clamps are testable (jsdom reports
+  every rect as zero). The popover recomputes from its day button on scroll; it must NOT
+  close on scroll, because the mobile keyboard fires scroll and resize.
 
 ### Mobile / accessibility
 - **`native.ts`** — `isNativeApp()`, `nativeGoogleSilentIdToken()` (cold-start silent re-auth

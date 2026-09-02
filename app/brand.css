@@ -8,6 +8,13 @@
   --brand-duration-fast: 150ms;
   --brand-duration-reveal: 210ms;
 
+  /* Height of the impersonation banner, so the navbar can stack under it.
+     This default only ever applies while `.impersonating` is on <html>, and
+     only until ImpersonationBanner publishes the MEASURED height over it
+     (inline on the same element, so it wins). Generous on purpose: the banner
+     wraps to two lines on a phone. Not a colour. */
+  --impersonation-h: 3.5rem;
+
   /* ---- Child B, Layer 1: the 18 base roles -------------------------------
      Stored as bare RGB triplets so Tailwind can apply <alpha-value>. The seven
      --brand-* above stay until B-final; this slice REMOVES NOTHING, so both
@@ -553,12 +560,13 @@
 
 /*
  * The impersonation banner is `sticky top-0` in the layout, OUTSIDE <main>,
- * and the navbar is `sticky top-0` inside it — same 32px, and the banner's
- * higher z-index won. `ImpersonationBanner` puts this class on <html> while a
- * session is being impersonated so the navbar stacks under it instead.
+ * and the navbar is `sticky top-0` inside it — the same strip, and the
+ * banner's higher z-index won. `ImpersonationBanner` puts this class on <html>
+ * while a session is being impersonated, and publishes its MEASURED height as
+ * --impersonation-h; the :root default stands in until that lands.
  */
 .impersonating .brand-navbar {
-  top: 2rem;
+  top: var(--impersonation-h);
 }
 
 .brand-navbar::before {

@@ -14,28 +14,43 @@
 import { describe, it, expect } from "vitest";
 import { paintsDayCard } from "../DayCard";
 
+// Every key is REQUIRED on the predicate, so a call site that forgets one is a
+// compile error rather than a silently-false answer. That is the whole point of
+// sharing it, so the tests spell out all six too.
+type Card = Parameters<typeof paintsDayCard>[0];
+const EMPTY: Card = {
+  setlist: null,
+  leads: undefined,
+  instruments: undefined,
+  fohTeam: undefined,
+  bgvs: undefined,
+  chorus: undefined,
+};
+const card = (over: Partial<Card>): Card => ({ ...EMPTY, ...over });
+
 describe("paintsDayCard", () => {
   it("is false for a service with no setlist and no assigned seat", () => {
-    expect(paintsDayCard({})).toBe(false);
-    expect(paintsDayCard({ setlist: null })).toBe(false);
-    expect(paintsDayCard({ setlist: { songs: [] }, leads: [], instruments: [], fohTeam: [], bgvs: [], chorus: [] })).toBe(false);
+    expect(paintsDayCard(EMPTY)).toBe(false);
+    expect(paintsDayCard(card({ setlist: undefined }))).toBe(false);
   });
 
   it("is true on a setlist alone — songs published before the team is named", () => {
-    expect(paintsDayCard({ setlist: { songs: [{}] } })).toBe(true);
+    expect(paintsDayCard(card({ setlist: { songs: [{}] } }))).toBe(true);
   });
 
   it("is true on any one of the five seat kinds alone", () => {
-    expect(paintsDayCard({ leads: ["Ana"] })).toBe(true);
-    expect(paintsDayCard({ instruments: [{ label: "Bajo", person: "Ana" }] })).toBe(true);
-    expect(paintsDayCard({ fohTeam: [{ label: "Audio", person: "Ana" }] })).toBe(true);
-    expect(paintsDayCard({ bgvs: [{ member_name: "Ana" }] })).toBe(true);
-    expect(paintsDayCard({ chorus: [{ member_name: "Ana" }] })).toBe(true);
+    expect(paintsDayCard(card({ leads: ["Ana"] }))).toBe(true);
+    expect(paintsDayCard(card({ instruments: [{ label: "Bajo", person: "Ana" }] }))).toBe(true);
+    expect(paintsDayCard(card({ fohTeam: [{ label: "Audio", person: "Ana" }] }))).toBe(true);
+    expect(paintsDayCard(card({ bgvs: [{ member_name: "Ana" }] }))).toBe(true);
+    expect(paintsDayCard(card({ chorus: [{ member_name: "Ana" }] }))).toBe(true);
   });
 
   it("treats a cleared role as empty even when the document exists", () => {
     // What a saturday_role looks like after every seat is removed: the arrays
     // are present and empty, not absent.
-    expect(paintsDayCard({ setlist: null, leads: [], instruments: [], fohTeam: [], bgvs: [], chorus: [] })).toBe(false);
+    expect(
+      paintsDayCard({ setlist: { songs: [] }, leads: [], instruments: [], fohTeam: [], bgvs: [], chorus: [] }),
+    ).toBe(false);
   });
 });

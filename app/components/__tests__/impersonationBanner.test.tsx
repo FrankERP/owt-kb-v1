@@ -76,6 +76,21 @@ describe("ImpersonationBanner", () => {
     expect(salir().hasAttribute("disabled")).toBe(false);
   });
 
+  // The failure that actually happens. NextAuth v4's `fetchData` catches every
+  // error — network, non-2xx, bad JSON — and returns `null`, and `update()`
+  // returns `undefined` while the session is still loading. Neither rejects, so
+  // a handler that only inspects `next.user.isImpersonating` navigates away on
+  // every real-world failure, leaving the admin on /admin still impersonating.
+  it("stays put when the update resolves null, which is how it really fails", async () => {
+    h.update.mockResolvedValue(null);
+    render(<ImpersonationBanner />);
+    fireEvent.click(salir());
+
+    await screen.findByText(/no se pudo salir/i);
+    expect(h.push).not.toHaveBeenCalled();
+    expect(salir().hasAttribute("disabled")).toBe(false);
+  });
+
   it("stays put when the update rejects outright", async () => {
     h.update.mockRejectedValue(new Error("network"));
     render(<ImpersonationBanner />);

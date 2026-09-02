@@ -161,7 +161,9 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
     if (!popoverOpen) return;
     const reposition = () => {
       const el = anchorRef.current;
-      if (!el) return;
+      // Paging months unmounts every day button; a detached node reports a
+      // zero rect, which would snap the popover to the top-left corner.
+      if (!el?.isConnected) return;
       const p = popoverPosition(el.getBoundingClientRect(), window.innerWidth, window.innerHeight);
       // Only write on a real move, or the state update re-arms this effect forever.
       setPopover(prev =>

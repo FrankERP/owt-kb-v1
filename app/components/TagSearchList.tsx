@@ -230,7 +230,7 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
       )}
 
       {/* ── Empty state ── */}
-      {gridTags.length === 0 && (
+      {gridTags.length === 0 && (isSearching || tags.length === 0) && (
         <div className="flex flex-col items-center gap-3 py-24 text-mono-600">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
