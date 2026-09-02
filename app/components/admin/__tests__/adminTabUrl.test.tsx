@@ -122,6 +122,21 @@ describe("AdminPanel — the tab in the URL", () => {
     await waitFor(() => expect(tabParam()).toBe("content"));
   });
 
+  it("follows a link naming the tab the server would have fallen back to", async () => {
+    // Open bare /admin (Miembros is the fallback, named by nothing), move to
+    // Actividad by hand, then follow a colleague's `?tab=members` link. Seeding
+    // the comparison from the fallback made that link visibly do nothing.
+    const { rerender } = render(
+      <AdminPanel role="super-admin" initialTab="members" tabNamedInUrl={false} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Actividad" }));
+    expect(currentTab()).toBe("Actividad");
+
+    rerender(<AdminPanel role="super-admin" initialTab="members" tabNamedInUrl />);
+    expect(currentTab()).toBe("Miembros");
+    await waitFor(() => expect(tabParam()).toBe("members"));
+  });
+
   it("treats a link to plain /admin as the no-op it looks like", async () => {
     // The server falls back to Miembros for bare /admin, so before the
     // `tabNamedInUrl` gate this yanked the admin out of the tab they were

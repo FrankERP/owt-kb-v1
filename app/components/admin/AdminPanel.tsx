@@ -654,10 +654,16 @@ export default function AdminPanel({
   // keeps the address bar honest either way.
   //
   // Adjusted during render, the documented React pattern for a changed prop, so
-  // it costs no extra commit. Known and accepted edge: re-navigating to the
-  // exact URL you are already on cannot be told apart by value, so it does not
-  // move the panel.
-  const [lastResolvedTab, setLastResolvedTab] = useState(initialTab);
+  // it costs no extra commit.
+  //
+  // Seeded from `initialTab` only when the URL NAMED it. Seeding from a
+  // fallback would record a tab no URL ever asked for: open bare /admin, click
+  // Actividad, then follow a colleague's link to `?tab=members` — the value
+  // matches the fallback recorded on arrival, so the link would visibly do
+  // nothing. Remaining edge, accepted: following the same named tab twice after
+  // moving away by hand cannot be told apart by value, and telling it apart
+  // needs a per-navigation nonce that is not worth its weight here.
+  const [lastResolvedTab, setLastResolvedTab] = useState(tabNamedInUrl ? initialTab : undefined);
   if (tabNamedInUrl && initialTab !== undefined && initialTab !== lastResolvedTab) {
     setLastResolvedTab(initialTab);
     dispatchReview({ type: "select_tab", tab: initialTab });
