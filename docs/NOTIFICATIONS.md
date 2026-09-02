@@ -555,6 +555,30 @@ modules use extensionless specifiers Node's ESM loader refuses. Members already
 notified will receive a duplicate — that is usually the right trade against
 someone never being told they serve.
 
+**Put back the notices of an EDIT that never queued** with `--before`, which
+supplies the pre-edit snapshot the writer would have taken (added 2026-09-02,
+when a ten-member Saturday edit queued nothing — see "Landmines"). Without it the
+script only enumerates the members currently stored on the service, all with an
+empty snapshot, which is right for a lost publish and wrong for an edit: a member
+the edit REMOVED is not stored any more and is never named, and a member whose
+seat CHANGED would be re-introduced as newly assigned instead of told they moved.
+
+```bash
+npx tsx --env-file=.env.local scripts/requeue-role-notices.mjs <roleId> \
+  --before <removedMemberId>=Líder --before <movedMemberId>=Líder \
+  --only <movedMemberId>,<addedMemberId> --apply
+```
+
+`--only` names the members the edit touched; without it every member still
+stored on the service is queued, and the ones the edit left alone — who would
+net out to silence in a real save — get a duplicate of their publish email.
+`--before` members are always queued. One role id per invocation with either
+flag. The labels are `rolesForMember`'s strings — `Líder`, `BGV`, `Coro`, an
+instrument name, an FOH role — copied verbatim into the snapshot, and the flush
+classifies them against live state exactly as it would a real save:
+`Líder → (absent)` is "Ya no participas", `Líder → BGV` is a role change, and a
+member named with the seat they still hold nets out to silence.
+
 **Put back a destroyed setlist notice** the same way:
 
 ```bash
@@ -597,6 +621,16 @@ all fall back). `CRON_SECRET` and `APP_BASE_URL` are covered in `SECRETS.md`.
 
 Things that are counter-intuitive and were each a real defect at some point.
 
+- **Outbox ids are HEX digests, and the alphabet is the point.** Sanity's id
+  grammar is `a-zA-Z0-9._-` with no dot-separated segment starting in `-`.
+  `outboxId` originally digested the subject to base64url, whose alphabet
+  includes `-`, so one subject in 64 produced a segment Sanity rejects. A role's
+  notices go out in ONE transaction, so that one subject took every notice for
+  the service with it: on 2026-09-02 a ten-member Saturday edit queued nothing,
+  the writer logged `Invalid document ID "outbox.role.-gAm0…": invalid element`
+  once per save, and three affected members were never told. Hex cannot produce
+  the character; `outboxNotice.test.ts` sweeps thousands of subjects for the
+  segment rule. Do not "shorten" the id back to a denser alphabet.
 - **Never compare raw `medley_tag` values.** `normalizeMedleyTags` mints a fresh
   tag for every group on every editor write, so tag equality reports a change
   whenever any unrelated song moves. Snapshots store the **partition** — the
