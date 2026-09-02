@@ -1,9 +1,13 @@
 // Rotate the «Verificador (bot)» password in ONE command.
 //
 //   node scripts/dev-verify-rotate.mjs                      # dry run: shows the plan, writes nothing
-//   node scripts/dev-verify-rotate.mjs --apply              # writes Sanity, then .env.local
-//   node scripts/dev-verify-rotate.mjs --apply --email a@b  # first-time seed, or to change the address
+//   node scripts/dev-verify-rotate.mjs --apply              # rotates, then smoke-tests the runner
 //   node scripts/dev-verify-rotate.mjs --apply --show       # also print the password once, for a manager
+//   node scripts/dev-verify-rotate.mjs --apply --email a@b  # to change the address
+//   node scripts/dev-verify-rotate.mjs --apply --no-verify  # skip the smoke test
+//
+// Nothing has to be typed: with no `--email` it reuses `.env.local`'s, and falls
+// back to DEFAULT_EMAIL below when there is none.
 //
 // Why this exists: the manual sequence is five steps across two files and a
 // dashboard, and getting the ORDER wrong silently breaks the runner. On
@@ -32,8 +36,17 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const STORAGE_STATE = path.join(REPO_ROOT, "playwright/.dev-verify-storageState.json");
 const KEYS = ["DEV_VERIFY_EMAIL", "DEV_VERIFY_PASSWORD", "DEV_VERIFY_PASSWORD_HASH"];
 
+// `.invalid` is reserved by RFC 2606 and can never resolve, so Google can never
+// issue an account on it. That matters more here than deliverability: the address
+// is a lookup key for the credentials sign-in and is NEVER mailed, while a real
+// address carries the risk docs/SECRETS.md names — Google SSO signs in by email
+// lookup too, so a Google identity on it would be a second door to this admin.
+// An unroutable address closes that door by construction rather than by promise.
+const DEFAULT_EMAIL = "verificador-bot@owt-backstage.invalid";
+
 const APPLY = process.argv.includes("--apply");
 const SHOW = process.argv.includes("--show");
+const VERIFY = !process.argv.includes("--no-verify");
 const emailArg = (() => {
   const i = process.argv.indexOf("--email");
   return i === -1 ? undefined : process.argv[i + 1];
@@ -52,10 +65,7 @@ const envPath = (() => {
 const raw = readFileSync(envPath, "utf8");
 const readKey = (k) => raw.match(new RegExp(`^${k}=(.*)$`, "m"))?.[1]?.trim().replace(/^["']|["']$/g, "");
 
-const email = emailArg ?? readKey("DEV_VERIFY_EMAIL");
-if (!email) die("no DEV_VERIFY_EMAIL in .env.local and none given. Pass --email <address>.\n" +
-  "  Use an address with NO Google account: SSO signs in by email lookup too, so a Google\n" +
-  "  identity on it would be a second door to the same admin (docs/SECRETS.md).");
+const email = emailArg ?? readKey("DEV_VERIFY_EMAIL") ?? DEFAULT_EMAIL;
 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) die(`--email does not look like an address: ${email}`);
 
 // base64url: 43 chars, no quoting hazards in a dotenv file, no shell metacharacters.
@@ -78,7 +88,7 @@ for (const v of ["NEXT_PUBLIC_SANITY_PROJECT_ID", "NEXT_PUBLIC_SANITY_DATASET", 
 }
 
 console.log(`dataset : ${childEnv.NEXT_PUBLIC_SANITY_DATASET} (project ${childEnv.NEXT_PUBLIC_SANITY_PROJECT_ID})`);
-console.log(`email   : ${email}`);
+console.log(`email   : ${email}${email === DEFAULT_EMAIL && !emailArg ? "  (default; unroutable by design)" : ""}`);
 console.log(`env file: ${envPath}`);
 console.log(`password: minted, 43 chars — ${SHOW ? "printed below" : "not printed; read it from .env.local"}\n`);
 
@@ -113,7 +123,6 @@ try {
   if (existsSync(STORAGE_STATE)) console.log("Stale storage state left in place — delete it by hand.");
   else console.log("Stale sign-in state cleared.");
   if (SHOW) console.log(`\npassword: ${password}`);
-  console.log("\nVerify:  npx tsx --env-file=.env.local scripts/dev-verify.ts --route / --text");
 } catch (err) {
   console.error(`\n!! Sanity WAS updated but ${envPath} was not: ${err.message}`);
   console.error("!! The password below is the only copy of a value the dataset already trusts.");
@@ -121,3 +130,23 @@ try {
   console.error(password);
   process.exit(1);
 }
+
+// Proving the rotation worked is part of the rotation. A password that signs in
+// nowhere is indistinguishable from one that was never written, and the whole
+// point of this script is that nobody should have to work that out later.
+if (!VERIFY) process.exit(0);
+
+console.log("\nSmoke test: signing in to dev as the bot and loading / ...\n");
+const check = spawnSync("npx", ["tsx", `--env-file=${envPath}`, path.join(REPO_ROOT, "scripts/dev-verify.ts"), "--route", "/", "--text"],
+  { cwd: REPO_ROOT, stdio: "inherit" });
+if (check.status === 0) {
+  console.log("\nRotation verified: the new password signs in and / renders.");
+  process.exit(0);
+}
+console.error(`\nThe rotation itself SUCCEEDED — the password is in ${envPath}.`);
+console.error(`The smoke test did not pass (exit ${check.status}). Read its refusal above:`);
+console.error("  env:...        a variable is still missing from .env.local");
+console.error("  host:...       wrong target; this runner refuses production by name");
+console.error("  a sign-in failure means the seed and the file disagree — re-run this script");
+console.error("Playwright browsers missing? npx playwright install chromium");
+process.exit(1);

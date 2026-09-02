@@ -91,15 +91,22 @@ not.
 
 ## Rotating the password (one command)
 
-    node scripts/dev-verify-rotate.mjs --email <address>            # dry run: shows the plan
-    node scripts/dev-verify-rotate.mjs --email <address> --apply    # rotates for real
+    node scripts/dev-verify-rotate.mjs                    # dry run: shows the plan
+    node scripts/dev-verify-rotate.mjs --apply --show    # rotates, verifies, prints the password once
 
-`scripts/dev-verify-rotate.mjs` mints a 43-character password, hashes it, patches
-`member-dev-verify`, then rewrites `DEV_VERIFY_EMAIL`, `DEV_VERIFY_PASSWORD` and
-`DEV_VERIFY_PASSWORD_HASH` in the primary checkout's `.env.local` (backing it up at mode 600
-first) and clears the stale storage state. `--email` is only needed when `.env.local` has no
-`DEV_VERIFY_EMAIL` yet, or to change the address. Add `--show` to print the password once,
+Nothing has to be typed. `scripts/dev-verify-rotate.mjs` mints a 43-character password,
+hashes it, patches `member-dev-verify`, rewrites `DEV_VERIFY_EMAIL`, `DEV_VERIFY_PASSWORD`
+and `DEV_VERIFY_PASSWORD_HASH` in the primary checkout's `.env.local` (backing it up at mode
+600 first), clears the stale storage state, and then **signs in to dev and loads `/`** to
+prove the rotation worked — a password that signs in nowhere is indistinguishable from one
+that was never written. `--no-verify` skips that last step; `--show` prints the password once
 for a password manager.
+
+The address defaults to `verificador-bot@owt-backstage.invalid` when `.env.local` has none.
+`.invalid` is reserved by RFC 2606 and can never resolve, so Google can never issue an
+account on it — which matters more here than deliverability, because the address is a lookup
+key for the credentials sign-in and is never mailed, while a real address carries the risk
+`docs/SECRETS.md` names. Pass `--email <address>` to override.
 
 **The order is Sanity first, `.env.local` second, and that is deliberate.** The reverse
 leaves the file holding a password whose hash never reached the dataset, and the runner's
