@@ -100,8 +100,9 @@ live session). Reused across runs; on a 401/redirect-to-signin the runner delete
 signs in again once. Never copied into the scratchpad, the report, or stdout. The bypass
 secret is sent as a header only and never appears in a URL, the storage state, or any
 artifact; the A3 leak scanner (`scanForSecretLeak` in `e2e/service-readiness/lib/bypass.ts`)
-runs over every file the runner writes and over the report itself, on every exit path,
-refusals included.
+runs over every file the runner writes — artifacts and the storage state alike — and over
+the report itself, on every exit path, refusals included. The header is attached per
+request and only to target-origin requests; third-party hosts never receive it.
 
 ### 3.5 Writes the app itself performs on sign-in — disclosed
 

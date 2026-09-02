@@ -723,7 +723,9 @@ async function newContext(origin: string, args: ParsedArgs, bypass: string | nul
     baseURL: origin,
     viewport: args.viewport,
     colorScheme: args.theme,
-    extraHTTPHeaders: bypassHeaders(bypass),
+    // NO extraHTTPHeaders: Playwright sends those with EVERY request, including
+    // cdn.sanity.io and vercel.com. The bypass header is injected per request, for
+    // the target origin only, inside the route handler below.
     storageState: useState && existsSync(STORAGE_STATE) ? STORAGE_STATE : undefined,
     serviceWorkers: "block",
   });
@@ -767,14 +769,23 @@ async function main(): Promise<void> {
 
   mkdirSync(OUT_DIR, { recursive: true });
   let phase: Phase = "observe";
+  let firstNavigation = true;
 
   const attachContext = async (context: BrowserContext): Promise<void> => {
     // Context-wide, awaited: covers popups and any page the context opens later.
     await context.route("**/*", async (route) => {
       const req = route.request();
-      if (!req.url().startsWith(target.origin)) return route.continue();
+      let origin = "";
+      try { origin = new URL(req.url()).origin; } catch { origin = ""; }
+      if (origin !== target.origin) return route.continue(); // third-party: untouched, and NO bypass header
       const decision = decideRequest({ method: req.method(), url: req.url(), phase });
-      if (decision.action === "allow") return route.continue();
+      if (decision.action === "allow") {
+        // Bypass header only here, only for the target origin. The set-cookie variant
+        // rides on the first navigation alone, as A3 does.
+        const extra = firstNavigation ? initialNavigationHeaders(bypass) : bypassHeaders(bypass);
+        firstNavigation = false;
+        return route.continue({ headers: { ...req.headers(), ...extra } });
+      }
       report.blockedMutations.push({ method: req.method(), url: req.url(), phase });
       return route.abort("blockedbyclient");
     });
@@ -796,9 +807,11 @@ async function main(): Promise<void> {
     const page = await context.newPage();
     attach(page);
     phase = "signin";
-    await page.setExtraHTTPHeaders(initialNavigationHeaders(bypass)); // asks Vercel for the bypass cookie, as A3 does
-    await page.goto(SIGNIN_PATH, { waitUntil: "networkidle" });
+    firstNavigation = true;
+    const signinResponse = await page.goto(SIGNIN_PATH, { waitUntil: "networkidle" });
     assertOnOrigin(page);
+    // A wrong or rotated bypass value can answer 401 ON origin; that is a refusal, not a "page error".
+    if ((signinResponse?.status() ?? 0) >= 400) refuse(report, `signin:HTTP ${signinResponse?.status()} on ${SIGNIN_PATH}`, args.json);
     await page.getByLabel("Correo electrónico").fill(email!);
     await page.getByLabel("Contraseña").fill(password!);
     await page.getByRole("button", { name: "Iniciar sesión" }).click();
@@ -815,10 +828,12 @@ async function main(): Promise<void> {
   await attachContext(context);
   let page = await context.newPage();
   attach(page);
-  await page.setExtraHTTPHeaders(initialNavigationHeaders(bypass));
   let response = await page.goto(args.route, { waitUntil: "networkidle" });
   assertOnOrigin(page); // an SSO wall on vercel.com is refused here, before any sign-in attempt
-  if (page.url().includes(SIGNIN_PATH) || response?.status() === 401) {
+  // Only a redirect to the sign-in page triggers a sign-in. NOT a 401: a CRON_SECRET-gated
+  // route answers 401 to a browser, and re-signing-in on that would write a loginEvent per
+  // run, exceeding the once-per-session bound Frank accepted.
+  if (page.url().includes(SIGNIN_PATH)) {
     await context.browser()?.close();
     context = await signIn();
     page = await context.newPage();
@@ -832,8 +847,8 @@ async function main(): Promise<void> {
 
   if (args.waitFor) await page.getByText(args.waitFor).first().waitFor({ timeout: 30_000 }).catch(() => report.pageErrors.push(`wait:${args.waitFor} not visible`));
   for (const name of args.clicks) {
-    const target = page.getByRole("button", { name }).or(page.getByRole("link", { name })).first();
-    await target.click({ timeout: 10_000 }).catch(() => report.pageErrors.push(`click:${name} not found`));
+    const el = page.getByRole("button", { name }).or(page.getByRole("link", { name })).first();
+    await el.click({ timeout: 10_000 }).catch(() => report.pageErrors.push(`click:${name} not found`));
     await page.waitForLoadState("networkidle").catch(() => undefined);
     assertOnOrigin(page);
   }
@@ -860,9 +875,12 @@ async function main(): Promise<void> {
 
   await context.browser()?.close();
 
-  // Redaction proof on every written artifact; `emit` covers the report itself.
+  // Redaction proof on every file the runner writes — artifacts AND the storage state
+  // (a live session; it must never carry the password or the bypass secret) — then
+  // `emit` covers the report itself.
   const texts = Object.values(report.artifacts).filter((f): f is string => !!f && !f.endsWith(".png"))
     .map((f) => ({ source: path.basename(f), text: readFileSync(f, "utf8") }));
+  if (existsSync(STORAGE_STATE)) texts.push({ source: "storageState", text: readFileSync(STORAGE_STATE, "utf8") });
   assertNoLeak(texts, SECRETS);
   emit(report, args.json);
   process.exit(decideExitCode(report));
@@ -877,7 +895,9 @@ main().catch((err) => {
 Implementation notes the executor must honour:
 - `owt_last_ping` must be replaced with the literal value of `PING_KEY` in `app/components/ActivityPing.tsx` (read it; do not import the component). Add a one-line vitest in `scripts/__tests__/devVerifyPingKey.test.ts` that reads that file with `readFileSync` and asserts the runner's constant equals it, so a rename there fails the gate instead of silently re-enabling the heartbeat.
 - `context.route("**/*")` with an origin check is used instead of `"**/api/**"` because of the server-action widening in Task 2. Third-party origins (fonts, Sanity CDN images) are continued untouched — which means lock 1 is origin-scoped: `/studio` talks to `api.sanity.io` unpoliced. That is safe only because the runner holds no Sanity login; `DEV_VERIFY.md` says so.
-- `page.setExtraHTTPHeaders(initialNavigationHeaders(bypass))` before the first navigation mirrors `e2e/service-readiness/fixtures.ts`; page-level headers merge over the context's `extraHTTPHeaders`.
+- The bypass header is injected ONLY in the route handler and ONLY for target-origin requests (`route.continue({ headers })`); `x-vercel-set-bypass-cookie: true` rides on the first navigation of a context and is then dropped, as A3 does. Never use `extraHTTPHeaders` for it: Playwright sends those with every request the context makes, third parties included.
+- Known exit-3 cause that is NOT a mutation of app data: NextAuth's client logger POSTs `/api/auth/_log` when its own fetches fail (e.g. the csrf GET). Lock 1 blocks it, correctly; `DEV_VERIFY.md` names it so an exit 3 during sign-in is read as "sign-in infrastructure failed", not "a read tried to write".
+- Choose a long random `DEV_VERIFY_PASSWORD`: redaction replaces the literal value wherever it appears, so a short or common password would mangle unrelated report text.
 - The `.catch(() => refuse(...))` inside `signIn` calls `process.exit`; that is intentional — a failed sign-in must not fall through to observation.
 - If `tsc` complains that `scripts/dev-verify.ts` is outside the project's `include`, check `tsconfig.json`; `scripts/set-password.ts` already compiles, so the pattern exists. Do not add `// @ts-nocheck`.
 
@@ -1052,7 +1072,7 @@ Expected test count after this step: 4. Before committing, confirm the `notifPre
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run scripts/__tests__/devVerifySeedDoc.test.ts`
-Expected: PASS (3 tests).
+Expected: PASS (4 tests).
 
 - [ ] **Step 5: Write the seed script**
 
@@ -1110,8 +1130,8 @@ if (!process.env.SANITY_WRITE_TOKEN) {
   process.exit(2);
 }
 const twin = await client.fetch(
-  `*[_type == "teamMembers" && lower(email) == lower($email) && _id != $id][0]._id`,
-  { email, id: VERIFIER_ID },
+  `*[_type == "teamMembers" && lower(email) == lower($email) && _id != $id && _id != $draftId][0]._id`,
+  { email, id: VERIFIER_ID, draftId: `drafts.${VERIFIER_ID}` },
 );
 if (twin) {
   console.error(`Another member already uses ${email} (${twin}). Refusing to create a twin.`);
@@ -1181,6 +1201,13 @@ Spec: `docs/superpowers/specs/2026-09-01-dev-verify-runner-design.md`. Decision 
 | `--json` | Machine-readable report. |
 
 Exit codes: `0` ok · `2` refused (host, env, sign-in) · `3` a mutation was attempted and blocked · `4` page error or HTTP ≥ 500.
+
+An exit 3 during sign-in usually means NextAuth's client logger tried to `POST /api/auth/_log`
+after one of its own fetches failed — sign-in infrastructure, not app data. It is blocked on
+purpose and never allow-listed.
+
+`DEV_VERIFY_OUT_DIR` must never point inside a tracked path: `--text` on `/admin/members`
+writes member names and emails. The default `test-results/dev-verify/` is gitignored.
 
 Pair every run with the alias check: the report's `observedDeployment` is the `x-vercel-id`
 of the response, not a commit. `get_deployment(dev-owt-backstage.vercel.app)` gives the SHA.
@@ -1264,7 +1291,9 @@ Append, following the file's existing entry shape (Name / platforms / purpose / 
 - **Purpose:** passes Vercel SSO protection on preview deployments, sent only as the
   `x-vercel-protection-bypass` header. Without it both tools refuse.
 - **Where it came from:** Vercel → project `owt-backstage` → Settings → Deployment Protection →
-  Protection Bypass for Automation.
+  Protection Bypass for Automation. The A3 harness's use of it is described in
+  `docs/VERIFICATION_HARNESS.md` §2 "Secret hygiene" and §3 "Environment"; this entry is the
+  rotation record for both tools.
 - **Rotate:** regenerate in that Vercel screen (the old value stops working immediately) → update
   `.env.local`.
 - **Blast radius of rotation:** every local A3 and dev-verify run fails until `.env.local` is
@@ -1387,6 +1416,7 @@ git commit -m "docs(dev-verify): record the three verification runs"
 - §4 locks 1–3: Task 2 + Task 5 context-wide route handler (lock 1, widened to all non-GET; heartbeat suppressed via `addInitScript`; landed-origin refusal after every navigation and click); Task 1 (lock 2); Task 6 (lock 3, worship-only membership because kids reads ignore `retiredFrom`).
 - Disclosed writes: `loginEvent` per sign-in (accepted by Frank) and the suppressed `lastSeen` heartbeat — Global Constraints, Task 7 (`DEV_VERIFY.md`, SECRETS, ADR).
 - Kill switch survives rotation: Task 6 patches an existing document and never carries `disabled`.
+- Post-approval adoptions (un-reviewed, see the review log): bypass header scoped to the target origin in the route handler; exact-origin compare; sign-in only on redirect (never on 401); ≥400 on `/auth/signin` is a refusal; storage state included in the leak scan; `_log` POST and out-dir notes in the docs; drafts excluded from the twin check.
 - §5 interface and exit codes: Task 3 (flags), Task 4 (`decideExitCode`), Task 5 (`observedDeployment` from `x-vercel-id`).
 - §6 shape: Tasks 1–6 match the module list; `.ts` runner via `tsx`.
 - §7 verification: unit tests in Tasks 1–4 and 6; manual (a)(b)(c) in Task 8.
