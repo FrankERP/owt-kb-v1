@@ -60,8 +60,15 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   primary tree while gates/servers run elsewhere (`EnterWorktree`, never a hand-rolled
   `git worktree add`). Code review is read-only — no worktree. Populate
   `node_modules` with an APFS clone from the primary checkout (`cp -Rc`), never a
-  fresh install. `git worktree remove` is part of the merge step; `git worktree prune`
-  at cycle open.
+  fresh install. **Symlink `.env.local` to the primary checkout's copy**
+  (`ln -s ../../../.env.local .env.local` from the worktree root) — never write a
+  real one inside a worktree. `.env*.local` is gitignored, so a file created there
+  is invisible to git and is destroyed by `git worktree remove` with no warning and
+  no Papelera. That is how the `DEV_VERIFY_*` credentials were lost: they were
+  written in the worktree that built `scripts/dev-verify.ts` on 2026-09-01, the
+  worktree was removed, and the account survived in Sanity while its password did
+  not. `git worktree remove` is part of the merge step; `git worktree prune` at
+  cycle open.
 - Conventional commits (`fix(scope): …`), body explains the *why*.
 - **Never** add AI/Claude attribution or `Co-Authored-By` trailers.
 - **Keep documentation current in the same delivery.** Implementation, behavior,

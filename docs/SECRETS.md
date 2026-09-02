@@ -339,8 +339,15 @@ that order, and the window is zero.
   `bcryptjs` (see `docs/DEV_VERIFY.md`). The email is any address Frank controls; it is never mailed.
   Choose a long random `DEV_VERIFY_PASSWORD`: redaction replaces the literal value wherever it
   appears in the report, so a short or common password would mangle unrelated text.
-- **Rotate:** generate a new hash → run the seed with `--apply` → update `DEV_VERIFY_PASSWORD`
-  in `.env.local` → delete `playwright/.dev-verify-storageState.json`.
+- **Rotate:** `scripts/dev-verify-rotate.sh` does the whole sequence in one command — mints a
+  new password, hashes it, rewrites the three keys in `.env.local`, drops the stale storage
+  state, and runs the seed (dry by default, `--apply` to write). The manual equivalent:
+  generate a new hash → run the seed with `--apply` → update `DEV_VERIFY_PASSWORD` in
+  `.env.local` → delete `playwright/.dev-verify-storageState.json`.
+- **Lives in the PRIMARY checkout's `.env.local` only.** A worktree reaches it through a
+  symlink; a real file written inside a worktree is gitignored, untracked, and destroyed by
+  `git worktree remove`. That is how these three values were lost on 2026-09-01 — see
+  `docs/DEV_VERIFY.md`. Rotation is the only recovery: the hash in Sanity is bcrypt.
 - **Blast radius of rotation:** the runner fails to sign in between the seed and the env update.
   Nothing else uses the member. **Kill switch:** `disabled: true` on the member in Studio.
 - **Exposure:** this is an `admin` credential on the production dataset. A leaked `.env.local`
