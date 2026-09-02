@@ -70,5 +70,6 @@ export function parseArgs(argv: string[]): ParsedArgs | ArgsError {
     }
   }
   if (!out.route.startsWith("/")) return { error: "--route is required and must start with /" };
+  if (/^\/[/\\]/.test(out.route)) return { error: "--route must be a path on the target origin (no //host or /\\host)" };
   return out;
 }

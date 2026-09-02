@@ -4,7 +4,8 @@ import { assertNoLeak, decideExitCode, formatHuman, redactReport, type RunReport
 function base(over: Partial<RunReport> = {}): RunReport {
   return {
     origin: "https://dev-owt-backstage.vercel.app", route: "/admin", observedDeployment: "iad1::abc",
-    status: 200, artifacts: {}, consoleErrors: [], failedRequests: [], blockedMutations: [], pageErrors: [],
+    status: 200, landedUrl: null, theme: "light", artifacts: {}, consoleErrors: [], failedRequests: [],
+    blockedMutations: [], pageErrors: [],
     exitCode: 0, ...over,
   };
 }
@@ -42,5 +43,23 @@ describe("dev-verify report", () => {
     const text = formatHuman(base({ blockedMutations: [{ method: "DELETE", url: "https://x/api/admin/roles/1", phase: "observe" }], exitCode: 3 }));
     expect(text.split("\n")[0]).toBe("dev-verify: exit 3 · https://dev-owt-backstage.vercel.app/admin · deployment iad1::abc · HTTP 200");
     expect(text).toContain("blocked_mutation DELETE https://x/api/admin/roles/1");
+  });
+
+  it("formatHuman reports a differing landed pathname, in the summary line and its own line", () => {
+    const text = formatHuman(base({ landedUrl: "https://dev-owt-backstage.vercel.app/", pageErrors: ["redirected:/admin → /"], exitCode: 4 }));
+    expect(text.split("\n")[0]).toBe(
+      "dev-verify: exit 4 · https://dev-owt-backstage.vercel.app/admin · deployment iad1::abc · HTTP 200 · landed https://dev-owt-backstage.vercel.app/",
+    );
+    expect(text).toContain("landed https://dev-owt-backstage.vercel.app/");
+  });
+
+  it("formatHuman omits the landed suffix on the summary line when the landed URL matches the route", () => {
+    const text = formatHuman(base({ landedUrl: "https://dev-owt-backstage.vercel.app/admin" }));
+    expect(text.split("\n")[0]).toBe("dev-verify: exit 0 · https://dev-owt-backstage.vercel.app/admin · deployment iad1::abc · HTTP 200");
+  });
+
+  it("formatHuman always prints the effective theme", () => {
+    expect(formatHuman(base({ theme: "dark" }))).toContain("theme dark");
+    expect(formatHuman(base())).toContain("theme light");
   });
 });

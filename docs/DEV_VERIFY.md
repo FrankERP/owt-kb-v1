@@ -15,8 +15,8 @@ Spec: `docs/superpowers/specs/2026-09-01-dev-verify-runner-design.md`. Decision 
 | `--base-url <origin>` | Default `https://dev-owt-backstage.vercel.app`. Only dev and this project's preview hosts are accepted; production is refused by name. |
 | `--screenshot <file>` / `--full-page` | PNG into `test-results/dev-verify/` (or `$DEV_VERIFY_OUT_DIR`, or an absolute path). |
 | `--text` / `--a11y` | Page text / accessibility tree, written next to the screenshot. |
-| `--console` | Include console errors and failed requests in the report. |
-| `--viewport WxH` · `--theme light|dark` | Emulation. `--theme` never touches `/me`. |
+| `--console` | Include console errors and warnings, plus failed requests, in the report. |
+| `--viewport WxH` · `--theme light|dark` | Emulation. `--theme` defaults to `light` when omitted (Playwright's own default) — pass `--theme dark` explicitly for a dark-theme check. Never touches `/me`. |
 | `--click "<accessible name>"` | Repeatable, in order, before capture. Still read-only (see locks). |
 | `--wait "<text>"` | Wait for text before capture (30 s). |
 | `--json` | Machine-readable report. |
@@ -65,8 +65,13 @@ only because the runner holds no Sanity login and imports no Sanity client.
 Env (all in `.env.local`, never in Vercel): `DEV_VERIFY_EMAIL`, `DEV_VERIFY_PASSWORD`,
 `SR_VERIFY_BYPASS_SECRET`. See `docs/SECRETS.md`. The session is cached at
 `playwright/.dev-verify-storageState.json` (gitignored; a live session — delete it to force a
-fresh sign-in). The bypass secret travels only as the `x-vercel-protection-bypass` header;
-every artifact and the report are scanned with the A3 leak scanner before anything is printed.
+fresh sign-in). The bypass secret travels as the `x-vercel-protection-bypass` header, but only
+on the first navigation of a context; afterwards the bypass cookie Vercel set carries
+authorisation, so no later request — redirects included — carries the header. Every artifact
+and the report are scanned with the A3 leak scanner before anything is printed.
+
+Choose a long random `DEV_VERIFY_PASSWORD`: redaction replaces the literal value wherever it
+appears in the report, so a short or common password would mangle unrelated text.
 
 ## Seeding the member (once, Frank)
 

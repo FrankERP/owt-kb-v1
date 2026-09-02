@@ -7,6 +7,15 @@ describe("dev-verify args", () => {
     expect(parseArgs(["--route", "admin"])).toEqual({ error: "--route is required and must start with /" });
   });
 
+  it("rejects a --route that escapes to another host via a protocol-relative or backslash prefix", () => {
+    const error = { error: "--route must be a path on the target origin (no //host or /\\host)" };
+    expect(parseArgs(["--route", "//evil.com"])).toEqual(error);
+    expect(parseArgs(["--route", "/\\evil.com"])).toEqual(error);
+    expect(parseArgs(["--route", "//evil.com/admin"])).toEqual(error);
+    // sanity: an ordinary single-slash route is unaffected
+    expect(isArgsError(parseArgs(["--route", "/admin"]))).toBe(false);
+  });
+
   it("applies defaults", () => {
     const parsed = parseArgs(["--route", "/admin"]);
     expect(parsed).toEqual({

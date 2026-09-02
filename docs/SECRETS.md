@@ -337,6 +337,8 @@ that order, and the window is zero.
   the runner refuses (exit 2). `PASSWORD_HASH` is read only by `scripts/dev-verify-seed.mjs`.
 - **Where it came from:** the password is chosen by Frank; the hash is generated locally with
   `bcryptjs` (see `docs/DEV_VERIFY.md`). The email is any address Frank controls; it is never mailed.
+  Choose a long random `DEV_VERIFY_PASSWORD`: redaction replaces the literal value wherever it
+  appears in the report, so a short or common password would mangle unrelated text.
 - **Rotate:** generate a new hash → run the seed with `--apply` → update `DEV_VERIFY_PASSWORD`
   in `.env.local` → delete `playwright/.dev-verify-storageState.json`.
 - **Blast radius of rotation:** the runner fails to sign in between the seed and the env update.

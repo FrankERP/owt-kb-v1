@@ -12,6 +12,8 @@ export interface RunReport {
   route: string;
   observedDeployment: string | null;
   status: number | null;
+  landedUrl: string | null;
+  theme: "light" | "dark";
   artifacts: { screenshot?: string; text?: string; a11y?: string };
   consoleErrors: string[];
   failedRequests: { method: string; url: string; status: number | null }[];
@@ -65,10 +67,14 @@ export function assertNoLeak(texts: { source: string; text: string }[], secrets:
 }
 
 export function formatHuman(r: RunReport): string {
+  const originRoute = `${r.origin}${r.route}`;
+  const landedSuffix = r.landedUrl && r.landedUrl !== originRoute ? ` · landed ${r.landedUrl}` : "";
   const lines = [
-    `dev-verify: exit ${r.exitCode} · ${r.origin}${r.route} · deployment ${r.observedDeployment ?? "unknown"} · HTTP ${r.status ?? "none"}`,
+    `dev-verify: exit ${r.exitCode} · ${originRoute} · deployment ${r.observedDeployment ?? "unknown"} · HTTP ${r.status ?? "none"}${landedSuffix}`,
   ];
   if (r.refusal) lines.push(`refused: ${r.refusal}`);
+  lines.push(`theme ${r.theme}`);
+  if (r.landedUrl) lines.push(`landed ${r.landedUrl}`);
   for (const [k, v] of Object.entries(r.artifacts)) if (v) lines.push(`${k}: ${v}`);
   for (const b of r.blockedMutations) lines.push(`blocked_mutation ${b.method} ${b.url} (${b.phase})`);
   for (const e of r.pageErrors) lines.push(`page_error ${e}`);

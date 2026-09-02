@@ -10,11 +10,11 @@
  * in the browser (mutationPolicy), production is refused by name (hostPolicy), and
  * the member is retired from every ministry. No Sanity client is imported here.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, writeSync } from "node:fs";
 import path from "node:path";
 import { chromium, type BrowserContext, type Page } from "playwright";
 
-import { bypassHeaders, initialNavigationHeaders, resolveBypassSecret } from "../e2e/service-readiness/lib/bypass";
+import { initialNavigationHeaders, resolveBypassSecret } from "../e2e/service-readiness/lib/bypass";
 import { isArgsError, parseArgs, type ParsedArgs } from "./lib/dev-verify/args";
 import { resolveTarget } from "./lib/dev-verify/hostPolicy";
 import { decideRequest, type Phase } from "./lib/dev-verify/mutationPolicy";
@@ -41,7 +41,10 @@ function emit(report: RunReport, json: boolean): void {
   const texts = [{ source: "report", text: JSON.stringify(final) }];
   if (existsSync(STORAGE_STATE)) texts.push({ source: "storageState", text: readFileSync(STORAGE_STATE, "utf8") });
   assertNoLeak(texts, SECRETS);
-  process.stdout.write((json ? JSON.stringify(final, null, 2) : formatHuman(final)) + "\n");
+  // Synchronous: process.stdout.write can be asynchronous on a pipe, and the
+  // process.exit() every caller of emit performs right after can truncate the
+  // report before it flushes. writeSync(1, ...) blocks until the write lands.
+  writeSync(1, (json ? JSON.stringify(final, null, 2) : formatHuman(final)) + "\n");
 }
 
 function refuse(report: RunReport, reason: string, json: boolean): never {
@@ -78,7 +81,8 @@ async function main(): Promise<void> {
   }
   const args = parsed;
   const report: RunReport = {
-    origin: "", route: args.route, observedDeployment: null, status: null, artifacts: {},
+    origin: "", route: args.route, observedDeployment: null, status: null, landedUrl: null,
+    theme: args.theme ?? "light", artifacts: {},
     consoleErrors: [], failedRequests: [], blockedMutations: [], pageErrors: [], exitCode: 0,
   };
 
@@ -100,6 +104,11 @@ async function main(): Promise<void> {
     if (origin !== target.origin) refuse(report, `host:landed_off_origin:${origin || "unparseable"}`, args.json);
   };
 
+  /** Pathname check, not a substring match: a route like /admin/auth/signin-log must not read as sign-in. */
+  const isSignInUrl = (page: Page): boolean => {
+    try { return new URL(page.url()).pathname.startsWith(SIGNIN_PATH); } catch { return false; }
+  };
+
   mkdirSync(OUT_DIR, { recursive: true });
   let phase: Phase = "observe";
   let firstNavigation = true;
@@ -113,11 +122,16 @@ async function main(): Promise<void> {
       if (origin !== target.origin) return route.continue(); // third-party: untouched, and NO bypass header
       const decision = decideRequest({ method: req.method(), url: req.url(), phase });
       if (decision.action === "allow") {
-        // Bypass header only here, only for the target origin. The set-cookie variant
-        // rides on the first navigation alone, as A3 does.
-        const extra = firstNavigation ? initialNavigationHeaders(bypass) : bypassHeaders(bypass);
-        firstNavigation = false;
-        return route.continue({ headers: { ...req.headers(), ...extra } });
+        // Bypass header only on the first navigation of a context, only for the
+        // target origin — the A3 harness's own model (e2e/service-readiness/lib/bypass.ts).
+        // After that we attach nothing and rely on the bypass cookie Vercel set in
+        // response to x-vercel-set-bypass-cookie: a header re-attached on every request
+        // would ride along on a cross-origin redirect too, which the cookie does not.
+        if (firstNavigation) {
+          firstNavigation = false;
+          return route.continue({ headers: { ...req.headers(), ...initialNavigationHeaders(bypass) } });
+        }
+        return route.continue();
       }
       report.blockedMutations.push({ method: req.method(), url: req.url(), phase });
       return route.abort("blockedbyclient");
@@ -168,14 +182,14 @@ async function main(): Promise<void> {
     // Only a redirect to the sign-in page triggers a sign-in. NOT a 401: a CRON_SECRET-gated
     // route answers 401 to a browser, and re-signing-in on that would write a loginEvent per
     // run, exceeding the once-per-session bound Frank accepted.
-    if (page.url().includes(SIGNIN_PATH)) {
+    if (isSignInUrl(page)) {
       await context.browser()?.close();
       context = await signIn();
       page = await context.newPage();
       attach(page);
       response = await page.goto(args.route, { waitUntil: "networkidle" });
       assertOnOrigin(page);
-      if (page.url().includes(SIGNIN_PATH)) refuse(report, "signin:session not accepted", args.json);
+      if (isSignInUrl(page)) refuse(report, "signin:session not accepted", args.json);
     }
     report.status = response?.status() ?? null;
     report.observedDeployment = response?.headers()["x-vercel-id"] ?? null;
@@ -214,6 +228,16 @@ async function main(): Promise<void> {
       report.artifacts.a11y = file;
     }
     if (!args.console) { report.consoleErrors = []; report.failedRequests = []; }
+
+    report.landedUrl = page.url();
+    const landedPath = (() => { try { return new URL(report.landedUrl!).pathname; } catch { return null; } })();
+    const routePath = (() => { try { return new URL(args.route, target.origin).pathname; } catch { return args.route; } })();
+    // An in-origin redirect (e.g. /admin → /) is not the refusal that
+    // assertOnOrigin catches — same origin, different page — so it must still
+    // surface as a page error rather than a silently green run.
+    if (landedPath !== null && landedPath !== routePath) {
+      report.pageErrors.push(`redirected:${args.route} → ${landedPath}`);
+    }
   } catch (err) {
     // A thrown Playwright/Node error (timeout, navigation failure, …) must still go
     // through `emit`: redaction, the leak scan, and exit-code precedence (a
