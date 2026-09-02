@@ -175,12 +175,26 @@ several exist precisely to stop a plausible-looking change.
 - **Notification emails: `before` is captured PRE-COMMIT** and threaded into
   `after()`. Reading live state inside `after()` gives post-write state and the
   system silently sends nothing. See `docs/NOTIFICATIONS.md`.
+- **The impersonation banner and the navbar are both `sticky top-0` in
+  different containers.** `ImpersonationBanner` publishes an `impersonating`
+  class plus its MEASURED height as `--impersonation-h` on `<html>`; `brand.css`
+  offsets `.brand-navbar` by that variable. Nothing but a comment connects the
+  two halves, so they must move together — `impersonationOffsetSync.test.ts` is
+  the guard. The height is measured, not a constant, because the banner wraps
+  to two lines on a phone.
+- **NextAuth's `update()` never rejects and returns `null` on every failure**
+  (`fetchData` swallows network, non-2xx and parse errors; `update` returns
+  `undefined` while loading). A handler that only inspects the returned
+  session's fields reads every real failure as success — check for nullish
+  FIRST. Both impersonation handlers do; see `ImpersonationBanner`.
 
 ## Reusable utils (don't reinvent)
 `normalizeText` (accent-insensitive search), `assignedMemberRefsQuery`,
 `revalidateSongViews`/`revalidateServiceViews`, `buildRuns`/`normalizeMedleyTags`
 (medley grouping), `extractYouTubeId`, `computeParticipation`,
-`summarizeUnfilledSeats`, `isMemberActive` (30s-TTL auth gate),
+`summarizeUnfilledSeats`, `paintsDayCard` (whether a `DayCard` will paint
+anything rather than render `null` — the home page asks it instead of copying
+the guard), `isMemberActive` (30s-TTL auth gate),
 `requireActiveSession`/`requireActiveManager`, `wantsNotification` (the ONLY
 per-type email-preference resolver — nothing reads `notifPrefs` directly),
 `sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette),

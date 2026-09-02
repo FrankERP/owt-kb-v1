@@ -230,14 +230,16 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
       )}
 
       {/* ── Empty state ── */}
-      {gridTags.length === 0 && isSearching && (
+      {gridTags.length === 0 && (isSearching || tags.length === 0) && (
         <div className="flex flex-col items-center gap-3 py-24 text-mono-600">
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
             <line x1="8" y1="11" x2="14" y2="11" />
           </svg>
-          <p className="font-label text-sm uppercase tracking-widest">No se encontraron etiquetas</p>
+          <p className="font-label text-sm uppercase tracking-widest">
+            {isSearching ? "No se encontraron etiquetas" : "Aún no hay etiquetas"}
+          </p>
         </div>
       )}
     </div>

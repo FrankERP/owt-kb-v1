@@ -88,7 +88,7 @@ export default async function ProposePage({
 
   return (
     <div>
-      <Navbar title="Propuesta" />
+      <Navbar title="Propuesta" tags schedule />
       <div className="mx-auto max-w-2xl px-6 pt-10 pb-20">
         <ProposalEditor
           roleDoc={{

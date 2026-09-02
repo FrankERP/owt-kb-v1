@@ -413,7 +413,7 @@ const myPortableTextComponents: PortableTextComponents = {
     image: ({ value }) => (
       <Image
         src={urlFor(value).width(1400).fit("max").auto("format").url()}
-        alt="Post"
+        alt={typeof value?.alt === "string" ? value.alt : ""}
         width={700}
         height={700}
         className="rounded-xl"
