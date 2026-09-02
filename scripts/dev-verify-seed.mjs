@@ -4,7 +4,7 @@
 //   node --env-file=.env.local scripts/dev-verify-seed.mjs --apply   # writes to the dataset in .env.local
 //
 // Env: DEV_VERIFY_EMAIL, DEV_VERIFY_PASSWORD_HASH (bcrypt; generate with
-//   node -e "console.log(require('bcryptjs').hashSync(process.argv[1], 10))" '<password>'
+//   node -e "import('bcryptjs').then(b=>console.log(b.default.hashSync(process.argv[1],10)))" '<password>'
 //   and NEVER paste the hash anywhere tracked), NEXT_PUBLIC_SANITY_PROJECT_ID,
 //   NEXT_PUBLIC_SANITY_DATASET, SANITY_WRITE_TOKEN.
 //

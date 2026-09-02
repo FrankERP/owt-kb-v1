@@ -73,9 +73,47 @@ and the report are scanned with the A3 leak scanner before anything is printed.
 Choose a long random `DEV_VERIFY_PASSWORD`: redaction replaces the literal value wherever it
 appears in the report, so a short or common password would mangle unrelated text.
 
+## Where the credentials live — and how they were lost once
+
+`DEV_VERIFY_EMAIL`, `DEV_VERIFY_PASSWORD` and `DEV_VERIFY_PASSWORD_HASH` live in the
+**primary checkout's** `.env.local` and nowhere else. A worktree must reach them through a
+symlink:
+
+    ln -s ../../../.env.local .env.local    # from a worktree root under .claude/worktrees/
+
+Never write a real `.env.local` inside a worktree. `.env*.local` is gitignored, so git
+neither tracks it nor warns about it, and `git worktree remove` deletes the directory
+outright — not to the Papelera. On 2026-09-01 the runner was built in a worktree and its
+credentials were written there; the worktree was removed and the values went with it. The
+member survived in Sanity, hash and all, but bcrypt is one-way, so the only way back was to
+rotate. Rotating is cheap (below); losing an hour working out *why* the runner refuses is
+not.
+
+## Rotating the password (one command)
+
+    node scripts/dev-verify-rotate.mjs --email <address>            # dry run: shows the plan
+    node scripts/dev-verify-rotate.mjs --email <address> --apply    # rotates for real
+
+`scripts/dev-verify-rotate.mjs` mints a 43-character password, hashes it, patches
+`member-dev-verify`, then rewrites `DEV_VERIFY_EMAIL`, `DEV_VERIFY_PASSWORD` and
+`DEV_VERIFY_PASSWORD_HASH` in the primary checkout's `.env.local` (backing it up at mode 600
+first) and clears the stale storage state. `--email` is only needed when `.env.local` has no
+`DEV_VERIFY_EMAIL` yet, or to change the address. Add `--show` to print the password once,
+for a password manager.
+
+**The order is Sanity first, `.env.local` second, and that is deliberate.** The reverse
+leaves the file holding a password whose hash never reached the dataset, and the runner's
+refusal then reads as a bug in the runner. A failed seed writes nothing locally and the old
+password keeps working. In the narrow window where Sanity succeeds and the local write does
+not, the script prints the password to stderr — at that point it is the only copy of a value
+the dataset already trusts.
+
+The password is minted inside the script, never typed and never passed as an argument, so it
+does not reach shell history.
+
 ## Seeding the member (once, Frank)
 
-    node -e "console.log(require('bcryptjs').hashSync(process.argv[1], 10))" '<password>'
+    node -e "import('bcryptjs').then(b=>console.log(b.default.hashSync(process.argv[1],10)))" '<password>'
     # put the hash in .env.local as DEV_VERIFY_PASSWORD_HASH, the password as DEV_VERIFY_PASSWORD
     node --env-file=.env.local scripts/dev-verify-seed.mjs            # dry run
     node --env-file=.env.local scripts/dev-verify-seed.mjs --apply    # creates or patches member-dev-verify
