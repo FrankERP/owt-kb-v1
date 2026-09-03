@@ -82,15 +82,6 @@ export const teamMembers = defineType({
         "Otorga administración del ministerio nombrado (p. ej. planear el rol de Kids). NO implica membresía ni acceso de Alabanza. Solo super-admin edita este campo.",
     },
     {
-      // Absent ⇒ serves in every ministry they belong to. Hidden like `themePref` —
-      // retirement is app-administered; a visible field in Studio would bypass R15.
-      name: "retiredFrom",
-      title: "Retirado de (ministerios)",
-      type: "array",
-      of: [{ type: "string" }],
-      hidden: true,
-    },
-    {
       // NO `initialValue` — deliberate, and the neighbouring prefs below all have one.
       // An unset `themePref` is the load-bearing signal Child F's staged rollout reads:
       // "this member has never chosen", as distinct from "this member chose dark". An

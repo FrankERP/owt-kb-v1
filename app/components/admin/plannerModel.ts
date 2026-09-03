@@ -46,10 +46,7 @@ import {
 } from "./seatModel";
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel";
-import {
-  rulePersonNamesMember,
-  worshipRetireeIdsExcludedFromSolve,
-} from "@/app/utils/memberRetirement";
+import { rulePersonNamesMember } from "@/app/utils/memberRuleNames";
 
 // ─── Grid shape ───────────────────────────────────────────────────────────────
 
@@ -638,29 +635,21 @@ export function buildSolveRequest(input: {
   const weeks = sundayDates.length;
   const weekendsWithSaturday = weekendWeekIndexes(sundayDates, activeSatDates);
 
-  // R10: worship-retired members leave the request when no live rule names them.
-  const excludedRetireeIds = worshipRetireeIdsExcludedFromSolve(members, config);
-  const isExcludedRetiree = (id: string) => excludedRetireeIds.has(id);
-  const isExcludedRetireeName = (name: string) =>
-    members.some((m) => isExcludedRetiree(m._id) && rulePersonNamesMember(name, m));
-
   const idToName = (id: string) => memberIdToName(id, members);
-
-  const filterPoolIds = (ids: string[]) => ids.filter((id) => !isExcludedRetiree(id));
 
   // Deduplicate pools: sunday_leads takes priority, then saturday_leads, then
   // support. The solver requires mutual exclusivity (fact 5).
-  const sundayLeadNames = filterPoolIds(config.sundayLeads).map(idToName);
+  const sundayLeadNames = config.sundayLeads.map(idToName);
   const sundaySet = new Set(sundayLeadNames);
-  const saturdayLeadNames = filterPoolIds(config.saturdayLeads).map(idToName).filter((n) => !sundaySet.has(n));
+  const saturdayLeadNames = config.saturdayLeads.map(idToName).filter((n) => !sundaySet.has(n));
   const satSet = new Set([...sundayLeadNames, ...saturdayLeadNames]);
-  const supportNames = filterPoolIds(config.support).map(idToName).filter((n) => !satSet.has(n));
+  const supportNames = config.support.map(idToName).filter((n) => !satSet.has(n));
   const poolNames = new Set([...sundayLeadNames, ...saturdayLeadNames, ...supportNames]);
 
   // Every DSL-named person absent from all pools is injected into `support`,
   // so every DSL-named person appears in exactly one pool — omitting this is
   // a 422 in production (the solver validates all DSL persons against known
-  // people). R10 plena skips worship retirees even when a rule named them.
+  // people).
   const extraSupport: string[] = [];
   const allDslPersons = [
     ...config.restrictions.map((r) => r.person),
@@ -668,7 +657,6 @@ export function buildSolveRequest(input: {
     ...config.presence.flatMap((r) => r.persons),
   ];
   for (const name of allDslPersons) {
-    if (isExcludedRetireeName(name)) continue;
     const resolved = resolvedNameOrRaw(name, members);
     if (!poolNames.has(resolved) && !extraSupport.includes(resolved)) extraSupport.push(resolved);
   }
@@ -678,9 +666,9 @@ export function buildSolveRequest(input: {
   // unavailable — that is a documented consequence, not a bug to "fix" here.
   const availabilityRules: string[] = [];
   const allPoolIds = new Set([
-    ...filterPoolIds(config.sundayLeads),
-    ...filterPoolIds(config.saturdayLeads),
-    ...filterPoolIds(config.support),
+    ...config.sundayLeads,
+    ...config.saturdayLeads,
+    ...config.support,
   ]);
   for (const memberId of allPoolIds) {
     const m = members.find((x) => x._id === memberId);

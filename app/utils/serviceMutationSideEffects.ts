@@ -54,7 +54,6 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { revalidateServiceViews } from "./revalidate";
 import { WORSHIP_AUDIENCE_GROQ_FILTER } from "@/app/ministries";
-import { WORSHIP_NOT_RETIRED_GROQ_FILTER } from "@/app/utils/memberRetirement";
 import { sendPush } from "./push";
 import {
   rolesForMember,
@@ -843,7 +842,7 @@ export async function notifySetlistSaved(week: string): Promise<void> {
     // super-admin bypass is for SEEING people in an admin list, and being able to
     // see someone is not a reason to notify them.
     const members = await operationalClient.fetch<{ _id: string; setlist?: SetlistPref }[]>(
-      `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER} && ${WORSHIP_NOT_RETIRED_GROQ_FILTER}]{ _id, "setlist": notifPrefs.setlist }`,
+      `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER}]{ _id, "setlist": notifPrefs.setlist }`,
     );
     // `published != false` matches the sibling audience in `api/cron/service-reminders`.
     // Without it, a member whose preference is `assigned` and who serves only on a

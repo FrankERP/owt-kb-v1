@@ -123,10 +123,6 @@ import {
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import type { TargetPreflight } from "./serviceReadiness";
 import {
-  memberIdsRetiredOnFutureService,
-  RETIREMENT_UI_COPY,
-} from "@/app/utils/memberRetirement";
-import {
   CARD_STYLE,
   PREFLIGHT_COPY,
   SERVICE_LABEL,
@@ -1602,7 +1598,6 @@ export default function PlannerGrid(props: PlannerGridProps) {
             row={row}
             columns={columns}
             cellsByKey={cellsByKey}
-            members={members}
             unfilledByKey={unfilledByKey}
             duplicatesByColumnId={(columnId) =>
               duplicatesByColumnId.get(columnId) ?? emptyDuplicates
@@ -2294,7 +2289,6 @@ function RowGroup({
   row,
   columns,
   cellsByKey,
-  members,
   unfilledByKey,
   duplicatesByColumnId,
   violationsByColumnId,
@@ -2314,7 +2308,6 @@ function RowGroup({
   row: GridRow;
   columns: GridColumn[];
   cellsByKey: Map<string, GridCell>;
-  members: RankMember[];
   unfilledByKey: Set<string>;
   duplicatesByColumnId: (columnId: string) => Map<string, string[]>;
   /** E13, by `violationKey(rowId, memberId)` — that service column only. */
@@ -2386,7 +2379,6 @@ function RowGroup({
         const cell = cellsByKey.get(cellKey(column.columnId, row.id));
         const memberIds = cell?.occupants.map((o) => o.memberId) ?? [];
         const duplicates = duplicatesByColumnId(column.columnId);
-        const retiredOccupants = memberIdsRetiredOnFutureService(memberIds, column.date, members);
         return (
           <GridCellView
             key={column.columnId}
@@ -2394,7 +2386,6 @@ function RowGroup({
             column={column}
             memberIds={memberIds}
             memberName={memberName}
-            retiredOccupants={retiredOccupants}
             duplicates={duplicates}
             violations={violationsByColumnId(column.columnId)}
             unfilled={unfilledByKey.has(cellKey(column.columnId, row.id))}
@@ -2417,7 +2408,6 @@ function GridCellView({
   column,
   memberIds,
   memberName,
-  retiredOccupants,
   duplicates,
   violations,
   unfilled,
@@ -2433,7 +2423,6 @@ function GridCellView({
   column: GridColumn;
   memberIds: string[];
   memberName: (id: string) => string;
-  retiredOccupants: string[];
   duplicates: Map<string, string[]>;
   violations: Map<string, SeatedViolation>;
   unfilled: boolean;
@@ -2477,7 +2466,6 @@ function GridCellView({
   const flagged = seatedRules.filter((x) => !x.v.overridden);
   const overridden = seatedRules.filter((x) => x.v.overridden);
   const hiddenHasViolation = hiddenIds.some((id) => ruleOf(id)?.overridden === false);
-  const retiredSet = useMemo(() => new Set(retiredOccupants), [retiredOccupants]);
 
   const endpoint: MoveOccupantEndpoint = { rowId: row.id, columnId: column.columnId };
   const isDropTarget = drag.activeDropKey === cellKey(column.columnId, row.id);
@@ -2594,7 +2582,6 @@ function GridCellView({
             // among the rows that hold the duplicate.
             const isDuplicate = duplicates.get(id)?.includes(row.id) ?? false;
             const ruleBroken = ruleOf(id)?.overridden === false;
-            const isRetired = retiredSet.has(id);
             const dragging =
               drag.source?.memberId === id &&
               drag.source.rowId === row.id &&
@@ -2633,8 +2620,7 @@ function GridCellView({
                 // the one assistive tech performs.
                 aria-label={`${marked ? "Cancelar el movimiento de" : "Marcar para mover a"} ${memberName(id)}${
                   isDuplicate || ruleBroken ? " (conflicto)" : ""
-                }${isRetired ? " (retirado de Alabanza)" : ""}`}
-                title={isRetired ? RETIREMENT_UI_COPY.futureOccupant : undefined}
+                }`}
                 // NO `onClick`, deliberately (user ruling, 2026-08-06). A pointer
                 // click on a name keeps doing exactly what it always has: it
                 // falls through to the cell, which opens the picker — or places
@@ -2665,15 +2651,12 @@ function GridCellView({
                 className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-ink-muted ${CARD_STYLE.longText} ${
                   isDuplicate || ruleBroken
                     ? "border-negative-strong/50 bg-negative-strong/10"
-                    : isRetired
-                      ? "border-warning-strong/50 bg-warning-strong/10"
-                      : "border-accent/25 bg-accent/10"
+                    : "border-accent/25 bg-accent/10"
                 } ${drag.enabled ? "cursor-grab" : "cursor-not-allowed"} ${dragging ? "opacity-30" : ""} ${
                   marked ? "ring-2 ring-accent" : ""
                 }`}
               >
                 {memberName(id)}
-                {isRetired && " ↷"}
                 {(isDuplicate || ruleBroken) && " ⚠"}
               </span>
             );
@@ -2726,11 +2709,6 @@ function GridCellView({
         {overridden.map((x) => (
           <p key={x.id} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
             Regla anulada — {memberName(x.id)}: {x.v.reason}
-          </p>
-        ))}
-        {retiredOccupants.map((id) => (
-          <p key={`retired-${id}`} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
-            ↷ {memberName(id)}: {RETIREMENT_UI_COPY.futureOccupant}
           </p>
         ))}
         {unfilled && (
