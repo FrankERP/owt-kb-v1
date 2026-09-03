@@ -87,12 +87,19 @@ function GripIcon() {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
+export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChange }: {
   week: string;
   type: "sunday" | "saturday" | "special";
   roleId?: string;
   onClose: () => void;
   onSaved?: () => void;
+  /**
+   * Reports the in-flight save upward so the surrounding dialog can refuse to
+   * be dismissed. `save()` deliberately keeps this editor open on failure and
+   * writes into `saveError` — and a dismissal mid-request destroys exactly that
+   * surface, so a lead's whole setlist disappears with no error shown.
+   */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [entries, setEntries]           = useState<SetlistEntry[]>([]);
   const [recentSongs, setRecentSongs]   = useState<Record<string, string>>({});
@@ -101,6 +108,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
   const [loading, setLoading]           = useState(true);
   const [loadError, setLoadError]       = useState<string | null>(null);
   const [saving, setSaving]             = useState(false);
+  useEffect(() => { onBusyChange?.(saving); }, [saving, onBusyChange]);
   const [saveError, setSaveError]       = useState<string | null>(null);
   // The observed target state is retained until a successful save or a reload —
   // never re-derived from a fresh server read, which would silently re-authorize
@@ -518,7 +526,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
         </button>
       )}
       <div className="flex gap-3 sticky bottom-0 bg-surface-raised-alt py-2">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
+        <button type="button" onClick={onClose} disabled={saving} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
           Cancelar
         </button>
         <button type="button" onClick={save} disabled={saving || saveConflict || !observed} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">

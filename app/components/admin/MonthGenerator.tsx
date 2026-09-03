@@ -1967,8 +1967,8 @@ export default function MonthGenerator({
    *
    * A shared VALUE rather than a shared function on purpose: a function
    * declaration referenced by the Escape effect below changes what the
-   * `react-hooks` compiler can analyse here, and it starts reporting
-   * long-standing ref-during-render patterns elsewhere in this file. Those are
+   * `react-hooks` compiler can analyse here, and it starts reporting seven
+   * long-standing ref-during-render errors elsewhere in this file. Those are
    * worth addressing, but not silently, inside a fix for a discard prompt.
    */
   const closeWouldDiscard = storedMode
@@ -2295,7 +2295,10 @@ export default function MonthGenerator({
       onClose();
       return;
     }
-    if (assignmentCount > 0) { setPendingDiscard("back"); return; }
+    // Reads the SAME predicate as Escape and «Cancelar», keeping only its own
+    // "back" disposition. The conditions happen to coincide today; re-deriving
+    // it here is how they would quietly stop coinciding.
+    if (closeWouldDiscard) { setPendingDiscard("back"); return; }
     goBackToConfig();
   }
 

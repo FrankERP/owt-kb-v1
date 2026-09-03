@@ -61,21 +61,68 @@ describe("copyInstrumentsTo guards itself, because its button does not", () => {
 // documents at length was silently dropped, because the next open clears
 // `pendingOutcome`. Disabling Cancelar is not enough on its own: CueDialog
 // routes Escape and a backdrop click to the same `onDismiss`.
+// The unknown-outcome record — "a publish may have committed and we could not
+// confirm it" — used to be cleared by opening OR closing any publish dialog. So
+// it evaporated one Escape or one reopen after being recorded, and
+// `submitPublication`'s own refusal ("El resultado anterior es desconocido")
+// could never fire. Only verification retires it now.
+describe("the unknown-outcome record survives a dismissal", () => {
+  it("is cleared only where a result is actually established", () => {
+    const clears = (SOURCE.match(/setPendingOutcome\(null\)/g) ?? []).length;
+    expect(clears).toBe(2); // verifyPendingOutcome: confirmed, and the 409 that supersedes it
+    const verify = SOURCE.slice(SOURCE.indexOf("async function verifyPendingOutcome"));
+    const body = verify.slice(0, verify.indexOf("\n  function "));
+    expect((body.match(/setPendingOutcome\(null\)/g) ?? []).length).toBe(2);
+  });
+
+  it("no dialog open- or close-handler discards it", () => {
+    for (const opener of ["openPublishPlan", "openOverride", "openUnpublish"]) {
+      const start = SOURCE.indexOf(`function ${opener}(`);
+      expect(start, opener).toBeGreaterThan(-1);
+      const body = SOURCE.slice(start, start + 400);
+      expect(body, opener).not.toContain("setPendingOutcome(null)");
+    }
+    expect(SOURCE).not.toMatch(/onClose=\{\(\) => \{[^}]*setPendingOutcome\(null\)/);
+  });
+});
+
 describe("a mutating dialog cannot be abandoned mid-flight", () => {
   it("the Modal wrapper refuses to dismiss while busy", () => {
     expect(SOURCE).toMatch(/onDismiss=\{\(\) => \{ if \(!busy\) onClose\(\); \}\}/);
   });
 
-  it("all four mutating dialogs pass busy={submitting}", () => {
-    // delete, publish-ready, override, unpublish. The setlist editor modal is
-    // deliberately absent: it owns its own save and its own guard.
-    expect((SOURCE.match(/busy=\{submitting\}/g) ?? []).length).toBe(4);
+  it("every mutating dialog is guarded, each by the flag that owns its request", () => {
+    // Four share the panel's `submitting`; the setlist editor owns its own save,
+    // so it reports upward through `onBusyChange` instead. It was excluded from
+    // this guard once on the false grounds that it already had one — it did not,
+    // and a lead could lose a whole setlist to an Escape mid-save.
+    expect((SOURCE.match(/busy=\{submitting\}/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect(SOURCE).toContain("busy={setlistSaving}");
+    expect(SOURCE).toContain("onBusyChange={setSetlistSaving}");
+    // Every `<Modal` in this panel carries a busy decision: one `busy={` per
+    // `<Modal`. A new dialog added without one breaks the equality rather than
+    // slipping in unguarded.
+    const modals = (SOURCE.match(/<Modal\b/g) ?? []).length;
+    const guarded = (SOURCE.match(/\bbusy=\{/g) ?? []).length;
+    expect(modals).toBeGreaterThan(0);
+    expect(guarded).toBe(modals);
   });
 
   it("the publication footer's Cancelar is disabled while loading", () => {
     const footer = SOURCE.slice(SOURCE.indexOf("function PublicationFooter("));
     const cancel = footer.slice(0, footer.indexOf("Cancelar"));
     expect(cancel).toContain("disabled={loading}");
+  });
+
+  it("no mutating request can hold a dialog open forever", () => {
+    // `busy` blocks Escape, the backdrop AND the header ✕, so without a timeout
+    // a request stalled behind a dead connection left a modal that could not be
+    // closed at all until the OS gave up. Every mutating fetch here carries the
+    // abort; the reads deliberately do not, since they hold nothing open.
+    const mutating = (SOURCE.match(/method: "(POST|DELETE|PATCH|PUT)"/g) ?? []).length;
+    const timed = (SOURCE.match(/AbortSignal\.timeout\(MUTATION_TIMEOUT_MS\)/g) ?? []).length;
+    expect(mutating).toBeGreaterThan(0);
+    expect(timed).toBe(mutating);
   });
 
   it("the delete modal's Cancelar is disabled while submitting", () => {

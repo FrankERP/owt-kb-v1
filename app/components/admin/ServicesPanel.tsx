@@ -114,6 +114,19 @@ async function describeMutationError(res: Response, fallback: string): Promise<s
   return mutationErrorMessage({ code, status: res.status, dependencyCount, fallback });
 }
 
+/**
+ * How long a mutation may hold a dialog open before we stop waiting.
+ *
+ * `busy` blocks Escape, the backdrop AND the header ✕ — every dismissal route —
+ * so a request stalled behind a dead mobile connection would otherwise leave a
+ * modal that cannot be closed at all, with its Cancelar disabled, until the OS
+ * TCP timeout. The abort turns that into an ordinary reported failure. It is
+ * generous on purpose: publishing a month is one batched transaction, and a
+ * false abort would put the panel into exactly the unknown-outcome state it
+ * works hardest to avoid.
+ */
+const MUTATION_TIMEOUT_MS = 30_000;
+
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
 
 function Modal({
@@ -233,6 +246,19 @@ export default function ServicesPanel() {
 
   // Copy-instruments mode: pick a source card, then a target day to repeat its lineup.
   const [copySource, setCopySource] = useState<string | null>(null);
+  // The setlist editor owns its own save, so it reports the in-flight state up
+  // rather than sharing `submitting`. Without it the setlist dialog kept the
+  // very defect the other four had: dismissed mid-save, it unmounts the surface
+  // `save()` writes its error into, and a lead loses a whole setlist silently.
+  const [setlistSaving, setSetlistSaving] = useState(false);
+
+  // `pendingOutcome` — "a publish may have committed and we could not confirm
+  // it" — is deliberately NOT cleared by opening or closing a dialog. It used to
+  // be both, which meant the record evaporated one Escape or one reopen after it
+  // was recorded, and `submitPublication`'s own refusal ("El resultado anterior
+  // es desconocido. Verifícalo antes de reintentar.") could never fire. Only
+  // `verifyPendingOutcome` retires it: on a confirmed result, or on a 409 that
+  // supersedes it.
   const copyMode = copySource !== null;
 
   // The three A1 integrity summaries, kept beside the roles/members arrays. A
@@ -417,6 +443,7 @@ export default function ServicesPanel() {
       const res = await fetch(`/api/admin/roles/${editModal.role._id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(MUTATION_TIMEOUT_MS),
         body: JSON.stringify({ rev: editModal.role._rev }),
       });
       if (res.ok) {
@@ -474,6 +501,7 @@ export default function ServicesPanel() {
       // failure copy mode stays open and nothing is claimed.
       const res = await fetch("/api/admin/roles/copy-instruments", {
         method: "POST", headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(MUTATION_TIMEOUT_MS),
         body: JSON.stringify({
           source: { id: source._id, rev: source._rev },
           target: { id: target._id, rev: target._rev },
@@ -523,6 +551,7 @@ export default function ServicesPanel() {
       const res = await fetch(input.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(MUTATION_TIMEOUT_MS),
         body: JSON.stringify(input.body),
       });
       if (res.ok) {
@@ -558,6 +587,7 @@ export default function ServicesPanel() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: AbortSignal.timeout(MUTATION_TIMEOUT_MS),
           body: JSON.stringify({
             mode: "recover",
             roles: pending.ids.map(id => ({ id })),
@@ -674,7 +704,6 @@ export default function ServicesPanel() {
     const guard = guardControl(sources, "publishReady");
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setPublishError(null);
-    setPendingOutcome(null);
     setPublishPlan(buildPublishConfirmation(cards));
   }
 
@@ -682,7 +711,6 @@ export default function ServicesPanel() {
     const guard = guardControl(sources, "publishReady");
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setPublishError(null);
-    setPendingOutcome(null);
     setOverrideCard(card);
   }
 
@@ -691,7 +719,6 @@ export default function ServicesPanel() {
     const guard = guardControl(sources, "unpublish");
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setPublishError(null);
-    setPendingOutcome(null);
     setUnpublishCard(card);
   }
 
@@ -1261,7 +1288,7 @@ export default function ServicesPanel() {
       {publishPlan && (
         <Modal
           title="Publicar listos"
-          onClose={() => { setPublishPlan(null); setPublishError(null); setPendingOutcome(null); }}
+          onClose={() => { setPublishPlan(null); setPublishError(null); }}
           status={publishError}
           busy={submitting}
         >
@@ -1321,7 +1348,7 @@ export default function ServicesPanel() {
               </section>
             )}
             <PublicationFooter
-              onClose={() => { setPublishPlan(null); setPublishError(null); setPendingOutcome(null); }}
+              onClose={() => { setPublishPlan(null); setPublishError(null); }}
               onConfirm={() => publishReady(publishPlan.selected.map(({ id, rev }) => ({ id, rev })))}
               onVerify={verifyPendingOutcome}
               confirmLabel={`Publicar ${publishPlan.selected.length}`}
@@ -1352,7 +1379,7 @@ export default function ServicesPanel() {
         return (
           <Modal
             title="Publicar de todos modos"
-            onClose={() => { setOverrideCard(null); setPublishError(null); setPendingOutcome(null); }}
+            onClose={() => { setOverrideCard(null); setPublishError(null); }}
             status={publishError}
             busy={submitting}
           >
@@ -1382,7 +1409,7 @@ export default function ServicesPanel() {
                 </p>
               )}
               <PublicationFooter
-                onClose={() => { setOverrideCard(null); setPublishError(null); setPendingOutcome(null); }}
+                onClose={() => { setOverrideCard(null); setPublishError(null); }}
                 onConfirm={() =>
                   acknowledgement && publishOverride(overrideCard, acknowledgement.acknowledgedBlockers)
                 }
@@ -1402,7 +1429,7 @@ export default function ServicesPanel() {
       {unpublishCard && (
         <Modal
           title="Ocultar servicio"
-          onClose={() => { setUnpublishCard(null); setPublishError(null); setPendingOutcome(null); }}
+          onClose={() => { setUnpublishCard(null); setPublishError(null); }}
           status={publishError ?? cardGates.unpublish.reason}
           busy={submitting}
         >
@@ -1416,7 +1443,7 @@ export default function ServicesPanel() {
               con datos incompletos o en conflicto.
             </p>
             <PublicationFooter
-              onClose={() => { setUnpublishCard(null); setPublishError(null); setPendingOutcome(null); }}
+              onClose={() => { setUnpublishCard(null); setPublishError(null); }}
               onConfirm={() => unpublishService(unpublishCard)}
               onVerify={verifyPendingOutcome}
               confirmLabel="Ocultar"
@@ -1437,11 +1464,12 @@ export default function ServicesPanel() {
         const week = r.date.slice(0, 10);
         const title = `Setlist — ${SERVICE_LABEL[r._type]} ${new Date(week + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`;
         return (
-          <Modal title={title} onClose={() => setSetlistRole(null)} wide>
+          <Modal title={title} onClose={() => setSetlistRole(null)} wide busy={setlistSaving}>
             <SetlistEditor
               week={week}
               type={type}
               roleId={type === "special" ? r._id : undefined}
+              onBusyChange={setSetlistSaving}
               onClose={() => setSetlistRole(null)}
               onSaved={async () => {
                 setSetlistRole(null);
