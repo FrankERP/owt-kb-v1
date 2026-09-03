@@ -13,7 +13,7 @@ describe("dev-verify seed doc", () => {
       role: "admin",
       ministries: ["worship"],
       managesMinistries: ["kids"],
-      retiredFrom: ["worship"],
+      memberType: [],
       notifPrefs: {
         assignments: false,
         email: false,
@@ -30,9 +30,17 @@ describe("dev-verify seed doc", () => {
     });
   });
 
-  it("never sets memberType, disabled, or super-admin", () => {
+  it("has an EMPTY memberType, which is what keeps it out of every pool and seat", () => {
+    // The pools and every seat filter on `memberType?.includes(...)`, so an
+    // empty Tipo matches nothing. This replaced `retiredFrom` when the
+    // retirement mechanism was removed; if it ever gains a Tipo, the bot
+    // becomes selectable by an admin and by the solver.
+    const doc = buildVerifierDoc({ email: "v@example.com", passwordHash: "h" });
+    expect(doc.memberType).toEqual([]);
+  });
+
+  it("never sets disabled, and is never super-admin", () => {
     const doc = buildVerifierDoc({ email: "v@example.com", passwordHash: "h" }) as unknown as Record<string, unknown>;
-    expect(doc.memberType).toBeUndefined();
     expect(doc.disabled).toBeUndefined();
     expect(doc.role).toBe("admin");
   });
@@ -42,7 +50,7 @@ describe("dev-verify seed doc", () => {
     expect(VERIFIER_ID).not.toContain(".");
   });
 
-  it("is a worship member only: kids reads ignore retiredFrom, so kids membership would seat the bot", () => {
+  it("is a worship member only: kids rotation seats from the pair register, so kids membership would seat the bot", () => {
     const doc = buildVerifierDoc({ email: "v@example.com", passwordHash: "h" });
     expect(doc.ministries).toEqual(["worship"]);
     expect(doc.managesMinistries).toEqual(["kids"]);

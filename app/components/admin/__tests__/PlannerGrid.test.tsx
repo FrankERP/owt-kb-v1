@@ -9,6 +9,7 @@ import { fireEvent, render, cleanup, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import PlannerGrid, { type PlannerGridProps, type SolveDiagnostics } from "../PlannerGrid";
+import { CueDialogProvider } from "../../ui/CueDialogProvider";
 import {
   buildColumns,
   buildRows,
@@ -912,21 +913,75 @@ describe("PlannerGrid — row management", () => {
 });
 
 describe("PlannerGrid — copy across dates (fact 26, grid-only)", () => {
-  it("copies an instrument row's occupants to every other date in the grid", () => {
+  // «Copiar a todo el mes» REPLACES the row in every other column rather than
+  // merging into it, and since stored mode it reaches services already saved in
+  // Sanity. It used to write on the single click with no prompt — the same
+  // eviction this component's header records shipping once, across 18 services.
+  // So the click now plans, and only the confirmation writes.
+  const COPY_BUTTON = /copiar a todo el mes/i;
+
+  function renderWithDialog(props: PlannerGridProps) {
+    return render(
+      <CueDialogProvider>
+        <PlannerGrid {...props} />
+      </CueDialogProvider>,
+    );
+  }
+
+  it("copies an instrument row's occupants to every other date once confirmed", () => {
     const columns = buildColumns({ sundayDates: ["2026-08-02", "2026-08-09"], activeSatDates: [] });
     const cells: InputGridCell[] = [
       { date: "2026-08-02", rowId: "instrumento:Drums", memberIds: ["d1", "d2"], origin: "manual" },
     ];
     const onCellsChange = vi.fn();
-    const { container } = render(<PlannerGrid {...baseProps({ columns, cells, onCellsChange })} />);
+    const { container } = renderWithDialog(baseProps({ columns, cells, onCellsChange }));
     const sourceCell = cellFor(container, "instrumento:Drums", "2026-08-02");
-    fireEvent.click(within(sourceCell).getByRole("button", { name: /copiar a todo el mes/i }));
+    fireEvent.click(within(sourceCell).getByRole("button", { name: COPY_BUTTON }));
+
+    // The click alone must not write.
+    expect(onCellsChange).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText("Copiar de todos modos"));
     expect(onCellsChange).toHaveBeenCalledTimes(1);
     const next: GridCell[] = onCellsChange.mock.calls[0][0];
     const copied = next.find(
       (c) => c.rowId === "instrumento:Drums" && c.columnId === columns[1].columnId,
     );
     expect(copied?.occupants.map((o) => o.memberId).sort()).toEqual(["d1", "d2"]);
+  });
+
+  it("writes nothing when the admin desists", () => {
+    const columns = buildColumns({ sundayDates: ["2026-08-02", "2026-08-09"], activeSatDates: [] });
+    const cells: InputGridCell[] = [
+      { date: "2026-08-02", rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" },
+    ];
+    const onCellsChange = vi.fn();
+    const { container } = renderWithDialog(baseProps({ columns, cells, onCellsChange }));
+    fireEvent.click(
+      within(cellFor(container, "instrumento:Drums", "2026-08-02")).getByRole("button", { name: COPY_BUTTON }),
+    );
+    fireEvent.click(screen.getByText("Desistir"));
+    expect(onCellsChange).not.toHaveBeenCalled();
+  });
+
+  it("names who the copy would evict, because it replaces rather than adds", () => {
+    // The whole point of the prompt: d2 is seated on the 9th and is not in the
+    // source, so the copy removes them. That was silent before.
+    const columns = buildColumns({ sundayDates: ["2026-08-02", "2026-08-09"], activeSatDates: [] });
+    const cells: InputGridCell[] = [
+      { date: "2026-08-02", rowId: "instrumento:Drums", memberIds: ["d1"], origin: "manual" },
+      { date: "2026-08-09", rowId: "instrumento:Drums", memberIds: ["d2"], origin: "manual" },
+    ];
+    const { container } = renderWithDialog(baseProps({ columns, cells }));
+    fireEvent.click(
+      within(cellFor(container, "instrumento:Drums", "2026-08-02")).getByRole("button", { name: COPY_BUTTON }),
+    );
+    const prompt = screen.getByText(/reemplaza a quien ya está puesto/i);
+    expect(prompt).not.toBeNull();
+    // Named as a person on a date, not as an id: "9 ago: sale Tony".
+    const eviction = screen.getByText(/sale/i).textContent ?? "";
+    expect(eviction).toMatch(/9 ago/);
+    expect(eviction).toMatch(/Tony/);
   });
 });
 

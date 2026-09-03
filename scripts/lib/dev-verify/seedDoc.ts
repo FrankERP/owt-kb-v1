@@ -2,8 +2,11 @@
  * The «Verificador» teamMembers document (spec §3.1). Pure so the exact shape is
  * unit-tested; scripts/dev-verify-seed.mjs is the only writer.
  *
- * `retiredFrom` is the load-bearing field: it is hidden in Studio, so this script
- * is the only way to set it, and it is what keeps the member out of every pool.
+ * An EMPTY `memberType` is the load-bearing field: the pools and every seat are
+ * built from it (`memberType?.includes(...)`), so a member with no Tipo matches
+ * nothing and can be selected neither by an admin nor by the solver. It replaces
+ * the `retiredFrom` this document used to carry, which was removed with the
+ * retirement mechanism it belonged to.
  */
 export const VERIFIER_ID = "member-dev-verify";
 
@@ -17,7 +20,7 @@ export interface VerifierDoc {
   role: "admin";
   ministries: string[];
   managesMinistries: string[];
-  retiredFrom: string[];
+  memberType: string[];
   notifPrefs: Record<string, boolean | string>;
   passwordHash: string;
 }
@@ -31,14 +34,14 @@ export function buildVerifierDoc(input: { email: string; passwordHash: string })
     slug: { _type: "slug", current: "verificador-bot" },
     email: input.email,
     role: "admin",
-    // Worship member, retired from it: every worship selection point honours
-    // retiredFrom. NOT a kids member — kids reads are resolution-only and never
-    // filter on retiredFrom (retirementGatingCoverage.test.ts pins that), so kids
+    // A worship member with no Tipo: it can sign in and read every worship
+    // surface, and it is in no pool and eligible for no seat. NOT a kids member —
+    // kids rotation seats from the pair register rather than from Tipo, so kids
     // membership would make the bot a seatable pair member. Kids MANAGEMENT alone
     // is enough for /kids/admin (requireMinistryManager needs no membership).
     ministries: ["worship"],
     managesMinistries: ["kids"],
-    retiredFrom: ["worship"],
+    memberType: [],
     notifPrefs: {
       assignments: false,
       email: false,

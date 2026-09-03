@@ -18,7 +18,6 @@ import {
 import type { SeatCategory, SeatDef } from "./seatModel";
 import { evaluate } from "./ruleEnforcement";
 import type { GridColumn, SolverConfig } from "./plannerModel";
-import { filterMembersForSelection } from "@/app/utils/memberRetirement";
 
 export interface RankMember {
   _id: string;
@@ -26,7 +25,6 @@ export interface RankMember {
   alias?: string;
   memberType?: string[];
   unavailableDates?: string[];
-  retiredFrom?: string[];
 }
 
 /** A seat already occupied on the service being edited. */
@@ -126,7 +124,7 @@ export function rankCandidates(input: {
   config?: SolverConfig;
 }): RankedCandidate[] {
   const { seat, date, windowRoles, assigned, column, sundayDates, config } = input;
-  const members = filterMembersForSelection(input.members ?? [], "worship") as RankMember[];
+  const members = (input.members ?? []) as RankMember[];
   const weeks = input.weeks ?? 4;
 
   // Load comes from the shipped counter so the WEEK RULE (Saturday counts toward

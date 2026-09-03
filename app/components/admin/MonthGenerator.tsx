@@ -3,12 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 import {
-  filterMembersForSelection,
-  isRetiredFrom,
   personNameOptions,
-  retiredInSolverPools,
-  RETIREMENT_UI_COPY,
-} from "@/app/utils/memberRetirement";
+} from "@/app/utils/memberRuleNames";
 import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
@@ -49,6 +45,7 @@ import {
   mapUnfilledSeats,
   namelessSpecial,
   plannerParticipationRoles,
+  poolTipoMismatch,
   unaddressableDates as computeUnaddressableDates,
   type DraftCard,
   type GridCell,
@@ -92,7 +89,6 @@ interface MemberOption {
   alias?: string;
   memberType?: string[];
   unavailableDates?: string[];
-  retiredFrom?: string[];
 }
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
@@ -565,7 +561,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
   initialValues?: PersonRestriction;
 }) {
   const preserve = initialValues?.person ? [initialValues.person] : [];
-  const names = personNameOptions(members, "worship", preserve);
+  const names = personNameOptions(members, preserve);
   const [person,   setPerson]   = useState(initialValues?.person ?? (names[0] ?? ""));
   const [excl,     setExcl]     = useState<string[]>(initialValues?.excludedPatterns ?? []);
   const [fairness, setFairness] = useState<PersonRestriction["fairness"]>(initialValues?.fairness ?? "none");
@@ -782,7 +778,7 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
   initialValues?: ConflictRule;
 }) {
   const preserve = initialValues ? [initialValues.personA, initialValues.personB] : [];
-  const names = personNameOptions(members, "worship", preserve);
+  const names = personNameOptions(members, preserve);
   const [personA,  setPersonA]  = useState(initialValues?.personA ?? (names[0] ?? ""));
   const [personB,  setPersonB]  = useState(initialValues?.personB ?? (names[1] ?? names[0] ?? ""));
   const [pattern,  setPattern]  = useState(initialValues?.pattern ?? "*.Lead");
@@ -834,10 +830,7 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
 }) {
   const [selected, setSelected] = useState<string[]>(initialValues?.persons ?? []);
   const [pattern,  setPattern]  = useState(initialValues?.pattern ?? "Sun.BGV");
-  const selectedSet = useMemo(() => new Set(selected), [selected]);
-  const listMembers = members.filter(
-    (m) => !isRetiredFrom("worship", m.retiredFrom) || selectedSet.has(dn(m)),
-  );
+  const listMembers = members;
 
   const canAdd = selected.length >= 2;
 
@@ -1376,16 +1369,24 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 }) {
   const [searches, setSearches] = useState<Record<string, string>>({});
 
-  const poolKeepIds = [
-    ...config.sundayLeads,
-    ...config.saturdayLeads,
-    ...config.support,
-  ];
-  const eligible = filterMembersForSelection(members, "worship", { keepIds: poolKeepIds });
-  const sundayPool   = eligible.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("sunday_lead"));
-  const saturdayPool = eligible.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("saturday_lead"));
-  const supportPool  = eligible.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("support"));
-  const retiredInPools = retiredInSolverPools(config, members);
+  // The pools are "Tipo" and nothing else: an empty Tipo puts a member in no
+  // pool and matches no seat, which is how someone stops being schedulable.
+  const sundayPool   = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("sunday_lead"));
+  const saturdayPool = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("saturday_lead"));
+  const supportPool  = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("support"));
+  // Ticked into a pool at some point, but no longer carrying that pool's Tipo.
+  // The lists above cannot render them — they are built FROM Tipo — so without
+  // this the stale tick is invisible and un-untickable while its id sits in the
+  // document. `buildSolveRequest` drops them from the pools and REFUSES the
+  // solve if a rule still names them, so this list is how the admin acts on
+  // either outcome.
+  const tipoMismatch = poolTipoMismatch(config, members);
+
+  const POOL_LABEL: Record<"sundayLeads" | "saturdayLeads" | "support", string> = {
+    sundayLeads: "Líder Domingo",
+    saturdayLeads: "Líder Sábado",
+    support: "Soporte",
+  };
 
   const toggleMember = (field: "sundayLeads" | "saturdayLeads" | "support", id: string) => {
     const cur = config[field];
@@ -1436,6 +1437,34 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         />
       </div>
 
+      {tipoMismatch.length > 0 && (
+        <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
+          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
+            En un pool sin el Tipo que ese pool pide
+          </p>
+          <p className="font-body text-xs text-mono-400">
+            No entran al solver desde el pool. Si alguno se quedó sin «Tipo» y una regla
+            todavía lo nombra, el mes no se genera hasta que quites esa regla.
+          </p>
+          <ul className="space-y-1">
+            {tipoMismatch.map((m) => (
+              <li key={`${m.field}-${m._id}`} className="flex items-center justify-between gap-2">
+                <span className="font-body text-xs text-mono-400">
+                  {dn(m as MemberOption)} — {POOL_LABEL[m.field]}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleMember(m.field, m._id)}
+                  className="rounded-lg border border-accent/20 px-2 py-1 font-label text-[10px] uppercase tracking-widest text-accent hover:bg-accent/10"
+                >
+                  Quitar del pool
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <LeadPoolHistoryPanel
         config={config}
         members={members}
@@ -1447,22 +1476,9 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
       <RuleBuilder
         config={config}
         onChange={onChange}
-        members={filterMembersForSelection(members.filter(m => m.memberType?.includes("voz")), "worship")}
+        members={members.filter(m => m.memberType?.includes("voz"))}
         source={rules.source}
       />
-
-      {retiredInPools.length > 0 && (
-        <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
-          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
-            {RETIREMENT_UI_COPY.poolWarning}
-          </p>
-          <ul className="font-body text-xs text-mono-400 list-disc pl-4">
-            {retiredInPools.map((m) => (
-              <li key={m._id}>{dn(m as MemberOption)}</li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {/*
         Below the pools AND the rules, because it saves the whole document —

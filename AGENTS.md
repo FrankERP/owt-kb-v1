@@ -258,12 +258,17 @@ role tier. Gate with `requireMinistryMember(id)` / `requireMinistryManager(id)`
   the only readers). **Explicitly empty** is rejected at every write boundary
   (`validateMinistryWrite`) and never stored — stored `[]` reads back as worship
   and would hand a kids volunteer the whole catalog.
-- **Soft retirement (`retiredFrom`):** absent ⇒ serves in every ministry they
-  belong to. **Selection** excludes retired members at the point of use
-  (`rankCandidates`, Persona select, `MemberPool`); **resolution** (`_id in $ids`,
-  id→name) never filters. `GET /api/admin/members` is deliberately unfiltered
-  by retirement. `disabled` is a separate kill switch — never written by retiro nor
-  by `handleEdit`. Kids rotation ignores `retiredFrom` (register-only in P1).
+- **"Tipo" (`memberType`) is the ONLY worship eligibility axis.** Every seat
+  filters on it (`rankCandidates`) and every solver pool is built from it
+  (`MonthGenerator`), so a member with an EMPTY Tipo matches no seat and is in no
+  pool — that is how someone stops being schedulable, and it is editable from
+  `/admin`. The `retiredFrom` soft-retirement mechanism was removed on
+  2026-09-03 (ADR-0029) after an audit found it made a retired-but-seated member
+  impossible to un-seat outside Studio; it had one document in production, the
+  dev-verify bot, which carried no Tipo at all. **Do not reintroduce a second
+  eligibility axis** without re-reading that ADR. `disabled` is separate and
+  unchanged: it removes app ACCESS, not schedulability, and is never written by
+  `handleEdit`.
 
 ## Continuous improvement
 Invoke `$improve-owt` from `.agents/skills/improve-owt/SKILL.md`. It performs

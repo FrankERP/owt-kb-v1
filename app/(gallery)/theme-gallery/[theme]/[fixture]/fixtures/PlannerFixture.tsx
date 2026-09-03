@@ -8,8 +8,9 @@
 // why it cannot share a page with the swatches, which it would cover entirely.
 //
 // `PlannerGrid` is hostable: zero `fetch`, zero `useSession`, nothing from `next-auth`,
-// and its own tests render it with no providers at all. Its `CueDialog` is mounted only
-// under `pendingMove`, so nothing throws without a provider.
+// and its own tests render it with no providers at all. Its `CueDialog`s are mounted only
+// under `pendingMove` and `pendingCopy`, and this fixture reaches neither, so nothing
+// throws without a provider.
 //
 // FULL SCREEN IS NOT A PROP. `PlannerGridProps` does not declare it; it is
 // `useState(false)` at `:553`, entered ONLY via the toggle at `:1823`. A static render

@@ -1,5 +1,9 @@
 # Spec: borrado de miembros que falla legible y no deja rastro colgante (P2)
 
+> **Still in force after ADR-0029.** Its siblings (P1, P3, the roadmap) were superseded
+> when soft retirement was removed; this one is not — `app/utils/memberDelete.ts` still
+> implements it. Only the message pointing at retirement changed.
+
 ## Status
 
 `APPROVED` — hijo 3 de 3 de `2026-08-30-member-retirement-roadmap.md`.

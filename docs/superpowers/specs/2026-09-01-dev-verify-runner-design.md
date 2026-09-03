@@ -54,13 +54,13 @@ dev reads):
 | `alias` | `Verificador` | |
 | `email` | the value of `DEV_VERIFY_EMAIL` | Credentials provider looks members up by email. |
 | `role` | `admin` | Reaches `/admin` (services, members, songs). Not `super-admin`: no impersonation, no super-admin-only actions. |
-| `ministries` | `["worship"]` | Membership gates member-facing worship pages (`requireMinistryMember`). **Not kids:** kids reads are resolution-only and never filter on `retiredFrom` (pinned by `retirementGatingCoverage.test.ts`), so kids membership would make the bot a seatable pair member. Member-facing `/kids` is therefore out of reach; `/kids/admin` is not (next row). |
+| `ministries` | `["worship"]` | Membership gates member-facing worship pages (`requireMinistryMember`). **Not kids:** kids rotation seats from the pair register, so kids membership would make the bot a seatable pair member. *(Amended 2026-09-03 by ADR-0029: this row cited `retirementGatingCoverage.test.ts`, deleted with the retirement mechanism.)* Member-facing `/kids` is therefore out of reach; `/kids/admin` is not (next row). |
 | `managesMinistries` | `["kids"]` | `requireMinistryManager` needs management, not membership, so kids planner pages stay reachable without seating the bot. No guard reads a `worship` entry here. |
-| `retiredFrom` | `["worship"]` | Excluded from every worship selection point (`rankCandidates`, Persona select, `MemberPool`). Hidden in Studio, so **only the seed script can set it** — this is why a Studio-only creation is not enough. |
+| `memberType` | `[]` | Excluded from every worship selection point: seats filter on `memberType`, and the solver pools are built from it. *(Amended 2026-09-03 by ADR-0029 — this row was `retiredFrom: ["worship"]` until soft retirement was removed.)* |
 | `memberType` | absent | Never a candidate for any section. |
 | `notifPrefs` | every boolean `false`, `setlist: "off"` | Never emailed, never pushed. |
 | `passwordHash` | bcrypt of `DEV_VERIFY_PASSWORD`, computed by the seed script from `DEV_VERIFY_PASSWORD_HASH` | Same mechanism as the A3 admin fixture (`SR_VERIFY_ADMIN_PASSWORD_HASH`): the script injects a hash, never a password. |
-| `disabled` | absent | `isMemberActive` is the login gate; `retiredFrom` does not block login. Setting `disabled: true` is the kill switch if the credential is ever suspected leaked. |
+| `disabled` | absent | `isMemberActive` is the login gate; an empty `memberType` does not block login. Setting `disabled: true` is the kill switch if the credential is ever suspected leaked. |
 
 What is NOT filtered: the member appears in `/admin/members` and in participation
 counts as a retired member with zero services. That is acceptable and honest; adding a

@@ -30,15 +30,7 @@ import {
   normalizeMinistries,
   type MinistryId,
 } from "@/app/ministries";
-import {
-  applyRetirementRuleChanges,
-  isRetiredFrom,
-  planWorshipRetirementRules,
-  RETIREMENT_UI_COPY,
-  type RetirementRuleChange,
-} from "@/app/utils/memberRetirement";
 import { interpretMemberDeleteResponse } from "@/app/utils/memberDelete";
-import type { SolverConfig } from "./plannerModel";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -56,7 +48,6 @@ interface Member {
    *  `normalizeMinistries`, never raw (see `MemberForm`). */
   ministries?: string[];
   managesMinistries?: string[];
-  retiredFrom?: MinistryId[];
   /** Stored as-is — absent means enabled (same contract as `isMemberActive`). */
   disabled?: boolean;
 }
@@ -171,13 +162,6 @@ type ModalState =
   | { type: "edit"; member: Member }
   | { type: "password"; member: Member }
   | { type: "delete"; member: Member }
-  | {
-      type: "retire_rules";
-      member: Member;
-      changes: RetirementRuleChange[];
-      solverRev: string;
-      solverConfig: SolverConfig;
-    }
   | null;
 
 const ROLES: { value: OWTRole; label: string }[] = [
@@ -745,7 +729,6 @@ export default function AdminPanel({
   const [error, setError]       = useState<string | null>(null);
   const [modal, setModal]       = useState<ModalState>(null);
   const [modalError, setModalError] = useState<string | null>(null);
-  const [deleteOfferRetire, setDeleteOfferRetire] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [toast, showToast]      = useTransientValue<string | null>(null, 3000);
   const [query, setQuery]           = useState("");
@@ -821,13 +804,11 @@ export default function AdminPanel({
 
   const openModal = (next: Exclude<ModalState, null>) => {
     setModalError(null);
-    setDeleteOfferRetire(false);
     setModal(next);
   };
 
   const closeModal = () => {
     setModalError(null);
-    setDeleteOfferRetire(false);
     setModal(null);
   };
 
@@ -910,126 +891,6 @@ export default function AdminPanel({
     }
   };
 
-  const executeMemberRetire = async (memberId: string, ministry: MinistryId, retire: boolean) => {
-    const res = await fetch(`/api/admin/members/${memberId}/retire`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ministry, retire }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({})) as { error?: string };
-      throw new Error(body.error ?? "Error al actualizar retiro.");
-    }
-  };
-
-  const writeSolverConfigRules = async (
-    rev: string,
-    config: SolverConfig,
-    changes: RetirementRuleChange[],
-  ) => {
-    if (changes.length === 0) return;
-    const nextConfig = applyRetirementRuleChanges(config, changes);
-    const res = await fetch("/api/admin/solver-config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rev, config: nextConfig }),
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({})) as { error?: string; kind?: string };
-      if (body.kind === "stale_revision") {
-        throw new Error("Las reglas cambiaron mientras confirmabas. Recarga e intenta de nuevo.");
-      }
-      throw new Error(body.error ?? "Error al actualizar reglas del solver.");
-    }
-  };
-
-  const completeWorshipRetire = async (
-    member: Member,
-    changes: RetirementRuleChange[],
-    solverRev: string,
-    solverConfig: SolverConfig,
-  ) => {
-    // R17: member `retiredFrom` before solverConfig (R15).
-    await executeMemberRetire(member._id, "worship", true);
-    await writeSolverConfigRules(solverRev, solverConfig, changes);
-    fetchMembers();
-    showToast("Retiro registrado.");
-  };
-
-  const handleRetire = async (memberId: string, ministry: MinistryId, retire: boolean) => {
-    const member = members.find((m) => m._id === memberId);
-    if (!member) return;
-
-    if (!retire || ministry !== "worship") {
-      setSubmitting(true);
-      try {
-        await executeMemberRetire(memberId, ministry, retire);
-        fetchMembers();
-        showToast(retire ? "Retiro registrado." : "Miembro restaurado al roster.");
-      } catch (err) {
-        showToast(err instanceof Error ? err.message : "Error al actualizar retiro.");
-      } finally {
-        setSubmitting(false);
-      }
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const cfgRes = await fetch("/api/admin/solver-config");
-      if (!cfgRes.ok) throw new Error("No se pudieron leer las reglas del solver.");
-      const cfgBody = await cfgRes.json() as {
-        present: boolean;
-        rev: string | null;
-        config: SolverConfig | null;
-      };
-      if (!cfgBody.present || !cfgBody.config || !cfgBody.rev) {
-        await executeMemberRetire(member._id, "worship", true);
-        fetchMembers();
-        showToast("Retiro registrado.");
-        return;
-      }
-
-      const plan = planWorshipRetirementRules(cfgBody.config, member);
-      const allChanges = [...plan.auto, ...plan.confirm];
-      if (plan.confirm.length > 0) {
-        setModal({
-          type: "retire_rules",
-          member,
-          changes: allChanges,
-          solverRev: cfgBody.rev,
-          solverConfig: cfgBody.config,
-        });
-        return;
-      }
-
-      await completeWorshipRetire(member, allChanges, cfgBody.rev, cfgBody.config);
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : "Error al actualizar retiro.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleConfirmRetireRules = async () => {
-    if (modal?.type !== "retire_rules") return;
-    setSubmitting(true);
-    setModalError(null);
-    try {
-      await completeWorshipRetire(
-        modal.member,
-        modal.changes,
-        modal.solverRev,
-        modal.solverConfig,
-      );
-      setModal(null);
-    } catch (err) {
-      setModalError(err instanceof Error ? err.message : "Error al confirmar retiro.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const handleDisableAccess = async (memberId: string, disabled: boolean) => {
     setSubmitting(true);
     try {
@@ -1083,7 +944,6 @@ export default function AdminPanel({
   const handleDelete = async () => {
     if (modal?.type !== "delete") return;
     setSubmitting(true);
-    setDeleteOfferRetire(false);
     try {
       const res = await fetch(`/api/admin/members/${modal.member._id}`, { method: "DELETE" });
       const body = await res.json().catch(() => ({})) as {
@@ -1102,7 +962,6 @@ export default function AdminPanel({
         setModalError(outcome.message);
       } else if (outcome.kind === "references") {
         setModalError(outcome.message);
-        setDeleteOfferRetire(true);
       } else {
         setModalError("Error al eliminar.");
       }
@@ -1346,41 +1205,9 @@ export default function AdminPanel({
                       Sin acceso
                     </span>
                   )}
-                  {ALL_MINISTRY_IDS.filter((id) => isRetiredFrom(id, m.retiredFrom)).map((id) => (
-                    <span key={id} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-warning-strong/15 text-warning-strong border border-warning-strong/30">
-                      Retirado · {MINISTRIES[id].name}
-                    </span>
-                  ))}
                 </div>
                 {role === "super-admin" && (
                   <div className="mt-2 space-y-2 border-t border-accent/10 pt-2">
-                    <p className="font-label text-[10px] uppercase tracking-widest text-mono-600">
-                      Retiro por ministerio
-                    </p>
-                    <p className="font-body text-[11px] text-mono-500 leading-snug">
-                      {RETIREMENT_UI_COPY.worshipRetire}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {normalizeMinistries(m.ministries).map((minId) => {
-                        const retired = isRetiredFrom(minId, m.retiredFrom);
-                        return (
-                          <button
-                            key={minId}
-                            type="button"
-                            disabled={submitting}
-                            onClick={() => handleRetire(m._id, minId, !retired)}
-                            className="rounded-lg border border-accent/20 px-2 py-1 font-label text-[10px] uppercase tracking-widest text-accent hover:bg-accent/10 disabled:opacity-50"
-                          >
-                            {retired ? `Restaurar · ${MINISTRIES[minId].name}` : `Retirar · ${MINISTRIES[minId].name}`}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {normalizeMinistries(m.ministries).includes("kids") && (
-                      <p className="font-body text-[11px] text-mono-500 leading-snug">
-                        {RETIREMENT_UI_COPY.kidsRetire}
-                      </p>
-                    )}
                     <div className="flex items-center gap-2 pt-1 border-t border-accent/10">
                       <span className="font-label text-[10px] uppercase tracking-widest text-mono-600">
                         Acceso a la app
@@ -1483,19 +1310,6 @@ export default function AdminPanel({
           <p className="font-body text-sm text-mono-400">
             ¿Eliminar a <span className="text-negative-fg font-semibold">{modal.member.member_name}</span>? Esta acción no se puede deshacer.
           </p>
-          {deleteOfferRetire && (
-            <button
-              type="button"
-              onClick={() => {
-                const member = modal.member;
-                closeModal();
-                void handleRetire(member._id, "worship", true);
-              }}
-              className="w-full py-2 rounded-lg border border-accent/30 bg-accent/10 font-label text-xs uppercase tracking-widest text-accent transition-colors hover:bg-accent/20"
-            >
-              Retirar de Alabanza en su lugar
-            </button>
-          )}
           <div className="flex gap-3 pt-1">
             <button onClick={closeModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
               Cancelar
@@ -1507,24 +1321,6 @@ export default function AdminPanel({
         </Modal>
       )}
 
-      {modal?.type === "retire_rules" && (
-        <Modal title={RETIREMENT_UI_COPY.ruleConfirmTitle} onClose={closeModal} status={modalError}>
-          <p className="font-body text-sm text-mono-400 mb-3">{RETIREMENT_UI_COPY.ruleConfirmBody}</p>
-          <ul className="font-body text-sm text-mono-300 list-disc pl-5 space-y-1 mb-4">
-            {modal.changes.filter((c) => c.affectedOthers.length > 0).map((c) => (
-              <li key={`${c.ruleType}-${c.ruleId}`}>{c.summary}</li>
-            ))}
-          </ul>
-          <div className="flex gap-3 pt-1">
-            <button onClick={closeModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
-              Cancelar
-            </button>
-            <button onClick={handleConfirmRetireRules} disabled={submitting} className="flex-1 py-2 rounded-lg bg-warning-strong/80 hover:bg-warning-strong font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
-              {submitting ? "Confirmando..." : "Confirmar retiro"}
-            </button>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 }

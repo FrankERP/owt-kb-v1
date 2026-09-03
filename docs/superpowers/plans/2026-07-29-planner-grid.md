@@ -179,7 +179,10 @@ Query only by accessible role and name, using the **real** labels (fact 20): mat
 
 *Request construction (fact 14)*
 - Every DSL-named person absent from all pools is injected into `support`, so **every DSL-named person appears in exactly one pool**. That is the shape a unit test can assert; "the solver accepts it" cannot be asserted without running the solver. Omitting the injection is a 422 in production.
-- A **pool** member unavailable on a Sunday in the window yields `!in week N Sun.*`; the Saturday case yields `Sat.*`. A **non-pool** member yields none — the rules loop `allPoolIds` (fact 15). Record the consequence in a comment: a DSL-named non-pool member is therefore schedulable while unavailable. Do not "fix" that by widening the loop without deciding it separately.
+- A **pool** member unavailable on a Sunday in the window yields `!in week N Sun.*`; the Saturday case yields `Sat.*`. A **non-pool** member yields none — the rules loop `allPoolIds` (fact 15). Record the consequence in a comment: a DSL-named non-pool member is therefore schedulable while unavailable.
+  **Amended 2026-09-03 (ADR-0029):** a DSL-named member injected into `support` now
+  DOES carry their week exclusions — `allPoolIds` unions `injectedMemberIds`. Only a
+  member the request never NAMES is schedulable while unavailable. Do not "fix" that by widening the loop without deciding it separately.
 - Pools are mutually exclusive (fact 5).
 - No Sunday leads selected → `ok: false` with the Spanish reason and **no API call**.
 - The returned object is a literal typed `SolveRequest`, so a rename of `weekends_with_saturday` is a `tsc` error rather than a silent empty month (fact 7).
