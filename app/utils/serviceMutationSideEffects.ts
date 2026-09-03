@@ -855,12 +855,15 @@ export async function notifySetlistSaved(week: string): Promise<void> {
     const assigned = await operationalClient.fetch<string[]>(assignedMemberRefsQuery(roleFilter), {
       week,
     });
-    // Retirement removes a member from the broadcast above, but NOT from a service
-    // they are still rostered on ("Sigue en servicios ya asignados"). Resolve the
-    // assigned ids' preferences directly — resolution by id never filters on
-    // retirement (R3) — and merge, so a worship-retired member who still plays this
-    // week is treated exactly like any other assignee. `setlistRecipientIds` keeps
-    // an assignee whose pref is "off" silent, retired or not.
+    // The broadcast above is an audience query; this is resolution BY ID, and the
+    // two must not be conflated. Somebody can stop being selectable for new work —
+    // by having no «Tipo» (ADR-0029) — and still be rostered on this week's
+    // service, which they are entitled to hear about. So resolve the assigned
+    // ids' preferences directly and merge: an assignee is treated like any other
+    // assignee. `setlistRecipientIds` keeps one whose pref is "off" silent either
+    // way. (This paragraph used to justify the same merge by the retirement
+    // filter that sat on the broadcast query; that filter is gone, the merge is
+    // not, and the reason above is the one that always did the work.)
     const assignedIds = assigned ?? [];
     const assignedMembers = assignedIds.length
       ? await operationalClient.fetch<{ _id: string; setlist?: SetlistPref }[]>(

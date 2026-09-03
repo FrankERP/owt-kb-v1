@@ -265,7 +265,7 @@ role tier. Gate with `requireMinistryMember(id)` / `requireMinistryManager(id)`
   `/admin`. The `retiredFrom` soft-retirement mechanism was removed on
   2026-09-03 (ADR-0029) after an audit found it made a retired-but-seated member
   impossible to un-seat outside Studio; it had one document in production, the
-  dev-verify bot, which already had an empty Tipo. **Do not reintroduce a second
+  dev-verify bot, which carried no Tipo at all. **Do not reintroduce a second
   eligibility axis** without re-reading that ADR. `disabled` is separate and
   unchanged: it removes app ACCESS, not schedulability, and is never written by
   `handleEdit`.

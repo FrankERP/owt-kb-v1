@@ -113,6 +113,69 @@ describe("buildSolveRequest — a cleared Tipo really does leave the request", (
     expect(out.ok).toBe(false);
   });
 
+  it("REFUSES rather than re-injecting a Tipo-less member that a rule still names", () => {
+    // The bug this closes: the pool filter dropped Beto, and the DSL injection
+    // — which exists because the solver 422s on a clause naming someone in no
+    // pool — put him straight back into `support`, where the solver seats BGV
+    // and Coro. His week exclusions were gone too, because those loop the
+    // FILTERED ids. Worse than having no filter at all.
+    const out = buildSolveRequest({
+      config: {
+        ...emptyConfig,
+        sundayLeads: ["a", "b"],
+        restrictions: [{
+          id: "r1", person: "Beto", excludedPatterns: [], fairness: "none",
+          fairnessSlack: 1, weekExclusions: [], caps: [],
+        }],
+      },
+      members: [
+        member("a", "Ana", ["voz", "sunday_lead"]),
+        member("b", "Beto", []),
+      ],
+      sundayDates: SUNDAYS,
+      activeSatDates: [],
+      historyEntries: [],
+      year: 2026,
+      month: 1,
+    });
+    expect(out.ok).toBe(false);
+    if (out.ok) throw new Error("unreachable");
+    expect(out.reason).toContain("Beto");
+    expect(out.reason).toMatch(/Tipo/);
+  });
+
+  it("still injects a rule-named member who merely lacks a POOL subtype", () => {
+    // `voz` with no sunday_lead/saturday_lead/support is not "unschedulable" —
+    // nobody said they cannot serve — so the documented injection stands.
+    const request = requestFor(
+      {
+        ...emptyConfig,
+        sundayLeads: ["a"],
+        restrictions: [{
+          id: "r1", person: "Eva", excludedPatterns: [], fairness: "none",
+          fairnessSlack: 1, weekExclusions: [], caps: [],
+        }],
+      },
+      [member("a", "Ana", ["voz", "sunday_lead"]), member("e", "Eva", ["voz"])],
+    );
+    expect(request.support).toContain("Eva");
+  });
+
+  it("still injects an unknown DSL name, which cannot be judged on Tipo at all", () => {
+    const request = requestFor(
+      {
+        ...emptyConfig,
+        sundayLeads: ["a"],
+        restrictions: [{
+          id: "r1", person: "Fantasma", excludedPatterns: [], fairness: "none",
+          fairnessSlack: 1, weekExclusions: [], caps: [],
+        }],
+      },
+      [member("a", "Ana", ["voz", "sunday_lead"])],
+    );
+    expect(request.support).toContain("Fantasma");
+  });
+
   it("still sends a member whose Tipo matches the pool they are in", () => {
     const config = { ...emptyConfig, sundayLeads: ["a"], support: ["d"] };
     const request = requestFor(config, [

@@ -49,13 +49,23 @@ solver rule's free-text `person` against a member and were never about
 retirement. The module carries no `"use client"` — both the planner model and
 client panels import it (ADR-0028).
 
-`buildSolveRequest` now re-filters the stored pool ids by live Tipo, and
+`buildSolveRequest` re-filters the stored pool ids by live Tipo, and
 `poolTipoMismatch` surfaces the stale ticks in the generator so they can be
 removed. Without that the premise held everywhere except the one document the
 admin cannot see: a member whose Tipo was cleared vanished from the pool
 checkboxes — which are built FROM Tipo — so the tick could not be removed, while
 their name still reached the solver. Clearing the Tipo of the only Sunday lead
-now fails the request closed rather than solving with no lead.
+fails the request closed rather than solving with no lead.
+
+Filtering the pools is not sufficient on its own, and the incomplete version is
+worse than none: every DSL-named person absent from all pools is injected into
+`support` (omitting them is a documented 422 from the solver), so a filtered-out
+member that a rule still named went straight back in — where the solver seats
+BGV and Coro — while their availability exclusions, which loop the FILTERED
+ids, were no longer generated. `buildSolveRequest` therefore REFUSES, naming the
+person, when a member with no Tipo is still named by a rule. A member who merely
+lacks a pool subtype (`voz` alone) is injected exactly as before: nobody has said
+they cannot serve.
 
 `disabled` is unchanged and still separate: it removes app ACCESS, not
 schedulability.

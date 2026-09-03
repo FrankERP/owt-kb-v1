@@ -1377,8 +1377,9 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
   // Ticked into a pool at some point, but no longer carrying that pool's Tipo.
   // The lists above cannot render them — they are built FROM Tipo — so without
   // this the stale tick is invisible and un-untickable while its id sits in the
-  // document. `buildSolveRequest` already ignores them, so this is cleanup, not
-  // a correctness gate.
+  // document. `buildSolveRequest` drops them from the pools and REFUSES the
+  // solve if a rule still names them, so this list is how the admin acts on
+  // either outcome.
   const tipoMismatch = poolTipoMismatch(config, members);
 
   const POOL_LABEL: Record<"sundayLeads" | "saturdayLeads" | "support", string> = {
@@ -1442,7 +1443,8 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
             En un pool sin el Tipo que ese pool pide
           </p>
           <p className="font-body text-xs text-mono-400">
-            Ya no entran al solver. Quítalos del pool para dejar la configuración limpia.
+            No entran al solver desde el pool. Si además alguna regla los nombra, el mes no
+            se genera hasta que quites la regla: sácalos de aquí y revisa las reglas.
           </p>
           <ul className="space-y-1">
             {tipoMismatch.map((m) => (

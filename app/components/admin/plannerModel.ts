@@ -633,9 +633,10 @@ export const POOL_SUBTYPE: Record<"sundayLeads" | "saturdayLeads" | "support", P
 /**
  * Stored pool ids whose member no longer carries the Tipo that pool requires —
  * including a member with no Tipo at all, which is how someone is made
- * unschedulable (ADR-0029). `buildSolveRequest` already ignores these; this is
- * what lets the panel SHOW them, since the checkbox list is built from Tipo and
- * therefore cannot render them.
+ * unschedulable (ADR-0029). `buildSolveRequest` drops these from the pools — and
+ * refuses outright when a rule still names one — so this is what lets the panel
+ * SHOW them, since the checkbox list is built from Tipo and therefore cannot
+ * render them.
  */
 export function poolTipoMismatch(
   config: Pick<SolverConfig, "sundayLeads" | "saturdayLeads" | "support">,
@@ -704,9 +705,42 @@ export function buildSolveRequest(input: {
     ...config.conflicts.flatMap((r) => [r.personA, r.personB]),
     ...config.presence.flatMap((r) => r.persons),
   ];
+
+  // …which quietly UNDID the Tipo filter above, and cost the member their
+  // availability into the bargain. Dropping someone from a pool for having no
+  // Tipo, while a rule still names them, put them straight back into `support`
+  // — where the solver seats BGV and Coro — and `allPoolIds` below (now built
+  // from the FILTERED ids) then generated none of their week exclusions. Worse
+  // than before the filter existed.
+  //
+  // Removing the name instead is not available: the solver 422s on a DSL clause
+  // naming someone in no pool. So this refuses, naming the person, and the
+  // generator's "en un pool sin el Tipo que ese pool pide" banner offers the
+  // one-click cleanup. NO Tipo at all is the deliberate "not schedulable"
+  // signal (ADR-0029); a member who merely lacks a POOL subtype — `voz` alone,
+  // say — is still injected exactly as before, since nobody has said they
+  // cannot serve.
+  const dslBlockedByTipo: string[] = [];
   for (const name of allDslPersons) {
-    const resolved = resolvedNameOrRaw(name, members);
-    if (!poolNames.has(resolved) && !extraSupport.includes(resolved)) extraSupport.push(resolved);
+    const r = resolveToMemberName(name, members);
+    const resolved = "resolved" in r ? r.resolved : r.unresolved;
+    if (poolNames.has(resolved)) continue;
+    // Only a name that RESOLVED to a real member can be judged on Tipo; an
+    // unknown raw name keeps its documented injection.
+    const named = "resolved" in r ? members.find((x) => x.member_name === r.resolved) : undefined;
+    if (named && (named.memberType ?? []).length === 0) {
+      if (!dslBlockedByTipo.includes(resolved)) dslBlockedByTipo.push(resolved);
+      continue;
+    }
+    if (!extraSupport.includes(resolved)) extraSupport.push(resolved);
+  }
+  if (dslBlockedByTipo.length > 0) {
+    return {
+      ok: false,
+      reason:
+        `${dslBlockedByTipo.join(", ")} no tiene «Tipo», así que no puede servir, pero todavía hay reglas del solver que lo nombran. `
+        + "Borra esas reglas (o devuélvele un Tipo) antes de generar el mes.",
+    };
   }
 
   // Auto-generate week-exclusion DSL rules from member unavailableDates. The
