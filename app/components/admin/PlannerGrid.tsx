@@ -368,6 +368,23 @@ interface PendingMove {
 }
 
 /**
+ * A planned «Copiar a todo el mes». Held between the click and the
+ * confirmation so the prompt can name what the write would cost — the copy
+ * REPLACES the row in every target column, so anyone currently seated there
+ * and not in the source is evicted.
+ */
+interface PendingCopy {
+  rowId: string;
+  rowLabel: string;
+  sourceColumnId: string;
+  sourceIds: string[];
+  /** Column ids the copy would write. */
+  targets: string[];
+  /** Only the targets that would LOSE somebody, with their names. */
+  evictions: { columnId: string; label: string; names: string[] }[];
+}
+
+/**
  * DD12 — an occupant MARKED as the source of a move, waiting for a target.
  *
  * The pick-then-place trigger (T5), and the reason it exists: `dragstart` never
@@ -567,6 +584,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const [dragNotice, setDragNotice] = useState<DragNotice | null>(null);
   /** A C4 move waiting on the force/desist prompt. See `forcePendingMove`. */
   const [pendingMove, setPendingMove] = useState<PendingMove | null>(null);
+  /** A planned «Copiar a todo el mes», awaiting confirmation. */
+  const [pendingCopy, setPendingCopy] = useState<PendingCopy | null>(null);
   /** T5 — the occupant marked for a pick-then-place. See `PickedMove`. */
   const [pickedMove, setPickedMove] = useState<PickedMove | null>(null);
   const pickerRef = useRef<HTMLDivElement | null>(null);
@@ -1443,20 +1462,70 @@ export default function PlannerGrid(props: PlannerGridProps) {
     return null;
   }
 
-  function copyRowAcrossColumns(row: GridRow, sourceColumnId: string) {
+  /**
+   * «Copiar a todo el mes» REPLACES this row in every other applicable column —
+   * it does not merge. That is the feature, but it is also exactly the eviction
+   * this file's own header records shipping once, on 18 services running two
+   * drummers on one Drums seat. Since stored mode it reaches services already
+   * saved in Sanity, and the next Guardar PATCHes every column it touched.
+   *
+   * So it plans first and writes only after the admin confirms, with the
+   * eviction named. The column filter is `canTouchColumn`, not the `admission`
+   * string test it used to run: the gate's P2 checks `serializeStoredColumn`,
+   * which also catches `invalid_special_name`, `invalid_write_label`,
+   * `missing_lead|bgv|coro` and `invalid_occupant` — and any touched column that
+   * fails poisons Guardar for the whole month.
+   */
+  function planCopyAcrossColumns(row: GridRow, sourceColumnId: string): PendingCopy | null {
+    const sourceColumn = columnById.get(sourceColumnId);
+    if (!sourceColumn || !canTouchColumn({ mode, column: sourceColumn, rows, cells })) return null;
+    const sourceIds =
+      cellsByKey.get(cellKey(sourceColumnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
+    const targets: string[] = [];
+    const evictions: { columnId: string; label: string; names: string[] }[] = [];
+    for (const col of columns) {
+      if (col.columnId === sourceColumnId) continue;
+      if (!canTouchColumn({ mode, column: col, rows, cells })) continue;
+      if (!rowAppliesTo(row, col)) continue;
+      const current = cellsByKey.get(cellKey(col.columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
+      targets.push(col.columnId);
+      // Only somebody who is there now and would NOT be there after is evicted.
+      const lost = current.filter((id) => !sourceIds.includes(id));
+      if (lost.length > 0) {
+        evictions.push({ columnId: col.columnId, label: shortDate(col.date), names: lost.map(memberName) });
+      }
+    }
+    if (targets.length === 0) return null;
+    return { rowId: row.id, rowLabel: row.label, sourceColumnId, sourceIds, targets, evictions };
+  }
+
+  function requestCopyAcrossColumns(row: GridRow, sourceColumnId: string) {
     if (mutationLocked) return;
     clearRemoveError();
     clearDragNotice();
-    const sourceColumn = columnById.get(sourceColumnId);
-    if (mode === "stored" && sourceColumn && "admission" in sourceColumn && sourceColumn.admission === "readOnly") return;
-    const sourceIds =
-      cellsByKey.get(cellKey(sourceColumnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
+    const plan = planCopyAcrossColumns(row, sourceColumnId);
+    if (!plan) {
+      setDragNotice({ tone: "note", message: `No hay otro servicio al que copiar ${row.label}.` });
+      return;
+    }
+    setPendingCopy(plan);
+  }
+
+  function confirmPendingCopy() {
+    if (!pendingCopy || mutationLocked) return;
+    // Re-planned against live `cells` rather than replayed from the snapshot:
+    // the same reason `forcePendingMove` re-judges instead of trusting what it
+    // captured when the prompt opened.
+    const row = rows.find((r) => r.id === pendingCopy.rowId);
+    const fresh = row ? planCopyAcrossColumns(row, pendingCopy.sourceColumnId) : null;
+    setPendingCopy(null);
+    if (!row || !fresh) {
+      setDragNotice({ tone: "refusal", message: "El mes cambió mientras confirmabas. No se copió nada." });
+      return;
+    }
     let next = cells;
-    for (const col of columns) {
-      if (col.columnId === sourceColumnId) continue;
-      if (mode === "stored" && "admission" in col && col.admission === "readOnly") continue;
-      if (!rowAppliesTo(row, col)) continue;
-      next = withUpdatedCell(next, row.id, col.columnId, sourceIds);
+    for (const columnId of fresh.targets) {
+      next = withUpdatedCell(next, row.id, columnId, fresh.sourceIds);
     }
     onCellsChange(next);
   }
@@ -1553,7 +1622,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             removeError={activeRemoveError?.rowId === row.id ? activeRemoveError.message : null}
             onCopy={
               row.category !== "voz"
-                ? (columnId) => copyRowAcrossColumns(row, columnId)
+                ? (columnId) => requestCopyAcrossColumns(row, columnId)
                 : undefined
             }
             activeColumnId={openCell?.rowId === row.id ? openCell.columnId : null}
@@ -1960,6 +2029,60 @@ export default function PlannerGrid(props: PlannerGridProps) {
               <button
                 type="button"
                 onClick={desistPendingMove}
+                className="min-h-[44px] flex-1 rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest hover:border-accent"
+              >
+                Desistir
+              </button>
+            </div>
+          </div>
+        </CueDialog>
+      )}
+
+      {/* Mounted conditionally for the same reason as the move prompt above. */}
+      {pendingCopy && (
+        <CueDialog
+          open
+          title="Copiar a todo el mes"
+          label="Copiar a todo el mes"
+          size="sm"
+          onDismiss={() => setPendingCopy(null)}
+        >
+          <div className="space-y-4 p-6">
+            <p className="font-body text-sm text-ink-muted">
+              {pendingCopy.sourceIds.length === 0
+                ? `Se vaciará ${pendingCopy.rowLabel} en ${pendingCopy.targets.length} ${pendingCopy.targets.length === 1 ? "servicio" : "servicios"} más de este mes.`
+                : `Se copiará ${pendingCopy.sourceIds.map(memberName).join(", ")} a ${pendingCopy.rowLabel} en ${pendingCopy.targets.length} ${pendingCopy.targets.length === 1 ? "servicio" : "servicios"} más de este mes.`}
+            </p>
+            {pendingCopy.evictions.length > 0 && (
+              <div className="space-y-1">
+                <p data-prompt-reason className="font-body text-sm text-negative-fg">
+                  Esto reemplaza a quien ya está puesto, no lo agrega:
+                </p>
+                <ul className="space-y-0.5">
+                  {pendingCopy.evictions.map((e) => (
+                    <li key={e.columnId} className="font-body text-sm text-negative-fg">
+                      {e.label}: sale {e.names.join(", ")}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="font-body text-xs text-ink-muted/70">
+              {mode === "stored"
+                ? "Son servicios ya guardados: el próximo Guardar los escribirá todos."
+                : "Puedes seguir ajustando cada servicio antes de crear los borradores."}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={confirmPendingCopy}
+                className="min-h-[44px] flex-1 rounded-lg border border-warning-fg/40 px-3 font-label text-xs uppercase tracking-widest text-warning-strong hover:bg-warning-fg/10"
+              >
+                Copiar de todos modos
+              </button>
+              <button
+                type="button"
+                onClick={() => setPendingCopy(null)}
                 className="min-h-[44px] flex-1 rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest hover:border-accent"
               >
                 Desistir
