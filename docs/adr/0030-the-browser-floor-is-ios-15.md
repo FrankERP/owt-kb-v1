@@ -9,9 +9,11 @@ The app ships an iOS wrap through Capacitor, and
 in all four build configurations. The WebView on such a device is Safari 15.
 
 Nothing recorded that floor. There is no `browserslist` in `package.json`, no
-`.browserslistrc`, and Next does not polyfill runtime APIs — it transpiles
-syntax, not `globalThis` members. So a Safari-16-only API compiles, type-checks,
-passes every test in jsdom and node, and throws only on a real old iPhone.
+`.browserslistrc`, and Next's `polyfill-module` covers only a fixed, small set
+(`Array.prototype.flat`, `Promise.prototype.finally`, `String.prototype.trimStart`
+and a few more) which includes none of the APIs below. So a Safari-16-only API
+compiles, type-checks, passes every test in jsdom and node, and throws only on a
+real old iPhone.
 
 The instance that forced the decision: `AbortSignal.timeout` (Safari 16.0) was
 used to bound four admin mutations whose dialogs block every dismissal route.
@@ -28,9 +30,11 @@ end reachable by nothing worse than an old phone.
 spelling that works everywhere rather than a feature check.
 
 Concretely: `mutationSignal()` in `app/components/admin/serviceMutationErrors.ts`
-builds an `AbortController` and a `setTimeout` (Safari 11.1) instead of
+builds an `AbortController` (Safari 11.1) with a plain `setTimeout` instead of
 `AbortSignal.timeout`. `servicesPanelInFlight.test.ts` fails on any reappearance
-of the call form.
+of the call form **in the three Servicios mutation files it reads** — narrower
+than `clientBoundary.test.ts`, which really is repo-wide, so the same call
+elsewhere under `app/**` would still ship silently.
 
 ## Rejected
 

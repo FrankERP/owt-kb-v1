@@ -62,9 +62,11 @@ export function mutationErrorMessage(input: MutationErrorInput): string {
  * false abort would put the panel into exactly the unknown-outcome state it
  * works hardest to avoid. It stays BELOW the admin routes' own
  * `maxDuration = 60`, so a genuinely slow publish becomes an honest unknown
- * outcome rather than a silent success. (The content routes the setlist editor
- * also calls declare no `maxDuration`; the platform default is lower, so the
- * server still answers first.)
+ * outcome rather than a silent success. The content routes the setlist editor
+ * also calls declare no `maxDuration` at all, so which side gives up first there
+ * depends on the Vercel project's default duration — unpinned in this repo. The
+ * consequence is bounded either way: those two creates report a plain error and
+ * reset their own flag, and neither touches the unknown-outcome ledger.
  */
 export const MUTATION_TIMEOUT_MS = 30_000;
 

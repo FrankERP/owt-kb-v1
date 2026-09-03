@@ -122,9 +122,10 @@ describe("a mutating dialog cannot be abandoned mid-flight", () => {
   });
 
   it("no mutating request behind THESE busy dialogs can hold one open forever", () => {
-    // KNOWINGLY OUT OF SCOPE: `MonthGenerator` blocks Escape and both «← Volver»
-    // exits while `storedTransportActive`, and its seven mutating fetches carry
-    // no abort at all. That predates this guard and is not covered here — the
+    // KNOWINGLY OUT OF SCOPE: `MonthGenerator` blocks Escape and both its
+    // header and footer exits — labelled «Cerrar», since `storedTransportActive`
+    // can only be true in stored mode — and its seven mutating fetches carry no
+    // abort at all. That predates this guard and is not covered here — the
     // title says "these" for that reason rather than implying a proof it does
     // not deliver.
     // `busy` blocks Escape, the backdrop AND the header ✕, so without a timeout
