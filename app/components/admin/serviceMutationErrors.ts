@@ -60,14 +60,18 @@ export function mutationErrorMessage(input: MutationErrorInput): string {
  * TCP timeout. The abort turns that into an ordinary reported failure. It is
  * generous on purpose: publishing a month is one batched transaction, and a
  * false abort would put the panel into exactly the unknown-outcome state it
- * works hardest to avoid. It stays BELOW the routes' own `maxDuration = 60`, so
- * a genuinely slow publish becomes an honest unknown outcome rather than a
- * silent success.
+ * works hardest to avoid. It stays BELOW the admin routes' own
+ * `maxDuration = 60`, so a genuinely slow publish becomes an honest unknown
+ * outcome rather than a silent success. (The content routes the setlist editor
+ * also calls declare no `maxDuration`; the platform default is lower, so the
+ * server still answers first.)
  */
 export const MUTATION_TIMEOUT_MS = 30_000;
 
 /**
  * `AbortController` + `setTimeout`, deliberately NOT `AbortSignal.timeout`.
+ *
+ * The browser floor is recorded in ADR-0030.
  *
  * The latter is Safari 16+, and this app ships an iOS wrap whose deployment
  * target is 15.0. On such a runtime the call throws a `TypeError` INSIDE the

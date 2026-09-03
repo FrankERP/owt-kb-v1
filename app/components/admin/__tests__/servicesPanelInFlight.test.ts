@@ -121,7 +121,12 @@ describe("a mutating dialog cannot be abandoned mid-flight", () => {
     expect(cancel).toContain("disabled={loading}");
   });
 
-  it("no mutating request behind a busy dialog can hold it open forever", () => {
+  it("no mutating request behind THESE busy dialogs can hold one open forever", () => {
+    // KNOWINGLY OUT OF SCOPE: `MonthGenerator` blocks Escape and both «← Volver»
+    // exits while `storedTransportActive`, and its seven mutating fetches carry
+    // no abort at all. That predates this guard and is not covered here — the
+    // title says "these" for that reason rather than implying a proof it does
+    // not deliver.
     // `busy` blocks Escape, the backdrop AND the header ✕, so without a timeout
     // a request stalled behind a dead connection left a modal that could not be
     // closed at all until the OS gave up. The scan covers the EDITOR too: its
@@ -134,6 +139,15 @@ describe("a mutating dialog cannot be abandoned mid-flight", () => {
       expect(mutating, name).toBeGreaterThan(0);
       expect(aborted, name).toBe(mutating);
     }
+  });
+
+  it("and every acquired timer is released", () => {
+    // Counting `signal:` alone would pass a `finally` that stopped clearing the
+    // timer, leaving an abort armed over an already-settled request.
+    expect((SOURCE.match(/mutationSignal\(\)/g) ?? []).length)
+      .toBe((SOURCE.match(/abort\.done\(\);/g) ?? []).length);
+    expect((EDITOR.match(/new AbortController\(\)/g) ?? []).length)
+      .toBe((EDITOR.match(/clearTimeout\(timer\);/g) ?? []).length);
   });
 
   it("uses AbortController, not the Safari-16-only AbortSignal.timeout", () => {
