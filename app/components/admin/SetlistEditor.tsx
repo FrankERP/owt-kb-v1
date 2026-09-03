@@ -7,6 +7,8 @@ import { ChainLinkIcon } from "../ChainLinkIcon";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import { canEditSetlistResponse, SETLIST_READ_ISSUE_COPY } from "../../utils/setlistReadContract";
+import { serviceDayOffset, serviceTodayIso } from "./serviceReadiness";
+import { MUTATION_TIMEOUT_MS } from "./serviceMutationErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,19 +25,53 @@ const SAVE_CONFLICT_COPY =
 
 const uid2 = () => Math.random().toString(36).slice(2, 9);
 
-function weeksAgo(iso: string): number {
-  return Math.floor((Date.now() - new Date(iso + "T12:00:00").getTime()) / (7 * 86400 * 1000));
+/**
+ * What the badge should say about a song's most recent appearance.
+ *
+ * Two things were wrong. The GROQ behind `recentSongs` is `week >= $cutoff`
+ * with no upper bound, and the route keeps the LATEST week per song — so a song
+ * already booked three months out arrived here as a NEGATIVE age, which passed
+ * the `> 4` filter, landed in the `<= 2` red class and rendered "esta sem.".
+ * A lead building a setlist saw a red "played this week" warning on songs that
+ * had not been played at all, which buries the real recency signal.
+ *
+ * Suppressing negatives would be the wrong fix: a song on tomorrow's Sunday
+ * while you edit Saturday is a genuine same-weekend repeat, and the most
+ * actionable warning of the lot. It gets its own label instead.
+ *
+ * The age is also a CALENDAR-day diff at local noon now, not elapsed hours,
+ * which is the repo's rule for anything that becomes a day/week LABEL: the old
+ * arithmetic flipped "esta sem." to "hace 1 sem." depending on the time of day.
+ */
+export function repeatBadgeFor(
+  lastUsed: string,
+  todayIso: string = serviceTodayIso(),
+): { label: string; tone: "upcoming" | "recent" | "older" } | null {
+  const offset = serviceDayOffset(lastUsed, todayIso);
+  if (offset === null) return null;
+  if (offset > 0) return { label: "ya programada", tone: "upcoming" };
+  const days = -offset;
+  const weeks = Math.floor(days / 7);
+  if (weeks > 4) return null;
+  return {
+    label: weeks <= 0 ? "esta sem." : `hace ${weeks} sem.`,
+    tone: weeks <= 2 ? "recent" : "older",
+  };
 }
 
+const REPEAT_TONE_CLASS: Record<"upcoming" | "recent" | "older", string> = {
+  // A booking still ahead is at least as loud as one two weeks past.
+  upcoming: "bg-negative-strong/20 text-negative-fg border-negative-strong/30",
+  recent: "bg-negative-strong/20 text-negative-fg border-negative-strong/30",
+  older: "bg-recency-fg/20 text-recency-strong border-recency-fg/30",
+};
+
 function RepeatBadge({ lastUsed }: { lastUsed: string }) {
-  const weeks = weeksAgo(lastUsed);
-  if (weeks > 4) return null;
-  const cls = weeks <= 2
-    ? "bg-negative-strong/20 text-negative-fg border-negative-strong/30"
-    : "bg-recency-fg/20 text-recency-strong border-recency-fg/30";
+  const badge = repeatBadgeFor(lastUsed);
+  if (!badge) return null;
   return (
-    <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${cls}`}>
-      {weeks <= 0 ? "esta sem." : `hace ${weeks} sem.`}
+    <span className={`font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full border ${REPEAT_TONE_CLASS[badge.tone]}`}>
+      {badge.label}
     </span>
   );
 }
@@ -52,12 +88,19 @@ function GripIcon() {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
+export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChange }: {
   week: string;
   type: "sunday" | "saturday" | "special";
   roleId?: string;
   onClose: () => void;
   onSaved?: () => void;
+  /**
+   * Reports the in-flight save upward so the surrounding dialog can refuse to
+   * be dismissed. `save()` deliberately keeps this editor open on failure and
+   * writes into `saveError` — and a dismissal mid-request destroys exactly that
+   * surface, so a lead's whole setlist disappears with no error shown.
+   */
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const [entries, setEntries]           = useState<SetlistEntry[]>([]);
   const [recentSongs, setRecentSongs]   = useState<Record<string, string>>({});
@@ -66,6 +109,13 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
   const [loading, setLoading]           = useState(true);
   const [loadError, setLoadError]       = useState<string | null>(null);
   const [saving, setSaving]             = useState(false);
+  // The cleanup is load-bearing: on a SUCCESSFUL save `onSaved()` unmounts this
+  // editor in the same batch that sets `saving` false, so the effect never
+  // re-runs and the parent's flag would stay true — locking the next dialog.
+  useEffect(() => {
+    onBusyChange?.(saving);
+    return () => onBusyChange?.(false);
+  }, [saving, onBusyChange]);
   const [saveError, setSaveError]       = useState<string | null>(null);
   // The observed target state is retained until a successful save or a reload —
   // never re-derived from a fresh server read, which would silently re-authorize
@@ -220,12 +270,15 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
   }
 
   async function handleCreateSong(form: FormState) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), MUTATION_TIMEOUT_MS);
     setCreateSaving(true);
     setCreateError(null);
     try {
       const res = await fetch("/api/content/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify(buildPayload(form)),
       });
       if (!res.ok) throw new Error();
@@ -241,15 +294,19 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
     } catch {
       setCreateError("No se pudo crear la canción.");
     } finally {
+      clearTimeout(timer);
       setCreateSaving(false);
     }
   }
 
   async function handleCreateTag(name: string): Promise<SongTag | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), MUTATION_TIMEOUT_MS);
     try {
       const res = await fetch("/api/content/tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error();
@@ -260,6 +317,8 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
     } catch {
       setCreateError("No se pudo crear el tag.");
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -267,12 +326,19 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
     // Without an observed state there is nothing to guard the write with; refuse
     // rather than send a blind overwrite.
     if (!observed) { setSaveError(SETLIST_READ_ISSUE_COPY.http); return; }
+    // The dialogs that host this editor block Escape, the backdrop and the ✕
+    // while it saves, so an un-abortable request would leave a modal that
+    // cannot be closed at all. Same budget and same reason as the panel's own
+    // mutations.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), MUTATION_TIMEOUT_MS);
     setSaving(true);
     setSaveError(null);
     try {
       const res = await fetch("/api/admin/setlists", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           week, type, roleId,
           // A1's observed state, unchanged: the server rejects the save unless the
@@ -294,6 +360,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
     } catch {
       setSaveError("Error de conexión. Intenta de nuevo.");
     } finally {
+      clearTimeout(timer);
       setSaving(false);
     }
   }
@@ -483,7 +550,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved }: {
         </button>
       )}
       <div className="flex gap-3 sticky bottom-0 bg-surface-raised-alt py-2">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
+        <button type="button" onClick={onClose} disabled={saving} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
           Cancelar
         </button>
         <button type="button" onClick={save} disabled={saving || saveConflict || !observed} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">

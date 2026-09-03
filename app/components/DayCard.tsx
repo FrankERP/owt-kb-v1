@@ -59,6 +59,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const [editSetlist, setEditSetlist] = useState(false);
+  const [setlistSaving, setSetlistSaving] = useState(false);
 
   const hasRole     = !!(leads?.length || instruments?.length || fohTeam?.length || bgvs?.length || chorus?.length);
   const hasSetlist  = !!(setlist?.songs?.length);
@@ -274,13 +275,17 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
           label={`Setlist - ${day} ${shortDate}`}
           mode="sheet"
           size="lg"
-          onDismiss={() => setEditSetlist(false)}
+          // A save in flight keeps the editor mounted on failure so it can
+          // show the error; dismissing here would destroy that surface and the
+          // lead's whole setlist with it. Same guard as the Servicios dialog.
+          onDismiss={() => { if (!setlistSaving) setEditSetlist(false); }}
         >
             <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-6">
               <SetlistEditor
                 week={date.slice(0, 10)}
                 type={setlistType}
                 roleId={roleId}
+                onBusyChange={setSetlistSaving}
                 onClose={() => setEditSetlist(false)}
                 onSaved={() => setEditSetlist(false)}
               />

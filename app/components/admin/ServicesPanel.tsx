@@ -5,7 +5,7 @@ import { useTransientValue } from "@/app/utils/useTransientValue";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import MonthGenerator from "./MonthGenerator";
 import type { ClearMonthSummary } from "./clearMonthModel";
-import { mutationErrorMessage } from "./serviceMutationErrors";
+import { mutationErrorMessage, mutationSignal } from "./serviceMutationErrors";
 import { useSolverConfig } from "./useSolverConfig";
 import {
   SERVICE_SOURCE_KEYS,
@@ -121,16 +121,25 @@ function Modal({
   onClose,
   wide,
   status,
+  busy,
   children,
 }: {
   title: string;
   onClose: () => void;
   wide?: boolean;
   status?: string | null;
+  /**
+   * A mutation is in flight. Disabling the Cancelar button is not enough:
+   * `CueDialog` routes Escape AND a backdrop click to `onDismiss`, so the
+   * dialog could still be abandoned mid-request — taking with it the surface
+   * that reports the failure and the one offering «Verificar resultado» after a
+   * lost response. Blocked here so all three exits agree.
+   */
+  busy?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <CueDialog open title={title} label={title} mode="sheet" size={wide ? "lg" : "sm"} onDismiss={onClose}>
+    <CueDialog open title={title} label={title} mode="sheet" size={wide ? "lg" : "sm"} onDismiss={() => { if (!busy) onClose(); }}>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
         {status && (
           <div>
@@ -224,6 +233,12 @@ export default function ServicesPanel() {
 
   // Copy-instruments mode: pick a source card, then a target day to repeat its lineup.
   const [copySource, setCopySource] = useState<string | null>(null);
+  // The setlist editor owns its own save, so it reports the in-flight state up
+  // rather than sharing `submitting`. Without it the setlist dialog kept the
+  // very defect the other four had: dismissed mid-save, it unmounts the surface
+  // `save()` writes its error into, and a lead loses a whole setlist silently.
+  const [setlistSaving, setSetlistSaving] = useState(false);
+
   const copyMode = copySource !== null;
 
   // The three A1 integrity summaries, kept beside the roles/members arrays. A
@@ -242,6 +257,13 @@ export default function ServicesPanel() {
    * A lost/timed-out publish or unpublish response. Repeat submission is disabled
    * until the read-only `recover` mode says what actually committed.
    */
+  // `pendingOutcome` — "a publish may have committed and we could not confirm
+  // it" — is deliberately NOT cleared by opening or closing a dialog. It used to
+  // be both, which meant the record evaporated one Escape or one reopen after it
+  // was recorded, and `submitPublication`'s own refusal ("El resultado anterior
+  // es desconocido. Verifícalo antes de reintentar.") could never fire. Only
+  // `verifyPendingOutcome` retires it: on a confirmed result, or on a 409 that
+  // supersedes it.
   const [pendingOutcome, setPendingOutcome] = useState<
     { kind: "publish" | "unpublish"; ids: string[]; published: boolean } | null
   >(null);
@@ -403,11 +425,13 @@ export default function ServicesPanel() {
     if (stale) { setEditError(stale.message); return; }
     const guard = guardControl(sources, "deleteService");
     if (!guard.ok) { setEditError(guard.message ?? "Datos incompletos."); return; }
+    const abort = mutationSignal();
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/roles/${editModal.role._id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
+        signal: abort.signal,
         body: JSON.stringify({ rev: editModal.role._rev }),
       });
       if (res.ok) {
@@ -422,6 +446,7 @@ export default function ServicesPanel() {
     } catch {
       setEditError("Error de conexión.");
     } finally {
+      abort.done();
       setSubmitting(false);
     }
   };
@@ -441,6 +466,12 @@ export default function ServicesPanel() {
 
   async function copyInstrumentsTo(targetId: string) {
     if (!copySource || copySource === targetId) return;
+    // The only direct mutation here that consulted no in-flight flag, while its
+    // button is gated on capability alone. On a slow network the admin clicked,
+    // confirmed, saw nothing, and clicked again — and the second POST carried
+    // the now-stale target `_rev`, so a 409 reported "Alguien más cambió este
+    // servicio" immediately after their OWN successful copy.
+    if (submitting) return;
     const stale = staleModes.copy;
     if (stale) { showToast(stale.message); return; }
     const guard = guardControl(sources, "copyInstruments");
@@ -452,6 +483,7 @@ export default function ServicesPanel() {
     const fmt = (r: ServiceRole) =>
       new Date(r.date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
     if (!confirm(`¿Copiar ${count} instrumento(s) de ${fmt(source)} a ${fmt(target)}? Reemplazará los instrumentos del destino.`)) return;
+    const abort = mutationSignal();
     setSubmitting(true);
     try {
       // Both observed revisions are sent; the server re-reads the source lineup
@@ -459,6 +491,7 @@ export default function ServicesPanel() {
       // failure copy mode stays open and nothing is claimed.
       const res = await fetch("/api/admin/roles/copy-instruments", {
         method: "POST", headers: { "Content-Type": "application/json" },
+        signal: abort.signal,
         body: JSON.stringify({
           source: { id: source._id, rev: source._rev },
           target: { id: target._id, rev: target._rev },
@@ -475,6 +508,7 @@ export default function ServicesPanel() {
     } catch {
       showToast("Error de conexión.");
     } finally {
+      abort.done();
       setSubmitting(false);
     }
   }
@@ -502,12 +536,14 @@ export default function ServicesPanel() {
       setPublishError("El resultado anterior es desconocido. Verifícalo antes de reintentar.");
       return;
     }
+    const abort = mutationSignal();
     setSubmitting(true);
     setPublishError(null);
     try {
       const res = await fetch(input.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: abort.signal,
         body: JSON.stringify(input.body),
       });
       if (res.ok) {
@@ -528,6 +564,7 @@ export default function ServicesPanel() {
       );
       void loadSources();
     } finally {
+      abort.done();
       setSubmitting(false);
     }
   }
@@ -536,6 +573,7 @@ export default function ServicesPanel() {
   async function verifyPendingOutcome() {
     const pending = pendingOutcome;
     if (!pending) return;
+    const abort = mutationSignal();
     setSubmitting(true);
     try {
       const res = await fetch(
@@ -543,6 +581,7 @@ export default function ServicesPanel() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          signal: abort.signal,
           body: JSON.stringify({
             mode: "recover",
             roles: pending.ids.map(id => ({ id })),
@@ -574,6 +613,7 @@ export default function ServicesPanel() {
     } catch {
       setPublishError("No se pudo verificar el resultado. Intenta de nuevo.");
     } finally {
+      abort.done();
       setSubmitting(false);
     }
   }
@@ -659,7 +699,6 @@ export default function ServicesPanel() {
     const guard = guardControl(sources, "publishReady");
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setPublishError(null);
-    setPendingOutcome(null);
     setPublishPlan(buildPublishConfirmation(cards));
   }
 
@@ -667,7 +706,6 @@ export default function ServicesPanel() {
     const guard = guardControl(sources, "publishReady");
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setPublishError(null);
-    setPendingOutcome(null);
     setOverrideCard(card);
   }
 
@@ -676,7 +714,6 @@ export default function ServicesPanel() {
     const guard = guardControl(sources, "unpublish");
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setPublishError(null);
-    setPendingOutcome(null);
     setUnpublishCard(card);
   }
 
@@ -1228,10 +1265,10 @@ export default function ServicesPanel() {
         // record still current, or this destructive confirmation is disabled.
         const blocked = staleModes.delete?.message ?? cardGates.deleteService.reason;
         return (
-          <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError ?? blocked}>
+          <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError ?? blocked} busy={submitting}>
             <p className="font-body text-sm text-mono-400">¿Eliminar el servicio del <span className="text-negative-fg font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
             <div className="flex gap-3">
-              <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">Cancelar</button>
+              <button onClick={closeEditModal} disabled={submitting} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">Cancelar</button>
               {staleModes.delete ? (
                 <button onClick={() => { closeEditModal(); retryLoad(); }} className="flex-1 py-2 rounded-lg border border-accent/30 font-label text-xs uppercase tracking-widest text-accent hover:bg-accent/10 transition-colors">Recargar</button>
               ) : (
@@ -1246,8 +1283,9 @@ export default function ServicesPanel() {
       {publishPlan && (
         <Modal
           title="Publicar listos"
-          onClose={() => { setPublishPlan(null); setPublishError(null); setPendingOutcome(null); }}
+          onClose={() => { setPublishPlan(null); setPublishError(null); }}
           status={publishError}
+          busy={submitting}
         >
           <div className={CARD_STYLE.dialog}>
             <p className="font-body text-sm text-mono-400">
@@ -1305,7 +1343,7 @@ export default function ServicesPanel() {
               </section>
             )}
             <PublicationFooter
-              onClose={() => { setPublishPlan(null); setPublishError(null); setPendingOutcome(null); }}
+              onClose={() => { setPublishPlan(null); setPublishError(null); }}
               onConfirm={() => publishReady(publishPlan.selected.map(({ id, rev }) => ({ id, rev })))}
               onVerify={verifyPendingOutcome}
               confirmLabel={`Publicar ${publishPlan.selected.length}`}
@@ -1336,8 +1374,9 @@ export default function ServicesPanel() {
         return (
           <Modal
             title="Publicar de todos modos"
-            onClose={() => { setOverrideCard(null); setPublishError(null); setPendingOutcome(null); }}
+            onClose={() => { setOverrideCard(null); setPublishError(null); }}
             status={publishError}
+            busy={submitting}
           >
             <div className={CARD_STYLE.dialog}>
               <p className={`font-body text-sm text-mono-400 ${CARD_STYLE.longText}`}>
@@ -1365,7 +1404,7 @@ export default function ServicesPanel() {
                 </p>
               )}
               <PublicationFooter
-                onClose={() => { setOverrideCard(null); setPublishError(null); setPendingOutcome(null); }}
+                onClose={() => { setOverrideCard(null); setPublishError(null); }}
                 onConfirm={() =>
                   acknowledgement && publishOverride(overrideCard, acknowledgement.acknowledgedBlockers)
                 }
@@ -1385,8 +1424,9 @@ export default function ServicesPanel() {
       {unpublishCard && (
         <Modal
           title="Ocultar servicio"
-          onClose={() => { setUnpublishCard(null); setPublishError(null); setPendingOutcome(null); }}
+          onClose={() => { setUnpublishCard(null); setPublishError(null); }}
           status={publishError ?? cardGates.unpublish.reason}
+          busy={submitting}
         >
           <div className={CARD_STYLE.dialog}>
             <p className={`font-body text-sm text-mono-400 ${CARD_STYLE.longText}`}>
@@ -1398,7 +1438,7 @@ export default function ServicesPanel() {
               con datos incompletos o en conflicto.
             </p>
             <PublicationFooter
-              onClose={() => { setUnpublishCard(null); setPublishError(null); setPendingOutcome(null); }}
+              onClose={() => { setUnpublishCard(null); setPublishError(null); }}
               onConfirm={() => unpublishService(unpublishCard)}
               onVerify={verifyPendingOutcome}
               confirmLabel="Ocultar"
@@ -1419,11 +1459,12 @@ export default function ServicesPanel() {
         const week = r.date.slice(0, 10);
         const title = `Setlist — ${SERVICE_LABEL[r._type]} ${new Date(week + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`;
         return (
-          <Modal title={title} onClose={() => setSetlistRole(null)} wide>
+          <Modal title={title} onClose={() => setSetlistRole(null)} wide busy={setlistSaving}>
             <SetlistEditor
               week={week}
               type={type}
               roleId={type === "special" ? r._id : undefined}
+              onBusyChange={setSetlistSaving}
               onClose={() => setSetlistRole(null)}
               onSaved={async () => {
                 setSetlistRole(null);
@@ -1472,10 +1513,19 @@ function PublicationFooter({
 }) {
   return (
     <div className="flex flex-wrap gap-3">
+      {/*
+        `disabled` while a submission is in flight, and it is not politeness.
+        Dismissing this dialog mid-request unmounts the surface that
+        `setPublishError` writes into and that renders «Verificar resultado» —
+        so a failed publish reported NOTHING. The lost-response half is now held
+        by `pendingOutcome` outliving any dismissal — only a verification retires
+        it — but this guard is still what keeps the in-flight error on screen.
+      */}
       <button
         type="button"
         onClick={onClose}
-        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent dark:hover:border-surface-accent-30"
+        disabled={loading}
+        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent dark:hover:border-surface-accent-30 disabled:opacity-50"
       >
         Cancelar
       </button>

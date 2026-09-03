@@ -60,6 +60,7 @@ import {
 } from "./plannerModel";
 import {
   buildStoredGridRows,
+  storedRowsDiffer,
   joinStoredRoleInventory,
   translateStoredRole,
   type StoredGridColumn,
@@ -1922,7 +1923,7 @@ export default function MonthGenerator({
   const invalidStoredColumns = storedMode
     ? storedColumns.filter((column) => touchedStoredRoleIds.has(column.roleId) && !serializeStoredColumn(column, rows, cells).ok)
     : [];
-  const storedRowsDirty = storedMode && JSON.stringify(rows) !== JSON.stringify(initialStoredRows);
+  const storedRowsDirty = storedMode && storedRowsDiffer(rows, initialStoredRows);
   const hasStoredDateMove = [...storedHeaderEdits.values()].some((edit) => edit.date !== undefined);
   const storedSaveBlocked = storedEditBlocked ?? (hasStoredDateMove ? storedDateBlocked : null);
   const storedWriteUnresolved = storedRowsDirty || dirtyStoredColumns.length > 0 || invalidStoredColumns.length > 0 || pendingSaveAttempts.size > 0 || swapVerificationPending;
@@ -1953,6 +1954,27 @@ export default function MonthGenerator({
     && (sectionSwapFirstColumn?.type === "saturday_role" || sectionSwapSecondColumn?.type === "saturday_role");
   const storedSwapInteractionBlocked = storedMutationLocked || storedHasUnresolvedWork || !!storedSwapBlocked;
 
+  /**
+   * Would closing right now throw work away?
+   *
+   * ONE predicate, read by all three exits from this screen — Escape, the
+   * footer «Cancelar», and (for its own "back" variant) «← Volver». That is the
+   * lesson `c16a2815` recorded when Escape was routed through the shared guard:
+   * two exits from one screen must not grow independent copies of "what counts
+   * as unsaved work". «Cancelar» was the third exit and was still calling
+   * `onClose` outright, so a month of hand-corrections vanished with no prompt
+   * while Escape, one key away, asked.
+   *
+   * A shared VALUE rather than a shared function on purpose: a function
+   * declaration referenced by the Escape effect below changes what the
+   * `react-hooks` compiler can analyse here, and it starts reporting seven
+   * long-standing ref-during-render errors elsewhere in this file. Those are
+   * worth addressing, but not silently, inside a fix for a discard prompt.
+   */
+  const closeWouldDiscard = storedMode
+    ? storedHasUnresolvedWork
+    : step === "grid" && assignmentCount > 0;
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -1960,10 +1982,7 @@ export default function MonthGenerator({
       // An open «Limpiar mes» confirmation is the nearest thing to dismiss —
       // Escape must not leap past a destructive prompt to close the editor.
       if (clearPending) { setClearPending(false); clearTriggerRef.current?.focus(); return; }
-      const wouldDiscard = storedMode
-        ? storedHasUnresolvedWork
-        : step === "grid" && assignmentCount > 0;
-      if (wouldDiscard) {
+      if (closeWouldDiscard) {
         setPendingDiscard("close");
         return;
       }
@@ -1971,7 +1990,7 @@ export default function MonthGenerator({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [assignmentCount, clearPending, onClose, step, storedHasUnresolvedWork, storedMode, storedTransportActive]);
+  }, [clearPending, closeWouldDiscard, onClose, storedTransportActive]);
 
   useEffect(() => {
     if (!storedMode || !focusRoleId) return;
@@ -2272,11 +2291,16 @@ export default function MonthGenerator({
   function requestBack() {
     if (storedMode) {
       if (storedTransportActive) return;
-      if (storedHasUnresolvedWork) { setPendingDiscard("close"); return; }
+      // `closeWouldDiscard` IS `storedHasUnresolvedWork` in stored mode; read
+      // the shared value so the two cannot drift apart later.
+      if (closeWouldDiscard) { setPendingDiscard("close"); return; }
       onClose();
       return;
     }
-    if (assignmentCount > 0) { setPendingDiscard("back"); return; }
+    // Reads the SAME predicate as Escape and «Cancelar», keeping only its own
+    // "back" disposition. The conditions happen to coincide today; re-deriving
+    // it here is how they would quietly stop coinciding.
+    if (closeWouldDiscard) { setPendingDiscard("back"); return; }
     goBackToConfig();
   }
 
@@ -3828,7 +3852,15 @@ export default function MonthGenerator({
         </div>
       ) : (
         <div className="flex gap-3">
-          <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
+          <button
+            type="button"
+            onClick={() => {
+              if (storedTransportActive) return;
+              if (closeWouldDiscard) { setPendingDiscard("close"); return; }
+              onClose();
+            }}
+            className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
+          >
             Cancelar
           </button>
           <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
