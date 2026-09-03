@@ -2335,7 +2335,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 181,
+      "line": 199,
       "disposition": "B",
       "reason": null
     },
@@ -2563,7 +2563,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 452,
+      "line": 453,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2575,7 +2575,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 555,
+      "line": 556,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2587,7 +2587,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1871,
+      "line": 1872,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2599,7 +2599,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1129,
+      "line": 1130,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2611,7 +2611,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1279,
+      "line": 1280,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2815,18 +2815,6 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 381,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/SetlistEditor.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
       "line": 416,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
@@ -2839,7 +2827,19 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 422,
+      "line": 451,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/SetlistEditor.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 457,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2851,7 +2851,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 45,
+      "line": 80,
       "disposition": "B",
       "reason": null
     },

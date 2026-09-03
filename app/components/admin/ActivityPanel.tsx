@@ -96,9 +96,20 @@ export default function ActivityPanel() {
   const [error, setError]       = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  // `res.ok` is checked BEFORE parsing, and the payload's shape after it. The
+  // route answers a lapsed session with `{ error: "Forbidden" }` and status 403
+  // — valid JSON, so `.catch` never fired, `activity` became that object, and
+  // the unguarded `activity.filter(...)` two lines below threw during render.
+  // That unmounts the whole /admin tree to the error boundary: a blank page
+  // instead of "Error al cargar actividad."
   useEffect(() => {
     fetch("/api/admin/login-events")
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        const body = await r.json();
+        if (!Array.isArray(body)) throw new Error("shape");
+        return body;
+      })
       .then(setActivity)
       .catch(() => setError("Error al cargar actividad."))
       .finally(() => setLoading(false));
@@ -169,8 +180,15 @@ export default function ActivityPanel() {
 
                 {/* Status dot + label */}
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className={`w-2 h-2 rounded-full ${status.color}`} />
-                  <span className="font-label text-[10px] uppercase tracking-widest text-mono-500 hidden sm:inline">
+                  <span className={`w-2 h-2 rounded-full ${status.color}`} aria-hidden="true" />
+                  {/*
+                    The label is `hidden sm:inline`, so on a phone the dot was
+                    the ONLY thing separating Activo from Inactivo — and a
+                    screen reader got nothing at any width. `sr-only` carries it
+                    without changing the mobile layout.
+                  */}
+                  <span className="sr-only">{status.label}</span>
+                  <span className="font-label text-[10px] uppercase tracking-widest text-mono-500 hidden sm:inline" aria-hidden="true">
                     {status.label}
                   </span>
                 </div>

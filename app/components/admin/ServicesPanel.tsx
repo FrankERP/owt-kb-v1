@@ -121,16 +121,25 @@ function Modal({
   onClose,
   wide,
   status,
+  busy,
   children,
 }: {
   title: string;
   onClose: () => void;
   wide?: boolean;
   status?: string | null;
+  /**
+   * A mutation is in flight. Disabling the Cancelar button is not enough:
+   * `CueDialog` routes Escape AND a backdrop click to `onDismiss`, so the
+   * dialog could still be abandoned mid-request — taking with it the surface
+   * that reports the failure and the one offering «Verificar resultado» after a
+   * lost response. Blocked here so all three exits agree.
+   */
+  busy?: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <CueDialog open title={title} label={title} mode="sheet" size={wide ? "lg" : "sm"} onDismiss={onClose}>
+    <CueDialog open title={title} label={title} mode="sheet" size={wide ? "lg" : "sm"} onDismiss={() => { if (!busy) onClose(); }}>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
         {status && (
           <div>
@@ -441,6 +450,12 @@ export default function ServicesPanel() {
 
   async function copyInstrumentsTo(targetId: string) {
     if (!copySource || copySource === targetId) return;
+    // The only direct mutation here that consulted no in-flight flag, while its
+    // button is gated on capability alone. On a slow network the admin clicked,
+    // confirmed, saw nothing, and clicked again — and the second POST carried
+    // the now-stale target `_rev`, so a 409 reported "Alguien más cambió este
+    // servicio" immediately after their OWN successful copy.
+    if (submitting) return;
     const stale = staleModes.copy;
     if (stale) { showToast(stale.message); return; }
     const guard = guardControl(sources, "copyInstruments");
@@ -1228,10 +1243,10 @@ export default function ServicesPanel() {
         // record still current, or this destructive confirmation is disabled.
         const blocked = staleModes.delete?.message ?? cardGates.deleteService.reason;
         return (
-          <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError ?? blocked}>
+          <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError ?? blocked} busy={submitting}>
             <p className="font-body text-sm text-mono-400">¿Eliminar el servicio del <span className="text-negative-fg font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
             <div className="flex gap-3">
-              <button onClick={closeEditModal} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">Cancelar</button>
+              <button onClick={closeEditModal} disabled={submitting} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">Cancelar</button>
               {staleModes.delete ? (
                 <button onClick={() => { closeEditModal(); retryLoad(); }} className="flex-1 py-2 rounded-lg border border-accent/30 font-label text-xs uppercase tracking-widest text-accent hover:bg-accent/10 transition-colors">Recargar</button>
               ) : (
@@ -1248,6 +1263,7 @@ export default function ServicesPanel() {
           title="Publicar listos"
           onClose={() => { setPublishPlan(null); setPublishError(null); setPendingOutcome(null); }}
           status={publishError}
+          busy={submitting}
         >
           <div className={CARD_STYLE.dialog}>
             <p className="font-body text-sm text-mono-400">
@@ -1338,6 +1354,7 @@ export default function ServicesPanel() {
             title="Publicar de todos modos"
             onClose={() => { setOverrideCard(null); setPublishError(null); setPendingOutcome(null); }}
             status={publishError}
+            busy={submitting}
           >
             <div className={CARD_STYLE.dialog}>
               <p className={`font-body text-sm text-mono-400 ${CARD_STYLE.longText}`}>
@@ -1387,6 +1404,7 @@ export default function ServicesPanel() {
           title="Ocultar servicio"
           onClose={() => { setUnpublishCard(null); setPublishError(null); setPendingOutcome(null); }}
           status={publishError ?? cardGates.unpublish.reason}
+          busy={submitting}
         >
           <div className={CARD_STYLE.dialog}>
             <p className={`font-body text-sm text-mono-400 ${CARD_STYLE.longText}`}>
@@ -1472,10 +1490,19 @@ function PublicationFooter({
 }) {
   return (
     <div className="flex flex-wrap gap-3">
+      {/*
+        `disabled` while a submission is in flight, and it is not politeness.
+        Dismissing this dialog mid-request unmounts the surface that
+        `setPublishError` writes into and that renders «Verificar resultado» —
+        so a failed publish reported NOTHING, and a LOST response dropped the
+        unknown-outcome contract this component documents at length: the next
+        `openPublishPlan`/`openOverride`/`openUnpublish` clears `pendingOutcome`.
+      */}
       <button
         type="button"
         onClick={onClose}
-        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent dark:hover:border-surface-accent-30"
+        disabled={loading}
+        className="min-h-[44px] flex-1 rounded-lg border border-surface-accent-30 px-3 font-label text-xs uppercase tracking-widest transition-colors hover:border-accent dark:hover:border-surface-accent-30 disabled:opacity-50"
       >
         Cancelar
       </button>
