@@ -8,6 +8,7 @@ import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import { canEditSetlistResponse, SETLIST_READ_ISSUE_COPY } from "../../utils/setlistReadContract";
 import { serviceDayOffset, serviceTodayIso } from "./serviceReadiness";
+import { MUTATION_TIMEOUT_MS } from "./serviceMutationErrors";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -108,7 +109,13 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
   const [loading, setLoading]           = useState(true);
   const [loadError, setLoadError]       = useState<string | null>(null);
   const [saving, setSaving]             = useState(false);
-  useEffect(() => { onBusyChange?.(saving); }, [saving, onBusyChange]);
+  // The cleanup is load-bearing: on a SUCCESSFUL save `onSaved()` unmounts this
+  // editor in the same batch that sets `saving` false, so the effect never
+  // re-runs and the parent's flag would stay true — locking the next dialog.
+  useEffect(() => {
+    onBusyChange?.(saving);
+    return () => onBusyChange?.(false);
+  }, [saving, onBusyChange]);
   const [saveError, setSaveError]       = useState<string | null>(null);
   // The observed target state is retained until a successful save or a reload —
   // never re-derived from a fresh server read, which would silently re-authorize
@@ -263,12 +270,15 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
   }
 
   async function handleCreateSong(form: FormState) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), MUTATION_TIMEOUT_MS);
     setCreateSaving(true);
     setCreateError(null);
     try {
       const res = await fetch("/api/content/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify(buildPayload(form)),
       });
       if (!res.ok) throw new Error();
@@ -284,15 +294,19 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
     } catch {
       setCreateError("No se pudo crear la canción.");
     } finally {
+      clearTimeout(timer);
       setCreateSaving(false);
     }
   }
 
   async function handleCreateTag(name: string): Promise<SongTag | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), MUTATION_TIMEOUT_MS);
     try {
       const res = await fetch("/api/content/tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error();
@@ -303,6 +317,8 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
     } catch {
       setCreateError("No se pudo crear el tag.");
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -310,12 +326,19 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
     // Without an observed state there is nothing to guard the write with; refuse
     // rather than send a blind overwrite.
     if (!observed) { setSaveError(SETLIST_READ_ISSUE_COPY.http); return; }
+    // The dialogs that host this editor block Escape, the backdrop and the ✕
+    // while it saves, so an un-abortable request would leave a modal that
+    // cannot be closed at all. Same budget and same reason as the panel's own
+    // mutations.
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), MUTATION_TIMEOUT_MS);
     setSaving(true);
     setSaveError(null);
     try {
       const res = await fetch("/api/admin/setlists", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           week, type, roleId,
           // A1's observed state, unchanged: the server rejects the save unless the
@@ -337,6 +360,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
     } catch {
       setSaveError("Error de conexión. Intenta de nuevo.");
     } finally {
+      clearTimeout(timer);
       setSaving(false);
     }
   }

@@ -2291,7 +2291,9 @@ export default function MonthGenerator({
   function requestBack() {
     if (storedMode) {
       if (storedTransportActive) return;
-      if (storedHasUnresolvedWork) { setPendingDiscard("close"); return; }
+      // `closeWouldDiscard` IS `storedHasUnresolvedWork` in stored mode; read
+      // the shared value so the two cannot drift apart later.
+      if (closeWouldDiscard) { setPendingDiscard("close"); return; }
       onClose();
       return;
     }

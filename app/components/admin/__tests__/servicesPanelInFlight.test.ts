@@ -30,6 +30,9 @@ import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SOURCE = readFileSync(path.join(HERE, "..", "ServicesPanel.tsx"), "utf8");
+const EDITOR = readFileSync(path.join(HERE, "..", "SetlistEditor.tsx"), "utf8");
+const HELPERS = readFileSync(path.join(HERE, "..", "serviceMutationErrors.ts"), "utf8");
+const DAY_CARD = readFileSync(path.join(HERE, "..", "..", "DayCard.tsx"), "utf8");
 const CARD = readFileSync(path.join(HERE, "..", "ServiceReadinessCard.tsx"), "utf8");
 
 /** The body of a named handler, up to the next declaration at the same depth. */
@@ -99,6 +102,10 @@ describe("a mutating dialog cannot be abandoned mid-flight", () => {
     expect((SOURCE.match(/busy=\{submitting\}/g) ?? []).length).toBeGreaterThanOrEqual(4);
     expect(SOURCE).toContain("busy={setlistSaving}");
     expect(SOURCE).toContain("onBusyChange={setSetlistSaving}");
+    // DayCard hosts the SAME editor for the same audience and had the same
+    // hole; it guards its CueDialog directly rather than through Modal.
+    expect(DAY_CARD).toContain("onBusyChange={setSetlistSaving}");
+    expect(DAY_CARD).toMatch(/onDismiss=\{\(\) => \{ if \(!setlistSaving\)/);
     // Every `<Modal` in this panel carries a busy decision: one `busy={` per
     // `<Modal`. A new dialog added without one breaks the equality rather than
     // slipping in unguarded.
@@ -114,15 +121,29 @@ describe("a mutating dialog cannot be abandoned mid-flight", () => {
     expect(cancel).toContain("disabled={loading}");
   });
 
-  it("no mutating request can hold a dialog open forever", () => {
+  it("no mutating request behind a busy dialog can hold it open forever", () => {
     // `busy` blocks Escape, the backdrop AND the header ✕, so without a timeout
     // a request stalled behind a dead connection left a modal that could not be
-    // closed at all until the OS gave up. Every mutating fetch here carries the
-    // abort; the reads deliberately do not, since they hold nothing open.
-    const mutating = (SOURCE.match(/method: "(POST|DELETE|PATCH|PUT)"/g) ?? []).length;
-    const timed = (SOURCE.match(/AbortSignal\.timeout\(MUTATION_TIMEOUT_MS\)/g) ?? []).length;
-    expect(mutating).toBeGreaterThan(0);
-    expect(timed).toBe(mutating);
+    // closed at all until the OS gave up. The scan covers the EDITOR too: its
+    // PUT is the fifth mutating request behind a busy dialog, and scanning only
+    // this panel is how it was missed once already. Reads carry no abort on
+    // purpose — they hold nothing open.
+    for (const [name, src] of [["ServicesPanel", SOURCE], ["SetlistEditor", EDITOR]] as const) {
+      const mutating = (src.match(/method: "(POST|DELETE|PATCH|PUT)"/g) ?? []).length;
+      const aborted = (src.match(/signal: (abort\.signal|controller\.signal)/g) ?? []).length;
+      expect(mutating, name).toBeGreaterThan(0);
+      expect(aborted, name).toBe(mutating);
+    }
+  });
+
+  it("uses AbortController, not the Safari-16-only AbortSignal.timeout", () => {
+    // The iOS wrap's deployment target is 15.0. `AbortSignal.timeout` throws a
+    // TypeError there — INSIDE the try — which `submitPublication` would record
+    // as an unknown outcome for a request never sent, and the verification that
+    // could retire it throws the same way. Every publish refused until a
+    // reload, and again after it.
+    expect(SOURCE + EDITOR + HELPERS).not.toContain("AbortSignal.timeout(");
+    expect(HELPERS).toContain("new AbortController()");
   });
 
   it("the delete modal's Cancelar is disabled while submitting", () => {

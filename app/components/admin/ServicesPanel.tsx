@@ -5,7 +5,7 @@ import { useTransientValue } from "@/app/utils/useTransientValue";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import MonthGenerator from "./MonthGenerator";
 import type { ClearMonthSummary } from "./clearMonthModel";
-import { mutationErrorMessage } from "./serviceMutationErrors";
+import { mutationErrorMessage, mutationSignal } from "./serviceMutationErrors";
 import { useSolverConfig } from "./useSolverConfig";
 import {
   SERVICE_SOURCE_KEYS,
@@ -113,19 +113,6 @@ async function describeMutationError(res: Response, fallback: string): Promise<s
   }
   return mutationErrorMessage({ code, status: res.status, dependencyCount, fallback });
 }
-
-/**
- * How long a mutation may hold a dialog open before we stop waiting.
- *
- * `busy` blocks Escape, the backdrop AND the header ✕ — every dismissal route —
- * so a request stalled behind a dead mobile connection would otherwise leave a
- * modal that cannot be closed at all, with its Cancelar disabled, until the OS
- * TCP timeout. The abort turns that into an ordinary reported failure. It is
- * generous on purpose: publishing a month is one batched transaction, and a
- * false abort would put the panel into exactly the unknown-outcome state it
- * works hardest to avoid.
- */
-const MUTATION_TIMEOUT_MS = 30_000;
 
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
 
@@ -252,13 +239,6 @@ export default function ServicesPanel() {
   // `save()` writes its error into, and a lead loses a whole setlist silently.
   const [setlistSaving, setSetlistSaving] = useState(false);
 
-  // `pendingOutcome` — "a publish may have committed and we could not confirm
-  // it" — is deliberately NOT cleared by opening or closing a dialog. It used to
-  // be both, which meant the record evaporated one Escape or one reopen after it
-  // was recorded, and `submitPublication`'s own refusal ("El resultado anterior
-  // es desconocido. Verifícalo antes de reintentar.") could never fire. Only
-  // `verifyPendingOutcome` retires it: on a confirmed result, or on a 409 that
-  // supersedes it.
   const copyMode = copySource !== null;
 
   // The three A1 integrity summaries, kept beside the roles/members arrays. A
@@ -277,6 +257,13 @@ export default function ServicesPanel() {
    * A lost/timed-out publish or unpublish response. Repeat submission is disabled
    * until the read-only `recover` mode says what actually committed.
    */
+  // `pendingOutcome` — "a publish may have committed and we could not confirm
+  // it" — is deliberately NOT cleared by opening or closing a dialog. It used to
+  // be both, which meant the record evaporated one Escape or one reopen after it
+  // was recorded, and `submitPublication`'s own refusal ("El resultado anterior
+  // es desconocido. Verifícalo antes de reintentar.") could never fire. Only
+  // `verifyPendingOutcome` retires it: on a confirmed result, or on a 409 that
+  // supersedes it.
   const [pendingOutcome, setPendingOutcome] = useState<
     { kind: "publish" | "unpublish"; ids: string[]; published: boolean } | null
   >(null);
@@ -438,12 +425,13 @@ export default function ServicesPanel() {
     if (stale) { setEditError(stale.message); return; }
     const guard = guardControl(sources, "deleteService");
     if (!guard.ok) { setEditError(guard.message ?? "Datos incompletos."); return; }
+    const abort = mutationSignal();
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/roles/${editModal.role._id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(MUTATION_TIMEOUT_MS),
+        signal: abort.signal,
         body: JSON.stringify({ rev: editModal.role._rev }),
       });
       if (res.ok) {
@@ -458,6 +446,7 @@ export default function ServicesPanel() {
     } catch {
       setEditError("Error de conexión.");
     } finally {
+      abort.done();
       setSubmitting(false);
     }
   };
@@ -494,6 +483,7 @@ export default function ServicesPanel() {
     const fmt = (r: ServiceRole) =>
       new Date(r.date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short", day: "numeric", month: "short" });
     if (!confirm(`¿Copiar ${count} instrumento(s) de ${fmt(source)} a ${fmt(target)}? Reemplazará los instrumentos del destino.`)) return;
+    const abort = mutationSignal();
     setSubmitting(true);
     try {
       // Both observed revisions are sent; the server re-reads the source lineup
@@ -501,7 +491,7 @@ export default function ServicesPanel() {
       // failure copy mode stays open and nothing is claimed.
       const res = await fetch("/api/admin/roles/copy-instruments", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(MUTATION_TIMEOUT_MS),
+        signal: abort.signal,
         body: JSON.stringify({
           source: { id: source._id, rev: source._rev },
           target: { id: target._id, rev: target._rev },
@@ -518,6 +508,7 @@ export default function ServicesPanel() {
     } catch {
       showToast("Error de conexión.");
     } finally {
+      abort.done();
       setSubmitting(false);
     }
   }
@@ -545,13 +536,14 @@ export default function ServicesPanel() {
       setPublishError("El resultado anterior es desconocido. Verifícalo antes de reintentar.");
       return;
     }
+    const abort = mutationSignal();
     setSubmitting(true);
     setPublishError(null);
     try {
       const res = await fetch(input.url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(MUTATION_TIMEOUT_MS),
+        signal: abort.signal,
         body: JSON.stringify(input.body),
       });
       if (res.ok) {
@@ -572,6 +564,7 @@ export default function ServicesPanel() {
       );
       void loadSources();
     } finally {
+      abort.done();
       setSubmitting(false);
     }
   }
@@ -580,6 +573,7 @@ export default function ServicesPanel() {
   async function verifyPendingOutcome() {
     const pending = pendingOutcome;
     if (!pending) return;
+    const abort = mutationSignal();
     setSubmitting(true);
     try {
       const res = await fetch(
@@ -587,7 +581,7 @@ export default function ServicesPanel() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          signal: AbortSignal.timeout(MUTATION_TIMEOUT_MS),
+          signal: abort.signal,
           body: JSON.stringify({
             mode: "recover",
             roles: pending.ids.map(id => ({ id })),
@@ -619,6 +613,7 @@ export default function ServicesPanel() {
     } catch {
       setPublishError("No se pudo verificar el resultado. Intenta de nuevo.");
     } finally {
+      abort.done();
       setSubmitting(false);
     }
   }
@@ -1522,9 +1517,9 @@ function PublicationFooter({
         `disabled` while a submission is in flight, and it is not politeness.
         Dismissing this dialog mid-request unmounts the surface that
         `setPublishError` writes into and that renders «Verificar resultado» —
-        so a failed publish reported NOTHING, and a LOST response dropped the
-        unknown-outcome contract this component documents at length: the next
-        `openPublishPlan`/`openOverride`/`openUnpublish` clears `pendingOutcome`.
+        so a failed publish reported NOTHING. The lost-response half is now held
+        by `pendingOutcome` outliving any dismissal — only a verification retires
+        it — but this guard is still what keeps the in-flight error on screen.
       */}
       <button
         type="button"

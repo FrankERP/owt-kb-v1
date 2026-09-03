@@ -50,3 +50,35 @@ export function mutationErrorMessage(input: MutationErrorInput): string {
   }
 }
 
+
+/**
+ * How long a mutation may hold a dialog open before we stop waiting.
+ *
+ * `busy` blocks Escape, the backdrop AND the header ✕ — every dismissal route —
+ * so a request stalled behind a dead mobile connection would otherwise leave a
+ * modal that cannot be closed at all, with its Cancelar disabled, until the OS
+ * TCP timeout. The abort turns that into an ordinary reported failure. It is
+ * generous on purpose: publishing a month is one batched transaction, and a
+ * false abort would put the panel into exactly the unknown-outcome state it
+ * works hardest to avoid. It stays BELOW the routes' own `maxDuration = 60`, so
+ * a genuinely slow publish becomes an honest unknown outcome rather than a
+ * silent success.
+ */
+export const MUTATION_TIMEOUT_MS = 30_000;
+
+/**
+ * `AbortController` + `setTimeout`, deliberately NOT `AbortSignal.timeout`.
+ *
+ * The latter is Safari 16+, and this app ships an iOS wrap whose deployment
+ * target is 15.0. On such a runtime the call throws a `TypeError` INSIDE the
+ * try, which `submitPublication` would record as an unknown outcome for a
+ * request that was never sent — and that record can only be retired by a
+ * verification that throws the same way. Every publish would then be refused
+ * until a reload, and again after it. A dead end reachable by nothing worse
+ * than an old iPhone is not worth the shorter spelling.
+ */
+export function mutationSignal(): { signal: AbortSignal; done: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), MUTATION_TIMEOUT_MS);
+  return { signal: controller.signal, done: () => clearTimeout(timer) };
+}
