@@ -14,7 +14,7 @@ export type MemberDeleteErrorCode =
   (typeof MEMBER_DELETE_ERROR)[keyof typeof MEMBER_DELETE_ERROR];
 
 export const MEMBER_HAS_REFERENCES_MESSAGE =
-  "No se puede eliminar porque tiene historial en el sistema (servicios, propuestas u otros registros). Puedes retirarlo de Alabanza en su lugar.";
+  "No se puede eliminar porque tiene historial en el sistema (servicios, propuestas u otros registros). Puedes quitarle el «Tipo» para que deje de ser asignable.";
 
 export const MEMBER_POOL_CLEANUP_FAILED_MESSAGE =
   "El miembro fue eliminado, pero su id puede seguir en los pools del planificador. Reintenta la eliminación o limpia los pools manualmente.";

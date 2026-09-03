@@ -27,6 +27,6 @@ storage state, and aborts every non-GET request in the browser. No server code c
 An `admin` credential lives in a local env file (see `docs/SECRETS.md`, kill switch
 `disabled: true`, which the seed script preserves across rotations). Each sign-in writes one
 `loginEvent`; the `lastSeen` heartbeat is suppressed client-side. The member is a worship
-member (retired) and a kids manager only, because kids reads ignore `retiredFrom`. `visual-verifier` may consume the runner's artifacts for gated routes but
+member with an EMPTY «Tipo» (so it is in no pool and matches no seat — it was `retiredFrom` until ADR-0029 removed that mechanism) and a kids manager only, because kids rotation seats from the pair register. `visual-verifier` may consume the runner's artifacts for gated routes but
 still never enters a credential. The block is wider than the spec's `/api/**` — every
 non-GET to the target — because server actions POST to page URLs.

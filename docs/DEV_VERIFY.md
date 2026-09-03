@@ -43,8 +43,9 @@ of the response, not a commit. `get_deployment(dev-owt-backstage.vercel.app)` gi
    /api/auth/callback/credentials` during sign-in. This is wider than `/api/**` on purpose:
    Next.js server actions POST to the page URL.
 2. Production hosts are refused before the allow-list is consulted (`hostPolicy.ts`).
-3. The member is a worship member retired from worship, a kids *manager* but not a kids
-   *member* (kids reads never filter on retirement, so membership would seat it), and opted
+3. The member is a worship member with an EMPTY «Tipo» — in no solver pool and matching no
+   seat (ADR-0029) — a kids *manager* but not a kids *member* (kids rotation seats from the
+   pair register, so membership would seat it), and opted
    out of every notification.
 
 Lock 1 is origin-scoped: Studio's calls to `api.sanity.io` are not policed. That is safe

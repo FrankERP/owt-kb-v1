@@ -62,14 +62,34 @@ export default function AvailabilityPanel() {
   const [members, setMembers]   = useState<Member[]>([]);
   const [roles, setRoles]       = useState<ServiceRole[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"matrix" | "conflicts">("conflicts");
 
+  // This panel answers "is anyone assigned on a day they said they cannot
+  // serve?", and the answer it gives on an empty list is the reassuring one.
+  // So a failed load MUST NOT reach the render: `if (res.ok)` alone left
+  // `members` empty, which made `conflicts` empty by construction and painted
+  // "Todo bien" over a request that never returned. A rejected fetch skipped
+  // `setLoading(false)` entirely and left the skeleton spinning forever.
+  // `serviceReadiness.ts` states the rule this panel has to honour: a failure
+  // never means clear.
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [rm, rr] = await Promise.all([fetch("/api/admin/members"), fetch("/api/admin/roles")]);
-    if (rm.ok) setMembers(await rm.json());
-    if (rr.ok) setRoles(await rr.json());
-    setLoading(false);
+    setError(null);
+    try {
+      const [rm, rr] = await Promise.all([fetch("/api/admin/members"), fetch("/api/admin/roles")]);
+      if (!rm.ok || !rr.ok) throw new Error("fetch failed");
+      const [nextMembers, nextRoles] = await Promise.all([rm.json(), rr.json()]);
+      if (!Array.isArray(nextMembers) || !Array.isArray(nextRoles)) throw new Error("bad shape");
+      setMembers(nextMembers);
+      setRoles(nextRoles);
+    } catch {
+      setMembers([]);
+      setRoles([]);
+      setError("No se pudo cargar la disponibilidad. No podemos confirmar si hay conflictos.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
@@ -122,6 +142,30 @@ export default function AvailabilityPanel() {
         {[...Array(3)].map((_, i) => (
           <div key={i} className="h-16 rounded-xl bg-surface-accent-wash animate-pulse" />
         ))}
+      </div>
+    );
+  }
+
+  // The failure state replaces the whole panel rather than sitting above it:
+  // every view below reads from empty arrays and would otherwise render its own
+  // reassuring emptiness beside the error.
+  if (error) {
+    return (
+      <div className="space-y-5">
+        <div>
+          <h1 className="font-display text-2xl uppercase tracking-wide">Disponibilidad</h1>
+        </div>
+        <div role="alert" className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center">
+          <p className="font-display text-lg uppercase text-negative-fg">Sin datos</p>
+          <p className="font-body text-sm text-mono-500 mt-1">{error}</p>
+          <button
+            type="button"
+            onClick={() => { void fetchData(); }}
+            className="mt-4 min-h-11 rounded-lg bg-surface-accent-solid px-4 py-2 font-label text-xs uppercase tracking-widest text-on-fill transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
+          >
+            Reintentar
+          </button>
+        </div>
       </div>
     );
   }

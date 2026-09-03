@@ -54,7 +54,6 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { revalidateServiceViews } from "./revalidate";
 import { WORSHIP_AUDIENCE_GROQ_FILTER } from "@/app/ministries";
-import { WORSHIP_NOT_RETIRED_GROQ_FILTER } from "@/app/utils/memberRetirement";
 import { sendPush } from "./push";
 import {
   rolesForMember,
@@ -843,7 +842,7 @@ export async function notifySetlistSaved(week: string): Promise<void> {
     // super-admin bypass is for SEEING people in an admin list, and being able to
     // see someone is not a reason to notify them.
     const members = await operationalClient.fetch<{ _id: string; setlist?: SetlistPref }[]>(
-      `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER} && ${WORSHIP_NOT_RETIRED_GROQ_FILTER}]{ _id, "setlist": notifPrefs.setlist }`,
+      `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER}]{ _id, "setlist": notifPrefs.setlist }`,
     );
     // `published != false` matches the sibling audience in `api/cron/service-reminders`.
     // Without it, a member whose preference is `assigned` and who serves only on a
@@ -856,12 +855,16 @@ export async function notifySetlistSaved(week: string): Promise<void> {
     const assigned = await operationalClient.fetch<string[]>(assignedMemberRefsQuery(roleFilter), {
       week,
     });
-    // Retirement removes a member from the broadcast above, but NOT from a service
-    // they are still rostered on ("Sigue en servicios ya asignados"). Resolve the
-    // assigned ids' preferences directly — resolution by id never filters on
-    // retirement (R3) — and merge, so a worship-retired member who still plays this
-    // week is treated exactly like any other assignee. `setlistRecipientIds` keeps
-    // an assignee whose pref is "off" silent, retired or not.
+    // The broadcast above is an AUDIENCE query; this is resolution BY ID, and the
+    // merge exists because the two can legitimately disagree. Whatever the
+    // audience filter is at any given time, somebody it excludes can still be
+    // rostered on this week's service — and they are entitled to hear about a
+    // service they are about to play. So the assigned ids' preferences are
+    // resolved directly, without that filter, and merged in; an assignee is then
+    // treated like any other assignee, and `setlistRecipientIds` keeps one whose
+    // pref is "off" silent either way. (This used to name worship retirement as
+    // the source of the disagreement. That filter is gone, the merge is not:
+    // the reason above is what always did the work.)
     const assignedIds = assigned ?? [];
     const assignedMembers = assignedIds.length
       ? await operationalClient.fetch<{ _id: string; setlist?: SetlistPref }[]>(

@@ -516,13 +516,15 @@ describe("notifySetlistSaved", () => {
     expect(operationalFetch.mock.calls[1][1]).toEqual({ week: "2026-08-09" });
   });
 
-  it("still pushes a worship-retired member who is assigned to the service that week", async () => {
-    // The broadcast query filters out worship-retired members, so the first fetch
-    // (all-pref audience) never returns them. But retirement keeps the services
-    // they were already assigned to, so the third fetch resolves the assigned ids'
-    // prefs by id (no retirement filter) and merges them back in.
+  it("still pushes a member the broadcast query missed but who is assigned that week", async () => {
+    // The broadcast is an audience query and can legitimately miss someone the
+    // service still rosters — a member with no «Tipo» is not selectable for new
+    // work (ADR-0029) yet may already be assigned. So the third fetch resolves
+    // the assigned ids' prefs BY ID and merges them back in. Fixtures are named
+    // for the retirement era, when the broadcast's own filter caused the miss;
+    // the merge under test never depended on it.
     operationalFetch
-      .mockResolvedValueOnce([{ _id: "mem-all" }])                                  // broadcast (retiree absent)
+      .mockResolvedValueOnce([{ _id: "mem-all" }])                                  // broadcast (assignee absent)
       .mockResolvedValueOnce(["mem-retired-assigned", "mem-off-assigned"])          // assigned ids
       .mockResolvedValueOnce([
         { _id: "mem-retired-assigned", setlist: "assigned" },

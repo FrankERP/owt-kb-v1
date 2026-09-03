@@ -1,5 +1,10 @@
 # Artifact Roadmap: retirar miembros sin borrarlos, sin colapsar el kill switch
 
+> **SUPERSEDED 2026-09-03 by ADR-0029.** The soft-retirement mechanism this plan
+> specifies was removed: «Tipo» (`memberType`) is now the only worship eligibility
+> axis. Kept as the record of what was built and why it was undone — do NOT
+> implement from it.
+
 ## Original request
 
 > Cómo manejaríamos lo del reference si quiero eliminar un miembro?

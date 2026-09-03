@@ -46,10 +46,7 @@ import {
 } from "./seatModel";
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel";
-import {
-  rulePersonNamesMember,
-  worshipRetireeIdsExcludedFromSolve,
-} from "@/app/utils/memberRetirement";
+import { displayMemberName, rulePersonNamesMember } from "@/app/utils/memberRuleNames";
 
 // ─── Grid shape ───────────────────────────────────────────────────────────────
 
@@ -624,6 +621,41 @@ export function historyForRequest(
  * rename is now a `tsc` error, not a silent empty month). Applies
  * `historyForRequest` internally (D14) — a caller cannot forget it.
  */
+/** The three solver pools, by the `memberType` subtype each one requires. */
+export type PoolSubtype = "sunday_lead" | "saturday_lead" | "support";
+
+export const POOL_SUBTYPE: Record<"sundayLeads" | "saturdayLeads" | "support", PoolSubtype> = {
+  sundayLeads: "sunday_lead",
+  saturdayLeads: "saturday_lead",
+  support: "support",
+};
+
+/**
+ * Stored pool ids whose member no longer carries the Tipo that pool requires —
+ * including a member with no Tipo at all, which is how someone is made
+ * unschedulable (ADR-0029). `buildSolveRequest` drops all of these from the
+ * pools; it refuses outright only when a rule still names one who has NO Tipo at
+ * all — a subtype mismatch is injected into `support` instead, keeping its
+ * availability exclusions. Either way the checkbox list is built from Tipo and
+ * cannot render them, which is what this is for.
+ */
+export function poolTipoMismatch(
+  config: Pick<SolverConfig, "sundayLeads" | "saturdayLeads" | "support">,
+  members: Array<{ _id: string; member_name: string; alias?: string; memberType?: string[] }>,
+): Array<{ _id: string; member_name: string; alias?: string; field: "sundayLeads" | "saturdayLeads" | "support" }> {
+  const out: Array<{ _id: string; member_name: string; alias?: string; field: "sundayLeads" | "saturdayLeads" | "support" }> = [];
+  for (const field of ["sundayLeads", "saturdayLeads", "support"] as const) {
+    for (const id of config[field]) {
+      const m = members.find((x) => x._id === id);
+      if (!m) continue; // a deleted member is a different problem; nothing to offer
+      const t = m.memberType ?? [];
+      if (t.includes("voz") && t.includes(POOL_SUBTYPE[field])) continue;
+      out.push({ _id: m._id, member_name: m.member_name, alias: m.alias, field });
+    }
+  }
+  return out;
+}
+
 export function buildSolveRequest(input: {
   config: SolverConfig;
   members: RankMember[];
@@ -638,49 +670,106 @@ export function buildSolveRequest(input: {
   const weeks = sundayDates.length;
   const weekendsWithSaturday = weekendWeekIndexes(sundayDates, activeSatDates);
 
-  // R10: worship-retired members leave the request when no live rule names them.
-  const excludedRetireeIds = worshipRetireeIdsExcludedFromSolve(members, config);
-  const isExcludedRetiree = (id: string) => excludedRetireeIds.has(id);
-  const isExcludedRetireeName = (name: string) =>
-    members.some((m) => isExcludedRetiree(m._id) && rulePersonNamesMember(name, m));
-
   const idToName = (id: string) => memberIdToName(id, members);
 
-  const filterPoolIds = (ids: string[]) => ids.filter((id) => !isExcludedRetiree(id));
+  // The stored pools are ids, ticked at some point in the past; "Tipo" is the
+  // live eligibility axis (ADR-0029). Re-filter here or the two disagree: an
+  // admin who clears someone's Tipo to stop them being scheduled would find
+  // them GONE from the pool checkboxes — which are built from Tipo — and so
+  // impossible to untick, while their id sat in the document and their name
+  // still reached the solver. `poolTipoMismatch` surfaces the same ids in the
+  // panel so the stale tick can be cleaned up rather than merely neutralised.
+  const eligibleForPool = (id: string, subtype: PoolSubtype) => {
+    const m = members.find((x) => x._id === id);
+    const t = m?.memberType ?? [];
+    return t.includes("voz") && t.includes(subtype);
+  };
+  const inPool = (ids: string[], subtype: PoolSubtype) =>
+    ids.filter((id) => eligibleForPool(id, subtype));
 
   // Deduplicate pools: sunday_leads takes priority, then saturday_leads, then
   // support. The solver requires mutual exclusivity (fact 5).
-  const sundayLeadNames = filterPoolIds(config.sundayLeads).map(idToName);
+  const sundayLeadNames = inPool(config.sundayLeads, "sunday_lead").map(idToName);
   const sundaySet = new Set(sundayLeadNames);
-  const saturdayLeadNames = filterPoolIds(config.saturdayLeads).map(idToName).filter((n) => !sundaySet.has(n));
+  const saturdayLeadNames = inPool(config.saturdayLeads, "saturday_lead").map(idToName).filter((n) => !sundaySet.has(n));
   const satSet = new Set([...sundayLeadNames, ...saturdayLeadNames]);
-  const supportNames = filterPoolIds(config.support).map(idToName).filter((n) => !satSet.has(n));
+  const supportNames = inPool(config.support, "support").map(idToName).filter((n) => !satSet.has(n));
   const poolNames = new Set([...sundayLeadNames, ...saturdayLeadNames, ...supportNames]);
 
   // Every DSL-named person absent from all pools is injected into `support`,
   // so every DSL-named person appears in exactly one pool — omitting this is
   // a 422 in production (the solver validates all DSL persons against known
-  // people). R10 plena skips worship retirees even when a rule named them.
+  // people).
   const extraSupport: string[] = [];
   const allDslPersons = [
     ...config.restrictions.map((r) => r.person),
     ...config.conflicts.flatMap((r) => [r.personA, r.personB]),
     ...config.presence.flatMap((r) => r.persons),
   ];
+
+  // …which quietly UNDID the Tipo filter above, and cost the member their
+  // availability into the bargain. Dropping someone from a pool for having no
+  // Tipo, while a rule still names them, put them straight back into `support`
+  // — where the solver seats BGV and Coro — and `allPoolIds` below, built from
+  // the FILTERED ids alone as it then was, generated none of their week
+  // exclusions. Worse than before the filter existed. It now unions
+  // `injectedMemberIds`, closing that half for everyone the request names.
+  //
+  // Removing the name instead is not available: the solver 422s on a DSL clause
+  // naming someone in no pool. So this refuses, naming the person, and the
+  // generator's "en un pool sin el Tipo que ese pool pide" banner offers the
+  // one-click cleanup. NO Tipo at all is the deliberate "not schedulable"
+  // signal (ADR-0029); a member who merely lacks a POOL subtype — `voz` alone,
+  // say — is still injected, since nobody has said they cannot serve, and
+  // `injectedMemberIds` below keeps their availability exclusions with them.
+  const dslBlockedByTipo: string[] = [];
+  /** Ids of real members whose NAME reaches the request via `extraSupport`. */
+  const injectedMemberIds = new Set<string>();
   for (const name of allDslPersons) {
-    if (isExcludedRetireeName(name)) continue;
-    const resolved = resolvedNameOrRaw(name, members);
-    if (!poolNames.has(resolved) && !extraSupport.includes(resolved)) extraSupport.push(resolved);
+    const r = resolveToMemberName(name, members);
+    const resolved = "resolved" in r ? r.resolved : r.unresolved;
+    if (poolNames.has(resolved)) continue;
+    // Only a name that RESOLVED to a real member can be judged on Tipo; an
+    // unknown raw name keeps its documented injection.
+    const named = "resolved" in r ? members.find((x) => x.member_name === r.resolved) : undefined;
+    if (named && (named.memberType ?? []).length === 0) {
+      // Named by alias where they have one: the rules list shows the rule's own
+      // text and the mismatch banner shows the alias, so `member_name` would
+      // name someone the admin cannot find on screen.
+      const shown = displayMemberName(named);
+      if (!dslBlockedByTipo.includes(shown)) dslBlockedByTipo.push(shown);
+      continue;
+    }
+    if (!extraSupport.includes(resolved)) extraSupport.push(resolved);
+    if (named) injectedMemberIds.add(named._id);
+  }
+  if (dslBlockedByTipo.length > 0) {
+    return {
+      ok: false,
+      reason:
+        `${dslBlockedByTipo.join(", ")} no tiene «Tipo», así que no puede servir, pero todavía hay reglas del solver que lo nombran. `
+        + "Borra esas reglas (o devuélvele un Tipo) antes de generar el mes.",
+    };
   }
 
   // Auto-generate week-exclusion DSL rules from member unavailableDates. The
-  // rules loop `allPoolIds` (fact 15): a non-pool member is schedulable while
-  // unavailable — that is a documented consequence, not a bug to "fix" here.
+  // rules loop `allPoolIds` (fact 15): a member the request never names is
+  // schedulable while unavailable — that is a documented consequence, not a bug
+  // to "fix" here.
+  //
+  // `injectedMemberIds` is part of that set and must be: the Tipo filter above
+  // can drop a member from a pool while a rule still names them, which puts
+  // their name into `extraSupport` — so the request DOES name them, and the
+  // solver can seat them BGV or Coro. Looping the filtered pool ids alone
+  // dropped exactly those people's exclusions, which is worse than not
+  // filtering at all: seated anyway, availability ignored. Anyone the request
+  // names carries their exclusions.
   const availabilityRules: string[] = [];
   const allPoolIds = new Set([
-    ...filterPoolIds(config.sundayLeads),
-    ...filterPoolIds(config.saturdayLeads),
-    ...filterPoolIds(config.support),
+    ...inPool(config.sundayLeads, "sunday_lead"),
+    ...inPool(config.saturdayLeads, "saturday_lead"),
+    ...inPool(config.support, "support"),
+    ...injectedMemberIds,
   ]);
   for (const memberId of allPoolIds) {
     const m = members.find((x) => x._id === memberId);

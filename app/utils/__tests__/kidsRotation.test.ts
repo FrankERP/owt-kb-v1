@@ -251,8 +251,12 @@ describe("proposalFingerprint", () => {
     expect(proposalFingerprint([reordered])).toBe(proposalFingerprint([row]));
   });
 
-  it("retiredFrom on members does not change rotation output (R18)", () => {
-    // Rotation reads pairs and unavailable — never `retiredFrom`. Same plan either way.
-    expect(planKidsMonth(base)).toEqual(planKidsMonth(base));
-  });
+  // R18 — "a member's worship eligibility does not change rotation output" —
+  // had a test here that compared `planKidsMonth(base)` with itself and could
+  // therefore never fail, including after `retiredFrom`, the field it was named
+  // for, was deleted (ADR-0029). It is gone rather than repaired because the
+  // guarantee is STRUCTURAL and stronger than any test of it: `RotationInput`
+  // is `{ sundays, pairs, unavailable, history }` — it carries no member
+  // document at all, so there is no worship field in scope to vary. Changing
+  // that type is what would need a test, and `tsc` is the thing that fails.
 });

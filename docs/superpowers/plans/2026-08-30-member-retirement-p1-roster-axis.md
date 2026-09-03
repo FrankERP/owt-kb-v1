@@ -1,5 +1,10 @@
 # Spec: eje de retiro por ministerio (P1)
 
+> **SUPERSEDED 2026-09-03 by ADR-0029.** The soft-retirement mechanism this plan
+> specifies was removed: «Tipo» (`memberType`) is now the only worship eligibility
+> axis. Kept as the record of what was built and why it was undone — do NOT
+> implement from it.
+
 ## Status
 
 `APPROVED` — hijo 1 de 3 de `2026-08-30-member-retirement-roadmap.md`.

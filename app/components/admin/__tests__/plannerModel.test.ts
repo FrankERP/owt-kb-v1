@@ -136,7 +136,14 @@ const FEB_SATURDAYS = ["2026-02-07", "2026-02-14", "2026-02-21", "2026-02-28"];
 // own in October (the following Sunday, Nov 1, is out of month) — D16's fixture.
 const OCT_SUNDAYS = ["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25"];
 
-const m = (id: string, name: string): RankMember => ({ _id: id, member_name: name });
+// Fully-qualified for every pool. `buildSolveRequest` re-filters the stored pool
+// ids by live "Tipo" (ADR-0029), so a fixture with no Tipo would now be dropped
+// from every pool — which is the correct production behaviour but not what any
+// test below is about. The Tipo filter itself is covered in
+// `poolTipoMismatch.test.ts`.
+const POOL_TIPO = ["voz", "sunday_lead", "saturday_lead", "support"];
+const m = (id: string, name: string): RankMember =>
+  ({ _id: id, member_name: name, memberType: POOL_TIPO } as RankMember);
 
 const emptyConfig: SolverConfig = {
   sundayLeads: [],
@@ -706,107 +713,9 @@ describe("buildSolveRequest", () => {
     expect(pin).toMatchSnapshot();
   });
 
-  it("(a) worship-retired member in pool, no rules → excluded from entire request", () => {
-    const members: RankMember[] = [
-      m("frank", "Frank"),
-      m("gaby", "Gaby"),
-      { ...m("mkz", "Mkz"), retiredFrom: ["worship"] },
-    ];
-    const result = buildSolveRequest({ ...r10BaseInput, members });
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("unreachable");
-    const body = JSON.stringify(result.request);
-    expect(body).not.toContain("Mkz");
-    expect(body).not.toContain("mkz");
-    expect(result.request.support).not.toContain("Mkz");
-  });
-
-  it("(b) worship-retired with unavailableDates → no dsl_rules clauses name them", () => {
-    const config: SolverConfig = {
-      ...emptyConfig,
-      sundayLeads: ["frank"],
-      support: ["ret"],
-    };
-    const members: RankMember[] = [
-      m("frank", "Frank"),
-      {
-        ...m("ret", "Retired"),
-        retiredFrom: ["worship"],
-        unavailableDates: ["2026-02-08", "2026-02-07"],
-      },
-    ];
-    const result = buildSolveRequest({
-      config,
-      members,
-      sundayDates: FEB_SUNDAYS,
-      activeSatDates: FEB_SATURDAYS,
-      historyEntries: [],
-      year: 2026,
-      month: 2,
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("unreachable");
-    expect(result.request.dsl_rules.some((r) => r.startsWith("Retired"))).toBe(false);
-    expect(JSON.stringify(result.request)).not.toContain("Retired");
-  });
-
-  it("(d) kids-only retired, active in worship → still in pools and dsl_rules", () => {
-    const members: RankMember[] = [
-      m("frank", "Frank"),
-      { ...m("mkz", "Mkz"), retiredFrom: ["kids"] },
-    ];
-    const config: SolverConfig = {
-      ...emptyConfig,
-      sundayLeads: ["frank"],
-      support: ["mkz"],
-      restrictions: [{
-        id: "r1", person: "Mkz", excludedPatterns: ["Sat.*"],
-        fairness: "none", fairnessSlack: 0, weekExclusions: [], caps: [],
-      }],
-    };
-    const result = buildSolveRequest({ ...r10BaseInput, config, members });
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("unreachable");
-    expect(result.request.support).toContain("Mkz");
-    expect(result.request.dsl_rules.some((r) => r.startsWith("Mkz"))).toBe(true);
-  });
-
-  it("(e) worship-retired with live rule naming them → deferred (still in request)", () => {
-    const members: RankMember[] = [
-      m("frank", "Frank"),
-      { ...m("mkz", "Mkz"), retiredFrom: ["worship"] },
-    ];
-    const config: SolverConfig = {
-      ...emptyConfig,
-      sundayLeads: ["frank"],
-      support: ["mkz"],
-      restrictions: [{
-        id: "r1", person: "Mkz", excludedPatterns: ["Sat.*"],
-        fairness: "none", fairnessSlack: 0, weekExclusions: [], caps: [],
-      }],
-    };
-    const result = buildSolveRequest({ ...r10BaseInput, config, members });
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("unreachable");
-    expect(result.request.support).toContain("Mkz");
-    expect(result.request.dsl_rules).toContain("Mkz !in Sat.*");
-  });
-
-  it("(f) after R15 removes naming rule → worship-retired excluded", () => {
-    const members: RankMember[] = [
-      m("frank", "Frank"),
-      { ...m("mkz", "Mkz"), retiredFrom: ["worship"] },
-    ];
-    const config: SolverConfig = {
-      ...emptyConfig,
-      sundayLeads: ["frank"],
-      support: ["mkz"],
-    };
-    const result = buildSolveRequest({ ...r10BaseInput, config, members });
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error("unreachable");
-    expect(JSON.stringify(result.request)).not.toContain("Mkz");
-  });
+  // The R10 retirement cases that lived here are gone with the mechanism: a
+  // member stops being schedulable by having no "Tipo", which removes them from
+  // every pool and every seat, so there is no second axis left to test.
 });
 
 // ─── Week spine over a 5-Sunday month (E21) ──────────────────────────────────
