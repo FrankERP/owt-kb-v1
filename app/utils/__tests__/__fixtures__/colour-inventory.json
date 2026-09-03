@@ -2563,7 +2563,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 451,
+      "line": 452,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2575,7 +2575,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 554,
+      "line": 555,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2587,7 +2587,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1829,
+      "line": 1869,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2599,7 +2599,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1128,
+      "line": 1129,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2611,7 +2611,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1278,
+      "line": 1279,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2635,7 +2635,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2225,
+      "line": 2239,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2647,7 +2647,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2235,
+      "line": 2249,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2659,7 +2659,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2953,
+      "line": 2967,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

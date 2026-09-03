@@ -1499,6 +1499,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
     if (mutationLocked) return;
     clearRemoveError();
     clearDragNotice();
+    const sourceColumn = columnById.get(sourceColumnId);
+    if (!sourceColumn || !canTouchColumn({ mode, column: sourceColumn, rows, cells })) {
+      // The source itself cannot be written — saying "nowhere to copy to" would
+      // point at the wrong end of the problem.
+      setDragNotice({ tone: "refusal", message: "No se puede copiar desde este servicio: no se puede editar." });
+      return;
+    }
     const plan = planCopyAcrossColumns(row, sourceColumnId);
     if (!plan) {
       setDragNotice({ tone: "note", message: `No hay otro servicio al que copiar ${row.label}.` });
@@ -1508,7 +1515,14 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   function confirmPendingCopy() {
-    if (!pendingCopy || mutationLocked) return;
+    if (!pendingCopy) return;
+    if (mutationLocked) {
+      // A save started while the prompt was open. Every other refusal here says
+      // so rather than leaving a dead button.
+      setPendingCopy(null);
+      setDragNotice({ tone: "refusal", message: "Hay un guardado en curso. No se copió nada." });
+      return;
+    }
     // Re-planned against live `cells` rather than replayed from the snapshot:
     // the same reason `forcePendingMove` re-judges instead of trusting what it
     // captured when the prompt opened.

@@ -621,6 +621,39 @@ export function historyForRequest(
  * rename is now a `tsc` error, not a silent empty month). Applies
  * `historyForRequest` internally (D14) — a caller cannot forget it.
  */
+/** The three solver pools, by the `memberType` subtype each one requires. */
+export type PoolSubtype = "sunday_lead" | "saturday_lead" | "support";
+
+export const POOL_SUBTYPE: Record<"sundayLeads" | "saturdayLeads" | "support", PoolSubtype> = {
+  sundayLeads: "sunday_lead",
+  saturdayLeads: "saturday_lead",
+  support: "support",
+};
+
+/**
+ * Stored pool ids whose member no longer carries the Tipo that pool requires —
+ * including a member with no Tipo at all, which is how someone is made
+ * unschedulable (ADR-0029). `buildSolveRequest` already ignores these; this is
+ * what lets the panel SHOW them, since the checkbox list is built from Tipo and
+ * therefore cannot render them.
+ */
+export function poolTipoMismatch(
+  config: Pick<SolverConfig, "sundayLeads" | "saturdayLeads" | "support">,
+  members: Array<{ _id: string; member_name: string; alias?: string; memberType?: string[] }>,
+): Array<{ _id: string; member_name: string; alias?: string; field: "sundayLeads" | "saturdayLeads" | "support" }> {
+  const out: Array<{ _id: string; member_name: string; alias?: string; field: "sundayLeads" | "saturdayLeads" | "support" }> = [];
+  for (const field of ["sundayLeads", "saturdayLeads", "support"] as const) {
+    for (const id of config[field]) {
+      const m = members.find((x) => x._id === id);
+      if (!m) continue; // a deleted member is a different problem; nothing to offer
+      const t = m.memberType ?? [];
+      if (t.includes("voz") && t.includes(POOL_SUBTYPE[field])) continue;
+      out.push({ _id: m._id, member_name: m.member_name, alias: m.alias, field });
+    }
+  }
+  return out;
+}
+
 export function buildSolveRequest(input: {
   config: SolverConfig;
   members: RankMember[];
@@ -637,13 +670,28 @@ export function buildSolveRequest(input: {
 
   const idToName = (id: string) => memberIdToName(id, members);
 
+  // The stored pools are ids, ticked at some point in the past; "Tipo" is the
+  // live eligibility axis (ADR-0029). Re-filter here or the two disagree: an
+  // admin who clears someone's Tipo to stop them being scheduled would find
+  // them GONE from the pool checkboxes — which are built from Tipo — and so
+  // impossible to untick, while their id sat in the document and their name
+  // still reached the solver. `poolTipoMismatch` surfaces the same ids in the
+  // panel so the stale tick can be cleaned up rather than merely neutralised.
+  const eligibleForPool = (id: string, subtype: PoolSubtype) => {
+    const m = members.find((x) => x._id === id);
+    const t = m?.memberType ?? [];
+    return t.includes("voz") && t.includes(subtype);
+  };
+  const inPool = (ids: string[], subtype: PoolSubtype) =>
+    ids.filter((id) => eligibleForPool(id, subtype));
+
   // Deduplicate pools: sunday_leads takes priority, then saturday_leads, then
   // support. The solver requires mutual exclusivity (fact 5).
-  const sundayLeadNames = config.sundayLeads.map(idToName);
+  const sundayLeadNames = inPool(config.sundayLeads, "sunday_lead").map(idToName);
   const sundaySet = new Set(sundayLeadNames);
-  const saturdayLeadNames = config.saturdayLeads.map(idToName).filter((n) => !sundaySet.has(n));
+  const saturdayLeadNames = inPool(config.saturdayLeads, "saturday_lead").map(idToName).filter((n) => !sundaySet.has(n));
   const satSet = new Set([...sundayLeadNames, ...saturdayLeadNames]);
-  const supportNames = config.support.map(idToName).filter((n) => !satSet.has(n));
+  const supportNames = inPool(config.support, "support").map(idToName).filter((n) => !satSet.has(n));
   const poolNames = new Set([...sundayLeadNames, ...saturdayLeadNames, ...supportNames]);
 
   // Every DSL-named person absent from all pools is injected into `support`,
@@ -666,9 +714,9 @@ export function buildSolveRequest(input: {
   // unavailable — that is a documented consequence, not a bug to "fix" here.
   const availabilityRules: string[] = [];
   const allPoolIds = new Set([
-    ...config.sundayLeads,
-    ...config.saturdayLeads,
-    ...config.support,
+    ...inPool(config.sundayLeads, "sunday_lead"),
+    ...inPool(config.saturdayLeads, "saturday_lead"),
+    ...inPool(config.support, "support"),
   ]);
   for (const memberId of allPoolIds) {
     const m = members.find((x) => x._id === memberId);

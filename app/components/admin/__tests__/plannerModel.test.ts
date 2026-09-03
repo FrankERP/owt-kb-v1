@@ -136,7 +136,14 @@ const FEB_SATURDAYS = ["2026-02-07", "2026-02-14", "2026-02-21", "2026-02-28"];
 // own in October (the following Sunday, Nov 1, is out of month) — D16's fixture.
 const OCT_SUNDAYS = ["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25"];
 
-const m = (id: string, name: string): RankMember => ({ _id: id, member_name: name });
+// Fully-qualified for every pool. `buildSolveRequest` re-filters the stored pool
+// ids by live "Tipo" (ADR-0029), so a fixture with no Tipo would now be dropped
+// from every pool — which is the correct production behaviour but not what any
+// test below is about. The Tipo filter itself is covered in
+// `poolTipoMismatch.test.ts`.
+const POOL_TIPO = ["voz", "sunday_lead", "saturday_lead", "support"];
+const m = (id: string, name: string): RankMember =>
+  ({ _id: id, member_name: name, memberType: POOL_TIPO } as RankMember);
 
 const emptyConfig: SolverConfig = {
   sundayLeads: [],

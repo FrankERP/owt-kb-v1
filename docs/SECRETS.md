@@ -333,7 +333,7 @@ that order, and the window is zero.
 
 - **Needed on:** local `.env.local` only. **Not needed on:** Vercel (any environment), CI, the mobile build.
 - **Purpose:** `scripts/dev-verify.ts` signs in to dev as the «Verificador (bot)» member
-  (`member-dev-verify`, role `admin`, retired from worship, kids manager only). Without `EMAIL`/`PASSWORD`
+  (`member-dev-verify`, role `admin`, empty «Tipo» so it is in no pool, kids manager only). Without `EMAIL`/`PASSWORD`
   the runner refuses (exit 2). `PASSWORD_HASH` is read only by `scripts/dev-verify-seed.mjs`.
 - **Where it came from:** the password is chosen by Frank; the hash is generated locally with
   `bcryptjs` (see `docs/DEV_VERIFY.md`). The email is any address Frank controls; it is never mailed.

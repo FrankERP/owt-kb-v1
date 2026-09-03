@@ -14,7 +14,9 @@ solver pool is built from it (`MonthGenerator`: `memberType?.includes("voz") &&
 memberType?.includes("sunday_lead")`, and the two siblings). A member with an
 empty Tipo therefore matches no seat and lands in no pool — they cannot be
 selected by an admin and cannot be assigned by the solver. Tipo is editable from
-`/admin` by a super-admin.
+`/admin` by a super-admin. The one place that was NOT true is the stored solver
+pools, whose ids were ticked in the past and were never re-checked against Tipo;
+this delivery closes that (see Decision).
 
 `retiredFrom` was a second axis added on top, filtering the same selection
 points. It shipped with a defect a 2026-09-02 audit found: `rankCandidates`
@@ -47,6 +49,14 @@ solver rule's free-text `person` against a member and were never about
 retirement. The module carries no `"use client"` — both the planner model and
 client panels import it (ADR-0028).
 
+`buildSolveRequest` now re-filters the stored pool ids by live Tipo, and
+`poolTipoMismatch` surfaces the stale ticks in the generator so they can be
+removed. Without that the premise held everywhere except the one document the
+admin cannot see: a member whose Tipo was cleared vanished from the pool
+checkboxes — which are built FROM Tipo — so the tick could not be removed, while
+their name still reached the solver. Clearing the Tipo of the only Sunday lead
+now fails the request closed rather than solving with no lead.
+
 `disabled` is unchanged and still separate: it removes app ACCESS, not
 schedulability.
 
@@ -64,10 +74,10 @@ had gained a third exclusion its comment did not know about.
 **Keeping retirement for the information it preserved.** Clearing Tipo loses
 "this person was a voz". That is real, and it is cheap to restore: a super-admin
 re-ticks the boxes. Against it, the mechanism had **one** document in production
-— the `member-dev-verify` bot — and that document already had an empty
-`memberType`, so removing retirement changed the behaviour of exactly zero
-members, human or otherwise. A mechanism with no users is not carrying the
-weight of its own defects.
+— the `member-dev-verify` bot — and that document carried no `memberType` at
+all, which every filter treats exactly as an empty one. Removing retirement
+therefore changed the behaviour of exactly zero members, human or otherwise. A
+mechanism with no users is not carrying the weight of its own defects.
 
 ## Consequences
 
@@ -82,9 +92,11 @@ than retirement's was because it also catches a member whose Tipo merely
 changed.
 
 **The setlist push now reaches every worship member with the preference on**,
-where it previously excluded retirees. With one retiree, whose notification
-preferences are all `false` and whose address is on the `.invalid` TLD, this
-delivered nothing and delivers nothing.
+where it previously excluded retirees. The only retiree is the bot, whose
+`notifPrefs.setlist` is `"off"` — and that preference, not the retirement
+filter, is what `setlistRecipientIds` gates on. So this delivered nothing and
+delivers nothing. Verified against production before the merge:
+`count(*[_type == "teamMembers" && count(retiredFrom) > 0])` is 1.
 
 **Undoing this means restoring two axes.** If retirement comes back, the R2
 keepIds contract has to hold at every selection surface simultaneously, and the

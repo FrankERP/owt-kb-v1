@@ -45,6 +45,7 @@ import {
   mapUnfilledSeats,
   namelessSpecial,
   plannerParticipationRoles,
+  poolTipoMismatch,
   unaddressableDates as computeUnaddressableDates,
   type DraftCard,
   type GridCell,
@@ -1373,6 +1374,18 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
   const sundayPool   = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("sunday_lead"));
   const saturdayPool = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("saturday_lead"));
   const supportPool  = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("support"));
+  // Ticked into a pool at some point, but no longer carrying that pool's Tipo.
+  // The lists above cannot render them — they are built FROM Tipo — so without
+  // this the stale tick is invisible and un-untickable while its id sits in the
+  // document. `buildSolveRequest` already ignores them, so this is cleanup, not
+  // a correctness gate.
+  const tipoMismatch = poolTipoMismatch(config, members);
+
+  const POOL_LABEL: Record<"sundayLeads" | "saturdayLeads" | "support", string> = {
+    sundayLeads: "Líder Domingo",
+    saturdayLeads: "Líder Sábado",
+    support: "Soporte",
+  };
 
   const toggleMember = (field: "sundayLeads" | "saturdayLeads" | "support", id: string) => {
     const cur = config[field];
@@ -1422,6 +1435,33 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
           onSearch={q => setSearches(s => ({ ...s, support: q }))}
         />
       </div>
+
+      {tipoMismatch.length > 0 && (
+        <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
+          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
+            En un pool sin el Tipo que ese pool pide
+          </p>
+          <p className="font-body text-xs text-mono-400">
+            Ya no entran al solver. Quítalos del pool para dejar la configuración limpia.
+          </p>
+          <ul className="space-y-1">
+            {tipoMismatch.map((m) => (
+              <li key={`${m.field}-${m._id}`} className="flex items-center justify-between gap-2">
+                <span className="font-body text-xs text-mono-400">
+                  {dn(m as MemberOption)} — {POOL_LABEL[m.field]}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleMember(m.field, m._id)}
+                  className="rounded-lg border border-accent/20 px-2 py-1 font-label text-[10px] uppercase tracking-widest text-accent hover:bg-accent/10"
+                >
+                  Quitar del pool
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <LeadPoolHistoryPanel
         config={config}
