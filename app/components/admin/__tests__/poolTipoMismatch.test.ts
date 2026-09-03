@@ -124,7 +124,7 @@ describe("buildSolveRequest — a cleared Tipo really does leave the request", (
         ...emptyConfig,
         sundayLeads: ["a", "b"],
         restrictions: [{
-          id: "r1", person: "Beto", excludedPatterns: [], fairness: "none",
+          id: "r1", person: "Beto", excludedPatterns: ["Sun.Lead"], fairness: "none",
           fairnessSlack: 1, weekExclusions: [], caps: [],
         }],
       },
@@ -142,6 +142,59 @@ describe("buildSolveRequest — a cleared Tipo really does leave the request", (
     if (out.ok) throw new Error("unreachable");
     expect(out.reason).toContain("Beto");
     expect(out.reason).toMatch(/Tipo/);
+  });
+
+  it("keeps the exclusions of a mismatched-Tipo member the request still names", () => {
+    // The regression the pool filter introduced and the refusal did not cover:
+    // Carla is voz-only with a stale `support` tick, so the filter drops her —
+    // but a rule names her, so her name is injected back into `support`, where
+    // the solver seats BGV and Coro. Looping only the filtered pool ids meant
+    // she was seated with her unavailability ignored: worse than no filter.
+    const request = requestFor(
+      {
+        ...emptyConfig,
+        sundayLeads: ["a"],
+        support: ["carla"],
+        restrictions: [{
+          id: "r1", person: "Carla", excludedPatterns: ["Sat.*"], fairness: "none",
+          fairnessSlack: 1, weekExclusions: [], caps: [],
+        }],
+      },
+      [
+        member("a", "Ana", ["voz", "sunday_lead"]),
+        { ...member("carla", "Carla", ["voz"]), unavailableDates: [SUNDAYS[1]] } as RankMember,
+      ],
+    );
+    expect(request.support).toContain("Carla");
+    expect(request.dsl_rules).toContain("Carla !in week 2 Sun.*");
+  });
+
+  it("names the blocked member the way the admin sees them — by alias", () => {
+    // The rules list shows the rule's own text and the banner shows the alias;
+    // naming them by member_name would point at a string that is nowhere on
+    // screen.
+    const out = buildSolveRequest({
+      config: {
+        ...emptyConfig,
+        sundayLeads: ["a"],
+        restrictions: [{
+          id: "r1", person: "Beti", excludedPatterns: ["Sun.Lead"], fairness: "none",
+          fairnessSlack: 1, weekExclusions: [], caps: [],
+        }],
+      },
+      members: [
+        member("a", "Ana", ["voz", "sunday_lead"]),
+        { ...member("b", "Beto Ramirez", []), alias: "Beti" } as RankMember,
+      ],
+      sundayDates: SUNDAYS,
+      activeSatDates: [],
+      historyEntries: [],
+      year: 2026,
+      month: 1,
+    });
+    expect(out.ok).toBe(false);
+    if (out.ok) throw new Error("unreachable");
+    expect(out.reason).toContain("Beti");
   });
 
   it("still injects a rule-named member who merely lacks a POOL subtype", () => {

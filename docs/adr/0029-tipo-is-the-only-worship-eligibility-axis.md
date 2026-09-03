@@ -64,8 +64,11 @@ member that a rule still named went straight back in — where the solver seats
 BGV and Coro — while their availability exclusions, which loop the FILTERED
 ids, were no longer generated. `buildSolveRequest` therefore REFUSES, naming the
 person, when a member with no Tipo is still named by a rule. A member who merely
-lacks a pool subtype (`voz` alone) is injected exactly as before: nobody has said
-they cannot serve.
+lacks a pool subtype (`voz` alone) is still injected — nobody has said they
+cannot serve — and the availability loop covers everyone the request NAMES, not
+just the surviving pool ids, so an injected member keeps their week exclusions.
+Looping the filtered ids alone was the same bug one predicate narrower: seated
+anyway, availability silently dropped.
 
 `disabled` is unchanged and still separate: it removes app ACCESS, not
 schedulability.

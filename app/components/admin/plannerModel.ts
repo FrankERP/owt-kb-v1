@@ -46,7 +46,7 @@ import {
 } from "./seatModel";
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel";
-import { rulePersonNamesMember } from "@/app/utils/memberRuleNames";
+import { displayMemberName, rulePersonNamesMember } from "@/app/utils/memberRuleNames";
 
 // ─── Grid shape ───────────────────────────────────────────────────────────────
 
@@ -718,9 +718,11 @@ export function buildSolveRequest(input: {
   // generator's "en un pool sin el Tipo que ese pool pide" banner offers the
   // one-click cleanup. NO Tipo at all is the deliberate "not schedulable"
   // signal (ADR-0029); a member who merely lacks a POOL subtype — `voz` alone,
-  // say — is still injected exactly as before, since nobody has said they
-  // cannot serve.
+  // say — is still injected, since nobody has said they cannot serve, and
+  // `injectedMemberIds` below keeps their availability exclusions with them.
   const dslBlockedByTipo: string[] = [];
+  /** Ids of real members whose NAME reaches the request via `extraSupport`. */
+  const injectedMemberIds = new Set<string>();
   for (const name of allDslPersons) {
     const r = resolveToMemberName(name, members);
     const resolved = "resolved" in r ? r.resolved : r.unresolved;
@@ -729,10 +731,15 @@ export function buildSolveRequest(input: {
     // unknown raw name keeps its documented injection.
     const named = "resolved" in r ? members.find((x) => x.member_name === r.resolved) : undefined;
     if (named && (named.memberType ?? []).length === 0) {
-      if (!dslBlockedByTipo.includes(resolved)) dslBlockedByTipo.push(resolved);
+      // Named by alias where they have one: the rules list shows the rule's own
+      // text and the mismatch banner shows the alias, so `member_name` would
+      // name someone the admin cannot find on screen.
+      const shown = displayMemberName(named);
+      if (!dslBlockedByTipo.includes(shown)) dslBlockedByTipo.push(shown);
       continue;
     }
     if (!extraSupport.includes(resolved)) extraSupport.push(resolved);
+    if (named) injectedMemberIds.add(named._id);
   }
   if (dslBlockedByTipo.length > 0) {
     return {
@@ -744,13 +751,23 @@ export function buildSolveRequest(input: {
   }
 
   // Auto-generate week-exclusion DSL rules from member unavailableDates. The
-  // rules loop `allPoolIds` (fact 15): a non-pool member is schedulable while
-  // unavailable — that is a documented consequence, not a bug to "fix" here.
+  // rules loop `allPoolIds` (fact 15): a member the request never names is
+  // schedulable while unavailable — that is a documented consequence, not a bug
+  // to "fix" here.
+  //
+  // `injectedMemberIds` is part of that set and must be: the Tipo filter above
+  // can drop a member from a pool while a rule still names them, which puts
+  // their name into `extraSupport` — so the request DOES name them, and the
+  // solver can seat them BGV or Coro. Looping the filtered pool ids alone
+  // dropped exactly those people's exclusions, which is worse than not
+  // filtering at all: seated anyway, availability ignored. Anyone the request
+  // names carries their exclusions.
   const availabilityRules: string[] = [];
   const allPoolIds = new Set([
     ...inPool(config.sundayLeads, "sunday_lead"),
     ...inPool(config.saturdayLeads, "saturday_lead"),
     ...inPool(config.support, "support"),
+    ...injectedMemberIds,
   ]);
   for (const memberId of allPoolIds) {
     const m = members.find((x) => x._id === memberId);

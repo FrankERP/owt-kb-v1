@@ -1443,8 +1443,8 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
             En un pool sin el Tipo que ese pool pide
           </p>
           <p className="font-body text-xs text-mono-400">
-            No entran al solver desde el pool. Si además alguna regla los nombra, el mes no
-            se genera hasta que quites la regla: sácalos de aquí y revisa las reglas.
+            No entran al solver desde el pool. Si alguno se quedó sin «Tipo» y una regla
+            todavía lo nombra, el mes no se genera hasta que quites esa regla.
           </p>
           <ul className="space-y-1">
             {tipoMismatch.map((m) => (
