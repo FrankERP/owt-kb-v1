@@ -633,10 +633,11 @@ export const POOL_SUBTYPE: Record<"sundayLeads" | "saturdayLeads" | "support", P
 /**
  * Stored pool ids whose member no longer carries the Tipo that pool requires —
  * including a member with no Tipo at all, which is how someone is made
- * unschedulable (ADR-0029). `buildSolveRequest` drops these from the pools — and
- * refuses outright when a rule still names one — so this is what lets the panel
- * SHOW them, since the checkbox list is built from Tipo and therefore cannot
- * render them.
+ * unschedulable (ADR-0029). `buildSolveRequest` drops all of these from the
+ * pools; it refuses outright only when a rule still names one who has NO Tipo at
+ * all — a subtype mismatch is injected into `support` instead, keeping its
+ * availability exclusions. Either way the checkbox list is built from Tipo and
+ * cannot render them, which is what this is for.
  */
 export function poolTipoMismatch(
   config: Pick<SolverConfig, "sundayLeads" | "saturdayLeads" | "support">,
@@ -709,9 +710,10 @@ export function buildSolveRequest(input: {
   // …which quietly UNDID the Tipo filter above, and cost the member their
   // availability into the bargain. Dropping someone from a pool for having no
   // Tipo, while a rule still names them, put them straight back into `support`
-  // — where the solver seats BGV and Coro — and `allPoolIds` below (now built
-  // from the FILTERED ids) then generated none of their week exclusions. Worse
-  // than before the filter existed.
+  // — where the solver seats BGV and Coro — and `allPoolIds` below, built from
+  // the FILTERED ids alone as it then was, generated none of their week
+  // exclusions. Worse than before the filter existed. It now unions
+  // `injectedMemberIds`, closing that half for everyone the request names.
   //
   // Removing the name instead is not available: the solver 422s on a DSL clause
   // naming someone in no pool. So this refuses, naming the person, and the
