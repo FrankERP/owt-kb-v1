@@ -343,3 +343,24 @@ export function joinStoredRoleInventory(
 
   return { coherent, reasons: [...reasons], roles: observations };
 }
+
+/**
+ * Do these two row lists differ in anything the ADMIN changed?
+ *
+ * Not a `JSON.stringify` comparison, and the difference is not cosmetic.
+ * `buildStoredGridRows` stamps `writeLabel` on every row it rebuilds from a
+ * stored document; `PlannerGrid`'s "add instrument"/"add FOH" adders mint
+ * `{ id, label, category, target }` with no `writeLabel`. So the moment an
+ * added seat row was SAVED and reloaded, the two shapes differed by that one
+ * key forever, and the editor insisted there was unsaved work that was in fact
+ * stored — disabling «+ Nuevo servicio» and both swap controls, and raising a
+ * data-loss prompt reading "descarta 0 servicios". Recovery was close-and-reopen.
+ *
+ * `writeLabel` is a write-path detail derived from the row id, never something
+ * the admin edits, so it has no business deciding whether the editor is dirty.
+ */
+export function storedRowsDiffer(a: StoredGridRow[], b: StoredGridRow[]): boolean {
+  if (a.length !== b.length) return true;
+  const key = (r: StoredGridRow) => JSON.stringify([r.id, r.label, r.category, r.target]);
+  return a.some((row, i) => key(row) !== key(b[i]));
+}
