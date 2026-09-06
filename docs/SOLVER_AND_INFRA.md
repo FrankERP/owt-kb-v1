@@ -127,6 +127,22 @@ import with `--apply`.**
 
 ### Migrations (one-off)
 - `migrate-authors.mjs` — free-text authors → canonical `author` references (`lib/author-canon.mjs`).
+- `retag-songs.mjs` — catalogue re-tag by theme (2026-09-05). Replaces each post's THEMATIC
+  tags with a curated set derived from the stored lyrics (the assignment table lives in the
+  script), keeps the tempo tags (`Up Beat`/`Down Beat`/`Transition`; five songs that had
+  none received `Down Beat`), strips the 21 artist
+  tags from `tags` (artists are `authors` since `migrate-authors`), folds 11 near-duplicate
+  theme tags into their canonical name, creates 9 new theme tags, fixes two accent-mangled
+  slugs, and deletes the 33 tag docs left unreferenced. Dry-run by default, `--apply` to
+  write; refuses to run while any `post` draft exists; idempotent. **STATE: APPLIED
+  2026-09-06** with Frank's consent — 9 tags created, 135 posts patched, 33 tag docs deleted,
+  0 skips; a follow-up dry-run reported 0 changes that day. **A later `--apply` re-imposes
+  the script's `THEMES` table over any tag edit made in Studio since** (full-array replace),
+  so read the dry-run diff first — do not re-run it on the word "idempotent". In the same
+  session two co-authors were
+  added by hand (`Gracias Dios` +UPPERROOM, `Gracia Sublime Es` +En Espíritu y En Verdad),
+  both in `authors[]` and the denormalised `author` string. Taxonomy after: 43 tags
+  (3 tempo + 40 theme), no artist tags.
 - `migrate-proposal-messages.mjs` — **RETIRED, see the table below.** It folded
   `setlistProposal.lead_notes` / `.admin_notes` into the append-only `messages[]` thread
   (Release 2, Child A). **STATE: APPLIED 2026-08-26** — 8 documents, 10 messages, 0 failed
