@@ -203,6 +203,9 @@ several exist precisely to stop a plausible-looking change.
   `undefined` while loading). A handler that only inspects the returned
   session's fields reads every real failure as success — check for nullish
   FIRST. Both impersonation handlers do; see `ImpersonationBanner`.
+- **`app/(client)/template.tsx` renders a fragment, never a wrapper.** A transformed
+  ancestor is a containing block for every `position: fixed` descendant (FAB, audio
+  transport, toasts). `reveal.test.ts` is the guard.
 
 ## Reusable utils (don't reinvent)
 `normalizeText` (accent-insensitive search), `assignedMemberRefsQuery`,
@@ -219,10 +222,15 @@ hold]` — every auto-dismissing toast and "Guardado ✓" flash. A bare
 `setTimeout(() => setToast(null))` leaks its timer, so a second toast inherits the
 first one's clock and an error can vanish in 100ms. Use `hold` for a message that must
 PERSIST until something replaces it — `MonthGenerator`'s swap toast, which reports
-writes that landed in Sanity but could not be verified. Never hand-roll the timer).
+writes that landed in Sanity but could not be verified. Never hand-roll the timer),
+`Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never an inline
+class string), `Presence` (every animated conditional), `Skeleton`/`SkeletonGroup` (every
+loading placeholder), `revealProps` (route reveal). Motion tokens are `--motion-*` /
+`--ease-*`; `motion` is importable only under `app/components/ui/**` — see `docs/MOTION.md`
+and ADR-0031.
 
 ## Colour tokens
-Colour lives in **67 base roles + 26 composed tokens** (`app/brand.css` `:root`,
+Colour lives in **67 base roles + 29 composed tokens** (`app/brand.css` `:root`,
 `tailwind.config.ts`). The seven retired `--brand-*` COLOUR variables and their `brand.*`
 Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
 `--brand-duration-*`) survive.

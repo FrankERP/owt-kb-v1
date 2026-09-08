@@ -28,6 +28,7 @@ Studio, and native iOS/Android apps (Capacitor).
 | 9 | [`SERVICE_READINESS_UI.md`](SERVICE_READINESS_UI.md) | The `/admin → Servicios` readiness layer: the five sources, the dimensions, the 15-rule primary-action ladder, the integrity queue, bulk-publish blockers. |
 | 10 | [`MONTH_GRID_EDITING.md`](MONTH_GRID_EDITING.md) | The stored-service month editor: role-ID grid, create/save/swap contracts, mutation recovery, server hardening, and preview delivery evidence. |
 | 11 | [`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md) | The deployed-verification (A3) runbook: isolation guarantees, env vars, the dataset lease, run identity, the zero-delivery proof, teardown. **Read before running Playwright.** |
+| 12 | [`MOTION.md`](MOTION.md) | The motion system: tokens, the seven rules, the `ui/` primitives, how to test one, the bundle ledger. |
 
 Also in this repo root:
 - [`adr/`](adr/README.md) — **decision records**: why a choice was made and what was
