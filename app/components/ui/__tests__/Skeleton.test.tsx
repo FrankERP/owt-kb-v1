@@ -2,7 +2,7 @@
 // app/components/ui/__tests__/Skeleton.test.tsx
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import Skeleton, { SkeletonGroup } from "../Skeleton";
+import Skeleton, { SkeletonGroup, NavbarSkeleton } from "../Skeleton";
 
 afterEach(cleanup);
 
@@ -30,5 +30,14 @@ describe("Skeleton", () => {
     const g = screen.getByRole("status");
     expect(g.getAttribute("aria-busy")).toBe("true");
     expect(g.getAttribute("aria-label")).toBe("Cargando servicios");
+  });
+
+  it("NavbarSkeleton reserves the navbar's height so the top bar never vanishes between routes", () => {
+    const { container } = render(<NavbarSkeleton />);
+    const el = container.firstElementChild as HTMLElement;
+    expect(el.className).toContain("env(safe-area-inset-top)");
+    expect(el.className).toContain("lg:h-[calc(6rem+env(safe-area-inset-top))]");
+    expect(el.className).toContain("border-b");
+    expect(el.getAttribute("aria-hidden")).toBe("true");
   });
 });

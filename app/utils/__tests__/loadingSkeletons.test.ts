@@ -17,12 +17,21 @@ const FILES = [
 describe.each(FILES)("%s", (rel) => {
   const src = readFileSync(path.join(REPO_ROOT, rel), "utf8");
   it("uses Skeleton and SkeletonGroup", () => {
-    expect(src).toMatch(/import Skeleton, \{ SkeletonGroup \} from "[./]*components\/ui\/Skeleton"/);
+    expect(src).toMatch(/import Skeleton, \{ SkeletonGroup, NavbarSkeleton \} from "[./]*components\/ui\/Skeleton"/);
     expect(src).toMatch(/<SkeletonGroup label="/);
   });
   it("carries no animate-pulse", () => {
     expect(src).not.toContain("animate-pulse");
   });
+  it("renders NavbarSkeleton as the first child of SkeletonGroup, so the top bar never vanishes", () => {
+    expect(src).toContain("NavbarSkeleton");
+    expect(src).toContain("<NavbarSkeleton />");
+  });
+});
+
+it("schedule/loading.tsx mirrors the calendar's 7-column month grid", () => {
+  const src = readFileSync(path.join(REPO_ROOT, "app/(client)/schedule/loading.tsx"), "utf8");
+  expect(src).toContain("grid-cols-7");
 });
 
 it("brand.css shimmer animates transform on a pseudo-element, never background-position", () => {

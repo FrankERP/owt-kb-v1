@@ -21,3 +21,12 @@ export function SkeletonGroup({ label, children, className = "" }: { label: stri
     </div>
   );
 }
+
+// Navbar renders per page (not in the layout), so a loading.tsx that skips this
+// placeholder lets the top bar vanish and reappear on every route transition.
+// Height classes must track Navbar.tsx's `h-20 lg:h-24` + safe-area top exactly.
+export function NavbarSkeleton() {
+  return (
+    <div aria-hidden="true" className="h-[calc(5rem+env(safe-area-inset-top))] lg:h-[calc(6rem+env(safe-area-inset-top))] border-b border-surface-accent-20" />
+  );
+}
