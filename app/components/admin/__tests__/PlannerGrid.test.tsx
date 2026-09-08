@@ -1114,7 +1114,7 @@ describe("PlannerGrid — an occupant whose Tipo no longer fits the seat", () =>
     expect(row?.textContent).not.toMatch(/Su Tipo/);
   });
 
-  it("tells assistive tech, not only the eye", () =>{
+  it("tells assistive tech, not only the eye", () => {
     const { container } = render(
       <PlannerGrid {...baseProps({ cells: seated("instrumento:Bass") })} />,
     );
