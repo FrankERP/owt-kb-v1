@@ -9,7 +9,7 @@
      Non-colour, so outside the theme-parity check in brandCss.test.ts (that guard
      classifies by VALUE shape). Pinned by motionTokens.test.ts. Only transform and
      opacity ever animate against these; see docs/MOTION.md. */
-  --motion-fast: 120ms;     /* colour, hover, focus ring */
+  --motion-fast: 120ms;     /* colour changes, hover, focus ring */
   --motion-base: 200ms;     /* press, toggles, menus, small reveals */
   --motion-slow: 320ms;     /* sheets, dialogs, tab panels, expand/collapse */
   --motion-reveal: 480ms;   /* route reveal, hero rail */
@@ -22,8 +22,9 @@
 
   /* The two surviving --brand-duration-* vars (ADR-0016 lists the four non-colour
      --brand-* survivors) become aliases so their 3 existing consumers move with the
-     system. Values CHANGE here: 150→120 and 210→480; the beam reveal on the sign-in
-     lockup is the only visible effect, and 480 is the spec's reveal duration. */
+     system. Values CHANGE here: 150→120 reaches .brand-surface-interactive (the card
+     hover lift) and .brand-library-module::before (the accent rail); 210→480 reaches
+     only .brand-stage-hero::before on the sign-in lockup. */
   --brand-duration-fast: var(--motion-fast);
   --brand-duration-reveal: var(--motion-reveal);
 
