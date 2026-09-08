@@ -575,12 +575,18 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
   });
 
   it("does NOT flag cross-category double duty (voz + instrumento)", () => {
+    // The fixture has to BE double duty for the name to be true: a `voz`-only
+    // member on a Bass seat is a Tipo mismatch, which the grid now warns about
+    // separately — in amber, so a red-only assertion would pass while showing
+    // the very thing the test says is legitimate.
+    const dualDuty = [{ _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"] }];
     const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "auto" },
       { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
     ];
-    const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
+    const { container } = render(<PlannerGrid {...baseProps({ cells, members: dualDuty })} />);
     expect(container.querySelectorAll(".border-negative-strong\\/50").length).toBe(0);
+    expect(container.querySelectorAll(".border-warning-strong\\/50").length).toBe(0);
   });
 
   it("flags a same-category duplicate on its own two rows WITHOUT bleeding onto a legitimate cross-category cell for the same member (Finding 1)", () => {
@@ -595,7 +601,12 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
       { date: "2026-08-09", rowId: "bgv", memberIds: ["m1"], origin: "auto" },
       { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
     ];
-    const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
+    // m1 really does double duty here, so their Tipo has to say so: the grid
+    // now warns about an occupant seated where their Tipo no longer allows,
+    // and a `voz`-only fixture on a Bass seat is that warning, not this test's
+    // subject.
+    const dualDuty = [{ _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"] }];
+    const { container } = render(<PlannerGrid {...baseProps({ cells, members: dualDuty })} />);
     const leadCell = cellFor(container, "lead", "2026-08-09");
     const bgvCell = cellFor(container, "bgv", "2026-08-09");
     const bassCell = cellFor(container, "instrumento:Bass", "2026-08-09");
@@ -618,7 +629,12 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
       { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
       { date: "2026-08-09", rowId: "instrumento:Keys", memberIds: ["m1"], origin: "manual" },
     ];
-    const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
+    // m1 really does double duty here, so their Tipo has to say so: the grid
+    // now warns about an occupant seated where their Tipo no longer allows,
+    // and a `voz`-only fixture on a Bass seat is that warning, not this test's
+    // subject.
+    const dualDuty = [{ _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"] }];
+    const { container } = render(<PlannerGrid {...baseProps({ cells, members: dualDuty })} />);
     for (const rowId of ["lead", "bgv", "instrumento:Bass", "instrumento:Keys"]) {
       expect(
         within(cellFor(container, rowId, "2026-08-09")).getByText(/⚠/),
@@ -982,6 +998,141 @@ describe("PlannerGrid — copy across dates (fact 26, grid-only)", () => {
     const eviction = screen.getByText(/sale/i).textContent ?? "";
     expect(eviction).toMatch(/9 ago/);
     expect(eviction).toMatch(/Tony/);
+  });
+});
+
+// ─── The seat-level «Tipo» warning ───────────────────────────────────────────
+//
+// Since ADR-0029, clearing someone's Tipo is how an admin takes them off the
+// roster — and nothing re-examines the months already planned, so the person
+// simply stays seated where they are. Retirement's ↷ badge used to say so; it
+// went away with the mechanism, and the ADR recorded this as the gap it left.
+//
+// This warning is strictly better than the badge it replaces: it also catches a
+// member whose Tipo merely CHANGED (a vocalist who stopped playing bass), which
+// retirement could never express.
+
+describe("PlannerGrid — an occupant whose Tipo no longer fits the seat", () => {
+  const seated = (rowId: string): InputGridCell[] => [
+    { date: "2026-08-09", rowId, memberIds: ["m1"], origin: "manual" },
+  ];
+
+  it("names the member and the Tipo the seat needs", () => {
+    // Frank is `voz` only, sitting on Bass.
+    const { container } = render(
+      <PlannerGrid {...baseProps({ cells: seated("instrumento:Bass") })} />,
+    );
+    const cell = cellFor(container, "instrumento:Bass", "2026-08-09");
+    const note = within(cell).getByText(/su Tipo ya no incluye/);
+    expect(note.textContent).toMatch(/Frank/);
+    expect(note.textContent).toMatch(/instrumento/);
+  });
+
+  it("says nothing when the Tipo still fits", () => {
+    const { container } = render(<PlannerGrid {...baseProps({ cells: seated("lead") })} />);
+    const cell = cellFor(container, "lead", "2026-08-09");
+    expect(within(cell).queryByText(/su Tipo ya no incluye/)).toBeNull();
+  });
+
+  it("warns when the Tipo is empty — the state clearing it produces", () => {
+    const cleared = [{ _id: "m1", member_name: "Frank", memberType: [] }];
+    const { container } = render(
+      <PlannerGrid {...baseProps({ cells: seated("lead"), members: cleared })} />,
+    );
+    expect(within(cellFor(container, "lead", "2026-08-09")).getByText(/su Tipo ya no incluye/)).toBeTruthy();
+  });
+
+  it("says nothing about an id that resolves to no member", () => {
+    // A missing document is a different problem with a different remedy;
+    // reporting it as a Tipo mismatch sends the admin to edit a Tipo that does
+    // not exist.
+    const ghost: InputGridCell[] = [
+      { date: "2026-08-09", rowId: "lead", memberIds: ["nobody"], origin: "manual" },
+    ];
+    const { container } = render(<PlannerGrid {...baseProps({ cells: ghost })} />);
+    expect(within(cellFor(container, "lead", "2026-08-09")).queryByText(/su Tipo ya no incluye/)).toBeNull();
+  });
+
+  it("offers a way OUT of the seat, which is what the warning tells them to do", () => {
+    // The picker filters on Tipo, so a flagged occupant has no candidate row;
+    // the drag gate judges the TARGET seat, so they could be relocated but not
+    // removed; and row removal refuses a non-empty row. Without this the warning would name an action the surface
+    // does not offer, which is exactly what ADR-0029 records the retirement
+    // badge doing.
+    const onCellsChange = vi.fn();
+    const { container } = render(
+      <PlannerGrid {...baseProps({ cells: seated("instrumento:Bass"), onCellsChange })} />,
+    );
+    fireEvent.click(cellFor(container, "instrumento:Bass", "2026-08-09"));
+
+    fireEvent.click(screen.getByRole("button", { name: /Quitar a Frank de Bass/ }));
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+    const next: GridCell[] = onCellsChange.mock.calls[0][0];
+    const cell = next.find((c) => c.rowId === "instrumento:Bass");
+    expect(cell?.occupants.map((o) => o.memberId) ?? []).toEqual([]);
+  });
+
+  it("offers removal only — never a toggle back into a seat their Tipo forbids", () => {
+    const { container } = render(
+      <PlannerGrid {...baseProps({ cells: seated("instrumento:Bass") })} />,
+    );
+    fireEvent.click(cellFor(container, "instrumento:Bass", "2026-08-09"));
+    const row = screen.getByRole("button", { name: /Quitar a Frank de Bass/ }).closest("li");
+    expect(row?.textContent).toMatch(/Su Tipo ya no permite este puesto/);
+    // One control on that row, and it removes.
+    expect(row?.querySelectorAll("button").length).toBe(1);
+  });
+
+  it("leaves an eligible occupant out of the stranded list", () => {
+    const { container } = render(<PlannerGrid {...baseProps({ cells: seated("lead") })} />);
+    fireEvent.click(cellFor(container, "lead", "2026-08-09"));
+    expect(screen.queryByRole("button", { name: /Quitar a Frank/ })).toBeNull();
+  });
+
+  it("spells FOH the way the rest of the admin does, not as a raw value", () => {
+    // `f1` is a `foh` member; `m1` is `voz` only, so seating them on Console is
+    // a mismatch and the note has to name the Tipo that seat needs.
+    const { container } = render(
+      <PlannerGrid {...baseProps({ cells: seated("foh:Console") })} />,
+    );
+    const note = within(cellFor(container, "foh:Console", "2026-08-09")).getByText(/su Tipo ya no incluye/);
+    expect(note.textContent).toMatch(/FOH/);
+    expect(note.textContent).not.toMatch(/incluye foh/);
+  });
+
+  it("says the person is missing, not that their Tipo is wrong, for an unresolved id", () => {
+    // Absence from the candidate list has two causes; the members read is
+    // scoped by ministry for a non-super-admin. Sending someone to edit a Tipo
+    // that does not exist is its own dead end.
+    const ghost: InputGridCell[] = [
+      { date: "2026-08-09", rowId: "lead", memberIds: ["nobody"], origin: "manual" },
+    ];
+    const { container } = render(<PlannerGrid {...baseProps({ cells: ghost })} />);
+    fireEvent.click(cellFor(container, "lead", "2026-08-09"));
+    const row = screen.getByRole("button", { name: /Quitar a nobody/ }).closest("li");
+    expect(row?.textContent).toMatch(/No se encontró a esta persona/);
+    expect(row?.textContent).not.toMatch(/Su Tipo/);
+  });
+
+  it("tells assistive tech, not only the eye", () => {
+    const { container } = render(
+      <PlannerGrid {...baseProps({ cells: seated("instrumento:Bass") })} />,
+    );
+    const chip = cellFor(container, "instrumento:Bass", "2026-08-09").querySelector('[data-occupant="m1"]');
+    expect(chip?.getAttribute("aria-label")).toMatch(/Tipo no permitido/);
+  });
+
+  it("keeps the conflict tint when a cell is BOTH a duplicate and a Tipo mismatch", () => {
+    // Red outranks amber: a duplicate is the more urgent of the two, and the
+    // named line below the cell still reports the Tipo separately.
+    const both: InputGridCell[] = [
+      { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
+      { date: "2026-08-09", rowId: "instrumento:Keys", memberIds: ["m1"], origin: "manual" },
+    ];
+    const { container } = render(<PlannerGrid {...baseProps({ cells: both })} />);
+    const cell = cellFor(container, "instrumento:Bass", "2026-08-09");
+    expect(cell.querySelectorAll(".border-negative-strong\\/50").length).toBeGreaterThan(0);
+    expect(within(cell).getByText(/su Tipo ya no incluye/)).toBeTruthy();
   });
 });
 

@@ -75,3 +75,34 @@ export function fohSeatDef(label: string): SeatDef {
   const name = normalizeSeatName(label);
   return { id: `foh:${name}`, label: name, category: "foh", max: null, memberType: "foh" };
 }
+
+/**
+ * The `memberType` a seat of this category requires. Every `SeatDef` above
+ * already carries it; this is the same fact keyed by category, for the callers
+ * that hold a `GridRow` (which has a category, not a `SeatDef`).
+ */
+export const SEAT_MEMBER_TYPE: Record<SeatCategory, string> = {
+  voz: "voz",
+  instrumento: "instrumento",
+  foh: "foh",
+};
+
+/**
+ * Can this member still occupy a seat of this category?
+ *
+ * The same test `rankCandidates` applies when building the candidate list, asked
+ * of someone who is ALREADY seated. The two answers can disagree, because a seat
+ * is filled once and «Tipo» is edited later — and since ADR-0029 made Tipo the
+ * only eligibility axis, clearing it is how an admin takes someone off the
+ * roster. Nothing re-examines the months already planned, so the person simply
+ * stays where they are, silently. This is what lets the planner say so.
+ *
+ * An absent or empty Tipo fits nothing, which is exactly the state that clearing
+ * it produces.
+ */
+export function occupantFitsSeat(
+  member: { memberType?: string[] } | undefined,
+  category: SeatCategory,
+): boolean {
+  return (member?.memberType ?? []).includes(SEAT_MEMBER_TYPE[category]);
+}

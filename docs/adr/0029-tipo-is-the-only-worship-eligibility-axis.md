@@ -94,6 +94,26 @@ mechanism with no users is not carrying the weight of its own defects.
 
 ## Consequences
 
+**~~Nothing warns that someone you removed from the team is still assigned to a
+future service.~~ Closed 2026-09-07** — `PlannerGrid` now warns per seat, the
+shape this section predicted: `occupantFitsSeat` (`seatModel.ts`) asks the same
+question `rankCandidates` asks when building the candidate list, of someone who
+is already placed. The cell tints the chip amber and names the person and the
+Tipo the seat needs. As predicted, it is wider than the badge it replaces: it
+also catches a member whose Tipo merely CHANGED, which retirement could not
+express.
+
+The removal half is closed with it, and deliberately: `rankCandidates` filters
+on Tipo, so a flagged occupant has no candidate row; the drag gate judges the
+TARGET seat, so a mismatched member can be relocated but never removed, and one
+with no Tipo at all has no legal target; and row removal refuses a non-empty row. A warning naming
+an action the surface does not offer is the exact sin recorded above, so the
+picker grows a removal-ONLY row for occupants it does not otherwise list. Not a
+toggle: putting them back is what their Tipo says they cannot do.
+
+The original wording is kept below because it is the reasoning that produced the
+fix.
+
 **Nothing warns that someone you removed from the team is still assigned to a
 future service.** Retirement's one genuine capability was the planner's ↷ badge
 and its "sigue en este servicio futuro" note. Clearing Tipo produces no such
