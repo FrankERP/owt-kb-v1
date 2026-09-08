@@ -354,3 +354,203 @@ inventory artifact is regenerated per phase, never in one 305-site sweep.
 - A visual redesign of the palette or type — the token system from ADR-0016 stays as is.
 - Studio (`/studio`) — Sanity's own UI.
 - The email templates (deliberately light, see CLAUDE.md).
+
+---
+
+# Part II — Remakes (proposed 2026-09-08 after looking at the live screens)
+
+Part I is a motion layer over today's layouts. After screenshots of the real routes on dev
+(phone 390×844 and desktop 1440×900, dark), six of those layouts are what stop the app from
+feeling premium, and no amount of easing fixes a layout. Part II proposes remaking them.
+**Nothing in Part II changes a writer, a route contract, a query filter, or the data
+model** — every remake is a re-composition of reads the pages already do.
+
+## 11. What the screens actually show
+
+| Screen | Observation | Consequence |
+|---|---|---|
+| `/` phone | The page is **34,045 px tall**: "Esta semana" then all 142 songs as ~230 px cards, each repeating a `REPERTORIO` eyebrow and a `VER` affordance | The home page is the library. Nobody scrolls it; the search box is the only usable entry |
+| `/` desktop | One DayCard centred at ~760 px inside a 1440 px viewport, heading left-aligned above it | The most important object on the site floats in empty space, misaligned with its own heading |
+| `/schedule` phone | The screenshot is **417 px wide on a 390 px viewport** — the `min-w-[13rem]` month heading pushes the Anterior/Siguiente buttons off-screen; three full month grids for four service days | Horizontal overflow bug on every phone; ~90 % of the cells carry no information |
+| `/me` phone | Three month grids of availability before the member's own identity card; theme and text-size cards are two more framed boxes of pills | The page is upside down: settings and calendars first, "who am I and when do I serve" last |
+| `/admin` desktop | Frame → shell → tabs bar → workspace → panel → card: five nested bordered surfaces before content | "Box in box in box" is the single strongest signal of non-premium UI |
+| `/tag` phone | Three pinned tiles, then **40+ identical two-column boxes** | A wall of boxes; counts are the only information and they are hidden in small caps |
+| `/posts/[slug]` | Good bones: hero, key dial, sticky section nav | Keep; extend into a practice surface (§12.7) |
+| Global | The diagonal beam atmosphere, the condensed display face, the lit section rail, the `KEY │ Name` instrument chips | These are the identity. Keep all of them. Part II adds no new colour or type |
+
+## 12. The remakes
+
+Subject grounding: this is a **run sheet for a stage team**. What a worship member wants
+on a phone on Thursday night is: *when do I serve, what do we play, in what key, and can I
+practise it now*. Every remake below optimises for that sentence.
+
+### 12.1 Home → the run sheet (`/`)
+
+The home page becomes the next service, and only the next service, above the fold.
+
+```
+┌──────────────────────────────────────────────┐
+│ ▍ESTA SEMANA                                 │
+│                                              │
+│ DOMINGO 13 SEP              ┌──────────────┐ │
+│ en 5 días                   │ ▶ ENSAYAR    │ │  ← practice playlist as the hero action
+│                             └──────────────┘ │
+│ ──────────────────────────────────────────── │
+│ 01  Amor Sin Condición     G   144  ▍▍▍      │  ← run sheet: order · title · key · BPM
+│ 02  Alaba (Praise)         A   127  ▍▍       │
+│ 03  Anclado (Anchor)       E    73  ▍        │
+│ ──────────────────────────────────────────── │
+│ VOCES   ● Jakey ● Marianne  ◦ Lucía ◦ Hugo   │  ← avatar stack, lit ring = you
+│ INSTR   BASS│Mkz  KEYS│Sofi  DRUMS│Tony …    │
+└──────────────────────────────────────────────┘
+│ ▍SÁBADO 19 SEP · en 11 días        (collapsed)│
+```
+
+- Numbered rows are justified here: a setlist **is** a sequence.
+- The `ENSAYAR` action is `PracticePlaylistButton` promoted; playing walks the run sheet and
+  the active row carries the equaliser bars from §5.3.
+- Saturday and any special service collapse to a one-line header (`Collapse`).
+- **The library leaves the home page.** It gets its own route and tab (§12.2). Home drops from
+  34,045 px to roughly two screens on a phone.
+- Desktop: the run sheet spans the container; team on the right column. No centred card.
+
+### 12.2 Library → an index, not a wall (`/biblioteca`, new route; `/tag`, `/author` fold in)
+
+```
+┌──────────────────────────────────────────────┐
+│ 🔍 Buscar por título, autor o tonalidad     ⌥ │  ← ⌥ opens the filter drawer (tags, tipo, key)
+│ ▍142 TÍTULOS · ordenado A–Z                  │
+│ A                                            │
+│ ▌A  Alaba (Praise)            Elevation  127 │  ← one 56 px row per song: key · title · artist · BPM
+│ ▌C  Alabaré Al Señor          Hillsong    72 │
+│ ▌G  Amor Sin Condición        Barrientos 144 │
+│ B                                            │
+│ …                                            │
+└──────────────────────────────────────────────┘
+                                          A B C D … ← sticky letter rail (phone: right edge)
+```
+
+- Row tap → `SongSheet` (exists). Long-press → quick actions sheet (Ensayar, Letra, Acordes,
+  Copiar tonalidad) with a light haptic.
+- Tags become a **filter drawer** on this route, not a page of boxes: pinned Tipo as three
+  large segmented tiles, the 40 themes as chips sized by count in a flowing row. `/tag` and
+  `/tag/[slug]` redirect into `/biblioteca?tag=`; `/author/[slug]` into `/biblioteca?author=`
+  (both keep working — they are 301s, no data change).
+- Filtering animates with `layout` (rows slide to place, leavers fade) — this is where the
+  Part I list motion earns its keep, at 56 px per row instead of 230.
+- Bottom tab: Inicio · **Biblioteca** · Calendario · Yo · Más.
+
+### 12.3 Schedule → agenda strip (`/schedule`)
+
+```
+┌──────────────────────────────────────────────┐
+│ ◂  SEPTIEMBRE 2026  ▸            [Mes][Lista] │
+│  L   M   X   J   V   S   D                    │
+│  7   8   9  10  11  12  ●13   ← week strip, swipeable, service days lit
+│ ──────────────────────────────────────────── │
+│ DOM 13 SEP · en 5 días                       │
+│   Lead Jakey, Marianne · Keys Sofi · 5 canc. │  ← agenda: service days ONLY
+│ SÁB 19 SEP · en 11 días        ⚠ 1 conflicto │
+│ DOM 20 SEP                                   │
+│ DOM 27 SEP                                   │
+└──────────────────────────────────────────────┘
+```
+
+- Month view stays as a second mode for planning; the agenda is the default on phone.
+- Swipe left/right between months (touch, `motion` drag with snap); the strip slides.
+- Fixes the overflow bug by construction (no fixed-width heading).
+- Tap a day → the existing sheet.
+
+### 12.4 Me → "Mi semana" (`/me`)
+
+Reordered top to bottom:
+
+1. **Identity header** — avatar, name, roles, and the one line that matters: *"Te toca el
+   domingo 13 · Lead"* with a countdown (`NumberRoll`). Editar perfil as a ghost button.
+2. **Próximos servicios** — the DayCards the member is on, compact.
+3. **Disponibilidad como fines de semana** — the team serves on weekends, so the default
+   control is a list of the next 8–12 weekends, each a `SÁB │ DOM` pair of toggles with the
+   service badge when one exists. The three-month grid moves behind "Ver calendario"
+   (`Collapse`). Saves stay on the same PATCH.
+4. **Ajustes** — one card: Tema and Tamaño de texto as two `SegmentedControl`s, email
+   preferences as `Switch` rows. Three framed boxes become one.
+
+### 12.5 Control Room → flatten (`/admin`)
+
+- Remove the outer frame: the page is the workspace. The tab bar becomes a **left rail on
+  desktop** (icons + labels, active indicator slides vertically) and a segmented top bar on
+  phone. Content sits directly on the page atmosphere; cards are the only boxes.
+- Servicios: the month pills stay; the service cards become a **horizontal timeline board**
+  on desktop (scroll-snap, one card per service, the readiness ring on each header) and the
+  current vertical list on phone. `ParticipationSidebar` stays (it is good).
+- Integrity strip: collapses to a single lit dot in the rail when OK; expands only when it
+  has something to say.
+- Planner grid and MonthGenerator: **no layout change** (ADR-0012, and they are dense on
+  purpose); they receive Part I motion only.
+
+### 12.6 Tags → gone as a page, kept as a drawer (§12.2)
+
+### 12.7 Song page → "Práctica" (`/posts/[slug]`)
+
+- **Sticky mini-header** on scroll: title · key · BPM · transport, replacing the navbar
+  title slot (crossfade `fade`).
+- **The key dial becomes the transposer**: tap the hero key → `SegmentedControl` of 12 keys
+  slides open under it; the chart transposes with `NumberRoll` on the readout. The
+  `ChordChart` transpose buttons remain for keyboard users.
+- **Tap tempo on the BPM pill**: tapping it starts a visual click — the pill's ring pulses
+  at the song's BPM (`scale` keyframe, period = 60000/BPM ms, stops on second tap or when
+  leaving the page). Subject-true ambient motion; a metronome is what a musician reaches for.
+- **Autoscroll for the chart**: a play control on the Letra section scrolls at a speed
+  derived from BPM and section length; pauses on touch. Uses `requestAnimationFrame` +
+  `scrollTo`, no library.
+
+### 12.8 New, app-wide
+
+- **Navbar as cue strip**: on every route but home, the centre slot shows the next service
+  countdown in small caps (`DOM 13 · EN 5 DÍAS`) under the page title. It is the one piece
+  of state a team member always wants.
+- **Blackout on sign-out**: the page dims to the base surface over 320 ms before the redirect
+  — the stage vocabulary's exit, used once.
+- **Pull-to-refresh** on the phone (native-feel `motion` drag on `<main>` with a lit rail
+  as the indicator; calls `router.refresh()`).
+- **Long-press quick actions** on song rows and DayCard rows (haptic, sheet).
+- **`REPERTORIO` eyebrows and `VER` affordances removed** from every song card/row: the
+  row is the affordance.
+
+## 13. What Part II does not change
+
+- Writers, API routes, notification triggers, the solver, Sanity schema: untouched.
+- The colour tokens and the type: untouched (ADR-0016 stands).
+- ADR-0012 planner constraints: untouched.
+- `/tag`, `/author` URLs keep resolving (redirects), so nothing bookmarked breaks.
+
+## 14. Phasing if Part II is approved
+
+Part I M0–M1 stay first (foundation + shell, now with the Biblioteca tab). Then remakes
+replace the per-route motion phases where they overlap:
+
+| Phase | Scope |
+|---|---|
+| R1 Home + Biblioteca | §12.1, §12.2, redirects from `/tag*` and `/author*`, §12.8 eyebrow removal |
+| R2 Schedule | §12.3 |
+| R3 Me | §12.4 |
+| R4 Song | §12.7 + Part I §5.3 |
+| R5 Control Room | §12.5 + Part I §5.8 (M7a); M7b (planner) unchanged |
+| R6 Kids, auth, errors, gallery | Part I §5.9–§5.11 |
+| R7 App-wide | §12.8 cue strip, blackout, pull-to-refresh, long-press |
+
+Each remake phase is its own spec section and its own implementation plan; the verification
+ladder in §7 applies, plus a **before/after screenshot pair per route on dev** committed
+under `docs/superpowers/specs/2026-09-08-premium-motion-shots/`.
+
+## 15. Decisions added by Part II
+
+- **G. Library leaves the home page** and gets its own route and tab. This is the largest
+  single change and the one with the clearest payoff.
+- **H. `/tag` and `/author` become a filter drawer** with redirects. Say no if you want the
+  pages to stay; §12.2 still works without the redirects.
+- **I. Availability defaults to a weekend list**, with the month grid behind a disclosure.
+- **J. Admin gets a left rail** on desktop and loses the outer frame.
+- **K. Song page gains transposer-in-hero, tap-tempo and chart autoscroll** — three real
+  features, not motion. Each can be dropped individually.
+- **L. Pull-to-refresh and long-press quick actions** — phone-only conveniences.
