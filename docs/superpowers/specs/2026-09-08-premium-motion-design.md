@@ -807,3 +807,5 @@ It ships in R1 with the run sheet, and it is the FIFTH place the beam appears; Â
 
 **Q. Adopt the lit-card beam (CSS-only, R1) and decline the five packages.** Recommended.
 Alternative: decline both â€” keep the four beam sites and no lit card.
+
+**Approved by Frank 2026-09-08 11:03 CST.** Q joins the Part IV ledger; R1 carries the lit card.
