@@ -77,7 +77,7 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
 
 | Primitive | Module kind | Use |
 |---|---|---|
-| `MotionProvider` | client | mounted once in `app/utils/Provider.tsx`; `LazyMotion features={() => import("./motionFeatures").then(…)} strict` (async chunk, not the synchronous `domAnimation` value) + `MotionConfig reducedMotion="user"` |
+| `MotionProvider` | client | mounted once in `app/utils/Provider.tsx`; `LazyMotion features={() => import("./motionFeatures").then(…)} strict` (async chunk, not the synchronous `domAnimation` value) + `MotionConfig reducedMotion="user"`. An `m.*` element renders its `initial` values until the chunk resolves; the vendor loader has no rejection handling, so if the chunk fails to fetch an `m` element stays at its pre-feature state and a `Presence` exit never completes — M0b's `Toast`/`Menu`/`Collapse` must decide a fallback. |
 | `Presence` | client | `<Presence show={open} variant="rise">` — exit before unmount. Hosts `div` \| `section` \| `aside` \| `li` only (block-level — a transform is dropped on a non-replaced inline element). `appear` defaults to **false**: a `Presence` mounted already-shown does not animate in unless `appear` is passed; for the common case — a mounted `Presence` that toggles `show` — do nothing, the enter animation runs on every `show→true` transition regardless. Pass `appear` only for an instance that mounts already-shown and must still animate in (an on-demand toast, a newly appended list row). |
 | `Skeleton`, `SkeletonGroup` | neutral | loading placeholders with the shimmer; one `aria-busy` status region per loading surface |
 | `Button` | neutral | `variant` primary/secondary/ghost/danger/icon/pill · `size` sm/md/lg · `busy`/`busyLabel` · `href`. Defaults to `md`; the spec's phone-width `lg` default is applied per call site, not by the primitive. `busy`/`busyLabel` are rejected by the types on the `href` branch — a link has no loading state to represent. `className` is additive only (appended after the variant/size classes, never a padding/radius/colour override). The `primary` variant sets `overflow: hidden` for the hover sheen, so an absolutely positioned badge nested inside a primary button is clipped — anchor badges outside the button instead. |
@@ -129,19 +129,20 @@ Before was measured on the primary checkout at the merge-base commit
 | Before M0a (merge-base `a733347c`) | 172.3 kB | 77.3 kB | 301.7 kB |
 | After M0a, `domAnimation` loaded synchronously | 172.3 kB | 101.5 kB | 325.9 kB |
 | After the fix wave, `domAnimation` loaded as an async chunk | 172.3 kB | 89.7 kB | 314.2 kB |
-| Δ vs Before M0a | +0.02 kB | +12.4 kB | +12.5 kB |
+| Δ vs Before M0a | +0.01 kB | +12.4 kB | +12.5 kB |
 
 The middle row is what M0a originally shipped (`LazyMotion features={domAnimation}`,
 loaded synchronously by `MotionProvider`); the last row is this fix wave's change
 (`LazyMotion features={() => import("./motionFeatures").then(…)}`, ADR-0031 Important
 finding 2). Loading the feature set as its own async chunk — which ships after
 hydration instead of inside the first-load script — took each route from ~24 kB gz to
-~12.4 kB gz, roughly half. The **async feature chunk itself** (`domAnimation`'s
-feature-definitions module, resolved by grepping `.next/static/chunks/*.js` for
-content matching the SSR-side chunk Turbopack names after `motionFeatures.ts`, then
-compressing it independently) is **42.3 kB raw / 15.8 kB gz** — bigger than either
-route's net saving, because it now pays its own gzip framing instead of sharing
-compression context with code that stayed in the first-load bundle.
+~12.4 kB gz, roughly half. The **async feature chunk itself** (motion-dom's
+feature-definitions module, identified by an A/B diff: a chunk unique to the async
+build, unreferenced by any route's client-reference manifest, containing motion-dom's
+feature signatures `animateVisualElement`, `Presence`, `Exit`, `layout`) is **42.3 kB
+raw / 15.8 kB gz** — bigger than either route's net saving, because it now pays its
+own gzip framing instead of sharing compression context with code that stayed in the
+first-load bundle.
 
 Programme cap: +25 kB gz total. Both route deltas now land well under the hard cap
 and under the ≤20 kB expectation the programme opened with — `motion`'s `domAnimation`
@@ -157,12 +158,12 @@ specifier); `motion/react-m`'s per-tag hosts (`m.div`, `m.section`, …) are nam
 exports of that submodule, which is why `Presence.tsx` imports them as
 `import * as m from "motion/react-m"` rather than a default export.
 
-M0b's `SlidingIndicator` needs `domMax` (~35 kB gz async, per the ADR's feature-set
-estimates), not `domAnimation` — the async chunk this fix wave built is what can carry
-that without touching first-load JS at all; the synchronous path could not have fit it
-under any reasonable cap. Whether the programme cap widens to admit `domMax`'s async
-weight, or `SlidingIndicator` ships a narrower feature subset, is a decision for the
-M0b spec owner, not this fix wave.
+M0b's `SlidingIndicator` needs `domMax` (materially larger than `domAnimation` and not
+measured here), not `domAnimation` — the async chunk this fix wave built is what can
+carry that without touching first-load JS at all; the synchronous path could not have
+fit it under any reasonable cap. Whether the programme cap widens to admit `domMax`'s
+async weight, or `SlidingIndicator` ships a narrower feature subset, is a decision for
+the M0b spec owner, not this fix wave.
 
 ## Where the walk's findings landed
 

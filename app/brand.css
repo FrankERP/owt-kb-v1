@@ -12,7 +12,7 @@
   --motion-fast: 120ms;     /* colour changes, hover, focus ring */
   --motion-base: 200ms;     /* press, toggles, menus, small reveals */
   --motion-slow: 320ms;     /* sheets, dialogs, tab panels, expand/collapse */
-  --motion-reveal: 480ms;   /* route reveal, hero rail */
+  --motion-reveal: 480ms;   /* section rail draw; the block reveal runs on --motion-base */
   --motion-shimmer: 1600ms; /* skeleton sweep period */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
