@@ -49,4 +49,34 @@ describe("Presence", () => {
     );
     expect(screen.getByTestId("row").tagName).toBe("LI");
   });
+
+  it("renders as a section host", () => {
+    render(
+      <MotionProvider>
+        <Presence show as="section" data-testid="panel">panel</Presence>
+      </MotionProvider>,
+    );
+    expect(screen.getByTestId("panel").tagName).toBe("SECTION");
+  });
+
+  it("renders on first mount when appear is set, with the forwarded attributes", () => {
+    render(
+      <MotionProvider>
+        <Presence show appear variant="rise" data-testid="on-demand" role="status">
+          Nueva fila
+        </Presence>
+      </MotionProvider>,
+    );
+    const el = screen.getByTestId("on-demand");
+    expect(el.textContent).toBe("Nueva fila");
+    expect(el.getAttribute("role")).toBe("status");
+  });
+
+  it("applies the variant's motion styles to the host", () => {
+    render(<Harness show />);
+    const el = screen.getByTestId("toast");
+    // Animations are skipped in tests (installMotionTestEnv), so motion writes the
+    // final computed value synchronously — "rise" animates opacity to 1.
+    expect(el.style.opacity).toBe("1");
+  });
 });
