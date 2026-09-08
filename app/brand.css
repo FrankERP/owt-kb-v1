@@ -907,10 +907,33 @@
   }
 }
 
+/* Reduced motion is a THEME, not a per-effect opt-out (spec §2.2). One rule
+   collapses every animation and transition to a single frame, and the JS layer
+   (MotionProvider, reducedMotion="user") reads the same query. Sheets and dialogs
+   still open and close — instantly. The beam-only override this replaces is what a
+   per-effect approach looks like after one effect; this is what it looks like after
+   none are forgotten. `html[data-motion="off"]` is the same collapse for the theme
+   gallery's visual-regression baselines, set by its root layout. */
 @media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
   .brand-stage-hero::before {
     opacity: 1;
     transform: none;
-    animation: none;
   }
+}
+
+html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+html[data-motion="off"] .brand-stage-hero::before {
+  opacity: 1;
+  transform: none;
 }

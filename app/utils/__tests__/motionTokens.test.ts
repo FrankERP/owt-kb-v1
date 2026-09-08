@@ -80,3 +80,29 @@ describe("motion tokens — Tailwind mirror", () => {
     expect(motionStart).toBeGreaterThan(colorsStart);
   });
 });
+
+describe("reduced motion is global, not per-effect", () => {
+  it("brand.css collapses every animation and transition under prefers-reduced-motion", () => {
+    const m = css.match(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{([\s\S]*?)\n\}/);
+    expect(m, "no global reduced-motion block").not.toBeNull();
+    const body = m![1];
+    expect(body).toMatch(/\*,\s*\*::before,\s*\*::after\s*\{/);
+    expect(body).toMatch(/animation-duration:\s*0\.01ms\s*!important/);
+    expect(body).toMatch(/transition-duration:\s*0\.01ms\s*!important/);
+    expect(body).toMatch(/animation-iteration-count:\s*1\s*!important/);
+    expect(body).toMatch(/scroll-behavior:\s*auto\s*!important/);
+  });
+
+  it("the old beam-only override is gone — one rule, not one per effect", () => {
+    expect(css).not.toMatch(/prefers-reduced-motion[\s\S]{0,200}\.brand-stage-hero::before/);
+  });
+
+  it("html[data-motion=\"off\"] applies the same collapse, for VR baselines", () => {
+    expect(css).toMatch(/html\[data-motion="off"\]\s*\*,\s*html\[data-motion="off"\]\s*\*::before,\s*html\[data-motion="off"\]\s*\*::after\s*\{/);
+  });
+
+  it("the theme gallery root sets data-motion=\"off\" on <html>", () => {
+    const layout = read("app/(gallery)/theme-gallery/[theme]/layout.tsx");
+    expect(layout).toMatch(/<html[\s\S]*?data-motion="off"/);
+  });
+});
