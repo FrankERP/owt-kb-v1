@@ -322,7 +322,7 @@ Legend: **[C]** client, **[S]** server.
 ### Motion primitives (`app/components/ui/`, see [MOTION.md](MOTION.md))
 | Component | Purpose |
 |-----------|---------|
-| `MotionProvider` [C] | Loads `motion`'s DOM features once; `reducedMotion="user"`. |
+| `MotionProvider` [C] | Loads `motion`'s DOM features as an async chunk after hydration (not inline); `reducedMotion="user"`. |
 | `Presence` [C] | Mount/unmount with an exit animation; variants `fade` `rise` `scale` `sheet`. |
 | `Skeleton` / `SkeletonGroup` [N] | Shimmer placeholders; one `aria-busy` status region per loading surface. |
 | `Button` [N] | The house button: six variants, three sizes, press physics, primary sheen, `busy`, `href`. |

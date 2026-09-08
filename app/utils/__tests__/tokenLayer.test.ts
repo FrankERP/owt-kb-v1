@@ -1,6 +1,6 @@
 // Guard for Child B's token layer (slice B1).
 //
-// B1 is purely additive: it introduces 18 base roles and 23 composed tokens and
+// B1 is purely additive: it introduces 18 base roles and 29 composed tokens and
 // REMOVES NOTHING, so nothing renders differently. That makes it the one slice
 // where a bug is invisible at runtime — the tokens can be wrong, misspelled, or
 // missing on one side and the app looks exactly the same until a later batch
@@ -66,7 +66,7 @@ const BASE_ROLES = [
   "badge-azure-fg", "badge-azure-deep",
 ] as const;
 
-/** The 23 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
+/** The 29 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
 const COMPOSED = [
   "surface-accent-solid", "surface-accent-30", "surface-accent-hover", "edge-accent-subtle",
   "surface-accent-20", "surface-accent-faint", "surface-accent-wash",

@@ -2,9 +2,10 @@
 // `{...revealProps(i)}` on a block; brand.css does the rest. Neutral module — no
 // "use client", no imports — so server pages may CALL it (ADR-0028).
 //
-// The stagger is capped: index 12 is 480 ms, the reveal duration itself. Past that
-// the eye reads the list as "loaded"; a 142-row library that staggered to the end
-// would still be fading in at 5.6 s.
+// The stagger is capped: index 12 keeps the last delay at 480 ms — the same length
+// as `--motion-reveal`, the section rail's draw, not the reveal itself, which runs
+// on `--motion-base` (200 ms). Past that the eye reads the list as "loaded"; a
+// 142-row library that staggered to the end would still be fading in at 5.6 s.
 
 export const REVEAL_STAGGER_CAP = 12;
 

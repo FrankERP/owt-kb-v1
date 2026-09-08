@@ -59,7 +59,7 @@ describe("Presence", () => {
     expect(screen.getByTestId("panel").tagName).toBe("SECTION");
   });
 
-  it("renders on first mount when appear is set, with the forwarded attributes", () => {
+  it("accepts appear and forwards attributes on a first mount (behaviour of initial is not observable under skipAnimations)", () => {
     render(
       <MotionProvider>
         <Presence show appear variant="rise" data-testid="on-demand" role="status">
