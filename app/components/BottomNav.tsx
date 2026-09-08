@@ -121,7 +121,12 @@ export default function BottomNav() {
           })}
           <button
             onClick={() => setMoreOpen(v => !v)}
-            aria-haspopup="menu"
+            // No `aria-haspopup`, for the reason NavMenu records at its own
+            // dropdown: this sheet is a disclosure of navigation links, not a
+            // menu widget — there is no arrow-key navigation — and
+            // `aria-haspopup`'s "true" token is defined as "menu", so it would
+            // promise behaviour that does not exist. `aria-expanded` plus
+            // `aria-controls` describe a disclosure honestly.
             aria-expanded={moreOpen}
             aria-controls="bottom-nav-more"
             className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
