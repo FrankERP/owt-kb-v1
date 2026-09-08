@@ -8,6 +8,9 @@
 //
 // `busy` is the ONLY loading affordance: aria-busy + disabled + a label swap. Never
 // a spinner beside a label that says nothing.
+//
+// `className` is for additive utilities only — never to override padding, radius, or
+// colour. Pick a variant or size instead.
 
 import Link from "next/link";
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
@@ -55,7 +58,7 @@ type Common = {
 };
 
 type ButtonOnlyProps = Common & Omit<ComponentPropsWithoutRef<"button">, "className" | "children"> & { href?: undefined };
-type LinkOnlyProps = Common & Omit<ComponentPropsWithoutRef<"a">, "className" | "children"> & { href: string };
+type LinkOnlyProps = Common & Omit<ComponentPropsWithoutRef<"a">, "className" | "children"> & { href: string; busy?: never; busyLabel?: never };
 
 export type ButtonProps = ButtonOnlyProps | LinkOnlyProps;
 
@@ -65,10 +68,10 @@ export default function Button(props: ButtonProps) {
   const label = busy && busyLabel ? busyLabel : children;
 
   if ("href" in props && typeof props.href === "string") {
-    const { href, variant: _v, size: _s, busy: _b, busyLabel: _bl, active: _a, className: _c, children: _ch, ...rest } =
+    const { href, variant: _v, size: _s, active: _a, className: _c, children: _ch, ...rest } =
       props as LinkOnlyProps;
     return (
-      <Link href={href} className={cls} aria-pressed={variant === "pill" ? active : undefined} {...rest}>
+      <Link href={href} className={cls} {...rest}>
         {label}
       </Link>
     );

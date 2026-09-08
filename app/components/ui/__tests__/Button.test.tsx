@@ -50,11 +50,19 @@ describe("Button", () => {
     const a = screen.getByRole("link", { name: "Ir al inicio" });
     expect(a.getAttribute("href")).toBe("/");
     expect(a.className).toContain("bg-surface-accent-solid");
+    expect(a.getAttribute("aria-pressed")).toBeNull();
   });
 
   it("pill exposes aria-pressed from `active`", () => {
     render(<Button variant="pill" active>Oscuro</Button>);
     expect(screen.getByRole("button").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("busy is a type error on the link branch", () => {
+    // @ts-expect-error busy is not representable on a link
+    render(<Button href="/" busy>x</Button>);
+    const a = screen.getByRole("link");
+    expect(a.getAttribute("aria-busy")).toBeNull();
   });
 
   it("forwards onClick", () => {
