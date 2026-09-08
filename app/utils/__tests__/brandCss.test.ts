@@ -36,6 +36,10 @@ const NON_COLOUR = new Set([
   "--brand-radius-control",
   "--brand-duration-fast",
   "--brand-duration-reveal",
+  // Set inline per element (app/utils/reveal.ts's `style={{ "--reveal-i": n }}`),
+  // never declared in brand.css — its `var(--reveal-i, 0)` reference carries its
+  // own fallback, so it is never dangling in the sense this guard protects against.
+  "--reveal-i",
 ]);
 
 /** The reference set spans the inventory's glob MINUS `__tests__` — without that

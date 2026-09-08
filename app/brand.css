@@ -659,6 +659,8 @@
   content: "";
   background: linear-gradient(180deg, rgb(var(--accent-rgb)), rgb(var(--accent-rgb) / 0.08));
   box-shadow: 0 0 16px rgb(var(--accent-rgb) / 0.38);
+  transform-origin: top;
+  animation: brand-rail-draw var(--motion-reveal) var(--ease-out) both;
 }
 
 .brand-surface {
@@ -906,6 +908,34 @@
     opacity: 1;
     transform: translate3d(0, 0, 0);
   }
+}
+
+/* ---- Route reveal (spec §2.1 #1) --------------------------------------------
+   Blocks carrying [data-reveal] rise --motion-rise and fade in, staggered by the
+   --reveal-i the page assigns (app/utils/reveal.ts). Only opacity and transform, so
+   the element occupies its final box from first paint and CLS stays 0. `both` keeps
+   the first frame at opacity 0 during the delay. Replays per navigation because
+   app/(client)/template.tsx remounts the page. */
+@keyframes brand-reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--motion-rise), 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+[data-reveal] {
+  animation: brand-reveal var(--motion-base) var(--ease-out) both;
+  animation-delay: calc(var(--reveal-i, 0) * 40ms);
+}
+
+/* The section rail draws top-to-bottom — the beam's one appearance on ordinary pages. */
+@keyframes brand-rail-draw {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
 }
 
 /* Reduced motion is a THEME, not a per-effect opt-out (spec §2.2). One rule
