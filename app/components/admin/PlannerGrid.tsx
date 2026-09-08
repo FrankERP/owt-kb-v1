@@ -118,6 +118,7 @@ import {
   fohSeatDef,
   instrumentSeatDef,
   normalizeSeatName,
+  occupantFitsSeat,
   type SeatCategory,
 } from "./seatModel";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
@@ -606,6 +607,24 @@ export default function PlannerGrid(props: PlannerGridProps) {
     const found = membersById.get(id);
     return found ? displayName(found) : id;
   };
+  /**
+   * Is this seated occupant still eligible for the seat they are sitting in?
+   *
+   * The same test `rankCandidates` applies when building the candidate list,
+   * asked of someone already placed. The two can disagree, because a seat is
+   * filled once and «Tipo» is edited later — and since ADR-0029, clearing Tipo
+   * is how an admin takes someone off the roster. Nothing re-examines the months
+   * already planned, so without this the person just stays seated, silently: the
+   * exact gap that ADR left open when the retirement badge went away.
+   *
+   * Unknown ids are NOT flagged. A member document that no longer resolves is a
+   * different problem with a different remedy, and reporting it here as a Tipo
+   * mismatch would send the admin to edit a Tipo that does not exist.
+   */
+  const seatMismatch = (id: string, category: SeatCategory) => {
+    const found = membersById.get(id);
+    return !!found && !occupantFitsSeat(found, category);
+  };
 
   // D12: `inGridDrafts` — the whole grid's current occupancy, converted to the
   // shape `rankCandidates` consumes, so "assigned earlier in THIS grid" can be
@@ -751,6 +770,23 @@ export default function PlannerGrid(props: PlannerGridProps) {
    */
   function clearDragNotice() {
     if (dragNotice) setDragNotice(null);
+  }
+
+  /**
+   * Remove an occupant the picker cannot otherwise reach.
+   *
+   * Deliberately NOT a `toggleCandidate` variant: this only ever removes. A
+   * toggle would offer to seat someone back into a seat their Tipo forbids,
+   * which is the state this exists to get out of.
+   */
+  function removeStrandedOccupant(row: GridRow, columnId: string, memberId: string) {
+    if (mutationLocked) return;
+    clearRemoveError();
+    clearDragNotice();
+    const current =
+      cellsByKey.get(cellKey(columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
+    if (!current.includes(memberId)) return;
+    onCellsChange(withUpdatedCell(cells, row.id, columnId, current.filter((id) => id !== memberId)));
   }
 
   /**
@@ -1560,6 +1596,28 @@ export default function PlannerGrid(props: PlannerGridProps) {
       })
     : liveCandidates;
 
+  /**
+   * Occupants of the open cell that the candidate list does not contain.
+   *
+   * `rankCandidates` filters on «Tipo», so someone seated before their Tipo
+   * changed has no row here. The other exits do not close the gap: the drag gate
+   * judges the TARGET seat, so a mismatched member can be relocated but never
+   * removed, and one with no Tipo at all has no legal target; row removal
+   * refuses a non-empty row. These get a removal-only row, so the warning on the
+   * cell names something the admin can actually do.
+   *
+   * Absence from the candidate list has TWO causes — a Tipo that no longer fits,
+   * and an id that resolves to no member at all (the members read is scoped by
+   * ministry for a non-super-admin). Both are stranded and both need the exit;
+   * the row says which, because sending someone to edit a Tipo that does not
+   * exist is its own dead end.
+   */
+  const strandedOccupants = openCell && openRow
+    ? (cellsByKey.get(cellKey(openCell.columnId, openRow.id))?.occupants ?? [])
+        .map((o) => o.memberId)
+        .filter((id) => !openCandidates.some((c) => c.id === id))
+    : [];
+
   // ── The three tracks, and the one number that differs between the modes ────
   //
   // The date track's floor is what decides "scroll" vs "squeeze". In the page
@@ -1620,6 +1678,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
               violationsByColumnId.get(columnId) ?? emptyViolations
             }
             memberName={memberName}
+            seatMismatch={seatMismatch}
             onOpen={(columnId) => {
               if (mutationLocked) return;
               const column = columnById.get(columnId);
@@ -1786,7 +1845,36 @@ export default function PlannerGrid(props: PlannerGridProps) {
               }
             />
           ))}
-          {openCandidates.length === 0 && (
+          {/* Seated here, but not in the candidate list — so there is no other
+              way out: the drag gate judges the TARGET seat, so a mismatched
+              member can only be relocated, and one with no Tipo at all has no
+              legal target; row removal refuses a non-empty row. Without this the cell's own warning would name an
+              action the surface does not offer, which is precisely what
+              ADR-0029 records the retirement badge doing. Removal only: there
+              is no toggle back, because putting them back is what their Tipo
+              says they cannot do. */}
+          {strandedOccupants.map((id) => (
+            <li key={`stranded-${id}`} className="flex items-center justify-between gap-2 rounded-lg border border-warning-strong/40 bg-warning-strong/10 px-2 py-1.5">
+              <span className={`font-label text-xs text-warning-strong ${CARD_STYLE.longText}`}>
+                {memberName(id)}
+                <span className="block font-body text-[10px] normal-case text-ink-muted/80">
+                  {membersById.has(id)
+                    ? "Su Tipo ya no permite este puesto"
+                    : "No se encontró a esta persona en el equipo"}
+                </span>
+              </span>
+              <button
+                type="button"
+                disabled={mutationLocked}
+                onClick={() => removeStrandedOccupant(openRow, openCell.columnId, id)}
+                aria-label={`Quitar a ${memberName(id)} de ${openRow.label}`}
+                className="min-h-[44px] shrink-0 rounded-lg border border-warning-strong/40 px-2 font-label text-[10px] uppercase tracking-widest text-warning-strong hover:bg-warning-strong/15 disabled:opacity-50"
+              >
+                Quitar
+              </button>
+            </li>
+          ))}
+          {openCandidates.length === 0 && strandedOccupants.length === 0 && (
             <li className="font-body text-xs italic text-mono-600">Nadie elegible para este puesto.</li>
           )}
         </ul>
@@ -2307,6 +2395,7 @@ function RowGroup({
   duplicatesByColumnId,
   violationsByColumnId,
   memberName,
+  seatMismatch,
   onOpen,
   onRemove,
   removeError,
@@ -2327,6 +2416,8 @@ function RowGroup({
   /** E13, by `violationKey(rowId, memberId)` — that service column only. */
   violationsByColumnId: (columnId: string) => Map<string, SeatedViolation>;
   memberName: (id: string) => string;
+  /** Seated but no longer carrying this seat's «Tipo» — see the main component. */
+  seatMismatch: (memberId: string, category: SeatCategory) => boolean;
   onOpen: (columnId: string) => void;
   onRemove?: () => void;
   removeError: string | null;
@@ -2393,6 +2484,7 @@ function RowGroup({
         const cell = cellsByKey.get(cellKey(column.columnId, row.id));
         const memberIds = cell?.occupants.map((o) => o.memberId) ?? [];
         const duplicates = duplicatesByColumnId(column.columnId);
+        const mismatched = memberIds.filter((id) => seatMismatch(id, row.category));
         return (
           <GridCellView
             key={column.columnId}
@@ -2400,6 +2492,7 @@ function RowGroup({
             column={column}
             memberIds={memberIds}
             memberName={memberName}
+            mismatched={mismatched}
             duplicates={duplicates}
             violations={violationsByColumnId(column.columnId)}
             unfilled={unfilledByKey.has(cellKey(column.columnId, row.id))}
@@ -2417,11 +2510,23 @@ function RowGroup({
   );
 }
 
+/**
+ * What the admin sees on the «Tipo» checkboxes, not the stored value — the rest
+ * of the admin spells FOH that way. Keyed by `SeatCategory`, so a fourth seat
+ * category fails to compile here rather than rendering a blank mid-sentence.
+ */
+const TYPE_LABEL: Record<SeatCategory, string> = {
+  voz: "voz",
+  instrumento: "instrumento",
+  foh: "FOH",
+};
+
 function GridCellView({
   row,
   column,
   memberIds,
   memberName,
+  mismatched,
   duplicates,
   violations,
   unfilled,
@@ -2437,6 +2542,8 @@ function GridCellView({
   column: GridColumn;
   memberIds: string[];
   memberName: (id: string) => string;
+  /** Occupants of THIS cell no longer carrying the seat's «Tipo». */
+  mismatched: string[];
   duplicates: Map<string, string[]>;
   violations: Map<string, SeatedViolation>;
   unfilled: boolean;
@@ -2468,6 +2575,7 @@ function GridCellView({
   // exists for — was never surfaced at all. Checked here regardless of
   // whether the occupant is currently visible.
   const hiddenHasDuplicate = hiddenIds.some((id) => duplicates.get(id)?.includes(row.id));
+  const mismatchedSet = new Set(mismatched);
 
   // E13 + P10, split. A violation the admin overrode renders as a NAMED
   // exception; one they did not renders as a refusal still to be fixed. Both are
@@ -2595,6 +2703,7 @@ function GridCellView({
             // real and must never be flagged. Only flag when THIS row's id is
             // among the rows that hold the duplicate.
             const isDuplicate = duplicates.get(id)?.includes(row.id) ?? false;
+            const tipoMismatch = mismatchedSet.has(id);
             const ruleBroken = ruleOf(id)?.overridden === false;
             const dragging =
               drag.source?.memberId === id &&
@@ -2634,7 +2743,7 @@ function GridCellView({
                 // the one assistive tech performs.
                 aria-label={`${marked ? "Cancelar el movimiento de" : "Marcar para mover a"} ${memberName(id)}${
                   isDuplicate || ruleBroken ? " (conflicto)" : ""
-                }`}
+                }${tipoMismatch ? " (Tipo no permitido)" : ""}`}
                 // NO `onClick`, deliberately (user ruling, 2026-08-06). A pointer
                 // click on a name keeps doing exactly what it always has: it
                 // falls through to the cell, which opens the picker — or places
@@ -2665,7 +2774,9 @@ function GridCellView({
                 className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-ink-muted ${CARD_STYLE.longText} ${
                   isDuplicate || ruleBroken
                     ? "border-negative-strong/50 bg-negative-strong/10"
-                    : "border-accent/25 bg-accent/10"
+                    : tipoMismatch
+                      ? "border-warning-strong/50 bg-warning-strong/10"
+                      : "border-accent/25 bg-accent/10"
                 } ${drag.enabled ? "cursor-grab" : "cursor-not-allowed"} ${dragging ? "opacity-30" : ""} ${
                   marked ? "ring-2 ring-accent" : ""
                 }`}
@@ -2723,6 +2834,16 @@ function GridCellView({
         {overridden.map((x) => (
           <p key={x.id} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
             Regla anulada — {memberName(x.id)}: {x.v.reason}
+          </p>
+        ))}
+        {/* Seated, but «Tipo» no longer allows this seat. Since ADR-0029 clearing
+            Tipo is how an admin takes someone off the roster, and nothing
+            re-examines the months already planned — so without this the person
+            simply stays here, silently. Named rather than tinted alone: the
+            colour says something is wrong, the line says who and what to do. */}
+        {mismatched.map((id) => (
+          <p key={`tipo-${id}`} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
+            ⚠ {memberName(id)}: su Tipo ya no incluye {TYPE_LABEL[row.category]} — ábrelo para quitarlo
           </p>
         ))}
         {unfilled && (
