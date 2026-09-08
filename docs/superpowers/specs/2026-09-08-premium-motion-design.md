@@ -554,3 +554,187 @@ under `docs/superpowers/specs/2026-09-08-premium-motion-shots/`.
 - **K. Song page gains transposer-in-hero, tap-tempo and chart autoscroll** — three real
   features, not motion. Each can be dropped individually.
 - **L. Pull-to-refresh and long-press quick actions** — phone-only conveniences.
+
+---
+
+# Part III — Element audit from a full walk of production (2026-09-08, 10:15–10:50 CST)
+
+Method: signed in as Frank on `owt-backstage.vercel.app` in Chrome (1374×782), every route
+and every admin tab, every dialog shell (Cue card, Cue sheet, Nueva canción, Generar mes,
+the month editor, Más acciones menu, the avatar menu), plus the read-only verifier on dev at
+390×844 for the phone menu, the bottom sheet, the song page and the kids planner, and both
+themes. No writes. Songs share one template, so one song with lyrics and one row of the
+Contenido list stood in for the 142.
+
+Part III corrects Part II where the walk contradicted it, then catalogues every element type
+in the app with its premium treatment. Part I's primitives still carry it; Part III adds
+three (`Select`, `DateField`, `Checkbox`) because the walk found the single biggest
+premium-killer that neither Part I nor Part II named.
+
+## 16. What the walk found that the screenshots had not
+
+| # | Finding | Evidence | Severity |
+|---|---|---|---|
+| 1 | **Native form controls everywhere.** 31 `<select>` sites in 12 files, 3 native `date`/`month` inputs, 5 native checkboxes. The schedule's month picker, the planner's per-column date inputs, the participation sidebar's "Voces" select, the kids pair roster's room selects, and the members list's "Deshabilitar acceso (kill switch)" checkbox all render the browser's default control inside a tokenised dark UI | `/schedule`, `/admin?tab=services` (editor), `/kids/admin`, `/admin?tab=members` | **Highest.** Nothing else undoes the identity as completely |
+| 2 | **Label noise.** 482 uppercase-tracking eyebrow labels. A DayCard inside the day sheet stacks `CUE → Detalle del día → SERVICIO → DOMINGO → EQUIPO → VOCES` before the first name. Every song card repeats `REPERTORIO` and `VER`; every dialog repeats `CUE` | day sheet on `/schedule`, every card | High |
+| 3 | **The lockup mark lazy-loads.** `Navbar.tsx:23` renders the brand mark with `next/image` defaults (`loading="lazy"`), so every navigation paints an empty rounded square first, then the logo. Visible in 9 of 22 captures | all routes | High (it is the first thing on every page) |
+| 4 | **Admin shell overflows its box.** `.brand-admin-shell` measures `scrollWidth 1358` vs `clientWidth 1230` with `overflow-x: hidden`; a programmatic `scrollIntoView` shifted the whole workspace 128 px left and it stayed there. The page itself does not scroll, so it hides | `/admin`, JS-measured | Medium (latent) |
+| 5 | **The initials avatar is invisible in light theme.** `NavMenu.tsx:129-130` paints a `bg-surface-accent-solid` disc with `text-accent` initials; in light both resolve to navy | `/` light, `/admin` light | Medium |
+| 6 | **Tutorial iframes paint white.** The one `<iframe>` (YouTube embeds) shows a white block until the player loads, on a dark page | `/posts/[slug]` | Medium |
+| 7 | **The avatar menu is a plain text list** with no icons, no grouping, no animation; `transition: all` is set but nothing changes | all routes | Medium |
+| 8 | **Lyrics are unstyled.** `Verso 1`, `Coro`, `Puente` render as ordinary lines; on desktop the block sits at x≈400 with the right two-thirds empty | `/posts/[slug]`, SongSheet | Medium |
+| 9 | **Three DayCards in a row on /me**, each ~500 px, before the availability calendar | `/me` | Medium |
+| 10 | **ThemeAnnouncement** (a feature shipped in August) still opens `/me` for anyone who has not dismissed it | `/me` | Low |
+| 11 | **Contenido already has the row grammar** Part II proposed for the library: icon · title · artist · tag chips · key badge, ~70 px per song. The library remake is a promotion of an existing pattern, not an invention | `/admin?tab=content` | Confirms §12.2 |
+| 12 | **Sign-in is the best page in the app** and the only one with an entrance. Its stagger is the reference for the route reveal | `/auth/signin` | Confirms §5.10 |
+| 13 | **Bottom sheet works but does not move:** grab handle drawn, no drag, and a redundant `CERRAR` text button under the `×` | `/schedule` phone | Confirms §4 |
+| 14 | **/kids is empty in production** (no published Sundays) and the kids planner is 5,067 px tall on a phone | `/kids`, `/kids/admin` phone | Low |
+
+## 17. Corrections to Part II
+
+- **§12.2 Library rows:** adopt Contenido's row (`ContentPanel.tsx`), not a new design; add
+  the key badge at the left, the tag chips collapse to `+N` on phones.
+- **§12.3 Schedule:** the month input is not a layout problem, it is a native control
+  (Finding 1); it becomes the `DateField` month strip, and the Anterior/Siguiente buttons
+  become icon buttons at the strip's ends.
+- **§12.5 Control Room:** Finding 4 means the flatten must also remove the
+  `overflow-x: hidden` shell and let the planner grid be the only horizontal scroller.
+- **§12.8 Cue strip:** the navbar title slot already changes per route (`OWT`, `CALENDARIO`,
+  `CONTROL ROOM`, the song title); the countdown joins as a second line, so no new slot.
+
+## 18. Label budget (new rule)
+
+One eyebrow per surface. The section rail heading keeps its eyebrow (`PROGRAMACIÓN`,
+`BIBLIOTECA`); cards and dialogs lose theirs. Concretely:
+
+| Label | Today | After |
+|---|---|---|
+| `CUE` on every dialog | 13 dialogs | gone; the dialog title is the header |
+| `SERVICIO` on every DayCard | every card | gone; `DOMINGO · 13 SEP` is the header |
+| `EQUIPO` + `VOCES` / `INSTRUMENTOS` | every card | `VOCES` and `INSTRUMENTOS` stay as the only two rails |
+| `REPERTORIO` + `VER` on song cards | 142 cards | gone; the row is the affordance |
+| `ÍNDICE MUSICAL · 142 canciones disponibles` + `142 TÍTULOS` pill | library | one count, in the search console placeholder |
+| `BACKSTAGE OPERATIONS` / `Servicios, equipo y contenido desde una sola consola.` | admin | gone; `Control Room` alone |
+| `ACCESO AUTORIZADO` pill | admin | gone (a manager knows they are authorised) |
+
+## 19. Element catalogue — every element type, what it does today, what it becomes
+
+Legend: **T** = today, **P** = premium treatment, **Prim** = primitive that owns it.
+Motion vocabulary from §2.3; nothing here adds a colour or a face.
+
+### 19.1 Shell
+
+| Element | T | P | Prim |
+|---|---|---|---|
+| Brand lockup (mark + wordmark) | lazy image, blank square on first paint; hover ring | `priority` + `fetchpriority=high`, no flash; press sink; the mark's glow (`brand-lockup-mark`) brightens 120 ms on hover | Button (link) |
+| Navbar title slot | route name in caps, static | route name + second line countdown (`DOM 13 · EN 5 DÍAS`), crossfades on navigation | Reveal |
+| Avatar button | 36 px image or initials disc, ring on hover; initials invisible in light | 40 px, initials on `text-on-fill`, ring `fast`, badge `pop` | Button (icon) |
+| Avatar menu | plain list, `absolute` panel, no animation | `Menu`: scale-from-corner 200 ms, icons per item, grouped (Yo · Equipo · Kids · Admin · Salir), arrow-key focus; on phone it is the `Más` sheet | Menu |
+| Bottom tab bar (phone) | none | Inicio · Biblioteca · Calendario · Yo · Más; `layoutId` pill; haptic tap; safe-area | new |
+| Section rail heading | 2 px accent rail, static | rail draws `scaleY` 0→1 over `reveal`; eyebrow fades in after | Reveal |
+| Page atmosphere (diagonal beam) | static gradient | stays static (ambient motion here would be the AI-default look) | — |
+| SectionNav (song page) | underline jumps, active pill can be off-screen | `SlidingIndicator`, active pill centres itself | Tabs |
+| ImpersonationBanner | appears instantly | slides down `slow`; height measured after | Presence |
+| Audio transport | appears instantly, `width` progress | `sheet` spring in/out; `scaleX` progress; equaliser bars on the playing track | Presence |
+| Toasts | 13 hand-rolled, instant | one viewport, `rise` in / `fade` out, above the tab bar | Toast |
+| Skeletons | `animate-pulse` blocks | shimmer sweep (the beam) | Skeleton |
+| Focus ring | ~62 of 305 buttons | every control | Button |
+
+### 19.2 Cards and rows
+
+| Element | T | P | Prim |
+|---|---|---|---|
+| DayCard header (`DOMINGO`, date, pills) | eyebrow + title + long date + 2 pills | `DOMINGO 13 SEP` display + countdown pill; long date dropped; header tint keeps its tone (accent / warning / info) | — |
+| Instrument chip `KEYS │ Sofi` | two-cell chip; "you" gets a positive ring | keep; press on tap opens the member's row in the sheet; "you" ring `pop`s on reveal | Button (pill) |
+| Voice list (`LEAD / BGVS / CORO`) | three text columns | keep; names become inline avatar+name chips on desktop, text on phone | — |
+| Setlist row (inside DayCard) | number · title · key | press, hover rail slides in, active-track equaliser | Button (ghost) |
+| Song card (library) | 230 px card with eyebrow, `VER`, BPM, sig, tags | 56–72 px row: key badge · title · artist · BPM · tags (`+N` on phone); press; long-press quick actions | Button (row) |
+| Key badge (`G`, `Gb`) | 40 px rounded square, accent text | keep; on the song hero it becomes the transposer trigger; flips with `NumberRoll` | NumberRoll |
+| Tag chip (`#amor`) | small outlined pill | keep; press; in the filter drawer sized by count | Button (pill) |
+| Count pill (`12 CANCIONES`, `142 TÍTULOS`) | many | one per surface (label budget) | — |
+| Status pill (`Publicado`, `Borrador`, `PRÓXIMO`, `EN 5 DÍAS`) | static | tone transition `base` on change; countdown via `NumberRoll` | — |
+| Member row (admin) | avatar · alias · name · email · chips · role pill · dot · kill-switch checkbox | kill switch moves into the row's `Menu` (destructive, confirmed); row press; role pill tone transition | Menu, Checkbox |
+| Activity row | initials · name · "última actividad" · `ACTIVO` · chevron | `Collapse` on expand; chevron rotates `base` | Collapse |
+| Content row (admin songs) | icon · title · artist · tags · key | becomes the library row (§17) | — |
+| Availability entry (admin) | name · date chips · quoted reasons | date chips press → `Menu` (edit / clear); reasons collapse past two | Collapse |
+| Service card (admin) | header tone, `Más acciones`, action button | readiness ring in the header; ring animates on state change; `Más acciones` → `Menu`; conflict border pulses once on reveal, never loops | Menu |
+| Participation sidebar bar | segmented bar, static | segments grow `scaleX` on reveal; `NumberRoll` on the count | — |
+| Kids Sunday card | `0 de 4 lugares`, `BORRADOR`, `PUBLICAR`, seat rows `Sin asignar / Cambiar ›` | seat rows press → `SeatPicker` sheet; assigned name crossfades; `PUBLICAR` → Button primary with `aria-busy` | CueDialog, Button |
+| Banca pair chip | pill, `LE TOCA` label | draggable lift + landing beam (desktop); press → picker (touch) | — |
+| Pair roster row | name · room `<select>` · `RETIRAR` | room → `Select`; `RETIRAR` → danger ghost with confirm `Menu` | Select, Menu |
+| Empty state (`AÚN NO HAY DOMINGOS PUBLICADOS`, `Sin propuestas…`) | icon + caps line | keep; `rise` in; add the one action that fills it (`Planear Kids`) as a Button | Reveal |
+
+### 19.3 Controls
+
+| Element | T | P | Prim |
+|---|---|---|---|
+| Primary button (`+ NUEVO`, `INICIAR SESIÓN`, `GUARDAR`) | solid fill, hover tint | fill + press sink + hover sheen (pointer only) + `aria-busy` label crossfade | Button |
+| Secondary (`GENERAR MES`, `EDITAR MES`, `RECARGAR`) | outline | outline + press; hover border to accent `fast` | Button |
+| Ghost (`OCULTAR`, `CERRAR`, `VER`) | text | text + press; the redundant `CERRAR` under a `×` is removed | Button |
+| Danger (`RETIRAR`, `RESOLVER CONFLICTO`) | red outline/fill | same physics, negative tone; confirm through `Menu` or dialog, never inline | Button |
+| Icon buttons (`×`, `⋮`, `←`, `→`, `⛶`) | mixed sizes, some 24 px | 44 px hit target on phone, 36 px desktop, press, focus ring | Button (icon) |
+| Segmented (`CALENDARIO / LISTA`, `POPULAR / A–Z`, `TIPO / ROL`, `A→Z / Z→A`, theme, text size, proposals filters) | two spellings of the same thing | one `SegmentedControl` with a sliding thumb | SegmentedControl |
+| Admin tab bar | pill tabs, jumps | `SlidingIndicator`, panel crossfade; left rail on desktop (§12.5) | Tabs |
+| Month pills (`PRÓXIMOS`, `SEP 26`, `ROLES PREVIOS ▾`) | pills + disclosure | segmented + `Menu` for previous months | SegmentedControl, Menu |
+| `<select>` (31 sites) | native | `Select`: styled trigger, `Menu` popover with search when >8 options, keyboard type-ahead; native `<select>` kept as the phone fallback under `@media (pointer: coarse)` because iOS's picker wheel is the better control there | **Select (new)** |
+| `<input type="month">` / `type="date"` (3 sites) | native | `DateField`: month strip with prev/next, or a `Menu` calendar; the planner's per-column date stays an inline editable text with a calendar `Menu` | **DateField (new)** |
+| Checkbox (5 sites) | native | `Checkbox`: 20 px box, check draws `scale` 0→1 `base`; the kill switch also gets a confirm | **Checkbox (new)** |
+| Switch (`EmailPrefToggles`, `Mostrar acordes`) | knob slides | knob spring; haptic | Switch |
+| Search console | input with icon | focus glow `fast`; clear button `pop`s in when non-empty; results `layout` | — |
+| Textarea (proposal notes, thread) | native | tokenised border/focus; auto-grow | — |
+| Calendar day cell | number, tone square when a service exists | press `pop`; service cell carries a 2-px dot row (one per service); today ring pulses once | Button (icon) |
+| Availability day toggle | number, dot when marked | press `pop` + 120 ms fill crossfade; marked dot `pop`s | Button (icon) |
+| Dot pager | four dots | `layoutId` thumb | SegmentedControl |
+| Legend swatches | square swatches | inline dots matching the day-cell dots | — |
+| Disclosure (`Recurrente`, `Roles previos`, integrity strip, activity rows) | instant | `Collapse` | Collapse |
+| FAB (song edit, phone) | instant | `pop` in; hides while a sheet is open | Presence |
+| Planner cell / chip | border tone on drop target, `opacity-30` while dragging | dashed valid-target pulse, custom drag image, landing beam, `settle` spring, picked-chip breathing ring | — |
+| Planner column date | native date input | inline text + calendar `Menu` | DateField |
+| Planner full-screen | instant | `scale 0.98→1` + fade | Presence |
+
+### 19.4 Overlays
+
+| Element | T | P | Prim |
+|---|---|---|---|
+| Cue card dialog | instant, `CUE` eyebrow, `×` | scale 0.96→1 + fade `slow`; eyebrow gone | CueDialog |
+| Cue sheet (phone) | instant, handle drawn, `CERRAR` + `×` | spring up; drag-to-dismiss on the handle; one close control; content is the card itself (no stacked headers) | CueDialog |
+| Backdrop | `scrim/0.68 + blur` instant | fades `base`; blur stays (it is cheap when not animated) | CueDialog |
+| Hand-rolled modals (`SeatPicker`, `SongFormModal`, proposal confirm) | three shells | all on `CueDialog` | CueDialog |
+| Menus (`Más acciones`, avatar, practice playlist, note popover) | instant | `Menu` | Menu |
+| Toast | instant | `Toast` | Toast |
+
+### 19.5 Content
+
+| Element | T | P | Prim |
+|---|---|---|---|
+| Song hero (title, artist, key/BPM/sig) | centred stack, chips above | stagger reveal; key → transposer; BPM → tap-tempo (§12.7) | Reveal, NumberRoll |
+| Lyrics block | plain lines, `Verso 1`/`Coro` inline, left third of the page | section labels become rail eyebrows (`VERSO 1`, `CORO`, `PUENTE`), the block centres at a 62 ch measure, repeat markers (`//`) styled as a dim glyph; chord chart on top when present | — |
+| Tutorial embeds | white iframe flash | poster facade with a play button; iframe mounts on press (also saves the network) | Presence |
+| History cards (`Última vez tocada`) | card list | reveal stagger; row press opens the day sheet | Button (row) |
+| Proposal thread messages | list | `rise` in per message | Presence |
+| Planner rule notes (`Niza: Regla: no puede coincidir con Hugo`) | red text under the chip | inline warning chip with a `Menu` explaining the rule | Menu |
+| Sign-in card | beam + facet panel, already staggered | keep; the reference implementation for `Reveal` | Reveal |
+
+## 20. Phase deltas from Part III
+
+- **M0** adds `Select`, `DateField`, `Checkbox`; fixes Finding 3 (lockup `priority`) and
+  Finding 5 (initials contrast) as part of the shell; ships the label budget as a
+  `labelBudget.test.ts` that counts `uppercase tracking-widest` inside `ui/` primitives'
+  consumers and fails above the audited baseline.
+- **M1** removes the redundant `CERRAR`, adds drag-to-dismiss, collapses stacked headers.
+- **R1** promotes Contenido's row to the library (not a new design).
+- **R2** replaces the month input with `DateField`.
+- **R5** removes the admin shell's `overflow-x: hidden` and the five-frame nesting together.
+- **M7b** replaces the planner's per-column date inputs and the sidebar select.
+- **R6** adds the tutorial poster facade and lyric section styling to the song page.
+
+## 21. Decisions added by Part III
+
+- **M. Ship `Select` / `DateField` / `Checkbox` primitives** and migrate all 39 native
+  control sites. On phones the native `<select>` picker is kept behind the styled trigger.
+- **N. Label budget:** one eyebrow per surface; `CUE`, `SERVICIO`, `REPERTORIO`, `VER`,
+  `ACCESO AUTORIZADO` and the admin subtitle go.
+- **O. Kill switch moves into a confirmed menu** instead of a bare checkbox on every member
+  row. Same write, one more click, no accidental disable.
+- **P. Tutorial embeds become poster facades** (click-to-load). Saves ~1 MB per song page
+  and removes the white flash.
