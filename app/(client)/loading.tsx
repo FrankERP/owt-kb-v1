@@ -1,8 +1,9 @@
-import Skeleton, { SkeletonGroup } from "../components/ui/Skeleton";
+import Skeleton, { SkeletonGroup, NavbarSkeleton } from "../components/ui/Skeleton";
 
 export default function HomeLoading() {
   return (
     <SkeletonGroup label="Cargando servicios de la semana" className="mx-auto max-w-7xl px-6 pt-10 mb-12">
+      <NavbarSkeleton />
       <Skeleton className="h-8 w-40 mx-auto mb-6" rounded="lg" />
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {[0, 1].map((i) => (

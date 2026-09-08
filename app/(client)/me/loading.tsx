@@ -1,8 +1,9 @@
-import Skeleton, { SkeletonGroup } from "../../components/ui/Skeleton";
+import Skeleton, { SkeletonGroup, NavbarSkeleton } from "../../components/ui/Skeleton";
 
 export default function MeLoading() {
   return (
     <SkeletonGroup label="Cargando tu perfil" className="mx-auto max-w-7xl px-6 pt-10 mb-12 space-y-8">
+      <NavbarSkeleton />
       <div className="space-y-3">
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-10 w-56" />
