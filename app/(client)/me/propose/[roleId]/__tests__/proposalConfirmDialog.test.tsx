@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 
 import ProposalEditor from "../ProposalEditor";
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
+import { ToastProvider } from "@/app/components/ui/Toast";
 
 // jsdom does no layout, so offsetParent is always null and the trap's visibility
 // filter would treat every element as hidden. Same shim as useFocusTrap.test.tsx.
@@ -59,9 +60,11 @@ const proposal = {
 /** Open the confirmation the way a member does: click "Enviar propuesta". */
 function openConfirm() {
   render(
-    <CueDialogProvider>
-      <ProposalEditor roleDoc={roleDoc} proposal={proposal} currentUserId="member-1" />
-    </CueDialogProvider>,
+    <ToastProvider>
+      <CueDialogProvider>
+        <ProposalEditor roleDoc={roleDoc} proposal={proposal} currentUserId="member-1" />
+      </CueDialogProvider>
+    </ToastProvider>,
   );
   const submit = screen.getAllByRole("button", { name: /enviar propuesta/i })[0];
   submit.focus();

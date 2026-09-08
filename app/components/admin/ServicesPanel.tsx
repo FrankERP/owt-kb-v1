@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useToast } from "@/app/components/ui/Toast";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import MonthGenerator from "./MonthGenerator";
@@ -164,7 +164,8 @@ export default function ServicesPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const [showPastMonths, setShowPastMonths] = useState(false);
-  const [toast, showToast]      = useTransientValue<string | null>(null, 3000);
+  const { toast } = useToast();
+  const showToast = useCallback((msg: string) => toast({ message: msg }), [toast]);
   // «Limpiar mes» outcome with at least one refused delete. A toast is too
   // short for a list of reasons, so it PERSISTS as a banner until dismissed.
   const [clearReport, setClearReport] = useState<ClearMonthSummary | null>(null);
@@ -1248,14 +1249,6 @@ export default function ServicesPanel() {
             />
           ))}
           </div>
-        </div>
-      )}
-
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-surface-raised-alt border border-accent/30 font-label text-xs uppercase tracking-widest shadow-xl whitespace-nowrap">
-          {toast}
         </div>
       )}
 

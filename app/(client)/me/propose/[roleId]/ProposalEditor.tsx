@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ProposalStatus } from "@/app/utils/interface";
 import { normalizeMedleyTags } from "@/app/utils/medley";
 import { ChainLinkIcon } from "@/app/components/ChainLinkIcon";
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useToast } from "@/app/components/ui/Toast";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
 import CueDialog from "@/app/components/ui/CueDialog";
 import Button from "@/app/components/ui/Button";
@@ -154,7 +154,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   const [teamNotes, setTeamNotes] = useState(proposal?.team_notes ?? "");
   const [status, setStatus]       = useState<ProposalStatus>(proposal?.status ?? "draft");
   const [saving, setSaving]       = useState(false);
-  const [toast, setToastValue]    = useTransientValue<{ msg: string; ok: boolean } | null>(null, 3000);
+  const { toast } = useToast();
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [staleReload, setStaleReload] = useState(false);
 
@@ -293,7 +293,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   const searchRef    = useRef<HTMLDivElement>(null);
   const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = (msg: string, ok = true) => setToastValue({ msg, ok });
+  const showToast = (msg: string, ok = true) => toast({ message: msg, tone: ok ? "ok" : "error" });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -928,24 +928,6 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
           </div>
         </div>
       </CueDialog>
-
-      {/* Toast. It is the ONLY confirmation that a save or a submit landed, and
-          it disappears after 3s — so it has to be announced, not just drawn.
-          `assertive` on failure matches CueDialogStatus: "no se pudo enviar"
-          must interrupt, because the member's next move depends on it. */}
-      {toast && (
-        <div
-          role={toast.ok ? "status" : "alert"}
-          aria-live={toast.ok ? "polite" : "assertive"}
-          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
-            toast.ok
-              ? "bg-surface-raised-alt border-accent/30"
-              : "bg-negative-surface-deep/80 border-negative-strong/30"
-          }`}
-        >
-          {toast.msg}
-        </div>
-      )}
     </div>
   );
 }

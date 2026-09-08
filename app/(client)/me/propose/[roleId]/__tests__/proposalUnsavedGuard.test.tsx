@@ -27,6 +27,7 @@ vi.mock("next/navigation", () => ({
 
 import ProposalEditor, { proposalSnapshot } from "../ProposalEditor";
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
+import { ToastProvider } from "@/app/components/ui/Toast";
 
 afterEach(() => {
   cleanup();
@@ -75,9 +76,11 @@ const volver = () => screen.getByRole("button", { name: /volver/i });
 // (open or not), so every mount needs the provider it portals into.
 function renderEditor(props: Parameters<typeof ProposalEditor>[0]) {
   return render(
-    <CueDialogProvider>
-      <ProposalEditor {...props} />
-    </CueDialogProvider>,
+    <ToastProvider>
+      <CueDialogProvider>
+        <ProposalEditor {...props} />
+      </CueDialogProvider>
+    </ToastProvider>,
   );
 }
 
