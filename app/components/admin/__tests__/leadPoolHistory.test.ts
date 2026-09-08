@@ -6,10 +6,13 @@ import {
 } from "../leadPoolHistory";
 import type { SolverConfig } from "../plannerModel";
 
+// Tipo is load-bearing now: this panel filters the stored pool ticks by live
+// eligibility, the same rule `buildSolveRequest` applies (ADR-0029). A fixture
+// without it would be a member nobody can schedule.
 const members = [
-  { _id: "frank", member_name: "Frank", alias: "Frank" },
-  { _id: "gaby", member_name: "Gaby" },
-  { _id: "liu", member_name: "Liu" },
+  { _id: "frank", member_name: "Frank", alias: "Frank", memberType: ["voz", "sunday_lead", "saturday_lead"] },
+  { _id: "gaby", member_name: "Gaby", memberType: ["voz", "sunday_lead"] },
+  { _id: "liu", member_name: "Liu", memberType: ["voz", "saturday_lead"] },
 ];
 
 const emptyConfig = (): SolverConfig => ({
@@ -98,6 +101,33 @@ describe("priorMonthLeadVisibility", () => {
       year: 2026,
       month: 2,
       role: "Sun.Lead",
+    });
+    expect(info.names).toEqual(["Frank"]);
+  });
+
+  // The stored pools are ticks made in the past. `buildSolveRequest` drops the
+  // ones live Tipo no longer supports and `poolTipoMismatch` surfaces them for
+  // removal (ADR-0029); this read did neither, so it could present someone who
+  // can no longer be assigned at all as an available lead — the opposite of
+  // what the panel is for.
+  it("drops a ticked member whose Tipo no longer supports the pool", () => {
+    const config: SolverConfig = { ...emptyConfig(), sundayLeads: ["frank", "gaby"] };
+    const cleared = members.map((m) => (m._id === "gaby" ? { ...m, memberType: [] } : m));
+
+    const info = priorMonthLeadVisibility({
+      config, members: cleared, history: [], year: 2026, month: 2, role: "Sun.Lead",
+    });
+    expect(info.names).toEqual(["Frank"]);
+  });
+
+  it("drops one who kept `voz` but lost the pool's subtype", () => {
+    // Narrower than an empty Tipo, and the case a coarse "has any Tipo" check
+    // would wave through: still a singer, no longer a Sunday lead.
+    const config: SolverConfig = { ...emptyConfig(), sundayLeads: ["frank", "gaby"] };
+    const demoted = members.map((m) => (m._id === "gaby" ? { ...m, memberType: ["voz"] } : m));
+
+    const info = priorMonthLeadVisibility({
+      config, members: demoted, history: [], year: 2026, month: 2, role: "Sun.Lead",
     });
     expect(info.names).toEqual(["Frank"]);
   });

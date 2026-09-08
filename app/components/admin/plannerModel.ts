@@ -639,6 +639,20 @@ export const POOL_SUBTYPE: Record<"sundayLeads" | "saturdayLeads" | "support", P
  * availability exclusions. Either way the checkbox list is built from Tipo and
  * cannot render them, which is what this is for.
  */
+/**
+ * Is this member still eligible for the pool their id is ticked in? The ONE
+ * predicate — `poolTipoMismatch` reports the failures of it and
+ * `buildSolveRequest` drops them, so a third consumer restating it is how these
+ * drift apart. That drift is what ADR-0029 was written about.
+ */
+export function memberFitsPool(
+  member: { memberType?: string[] } | undefined,
+  field: "sundayLeads" | "saturdayLeads" | "support",
+): boolean {
+  const t = member?.memberType ?? [];
+  return t.includes("voz") && t.includes(POOL_SUBTYPE[field]);
+}
+
 export function poolTipoMismatch(
   config: Pick<SolverConfig, "sundayLeads" | "saturdayLeads" | "support">,
   members: Array<{ _id: string; member_name: string; alias?: string; memberType?: string[] }>,
@@ -648,8 +662,7 @@ export function poolTipoMismatch(
     for (const id of config[field]) {
       const m = members.find((x) => x._id === id);
       if (!m) continue; // a deleted member is a different problem; nothing to offer
-      const t = m.memberType ?? [];
-      if (t.includes("voz") && t.includes(POOL_SUBTYPE[field])) continue;
+      if (memberFitsPool(m, field)) continue;
       out.push({ _id: m._id, member_name: m.member_name, alias: m.alias, field });
     }
   }

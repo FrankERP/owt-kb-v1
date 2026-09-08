@@ -5,6 +5,7 @@
 import type { RankMember } from "./candidateRanking";
 import { patternMatches, type RuleRow } from "./ruleEnforcement";
 import {
+  memberFitsPool,
   memberIdToName,
   type SolverConfig,
   type SolverHistoryEntry,
@@ -42,10 +43,25 @@ function isExcludedFromLead(config: SolverConfig, memberId: string, service: "Su
   return restriction.excludedPatterns.some((pattern) => patternMatches(pattern, column, LEAD_ROW));
 }
 
-function leadPoolMemberIds(config: SolverConfig, service: "Sun" | "Sat"): string[] {
-  if (service === "Sun") return [...config.sundayLeads];
+/**
+ * Filtered by live Tipo, like every other reader of these ids. The stored pools
+ * are ticks made in the past; `buildSolveRequest` drops the ones Tipo no longer
+ * supports and `poolTipoMismatch` surfaces them for removal (ADR-0029). This
+ * read did neither, so it could name someone in "did not lead last month" who
+ * can no longer be assigned at all — presenting an unschedulable member as an
+ * available lead, which is the opposite of what the panel is for.
+ */
+function leadPoolMemberIds(
+  config: SolverConfig,
+  service: "Sun" | "Sat",
+  members: Array<{ _id: string; memberType?: string[] }>,
+): string[] {
+  const byId = new Map(members.map((m) => [m._id, m]));
+  const fits = (id: string, field: "sundayLeads" | "saturdayLeads") =>
+    memberFitsPool(byId.get(id), field);
+  if (service === "Sun") return config.sundayLeads.filter((id) => fits(id, "sundayLeads"));
   const sundaySet = new Set(config.sundayLeads);
-  return config.saturdayLeads.filter((id) => !sundaySet.has(id));
+  return config.saturdayLeads.filter((id) => !sundaySet.has(id) && fits(id, "saturdayLeads"));
 }
 
 function displayNameForMember(id: string, members: RankMember[]): string {
@@ -70,7 +86,7 @@ export function priorMonthLeadVisibility(input: {
   const priorMonthLabel = `${SPANISH_MONTHS[prior.month - 1]} ${prior.year}`;
 
   const names: string[] = [];
-  for (const id of leadPoolMemberIds(config, service)) {
+  for (const id of leadPoolMemberIds(config, service, members)) {
     if (isExcludedFromLead(config, id, service)) continue;
     const name = memberIdToName(id, members);
     const priorCount = entry?.role_counts[name]?.[role] ?? 0;
