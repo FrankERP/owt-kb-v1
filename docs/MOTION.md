@@ -124,13 +124,49 @@ these figures are computed directly from the emitted manifests instead, gzip lev
 Before was measured on the primary checkout at the merge-base commit
 `a733347cfde72f731010f1bd58f9d189a84072cb` (branch `main`); After on this branch.
 
-| Build | First Load JS shared | `/` | `/admin` |
-|---|---|---|---|
-| Before M0a (merge-base `a733347c`) | 172.3 kB | 77.3 kB | 301.7 kB |
-| After M0a, `domAnimation` loaded synchronously | 172.3 kB | 101.5 kB | 325.9 kB |
-| After the fix wave, `domAnimation` loaded as an async chunk | 172.3 kB | 89.7 kB | 314.2 kB |
-| Δ vs Before M0a | +0.01 kB | +12.4 kB | +12.5 kB |
-| After M0b-1, `domMax` loaded as an async chunk | 168.4 kB | 87.9 kB | 307.1 kB |
+| Build | First Load JS shared | `/` | `/admin` | Async feature chunk (raw / gz) |
+|---|---|---|---|---|
+| Before M0a (merge-base `a733347c`) | 172.3 kB | 77.3 kB | 301.7 kB | — |
+| After M0a, `domAnimation` loaded synchronously | 172.3 kB | 101.5 kB | 325.9 kB | — (not yet async) |
+| After the fix wave, `domAnimation` loaded as an async chunk | 172.3 kB | 89.7 kB | 314.2 kB | 42.3 kB / 15.8 kB |
+| Δ vs Before M0a | +0.01 kB | +12.4 kB | +12.5 kB | — |
+| **M0b-1 tree, `domAnimation`** (confirmatory rebuild, fix round 1) | 168.4 kB | 87.8 kB | 307.0 kB | 41.3 kB / 15.4 kB |
+| **M0b-1 tree, `domMax`** (shipped, `e9d90327`) | 168.4 kB | 87.9 kB | 307.1 kB | 88.0 kB / 28.8 kB |
+
+Commit e9d90327's body says first-load does not move; the A/B above is the
+evidence for that claim, measured after the fact.
+
+The two M0b-1 rows are a confirmatory A/B run on the *same* tree (this branch,
+same commit of everything except `motionFeatures.ts`'s one-line export): first
+`domAnimation` was reinstated locally (uncommitted), built, and measured; then
+`domMax` was restored via `git checkout --` and rebuilt. Shared moved by 6
+bytes between the two builds (172,475 B → 172,481 B, both rounding to 168.4 kB)
+even though `motionFeatures.ts` is dynamically imported and never appears in
+`rootMainFiles`/`polyfillFiles` — that 6-byte drift is Turbopack build
+non-determinism on an unrelated build, not a `domMax` effect. `/` moved +0.1 kB
+and `/admin` moved +0.1 kB between the two rows, both inside the ±0.5 kB
+budget the switch was expected to hold. The async feature chunk is the only
+number that moved meaningfully: 41.3 kB raw / 15.4 kB gz (`domAnimation`) to
+88.0 kB raw / 28.8 kB gz (`domMax`), the ~13 kB gz cost of layout projection
+plus drag — exactly the change under test, isolated from everything else.
+
+This A/B also resolves the finding-1/finding-2 hole from the first measurement
+pass. Shared and first-load did **not** move between `domAnimation` and
+`domMax` on this tree — they moved between M0a's merge-base build (172.3 /
+89.7 / 314.2, recorded on a different tree entirely, the fix-wave's) and any
+build of *this* tree (168.4 / 87.8–87.9 / 307.0–307.1, true for both
+`domAnimation` and `domMax` here). Since the drop reproduces identically
+whichever feature set `motionFeatures.ts` exports, it cannot be the `domMax`
+switch; it belongs to something else that changed on this tree ahead of
+M0b-1. The two loading-skeleton commits already merged onto this branch before
+M0b-1 (`ecb6c86b`, `e6b2b46c` — both touch `app/(client)/loading.tsx`, the
+loading boundary shared by `/` and `/admin`, plus `Skeleton.tsx`) remain the
+only commits between the fix-wave's measurement and this one that touch
+route-rendered code, and are the most plausible source of the −3.9 kB /
+−1.9 kB / −7.2 kB (shared / `/` / `/admin`) difference against the fix-wave
+numbers — but that is still an inference from "no other candidate commit
+exists," not a rebuild of the pre-skeleton-commits tree, which this pass did
+not do either.
 
 The middle row is what M0a originally shipped (`LazyMotion features={domAnimation}`,
 loaded synchronously by `MotionProvider`); the last row is this fix wave's change
@@ -172,15 +208,13 @@ well under the spec's Part VI 40 kB gz cap, and about 13 kB gz heavier than
 `domAnimation`'s 15.8 kB, the cost of layout projection plus drag (motion 13 ships
 them as one bundle; there is no public layout-only feature set).
 
-First-load `/` and `/admin` moved by −1.8 kB and −7.1 kB against the fix-wave's
-recorded 89.7 kB / 314.2 kB — more than the ±0.5 kB this switch alone should produce.
-The move is not from `domMax`: the chunk above is structurally unreferenced by any
-route's client-reference manifest, so which feature set it re-exports cannot change a
-single byte of synchronously-loaded route JS. It is the two loading-skeleton fixes
-already merged onto this branch ahead of M0b-1 (`ecb6c86b`, `e6b2b46c` — both touch
-`app/(client)/loading.tsx`, shared by `/` and `/admin`) landing between the fix-wave's
-measurement and this one. Confirming this would need rebuilding the pre-M0b-1 tree
-with `domAnimation` still in place, which this measurement pass intentionally skips.
+The first measurement pass flagged `/` and `/admin` moving −1.8 kB and −7.1 kB
+against the fix-wave's recorded 89.7 kB / 314.2 kB — more than the ±0.5 kB this
+switch alone should produce — as an open question, since it did not rebuild
+`domAnimation` on this tree to isolate the cause. The Bundle table's two
+`M0b-1 tree` rows above are that confirmatory rebuild: `domAnimation` and
+`domMax`, same tree, same commit apart from that one export. See the
+paragraph under the table for what it shows.
 
 ## Where the walk's findings landed
 
