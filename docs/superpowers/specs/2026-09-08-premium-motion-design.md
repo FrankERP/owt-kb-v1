@@ -768,3 +768,42 @@ recommended option:
 Next step: implementation plan for phase M0 (foundation), then M1, R1… per §6 and §14 with
 the §20 deltas. Each phase is its own PR through `preview` then `main`, with a fresh code
 review of the diff.
+
+---
+
+# Part V — Reference check: libraries.dev (2026-09-08, 11:00 CST)
+
+Frank asked for libraries.dev to be reviewed for proposals. It catalogues five MIT effect
+packages for React 18+: `border-beam` (an animated glow riding a border), `thinking-orbs`
+(loading orbs for AI chat), `liquid-gooey` (elements merge like liquid), `metal-fx` (a
+real-time chrome ring on buttons) and `img-fx` (a WebGL image-generation loader on `three`).
+Together ~83 kB gz.
+
+## 22. Verdict
+
+**Do not add any of the five as dependencies.** Three reasons, each sufficient:
+
+- **Budget.** The programme's whole cap is +25 kB gz (§7); `border-beam` alone would spend
+  most of it and `img-fx` brings `three`.
+- **Floor.** Nothing on the site states a Safari floor; the gooey and metal effects lean on
+  filters and shaders that are exactly the frame-droppers §2.2 bans on iOS 15 WebViews.
+- **Register.** Orbs, goo and chrome are the vocabulary of AI-chat and landing pages. This is
+  a run sheet for a stage team; §2.1 spends the app's one flourish on the beam and keeps
+  everything else quiet. Adding a second, louder vocabulary is the "AI-generated look" the
+  spec is written against.
+
+## 23. The one idea worth harvesting — decision Q
+
+`border-beam`'s gesture — a light travelling the edge of a card — is already this app's
+metaphor. Harvested CSS-only, with the tokens, it becomes the **lit card**: after the route
+reveal on `/` (§12.1), the next service's card gets ONE beam pass around its border, 900 ms,
+`--ease-in-out`, then rests with its existing accent border. Never a loop.
+
+Implementation is a rotating pseudo-element under a border mask (transform only —
+`@property`-registered angle animation is Safari 16.4, so the rotation is on the element,
+not the gradient); ~30 lines in `brand.css`, a `data-lit` attribute set by the page.
+It ships in R1 with the run sheet, and it is the FIFTH place the beam appears; §2.1's
+"exactly four" becomes five, still enumerated, still one-shot.
+
+**Q. Adopt the lit-card beam (CSS-only, R1) and decline the five packages.** Recommended.
+Alternative: decline both — keep the four beam sites and no lit card.
