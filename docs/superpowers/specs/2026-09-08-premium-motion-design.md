@@ -1,6 +1,6 @@
 # Backstage motion — design spec
 
-**Date:** 2026-09-08 · **Status:** Draft, awaiting Frank's review · **Risk tier:** standard
+**Date:** 2026-09-08 · **Status:** Approved by Frank 2026-09-08 10:40 CST (all decisions A–P, see §22) · **Risk tier:** standard
 (UI consumers of already-approved writers; no production writer, serializer, auth boundary,
 schema or concurrency contract changes). Pipeline: this spec → user review → implementation
 plans per phase → gates → fresh code review of each diff.
@@ -738,3 +738,33 @@ Motion vocabulary from §2.3; nothing here adds a colour or a face.
   row. Same write, one more click, no accidental disable.
 - **P. Tutorial embeds become poster facades** (click-to-load). Saves ~1 MB per song page
   and removes the white flash.
+
+---
+
+# Part IV — Decision ledger
+
+Approved by Frank on 2026-09-08 (10:36–10:40 CST), one question per decision, all with the
+recommended option:
+
+| # | Decision | Verdict |
+|---|---|---|
+| A | `motion` library, lazy, ui/-only import boundary, ADR-0031 | Approved |
+| B | Resurrect BottomNav: Inicio · Biblioteca · Calendario · Yo · Más | Approved |
+| C | Route transitions enter-only | Approved |
+| D | `@capacitor/haptics` | Approved |
+| E | Author pages get `brand-song-hero` | Approved |
+| F | Theme switch stays a hard swap | Approved |
+| G | Library leaves home → `/biblioteca` route + tab | Approved |
+| H | `/tag*`, `/author*` → filter drawer with redirects | Approved |
+| I | Availability defaults to a weekend list; grid behind a disclosure | Approved |
+| J | Control Room: no outer frame, left rail on desktop, snap board | Approved |
+| K | Song page: transposer in hero, tap-tempo, chart autoscroll (all three) | Approved |
+| L | Pull-to-refresh and long-press quick actions on phone | Approved |
+| M | `Select` / `DateField` / `Checkbox`; migrate all 39 native sites | Approved |
+| N | Label budget: one eyebrow per surface | Approved |
+| O | Kill switch moves into a confirmed row menu | Approved |
+| P | Tutorial embeds become click-to-load posters | Approved |
+
+Next step: implementation plan for phase M0 (foundation), then M1, R1… per §6 and §14 with
+the §20 deltas. Each phase is its own PR through `preview` then `main`, with a fresh code
+review of the diff.
