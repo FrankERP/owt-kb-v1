@@ -1979,7 +1979,7 @@ Fill the bundle table with the numbers from Step 1 and the export spelling from 
 Append to the table in `docs/README.md` after row 11:
 
 ```markdown
-| 12 | [`MOTION.md`](MOTION.md) | The motion system: tokens, the seven rules, the `ui/` primitives, how to test one, the bundle ledger. |
+| 12 | [`MOTION.md`](MOTION.md) | The motion system: tokens, the nine rules, the `ui/` primitives, how to test one, the bundle ledger. |
 ```
 
 In `docs/UTILITIES_AND_COMPONENTS.md`, before `### Admin panels`, insert:
@@ -2026,7 +2026,7 @@ Expected: 0 type errors; all tests pass; eslint 0 errors (warnings are the backl
 git add docs/adr/0031-motion-library-under-an-ios-15-floor.md docs/adr/README.md docs/MOTION.md docs/README.md docs/UTILITIES_AND_COMPONENTS.md CLAUDE.md
 git commit -m "docs(motion): ADR-0031, MOTION.md, and the primitive inventory
 
-Records why motion (lazy, ui/-only), the seven rules, the four M0a primitives,
+Records why motion (lazy, ui/-only), the nine rules, the four M0a primitives,
 how to test one, and the measured bundle delta."
 ```
 
