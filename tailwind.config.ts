@@ -163,6 +163,39 @@ const config: Config = {
 				sm:   ["0.9375rem", { lineHeight: "1.45rem" }],
 				base: ["1.0625rem", { lineHeight: "1.65rem" }],
 			},
+			// Motion tokens — mirrors of the --motion-* / --ease-* vars in brand.css so
+			// utilities and CSS agree on one clock. Pinned by motionTokens.test.ts.
+			// NON-COLOUR: tokenLayer.test.ts reads theme.extend.colors only.
+			transitionDuration: {
+				fast: "var(--motion-fast)",
+				base: "var(--motion-base)",
+				slow: "var(--motion-slow)",
+				reveal: "var(--motion-reveal)",
+			},
+			transitionTimingFunction: {
+				"out-brand": "var(--ease-out)",
+				"in-brand": "var(--ease-in)",
+				"in-out-brand": "var(--ease-in-out)",
+			},
+			keyframes: {
+				rise: {
+					from: { opacity: "0", transform: "translate3d(0, var(--motion-rise), 0)" },
+					to: { opacity: "1", transform: "translate3d(0, 0, 0)" },
+				},
+				"scale-in": {
+					from: { opacity: "0", transform: "scale(0.96)" },
+					to: { opacity: "1", transform: "scale(1)" },
+				},
+				shimmer: {
+					from: { transform: "translate3d(-100%, 0, 0)" },
+					to: { transform: "translate3d(100%, 0, 0)" },
+				},
+			},
+			animation: {
+				rise: "rise var(--motion-base) var(--ease-out) both",
+				"scale-in": "scale-in var(--motion-slow) var(--ease-out) both",
+				shimmer: "shimmer var(--motion-shimmer) linear infinite",
+			},
 			scrollSnapType: {
 				x: "x mandatory",
 			},

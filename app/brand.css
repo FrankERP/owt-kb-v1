@@ -5,8 +5,27 @@
      could never demand category 11 reach zero — 7 of its 9 rows are these. */
   --brand-radius-panel: 16px;
   --brand-radius-control: 10px;
-  --brand-duration-fast: 150ms;
-  --brand-duration-reveal: 210ms;
+  /* ---- Motion tokens (spec 2026-09-08-premium-motion-design §2.3) ----------
+     Non-colour, so outside the theme-parity check in brandCss.test.ts (that guard
+     classifies by VALUE shape). Pinned by motionTokens.test.ts. Only transform and
+     opacity ever animate against these; see docs/MOTION.md. */
+  --motion-fast: 120ms;     /* colour, hover, focus ring */
+  --motion-base: 200ms;     /* press, toggles, menus, small reveals */
+  --motion-slow: 320ms;     /* sheets, dialogs, tab panels, expand/collapse */
+  --motion-reveal: 480ms;   /* route reveal, hero rail */
+  --motion-shimmer: 1600ms; /* skeleton sweep period */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --motion-rise: 8px;       /* enter travel */
+  --motion-sink: 1px;       /* press travel */
+
+  /* The two surviving --brand-duration-* vars (ADR-0016 lists the four non-colour
+     --brand-* survivors) become aliases so their 3 existing consumers move with the
+     system. Values CHANGE here: 150→120 and 210→480; the beam reveal on the sign-in
+     lockup is the only visible effect, and 480 is the spec's reveal duration. */
+  --brand-duration-fast: var(--motion-fast);
+  --brand-duration-reveal: var(--motion-reveal);
 
   /* Height of the impersonation banner, so the navbar can stack under it.
      This default only ever applies while `.impersonating` is on <html>, and
