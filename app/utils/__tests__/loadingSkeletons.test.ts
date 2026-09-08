@@ -34,6 +34,35 @@ it("schedule/loading.tsx mirrors the calendar's 7-column month grid", () => {
   expect(src).toContain("grid-cols-7");
 });
 
+describe("full-bleed navbar in loading states", () => {
+  it("home/loading.tsx: NavbarSkeleton appears before the container's max-w-", () => {
+    const src = readFileSync(path.join(REPO_ROOT, "app/(client)/loading.tsx"), "utf8");
+    const navbarIndex = src.indexOf("<NavbarSkeleton />");
+    const maxWIndex = src.indexOf("max-w-");
+    expect(navbarIndex).toBeGreaterThan(-1);
+    expect(maxWIndex).toBeGreaterThan(-1);
+    expect(navbarIndex).toBeLessThan(maxWIndex);
+  });
+
+  it("me/loading.tsx: NavbarSkeleton appears before the container's max-w-", () => {
+    const src = readFileSync(path.join(REPO_ROOT, "app/(client)/me/loading.tsx"), "utf8");
+    const navbarIndex = src.indexOf("<NavbarSkeleton />");
+    const maxWIndex = src.indexOf("max-w-");
+    expect(navbarIndex).toBeGreaterThan(-1);
+    expect(maxWIndex).toBeGreaterThan(-1);
+    expect(navbarIndex).toBeLessThan(maxWIndex);
+  });
+
+  it("schedule/loading.tsx: NavbarSkeleton appears before the container's max-w-", () => {
+    const src = readFileSync(path.join(REPO_ROOT, "app/(client)/schedule/loading.tsx"), "utf8");
+    const navbarIndex = src.indexOf("<NavbarSkeleton />");
+    const maxWIndex = src.indexOf("max-w-");
+    expect(navbarIndex).toBeGreaterThan(-1);
+    expect(maxWIndex).toBeGreaterThan(-1);
+    expect(navbarIndex).toBeLessThan(maxWIndex);
+  });
+});
+
 it("brand.css shimmer animates transform on a pseudo-element, never background-position", () => {
   const css = readFileSync(path.join(REPO_ROOT, "app/brand.css"), "utf8");
   const after = css.match(/\.brand-skeleton::after\s*\{([^}]*)\}/)?.[1] ?? "";
