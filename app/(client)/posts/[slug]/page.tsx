@@ -14,6 +14,7 @@ import type { PortableTextComponents } from "@portabletext/react";
 import Image from "next/image";
 import { urlFor } from "@/sanity/lib/image";
 import { notFound } from "next/navigation";
+import { songSections, type SongSection } from "@/app/utils/songSections";
 import Navbar from "@/app/components/Navbar";
 import SectionNav from "@/app/components/SectionNav";
 import ChordChart from "@/app/components/ChordChart";
@@ -149,23 +150,16 @@ const Page = async ({ params }: Params) => {
 
   const history = await getSongHistory(post._id);
 
-  const hasAudio        = (post?.audioTracks?.length ?? 0) > 0;
+  // `songSections` owns which of the five paint — see its header for why the
+  // `body` flag in particular is worth a tested home.
+  const sections = songSections(post, history.length);
+  const shows = (id: SongSection["id"]) => sections.some((s) => s.id === id);
+  const hasAudio        = shows("audio");
   const hasInlineChords = (post?.chords?.length ?? 0) > 0;
-  const hasTutorials = (post?.tutorials2?.length ?? 0) > 0;
-  const hasBody      = !!post?.body;
-  const hasLyrics    = hasBody || hasInlineChords;
-  const hasHistory   = history.length > 0;
-  const hasMusicalRef = !!post?.musicalReferenceUrl;
-  const hasLyricsVid  = !!post?.lyricsVideoUrl;
-  const hasRefLinks   = hasMusicalRef || hasLyricsVid || (post?.referenceLinks?.length ?? 0) > 0;
-
-  const sections = [
-    { id: "audio",      label: "Audio",        show: hasAudio },
-    { id: "tutoriales", label: "Tutoriales",   show: hasTutorials },
-    { id: "referencia", label: "Referencia",   show: hasRefLinks },
-    { id: "letra",      label: "Letra",        show: hasLyrics },
-    { id: "historial",  label: "Historial",    show: hasHistory },
-  ].filter((s) => s.show);
+  const hasTutorials    = shows("tutoriales");
+  const hasLyrics       = shows("letra");
+  const hasHistory      = shows("historial");
+  const hasRefLinks     = shows("referencia");
 
   return (
     <div>

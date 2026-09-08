@@ -579,7 +579,11 @@ export default async function MePage() {
             <ProfilePanel initialMember={member} />
           </>
         ) : (
-          <section role="alert" className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center">
+          // No live-region role: this is server-rendered and present at first
+          // paint, so nothing is being INSERTED for a live region to announce,
+          // and screen readers treat already-present live content
+          // inconsistently. The heading carries the message.
+          <section className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center">
             <p className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</p>
             <p className="font-body text-sm text-mono-500 mt-1">
               Tus días no disponibles y tus ajustes no están disponibles ahora mismo.

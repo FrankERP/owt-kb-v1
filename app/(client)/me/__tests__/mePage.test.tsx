@@ -148,7 +148,8 @@ describe("/me worship gating", () => {
     expect(html).not.toContain("CALENDARIO");
     expect(html).not.toContain("PERFIL");
     expect(html).toContain("No pudimos cargar tu perfil");
-    expect(html).toContain('role="alert"');
+    // Not asserting a live-region role: this is server-rendered and present at
+    // first paint, so there is nothing being inserted for one to announce.
     // The rest of the page is unaffected — this is not a whole-page failure.
     expect(html).toContain("Mis próximos servicios");
   });

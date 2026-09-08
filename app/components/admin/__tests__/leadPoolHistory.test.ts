@@ -120,6 +120,28 @@ describe("priorMonthLeadVisibility", () => {
     expect(info.names).toEqual(["Frank"]);
   });
 
+  it("keeps a Saturday lead whose Sunday tick went stale, rather than losing them to both columns", () => {
+    // The Saturday branch dedupes against the Sunday pool. Deduping against the
+    // RAW ticks dropped this member from Sunday for Tipo and from Saturday for
+    // the tick — absent from both, while the solver had them in its Saturday
+    // pool. `buildSolveRequest` dedupes against the filtered pool; so does this.
+    const config: SolverConfig = {
+      ...emptyConfig(),
+      sundayLeads: ["frank", "liu"],   // liu's Sunday tick is stale
+      saturdayLeads: ["frank", "liu"], // liu IS a valid Saturday lead
+    };
+
+    const sat = priorMonthLeadVisibility({
+      config, members, history: [], year: 2026, month: 2, role: "Sat.Lead",
+    });
+    expect(sat.names).toContain("Liu");
+
+    const sun = priorMonthLeadVisibility({
+      config, members, history: [], year: 2026, month: 2, role: "Sun.Lead",
+    });
+    expect(sun.names).not.toContain("Liu");
+  });
+
   it("drops one who kept `voz` but lost the pool's subtype", () => {
     // Narrower than an empty Tipo, and the case a coarse "has any Tipo" check
     // would wave through: still a singer, no longer a Sunday lead.

@@ -631,6 +631,31 @@ export const POOL_SUBTYPE: Record<"sundayLeads" | "saturdayLeads" | "support", P
 };
 
 /**
+ * Is this member still eligible for a pool? The ONE predicate: `poolTipoMismatch`
+ * reports its failures, `buildSolveRequest` drops them, and the planner's
+ * lead-history panel filters on it. A consumer restating the rule instead is how
+ * these drift apart — which is what ADR-0029 was written about, and what already
+ * cost the Saturday lead column a member it should have listed.
+ *
+ * Two spellings of one rule: by pool FIELD for the config-shaped callers, by
+ * SUBTYPE for `buildSolveRequest`, which already works in subtypes.
+ */
+export function memberFitsPoolSubtype(
+  member: { memberType?: string[] } | undefined,
+  subtype: PoolSubtype,
+): boolean {
+  const t = member?.memberType ?? [];
+  return t.includes("voz") && t.includes(subtype);
+}
+
+export function memberFitsPool(
+  member: { memberType?: string[] } | undefined,
+  field: "sundayLeads" | "saturdayLeads" | "support",
+): boolean {
+  return memberFitsPoolSubtype(member, POOL_SUBTYPE[field]);
+}
+
+/**
  * Stored pool ids whose member no longer carries the Tipo that pool requires —
  * including a member with no Tipo at all, which is how someone is made
  * unschedulable (ADR-0029). `buildSolveRequest` drops all of these from the
@@ -639,20 +664,6 @@ export const POOL_SUBTYPE: Record<"sundayLeads" | "saturdayLeads" | "support", P
  * availability exclusions. Either way the checkbox list is built from Tipo and
  * cannot render them, which is what this is for.
  */
-/**
- * Is this member still eligible for the pool their id is ticked in? The ONE
- * predicate — `poolTipoMismatch` reports the failures of it and
- * `buildSolveRequest` drops them, so a third consumer restating it is how these
- * drift apart. That drift is what ADR-0029 was written about.
- */
-export function memberFitsPool(
-  member: { memberType?: string[] } | undefined,
-  field: "sundayLeads" | "saturdayLeads" | "support",
-): boolean {
-  const t = member?.memberType ?? [];
-  return t.includes("voz") && t.includes(POOL_SUBTYPE[field]);
-}
-
 export function poolTipoMismatch(
   config: Pick<SolverConfig, "sundayLeads" | "saturdayLeads" | "support">,
   members: Array<{ _id: string; member_name: string; alias?: string; memberType?: string[] }>,
@@ -692,11 +703,8 @@ export function buildSolveRequest(input: {
   // impossible to untick, while their id sat in the document and their name
   // still reached the solver. `poolTipoMismatch` surfaces the same ids in the
   // panel so the stale tick can be cleaned up rather than merely neutralised.
-  const eligibleForPool = (id: string, subtype: PoolSubtype) => {
-    const m = members.find((x) => x._id === id);
-    const t = m?.memberType ?? [];
-    return t.includes("voz") && t.includes(subtype);
-  };
+  const eligibleForPool = (id: string, subtype: PoolSubtype) =>
+    memberFitsPoolSubtype(members.find((x) => x._id === id), subtype);
   const inPool = (ids: string[], subtype: PoolSubtype) =>
     ids.filter((id) => eligibleForPool(id, subtype));
 

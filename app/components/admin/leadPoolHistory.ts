@@ -60,8 +60,14 @@ function leadPoolMemberIds(
   const fits = (id: string, field: "sundayLeads" | "saturdayLeads") =>
     memberFitsPool(byId.get(id), field);
   if (service === "Sun") return config.sundayLeads.filter((id) => fits(id, "sundayLeads"));
-  const sundaySet = new Set(config.sundayLeads);
-  return config.saturdayLeads.filter((id) => !sundaySet.has(id) && fits(id, "saturdayLeads"));
+  // Dedupe against the FILTERED Sunday pool, exactly as `buildSolveRequest`
+  // does. Against the raw ticks, a member with a stale `sundayLeads` tick and a
+  // valid Saturday Tipo was dropped from the Sunday column for Tipo and from
+  // the Saturday column for the tick — absent from both, while the solver had
+  // them in its Saturday pool. A panel whose job is "who has not led" cannot
+  // afford to lose someone to bookkeeping.
+  const sundayEligible = new Set(config.sundayLeads.filter((id) => fits(id, "sundayLeads")));
+  return config.saturdayLeads.filter((id) => !sundayEligible.has(id) && fits(id, "saturdayLeads"));
 }
 
 function displayNameForMember(id: string, members: RankMember[]): string {
