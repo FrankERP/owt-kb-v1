@@ -17,6 +17,7 @@
 // admin's fail-closed review lock.
 
 import { useState } from "react";
+import { serviceTodayIso } from "@/app/components/admin/serviceReadiness";
 import { orderedMessages, isThreadOpen } from "@/app/utils/proposalThread";
 import { PROPOSAL_NOTES_MAX } from "@/app/utils/proposalNotesLimit";
 import { useTransientValue } from "@/app/utils/useTransientValue";
@@ -101,7 +102,14 @@ export default function ProposalThread({
   const [posting, setPosting] = useState(false);
   const [error, showError] = useTransientValue<string | null>(null, 6000);
 
-  const today = new Date().toLocaleDateString("sv", { timeZone: SERVICE_TIME_ZONE });
+  // `serviceTodayIso()`, not a second inline `new Date()`, and the reason is a
+  // test that lied. This computed the same string the shared helper does, but
+  // through its OWN clock read — so `proposalsPanelThread.test.tsx`, which pins
+  // "today" by mocking `serviceReadiness`, never reached the one decision that
+  // matters here: whether the thread is open. Those tests passed only while the
+  // fixture's service date happened to still be in the future, and went red the
+  // day after it. One clock, one place to pin it.
+  const today = serviceTodayIso();
   const ordered = orderedMessages(messages ?? []);
   // The same predicate the two routes enforce server-side. A hidden composer is
   // not a guard; this is the courtesy half of it.

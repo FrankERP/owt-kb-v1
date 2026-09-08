@@ -993,6 +993,46 @@ describe("MonthGenerator — create path", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  // The THIRD exit from the grid step, and the one that was missed when Escape
+  // was routed through the shared guard: the footer «Cancelar» button, sitting
+  // directly beside «Crear N borradores», still called `onClose` outright. An
+  // admin who ran Auto, hand-corrected a month and then clicked the leftmost
+  // footer button lost all of it with no prompt — while Escape, one key away,
+  // asked. Two exits from one screen must share one guard, not grow independent
+  // copies of "what counts as unsaved work".
+  it("the grid-step Cancelar confirms before discarding, like ← Volver and Escape", () => {
+    const members = [
+      { _id: "drum-1", member_name: "Beto", memberType: ["instrumento"] },
+    ];
+    const onClose = vi.fn();
+    const { container } = render(
+      <Gen members={members} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    const drumsCell = container.querySelector('[data-row-id="instrumento:Drums"][data-date="2026-02-01"]');
+    fireEvent.click(drumsCell!);
+    fireEvent.click(screen.getByText("Beto"));
+    fireEvent.click(screen.getByText("Cerrar"));
+
+    fireEvent.click(screen.getByRole("button", { name: /^Cancelar$/ }));
+
+    expect(screen.getByText(/1 asignaci/i)).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: /Cerrar de todos modos/ }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("the grid-step Cancelar closes immediately when there is nothing to lose", () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <Gen members={noMembers} existingRoles={[]} onClose={onClose} onCreated={vi.fn()} />,
+    );
+    goToPreview(container, 2, 2026);
+    fireEvent.click(screen.getByRole("button", { name: /^Cancelar$/ }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it("Escape with an empty grid closes immediately, no confirmation", () => {
     const onClose = vi.fn();
     const { container } = render(
