@@ -311,7 +311,7 @@ describe("CueDialog motion", () => {
     );
     const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 200 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 200, isPrimary: true });
     fireEvent.pointerUp(handle, { pointerId: 1, clientY: 200 });
     expect(onDismiss).toHaveBeenCalledWith("drag");
   });
@@ -338,10 +338,110 @@ describe("CueDialog motion", () => {
       const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
       fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
       clock = 400;
-      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 120 });
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 120, isPrimary: true });
       fireEvent.pointerUp(handle, { pointerId: 1, clientY: 120 });
     } finally {
       now.mockRestore();
+    }
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("springs the sheet back when the consumer REFUSES the dismissal", async () => {
+    // `DayCard` and `ServicesPanel` both ignore a dismissal while a save is in
+    // flight, so "onDismiss was called" is not "the sheet went away". Without the
+    // spring on this branch the sheet stays where the finger left it, for good.
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open mode="sheet" title="Detalle" onDismiss={() => {}}>
+            <button>Ok</button>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    // Let the enter animation settle first: while it is in flight it owns `y` and
+    // overwrites the drag on the next frame, which would make the mid-drag
+    // assertion below read `none` and the whole test vacuous.
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+    const shell = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
+
+    fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 220, isPrimary: true });
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+    expect(shell.style.transform).toBe("translateY(120px)");
+
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 220, isPrimary: true });
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+    expect(shell.style.transform).toBe("none");
+  });
+
+  it("does not dismiss a sheet when the gesture is CANCELLED past the threshold", async () => {
+    // The OS took the pointer (a system edge swipe, an incoming call). Distance is
+    // irrelevant: a cancel is not a release.
+    const onDismiss = vi.fn();
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open mode="sheet" title="Detalle" onDismiss={onDismiss}>
+            <button>Ok</button>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+    const shell = document.querySelector<HTMLElement>('[role="dialog"]')!;
+    const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
+
+    fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 220, isPrimary: true });
+    fireEvent.pointerCancel(handle, { pointerId: 1, clientY: 220, isPrimary: true });
+    await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
+
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(shell.style.transform).toBe("none");
+  });
+
+  it("gives a sheet the card's motion on a ≥640px viewport, with no drag", () => {
+    // `mode="sheet"` is a sheet only on a phone — the `sm:` classes make it the same
+    // centred card a modal renders, and the handle is `sm:hidden`. The gesture has to
+    // follow the layout or a laptop dismisses a card by an invisible grip.
+    // `installMotionTestEnv` stubs `matchMedia` with `matches: false`, which is the
+    // phone path every other sheet test above runs on; this one overrides it for the
+    // width query only, so motion still reads `prefers-reduced-motion` as false.
+    const original = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      configurable: true,
+      value: (query: string) => ({
+        matches: query === "(min-width: 640px)",
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+    const onDismiss = vi.fn();
+    try {
+      render(
+        <MotionProvider>
+          <CueDialogProvider>
+            <CueDialog open mode="sheet" title="Detalle" onDismiss={onDismiss}>
+              <button>Ok</button>
+            </CueDialog>
+          </CueDialogProvider>
+        </MotionProvider>,
+      );
+      const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
+      // A drag that would dismiss twice over on a phone (200 px, instantly).
+      fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 300, isPrimary: true });
+      fireEvent.pointerUp(handle, { pointerId: 1, clientY: 300, isPrimary: true });
+    } finally {
+      Object.defineProperty(window, "matchMedia", { writable: true, configurable: true, value: original });
     }
     expect(onDismiss).not.toHaveBeenCalled();
   });
@@ -365,7 +465,7 @@ describe("CueDialog motion", () => {
       const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
       fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
       clock = 10;
-      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 120 });
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 120, isPrimary: true });
       fireEvent.pointerUp(handle, { pointerId: 1, clientY: 120 });
     } finally {
       now.mockRestore();

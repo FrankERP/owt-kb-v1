@@ -182,7 +182,12 @@ export default function CueDialog({
   const mounted = open || exiting;
   useEffect(() => {
     if (open) setExiting(true);
-  }, [open]);
+    // Unreachable with the provider mounted; belt-and-braces. With no portal node
+    // there is no `AnimatePresence` to fire `onExitComplete`, so `exiting` would
+    // stay true forever and the layer would stay registered — inert app root,
+    // locked scroll, no dialog. Clearing it here costs one comparison per close.
+    else if (!portalNode && exiting) setExiting(false);
+  }, [exiting, open, portalNode]);
   useEffect(() => {
     if (!mounted) return;
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -243,15 +248,43 @@ export default function CueDialog({
     return "max-w-2xl";
   }, [size]);
 
+  // A `mode="sheet"` dialog is only a SHEET on a phone: the `sm:` classes below turn
+  // it into the same centred card a modal renders at ≥640px. The motion has to follow
+  // the layout, or a laptop gets a card that slides up from under the viewport and
+  // drags closed by a handle CSS has already hidden. Read per render, with no state
+  // and no listener, because a dialog never renders on the server — `portalNode` comes
+  // from the provider's effect, so the first render that reaches this JSX is a client
+  // one and there is no hydration to mismatch. A window resized across 640px while a
+  // dialog is open keeps the variant it opened with, which is the same trade the
+  // rest of the app's breakpoint-dependent behaviour makes.
+  // Absent `matchMedia` — jsdom without a stub — falls back to the SHEET, which is
+  // both the mode the consumer asked for and the behaviour every caller had before
+  // this line existed.
+  const sheetMotion =
+    mode === "sheet" &&
+    (typeof window === "undefined" ||
+      typeof window.matchMedia !== "function" ||
+      !window.matchMedia("(min-width: 640px)").matches);
+
   // Sheet drag-to-dismiss (spec §19.4). Pointer events by hand — no `drag` prop —
   // because the gesture is one-axis, downward only, with its own thresholds, and
   // because a `drag` element fights the sheet's own scroll region. touch-action:none
   // lives on the HANDLE so the sheet body still scrolls.
   const sheetY = useMotionValue(0);
   const dragRef = useRef<{ startY: number; startT: number; lastY: number; lastT: number } | null>(null);
+  // The spring-back's controls, so a re-grab can stop it. `sheetY.set()` does NOT
+  // interrupt a running animation — it writes a value the animation overwrites on the
+  // next frame — so without this a finger that catches the sheet mid-flight drags
+  // nothing.
+  const springRef = useRef<{ stop: () => void } | null>(null);
+
+  const springBack = useCallback(() => {
+    springRef.current = animate(sheetY, 0, SPRINGS.sheet);
+  }, [sheetY]);
 
   const onHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (mode !== "sheet" || !e.isPrimary) return;
+    if (!e.isPrimary) return;
+    springRef.current?.stop();
     dragRef.current = { startY: e.clientY, startT: performance.now(), lastY: e.clientY, lastT: performance.now() };
     // jsdom has no pointer capture; a real browser needs it so the gesture keeps
     // tracking once the finger leaves the 12px handle.
@@ -259,7 +292,7 @@ export default function CueDialog({
   };
   const onHandlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     const d = dragRef.current;
-    if (!d) return;
+    if (!d || !e.isPrimary) return;
     d.lastY = e.clientY;
     d.lastT = performance.now();
     sheetY.set(Math.max(0, e.clientY - d.startY));
@@ -268,14 +301,24 @@ export default function CueDialog({
     const d = dragRef.current;
     if (!d) return;
     dragRef.current = null;
+    // Spring back on BOTH branches, before the threshold test. A consumer may REFUSE
+    // the dismissal — `DayCard` and `ServicesPanel` both ignore it while a save is in
+    // flight — and then nothing else would ever return the sheet to 0, leaving it
+    // hanging where the finger left it. When the consumer ACCEPTS, the exit animation
+    // starts on the same MotionValue and stops this one, so the spring is invisible.
+    springBack();
     const travel = Math.max(0, d.lastY - d.startY);
     const dt = Math.max(1, d.lastT - d.startT);
     const velocity = travel / dt;
-    if (travel > SHEET_DISMISS.distance || velocity > SHEET_DISMISS.velocity) {
-      onDismiss("drag");
-      return;
-    }
-    animate(sheetY, 0, SPRINGS.sheet);
+    if (travel > SHEET_DISMISS.distance || velocity > SHEET_DISMISS.velocity) onDismiss("drag");
+  };
+  // A cancelled pointer is not a released one: the OS took the gesture away (a system
+  // edge swipe, an incoming call). It must never dismiss, however far the finger had
+  // travelled — only put the sheet back.
+  const onHandlePointerCancel = () => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    springBack();
   };
 
   if (!portalNode) return null;
@@ -310,15 +353,19 @@ export default function CueDialog({
             aria-label={!title ? label : undefined}
             tabIndex={-1}
             style={{ y: sheetY }}
-            initial={mode === "sheet" ? { y: "100%", opacity: 1 } : { scale: 0.96, opacity: 0 }}
+            initial={sheetMotion ? { y: "100%", opacity: 1 } : { scale: 0.96, opacity: 0 }}
             animate={
-              mode === "sheet"
+              sheetMotion
                 ? { y: 0, opacity: 1, transition: SPRINGS.sheet }
                 : { scale: 1, opacity: 1, transition: { duration: MS.slow / 1000, ease: EASE_OUT } }
             }
+            // A sheet slides ALL the way out and keeps its opacity, the way an iOS
+            // sheet does. The old `{ y: 24 }` was a recoil: a sheet dragged 100 px down
+            // snapped back up to 24 px before fading, which reads as the gesture being
+            // undone rather than completed.
             exit={
-              mode === "sheet"
-                ? { y: 24, opacity: 0, transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }
+              sheetMotion
+                ? { y: "100%", transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }
                 : { scale: 0.98, opacity: 0, transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }
             }
             className={`brand-facet-panel brand-surface relative z-10 flex w-full ${sizeClass} flex-col overflow-hidden border-accent/25 shadow-2xl focus:outline-none ${
@@ -330,10 +377,17 @@ export default function CueDialog({
             {mode === "sheet" && (
               <div
                 data-cue-handle=""
-                onPointerDown={onHandlePointerDown}
-                onPointerMove={onHandlePointerMove}
-                onPointerUp={onHandlePointerUp}
-                onPointerCancel={onHandlePointerUp}
+                // Handlers only on the phone side of the breakpoint: at ≥640px the
+                // handle is `sm:hidden` and the dialog is a card, so a drag there would
+                // dismiss a card by a grip nobody can see.
+                {...(sheetMotion
+                  ? {
+                      onPointerDown: onHandlePointerDown,
+                      onPointerMove: onHandlePointerMove,
+                      onPointerUp: onHandlePointerUp,
+                      onPointerCancel: onHandlePointerCancel,
+                    }
+                  : null)}
                 className="flex cursor-grab touch-none justify-center pb-1 pt-3 active:cursor-grabbing sm:hidden"
               >
                 <span className="h-1.5 w-12 rounded-full bg-accent/25" />

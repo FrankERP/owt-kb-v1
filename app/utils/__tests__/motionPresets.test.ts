@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SPRINGS, VARIANTS, EXIT_MS } from "../motionPresets";
+import { SHEET_DISMISS, SPRINGS, VARIANTS, EXIT_MS } from "../motionPresets";
 
 describe("motionPresets", () => {
   it("names the three springs from spec §2.3 with their constants", () => {
@@ -17,6 +17,12 @@ describe("motionPresets", () => {
         }
       }
     }
+  });
+
+  it("pins the sheet dismissal thresholds (spec §19.4)", () => {
+    // px and px/ms. Both arms are an OR in CueDialog, so loosening either one here
+    // would let a stray 80 px scroll close a sheet.
+    expect(SHEET_DISMISS).toEqual({ distance: 80, velocity: 0.5 });
   });
 
   it("exits are faster than enters (spec: enter fast, exit faster)", () => {
