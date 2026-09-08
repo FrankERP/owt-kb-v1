@@ -814,7 +814,7 @@ Alternative: decline both — keep the four beam sites and no lit card.
 
 # Part VI — After M0a (2026-09-08, 16:30 CST)
 
-M0a shipped to production in PR #50 (`main` 4b218d61). Measured in `docs/MOTION.md`: first-load
+M0a shipped to production in PR #50 (`main` 4b218d61; production alias verified 16:31 CST, dpl_88mcKgSeV3Rjo69EAqDsYCXtk1X9). Measured in `docs/MOTION.md`: first-load
 +12.4 kB gz on `/`, +12.5 kB on `/admin`, plus a 15.8 kB gz async motion-feature chunk. The
 25 kB figure in §7 was written for a synchronous feature load and mis-estimated `domAnimation` at
 18 kB; the whole-branch review moved the features to an async chunk, which is the only shape under
