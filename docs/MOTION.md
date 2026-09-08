@@ -39,7 +39,12 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
    not a substitute for it.
 4. **Reduced motion is global.** `@media (prefers-reduced-motion: reduce)` in
    `brand.css` and `reducedMotion="user"` in `MotionProvider`. Do not add per-effect
-   opt-outs. `html[data-motion="off"]` is the same collapse for the theme gallery. The
+   opt-outs. `html[data-motion="off"]` collapses CSS motion the same way — but the
+   theme gallery mounts no `MotionProvider` today, so that attribute covers CSS
+   only, not `motion`-driven JS animation. An M0b fixture that renders `Presence`
+   (or any other `motion` primitive) inside the gallery must add a gallery-side
+   `LazyMotion` plus `MotionGlobalConfig.skipAnimations` keyed off the same
+   attribute, or the gallery's "off" baseline will silently still animate. The
    reduced-motion collapse also zeroes `animation-delay` — without that, `[data-reveal]`'s
    up-to-480ms stagger delay (combined with `fill: both`) would still hold an element at
    its `from` frame — opacity 0 — for the whole delay, so "no motion" would mean
@@ -48,7 +53,11 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
    renders a fragment for this reason (`reveal.test.ts`). Toasts and FABs portal.
    Both `@keyframes brand-reveal` and `brand-beam-reveal` end on `transform: none`,
    never `translate3d(0,0,0)` — a non-`none` transform under `fill: both` stays on the
-   host forever and becomes a containing block for any fixed descendant.
+   host forever and becomes a containing block for any fixed descendant. The Tailwind
+   mirror's `rise` and `scale-in` keyframes end on `transform: "none"` too, for the
+   same reason — `motionTokens.test.ts` checks every mirrored `to` frame that
+   animates transform (`shimmer` is exempt: its `to` is a sweep endpoint, not a
+   rest state).
 6. **Enter fast, exit faster.** Enter 200–320 ms `--ease-out`; exit 120–160 ms `--ease-in`.
 7. **Every hover effect has a press twin.** Hover-only choreography (sheen, lift) is
    gated on `@media (hover: hover)`.
@@ -68,10 +77,10 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
 
 | Primitive | Module kind | Use |
 |---|---|---|
-| `MotionProvider` | client | mounted once in `app/utils/Provider.tsx`; `LazyMotion features={domAnimation} strict` + `MotionConfig reducedMotion="user"` |
+| `MotionProvider` | client | mounted once in `app/utils/Provider.tsx`; `LazyMotion features={() => import("./motionFeatures").then(…)} strict` (async chunk, not the synchronous `domAnimation` value) + `MotionConfig reducedMotion="user"` |
 | `Presence` | client | `<Presence show={open} variant="rise">` — exit before unmount. Hosts `div` \| `section` \| `aside` \| `li` only (block-level — a transform is dropped on a non-replaced inline element). `appear` defaults to **false**: a `Presence` mounted already-shown does not animate in unless `appear` is passed; for the common case — a mounted `Presence` that toggles `show` — do nothing, the enter animation runs on every `show→true` transition regardless. Pass `appear` only for an instance that mounts already-shown and must still animate in (an on-demand toast, a newly appended list row). |
 | `Skeleton`, `SkeletonGroup` | neutral | loading placeholders with the shimmer; one `aria-busy` status region per loading surface |
-| `Button` | neutral | `variant` primary/secondary/ghost/danger/icon/pill · `size` sm/md/lg · `busy`/`busyLabel` · `href`. `busy`/`busyLabel` are rejected by the types on the `href` branch — a link has no loading state to represent. `className` is additive only (appended after the variant/size classes, never a padding/radius/colour override). The `primary` variant sets `overflow: hidden` for the hover sheen, so an absolutely positioned badge nested inside a primary button is clipped — anchor badges outside the button instead. |
+| `Button` | neutral | `variant` primary/secondary/ghost/danger/icon/pill · `size` sm/md/lg · `busy`/`busyLabel` · `href`. Defaults to `md`; the spec's phone-width `lg` default is applied per call site, not by the primitive. `busy`/`busyLabel` are rejected by the types on the `href` branch — a link has no loading state to represent. `className` is additive only (appended after the variant/size classes, never a padding/radius/colour override). The `primary` variant sets `overflow: hidden` for the hover sheen, so an absolutely positioned badge nested inside a primary button is clipped — anchor badges outside the button instead. |
 | `revealProps(i)` (`app/utils/reveal.ts`) | neutral | spread on a block a page reveals; `template.tsx` replays it per navigation |
 
 M0b adds: `CueDialog` motion, `Toast`, `Menu`, `Collapse`, `SegmentedControl`,
@@ -118,21 +127,42 @@ Before was measured on the primary checkout at the merge-base commit
 | Build | First Load JS shared | `/` | `/admin` |
 |---|---|---|---|
 | Before M0a (merge-base `a733347c`) | 172.3 kB | 77.3 kB | 301.7 kB |
-| After M0a | 172.3 kB | 101.5 kB | 325.9 kB |
-| Δ | +0.02 kB | +24.1 kB | +24.3 kB |
+| After M0a, `domAnimation` loaded synchronously | 172.3 kB | 101.5 kB | 325.9 kB |
+| After the fix wave, `domAnimation` loaded as an async chunk | 172.3 kB | 89.7 kB | 314.2 kB |
+| Δ vs Before M0a | +0.02 kB | +12.4 kB | +12.5 kB |
 
-Programme cap: +25 kB gz total. Both route deltas land under the hard cap but above
-the ≤20 kB expectation the programme opened with — `motion`'s `domAnimation` feature
-set plus the four M0a primitives' own code (`Presence`, `Skeleton`/`SkeletonGroup`,
-`Button`, `MotionProvider`) together cost ~24 kB gz on a route that renders them. The
-shared/root chunk barely moves (+18 bytes, noise) because `MotionProvider` is mounted
-inside `app/utils/Provider.tsx`, which is wired from the `(admin)` and `(client)`
-route-group layouts, not the app root — so the cost is paid by the routes that render
-it, not by every route in the app (e.g. bare API routes pay nothing). `motion`
-resolved the `MotionGlobalConfig` export from `motion/react` (not the bare `motion`
-package specifier); `motion/react-m`'s per-tag hosts (`m.div`, `m.section`, …) are
-named exports of that submodule, which is why `Presence.tsx` imports them as
+The middle row is what M0a originally shipped (`LazyMotion features={domAnimation}`,
+loaded synchronously by `MotionProvider`); the last row is this fix wave's change
+(`LazyMotion features={() => import("./motionFeatures").then(…)}`, ADR-0031 Important
+finding 2). Loading the feature set as its own async chunk — which ships after
+hydration instead of inside the first-load script — took each route from ~24 kB gz to
+~12.4 kB gz, roughly half. The **async feature chunk itself** (`domAnimation`'s
+feature-definitions module, resolved by grepping `.next/static/chunks/*.js` for
+content matching the SSR-side chunk Turbopack names after `motionFeatures.ts`, then
+compressing it independently) is **42.3 kB raw / 15.8 kB gz** — bigger than either
+route's net saving, because it now pays its own gzip framing instead of sharing
+compression context with code that stayed in the first-load bundle.
+
+Programme cap: +25 kB gz total. Both route deltas now land well under the hard cap
+and under the ≤20 kB expectation the programme opened with — `motion`'s `domAnimation`
+feature set plus the four M0a primitives' own code (`Presence`, `Skeleton`/
+`SkeletonGroup`, `Button`, `MotionProvider`) together now cost ~12.4 kB gz on a route
+that renders them, not the ~24 kB the synchronous load cost. The shared/root chunk
+barely moves (+0.02 kB, noise) because `MotionProvider` is mounted inside
+`app/utils/Provider.tsx`, which is wired from the `(admin)` and `(client)` route-group
+layouts, not the app root — so the cost is paid by the routes that render it, not by
+every route in the app (e.g. bare API routes pay nothing). `motion` resolved the
+`MotionGlobalConfig` export from `motion/react` (not the bare `motion` package
+specifier); `motion/react-m`'s per-tag hosts (`m.div`, `m.section`, …) are named
+exports of that submodule, which is why `Presence.tsx` imports them as
 `import * as m from "motion/react-m"` rather than a default export.
+
+M0b's `SlidingIndicator` needs `domMax` (~35 kB gz async, per the ADR's feature-set
+estimates), not `domAnimation` — the async chunk this fix wave built is what can carry
+that without touching first-load JS at all; the synchronous path could not have fit it
+under any reasonable cap. Whether the programme cap widens to admit `domMax`'s async
+weight, or `SlidingIndicator` ships a narrower feature subset, is a decision for the
+M0b spec owner, not this fix wave.
 
 ## Where the walk's findings landed
 

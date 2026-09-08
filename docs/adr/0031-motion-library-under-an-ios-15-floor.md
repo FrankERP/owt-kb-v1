@@ -19,8 +19,12 @@ no scroll-driven animations.
 ## Decision
 
 `motion` 13.x, loaded once through `app/components/ui/MotionProvider.tsx`
-(`LazyMotion features={domAnimation} strict` + `MotionConfig reducedMotion="user"`),
-and importable ONLY from `app/components/ui/**` and `app/utils/motion*`
+(`LazyMotion features={() => import("./motionFeatures").then(…)} strict` +
+`MotionConfig reducedMotion="user"`). The feature set is genuinely lazily loaded: it
+ships as its own chunk fetched after hydration, not inlined into the first-load
+script, which is what keeps `LazyMotion`'s name honest and is the only way a future
+`domMax` (M0b's `SlidingIndicator`) fits without inflating every route's first paint.
+`motion` is importable ONLY from `app/components/ui/**` and `app/utils/motion*`
 (`motionImportBoundary.test.ts`). Feature components compose primitives — `Presence`,
 `Collapse`, `SegmentedControl`, `Toast`, `Menu`, `CueDialog` — and never `m.*`.
 
@@ -50,6 +54,11 @@ puts a second clock in the app. The boundary test is what makes the dependency s
 
 - A new animated pattern is a new primitive under `ui/`, with a test that runs under
   `MotionGlobalConfig.skipAnimations` and a gallery fixture. Never an `m.div` in a page.
+- Because the feature chunk arrives asynchronously, an `m.*` element renders its
+  `initial` values until it resolves (sound, since SSR/hydration also renders
+  `initial`) — so `Presence appear`, which depends on the enter animation actually
+  running on first mount, must never be used above the fold (M0b rule,
+  `docs/MOTION.md`).
 - `reducedMotion="user"` plus the global CSS rule means Reduce Motion in iOS Settings
   calms the whole app; nothing needs a per-effect opt-out.
 - Raising the iOS floor would unlock View Transitions for route exits (decision C
