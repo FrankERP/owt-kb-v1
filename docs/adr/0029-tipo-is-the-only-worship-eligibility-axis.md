@@ -104,8 +104,9 @@ also catches a member whose Tipo merely CHANGED, which retirement could not
 express.
 
 The removal half is closed with it, and deliberately: `rankCandidates` filters
-on Tipo, so a flagged occupant has no candidate row, the drag gate answers C3
-for the same reason, and row removal refuses a non-empty row. A warning naming
+on Tipo, so a flagged occupant has no candidate row; the drag gate judges the
+TARGET seat, so a mismatched member can be relocated but never removed, and one
+with no Tipo at all has no legal target; and row removal refuses a non-empty row. A warning naming
 an action the surface does not offer is the exact sin recorded above, so the
 picker grows a removal-ONLY row for occupants it does not otherwise list. Not a
 toggle: putting them back is what their Tipo says they cannot do.

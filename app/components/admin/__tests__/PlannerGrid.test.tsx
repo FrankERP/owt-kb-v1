@@ -1054,9 +1054,9 @@ describe("PlannerGrid — an occupant whose Tipo no longer fits the seat", () =>
   });
 
   it("offers a way OUT of the seat, which is what the warning tells them to do", () => {
-    // The picker filters on Tipo, so a flagged occupant has no candidate row —
-    // and the drag gate refuses for the same reason, and row removal refuses a
-    // non-empty row. Without this the warning would name an action the surface
+    // The picker filters on Tipo, so a flagged occupant has no candidate row;
+    // the drag gate judges the TARGET seat, so they could be relocated but not
+    // removed; and row removal refuses a non-empty row. Without this the warning would name an action the surface
     // does not offer, which is exactly what ADR-0029 records the retirement
     // badge doing.
     const onCellsChange = vi.fn();
@@ -1089,7 +1089,32 @@ describe("PlannerGrid — an occupant whose Tipo no longer fits the seat", () =>
     expect(screen.queryByRole("button", { name: /Quitar a Frank/ })).toBeNull();
   });
 
-  it("tells assistive tech, not only the eye", () => {
+  it("spells FOH the way the rest of the admin does, not as a raw value", () => {
+    // `f1` is a `foh` member; `m1` is `voz` only, so seating them on Console is
+    // a mismatch and the note has to name the Tipo that seat needs.
+    const { container } = render(
+      <PlannerGrid {...baseProps({ cells: seated("foh:Console") })} />,
+    );
+    const note = within(cellFor(container, "foh:Console", "2026-08-09")).getByText(/su Tipo ya no incluye/);
+    expect(note.textContent).toMatch(/FOH/);
+    expect(note.textContent).not.toMatch(/incluye foh/);
+  });
+
+  it("says the person is missing, not that their Tipo is wrong, for an unresolved id", () => {
+    // Absence from the candidate list has two causes; the members read is
+    // scoped by ministry for a non-super-admin. Sending someone to edit a Tipo
+    // that does not exist is its own dead end.
+    const ghost: InputGridCell[] = [
+      { date: "2026-08-09", rowId: "lead", memberIds: ["nobody"], origin: "manual" },
+    ];
+    const { container } = render(<PlannerGrid {...baseProps({ cells: ghost })} />);
+    fireEvent.click(cellFor(container, "lead", "2026-08-09"));
+    const row = screen.getByRole("button", { name: /Quitar a nobody/ }).closest("li");
+    expect(row?.textContent).toMatch(/No se encontró a esta persona/);
+    expect(row?.textContent).not.toMatch(/Su Tipo/);
+  });
+
+  it("tells assistive tech, not only the eye", () =>{
     const { container } = render(
       <PlannerGrid {...baseProps({ cells: seated("instrumento:Bass") })} />,
     );

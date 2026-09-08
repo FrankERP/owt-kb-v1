@@ -119,7 +119,6 @@ import {
   instrumentSeatDef,
   normalizeSeatName,
   occupantFitsSeat,
-  SEAT_MEMBER_TYPE,
   type SeatCategory,
 } from "./seatModel";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
@@ -774,6 +773,23 @@ export default function PlannerGrid(props: PlannerGridProps) {
   }
 
   /**
+   * Remove an occupant the picker cannot otherwise reach.
+   *
+   * Deliberately NOT a `toggleCandidate` variant: this only ever removes. A
+   * toggle would offer to seat someone back into a seat their Tipo forbids,
+   * which is the state this exists to get out of.
+   */
+  function removeStrandedOccupant(row: GridRow, columnId: string, memberId: string) {
+    if (mutationLocked) return;
+    clearRemoveError();
+    clearDragNotice();
+    const current =
+      cellsByKey.get(cellKey(columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
+    if (!current.includes(memberId)) return;
+    onCellsChange(withUpdatedCell(cells, row.id, columnId, current.filter((id) => id !== memberId)));
+  }
+
+  /**
    * The manual pick, and both of its refusals.
    *
    * TWO predicates, read separately and never merged into one: `blockedReason`
@@ -798,23 +814,6 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * two lines; the line that must never be weakened is `CandidateRow`'s
    * `blocked`, which is also what renders `aria-disabled` and the red state.
    */
-  /**
-   * Remove an occupant the picker cannot otherwise reach.
-   *
-   * Deliberately NOT a `toggleCandidate` variant: this only ever removes. A
-   * toggle would offer to seat someone back into a seat their Tipo forbids,
-   * which is the state this exists to get out of.
-   */
-  function removeStrandedOccupant(row: GridRow, columnId: string, memberId: string) {
-    if (mutationLocked) return;
-    clearRemoveError();
-    clearDragNotice();
-    const current =
-      cellsByKey.get(cellKey(columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
-    if (!current.includes(memberId)) return;
-    onCellsChange(withUpdatedCell(cells, row.id, columnId, current.filter((id) => id !== memberId)));
-  }
-
   function toggleCandidate(row: GridRow, columnId: string, memberId: string, candidates: RankedCandidate[]) {
     if (mutationLocked) return;
     clearRemoveError();
@@ -1601,10 +1600,17 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * Occupants of the open cell that the candidate list does not contain.
    *
    * `rankCandidates` filters on «Tipo», so someone seated before their Tipo
-   * changed has no row — and therefore no way out, since the drag gate answers
-   * C3 for the same reason and row removal refuses a non-empty row. These get a
-   * removal-only row, so the warning on the cell names something the admin can
-   * actually do.
+   * changed has no row here. The other exits do not close the gap: the drag gate
+   * judges the TARGET seat, so a mismatched member can be relocated but never
+   * removed, and one with no Tipo at all has no legal target; row removal
+   * refuses a non-empty row. These get a removal-only row, so the warning on the
+   * cell names something the admin can actually do.
+   *
+   * Absence from the candidate list has TWO causes — a Tipo that no longer fits,
+   * and an id that resolves to no member at all (the members read is scoped by
+   * ministry for a non-super-admin). Both are stranded and both need the exit;
+   * the row says which, because sending someone to edit a Tipo that does not
+   * exist is its own dead end.
    */
   const strandedOccupants = openCell && openRow
     ? (cellsByKey.get(cellKey(openCell.columnId, openRow.id))?.occupants ?? [])
@@ -1839,10 +1845,10 @@ export default function PlannerGrid(props: PlannerGridProps) {
               }
             />
           ))}
-          {/* Seated here, but no longer eligible — so `rankCandidates` does not
-              return them and every other exit refuses: the drag gate answers C3
-              for a Tipo that does not match, and row removal refuses a
-              non-empty row. Without this the cell's own warning would name an
+          {/* Seated here, but not in the candidate list — so there is no other
+              way out: the drag gate judges the TARGET seat, so a mismatched
+              member can only be relocated, and one with no Tipo at all has no
+              legal target; row removal refuses a non-empty row. Without this the cell's own warning would name an
               action the surface does not offer, which is precisely what
               ADR-0029 records the retirement badge doing. Removal only: there
               is no toggle back, because putting them back is what their Tipo
@@ -1852,7 +1858,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
               <span className={`font-label text-xs text-warning-strong ${CARD_STYLE.longText}`}>
                 {memberName(id)}
                 <span className="block font-body text-[10px] normal-case text-ink-muted/80">
-                  Su Tipo ya no permite este puesto
+                  {membersById.has(id)
+                    ? "Su Tipo ya no permite este puesto"
+                    : "No se encontró a esta persona en el equipo"}
                 </span>
               </span>
               <button
@@ -2502,8 +2510,12 @@ function RowGroup({
   );
 }
 
-/** What the admin sees on the «Tipo» checkboxes, not the stored value. */
-const TYPE_LABEL: Record<string, string> = {
+/**
+ * What the admin sees on the «Tipo» checkboxes, not the stored value — the rest
+ * of the admin spells FOH that way. Keyed by `SeatCategory`, so a fourth seat
+ * category fails to compile here rather than rendering a blank mid-sentence.
+ */
+const TYPE_LABEL: Record<SeatCategory, string> = {
   voz: "voz",
   instrumento: "instrumento",
   foh: "FOH",
@@ -2831,7 +2843,7 @@ function GridCellView({
             colour says something is wrong, the line says who and what to do. */}
         {mismatched.map((id) => (
           <p key={`tipo-${id}`} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
-            ⚠ {memberName(id)}: su Tipo ya no incluye {TYPE_LABEL[SEAT_MEMBER_TYPE[row.category]]} — ábrelo para quitarlo
+            ⚠ {memberName(id)}: su Tipo ya no incluye {TYPE_LABEL[row.category]} — ábrelo para quitarlo
           </p>
         ))}
         {unfilled && (
