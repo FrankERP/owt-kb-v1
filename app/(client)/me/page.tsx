@@ -560,18 +560,33 @@ export default async function MePage() {
           </section>
         )}
 
-        {/* Availability */}
-        {member && (
-          <AvailabilityCalendar
-            initialRev={member._rev}
-            initialDates={member.unavailableDates ?? []}
-            initialNotes={member.unavailabilityNotes ?? []}
-            serviceDates={calendarServiceDates}
-          />
+        {/* Availability + profile settings.
+            Both hang off the SAME `member` read, so they are branched together
+            rather than each on its own `member &&`. A null read used to remove
+            both without a word — two thirds of this page's controls simply not
+            there, on a page that otherwise rendered fine, so it looked like a
+            feature the member does not have rather than something that failed.
+            It is not an empty state: every signed-in member has a document, so
+            null means the read did not find theirs. */}
+        {member ? (
+          <>
+            <AvailabilityCalendar
+              initialRev={member._rev}
+              initialDates={member.unavailableDates ?? []}
+              initialNotes={member.unavailabilityNotes ?? []}
+              serviceDates={calendarServiceDates}
+            />
+            <ProfilePanel initialMember={member} />
+          </>
+        ) : (
+          <section role="alert" className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center">
+            <p className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</p>
+            <p className="font-body text-sm text-mono-500 mt-1">
+              Tus días no disponibles y tus ajustes no están disponibles ahora mismo.
+              Recarga la página; si sigue igual, avísale a un administrador.
+            </p>
+          </section>
         )}
-
-        {/* Profile settings */}
-        {member && <ProfilePanel initialMember={member} />}
         <ThemeControl />
         <TextSizeControl />
 

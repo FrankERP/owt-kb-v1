@@ -134,4 +134,22 @@ describe("/me worship gating", () => {
     expect(html).toContain("CALENDARIO");
     expect(html).toContain("PERFIL");
   });
+
+  // Both panels hang off the same member read, and both used to be gated on
+  // their own `member &&`. A null read therefore removed two thirds of this
+  // page's controls without a word, on a page that otherwise rendered fine — so
+  // it read as a feature the member does not have, not as something that
+  // failed. Every signed-in member has a document; null means the read missed.
+  it("says so when the member read comes back empty, instead of dropping both panels", async () => {
+    getMemberAccess.mockResolvedValue(access(["worship"]));
+    serverFetch.mockResolvedValue(null);
+    const html = await renderPage();
+
+    expect(html).not.toContain("CALENDARIO");
+    expect(html).not.toContain("PERFIL");
+    expect(html).toContain("No pudimos cargar tu perfil");
+    expect(html).toContain('role="alert"');
+    // The rest of the page is unaffected — this is not a whole-page failure.
+    expect(html).toContain("Mis próximos servicios");
+  });
 });
