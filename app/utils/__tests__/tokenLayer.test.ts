@@ -89,6 +89,10 @@ const COMPOSED = [
   // literal in a rule body.
   "skeleton-base",  // the placeholder block's own wash
   "skeleton-sweep", // the ::after gradient's middle stop
+
+  // The primary button hover sheen (2026-09-08, Task 7). Same ruling as the
+  // skeleton pair above — Task 6's fix round is the precedent.
+  "sheen-highlight", // .brand-btn-sheen::after's gradient middle stop
 ] as const;
 
 const UTILITY_PREFIXES = [

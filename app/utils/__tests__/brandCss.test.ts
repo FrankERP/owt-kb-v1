@@ -216,7 +216,7 @@ describe("brand.css — (b) theme parity, dormant until .light carries custom pr
   });
 
   it("counts both sides, so a role added to one block alone cannot pass", () => {
-    // 95 colour properties per side — 67 base roles and 28 composed tokens. The four
+    // 96 colour properties per side — 67 base roles and 29 composed tokens. The four
     // non-colour ones (`--brand-radius-*`, `--brand-duration-*`) are correctly excluded:
     // a light radius is nonsense, and demanding one would make the guard unsatisfiable.
     //
@@ -227,16 +227,18 @@ describe("brand.css — (b) theme parity, dormant until .light carries custom pr
     // failure (placeholders 3.55 dark / 3.09 light against 4.5; input borders 1.46 /
     // 1.42 against 3.0), 93 when `--warning-glow` replaced the Sabado card's
     // `shadow-warning-fg/20` — a yellow bloom that read as an alert in light mode,
-    // and 95 when `--skeleton-base` and `--skeleton-sweep` (Task 6 fix round 1,
+    // 95 when `--skeleton-base` and `--skeleton-sweep` (Task 6 fix round 1,
     // 2026-09-08) replaced the two raw alpha literals `.brand-skeleton`'s rule
-    // body had used — this is registration, not a bumped pin: the tokenLayer.test.ts
-    // rule-body-literal pin returns to 69.
+    // body had used, and 96 when `--sheen-highlight` (Task 7, 2026-09-08, same
+    // ruling) replaced the one raw alpha literal `.brand-btn-sheen::after`'s rule
+    // body would otherwise have used — this is registration, not a bumped pin:
+    // the tokenLayer.test.ts rule-body-literal pin stays at 69.
     // That edit is the point, not an inconvenience.
     const root = customProperties(css.slice(css.indexOf(":root {"), css.indexOf("\n}", css.indexOf(":root {"))));
     const light = customProperties(lightBlock(css) ?? "");
     const rootColour = [...root].filter((p) => isColourProperty(p, css));
     expect(light.size).toBe(rootColour.length);
-    expect(light.size).toBe(95);
+    expect(light.size).toBe(96);
   });
 
   it("FIRES on a synthetic .light block with a missing counterpart (the fire-proof)", () => {
