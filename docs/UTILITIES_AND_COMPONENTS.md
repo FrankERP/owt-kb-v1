@@ -72,6 +72,12 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 - **`summarizeUnfilledSeats(seats)`** ([unfilledSeats.ts](../app/utils/unfilledSeats.ts)) — parses
   solver `unfilled_seats` strings ("W2 Sunday Sun.Choir #2") into Spanish short-staffing labels,
   sorted by degradation severity (Lead → BGV → Choir).
+- **`songSections(post, historyCount)`** ([songSections.ts](../app/utils/songSections.ts)) —
+  which of the five sections a song page paints (audio / tutoriales / referencia / letra /
+  historial), in page order. One list decides three things: whether `SectionNav` renders
+  (more than one), which `<section>`s render, and whether the "aún no tiene contenido" state
+  does (none). **Count lengths, never truthiness** — `post.body` is an array, so `!![]` is
+  true, and `[]` is exactly what clearing the "Letra" field stores.
 
 ### Dates & schedule
 - **`scheduleMonths.ts`** — pure `YYYY-MM` month arithmetic (leaf module, no clock/React/Sanity):
@@ -358,7 +364,7 @@ Shares `songToForm` / chart helpers with `SongFormModal`. Lyrics and charts are 
 
 ## Tests
 
-**219 test files / 4,557 tests** (185 under `app/` + 25 under `scripts/` + 9 harness unit
+**219 test files / 4,561 tests** (185 under `app/` + 25 under `scripts/` + 9 harness unit
 tests under `e2e/service-readiness/__tests__/`).
 Separately, **11 Playwright specs** under `e2e/service-readiness/` run only against the isolated
 verification deployment and are **not** part of `npm test` — see

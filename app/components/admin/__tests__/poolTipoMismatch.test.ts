@@ -10,7 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { buildSolveRequest, poolTipoMismatch, type SolverConfig } from "../plannerModel";
+import { buildSolveRequest, memberFitsPool, memberFitsPoolSubtype, poolTipoMismatch, type SolverConfig } from "../plannerModel";
 import type { RankMember } from "../candidateRanking";
 
 const emptyConfig: SolverConfig = {
@@ -236,5 +236,38 @@ describe("buildSolveRequest — a cleared Tipo really does leave the request", (
       member("d", "Dani", ["voz", "support"]),
     ]);
     expect(JSON.stringify(request)).toContain("Dani");
+  });
+});
+
+// Four call sites share this now — `poolTipoMismatch`, `buildSolveRequest`, the
+// generator's pool checkbox lists and the lead-history panel — so the rule
+// itself is worth pinning rather than only its consumers. Nothing caught a
+// mutation that dropped the `voz` conjunct until these existed.
+describe("memberFitsPool / memberFitsPoolSubtype", () => {
+  it("requires BOTH `voz` and the pool subtype", () => {
+    expect(memberFitsPoolSubtype({ memberType: ["voz", "sunday_lead"] }, "sunday_lead")).toBe(true);
+    // The subtype alone is not enough: the solver's lead pools are vocalists.
+    expect(memberFitsPoolSubtype({ memberType: ["sunday_lead"] }, "sunday_lead")).toBe(false);
+    expect(memberFitsPoolSubtype({ memberType: ["voz"] }, "sunday_lead")).toBe(false);
+  });
+
+  it("treats a missing member, a missing Tipo and an empty Tipo alike", () => {
+    expect(memberFitsPoolSubtype(undefined, "support")).toBe(false);
+    expect(memberFitsPoolSubtype({}, "support")).toBe(false);
+    expect(memberFitsPoolSubtype({ memberType: [] }, "support")).toBe(false);
+  });
+
+  it("does not let one pool's subtype satisfy another", () => {
+    const satOnly = { memberType: ["voz", "saturday_lead"] };
+    expect(memberFitsPoolSubtype(satOnly, "saturday_lead")).toBe(true);
+    expect(memberFitsPoolSubtype(satOnly, "sunday_lead")).toBe(false);
+    expect(memberFitsPoolSubtype(satOnly, "support")).toBe(false);
+  });
+
+  it("maps each pool FIELD to its own subtype", () => {
+    const m = { memberType: ["voz", "saturday_lead"] };
+    expect(memberFitsPool(m, "saturdayLeads")).toBe(true);
+    expect(memberFitsPool(m, "sundayLeads")).toBe(false);
+    expect(memberFitsPool(m, "support")).toBe(false);
   });
 });

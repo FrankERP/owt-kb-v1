@@ -584,7 +584,7 @@ export default async function MePage() {
           // and screen readers treat already-present live content
           // inconsistently. The heading carries the message.
           <section className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center">
-            <p className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</p>
+            <h2 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h2>
             <p className="font-body text-sm text-mono-500 mt-1">
               Tus días no disponibles y tus ajustes no están disponibles ahora mismo.
               Recarga la página; si sigue igual, avísale a un administrador.

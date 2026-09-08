@@ -134,7 +134,10 @@ describe("priorMonthLeadVisibility", () => {
     const sat = priorMonthLeadVisibility({
       config, members, history: [], year: 2026, month: 2, role: "Sat.Lead",
     });
-    expect(sat.names).toContain("Liu");
+    // `toEqual`, not `toContain`: frank is ticked in BOTH pools and is fully
+    // eligible, so the dedupe must keep him out of Saturday. `toContain` would
+    // pass with the dedupe deleted.
+    expect(sat.names).toEqual(["Liu"]);
 
     const sun = priorMonthLeadVisibility({
       config, members, history: [], year: 2026, month: 2, role: "Sun.Lead",

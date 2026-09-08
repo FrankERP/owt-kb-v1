@@ -45,6 +45,7 @@ import {
   mapUnfilledSeats,
   namelessSpecial,
   plannerParticipationRoles,
+  memberFitsPool,
   poolTipoMismatch,
   unaddressableDates as computeUnaddressableDates,
   type DraftCard,
@@ -1372,9 +1373,12 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 
   // The pools are "Tipo" and nothing else: an empty Tipo puts a member in no
   // pool and matches no seat, which is how someone stops being schedulable.
-  const sundayPool   = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("sunday_lead"));
-  const saturdayPool = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("saturday_lead"));
-  const supportPool  = members.filter(m => m.memberType?.includes("voz") && m.memberType?.includes("support"));
+  // `memberFitsPool`, not a fourth inline copy: the banner below exists because
+  // these lists are built FROM Tipo, so the checkbox lists and the mismatch
+  // report have to agree by construction rather than by coincidence.
+  const sundayPool   = members.filter(m => memberFitsPool(m, "sundayLeads"));
+  const saturdayPool = members.filter(m => memberFitsPool(m, "saturdayLeads"));
+  const supportPool  = members.filter(m => memberFitsPool(m, "support"));
   // Ticked into a pool at some point, but no longer carrying that pool's Tipo.
   // The lists above cannot render them — they are built FROM Tipo — so without
   // this the stale tick is invisible and un-untickable while its id sits in the
