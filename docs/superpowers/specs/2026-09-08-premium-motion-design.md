@@ -809,3 +809,26 @@ It ships in R1 with the run sheet, and it is the FIFTH place the beam appears; �
 Alternative: decline both — keep the four beam sites and no lit card.
 
 **Approved by Frank 2026-09-08 11:03 CST.** Q joins the Part IV ledger; R1 carries the lit card.
+
+---
+
+# Part VI — After M0a (2026-09-08, 16:30 CST)
+
+M0a shipped to production in PR #50 (`main` 4b218d61). Measured in `docs/MOTION.md`: first-load
++12.4 kB gz on `/`, +12.5 kB on `/admin`, plus a 15.8 kB gz async motion-feature chunk. The
+25 kB figure in §7 was written for a synchronous feature load and mis-estimated `domAnimation` at
+18 kB; the whole-branch review moved the features to an async chunk, which is the only shape under
+which M0b's layout animations (`domMax`) fit.
+
+**R. Bundle cap, restated (coordinator's ruling, pending Frank's word):** §7's **+25 kB gz on
+first-load JS** stands as written and is measured as MOTION.md measures it. A second line is added:
+**the async motion-feature chunk is capped at 40 kB gz.** M0b measures `domMax` against that line
+before adopting `layoutId`; if it does not fit, the sliding indicator is a measured CSS transform
+without `layoutId`.
+
+M0b rules learned in M0a: no `Presence appear` above the fold (features arrive after hydration);
+the vendor feature loader has no rejection handling, so Toast/Menu/Collapse need a load-failure
+fallback; the theme gallery mounts no MotionProvider, so its `controls` fixture must add a
+gallery-side `LazyMotion` with `MotionGlobalConfig.skipAnimations` keyed off `data-motion="off"`;
+new colour in a rule body is a composed token at every `--warning-glow` touch point; `Button` needs
+`forwardRef` before `Menu` can use it as a trigger.
