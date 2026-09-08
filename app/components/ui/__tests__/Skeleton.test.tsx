@@ -32,12 +32,17 @@ describe("Skeleton", () => {
     expect(g.getAttribute("aria-label")).toBe("Cargando servicios");
   });
 
-  it("NavbarSkeleton reserves the navbar's height so the top bar never vanishes between routes", () => {
+  it("NavbarSkeleton draws the mark, title, and avatar so the swap to the real bar is invisible", () => {
     const { container } = render(<NavbarSkeleton />);
-    const el = container.firstElementChild as HTMLElement;
-    expect(el.className).toContain("env(safe-area-inset-top)");
-    expect(el.className).toContain("lg:h-[calc(6rem+env(safe-area-inset-top))]");
-    expect(el.className).toContain("border-b");
-    expect(el.getAttribute("aria-hidden")).toBe("true");
+    const outer = container.firstElementChild as HTMLElement;
+    const inner = outer.firstElementChild as HTMLElement;
+    const skeletons = inner.querySelectorAll(".brand-skeleton");
+
+    expect(outer.getAttribute("aria-hidden")).toBe("true");
+    expect(outer.className).toContain("pt-[env(safe-area-inset-top)]");
+    expect(outer.className).toContain("border-b");
+    expect(inner.className).toContain("h-20");
+    expect(inner.className).toContain("lg:h-24");
+    expect(skeletons).toHaveLength(3);
   });
 });
