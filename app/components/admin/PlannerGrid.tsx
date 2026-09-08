@@ -798,6 +798,23 @@ export default function PlannerGrid(props: PlannerGridProps) {
    * two lines; the line that must never be weakened is `CandidateRow`'s
    * `blocked`, which is also what renders `aria-disabled` and the red state.
    */
+  /**
+   * Remove an occupant the picker cannot otherwise reach.
+   *
+   * Deliberately NOT a `toggleCandidate` variant: this only ever removes. A
+   * toggle would offer to seat someone back into a seat their Tipo forbids,
+   * which is the state this exists to get out of.
+   */
+  function removeStrandedOccupant(row: GridRow, columnId: string, memberId: string) {
+    if (mutationLocked) return;
+    clearRemoveError();
+    clearDragNotice();
+    const current =
+      cellsByKey.get(cellKey(columnId, row.id))?.occupants.map((o) => o.memberId) ?? [];
+    if (!current.includes(memberId)) return;
+    onCellsChange(withUpdatedCell(cells, row.id, columnId, current.filter((id) => id !== memberId)));
+  }
+
   function toggleCandidate(row: GridRow, columnId: string, memberId: string, candidates: RankedCandidate[]) {
     if (mutationLocked) return;
     clearRemoveError();
@@ -1580,6 +1597,21 @@ export default function PlannerGrid(props: PlannerGridProps) {
       })
     : liveCandidates;
 
+  /**
+   * Occupants of the open cell that the candidate list does not contain.
+   *
+   * `rankCandidates` filters on «Tipo», so someone seated before their Tipo
+   * changed has no row — and therefore no way out, since the drag gate answers
+   * C3 for the same reason and row removal refuses a non-empty row. These get a
+   * removal-only row, so the warning on the cell names something the admin can
+   * actually do.
+   */
+  const strandedOccupants = openCell && openRow
+    ? (cellsByKey.get(cellKey(openCell.columnId, openRow.id))?.occupants ?? [])
+        .map((o) => o.memberId)
+        .filter((id) => !openCandidates.some((c) => c.id === id))
+    : [];
+
   // ── The three tracks, and the one number that differs between the modes ────
   //
   // The date track's floor is what decides "scroll" vs "squeeze". In the page
@@ -1807,7 +1839,34 @@ export default function PlannerGrid(props: PlannerGridProps) {
               }
             />
           ))}
-          {openCandidates.length === 0 && (
+          {/* Seated here, but no longer eligible — so `rankCandidates` does not
+              return them and every other exit refuses: the drag gate answers C3
+              for a Tipo that does not match, and row removal refuses a
+              non-empty row. Without this the cell's own warning would name an
+              action the surface does not offer, which is precisely what
+              ADR-0029 records the retirement badge doing. Removal only: there
+              is no toggle back, because putting them back is what their Tipo
+              says they cannot do. */}
+          {strandedOccupants.map((id) => (
+            <li key={`stranded-${id}`} className="flex items-center justify-between gap-2 rounded-lg border border-warning-strong/40 bg-warning-strong/10 px-2 py-1.5">
+              <span className={`font-label text-xs text-warning-strong ${CARD_STYLE.longText}`}>
+                {memberName(id)}
+                <span className="block font-body text-[10px] normal-case text-ink-muted/80">
+                  Su Tipo ya no permite este puesto
+                </span>
+              </span>
+              <button
+                type="button"
+                disabled={mutationLocked}
+                onClick={() => removeStrandedOccupant(openRow, openCell.columnId, id)}
+                aria-label={`Quitar a ${memberName(id)} de ${openRow.label}`}
+                className="min-h-[44px] shrink-0 rounded-lg border border-warning-strong/40 px-2 font-label text-[10px] uppercase tracking-widest text-warning-strong hover:bg-warning-strong/15 disabled:opacity-50"
+              >
+                Quitar
+              </button>
+            </li>
+          ))}
+          {openCandidates.length === 0 && strandedOccupants.length === 0 && (
             <li className="font-body text-xs italic text-mono-600">Nadie elegible para este puesto.</li>
           )}
         </ul>
@@ -2443,6 +2502,13 @@ function RowGroup({
   );
 }
 
+/** What the admin sees on the «Tipo» checkboxes, not the stored value. */
+const TYPE_LABEL: Record<string, string> = {
+  voz: "voz",
+  instrumento: "instrumento",
+  foh: "FOH",
+};
+
 function GridCellView({
   row,
   column,
@@ -2765,7 +2831,7 @@ function GridCellView({
             colour says something is wrong, the line says who and what to do. */}
         {mismatched.map((id) => (
           <p key={`tipo-${id}`} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
-            ⚠ {memberName(id)}: su Tipo ya no incluye {SEAT_MEMBER_TYPE[row.category]} — quítalo o ajusta su Tipo
+            ⚠ {memberName(id)}: su Tipo ya no incluye {TYPE_LABEL[SEAT_MEMBER_TYPE[row.category]]} — ábrelo para quitarlo
           </p>
         ))}
         {unfilled && (

@@ -575,12 +575,18 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
   });
 
   it("does NOT flag cross-category double duty (voz + instrumento)", () => {
+    // The fixture has to BE double duty for the name to be true: a `voz`-only
+    // member on a Bass seat is a Tipo mismatch, which the grid now warns about
+    // separately — in amber, so a red-only assertion would pass while showing
+    // the very thing the test says is legitimate.
+    const dualDuty = [{ _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"] }];
     const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "auto" },
       { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
     ];
-    const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
+    const { container } = render(<PlannerGrid {...baseProps({ cells, members: dualDuty })} />);
     expect(container.querySelectorAll(".border-negative-strong\\/50").length).toBe(0);
+    expect(container.querySelectorAll(".border-warning-strong\\/50").length).toBe(0);
   });
 
   it("flags a same-category duplicate on its own two rows WITHOUT bleeding onto a legitimate cross-category cell for the same member (Finding 1)", () => {
@@ -1045,6 +1051,42 @@ describe("PlannerGrid — an occupant whose Tipo no longer fits the seat", () =>
     ];
     const { container } = render(<PlannerGrid {...baseProps({ cells: ghost })} />);
     expect(within(cellFor(container, "lead", "2026-08-09")).queryByText(/su Tipo ya no incluye/)).toBeNull();
+  });
+
+  it("offers a way OUT of the seat, which is what the warning tells them to do", () => {
+    // The picker filters on Tipo, so a flagged occupant has no candidate row —
+    // and the drag gate refuses for the same reason, and row removal refuses a
+    // non-empty row. Without this the warning would name an action the surface
+    // does not offer, which is exactly what ADR-0029 records the retirement
+    // badge doing.
+    const onCellsChange = vi.fn();
+    const { container } = render(
+      <PlannerGrid {...baseProps({ cells: seated("instrumento:Bass"), onCellsChange })} />,
+    );
+    fireEvent.click(cellFor(container, "instrumento:Bass", "2026-08-09"));
+
+    fireEvent.click(screen.getByRole("button", { name: /Quitar a Frank de Bass/ }));
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+    const next: GridCell[] = onCellsChange.mock.calls[0][0];
+    const cell = next.find((c) => c.rowId === "instrumento:Bass");
+    expect(cell?.occupants.map((o) => o.memberId) ?? []).toEqual([]);
+  });
+
+  it("offers removal only — never a toggle back into a seat their Tipo forbids", () => {
+    const { container } = render(
+      <PlannerGrid {...baseProps({ cells: seated("instrumento:Bass") })} />,
+    );
+    fireEvent.click(cellFor(container, "instrumento:Bass", "2026-08-09"));
+    const row = screen.getByRole("button", { name: /Quitar a Frank de Bass/ }).closest("li");
+    expect(row?.textContent).toMatch(/Su Tipo ya no permite este puesto/);
+    // One control on that row, and it removes.
+    expect(row?.querySelectorAll("button").length).toBe(1);
+  });
+
+  it("leaves an eligible occupant out of the stranded list", () => {
+    const { container } = render(<PlannerGrid {...baseProps({ cells: seated("lead") })} />);
+    fireEvent.click(cellFor(container, "lead", "2026-08-09"));
+    expect(screen.queryByRole("button", { name: /Quitar a Frank/ })).toBeNull();
   });
 
   it("tells assistive tech, not only the eye", () => {
