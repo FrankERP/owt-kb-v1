@@ -14,13 +14,14 @@
 // time — while still being asked to confirm the first.
 
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
-import { render, cleanup, fireEvent, screen } from "@testing-library/react";
+import { render, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
 }));
 
 import ProposalEditor from "../ProposalEditor";
+import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 
 // jsdom does no layout, so offsetParent is always null and the trap's visibility
 // filter would treat every element as hidden. Same shim as useFocusTrap.test.tsx.
@@ -57,7 +58,11 @@ const proposal = {
 
 /** Open the confirmation the way a member does: click "Enviar propuesta". */
 function openConfirm() {
-  render(<ProposalEditor roleDoc={roleDoc} proposal={proposal} currentUserId="member-1" />);
+  render(
+    <CueDialogProvider>
+      <ProposalEditor roleDoc={roleDoc} proposal={proposal} currentUserId="member-1" />
+    </CueDialogProvider>,
+  );
   const submit = screen.getAllByRole("button", { name: /enviar propuesta/i })[0];
   submit.focus();
   fireEvent.click(submit);
@@ -101,12 +106,14 @@ describe("submit-confirmation modal", () => {
   // was no Escape handler); the Cancelar case still passes, because that button
   // always worked — it is here to prove the fix did not break it, not to prove
   // the fix.
-  it("closes on Escape and gives focus back to the opener", () => {
+  it("closes on Escape and gives focus back to the opener", async () => {
     const opener = openConfirm();
     expect(screen.queryByRole("button", { name: /^confirmar$/i })).not.toBeNull();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("button", { name: /^confirmar$/i })).toBeNull();
-    expect(document.activeElement).toBe(opener);
+    // `CueDialogProvider` restores focus on a `requestAnimationFrame`, not
+    // synchronously with the dismissal — see its `registerLayer` cleanup.
+    await waitFor(() => expect(document.activeElement).toBe(opener));
   });
 
   it("still closes on Cancelar, and dismissing never submits", () => {

@@ -106,7 +106,10 @@ describe("every dismissable overlay is a real dialog", () => {
     .filter(({ source }) => hasDismissableScrim(source));
 
   it("finds the overlays at all (a scan that matches nothing proves nothing)", () => {
-    expect(overlays.length).toBeGreaterThanOrEqual(4);
+    // 2 as of M0b-1: CueDialog and the exempt BottomNav. Three hand-rolled
+    // shells migrated onto CueDialog on 2026-09-08; a new hand-rolled overlay
+    // raises this by one and must carry the semantics.
+    expect(overlays.length).toBeGreaterThanOrEqual(2);
   });
 
   it("declares dialog semantics and manages focus, or is an exempt non-dialog", () => {

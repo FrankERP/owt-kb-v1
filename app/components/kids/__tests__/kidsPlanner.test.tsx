@@ -33,6 +33,7 @@ import {
   overlapLabel,
 } from "../kidsPlannerLabels";
 import { buildPlannerView } from "@/app/utils/kidsPlannerView";
+import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 
 afterEach(() => {
   cleanup();
@@ -198,16 +199,21 @@ describe("canPlace — the one drag the view's own verdict would refuse", () => 
 });
 
 describe("KidsPlanner — the board shows what a dropdown hid", () => {
+  // The seat picker is a `CueDialog` now, which portals into the node
+  // `CueDialogProvider` creates — mounted app-wide in production
+  // (`app/utils/Provider.tsx`) but not here, so tests that open it need it too.
   const renderPlanner = (over: Partial<Parameters<typeof KidsPlanner>[0]> = {}) =>
     render(
-      <KidsPlanner
-        initialMonth="2026-09"
-        initialPairs={PAIRS}
-        initialMembers={MEMBERS}
-        initialSchedules={[]}
-        initialHistory={[]}
-        {...over}
-      />,
+      <CueDialogProvider>
+        <KidsPlanner
+          initialMonth="2026-09"
+          initialPairs={PAIRS}
+          initialMembers={MEMBERS}
+          initialSchedules={[]}
+          initialHistory={[]}
+          {...over}
+        />
+      </CueDialogProvider>,
     );
 
   /** The phone layout's seat row — the primary target, opened by tap. */
@@ -301,13 +307,15 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     render(
-      <KidsPlanner
-        initialMonth="2026-08"
-        initialPairs={PAIRS}
-        initialMembers={MEMBERS}
-        initialSchedules={[]}
-        initialHistory={[]}
-      />,
+      <CueDialogProvider>
+        <KidsPlanner
+          initialMonth="2026-08"
+          initialPairs={PAIRS}
+          initialMembers={MEMBERS}
+          initialSchedules={[]}
+          initialHistory={[]}
+        />
+      </CueDialogProvider>,
     );
     fireEvent.click(screen.getByLabelText("Mes siguiente"));
     await waitFor(() => expect(screen.getByLabelText("Domingo, 6 de septiembre")).toBeTruthy());
@@ -549,12 +557,14 @@ describe("KidsPlanner — a failed save never reads as success", () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 });
     vi.stubGlobal("fetch", fetchMock);
     render(
-      <KidsPlanner
-        initialMonth="2026-09"
-        initialPairs={PAIRS}
-        initialMembers={MEMBERS}
-        initialSchedules={[]}
-      />,
+      <CueDialogProvider>
+        <KidsPlanner
+          initialMonth="2026-09"
+          initialPairs={PAIRS}
+          initialMembers={MEMBERS}
+          initialSchedules={[]}
+        />
+      </CueDialogProvider>,
     );
 
     fireEvent.click(
