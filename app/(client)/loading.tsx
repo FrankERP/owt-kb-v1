@@ -2,7 +2,7 @@ import Skeleton, { SkeletonGroup, NavbarSkeleton } from "../components/ui/Skelet
 
 export default function HomeLoading() {
   return (
-    <SkeletonGroup label="Cargando servicios de la semana" className="mx-auto max-w-7xl px-6 pt-10 mb-12">
+    <SkeletonGroup label="Cargando servicios de la semana" className="mx-auto mb-16 max-w-7xl px-6 pt-12">
       <NavbarSkeleton />
       <Skeleton className="h-8 w-40 mx-auto mb-6" rounded="lg" />
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

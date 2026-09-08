@@ -36,5 +36,8 @@ describe("Skeleton", () => {
     const { container } = render(<NavbarSkeleton />);
     const el = container.firstElementChild as HTMLElement;
     expect(el.className).toContain("env(safe-area-inset-top)");
+    expect(el.className).toContain("lg:h-[calc(6rem+env(safe-area-inset-top))]");
+    expect(el.className).toContain("border-b");
+    expect(el.getAttribute("aria-hidden")).toBe("true");
   });
 });

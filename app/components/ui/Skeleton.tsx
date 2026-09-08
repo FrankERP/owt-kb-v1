@@ -27,6 +27,6 @@ export function SkeletonGroup({ label, children, className = "" }: { label: stri
 // Height classes must track Navbar.tsx's `h-20 lg:h-24` + safe-area top exactly.
 export function NavbarSkeleton() {
   return (
-    <div className="h-[calc(5rem+env(safe-area-inset-top))] lg:h-[calc(6rem+env(safe-area-inset-top))] border-b border-surface-accent-20" />
+    <div aria-hidden="true" className="h-[calc(5rem+env(safe-area-inset-top))] lg:h-[calc(6rem+env(safe-area-inset-top))] border-b border-surface-accent-20" />
   );
 }

@@ -2,7 +2,7 @@ import Skeleton, { SkeletonGroup, NavbarSkeleton } from "../../components/ui/Ske
 
 export default function ScheduleLoading() {
   return (
-    <SkeletonGroup label="Cargando el calendario" className="mx-auto max-w-7xl px-6 pt-10 mb-12">
+    <SkeletonGroup label="Cargando el calendario" className="mx-auto max-w-4xl px-6 pt-10 pb-16">
       <NavbarSkeleton />
       <Skeleton className="h-8 w-64 mx-auto mb-6" />
 

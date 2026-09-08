@@ -2,7 +2,7 @@ import Skeleton, { SkeletonGroup, NavbarSkeleton } from "../../components/ui/Ske
 
 export default function MeLoading() {
   return (
-    <SkeletonGroup label="Cargando tu perfil" className="mx-auto max-w-7xl px-6 pt-10 mb-12 space-y-8">
+    <SkeletonGroup label="Cargando tu perfil" className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-8">
       <NavbarSkeleton />
       <div className="space-y-3">
         <Skeleton className="h-4 w-32" />
