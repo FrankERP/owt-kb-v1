@@ -16,7 +16,7 @@ interface Props {
 const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Props) => {
   return (
     <nav aria-label="Navegación superior" className="brand-navbar sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
-      <div className="relative z-[1] mx-auto max-w-7xl h-20 lg:h-24 transition-[height] duration-300 flex items-center gap-3 sm:gap-5 ps-[max(1.25rem,env(safe-area-inset-left))] pe-[max(1.25rem,env(safe-area-inset-right))]">
+      <div className="relative z-[1] mx-auto max-w-7xl h-20 lg:h-24 flex items-center gap-3 sm:gap-5 ps-[max(1.25rem,env(safe-area-inset-left))] pe-[max(1.25rem,env(safe-area-inset-right))]">
 
         {/* Backstage brand lockup */}
         <Link href="/" aria-label="Ir a Backstage" className="flex shrink-0 items-center gap-3 lg:gap-4">
@@ -25,6 +25,9 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
             alt=""
             width={64}
             height={64}
+            // The first thing on every page. `priority` = eager + fetchpriority=high,
+            // so it never paints as an empty rounded square first (spec Part III #3).
+            priority
             className="brand-lockup-mark h-12 w-12 rounded-[14px] lg:h-16 lg:w-16 lg:rounded-[18px]"
           />
           <div className="hidden leading-none sm:block">

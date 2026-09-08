@@ -319,6 +319,17 @@ Legend: **[C]** client, **[S]** server.
 | `NativeAuthBootstrap` [C] | Native cold-start silent Google re-auth. |
 | `TextScaleBootstrap` [C] / `TextSizeControl` [C] | Apply stored text scale / segmented size control. |
 
+### Motion primitives (`app/components/ui/`, see [MOTION.md](MOTION.md))
+| Component | Purpose |
+|-----------|---------|
+| `MotionProvider` [C] | Loads `motion`'s DOM features as an async chunk after hydration (not inline); `reducedMotion="user"`. |
+| `Presence` [C] | Mount/unmount with an exit animation; variants `fade` `rise` `scale` `sheet`. |
+| `Skeleton` / `SkeletonGroup` [N] | Shimmer placeholders; one `aria-busy` status region per loading surface. |
+| `Button` [N] | The house button: six variants, three sizes, press physics, primary sheen, `busy`, `href`. |
+| `revealProps()` (`app/utils/reveal.ts`) [N] | CSS route reveal; `app/(client)/template.tsx` replays it per navigation. |
+
+[N] = neutral module (no `"use client"`, no hooks) — renderable from either side (ADR-0028).
+
 ### Admin panels (`app/components/admin/`, all [C])
 | Component | Purpose |
 |-----------|---------|

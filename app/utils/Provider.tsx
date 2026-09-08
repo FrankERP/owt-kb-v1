@@ -6,6 +6,7 @@ import { SessionProvider } from "next-auth/react"
 import { PlayerProvider } from "@/app/context/PlayerContext"
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider"
 import { ThemeBootstrap } from "@/app/components/ThemeBootstrap"
+import { MotionProvider } from "@/app/components/ui/MotionProvider"
 
 interface Props {
   children: React.ReactNode;
@@ -40,7 +41,9 @@ export const Provider = ({ children }: Props) => {
       <ThemeProvider attribute="class" defaultTheme="system" enableSystem={true}>
         <ThemeBootstrap>
           <PlayerProvider>
-            <CueDialogProvider>{children}</CueDialogProvider>
+            <CueDialogProvider>
+              <MotionProvider>{children}</MotionProvider>
+            </CueDialogProvider>
           </PlayerProvider>
         </ThemeBootstrap>
       </ThemeProvider>

@@ -5,8 +5,29 @@
      could never demand category 11 reach zero — 7 of its 9 rows are these. */
   --brand-radius-panel: 16px;
   --brand-radius-control: 10px;
-  --brand-duration-fast: 150ms;
-  --brand-duration-reveal: 210ms;
+  /* ---- Motion tokens (spec 2026-09-08-premium-motion-design §2.3) ----------
+     Non-colour, so outside the theme-parity check in brandCss.test.ts (that guard
+     classifies by VALUE shape). Pinned by motionTokens.test.ts. Only transform and
+     opacity ever animate against these; see docs/MOTION.md. */
+  --motion-fast: 120ms;     /* colour changes, hover, focus ring */
+  --motion-base: 200ms;     /* press, toggles, menus, small reveals */
+  --motion-slow: 320ms;     /* sheets, dialogs, tab panels, expand/collapse */
+  --motion-reveal: 480ms;   /* section rail draw; the block reveal runs on --motion-base */
+  --motion-shimmer: 1600ms; /* skeleton sweep period */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --motion-rise: 8px;       /* enter travel */
+  --motion-sink: 1px;       /* press travel */
+  --reveal-i: 0;            /* stagger index; app/utils/reveal.ts's inline style overrides this per element */
+
+  /* The two surviving --brand-duration-* vars (ADR-0016 lists the four non-colour
+     --brand-* survivors) become aliases so their 3 existing consumers move with the
+     system. Values CHANGE here: 150→120 reaches .brand-surface-interactive (the card
+     hover lift) and .brand-library-module::before (the accent rail); 210→480 reaches
+     only .brand-stage-hero::before on the sign-in lockup. */
+  --brand-duration-fast: var(--motion-fast);
+  --brand-duration-reveal: var(--motion-reveal);
 
   /* Height of the impersonation banner, so the navbar can stack under it.
      This default only ever applies while `.impersonating` is on <html>, and
@@ -382,6 +403,20 @@
      recorded rather than glossed. */
   --placeholder:                   rgb(var(--ink-muted-rgb) / 0.75);   /* name == Tailwind key, deliberately: see below */
   --edge-control:                  rgb(var(--ink-muted-rgb) / 0.6);
+
+  /* --- Skeleton shimmer, added 2026-09-08 (Task 6 fix round 1) ------------------
+     COMPOSED, same reason as --warning-glow above: a colour with baked-in alpha
+     belongs to the token layer, not to a literal sitting in `.brand-skeleton`'s
+     rule body — that literal is what tokenLayer.test.ts's rule-body pin counts,
+     and a real new colour role is registered here rather than bumping that pin. */
+  --skeleton-base:                 rgb(var(--accent-deep-rgb) / 0.18);
+  --skeleton-sweep:                rgb(var(--accent-rgb) / 0.14);
+
+  /* --- Button sheen, added 2026-09-08 (Task 7, same ruling as Task 6's fix) -----
+     COMPOSED, same reason as --skeleton-base/--skeleton-sweep above: a colour with
+     baked-in alpha belongs to the token layer, not to a literal sitting in
+     `.brand-btn-sheen::after`'s rule body. */
+  --sheen-highlight:                rgb(var(--on-fill-rgb) / 0.18);
 }
 
 /* Light branch. `:root` above hardcodes `color-scheme: dark`, which is masked in the
@@ -534,6 +569,9 @@
   --warning-glow: rgb(var(--elevation-rgb) / 0.1);
   --placeholder: rgb(var(--ink-muted-rgb) / 0.75);
   --edge-control: rgb(var(--ink-muted-rgb) / 0.6);
+  --skeleton-base: rgb(var(--accent-deep-rgb) / 0.10);
+  --skeleton-sweep: rgb(var(--accent-rgb) / 0.18);
+  --sheen-highlight: rgb(var(--on-fill-rgb) / 0.22);
 }
 
 .brand-atmosphere {
@@ -639,6 +677,8 @@
   content: "";
   background: linear-gradient(180deg, rgb(var(--accent-rgb)), rgb(var(--accent-rgb) / 0.08));
   box-shadow: 0 0 16px rgb(var(--accent-rgb) / 0.38);
+  transform-origin: top;
+  animation: brand-rail-draw var(--motion-reveal) var(--ease-out) both;
 }
 
 .brand-surface {
@@ -884,14 +924,132 @@
 @keyframes brand-beam-reveal {
   to {
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
 }
 
+/* ---- Primary button sheen (spec §2.1 #3) ------------------------------------
+   Pointer devices only: a narrow highlight crosses the fill ONCE on hover, never on
+   tap, never repeated while hovered (the animation runs on :hover entry and holds
+   at its end state because of `both`). Transform on a pseudo-element; the button
+   itself never repaints. */
+.brand-btn-sheen {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.brand-btn-sheen::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  content: "";
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(100deg, transparent 30%, var(--sheen-highlight) 50%, transparent 70%);
+  transform: translate3d(-100%, 0, 0);
+}
+
+@media (hover: hover) {
+  .brand-btn-sheen:hover::after {
+    opacity: 1;
+    animation: shimmer 600ms var(--ease-out) both;
+  }
+}
+
+/* ---- Skeleton shimmer (spec §2.1 #2) ----------------------------------------
+   The loading state shares the loaded state's gesture: a beam crosses each
+   placeholder every --motion-shimmer. The sweep is a pseudo-element translating on
+   the compositor; the block's own background never animates. `shimmer` keyframes
+   are the Tailwind mirror's (tailwind.config.ts) so the CSS and the utility agree. */
+.brand-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--skeleton-base);
+}
+
+.brand-skeleton::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 20%, var(--skeleton-sweep) 50%, transparent 80%);
+  animation: shimmer var(--motion-shimmer) linear infinite;
+}
+
+@keyframes shimmer {
+  from { transform: translate3d(-100%, 0, 0); }
+  to { transform: translate3d(100%, 0, 0); }
+}
+
+/* ---- Route reveal (spec §2.1 #1) --------------------------------------------
+   Blocks carrying [data-reveal] rise --motion-rise and fade in, staggered by the
+   --reveal-i the page assigns (app/utils/reveal.ts). Only opacity and transform, so
+   the element occupies its final box from first paint and CLS stays 0. `both` keeps
+   the first frame at opacity 0 during the delay. Replays per navigation because
+   app/(client)/template.tsx remounts the page. */
+@keyframes brand-reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--motion-rise), 0);
+  }
+  to {
+    /* `none`, not translate3d(0,0,0) — a non-none transform under `fill: both`
+       would stay on the reveal host forever and become a containing block for
+       any `position: fixed` descendant (the WebKit trap CueDialog.tsx:33
+       documents). `none` interpolates as the identity transform, so this is
+       visually unchanged. */
+    opacity: 1;
+    transform: none;
+  }
+}
+
+[data-reveal] {
+  animation: brand-reveal var(--motion-base) var(--ease-out) both;
+  animation-delay: calc(var(--reveal-i, 0) * 40ms);
+}
+
+/* The section rail draws top-to-bottom — the beam's one appearance on ordinary pages. */
+@keyframes brand-rail-draw {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+
+/* Reduced motion is a THEME, not a per-effect opt-out (spec §2.2). One rule
+   collapses every animation and transition to a single frame, and the JS layer
+   (MotionProvider, reducedMotion="user") reads the same query. Sheets and dialogs
+   still open and close — instantly. The beam-only override this replaces is what a
+   per-effect approach looks like after one effect; this is what it looks like after
+   none are forgotten. `html[data-motion="off"]` is the same collapse for the theme
+   gallery's visual-regression baselines, set by its root layout. */
 @media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    /* [data-reveal] introduced this file's first animation-delay (up to 480ms
+       at the stagger cap) combined with `fill: both`, which holds the element
+       at its `from` frame — opacity 0 — for the whole delay. Without zeroing
+       the delay here, "no motion" would still mean "invisible for half a
+       second". -1ms (not 0) so a delay of exactly 0 stays unaffected and
+       every other delay collapses to effectively instant. */
+    animation-delay: -1ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
   .brand-stage-hero::before {
     opacity: 1;
     transform: none;
-    animation: none;
   }
+}
+
+html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  animation-delay: -1ms !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+html[data-motion="off"] .brand-stage-hero::before {
+  opacity: 1;
+  transform: none;
 }
