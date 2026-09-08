@@ -42,3 +42,6 @@ export const VARIANTS = {
 } as const satisfies Record<string, Variant>;
 
 export type VariantName = keyof typeof VARIANTS;
+
+/** Sheet drag-to-dismiss (spec §19.4): past this travel OR faster than this, the sheet closes. */
+export const SHEET_DISMISS = { distance: 80, velocity: 0.5 } as const; // px, px/ms

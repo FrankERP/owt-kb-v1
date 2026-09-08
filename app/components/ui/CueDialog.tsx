@@ -1,8 +1,12 @@
 "use client";
 
-import React, { useCallback, useContext, useEffect, useId, useMemo, useRef } from "react";
+import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, animate, useMotionValue } from "motion/react";
+import * as m from "motion/react-m";
 import { trapTabTarget } from "@/app/utils/focusTrap";
+import { EASE_IN, EASE_OUT, EXIT_MS, MS, SHEET_DISMISS, SPRINGS } from "@/app/utils/motionPresets";
+import Button from "./Button";
 import { DismissReason, useCueDialogContext } from "./CueDialogProvider";
 
 const FOCUSABLE = [
@@ -165,8 +169,22 @@ export default function CueDialog({
     [],
   );
 
+  // Mounted = open OR exiting. Registration (focus capture, inert on the app root,
+  // scroll lock) lives for the whole presence, so focus restores and inert lifts
+  // AFTER the exit animation, not at its start. This is the "closing state" spec §4
+  // asked for, held here rather than in the provider — the provider only ever sees
+  // register/unregister.
+  //
+  // `exiting` goes true the moment the dialog OPENS and is cleared by
+  // `onExitComplete`; while `open` is true it is redundant, which is the point —
+  // `mounted` cannot flicker between the two flips and re-register the layer.
+  const [exiting, setExiting] = useState(false);
+  const mounted = open || exiting;
   useEffect(() => {
-    if (!open) return;
+    if (open) setExiting(true);
+  }, [open]);
+  useEffect(() => {
+    if (!mounted) return;
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     return registerLayer({
       id,
@@ -175,7 +193,7 @@ export default function CueDialog({
       fallbackRef: fallbackFocusRef,
       shellRef,
     });
-  }, [fallbackFocusRef, id, open, registerLayer, restoreFocusRef]);
+  }, [fallbackFocusRef, id, mounted, registerLayer, restoreFocusRef]);
 
   const top = isTopLayer(id);
   const layerIndex = layers.indexOf(id);
@@ -225,63 +243,121 @@ export default function CueDialog({
     return "max-w-2xl";
   }, [size]);
 
-  if (!open || !portalNode) return null;
+  // Sheet drag-to-dismiss (spec §19.4). Pointer events by hand — no `drag` prop —
+  // because the gesture is one-axis, downward only, with its own thresholds, and
+  // because a `drag` element fights the sheet's own scroll region. touch-action:none
+  // lives on the HANDLE so the sheet body still scrolls.
+  const sheetY = useMotionValue(0);
+  const dragRef = useRef<{ startY: number; startT: number; lastY: number; lastT: number } | null>(null);
+
+  const onHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (mode !== "sheet" || !e.isPrimary) return;
+    dragRef.current = { startY: e.clientY, startT: performance.now(), lastY: e.clientY, lastT: performance.now() };
+    // jsdom has no pointer capture; a real browser needs it so the gesture keeps
+    // tracking once the finger leaves the 12px handle.
+    if (typeof e.currentTarget.setPointerCapture === "function") e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onHandlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current;
+    if (!d) return;
+    d.lastY = e.clientY;
+    d.lastT = performance.now();
+    sheetY.set(Math.max(0, e.clientY - d.startY));
+  };
+  const onHandlePointerUp = () => {
+    const d = dragRef.current;
+    if (!d) return;
+    dragRef.current = null;
+    const travel = Math.max(0, d.lastY - d.startY);
+    const dt = Math.max(1, d.lastT - d.startT);
+    const velocity = travel / dt;
+    if (travel > SHEET_DISMISS.distance || velocity > SHEET_DISMISS.velocity) {
+      onDismiss("drag");
+      return;
+    }
+    animate(sheetY, 0, SPRINGS.sheet);
+  };
+
+  if (!portalNode) return null;
 
   return createPortal(
-    <div
-      data-cue-layer={id}
-      aria-hidden={isLowerLayer ? "true" : undefined}
-      inert={isLowerLayer ? true : undefined}
-      className="fixed inset-0 z-[90] flex items-start justify-center px-4 py-4 sm:items-center"
-      style={{ paddingTop: "max(1rem, env(safe-area-inset-top))", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
-    >
-      <button
-        data-cue-backdrop=""
-        type="button"
-        aria-label="Cerrar"
-        tabIndex={-1}
-        onClick={() => top && onDismiss("backdrop")}
-        className="absolute inset-0 cursor-default bg-scrim/[0.68] backdrop-blur-md"
-      />
-      <div
-        ref={shellRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
-        aria-label={!title ? label : undefined}
-        tabIndex={-1}
-        className={`brand-facet-panel brand-surface relative z-10 flex w-full ${sizeClass} flex-col overflow-hidden border-accent/25 shadow-2xl focus:outline-none ${
-          mode === "sheet"
-            ? "mt-auto max-h-[92svh] rounded-t-2xl sm:mt-0 sm:max-h-[min(86svh,52rem)] sm:rounded-2xl"
-            : "max-h-[min(92svh,54rem)] rounded-2xl"
-        }`}
-      >
-        {mode === "sheet" && (
-          <div className="flex justify-center pb-1 pt-3 sm:hidden">
-            <span className="h-1.5 w-12 rounded-full bg-accent/25" />
-          </div>
-        )}
-        {title && (
-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-accent/10 bg-surface-raised/35 px-5 py-5 sm:px-6">
-            <div className="min-w-0">
-              <p className="mb-1 font-label text-[10px] uppercase tracking-[0.24em] text-accent/70">Cue</p>
-              <h2 id={titleId} className="font-display text-2xl leading-tight text-ink">
-                {title}
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => onDismiss("escape")}
-              className="rounded-lg p-2 text-ink-dim transition-colors hover:bg-surface-lift/5 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-              aria-label={label ? `Cerrar ${label}` : "Cerrar diálogo"}
-            >
-              <CloseIcon />
-            </button>
-          </div>
-        )}
-        <SatelliteContext.Provider value={satelliteRegistry}>{children}</SatelliteContext.Provider>
-      </div>
-    </div>,
+    <AnimatePresence initial={false} onExitComplete={() => setExiting(false)}>
+      {open && (
+        <div
+          key="layer"
+          data-cue-layer={id}
+          aria-hidden={isLowerLayer ? "true" : undefined}
+          inert={isLowerLayer ? true : undefined}
+          className="fixed inset-0 z-[90] flex items-start justify-center px-4 py-4 sm:items-center"
+          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        >
+          <m.button
+            data-cue-backdrop=""
+            type="button"
+            aria-label="Cerrar"
+            tabIndex={-1}
+            onClick={() => top && open && onDismiss("backdrop")}
+            className="absolute inset-0 cursor-default bg-scrim/[0.68] backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: MS.base / 1000, ease: EASE_OUT } }}
+            exit={{ opacity: 0, transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }}
+          />
+          <m.div
+            ref={shellRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? titleId : undefined}
+            aria-label={!title ? label : undefined}
+            tabIndex={-1}
+            style={{ y: sheetY }}
+            initial={mode === "sheet" ? { y: "100%", opacity: 1 } : { scale: 0.96, opacity: 0 }}
+            animate={
+              mode === "sheet"
+                ? { y: 0, opacity: 1, transition: SPRINGS.sheet }
+                : { scale: 1, opacity: 1, transition: { duration: MS.slow / 1000, ease: EASE_OUT } }
+            }
+            exit={
+              mode === "sheet"
+                ? { y: 24, opacity: 0, transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }
+                : { scale: 0.98, opacity: 0, transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }
+            }
+            className={`brand-facet-panel brand-surface relative z-10 flex w-full ${sizeClass} flex-col overflow-hidden border-accent/25 shadow-2xl focus:outline-none ${
+              mode === "sheet"
+                ? "mt-auto max-h-[92svh] rounded-t-2xl sm:mt-0 sm:max-h-[min(86svh,52rem)] sm:rounded-2xl"
+                : "max-h-[min(92svh,54rem)] rounded-2xl"
+            }`}
+          >
+            {mode === "sheet" && (
+              <div
+                data-cue-handle=""
+                onPointerDown={onHandlePointerDown}
+                onPointerMove={onHandlePointerMove}
+                onPointerUp={onHandlePointerUp}
+                onPointerCancel={onHandlePointerUp}
+                className="flex cursor-grab touch-none justify-center pb-1 pt-3 active:cursor-grabbing sm:hidden"
+              >
+                <span className="h-1.5 w-12 rounded-full bg-accent/25" />
+              </div>
+            )}
+            {title && (
+              <div className="flex shrink-0 items-start justify-between gap-4 border-b border-accent/10 bg-surface-raised/35 px-5 py-5 sm:px-6">
+                <h2 id={titleId} className="min-w-0 font-display text-2xl leading-tight text-ink">
+                  {title}
+                </h2>
+                <Button
+                  variant="icon"
+                  onClick={() => onDismiss("escape")}
+                  aria-label={label ? `Cerrar ${label}` : "Cerrar diálogo"}
+                >
+                  <CloseIcon />
+                </Button>
+              </div>
+            )}
+            <SatelliteContext.Provider value={satelliteRegistry}>{children}</SatelliteContext.Provider>
+          </m.div>
+        </div>
+      )}
+    </AnimatePresence>,
     portalNode,
   );
 }

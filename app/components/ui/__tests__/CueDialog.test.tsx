@@ -1,10 +1,14 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createPortal } from "react-dom";
 import CueDialog, { useCueDialogFocusSatellite } from "../CueDialog";
-import { CueDialogProvider } from "../CueDialogProvider";
+import { CueDialogProvider, type DismissReason } from "../CueDialogProvider";
 import CueDialogStatus from "../CueDialogStatus";
+import { MotionProvider } from "../MotionProvider";
+import { installMotionTestEnv } from "./motionTestSetup";
+
+installMotionTestEnv();
 
 let originalOffsetParent: PropertyDescriptor | undefined;
 
@@ -34,23 +38,25 @@ function Harness({
 }: {
   open: boolean;
   childOpen?: boolean;
-  onDismiss?: (reason: "escape" | "backdrop") => void;
-  onChildDismiss?: (reason: "escape" | "backdrop") => void;
+  onDismiss?: (reason: DismissReason) => void;
+  onChildDismiss?: (reason: DismissReason) => void;
 }) {
   return (
-    <CueDialogProvider>
-      <button data-testid="trigger">Abrir</button>
-      <CueDialog open={open} title="Editar canción" onDismiss={onDismiss}>
-        <div className="p-4">
-          <button>Guardar</button>
-          <button>Cancelar</button>
-          <CueDialogStatus tone="error">Error local</CueDialogStatus>
-          <CueDialog open={childOpen} title="Confirmar" onDismiss={onChildDismiss}>
-            <button>Volver</button>
-          </CueDialog>
-        </div>
-      </CueDialog>
-    </CueDialogProvider>
+    <MotionProvider>
+      <CueDialogProvider>
+        <button data-testid="trigger">Abrir</button>
+        <CueDialog open={open} title="Editar canción" onDismiss={onDismiss}>
+          <div className="p-4">
+            <button>Guardar</button>
+            <button>Cancelar</button>
+            <CueDialogStatus tone="error">Error local</CueDialogStatus>
+            <CueDialog open={childOpen} title="Confirmar" onDismiss={onChildDismiss}>
+              <button>Volver</button>
+            </CueDialog>
+          </div>
+        </CueDialog>
+      </CueDialogProvider>
+    </MotionProvider>
   );
 }
 
@@ -142,24 +148,26 @@ describe("CueDialog focus satellites", () => {
     childOpen?: boolean;
   }) {
     return (
-      <CueDialogProvider>
-        <CueDialog open title="Tablero" onDismiss={vi.fn()}>
-          <div className="p-4">
-            <button>Guardar</button>
-            <button>Cancelar</button>
-            {mounted && (
-              <Satellite target={target}>
-                <select aria-label="Vista">
-                  <option value="voces">Voces</option>
-                </select>
-              </Satellite>
-            )}
-            <CueDialog open={childOpen} title="Confirmar" onDismiss={vi.fn()}>
-              <button>Volver</button>
-            </CueDialog>
-          </div>
-        </CueDialog>
-      </CueDialogProvider>
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open title="Tablero" onDismiss={vi.fn()}>
+            <div className="p-4">
+              <button>Guardar</button>
+              <button>Cancelar</button>
+              {mounted && (
+                <Satellite target={target}>
+                  <select aria-label="Vista">
+                    <option value="voces">Voces</option>
+                  </select>
+                </Satellite>
+              )}
+              <CueDialog open={childOpen} title="Confirmar" onDismiss={vi.fn()}>
+                <button>Volver</button>
+              </CueDialog>
+            </div>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>
     );
   }
 
@@ -254,5 +262,114 @@ describe("CueDialog focus satellites", () => {
     childClose.focus();
     fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
     expect(document.activeElement).toBe(volver);
+  });
+});
+
+/**
+ * ── Motion (spec §4, §19.4) ────────────────────────────────────────────────
+ *
+ * Animations are skipped under `installMotionTestEnv`, so an exit resolves on
+ * the next frame rather than after EXIT_MS — the assertions below pin the
+ * ORDER (mounted → unregistered → focus restored), never the duration.
+ */
+describe("CueDialog motion", () => {
+  it("keeps the dialog mounted until the exit completes, then restores focus to the opener", async () => {
+    const { rerender } = render(<Harness open={false} />);
+    // MotionProvider loads its feature set as an async chunk (ADR-0031). Until it
+    // lands, `m.*` elements have no exit protocol and AnimatePresence unmounts them
+    // synchronously — the documented degradation, and not what this test is about.
+    // Flushing the import first is what makes the assertion below about the EXIT.
+    await act(async () => {});
+    screen.getByTestId("trigger").focus();
+    rerender(<Harness open />);
+    await act(async () => {});
+    expect(document.querySelector("[data-cue-layer]")).not.toBeNull();
+    rerender(<Harness open={false} />);
+    // Exit is in flight: still mounted, still registered (app root still inert).
+    expect(document.querySelector("[data-cue-layer]")).not.toBeNull();
+    await waitFor(() => expect(document.querySelector("[data-cue-layer]")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("trigger")));
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  it("renders no Cue eyebrow above the title", () => {
+    render(<Harness open />);
+    expect(screen.queryByText("Cue")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Editar canción" })).toBeTruthy();
+  });
+
+  it("dismisses a sheet with reason drag when the handle is dragged past the threshold", () => {
+    const onDismiss = vi.fn();
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open mode="sheet" title="Detalle" onDismiss={onDismiss}>
+            <button>Ok</button>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
+    fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 200 });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 200 });
+    expect(onDismiss).toHaveBeenCalledWith("drag");
+  });
+
+  it("springs a sheet back when the drag is short and slow", () => {
+    const onDismiss = vi.fn();
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open mode="sheet" title="Detalle" onDismiss={onDismiss}>
+            <button>Ok</button>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    // "Slow" is a claim about ELAPSED TIME, and a jsdom gesture takes none: 20 px
+    // between two synchronous events reads as 20 px/ms, forty times the flick
+    // threshold, and would dismiss for the right reason on a wrong clock. Driving
+    // `performance.now` — the only clock the handlers read — is what makes this a
+    // 20 px drag over 400 ms (0.05 px/ms) instead of an instantaneous one.
+    let clock = 0;
+    const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    try {
+      const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
+      fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
+      clock = 400;
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 120 });
+      fireEvent.pointerUp(handle, { pointerId: 1, clientY: 120 });
+    } finally {
+      now.mockRestore();
+    }
+    expect(onDismiss).not.toHaveBeenCalled();
+  });
+
+  it("dismisses a sheet on a short but fast flick", () => {
+    const onDismiss = vi.fn();
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open mode="sheet" title="Detalle" onDismiss={onDismiss}>
+            <button>Ok</button>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    // The other half of the OR: 20 px is far under the 80 px threshold, but 20 px
+    // in 10 ms is 2 px/ms and the sheet goes.
+    let clock = 0;
+    const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    try {
+      const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
+      fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
+      clock = 10;
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 120 });
+      fireEvent.pointerUp(handle, { pointerId: 1, clientY: 120 });
+    } finally {
+      now.mockRestore();
+    }
+    expect(onDismiss).toHaveBeenCalledWith("drag");
   });
 });
