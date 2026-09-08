@@ -40,9 +40,11 @@ describe("Skeleton", () => {
 
     expect(outer.getAttribute("aria-hidden")).toBe("true");
     expect(outer.className).toContain("pt-[env(safe-area-inset-top)]");
-    expect(outer.className).toContain("border-b");
+    expect(outer.className).not.toContain("border-b");
     expect(inner.className).toContain("h-20");
     expect(inner.className).toContain("lg:h-24");
+    expect(inner.className).toContain("border-b");
+    expect(inner.className).toContain("border-surface-accent-20");
     expect(skeletons).toHaveLength(3);
   });
 });

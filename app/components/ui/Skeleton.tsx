@@ -27,8 +27,8 @@ export function SkeletonGroup({ label, children, className = "" }: { label: stri
 // Draws the three shapes (mark, title, avatar) so the swap to the real bar is invisible.
 export function NavbarSkeleton() {
   return (
-    <div aria-hidden="true" className="pt-[env(safe-area-inset-top)] border-b border-surface-accent-20">
-      <div className="mx-auto max-w-7xl h-20 lg:h-24 flex items-center gap-3 sm:gap-5 ps-[max(1.25rem,env(safe-area-inset-left))] pe-[max(1.25rem,env(safe-area-inset-right))]">
+    <div aria-hidden="true" className="pt-[env(safe-area-inset-top)]">
+      <div className="mx-auto max-w-7xl h-20 lg:h-24 flex items-center gap-3 sm:gap-5 ps-[max(1.25rem,env(safe-area-inset-left))] pe-[max(1.25rem,env(safe-area-inset-right))] border-b border-surface-accent-20">
         <Skeleton className="h-12 w-12 lg:h-16 lg:w-16 shrink-0" rounded="lg" />
         <Skeleton className="mx-auto h-4 w-24 sm:w-32" />
         <Skeleton className="h-9 w-9 shrink-0 ml-auto" rounded="full" />
