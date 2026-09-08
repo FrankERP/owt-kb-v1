@@ -17,7 +17,7 @@ function tsxFiles(): string[] {
   const walk = (dir: string) => {
     for (const e of readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true })) {
       const rel = path.join(dir, e.name);
-      if (rel.includes("__tests__") || rel.startsWith(path.join("app", "components", "ui"))) continue;
+      if (rel.includes("__tests__") || rel.startsWith(path.join("app", "components", "ui") + path.sep)) continue;
       if (e.isDirectory()) walk(rel);
       else if (rel.endsWith(".tsx")) out.push(rel);
     }
