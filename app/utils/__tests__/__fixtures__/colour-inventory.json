@@ -8,29 +8,29 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 320,
-    "filesScanned": 269,
+    "literalRows": 322,
+    "filesScanned": 270,
     "filesWithColour": 51,
     "byCategory": {
       "2": 2,
-      "4": 72,
+      "4": 74,
       "8": 95,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 124,
+      "B": 126,
       "exempt": 28,
-      "keep": 243,
+      "keep": 246,
       "C": 7,
-      "D": 15
+      "D": 16
     },
-    "compositingClasses": 17,
-    "compositingSelectorOccurrences": 35,
-    "compositingClassNameOccurrences": 69,
-    "compositingRuleBodies": 34,
-    "lightCounterpartClasses": 15,
+    "compositingClasses": 18,
+    "compositingSelectorOccurrences": 37,
+    "compositingClassNameOccurrences": 70,
+    "compositingRuleBodies": 36,
+    "lightCounterpartClasses": 16,
     "pairs": 14,
     "pairsDifferingInAlpha": 0
   },
@@ -2328,6 +2328,30 @@
       "reason": "Already theme-agnostic"
     },
     {
+      "file": "app/brand.css",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 930,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/brand.css",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 930,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
       "file": "app/components/AddToCalendarButton.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -3984,6 +4008,14 @@
     {
       "file": "app/brand.css",
       "kind": "selector",
+      "class": "skeleton",
+      "count": 2,
+      "disposition": "D",
+      "reason": null
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "selector",
       "class": "song-hero",
       "count": 2,
       "disposition": "D",
@@ -4382,6 +4414,14 @@
       "reason": "Usage site of a compositing class"
     },
     {
+      "file": "app/components/ui/Skeleton.tsx",
+      "kind": "className",
+      "class": "skeleton",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
@@ -4705,9 +4745,29 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "stage-hero"
+        "skeleton"
       ],
       "ordinal": 32,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "skeleton"
+      ],
+      "ordinal": 33,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "stage-hero"
+      ],
+      "ordinal": 34,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
     },
@@ -4717,7 +4777,7 @@
       "classes": [
         "stage-hero"
       ],
-      "ordinal": 33,
+      "ordinal": 35,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
     }

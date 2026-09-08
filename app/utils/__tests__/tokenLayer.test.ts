@@ -307,11 +307,12 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
   });
 
   it("counts the migrated occurrences, alpha-free ones included", () => {
-    // 69 colour occurrences moved: 65 alpha-bearing plus FOUR alpha-free. A check
-    // scoped to alpha-bearing values misses the alpha-free ones entirely — and three
-    // of those four were beam, including `.brand-atmosphere`'s own body wash.
+    // 71 colour occurrences: the original 69 (65 alpha-bearing plus FOUR alpha-free —
+    // a check scoped to alpha-bearing values misses the alpha-free ones entirely, and
+    // three of those four were beam, including `.brand-atmosphere`'s own body wash)
+    // plus TWO alpha-bearing ones added by `.brand-skeleton`'s shimmer (Task 6).
     const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative)/.test(o.name));
-    expect(all.length).toBe(69);
+    expect(all.length).toBe(71);
     expect(all.filter((o) => o.alpha === "none").length).toBe(4);
   });
 
