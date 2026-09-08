@@ -18,7 +18,7 @@ Spec: `docs/superpowers/specs/2026-09-01-dev-verify-runner-design.md`. Decision 
 | `--console` | Include console errors and warnings, plus failed requests, in the report. |
 | `--viewport WxH` · `--theme light|dark` | Emulation. `--theme` defaults to `light` when omitted (Playwright's own default) — pass `--theme dark` explicitly for a dark-theme check. Never touches `/me`. |
 | `--click "<accessible name>"` | Repeatable, in order, before capture. Still read-only (see locks). |
-| `--wait "<text>"` | Wait for text before capture (30 s). |
+| `--wait "<text>"` | Wait for text before capture, AFTER any `--click` (30 s). Use it whenever a click fetches: without it the artifacts catch the loading state, because a click starts no navigation and `networkidle` has already resolved. |
 | `--json` | Machine-readable report. |
 
 Exit codes: `0` ok · `2` refused (host, env, sign-in) · `3` a mutation was attempted and blocked · `4` page error or HTTP ≥ 500.

@@ -201,7 +201,6 @@ async function main(): Promise<void> {
       refuse(report, `auth:HTTP ${report.status} on ${args.route}`, args.json);
     }
 
-    if (args.waitFor) await page.getByText(args.waitFor).first().waitFor({ timeout: 30_000 }).catch(() => report.pageErrors.push(`wait:${args.waitFor} not visible`));
     for (const name of args.clicks) {
       // Match by accessible name across the interactive roles the app actually
       // uses: plain buttons and links, plus `menuitem` — destructive actions in
@@ -221,9 +220,22 @@ async function main(): Promise<void> {
       const exactMatches = roleNames(true);
       const el = (await exactMatches.count()) > 0 ? exactMatches.first() : roleNames(false).first();
       await el.click({ timeout: 10_000 }).catch(() => report.pageErrors.push(`click:${name} not found`));
+      // This does NOT wait for what the click FETCHED: `waitForLoadState`
+      // resolves as soon as the current navigation's lifecycle is done, and a
+      // click that opens a dialog starts no navigation. `--wait` below is the
+      // only thing that waits for a click's own requests.
       await page.waitForLoadState("networkidle").catch(() => undefined);
       assertOnOrigin(page);
     }
+
+    // AFTER the clicks, deliberately. It used to run before them, where it could
+    // not do its job: `click()` already auto-waits for its own target, so the
+    // only thing worth waiting for is what the click PRODUCES. Positioned first,
+    // it timed out against text that only exists post-click, and the artifacts
+    // then captured whatever was on screen the instant the click returned — for
+    // a dialog that fetches, its loading state. That cost a session to
+    // "diagnose" a hang the app never had.
+    if (args.waitFor) await page.getByText(args.waitFor).first().waitFor({ timeout: 30_000 }).catch(() => report.pageErrors.push(`wait:${args.waitFor} not visible`));
 
     const stem = args.route.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "") || "root";
     if (args.screenshot) {
