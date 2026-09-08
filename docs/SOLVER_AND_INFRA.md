@@ -66,7 +66,9 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   assignments (monthly and per-week terms). The planner UI surfaces, separately for
   Sunday and Saturday, which lead-pool members did not hold that lead role in the
   calendar month before the month being planned (`LeadPoolHistoryPanel`); that is
-  visibility only and does not change the objective.
+  visibility only and does not change the objective. The pool ids are filtered by
+  live «Tipo» first, the same rule `buildSolveRequest` applies, so a stale tick
+  cannot present an unschedulable member as an available lead (ADR-0029).
 
 ### Invocation from Next.js
 `POST /api/admin/solve` (admin/super-admin, `maxDuration=60`):

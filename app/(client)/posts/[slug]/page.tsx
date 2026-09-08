@@ -14,6 +14,7 @@ import type { PortableTextComponents } from "@portabletext/react";
 import Image from "next/image";
 import { urlFor } from "@/sanity/lib/image";
 import { notFound } from "next/navigation";
+import { songSections, type SongSection } from "@/app/utils/songSections";
 import Navbar from "@/app/components/Navbar";
 import SectionNav from "@/app/components/SectionNav";
 import ChordChart from "@/app/components/ChordChart";
@@ -149,23 +150,16 @@ const Page = async ({ params }: Params) => {
 
   const history = await getSongHistory(post._id);
 
-  const hasAudio        = (post?.audioTracks?.length ?? 0) > 0;
+  // `songSections` owns which of the five paint — see its header for why the
+  // `body` flag in particular is worth a tested home.
+  const sections = songSections(post, history.length);
+  const shows = (id: SongSection["id"]) => sections.some((s) => s.id === id);
+  const hasAudio        = shows("audio");
   const hasInlineChords = (post?.chords?.length ?? 0) > 0;
-  const hasTutorials = (post?.tutorials2?.length ?? 0) > 0;
-  const hasBody      = !!post?.body;
-  const hasLyrics    = hasBody || hasInlineChords;
-  const hasHistory   = history.length > 0;
-  const hasMusicalRef = !!post?.musicalReferenceUrl;
-  const hasLyricsVid  = !!post?.lyricsVideoUrl;
-  const hasRefLinks   = hasMusicalRef || hasLyricsVid || (post?.referenceLinks?.length ?? 0) > 0;
-
-  const sections = [
-    { id: "audio",      label: "Audio",        show: hasAudio },
-    { id: "tutoriales", label: "Tutoriales",   show: hasTutorials },
-    { id: "referencia", label: "Referencia",   show: hasRefLinks },
-    { id: "letra",      label: "Letra",        show: hasLyrics },
-    { id: "historial",  label: "Historial",    show: hasHistory },
-  ].filter((s) => s.show);
+  const hasTutorials    = shows("tutoriales");
+  const hasLyrics       = shows("letra");
+  const hasHistory      = shows("historial");
+  const hasRefLinks     = shows("referencia");
 
   return (
     <div>
@@ -235,6 +229,24 @@ const Page = async ({ params }: Params) => {
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 py-12 space-y-20">
+
+        {/* `sections` is already the list of what will paint, so it answers this
+            exactly. A song with no audio, tutorials, references, lyrics or
+            history used to render the hero over an empty box — the page looked
+            half-loaded rather than empty, and ~15 songs have no lyrics source in
+            the catalogue at all, so this is a real state, not a hypothetical. */}
+        {sections.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-16 text-mono-600">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+            </svg>
+            <p className="font-label text-sm uppercase tracking-widest text-center">Esta canción aún no tiene contenido</p>
+            <p className="font-body text-sm text-mono-500 max-w-sm text-center">
+              Todavía no hay audio, tutoriales, referencias, letra ni historial para mostrar.
+            </p>
+          </div>
+        )}
 
         {/* Audio */}
         {hasAudio && (
