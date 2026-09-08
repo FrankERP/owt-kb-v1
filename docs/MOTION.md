@@ -130,6 +130,7 @@ Before was measured on the primary checkout at the merge-base commit
 | After M0a, `domAnimation` loaded synchronously | 172.3 kB | 101.5 kB | 325.9 kB |
 | After the fix wave, `domAnimation` loaded as an async chunk | 172.3 kB | 89.7 kB | 314.2 kB |
 | Δ vs Before M0a | +0.01 kB | +12.4 kB | +12.5 kB |
+| After M0b-1, `domMax` loaded as an async chunk | 168.4 kB | 87.9 kB | 307.1 kB |
 
 The middle row is what M0a originally shipped (`LazyMotion features={domAnimation}`,
 loaded synchronously by `MotionProvider`); the last row is this fix wave's change
@@ -158,12 +159,28 @@ specifier); `motion/react-m`'s per-tag hosts (`m.div`, `m.section`, …) are nam
 exports of that submodule, which is why `Presence.tsx` imports them as
 `import * as m from "motion/react-m"` rather than a default export.
 
-M0b's `SlidingIndicator` needs `domMax` (materially larger than `domAnimation` and not
-measured here), not `domAnimation` — the async chunk this fix wave built is what can
-carry that without touching first-load JS at all; the synchronous path could not have
-fit it under any reasonable cap. Whether the programme cap widens to admit `domMax`'s
-async weight, or `SlidingIndicator` ships a narrower feature subset, is a decision for
-the M0b spec owner, not this fix wave.
+M0b's `SlidingIndicator` needs `domMax`, not `domAnimation`, for layout projection
+(`layoutId`). M0b-1 switched `motionFeatures.ts` to `domMax` and measured it with the
+same A/B method: on a `next build` here, the async chunk is the one file under
+`.next/static/chunks/` that is unreferenced by `build-manifest.json` and by every
+route's `page_client-reference-manifest.js`, and that carries motion-dom's feature
+signatures (`animateVisualElement`, `Presence`, `Exit`, `MeasureLayout` — this build's
+minifier did not preserve a literal `HTMLProjectionNode` string, but `MeasureLayout`
+alone is enough to distinguish it from the plain `domAnimation` chunk, which had
+neither). That chunk is **90 088 B raw / 29 468 B gz (88.0 kB raw / 28.8 kB gz)** —
+well under the spec's Part VI 40 kB gz cap, and about 13 kB gz heavier than
+`domAnimation`'s 15.8 kB, the cost of layout projection plus drag (motion 13 ships
+them as one bundle; there is no public layout-only feature set).
+
+First-load `/` and `/admin` moved by −1.8 kB and −7.1 kB against the fix-wave's
+recorded 89.7 kB / 314.2 kB — more than the ±0.5 kB this switch alone should produce.
+The move is not from `domMax`: the chunk above is structurally unreferenced by any
+route's client-reference manifest, so which feature set it re-exports cannot change a
+single byte of synchronously-loaded route JS. It is the two loading-skeleton fixes
+already merged onto this branch ahead of M0b-1 (`ecb6c86b`, `e6b2b46c` — both touch
+`app/(client)/loading.tsx`, shared by `/` and `/admin`) landing between the fix-wave's
+measurement and this one. Confirming this would need rebuilding the pre-M0b-1 tree
+with `domAnimation` still in place, which this measurement pass intentionally skips.
 
 ## Where the walk's findings landed
 
