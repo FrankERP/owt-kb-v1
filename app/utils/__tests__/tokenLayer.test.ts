@@ -83,6 +83,12 @@ const COMPOSED = [
   "placeholder",
   "edge-control",
   "warning-glow",   // the Saturday card's shadow: warm glow in dark, neutral in light
+
+  // The Skeleton shimmer (2026-09-08, Task 6 fix round 1). Composed for the same
+  // reason as the three above — a colour with baked-in alpha is a token, not a
+  // literal in a rule body.
+  "skeleton-base",  // the placeholder block's own wash
+  "skeleton-sweep", // the ::after gradient's middle stop
 ] as const;
 
 const UTILITY_PREFIXES = [
@@ -307,12 +313,17 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
   });
 
   it("counts the migrated occurrences, alpha-free ones included", () => {
-    // 71 colour occurrences: the original 69 (65 alpha-bearing plus FOUR alpha-free —
-    // a check scoped to alpha-bearing values misses the alpha-free ones entirely, and
-    // three of those four were beam, including `.brand-atmosphere`'s own body wash)
-    // plus TWO alpha-bearing ones added by `.brand-skeleton`'s shimmer (Task 6).
+    // 69 colour occurrences: 65 alpha-bearing plus FOUR alpha-free — a check
+    // scoped to alpha-bearing values misses the alpha-free ones entirely, and
+    // three of those four were beam, including `.brand-atmosphere`'s own body wash.
+    //
+    // `.brand-skeleton`'s shimmer (Task 6) does NOT add to this count: its two
+    // alpha-bearing colours are declared as composed tokens (--skeleton-base,
+    // --skeleton-sweep) referenced with a bare `var(--name)` in the rule body,
+    // not `rgb(var(--role-rgb) / a)` — the same shape as --warning-glow. The
+    // OCCURRENCE regex only matches the latter, so the pin stays put.
     const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative)/.test(o.name));
-    expect(all.length).toBe(71);
+    expect(all.length).toBe(69);
     expect(all.filter((o) => o.alpha === "none").length).toBe(4);
   });
 

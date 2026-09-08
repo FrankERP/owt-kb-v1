@@ -403,6 +403,14 @@
      recorded rather than glossed. */
   --placeholder:                   rgb(var(--ink-muted-rgb) / 0.75);   /* name == Tailwind key, deliberately: see below */
   --edge-control:                  rgb(var(--ink-muted-rgb) / 0.6);
+
+  /* --- Skeleton shimmer, added 2026-09-08 (Task 6 fix round 1) ------------------
+     COMPOSED, same reason as --warning-glow above: a colour with baked-in alpha
+     belongs to the token layer, not to a literal sitting in `.brand-skeleton`'s
+     rule body — that literal is what tokenLayer.test.ts's rule-body pin counts,
+     and a real new colour role is registered here rather than bumping that pin. */
+  --skeleton-base:                 rgb(var(--accent-deep-rgb) / 0.18);
+  --skeleton-sweep:                rgb(var(--accent-rgb) / 0.14);
 }
 
 /* Light branch. `:root` above hardcodes `color-scheme: dark`, which is masked in the
@@ -555,6 +563,8 @@
   --warning-glow: rgb(var(--elevation-rgb) / 0.1);
   --placeholder: rgb(var(--ink-muted-rgb) / 0.75);
   --edge-control: rgb(var(--ink-muted-rgb) / 0.6);
+  --skeleton-base: rgb(var(--accent-deep-rgb) / 0.10);
+  --skeleton-sweep: rgb(var(--accent-rgb) / 0.18);
 }
 
 .brand-atmosphere {
@@ -919,7 +929,7 @@
 .brand-skeleton {
   position: relative;
   overflow: hidden;
-  background: rgb(var(--accent-deep-rgb) / 0.18);
+  background: var(--skeleton-base);
 }
 
 .brand-skeleton::after {
@@ -927,7 +937,7 @@
   inset: 0;
   content: "";
   pointer-events: none;
-  background: linear-gradient(100deg, transparent 20%, rgb(var(--accent-rgb) / 0.14) 50%, transparent 80%);
+  background: linear-gradient(100deg, transparent 20%, var(--skeleton-sweep) 50%, transparent 80%);
   animation: shimmer var(--motion-shimmer) linear infinite;
 }
 

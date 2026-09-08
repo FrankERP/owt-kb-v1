@@ -108,8 +108,9 @@ const config: Config = {
 				"badge-azure-fg": "rgb(var(--badge-azure-fg-rgb) / <alpha-value>)",
 				"badge-azure-deep": "rgb(var(--badge-azure-deep-rgb) / <alpha-value>)",
 
-				// Child B, Layer 2 — the 23 composed tokens (26 today; placeholder,
-				// edge-control and warning-glow were added 2026-08-12). These bake their own alpha
+				// Child B, Layer 2 — the 23 composed tokens (28 today; placeholder,
+				// edge-control and warning-glow were added 2026-08-12, skeleton-base and
+				// skeleton-sweep on 2026-09-08). These bake their own alpha
 				// and are therefore NOT alpha-capable: no `<alpha-value>`, and an
 				// opacity modifier on one is a bug that B-final's lint clause bans.
 				"surface-accent-solid": "var(--surface-accent-solid)",
@@ -152,6 +153,10 @@ const config: Config = {
 				// Composed, so not alpha-capable. Resolves to a warm glow in dark and a
 				// neutral shadow in light — see brand.css.
 				"warning-glow": "var(--warning-glow)",
+				// The Skeleton shimmer (2026-09-08, Task 6 fix round 1). Composed for the
+				// same reason as warning-glow above — see brand.css.
+				"skeleton-base": "var(--skeleton-base)",
+				"skeleton-sweep": "var(--skeleton-sweep)",
 			},
 			fontFamily: {
 				display: ["var(--font-display)", "sans-serif"],
