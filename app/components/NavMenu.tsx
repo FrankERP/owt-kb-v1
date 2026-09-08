@@ -127,7 +127,7 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
           />
         ) : (
           <div className="w-9 h-9 rounded-full bg-surface-accent-solid text-on-fill flex items-center justify-center ring-2 ring-transparent group-hover:ring-accent/40 transition-all">
-            <span className="font-label text-xs text-accent">{initials}</span>
+            <span className="font-label text-xs text-on-fill">{initials}</span>
           </div>
         )}
         {notifCount > 0 && (
