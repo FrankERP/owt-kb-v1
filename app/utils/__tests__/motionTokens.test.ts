@@ -73,6 +73,23 @@ describe("motion tokens — Tailwind mirror", () => {
     }
   });
 
+  it("ends every mirrored keyframe's `to` frame that animates transform on transform: \"none\" — the containing-block trap `brand-reveal`/`brand-beam-reveal` avoid in brand.css (MOTION.md rule 5); shimmer is exempt because its `to` is the sweep's landing position, not a rest state", () => {
+    // shimmer deliberately does NOT end on "none" — it is a translate sweep, not
+    // an enter animation, so there is no fixed-descendant containing-block risk.
+    const EXEMPT = new Set(["shimmer"]);
+    for (const k of ["rise", "shimmer", "scale-in"]) {
+      const m = tailwind.match(new RegExp(`"?${k}"?:\\s*\\{[\\s\\S]*?to:\\s*\\{([^}]*)\\}`));
+      expect(m, `${k}: to-frame not found`).not.toBeNull();
+      const toFrame = m![1];
+      if (!/transform\s*:/.test(toFrame)) continue;
+      if (EXEMPT.has(k)) {
+        expect(toFrame, `${k}: exempt keyframe should not end on transform: "none"`).not.toMatch(/transform:\s*"none"/);
+        continue;
+      }
+      expect(toFrame, `${k}: to-frame must end on transform: "none"`).toMatch(/transform:\s*"none"/);
+    }
+  });
+
   it("adds no colour key — tokenLayer.test.ts owns theme.extend.colors", () => {
     const colorsStart = tailwind.indexOf("colors: {");
     const motionStart = tailwind.indexOf("transitionDuration:");

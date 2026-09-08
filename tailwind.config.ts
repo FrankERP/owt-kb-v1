@@ -189,11 +189,15 @@ const config: Config = {
 			keyframes: {
 				rise: {
 					from: { opacity: "0", transform: "translate3d(0, var(--motion-rise), 0)" },
-					to: { opacity: "1", transform: "translate3d(0, 0, 0)" },
+					// `transform: "none"`, never `translate3d(0,0,0)` — the containing-block
+					// trap `brand-reveal`/`brand-beam-reveal` avoid (MOTION.md rule 5): a
+					// non-`none` transform under `animation-fill-mode: both` stays on the
+					// host forever and becomes a containing block for a fixed descendant.
+					to: { opacity: "1", transform: "none" },
 				},
 				"scale-in": {
 					from: { opacity: "0", transform: "scale(0.96)" },
-					to: { opacity: "1", transform: "scale(1)" },
+					to: { opacity: "1", transform: "none" },
 				},
 				shimmer: {
 					from: { transform: "translate3d(-100%, 0, 0)" },
