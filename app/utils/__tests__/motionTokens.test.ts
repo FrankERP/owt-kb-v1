@@ -91,6 +91,11 @@ describe("reduced motion is global, not per-effect", () => {
     expect(body).toMatch(/transition-duration:\s*0\.01ms\s*!important/);
     expect(body).toMatch(/animation-iteration-count:\s*1\s*!important/);
     expect(body).toMatch(/scroll-behavior:\s*auto\s*!important/);
+    // [data-reveal]'s animation-delay (up to 480ms at the stagger cap) combines
+    // with `fill: both` to hold the element at opacity 0 for the whole delay —
+    // the collapse must zero that too, or "no motion" still means "invisible
+    // for half a second".
+    expect(body).toMatch(/animation-delay:\s*-1ms\s*!important/);
   });
 
   it("the old beam-only override is gone — one rule, not one per effect", () => {
@@ -98,7 +103,11 @@ describe("reduced motion is global, not per-effect", () => {
   });
 
   it("html[data-motion=\"off\"] applies the same collapse, for VR baselines", () => {
-    expect(css).toMatch(/html\[data-motion="off"\]\s*\*,\s*html\[data-motion="off"\]\s*\*::before,\s*html\[data-motion="off"\]\s*\*::after\s*\{/);
+    const selector = /html\[data-motion="off"\]\s*\*,\s*html\[data-motion="off"\]\s*\*::before,\s*html\[data-motion="off"\]\s*\*::after\s*\{/;
+    expect(css).toMatch(selector);
+    const m = css.match(/html\[data-motion="off"\]\s*\*,\s*html\[data-motion="off"\]\s*\*::before,\s*html\[data-motion="off"\]\s*\*::after\s*\{([\s\S]*?)\n\}/);
+    expect(m, "no html[data-motion=\"off\"] collapse block").not.toBeNull();
+    expect(m![1]).toMatch(/animation-delay:\s*-1ms\s*!important/);
   });
 
   it("the theme gallery root sets data-motion=\"off\" on <html>", () => {

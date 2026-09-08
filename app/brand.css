@@ -19,6 +19,7 @@
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --motion-rise: 8px;       /* enter travel */
   --motion-sink: 1px;       /* press travel */
+  --reveal-i: 0;            /* stagger index; app/utils/reveal.ts's inline style overrides this per element */
 
   /* The two surviving --brand-duration-* vars (ADR-0016 lists the four non-colour
      --brand-* survivors) become aliases so their 3 existing consumers move with the
@@ -922,8 +923,13 @@
     transform: translate3d(0, var(--motion-rise), 0);
   }
   to {
+    /* `none`, not translate3d(0,0,0) — a non-none transform under `fill: both`
+       would stay on the reveal host forever and become a containing block for
+       any `position: fixed` descendant (the WebKit trap CueDialog.tsx:33
+       documents). `none` interpolates as the identity transform, so this is
+       visually unchanged. */
     opacity: 1;
-    transform: translate3d(0, 0, 0);
+    transform: none;
   }
 }
 
@@ -949,6 +955,13 @@
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    /* [data-reveal] introduced this file's first animation-delay (up to 480ms
+       at the stagger cap) combined with `fill: both`, which holds the element
+       at its `from` frame — opacity 0 — for the whole delay. Without zeroing
+       the delay here, "no motion" would still mean "invisible for half a
+       second". -1ms (not 0) so a delay of exactly 0 stays unaffected and
+       every other delay collapses to effectively instant. */
+    animation-delay: -1ms !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
@@ -961,6 +974,7 @@
 html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="off"] *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
+  animation-delay: -1ms !important;
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
 }

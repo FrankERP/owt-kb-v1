@@ -32,8 +32,18 @@ describe("app/(client)/template.tsx", () => {
   it("renders children through a fragment — no wrapper, no transform, no motion import", () => {
     const src = read(rel);
     expect(src).not.toMatch(/from\s+["']motion/);
-    expect(src).not.toMatch(/data-reveal/);
-    expect(src).not.toMatch(/transform|animate-|className=/);
+    // Scoped to CODE, not prose: the file's own comment is free to discuss
+    // `data-reveal`/`transform` in English, as the brief's template does (it
+    // even mentions `<main>`). Strip `//`-prefixed lines before checking for an
+    // actual JSX element (other than the fragment), a `className=`, or a
+    // `style=` — those must never appear outside a comment.
+    const code = src
+      .split("\n")
+      .filter((line) => !line.trim().startsWith("//"))
+      .join("\n");
+    expect(code).not.toMatch(/<[a-zA-Z]/);
+    expect(code).not.toMatch(/className=/);
+    expect(code).not.toMatch(/style=/);
     expect(src).toMatch(/return\s+<>\{children\}<\/>/);
   });
 });
@@ -49,6 +59,12 @@ describe("brand.css reveal rules", () => {
     expect(kf).toMatch(/opacity/);
     expect(kf).toMatch(/translate3d\(0,\s*var\(--motion-rise\),\s*0\)/);
     expect(kf).not.toMatch(/height|width|top:|left:/);
+    // The `to` frame must land on `transform: none`, not a non-none transform
+    // like translate3d(0,0,0) — under `fill: both` a non-none transform stays
+    // on the reveal host forever and becomes a containing block for any
+    // `position: fixed` descendant (the WebKit trap CueDialog.tsx:33 documents).
+    const to = kf.match(/to\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(to).toMatch(/transform:\s*none\s*;/);
   });
 
   it("draws the section rail with scaleY from the top", () => {
