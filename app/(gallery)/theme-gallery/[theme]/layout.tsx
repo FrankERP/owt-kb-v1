@@ -53,6 +53,7 @@ export default async function ThemeGalleryLayout({
     <html
       lang="es"
       suppressHydrationWarning
+      data-motion="off"
       className={`${theme} ${displayFont.variable} ${bodyFont.variable} ${labelFont.variable}`}
     >
       {/*

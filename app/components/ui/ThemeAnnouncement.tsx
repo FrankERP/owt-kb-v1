@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Button from "./Button";
 
 /**
  * The Spanish announcement for the theme rollout (parent Q2's bounded default:
@@ -59,14 +60,9 @@ export default function ThemeAnnouncement() {
         </a>
         .
       </p>
-      <button
-        type="button"
-        onClick={dismiss}
-        aria-label="Descartar aviso"
-        className="font-label text-xs uppercase tracking-widest text-mono-500 hover:text-ink transition-colors shrink-0"
-      >
+      <Button variant="ghost" size="sm" onClick={dismiss} aria-label="Descartar aviso" className="shrink-0">
         Ocultar
-      </button>
+      </Button>
     </aside>
   );
 }

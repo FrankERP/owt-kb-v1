@@ -108,8 +108,10 @@ const config: Config = {
 				"badge-azure-fg": "rgb(var(--badge-azure-fg-rgb) / <alpha-value>)",
 				"badge-azure-deep": "rgb(var(--badge-azure-deep-rgb) / <alpha-value>)",
 
-				// Child B, Layer 2 — the 23 composed tokens (26 today; placeholder,
-				// edge-control and warning-glow were added 2026-08-12). These bake their own alpha
+				// Child B, Layer 2 — the 23 composed tokens (29 today; placeholder,
+				// edge-control and warning-glow were added 2026-08-12, skeleton-base and
+				// skeleton-sweep on 2026-09-08 (Task 6 fix), sheen-highlight on 2026-09-08
+				// (Task 7, same ruling)). These bake their own alpha
 				// and are therefore NOT alpha-capable: no `<alpha-value>`, and an
 				// opacity modifier on one is a bug that B-final's lint clause bans.
 				"surface-accent-solid": "var(--surface-accent-solid)",
@@ -152,6 +154,13 @@ const config: Config = {
 				// Composed, so not alpha-capable. Resolves to a warm glow in dark and a
 				// neutral shadow in light — see brand.css.
 				"warning-glow": "var(--warning-glow)",
+				// The Skeleton shimmer (2026-09-08, Task 6 fix round 1). Composed for the
+				// same reason as warning-glow above — see brand.css.
+				"skeleton-base": "var(--skeleton-base)",
+				"skeleton-sweep": "var(--skeleton-sweep)",
+				// The primary button hover sheen (2026-09-08, Task 7, same ruling as
+				// skeleton-base/skeleton-sweep above) — see brand.css.
+				"sheen-highlight": "var(--sheen-highlight)",
 			},
 			fontFamily: {
 				display: ["var(--font-display)", "sans-serif"],
@@ -162,6 +171,43 @@ const config: Config = {
 				xs:   ["0.8125rem", { lineHeight: "1.2rem" }],
 				sm:   ["0.9375rem", { lineHeight: "1.45rem" }],
 				base: ["1.0625rem", { lineHeight: "1.65rem" }],
+			},
+			// Motion tokens — mirrors of the --motion-* / --ease-* vars in brand.css so
+			// utilities and CSS agree on one clock. Pinned by motionTokens.test.ts.
+			// NON-COLOUR: tokenLayer.test.ts reads theme.extend.colors only.
+			transitionDuration: {
+				fast: "var(--motion-fast)",
+				base: "var(--motion-base)",
+				slow: "var(--motion-slow)",
+				reveal: "var(--motion-reveal)",
+			},
+			transitionTimingFunction: {
+				"out-brand": "var(--ease-out)",
+				"in-brand": "var(--ease-in)",
+				"in-out-brand": "var(--ease-in-out)",
+			},
+			keyframes: {
+				rise: {
+					from: { opacity: "0", transform: "translate3d(0, var(--motion-rise), 0)" },
+					// `transform: "none"`, never `translate3d(0,0,0)` — the containing-block
+					// trap `brand-reveal`/`brand-beam-reveal` avoid (MOTION.md rule 5): a
+					// non-`none` transform under `animation-fill-mode: both` stays on the
+					// host forever and becomes a containing block for a fixed descendant.
+					to: { opacity: "1", transform: "none" },
+				},
+				"scale-in": {
+					from: { opacity: "0", transform: "scale(0.96)" },
+					to: { opacity: "1", transform: "none" },
+				},
+				shimmer: {
+					from: { transform: "translate3d(-100%, 0, 0)" },
+					to: { transform: "translate3d(100%, 0, 0)" },
+				},
+			},
+			animation: {
+				rise: "rise var(--motion-base) var(--ease-out) both",
+				"scale-in": "scale-in var(--motion-slow) var(--ease-out) both",
+				shimmer: "shimmer var(--motion-shimmer) linear infinite",
 			},
 			scrollSnapType: {
 				x: "x mandatory",

@@ -3,6 +3,7 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import { Setlist, SetlistSong, SpecialRole } from "../utils/interface";
 import Navbar from "../components/Navbar";
 import SongSearchList from "../components/SongSearchList";
+import { revealProps } from "../utils/reveal";
 import { DayCard } from "../components/DayCard";
 import { paintsDayCard } from "../utils/paintsDayCard";
 import { publishedSetlist } from "../utils/draftGating";
@@ -157,7 +158,7 @@ export default async function Home() {
       <Navbar title="OWT" tags schedule />
 
       <div className="mx-auto mb-16 max-w-7xl px-6 pt-12">
-        <div className="brand-section-heading mb-7">
+        <div className="brand-section-heading mb-7" {...revealProps(0)}>
           <p className="font-label text-[10px] uppercase tracking-[0.24em] text-accent">Programación</p>
           <h2 className="mt-1 font-display text-3xl font-semibold text-ink md:text-4xl">Esta semana</h2>
         </div>
@@ -170,7 +171,7 @@ export default async function Home() {
             <p className="font-label text-sm uppercase tracking-widest text-center">Aún no hay servicios publicados esta semana</p>
           </div>
         ) : (
-        <div className={`grid grid-cols-1 gap-6 ${totalCards > 1 ? "md:grid-cols-2" : "mx-auto max-w-3xl"}`}>
+        <div className={`grid grid-cols-1 gap-6 ${totalCards > 1 ? "md:grid-cols-2" : "mx-auto max-w-3xl"}`} {...revealProps(1)}>
           {hasSpecials && specials.map((sp) => (
             <DayCard
               key={sp._id}
@@ -215,7 +216,7 @@ export default async function Home() {
       </div>
 
       <div className="mx-auto max-w-7xl px-6 pt-8">
-        <div className="mb-7 flex items-end justify-between gap-4 border-b border-ink-dim/10 pb-5">
+        <div className="mb-7 flex items-end justify-between gap-4 border-b border-ink-dim/10 pb-5" {...revealProps(2)}>
           <div className="brand-section-heading">
             <p className="font-label text-[10px] uppercase tracking-[0.24em] text-accent">Biblioteca</p>
             <h2 className="mt-1 font-display text-3xl font-semibold text-ink md:text-4xl">Todas las canciones</h2>

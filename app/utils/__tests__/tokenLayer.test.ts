@@ -1,6 +1,6 @@
 // Guard for Child B's token layer (slice B1).
 //
-// B1 is purely additive: it introduces 18 base roles and 23 composed tokens and
+// B1 is purely additive: it introduces 18 base roles and 29 composed tokens and
 // REMOVES NOTHING, so nothing renders differently. That makes it the one slice
 // where a bug is invisible at runtime — the tokens can be wrong, misspelled, or
 // missing on one side and the app looks exactly the same until a later batch
@@ -66,7 +66,7 @@ const BASE_ROLES = [
   "badge-azure-fg", "badge-azure-deep",
 ] as const;
 
-/** The 23 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
+/** The 29 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
 const COMPOSED = [
   "surface-accent-solid", "surface-accent-30", "surface-accent-hover", "edge-accent-subtle",
   "surface-accent-20", "surface-accent-faint", "surface-accent-wash",
@@ -83,6 +83,16 @@ const COMPOSED = [
   "placeholder",
   "edge-control",
   "warning-glow",   // the Saturday card's shadow: warm glow in dark, neutral in light
+
+  // The Skeleton shimmer (2026-09-08, Task 6 fix round 1). Composed for the same
+  // reason as the three above — a colour with baked-in alpha is a token, not a
+  // literal in a rule body.
+  "skeleton-base",  // the placeholder block's own wash
+  "skeleton-sweep", // the ::after gradient's middle stop
+
+  // The primary button hover sheen (2026-09-08, Task 7). Same ruling as the
+  // skeleton pair above — Task 6's fix round is the precedent.
+  "sheen-highlight", // .brand-btn-sheen::after's gradient middle stop
 ] as const;
 
 const UTILITY_PREFIXES = [
@@ -307,9 +317,15 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
   });
 
   it("counts the migrated occurrences, alpha-free ones included", () => {
-    // 69 colour occurrences moved: 65 alpha-bearing plus FOUR alpha-free. A check
-    // scoped to alpha-bearing values misses the alpha-free ones entirely — and three
-    // of those four were beam, including `.brand-atmosphere`'s own body wash.
+    // 69 colour occurrences: 65 alpha-bearing plus FOUR alpha-free — a check
+    // scoped to alpha-bearing values misses the alpha-free ones entirely, and
+    // three of those four were beam, including `.brand-atmosphere`'s own body wash.
+    //
+    // `.brand-skeleton`'s shimmer (Task 6) does NOT add to this count: its two
+    // alpha-bearing colours are declared as composed tokens (--skeleton-base,
+    // --skeleton-sweep) referenced with a bare `var(--name)` in the rule body,
+    // not `rgb(var(--role-rgb) / a)` — the same shape as --warning-glow. The
+    // OCCURRENCE regex only matches the latter, so the pin stays put.
     const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative)/.test(o.name));
     expect(all.length).toBe(69);
     expect(all.filter((o) => o.alpha === "none").length).toBe(4);
