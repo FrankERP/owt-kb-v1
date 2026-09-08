@@ -272,7 +272,7 @@ cards don't all re-render on every provider render. Consumers: `AudioPlayer`, `D
 
 ---
 
-## `app/components/` — inventory (41 files: 31 top-level + 10 admin panels)
+## `app/components/` — inventory (65 files: 32 top-level + 20 admin + 7 kids + 6 ui)
 
 Legend: **[C]** client, **[S]** server.
 
@@ -358,7 +358,7 @@ Shares `songToForm` / chart helpers with `SongFormModal`. Lyrics and charts are 
 
 ## Tests
 
-**212 test files / 4,503 tests** (179 under `app/` + 24 under `scripts/` + 9 harness unit
+**218 test files / 4,546 tests** (184 under `app/` + 25 under `scripts/` + 9 harness unit
 tests under `e2e/service-readiness/__tests__/`).
 Separately, **11 Playwright specs** under `e2e/service-readiness/` run only against the isolated
 verification deployment and are **not** part of `npm test` — see

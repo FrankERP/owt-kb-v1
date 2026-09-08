@@ -236,6 +236,24 @@ const Page = async ({ params }: Params) => {
       {/* ── Content ──────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 py-12 space-y-20">
 
+        {/* `sections` is already the list of what will paint, so it answers this
+            exactly. A song with no audio, tutorials, references, lyrics or
+            history used to render the hero over an empty box — the page looked
+            half-loaded rather than empty, and ~15 songs have no lyrics source in
+            the catalogue at all, so this is a real state, not a hypothetical. */}
+        {sections.length === 0 && (
+          <div className="flex flex-col items-center gap-3 py-16 text-mono-600">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 18V5l12-2v13" />
+              <circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+            </svg>
+            <p className="font-label text-sm uppercase tracking-widest text-center">Esta canción aún no tiene contenido</p>
+            <p className="font-body text-sm text-mono-500 max-w-sm text-center">
+              Todavía no hay audio, tutoriales, referencias, letra ni historial para mostrar.
+            </p>
+          </div>
+        )}
+
         {/* Audio */}
         {hasAudio && (
           <section id="audio" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
