@@ -46,7 +46,7 @@ export default function Switch({
       disabled={disabled}
       onClick={() => { void haptic("light"); onChange(!checked); }}
       className={`relative inline-flex shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-base ease-out-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base disabled:opacity-50 ${s.track} ${
-        checked ? "bg-accent" : "bg-mono-500/70"
+        checked ? "bg-accent" : "bg-mono-300 dark:bg-mono-600"
       } ${className}`.trim()}
     >
       <m.span
