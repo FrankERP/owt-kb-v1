@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useToast } from "@/app/components/ui/Toast";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
 
 import {
@@ -408,7 +408,7 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToastValue] = useTransientValue<{ msg: string; ok: boolean } | null>(null, 3000);
+  const { toast } = useToast();
   const [filter, setFilter] = useState<ProposalFilter>("pending");
   const [highlightIds, setHighlightIds] = useState<string[]>([]);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
@@ -421,7 +421,7 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
   const cardRefs = useRef(new Map<string, HTMLDivElement | null>());
   const scrollTargetRef = useRef<string | null>(null);
 
-  const showToast = (msg: string, ok = true) => setToastValue({ msg, ok });
+  const showToast = (msg: string, ok = true) => toast({ message: msg, tone: ok ? "ok" : "error" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -786,17 +786,6 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
                 and moving 9 is the same broken-button feeling in reverse. */}
             {`Ver ${(stepsToShowMore - windowSteps) * WIDEN_STEP_MONTHS} meses más`}
           </button>
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
-          toast.ok
-            ? "bg-surface-raised-alt border-accent/30"
-            : "bg-negative-surface-deep/80 border-negative-strong/30"
-        }`}>
-          {toast.msg}
         </div>
       )}
     </div>

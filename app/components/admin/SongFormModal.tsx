@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect, useId } from "react";
+import { useState, useRef, useId } from "react";
 import type { PortableTextBody } from "@/app/utils/interface";
 import { bodyToLyrics } from "@/app/utils/lyrics";
-import { useFocusTrap } from "@/app/utils/useFocusTrap";
 import { chartsFromSong, chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
 import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
 
@@ -82,50 +81,6 @@ export function buildPayload(form: FormState) {
     referenceLinks: form.referenceLinks,
     tagIds: form.tagIds,
   };
-}
-
-// ─── Modal ────────────────────────────────────────────────────────────────────
-
-export function Modal({
-  title,
-  onClose,
-  children,
-  zClass = "z-50",
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-  zClass?: string;
-}) {
-  // Close on Escape, like the song sheet — standard modal-dialog behavior.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  // Move focus into the dialog, trap it, and restore on close.
-  const dialogRef = useFocusTrap<HTMLDivElement>(true);
-
-  return (
-    <div className={`fixed inset-0 ${zClass} flex items-start justify-center pt-4 px-4 pb-4`}>
-      <div className="absolute inset-0 bg-scrim/60 backdrop-blur-sm" onClick={onClose} />
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        tabIndex={-1}
-        className="relative z-10 w-full max-w-2xl bg-surface-raised-alt border border-accent/20 rounded-xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)] focus:outline-none"
-      >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-edge-accent-subtle shrink-0">
-          <h2 className="font-display text-lg uppercase tracking-wide">{title}</h2>
-          <button onClick={onClose} aria-label="Cerrar" className="text-mono-400 hover:text-accent transition-colors text-xl leading-none">×</button>
-        </div>
-        <div className="overflow-y-auto overflow-x-hidden p-6 space-y-5 flex-1">{children}</div>
-      </div>
-    </div>
-  );
 }
 
 // ─── SongForm ─────────────────────────────────────────────────────────────────

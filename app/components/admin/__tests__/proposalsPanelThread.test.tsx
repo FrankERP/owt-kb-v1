@@ -23,6 +23,7 @@ vi.mock("../serviceReadiness", async (importOriginal) => ({
 }));
 
 import ProposalsPanel from "../ProposalsPanel";
+import { ToastProvider } from "../../ui/Toast";
 
 interface Row {
   _id: string;
@@ -83,7 +84,7 @@ afterEach(cleanup);
 
 async function mountAndPost(postResponse: Record<string, unknown>, initial: Partial<Row> = {}) {
   const counts = stubApi([row(initial)], postResponse);
-  render(<ProposalsPanel viewerId="admin-1" />);
+  render(<ToastProvider><ProposalsPanel viewerId="admin-1" /></ToastProvider>);
   await waitFor(() => expect(screen.queryByText("Ana Líder")).not.toBeNull());
   const readsAfterMount = counts.listReads;
 
@@ -141,7 +142,7 @@ describe("ProposalsPanel — posting into a card's thread", () => {
     // still produce "" and the test would pass while asserting nothing.
     const LEGACY = "una petición anterior";
     stubApi([row({ admin_notes: LEGACY } as Partial<Row>)], {});
-    render(<ProposalsPanel viewerId="admin-1" />);
+    render(<ToastProvider><ProposalsPanel viewerId="admin-1" /></ToastProvider>);
     await waitFor(() => expect(screen.queryByText("Ana Líder")).not.toBeNull());
     fireEvent.click(screen.getByText("Solicitar cambios"));
 

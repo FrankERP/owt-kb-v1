@@ -25,6 +25,7 @@ vi.mock("../serviceReadiness", async (importOriginal) => ({
 }));
 
 import ProposalsPanel from "../ProposalsPanel";
+import { ToastProvider } from "../../ui/Toast";
 import type { ProposalReviewTarget } from "../proposalHandoff";
 
 interface Row {
@@ -111,7 +112,7 @@ describe("ProposalsPanel — the archive window, mounted", () => {
       status: "approved",
     };
     const onResolved = vi.fn();
-    render(<ProposalsPanel target={target} onResolved={onResolved} />);
+    render(<ToastProvider><ProposalsPanel target={target} onResolved={onResolved} /></ToastProvider>);
 
     await waitFor(() => expect(onResolved).toHaveBeenCalledWith("focus"));
     // The card itself — not just the filter switch the handoff also performs.
@@ -132,7 +133,7 @@ describe("ProposalsPanel — the archive window, mounted", () => {
     });
     stubApi([PAST]);
 
-    render(<ProposalsPanel />);
+    render(<ToastProvider><ProposalsPanel /></ToastProvider>);
     await waitFor(() => expect(screen.queryByText("Ana Pasada")).not.toBeNull());
     // The scenario is the Todas tab — the admin watching the whole list.
     fireEvent.click(tab("Todas"));
@@ -161,7 +162,7 @@ describe("ProposalsPanel — the archive window, mounted", () => {
     });
     stubApi([OLD]);
 
-    render(<ProposalsPanel />);
+    render(<ToastProvider><ProposalsPanel /></ToastProvider>);
     // The window is applied AFTER the status filter, so it hides nothing on the
     // default Pendientes tab. Aprobadas is where the archive actually lives.
     await waitFor(() => expect(screen.queryByText("Aprobadas")).not.toBeNull());

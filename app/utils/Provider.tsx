@@ -7,6 +7,7 @@ import { PlayerProvider } from "@/app/context/PlayerContext"
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider"
 import { ThemeBootstrap } from "@/app/components/ThemeBootstrap"
 import { MotionProvider } from "@/app/components/ui/MotionProvider"
+import { ToastProvider } from "@/app/components/ui/Toast"
 
 interface Props {
   children: React.ReactNode;
@@ -42,7 +43,9 @@ export const Provider = ({ children }: Props) => {
         <ThemeBootstrap>
           <PlayerProvider>
             <CueDialogProvider>
-              <MotionProvider>{children}</MotionProvider>
+              <MotionProvider>
+                <ToastProvider>{children}</ToastProvider>
+              </MotionProvider>
             </CueDialogProvider>
           </PlayerProvider>
         </ThemeBootstrap>

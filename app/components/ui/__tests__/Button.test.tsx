@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 // app/components/ui/__tests__/Button.test.tsx
+import { createRef } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Button, { buttonClass } from "../Button";
@@ -70,5 +71,17 @@ describe("Button", () => {
     render(<Button onClick={onClick}>Ok</Button>);
     fireEvent.click(screen.getByRole("button"));
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it("forwards a ref to the underlying button", () => {
+    const ref = createRef<HTMLButtonElement>();
+    render(<Button ref={ref}>Abrir</Button>);
+    expect(ref.current?.tagName).toBe("BUTTON");
+  });
+
+  it("forwards a ref to the underlying link", () => {
+    const ref = createRef<HTMLAnchorElement>();
+    render(<Button ref={ref} href="/">Inicio</Button>);
+    expect(ref.current?.tagName).toBe("A");
   });
 });

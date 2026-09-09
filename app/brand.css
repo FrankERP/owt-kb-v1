@@ -36,6 +36,11 @@
      wraps to two lines on a phone. Not a colour. */
   --impersonation-h: 3.5rem;
 
+  /* Height of the bottom nav on phones, so a toast's bottom offset clears it.
+     0 until M1's BottomNav publishes the measured value (same pattern as
+     --impersonation-h above). Not a colour. */
+  --bottom-nav-h: 0px;
+
   /* ---- Child B, Layer 1: the 18 base roles -------------------------------
      Stored as bare RGB triplets so Tailwind can apply <alpha-value>. The seven
      --brand-* above stay until B-final; this slice REMOVES NOTHING, so both

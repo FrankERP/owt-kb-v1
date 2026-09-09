@@ -60,7 +60,7 @@ describe("ActivityPanel — a failed load", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({
       ok: true,
       json: async () => [
-        { _id: "m1", member_name: "Ana", lastActive: null, loginCount: 0, lastSeen: null },
+        { _id: "m1", member_name: "Ana", lastActive: null, lastLogin: null, loginCount: 0, lastSeen: null, providers: [], events: [] },
       ],
     })));
     const { container } = render(<ActivityPanel />);

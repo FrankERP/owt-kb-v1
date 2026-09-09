@@ -16,6 +16,7 @@ import EmailPrefToggles, {
   visibleEmailPrefRows,
 } from "../ui/EmailPrefToggles";
 import { CueDialogProvider } from "../ui/CueDialogProvider";
+import { ToastProvider } from "../ui/Toast";
 import ProfilePanel from "../ProfilePanel";
 
 afterEach(() => {
@@ -136,9 +137,11 @@ const baseMember = {
 
 function openProfile(notifPrefs: Record<string, unknown> | undefined, role = baseMember.role) {
   const utils = render(
-    <CueDialogProvider>
-      <ProfilePanel initialMember={{ ...baseMember, role, notifPrefs }} />
-    </CueDialogProvider>,
+    <ToastProvider>
+      <CueDialogProvider>
+        <ProfilePanel initialMember={{ ...baseMember, role, notifPrefs }} />
+      </CueDialogProvider>
+    </ToastProvider>,
   );
   act(() => { fireEvent.click(utils.getByRole("button", { name: /Editar perfil/i })); });
   return utils;
