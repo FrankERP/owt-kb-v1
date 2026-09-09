@@ -25,7 +25,9 @@ describe("Toast", () => {
     fireEvent.click(screen.getByText("go"));
     expect(screen.getByRole("status").textContent).toContain("Guardado");
     act(() => { vi.advanceTimersByTime(3000); });
-    expect(screen.queryByRole("status")).toBeNull();
+    // The polite region persists (M0b-2) — a toast leaving clears its own text,
+    // not the always-mounted region itself.
+    expect(screen.queryByText("Guardado")).toBeNull();
   });
 
   it("an error toast is an alert", () => {
@@ -75,11 +77,21 @@ describe("Toast", () => {
     fireEvent.click(screen.getByText("two"));
     fireEvent.click(screen.getByText("three"));
     fireEvent.click(screen.getByText("four"));
-    const visible = screen.getAllByRole("status");
+    // The region itself is a single always-mounted element (M0b-2); count the
+    // individual toast items inside it instead.
+    const visible = document.querySelectorAll('[data-toast-root] .pointer-events-auto');
     expect(visible).toHaveLength(3);
     expect(screen.queryByText("Uno")).toBeNull();
     expect(screen.getByText("Dos")).toBeTruthy();
     expect(screen.getByText("Tres")).toBeTruthy();
     expect(screen.getByText("Cuatro")).toBeTruthy();
+  });
+
+  it("keeps a polite live region mounted with zero toasts, so the first toast is announced", () => {
+    render(<ToastProvider><span /></ToastProvider>);
+    const region = document.querySelector('[data-toast-root] [role="status"]');
+    expect(region).not.toBeNull();
+    expect(region?.getAttribute("aria-live")).toBe("polite");
+    expect(document.querySelector('[data-toast-root] [role="alert"]')).not.toBeNull();
   });
 });
