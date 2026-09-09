@@ -252,7 +252,7 @@ Semantics: `role="radiogroup"`; each option is `<button type="button" role="radi
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import MotionProvider from "../MotionProvider";
+import { MotionProvider } from "../MotionProvider";
 import SegmentedControl from "../SegmentedControl";
 import { installMotionTestEnv } from "./motionTestSetup";
 
@@ -815,7 +815,7 @@ export function useActiveIntoView(active: boolean): (node: HTMLElement | null) =
 /** @vitest-environment jsdom */
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import MotionProvider from "../MotionProvider";
+import { MotionProvider } from "../MotionProvider";
 import SlidingIndicator, { useActiveIntoView } from "../SlidingIndicator";
 import { installMotionTestEnv } from "./motionTestSetup";
 
@@ -1066,7 +1066,7 @@ export default function Switch(props: {
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import MotionProvider from "../MotionProvider";
+import { MotionProvider } from "../MotionProvider";
 import Switch from "../Switch";
 import { installMotionTestEnv } from "./motionTestSetup";
 
@@ -1782,7 +1782,7 @@ Old value rises out, new value rises in (spec §4). `AnimatePresence mode="popLa
 /** @vitest-environment jsdom */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import MotionProvider from "../MotionProvider";
+import { MotionProvider } from "../MotionProvider";
 import NumberRoll from "../NumberRoll";
 import { installMotionTestEnv } from "./motionTestSetup";
 
