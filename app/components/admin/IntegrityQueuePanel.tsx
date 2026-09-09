@@ -41,6 +41,7 @@ import {
   type IntegritySourceStates,
 } from "./serviceIntegrityQueue";
 import type { IntegrityIssueTarget } from "./proposalHandoff";
+import Collapse from "@/app/components/ui/Collapse";
 
 const DOMAIN_ROUTE: Record<IntegrityDomain, string> = {
   roles: "/api/admin/service-integrity/roles",
@@ -213,7 +214,7 @@ export default function IntegrityQueuePanel({
         >
           <span
             aria-hidden="true"
-            className={`font-label text-xs transition-transform ${open ? "rotate-90" : ""}`}
+            className={`font-label text-xs transition-transform duration-base ${open ? "rotate-90" : ""}`}
           >
             ▸
           </span>
@@ -269,7 +270,7 @@ export default function IntegrityQueuePanel({
         </p>
       )}
 
-      <div id="integrity-queue-body" hidden={!open}>
+      <Collapse id="integrity-queue-body" open={open}>
         {queue.count === 0 ? (
           <p className="px-3 pb-3 font-body text-xs text-mono-500 sm:px-4">
             {queue.incomplete
@@ -292,7 +293,7 @@ export default function IntegrityQueuePanel({
             ))}
           </ul>
         )}
-      </div>
+      </Collapse>
     </section>
   );
 }
@@ -336,7 +337,7 @@ function QueueEntry({
         </span>
       </button>
 
-      <div id={bodyId} hidden={!expanded} className="space-y-1.5 px-3 pb-3">
+      <Collapse id={bodyId} open={expanded} className="space-y-1.5 px-3 pb-3">
         <Row label="Tipo" value={entry.kind} mono />
         <Row label="Dominio" value={DOMAIN_LABEL[entry.domain]} />
         {entry.targetKey && <Row label="Objetivo" value={entry.targetKey} mono />}
@@ -350,7 +351,7 @@ function QueueEntry({
         <p className="rounded-lg border border-accent/20 bg-accent/5 px-2.5 py-2 font-body text-xs text-accent/90 [overflow-wrap:anywhere]">
           {INTEGRITY_ACTION_COPY[entry.action]}
         </p>
-      </div>
+      </Collapse>
     </li>
   );
 }

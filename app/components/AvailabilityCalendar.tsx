@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
+import Collapse from "@/app/components/ui/Collapse";
 
 interface Props {
   /** The revision this page was rendered at — the save's `ifRevisionId` guard. */
@@ -341,6 +342,7 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
             type="button"
             onClick={() => setRecurOpen(v => !v)}
             aria-expanded={recurOpen}
+            aria-controls="availability-recur"
             className={`px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
               recurOpen
                 ? "border-accent text-accent"
@@ -365,48 +367,46 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
       </div>
 
       {/* Recurring pattern */}
-      {recurOpen && (
-        <div className="rounded-xl border border-accent/20 bg-accent/[0.04] p-4 space-y-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-accent/70">
-            Marcar un día recurrente como no disponible
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={recurDow}
-              onChange={e => setRecurDow(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
-            >
-              {WEEKDAYS.map((w, i) => <option key={i} value={i} className="bg-surface-base">{w}</option>)}
-            </select>
-            <select
-              value={recurInterval}
-              onChange={e => setRecurInterval(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
-            >
-              <option value={1} className="bg-surface-base">Cada semana</option>
-              <option value={2} className="bg-surface-base">Cada 2 semanas</option>
-              <option value={4} className="bg-surface-base">Cada 4 semanas</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => applyRecurring(true)}
-              className="px-4 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors"
-            >
-              Marcar
-            </button>
-            <button
-              type="button"
-              onClick={() => applyRecurring(false)}
-              className="px-4 py-2 rounded-lg border border-surface-accent-l40-d20 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-negative-strong/40 hover:text-negative-fg transition-colors"
-            >
-              Quitar serie
-            </button>
-          </div>
-          <p className="font-body text-xs text-mono-500">
-            <span className="text-mono-400">Marcar</span> agrega o <span className="text-mono-400">Quitar serie</span> borra ese día durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-mono-400">Guardar</span>.
-          </p>
+      <Collapse open={recurOpen} id="availability-recur" className="rounded-xl border border-accent/20 bg-accent/[0.04] p-4 space-y-3">
+        <p className="font-label text-[11px] uppercase tracking-widest text-accent/70">
+          Marcar un día recurrente como no disponible
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={recurDow}
+            onChange={e => setRecurDow(Number(e.target.value))}
+            className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
+          >
+            {WEEKDAYS.map((w, i) => <option key={i} value={i} className="bg-surface-base">{w}</option>)}
+          </select>
+          <select
+            value={recurInterval}
+            onChange={e => setRecurInterval(Number(e.target.value))}
+            className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
+          >
+            <option value={1} className="bg-surface-base">Cada semana</option>
+            <option value={2} className="bg-surface-base">Cada 2 semanas</option>
+            <option value={4} className="bg-surface-base">Cada 4 semanas</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => applyRecurring(true)}
+            className="px-4 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors"
+          >
+            Marcar
+          </button>
+          <button
+            type="button"
+            onClick={() => applyRecurring(false)}
+            className="px-4 py-2 rounded-lg border border-surface-accent-l40-d20 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-negative-strong/40 hover:text-negative-fg transition-colors"
+          >
+            Quitar serie
+          </button>
         </div>
-      )}
+        <p className="font-body text-xs text-mono-500">
+          <span className="text-mono-400">Marcar</span> agrega o <span className="text-mono-400">Quitar serie</span> borra ese día durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-mono-400">Guardar</span>.
+        </p>
+      </Collapse>
 
       {upcomingCount > 0 && (
         <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useToast } from "@/app/components/ui/Toast";
+import Collapse from "@/app/components/ui/Collapse";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import MonthGenerator from "./MonthGenerator";
@@ -1111,19 +1112,21 @@ export default function ServicesPanel() {
               <button
                 type="button"
                 onClick={() => setShowPastMonths(v => !v)}
+                aria-expanded={showPastMonths}
+                aria-controls="services-past-months"
                 className="font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-accent/10 text-mono-600 hover:border-accent/25 hover:text-mono-400 transition-colors flex items-center gap-1"
               >
                 Roles previos
-                <span className={`transition-transform ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
+                <span className={`transition-transform duration-base ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
               </button>
             )}
           </div>
-          {showPastMonths && pastMonths.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap pl-12">
+          {pastMonths.length > 0 && (
+            <Collapse id="services-past-months" open={showPastMonths} className="flex items-center gap-2 flex-wrap pl-12">
               {pastMonths.map(ym => (
                 <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} past />
               ))}
-            </div>
+            </Collapse>
           )}
         </div>
       )}

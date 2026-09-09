@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Collapse from "@/app/components/ui/Collapse";
 
 interface LoginEvent {
   _id: string;
@@ -160,6 +161,8 @@ export default function ActivityPanel() {
             <div key={m._id} className="rounded-xl border border-edge-accent-subtle overflow-hidden">
               <button
                 onClick={() => setExpanded(expanded === m._id ? null : m._id)}
+                aria-expanded={expanded === m._id}
+                aria-controls={`activity-${m._id}`}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-accent-deep/5 dark:hover:bg-accent/5 transition-colors text-left"
               >
                 <Avatar name={m.member_name} />
@@ -198,7 +201,7 @@ export default function ActivityPanel() {
                   <svg
                     width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                     strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                    className={`text-mono-500 shrink-0 transition-transform ${expanded === m._id ? "rotate-180" : ""}`}
+                    className={`text-mono-500 shrink-0 transition-transform duration-base ${expanded === m._id ? "rotate-180" : ""}`}
                   >
                     <polyline points="6 9 12 15 18 9" />
                   </svg>
@@ -206,42 +209,44 @@ export default function ActivityPanel() {
               </button>
 
               {/* Expanded detail */}
-              {expanded === m._id && (
-                <div className="border-t border-accent/10 px-4 py-3 space-y-3 bg-accent/[0.04]">
-                  {/* Last seen vs last login */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-0.5">Última visita</p>
-                      <p className="font-body text-xs">
-                        {m.lastSeen ? formatDateTime(m.lastSeen) : "—"}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-0.5">Último inicio de sesión</p>
-                      <p className="font-body text-xs">
-                        {m.lastLogin ? formatDateTime(m.lastLogin) : "—"}
-                      </p>
+              <Collapse
+                open={expanded === m._id}
+                id={`activity-${m._id}`}
+                className="border-t border-accent/10 px-4 py-3 space-y-3 bg-accent/[0.04]"
+              >
+                {/* Last seen vs last login */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-0.5">Última visita</p>
+                    <p className="font-body text-xs">
+                      {m.lastSeen ? formatDateTime(m.lastSeen) : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-0.5">Último inicio de sesión</p>
+                    <p className="font-body text-xs">
+                      {m.lastLogin ? formatDateTime(m.lastLogin) : "—"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Login history */}
+                {(m.events?.length ?? 0) > 0 && (
+                  <div>
+                    <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-1.5">
+                      Historial de accesos ({m.loginCount})
+                    </p>
+                    <div className="space-y-1">
+                      {m.events.map((e) => (
+                        <div key={e._id} className="flex items-center justify-between gap-4">
+                          <span className="font-body text-xs text-mono-400">{formatDateTime(e.timestamp)}</span>
+                          <ProviderBadge provider={e.provider} />
+                        </div>
+                      ))}
                     </div>
                   </div>
-
-                  {/* Login history */}
-                  {m.events.length > 0 && (
-                    <div>
-                      <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-1.5">
-                        Historial de accesos ({m.loginCount})
-                      </p>
-                      <div className="space-y-1">
-                        {m.events.map((e) => (
-                          <div key={e._id} className="flex items-center justify-between gap-4">
-                            <span className="font-body text-xs text-mono-400">{formatDateTime(e.timestamp)}</span>
-                            <ProviderBadge provider={e.provider} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                )}
+              </Collapse>
             </div>
           );
         })}
