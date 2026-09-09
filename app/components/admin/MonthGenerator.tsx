@@ -28,6 +28,7 @@ import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
 import Checkbox from "@/app/components/ui/Checkbox";
+import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
 import {
   editableConfig,
@@ -3470,10 +3471,16 @@ export default function MonthGenerator({
                 <option value="saturday_role">Sábado</option>
                 <option value="special_role">Especial</option>
               </Select>
-              <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
-                Fecha
-                <input type="date" value={createDate} disabled={storedMutationLocked} min={`${monthPrefix}-01`} max={`${monthPrefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`} onChange={(event) => setCreateDate(event.target.value)} className={inCls} />
-              </label>
+              <DateField
+                kind="date"
+                id="mg-create-date"
+                label="Fecha"
+                value={createDate}
+                disabled={storedMutationLocked}
+                min={`${monthPrefix}-01`}
+                max={`${monthPrefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`}
+                onChange={(event) => setCreateDate(event.target.value)}
+              />
               {createType === "special_role" ? (
                 <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
                   Nombre

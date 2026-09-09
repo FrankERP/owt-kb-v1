@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MONTH_NAMES_ES, addMonths, monthRangeLabel, scheduleHref, windowMonths, WINDOW_MONTHS } from "../utils/scheduleMonths";
 import CueDialog from "./ui/CueDialog";
+import DateField from "./ui/DateField";
 import SegmentedControl from "./ui/SegmentedControl";
 import { themeColour } from "@/app/utils/themeColour";
 
@@ -141,15 +142,17 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
         </Link>
       </div>
       <div className="flex items-center justify-center gap-3 mb-8">
-        <label className="flex items-center gap-2">
-          <span className="sr-only">Ir al mes</span>
-          <input
-            type="month"
-            value={anchorMonth}
-            onChange={(e) => { if (e.target.value) router.push(scheduleHref(e.target.value)); }}
-            className="bg-transparent border border-surface-accent-30 rounded-lg px-3 py-1.5 font-label text-xs text-ink-muted"
-          />
-        </label>
+        <DateField
+          kind="month"
+          aria-label="Ir al mes"
+          value={anchorMonth}
+          onChange={(e) => { if (e.target.value) router.push(scheduleHref(e.target.value)); }}
+          onStep={(d) => {
+            const [y, mo] = anchorMonth.split("-").map(Number);
+            const next = new Date(y, mo - 1 + d, 1);
+            router.push(scheduleHref(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`));
+          }}
+        />
         {viewMonth && (
           <Link
             href="/schedule"

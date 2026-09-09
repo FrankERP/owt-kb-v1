@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 324,
-    "filesScanned": 281,
-    "filesWithColour": 51,
+    "literalRows": 323,
+    "filesScanned": 282,
+    "filesWithColour": 52,
     "byCategory": {
       "2": 2,
-      "4": 74,
+      "4": 73,
       "8": 97,
       "9": 10,
       "11": 7,
@@ -22,7 +22,7 @@
     "byDisposition": {
       "B": 126,
       "exempt": 35,
-      "keep": 248,
+      "keep": 247,
       "C": 6,
       "D": 15
     },
@@ -2623,7 +2623,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 456,
+      "line": 457,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2635,7 +2635,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 562,
+      "line": 563,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2647,7 +2647,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1888,
+      "line": 1889,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2659,7 +2659,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1143,
+      "line": 1144,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2671,19 +2671,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1293,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/PlannerGrid.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 2328,
+      "line": 1294,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3147,23 +3135,11 @@
       "file": "app/components/CalendarView.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 150,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/CalendarView.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
       "value": "bg-current",
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 396,
+      "line": 399,
       "disposition": "B",
       "reason": null
     },
@@ -3175,7 +3151,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 399,
+      "line": 402,
       "disposition": "B",
       "reason": null
     },
@@ -3778,6 +3754,18 @@
       "line": 441,
       "disposition": "B",
       "reason": null
+    },
+    {
+      "file": "app/components/ui/DateField.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 33,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
     },
     {
       "file": "app/components/ui/Select.tsx",
