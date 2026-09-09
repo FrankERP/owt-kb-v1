@@ -836,9 +836,12 @@ new colour in a rule body is a composed token at every `--warning-glow` touch po
 # Part VII — M0b-1 shipped
 
 M0b-1 (overlays and controls — `CueDialog`, `Toast`/`useToast`, `Menu`/`MenuItem`/
-`MenuSeparator`/`MenuHeader`, `Collapse`, the gallery's own `GalleryMotion`) is
-implemented on branch `claude/motion-m0b-overlays-controls`; commit range
-`603f1eb4..0219cc3e` and the two docs commits after it. Full reference in `docs/MOTION.md`
+`MenuSeparator`/`MenuHeader`, `Collapse`, the gallery's own `GalleryMotion`) was
+**released to production on 2026-09-09** via PR #52 (merge `2d635d38`, alias verified).
+Branch `claude/motion-m0b-overlays-controls`, range `603f1eb4..0c478b5a`, of which
+`e686fab3..0c478b5a` is the wave after Frank's dev look: 150 px drag threshold,
+the whole head as the grip, the `×` `sr-only` on phone sheets, the day sheet's
+`CERRAR` footer gone. Full reference in `docs/MOTION.md`
 — primitives table, the "Load-failure behaviour" section (§Part VI's "Toast/Menu/Collapse
 need a load-failure fallback" resolved: `Collapse`/`CueDialog` render already-open via
 `initial={false}`; `Toast`/`Menu` animate in from `initial` since they only ever open long
