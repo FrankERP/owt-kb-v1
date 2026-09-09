@@ -181,9 +181,9 @@ Before was measured on the primary checkout at the merge-base commit
 | Δ vs Before M0a | +0.01 kB | +12.4 kB | +12.5 kB | — |
 | **M0b-1 tree, `domAnimation`** (confirmatory rebuild, fix round 1) | 168.4 kB | 87.8 kB | 307.0 kB | 41.3 kB / 15.4 kB |
 | **M0b-1 tree, `domMax`** (shipped, `e9d90327`) | 168.4 kB | 87.9 kB | 307.1 kB | 88.0 kB / 28.8 kB |
-| **M0b-1 tree, rebuilt today** (`2d635d38`, confirmatory rebuild for the M0b-2 row below) | 168.4 kB | 112.9 kB | 333.8 kB | 58.8 kB / 17.4 kB |
-| **M0b-2 tree** (this branch, `fa9bff79` + the controls-fixture commit) | 168.4 kB | 114.2 kB | 336.7 kB | 58.8 kB / 17.4 kB |
-| Δ, M0b-2 vs the same-environment M0b-1 rebuild | 0 kB | +1.3 kB | +2.9 kB | ~0 kB |
+| **`e9d90327` cold rebuild** (M0b-1 Task 1, mid-branch — the commit the row above was actually measured against; fix round 1) | 169.2 kB | 85.5 kB | 310.3 kB | 90.1 kB / 29.5 kB |
+| **`2d635d38` cold rebuild** (the M0b-1 merge; fix round 1) | 169.2 kB | 110.3 kB | 335.3 kB | not cleanly isolable — see note below |
+| **M0b-2 tip** (`857cd2d5`, this branch; fix round 1) | 169.2 kB | 110.2 kB | 336.8 kB | not cleanly isolable — see note below |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -269,33 +269,77 @@ switch alone should produce — as an open question, since it did not rebuild
 `domMax`, same tree, same commit apart from that one export. See the
 paragraph under the table for what it shows.
 
-**M0b-2's own row needed a fresh M0b-1 baseline, and rebuilding it did not reproduce
-the numbers above.** Task 13 (the `controls` gallery fixture) measured the M0b-2
-tree per the method above and got `/` = 114.2 kB, `/admin` = 336.7 kB — which,
-compared directly against "Before M0a" (77.3 kB / 301.7 kB), reads as +36.9 kB /
-+35.0 kB, over the programme's +25 kB gz cap. Before treating that as a real
-regression, the SAME commit that produced the "M0b-1 tree, `domMax`" row above
-(`2d635d38`) was rebuilt today, in this environment, with the identical script —
-and it measured `/` = 112.9 kB and `/admin` = 333.8 kB, not the previously-recorded
-87.9 kB / 307.1 kB. The async chunk shows the same pattern: 58.8 kB raw / 17.4 kB gz
-today vs the recorded 90 088 B / 29 468 B for the identical commit. Three independent
-figures (shared, route, chunk) were checked; only "shared" reproduced exactly
-(168.4 kB both times — it sums a small, fixed set of framework files that Turbopack's
-chunk splitter doesn't touch). The route and chunk figures depend on Turbopack's
-chunk-splitting boundaries, which this rebuild shows are NOT stable for the identical
-commit across two builds taken days apart in what should be the same toolchain —
-a materially larger version of the 6-byte drift already documented above for
-`domAnimation`/`domMax`, not a new phenomenon. **The reliable number is therefore the
-same-environment delta, not either absolute figure**: M0b-2 vs a same-day rebuild of
-M0b-1 moves `/` by +1.3 kB and `/admin` by +2.9 kB — consistent with the actual
-change (an isolated, public gallery fixture that touches neither route, plus whatever
-`/admin`-surface primitive wiring landed in the M0b-2 tasks before it) — and the async
-chunk does not move at all (58.8 kB → 58.8 kB). Both are far inside the +25 kB cap.
-This does not retroactively validate the Before-M0a-anchored deltas recorded for M0a
-and M0b-1 above; it only says that comparing an absolute figure measured in one
-environment against one measured in another, months apart, is not safe for this
-particular metric, and a clean same-environment re-baseline against "Before M0a"
-would be needed before trusting an absolute cap check again.
+**Fix round 1 (2026-09-09): the "rebuilt today" row above was comparing the wrong
+two commits, per a critical review finding.** It measured `2d635d38` (the M0b-1
+merge) against the ledger's `87.9 kB / 307.1 kB` row, which was actually measured at
+`e9d90327` (2026-09-08, mid-branch — `git diff e9d90327 2d635d38 --stat` is 54 files
+changed, 2 653 insertions / 1 156 deletions: `Toast.tsx`, `Menu.tsx`, `Collapse.tsx`,
+the expanded `CueDialog.tsx`, and their admin/shell wiring). So the ~25 kB gap that
+row reported was most likely M0b-1's own shipped cost, never measured at its merge —
+not "Turbopack drift" as the paragraph below used to claim. `package-lock.json` is
+unchanged between `e9d90327` and `2d635d38`; it gains 10 lines between `2d635d38` and
+this branch's tip (`a1d0fa49`, the haptics plugin) — the rebuild below reused one
+`node_modules` (an APFS clone, `cp -Rc`, of this worktree's install) across all three
+trees regardless.
+
+To settle it, three trees were exported cold — `git archive <sha> | tar -x` into a
+clean scratch directory, `node_modules` cloned in (not symlinked: Turbopack's own
+root-detection rejects a `node_modules` symlink that resolves outside the export
+directory — "Symlink [project]/node_modules is invalid, it points out of the
+filesystem root" — so an APFS clone stood in for it, zero-cost and identical to a
+symlink for this purpose), `.next` removed, `next build` from scratch — and measured
+with the identical script, in the same environment, on the same day: `e9d90327`
+itself (the commit the ledger's `87.9 / 307.1` row was actually measured against),
+`2d635d38` (the commit the old "rebuilt today" row meant to isolate), and this
+branch's tip (`857cd2d5`). All three rows in the table above are that rebuild.
+
+The cold rebuild of `e9d90327` does **not** reproduce `87.9 kB / 307.1 kB` within
+~1 kB: it measures `/` = 85.5 kB (−2.4 kB) and `/admin` = 310.3 kB (+3.2 kB). That is
+consistent with the same-commit rebuild drift already documented elsewhere in this
+section (the 6-byte shared-chunk drift between the `domAnimation`/`domMax` A/B, both
+inside a ±0.5 kB budget) — a few kB of Turbopack chunk-splitting noise on an
+unmodified commit, not a new phenomenon. Shared reproduces far more tightly — 169.2 kB
+against the recorded 168.4 kB, +0.8 kB — because it sums a small, fixed set of
+framework files Turbopack's chunk splitter doesn't touch; all three rows above measure
+it at exactly 169.2 kB, byte-identical.
+
+Against that ~3 kB noise band, the gap between `e9d90327` and `2d635d38` is an order
+of magnitude larger and moves in one direction: `/` moves **+24.8 kB** (85.5 → 110.3)
+and `/admin` moves **+25.0 kB** (310.3 → 335.3), cold, same script, same day. That
+matches the reviewer's finding almost exactly — it is M0b-1's own shipped cost (the
+Toast/Menu/Collapse/CueDialog expansion named above), not Turbopack instability, and
+every sentence in this section that previously attributed a gap of this size to chunk-
+splitting drift was wrong and has been removed.
+
+M0b-2's own cost, `857cd2d5` vs `2d635d38`, is small by comparison and inside the
+noise band established above: `/` moves **−0.1 kB** (110.3 → 110.2) and `/admin`
+moves **+1.5 kB** (335.3 → 336.8).
+
+The async motion-feature chunk could not be cleanly isolated for `2d635d38` or
+`857cd2d5` in this rebuild. Its signature strings (`animateVisualElement`,
+`MeasureLayout`, `Exit`) turn up inside a single 422.5 kB chunk (`44zm1rbsb67qq.js`,
+byte-identical between the two commits, so it is not part of either commit's own
+diff) that Turbopack fused together with roughly 380 kB of `@sanity`/Studio code. The
+theme gallery's `GalleryMotion` loads `domMax` synchronously by design (Rules §4), so
+it is legitimately referenced by the gallery and Studio routes — and in this build
+Turbopack packed it into their shared vendor chunk instead of splitting it into its
+own file the way it did for `e9d90327`, whose isolated chunk measured 90.1 kB raw /
+29.5 kB gz (close to but not identical to the ledger's 88.0 / 28.8 — the same few-kB
+class of drift as the route figures above). No raw/gz figure is reported for
+`2d635d38` or `857cd2d5`'s async chunk as a result; every measurement that HAS
+isolated it, across every commit checked so far, stays well inside the spec's 40 kB
+gz cap for that chunk specifically.
+
+The absolute Δ against "Before M0a" (77.3 kB / 301.7 kB — itself only rebuildable in a
+stale environment; Task 13's failed attempt at that rebuild is unchanged by this fix
+round) is, from this branch's tip: `/` **+32.9 kB**, `/admin` **+35.1 kB**.
+
+**Cap status (§7 +25 kB gz first-load): OPEN** — the absolute Δ is +32.9 kB (`/`) /
++35.1 kB (`/admin`) against "Before M0a"; ruling R was recorded pending Frank's word,
+and this is the number he decides on. This does not retroactively validate the
+Before-M0a-anchored deltas recorded for M0a above; a clean same-environment rebuild of
+"Before M0a" itself would still be needed before trusting an absolute cap check
+against it without caveat.
 
 ## Where the walk's findings landed
 
