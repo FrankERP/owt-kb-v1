@@ -2,9 +2,10 @@
 
 Artifact: `2026-09-09-member-instruments-auto-fill-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
-**Status: PAUSED at the churn cap after round 3. No approval has been recorded. Round 3
-ran on Frank's explicit go-ahead («Sí, lanza la ronda 3», 2026-09-09 13:55 CST); round 4
-requires another.**
+**Status: APPROVED — round 4, digest `d4a0fe34…`, one valid fresh `APPROVED`, which is
+the standard-tier requirement.** Rounds 3 and 4 ran past the churn cap on Frank's explicit
+go-ahead each time («Sí, lanza la ronda 3», 13:55 CST; «Por persona, lanza la ronda 4»,
+14:42 CST, 2026-09-09).
 
 Approval, when it comes, is not authorization to implement. Implementation still
 requires the plan, the three gates, and a fresh code review of the diff.
@@ -26,7 +27,10 @@ request («Haz el review loop»), which is the standard-tier trigger.
 | 1 | `78d62155602f35d33c16338f6d3a55d986b972e2d906c0e865c5baad328cdfc2` | `24a31bbb` | CHANGES_REQUIRED | yes | 0 |
 | 2 | `99046fa40128a45f09d78b5810da3bb0d515b0174643196657ae9fc233d97290` | `93351dae` | CHANGES_REQUIRED | yes | 0 |
 | 3 | `534c32d178fee3be45c144100a41e8d208756775bcf13013f84b850bb1758548` | `763f7c82` | CHANGES_REQUIRED | yes | 0 |
-| — | `a59b286584e71005e9e44b532fd728e9b56b3babac06685fe50fbb53248500be` | `d29a3b2d` | not reviewed | — | — |
+| — | `a59b286584e71005e9e44b532fd728e9b56b3babac06685fe50fbb53248500be` | `d29a3b2d` | not reviewed (superseded before dispatch by Frank's per-person confirmation) | — | — |
+| 4 | `d4a0fe3427c56bcc781503fdc0864360c7b5e968464e4597a76e174420cda390` | `f9d410ac` | **APPROVED** | — | 1 |
+
+Canonical file digest re-checked after the round-4 verdict: `d4a0fe34…`, identical.
 
 Each round used a brand-new `skeptical-reviewer` dispatch given only the reviewer brief,
 an immutable scratchpad snapshot (digest verified equal to the canonical file before
@@ -116,10 +120,26 @@ Non-blocking, adopted: the "no test imports a schema module" rationale corrected
 in `scripts/lib/`, and runs before the preview push since Sanity is schemaless. Not
 adopted: none.
 
+## Round 4 — APPROVED
+
+The reviewer traced the per-member-total case by hand and reproduced the spec's numbers,
+confirmed idempotence on own output by enumerating every producer of `origin: "auto"`
+(`applySolveResponse` voice rows only, `fillColumn` lead/bgv only, every human path
+through `withUpdatedCell` stamping `"manual"`), confirmed the scoped render gate against
+the three producers of `unfilled`, confirmed the D6/PATCH/backfill contract, and checked
+that existing fixtures (no member with `instruments`) keep their Auto assertions because
+every instrument row has zero declarers. No blocker.
+
+Six non-blocking items, all adopted **after** the approval and listed in the spec's §12
+as un-reviewed. Each citation was checked before adoption: `handleAdd` is at
+`AdminPanel.tsx:831` (there is no `handleCreate`); availability is read at
+`candidateRanking.ts:200`; `mapUnfilledSeats` starts at `plannerModel.ts:958`;
+`seatModel.ts:45` canonicalizes `console`.
+
 ## Churn cap
 
-Three substantive `CHANGES_REQUIRED` rounds. Round 3 ran with Frank's go-ahead; round 4
-does not start without another. Recorded in the worklog as a `coordinator-inline`
+Three substantive `CHANGES_REQUIRED` rounds. Rounds 3 and 4 each ran only after Frank's
+explicit go-ahead, obtained in advance and recorded above. Recorded in the worklog as a `coordinator-inline`
 entry naming the defect class:
 
 > §6.2 restates state and eligibility the planner already owns (`rankCandidates`,
@@ -146,6 +166,11 @@ ordering does not compute. Both were the author's, one of them a round-2 adoptio
 - No reviewer claim was accepted without the independent check; every citation fix was
   verified against the file before adoption.
 
-## Post-approval changes
+## Post-approval changes (un-reviewed)
 
-None — there is no approval yet.
+Adopted after the round-4 `APPROVED` on `d4a0fe34…`, so outside that approval — spec §12
+lists them: create path posts `instruments` only when touched and non-empty; "known
+name" defined as `DEFAULT_INSTRUMENT_SEATS` membership; per-row declarer count as a
+`rankCandidates` filter; per-cell `origin` promotion corollary; «sin declarar» in its own
+element; three citation corrections. Current canonical digest after these edits is
+recorded in the commit that carries them.

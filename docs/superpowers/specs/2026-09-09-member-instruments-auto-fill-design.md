@@ -1,6 +1,6 @@
 # Declared instruments and automatic instrument fill — design spec
 
-**Date:** 2026-09-09 · **Status:** Approved in chat by Frank 2026-09-09 (decisions D1–D6 below); written spec pending his review · **Risk tier:** standard
+**Date:** 2026-09-09 · **Status:** Decisions D1–D6 approved in chat by Frank 2026-09-09; adversarial review APPROVED on digest `d4a0fe34…` (round 4, see the review log beside this file); the items under §12 were adopted after that approval and are un-reviewed · **Risk tier:** standard
 (a new optional field on `teamMembers`, a pure client-side filler, and a one-off
 guarded backfill script; no production writer contract, serializer, auth boundary or
 concurrency protocol changes — the solver is NOT touched). Pipeline: this spec → user
@@ -29,7 +29,7 @@ seat, each member of Tipo `instrumento` declares the instrument(s) they play.
 | Eligibility for an instrument seat is `memberType.includes("instrumento")` and nothing finer | `seatModel.ts:86`, `candidateRanking.ts:186` |
 | Tipo is the ONLY eligibility axis; a second axis was removed after it drifted across three selection surfaces | ADR-0029 |
 | Instrument participation is measured in WEEKS (`instrWeeks`: Saturday and Sunday of one weekend count once) | `app/utils/computeParticipation.ts:83` |
-| `rankCandidates` already reads `unavailableDates` and `alreadyAssigned`; a member may hold a voice AND an instrument seat on the same service (D4: Frank, Mkz) | `candidateRanking.ts:171-190` |
+| `rankCandidates` already reads `unavailableDates` and `alreadyAssigned`; a member may hold a voice AND an instrument seat on the same service (D4: Frank, Mkz) | `candidateRanking.ts:171-200` |
 | No member document carries any per-instrument information today | `sanity/schemas/worshipTeam.ts` |
 
 ## 3. Decisions (from the brainstorm, 2026-09-08/09)
@@ -92,7 +92,10 @@ the cheaper of the two), re-exported into `worshipTeam.ts`; `seatModel.test.ts` 
 
 `instruments` is accepted as `string[]` behind a `!== undefined` guard (absent from the
 body ⇒ untouched, like `ministries`), each value passed through `normalizeSeatName`,
-unknown names **rejected with 400** naming the offending value (the seat list is closed
+a name that is not in `DEFAULT_INSTRUMENT_SEATS` after normalization **rejected with
+400** naming the offending value — "known" means membership in that list, the same
+predicate §5's script applies; `normalizeSeatName` alone is not the test, since it also
+canonicalizes `console` → `Console`, a FOH seat (the seat list is closed
 for members even though it is open for services — a typo here would silently make a
 member unschedulable). Duplicates collapse. An array is stored as sent, including `[]`
 (unlike `ministries`, an explicit empty is a legitimate "declares nothing"). Not
@@ -114,8 +117,10 @@ restores it). **The PATCH body carries `instruments` only when the admin touched
 grid** — the same touched-field discipline the form already applies to `ministries` —
 so editing a member's email never writes `[]` over an untouched field, and the backfill's
 "no stored field" predicate (§5) stays true until someone actually declares. The same
-grid appears on the create form, and `handleCreate` (`AdminPanel.tsx:839-844`) adds
-`instruments` to the fields it destructures and posts. The member list shows the
+grid appears on the create form, and `handleAdd` (`AdminPanel.tsx:831`) posts
+`instruments` **only when the grid was touched and is non-empty** — otherwise the field
+stays absent on the new document, so a member created after ship is still "no stored
+field" for a later backfill run (§5), instead of being frozen at `[]`. The member list shows the
 declared instruments as small chips next to the Tipo chips.
 
 ## 5. Backfill: `scripts/backfill-member-instruments.mjs`
@@ -187,7 +192,9 @@ export function fillInstruments(input): FillInstrumentsResult;
    (the filler's own picks from a previous Auto in this session — a second Auto re-rolls
    instruments exactly as the solver re-rolls voices) is emptied. A cell with any other
    origin is not empty and is never touched — every human path stamps `"manual"`
-   (`withUpdatedCell`, `moveOccupant`, column copy). This happens BEFORE the column loop, not
+   (`withUpdatedCell`, `moveOccupant`, column copy). Corollary of the per-cell field: a
+   human ADDING a second occupant to an auto-filled instrument cell stamps the whole cell
+   `"manual"`, so the filler's own pick is promoted and survives the next Auto. Intended. This happens BEFORE the column loop, not
    inside it: `working` must never contain a pick this run has not made, or a stale pick
    in a later column counts as a seat held while an earlier column is being filled and
    the balance is computed against state the same pass is about to discard. (Stored
@@ -286,7 +293,7 @@ weekend columns. In scope, minimal, and **scoped to `instrumento:` rows only**: 
 (target 1, so empty ⇔ short) the per-cell marker and the row's contribution to the
 «Lugares sin cubrir» count are gated on `occupants.length === 0` at render. Voice and
 special rows are untouched: their `unfilled` is one entry per missing SLOT
-(`owt_solver_v2.py:987-990`, `plannerModel.ts:966-984`, `localFill.ts:289-291`), so a Coro
+(`owt_solver_v2.py:987-990`, `plannerModel.ts:958-985`, `localFill.ts:289-291`), so a Coro
 with one of three seated has two entries and a non-empty cell, and an unscoped emptiness
 gate would silently hide the solver's own degradation signal. The wiring test carries a
 partially filled Coro to pin that.
@@ -300,7 +307,8 @@ The grid already marks every unfilled cell (`unfilledByKey`) and reports the tot
   member whose `instruments` does not include the seat's label gets a new
   `undeclared: boolean` flag and sorts after declared candidates (a sort penalty, like
   availability — never a block, D6; `eligible` does NOT fold it in, the filler filters on
-  it explicitly). The picker renders «sin declarar» on the row. The comment at
+  it explicitly). The picker renders «sin declarar» on the row **in its own element**, never concatenated
+  into the name text node — four tests select members via `getByText("Beto")`. The comment at
   `candidateRanking.ts:218` («THE SORT IS DELIBERATELY UNCHANGED (P7b)») is amended in
   the same diff to name this key, so the next reader does not "fix" it back. Because undeclared members
   are still listed, they never become "stranded" occupants and never need the
@@ -368,7 +376,9 @@ The grid already marks every unfilled cell (`unfilledByKey`) and reports the tot
 - `docs/adr/0029-…`: a short «Refinements» paragraph stating that `instruments` narrows
   the `instrumento` Tipo for instrument seats only and is read in exactly three places
   (`rankCandidates`, `occupantDeclaresInstrument`, the backfill script) — the filler
-  reads it only through `rankCandidates`.
+  reads it only through `rankCandidates`, including §6.2's per-row declarer count, which
+  is `rankCandidates(...).filter(c => !c.undeclared).length` on the column, never a
+  direct read of `instruments`.
 - No entry in `docs/SECRETS.md` — no new secret or env var.
 
 ## 11. Out of scope
@@ -378,3 +388,19 @@ The grid already marks every unfilled cell (`unfilledByKey`) and reports the tot
 - Showing declared instruments on `/me` or letting members edit them.
 - Changing the participation sidebar from `instrWeeks` to per-service counts.
 - Capacity guidance for two-occupant seats (existing behaviour kept).
+
+## 12. Post-approval changes (un-reviewed)
+
+Adopted from round 4's non-blocking list after the `APPROVED` verdict on `d4a0fe34…`;
+they are outside that approval. Each was checked against the file it cites before
+adoption.
+
+- §4.4: `handleAdd` posts `instruments` only when touched and non-empty, so new members
+  are not frozen at `[]` for the backfill (`AdminPanel.tsx:831`).
+- §4.2: "known" is defined as membership in `DEFAULT_INSTRUMENT_SEATS` after
+  normalization, the script's predicate (`seatModel.ts:45` canonicalizes `console`).
+- §10: the per-row declarer count is a `rankCandidates` filter, not a fourth read site.
+- §6.2 step 0: the promotion corollary of per-cell `origin` is spelled out.
+- §7: the «sin declarar» label lives in its own element.
+- Citations: `handleCreate` → `handleAdd`; `candidateRanking.ts:171-190` → `:171-200`;
+  `plannerModel.ts:966-984` → `:958-985`.
