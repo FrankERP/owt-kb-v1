@@ -418,7 +418,9 @@ export default function CueDialog({
                     // accessibility tree — VoiceOver and a keyboard cannot drag — and
                     // reappears in place only while it holds keyboard focus. The
                     // ≥640px card has no drag, so there it stays visible.
-                    className={sheetMotion ? "sr-only focus-visible:not-sr-only" : ""}
+                    // not-sr-only resets width/height to auto at (0,2,0), which beats the icon
+                    // variant's w-9/h-9 — restore the 36px hit box in the same variant.
+                    className={sheetMotion ? "sr-only focus-visible:not-sr-only focus-visible:h-9 focus-visible:w-9" : ""}
                   >
                     <CloseIcon />
                   </Button>
