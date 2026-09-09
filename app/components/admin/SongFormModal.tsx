@@ -5,7 +5,6 @@ import type { PortableTextBody } from "@/app/utils/interface";
 import { bodyToLyrics } from "@/app/utils/lyrics";
 import { chartsFromSong, chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
 import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
-import CueDialog from "@/app/components/ui/CueDialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,27 +81,6 @@ export function buildPayload(form: FormState) {
     referenceLinks: form.referenceLinks,
     tagIds: form.tagIds,
   };
-}
-
-// ─── Modal ────────────────────────────────────────────────────────────────────
-
-export function Modal({
-  title,
-  onClose,
-  children,
-}: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-  // `zClass` is gone: `CueDialog` owns its own stacking (`z-[90]`) for every
-  // consumer, so a caller-supplied z-index no longer has anywhere to apply.
-  zClass?: string;
-}) {
-  return (
-    <CueDialog open title={title} label={title} size="md" onDismiss={onClose}>
-      <div className="flex-1 space-y-5 overflow-y-auto overflow-x-hidden p-6">{children}</div>
-    </CueDialog>
-  );
 }
 
 // ─── SongForm ─────────────────────────────────────────────────────────────────

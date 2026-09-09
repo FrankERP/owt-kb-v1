@@ -40,11 +40,15 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
 4. **Reduced motion is global.** `@media (prefers-reduced-motion: reduce)` in
    `brand.css` and `reducedMotion="user"` in `MotionProvider`. Do not add per-effect
    opt-outs. `html[data-motion="off"]` collapses CSS motion the same way — but the
-   theme gallery mounts no `MotionProvider` today, so that attribute covers CSS
-   only, not `motion`-driven JS animation. An M0b fixture that renders `Presence`
-   (or any other `motion` primitive) inside the gallery must add a gallery-side
-   `LazyMotion` plus `MotionGlobalConfig.skipAnimations` keyed off the same
-   attribute, or the gallery's "off" baseline will silently still animate. The
+   theme gallery mounts no `MotionProvider` (it mounts its own `GalleryMotion`, see
+   below), so that attribute covers CSS only, not `motion`-driven JS animation, on
+   any route that has neither. The gallery's `GalleryMotion` (`app/(gallery)/
+   theme-gallery/[theme]/GalleryMotion.tsx`) closes that gap for itself: it loads
+   `domMax` synchronously (a baseline capture must not race an async chunk) and
+   sets `MotionGlobalConfig.skipAnimations` from `data-motion="off"` on mount, so
+   every gallery frame is final. Any new gallery fixture that renders `Presence`
+   (or another `motion` primitive) is covered by this wrapper already sitting above
+   `{children}` in the gallery's root layout — it does not need its own. The
    reduced-motion collapse also zeroes `animation-delay` — without that, `[data-reveal]`'s
    up-to-480ms stagger delay (combined with `fill: both`) would still hold an element at
    its `from` frame — opacity 0 — for the whole delay, so "no motion" would mean
@@ -77,14 +81,50 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
 
 | Primitive | Module kind | Use |
 |---|---|---|
-| `MotionProvider` | client | mounted once in `app/utils/Provider.tsx`; `LazyMotion features={() => import("./motionFeatures").then(…)} strict` (async chunk, not the synchronous `domAnimation` value) + `MotionConfig reducedMotion="user"`. An `m.*` element renders its `initial` values until the chunk resolves; the vendor loader has no rejection handling, so if the chunk fails to fetch an `m` element stays at its pre-feature state and a `Presence` exit never completes — M0b's `Toast`/`Menu`/`Collapse` must decide a fallback. |
+| `MotionProvider` | client | mounted once in `app/utils/Provider.tsx`; `LazyMotion features={() => import("./motionFeatures").then(…)} strict` (async chunk, not the synchronous `domAnimation` value) + `MotionConfig reducedMotion="user"`. An `m.*` element renders its `initial` values until the chunk resolves; the vendor loader has no rejection handling, so if the chunk fails to fetch an `m` element stays at its pre-feature state and a `Presence` exit never completes — see "Load-failure behaviour" below for what each M0b overlay primitive does about it. |
 | `Presence` | client | `<Presence show={open} variant="rise">` — exit before unmount. Hosts `div` \| `section` \| `aside` \| `li` only (block-level — a transform is dropped on a non-replaced inline element). `appear` defaults to **false**: a `Presence` mounted already-shown does not animate in unless `appear` is passed; for the common case — a mounted `Presence` that toggles `show` — do nothing, the enter animation runs on every `show→true` transition regardless. Pass `appear` only for an instance that mounts already-shown and must still animate in (an on-demand toast, a newly appended list row). |
 | `Skeleton`, `SkeletonGroup` | neutral | loading placeholders with the shimmer; one `aria-busy` status region per loading surface |
 | `Button` | neutral | `variant` primary/secondary/ghost/danger/icon/pill · `size` sm/md/lg · `busy`/`busyLabel` · `href`. Defaults to `md`; the spec's phone-width `lg` default is applied per call site, not by the primitive. `busy`/`busyLabel` are rejected by the types on the `href` branch — a link has no loading state to represent. `className` is additive only (appended after the variant/size classes, never a padding/radius/colour override). The `primary` variant sets `overflow: hidden` for the hover sheen, so an absolutely positioned badge nested inside a primary button is clipped — anchor badges outside the button instead. |
 | `revealProps(i)` (`app/utils/reveal.ts`) | neutral | spread on a block a page reveals; `template.tsx` replays it per navigation |
+| `CueDialog` | client | the ONE dialog shell — never a hand-rolled `fixed inset-0` scrim. `mode="modal"` \| `"sheet"`; a `"sheet"` dialog is only a sheet below 640px — at ≥640px it renders the same centred-card motion as a modal, decided once per render from `matchMedia` (fixed for the dialog's life; a resize across the breakpoint keeps the variant it opened with). Drag-to-dismiss lives ONLY on the sheet's handle (hand-rolled pointer events, not the `drag` prop — the gesture is one-axis and the sheet body still needs to scroll); a sheet's exit slides fully out (`y: "100%"`), it does not recoil partway like a modal's scale-fade. `onDismiss(reason: DismissReason)` where `DismissReason` is `"escape" \| "backdrop" \| "drag"`. Layers register with the provider so Escape and inert-ing only ever affect the top one. Traps focus via `trapTabTarget`, and can extend its Tab ring to a portalled "satellite" node via `useCueDialogFocusSatellite()` (no production consumer registers one today; see the in-file comment). **Render `<CueDialog open={x}>` unconditionally — never `{x && <CueDialog open>}`.** A conditionally-mounted dialog is created and destroyed by React instead of opened and closed by the `open` prop, so it never runs CueDialog's own enter/exit — `cueDialogMount.test.ts` pins the current backlog and ratchets it down. A `Menu` inside a `CueDialog` is unsupported in M0b-1 (the dialog's capture-phase Escape wins over the menu's); no consumer needs it. |
+| `Toast` / `useToast` | client | the ONE toast stack — `useTransientValue` stays for an inline "Guardado ✓" flash next to the control that produced it, `useToast` is for anything that needs a FIXED, stacked notification. `toast({ message, tone?, duration?, hold?, action? })`: `tone` is `"ok" \| "error" \| "info"`; `hold` persists until something calls `dismiss(id)` (never a bare `setTimeout`); `action` renders a button inside the toast that both fires and dismisses. Portals to its own viewport node, `z-[95]` (above `CueDialog`'s `z-[90]`, so a save confirmation is visible over a dialog), bottom-anchored at `calc(1.5rem + env(safe-area-inset-bottom) + var(--bottom-nav-h, 0px))` so it clears the mobile tab bar. |
+| `Menu` / `MenuItem` / `MenuSeparator` / `MenuHeader` | client | the ONE anchored dropdown. Real `role="menu"` semantics: roving focus with arrow keys, Home/End, Escape closes and refocuses the trigger, Tab closes without refocusing. Positioned `absolute` in a `relative` wrapper (never a portal — a portal would escape a dialog's inert boundary). Merges the trigger's own `ref` with its internal one, so a consumer that also needs the trigger node (to refocus it after an async action) still can. |
+| `Collapse` | client | the ONE disclosure — expand/collapse with real height animation (the one place `height` animates outside `transform`/`opacity`, on user-triggered disclosures only). Children stay mounted while closed; `inert`/`aria-hidden` flip so nothing inside is reachable. Because jsdom (as of this writing) does not wire the `inert` IDL property from the reflected attribute, `Collapse` also sets `el.inert` imperatively in an effect — a harmless duplicate of the JSX prop in a real browser, and what `Collapse.test.tsx` actually observes. |
 
-M0b adds: `CueDialog` motion, `Toast`, `Menu`, `Collapse`, `SegmentedControl`,
-`SlidingIndicator`, `Switch`, `Checkbox`, `Select`, `DateField`, `NumberRoll`, `haptics`.
+M0b also adds: `SegmentedControl`, `SlidingIndicator`, `Switch`, `Checkbox`,
+`Select`, `DateField`, `NumberRoll`, `haptics`.
+
+### Load-failure behaviour
+
+The vendor feature loader (`motion/react`'s `LazyMotion`) has no rejection handling:
+an `m.*` element with no loaded features renders using its `initial` prop's values as
+static style, never advancing to `animate`, and a `Presence`/`AnimatePresence` exit
+never completes. What that means differs by primitive, because it depends on WHEN
+each one first needs the chunk relative to when it loads:
+
+- **`Collapse` and `CueDialog` render already open via `initial={false}`** (on the
+  `m.div`/the dialog's `AnimatePresence`, respectively) — a disclosure or a dialog
+  that is open at the FIRST paint of its `AnimatePresence` renders at its resting,
+  visible state immediately, with no dependency on the feature chunk for that first
+  frame. This is what protects the case that matters most: content already open when
+  the page loads.
+- **`Toast` and `Menu` animate in from `initial` on every open** — deliberately not
+  suppressed, because both open only after a user action, long after hydration and
+  the feature chunk race is over in practice (see the comment atop `Toast.tsx`). If
+  the chunk genuinely never arrives (a same-deploy static asset going missing; Next
+  reloads the page on most chunk-load errors so this is a narrow window), a `Toast`
+  or `Menu` opened in that window stays at its `initial` values — invisible.
+- **A `CueDialog` opened AFTER mount, in that same narrow window, renders invisible
+  while still inert-ing the rest of the page** — `initial={false}` only covers the
+  case where the dialog's `AnimatePresence` first mounts already open; a dialog that
+  starts closed and is opened later is a fresh enter within that `AnimatePresence`,
+  which does depend on the chunk. The registration effects (focus, `inert`, scroll
+  lock) do not depend on `motion` at all, so they still run — a user would see
+  nothing but be unable to reach the rest of the page.
+
+This is accepted and documented, not a bug to fix per component — revisit only if a
+real report shows the failure window is wider than "a chunk fetch failed and the page
+did not reload."
 
 ## Testing a primitive
 
@@ -106,6 +146,8 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `loadingSkeletons.test.ts` | The four `loading.tsx` files compose `Skeleton` instead of a hand-copied pulse block. |
 | `shellPolish.test.ts` | Spec Part III findings 3 (brand mark loads with `priority`) and 5 (initials avatar contrast in light). |
 | `rawMotionLiterals.test.ts` | Pins `transition-all` (13) and raw `duration-N` (12) counts outside `ui/` at the audited baseline — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. |
+| `cueDialogMount.test.ts` | Pins the count of `{x && <CueDialog open …>}` sites (7, audited 2026-09-08) — a dialog mounted conditionally instead of via `open={x}` gets no enter/exit. Lower it in the same commit that migrates a consumer to `open={…}`; never raise it. |
+| `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins six named labels (`>Cue<`, `>Servicio<`, "Índice musical", "títulos", "Backstage operations", "Acceso autorizado") at their audited counts, by equality — a phase that removes one lowers its number in the same commit. |
 
 ## Bundle
 

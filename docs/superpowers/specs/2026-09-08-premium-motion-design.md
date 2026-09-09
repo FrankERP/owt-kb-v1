@@ -832,3 +832,19 @@ fallback; the theme gallery mounts no MotionProvider, so its `controls` fixture 
 gallery-side `LazyMotion` with `MotionGlobalConfig.skipAnimations` keyed off `data-motion="off"`;
 new colour in a rule body is a composed token at every `--warning-glow` touch point; `Button` needs
 `forwardRef` before `Menu` can use it as a trigger.
+
+# Part VII — M0b-1 shipped
+
+M0b-1 (overlays and controls — `CueDialog`, `Toast`/`useToast`, `Menu`/`MenuItem`/
+`MenuSeparator`/`MenuHeader`, `Collapse`, the gallery's own `GalleryMotion`) is
+implemented on branch `claude/motion-m0b-overlays-controls`; see PR for the commit
+range. Full reference in `docs/MOTION.md` — primitives table, the "Load-failure
+behaviour" section (§Part VI's "Toast/Menu/Collapse need a load-failure fallback"
+resolved: `Collapse`/`CueDialog` render already-open via `initial={false}`; `Toast`/
+`Menu` animate in from `initial` since they only ever open long after the feature
+chunk has had time to load), and the Guards table (`cueDialogMount.test.ts`,
+`labelBudget.test.ts`).
+
+§Part VI's 40 kB gz async-chunk cap: `domMax` measured at **28.8 kB gz** (88.0 kB
+raw) — under the cap, so the sliding indicator kept `layoutId`. See MOTION.md's
+Bundle section for the full A/B measurement.

@@ -10,8 +10,10 @@
 // the setlist, or fire submit a second time, while being asked to confirm the
 // first.
 //
-// Two other scrim overlays got it right (`CueDialog`, `SongFormModal`), as does
-// `PlannerGrid`'s full-screen view by a different route — it stacks, but is
+// One other scrim overlay gets it right (`CueDialog` — `SongFormModal`'s own
+// `Modal` wrapper was a thin `CueDialog` shell and was removed as a dead export
+// in M0b-1, so every consumer now mounts `SongForm` inside its own `CueDialog`
+// directly), as does `PlannerGrid`'s full-screen view by a different route — it stacks, but is
 // opaque and makes its siblings `inert`, so it draws no scrim and is not what
 // this scan checks. A house pattern existed; that is why the gap survived:
 // there was a house pattern and nothing that made a new overlay follow it. This
