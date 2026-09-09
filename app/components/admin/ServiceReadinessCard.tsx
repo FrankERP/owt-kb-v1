@@ -27,6 +27,7 @@
 import { ChainLinkIcon } from "../ChainLinkIcon";
 import { buildRuns } from "../../utils/medley";
 import Menu, { MenuItem, MenuSeparator } from "../ui/Menu";
+import NumberRoll from "../ui/NumberRoll";
 import ReadinessBadge from "./ReadinessBadge";
 import ServiceIssueList from "./ServiceIssueList";
 import ServicePrimaryAction from "./ServicePrimaryAction";
@@ -284,7 +285,7 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
               />
               {identity.relative && (
                 <span className="font-label text-[11px] uppercase tracking-widest text-ink-muted/70">
-                  {identity.relative}
+                  <NumberRoll value={identity.relative} />
                 </span>
               )}
             </div>

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { computeParticipation, type ParticipantRole, type MemberParticipation } from "@/app/utils/computeParticipation";
 import { themeColour } from "@/app/utils/themeColour";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import NumberRoll from "@/app/components/ui/NumberRoll";
 
 // Six CATEGORICAL hues, keyed by seat. These are consumed as inline `background:`
 // values, so they must be COMPLETE colours — a bare triplet would need wrapping and
@@ -127,7 +128,9 @@ function Row({ r, max, view }: { r: MemberParticipation; max: number; view: View
             : <>{seg(r.instrWeeks, COLORS.instr)}{seg(r.fohWeeks, COLORS.foh)}</>}
         </div>
       </div>
-      <div className="text-xl font-medium text-ink-muted min-w-[24px] text-right">{value}</div>
+      <div className="text-xl font-medium text-ink-muted min-w-[24px] text-right">
+        <NumberRoll value={value} />
+      </div>
     </div>
   );
 }

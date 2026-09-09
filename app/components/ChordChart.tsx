@@ -3,6 +3,7 @@
 import { useState } from "react";
 import SegmentedControl from "./ui/SegmentedControl";
 import Switch from "./ui/Switch";
+import NumberRoll from "./ui/NumberRoll";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -198,9 +199,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
                 title="Posición de capo para tocar con acordes abiertos en la tonalidad seleccionada"
               >
                 <CapoIcon />
-                {capo.fret === 0
-                  ? `Acordes abiertos (${capo.shapeKey})`
-                  : `Capo ${capo.fret} · formas de ${capo.shapeKey}`}
+                <NumberRoll value={capo.fret === 0 ? `Acordes abiertos (${capo.shapeKey})` : `Capo ${capo.fret} · formas de ${capo.shapeKey}`} />
               </span>
             </div>
           )}
