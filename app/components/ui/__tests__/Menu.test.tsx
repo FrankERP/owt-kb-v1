@@ -157,6 +157,19 @@ describe("Menu", () => {
     await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
   });
 
+  it("merges the trigger's own ref: the caller's ref still receives the DOM node", () => {
+    const ownRef = { current: null as HTMLButtonElement | null };
+    render(
+      <MotionProvider>
+        <Menu label="Más acciones" trigger={<Button ref={ownRef} aria-label="Más acciones">⋮</Button>} align="end">
+          <MenuItem onSelect={() => {}}>Copiar</MenuItem>
+        </Menu>
+      </MotionProvider>,
+    );
+    const t = screen.getByRole("button", { name: "Más acciones" });
+    expect(ownRef.current).toBe(t);
+  });
+
   it("a danger item carries the negative tone class", () => {
     render(<Harness />);
     fireEvent.click(screen.getByRole("button", { name: "Más acciones" }));

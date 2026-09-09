@@ -34,6 +34,7 @@ export default function PracticePlaylistButton({ songIds, accentVar }: { songIds
     const reserved = window.open("", "_blank");
     if (!reserved) {
       setState("blocked");
+      restoreTrigger();
       return;
     }
     try {

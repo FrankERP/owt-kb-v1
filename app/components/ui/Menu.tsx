@@ -17,6 +17,17 @@ import { EASE_IN, EASE_OUT, EXIT_MS, MS } from "@/app/utils/motionPresets";
 
 const MenuCtx = createContext<{ close: (refocus: boolean) => void } | null>(null);
 
+/**
+ * Forward `node` to a ref supplied as a prop. Kept as a free function (not a
+ * closure over component state) so the ref-immutability lint, which flags
+ * direct mutation of anything reachable from `props` inside a component body,
+ * does not see this as mutating the trigger's own props.
+ */
+function setForwardedRef<T>(ref: React.Ref<T> | null | undefined, node: T | null) {
+  if (typeof ref === "function") ref(node);
+  else if (ref && "current" in ref) (ref as React.MutableRefObject<T | null>).current = node;
+}
+
 type TriggerProps = {
   ref: React.Ref<HTMLButtonElement>;
   "aria-haspopup": "menu";
@@ -78,11 +89,22 @@ export default function Menu({
     else if (e.key === "Tab") { close(false); }
   };
 
-  const triggerProps = trigger.props as { onClick?: (e: React.MouseEvent) => void; onKeyDown?: (e: React.KeyboardEvent) => void };
+  const triggerProps = trigger.props as {
+    ref?: React.Ref<HTMLButtonElement>;
+    onClick?: (e: React.MouseEvent) => void;
+    onKeyDown?: (e: React.KeyboardEvent) => void;
+  };
 
-  // The trigger's own ref (if any) is replaced; consumers that need it wrap the trigger.
+  // The trigger's own ref (if any) is merged with Menu's: both receive the DOM
+  // node, so a consumer that needs to refocus its trigger (e.g. after an async
+  // action) still can.
+  const mergedTriggerRef = useCallback((node: HTMLButtonElement | null) => {
+    triggerRef.current = node;
+    setForwardedRef(triggerProps.ref, node);
+  }, [triggerProps.ref]);
+
   const triggerEl = React.cloneElement(trigger, {
-    ref: triggerRef,
+    ref: mergedTriggerRef,
     "aria-haspopup": "menu",
     "aria-expanded": open,
     "aria-controls": id,

@@ -96,6 +96,40 @@ describe("PracticePlaylistButton", () => {
     expect((popup as any).location.href).toBe("https://youtube.com/watch_videos?video_ids=abc");
   });
 
+  it("restores focus to the trigger once the fetch resolves, even though Menu clones its own ref onto it", async () => {
+    const popup = fakePopup();
+    vi.stubGlobal("open", vi.fn(() => popup));
+    const pendingFetch = deferred<{ ok: boolean; json: () => Promise<{ url: string }> }>();
+    vi.stubGlobal("fetch", vi.fn(() => pendingFetch.promise));
+
+    const { getByRole } = renderButton({ songIds: ["song-1"], accentVar: "--accent-rgb" });
+    await act(async () => {});
+
+    const trigger = getByRole("button", { name: /Practicar/i });
+    fireEvent.click(trigger);
+    fireEvent.click(getByRole("menuitem", { name: /Música/i }));
+
+    await act(async () => {
+      pendingFetch.resolve({ ok: true, json: async () => ({ url: "https://youtube.com/watch_videos?video_ids=abc" }) });
+      await pendingFetch.promise;
+    });
+
+    await waitFor(() => expect(document.activeElement).toBe(getByRole("button", { name: /Practicar/i })));
+  });
+
+  it("restores focus to the trigger when the popup is blocked", async () => {
+    vi.stubGlobal("open", vi.fn(() => null));
+
+    const { getByRole } = renderButton({ songIds: ["song-1"], accentVar: "--accent-rgb" });
+    await act(async () => {});
+
+    const trigger = getByRole("button", { name: /Practicar/i });
+    fireEvent.click(trigger);
+    fireEvent.click(getByRole("menuitem", { name: /Música/i }));
+
+    await waitFor(() => expect(document.activeElement).toBe(getByRole("button", { name: /Permitir popup/i })));
+  });
+
   it("keeps the pending trigger focusable and blocks duplicate click, Enter, and Space activations", async () => {
     const popup = fakePopup();
     const open = vi.fn(() => popup);

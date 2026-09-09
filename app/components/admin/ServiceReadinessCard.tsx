@@ -234,7 +234,9 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                       >
                         Copiar instrumentos a otro día
                         {!gates.copyInstruments.enabled && gates.copyInstruments.reason && (
-                          <span className="sr-only"> — {gates.copyInstruments.reason}</span>
+                          <span className="block text-[11px] normal-case tracking-normal text-warning-fg">
+                            {gates.copyInstruments.reason}
+                          </span>
                         )}
                       </MenuItem>
                     )}
@@ -248,14 +250,18 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                       {isDraft ? "Publicar" : "Ocultar"}
                       {!(isDraft ? gates.publish.enabled : gates.unpublish.enabled) &&
                         (isDraft ? gates.publish.reason : gates.unpublish.reason) && (
-                          <span className="sr-only"> — {isDraft ? gates.publish.reason : gates.unpublish.reason}</span>
+                          <span className="block text-[11px] normal-case tracking-normal text-warning-fg">
+                            {isDraft ? gates.publish.reason : gates.unpublish.reason}
+                          </span>
                         )}
                     </MenuItem>
                     <MenuSeparator />
                     <MenuItem icon={<TrashIcon />} danger disabled={!gates.deleteService.enabled} onSelect={props.onDelete}>
                       Eliminar servicio
                       {!gates.deleteService.enabled && gates.deleteService.reason && (
-                        <span className="sr-only"> — {gates.deleteService.reason}</span>
+                        <span className="block text-[11px] normal-case tracking-normal text-warning-fg">
+                          {gates.deleteService.reason}
+                        </span>
                       )}
                     </MenuItem>
                   </Menu>
