@@ -3796,7 +3796,8 @@ export default function MonthGenerator({
           </p>
           {clearSelection.published.length > 0 && (
             <Checkbox
-              className="items-start font-body text-xs text-mono-300"
+              align="start"
+              className="font-body text-xs text-mono-300"
               checked={clearIncludePublished}
               disabled={clearing}
               onChange={(event) => setClearIncludePublished(event.target.checked)}

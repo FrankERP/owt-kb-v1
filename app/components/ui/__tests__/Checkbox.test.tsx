@@ -30,4 +30,26 @@ describe("Checkbox", () => {
     expect(mark.getAttribute("class")).toMatch(/\bscale-0\b/);
     expect(box.className + mark.getAttribute("class")).not.toMatch(/peer-checked:block|hidden/);
   });
+
+  it("aligns the label row by align, defaulting to center", () => {
+    render(<Checkbox checked onChange={() => {}}>Sí</Checkbox>);
+    const label = screen.getByRole("checkbox").closest("label")!;
+    const box = document.querySelector("[data-checkbox-box]")!;
+    const labelTokens = label.className.split(/\s+/);
+    const boxTokens = box.className.split(/\s+/);
+    expect(labelTokens).toContain("items-center");
+    expect(labelTokens).not.toContain("items-start");
+    expect(boxTokens).not.toContain("mt-0.5");
+  });
+
+  it("align=\"start\" sits the box on the label's first text line", () => {
+    render(<Checkbox align="start" checked onChange={() => {}}>Sí</Checkbox>);
+    const label = screen.getByRole("checkbox").closest("label")!;
+    const box = document.querySelector("[data-checkbox-box]")!;
+    const labelTokens = label.className.split(/\s+/);
+    const boxTokens = box.className.split(/\s+/);
+    expect(labelTokens).toContain("items-start");
+    expect(labelTokens).not.toContain("items-center");
+    expect(boxTokens).toContain("mt-0.5");
+  });
 });
