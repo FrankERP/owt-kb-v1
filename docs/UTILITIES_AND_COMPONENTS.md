@@ -179,17 +179,17 @@ state a save actually persists against the last saved one.
     write landed but could not be verified, or a recovery control rendered inside the message.
   - NOTE: all three callbacks are `useCallback`s, not `useState` setters — ESLint cannot assume
     they are stable, so name them in an effect's dependency array.
-- **`focusTrap.ts`** (`trapTabTarget` pure tab math) + **`useFocusTrap.ts`** (WAI-ARIA dialog
-  focus hook, **retired 2026-09-09: no production consumer since M0b-1** — `CueDialog` owns
-  focus trapping directly via `trapTabTarget`; the hook is kept for its own test and because
-  `dialogSemantics.test.ts`'s regex still scans for it). **Any overlay with a dismissable scrim must use it** — a clickable full-bleed
-  `bg-scrim` means content is stacked over a still-interactive page, so the overlay also needs
-  `role="dialog"`, `aria-modal`, a name, and Escape. `dialogSemantics.test.ts` enumerates every
-  overlay drawn with a clickable `bg-scrim` and fails on one that skips this (per file,
-  and keyed to that token — see its header for what it cannot see); `NOT_A_DIALOG` there holds the justified
-  exemptions (today: `BottomNav`'s sheet, which uses `inert` instead). `CueDialog` uses the
-  `trapTabTarget` primitive directly rather than the hook, because it also traps portalled
-  satellite nodes.
+- **`focusTrap.ts`** (`trapTabTarget` pure tab math) + **`useFocusTrap.ts`** (retired
+  2026-09-09 — no production consumer since M0b-1; kept because `app/utils/__tests__/
+  dialogSemantics.test.ts` accepts `useFocusTrap` or `trapTabTarget` as proof of focus
+  management). **Any overlay with a dismissable scrim must be focus-managed** — use
+  `CueDialog`; a bespoke overlay may call `trapTabTarget` directly. A clickable full-bleed
+  `bg-scrim` means content is stacked over a still-interactive page, so the overlay also
+  needs `role="dialog"`, `aria-modal`, a name, and Escape. `dialogSemantics.test.ts`
+  enumerates every overlay drawn with a clickable `bg-scrim` and fails on one that skips
+  this (per file, and keyed to that token — see its header for what it cannot see);
+  `NOT_A_DIALOG` there holds the justified exemptions (today: `BottomNav`'s sheet, which
+  uses `inert` instead).
 
 ### Colour inventory & token guards (light-mode migration, Child A1)
 - **`scripts/colour-inventory.mjs`** — emits every colour decision in `app/**` (plus

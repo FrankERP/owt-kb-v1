@@ -837,13 +837,21 @@ new colour in a rule body is a composed token at every `--warning-glow` touch po
 
 M0b-1 (overlays and controls — `CueDialog`, `Toast`/`useToast`, `Menu`/`MenuItem`/
 `MenuSeparator`/`MenuHeader`, `Collapse`, the gallery's own `GalleryMotion`) is
-implemented on branch `claude/motion-m0b-overlays-controls`; see PR for the commit
-range. Full reference in `docs/MOTION.md` — primitives table, the "Load-failure
-behaviour" section (§Part VI's "Toast/Menu/Collapse need a load-failure fallback"
-resolved: `Collapse`/`CueDialog` render already-open via `initial={false}`; `Toast`/
-`Menu` animate in from `initial` since they only ever open long after the feature
-chunk has had time to load), and the Guards table (`cueDialogMount.test.ts`,
-`labelBudget.test.ts`).
+implemented on branch `claude/motion-m0b-overlays-controls`; commit range
+`603f1eb4..0219cc3e` and the two docs commits after it. Full reference in `docs/MOTION.md`
+— primitives table, the "Load-failure behaviour" section (§Part VI's "Toast/Menu/Collapse
+need a load-failure fallback" resolved: `Collapse`/`CueDialog` render already-open via
+`initial={false}`; `Toast`/`Menu` animate in from `initial` since they only ever open long
+after the feature chunk has had time to load; a `CueDialog` opened after mount before the
+chunk lands is invisible while inerting the page), and the Guards table
+(`cueDialogMount.test.ts`, `labelBudget.test.ts`).
+
+**Deferred from M0b-1 → M0b-2, M1, M5–M8:** `SegmentedControl`, `SlidingIndicator`,
+`Switch`, `Checkbox`, `Select`, `DateField`, `NumberRoll`, haptics and the `controls`
+gallery fixture; the 11 literal-`open` `CueDialog` sites (tracked by `cueDialogMount.test.ts`)
+deferred to their route phases; `AvailabilityCalendar`'s note popover → M5; `MonthGenerator`'s
+held swap block → M7b; Kids inline statuses → M8; a `Menu`'s Escape inside a `CueDialog`
+(`CalendarView`'s day sheet) → M0b-2; the 640 px viewport variant fixed at dialog open → M0b-2.
 
 §Part VI's 40 kB gz async-chunk cap: `domMax` measured at **28.8 kB gz** (88.0 kB
 raw) — under the cap, so the sliding indicator kept `layoutId`. See MOTION.md's
