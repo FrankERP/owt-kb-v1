@@ -34,9 +34,15 @@ seat, each member of Tipo `instrumento` declares the instrument(s) they play.
 
 ## 3. Decisions (from the brainstorm, 2026-09-08/09)
 
-- **D1 — Scope of the fill:** every instrument seat (`Keys`, `Drums`, `Bass`, `EG`, `AG`, and
-  any future one) for which at least one member declares that instrument. Not only
-  pianos and drums. A single declared bassist is simply seated every time.
+- **D1 — Scope of the fill:** every instrument seat in the member vocabulary (`Keys`,
+  `Drums`, `Bass`, `EG`, `AG` — `DEFAULT_INSTRUMENT_SEATS`) for which at least one member
+  declares that instrument. Not only pianos and drums. A single declared bassist is
+  simply seated every time. A **custom** row an admin adds in the planner («Nuevo
+  instrumento», `PlannerGrid.tsx:1790`) is outside the member vocabulary: nobody can
+  declare it, so the filler skips it (zero declarers) and §7's declaration warning stays
+  silent for it — a warning naming a remedy the member form cannot perform is the defect
+  class ADR-0029 records. Growing the vocabulary is a one-line change to
+  `DEFAULT_INSTRUMENT_SEATS` plus a schema deploy, not a runtime feature.
 - **D2 — Fairness unit and window:** per **service** (Saturday and Sunday are two
   participations), counting **only inside the month being generated**. Not the
   weekend-based `instrWeeks` and not the saved history window. Consequence, accepted:
@@ -72,8 +78,10 @@ seat, each member of Tipo `instrumento` declares the instrument(s) they play.
 }
 ```
 
-The `list` is a constant in `sanity/schemas/` (no schema imports from `app/` today, and
-the Studio build is not asked to resolve `@/app/...`); `seatModel.test.ts` asserts it equals
+The `list` is a constant in a new `sanity/schemas/instrumentSeats.ts` that imports
+nothing from `sanity` or `app/` (no schema imports from `app/` today, and no test imports
+a schema module — `themePrefSchema.test.ts` reads the file as text), re-exported into
+`worshipTeam.ts`; `seatModel.test.ts` imports the constant and asserts it equals
 `DEFAULT_INSTRUMENT_SEATS` so the two vocabularies cannot drift. Studio schema deploy
 (`npx sanity schema deploy`) is part of the delivery.
 
@@ -119,7 +127,10 @@ the two tables agree), and proposes a set per member.
   «no se escribe» section so Frank can fix Tipo first if he wants them.
 - **`--apply`:** writes `instruments` only to members that (a) have Tipo `instrumento` and
   (b) have NO stored `instruments` field. Never touches a member with a value, even `[]`.
-  Idempotent: a second run writes nothing. **Writes only names in
+  Idempotent: a second run writes nothing. A Tipo-`instrumento` member with NO
+  instrument history (empty proposal) is **skipped**, not written `[]`, and listed in the
+  dry run under «sin historial» — leaving the field absent keeps them eligible for a
+  later run once they have served. **Writes only names in
   `DEFAULT_INSTRUMENT_SEATS`** — the script bypasses the route's 400, and
   `normalizeSeatName` preserves unknown labels, so a legacy «Piano»/«Guitarra» seat would
   otherwise land in a member's field and match no row. Anything else is listed in the dry
@@ -157,16 +168,25 @@ export function fillInstruments(input): FillInstrumentsResult;
 
 ### 6.2 Algorithm
 
+0. **Vacate first, in one pass over the whole grid.** Before any placement, every
+   `instrumento:` cell on a weekend column whose occupants ALL carry `origin: "auto"`
+   (the filler's own picks from a previous Auto in this session — a second Auto re-rolls
+   instruments exactly as the solver re-rolls voices) is emptied. A cell with any other
+   occupant is not empty and is never touched. This happens BEFORE the column loop, not
+   inside it: `working` must never contain a pick this run has not made, or a stale pick
+   in a later column counts as a seat held while an earlier column is being filled and
+   the balance is computed against state the same pass is about to discard. (Stored
+   months load every cell as `origin: "manual"` and Auto exists only in create mode, so
+   nothing a human or a saved month produced is ever vacated.)
 1. Take the **weekend** columns (`sunday_role`, `saturday_role`) in date order.
    Specials are skipped (they stay manual, as their voices' Coro does).
 2. For each column, take the rows with id prefix `instrumento:` that `rowAppliesTo` the
-   column, **skip every row that no member declares** (D1: a row with zero declarers is
-   not the filler's business and produces no marker — today it produces none either),
-   and order the remaining rows **thinnest declared pool first**, so a scarce instrument
-   is not robbed of its only player by a wider row that shares them. Vacate the cells
-   whose occupants all carry `origin: "auto"` (the filler's own picks from a previous
-   Auto in this session — a second Auto re-rolls instruments exactly as the solver
-   re-rolls voices); a cell with any other occupant is not empty and is not touched.
+   column, **skip every row that no member declares** — a *declarer* is a member with
+   Tipo `instrumento` AND the row's label in `instruments`; a leftover `instruments`
+   value on a member whose Tipo was cleared declares nothing (D1: a row with zero
+   declarers is not the filler's business and produces no marker — today it produces
+   none either), and order the remaining rows **thinnest declared pool first**, so a
+   scarce instrument is not robbed of its only player by a wider row that shares them.
    For each **empty** cell, the pool is `rankCandidates({ seat, date, members,
    windowRoles, assigned, column, config })` **re-run per placement against `working`**,
    as `localFill.ts` does, filtered to `c.eligible && !c.undeclared` (§7). That single
@@ -181,8 +201,10 @@ export function fillInstruments(input): FillInstrumentsResult;
       instrument rows, weekend AND special columns, one per seat occupied;
    2. **did not play on the immediately previous weekend column** (any instrument row) —
       the alternation Frank asked for, so two equal-count players still swap;
-   3. `member_name` `localeCompare("es")` — deterministic, so a re-run without changes
-      reproduces the same roster.
+   3. `member_name` `localeCompare("es")` — deterministic. **Idempotence on its own
+      output is the property:** `fillInstruments` run on the cells it just produced,
+      with the same inputs, reproduces the same roster, because step 0 removes exactly
+      the picks step 4 will remake and nothing else feeds the count.
 4. Seat the first candidate with `origin: "auto"`, update `working`, continue. Target is
    1 per empty seat: a `Drums` row with two occupants already is not empty and is not
    touched; a row with zero gets exactly one.
@@ -215,7 +237,7 @@ exactly as the specials do today, with one owner of the three setters — the co
 `MonthGenerator.tsx:2878` ("all three setters, at every exit") stays true.
 
 **The failure-exit filter must learn the new rows.** Today
-(`MonthGenerator.tsx:2942-2945`) a non-success exit keeps the previous run's `unfilled`
+(`MonthGenerator.tsx:2947-2950`) a non-success exit keeps the previous run's `unfilled`
 entries except those on a special column, because only specials were locally filled.
 Instrument entries sit on **weekend** columns, so left alone they would be re-appended on
 every solver refusal — D15's *normal* failure — and «Lugares sin cubrir» would grow by
@@ -224,6 +246,14 @@ Auto twice cannot double-count. The filter therefore drops every previous entry 
 **either** on a special column **or** on a row with the `instrumento:` prefix — i.e. every
 seat a local filler owns — before the fresh local results are appended. Wiring test:
 Auto twice with a solver refusal → exactly one entry per empty instrument seat.
+
+**Markers and later human fills.** No `setUnfilled` runs in `handleCellsChange`
+(`MonthGenerator.tsx:2434`), so a marker survives a human seating the cell by hand; the
+per-cell «Sin cubrir» is keyed on `unfilledByKey` alone (`PlannerGrid.tsx:2498`). Existing
+behaviour for specials, and instrument markers will now be seen far more often on
+weekend columns. In scope, minimal: the per-cell marker and the «Lugares sin cubrir»
+count are gated on `occupants.length === 0` at render, so a seat a human fills stops
+being counted without touching the `unfilled` state or its merge rules.
 
 The grid already marks every unfilled cell (`unfilledByKey`) and reports the total
 («Lugares sin cubrir (faltó gente): N»); instrument seats join both with no new UI.
@@ -234,14 +264,17 @@ The grid already marks every unfilled cell (`unfilledByKey`) and reports the tot
   member whose `instruments` does not include the seat's label gets a new
   `undeclared: boolean` flag and sorts after declared candidates (a sort penalty, like
   availability — never a block, D6; `eligible` does NOT fold it in, the filler filters on
-  it explicitly). The picker renders «sin declarar» on the row. Because undeclared members
+  it explicitly). The picker renders «sin declarar» on the row. The comment at
+  `candidateRanking.ts:218` («THE SORT IS DELIBERATELY UNCHANGED (P7b)») is amended in
+  the same diff to name this key, so the next reader does not "fix" it back. Because undeclared members
   are still listed, they never become "stranded" occupants and never need the
   removal-only row ADR-0029 added for Tipo mismatches.
 - **`occupantFitsSeat`** (`seatModel.ts`): unchanged in signature and meaning — it keeps
   answering the Tipo question, and the Tipo copy («su Tipo ya no incluye Instrumento —
   ábrelo para quitarlo», `PlannerGrid.tsx:2846`) keeps its meaning. A **second**
   predicate, `occupantDeclaresInstrument(member, label)`, feeds a second amber line on
-  instrument cells only: «⚠ Nombre: no declara Keys — revísalo en Miembros», with aria
+  instrument cells whose label is in `DEFAULT_INSTRUMENT_SEATS` only (custom rows never
+  warn — D1): «⚠ Nombre: no declara Keys — revísalo en Miembros», with aria
   «(instrumento no declarado)». Two questions, two lines, so a reader can tell a stale
   Tipo from a missing declaration. Voice and FOH behaviour unchanged.
 - **`moveGate`**: unchanged. A drag target is judged by category; declared instrument is
@@ -268,9 +301,13 @@ The grid already marks every unfilled cell (`unfilledByKey`) and reports the tot
   empty eligible pool → one `unfilled` entry; specials never filled; a member already on
   another instrument row of the same column is NOT seated again; a voice seat on the
   same column does not exclude; a two-instrument member goes to the thinner row;
-  deterministic re-run; untouched cells preserved by reference.
+  **idempotent on its own output** (`fillInstruments(fillInstruments(x).cells, …)`
+  reproduces the roster, including the reviewer's case: 2 drummers, one unavailable on
+  three of five Sundays); stale auto picks in later columns do not influence earlier
+  columns; untouched cells preserved by reference.
 - `MonthGenerator` wiring test: Auto twice with a solver refusal → one `unfilled` entry
-  per empty instrument seat, none duplicated.
+  per empty instrument seat, none duplicated; a hand-filled seat drops out of the
+  rendered count.
 - `seatModel.test.ts`: the Studio `list` equals `DEFAULT_INSTRUMENT_SEATS`;
   `occupantDeclaresInstrument`; `occupantFitsSeat` unchanged.
 - `candidateRanking.test.ts`: `undeclared` flag, its sort position, not folded into
