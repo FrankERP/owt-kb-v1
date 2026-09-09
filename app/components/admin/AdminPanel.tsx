@@ -22,6 +22,7 @@ import { visibleAdminTabs } from "./adminTabs";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import Checkbox from "@/app/components/ui/Checkbox";
+import Select from "@/app/components/ui/Select";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
 import { useToast } from "../ui/Toast";
 import SegmentedControl from "../ui/SegmentedControl";
@@ -194,9 +195,6 @@ const ROLE_LABEL: Record<OWTRole, string> = {
 // ─── Shared input style ────────────────────────────────────────────────────────
 const inputCls =
   "brand-search-console w-full px-3 py-2.5 bg-transparent font-body text-sm focus:outline-none transition-colors";
-
-const selectCls =
-  "brand-search-console w-full px-3 py-2.5 bg-surface-base font-body text-sm focus:outline-none transition-colors";
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 function Avatar({
@@ -411,12 +409,11 @@ export function MemberForm({
         <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="correo@ejemplo.com" />
       </div>
       <div className="space-y-1">
-        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Rol</label>
-        <select className={selectCls} value={role} onChange={(e) => setRole(e.target.value as OWTRole)}>
+        <Select id="member-role" label="Rol" value={role} onChange={(e) => setRole(e.target.value as OWTRole)}>
           {ROLES.map((r) => (
             <option key={r.value} value={r.value}>{r.label}</option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Tipo</label>
@@ -1090,10 +1087,11 @@ export default function AdminPanel({
           />
 
           {/* Filter value dropdown */}
-          <select
+          <Select
+            aria-label={filterKey === "type" ? "Tipo" : "Rol"}
+            className="min-w-[120px] flex-1"
             value={filterValue}
             onChange={(e) => setFilterValue(e.target.value)}
-            className="brand-search-console min-w-[120px] flex-1 bg-surface-base px-3 py-2 font-body text-sm text-ink/80 focus:outline-none"
           >
             <option value="">{filterKey === "type" ? "Todos los tipos" : "Todos los roles"}</option>
             {filterKey === "type"
@@ -1107,7 +1105,7 @@ export default function AdminPanel({
                 ].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
               : ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)
             }
-          </select>
+          </Select>
 
           <SegmentedControl
             label="Orden"

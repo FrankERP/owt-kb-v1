@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { KIDS_ROOMS, KIDS_SEAT_LABELS, type KidsRoom } from "@/app/utils/kidsTypes";
 import { useTransientValue } from "@/app/utils/useTransientValue";
+import Select from "@/app/components/ui/Select";
 
 export interface RosterPair {
   id: string;
@@ -137,24 +138,18 @@ export default function PairRoster({ initialPairs, initialMembers }: Props) {
             />
           </div>
           <div className="space-y-1">
-            <label
-              htmlFor="kids-pair-room"
-              className="block font-label text-[11px] uppercase tracking-widest text-mono-500"
-            >
-              Sala
-            </label>
-            <select
+            <Select
               id="kids-pair-room"
+              label="Sala"
               value={room}
               onChange={(e) => setRoom(e.target.value as KidsRoom)}
-              className="w-full rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-ink focus:border-accent/50 focus:outline-none dark:focus:border-surface-accent-l40-d20"
             >
               {KIDS_ROOMS.map((r) => (
                 <option key={r} value={r} className="bg-surface-base">
                   {KIDS_SEAT_LABELS[r]}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           {(
             [
@@ -163,18 +158,7 @@ export default function PairRoster({ initialPairs, initialMembers }: Props) {
             ] as const
           ).map(([id, label, value, setValue, other]) => (
             <div key={id} className="space-y-1">
-              <label
-                htmlFor={id}
-                className="block font-label text-[11px] uppercase tracking-widest text-mono-500"
-              >
-                {label}
-              </label>
-              <select
-                id={id}
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                className="w-full rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-ink focus:border-accent/50 focus:outline-none dark:focus:border-surface-accent-l40-d20"
-              >
+              <Select id={id} label={label} value={value} onChange={(e) => setValue(e.target.value)}>
                 <option value="" className="bg-surface-base">
                   — Elegir —
                 </option>
@@ -188,7 +172,7 @@ export default function PairRoster({ initialPairs, initialMembers }: Props) {
                     {displayName(member)}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           ))}
         </div>
@@ -244,24 +228,20 @@ export default function PairRoster({ initialPairs, initialMembers }: Props) {
                         </p>
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <label htmlFor={`kids-pair-room-${pair.id}`} className="sr-only">
-                          Sala de {pair.name}
-                        </label>
-                        <select
-                          id={`kids-pair-room-${pair.id}`}
+                        <Select
+                          aria-label={`Sala de ${pair.name}`}
                           value={pair.room}
                           onChange={(e) =>
                             patchPair(pair.id, { room: e.target.value }, "Sala actualizada.")
                           }
                           disabled={busyPair === pair.id}
-                          className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-ink focus:border-accent/50 focus:outline-none disabled:opacity-40 dark:focus:border-surface-accent-l40-d20"
                         >
                           {KIDS_ROOMS.map((option) => (
                             <option key={option} value={option} className="bg-surface-base">
                               {KIDS_SEAT_LABELS[option]}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                         {pair.active ? (
                           <button
                             type="button"
