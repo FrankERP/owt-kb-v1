@@ -1642,7 +1642,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const stickyLabel = "sticky left-0 z-10 bg-surface-base";
 
   const gridBlock = (
-    <div className={fullScreen ? undefined : "overflow-x-auto"}>
+    <div data-planner-scroller="" className={fullScreen ? undefined : "overflow-x-auto"}>
       <div
         className="grid"
         style={{ gridTemplateColumns: `${labelTrack} repeat(${columns.length}, ${dateTrack})` }}
