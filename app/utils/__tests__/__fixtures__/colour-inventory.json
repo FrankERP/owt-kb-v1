@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 322,
-    "filesScanned": 278,
+    "literalRows": 321,
+    "filesScanned": 279,
     "filesWithColour": 49,
     "byCategory": {
       "2": 2,
-      "4": 74,
+      "4": 73,
       "8": 95,
       "9": 10,
       "11": 7,
@@ -23,7 +23,7 @@
       "B": 124,
       "exempt": 35,
       "keep": 247,
-      "C": 7,
+      "C": 6,
       "D": 15
     },
     "compositingClasses": 19,
@@ -31,7 +31,7 @@
     "compositingClassNameOccurrences": 70,
     "compositingRuleBodies": 39,
     "lightCounterpartClasses": 15,
-    "pairs": 11,
+    "pairs": 10,
     "pairsDifferingInAlpha": 0
   },
   "literalRows": [
@@ -3193,37 +3193,13 @@
     },
     {
       "file": "app/components/ChordChart.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-white",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 220,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/ChordChart.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "border-transparent",
-      "alpha": null,
-      "utility": "border",
-      "carrier": null,
-      "line": 215,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/ChordChart.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
       "value": "fill=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 309,
+      "line": 300,
       "disposition": "B",
       "reason": null
     },
@@ -3235,7 +3211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 307,
+      "line": 298,
       "disposition": "B",
       "reason": null
     },
@@ -3780,16 +3756,28 @@
       "reason": null
     },
     {
-      "file": "app/components/ui/EmailPrefToggles.tsx",
+      "file": "app/components/ui/Switch.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
       "value": "bg-white",
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 142,
+      "line": 58,
       "disposition": "C",
       "reason": null
+    },
+    {
+      "file": "app/components/ui/Switch.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "border-transparent",
+      "alpha": null,
+      "utility": "border",
+      "carrier": null,
+      "line": 48,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
     },
     {
       "file": "app/utils/emailShell.ts",
@@ -4853,15 +4841,6 @@
       "light": "mono-400",
       "lightAlpha": null,
       "dark": "mono-400",
-      "darkAlpha": null,
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/ChordChart.tsx",
-      "utility": "bg",
-      "light": "mono-300",
-      "lightAlpha": null,
-      "dark": "mono-600",
       "darkAlpha": null,
       "alphaDiffers": false
     },
