@@ -390,8 +390,12 @@ describe("CueDialog motion", () => {
       </MotionProvider>,
     );
     const close = screen.getByRole("button", { name: "Cerrar diálogo" });
-    expect(close.className).toMatch(/\bsr-only\b/);
-    expect(close.className).toMatch(/focus-visible:not-sr-only/);
+    // Token match, not a regex: `\bsr-only\b` also matches inside `not-sr-only`.
+    const tokens = close.className.split(/\s+/);
+    expect(tokens).toContain("sr-only");
+    expect(tokens).toContain("focus-visible:not-sr-only");
+    expect(tokens).toContain("focus-visible:h-9");
+    expect(tokens).toContain("focus-visible:w-9");
   });
 
   it("keeps the × visible on a modal, where nothing can be dragged", () => {
@@ -529,6 +533,9 @@ describe("CueDialog motion", () => {
           </CueDialogProvider>
         </MotionProvider>,
       );
+      // No drag at this width, so the × must stay a visible control.
+      const close = screen.getByRole("button", { name: "Cerrar diálogo" });
+      expect(close.className.split(/\s+/)).not.toContain("sr-only");
       const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
       // A drag that would dismiss twice over on a phone (300 px, instantly).
       fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
