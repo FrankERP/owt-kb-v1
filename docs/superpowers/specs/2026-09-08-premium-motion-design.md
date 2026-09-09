@@ -864,7 +864,7 @@ Bundle section for the full A/B measurement.
 
 Branch `claude/motion-m0b2-controls` (from `main` 2d635d38), plan
 `docs/superpowers/plans/2026-09-09-motion-m0b2-controls.md`. Thirteen tasks, each with a
-fresh implementer and a task review; nine fix rounds in all, every one re-reviewed.
+fresh implementer and a task review; ten fix rounds in all, every one re-reviewed.
 
 **Shipped.** Seven primitives under `app/components/ui/` and one util:
 `SegmentedControl` (radiogroup, roving arrows, `layoutId` thumb — the reason M0b-1 paid

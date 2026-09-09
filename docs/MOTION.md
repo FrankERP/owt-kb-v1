@@ -94,8 +94,8 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
 | `SegmentedControl` | client | the ONE segmented control — `role="radiogroup"`, arrows move the selection with wrap and focus follows, the checked option is the sole tab stop; `value={null}` means nothing chosen yet (no thumb). The thumb is one `layoutId` span (what `domMax` is for). Sizes `sm`/`md`; tones `outline` (bordered pills) / `filled` (joined bar, solid thumb). `badge` and `busy` per option. Never `aria-pressed` toggles for a one-of-N choice. |
 | `SlidingIndicator` / `useActiveIntoView` | client | the active marker for tab bars (admin `TabBar`, `SectionNav`, `BottomNav`): render ONE inside the active item; variants `pill`/`underline`/`dot`. Semantics stay on the items (`aria-current`). The hook scrolls the active item to the centre of an overflowing bar. |
 | `Switch` | client | the ONE switch — `role="switch"`, `aria-checked`, a `<button>`; knob springs (`SPRINGS.pop`) with `initial={false}` so the first paint is the real state; haptic on flip. Sizes `sm`/`md`. |
-| `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` for the kill switch. Name it with `children` or `aria-label`. |
-| `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
+| `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` for the kill switch. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop rather than a `className` because a same-property utility passed through `className` cannot beat one the primitive already sets — two classes for the same property land at equal specificity in the compiled stylesheet, and the one emitted LATER wins regardless of call-site order, so an `items-center` baked into the component always beats an `items-start` passed in from outside. Name it with `children` or `aria-label`. |
+| `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
 | `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws «Mes anterior» / «Mes siguiente» icon buttons (the schedule's month strip). |
 | `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
 | `haptic(kind)` (`app/utils/haptics.ts`) | neutral | `"light"` (default) on a toggle flip or thumb move, `"selection"` on a tab press, `"medium"` reserved for drop landing (M-planner). Native only; no-op on web; never awaited in a handler. |
@@ -234,11 +234,13 @@ raw / 15.8 kB gz** — bigger than either route's net saving, because it now pay
 own gzip framing instead of sharing compression context with code that stayed in the
 first-load bundle.
 
-Programme cap: +25 kB gz total. Both route deltas now land well under the hard cap
-and under the ≤20 kB expectation the programme opened with — `motion`'s `domAnimation`
-feature set plus the four M0a primitives' own code (`Presence`, `Skeleton`/
-`SkeletonGroup`, `Button`, `MotionProvider`) together now cost ~12.4 kB gz on a route
-that renders them, not the ~24 kB the synchronous load cost. The shared/root chunk
+Programme cap: +25 kB gz total. At this M0a fix wave, both route deltas landed well
+under the hard cap and under the ≤20 kB expectation the programme opened with —
+`motion`'s `domAnimation` feature set plus the four M0a primitives' own code
+(`Presence`, `Skeleton`/`SkeletonGroup`, `Button`, `MotionProvider`) together cost
+~12.4 kB gz on a route that renders them, not the ~24 kB the synchronous load cost.
+The M0b-1 merge later added its own +24.8 / +25.0 kB (see the fix-round-1 measurement
+below), and the cap status is now OPEN — see the "Cap status" line further down. The shared/root chunk
 barely moves (+0.02 kB, noise) because `MotionProvider` is mounted inside
 `app/utils/Provider.tsx`, which is wired from the `(admin)` and `(client)` route-group
 layouts, not the app root — so the cost is paid by the routes that render it, not by
@@ -340,6 +342,20 @@ and this is the number he decides on. This does not retroactively validate the
 Before-M0a-anchored deltas recorded for M0a above; a clean same-environment rebuild of
 "Before M0a" itself would still be needed before trusting an absolute cap check
 against it without caveat.
+
+**What the +24.8 kB is** (forensics, 2026-09-09): framer-motion's core runtime
+(`AnimatePresence`/`useMotionValue` machinery, ~63 kB gz across the chunks that carry
+it, an upper bound) became reachable for the first time when `Toast`, `Menu` and the
+expanded `CueDialog` were mounted app-wide via `app/utils/Provider.tsx` and the
+Navbar; the same import already existed in `Presence.tsx` at `e9d90327` but nothing
+imported `Presence`, so it cost nothing. motion 13.2.0 has no slimmer entry for
+`AnimatePresence`/`useMotionValue` (`motion/react` is the full `framer-motion`
+barrel; `motion/react-m` is hosts only; the mini entries export neither); moving
+`animate` to `framer-motion/dom` produced a byte-identical build; the gallery's
+synchronous `domMax` fuses into a Studio-only chunk absent from `/` and `/admin`. The
+two real options are to accept the number as the programme's cost, or a later
+architectural deferral of the sheet-drag/AnimatePresence path behind a dynamic
+import — Frank's call.
 
 ## Where the walk's findings landed
 
