@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Tag } from "../utils/interface";
 import { normalizeText } from "../utils/normalizeText";
 import Link from "next/link";
+import SegmentedControl from "./ui/SegmentedControl";
 
 type SortMode = "popular" | "alpha";
 
@@ -104,23 +105,17 @@ export default function TagSearchList({ tags, totalSongs }: { tags: Tag[]; total
 
         {/* Sort + Search */}
         <div className="flex items-center gap-2 shrink-0">
-          <div className="brand-search-console flex overflow-hidden">
-            {(["popular", "alpha"] as SortMode[]).map((mode, i) => (
-              <button
-                key={mode}
-                onClick={() => setSort(mode)}
-                aria-pressed={sort === mode}
-                className={`px-3 py-1.5 font-label text-[11px] uppercase tracking-widest transition-colors duration-150
-                  ${i > 0 ? "border-l border-surface-accent-20" : ""}
-                  ${sort === mode
-                    ? "bg-accent/15 text-accent"
-                    : "text-ink-dim hover:bg-accent/5 hover:text-ink"
-                  }`}
-              >
-                {mode === "popular" ? "Popular" : "A–Z"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="Ordenar"
+            size="sm"
+            tone="filled"
+            value={sort}
+            onChange={setSort}
+            options={[
+              { value: "popular", label: "Popular" },
+              { value: "alpha", label: "A–Z" },
+            ]}
+          />
           <div className="brand-search-console relative">
             <input
               type="text"

@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MONTH_NAMES_ES, addMonths, monthRangeLabel, scheduleHref, windowMonths, WINDOW_MONTHS } from "../utils/scheduleMonths";
 import CueDialog from "./ui/CueDialog";
+import SegmentedControl from "./ui/SegmentedControl";
 import { themeColour } from "@/app/utils/themeColour";
 
 export type ActiveDay = {
@@ -161,30 +162,16 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
 
       {/* View toggle */}
       <div className="flex justify-center mb-8">
-        <div className="flex rounded-lg border border-surface-accent-30 overflow-hidden">
-          <button
-            onClick={() => setView("calendar")}
-            aria-pressed={view === "calendar"}
-            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-              view === "calendar"
-                ? "bg-surface-accent-solid text-on-fill"
-                : "text-mono-500 hover:text-ink-muted"
-            }`}
-          >
-            Calendario
-          </button>
-          <button
-            onClick={() => setView("list")}
-            aria-pressed={view === "list"}
-            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-accent-deep/30 dark:border-accent/20 ${
-              view === "list"
-                ? "bg-surface-accent-solid text-on-fill"
-                : "text-mono-500 hover:text-ink-muted"
-            }`}
-          >
-            Lista
-          </button>
-        </div>
+        <SegmentedControl
+          label="Vista"
+          tone="filled"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "calendar", label: "Calendario" },
+            { value: "list", label: "Lista" },
+          ]}
+        />
       </div>
 
       {/* Legend */}

@@ -28,10 +28,10 @@
     },
     "compositingClasses": 19,
     "compositingSelectorOccurrences": 40,
-    "compositingClassNameOccurrences": 71,
+    "compositingClassNameOccurrences": 70,
     "compositingRuleBodies": 39,
     "lightCounterpartClasses": 15,
-    "pairs": 13,
+    "pairs": 11,
     "pairsDifferingInAlpha": 0
   },
   "literalRows": [
@@ -2983,7 +2983,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 54,
+      "line": 57,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2995,7 +2995,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 62,
+      "line": 65,
       "disposition": "B",
       "reason": null
     },
@@ -3163,7 +3163,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 149,
+      "line": 150,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3175,7 +3175,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 409,
+      "line": 396,
       "disposition": "B",
       "reason": null
     },
@@ -3187,7 +3187,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 412,
+      "line": 399,
       "disposition": "B",
       "reason": null
     },
@@ -3679,7 +3679,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 131,
+      "line": 126,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3691,7 +3691,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 22,
+      "line": 23,
       "disposition": "B",
       "reason": null
     },
@@ -3703,7 +3703,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 33,
+      "line": 34,
       "disposition": "B",
       "reason": null
     },
@@ -3715,7 +3715,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 44,
+      "line": 45,
       "disposition": "B",
       "reason": null
     },
@@ -3727,7 +3727,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 136,
+      "line": 131,
       "disposition": "B",
       "reason": null
     },
@@ -3739,7 +3739,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 148,
+      "line": 143,
       "disposition": "B",
       "reason": null
     },
@@ -3751,7 +3751,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 235,
+      "line": 230,
       "disposition": "B",
       "reason": null
     },
@@ -3763,7 +3763,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 169,
+      "line": 164,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -4369,7 +4369,7 @@
       "file": "app/components/TagSearchList.tsx",
       "kind": "className",
       "class": "search-console",
-      "count": 2,
+      "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
     },
@@ -4936,24 +4936,6 @@
     },
     {
       "file": "app/components/TextSizeControl.tsx",
-      "utility": "text",
-      "light": "mono-500",
-      "lightAlpha": null,
-      "dark": "mono-400",
-      "darkAlpha": null,
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/TextSizeControl.tsx",
-      "utility": "text",
-      "light": "mono-500",
-      "lightAlpha": null,
-      "dark": "mono-400",
-      "darkAlpha": null,
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/ui/ThemeControl.tsx",
       "utility": "text",
       "light": "mono-500",
       "lightAlpha": null,
