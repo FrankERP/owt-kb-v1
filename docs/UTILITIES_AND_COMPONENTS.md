@@ -180,7 +180,9 @@ state a save actually persists against the last saved one.
   - NOTE: all three callbacks are `useCallback`s, not `useState` setters — ESLint cannot assume
     they are stable, so name them in an effect's dependency array.
 - **`focusTrap.ts`** (`trapTabTarget` pure tab math) + **`useFocusTrap.ts`** (WAI-ARIA dialog
-  focus hook). **Any overlay with a dismissable scrim must use it** — a clickable full-bleed
+  focus hook, **retired 2026-09-09: no production consumer since M0b-1** — `CueDialog` owns
+  focus trapping directly via `trapTabTarget`; the hook is kept for its own test and because
+  `dialogSemantics.test.ts`'s regex still scans for it). **Any overlay with a dismissable scrim must use it** — a clickable full-bleed
   `bg-scrim` means content is stacked over a still-interactive page, so the overlay also needs
   `role="dialog"`, `aria-modal`, a name, and Escape. `dialogSemantics.test.ts` enumerates every
   overlay drawn with a clickable `bg-scrim` and fails on one that skips this (per file,
@@ -329,7 +331,7 @@ Legend: **[C]** client, **[S]** server.
 | `revealProps()` (`app/utils/reveal.ts`) [N] | CSS route reveal; `app/(client)/template.tsx` replays it per navigation. |
 | `CueDialog` [C] | The ONE dialog shell — never a hand-rolled `fixed inset-0` scrim. `mode="modal"` \| `"sheet"` (a sheet is only a sheet below 640px); drag-to-dismiss on the sheet's handle only; `onDismiss(reason)` where `reason` is `"escape" \| "backdrop" \| "drag"`. Traps focus, stacks layers, supports a portalled focus "satellite". Always render `<CueDialog open={x}>`, never `{x && <CueDialog open>}` — see `cueDialogMount.test.ts`. |
 | `Toast` / `useToast` [C] | The ONE fixed toast stack. `toast({ message, tone?, duration?, hold?, action? })`; `hold` persists until `dismiss(id)`. `useTransientValue` stays for an inline flash next to the control that produced it. |
-| `Menu` / `MenuItem` / `MenuSeparator` / `MenuHeader` [C] | The ONE anchored dropdown. `role="menu"`, roving focus, merges the trigger's own ref. Not supported nested inside a `CueDialog` in M0b-1. |
+| `Menu` / `MenuItem` / `MenuSeparator` / `MenuHeader` [C] | The ONE anchored dropdown. `role="menu"`, roving focus, merges the trigger's own ref. Not supported nested inside a `CueDialog` in M0b-1 (one consumer exists; see MOTION.md). |
 | `Collapse` [C] | The ONE disclosure. Real height animation (the one exception to transform/opacity-only); children stay mounted while closed, `inert` + `aria-hidden`. |
 | `GalleryMotion` (`app/(gallery)/theme-gallery/[theme]/`) [C] | The theme gallery's own `LazyMotion` — the gallery mounts no `Provider`/`MotionProvider`, so this wrapper loads `domMax` synchronously and honours `data-motion="off"` so a baseline capture is deterministic. |
 

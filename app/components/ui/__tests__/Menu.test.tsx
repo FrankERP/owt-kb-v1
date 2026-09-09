@@ -85,6 +85,47 @@ describe("Menu", () => {
     expect(document.activeElement).toBe(t);
   });
 
+  it("ArrowDown on the trigger of a click-opened menu focuses the first item (the [open] effect does not re-run on an already-open menu)", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    const t = screen.getByRole("button", { name: "Más acciones" });
+    fireEvent.click(t);
+    screen.getByRole("menu");
+    fireEvent.keyDown(t, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Copiar" }));
+  });
+
+  it("ArrowUp on the trigger of a click-opened menu focuses the last item", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    const t = screen.getByRole("button", { name: "Más acciones" });
+    fireEvent.click(t);
+    screen.getByRole("menu");
+    fireEvent.keyDown(t, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Eliminar" }));
+  });
+
+  it("Tab on the trigger of a click-opened menu closes it (no dead-open panel left behind)", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    const t = screen.getByRole("button", { name: "Más acciones" });
+    fireEvent.click(t);
+    screen.getByRole("menu");
+    fireEvent.keyDown(t, { key: "Tab" });
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  });
+
+  it("ArrowUp inside the panel when focus is outside the roving list (the panel itself) lands on the last item", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "Más acciones" }));
+    const menu = screen.getByRole("menu");
+    menu.focus();
+    expect(document.activeElement).toBe(menu);
+    fireEvent.keyDown(menu, { key: "ArrowUp" });
+    expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Eliminar" }));
+  });
+
   it("Home/End move focus to the first/last item", async () => {
     render(<Harness />);
     await act(async () => {});

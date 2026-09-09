@@ -81,6 +81,10 @@ export default function Menu({
   const onPanelKeyDown = (e: React.KeyboardEvent) => {
     const list = items();
     const i = list.indexOf(document.activeElement as HTMLElement);
+    // `i < 0` covers focus landing outside the roving list — e.g. the panel
+    // element itself (focusable via its own `tabIndex={-1}` below) — and both
+    // arrows treat that as "one before the first item", so ArrowDown lands on
+    // item 0 and ArrowUp wraps to the LAST item rather than nothing.
     if (e.key === "ArrowDown") { e.preventDefault(); list[(i + 1) % list.length]?.focus(); }
     else if (e.key === "ArrowUp") { e.preventDefault(); const prev = i < 0 ? list.length - 1 : (i - 1 + list.length) % list.length; list[prev]?.focus(); }
     else if (e.key === "Home") { e.preventDefault(); list[0]?.focus(); }
@@ -112,7 +116,20 @@ export default function Menu({
     onKeyDown: (e: React.KeyboardEvent) => {
       triggerProps.onKeyDown?.(e);
       if (e.defaultPrevented) return;
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); focusFirst.current = true; setOpen(true); }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        // Already open (e.g. opened by click/Enter/Space) — the `[open]` effect
+        // below only fires on a false→true transition, so it never runs here.
+        // Move focus into the panel directly instead of relying on it.
+        if (open) {
+          const list = items();
+          list[e.key === "ArrowDown" ? 0 : list.length - 1]?.focus();
+        } else {
+          focusFirst.current = true;
+          setOpen(true);
+        }
+      }
+      if (e.key === "Tab" && open) close(false);
       if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); close(true); }
     },
   } satisfies Partial<TriggerProps>);
@@ -128,6 +145,7 @@ export default function Menu({
             id={id}
             role="menu"
             aria-label={label}
+            tabIndex={-1}
             onKeyDown={onPanelKeyDown}
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1, transition: { duration: MS.base / 1000, ease: EASE_OUT } }}

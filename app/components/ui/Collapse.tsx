@@ -11,6 +11,10 @@
 // under `border-box` a padded/bordered box floors its height at padding+border,
 // so a closed Collapse that owned the padding reserved blank space forever
 // (~50px on /me). Height 0 only means 0 when the box has no padding of its own.
+//
+// A closed Collapse is a zero-height child; a `space-y-*`/`gap` PARENT still
+// reserves its gap, so carry the gap on the Collapse's own className instead
+// (see AvailabilityCalendar, ServicesPanel).
 
 import { useEffect, useRef, useState } from "react";
 import * as m from "motion/react-m";
