@@ -147,7 +147,7 @@ site, the same shape as `clientBoundary.test.ts`.
 | `SegmentedControl` | `role=radiogroup` pills with a sliding `layoutId` thumb | ThemeControl, TextSizeControl, Calendario/Lista, Popular/A–Z, ChordChart chart tabs |
 | `Tabs` (indicator only) | `SlidingIndicator` under/behind the active tab, scroll-active-into-view | AdminPanel `TabBar`, SectionNav |
 | `Presence` | `AnimatePresence` wrapper with the four house variants: `fade`, `rise`, `sheet`, `scale` | every conditional `{open && …}` that should animate |
-| `CueDialog` (upgraded) | enter/exit: card = scale 0.96→1 + fade over `slow`; sheet = spring from `translateY(100%)`; backdrop fades; drag-down-to-dismiss on the sheet handle (pointer events, threshold 150px or velocity — 80px as first built, doubled on Frank's dev look 2026-09-09); `CueDialogProvider` gains a `closing` state so focus restores after the exit completes | its 13 consumers + `SeatPicker` + `SongFormModal` + `ProposalEditor` confirm, which migrate onto it |
+| `CueDialog` (upgraded) | enter/exit: card = scale 0.96→1 + fade over `slow`; sheet = spring from `translateY(100%)`; backdrop fades; drag-down-to-dismiss from the sheet head — handle and title bar (pointer events, threshold 150px or velocity — 80px as first built, doubled on Frank's dev look 2026-09-09); `CueDialogProvider` gains a `closing` state so focus restores after the exit completes | its 13 consumers + `SeatPicker` + `SongFormModal` + `ProposalEditor` confirm, which migrate onto it |
 | `Toast` + `ToastViewport` + `useToast()` | one stack, bottom-centre above the tab bar and safe area, `rise` in / `fade` out, `role=status` (or `alert` for errors), holds the existing `useTransientValue` semantics including `hold` | the 13 hand-rolled toasts |
 | `Menu` | anchored popover with `scale` presence, outside-click and Escape, arrow-key roving focus | NavMenu dropdown, PracticePlaylistButton, ServiceReadinessCard "Más acciones", AvailabilityCalendar note popover |
 | `Collapse` | measured `height: auto` animation with fade, `aria-expanded` wiring, chevron rotation | ActivityPanel, IntegrityQueuePanel, "Roles previos", "Recurrente", "Agregar canción" |
@@ -697,7 +697,7 @@ Motion vocabulary from §2.3; nothing here adds a colour or a face.
 | Element | T | P | Prim |
 |---|---|---|---|
 | Cue card dialog | instant, `CUE` eyebrow, `×` | scale 0.96→1 + fade `slow`; eyebrow gone | CueDialog |
-| Cue sheet (phone) | instant, handle drawn, `CERRAR` + `×` | spring up; drag-to-dismiss on the handle; one close control; content is the card itself (no stacked headers) | CueDialog |
+| Cue sheet (phone) | instant, handle drawn, `CERRAR` + `×` | spring up; drag-to-dismiss from the whole head (handle + title bar, since 2026-09-09); one close control (`×` stays — keyboard, VoiceOver and the ≥640px card have no drag — and the `CERRAR` footer goes); content is the card itself (no stacked headers) | CueDialog |
 | Backdrop | `scrim/0.68 + blur` instant | fades `base`; blur stays (it is cheap when not animated) | CueDialog |
 | Hand-rolled modals (`SeatPicker`, `SongFormModal`, proposal confirm) | three shells | all on `CueDialog` | CueDialog |
 | Menus (`Más acciones`, avatar, practice playlist, note popover) | instant | `Menu` | Menu |

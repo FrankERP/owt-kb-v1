@@ -320,12 +320,6 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
                 roleId={d.roleId}
               />
             ))}
-            <button
-              onClick={dismiss}
-              className="w-full font-label text-xs uppercase tracking-widest text-mono-500 hover:text-mono-300 transition-colors py-2"
-            >
-              Cerrar
-            </button>
           </div>
         </CueDialog>
       )}

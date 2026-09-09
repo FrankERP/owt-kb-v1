@@ -269,7 +269,9 @@ export default function CueDialog({
   // Sheet drag-to-dismiss (spec §19.4). Pointer events by hand — no `drag` prop —
   // because the gesture is one-axis, downward only, with its own thresholds, and
   // because a `drag` element fights the sheet's own scroll region. touch-action:none
-  // lives on the HANDLE so the sheet body still scrolls.
+  // lives on the sheet's HEAD (handle + title bar) so the sheet body still scrolls.
+  // The whole head is the grip, not just the 12px pill: Frank's dev look on
+  // 2026-09-09 found the pill too small a target and asked for the title bar too.
   const sheetY = useMotionValue(0);
   const dragRef = useRef<{ startY: number; startT: number; lastY: number; lastT: number } | null>(null);
   // The spring-back's controls, so a re-grab can stop it. `sheetY.set()` does NOT
@@ -284,10 +286,15 @@ export default function CueDialog({
 
   const onHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!e.isPrimary) return;
+    // The close button lives inside the grip. A pointerdown that starts on it must
+    // stay a tap: capturing the pointer here would retarget the pointerup to the
+    // head, and the button's `click` — which needs down and up on the same node —
+    // would never fire.
+    if ((e.target as Element).closest("button, a, input, select, textarea")) return;
     springRef.current?.stop();
     dragRef.current = { startY: e.clientY, startT: performance.now(), lastY: e.clientY, lastT: performance.now() };
     // jsdom has no pointer capture; a real browser needs it so the gesture keeps
-    // tracking once the finger leaves the 12px handle.
+    // tracking once the finger leaves the head.
     if (typeof e.currentTarget.setPointerCapture === "function") e.currentTarget.setPointerCapture(e.pointerId);
   };
   const onHandlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -374,39 +381,42 @@ export default function CueDialog({
                 : "max-h-[min(92svh,54rem)] rounded-2xl"
             }`}
           >
-            {mode === "sheet" && (
-              <div
-                data-cue-handle=""
-                // Handlers only on the phone side of the breakpoint: at ≥640px the
-                // handle is `sm:hidden` and the dialog is a card, so a drag there would
-                // dismiss a card by a grip nobody can see.
-                {...(sheetMotion
-                  ? {
-                      onPointerDown: onHandlePointerDown,
-                      onPointerMove: onHandlePointerMove,
-                      onPointerUp: onHandlePointerUp,
-                      onPointerCancel: onHandlePointerCancel,
-                    }
-                  : null)}
-                className="flex cursor-grab touch-none justify-center pb-1 pt-3 active:cursor-grabbing sm:hidden"
-              >
-                <span className="h-1.5 w-12 rounded-full bg-accent/25" />
-              </div>
-            )}
-            {title && (
-              <div className="flex shrink-0 items-start justify-between gap-4 border-b border-accent/10 bg-surface-raised/35 px-5 py-5 sm:px-6">
-                <h2 id={titleId} className="min-w-0 font-display text-2xl leading-tight text-ink">
-                  {title}
-                </h2>
-                <Button
-                  variant="icon"
-                  onClick={() => onDismiss("escape")}
-                  aria-label={label ? `Cerrar ${label}` : "Cerrar diálogo"}
-                >
-                  <CloseIcon />
-                </Button>
-              </div>
-            )}
+            {/* The head — handle plus title bar — is one grip. Handlers only on the
+                phone side of the breakpoint: at ≥640px the handle is `sm:hidden` and
+                the dialog is a card, so a drag there would dismiss a card by a grip
+                nobody can see. */}
+            <div
+              data-cue-head=""
+              {...(sheetMotion
+                ? {
+                    onPointerDown: onHandlePointerDown,
+                    onPointerMove: onHandlePointerMove,
+                    onPointerUp: onHandlePointerUp,
+                    onPointerCancel: onHandlePointerCancel,
+                  }
+                : null)}
+              className={`shrink-0 ${sheetMotion ? "cursor-grab touch-none active:cursor-grabbing" : ""}`}
+            >
+              {mode === "sheet" && (
+                <div data-cue-handle="" className="flex justify-center pb-1 pt-3 sm:hidden">
+                  <span className="h-1.5 w-12 rounded-full bg-accent/25" />
+                </div>
+              )}
+              {title && (
+                <div className="flex items-start justify-between gap-4 border-b border-accent/10 bg-surface-raised/35 px-5 py-5 sm:px-6">
+                  <h2 id={titleId} className="min-w-0 font-display text-2xl leading-tight text-ink">
+                    {title}
+                  </h2>
+                  <Button
+                    variant="icon"
+                    onClick={() => onDismiss("escape")}
+                    aria-label={label ? `Cerrar ${label}` : "Cerrar diálogo"}
+                  >
+                    <CloseIcon />
+                  </Button>
+                </div>
+              )}
+            </div>
             <SatelliteContext.Provider value={satelliteRegistry}>{children}</SatelliteContext.Provider>
           </m.div>
         </div>

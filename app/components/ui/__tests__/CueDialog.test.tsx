@@ -326,6 +326,56 @@ describe("CueDialog motion", () => {
     expect(onDismiss).toHaveBeenCalledWith("drag");
   });
 
+  it("dismisses a sheet when the TITLE BAR is dragged, not only the handle", () => {
+    // The whole head is the grip (Frank, dev, 2026-09-09): a finger on «Detalle»
+    // must work exactly like one on the pill.
+    const onDismiss = vi.fn();
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open mode="sheet" title="Detalle" onDismiss={onDismiss}>
+            <button>Ok</button>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    let clock = 0;
+    const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    try {
+      const heading = screen.getByRole("heading", { name: "Detalle" });
+      fireEvent.pointerDown(heading, { pointerId: 1, clientY: 100, isPrimary: true });
+      clock = 1000;
+      fireEvent.pointerMove(heading, { pointerId: 1, clientY: 300, isPrimary: true });
+      fireEvent.pointerUp(heading, { pointerId: 1, clientY: 300 });
+    } finally {
+      now.mockRestore();
+    }
+    expect(onDismiss).toHaveBeenCalledWith("drag");
+  });
+
+  it("keeps the close button inside the grip a tap, never a drag", () => {
+    // A pointerdown on × must not start tracking: with pointer capture the pointerup
+    // would retarget to the head and the button's click would never fire.
+    const onDismiss = vi.fn();
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open mode="sheet" title="Detalle" onDismiss={onDismiss}>
+            <button>Ok</button>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    const close = screen.getByRole("button", { name: "Cerrar diálogo" });
+    fireEvent.pointerDown(close, { pointerId: 1, clientY: 100, isPrimary: true });
+    fireEvent.pointerMove(close, { pointerId: 1, clientY: 400, isPrimary: true });
+    fireEvent.pointerUp(close, { pointerId: 1, clientY: 400, isPrimary: true });
+    expect(onDismiss).not.toHaveBeenCalledWith("drag");
+    fireEvent.click(close);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
   it("springs a sheet back when the drag is short and slow", () => {
     const onDismiss = vi.fn();
     render(
