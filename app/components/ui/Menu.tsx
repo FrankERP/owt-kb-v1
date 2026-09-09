@@ -41,12 +41,15 @@ export default function Menu({
 }) {
   const id = useId();
   const [open, setOpenState] = useState(false);
-  const [focusFirst, setFocusFirst] = useState(false);
+  const focusFirst = useRef(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  const setOpen = useCallback((next: boolean) => { setOpenState(next); onOpenChange?.(next); }, [onOpenChange]);
+  const setOpen = useCallback((next: boolean) => {
+    setOpenState(next);
+    if (next !== open) onOpenChange?.(next);
+  }, [open, onOpenChange]);
   const close = useCallback((refocus: boolean) => { setOpen(false); if (refocus) triggerRef.current?.focus(); }, [setOpen]);
 
   useEffect(() => {
@@ -59,16 +62,16 @@ export default function Menu({
   const items = () => Array.from(panelRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])') ?? []);
 
   useEffect(() => {
-    if (!open || !focusFirst) return;
+    if (!open || !focusFirst.current) return;
     items()[0]?.focus();
-    setFocusFirst(false);
-  }, [open, focusFirst]);
+    focusFirst.current = false;
+  }, [open]);
 
   const onPanelKeyDown = (e: React.KeyboardEvent) => {
     const list = items();
     const i = list.indexOf(document.activeElement as HTMLElement);
     if (e.key === "ArrowDown") { e.preventDefault(); list[(i + 1) % list.length]?.focus(); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); list[(i - 1 + list.length) % list.length]?.focus(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); const prev = i < 0 ? list.length - 1 : (i - 1 + list.length) % list.length; list[prev]?.focus(); }
     else if (e.key === "Home") { e.preventDefault(); list[0]?.focus(); }
     else if (e.key === "End") { e.preventDefault(); list[list.length - 1]?.focus(); }
     else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(true); }
@@ -77,6 +80,7 @@ export default function Menu({
 
   const triggerProps = trigger.props as { onClick?: (e: React.MouseEvent) => void; onKeyDown?: (e: React.KeyboardEvent) => void };
 
+  // The trigger's own ref (if any) is replaced; consumers that need it wrap the trigger.
   const triggerEl = React.cloneElement(trigger, {
     ref: triggerRef,
     "aria-haspopup": "menu",
@@ -86,7 +90,7 @@ export default function Menu({
     onKeyDown: (e: React.KeyboardEvent) => {
       triggerProps.onKeyDown?.(e);
       if (e.defaultPrevented) return;
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); setOpen(true); setFocusFirst(true); }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); focusFirst.current = true; setOpen(true); }
       if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); close(true); }
     },
   } satisfies Partial<TriggerProps>);
@@ -126,8 +130,8 @@ export function MenuItem({ onSelect, href, icon, danger = false, disabled = fals
 }) {
   const ctx = useContext(MenuCtx);
   const cls = `${ITEM} ${danger ? "text-negative-fg hover:text-negative-fg" : ""}`;
-  const pick = () => { if (disabled) return; ctx?.close(false); onSelect?.(); };
-  if (href) return <Link role="menuitem" href={href} className={cls} aria-disabled={disabled || undefined} onClick={() => ctx?.close(false)} tabIndex={-1}>{icon}{children}</Link>;
+  const pick = () => { if (disabled) return; ctx?.close(true); onSelect?.(); };
+  if (href && !disabled) return <Link role="menuitem" href={href} className={cls} aria-disabled={disabled || undefined} onClick={() => ctx?.close(false)} tabIndex={-1}>{icon}{children}</Link>;
   return <button type="button" role="menuitem" className={cls} aria-disabled={disabled || undefined} onClick={pick} tabIndex={-1}>{icon}{children}</button>;
 }
 
