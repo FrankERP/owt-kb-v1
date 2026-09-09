@@ -231,9 +231,11 @@ duration?, hold?, action? })`, portalled, `z-[95]` above `CueDialog`), `Menu`
 roving focus, merges the trigger's own ref), `Collapse` (`app/components/ui/Collapse.tsx`
 — every disclosure; the one place height animates, on user-triggered opens only),
 `CueDialog` (`app/components/ui/CueDialog.tsx` — every dialog, never a hand-rolled
-`fixed inset-0` shell; render `<CueDialog open={x}>`, never `{x && <CueDialog open>}`
-— a conditionally-mounted dialog gets no enter/exit; `cueDialogMount.test.ts` is the
-guard), `Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never
+`fixed inset-0` shell; render `<CueDialog open={x}>`, never a literal `open` behind a
+conditional — directly or inside a wrapper component (a local `Modal`, a
+`SetlistPopover`, a `SeatPicker`) whose only JSX output is `<CueDialog open …>` — a
+dialog element with a literal `open` gets no enter/exit either way;
+`cueDialogMount.test.ts` is the guard), `Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never
 an inline class string), `Presence` (every animated conditional), `Skeleton`/
 `SkeletonGroup` (every loading placeholder), `revealProps` (route reveal). Motion
 tokens are `--motion-*` / `--ease-*`; `motion` is importable only under
