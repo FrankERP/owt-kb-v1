@@ -413,6 +413,12 @@ export default function CueDialog({
                     variant="icon"
                     onClick={() => onDismiss("escape")}
                     aria-label={label ? `Cerrar ${label}` : "Cerrar diálogo"}
+                    // On the phone sheet the grip IS the close control (Frank, dev,
+                    // 2026-09-09: "I keep seeing the x"). The button stays in the
+                    // accessibility tree — VoiceOver and a keyboard cannot drag — and
+                    // reappears in place only while it holds keyboard focus. The
+                    // ≥640px card has no drag, so there it stays visible.
+                    className={sheetMotion ? "sr-only focus-visible:not-sr-only" : ""}
                   >
                     <CloseIcon />
                   </Button>

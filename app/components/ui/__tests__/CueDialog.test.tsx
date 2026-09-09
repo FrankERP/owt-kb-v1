@@ -379,6 +379,35 @@ describe("CueDialog motion", () => {
     expect(onDismiss).toHaveBeenCalledWith("escape");
   });
 
+  it("hides the × on a phone sheet for sighted users but keeps it for the accessibility tree", () => {
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open mode="sheet" title="Detalle" onDismiss={() => {}}>
+            <button>Ok</button>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    const close = screen.getByRole("button", { name: "Cerrar diálogo" });
+    expect(close.className).toMatch(/\bsr-only\b/);
+    expect(close.className).toMatch(/focus-visible:not-sr-only/);
+  });
+
+  it("keeps the × visible on a modal, where nothing can be dragged", () => {
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open mode="modal" title="Detalle" onDismiss={() => {}}>
+            <button>Ok</button>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    const close = screen.getByRole("button", { name: "Cerrar diálogo" });
+    expect(close.className).not.toMatch(/sr-only/);
+  });
+
   it("springs a sheet back when the drag is short and slow", () => {
     const onDismiss = vi.fn();
     render(
