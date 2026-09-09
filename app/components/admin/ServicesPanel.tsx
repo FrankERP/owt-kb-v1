@@ -1101,7 +1101,9 @@ export default function ServicesPanel() {
 
       {/* Month filter */}
       {canFilterMonths(sourceRecords) && allMonths.length > 0 && (
-        <div className="space-y-2">
+        // Not `space-y-2`: a closed Collapse is still a child, so the gap would
+        // be reserved. The Collapse's own content carries it (`mt-2`).
+        <div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-label text-[11px] uppercase tracking-widest text-mono-600 shrink-0">Mes:</span>
             <MonthPill label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
@@ -1122,7 +1124,7 @@ export default function ServicesPanel() {
             )}
           </div>
           {pastMonths.length > 0 && (
-            <Collapse id="services-past-months" open={showPastMonths} className="flex items-center gap-2 flex-wrap pl-12">
+            <Collapse id="services-past-months" open={showPastMonths} className="mt-2 flex items-center gap-2 flex-wrap pl-12">
               {pastMonths.map(ym => (
                 <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} past />
               ))}

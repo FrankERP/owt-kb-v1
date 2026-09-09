@@ -231,7 +231,7 @@ export default function ActivityPanel() {
                 </div>
 
                 {/* Login history */}
-                {(m.events?.length ?? 0) > 0 && (
+                {m.events.length > 0 && (
                   <div>
                     <p className="font-label text-[10px] uppercase tracking-widest text-mono-600 mb-1.5">
                       Historial de accesos ({m.loginCount})
