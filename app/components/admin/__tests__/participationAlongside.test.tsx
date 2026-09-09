@@ -628,19 +628,21 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
   });
 
   it("keeps the Voces/Instrumentos select from setting the rail's width", () => {
-    // The defect, as close as jsdom can get to it. Beside the title the select
-    // demanded its widest option ("Instrumentos", 112px) ON TOP of the title's
-    // ~131px, and the header overflowed the fixed 216px box by 47px onto the
-    // grid. Stacked and `w-full`, it is capped by the rail instead.
+    // The defect, as close as jsdom can get to it. Beside the title the old
+    // `<select>` demanded its widest option ("Instrumentos", 112px) ON TOP of
+    // the title's ~131px, and the header overflowed the fixed 216px box by
+    // 47px onto the grid. `SegmentedControl` (M0b-2) doesn't have that failure
+    // mode — its group is only as wide as its own short labels, never the
+    // stacked SUM of title + widest option — but it must still live inside
+    // the STACKED header, not back beside the title.
     stubWideViewport();
     const { container } = goToGrid([]);
     const rail = findRail(container, '[data-participation-rail="panel"]') as HTMLElement;
     const header = rail.querySelector("[data-rail-header]") as HTMLElement;
-    const select = rail.querySelector("select") as HTMLSelectElement;
+    const select = rail.querySelector('[role="radiogroup"]') as HTMLElement;
 
     expect(header).not.toBeNull();
     expect(header.contains(select)).toBe(true);
-    expect(select.className.split(/\s+/)).toContain("w-full");
     // A flex row is what made the two widths ADD. A block header makes the
     // demand the wider of the two.
     expect(header.className.split(/\s+/)).not.toContain("flex");
@@ -1142,10 +1144,12 @@ describe("the chart's header row cannot out-demand its column", () => {
   const sidebarSrc = readFileSync(join(root, "app/components/admin/ParticipationSidebar.tsx"), "utf8");
 
   it("the header row cannot demand the select's intrinsic width", () => {
-    // `w-full` inside a block header. Side by side with the title (the shipped
-    // defect) the header's demand is the SUM, and no floor derived from the bar
-    // row can hold it — a `<select>` is as wide as its longest option.
-    expect(sidebarSrc).toMatch(/<select[\s\S]{0,240}?className="[^"]*\bw-full\b/);
-    expect(sidebarSrc).toMatch(/<div data-rail-header className="mb-1">/);
+    // The `<select>` this pinned is gone (M0b-2): `SegmentedControl` renders an
+    // `inline-flex` radiogroup whose two short labels never sum past the
+    // title's ~131px the way "Instrumentos" (112px) used to on its own, so the
+    // specific overflow mechanism this guarded against cannot recur. What
+    // still matters structurally is that the control stays inside the
+    // STACKED, non-flex header rather than back beside the title.
+    expect(sidebarSrc).toMatch(/<div data-rail-header className="mb-1">[\s\S]{0,400}?<SegmentedControl/);
   });
 });

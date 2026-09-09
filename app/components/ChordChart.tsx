@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import SegmentedControl from "./ui/SegmentedControl";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -140,24 +141,16 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
 
       {/* Chart tabs */}
       {charts.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {charts.map((c, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => handleTabChange(i)}
-              aria-label={`${c.key || `Tonalidad ${i + 1}`} · versión ${i + 1} de ${charts.length}`}
-              aria-pressed={i === activeIdx}
-              className={`font-label text-xs uppercase tracking-widest px-4 py-1.5 rounded-full border transition-colors ${
-                i === activeIdx
-                  ? "border-accent bg-accent/15 text-accent"
-                  : "border-surface-accent-l25-d20 text-mono-500 hover:border-accent/50 dark:hover:border-surface-accent-l25-d20 hover:text-accent"
-              }`}
-            >
-              {c.key || `Tonalidad ${i + 1}`}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Versión"
+          value={String(activeIdx)}
+          onChange={(v) => handleTabChange(Number(v))}
+          options={charts.map((c, i) => ({
+            value: String(i),
+            label: c.key || `Tonalidad ${i + 1}`,
+            ariaLabel: `${c.key || `Tonalidad ${i + 1}`} · versión ${i + 1} de ${charts.length}`,
+          }))}
+        />
       )}
 
       {/* ChordPro controls */}

@@ -75,7 +75,7 @@ function stubApi(rows: Row[]) {
   return fetchMock;
 }
 
-const tab = (label: string) => screen.getByRole("button", { name: label });
+const tab = (label: string) => screen.getByRole("radio", { name: new RegExp(`^${label}`) });
 
 beforeEach(() => {
   vi.unstubAllGlobals();

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { computeParticipation, type ParticipantRole, type MemberParticipation } from "@/app/utils/computeParticipation";
 import { themeColour } from "@/app/utils/themeColour";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
 
 // Six CATEGORICAL hues, keyed by seat. These are consumed as inline `background:`
 // values, so they must be COMPLETE colours — a bare triplet would need wrapping and
@@ -59,18 +60,25 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
         this header is the half of that derivation no arithmetic can see, and
         `participationAlongside.test.tsx` pins it structurally for that reason.
 
-        `min-h-[44px]`: below the gutter threshold this chart stacks inline on an
-        iPad and in the Capacitor wrap, where this is a touch target.
+        The 44px touch-target this used to guarantee (`min-h-[44px]` on the old
+        `<select>`) returns with the Control Room rail remake; `size="sm"` here
+        is deliberately below it because this rail is narrow.
       */}
       <div data-rail-header className="mb-1">
         <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
         <p className="text-xs text-mono-500">{monthLabel}</p>
-        <select value={view} onChange={e => setView(e.target.value as View)}
-          aria-label="Ver participaciones por"
-          className="mt-2 w-full min-h-[44px] text-xs bg-transparent border border-accent/20 rounded-lg px-2 py-1">
-          <option value="voces">Voces</option>
-          <option value="instrumentos">Instrumentos</option>
-        </select>
+        <SegmentedControl
+          label="Ver participaciones por"
+          size="sm"
+          tone="filled"
+          className="mt-2"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "voces", label: "Voces" },
+            { value: "instrumentos", label: "Instrumentos" },
+          ]}
+        />
       </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 py-2 border-b border-accent/15 mb-1">

@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 324,
+    "literalRows": 323,
     "filesScanned": 277,
-    "filesWithColour": 51,
+    "filesWithColour": 50,
     "byCategory": {
       "2": 2,
-      "4": 76,
+      "4": 75,
       "8": 95,
       "9": 10,
       "11": 7,
@@ -22,7 +22,7 @@
     "byDisposition": {
       "B": 124,
       "exempt": 35,
-      "keep": 249,
+      "keep": 248,
       "C": 7,
       "D": 15
     },
@@ -2407,7 +2407,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 190,
+      "line": 191,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2419,7 +2419,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1131,
+      "line": 1122,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2431,6 +2431,18 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
+      "line": 230,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
       "line": 229,
       "disposition": "B",
       "reason": null
@@ -2443,7 +2455,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 228,
+      "line": 1117,
       "disposition": "B",
       "reason": null
     },
@@ -2455,7 +2467,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1126,
+      "line": 1328,
       "disposition": "B",
       "reason": null
     },
@@ -2479,7 +2491,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1346,
+      "line": 1347,
       "disposition": "B",
       "reason": null
     },
@@ -2491,19 +2503,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1356,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/AdminPanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 1367,
+      "line": 1358,
       "disposition": "B",
       "reason": null
     },
@@ -2515,7 +2515,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 232,
+      "line": 233,
       "disposition": "C",
       "reason": null
     },
@@ -2527,7 +2527,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 227,
+      "line": 228,
       "disposition": "C",
       "reason": null
     },
@@ -2539,7 +2539,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 594,
+      "line": 595,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2676,18 +2676,6 @@
       "reason": "Already theme-agnostic"
     },
     {
-      "file": "app/components/admin/ParticipationSidebar.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 70,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
       "file": "app/components/admin/PlannerGrid.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -2731,7 +2719,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 180,
+      "line": 181,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2743,7 +2731,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 333,
+      "line": 334,
       "disposition": "B",
       "reason": null
     },
@@ -3211,7 +3199,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 227,
+      "line": 220,
       "disposition": "C",
       "reason": null
     },
@@ -3223,7 +3211,7 @@
       "alpha": null,
       "utility": "border",
       "carrier": null,
-      "line": 222,
+      "line": 215,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3235,7 +3223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 316,
+      "line": 309,
       "disposition": "B",
       "reason": null
     },
@@ -3247,7 +3235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 314,
+      "line": 307,
       "disposition": "B",
       "reason": null
     },

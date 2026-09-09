@@ -23,6 +23,7 @@ import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
 import { useToast } from "../ui/Toast";
+import SegmentedControl from "../ui/SegmentedControl";
 import {
   ALL_MINISTRY_IDS,
   MANAGEABLE_MINISTRY_IDS,
@@ -138,22 +139,22 @@ export function MinistryScopeBar({
 }) {
   if (!visible) return null;
   return (
-    <div className="brand-search-console flex shrink-0 self-start overflow-hidden">
-      {MINISTRY_SCOPES.map((s) => (
-        <button
-          key={s}
-          type="button"
-          aria-pressed={value === s}
-          onClick={() => onChange(s)}
-          className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-            value === s ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-accent"
-          }`}
-        >
-          {MINISTRY_SCOPE_LABEL(s)}
-          <span className="ml-1.5 opacity-60">{s === "all" ? total : counts[s]}</span>
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      label="Ministerio"
+      tone="filled"
+      className="brand-search-console self-start"
+      value={value}
+      onChange={onChange}
+      options={MINISTRY_SCOPES.map((s) => ({
+        value: s,
+        label: (
+          <>
+            {MINISTRY_SCOPE_LABEL(s)}
+            <span className="ml-1.5 opacity-60">{s === "all" ? total : counts[s]}</span>
+          </>
+        ),
+      }))}
+    />
   );
 }
 
@@ -1063,22 +1064,17 @@ export default function AdminPanel({
 
         {/* Row 1: filter key + filter value + sort direction */}
         <div className="flex gap-2 flex-wrap">
-          {/* Filter by: type | role */}
-          <div className="brand-search-console flex shrink-0 overflow-hidden">
-            {(["type", "role"] as FilterKey[]).map((k) => (
-              <button
-                key={k}
-                onClick={() => { setFilterKey(k); setFilterValue(""); }}
-                className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-                  filterKey === k
-                    ? "bg-accent/15 text-accent"
-                    : "text-ink-dim hover:text-accent"
-                }`}
-              >
-                {k === "type" ? "Tipo" : "Rol"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="Filtrar por"
+            tone="filled"
+            className="brand-search-console shrink-0"
+            value={filterKey}
+            onChange={(k) => { setFilterKey(k); setFilterValue(""); }}
+            options={[
+              { value: "type", label: "Tipo" },
+              { value: "role", label: "Rol" },
+            ]}
+          />
 
           {/* Filter value dropdown */}
           <select
@@ -1100,22 +1096,17 @@ export default function AdminPanel({
             }
           </select>
 
-          {/* Sort direction */}
-          <div className="brand-search-console flex shrink-0 overflow-hidden">
-            {(["asc", "desc"] as SortDir[]).map((d) => (
-              <button
-                key={d}
-                onClick={() => setSortDir(d)}
-                className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-                  sortDir === d
-                    ? "bg-accent/15 text-accent"
-                    : "text-ink-dim hover:text-accent"
-                }`}
-              >
-                {d === "asc" ? "A→Z" : "Z→A"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="Orden"
+            tone="filled"
+            className="brand-search-console shrink-0"
+            value={sortDir}
+            onChange={setSortDir}
+            options={[
+              { value: "asc", label: "A→Z" },
+              { value: "desc", label: "Z→A" },
+            ]}
+          />
         </div>
 
         {/* Row 2: search */}
