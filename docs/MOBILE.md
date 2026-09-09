@@ -47,7 +47,7 @@ Still pending: set **Vercel → Settings → Node.js Version → 22** so prod ma
 ## Phase 1 — generate native projects & run (online wrap)
 
 > **Status:** `ios/` and `android/` are generated and **committed** to the repo.
-> Remaining local setup: CocoaPods (iOS) and JDK 17 + Android Studio (Android).
+> Remaining local setup: Xcode (iOS plugins resolve through Swift Package Manager — there is no Podfile) and JDK 17 + Android Studio (Android).
 
 ```bash
 nvm use                  # Node 22 from .nvmrc
@@ -93,6 +93,25 @@ signing" → select your Apple Developer team.
 - **Calendar:** a calendar plugin fed by `app/utils/ics.ts` / `AddToCalendarButton.tsx`.
 
 ---
+
+## Native plugins in use
+
+| Plugin | Used by | Web behaviour |
+|---|---|---|
+| `@capacitor/text-zoom` | `app/utils/textZoom.ts` | falls back to a CSS scale |
+| `@capgo/capacitor-social-login` | `app/utils/native.ts` | not loaded |
+| `@capacitor/haptics` | `app/utils/haptics.ts` — `haptic("light")` on a toggle flip or a segmented thumb move, `haptic("selection")` on a tab press (spec decision D) | no-op: `isNativeApp()` is false, the module is never imported |
+
+### Adding a plugin
+
+1. `npm install <plugin>` — the dependency goes in `package.json` like any other.
+2. `npx cap sync ios` — regenerates `ios/App/CapApp-SPM/Package.swift` (managed by the
+   CLI, never hand-edited) so Xcode resolves the plugin's Swift package from
+   `node_modules`. Commit the regenerated file: `ios/` is committed on purpose.
+3. Import the plugin LAZILY behind `isNativeApp()` (`app/utils/native.ts` is the
+   pattern) so the web bundle and SSR never see it.
+4. A new native plugin means a new iOS build before the team's installed app has it;
+   until then the util must degrade silently — `haptic()` swallows the failure.
 
 ## Notes
 
