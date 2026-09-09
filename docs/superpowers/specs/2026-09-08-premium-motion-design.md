@@ -147,7 +147,7 @@ site, the same shape as `clientBoundary.test.ts`.
 | `SegmentedControl` | `role=radiogroup` pills with a sliding `layoutId` thumb | ThemeControl, TextSizeControl, Calendario/Lista, Popular/A–Z, ChordChart chart tabs |
 | `Tabs` (indicator only) | `SlidingIndicator` under/behind the active tab, scroll-active-into-view | AdminPanel `TabBar`, SectionNav |
 | `Presence` | `AnimatePresence` wrapper with the four house variants: `fade`, `rise`, `sheet`, `scale` | every conditional `{open && …}` that should animate |
-| `CueDialog` (upgraded) | enter/exit: card = scale 0.96→1 + fade over `slow`; sheet = spring from `translateY(100%)`; backdrop fades; drag-down-to-dismiss on the sheet handle (pointer events, threshold 80px or velocity); `CueDialogProvider` gains a `closing` state so focus restores after the exit completes | its 13 consumers + `SeatPicker` + `SongFormModal` + `ProposalEditor` confirm, which migrate onto it |
+| `CueDialog` (upgraded) | enter/exit: card = scale 0.96→1 + fade over `slow`; sheet = spring from `translateY(100%)`; backdrop fades; drag-down-to-dismiss from the sheet head — handle and title bar (pointer events, threshold 150px or velocity — 80px as first built, doubled on Frank's dev look 2026-09-09); `CueDialogProvider` gains a `closing` state so focus restores after the exit completes | its 13 consumers + `SeatPicker` + `SongFormModal` + `ProposalEditor` confirm, which migrate onto it |
 | `Toast` + `ToastViewport` + `useToast()` | one stack, bottom-centre above the tab bar and safe area, `rise` in / `fade` out, `role=status` (or `alert` for errors), holds the existing `useTransientValue` semantics including `hold` | the 13 hand-rolled toasts |
 | `Menu` | anchored popover with `scale` presence, outside-click and Escape, arrow-key roving focus | NavMenu dropdown, PracticePlaylistButton, ServiceReadinessCard "Más acciones", AvailabilityCalendar note popover |
 | `Collapse` | measured `height: auto` animation with fade, `aria-expanded` wiring, chevron rotation | ActivityPanel, IntegrityQueuePanel, "Roles previos", "Recurrente", "Agregar canción" |
@@ -697,7 +697,7 @@ Motion vocabulary from §2.3; nothing here adds a colour or a face.
 | Element | T | P | Prim |
 |---|---|---|---|
 | Cue card dialog | instant, `CUE` eyebrow, `×` | scale 0.96→1 + fade `slow`; eyebrow gone | CueDialog |
-| Cue sheet (phone) | instant, handle drawn, `CERRAR` + `×` | spring up; drag-to-dismiss on the handle; one close control; content is the card itself (no stacked headers) | CueDialog |
+| Cue sheet (phone) | instant, handle drawn, `CERRAR` + `×` | spring up; drag-to-dismiss from the whole head (handle + title bar, since 2026-09-09); one close control: the grip itself (Frank, 2026-09-09) — the `×` is `sr-only` on the phone sheet for VoiceOver and keyboard, visible on the ≥640px card which has no drag; the `CERRAR` footer is gone; content is the card itself (no stacked headers) | CueDialog |
 | Backdrop | `scrim/0.68 + blur` instant | fades `base`; blur stays (it is cheap when not animated) | CueDialog |
 | Hand-rolled modals (`SeatPicker`, `SongFormModal`, proposal confirm) | three shells | all on `CueDialog` | CueDialog |
 | Menus (`Más acciones`, avatar, practice playlist, note popover) | instant | `Menu` | Menu |
@@ -721,7 +721,7 @@ Motion vocabulary from §2.3; nothing here adds a colour or a face.
   Finding 5 (initials contrast) as part of the shell; ships the label budget as a
   `labelBudget.test.ts` that counts `uppercase tracking-widest` inside `ui/` primitives'
   consumers and fails above the audited baseline.
-- **M1** removes the redundant `CERRAR`, adds drag-to-dismiss, collapses stacked headers.
+- **M0b-1** removed the redundant `CERRAR` and added drag-to-dismiss (from the whole head since 2026-09-09); **M1** collapses stacked headers.
 - **R1** promotes Contenido's row to the library (not a new design).
 - **R2** replaces the month input with `DateField`.
 - **R5** removes the admin shell's `overflow-x: hidden` and the five-frame nesting together.
@@ -809,3 +809,50 @@ It ships in R1 with the run sheet, and it is the FIFTH place the beam appears; �
 Alternative: decline both — keep the four beam sites and no lit card.
 
 **Approved by Frank 2026-09-08 11:03 CST.** Q joins the Part IV ledger; R1 carries the lit card.
+
+---
+
+# Part VI — After M0a (2026-09-08, 16:30 CST)
+
+M0a shipped to production in PR #50 (`main` 4b218d61; production alias verified 16:31 CST, dpl_88mcKgSeV3Rjo69EAqDsYCXtk1X9). Measured in `docs/MOTION.md`: first-load
++12.4 kB gz on `/`, +12.5 kB on `/admin`, plus a 15.8 kB gz async motion-feature chunk. The
+25 kB figure in §7 was written for a synchronous feature load and mis-estimated `domAnimation` at
+18 kB; the whole-branch review moved the features to an async chunk, which is the only shape under
+which M0b's layout animations (`domMax`) fit.
+
+**R. Bundle cap, restated (coordinator's ruling, pending Frank's word):** §7's **+25 kB gz on
+first-load JS** stands as written and is measured as MOTION.md measures it. A second line is added:
+**the async motion-feature chunk is capped at 40 kB gz.** M0b measures `domMax` against that line
+before adopting `layoutId`; if it does not fit, the sliding indicator is a measured CSS transform
+without `layoutId`.
+
+M0b rules learned in M0a: no `Presence appear` above the fold (features arrive after hydration);
+the vendor feature loader has no rejection handling, so Toast/Menu/Collapse need a load-failure
+fallback; the theme gallery mounts no MotionProvider, so its `controls` fixture must add a
+gallery-side `LazyMotion` with `MotionGlobalConfig.skipAnimations` keyed off `data-motion="off"`;
+new colour in a rule body is a composed token at every `--warning-glow` touch point; `Button` needs
+`forwardRef` before `Menu` can use it as a trigger.
+
+# Part VII — M0b-1 shipped
+
+M0b-1 (overlays and controls — `CueDialog`, `Toast`/`useToast`, `Menu`/`MenuItem`/
+`MenuSeparator`/`MenuHeader`, `Collapse`, the gallery's own `GalleryMotion`) is
+implemented on branch `claude/motion-m0b-overlays-controls`; commit range
+`603f1eb4..0219cc3e` and the two docs commits after it. Full reference in `docs/MOTION.md`
+— primitives table, the "Load-failure behaviour" section (§Part VI's "Toast/Menu/Collapse
+need a load-failure fallback" resolved: `Collapse`/`CueDialog` render already-open via
+`initial={false}`; `Toast`/`Menu` animate in from `initial` since they only ever open long
+after the feature chunk has had time to load; a `CueDialog` opened after mount before the
+chunk lands is invisible while inerting the page), and the Guards table
+(`cueDialogMount.test.ts`, `labelBudget.test.ts`).
+
+**Deferred from M0b-1 → M0b-2, M1, M5–M8:** `SegmentedControl`, `SlidingIndicator`,
+`Switch`, `Checkbox`, `Select`, `DateField`, `NumberRoll`, haptics and the `controls`
+gallery fixture; the 11 literal-`open` `CueDialog` sites (tracked by `cueDialogMount.test.ts`)
+deferred to their route phases; `AvailabilityCalendar`'s note popover → M5; `MonthGenerator`'s
+held swap block → M7b; Kids inline statuses → M8; a `Menu`'s Escape inside a `CueDialog`
+(`CalendarView`'s day sheet) → M0b-2; the 640 px viewport variant fixed at dialog open → M0b-2.
+
+§Part VI's 40 kB gz async-chunk cap: `domMax` measured at **28.8 kB gz** (88.0 kB
+raw) — under the cap, so the sliding indicator kept `layoutId`. See MOTION.md's
+Bundle section for the full A/B measurement.

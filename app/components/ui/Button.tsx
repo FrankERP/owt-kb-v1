@@ -13,7 +13,7 @@
 // colour. Pick a variant or size instead.
 
 import Link from "next/link";
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "icon" | "pill";
 export type ButtonSize = "sm" | "md" | "lg";
@@ -57,30 +57,51 @@ type Common = {
   children: ReactNode;
 };
 
-type ButtonOnlyProps = Common & Omit<ComponentPropsWithoutRef<"button">, "className" | "children"> & { href?: undefined };
-type LinkOnlyProps = Common & Omit<ComponentPropsWithoutRef<"a">, "className" | "children"> & { href: string; busy?: never; busyLabel?: never };
+type ButtonOnlyProps = Common &
+  Omit<ComponentPropsWithoutRef<"button">, "className" | "children"> & { href?: undefined; ref?: Ref<HTMLButtonElement> };
+type LinkOnlyProps = Common &
+  Omit<ComponentPropsWithoutRef<"a">, "className" | "children"> & {
+    href: string;
+    busy?: never;
+    busyLabel?: never;
+    ref?: Ref<HTMLAnchorElement>;
+  };
 
 export type ButtonProps = ButtonOnlyProps | LinkOnlyProps;
 
+// React 19 delivers `ref` as an ordinary prop to function components — no
+// `forwardRef` wrapper needed to accept and pass it on.
 export default function Button(props: ButtonProps) {
   const { variant = "secondary", size = "md", busy = false, busyLabel, active, className = "", children } = props;
   const cls = buttonClass(variant, size, className);
   const label = busy && busyLabel ? busyLabel : children;
 
   if ("href" in props && typeof props.href === "string") {
-    const { href, variant: _v, size: _s, active: _a, className: _c, children: _ch, ...rest } =
+    const { href, variant: _v, size: _s, active: _a, className: _c, children: _ch, ref, ...rest } =
       props as LinkOnlyProps;
     return (
-      <Link href={href} className={cls} {...rest}>
+      <Link href={href} className={cls} ref={ref} {...rest}>
         {label}
       </Link>
     );
   }
 
-  const { variant: _v, size: _s, busy: _b, busyLabel: _bl, active: _a, className: _c, children: _ch, type = "button", disabled, ...rest } =
-    props as ButtonOnlyProps;
+  const {
+    variant: _v,
+    size: _s,
+    busy: _b,
+    busyLabel: _bl,
+    active: _a,
+    className: _c,
+    children: _ch,
+    ref,
+    type = "button",
+    disabled,
+    ...rest
+  } = props as ButtonOnlyProps;
   return (
     <button
+      ref={ref}
       type={type}
       className={cls}
       aria-busy={busy || undefined}

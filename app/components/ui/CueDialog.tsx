@@ -1,8 +1,12 @@
 "use client";
 
-import React, { useCallback, useContext, useEffect, useId, useMemo, useRef } from "react";
+import React, { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { AnimatePresence, animate, useMotionValue } from "motion/react";
+import * as m from "motion/react-m";
 import { trapTabTarget } from "@/app/utils/focusTrap";
+import { EASE_IN, EASE_OUT, EXIT_MS, MS, SHEET_DISMISS, SPRINGS } from "@/app/utils/motionPresets";
+import Button from "./Button";
 import { DismissReason, useCueDialogContext } from "./CueDialogProvider";
 
 const FOCUSABLE = [
@@ -165,8 +169,27 @@ export default function CueDialog({
     [],
   );
 
+  // Mounted = open OR exiting. Registration (focus capture, inert on the app root,
+  // scroll lock) lives for the whole presence, so focus restores and inert lifts
+  // AFTER the exit animation, not at its start. This is the "closing state" spec §4
+  // asked for, held here rather than in the provider — the provider only ever sees
+  // register/unregister.
+  //
+  // `exiting` goes true the moment the dialog OPENS and is cleared by
+  // `onExitComplete`; while `open` is true it is redundant, which is the point —
+  // `mounted` cannot flicker between the two flips and re-register the layer.
+  const [exiting, setExiting] = useState(false);
+  const mounted = open || exiting;
   useEffect(() => {
-    if (!open) return;
+    if (open) setExiting(true);
+    // Unreachable with the provider mounted; belt-and-braces. With no portal node
+    // there is no `AnimatePresence` to fire `onExitComplete`, so `exiting` would
+    // stay true forever and the layer would stay registered — inert app root,
+    // locked scroll, no dialog. Clearing it here costs one comparison per close.
+    else if (!portalNode && exiting) setExiting(false);
+  }, [exiting, open, portalNode]);
+  useEffect(() => {
+    if (!mounted) return;
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     return registerLayer({
       id,
@@ -175,7 +198,7 @@ export default function CueDialog({
       fallbackRef: fallbackFocusRef,
       shellRef,
     });
-  }, [fallbackFocusRef, id, open, registerLayer, restoreFocusRef]);
+  }, [fallbackFocusRef, id, mounted, registerLayer, restoreFocusRef]);
 
   const top = isTopLayer(id);
   const layerIndex = layers.indexOf(id);
@@ -225,63 +248,190 @@ export default function CueDialog({
     return "max-w-2xl";
   }, [size]);
 
-  if (!open || !portalNode) return null;
+  // A `mode="sheet"` dialog is only a SHEET on a phone: the `sm:` classes below turn
+  // it into the same centred card a modal renders at ≥640px. The motion has to follow
+  // the layout, or a laptop gets a card that slides up from under the viewport and
+  // drags closed by a handle CSS has already hidden. Read per render, with no state
+  // and no listener, because a dialog never renders on the server — `portalNode` comes
+  // from the provider's effect, so the first render that reaches this JSX is a client
+  // one and there is no hydration to mismatch. A window resized across 640px while a
+  // dialog is open keeps the variant it opened with, which is the same trade the
+  // rest of the app's breakpoint-dependent behaviour makes.
+  // Absent `matchMedia` — jsdom without a stub — falls back to the SHEET, which is
+  // both the mode the consumer asked for and the behaviour every caller had before
+  // this line existed.
+  const sheetMotion =
+    mode === "sheet" &&
+    (typeof window === "undefined" ||
+      typeof window.matchMedia !== "function" ||
+      !window.matchMedia("(min-width: 640px)").matches);
+
+  // Sheet drag-to-dismiss (spec §19.4). Pointer events by hand — no `drag` prop —
+  // because the gesture is one-axis, downward only, with its own thresholds, and
+  // because a `drag` element fights the sheet's own scroll region. touch-action:none
+  // lives on the sheet's HEAD (handle + title bar) so the sheet body still scrolls.
+  // The whole head is the grip, not just the 12px pill: Frank's dev look on
+  // 2026-09-09 found the pill too small a target and asked for the title bar too.
+  const sheetY = useMotionValue(0);
+  const dragRef = useRef<{ startY: number; startT: number; lastY: number; lastT: number } | null>(null);
+  // The spring-back's controls, so a re-grab can stop it. `sheetY.set()` does NOT
+  // interrupt a running animation — it writes a value the animation overwrites on the
+  // next frame — so without this a finger that catches the sheet mid-flight drags
+  // nothing.
+  const springRef = useRef<{ stop: () => void } | null>(null);
+
+  const springBack = useCallback(() => {
+    springRef.current = animate(sheetY, 0, SPRINGS.sheet);
+  }, [sheetY]);
+
+  const onHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!e.isPrimary) return;
+    // The close button lives inside the grip. A pointerdown that starts on it must
+    // stay a tap: capturing the pointer here would retarget the pointerup to the
+    // head, and the button's `click` — which needs down and up on the same node —
+    // would never fire.
+    if ((e.target as Element).closest("button, a, input, select, textarea")) return;
+    springRef.current?.stop();
+    dragRef.current = { startY: e.clientY, startT: performance.now(), lastY: e.clientY, lastT: performance.now() };
+    // jsdom has no pointer capture; a real browser needs it so the gesture keeps
+    // tracking once the finger leaves the head.
+    if (typeof e.currentTarget.setPointerCapture === "function") e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const onHandlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = dragRef.current;
+    if (!d || !e.isPrimary) return;
+    d.lastY = e.clientY;
+    d.lastT = performance.now();
+    sheetY.set(Math.max(0, e.clientY - d.startY));
+  };
+  const onHandlePointerUp = () => {
+    const d = dragRef.current;
+    if (!d) return;
+    dragRef.current = null;
+    // Spring back on BOTH branches, before the threshold test. A consumer may REFUSE
+    // the dismissal — `DayCard` and `ServicesPanel` both ignore it while a save is in
+    // flight — and then nothing else would ever return the sheet to 0, leaving it
+    // hanging where the finger left it. When the consumer ACCEPTS, the exit animation
+    // starts on the same MotionValue and stops this one, so the spring is invisible.
+    springBack();
+    const travel = Math.max(0, d.lastY - d.startY);
+    const dt = Math.max(1, d.lastT - d.startT);
+    const velocity = travel / dt;
+    if (travel > SHEET_DISMISS.distance || velocity > SHEET_DISMISS.velocity) onDismiss("drag");
+  };
+  // A cancelled pointer is not a released one: the OS took the gesture away (a system
+  // edge swipe, an incoming call). It must never dismiss, however far the finger had
+  // travelled — only put the sheet back.
+  const onHandlePointerCancel = () => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    springBack();
+  };
+
+  if (!portalNode) return null;
 
   return createPortal(
-    <div
-      data-cue-layer={id}
-      aria-hidden={isLowerLayer ? "true" : undefined}
-      inert={isLowerLayer ? true : undefined}
-      className="fixed inset-0 z-[90] flex items-start justify-center px-4 py-4 sm:items-center"
-      style={{ paddingTop: "max(1rem, env(safe-area-inset-top))", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
-    >
-      <button
-        data-cue-backdrop=""
-        type="button"
-        aria-label="Cerrar"
-        tabIndex={-1}
-        onClick={() => top && onDismiss("backdrop")}
-        className="absolute inset-0 cursor-default bg-scrim/[0.68] backdrop-blur-md"
-      />
-      <div
-        ref={shellRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
-        aria-label={!title ? label : undefined}
-        tabIndex={-1}
-        className={`brand-facet-panel brand-surface relative z-10 flex w-full ${sizeClass} flex-col overflow-hidden border-accent/25 shadow-2xl focus:outline-none ${
-          mode === "sheet"
-            ? "mt-auto max-h-[92svh] rounded-t-2xl sm:mt-0 sm:max-h-[min(86svh,52rem)] sm:rounded-2xl"
-            : "max-h-[min(92svh,54rem)] rounded-2xl"
-        }`}
-      >
-        {mode === "sheet" && (
-          <div className="flex justify-center pb-1 pt-3 sm:hidden">
-            <span className="h-1.5 w-12 rounded-full bg-accent/25" />
-          </div>
-        )}
-        {title && (
-          <div className="flex shrink-0 items-start justify-between gap-4 border-b border-accent/10 bg-surface-raised/35 px-5 py-5 sm:px-6">
-            <div className="min-w-0">
-              <p className="mb-1 font-label text-[10px] uppercase tracking-[0.24em] text-accent/70">Cue</p>
-              <h2 id={titleId} className="font-display text-2xl leading-tight text-ink">
-                {title}
-              </h2>
-            </div>
-            <button
-              type="button"
-              onClick={() => onDismiss("escape")}
-              className="rounded-lg p-2 text-ink-dim transition-colors hover:bg-surface-lift/5 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-              aria-label={label ? `Cerrar ${label}` : "Cerrar diálogo"}
+    <AnimatePresence initial={false} onExitComplete={() => setExiting(false)}>
+      {open && (
+        <div
+          key="layer"
+          data-cue-layer={id}
+          aria-hidden={isLowerLayer ? "true" : undefined}
+          inert={isLowerLayer ? true : undefined}
+          className="fixed inset-0 z-[90] flex items-start justify-center px-4 py-4 sm:items-center"
+          style={{ paddingTop: "max(1rem, env(safe-area-inset-top))", paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+        >
+          <m.button
+            data-cue-backdrop=""
+            type="button"
+            aria-label="Cerrar"
+            tabIndex={-1}
+            onClick={() => top && open && onDismiss("backdrop")}
+            className="absolute inset-0 cursor-default bg-scrim/[0.68] backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1, transition: { duration: MS.base / 1000, ease: EASE_OUT } }}
+            exit={{ opacity: 0, transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }}
+          />
+          <m.div
+            ref={shellRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={title ? titleId : undefined}
+            aria-label={!title ? label : undefined}
+            tabIndex={-1}
+            style={{ y: sheetY }}
+            initial={sheetMotion ? { y: "100%", opacity: 1 } : { scale: 0.96, opacity: 0 }}
+            animate={
+              sheetMotion
+                ? { y: 0, opacity: 1, transition: SPRINGS.sheet }
+                : { scale: 1, opacity: 1, transition: { duration: MS.slow / 1000, ease: EASE_OUT } }
+            }
+            // A sheet slides ALL the way out and keeps its opacity, the way an iOS
+            // sheet does. The old `{ y: 24 }` was a recoil: a sheet dragged 100 px down
+            // snapped back up to 24 px before fading, which reads as the gesture being
+            // undone rather than completed.
+            exit={
+              sheetMotion
+                ? { y: "100%", transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }
+                : { scale: 0.98, opacity: 0, transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }
+            }
+            className={`brand-facet-panel brand-surface relative z-10 flex w-full ${sizeClass} flex-col overflow-hidden border-accent/25 shadow-2xl focus:outline-none ${
+              mode === "sheet"
+                ? "mt-auto max-h-[92svh] rounded-t-2xl sm:mt-0 sm:max-h-[min(86svh,52rem)] sm:rounded-2xl"
+                : "max-h-[min(92svh,54rem)] rounded-2xl"
+            }`}
+          >
+            {/* The head — handle plus title bar — is one grip. Handlers only on the
+                phone side of the breakpoint: at ≥640px the handle is `sm:hidden` and
+                the dialog is a card, so a drag there would dismiss a card by a grip
+                nobody can see. */}
+            <div
+              data-cue-head=""
+              {...(sheetMotion
+                ? {
+                    onPointerDown: onHandlePointerDown,
+                    onPointerMove: onHandlePointerMove,
+                    onPointerUp: onHandlePointerUp,
+                    onPointerCancel: onHandlePointerCancel,
+                  }
+                : null)}
+              // select-none: the grip now holds text, and touch-action:none stops panning, not
+              // a long-press or mouse drag from selecting the title while the sheet moves.
+              className={`shrink-0 ${sheetMotion ? "cursor-grab touch-none select-none active:cursor-grabbing" : ""}`}
             >
-              <CloseIcon />
-            </button>
-          </div>
-        )}
-        <SatelliteContext.Provider value={satelliteRegistry}>{children}</SatelliteContext.Provider>
-      </div>
-    </div>,
+              {mode === "sheet" && (
+                <div data-cue-handle="" className="flex justify-center pb-1 pt-3 sm:hidden">
+                  <span className="h-1.5 w-12 rounded-full bg-accent/25" />
+                </div>
+              )}
+              {title && (
+                <div className="flex items-start justify-between gap-4 border-b border-accent/10 bg-surface-raised/35 px-5 py-5 sm:px-6">
+                  <h2 id={titleId} className="min-w-0 font-display text-2xl leading-tight text-ink">
+                    {title}
+                  </h2>
+                  <Button
+                    variant="icon"
+                    onClick={() => onDismiss("escape")}
+                    aria-label={label ? `Cerrar ${label}` : "Cerrar diálogo"}
+                    // On the phone sheet the grip IS the close control (Frank, dev,
+                    // 2026-09-09: "I keep seeing the x"). The button stays in the
+                    // accessibility tree — VoiceOver and a keyboard cannot drag — and
+                    // reappears in place only while it holds keyboard focus. The
+                    // ≥640px card has no drag, so there it stays visible.
+                    // not-sr-only resets width/height to auto at (0,2,0), which beats the icon
+                    // variant's w-9/h-9 — restore the 36px hit box in the same variant.
+                    className={sheetMotion ? "sr-only focus-visible:not-sr-only focus-visible:h-9 focus-visible:w-9" : ""}
+                  >
+                    <CloseIcon />
+                  </Button>
+                </div>
+              )}
+            </div>
+            <SatelliteContext.Provider value={satelliteRegistry}>{children}</SatelliteContext.Provider>
+          </m.div>
+        </div>
+      )}
+    </AnimatePresence>,
     portalNode,
   );
 }

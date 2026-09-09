@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { clearThemeMirror } from "@/app/utils/themePref";
 import Link from "next/link";
 import Image from "next/image";
+import Menu, { MenuHeader, MenuItem, MenuSeparator } from "@/app/components/ui/Menu";
 
 interface NavMenuProps {
   showSchedule?: boolean;
@@ -40,32 +41,10 @@ function useNotifCount(authed: boolean): number {
   return count;
 }
 
-function MenuItem({ href, onClick, children }: { href?: string; onClick?: () => void; children: React.ReactNode }) {
-  const cls =
-    "w-full text-left flex items-center gap-3 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-mono-500 dark:text-mono-400 hover:text-accent hover:bg-accent-deep/10 dark:hover:bg-accent/10 transition-colors";
-  if (href) return <Link href={href} className={cls}>{children}</Link>;
-  return <button type="button" onClick={onClick} className={cls}>{children}</button>;
-}
-
 export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
   const { data: session, status } = useSession();
   const user = session?.user ?? null;
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
   const notifCount = useNotifCount(!!user);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", handler);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, []);
 
   const isAdmin =
     user?.role === "super-admin" ||
@@ -102,87 +81,69 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
   const firstName = user.name?.split(" ")[0];
 
   return (
-    <div ref={ref} className="relative">
-      {/* Avatar trigger */}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="relative flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base group"
-        aria-expanded={open}
-        aria-label={
-          notifCount > 0
-            ? `Menú de usuario, ${notifCount} ${notifCount === 1 ? "notificación" : "notificaciones"}`
-            : "Menú de usuario"
-        }
-      >
-        {user.image ? (
-          <Image
-            src={user.image}
-            alt={user.name ?? ""}
-            width={36}
-            height={36}
-            // unoptimized: serve the original JPEG/PNG, not Next's WebP — the iOS
-            // WKWebView (Capacitor wrap) fails to decode the optimized WebP avatar.
-            unoptimized
-            className="rounded-full ring-2 ring-transparent group-hover:ring-accent/40 transition-all"
-          />
-        ) : (
-          <div className="w-9 h-9 rounded-full bg-surface-accent-solid text-on-fill flex items-center justify-center ring-2 ring-transparent group-hover:ring-accent/40 transition-all">
-            <span className="font-label text-xs text-on-fill">{initials}</span>
-          </div>
-        )}
-        {notifCount > 0 && (
-          <span aria-hidden className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-negative-strong border-2 border-surface-base flex items-center justify-center">
-            <span className="font-label text-[10px] text-white leading-none">{notifCount > 9 ? "9+" : notifCount}</span>
-          </span>
-        )}
-      </button>
-
-      {/* Dropdown. A disclosure of navigation links, not a menu widget: there
-          is no arrow-key navigation, so `role="menu"` — and `aria-haspopup`,
-          whose "true" token is defined as "menu" — would promise behaviour
-          that does not exist. `<nav>` is a real landmark, so unlike a generic
-          div it also exposes the label. */}
-      {open && (
-        <nav
-          aria-label="Menú de cuenta"
-          className="absolute right-0 top-full mt-2 w-52 rounded-xl border border-surface-accent-20 bg-surface-raised-alt shadow-2xl overflow-hidden z-50"
-          onClick={() => setOpen(false)}
+    <Menu
+      label="Menú de cuenta"
+      align="end"
+      trigger={
+        <button
+          type="button"
+          className="relative flex items-center gap-2 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base group"
+          aria-label={
+            notifCount > 0
+              ? `Menú de usuario, ${notifCount} ${notifCount === 1 ? "notificación" : "notificaciones"}`
+              : "Menú de usuario"
+          }
         >
-          {/* User identity */}
-          <div className="px-4 py-3 border-b border-edge-accent-subtle">
-            {user.image ? (
-              <div className="flex items-center gap-2.5 mb-0">
-                <Image src={user.image} alt={user.name ?? ""} width={28} height={28} unoptimized className="rounded-full shrink-0" />
-                <span className="font-label text-xs uppercase tracking-widest text-mono-400 min-w-0 truncate">{firstName}</span>
-              </div>
-            ) : (
-              <span className="font-label text-xs uppercase tracking-widest text-mono-400">{firstName}</span>
-            )}
+          {user.image ? (
+            <Image
+              src={user.image}
+              alt={user.name ?? ""}
+              width={36}
+              height={36}
+              // unoptimized: serve the original JPEG/PNG, not Next's WebP — the iOS
+              // WKWebView (Capacitor wrap) fails to decode the optimized WebP avatar.
+              unoptimized
+              className="rounded-full ring-2 ring-transparent group-hover:ring-accent/40 transition-all"
+            />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-surface-accent-solid text-on-fill flex items-center justify-center ring-2 ring-transparent group-hover:ring-accent/40 transition-all">
+              <span className="font-label text-xs text-on-fill">{initials}</span>
+            </div>
+          )}
+          {notifCount > 0 && (
+            <span aria-hidden className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-negative-strong border-2 border-surface-base flex items-center justify-center">
+              <span className="font-label text-[10px] text-white leading-none">{notifCount > 9 ? "9+" : notifCount}</span>
+            </span>
+          )}
+        </button>
+      }
+    >
+      {/* A real menu now: Menu supplies arrow-key navigation, so role=menu is honest. */}
+      <MenuHeader>
+        {user.image ? (
+          <div className="flex items-center gap-2.5 mb-0">
+            <Image src={user.image} alt={user.name ?? ""} width={28} height={28} unoptimized className="rounded-full shrink-0" />
+            <span className="font-label text-xs uppercase tracking-widest text-mono-400 min-w-0 truncate">{firstName}</span>
           </div>
-
-          {/* Navigation links */}
-          <div className="py-1">
-            {/* /me is ministry-neutral, so it stays unconditional. */}
-            <MenuItem href="/me">Mi perfil</MenuItem>
-            {showSchedule && inWorship && <MenuItem href="/schedule">Calendario</MenuItem>}
-            {showTags && inWorship && <MenuItem href="/tag">#Tags</MenuItem>}
-            {inKids && <MenuItem href="/kids">Oasis Kids</MenuItem>}
-            {managesKids && <MenuItem href="/kids/admin">Planear Kids</MenuItem>}
-            {/* No `&& inWorship` here on purpose: the three manager roles are
-                worship-scoped by definition (requireActiveManager is role-only),
-                so the extra clause would be dead code or imply a non-worship
-                admin. Nav must agree with the page guard, not invent a rule. */}
-            {isAdmin && <MenuItem href="/admin">Admin</MenuItem>}
-          </div>
-
-          {/* Sign out */}
-          <div className="border-t border-edge-accent-subtle py-1">
-            <MenuItem onClick={() => { clearThemeMirror(); signOut({ callbackUrl: "/" }); }}>
-              Cerrar sesión
-            </MenuItem>
-          </div>
-        </nav>
-      )}
-    </div>
+        ) : (
+          <span className="font-label text-xs uppercase tracking-widest text-mono-400">{firstName}</span>
+        )}
+      </MenuHeader>
+      {/* /me is ministry-neutral, so it stays unconditional. */}
+      <MenuItem href="/me">Mi perfil</MenuItem>
+      {showSchedule && inWorship && <MenuItem href="/schedule">Calendario</MenuItem>}
+      {showTags && inWorship && <MenuItem href="/tag">#Tags</MenuItem>}
+      {inKids && <MenuItem href="/kids">Oasis Kids</MenuItem>}
+      {managesKids && <MenuItem href="/kids/admin">Planear Kids</MenuItem>}
+      {/* No `&& inWorship` here on purpose: the three manager roles are
+          worship-scoped by definition (requireActiveManager is role-only),
+          so the extra clause would be dead code or imply a non-worship
+          admin. Nav must agree with the page guard, not invent a rule. */}
+      {isAdmin && <MenuItem href="/admin">Admin</MenuItem>}
+      <MenuSeparator />
+      <MenuItem onSelect={() => { clearThemeMirror(); signOut({ callbackUrl: "/" }); }}>
+        Cerrar sesión
+      </MenuItem>
+    </Menu>
   );
 }

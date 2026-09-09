@@ -1,6 +1,7 @@
 "use client";
 
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useToast } from "@/app/components/ui/Toast";
+import Collapse from "@/app/components/ui/Collapse";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import MonthGenerator from "./MonthGenerator";
@@ -164,7 +165,8 @@ export default function ServicesPanel() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const [showPastMonths, setShowPastMonths] = useState(false);
-  const [toast, showToast]      = useTransientValue<string | null>(null, 3000);
+  const { toast } = useToast();
+  const showToast = useCallback((msg: string) => toast({ message: msg }), [toast]);
   // «Limpiar mes» outcome with at least one refused delete. A toast is too
   // short for a list of reasons, so it PERSISTS as a banner until dismissed.
   const [clearReport, setClearReport] = useState<ClearMonthSummary | null>(null);
@@ -1099,7 +1101,9 @@ export default function ServicesPanel() {
 
       {/* Month filter */}
       {canFilterMonths(sourceRecords) && allMonths.length > 0 && (
-        <div className="space-y-2">
+        // Not `space-y-2`: a closed Collapse is still a child, so the gap would
+        // be reserved. The Collapse's own content carries it (`mt-2`).
+        <div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-label text-[11px] uppercase tracking-widest text-mono-600 shrink-0">Mes:</span>
             <MonthPill label="Próximos" selected={selectedMonths.size === 0} onClick={() => setSelectedMonths(new Set())} />
@@ -1110,19 +1114,21 @@ export default function ServicesPanel() {
               <button
                 type="button"
                 onClick={() => setShowPastMonths(v => !v)}
+                aria-expanded={showPastMonths}
+                aria-controls="services-past-months"
                 className="font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-accent/10 text-mono-600 hover:border-accent/25 hover:text-mono-400 transition-colors flex items-center gap-1"
               >
                 Roles previos
-                <span className={`transition-transform ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
+                <span className={`transition-transform duration-base ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
               </button>
             )}
           </div>
-          {showPastMonths && pastMonths.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap pl-12">
+          {pastMonths.length > 0 && (
+            <Collapse id="services-past-months" open={showPastMonths} className="mt-2 flex items-center gap-2 flex-wrap pl-12">
               {pastMonths.map(ym => (
                 <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} past />
               ))}
-            </div>
+            </Collapse>
           )}
         </div>
       )}
@@ -1248,14 +1254,6 @@ export default function ServicesPanel() {
             />
           ))}
           </div>
-        </div>
-      )}
-
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-surface-raised-alt border border-accent/30 font-label text-xs uppercase tracking-widest shadow-xl whitespace-nowrap">
-          {toast}
         </div>
       )}
 

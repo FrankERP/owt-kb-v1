@@ -2,7 +2,10 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
-type DismissReason = "escape" | "backdrop";
+// "drag" is a sheet flicked closed on a phone (CueDialog owns the gesture); it
+// means the same thing to a consumer as "backdrop" — a dismissal the user asked
+// for without committing to anything.
+type DismissReason = "escape" | "backdrop" | "drag";
 
 interface LayerRecord {
   id: string;

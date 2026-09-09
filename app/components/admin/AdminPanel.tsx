@@ -22,7 +22,7 @@ import { visibleAdminTabs } from "./adminTabs";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useToast } from "../ui/Toast";
 import {
   ALL_MINISTRY_IDS,
   MANAGEABLE_MINISTRY_IDS,
@@ -730,7 +730,8 @@ export default function AdminPanel({
   const [modal, setModal]       = useState<ModalState>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [toast, showToast]      = useTransientValue<string | null>(null, 3000);
+  const { toast } = useToast();
+  const showToast = useCallback((msg: string) => toast({ message: msg }), [toast]);
   const [query, setQuery]           = useState("");
   const [filterKey, setFilterKey]   = useState<FilterKey>("type");
   const [filterValue, setFilterValue] = useState("");
@@ -1278,13 +1279,6 @@ export default function AdminPanel({
         className="sr-only"
         onChange={handlePhotoChange}
       />
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-surface-raised-alt border border-accent/30 font-label text-xs uppercase tracking-widest shadow-xl">
-          {toast}
-        </div>
-      )}
 
       {/* ── Modals ── */}
       {modal?.type === "add" && (

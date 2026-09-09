@@ -4,10 +4,11 @@ import { useState, useEffect, useRef, useCallback, useId, Fragment } from "react
 import { useRouter } from "next/navigation";
 import { ProposalStatus } from "@/app/utils/interface";
 import { normalizeMedleyTags } from "@/app/utils/medley";
-import { useFocusTrap } from "@/app/utils/useFocusTrap";
 import { ChainLinkIcon } from "@/app/components/ChainLinkIcon";
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useToast } from "@/app/components/ui/Toast";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
+import CueDialog from "@/app/components/ui/CueDialog";
+import Button from "@/app/components/ui/Button";
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
@@ -153,7 +154,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   const [teamNotes, setTeamNotes] = useState(proposal?.team_notes ?? "");
   const [status, setStatus]       = useState<ProposalStatus>(proposal?.status ?? "draft");
   const [saving, setSaving]       = useState(false);
-  const [toast, setToastValue]    = useTransientValue<{ msg: string; ok: boolean } | null>(null, 3000);
+  const { toast } = useToast();
   const [confirmSubmit, setConfirmSubmit] = useState(false);
   const [staleReload, setStaleReload] = useState(false);
 
@@ -170,36 +171,12 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
     ),
   );
 
-  /**
-   * The submit-confirmation modal is a real overlay: the editor stays mounted
-   * and interactive behind it, which is exactly the case `CueDialog` and
-   * `SongFormModal` trap focus for. `MonthGenerator`'s D10 note excludes itself
-   * because that panel REPLACES its view rather than stacking on one;
-   * `PlannerGrid`'s full-screen view does stack, and does trap Tab — it is opaque
-   * and inerts its siblings, so it needs no scrim, but `inert` is not honoured for
-   * sequential focus in every engine this app ships to (see its own note).
-   * Without a trap, Tab walks out of the confirmation into the song list and
-   * the "Enviar propuesta" button that opened it — a member can reorder the
-   * setlist, or fire submit a second time, while being asked to confirm the
-   * first. `useFocusTrap` also moves focus in on open and returns it to the
-   * opener on close, neither of which happened before.
-   */
-  const confirmRef = useFocusTrap<HTMLDivElement>(confirmSubmit);
-  const confirmTitleId = useId();
+  // The submit-confirmation dialog is a `CueDialog` (traps focus, restores it
+  // to the opener on close, and closes on Escape/backdrop) — see Step 3 of
+  // the M0b-1 overlays task for why the hand-rolled version it replaced
+  // needed a trap in the first place.
   const teamNotesId = useId();
   const leadNotesId = useId();
-
-  // Escape closes the confirmation, matching every other dialog in the app.
-  // Safe to close unconditionally: this modal holds no user input of its own,
-  // so dismissing it discards nothing — it just returns to the editor.
-  useEffect(() => {
-    if (!confirmSubmit) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setConfirmSubmit(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [confirmSubmit]);
 
   // The doc revision for optimistic concurrency. MUST track the live prop (not a
   // one-time initializer): after a 409 the reload banner calls router.refresh(),
@@ -316,7 +293,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   const searchRef    = useRef<HTMLDivElement>(null);
   const debounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = (msg: string, ok = true) => setToastValue({ msg, ok });
+  const showToast = (msg: string, ok = true) => toast({ message: msg, tone: ok ? "ok" : "error" });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -928,69 +905,29 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
         </div>
       )}
 
-      {/* Submit confirmation modal */}
-      {confirmSubmit && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-          <div className="absolute inset-0 bg-scrim/60 backdrop-blur-sm" onClick={() => setConfirmSubmit(false)} />
-          <div
-            ref={confirmRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby={confirmTitleId}
-            tabIndex={-1}
-            className="relative z-10 w-full max-w-sm bg-surface-raised-alt border border-accent/20 rounded-2xl shadow-2xl p-6 space-y-5 focus:outline-none"
-          >
-            <div className="space-y-1">
-              <h3 id={confirmTitleId} className="font-display text-lg uppercase tracking-wide">Enviar propuesta</h3>
-              <p className="font-body text-sm text-mono-400">
-                Vas a enviar {songs.length} canción{songs.length !== 1 ? "es" : ""} para {serviceLabel}. El admin recibirá tu propuesta para revisión.
-              </p>
-            </div>
-            <ul className="space-y-1 border border-accent/10 rounded-xl p-3 bg-accent-deep/10">
-              {songs.map((s, i) => (
-                <li key={s.songId} className="flex items-center gap-2">
-                  <span className="font-label text-[11px] text-mono-600 w-4 text-right tabular-nums">{i + 1}</span>
-                  <span className="font-body text-sm truncate flex-1">{s.title}</span>
-                  <span className="font-label text-xs text-accent shrink-0">{s.play_key}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setConfirmSubmit(false)}
-                className="flex-1 py-2.5 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={() => { setConfirmSubmit(false); save("pending"); }}
-                disabled={saving}
-                className="flex-1 py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
-              >
-                Confirmar
-              </button>
-            </div>
+      {/* Submit confirmation dialog */}
+      <CueDialog open={confirmSubmit} title="Enviar propuesta" size="sm" onDismiss={() => setConfirmSubmit(false)}>
+        <div className="space-y-5 p-6">
+          <p className="font-body text-sm text-mono-400">
+            Vas a enviar {songs.length} canción{songs.length !== 1 ? "es" : ""} para {serviceLabel}. El admin recibirá tu propuesta para revisión.
+          </p>
+          <ul className="space-y-1 rounded-xl border border-accent/10 bg-accent-deep/10 p-3">
+            {songs.map((s, i) => (
+              <li key={s.songId} className="flex items-center gap-2">
+                <span className="w-4 text-right font-label text-[11px] tabular-nums text-mono-600">{i + 1}</span>
+                <span className="flex-1 truncate font-body text-sm">{s.title}</span>
+                <span className="shrink-0 font-label text-xs text-accent">{s.play_key}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-3">
+            <Button className="flex-1" onClick={() => setConfirmSubmit(false)}>Cancelar</Button>
+            <Button className="flex-1" variant="primary" disabled={saving} onClick={() => { setConfirmSubmit(false); save("pending"); }}>
+              Confirmar
+            </Button>
           </div>
         </div>
-      )}
-
-      {/* Toast. It is the ONLY confirmation that a save or a submit landed, and
-          it disappears after 3s — so it has to be announced, not just drawn.
-          `assertive` on failure matches CueDialogStatus: "no se pudo enviar"
-          must interrupt, because the member's next move depends on it. */}
-      {toast && (
-        <div
-          role={toast.ok ? "status" : "alert"}
-          aria-live={toast.ok ? "polite" : "assertive"}
-          className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
-            toast.ok
-              ? "bg-surface-raised-alt border-accent/30"
-              : "bg-negative-surface-deep/80 border-negative-strong/30"
-          }`}
-        >
-          {toast.msg}
-        </div>
-      )}
+      </CueDialog>
     </div>
   );
 }

@@ -218,16 +218,28 @@ the guard), `isMemberActive` (30s-TTL auth gate),
 per-type email-preference resolver — nothing reads `notifPrefs` directly),
 `sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette),
 `themeColour` (`app/utils/themeColour.ts`), `useTransientValue` (`[value, show, reset,
-hold]` — every auto-dismissing toast and "Guardado ✓" flash. A bare
-`setTimeout(() => setToast(null))` leaks its timer, so a second toast inherits the
-first one's clock and an error can vanish in 100ms. Use `hold` for a message that must
-PERSIST until something replaces it — `MonthGenerator`'s swap toast, which reports
-writes that landed in Sanity but could not be verified. Never hand-roll the timer),
-`Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never an inline
-class string), `Presence` (every animated conditional), `Skeleton`/`SkeletonGroup` (every
-loading placeholder), `revealProps` (route reveal). Motion tokens are `--motion-*` /
-`--ease-*`; `motion` is importable only under `app/components/ui/**` — see `docs/MOTION.md`
-and ADR-0031.
+hold]` — an inline, in-place flash next to the control that produced it, e.g.
+"Guardado ✓" beside a save button. A bare `setTimeout(() => setToast(null))` leaks its
+timer, so a second flash inherits the first one's clock and an error can vanish in
+100ms. Use `hold` for a message that must PERSIST until something replaces it —
+`MonthGenerator`'s swap toast, which reports writes that landed in Sanity but could
+not be verified. Never hand-roll the timer. For a FIXED, stacked notification use
+`useToast` instead — the two are not interchangeable), `useToast`
+(`app/components/ui/Toast.tsx` — the ONLY fixed toast stack; `toast({ message, tone?,
+duration?, hold?, action? })`, portalled, `z-[95]` above `CueDialog`), `Menu`
+(`app/components/ui/Menu.tsx` — every anchored dropdown; real `role="menu"` semantics,
+roving focus, merges the trigger's own ref), `Collapse` (`app/components/ui/Collapse.tsx`
+— every disclosure; the one place height animates, on user-triggered opens only),
+`CueDialog` (`app/components/ui/CueDialog.tsx` — every dialog, never a hand-rolled
+`fixed inset-0` shell; render `<CueDialog open={x}>`, never a literal `open` behind a
+conditional — directly or inside a wrapper component (a local `Modal`, a
+`SetlistPopover`, a `SeatPicker`) whose only JSX output is `<CueDialog open …>` — a
+dialog element with a literal `open` gets no enter/exit either way;
+`cueDialogMount.test.ts` is the guard), `Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never
+an inline class string), `Presence` (every animated conditional), `Skeleton`/
+`SkeletonGroup` (every loading placeholder), `revealProps` (route reveal). Motion
+tokens are `--motion-*` / `--ease-*`; `motion` is importable only under
+`app/components/ui/**` — see `docs/MOTION.md` and ADR-0031.
 
 ## Colour tokens
 Colour lives in **67 base roles + 29 composed tokens** (`app/brand.css` `:root`,

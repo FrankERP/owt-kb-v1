@@ -31,6 +31,10 @@ export function isAllowedMotionImporter(rel: string): boolean {
   if (p.includes("/__tests__/")) return true;
   if (p.startsWith("app/components/ui/")) return true;
   if (/^app\/utils\/motion[^/]*\.tsx?$/.test(p)) return true;
+  // The gallery mounts no Provider/MotionProvider (themeGallery.test.ts pins that),
+  // so it needs its own LazyMotion — GalleryMotion is that wrapper, not a feature
+  // component reaching for `m.*`. Exactly this one path, not the route group.
+  if (p === "app/(gallery)/theme-gallery/[theme]/GalleryMotion.tsx") return true;
   return false;
 }
 
@@ -79,6 +83,15 @@ describe("motion import boundary", () => {
     expect(isAllowedMotionImporter("app/utils/motionPresets.ts")).toBe(true);
     expect(isAllowedMotionImporter("app/utils/motionless.ts")).toBe(true); // prefix rule, documented
     expect(isAllowedMotionImporter("app/utils/reveal.ts")).toBe(false);
+  });
+
+  it("allows exactly the gallery's own LazyMotion wrapper, no sibling fixture", () => {
+    expect(isAllowedMotionImporter("app/(gallery)/theme-gallery/[theme]/GalleryMotion.tsx")).toBe(true);
+    // A sibling under the SAME segment — a fixture, or any other gallery file —
+    // stays refused. The allow-list is one exact path, not the route group.
+    expect(
+      isAllowedMotionImporter("app/(gallery)/theme-gallery/[theme]/[fixture]/fixtures/DialogFixture.tsx"),
+    ).toBe(false);
   });
 });
 
