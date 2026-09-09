@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MotionProvider } from "../MotionProvider";
@@ -14,13 +15,43 @@ const OPTIONS = [
   { value: "agenda", label: "Agenda" },
 ] as const;
 
-function mount(value: "calendar" | "list" | "agenda" | null, onChange = vi.fn()) {
+type View = (typeof OPTIONS)[number]["value"];
+
+function mount(value: View | null, onChange = vi.fn()) {
   render(
     <MotionProvider>
       <SegmentedControl label="Vista" value={value} onChange={onChange} options={OPTIONS} />
     </MotionProvider>,
   );
   return onChange;
+}
+
+// A real controlled parent: `value` lives in state and actually re-renders on
+// every `onChange`, unlike a static `vi.fn()` mock. Keyboard navigation reads
+// the (possibly stale, possibly fresh) `value` prop on every key event, so
+// only this shape exercises the guard against a landing-on-the-checked-option
+// keyboard move the way a live app would.
+function StatefulControl({
+  initial,
+  onChangeSpy,
+}: {
+  initial: View;
+  onChangeSpy: (value: View) => void;
+}) {
+  const [value, setValue] = useState<View>(initial);
+  return (
+    <MotionProvider>
+      <SegmentedControl
+        label="Vista"
+        value={value}
+        onChange={(v) => {
+          setValue(v);
+          onChangeSpy(v);
+        }}
+        options={OPTIONS}
+      />
+    </MotionProvider>
+  );
 }
 
 describe("SegmentedControl", () => {
@@ -40,17 +71,58 @@ describe("SegmentedControl", () => {
   });
 
   it("arrows move the selection with wrap; Home/End jump; focus follows", () => {
-    const onChange = mount("agenda");
-    const last = screen.getByRole("radio", { name: "Agenda" });
-    last.focus();
-    fireEvent.keyDown(last, { key: "ArrowRight" });
-    expect(onChange).toHaveBeenLastCalledWith("calendar");
-    fireEvent.keyDown(last, { key: "ArrowLeft" });
-    expect(onChange).toHaveBeenLastCalledWith("list");
-    fireEvent.keyDown(last, { key: "Home" });
-    expect(onChange).toHaveBeenLastCalledWith("calendar");
-    fireEvent.keyDown(last, { key: "End" });
-    expect(onChange).toHaveBeenLastCalledWith("agenda");
+    const onChangeSpy = vi.fn();
+    render(<StatefulControl initial="agenda" onChangeSpy={onChangeSpy} />);
+    const radio = (name: string) => screen.getByRole("radio", { name });
+
+    radio("Agenda").focus();
+    expect(document.activeElement).toBe(radio("Agenda"));
+
+    // Wrap forward: last option -> first.
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowRight" });
+    expect(onChangeSpy).toHaveBeenLastCalledWith("calendar");
+    expect(document.activeElement).toBe(radio("Calendario"));
+
+    // Wrap backward: first option -> last.
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    expect(onChangeSpy).toHaveBeenLastCalledWith("agenda");
+    expect(document.activeElement).toBe(radio("Agenda"));
+
+    // Plain (non-wrap) previous, twice: last -> middle -> first.
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    expect(onChangeSpy).toHaveBeenLastCalledWith("list");
+    expect(document.activeElement).toBe(radio("Lista"));
+
+    fireEvent.keyDown(document.activeElement!, { key: "ArrowLeft" });
+    expect(onChangeSpy).toHaveBeenLastCalledWith("calendar");
+    expect(document.activeElement).toBe(radio("Calendario"));
+
+    // End jumps from the first option straight to the last.
+    fireEvent.keyDown(document.activeElement!, { key: "End" });
+    expect(onChangeSpy).toHaveBeenLastCalledWith("agenda");
+    expect(document.activeElement).toBe(radio("Agenda"));
+
+    // Home jumps from the last option straight to the first.
+    fireEvent.keyDown(document.activeElement!, { key: "Home" });
+    expect(onChangeSpy).toHaveBeenLastCalledWith("calendar");
+    expect(document.activeElement).toBe(radio("Calendario"));
+  });
+
+  it("Home on the already-checked, already-focused option fires no onChange and leaves focus put", () => {
+    // Regression coverage for the review finding: keyboard navigation that
+    // resolves to the option already checked (and already focused) in a
+    // normal, re-rendering controlled parent must be a genuine no-op — no
+    // onChange, no haptic — the same guard a click on the checked option
+    // already has.
+    const onChangeSpy = vi.fn();
+    render(<StatefulControl initial="calendar" onChangeSpy={onChangeSpy} />);
+    const calendario = screen.getByRole("radio", { name: "Calendario" });
+    calendario.focus();
+
+    fireEvent.keyDown(document.activeElement!, { key: "Home" });
+
+    expect(onChangeSpy).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(calendario);
   });
 
   it("renders no thumb and no tab stop when nothing is selected yet", () => {

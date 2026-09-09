@@ -73,24 +73,19 @@ export default function SegmentedControl<V extends string>({
   const layoutId = useId();
   const index = options.findIndex((o) => o.value === value);
 
-  // Commits a navigation to `next` (wrapped) unconditionally — used by both
-  // click (once the caller has already screened out the no-op "click the
-  // option that's already checked" case) and every keyboard move. Keyboard
-  // navigation always commits, even when it lands back on the currently
-  // checked option (e.g. End on the last option), because it is a deliberate
-  // move gesture, not a redundant click.
-  const commit = (next: number) => {
+  // Navigates to `next` (wrapped) — the one path shared by click and every
+  // keyboard move. `onChange`/haptic only fire when the target option's value
+  // actually differs from the current `value` prop: a click on the already-
+  // checked option is a no-op (spec note b), and so is a Home/End/Arrow that
+  // lands back on the already-checked, already-focused option in a normal
+  // controlled parent — that guard must live here, once, rather than only on
+  // the click path, or a keyboard move that resolves to the same option fires
+  // a spurious onChange + haptic on every re-render.
+  const select = (next: number) => {
     const opt = options[(next + options.length) % options.length];
-    if (!opt) return;
+    if (!opt || opt.value === value) return;
     void haptic("light");
     onChange(opt.value);
-  };
-
-  const select = (i: number) => {
-    // A click on the option that's already checked must not fire onChange or
-    // a haptic (spec note b).
-    if (i === index) return;
-    commit(i);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
@@ -102,9 +97,12 @@ export default function SegmentedControl<V extends string>({
     else if (e.key === "End") next = options.length - 1;
     if (next === null) return;
     e.preventDefault();
-    commit(next);
-    // Selection follows focus, as native radios do; the radio we move to is the
-    // one that becomes the tab stop on the next render.
+    select(next);
+    // Selection follows focus, as native radios do; the radio we move to is
+    // the one that becomes the tab stop on the next render. Focus moves even
+    // when `select` above short-circuited the onChange/haptic — focus and
+    // selection are separate steps, and a keyboard move that resolves to the
+    // already-checked option still needs to land (or stay) on that option.
     const target = e.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[
       (next + options.length) % options.length
     ];
