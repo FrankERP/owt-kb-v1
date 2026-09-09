@@ -395,7 +395,9 @@ export default function CueDialog({
                     onPointerCancel: onHandlePointerCancel,
                   }
                 : null)}
-              className={`shrink-0 ${sheetMotion ? "cursor-grab touch-none active:cursor-grabbing" : ""}`}
+              // select-none: the grip now holds text, and touch-action:none stops panning, not
+              // a long-press or mouse drag from selecting the title while the sheet moves.
+              className={`shrink-0 ${sheetMotion ? "cursor-grab touch-none select-none active:cursor-grabbing" : ""}`}
             >
               {mode === "sheet" && (
                 <div data-cue-handle="" className="flex justify-center pb-1 pt-3 sm:hidden">

@@ -354,8 +354,11 @@ describe("CueDialog motion", () => {
   });
 
   it("keeps the close button inside the grip a tap, never a drag", () => {
-    // A pointerdown on × must not start tracking: with pointer capture the pointerup
-    // would retarget to the head and the button's click would never fire.
+    // A pointerdown on × must not start tracking. What this proves is exactly that —
+    // no drag reason fires from the ×. The reason the guard exists (with pointer
+    // capture a real browser retargets the pointerup to the head and the button's
+    // click never fires) is NOT observable in jsdom, which has no setPointerCapture
+    // and dispatches `click` regardless; only a browser look can confirm that half.
     const onDismiss = vi.fn();
     render(
       <MotionProvider>

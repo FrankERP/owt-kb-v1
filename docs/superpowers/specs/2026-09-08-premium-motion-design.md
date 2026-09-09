@@ -721,7 +721,7 @@ Motion vocabulary from §2.3; nothing here adds a colour or a face.
   Finding 5 (initials contrast) as part of the shell; ships the label budget as a
   `labelBudget.test.ts` that counts `uppercase tracking-widest` inside `ui/` primitives'
   consumers and fails above the audited baseline.
-- **M1** removes the redundant `CERRAR`, adds drag-to-dismiss, collapses stacked headers.
+- **M0b-1** removed the redundant `CERRAR` and added drag-to-dismiss (from the whole head since 2026-09-09); **M1** collapses stacked headers.
 - **R1** promotes Contenido's row to the library (not a new design).
 - **R2** replaces the month input with `DateField`.
 - **R5** removes the admin shell's `overflow-x: hidden` and the five-frame nesting together.
