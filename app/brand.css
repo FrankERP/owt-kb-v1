@@ -153,20 +153,18 @@
      The value is #C8D8EB, exactly what shipped before the migrations. */
   --on-fill-rgb: 200 216 235;
 
-  /* SEVEN white/black usages remain literal, and each is a real anchor rather than a
+  /* SIX white/black usages remain literal, and each is a real anchor rather than a
      leftover — checked one at a time rather than by rule:
-       - two toggle KNOBS (ChordChart, EmailPrefToggles), both now rendered through
-         the shared `Switch` primitive (`app/components/ui/Switch.tsx`). A knob is a
-         physical metaphor and stays white in both themes. The two switches used to
-         have different OFF tracks — ChordChart's opaque `mono-300`/`dark:mono-600`
+       - one toggle knob (`bg-white` literal in the shared `Switch` primitive at
+         `app/components/ui/Switch.tsx`), used by both ChordChart and EmailPrefToggles.
+         A knob is a physical metaphor and stays white in both themes. The two switches
+         used to have different OFF tracks — ChordChart's opaque `mono-300`/`dark:mono-600`
          put its knob at 11.35:1; EmailPrefToggles' was `mono-500/40`, which composites
          to a pale grey and put its knob at 2.09:1, under the 3:1 WCAG minimum for a
          non-text control, later widened to `mono-500/70` for 3.79:1. Unifying the two
          into one primitive forced a single OFF-state anchor, and the higher-contrast
          one won: both switches now render ChordChart's `bg-mono-300 dark:bg-mono-600`,
-         knob at 11.35:1. EmailPrefToggles' `/70` track is gone. An earlier note here
-         claimed 7.56:1 for both, which was the figure for an OPAQUE track and true of
-         neither.
+         knob at 11.35:1. EmailPrefToggles' `/70` track is gone.
        - one notification count on `bg-negative-strong` — white on red, both themes.
        - four spinner/icon strokes inside a `bg-scrim` overlay. The scrim is dark in
          both themes, so white on it is invariant by construction.
