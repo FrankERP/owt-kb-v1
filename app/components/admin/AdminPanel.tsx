@@ -24,6 +24,8 @@ import CueDialogStatus from "../ui/CueDialogStatus";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
 import { useToast } from "../ui/Toast";
 import SegmentedControl from "../ui/SegmentedControl";
+import SlidingIndicator, { useActiveIntoView } from "../ui/SlidingIndicator";
+import { haptic } from "@/app/utils/haptics";
 import {
   ALL_MINISTRY_IDS,
   MANAGEABLE_MINISTRY_IDS,
@@ -570,6 +572,24 @@ function PasswordForm({
 // one reducer owns both and a manual tab change cannot leave a stale target.
 type Tab = AdminTabId;
 
+function TabItem({ id, label, active, onChange }: { id: Tab; label: string; active: boolean; onChange: (t: Tab) => void }) {
+  const ref = useActiveIntoView(active);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-current={active ? "page" : undefined}
+      onClick={() => { void haptic("selection"); onChange(id); }}
+      className={`relative font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
+        active ? "text-accent" : "text-ink-dim hover:bg-accent/[0.04] hover:text-ink"
+      }`}
+    >
+      {active && <SlidingIndicator id="admin-tabs" />}
+      <span className="relative">{label}</span>
+    </button>
+  );
+}
+
 function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) => void; role: OWTRole }) {
   const visible = visibleAdminTabs(role);
   return (
@@ -577,19 +597,7 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
       <div className="overflow-x-auto -mx-2 px-2 pb-1">
         <div className="brand-admin-tabs flex min-w-full w-max gap-1 rounded-xl p-1.5">
           {visible.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              aria-current={active === id ? "page" : undefined}
-              onClick={() => onChange(id)}
-              className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
-                active === id
-                  ? "bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgb(var(--accent-rgb)/0.15)]"
-                  : "text-ink-dim hover:bg-accent/[0.04] hover:text-ink"
-              }`}
-            >
-              {label}
-            </button>
+            <TabItem key={id} id={id} label={label} active={active === id} onChange={onChange} />
           ))}
         </div>
       </div>

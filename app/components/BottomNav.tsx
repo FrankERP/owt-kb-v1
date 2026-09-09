@@ -6,6 +6,8 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { clearThemeMirror } from "@/app/utils/themePref";
+import { haptic } from "@/app/utils/haptics";
+import SlidingIndicator from "./ui/SlidingIndicator";
 
 export default function BottomNav() {
   const { data: session } = useSession();
@@ -106,15 +108,16 @@ export default function BottomNav() {
             <Link
               key={tab.href}
               href={tab.href}
-              onClick={() => setMoreOpen(false)}
+              onClick={() => { void haptic("selection"); setMoreOpen(false); }}
               aria-current={active ? "page" : undefined}
-              className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
+              className={`relative flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
                 active
                   ? "text-accent"
                   : "text-mono-500 hover:text-mono-300"
               }`}
             >
-              {tab.icon}
+              {active && <SlidingIndicator id="bottom-nav" variant="dot" />}
+              <span className={`transition-transform duration-fast ease-out-brand ${active ? "-translate-y-0.5" : ""}`}>{tab.icon}</span>
               <span className="font-label text-[10px] uppercase tracking-widest">{tab.label}</span>
             </Link>
             );

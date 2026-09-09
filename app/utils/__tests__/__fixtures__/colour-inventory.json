@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 323,
-    "filesScanned": 277,
-    "filesWithColour": 50,
+    "literalRows": 322,
+    "filesScanned": 278,
+    "filesWithColour": 49,
     "byCategory": {
       "2": 2,
-      "4": 75,
+      "4": 74,
       "8": 95,
       "9": 10,
       "11": 7,
@@ -22,7 +22,7 @@
     "byDisposition": {
       "B": 124,
       "exempt": 35,
-      "keep": 248,
+      "keep": 247,
       "C": 7,
       "D": 15
     },
@@ -2407,7 +2407,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 193,
+      "line": 195,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2419,7 +2419,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1128,
+      "line": 1136,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2431,7 +2431,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 232,
+      "line": 234,
       "disposition": "B",
       "reason": null
     },
@@ -2443,7 +2443,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 231,
+      "line": 233,
       "disposition": "B",
       "reason": null
     },
@@ -2455,7 +2455,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1123,
+      "line": 1131,
       "disposition": "B",
       "reason": null
     },
@@ -2467,7 +2467,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1334,
+      "line": 1342,
       "disposition": "B",
       "reason": null
     },
@@ -2479,7 +2479,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1343,
+      "line": 1351,
       "disposition": "B",
       "reason": null
     },
@@ -2491,7 +2491,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1353,
+      "line": 1361,
       "disposition": "B",
       "reason": null
     },
@@ -2503,7 +2503,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1364,
+      "line": 1372,
       "disposition": "B",
       "reason": null
     },
@@ -2515,7 +2515,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 235,
+      "line": 237,
       "disposition": "C",
       "reason": null
     },
@@ -2527,7 +2527,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 230,
+      "line": 232,
       "disposition": "C",
       "reason": null
     },
@@ -2539,7 +2539,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 597,
+      "line": 605,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3043,7 +3043,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 178,
+      "line": 181,
       "disposition": "B",
       "reason": null
     },
@@ -3055,7 +3055,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 179,
+      "line": 182,
       "disposition": "B",
       "reason": null
     },
@@ -3067,6 +3067,54 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
+      "line": 183,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 150,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 161,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 171,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
       "line": 180,
       "disposition": "B",
       "reason": null
@@ -3079,7 +3127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 147,
+      "line": 190,
       "disposition": "B",
       "reason": null
     },
@@ -3091,55 +3139,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 158,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 168,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 177,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 187,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 195,
+      "line": 198,
       "disposition": "B",
       "reason": null
     },
@@ -3500,18 +3500,6 @@
       "utility": "bg",
       "carrier": null,
       "line": 177,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/SectionNav.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "border-transparent",
-      "alpha": null,
-      "utility": "border",
-      "carrier": null,
-      "line": 39,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
