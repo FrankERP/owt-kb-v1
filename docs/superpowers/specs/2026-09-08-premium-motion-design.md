@@ -697,7 +697,7 @@ Motion vocabulary from §2.3; nothing here adds a colour or a face.
 | Element | T | P | Prim |
 |---|---|---|---|
 | Cue card dialog | instant, `CUE` eyebrow, `×` | scale 0.96→1 + fade `slow`; eyebrow gone | CueDialog |
-| Cue sheet (phone) | instant, handle drawn, `CERRAR` + `×` | spring up; drag-to-dismiss from the whole head (handle + title bar, since 2026-09-09); one close control (`×` stays — keyboard, VoiceOver and the ≥640px card have no drag — and the `CERRAR` footer goes); content is the card itself (no stacked headers) | CueDialog |
+| Cue sheet (phone) | instant, handle drawn, `CERRAR` + `×` | spring up; drag-to-dismiss from the whole head (handle + title bar, since 2026-09-09); one close control: the grip itself (Frank, 2026-09-09) — the `×` is `sr-only` on the phone sheet for VoiceOver and keyboard, visible on the ≥640px card which has no drag; the `CERRAR` footer is gone; content is the card itself (no stacked headers) | CueDialog |
 | Backdrop | `scrim/0.68 + blur` instant | fades `base`; blur stays (it is cheap when not animated) | CueDialog |
 | Hand-rolled modals (`SeatPicker`, `SongFormModal`, proposal confirm) | three shells | all on `CueDialog` | CueDialog |
 | Menus (`Más acciones`, avatar, practice playlist, note popover) | instant | `Menu` | Menu |
