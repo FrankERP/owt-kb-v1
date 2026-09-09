@@ -2623,7 +2623,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 455,
+      "line": 456,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2647,7 +2647,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1882,
+      "line": 1888,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2659,7 +2659,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1137,
+      "line": 1143,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2671,7 +2671,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1287,
+      "line": 1293,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
