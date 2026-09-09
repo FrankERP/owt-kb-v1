@@ -309,12 +309,20 @@ describe("CueDialog motion", () => {
         </CueDialogProvider>
       </MotionProvider>,
     );
-    const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
-    // 200 px, past the 150 px distance arm on its own (jsdom's instant move would
-    // also satisfy the velocity arm; the distance is what this case is about).
-    fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 300, isPrimary: true });
-    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 300 });
+    // 200 px over a full second (0.2 px/ms, under the 0.5 px/ms flick arm), so only
+    // the distance arm can dismiss. Without the clock jsdom's instant move reads as
+    // 200 px/ms and the case would pass with the distance arm deleted.
+    let clock = 0;
+    const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
+    try {
+      const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
+      fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
+      clock = 1000;
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 300, isPrimary: true });
+      fireEvent.pointerUp(handle, { pointerId: 1, clientY: 300 });
+    } finally {
+      now.mockRestore();
+    }
     expect(onDismiss).toHaveBeenCalledWith("drag");
   });
 
@@ -352,10 +360,11 @@ describe("CueDialog motion", () => {
     // `DayCard` and `ServicesPanel` both ignore a dismissal while a save is in
     // flight, so "onDismiss was called" is not "the sheet went away". Without the
     // spring on this branch the sheet stays where the finger left it, for good.
+    const onDismiss = vi.fn(); // a refusing consumer: called, does nothing
     render(
       <MotionProvider>
         <CueDialogProvider>
-          <CueDialog open mode="sheet" title="Detalle" onDismiss={() => {}}>
+          <CueDialog open mode="sheet" title="Detalle" onDismiss={onDismiss}>
             <button>Ok</button>
           </CueDialog>
         </CueDialogProvider>
@@ -369,11 +378,12 @@ describe("CueDialog motion", () => {
     const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 220, isPrimary: true });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 300, isPrimary: true });
     await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
-    expect(shell.style.transform).toBe("translateY(120px)");
+    expect(shell.style.transform).toBe("translateY(200px)");
 
-    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 220, isPrimary: true });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 300, isPrimary: true });
+    expect(onDismiss).toHaveBeenCalledWith("drag");
     await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
     expect(shell.style.transform).toBe("none");
   });
