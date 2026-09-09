@@ -2,8 +2,9 @@
 
 Artifact: `2026-09-09-member-instruments-auto-fill-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
-**Status: PAUSED at the churn cap after round 2. No approval has been recorded. Round 3
-requires Frank's explicit go-ahead, obtained before it starts.**
+**Status: PAUSED at the churn cap after round 3. No approval has been recorded. Round 3
+ran on Frank's explicit go-ahead («Sí, lanza la ronda 3», 2026-09-09 13:55 CST); round 4
+requires another.**
 
 Approval, when it comes, is not authorization to implement. Implementation still
 requires the plan, the three gates, and a fresh code review of the diff.
@@ -24,7 +25,8 @@ request («Haz el review loop»), which is the standard-tier trigger.
 |---|---|---|---|---|---|
 | 1 | `78d62155602f35d33c16338f6d3a55d986b972e2d906c0e865c5baad328cdfc2` | `24a31bbb` | CHANGES_REQUIRED | yes | 0 |
 | 2 | `99046fa40128a45f09d78b5810da3bb0d515b0174643196657ae9fc233d97290` | `93351dae` | CHANGES_REQUIRED | yes | 0 |
-| — | `534c32d178fee3be45c144100a41e8d208756775bcf13013f84b850bb1758548` | `763f7c82` | not reviewed | — | — |
+| 3 | `534c32d178fee3be45c144100a41e8d208756775bcf13013f84b850bb1758548` | `763f7c82` | CHANGES_REQUIRED | yes | 0 |
+| — | `a59b286584e71005e9e44b532fd728e9b56b3babac06685fe50fbb53248500be` | `d29a3b2d` | not reviewed | — | — |
 
 Each round used a brand-new `skeptical-reviewer` dispatch given only the reviewer brief,
 an immutable scratchpad snapshot (digest verified equal to the canonical file before
@@ -88,26 +90,59 @@ import it (checked: `themePrefSchema.test.ts` reads schema files as text); the
 `candidateRanking.ts:218` "DELIBERATELY UNCHANGED" comment is amended in the same diff;
 citation drift `:2942-2945` → `:2947-2950` corrected. Not adopted: none.
 
+## Round 3 — two blockers, verified, fixed
+
+1. **The render-time `occupants.length === 0` gate (a round-2 adoption) would hide
+   markers for partially filled multi-target rows.** Checked: `unfilled` is one entry per
+   missing SLOT — the solver emits one string per slot (`owt_solver_v2.py:987-990`),
+   `mapUnfilledSeats` pushes one per string (`plannerModel.ts:966-984`), `localFill.ts:289-291`
+   loops `current.length..target`. A Coro with one of three seated has two entries and a
+   non-empty cell. **Fixed:** the gate is scoped to `instrumento:` rows (target 1); the
+   wiring test carries a partially filled Coro.
+2. **The stated per-instrument ≤1 guarantee was false under the per-member total
+   ordering once anyone declares two instruments.** Verified by re-tracing the
+   reviewer's case (X Keys+Drums, Y Drums, Z and W Keys): Keys ends Z 3, W 2, X 0; totals
+   end X 3, Y 2, Z 3, W 2. **Fixed:** §6.2 now states the delivered property as
+   per-member total balance, shows the trace, notes that per-row counting is a one-line
+   alternative, and asks Frank to confirm the reading at spec review; the trace is a
+   named test. D2 cross-references it.
+
+Non-blocking, adopted: the "no test imports a schema module" rationale corrected
+(checked: `migrateProposalMessages.test.ts:21` does); vacate rule worded on the per-CELL
+`origin` (checked: `plannerModel.ts:82`); row tie-break "then `rows` order";
+`MemberOption` (`serviceCardModel.ts:96`) gains the field; the create form posts it
+(checked: `AdminPanel.tsx:839-844` destructures named fields); backfill follows
+`backfill-legacy-seat-arrays.mjs` (backup + `_rev` guard) with `setIfMissing`, pure logic
+in `scripts/lib/`, and runs before the preview push since Sanity is schemaless. Not
+adopted: none.
+
 ## Churn cap
 
-Two substantive `CHANGES_REQUIRED` rounds. Per the skill, round 3 does not start
-without Frank's explicit go-ahead. Recorded in the worklog as a `coordinator-inline`
+Three substantive `CHANGES_REQUIRED` rounds. Round 3 ran with Frank's go-ahead; round 4
+does not start without another. Recorded in the worklog as a `coordinator-inline`
 entry naming the defect class:
 
 > §6.2 restates state and eligibility the planner already owns (`rankCandidates`,
 > `origin`, `working`), and each restatement leaves out one rule the existing code
 > enforces. Round 1: the same-category block. Round 2: the vacate/count ordering.
 
-The round-2 fix removed the last piece of restated eligibility (the pool is now
-`rankCandidates` and nothing else) and the last piece of restated state (vacate happens
-once, before any count). Whether that is enough is what round 3 would test; that call is
-Frank's.
+Round 3 found a different class: two of its findings were **claims the spec made
+about behaviour it does not own** — a render gate written without checking the shape of
+the `unfilled` state it filters, and a fairness guarantee stated for a property the
+ordering does not compute. Both were the author's, one of them a round-2 adoption.
 
 ## Process failures on the author's side
 
 - The round-2 blocker was introduced by the author's round-1 fix (the vacate-and-re-roll
   rule was a non-blocking adoption, placed inside the loop without tracing a second run).
   A fix written in response to a review is not lower-risk than the text it corrects.
+- The round-3 blocker 1 was likewise introduced by the author's round-2 adoption (the
+  emptiness gate), written without reading how `unfilled` is populated. Two of three
+  rounds found a defect in the previous round's fix — the same lesson CLAUDE.md records
+  for code fixes applies to spec fixes.
+- The round-3 blocker 2 was a guarantee the author asserted twice (rounds 1 and 2)
+  without tracing a multi-instrument case, even after round 1's non-blocking note named
+  exactly that coupling.
 - No reviewer claim was accepted without the independent check; every citation fix was
   verified against the file before adoption.
 
