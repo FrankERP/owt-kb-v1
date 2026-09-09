@@ -1609,7 +1609,7 @@ their label association through htmlFor. selCls is gone."
 - Produces (NEUTRAL module; steppers are plain `Button`s whose handlers the client parent supplies):
 
 ```ts
-export default function DateField(props: Omit<ComponentPropsWithoutRef<"input">, "type" | "className" | "children"> & {
+export default function DateField(props: Omit<ComponentPropsWithoutRef<"input">, "type" | "className" | "children" | "size"> & {
   kind: "date" | "month";
   label?: ReactNode;        // with `id`, wires htmlFor; else pass aria-label
   size?: "sm" | "md";
@@ -1683,7 +1683,7 @@ export default function DateField({
   className = "",
   onStep,
   ...input
-}: Omit<ComponentPropsWithoutRef<"input">, "type" | "className" | "children"> & {
+}: Omit<ComponentPropsWithoutRef<"input">, "type" | "className" | "children" | "size"> & {
   kind: "date" | "month";
   label?: ReactNode;
   size?: keyof typeof SIZE;
