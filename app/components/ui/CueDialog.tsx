@@ -222,6 +222,11 @@ export default function CueDialog({
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isTopLayer(id)) return;
       if (event.key === "Escape") {
+        // A Menu open inside this dialog owns Escape (M0b-1 deferral): this
+        // listener is capture-phase on document and would otherwise eat the key
+        // before the menu's bubble handler ever sees it.
+        const t = event.target instanceof Element ? event.target : null;
+        if (t?.closest('[role="menu"], [aria-haspopup="menu"][aria-expanded="true"]')) return;
         event.preventDefault();
         event.stopPropagation();
         onDismiss("escape");
@@ -251,20 +256,24 @@ export default function CueDialog({
   // A `mode="sheet"` dialog is only a SHEET on a phone: the `sm:` classes below turn
   // it into the same centred card a modal renders at ≥640px. The motion has to follow
   // the layout, or a laptop gets a card that slides up from under the viewport and
-  // drags closed by a handle CSS has already hidden. Read per render, with no state
-  // and no listener, because a dialog never renders on the server — `portalNode` comes
-  // from the provider's effect, so the first render that reaches this JSX is a client
-  // one and there is no hydration to mismatch. A window resized across 640px while a
-  // dialog is open keeps the variant it opened with, which is the same trade the
-  // rest of the app's breakpoint-dependent behaviour makes.
+  // drags closed by a handle CSS has already hidden.
   // Absent `matchMedia` — jsdom without a stub — falls back to the SHEET, which is
   // both the mode the consumer asked for and the behaviour every caller had before
   // this line existed.
-  const sheetMotion =
-    mode === "sheet" &&
-    (typeof window === "undefined" ||
-      typeof window.matchMedia !== "function" ||
-      !window.matchMedia("(min-width: 640px)").matches);
+  //
+  // Sheet or card is decided when the dialog OPENS and held until it closes: a
+  // resize across 640px mid-dialog must not swap the exit animation or drop the
+  // drag handlers under a finger. `useMemo` keyed on `open` re-evaluates only on
+  // that edge (M0b-1 deferral: "the 640px variant fixed at dialog open").
+  const sheetMotion = useMemo(
+    () =>
+      mode === "sheet" &&
+      (typeof window === "undefined" ||
+        typeof window.matchMedia !== "function" ||
+        !window.matchMedia("(min-width: 640px)").matches),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `open` is the intended edge
+    [mode, open],
+  );
 
   // Sheet drag-to-dismiss (spec §19.4). Pointer events by hand — no `drag` prop —
   // because the gesture is one-axis, downward only, with its own thresholds, and

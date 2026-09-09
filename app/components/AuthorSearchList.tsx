@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Author } from "../utils/interface";
 import { normalizeText } from "../utils/normalizeText";
 import Link from "next/link";
+import SegmentedControl from "./ui/SegmentedControl";
 
 type SortMode = "popular" | "alpha";
 
@@ -40,15 +41,17 @@ export default function AuthorSearchList({ authors, totalSongs }: { authors: Aut
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <div className="flex rounded-lg border border-surface-accent-20 overflow-hidden">
-            {(["popular", "alpha"] as SortMode[]).map((mode, i) => (
-              <button key={mode} onClick={() => setSort(mode)}
-                aria-pressed={sort === mode}
-                className={`px-3 py-1.5 font-label text-[11px] uppercase tracking-widest transition-colors duration-150 ${i > 0 ? "border-l border-surface-accent-20" : ""} ${sort === mode ? "bg-accent/15 text-accent" : "text-mono-500 hover:text-mono-300 hover:bg-accent/5"}`}>
-                {mode === "popular" ? "Popular" : "A–Z"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="Ordenar"
+            size="sm"
+            tone="filled"
+            value={sort}
+            onChange={setSort}
+            options={[
+              { value: "popular", label: "Popular" },
+              { value: "alpha", label: "A–Z" },
+            ]}
+          />
           <div className="relative">
             <input type="text" aria-label="Buscar artistas" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar..."
               className="font-label pl-3 pr-8 py-1.5 rounded-lg border border-surface-accent-20 bg-transparent focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 text-sm placeholder:text-placeholder transition-colors w-36 sm:w-48" />

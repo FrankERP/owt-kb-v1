@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 import Collapse from "@/app/components/ui/Collapse";
+import Select from "@/app/components/ui/Select";
 
 interface Props {
   /** The revision this page was rendered at — the save's `ifRevisionId` guard. */
@@ -375,22 +376,14 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
             Marcar un día recurrente como no disponible
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={recurDow}
-              onChange={e => setRecurDow(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
-            >
+            <Select aria-label="Día de la semana" value={recurDow} onChange={e => setRecurDow(Number(e.target.value))}>
               {WEEKDAYS.map((w, i) => <option key={i} value={i} className="bg-surface-base">{w}</option>)}
-            </select>
-            <select
-              value={recurInterval}
-              onChange={e => setRecurInterval(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
-            >
+            </Select>
+            <Select aria-label="Cada cuántas semanas" value={recurInterval} onChange={e => setRecurInterval(Number(e.target.value))}>
               <option value={1} className="bg-surface-base">Cada semana</option>
               <option value={2} className="bg-surface-base">Cada 2 semanas</option>
               <option value={4} className="bg-surface-base">Cada 4 semanas</option>
-            </select>
+            </Select>
             <button
               type="button"
               onClick={() => applyRecurring(true)}

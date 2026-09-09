@@ -104,17 +104,22 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 }
 
 function ToastViewport({ items, onDismiss }: { items: ToastRecord[]; onDismiss: (id: string) => void }) {
+  const lastError = [...items].reverse().find((t) => t.tone === "error");
   return (
     <div
+      role="status"
+      aria-live="polite"
+      aria-relevant="additions"
       className="pointer-events-none fixed inset-x-0 z-[95] flex flex-col items-center gap-2 px-4"
       style={{ bottom: "calc(1.5rem + env(safe-area-inset-bottom) + var(--bottom-nav-h, 0px))" }}
     >
+      {/* A region that exists before its text is what gets announced. Errors are
+          mirrored into an assertive region that is likewise always mounted. */}
+      <span role="alert" className="sr-only">{lastError?.message ?? ""}</span>
       <AnimatePresence>
         {items.map((t) => (
           <m.div
             key={t.id}
-            role={t.tone === "error" ? "alert" : "status"}
-            aria-live={t.tone === "error" ? "assertive" : "polite"}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0, transition: { duration: MS.base / 1000, ease: EASE_OUT } }}
             exit={{ opacity: 0, transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }}

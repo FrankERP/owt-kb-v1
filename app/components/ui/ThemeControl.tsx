@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import { useSession } from "next-auth/react";
 import { useThemePref } from "@/app/components/ThemeBootstrap";
 import type { ThemePref } from "@/app/utils/themePref";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
 
 const OPTIONS: ReadonlyArray<{ value: ThemePref; label: string }> = [
   { value: "system", label: "Seguir sistema" },
@@ -83,45 +84,15 @@ export default function ThemeControl() {
         Por defecto la app sigue el modo de tu teléfono. Tu elección te sigue en
         todos tus dispositivos.
       </p>
-      {/* A radiogroup, not three toggles. `aria-pressed` on mutually exclusive
-          buttons reads to a screen reader as three unrelated switches; radio
-          semantics say "one of these three", which is what this is. */}
-      <div role="radiogroup" aria-labelledby="tema-h" className="flex flex-wrap gap-2">
-        {OPTIONS.map((o) => {
-          // `loaded` distinguishes "not fetched yet" from "never chosen": before
-          // the projection lands, `pref` is undefined for everyone, and neither
-          // button should look selected.
-          // `loaded` still gates everything: before the projection lands, nothing
-          // is selected. "Not known yet" is not "follows the system".
-          // Unset resolves to the system option, which is what the default now is.
-          const active = loaded && (pref ?? "system") === o.value;
-          return (
-            <button
-              key={o.value}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => void choose(o.value)}
-              // Not `disabled`: disabling the pressed control during the
-              // round-trip drops it out of the a11y tree mid-interaction. Busy
-              // + a guard in `choose()` gives the same protection.
-              aria-busy={saving === o.value}
-              className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-full border transition-colors ${
-                saving === o.value ? "opacity-60" : ""
-              } ${
-                active
-                  ? "border-accent text-accent bg-accent/10"
-                  : "border-surface-accent-l25-d20 text-mono-500 dark:text-mono-400 hover:border-accent/50 dark:hover:border-surface-accent-l25-d20"
-              }`}
-            >
-              {o.label}
-              {saving === o.value && (
-                <span className="sr-only"> — guardando</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* A radiogroup, not three toggles — SegmentedControl owns the semantics.
+          `loaded` still gates everything: before the projection lands nothing is
+          selected (`value={null}`). "Not known yet" is not "follows the system". */}
+      <SegmentedControl
+        labelledBy="tema-h"
+        value={loaded ? (pref ?? "system") : null}
+        onChange={(v) => void choose(v)}
+        options={OPTIONS.map((o) => ({ value: o.value, label: o.label, busy: saving === o.value }))}
+      />
       {error && (
         <p role="alert" className="font-body text-sm mt-3 text-negative-fg">
           {error}

@@ -17,6 +17,7 @@
 // same `wantsNotification` every sender does.
 
 import { NOTIFY_PREF_FIELD, wantsNotification, type NotifyKind } from "@/app/utils/notifyPrefs";
+import Switch from "./Switch";
 
 export interface EmailPrefRow {
   kind: NotifyKind;
@@ -130,17 +131,12 @@ export default function EmailPrefToggles({
               <p className="font-body text-sm">{row.label}</p>
               {showHints && <p className="font-body text-xs text-mono-500 mt-0.5">{row.hint}</p>}
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={on}
+            <Switch
               aria-label={row.label}
+              checked={on}
               disabled={disabled || busyField === row.field}
-              onClick={() => onToggle(row.field, !on)}
-              className={`relative shrink-0 w-11 h-6 rounded-full transition-colors disabled:opacity-50 ${on ? "bg-accent" : "bg-mono-500/70"}`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${on ? "translate-x-5" : "translate-x-0"}`} />
-            </button>
+              onChange={(next) => onToggle(row.field, next)}
+            />
           </div>
         );
       })}

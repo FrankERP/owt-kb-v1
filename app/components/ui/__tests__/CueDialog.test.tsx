@@ -6,6 +6,7 @@ import CueDialog, { useCueDialogFocusSatellite } from "../CueDialog";
 import { CueDialogProvider, type DismissReason } from "../CueDialogProvider";
 import CueDialogStatus from "../CueDialogStatus";
 import { MotionProvider } from "../MotionProvider";
+import Menu, { MenuItem } from "../Menu";
 import { installMotionTestEnv } from "./motionTestSetup";
 
 installMotionTestEnv();
@@ -570,6 +571,59 @@ describe("CueDialog motion", () => {
       fireEvent.pointerUp(handle, { pointerId: 1, clientY: 120 });
     } finally {
       now.mockRestore();
+    }
+    expect(onDismiss).toHaveBeenCalledWith("drag");
+  });
+
+  it("lets a Menu inside the dialog own Escape: first closes the menu, second the dialog", () => {
+    const onDismiss = vi.fn();
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open title="Detalle" onDismiss={onDismiss}>
+            <Menu label="Más" trigger={<button type="button">Más acciones</button>}>
+              <MenuItem onSelect={() => {}}>Uno</MenuItem>
+            </Menu>
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    const trigger = screen.getByRole("button", { name: "Más acciones" });
+    fireEvent.click(trigger);
+    const item = screen.getByRole("menuitem", { name: "Uno" });
+    fireEvent.keyDown(item, { key: "Escape" });
+    expect(onDismiss).not.toHaveBeenCalled();
+    expect(screen.queryByRole("menu")).toBeNull();
+    fireEvent.keyDown(document.activeElement ?? trigger, { key: "Escape" });
+    expect(onDismiss).toHaveBeenCalledWith("escape");
+  });
+
+  it("decides sheet-or-card when it opens and keeps it while open", () => {
+    // Opens as a phone sheet (matchMedia false), then the viewport crosses 640px:
+    // the handle keeps its drag until the dialog closes.
+    const onDismiss = vi.fn();
+    const { rerender } = render(
+      <MotionProvider><CueDialogProvider>
+        <CueDialog open mode="sheet" title="Detalle" onDismiss={onDismiss}><button>Ok</button></CueDialog>
+      </CueDialogProvider></MotionProvider>,
+    );
+    const original = window.matchMedia;
+    Object.defineProperty(window, "matchMedia", {
+      writable: true, configurable: true,
+      value: (query: string) => ({ matches: query === "(min-width: 640px)", media: query, onchange: null, addEventListener: () => {}, removeEventListener: () => {}, addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false }),
+    });
+    try {
+      rerender(
+        <MotionProvider><CueDialogProvider>
+          <CueDialog open mode="sheet" title="Detalle (re-render)" onDismiss={onDismiss}><button>Ok</button></CueDialog>
+        </CueDialogProvider></MotionProvider>,
+      );
+      const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
+      fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 400, isPrimary: true });
+      fireEvent.pointerUp(handle, { pointerId: 1, clientY: 400, isPrimary: true });
+    } finally {
+      Object.defineProperty(window, "matchMedia", { writable: true, configurable: true, value: original });
     }
     expect(onDismiss).toHaveBeenCalledWith("drag");
   });

@@ -86,13 +86,19 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
 | `Skeleton`, `SkeletonGroup` | neutral | loading placeholders with the shimmer; one `aria-busy` status region per loading surface |
 | `Button` | neutral | `variant` primary/secondary/ghost/danger/icon/pill · `size` sm/md/lg · `busy`/`busyLabel` · `href`. Defaults to `md`; the spec's phone-width `lg` default is applied per call site, not by the primitive. `busy`/`busyLabel` are rejected by the types on the `href` branch — a link has no loading state to represent. `className` is additive only (appended after the variant/size classes, never a padding/radius/colour override). The `primary` variant sets `overflow: hidden` for the hover sheen, so an absolutely positioned badge nested inside a primary button is clipped — anchor badges outside the button instead. |
 | `revealProps(i)` (`app/utils/reveal.ts`) | neutral | spread on a block a page reveals; `template.tsx` replays it per navigation |
-| `CueDialog` | client | the ONE dialog shell — never a hand-rolled `fixed inset-0` scrim. `mode="modal"` \| `"sheet"`; a `"sheet"` dialog is only a sheet below 640px — at ≥640px it renders the same centred-card motion as a modal, decided once per render from `matchMedia` (fixed for the dialog's life; a resize across the breakpoint keeps the variant it opened with). Drag-to-dismiss lives on the sheet's HEAD — the handle and the title bar as one grip, never the body (hand-rolled pointer events, not the `drag` prop — the gesture is one-axis and the sheet body still needs to scroll; on the phone sheet the × is `sr-only` (the grip is the close control; the button stays for VoiceOver and keyboard focus, and the ≥640px card keeps it visible); a sheet that passes no `title` — `SongSheet`, whose header is hand-rolled inside `children` — still drags only from the pill until M1 gives it a real `title`; it closes past `SHEET_DISMISS.distance` = 150 px of travel OR above 0.5 px/ms, and springs back otherwise); a sheet's exit slides fully out (`y: "100%"`), it does not recoil partway like a modal's scale-fade. `onDismiss(reason: DismissReason)` where `DismissReason` is `"escape" \| "backdrop" \| "drag"`. Layers register with the provider so Escape and inert-ing only ever affect the top one. Traps focus via `trapTabTarget`, and can extend its Tab ring to a portalled "satellite" node via `useCueDialogFocusSatellite()` (no production consumer registers one today; see the in-file comment). **Render `<CueDialog open={x}>`, never a literal `open` behind a conditional** — whether that conditional is `{x && <CueDialog open>}` directly, or a wrapper component (a local `Modal`, a `SetlistPopover`, a `SeatPicker`) whose only JSX output is `<CueDialog open …>` and which its caller mounts conditionally. Either way the dialog element is created and destroyed by React instead of opened and closed by the `open` prop, so it never runs CueDialog's own enter/exit — `cueDialogMount.test.ts` pins the current backlog and ratchets it down. A `Menu` inside a `CueDialog` is unsupported in M0b-1: `CalendarView`'s day-detail sheet renders `DayCard`, which renders `PracticePlaylistButton` — now a `Menu` — so Escape with that menu open closes the whole sheet (the dialog's capture-phase Escape wins over the menu's), same as before this branch. Making the menu's own Escape win there is M0b-2 work. |
+| `CueDialog` | client | the ONE dialog shell — never a hand-rolled `fixed inset-0` scrim. `mode="modal"` \| `"sheet"`; a `"sheet"` dialog is only a sheet below 640px — at ≥640px it renders the same centred-card motion as a modal, decided when the dialog opens (`useMemo` on the `open` edge) and held until it closes. Drag-to-dismiss lives on the sheet's HEAD — the handle and the title bar as one grip, never the body (hand-rolled pointer events, not the `drag` prop — the gesture is one-axis and the sheet body still needs to scroll; on the phone sheet the × is `sr-only` (the grip is the close control; the button stays for VoiceOver and keyboard focus, and the ≥640px card keeps it visible); a sheet that passes no `title` — `SongSheet`, whose header is hand-rolled inside `children` — still drags only from the pill until M1 gives it a real `title`; it closes past `SHEET_DISMISS.distance` = 150 px of travel OR above 0.5 px/ms, and springs back otherwise); a sheet's exit slides fully out (`y: "100%"`), it does not recoil partway like a modal's scale-fade. `onDismiss(reason: DismissReason)` where `DismissReason` is `"escape" \| "backdrop" \| "drag"`. Layers register with the provider so Escape and inert-ing only ever affect the top one. Traps focus via `trapTabTarget`, and can extend its Tab ring to a portalled "satellite" node via `useCueDialogFocusSatellite()` (no production consumer registers one today; see the in-file comment). **Render `<CueDialog open={x}>`, never a literal `open` behind a conditional** — whether that conditional is `{x && <CueDialog open>}` directly, or a wrapper component (a local `Modal`, a `SetlistPopover`, a `SeatPicker`) whose only JSX output is `<CueDialog open …>` and which its caller mounts conditionally. Either way the dialog element is created and destroyed by React instead of opened and closed by the `open` prop, so it never runs CueDialog's own enter/exit — `cueDialogMount.test.ts` pins the current backlog and ratchets it down. A `Menu` inside a `CueDialog` owns Escape: the dialog's capture-phase listener yields when the key's target is inside an open menu or on its expanded trigger, so the first Escape closes the menu and the second the dialog (M0b-2). The sheet/card decision is taken when the dialog OPENS and held until it closes. |
 | `Toast` / `useToast` | client | the ONE toast stack — `useTransientValue` stays for an inline "Guardado ✓" flash next to the control that produced it, `useToast` is for anything that needs a FIXED, stacked notification. `toast({ message, tone?, duration?, hold?, action? })`: `tone` is `"ok" \| "error" \| "info"`; `hold` persists until something calls `dismiss(id)` (never a bare `setTimeout`); `action` renders a button inside the toast that both fires and dismisses. Portals to its own viewport node, `z-[95]` (above `CueDialog`'s `z-[90]`, so a save confirmation is visible over a dialog), bottom-anchored at `calc(1.5rem + env(safe-area-inset-bottom) + var(--bottom-nav-h, 0px))` so it clears the mobile tab bar. |
 | `Menu` / `MenuItem` / `MenuSeparator` / `MenuHeader` | client | the ONE anchored dropdown. Real `role="menu"` semantics: roving focus with arrow keys, Home/End, Escape closes and refocuses the trigger, Tab closes without refocusing. Positioned `absolute` in a `relative` wrapper (never a portal — a portal would escape a dialog's inert boundary). Merges the trigger's own `ref` with its internal one, so a consumer that also needs the trigger node (to refocus it after an async action) still can. |
 | `Collapse` | client | the ONE disclosure — expand/collapse with real height animation (the one place `height` animates outside `transform`/`opacity`, on user-triggered disclosures only). Renders an UNSTYLED animated OUTER `m.div` (owns `id`/`aria-hidden`/`inert`/`height`/`opacity`/`overflow`) with `className` applied to a plain INNER `div` — under `border-box` a padded/bordered box floors its height at padding+border, so a closed `Collapse` that owned the padding itself reserved blank space forever; height 0 only means 0 when the animated box has no padding of its own. Children stay mounted while closed; opening clears `inert`/`aria-hidden` in the same commit as `open` (so a parent's own effect can reach a child node right away), while closing waits for the animation to finish before setting them. Because jsdom (as of this writing) does not wire the `inert` IDL property from the reflected attribute, `Collapse` also sets `el.inert` imperatively in an effect — a harmless duplicate of the JSX prop in a real browser, and what `Collapse.test.tsx` actually observes. |
 
-M0b also adds: `SegmentedControl`, `SlidingIndicator`, `Switch`, `Checkbox`,
-`Select`, `DateField`, `NumberRoll`, `haptics`.
+| `SegmentedControl` | client | the ONE segmented control — `role="radiogroup"`, arrows move the selection with wrap and focus follows, the checked option is the sole tab stop; `value={null}` means nothing chosen yet (no thumb). The thumb is one `layoutId` span (what `domMax` is for). Sizes `sm`/`md`; tones `outline` (bordered pills) / `filled` (joined bar, solid thumb). `badge` and `busy` per option. Never `aria-pressed` toggles for a one-of-N choice. |
+| `SlidingIndicator` / `useActiveIntoView` | client | the active marker for tab bars (admin `TabBar`, `SectionNav`, `BottomNav`): render ONE inside the active item; variants `pill`/`underline`/`dot`. Semantics stay on the items (`aria-current`). The hook scrolls the active item to the centre of an overflowing bar. |
+| `Switch` | client | the ONE switch — `role="switch"`, `aria-checked`, a `<button>`; knob springs (`SPRINGS.pop`) with `initial={false}` so the first paint is the real state; haptic on flip. Sizes `sm`/`md`. |
+| `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` for the kill switch. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop rather than a `className` because a same-property utility passed through `className` cannot beat one the primitive already sets — two classes for the same property land at equal specificity in the compiled stylesheet, and the one emitted LATER wins regardless of call-site order, so an `items-center` baked into the component always beats an `items-start` passed in from outside. Name it with `children` or `aria-label`. |
+| `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
+| `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws «Mes anterior» / «Mes siguiente» icon buttons (the schedule's month strip). |
+| `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
+| `haptic(kind)` (`app/utils/haptics.ts`) | neutral | `"light"` (default) on a toggle flip or thumb move, `"selection"` on a tab press, `"medium"` reserved for drop landing (M-planner). Native only; no-op on web; never awaited in a handler. |
 
 ### Load-failure behaviour
 
@@ -164,7 +170,8 @@ these figures are computed directly from the emitted manifests instead, gzip lev
   specific), the closest analogue to the retired per-route table row.
 
 Before was measured on the primary checkout at the merge-base commit
-`a733347cfde72f731010f1bd58f9d189a84072cb` (branch `main`); After on this branch.
+`a733347cfde72f731010f1bd58f9d189a84072cb` (branch `main`); After on the M0a branch
+(`claude/premium-ui-animations-7e0204`, merged as `4b218d61`).
 
 | Build | First Load JS shared | `/` | `/admin` | Async feature chunk (raw / gz) |
 |---|---|---|---|---|
@@ -174,11 +181,15 @@ Before was measured on the primary checkout at the merge-base commit
 | Δ vs Before M0a | +0.01 kB | +12.4 kB | +12.5 kB | — |
 | **M0b-1 tree, `domAnimation`** (confirmatory rebuild, fix round 1) | 168.4 kB | 87.8 kB | 307.0 kB | 41.3 kB / 15.4 kB |
 | **M0b-1 tree, `domMax`** (shipped, `e9d90327`) | 168.4 kB | 87.9 kB | 307.1 kB | 88.0 kB / 28.8 kB |
+| **`e9d90327` cold rebuild** (M0b-1 Task 1, mid-branch — the commit the row above was actually measured against; fix round 1) | 169.2 kB | 85.5 kB | 310.3 kB | 90.1 kB / 29.5 kB |
+| **`2d635d38` cold rebuild** (the M0b-1 merge; fix round 1) | 169.2 kB | 110.3 kB | 335.3 kB | not cleanly isolable — see note below |
+| **M0b-2 tip** (`857cd2d5`, this branch; fix round 1) | 169.2 kB | 110.2 kB | 336.8 kB | not cleanly isolable — see note below |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
 
-The two M0b-1 rows are a confirmatory A/B run on the *same* tree (this branch,
+The two M0b-1 rows are a confirmatory A/B run on the *same* tree (the M0b-1 branch
+`claude/motion-m0b-overlays-controls`, merged as `2d635d38`,
 same commit of everything except `motionFeatures.ts`'s one-line export): first
 `domAnimation` was reinstated locally (uncommitted), built, and measured; then
 `domMax` was restored via `git checkout --` and rebuilt. Shared moved by 6
@@ -200,7 +211,7 @@ build of *this* tree (168.4 / 87.8–87.9 / 307.0–307.1, true for both
 `domAnimation` and `domMax` here). Since the drop reproduces identically
 whichever feature set `motionFeatures.ts` exports, it cannot be the `domMax`
 switch; it belongs to something else that changed on this tree ahead of
-M0b-1. The two loading-skeleton commits already merged onto this branch before
+M0b-1. The two loading-skeleton commits already merged onto the M0a branch before
 M0b-1 (`ecb6c86b`, `e6b2b46c` — both touch `app/(client)/loading.tsx`, the
 loading boundary shared by `/` and `/admin`, plus `Skeleton.tsx`) remain the
 only commits between the fix-wave's measurement and this one that touch
@@ -223,11 +234,13 @@ raw / 15.8 kB gz** — bigger than either route's net saving, because it now pay
 own gzip framing instead of sharing compression context with code that stayed in the
 first-load bundle.
 
-Programme cap: +25 kB gz total. Both route deltas now land well under the hard cap
-and under the ≤20 kB expectation the programme opened with — `motion`'s `domAnimation`
-feature set plus the four M0a primitives' own code (`Presence`, `Skeleton`/
-`SkeletonGroup`, `Button`, `MotionProvider`) together now cost ~12.4 kB gz on a route
-that renders them, not the ~24 kB the synchronous load cost. The shared/root chunk
+Programme cap: +25 kB gz total. At this M0a fix wave, both route deltas landed well
+under the hard cap and under the ≤20 kB expectation the programme opened with —
+`motion`'s `domAnimation` feature set plus the four M0a primitives' own code
+(`Presence`, `Skeleton`/`SkeletonGroup`, `Button`, `MotionProvider`) together cost
+~12.4 kB gz on a route that renders them, not the ~24 kB the synchronous load cost.
+The M0b-1 merge later added its own +24.8 / +25.0 kB (see the fix-round-1 measurement
+below), and the cap status is now OPEN — see the "Cap status" line further down. The shared/root chunk
 barely moves (+0.02 kB, noise) because `MotionProvider` is mounted inside
 `app/utils/Provider.tsx`, which is wired from the `(admin)` and `(client)` route-group
 layouts, not the app root — so the cost is paid by the routes that render it, not by
@@ -257,6 +270,92 @@ switch alone should produce — as an open question, since it did not rebuild
 `M0b-1 tree` rows above are that confirmatory rebuild: `domAnimation` and
 `domMax`, same tree, same commit apart from that one export. See the
 paragraph under the table for what it shows.
+
+**Fix round 1 (2026-09-09): the "rebuilt today" row above was comparing the wrong
+two commits, per a critical review finding.** It measured `2d635d38` (the M0b-1
+merge) against the ledger's `87.9 kB / 307.1 kB` row, which was actually measured at
+`e9d90327` (2026-09-08, mid-branch — `git diff e9d90327 2d635d38 --stat` is 54 files
+changed, 2 653 insertions / 1 156 deletions: `Toast.tsx`, `Menu.tsx`, `Collapse.tsx`,
+the expanded `CueDialog.tsx`, and their admin/shell wiring). So the ~25 kB gap that
+row reported was most likely M0b-1's own shipped cost, never measured at its merge —
+not "Turbopack drift" as the paragraph below used to claim. `package-lock.json` is
+unchanged between `e9d90327` and `2d635d38`; it gains 10 lines between `2d635d38` and
+this branch's tip (`a1d0fa49`, the haptics plugin) — the rebuild below reused one
+`node_modules` (an APFS clone, `cp -Rc`, of this worktree's install) across all three
+trees regardless.
+
+To settle it, three trees were exported cold — `git archive <sha> | tar -x` into a
+clean scratch directory, `node_modules` cloned in (not symlinked: Turbopack's own
+root-detection rejects a `node_modules` symlink that resolves outside the export
+directory — "Symlink [project]/node_modules is invalid, it points out of the
+filesystem root" — so an APFS clone stood in for it, zero-cost and identical to a
+symlink for this purpose), `.next` removed, `next build` from scratch — and measured
+with the identical script, in the same environment, on the same day: `e9d90327`
+itself (the commit the ledger's `87.9 / 307.1` row was actually measured against),
+`2d635d38` (the commit the old "rebuilt today" row meant to isolate), and this
+branch's tip (`857cd2d5`). All three rows in the table above are that rebuild.
+
+The cold rebuild of `e9d90327` does **not** reproduce `87.9 kB / 307.1 kB` within
+~1 kB: it measures `/` = 85.5 kB (−2.4 kB) and `/admin` = 310.3 kB (+3.2 kB). That is
+consistent with the same-commit rebuild drift already documented elsewhere in this
+section (the 6-byte shared-chunk drift between the `domAnimation`/`domMax` A/B, both
+inside a ±0.5 kB budget) — a few kB of Turbopack chunk-splitting noise on an
+unmodified commit, not a new phenomenon. Shared reproduces far more tightly — 169.2 kB
+against the recorded 168.4 kB, +0.8 kB — because it sums a small, fixed set of
+framework files Turbopack's chunk splitter doesn't touch; all three rows above measure
+it at exactly 169.2 kB, byte-identical.
+
+Against that ~3 kB noise band, the gap between `e9d90327` and `2d635d38` is an order
+of magnitude larger and moves in one direction: `/` moves **+24.8 kB** (85.5 → 110.3)
+and `/admin` moves **+25.0 kB** (310.3 → 335.3), cold, same script, same day. That
+matches the reviewer's finding almost exactly — it is M0b-1's own shipped cost (the
+Toast/Menu/Collapse/CueDialog expansion named above), not Turbopack instability, and
+every sentence in this section that previously attributed a gap of this size to chunk-
+splitting drift was wrong and has been removed.
+
+M0b-2's own cost, `857cd2d5` vs `2d635d38`, is small by comparison and inside the
+noise band established above: `/` moves **−0.1 kB** (110.3 → 110.2) and `/admin`
+moves **+1.5 kB** (335.3 → 336.8).
+
+The async motion-feature chunk could not be cleanly isolated for `2d635d38` or
+`857cd2d5` in this rebuild. Its signature strings (`animateVisualElement`,
+`MeasureLayout`, `Exit`) turn up inside a single 422.5 kB chunk (`44zm1rbsb67qq.js`,
+byte-identical between the two commits, so it is not part of either commit's own
+diff) that Turbopack fused together with roughly 380 kB of `@sanity`/Studio code. The
+theme gallery's `GalleryMotion` loads `domMax` synchronously by design (Rules §4), so
+it is legitimately referenced by the gallery and Studio routes — and in this build
+Turbopack packed it into their shared vendor chunk instead of splitting it into its
+own file the way it did for `e9d90327`, whose isolated chunk measured 90.1 kB raw /
+29.5 kB gz (close to but not identical to the ledger's 88.0 / 28.8 — the same few-kB
+class of drift as the route figures above). No raw/gz figure is reported for
+`2d635d38` or `857cd2d5`'s async chunk as a result; every measurement that HAS
+isolated it, across every commit checked so far, stays well inside the spec's 40 kB
+gz cap for that chunk specifically.
+
+The absolute Δ against "Before M0a" (77.3 kB / 301.7 kB — itself only rebuildable in a
+stale environment; Task 13's failed attempt at that rebuild is unchanged by this fix
+round) is, from this branch's tip: `/` **+32.9 kB**, `/admin` **+35.1 kB**.
+
+**Cap status (§7 +25 kB gz first-load): OPEN** — the absolute Δ is +32.9 kB (`/`) /
++35.1 kB (`/admin`) against "Before M0a"; ruling R was recorded pending Frank's word,
+and this is the number he decides on. This does not retroactively validate the
+Before-M0a-anchored deltas recorded for M0a above; a clean same-environment rebuild of
+"Before M0a" itself would still be needed before trusting an absolute cap check
+against it without caveat.
+
+**What the +24.8 kB is** (forensics, 2026-09-09): framer-motion's core runtime
+(`AnimatePresence`/`useMotionValue` machinery, ~63 kB gz across the chunks that carry
+it, an upper bound) became reachable for the first time when `Toast`, `Menu` and the
+expanded `CueDialog` were mounted app-wide via `app/utils/Provider.tsx` and the
+Navbar; the same import already existed in `Presence.tsx` at `e9d90327` but nothing
+imported `Presence`, so it cost nothing. motion 13.2.0 has no slimmer entry for
+`AnimatePresence`/`useMotionValue` (`motion/react` is the full `framer-motion`
+barrel; `motion/react-m` is hosts only; the mini entries export neither); moving
+`animate` to `framer-motion/dom` produced a byte-identical build; the gallery's
+synchronous `domMax` fuses into a Studio-only chunk absent from `/` and `/admin`. The
+two real options are to accept the number as the programme's cost, or a later
+architectural deferral of the sheet-drag/AnimatePresence path behind a dynamic
+import — Frank's call.
 
 ## Where the walk's findings landed
 
