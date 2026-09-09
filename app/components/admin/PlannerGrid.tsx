@@ -131,6 +131,7 @@ import {
   describePreflightReason,
 } from "./serviceCardModel";
 import CueDialog from "../ui/CueDialog";
+import Checkbox from "@/app/components/ui/Checkbox";
 // T4 of the drag-and-drop plan. `moveOccupant` imports `withUpdatedCell` back
 // out of this file, so these two modules are a cycle — a deliberate one: T2's
 // whole point is that the move composes THIS file's single write helper twice
@@ -2344,16 +2345,15 @@ function ColumnHeader({
           shows it as skipped and refuses the toggle instead of offering an
           un-skip that changes nothing. */}
       {!stored && (
-        <label className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
-          <input
-            type="checkbox"
-            checked={skipped || blockCopy !== null}
-            disabled={blockCopy !== null}
-            onChange={onToggleSkip}
-            aria-label={`Omitir ${column.date}`}
-          />
+        <Checkbox
+          className="font-label text-[10px] uppercase tracking-widest text-mono-500"
+          checked={skipped || blockCopy !== null}
+          disabled={blockCopy !== null}
+          onChange={onToggleSkip}
+          aria-label={`Omitir ${column.date}`}
+        >
           Omitir
-        </label>
+        </Checkbox>
       )}
       {!stored && blockCopy && (
         <p className={`font-body text-[10px] text-warning-strong ${CARD_STYLE.longText}`}>{blockCopy}</p>

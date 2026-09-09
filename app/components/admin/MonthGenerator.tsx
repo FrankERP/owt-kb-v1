@@ -27,6 +27,7 @@ import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
+import Checkbox from "@/app/components/ui/Checkbox";
 import {
   editableConfig,
   sameSolverConfig,
@@ -462,10 +463,14 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
       <div className="rounded border border-accent/10 divide-y divide-accent/5">
         {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-mono-600 italic">Sin resultados</p>}
         {visible.map(m => (
-          <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${config[field].includes(m._id) ? "bg-accent/10" : "hover:bg-accent/5"}`}>
-            <input type="checkbox" checked={config[field].includes(m._id)} onChange={() => onToggle(m._id)} className="accent-accent" />
+          <Checkbox
+            key={m._id}
+            className={`w-full px-2 py-1 text-xs transition-colors ${config[field].includes(m._id) ? "bg-accent/10" : "hover:bg-accent/5"}`}
+            checked={config[field].includes(m._id)}
+            onChange={() => onToggle(m._id)}
+          >
             <span className="font-body">{dn(m)}</span>
-          </label>
+          </Checkbox>
         ))}
       </div>
       {config[field].length > 0 && (
@@ -849,13 +854,14 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
             const name    = dn(m);
             const checked = selected.includes(name);
             return (
-              <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${checked ? "bg-accent/10" : "hover:bg-accent/5"}`}>
-                <input
-                  type="checkbox" checked={checked} className="accent-accent"
-                  onChange={() => setSelected(s => checked ? s.filter(p => p !== name) : [...s, name])}
-                />
+              <Checkbox
+                key={m._id}
+                className={`w-full px-2 py-1 text-xs transition-colors ${checked ? "bg-accent/10" : "hover:bg-accent/5"}`}
+                checked={checked}
+                onChange={() => setSelected(s => checked ? s.filter(p => p !== name) : [...s, name])}
+              >
                 <span className="font-body">{name}</span>
-              </label>
+              </Checkbox>
             );
           })}
         </div>
@@ -3789,19 +3795,17 @@ export default function MonthGenerator({
             {" "}Esta acción no se puede deshacer.
           </p>
           {clearSelection.published.length > 0 && (
-            <label className="flex items-start gap-2 font-body text-xs text-mono-300">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={clearIncludePublished}
-                disabled={clearing}
-                onChange={(event) => setClearIncludePublished(event.target.checked)}
-              />
+            <Checkbox
+              className="items-start font-body text-xs text-mono-300"
+              checked={clearIncludePublished}
+              disabled={clearing}
+              onChange={(event) => setClearIncludePublished(event.target.checked)}
+            >
               <span>
                 Incluir {clearSelection.published.length} servicio{clearSelection.published.length !== 1 ? "s" : ""} publicado{clearSelection.published.length !== 1 ? "s" : ""}.
                 {" "}Los asignados recibirán aviso de que ya no participan.
               </span>
-            </label>
+            </Checkbox>
           )}
           {clearSelection.selected.length === 0 && (
             <p className="font-body text-xs text-mono-400">No hay borradores en este mes; marca «Incluir publicados» para eliminarlos.</p>

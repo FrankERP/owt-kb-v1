@@ -8,21 +8,21 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 321,
-    "filesScanned": 279,
-    "filesWithColour": 49,
+    "literalRows": 323,
+    "filesScanned": 280,
+    "filesWithColour": 50,
     "byCategory": {
       "2": 2,
-      "4": 73,
-      "8": 95,
+      "4": 74,
+      "8": 96,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 124,
+      "B": 125,
       "exempt": 35,
-      "keep": 247,
+      "keep": 248,
       "C": 6,
       "D": 15
     },
@@ -2407,7 +2407,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 195,
+      "line": 196,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2419,7 +2419,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1136,
+      "line": 1137,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2431,6 +2431,18 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
+      "line": 235,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/AdminPanel.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
       "line": 234,
       "disposition": "B",
       "reason": null
@@ -2443,7 +2455,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 233,
+      "line": 1132,
       "disposition": "B",
       "reason": null
     },
@@ -2455,7 +2467,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1131,
+      "line": 1341,
       "disposition": "B",
       "reason": null
     },
@@ -2467,7 +2479,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1342,
+      "line": 1350,
       "disposition": "B",
       "reason": null
     },
@@ -2479,7 +2491,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1351,
+      "line": 1360,
       "disposition": "B",
       "reason": null
     },
@@ -2491,19 +2503,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1361,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/admin/AdminPanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 1372,
+      "line": 1371,
       "disposition": "B",
       "reason": null
     },
@@ -2515,7 +2515,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 237,
+      "line": 238,
       "disposition": "C",
       "reason": null
     },
@@ -2527,7 +2527,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 232,
+      "line": 233,
       "disposition": "C",
       "reason": null
     },
@@ -2539,7 +2539,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 605,
+      "line": 606,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2623,7 +2623,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 454,
+      "line": 455,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2635,7 +2635,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 557,
+      "line": 562,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2647,19 +2647,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1876,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "disabled:hover:bg",
-      "carrier": null,
-      "line": 1131,
+      "line": 1882,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2671,7 +2659,19 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1281,
+      "line": 1137,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "disabled:hover:bg",
+      "carrier": null,
+      "line": 1287,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2683,7 +2683,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2327,
+      "line": 2328,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2695,7 +2695,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2337,
+      "line": 2338,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3740,6 +3740,30 @@
       "utility": null,
       "carrier": null,
       "line": 59,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/ui/Checkbox.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 38,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/Checkbox.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 45,
       "disposition": "B",
       "reason": null
     },

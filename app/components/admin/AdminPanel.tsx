@@ -21,6 +21,7 @@ import {
 import { visibleAdminTabs } from "./adminTabs";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import Checkbox from "@/app/components/ui/Checkbox";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
 import { useToast } from "../ui/Toast";
 import SegmentedControl from "../ui/SegmentedControl";
@@ -1218,18 +1219,16 @@ export default function AdminPanel({
                       <span className="font-label text-[10px] uppercase tracking-widest text-mono-600">
                         Acceso a la app
                       </span>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="accent-negative-fg"
-                          checked={m.disabled === true}
-                          disabled={submitting}
-                          onChange={(e) => handleDisableAccess(m._id, e.target.checked)}
-                        />
+                      <Checkbox
+                        tone="negative"
+                        checked={m.disabled === true}
+                        disabled={submitting}
+                        onChange={(e) => handleDisableAccess(m._id, e.target.checked)}
+                      >
                         <span className="font-body text-xs text-mono-400">
                           Deshabilitar acceso (kill switch)
                         </span>
-                      </label>
+                      </Checkbox>
                     </div>
                   </div>
                 )}
