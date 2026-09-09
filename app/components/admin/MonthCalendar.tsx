@@ -382,7 +382,8 @@ export default function MonthCalendar({
           </p>
           <Select
             aria-label="Fecha del servicio especial"
-            className="min-h-[44px] w-full"
+            size="lg"
+            className="w-full"
             value={openDate}
             onChange={(e) => {
               setNotice(null);

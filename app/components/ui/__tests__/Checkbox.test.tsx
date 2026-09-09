@@ -31,6 +31,14 @@ describe("Checkbox", () => {
     expect(box.className + mark.getAttribute("class")).not.toMatch(/peer-checked:block|hidden/);
   });
 
+  it("colours the mark from the box span, never the svg itself", () => {
+    render(<Checkbox checked onChange={() => {}}>Sí</Checkbox>);
+    const box = document.querySelector("[data-checkbox-box]")!;
+    const mark = document.querySelector("[data-checkbox-mark]")!;
+    expect(box.className.split(/\s+/)).toContain("peer-checked:text-on-fill");
+    expect(mark.getAttribute("class")!.split(/\s+/).some((t) => t.startsWith("text-"))).toBe(false);
+  });
+
   it("aligns the label row by align, defaulting to center", () => {
     render(<Checkbox checked onChange={() => {}}>Sí</Checkbox>);
     const label = screen.getByRole("checkbox").closest("label")!;

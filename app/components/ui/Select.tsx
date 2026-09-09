@@ -11,8 +11,9 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
 const SIZE = {
-  sm: "px-2 py-1 pr-7 text-[11px]",
+  sm: "px-2 py-1 pr-8 text-[11px]",
   md: "px-3 py-2 pr-9 text-sm",
+  lg: "min-h-[44px] px-3 py-2 pr-9 text-sm",
 } as const;
 
 type Base = Omit<ComponentPropsWithoutRef<"select">, "className" | "children" | "size"> & {
