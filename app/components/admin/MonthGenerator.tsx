@@ -598,7 +598,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
       {/* Person */}
       <div>
         <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona</p>
-        <Select size="md" aria-label="Persona" value={person} onChange={e => setPerson(e.target.value)}>
+        <Select size="sm" aria-label="Persona" value={person} onChange={e => setPerson(e.target.value)}>
           {names.map(n => <option key={n} value={n}>{n}</option>)}
         </Select>
       </div>
@@ -661,9 +661,9 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
                 narrow (same reasoning as the pattern selects' cap).
               */}
               <Select
-                size="md"
+                size="sm"
                 aria-label="Semana"
-                className="w-20 max-w-[80px] flex-none"
+                className="w-24 max-w-[96px] flex-none"
                 value={we.week}
                 onChange={e => setWeekEx(ws => ws.map(x => x.id === we.id ? { ...x, week: Number(e.target.value) } : x))}
               >
@@ -676,7 +676,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
                 to wrap instead — same fix as the Caps row below.
               */}
               <Select
-                size="md"
+                size="sm"
                 aria-label="Patrón"
                 className="flex-1 min-w-[140px] max-w-[220px]"
                 value={we.pattern}
@@ -710,7 +710,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
             // spilling out of the card.
             <div key={cap.id} className="flex flex-wrap gap-1.5 items-center">
               <Select
-                size="md"
+                size="sm"
                 aria-label="Patrón"
                 className="flex-1 min-w-[140px] max-w-[220px]"
                 value={cap.pattern}
@@ -720,9 +720,9 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               </Select>
               {/* Same wrapper-vs-inner-select width note as the week select above. */}
               <Select
-                size="md"
+                size="sm"
                 aria-label="Operador"
-                className="w-14 max-w-[56px] flex-none"
+                className="w-16 max-w-[64px] flex-none"
                 value={cap.op}
                 onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, op: e.target.value as any } : x))}
               >
@@ -803,20 +803,20 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
       <div className="grid grid-cols-2 gap-2">
         <div>
           <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona A</p>
-          <Select size="md" aria-label="Persona A" value={personA} onChange={e => setPersonA(e.target.value)}>
+          <Select size="sm" aria-label="Persona A" value={personA} onChange={e => setPersonA(e.target.value)}>
             {names.map(n => <option key={n} value={n}>{n}</option>)}
           </Select>
         </div>
         <div>
           <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona B</p>
-          <Select size="md" aria-label="Persona B" value={personB} onChange={e => setPersonB(e.target.value)}>
+          <Select size="sm" aria-label="Persona B" value={personB} onChange={e => setPersonB(e.target.value)}>
             {names.map(n => <option key={n} value={n}>{n}</option>)}
           </Select>
         </div>
       </div>
       <div>
         <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Patrón — no pueden coincidir en</p>
-        <Select size="md" aria-label="Patrón — no pueden coincidir en" value={pattern} onChange={e => setPattern(e.target.value)}>
+        <Select size="sm" aria-label="Patrón — no pueden coincidir en" value={pattern} onChange={e => setPattern(e.target.value)}>
           {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
         </Select>
       </div>
@@ -877,7 +877,7 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
       </div>
       <div>
         <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Debe aparecer en</p>
-        <Select size="md" aria-label="Debe aparecer en" value={pattern} onChange={e => setPattern(e.target.value)}>
+        <Select size="sm" aria-label="Debe aparecer en" value={pattern} onChange={e => setPattern(e.target.value)}>
           {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
         </Select>
       </div>
