@@ -12,6 +12,10 @@ describe("NumberRoll", () => {
   it("renders the value as text", () => {
     render(<MotionProvider><NumberRoll value="En 4 días" /></MotionProvider>);
     expect(screen.getByText("En 4 días")).toBeTruthy();
+    const hostElement = screen.getByText("En 4 días").parentElement;
+    const classList = hostElement?.className.split(/\s+/) || [];
+    expect(classList).toContain("relative");
+    expect(classList).toContain("overflow-hidden");
   });
 
   it("swaps to the new value and drops the old one", async () => {

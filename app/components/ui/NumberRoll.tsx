@@ -4,7 +4,8 @@
 // out, the new one rises in. NextServiceHero's countdown, the readiness card's
 // relative day, the participation total, ChordChart's capo readout. Both values
 // share one grid cell so the width never jumps; `initial={false}` so the first
-// paint is the value, not an animation.
+// paint is the value, not an animation. The host is positioned (relative) so that
+// popLayout's absolutely-placed exiting value is clipped by the host's overflow-hidden.
 
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
@@ -13,7 +14,7 @@ import { EASE_IN, EASE_OUT, EXIT_MS, MS } from "@/app/utils/motionPresets";
 export default function NumberRoll({ value, className = "" }: { value: string | number; className?: string }) {
   const key = String(value);
   return (
-    <span className={`inline-grid overflow-hidden align-baseline ${className}`.trim()}>
+    <span className={`relative inline-grid overflow-hidden align-baseline ${className}`.trim()}>
       <AnimatePresence initial={false} mode="popLayout">
         <m.span
           key={key}
