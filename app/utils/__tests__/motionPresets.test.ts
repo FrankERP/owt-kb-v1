@@ -21,8 +21,9 @@ describe("motionPresets", () => {
 
   it("pins the sheet dismissal thresholds (spec §19.4)", () => {
     // px and px/ms. Both arms are an OR in CueDialog, so loosening either one here
-    // would let a stray 80 px scroll close a sheet.
-    expect(SHEET_DISMISS).toEqual({ distance: 80, velocity: 0.5 });
+    // would let a stray scroll close a sheet. 150 px is Frank's call from dev on
+    // 2026-09-09 ("almost twice" the original 80).
+    expect(SHEET_DISMISS).toEqual({ distance: 150, velocity: 0.5 });
   });
 
   it("exits are faster than enters (spec: enter fast, exit faster)", () => {

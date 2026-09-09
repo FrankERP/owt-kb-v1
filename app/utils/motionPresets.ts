@@ -43,5 +43,10 @@ export const VARIANTS = {
 
 export type VariantName = keyof typeof VARIANTS;
 
-/** Sheet drag-to-dismiss (spec §19.4): past this travel OR faster than this, the sheet closes. */
-export const SHEET_DISMISS = { distance: 80, velocity: 0.5 } as const; // px, px/ms
+/**
+ * Sheet drag-to-dismiss (spec §19.4): past this travel OR faster than this, the sheet
+ * closes. Distance was 80 px in the first M0b-1 build; Frank tried it on dev on 2026-09-09
+ * and asked for roughly double, so a deliberate pull closes the sheet and a nudge does not.
+ * A flick still closes it through the velocity arm.
+ */
+export const SHEET_DISMISS = { distance: 150, velocity: 0.5 } as const; // px, px/ms
