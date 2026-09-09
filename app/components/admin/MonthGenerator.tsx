@@ -2014,7 +2014,25 @@ export default function MonthGenerator({
       const escaped = typeof CSS !== "undefined" && typeof CSS.escape === "function"
         ? CSS.escape(focusRoleId)
         : focusRoleId.replace(/["\\]/g, "\\$&");
-      document.querySelector(`[data-grid-column-id="${escaped}"]`)?.scrollIntoView({ block: "nearest", inline: "center" });
+      const el = document.querySelector<HTMLElement>(`[data-grid-column-id="${escaped}"]`);
+      if (!el) return;
+      // `scrollIntoView({ inline: "center" })` scrolls EVERY scrollable
+      // ancestor, not just the grid's own horizontal scroller — when that
+      // scroller alone cannot centre the column, the browser keeps climbing
+      // and reaches `.brand-admin-shell` (`overflow: hidden`, which is still
+      // scrollable by script). The shell shifts left and clips its own
+      // content. Centre the known horizontal scroller by hand instead, then
+      // let `scrollIntoView` handle only the vertical axis with `inline:
+      // "nearest"` — the column is already inside the scroller's visible box
+      // by then, so no ancestor needs a horizontal scroll.
+      const scroller = el.closest<HTMLElement>("[data-planner-scroller]");
+      if (scroller) {
+        const elRect = el.getBoundingClientRect();
+        const scrollerRect = scroller.getBoundingClientRect();
+        scroller.scrollLeft +=
+          (elRect.left + elRect.width / 2) - (scrollerRect.left + scrollerRect.width / 2);
+      }
+      el.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
     return () => cancelAnimationFrame(frame);
   }, [focusRoleId, storedGenerationKey, storedMode]);
