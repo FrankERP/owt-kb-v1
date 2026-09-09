@@ -131,9 +131,9 @@ describe("theme gallery — segment validation", () => {
     expect(page).toContain("generateStaticParams");
   });
 
-  it("enumerates exactly two themes and four fixtures", () => {
+  it("enumerates exactly two themes and five fixtures", () => {
     expect(read(`${GALLERY}/layout.tsx`)).toContain('["dark", "light"] as const');
-    expect(page).toContain('["swatches", "dialog", "planner", "kids-planner"] as const');
+    expect(page).toContain('["swatches", "dialog", "planner", "kids-planner", "controls"] as const');
   });
 
   it("also calls notFound() for an unknown value reaching the component", () => {
@@ -147,6 +147,7 @@ describe("theme gallery — the fixtures are hermetic", () => {
     "DialogFixture",
     "PlannerFixture",
     "KidsPlannerFixture",
+    "ControlsFixture",
   ] as const;
   const files = names.map((f) => read(`${GALLERY}/[fixture]/fixtures/${f}.tsx`));
   const codes = names.map((f) => code(`${GALLERY}/[fixture]/fixtures/${f}.tsx`));

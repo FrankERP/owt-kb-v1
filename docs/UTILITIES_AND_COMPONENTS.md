@@ -333,6 +333,14 @@ Legend: **[C]** client, **[S]** server.
 | `Toast` / `useToast` [C] | The ONE fixed toast stack. `toast({ message, tone?, duration?, hold?, action? })`; `hold` persists until `dismiss(id)`. `useTransientValue` stays for an inline flash next to the control that produced it. |
 | `Menu` / `MenuItem` / `MenuSeparator` / `MenuHeader` [C] | The ONE anchored dropdown. `role="menu"`, roving focus, merges the trigger's own ref. Not supported nested inside a `CueDialog` in M0b-1 (one consumer exists; see MOTION.md). |
 | `Collapse` [C] | The ONE disclosure. Real height animation (the one exception to transform/opacity-only); children stay mounted while closed, `inert` + `aria-hidden`. |
+| `SegmentedControl` [C] | The ONE segmented control — `role="radiogroup"`, arrow keys move the selection with wrap, the checked option is the sole tab stop; `value={null}` means nothing chosen yet. One `layoutId` thumb. Sizes `sm`/`md`; tones `outline`/`filled`; `badge`/`busy` per option. Never `aria-pressed` toggles for a one-of-N choice. |
+| `SlidingIndicator` / `useActiveIntoView` [C] | The active marker for tab bars (admin `TabBar`, `SectionNav`, `BottomNav`). Semantics stay on the items (`aria-current`); the hook scrolls the active item into view. |
+| `Switch` [C] | The ONE switch — `role="switch"`, `aria-checked`, a `<button>`; knob springs with `initial={false}`; haptic on flip. Sizes `sm`/`md`. |
+| `Checkbox` [N] | The ONE checkbox — native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in. `tone="negative"` for the kill switch. |
+| `Select` [N] | The ONE select — native `<select>` under tokenised chrome plus a drawn chevron. `label` + `id`, or `aria-label`. |
+| `DateField` [N] | The ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws the prev/next month buttons. |
+| `NumberRoll` [C] | A value that changes in place: old rises out, new rises in, one grid cell. `initial={false}`. |
+| `haptic()` (`app/utils/haptics.ts`) [N] | Native-only haptic feedback; no-op on web; fire-and-forget, never awaited in a handler. |
 | `GalleryMotion` (`app/(gallery)/theme-gallery/[theme]/`) [C] | The theme gallery's own `LazyMotion` — the gallery mounts no `Provider`/`MotionProvider`, so this wrapper loads `domMax` synchronously and honours `data-motion="off"` so a baseline capture is deterministic. |
 
 See [MOTION.md](MOTION.md) for the full primitive reference, the load-failure

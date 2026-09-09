@@ -20,7 +20,6 @@ you must install these locally — they can't be set up from the repo:
 | **Node 22 LTS** | already set (`nvm use` reads `.nvmrc`) | everything (Capacitor 8 requires Node ≥22) |
 | **Xcode** (full) | Mac App Store (~7 GB) | iOS build/sign/run |
 | **Xcode CLT** | `xcode-select --install` | iOS tooling |
-| **CocoaPods** | `sudo gem install cocoapods` | iOS native deps |
 | **Android Studio** | https://developer.android.com/studio | Android SDK + build/run |
 | **JDK 17** | `brew install --cask temurin@17` | Android (Gradle) |
 

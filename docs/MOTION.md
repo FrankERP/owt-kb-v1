@@ -91,8 +91,14 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
 | `Menu` / `MenuItem` / `MenuSeparator` / `MenuHeader` | client | the ONE anchored dropdown. Real `role="menu"` semantics: roving focus with arrow keys, Home/End, Escape closes and refocuses the trigger, Tab closes without refocusing. Positioned `absolute` in a `relative` wrapper (never a portal — a portal would escape a dialog's inert boundary). Merges the trigger's own `ref` with its internal one, so a consumer that also needs the trigger node (to refocus it after an async action) still can. |
 | `Collapse` | client | the ONE disclosure — expand/collapse with real height animation (the one place `height` animates outside `transform`/`opacity`, on user-triggered disclosures only). Renders an UNSTYLED animated OUTER `m.div` (owns `id`/`aria-hidden`/`inert`/`height`/`opacity`/`overflow`) with `className` applied to a plain INNER `div` — under `border-box` a padded/bordered box floors its height at padding+border, so a closed `Collapse` that owned the padding itself reserved blank space forever; height 0 only means 0 when the animated box has no padding of its own. Children stay mounted while closed; opening clears `inert`/`aria-hidden` in the same commit as `open` (so a parent's own effect can reach a child node right away), while closing waits for the animation to finish before setting them. Because jsdom (as of this writing) does not wire the `inert` IDL property from the reflected attribute, `Collapse` also sets `el.inert` imperatively in an effect — a harmless duplicate of the JSX prop in a real browser, and what `Collapse.test.tsx` actually observes. |
 
-M0b also adds: `SegmentedControl`, `SlidingIndicator`, `Switch`, `Checkbox`,
-`Select`, `DateField`, `NumberRoll`, `haptics`.
+| `SegmentedControl` | client | the ONE segmented control — `role="radiogroup"`, arrows move the selection with wrap and focus follows, the checked option is the sole tab stop; `value={null}` means nothing chosen yet (no thumb). The thumb is one `layoutId` span (what `domMax` is for). Sizes `sm`/`md`; tones `outline` (bordered pills) / `filled` (joined bar, solid thumb). `badge` and `busy` per option. Never `aria-pressed` toggles for a one-of-N choice. |
+| `SlidingIndicator` / `useActiveIntoView` | client | the active marker for tab bars (admin `TabBar`, `SectionNav`, `BottomNav`): render ONE inside the active item; variants `pill`/`underline`/`dot`. Semantics stay on the items (`aria-current`). The hook scrolls the active item to the centre of an overflowing bar. |
+| `Switch` | client | the ONE switch — `role="switch"`, `aria-checked`, a `<button>`; knob springs (`SPRINGS.pop`) with `initial={false}` so the first paint is the real state; haptic on flip. Sizes `sm`/`md`. |
+| `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` for the kill switch. Name it with `children` or `aria-label`. |
+| `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
+| `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws «Mes anterior» / «Mes siguiente» icon buttons (the schedule's month strip). |
+| `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
+| `haptic(kind)` (`app/utils/haptics.ts`) | neutral | `"light"` (default) on a toggle flip or thumb move, `"selection"` on a tab press, `"medium"` reserved for drop landing (M-planner). Native only; no-op on web; never awaited in a handler. |
 
 ### Load-failure behaviour
 
@@ -175,6 +181,9 @@ Before was measured on the primary checkout at the merge-base commit
 | Δ vs Before M0a | +0.01 kB | +12.4 kB | +12.5 kB | — |
 | **M0b-1 tree, `domAnimation`** (confirmatory rebuild, fix round 1) | 168.4 kB | 87.8 kB | 307.0 kB | 41.3 kB / 15.4 kB |
 | **M0b-1 tree, `domMax`** (shipped, `e9d90327`) | 168.4 kB | 87.9 kB | 307.1 kB | 88.0 kB / 28.8 kB |
+| **M0b-1 tree, rebuilt today** (`2d635d38`, confirmatory rebuild for the M0b-2 row below) | 168.4 kB | 112.9 kB | 333.8 kB | 58.8 kB / 17.4 kB |
+| **M0b-2 tree** (this branch, `fa9bff79` + the controls-fixture commit) | 168.4 kB | 114.2 kB | 336.7 kB | 58.8 kB / 17.4 kB |
+| Δ, M0b-2 vs the same-environment M0b-1 rebuild | 0 kB | +1.3 kB | +2.9 kB | ~0 kB |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -259,6 +268,34 @@ switch alone should produce — as an open question, since it did not rebuild
 `M0b-1 tree` rows above are that confirmatory rebuild: `domAnimation` and
 `domMax`, same tree, same commit apart from that one export. See the
 paragraph under the table for what it shows.
+
+**M0b-2's own row needed a fresh M0b-1 baseline, and rebuilding it did not reproduce
+the numbers above.** Task 13 (the `controls` gallery fixture) measured the M0b-2
+tree per the method above and got `/` = 114.2 kB, `/admin` = 336.7 kB — which,
+compared directly against "Before M0a" (77.3 kB / 301.7 kB), reads as +36.9 kB /
++35.0 kB, over the programme's +25 kB gz cap. Before treating that as a real
+regression, the SAME commit that produced the "M0b-1 tree, `domMax`" row above
+(`2d635d38`) was rebuilt today, in this environment, with the identical script —
+and it measured `/` = 112.9 kB and `/admin` = 333.8 kB, not the previously-recorded
+87.9 kB / 307.1 kB. The async chunk shows the same pattern: 58.8 kB raw / 17.4 kB gz
+today vs the recorded 90 088 B / 29 468 B for the identical commit. Three independent
+figures (shared, route, chunk) were checked; only "shared" reproduced exactly
+(168.4 kB both times — it sums a small, fixed set of framework files that Turbopack's
+chunk splitter doesn't touch). The route and chunk figures depend on Turbopack's
+chunk-splitting boundaries, which this rebuild shows are NOT stable for the identical
+commit across two builds taken days apart in what should be the same toolchain —
+a materially larger version of the 6-byte drift already documented above for
+`domAnimation`/`domMax`, not a new phenomenon. **The reliable number is therefore the
+same-environment delta, not either absolute figure**: M0b-2 vs a same-day rebuild of
+M0b-1 moves `/` by +1.3 kB and `/admin` by +2.9 kB — consistent with the actual
+change (an isolated, public gallery fixture that touches neither route, plus whatever
+`/admin`-surface primitive wiring landed in the M0b-2 tasks before it) — and the async
+chunk does not move at all (58.8 kB → 58.8 kB). Both are far inside the +25 kB cap.
+This does not retroactively validate the Before-M0a-anchored deltas recorded for M0a
+and M0b-1 above; it only says that comparing an absolute figure measured in one
+environment against one measured in another, months apart, is not safe for this
+particular metric, and a clean same-environment re-baseline against "Before M0a"
+would be needed before trusting an absolute cap check again.
 
 ## Where the walk's findings landed
 
