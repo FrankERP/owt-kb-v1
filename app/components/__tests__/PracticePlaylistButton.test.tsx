@@ -1,12 +1,24 @@
 /** @vitest-environment jsdom */
-import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { installMotionTestEnv } from "../ui/__tests__/motionTestSetup";
+import { MotionProvider } from "../ui/MotionProvider";
 import PracticePlaylistButton from "../PracticePlaylistButton";
+
+installMotionTestEnv();
 
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+
+function renderButton(props: { songIds: string[]; accentVar: string }) {
+  return render(
+    <MotionProvider>
+      <PracticePlaylistButton {...props} />
+    </MotionProvider>,
+  );
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -27,23 +39,24 @@ function fakePopup() {
 }
 
 describe("PracticePlaylistButton", () => {
-  it("uses disclosure semantics and closes on Escape without reaching outer handlers", () => {
+  it("uses menu semantics and closes on Escape without reaching outer handlers", async () => {
     const outerEscape = vi.fn();
     window.addEventListener("keydown", outerEscape);
 
-    const { getByRole, queryByText } = render(
-      <PracticePlaylistButton songIds={["song-1"]} accentVar="--accent-rgb" />,
-    );
+    const { getByRole, queryByText } = renderButton({ songIds: ["song-1"], accentVar: "--accent-rgb" });
+    // Flush MotionProvider's async feature chunk (ADR-0031) before the exit under
+    // test starts — see Menu.test.tsx.
+    await act(async () => {});
 
     const trigger = getByRole("button", { name: /Practicar/i });
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
 
     fireEvent.click(trigger);
     expect(trigger.getAttribute("aria-expanded")).toBe("true");
-    expect(getByRole("button", { name: /Música/i })).toBeTruthy();
+    expect(getByRole("menuitem", { name: /Música/i })).toBeTruthy();
 
-    fireEvent.keyDown(getByRole("button", { name: /Música/i }), { key: "Escape" });
-    expect(queryByText("referencia musical")).toBeNull();
+    fireEvent.keyDown(getByRole("menuitem", { name: /Música/i }), { key: "Escape" });
+    await waitFor(() => expect(queryByText("referencia musical")).toBeNull());
     expect(outerEscape).not.toHaveBeenCalled();
 
     window.removeEventListener("keydown", outerEscape);
@@ -57,12 +70,11 @@ describe("PracticePlaylistButton", () => {
     vi.stubGlobal("open", open);
     vi.stubGlobal("fetch", fetch);
 
-    const { getByRole } = render(
-      <PracticePlaylistButton songIds={["song-1", "song-2"]} accentVar="--accent-rgb" />,
-    );
+    const { getByRole } = renderButton({ songIds: ["song-1", "song-2"], accentVar: "--accent-rgb" });
+    await act(async () => {});
 
     fireEvent.click(getByRole("button", { name: /Practicar/i }));
-    fireEvent.click(getByRole("button", { name: /Música/i }));
+    fireEvent.click(getByRole("menuitem", { name: /Música/i }));
 
     expect(open).toHaveBeenCalledWith("", "_blank");
     expect(fetch).toHaveBeenCalledWith("/api/practice-playlist", {
@@ -84,7 +96,7 @@ describe("PracticePlaylistButton", () => {
     expect((popup as any).location.href).toBe("https://youtube.com/watch_videos?video_ids=abc");
   });
 
-  it("keeps the pending trigger focusable and blocks duplicate click, Enter, and Space activations", () => {
+  it("keeps the pending trigger focusable and blocks duplicate click, Enter, and Space activations", async () => {
     const popup = fakePopup();
     const open = vi.fn(() => popup);
     const pendingFetch = deferred<{ ok: boolean; json: () => Promise<{ url: string }> }>();
@@ -92,13 +104,12 @@ describe("PracticePlaylistButton", () => {
     vi.stubGlobal("open", open);
     vi.stubGlobal("fetch", fetch);
 
-    const { getByRole } = render(
-      <PracticePlaylistButton songIds={["song-1"]} accentVar="--accent-rgb" />,
-    );
+    const { getByRole } = renderButton({ songIds: ["song-1"], accentVar: "--accent-rgb" });
+    await act(async () => {});
 
     const trigger = getByRole("button", { name: /Practicar/i });
     fireEvent.click(trigger);
-    fireEvent.click(getByRole("button", { name: /Letras/i }));
+    fireEvent.click(getByRole("menuitem", { name: /Letras/i }));
 
     expect(getByRole("button", { name: /Abriendo/i }).getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(getByRole("button", { name: /Abriendo/i }));
@@ -114,12 +125,11 @@ describe("PracticePlaylistButton", () => {
     vi.stubGlobal("open", vi.fn(() => popup));
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, json: async () => ({}) })));
 
-    const { getByRole, findByRole } = render(
-      <PracticePlaylistButton songIds={["song-1"]} accentVar="--accent-rgb" />,
-    );
+    const { getByRole, findByRole } = renderButton({ songIds: ["song-1"], accentVar: "--accent-rgb" });
+    await act(async () => {});
 
     fireEvent.click(getByRole("button", { name: /Practicar/i }));
-    fireEvent.click(getByRole("button", { name: /Música/i }));
+    fireEvent.click(getByRole("menuitem", { name: /Música/i }));
 
     expect((await findByRole("status")).textContent).toContain("No se pudo crear la playlist");
     expect((popup as any).close).toHaveBeenCalled();

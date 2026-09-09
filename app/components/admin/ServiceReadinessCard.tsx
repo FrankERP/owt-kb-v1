@@ -24,10 +24,9 @@
 // selection, copy-instruments source/target picking, the setlist editor, publish /
 // hide, edit and delete.
 
-import { useEffect, useRef, useState } from "react";
-
 import { ChainLinkIcon } from "../ChainLinkIcon";
 import { buildRuns } from "../../utils/medley";
+import Menu, { MenuItem, MenuSeparator } from "../ui/Menu";
 import ReadinessBadge from "./ReadinessBadge";
 import ServiceIssueList from "./ServiceIssueList";
 import ServicePrimaryAction from "./ServicePrimaryAction";
@@ -105,22 +104,6 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
   const { card, gates, swapMode, copyMode, isCopySource, swapSource } = props;
   const role = card.role;
   const readiness = card.readiness;
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuTriggerRef = useRef<HTMLButtonElement>(null);
-
-  // Escape closes the kebab and hands focus back to its trigger. The backdrop
-  // click is a pointer-only escape hatch, so without this a keyboard user who
-  // opened the menu has no way out of it.
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      setMenuOpen(false);
-      menuTriggerRef.current?.focus();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [menuOpen]);
 
   const identity = cardIdentity(card, props.todayIso);
   const preview = cardPreview(role);
@@ -229,62 +212,53 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
                     onClick={props.onSetlist}
                     icon={<MusicIcon />}
                   />
-                  <button
-                    type="button"
-                    ref={menuTriggerRef}
-                    onClick={() => setMenuOpen((o) => !o)}
-                    aria-haspopup="menu"
-                    aria-expanded={menuOpen}
-                    aria-label="Más acciones"
-                    title="Más acciones"
-                    className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-ink-muted/70 transition-colors hover:bg-surface-lift/15 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
-                  >
-                    <KebabIcon />
-                  </button>
-                  {menuOpen && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-                      <div
-                        role="menu"
-                        className={`absolute right-0 top-full z-50 mt-1 overflow-hidden rounded-lg border border-accent/25 bg-surface-overlay-deep py-1 shadow-xl shadow-elevation/50 ${CARD_STYLE.menu}`}
+                  <Menu
+                    label="Más acciones"
+                    align="end"
+                    trigger={
+                      <button
+                        type="button"
+                        aria-label="Más acciones"
+                        title="Más acciones"
+                        className={`${CARD_STYLE.menuTrigger} flex items-center justify-center rounded-lg text-ink-muted/70 transition-colors hover:bg-surface-lift/15 hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent`}
                       >
-                        {instrPills.length > 0 && (
-                          <MenuItem
-                            icon={<CopyIcon />}
-                            label="Copiar instrumentos a otro día"
-                            gate={gates.copyInstruments}
-                            onClick={() => {
-                              setMenuOpen(false);
-                              props.onCopyStart();
-                            }}
-                          />
+                        <KebabIcon />
+                      </button>
+                    }
+                  >
+                    {instrPills.length > 0 && (
+                      <MenuItem
+                        icon={<CopyIcon />}
+                        disabled={!gates.copyInstruments.enabled}
+                        onSelect={props.onCopyStart}
+                      >
+                        Copiar instrumentos a otro día
+                        {!gates.copyInstruments.enabled && gates.copyInstruments.reason && (
+                          <span className="sr-only"> — {gates.copyInstruments.reason}</span>
                         )}
-                        <MenuItem
-                          icon={<EyeIcon />}
-                          label={isDraft ? "Publicar" : "Ocultar"}
-                          // Publishing needs all five sources; safe unpublish needs only
-                          // roles + role-target integrity (plan §"Unpublish is separate").
-                          gate={isDraft ? gates.publish : gates.unpublish}
-                          onClick={() => {
-                            setMenuOpen(false);
-                            if (isDraft) props.onPublish();
-                            else props.onUnpublish();
-                          }}
-                        />
-                        <div className="my-1 border-t border-accent/15" />
-                        <MenuItem
-                          icon={<TrashIcon />}
-                          label="Eliminar servicio"
-                          danger
-                          gate={gates.deleteService}
-                          onClick={() => {
-                            setMenuOpen(false);
-                            props.onDelete();
-                          }}
-                        />
-                      </div>
-                    </>
-                  )}
+                      </MenuItem>
+                    )}
+                    {/* Publishing needs all five sources; safe unpublish needs only
+                        roles + role-target integrity (plan §"Unpublish is separate"). */}
+                    <MenuItem
+                      icon={<EyeIcon />}
+                      disabled={!(isDraft ? gates.publish.enabled : gates.unpublish.enabled)}
+                      onSelect={() => { if (isDraft) props.onPublish(); else props.onUnpublish(); }}
+                    >
+                      {isDraft ? "Publicar" : "Ocultar"}
+                      {!(isDraft ? gates.publish.enabled : gates.unpublish.enabled) &&
+                        (isDraft ? gates.publish.reason : gates.unpublish.reason) && (
+                          <span className="sr-only"> — {isDraft ? gates.publish.reason : gates.unpublish.reason}</span>
+                        )}
+                    </MenuItem>
+                    <MenuSeparator />
+                    <MenuItem icon={<TrashIcon />} danger disabled={!gates.deleteService.enabled} onSelect={props.onDelete}>
+                      Eliminar servicio
+                      {!gates.deleteService.enabled && gates.deleteService.reason && (
+                        <span className="sr-only"> — {gates.deleteService.reason}</span>
+                      )}
+                    </MenuItem>
+                  </Menu>
                 </div>
               )}
             </div>
@@ -799,45 +773,6 @@ function IconAction({
     >
       {icon}
     </button>
-  );
-}
-
-function MenuItem({
-  icon,
-  label,
-  onClick,
-  danger,
-  gate,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  danger?: boolean;
-  gate?: CardGate;
-}) {
-  const disabled = !!gate && !gate.enabled;
-  return (
-    <>
-      <button
-        type="button"
-        role="menuitem"
-        onClick={onClick}
-        disabled={disabled}
-        title={disabled ? (gate?.reason ?? undefined) : undefined}
-        className={`flex min-h-[44px] w-full min-w-0 items-center gap-2.5 px-3 text-left text-sm transition-colors disabled:opacity-40 ${
-          danger ? "text-negative-muted hover:bg-negative-strong/15" : "text-ink-muted hover:bg-surface-lift/10"
-        }`}
-      >
-        <span className="shrink-0 opacity-80">{icon}</span>
-        <span className={CARD_STYLE.longText}>{label}</span>
-      </button>
-      {disabled && gate?.reason && (
-        // `role="none"` so this explanatory line is not read as a menu item.
-        <p role="none" className={`px-3 pb-1.5 font-body text-[11px] text-warning-strong ${CARD_STYLE.longText}`}>
-          {gate.reason}
-        </p>
-      )}
-    </>
   );
 }
 
