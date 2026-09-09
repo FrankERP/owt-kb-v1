@@ -46,7 +46,7 @@ seat, each member of Tipo `instrumento` declares the instrument(s) they play.
 - **D2 — Fairness unit and window:** per **service** (Saturday and Sunday are two
   participations), counting **only inside the month being generated**, as a per-MEMBER
   total across instruments (§6.2 states exactly what that guarantees and what it does
-  not; Frank confirms the reading at spec review). Not the
+  not; **the per-person reading was confirmed by Frank 2026-09-09 14:42 CST**). Not the
   weekend-based `instrWeeks` and not the saved history window. Consequence, accepted:
   the participation sidebar keeps showing `instrWeeks`, so the number the filler balances
   and the number the team sees are different measures. Not changed by this delivery.
@@ -249,8 +249,8 @@ someone who already holds strictly more seats. Two consequences follow:
   X 3, Y 2, Z 3, W 2 — balanced as people, unbalanced as "Keys players". A rule that
   counted per instrument would instead seat X on Keys on Sundays 2 and 4, giving X five
   Sundays in a row while W sits at 1. **The per-member reading is the one delivered**,
-  and it is a product choice Frank is asked to confirm at spec review; switching to
-  per-row counting is a one-line change to step 3.1 and a test. Thinnest-pool-first keeps
+  confirmed by Frank as the intended meaning of «sus participaciones» (2026-09-09 14:42
+  CST); switching to per-row counting is a one-line change to step 3.1 and a test. Thinnest-pool-first keeps
   a two-instrument member from being consumed by the wide row before the scarce one
   needs them; it does not change which property is balanced.
 
