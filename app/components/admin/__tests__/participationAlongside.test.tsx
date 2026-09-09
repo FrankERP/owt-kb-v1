@@ -643,6 +643,13 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
 
     expect(header).not.toBeNull();
     expect(header.contains(select)).toBe(true);
+    // The old `<select>` needed `w-full` to be capped at the rail's width — a
+    // native select is as wide as its widest option. `SegmentedControl`'s
+    // `filled` group is `inline-flex` with no width-capping class of its own,
+    // so it carries `max-w-full` at this call site instead: the group is
+    // capped at the header's content box rather than free to demand the sum
+    // of its rendered options.
+    expect(select.className.split(/\s+/)).toContain("max-w-full");
     // A flex row is what made the two widths ADD. A block header makes the
     // demand the wider of the two.
     expect(header.className.split(/\s+/)).not.toContain("flex");

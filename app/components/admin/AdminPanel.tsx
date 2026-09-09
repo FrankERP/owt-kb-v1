@@ -142,6 +142,8 @@ export function MinistryScopeBar({
     <SegmentedControl
       label="Ministerio"
       tone="filled"
+      // brand-search-console deliberately wins over the primitive's filled chrome
+      // so the control matches the search input beside it.
       className="brand-search-console self-start"
       value={value}
       onChange={onChange}
@@ -1067,6 +1069,8 @@ export default function AdminPanel({
           <SegmentedControl
             label="Filtrar por"
             tone="filled"
+            // brand-search-console deliberately wins over the primitive's filled chrome
+            // so the control matches the search input beside it.
             className="brand-search-console shrink-0"
             value={filterKey}
             onChange={(k) => { setFilterKey(k); setFilterValue(""); }}
@@ -1099,6 +1103,8 @@ export default function AdminPanel({
           <SegmentedControl
             label="Orden"
             tone="filled"
+            // brand-search-console deliberately wins over the primitive's filled chrome
+            // so the control matches the search input beside it.
             className="brand-search-console shrink-0"
             value={sortDir}
             onChange={setSortDir}

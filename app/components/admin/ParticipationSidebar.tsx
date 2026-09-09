@@ -42,23 +42,26 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
   return (
     <aside className="rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 lg:sticky lg:top-4 self-start">
       {/*
-        The header is a COLUMN, and the select is `w-full`. Both are load-bearing
-        for the gutter placement, not styling.
+        The header is a COLUMN, not a row. That is still load-bearing for the
+        gutter placement, not styling.
 
-        Side by side (the original `flex justify-between`) the header demanded
-        the title's ~131px PLUS the select's intrinsic width — a `<select>` is as
-        wide as its widest option, and "Instrumentos" makes that 112px. Measured
-        in a real browser that came to 262px of content inside a 216px column:
-        the select's right edge landed 47px past it and printed itself over the
-        planner grid — the exact overlap the column's width floor exists to
-        prevent.
+        Side by side (the original `flex justify-between`, back when this was a
+        `<select>`) the header demanded the title's ~131px PLUS the control's
+        intrinsic width — a `<select>` is as wide as its widest option, and
+        "Instrumentos" made that 112px. Measured in a real browser that came to
+        262px of content inside a 216px column: the control's right edge landed
+        47px past it and printed itself over the planner grid — the exact
+        overlap the column's width floor exists to prevent.
 
         Stacked, each row asks for the WIDER of the two rather than their sum
-        (~131px), and `w-full` caps the select at the content box instead of
-        letting its longest option set the width. See `CHART_COLUMN_WIDTH` in
-        `PlannerGrid.tsx`, whose floor is derived from this file's own rows —
-        this header is the half of that derivation no arithmetic can see, and
-        `participationAlongside.test.tsx` pins it structurally for that reason.
+        (~131px), which is why the column stayed a fix even after the `<select>`
+        became a `SegmentedControl` (M0b-2). The control's own `max-w-full`
+        caps it at the header's content box so a future option list wider than
+        the column can't reopen the same overflow the stack was built to close.
+        See `CHART_COLUMN_WIDTH` in `PlannerGrid.tsx`, whose floor is derived
+        from this file's own rows — this header is the half of that derivation
+        no arithmetic can see, and `participationAlongside.test.tsx` pins it
+        structurally for that reason.
 
         The 44px touch-target this used to guarantee (`min-h-[44px]` on the old
         `<select>`) returns with the Control Room rail remake; `size="sm"` here
@@ -71,7 +74,7 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
           label="Ver participaciones por"
           size="sm"
           tone="filled"
-          className="mt-2"
+          className="mt-2 max-w-full"
           value={view}
           onChange={setView}
           options={[
