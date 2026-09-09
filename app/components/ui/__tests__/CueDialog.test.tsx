@@ -310,9 +310,11 @@ describe("CueDialog motion", () => {
       </MotionProvider>,
     );
     const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
+    // 200 px, past the 150 px distance arm on its own (jsdom's instant move would
+    // also satisfy the velocity arm; the distance is what this case is about).
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 200, isPrimary: true });
-    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 200 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 300, isPrimary: true });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 300 });
     expect(onDismiss).toHaveBeenCalledWith("drag");
   });
 
@@ -394,8 +396,8 @@ describe("CueDialog motion", () => {
     const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
 
     fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 220, isPrimary: true });
-    fireEvent.pointerCancel(handle, { pointerId: 1, clientY: 220, isPrimary: true });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 300, isPrimary: true });
+    fireEvent.pointerCancel(handle, { pointerId: 1, clientY: 300, isPrimary: true });
     await act(async () => { await new Promise((r) => setTimeout(r, 60)); });
 
     expect(onDismiss).not.toHaveBeenCalled();
@@ -436,10 +438,10 @@ describe("CueDialog motion", () => {
         </MotionProvider>,
       );
       const handle = document.querySelector<HTMLElement>("[data-cue-handle]")!;
-      // A drag that would dismiss twice over on a phone (200 px, instantly).
+      // A drag that would dismiss twice over on a phone (300 px, instantly).
       fireEvent.pointerDown(handle, { pointerId: 1, clientY: 100, isPrimary: true });
-      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 300, isPrimary: true });
-      fireEvent.pointerUp(handle, { pointerId: 1, clientY: 300, isPrimary: true });
+      fireEvent.pointerMove(handle, { pointerId: 1, clientY: 400, isPrimary: true });
+      fireEvent.pointerUp(handle, { pointerId: 1, clientY: 400, isPrimary: true });
     } finally {
       Object.defineProperty(window, "matchMedia", { writable: true, configurable: true, value: original });
     }
@@ -457,7 +459,7 @@ describe("CueDialog motion", () => {
         </CueDialogProvider>
       </MotionProvider>,
     );
-    // The other half of the OR: 20 px is far under the 80 px threshold, but 20 px
+    // The other half of the OR: 20 px is far under the 150 px threshold, but 20 px
     // in 10 ms is 2 px/ms and the sheet goes.
     let clock = 0;
     const now = vi.spyOn(performance, "now").mockImplementation(() => clock);
