@@ -865,6 +865,10 @@ Bundle section for the full A/B measurement.
 Branch `claude/motion-m0b2-controls` (from `main` 2d635d38), plan
 `docs/superpowers/plans/2026-09-09-motion-m0b2-controls.md`. Thirteen tasks, each with a
 fresh implementer and a task review; ten fix rounds in all, every one re-reviewed.
+**Released to production on 2026-09-09** via PR #53 (merge `40fa9683`), after Frank's
+look on dev found one pre-existing bug — opening the month editor from a card's
+«Editar equipo» scrolled the admin shell instead of the grid (`scrollIntoView` reaching
+an `overflow: hidden` ancestor) — fixed as `8f3dfc87` on the branch before the merge.
 
 **Shipped.** Seven primitives under `app/components/ui/` and one util:
 `SegmentedControl` (radiogroup, roving arrows, `layoutId` thumb — the reason M0b-1 paid
@@ -901,14 +905,16 @@ through `className` cannot beat one the primitive sets; the rule editor's nine s
 `size="sm"` and the two narrowest widened; `NumberRoll`'s host is positioned so the exiting
 value is clipped; `useActiveIntoView` scrolls on activation only, never on mount.
 
-**Bundle — the cap is OPEN and it is Frank's number.** Measured cold, same environment,
+**Bundle — the cap, decided.** Measured cold, same environment,
 identical script (`docs/MOTION.md` §Bundle): `e9d90327` (M0b-1 Task 1, mid-branch) `/`
 85.5 kB · `/admin` 310.3 kB; `2d635d38` (the M0b-1 merge) 110.3 · 335.3; M0b-2 tip
 110.2 · 336.8. So **M0b-1's own shipped cost was +24.8 / +25.0 kB gz** — the ledger's
 87.9/307.1 row had been measured before `Toast`, `Menu`, `Collapse` and the expanded
 `CueDialog` landed — and **M0b-2 adds −0.1 / +1.5 kB**. Against "Before M0a"
 (77.3 / 301.7) the absolute delta is **+32.9 / +35.1 kB gz, over §7's +25 kB line.**
-Ruling R was recorded pending Frank's word; the number above is what he decides on. The
+**Frank accepted the number on 2026-09-09 ("merge, accept"):** +32.9 / +35.1 kB gz is the
+programme's recorded cost and supersedes §7's +25 kB line and ruling R's first clause;
+the 40 kB async line stands. The
 async feature chunk cannot be isolated at the tip (Turbopack fused it with Studio code into
 one async chunk that no first-load path references), so the 40 kB async line has no figure
 at this commit.

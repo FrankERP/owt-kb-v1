@@ -240,7 +240,7 @@ under the hard cap and under the ≤20 kB expectation the programme opened with 
 (`Presence`, `Skeleton`/`SkeletonGroup`, `Button`, `MotionProvider`) together cost
 ~12.4 kB gz on a route that renders them, not the ~24 kB the synchronous load cost.
 The M0b-1 merge later added its own +24.8 / +25.0 kB (see the fix-round-1 measurement
-below), and the cap status is now OPEN — see the "Cap status" line further down. The shared/root chunk
+below), and the cap was re-based at +32.9 / +35.1 kB with Frank's acceptance on 2026-09-09 — see the "Cap status" line further down. The shared/root chunk
 barely moves (+0.02 kB, noise) because `MotionProvider` is mounted inside
 `app/utils/Provider.tsx`, which is wired from the `(admin)` and `(client)` route-group
 layouts, not the app root — so the cost is paid by the routes that render it, not by
@@ -336,9 +336,12 @@ The absolute Δ against "Before M0a" (77.3 kB / 301.7 kB — itself only rebuild
 stale environment; Task 13's failed attempt at that rebuild is unchanged by this fix
 round) is, from this branch's tip: `/` **+32.9 kB**, `/admin` **+35.1 kB**.
 
-**Cap status (§7 +25 kB gz first-load): OPEN** — the absolute Δ is +32.9 kB (`/`) /
-+35.1 kB (`/admin`) against "Before M0a"; ruling R was recorded pending Frank's word,
-and this is the number he decides on. This does not retroactively validate the
+**Cap status (§7 +25 kB gz first-load): ACCEPTED by Frank on 2026-09-09** ("merge,
+accept", with M0b-2's release) — the absolute Δ is +32.9 kB (`/`) / +35.1 kB (`/admin`)
+against "Before M0a", and that is now the programme's recorded cost; §7's +25 kB line
+is superseded by this figure (spec Part VIII). A later phase may still defer the
+sheet-drag/`AnimatePresence` path behind a dynamic import if the number needs to come
+down. This does not retroactively validate the
 Before-M0a-anchored deltas recorded for M0a above; a clean same-environment rebuild of
 "Before M0a" itself would still be needed before trusting an absolute cap check
 against it without caveat.
