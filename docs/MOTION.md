@@ -187,6 +187,8 @@ Before was measured on the primary checkout at the merge-base commit
 | **`2d635d38` cold rebuild** (the M0b-1 merge; fix round 1) | 169.2 kB | 110.3 kB | 335.3 kB | not cleanly isolable — see note below |
 | **M0b-2 tip** (`857cd2d5`, this branch; fix round 1) | 169.2 kB | 110.2 kB | 336.8 kB | not cleanly isolable — see note below |
 | **M1 tip** (this branch, `3c5e8cd4`) | 169.2 kB | 117.5 kB | 342.5 kB | not cleanly isolable — see note below |
+| **M1 tip `3c5e8cd4`, release-day rebuild** (worktree, 2026-09-10 — a different environment: every column reads higher, shared included, so compare only within this pair) | 172.5 kB | 123.9 kB | 350.5 kB | not cleanly isolable — see note below |
+| **M1 merge `c93d4494`** (same environment as the row above; the three follow-ups — dot centring, month-nav overflow, F1/F2) | 172.5 kB | 123.5 kB | 351.0 kB | not cleanly isolable — see note below |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -342,8 +344,10 @@ round) is, from this branch's tip: `/` **+32.9 kB**, `/admin` **+35.1 kB**.
 **Cap status (§7 +25 kB gz first-load): ACCEPTED by Frank on 2026-09-09** ("merge,
 accept", with M0b-2's release) — the absolute Δ is +32.9 kB (`/`) / +35.1 kB (`/admin`)
 against "Before M0a", and that is now the programme's recorded cost; §7's +25 kB line
-is superseded by this figure (spec Part VIII) — exceeded by M1 (+40.2 / +40.8
-absolute); see the M1 row below, Frank's call at the M1 release. A later phase may
+is superseded by this figure (spec Part VIII) — **exceeded by M1 and re-accepted by
+Frank on 2026-09-10 at +40.2 / +40.8 absolute** (spec Part IX: structural growth, the
+«Más» sheet body too small to be worth deferring; the follow-ups moved the routes −0.4 /
++0.5 kB in a same-environment A/B, build noise). A later phase may
 still defer the sheet-drag/`AnimatePresence` path behind a dynamic import if the
 number needs to come down. This does not retroactively validate the
 Before-M0a-anchored deltas recorded for M0a above; a clean same-environment rebuild of
