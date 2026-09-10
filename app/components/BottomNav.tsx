@@ -108,7 +108,7 @@ export default function BottomNav() {
     };
   }, [hidden]);
 
-  if (hidden || !user) return null;
+  if (hidden) return null;
 
   return (
     <>
