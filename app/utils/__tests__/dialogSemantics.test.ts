@@ -51,12 +51,7 @@ const APP_DIR = path.join(REPO_ROOT, "app");
  * entry needs a reason, because "add it to the list" is how a guard like this
  * rots into decoration.
  */
-const NOT_A_DIALOG: Record<string, string> = {
-  "components/BottomNav.tsx":
-    "A disclosure sheet, not a modal: the panel it dims is `inert` when closed, " +
-    "so its controls leave the tab order and the a11y tree without a trap. " +
-    "Trapping focus in a nav sheet would be wrong, not missing.",
-};
+const NOT_A_DIALOG: Record<string, string> = {};
 
 function tsxFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -108,10 +103,13 @@ describe("every dismissable overlay is a real dialog", () => {
     .filter(({ source }) => hasDismissableScrim(source));
 
   it("finds the overlays at all (a scan that matches nothing proves nothing)", () => {
-    // 2 as of M0b-1: CueDialog and the exempt BottomNav. Three hand-rolled
-    // shells migrated onto CueDialog on 2026-09-08; a new hand-rolled overlay
-    // raises this by one and must carry the semantics.
-    expect(overlays.length).toBeGreaterThanOrEqual(2);
+    // 1 as of M1 Task 1: CueDialog only. BottomNav's own hand-rolled scrim
+    // (the exempted entry above) was replaced by a CueDialog sheet on
+    // 2026-09-09, so its `<div>` no longer draws a `bg-scrim inset-0 onClick`
+    // and the scan no longer sees it at all — there is nothing left to exempt.
+    // A new hand-rolled overlay raises this by one and must carry the
+    // semantics.
+    expect(overlays.length).toBeGreaterThanOrEqual(1);
   });
 
   it("declares dialog semantics and manages focus, or is an exempt non-dialog", () => {

@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 323,
+    "literalRows": 327,
     "filesScanned": 283,
     "filesWithColour": 52,
     "byCategory": {
       "2": 2,
       "4": 73,
-      "8": 97,
+      "8": 101,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 126,
+      "B": 130,
       "exempt": 35,
       "keep": 247,
       "C": 6,
@@ -3031,6 +3031,54 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
+      "line": 249,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
+      "line": 250,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
+      "line": 251,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 172,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
       "line": 181,
       "disposition": "B",
       "reason": null
@@ -3039,23 +3087,11 @@
       "file": "app/components/BottomNav.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
+      "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
-      "carrier": "fill",
-      "line": 182,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
-      "line": 183,
+      "carrier": "stroke",
+      "line": 192,
       "disposition": "B",
       "reason": null
     },
@@ -3067,7 +3103,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 150,
+      "line": 202,
       "disposition": "B",
       "reason": null
     },
@@ -3079,7 +3115,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 161,
+      "line": 211,
       "disposition": "B",
       "reason": null
     },
@@ -3091,7 +3127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 171,
+      "line": 221,
       "disposition": "B",
       "reason": null
     },
@@ -3103,7 +3139,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 180,
+      "line": 231,
       "disposition": "B",
       "reason": null
     },
@@ -3115,7 +3151,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 190,
+      "line": 239,
       "disposition": "B",
       "reason": null
     },
@@ -3127,7 +3163,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 198,
+      "line": 248,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 258,
       "disposition": "B",
       "reason": null
     },
