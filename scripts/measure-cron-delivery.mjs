@@ -2,7 +2,9 @@
 // Measure what GitHub ACTUALLY delivers for a scheduled workflow, against what
 // the workflow declares.
 //
-// This exists because the gap is not a one-off. Layer 1's schedule has been
+// This exists because the gap is not a one-off. (Since ADR-0032 the primary
+// caller is Cloud Scheduler; this script measures the GitHub caller only.)
+// Layer 1's schedule has been
 // measured twice — 41 min median over 98 runs (2026-08-27), then 62 min median
 // with a 3.3% delivery rate (2026-08-30, scheduled runs only) — and issue #25's
 // acceptance criterion is that any change be re-measured the same way rather
