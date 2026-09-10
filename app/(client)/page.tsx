@@ -57,7 +57,7 @@ const WEEKEND_QUERY = `{
   "satRole":  *[_type == "saturday_role"  && week == $sat && published != false] { ${ROLE_FIELDS} },
   "specials": *[_type == "special_role"   && date >= $today && date <= $sun && published != false] | order(date asc) {
     _id, date, service_name, team_notes,
-    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "key": song->key },
+    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key },
     ${ROLE_FIELDS}
   }
 }`;

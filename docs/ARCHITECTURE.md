@@ -502,7 +502,7 @@ Service dates are Sanity `date` type (`YYYY-MM-DD` strings). The rules:
   `new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" })` (Swedish locale → ISO format).
 - **For "Hoy/Ayer/Mañana" labels and countdowns:** use a **calendar-day diff at local noon**,
   not elapsed hours (elapsed math is off-by-one near midnight). See `daysUntil` in
-  `NextServiceHero.tsx` and `computeParticipation.plusOneDay`.
+  `app/utils/daysUntil.ts` and `computeParticipation.plusOneDay`.
 - **For TZ-stable pure arithmetic** (month bounds, ICS), read via `Date.UTC(...)` only — see
   `scheduleMonths.ts` and `ics.ts`.
 

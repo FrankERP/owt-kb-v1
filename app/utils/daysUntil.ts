@@ -6,9 +6,16 @@
 // Whole days from `now` to the service date. Both anchors are pinned to LOCAL
 // noon so the difference is a clean integer — comparing local midnight against
 // the target's noon left a permanent +0.5 that Math.round pushed up, reporting
-// a same-day service as "tomorrow".
+// a same-day service as "tomorrow". "Today" is pinned to America/Mexico_City
+// rather than the runtime's local date, because the card is now server-rendered
+// on `/` and Vercel's runtime clock is UTC — reading `now.getFullYear()` etc.
+// there reports the team's evening service as still a day away.
 export function daysUntil(dateStr: string, now: Date = new Date()): number {
-  const todayNoon = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+  const [y, m, d] = now
+    .toLocaleDateString("sv", { timeZone: "America/Mexico_City" })
+    .split("-")
+    .map(Number);
+  const todayNoon = new Date(y, m - 1, d, 12, 0, 0, 0);
   const target = new Date(dateStr.slice(0, 10) + "T12:00:00");
   return Math.round((target.getTime() - todayNoon.getTime()) / 86400_000);
 }

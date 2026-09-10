@@ -26,6 +26,13 @@ describe("daysUntil", () => {
   it("ignores any time component in the date string", () => {
     expect(daysUntil("2026-07-02T00:00:00Z", now)).toBe(1);
   });
+
+  it("pins 'today' to America/Mexico_City, not the runtime's local date", () => {
+    // 2026-07-01T04:30:00Z is 2026-06-30 22:30 in America/Mexico_City — still
+    // "today" is the 30th there, so a service on 07-01 is tomorrow, not today.
+    const utcLateNight = new Date("2026-07-01T04:30:00Z");
+    expect(daysUntil("2026-07-01", utcLateNight)).toBe(1);
+  });
 });
 
 describe("formatCountdown", () => {

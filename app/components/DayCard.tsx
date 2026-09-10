@@ -102,7 +102,10 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
     ? new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })
     : "";
   const days = date ? daysUntil(date) : null;
-  const wide = layout === "wide";
+  // The two-column rail only earns its keep when both columns have content —
+  // a setlist with no team to show beside it should stack like `card`, not
+  // reserve a 20rem rail for nothing.
+  const wide = layout === "wide" && hasSetlist && hasRole;
 
   // Group songs into medley runs
   const runs = hasSetlist ? buildRuns(setlist!.songs) : [];

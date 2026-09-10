@@ -86,10 +86,15 @@ describe("DayCard", () => {
     expect(withBpm.textContent!.trimEnd().endsWith("G144")).toBe(true);
   });
 
-  it("puts the setlist and the team in two columns only in the `wide` layout", () => {
+  it("puts the setlist and the team in two columns only when `wide` has both a setlist and a team", () => {
     const { container, unmount } = mount({ layout: "wide" });
     expect(container.querySelector(".lg\\:grid")).not.toBeNull();
     unmount();
     expect(mount().container.querySelector(".lg\\:grid")).toBeNull();
+  });
+
+  it("stacks a `wide` card with a setlist but no team, instead of reserving an empty rail", () => {
+    const { container } = mount({ layout: "wide", leads: [] });
+    expect(container.querySelector(".lg\\:grid")).toBeNull();
   });
 });

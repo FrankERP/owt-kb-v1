@@ -80,6 +80,12 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   true, and `[]` is exactly what clearing the "Letra" field stores.
 
 ### Dates & schedule
+- **`daysUntil(dateStr, now?)`**, **`formatCountdown(days)`** ([daysUntil.ts](../app/utils/daysUntil.ts))
+  — the service countdown, in a neutral module with no imports/hooks so a Server Component may
+  call it. `daysUntil` pins "today" to America/Mexico_City (`toLocaleDateString("sv", …)`), not
+  the runtime's local date — Vercel is UTC, so reading the bare local date would misreport the
+  team's evening as still a day away. `formatCountdown` reads a negative diff as "Hace N días"
+  rather than "En -N días". Consumers: `NextServiceHero`, `DayCard`'s header pill.
 - **`scheduleMonths.ts`** — pure `YYYY-MM` month arithmetic (leaf module, no clock/React/Sanity):
   `parseMonthParam`, `addMonths`, `monthBounds`, `monthLabel`, `windowMonths`, `windowBounds`,
   `monthRangeLabel`, `scheduleHref`, `MONTH_NAMES_ES`, `WINDOW_MONTHS=3`. Reads via `Date.UTC` for
@@ -300,7 +306,7 @@ Legend: **[C]** client, **[S]** server.
 | Component | Purpose |
 |-----------|---------|
 | `DayCard` [C] | **The core service card** — setlist (medley-grouped via `buildRuns`) + all five seats; embeds `SetlistEditor` for admins + `PracticePlaylistButton`. |
-| `NextServiceHero` [C] | Countdown badge ("Hoy"/"Mañana"/"En N días"). Exports **`daysUntil(dateStr, now?)`** (local-noon day diff). Tested. |
+| `NextServiceHero` [C] | Countdown badge ("Hoy"/"Mañana"/"En N días"). Imports `daysUntil`/`formatCountdown` from `app/utils/daysUntil.ts`. |
 | `CalendarView` [C] | Schedule calendar grid; Mexico_City "today" highlight. |
 | `AvailabilityCalendar` [C] | Member self-service unavailability picker. |
 | `AddToCalendarButton` [C] | Downloads `.ics` of the member's assignments. |

@@ -106,6 +106,12 @@ export default function PracticePlaylistButton({
         align="end"
         trigger={
           variant === "hero" ? (
+            // Manual label swap + `aria-disabled`, not `Button`'s `busy` prop:
+            // `busy` sets the native `disabled` attribute, which yanks the
+            // element out of the tab order and drops focus. `restoreTrigger()`
+            // re-focuses THIS trigger once the fetch settles (success or
+            // failure); a `disabled` button can't receive that focus back,
+            // breaking restoration for the pending Ensayar trigger.
             <Button
               ref={triggerRef}
               variant="primary"
