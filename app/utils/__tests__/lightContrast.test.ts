@@ -347,6 +347,11 @@ describe("alpha-modified text roles still clear AA, in both themes", () => {
     //   measuring against surface-sunken: it was 2.73 there in light. Now 3.38 on
     //   the worst ground in either theme, and still exempt from the 4.5 TEXT rule
     //   because it is not text.
+    "accent/65@app/components/LibraryIndex.tsx",
+    //   the same <svg> search glyph, on /biblioteca's console (R1). Judged on its
+    //   own merits per the keying rule above and it lands identically: not text,
+    //   so 1.4.11 at 3:1 governs it, and the icon guard below already measures
+    //   accent/65 — this site adds no new role/alpha pair to it.
     "mono-700/40@app/components/admin/SetlistEditor.tsx",
     "accent/40@app/components/admin/SetlistEditor.tsx",
     "mono-600/50@app/(client)/me/propose/[roleId]/ProposalEditor.tsx",

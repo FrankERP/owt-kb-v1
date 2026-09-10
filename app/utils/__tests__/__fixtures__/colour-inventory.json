@@ -8,27 +8,27 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 324,
-    "filesScanned": 286,
-    "filesWithColour": 52,
+    "literalRows": 326,
+    "filesScanned": 290,
+    "filesWithColour": 53,
     "byCategory": {
       "2": 2,
-      "4": 73,
-      "8": 98,
+      "4": 74,
+      "8": 99,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 127,
+      "B": 128,
       "exempt": 35,
-      "keep": 247,
+      "keep": 250,
       "C": 6,
       "D": 15
     },
     "compositingClasses": 19,
     "compositingSelectorOccurrences": 40,
-    "compositingClassNameOccurrences": 68,
+    "compositingClassNameOccurrences": 70,
     "compositingRuleBodies": 39,
     "lightCounterpartClasses": 15,
     "pairs": 11,
@@ -3300,6 +3300,30 @@
       "reason": null
     },
     {
+      "file": "app/components/LibraryIndex.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 90,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/LibraryIndex.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 75,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/components/NavMenu.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -4249,6 +4273,22 @@
       "file": "app/components/DayCard.tsx",
       "kind": "className",
       "class": "surface",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/LibraryIndex.tsx",
+      "kind": "className",
+      "class": "search-console",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/LibraryRow.tsx",
+      "kind": "className",
+      "class": "key-dial",
       "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
