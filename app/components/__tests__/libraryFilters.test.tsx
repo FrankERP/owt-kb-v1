@@ -54,7 +54,7 @@ describe("LibraryFilters", () => {
     openDrawer();
 
     const tipoGroup = screen.getByRole("radiogroup", { name: "Tipo de canción" });
-    expect(within(tipoGroup).getAllByRole("radio")).toHaveLength(3);
+    expect(within(tipoGroup).getAllByRole("radio")).toHaveLength(4); // Todos + three Tipos
 
     expect(screen.getByRole("button", { name: /Alabanza/ })).toBeDefined();
     expect(screen.getByRole("button", { name: /Adoración/ })).toBeDefined();
@@ -72,6 +72,17 @@ describe("LibraryFilters", () => {
     fireEvent.click(upBeat!);
 
     expect(onChange).toHaveBeenCalledWith({ ...EMPTY, tags: ["up-beat"] });
+  });
+
+  it("«Todos» clears the Tipo and leaves the theme tags alone", () => {
+    const onChange = mount({ ...EMPTY, tags: ["down-beat", "alabanza"] });
+    openDrawer();
+
+    const tipoGroup = screen.getByRole("radiogroup", { name: "Tipo de canción" });
+    const todos = within(tipoGroup).getAllByRole("radio").find((el) => el.textContent?.includes("Todos"));
+    fireEvent.click(todos!);
+
+    expect(onChange).toHaveBeenCalledWith({ ...EMPTY, tags: ["alabanza"] });
   });
 
   it("the Artista select lists authors", () => {

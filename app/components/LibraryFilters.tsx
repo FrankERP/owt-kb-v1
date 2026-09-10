@@ -21,7 +21,11 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
   const count = filters.tags.length + (filters.author ? 1 : 0) + (filters.key ? 1 : 0);
 
   const toggleTag = (slug: string) => onChange({ ...filters, tags: filters.tags.includes(slug) ? filters.tags.filter((s) => s !== slug) : [...filters.tags, slug] });
-  const setTipo = (next: Tipo) => onChange({ ...filters, tags: [...filters.tags.filter((s) => !(TIPO_SLUGS as readonly string[]).includes(s)), ...(tipo === next ? [] : [next])] });
+  // SegmentedControl never fires onChange for the already-checked option
+  // (spec note b), so "tap it again to clear" cannot exist; a fourth tile,
+  // «Todos», is the clear. `tipo ?? ""` maps "no Tipo" onto it.
+  const setTipo = (next: Tipo | "") =>
+    onChange({ ...filters, tags: [...filters.tags.filter((s) => !(TIPO_SLUGS as readonly string[]).includes(s)), ...(next ? [next] : [])] });
 
   return (
     <>
@@ -32,8 +36,8 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
         <div className="space-y-6 p-5">
           <section>
             <p className="mb-2 font-label text-[11px] uppercase tracking-widest text-ink-dim">Tipo</p>
-            <SegmentedControl label="Tipo de canción" tone="filled" value={tipo} onChange={setTipo}
-              options={TIPO_SLUGS.map((s) => ({ value: s, label: TIPO_LABEL[s], badge: tags.find((t) => t.slug.current === s)?.postCount }))} />
+            <SegmentedControl label="Tipo de canción" tone="filled" value={tipo ?? ""} onChange={setTipo}
+              options={[{ value: "" as const, label: "Todos" }, ...TIPO_SLUGS.map((s) => ({ value: s, label: TIPO_LABEL[s], badge: tags.find((t) => t.slug.current === s)?.postCount }))]} />
           </section>
           <section>
             <p className="mb-2 font-label text-[11px] uppercase tracking-widest text-ink-dim">Temas</p>
