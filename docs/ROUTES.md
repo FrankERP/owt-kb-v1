@@ -53,11 +53,12 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | `/auth/not-a-member` | `(client)/auth/not-a-member/page.tsx` | C | Public | — | For authenticated Google users not in `teamMembers`. |
 | `/studio`, `/studio/*` | `(admin)/studio/[[...tool]]/page.tsx` | S | **admin+** | `force-static` | Embedded Sanity Studio (`NextStudio`). |
 
-\* **"Public"** means no page-level guard, **but** `proxy.ts` still requires an authenticated
-session for everything except the auth pages, the cron routes, the A3 identity route, the theme
-gallery (ADR-0017) and static assets — so in practice these pages are visible to any
-logged-in team member. **The theme gallery is the one exception**: it is reachable by the
-anonymous internet, deliberately, because it is prerendered and reads nothing.
+**Access column.** `proxy.ts` requires an authenticated session for everything except the
+auth pages, the cron routes, the A3 identity route, the theme gallery (ADR-0017) and static
+assets. "Public" therefore means "no page-level guard": the two `/auth/*` pages are reachable
+signed-out by design, and **the theme gallery is the one route the anonymous internet can
+open**, deliberately, because it is prerendered and reads nothing. "Worship" means the page
+calls `requireWorshipPage()` on top of the session (ministry-scoped, see the enforcement table).
 
 ### Dynamic segments
 - `posts/[slug]` → `post.slug.current` (has `generateStaticParams()`).

@@ -1,4 +1,4 @@
-// Spec §18 (decision N): one eyebrow per surface. Pins the six named labels at
+// Spec §18 (decision N): one eyebrow per surface. Pins the seven named labels at
 // their audited counts and ratchets DOWN; a phase that removes one lowers its
 // number in the same commit. Equality, so the pin cannot go stale.
 import { describe, it, expect } from "vitest";
@@ -12,7 +12,7 @@ const BUDGET: Record<string, number> = {
   ">Servicio<": 1,            // DayCard header — goes in R1
   "Índice musical": 0,        // SongSearchList — removed in R1
   "títulos": 0,               // home library count — removed in R1
-  "Repertorio": 0,            // /biblioteca eyebrow — DayCardDisclosure (R6/R7)
+  "Repertorio": 0,            // PostComponent's song-card eyebrow — removed in R1 (spec §18)
   "Backstage operations": 1,  // /admin eyebrow — goes in R5
   "Acceso autorizado": 1,     // /admin pill — goes in R5
 };

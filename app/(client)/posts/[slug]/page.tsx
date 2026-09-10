@@ -176,7 +176,7 @@ const Page = async ({ params }: Params) => {
           {post?.tags && post.tags.length > 0 && (
             <div className="mb-6 flex flex-wrap justify-center gap-2">
               {post.tags.map((tag) => (
-                <Link key={tag._id} href={`/biblioteca?tag=${tag.slug.current}`}>
+                <Link key={tag._id} href={`/biblioteca?tag=${encodeURIComponent(tag.slug.current)}`}>
                   <span className="rounded-md border border-accent/15 bg-accent/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-accent/70 transition-colors hover:border-accent/35 hover:text-accent">
                     #{tag.name}
                   </span>
@@ -193,7 +193,7 @@ const Page = async ({ params }: Params) => {
             <div className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
               {post.authors.map((a, i) => (
                 <span key={a._id} className="font-body text-lg text-ink-muted/70">
-                  <Link href={`/biblioteca?author=${a.slug.current}`} className="hover:text-accent transition-colors">
+                  <Link href={`/biblioteca?author=${encodeURIComponent(a.slug.current)}`} className="hover:text-accent transition-colors">
                     {a.name}
                   </Link>
                   {i < post.authors!.length - 1 && <span className="text-ink-muted/30">,</span>}
