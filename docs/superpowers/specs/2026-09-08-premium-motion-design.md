@@ -971,6 +971,13 @@ Kids/Planear Kids/Admin along with their ministry/role computations. `BottomNav`
 sheet drops the user block, the Tema row and the Cerrar sesión row; its rows are now
 computed first (Kids, Planear Kids, Admin), and when none applies the «Más» button itself
 does not render — the bar shows four tabs and the sheet never opens.
+Review of F1 found `/kids/admin` had lost its only lg+ home, so `NavLinks` gained «Planear
+Kids» for kids managers (one link current at a time; the sign-out landing is `/auth/signin`
+at all three sites). Two smaller items from the same look: the tab bar's active dot sat
+off-centre because motion's layout `transform` overwrote the Tailwind translate on the
+same element (`SlidingIndicator` now centres the dot with auto margins), and the schedule's
+«‹ Anterior» / «Siguiente ›» row overflowed a 390 px phone — the words show from `sm:` up,
+the chevrons carry the buttons below that, and both are the house `Button`.
 
 **Bundle — over the accepted figure; Frank's call.** Cold, same method: M1 tip
 `/` 117.5 kB · `/admin` 342.5 kB (shared 169.2, chunk not isolable). Δ vs the M0b-2 tip
