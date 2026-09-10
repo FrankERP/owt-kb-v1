@@ -12,7 +12,6 @@ let session: { user: Record<string, unknown> } | null = null;
 vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
 vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: session, status: session ? "authenticated" : "unauthenticated" }),
-  signOut: vi.fn(async () => {}),
 }));
 vi.mock("@/app/utils/haptics", () => ({ haptic: vi.fn(async () => {}) }));
 
@@ -39,22 +38,27 @@ describe("BottomNav", () => {
     expect(screen.queryByRole("navigation", { name: "Navegación principal" })).toBeNull();
   });
 
-  it("shows Inicio · Calendario · Biblioteca · Yo · Más for a worship member, with aria-current on the route", () => {
+  // (a) a plain worship member: the five tabs cannot fit nothing that isn't
+  // already a tab (no kids ministry, no admin role), so «Más» does not render
+  // and the sheet never opens.
+  it("shows Inicio · Calendario · Biblioteca · Yo for a plain worship member, with aria-current on the route and NO «Más» button", () => {
     pathname = "/schedule";
     mount();
     const nav = screen.getByRole("navigation", { name: "Navegación principal" });
     const names = Array.from(nav.querySelectorAll("a, button")).map((n) => n.textContent?.trim());
-    expect(names).toEqual(["Inicio", "Calendario", "Biblioteca", "Yo", "Más"]);
+    expect(names).toEqual(["Inicio", "Calendario", "Biblioteca", "Yo"]);
     expect(screen.getByRole("link", { name: "Calendario" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Biblioteca" }).getAttribute("href")).toBe("/tag");
     expect(nav.querySelectorAll("[data-sliding-indicator]")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Más" })).toBeNull();
   });
 
-  it("shows Kids · Planear Kids · Yo · Más for a kids manager with no worship ministry", () => {
+  it("shows Kids · Planear Kids · Yo for a kids manager with no worship ministry, and NO «Más» button", () => {
     session = { user: { ...worshipUser, ministries: ["kids"], managesMinistries: ["kids"] } };
     mount();
     const nav = screen.getByRole("navigation", { name: "Navegación principal" });
-    expect(Array.from(nav.querySelectorAll("a, button")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids", "Yo", "Más"]);
+    expect(Array.from(nav.querySelectorAll("a, button")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids", "Yo"]);
+    expect(screen.queryByRole("button", { name: "Más" })).toBeNull();
   });
 
   it("publishes its measured height on <html> while mounted and clears it on unmount", () => {
@@ -69,26 +73,35 @@ describe("BottomNav", () => {
     expect(document.documentElement.classList.contains(NAV_CLASS)).toBe(false);
   });
 
-  // requireWorshipPage bounces a kids-only member away from /tag; NavMenu
-  // already hides this link there, and the Más sheet must match.
-  it("never shows a Tags link in the Más sheet for a kids-only member", () => {
-    session = { user: { ...worshipUser, ministries: ["kids"], managesMinistries: ["kids"] } };
+  // (b) an admin: no kids ministry, so the sheet holds Admin only.
+  it("shows «Más» for an admin and the sheet lists Admin only", () => {
+    session = { user: { ...worshipUser, role: "admin" } };
     mount();
-    fireEvent.click(screen.getByRole("button", { name: "Más" }));
-    expect(screen.queryByRole("link", { name: /tags/i })).toBeNull();
+    const button = screen.getByRole("button", { name: "Más" });
+    fireEvent.click(button);
+    const dialog = screen.getByRole("dialog", { name: "Más" });
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Admin"]);
+    expect(screen.getByRole("link", { name: "Admin" }).getAttribute("href")).toBe("/admin");
   });
 
-  it("opens Más as a sheet dialog with Tema and Cerrar sesión, and Admin only for managers", () => {
+  // (c) a super-admin spans both ministries and is a manager everywhere, so
+  // the sheet lists all three rows, in tab-bar-then-admin order.
+  it("shows «Más» for a super-admin and the sheet lists Kids, Planear Kids, Admin", () => {
+    session = { user: { ...worshipUser, role: "super-admin" } };
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Más" }));
     const dialog = screen.getByRole("dialog", { name: "Más" });
-    expect(dialog.querySelector('a[href="/me#tema"]')?.textContent).toContain("Tema");
-    expect(screen.getByRole("button", { name: "Cerrar sesión" })).toBeTruthy();
-    expect(screen.queryByRole("link", { name: "Admin" })).toBeNull();
-    cleanup();
-    session = { user: { ...worshipUser, role: "admin" } };
+    expect(Array.from(dialog.querySelectorAll("a")).map((a) => a.textContent?.trim())).toEqual(["Kids", "Planear Kids", "Admin"]);
+  });
+
+  // (d) Tema and Cerrar sesión moved to the avatar menu (NavMenu) — the sheet
+  // never repeats them.
+  it("never shows a Tema or Cerrar sesión row in the «Más» sheet", () => {
+    session = { user: { ...worshipUser, role: "super-admin" } };
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Más" }));
-    expect(screen.getByRole("link", { name: "Admin" }).getAttribute("href")).toBe("/admin");
+    const dialog = screen.getByRole("dialog", { name: "Más" });
+    expect(dialog.textContent).not.toMatch(/Tema/);
+    expect(dialog.textContent).not.toMatch(/Cerrar sesión/);
   });
 });

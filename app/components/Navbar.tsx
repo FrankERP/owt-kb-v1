@@ -63,10 +63,7 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
 
         {/* Right: single avatar/menu */}
         <div className="ml-auto shrink-0">
-          <NavMenu
-            showSchedule={schedule}
-            showTags={tags}
-          />
+          <NavMenu />
         </div>
 
       </div>

@@ -1,18 +1,19 @@
 "use client";
 
-// The phone tab bar (spec §5.0, §19.1, decision B). Five tabs, one sheet. It
-// publishes its MEASURED height as --bottom-nav-h on <html> the way the
-// impersonation banner publishes --impersonation-h, so every fixed-bottom
-// element (toasts, the audio transport, the song FAB) clears it without a
-// constant anyone can drift from — bottomNavOffsetSync.test.ts is the guard.
-// Ministry filtering is COSMETIC (the pages enforce), as NavMenu says.
+// The phone tab bar (spec §5.0, §19.1, decision B). Four tabs, plus a fifth
+// «Más» tab and its sheet ONLY when there is something the four cannot hold
+// (Kids, Planear Kids, Admin) — Tema and Cerrar sesión live in the avatar menu
+// (NavMenu) now, one home per destination (M1 follow-up F1). It publishes its
+// MEASURED height as --bottom-nav-h on <html> the way the impersonation banner
+// publishes --impersonation-h, so every fixed-bottom element (toasts, the audio
+// transport, the song FAB) clears it without a constant anyone can drift from —
+// bottomNavOffsetSync.test.ts is the guard. Ministry filtering is COSMETIC (the
+// pages enforce), as NavMenu says.
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
-import { clearThemeMirror } from "@/app/utils/themePref";
+import { useSession } from "next-auth/react";
 import { haptic } from "@/app/utils/haptics";
 import SlidingIndicator from "./ui/SlidingIndicator";
 import CueDialog from "./ui/CueDialog";
@@ -92,6 +93,15 @@ export default function BottomNav() {
 
   const rowClass = "flex min-h-[44px] w-full items-center gap-3 px-5 py-3 font-label text-xs uppercase tracking-widest text-ink hover:bg-accent/5";
 
+  // «Más» holds only what the five tabs cannot fit — the avatar menu (NavMenu)
+  // now owns Tema and Cerrar sesión. When no row applies, there is nothing to
+  // hold: the bar shows four tabs and the sheet never opens.
+  const moreRows: { href: string; label: string; icon: React.ReactNode }[] = [
+    ...(inWorship && inKids ? [{ href: "/kids", label: "Kids", icon: <KidsIcon /> }] : []),
+    ...(inWorship && managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon /> }] : []),
+    ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: <AdminIcon /> }] : []),
+  ];
+
   return (
     <>
       <nav
@@ -119,49 +129,30 @@ export default function BottomNav() {
               </Link>
             );
           })}
-          <button
-            type="button"
-            onClick={() => { void haptic("selection"); setMoreOpen(true); }}
-            aria-haspopup="dialog"
-            aria-expanded={moreOpen}
-            className={`relative flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-fast ease-out-brand ${
-              moreOpen ? "text-accent" : "text-mono-500 hover:text-mono-300"
-            }`}
-          >
-            <span><MoreIcon /></span>
-            <span className="font-label text-[10px] uppercase tracking-widest">Más</span>
-          </button>
+          {moreRows.length > 0 && (
+            <button
+              type="button"
+              onClick={() => { void haptic("selection"); setMoreOpen(true); }}
+              aria-haspopup="dialog"
+              aria-expanded={moreOpen}
+              className={`relative flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-fast ease-out-brand ${
+                moreOpen ? "text-accent" : "text-mono-500 hover:text-mono-300"
+              }`}
+            >
+              <span><MoreIcon /></span>
+              <span className="font-label text-[10px] uppercase tracking-widest">Más</span>
+            </button>
+          )}
         </div>
       </nav>
 
       <CueDialog open={moreOpen} mode="sheet" size="sm" title="Más" label="Más" onDismiss={() => setMoreOpen(false)}>
-        <div className="flex items-center gap-3 px-5 py-4 border-b border-accent/10">
-          {user.image ? (
-            // unoptimized: serve the original JPEG/PNG, not Next's WebP — the iOS
-            // WKWebView (Capacitor wrap) fails to decode the optimized WebP avatar.
-            <Image src={user.image} alt="" width={40} height={40} unoptimized className="rounded-full shrink-0" />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-accent-deep flex items-center justify-center shrink-0">
-              <span className="font-label text-sm text-accent">{user.name?.slice(0, 2).toUpperCase()}</span>
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className="font-body text-sm font-semibold truncate">{user.name}</p>
-            <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 truncate">{user.email}</p>
-          </div>
-        </div>
         <div className="divide-y divide-accent/10">
-          {inWorship && inKids && <Link href="/kids" onClick={() => setMoreOpen(false)} className={rowClass}><KidsIcon />Kids</Link>}
-          {inWorship && managesKids && <Link href="/kids/admin" onClick={() => setMoreOpen(false)} className={rowClass}><PlanIcon />Planear Kids</Link>}
-          {isAdmin && <Link href="/admin" onClick={() => setMoreOpen(false)} className={rowClass}><AdminIcon />Admin</Link>}
-          <Link href="/me#tema" onClick={() => setMoreOpen(false)} className={rowClass}><ThemeIcon />Tema</Link>
-          <button
-            type="button"
-            onClick={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}
-            className={`${rowClass} text-negative-fg hover:bg-negative-strong/10`}
-          >
-            <SignOutIcon />Cerrar sesión
-          </button>
+          {moreRows.map((row) => (
+            <Link key={row.href} href={row.href} onClick={() => setMoreOpen(false)} className={rowClass}>
+              {row.icon}{row.label}
+            </Link>
+          ))}
         </div>
       </CueDialog>
     </>
@@ -235,31 +226,12 @@ function AdminIcon() {
   );
 }
 
-function ThemeIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="12" cy="12" r="5" />
-      <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
-    </svg>
-  );
-}
-
 function MoreIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="5" r="1" fill="currentColor" stroke="none" />
       <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
       <circle cx="12" cy="19" r="1" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function SignOutIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   );
 }

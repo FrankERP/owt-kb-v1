@@ -407,11 +407,21 @@ and 5 (initials contrast) — `shellPolish.test.ts`.
 M1 is the app chrome: the phone tab bar, the desktop nav links, the avatar badge,
 the impersonation banner, the audio transport, and the song sheet's head.
 
-- **`BottomNav`** (`app/components/BottomNav.tsx`) — five worship tabs (Inicio ·
-  Calendario · Biblioteca · Yo · Más) or the kids-only set (Kids · Planear Kids ·
-  Yo · Más); **«Más» is a `CueDialog` sheet** (`mode="sheet"`, `size="sm"`), not
-  the hand-rolled `inert`/backdrop panel it used to be. Hidden at `lg` and above,
-  and on `/auth*`/`/studio*`. Publishes its MEASURED `offsetHeight` in px as
+- **`BottomNav`** (`app/components/BottomNav.tsx`) — four worship tabs (Inicio ·
+  Calendario · Biblioteca · Yo) or the kids-only set (Kids · Planear Kids · Yo),
+  plus a fifth **«Más»** tab that holds only what those four cannot fit: `Kids`
+  (worship member also in Kids), `Planear Kids` (worship member who manages
+  Kids), `Admin` (admin/content-editor/super-admin). **Tema and Cerrar sesión
+  live in the avatar menu (`NavMenu`) now, not here** — M1 follow-up F1 gave
+  every destination one home per width, so the tab bar stopped repeating the
+  account actions. When none of the three rows applies (the common case: a
+  plain worship member with no Kids ministry), the «Más» button itself does not
+  render — the bar shows four tabs — and the sheet never opens. **«Más» is a
+  `CueDialog` sheet** (`mode="sheet"`, `size="sm"`), not the hand-rolled
+  `inert`/backdrop panel it used to be, rendered unconditionally with
+  `open={moreOpen}` even when the triggering button is absent (only the button
+  is conditional, never the dialog element — the `cueDialogMount` guard).
+  Hidden at `lg` and above, and on `/auth*`/`/studio*`. Publishes its MEASURED `offsetHeight` in px as
   `--bottom-nav-h` on `<html>` plus a `has-bottom-nav` class while it is mounted
   AND on screen (the `lg:hidden` media query, not a constant, decides "on
   screen" — `getComputedStyle(bar).display !== "none"`, since `offsetParent` is
@@ -434,7 +444,12 @@ the impersonation banner, the audio transport, and the song sheet's head.
   pages themselves enforce access).
 - The **avatar notification badge** (`NavMenu`) now pops in with `<Presence
   show={notifCount > 0} appear variant="scale">` instead of a plain conditional
-  `<span>`.
+  `<span>`. **`NavMenu` is an ACCOUNT menu, all widths** (M1 follow-up F1):
+  `Mi perfil` (`/me`), `Tema` (`/me#tema`), a separator, `Cerrar sesión` — it no
+  longer repeats Calendario, #Tags, Oasis Kids, Planear Kids or Admin, which
+  already have a home in `NavLinks` (desktop) or `BottomNav`'s tabs/«Más» sheet
+  (phone). The `showSchedule`/`showTags` props and their ministry/role
+  computations are gone with them.
 - **`ImpersonationBanner`** drops in on `<Presence variant="drop">` — but
   `appear` is passed only when impersonation STARTS IN-SESSION, never when the
   session resolves already impersonating. That distinction exists because of

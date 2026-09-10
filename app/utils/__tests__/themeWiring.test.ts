@@ -9,7 +9,7 @@
 //    nothing failing anywhere;
 //  - add the migration script to one layout and forget the other, and admin
 //    routes ship a terminal light state with a green suite;
-//  - miss one of the four sign-out sites and a member leaves their mirror behind
+//  - miss one of the three sign-out sites and a member leaves their mirror behind
 //    for the next person on a shared phone.
 
 import { describe, it, expect } from "vitest";
@@ -162,10 +162,12 @@ describe("clearThemeMirror() at sign-out", () => {
 
   const signOutFiles = appFiles().filter((f) => /\bsignOut\(/.test(code(f)));
 
-  it("is called at EXACTLY four sign-out sites", () => {
+  it("is called at EXACTLY three sign-out sites", () => {
     // Scoped to files that actually sign out. ThemeBootstrap calls it too — the
     // durable unset-with-a-mirror repair — and that call is asserted separately
     // rather than folded into this count, so the two cannot mask each other.
+    // BottomNav's own "Cerrar sesión" row was removed in M1 follow-up F1 — the
+    // avatar menu (NavMenu) is now the only account-level sign-out on phones too.
     const calls = signOutFiles
       .map((f) => (code(f).match(/clearThemeMirror\(\)/g) ?? []).length)
       .reduce((a, b) => a + b, 0);
@@ -177,7 +179,7 @@ describe("clearThemeMirror() at sign-out", () => {
         "painted light, and ThemeBootstrap correctly does nothing because their " +
         "themePref is unset. Their only escape is to pick Dark, which destroys the " +
         "unset signal Child F depends on.",
-    ).toBe(4);
+    ).toBe(3);
   });
 
   it("no file that calls signOut( is missing the clear", () => {
@@ -188,12 +190,11 @@ describe("clearThemeMirror() at sign-out", () => {
     ).toEqual([]);
   });
 
-  it("found the four known sign-out entry points", () => {
+  it("found the three known sign-out entry points", () => {
     // If this changes, the count above needs revisiting with it — not silently.
     expect(signOutFiles.sort()).toEqual(
       [
         "app/(client)/auth/not-a-member/page.tsx",
-        "app/components/BottomNav.tsx",
         "app/components/NavMenu.tsx",
         "app/components/SignOutButton.tsx",
       ].sort(),
