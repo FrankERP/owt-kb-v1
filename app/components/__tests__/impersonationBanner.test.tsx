@@ -28,10 +28,10 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("next-auth/react", () => ({
-  useSession: () => ({
+  useSession: vi.fn(() => ({
     data: { user: { isImpersonating: h.isImpersonating, name: "Ana", sanityId: "m1", realAdminName: "Frank" } },
     update: h.update,
-  }),
+  })),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: h.push, refresh: h.refresh, replace: vi.fn() }),
@@ -67,14 +67,39 @@ describe("ImpersonationBanner", () => {
     expect(document.documentElement.classList.contains("impersonating")).toBe(false);
   });
 
-  it("publishes the measured height once the drop-in lands, not before", async () => {
-    renderBanner();
+  it("publishes the measured height once the drop-in lands, not before — impersonation started in this session", async () => {
+    h.isImpersonating = false;
+    const { rerender } = renderBanner();
+    expect(document.documentElement.classList.contains("impersonating")).toBe(false);
+
+    h.isImpersonating = true;
+    rerender(<ImpersonationBanner />);
     const bar = document.querySelector(".impersonation-bar") as HTMLElement;
     Object.defineProperty(bar, "offsetHeight", { configurable: true, value: 56 });
     await waitFor(() =>
       expect(document.documentElement.style.getPropertyValue("--impersonation-h")).toMatch(/px$/)
     );
     expect(document.documentElement.style.getPropertyValue("--impersonation-h")).toBe("56px");
+  });
+
+  // The mount that already IS active — an admin hard-refreshing while
+  // impersonating. Without `appear` there is no enter animation, so the bar
+  // must be visible and measured synchronously, feature chunk or not (the
+  // finding this fix addresses: with `appear` unconditional, this mount sat
+  // at the drop variant's `initial` — opacity: 0 — until the async motion
+  // chunk resolved, or forever if it never did).
+  it("renders at rest and measures synchronously when the mount is already active", () => {
+    const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 56 });
+    try {
+      renderBanner();
+      expect(document.documentElement.style.getPropertyValue("--impersonation-h")).toBe("56px");
+      const host = document.querySelector(".impersonation-bar")?.parentElement as HTMLElement;
+      expect(["", "1"]).toContain(host.style.opacity);
+    } finally {
+      if (original) Object.defineProperty(HTMLElement.prototype, "offsetHeight", original);
+      else delete (HTMLElement.prototype as { offsetHeight?: number }).offsetHeight;
+    }
   });
 
   it("returns to /admin when the session really did stop impersonating", async () => {

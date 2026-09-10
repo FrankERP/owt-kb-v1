@@ -17,6 +17,15 @@ export default function ImpersonationBanner() {
   const barRef = useRef<HTMLDivElement>(null);
 
   const active = !!session?.user?.isImpersonating;
+  // Frozen at the first render of this instance (a plain `useState`, not a
+  // ref: `react-hooks/refs` forbids reading `ref.current` during render, and
+  // this value feeds the `appear` prop below): an admin hard-refreshing
+  // mid-impersonation mounts already-active, and `appear` must stay false for
+  // that mount (see the effect below and the `Presence` call) — otherwise the
+  // bar renders at the drop variant's `initial` (opacity: 0) until the async
+  // motion chunk resolves, or forever if it never does, while the navbar has
+  // already reserved space for it via the `impersonating` class.
+  const [activeAtMount] = useState(active);
 
   // Both this banner and the navbar are `sticky top-0`, in different
   // containers, so they occupied the same strip and the banner's higher
@@ -33,11 +42,18 @@ export default function ImpersonationBanner() {
     if (h) document.documentElement.style.setProperty(BANNER_H_VAR, `${h}px`);
   }, []);
 
-  // The FIRST measurement waits for `onEntered` below — the bar is still
-  // animating into place while this effect runs, so measuring here would
-  // publish a height for a banner that hasn't landed yet. The observer and
-  // resize listener still live here: they publish LATER changes (a wrapped
-  // line on rotation, say), after the drop-in is long done.
+  // Two paths to the FIRST measurement, because there are two ways to arrive
+  // active:
+  //   - A page loaded mid-impersonation (`activeAtMount`): there is no enter
+  //     animation (see `appear` below), the bar is visible at once, so it is
+  //     measured at once, right here.
+  //   - Impersonation started in this session: the bar drops in, and
+  //     measuring before it lands would publish a height for a banner that
+  //     hasn't finished moving — `handleEntered` below does that measurement
+  //     once the drop-in actually completes.
+  // The observer and resize listener live here either way: they publish LATER
+  // changes (a wrapped line on rotation, say), long after either first
+  // measurement.
   useEffect(() => {
     const root = document.documentElement;
     const clear = () => {
@@ -49,6 +65,7 @@ export default function ImpersonationBanner() {
       return;
     }
     root.classList.add(BANNER_CLASS);
+    if (activeAtMount) publish();
     const bar = barRef.current;
     // Guarded: jsdom has no ResizeObserver, and the CSS fallback covers it.
     const ro = typeof ResizeObserver !== "undefined" && bar ? new ResizeObserver(publish) : null;
@@ -59,12 +76,15 @@ export default function ImpersonationBanner() {
       window.removeEventListener("resize", publish);
       clear();
     };
-  }, [active, publish]);
+  }, [active, activeAtMount, publish]);
 
-  // The first measurement lands with the banner instead of racing it: under
+  // Fires only on the animated path (`appear` below is true there): under
   // skipAnimations (tests) this fires synchronously after mount, and in a
   // real browser it fires once the drop-in has actually finished, so the
-  // navbar offset never chases a bar still in motion.
+  // navbar offset never chases a bar still in motion. It never fires for a
+  // mount that is already active — `activeAtMount` above measures that case
+  // synchronously instead, since an already-shown `Presence` without `appear`
+  // runs no enter animation and calls no completion callback.
   const handleEntered = useCallback(() => {
     publish();
   }, [publish]);
@@ -108,7 +128,7 @@ export default function ImpersonationBanner() {
     // The positioned/stacked host: `Presence` transforms this element while
     // dropping it in, so it must carry no `position: fixed` descendant — the
     // banner has an icon, text and a button, nothing fixed among them.
-    <Presence show={active} appear variant="drop" onEntered={handleEntered} className="sticky top-0 z-[60] w-full">
+    <Presence show={active} appear={!activeAtMount} variant="drop" onEntered={handleEntered} className="sticky top-0 z-[60] w-full">
       <div ref={barRef} className="impersonation-bar w-full bg-warning-fg/90 backdrop-blur-sm text-surface-base flex items-center justify-center gap-3 px-4 py-2">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
           <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
