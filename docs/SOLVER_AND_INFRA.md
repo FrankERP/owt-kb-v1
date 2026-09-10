@@ -88,6 +88,21 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
 `ortools==9.15.6755` (**hard-pinned** for parity with the local conda env — bump deliberately and
 re-pin locally), `functions-framework>=3.0,<4`. Entry point `solve`.
 
+### Instrument seats are filled locally, not by the solver
+`app/components/admin/instrumentFill.ts` runs inside «Generar mes» on every exit (like the
+specials filler, `localFill.ts`). It seats only EMPTY `instrumento:` cells on weekend columns,
+through `rankCandidates` per placement (Tipo, availability, same-category block), among
+members who DECLARE the instrument (`teamMembers.instruments`). Ordering: fewest instrument
+seats this month **per member, all instruments** → did not play the previous weekend
+service → name. Guarantee: per-member total balance in the month; for instruments whose
+players declare only that instrument this is the «difference ≤ 1» rule. A two-instrument
+member is balanced as a person, not per instrument (confirmed 2026-09-09). Its own previous
+`origin: "auto"` picks are vacated once, before counting; manual picks are never touched.
+Rows nobody declares are skipped with no marker; custom planner rows are outside the
+vocabulary and never filled. Rows whose stored label doesn't match the current seat vocabulary
+(`instrumentSeatDef(label).id !== row.id` — legacy-spelled rows) are likewise never filled and
+produce no marker. Spec: `docs/superpowers/specs/2026-09-09-member-instruments-auto-fill-design.md`.
+
 ---
 
 ## 2. CI/CD ([`cloudbuild.yaml`](../cloudbuild.yaml))
@@ -241,6 +256,9 @@ Both of the first two are listed by exact `file + operation` in the protected-re
 
 ### History / backfill
 - `import-setlist-history.mjs`, `import-schedule.ts` — **retired**, see above.
+- `backfill-member-instruments.mjs` — one-shot, dry-run by default, `--apply` with consent:
+  derives `teamMembers.instruments` from held `instruments[]` seats. `setIfMissing` +
+  `ifRevisionId`, backup to `.backfill-backups/`, closed vocabulary only. **Status:** applied to production 2026-09-10 (10 written; Samy skipped «sin historial»; Francisco Gutierrez listed without Tipo — Frank had already un-typed him; Antonio Navarro then patched by hand to `[Drums, AG]` at Frank's request). Backup in `.backfill-backups/` (gitignored). Idempotent: a re-run writes nothing.
 
 ### Accounts / auth
 - `set-password.ts` (tsx) — `MEMBER_ID=… PASSWORD=… npx tsx scripts/set-password.ts` — bcrypt a
@@ -263,7 +281,9 @@ Both of the first two are listed by exact `file + operation` in the protected-re
 `/me` surfacing rank; don't merge them). Service Readiness: `sr-verification.mjs` (pure guard
 evaluation, backup naming, fixture verifiers), `sr-verification-runtime.mjs` (the only module that
 constructs a client, acquires the dataset lease, and writes backups), `sr-cleanup.mjs` (pure cleanup
-plan/refusal decisions), `sr-feasibility-checks.mjs`, `sr-retired-writer.mjs` (the retirement gate).
+plan/refusal decisions), `sr-feasibility-checks.mjs`, `sr-retired-writer.mjs` (the retirement gate),
+`memberInstruments.mjs` (pure grouping/normalization for the instruments backfill; mirrors
+`seatModel.ts`'s vocabulary, pinned by test).
 Tests in `scripts/lib/__tests__/`; CLI-level tests in `scripts/__tests__/`.
 
 ---
