@@ -9,10 +9,25 @@ import Presence from "../Presence";
 installMotionTestEnv();
 afterEach(cleanup);
 
-function Harness({ show, onExited }: { show: boolean; onExited?: () => void }) {
+function Harness({
+  show,
+  onExited,
+  onEntered,
+}: {
+  show: boolean;
+  onExited?: () => void;
+  onEntered?: () => void;
+}) {
   return (
     <MotionProvider>
-      <Presence show={show} variant="rise" role="status" data-testid="toast" onExited={onExited}>
+      <Presence
+        show={show}
+        variant="rise"
+        role="status"
+        data-testid="toast"
+        onExited={onExited}
+        onEntered={onEntered}
+      >
         Guardado
       </Presence>
     </MotionProvider>
@@ -70,6 +85,20 @@ describe("Presence", () => {
     const el = screen.getByTestId("on-demand");
     expect(el.textContent).toBe("Nueva fila");
     expect(el.getAttribute("role")).toBe("status");
+  });
+
+  it("calls onEntered once after show flips false→true, and not on exit", async () => {
+    const onEntered = vi.fn();
+    const onExited = vi.fn();
+    const { rerender } = render(<Harness show={false} onEntered={onEntered} onExited={onExited} />);
+    expect(onEntered).not.toHaveBeenCalled();
+
+    rerender(<Harness show onEntered={onEntered} onExited={onExited} />);
+    await waitFor(() => expect(onEntered).toHaveBeenCalledTimes(1));
+
+    rerender(<Harness show={false} onEntered={onEntered} onExited={onExited} />);
+    await waitFor(() => expect(onExited).toHaveBeenCalledTimes(1));
+    expect(onEntered).toHaveBeenCalledTimes(1);
   });
 
   it("applies the variant's motion styles to the host", () => {

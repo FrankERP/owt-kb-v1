@@ -3343,7 +3343,7 @@
       "alpha": null,
       "utility": "ring",
       "carrier": null,
-      "line": 106,
+      "line": 107,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3355,7 +3355,7 @@
       "alpha": null,
       "utility": "ring",
       "carrier": null,
-      "line": 109,
+      "line": 110,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3367,7 +3367,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 115,
+      "line": 116,
       "disposition": "C",
       "reason": null
     },

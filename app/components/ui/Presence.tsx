@@ -42,6 +42,8 @@ type Props = Omit<
   /** Animate the enter transition even when this instance mounts already-shown. */
   appear?: boolean;
   onExited?: () => void;
+  /** Fires once the ENTER animation completes — under skipAnimations, synchronously after mount. */
+  onEntered?: () => void;
   children: React.ReactNode;
 };
 
@@ -54,6 +56,7 @@ export default function Presence({
   as = "div",
   appear = false,
   onExited,
+  onEntered,
   children,
   ...rest
 }: Props) {
@@ -73,6 +76,16 @@ export default function Presence({
           initial={v.initial}
           animate={{ ...v.animate, transition: ENTER }}
           exit={{ ...v.exit, transition: EXIT }}
+          onAnimationComplete={(definition) => {
+            // motion passes the completed animation's DEFINITION — the `animate`
+            // object for an enter, the `exit` object for an exit. Distinguish by
+            // content: only the enter target lands on opacity 1.
+            const opacity =
+              typeof definition === "object" && definition !== null && "opacity" in definition
+                ? (definition as { opacity?: number }).opacity
+                : undefined;
+            if (definition === "animate" || opacity === 1) onEntered?.();
+          }}
           {...rest}
         >
           {children}

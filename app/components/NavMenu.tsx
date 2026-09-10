@@ -6,6 +6,7 @@ import { clearThemeMirror } from "@/app/utils/themePref";
 import Link from "next/link";
 import Image from "next/image";
 import Menu, { MenuHeader, MenuItem, MenuSeparator } from "@/app/components/ui/Menu";
+import Presence from "@/app/components/ui/Presence";
 
 interface NavMenuProps {
   showSchedule?: boolean;
@@ -103,18 +104,18 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
               // unoptimized: serve the original JPEG/PNG, not Next's WebP — the iOS
               // WKWebView (Capacitor wrap) fails to decode the optimized WebP avatar.
               unoptimized
-              className="rounded-full ring-2 ring-transparent group-hover:ring-accent/40 transition-all"
+              className="rounded-full ring-2 ring-transparent group-hover:ring-accent/40 transition-[box-shadow,transform] duration-fast ease-out-brand active:scale-[0.97]"
             />
           ) : (
-            <div className="w-9 h-9 rounded-full bg-surface-accent-solid text-on-fill flex items-center justify-center ring-2 ring-transparent group-hover:ring-accent/40 transition-all">
+            <div className="w-9 h-9 rounded-full bg-surface-accent-solid text-on-fill flex items-center justify-center ring-2 ring-transparent group-hover:ring-accent/40 transition-[box-shadow,transform] duration-fast ease-out-brand active:scale-[0.97]">
               <span className="font-label text-xs text-on-fill">{initials}</span>
             </div>
           )}
-          {notifCount > 0 && (
-            <span aria-hidden className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-negative-strong border-2 border-surface-base flex items-center justify-center">
+          <Presence show={notifCount > 0} appear variant="scale" className="absolute -top-0.5 -right-0.5">
+            <span aria-hidden className="w-3.5 h-3.5 rounded-full bg-negative-strong border-2 border-surface-base flex items-center justify-center">
               <span className="font-label text-[10px] text-white leading-none">{notifCount > 9 ? "9+" : notifCount}</span>
             </span>
-          )}
+          </Presence>
         </button>
       }
     >
