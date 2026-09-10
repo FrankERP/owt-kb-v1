@@ -58,7 +58,7 @@ permissions: {}
 # A run that hangs on a slow sweep would otherwise still be in flight when the
 # next tick fires. The sweep claims before it sends, so an overlap is
 # not a double-send — but two concurrent sweeps do split one backlog and pile
-# onto an SMTP transport with `maxConnections: 1`. Newer wins: a skipped tick is
+# onto an SMTP transport whose width is `SEND_CONCURRENCY`. Newer wins: a skipped tick is
 # nominally the declared tick (in practice far more), and there is always another one.
 concurrency:
   group: flush-notification-outbox

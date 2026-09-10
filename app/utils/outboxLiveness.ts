@@ -9,9 +9,9 @@
 // CI volume; see docs/NOTIFICATIONS.md, ADR-0032) — is a genuine single point of failure. Layer 2 (the
 // opportunistic sweep inside a committed write) structurally cannot flush the
 // terminal edit of a working session, and the terminal edit is what every notice
-// eventually is. So every notice that ships depends on that workflow or, failing
-// it, the daily Vercel cron: the honest worst case when the workflow is broken,
-// disabled or throttled is up to 24 hours.
+// eventually is. So every notice that ships depends on those two callers or,
+// failing both, the daily Vercel cron: the honest worst case when the Scheduler
+// job is paused or 401ing and the GitHub workflow is starved is up to 24 hours.
 //
 // GitHub also disables scheduled workflows after 60 days of repository
 // inactivity, and this repo is public, so that rule applies here. Combined with a
@@ -144,7 +144,7 @@ function buildStaleEmail(o: { count: number; oldestHours: number }): { subject: 
     ) +
     tr(
       td(
-        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Nada se está enviando, así que lo más probable es que el workflow <em>Flush notification outbox</em> de GitHub Actions esté detenido, deshabilitado o sin el secreto correcto. Revísalo en GitHub → Actions.</p>`,
+        `<p style="margin:0;font:13px system-ui,sans-serif;color:${C.ink}">Nada se está enviando, así que lo más probable es que el job <em>flush-notification-outbox</em> de Cloud Scheduler esté pausado o sin el secreto correcto (<code>gcloud scheduler jobs describe flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1 --format=&quot;value(state,status.code,lastAttemptTime)&quot;</code>), y que el workflow <em>Flush notification outbox</em> de GitHub Actions tampoco esté corriendo. Revisa ambos; el procedimiento está en docs/SECRETS.md.</p>`,
         { style: "padding:0 24px 18px" },
       ),
     ) +
@@ -346,9 +346,9 @@ export async function reportOutboxLiveness(now: Date = new Date()): Promise<Outb
  * stopped draining. This one asks "did mail just get destroyed?" — a sweep that
  * ran, worked, and discharged recipients nobody will ever hear from.
  *
- * It exists because layer 3 has no other reporter. Layer 1 curls
- * `/api/cron/flush-notifications` from a GitHub workflow that reads the report
- * and goes red on `failed >= 2` or `lost > 0`. The daily Vercel cron calls the
+ * It exists because layer 3 has no other reporter. Layer 1's GitHub caller
+ * reads the report and goes red on `failed >= 2` or `lost > 0`; its Cloud
+ * Scheduler caller reads nothing but the HTTP status. The daily Vercel cron calls the
  * same sweep and returns the same report to its scheduler, which reads nothing —
  * so a layer-3 sweep that destroyed every send has always looked exactly like one
  * that delivered everything.

@@ -56,8 +56,9 @@ hand-writing a fixture that mirrors them).
 **Layer 1 is load-bearing, not one of three redundant paths.** Layer 2 only
 flushes subjects that have *already* gone quiet, so it can never flush the
 terminal edit of a working session — and the terminal edit is what every notice
-eventually is. If the GitHub workflow is broken or disabled, the realistic delay
-is **up to 24 hours**, until layer 3 runs.
+eventually is. If both layer-1 callers are down — the Scheduler job paused or
+401ing, and the GitHub workflow starved or disabled — the realistic delay is
+**up to 24 hours**, until layer 3 runs.
 
 Layer 2 derates **three** knobs (half the recipient limit *and* half the send
 budget) — but the budget is derated ABOVE THE RESERVE, not as a whole:
@@ -257,7 +258,7 @@ would overlap the sweep it retries). Inspect it with
 `gcloud scheduler jobs describe flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1 --format="value(state,status.code,lastAttemptTime)"`
 — **always with a `--format` projection**, because a bare `describe` prints the
 bearer and `gcloud` logs its stdout to `~/.config/gcloud/logs/`. `status.code`
-empty or `0` is a 200 on the last attempt, `-1` is never attempted, `16` is a 401
+empty is a 200 on the last attempt, `-1` is never attempted (both observed 2026-09-10), `16` is a 401
 (the bearer no longer matches Vercel — rotate). Measure delivery the same way as before:
 `scripts/measure-cron-delivery.mjs` reads GitHub runs only, so for Scheduler read
 `lastAttemptTime` or the GCP logs.

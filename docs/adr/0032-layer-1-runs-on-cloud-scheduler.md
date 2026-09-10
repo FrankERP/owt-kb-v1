@@ -67,8 +67,8 @@ Cloud Scheduler is priced per job (first three per billing account free, then
 - A rotation of `CRON_SECRET` has a third destination. Forgetting Scheduler
   leaves it presenting the old value: every tick 401s silently in GCP and
   layer 1 degrades back to GitHub's starved cadence with nothing in the app
-  going red. `gcloud scheduler jobs describe` shows `status.code` of the last
-  attempt; check it after every rotation.
+  going red. `gcloud scheduler jobs describe … --format="value(state,status.code,lastAttemptTime)"`
+  shows the last attempt; check it after every rotation.
 - The job is a GCP resource, not repo state. Deleting the GCP project, or the
   API being disabled, removes layer 1's primary caller with no diff in this
   repo. The daily liveness alarm in `/api/cron/service-reminders` is what makes
