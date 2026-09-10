@@ -4,7 +4,7 @@
 // rows, and the letter rail. All filtering is client-side over one fetched
 // catalogue — the URL only mirrors the state so a view is shareable.
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { Post, Tag, Author } from "@/app/utils/interface";
 import {
   applyLibraryFilters,
@@ -29,13 +29,18 @@ const UNDER_NAVBAR =
 // (the filter drawer) — destructuring them here would be an unused binding.
 export default function LibraryIndex(props: LibraryIndexProps) {
   const { posts, initial } = props;
-  const router = useRouter();
   const pathname = usePathname();
   const [filters, setFilters] = useState<LibraryFilters>(initial);
   const fuse = useMemo(() => makeLibraryFuse(posts), [posts]);
 
   // URL mirrors the filters (shareable; the /tag* and /author* redirects land
-  // here with them set). replace, not push — typing must not grow history.
+  // here with them set). `history.replaceState`, deliberately, not the router —
+  // the `AdminPanel.tsx` `?tab=` precedent (~line 671): `router.replace`
+  // re-renders the route segment, which for this page means re-running the
+  // Server Component's fetch on every keystroke for a purely local, client-side
+  // filter. Rewriting the current history entry keeps the URL honest for
+  // reload/Back with no round-trip and no navigation at all. replace, not push
+  // — typing must not grow history.
   const first = useRef(true);
   useEffect(() => {
     if (first.current) {
@@ -43,8 +48,8 @@ export default function LibraryIndex(props: LibraryIndexProps) {
       return;
     }
     const qs = serializeLibraryParams(filters);
-    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [filters, pathname, router]);
+    window.history.replaceState(window.history.state, "", qs ? `${pathname}?${qs}` : pathname);
+  }, [filters, pathname]);
 
   const filtered = useMemo(() => applyLibraryFilters(posts, filters, fuse), [posts, filters, fuse]);
   const active = !!(filters.q || filters.tags.length || filters.author || filters.key);
@@ -93,43 +98,22 @@ export default function LibraryIndex(props: LibraryIndexProps) {
         {/* Task 4: <LibraryFilters filters={filters} onChange={set} tags={props.tags} authors={props.authors} keys={libraryKeys(posts)} /> */}
       </div>
 
-      {active && (
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-ink-dim" aria-live="polite">
-            {filtered.length} {filtered.length === 1 ? "resultado" : "resultados"}
-          </p>
+      {/* Always mounted so a screen reader keeps ONE live region to announce
+          into — mounting/unmounting it on `active` drops the announcement of
+          the very change that flips `active`. Text is empty, not absent, when
+          idle; Limpiar stays conditional since it has nothing to do idle. */}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="font-label text-[11px] uppercase tracking-widest text-ink-dim" aria-live="polite">
+          {active ? `${filtered.length} ${filtered.length === 1 ? "resultado" : "resultados"}` : ""}
+        </p>
+        {active && (
           <Button variant="ghost" size="sm" onClick={clear}>
             Limpiar
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="relative">
-        {letters.length > 1 && (
-          // FIRST in DOM on purpose: a float only sits beside the content that
-          // FOLLOWS it — after the sections it would land under them. The offset is
-          // viewport-relative (`50vh`) because a percentage inset on a sticky box
-          // resolves against the CONTAINING BLOCK, and this container is thousands of
-          // pixels tall — `top-1/2` would park the rail off-screen instead of centring
-          // it. Plain <button>s by the same row exemption the plan records: bare tap
-          // targets in a rail, not the Button primitive's chrome.
-          <nav
-            aria-label="Índice alfabético"
-            className="sticky top-[50vh] float-right -mr-1 flex -translate-y-1/2 flex-col items-center"
-          >
-            {letters.map((l) => (
-              <button
-                key={l}
-                type="button"
-                onClick={() => jump(l)}
-                className="px-1.5 py-px font-label text-[10px] text-ink-dim hover:text-accent focus:outline-none focus-visible:text-accent"
-                aria-label={`Ir a la letra ${l}`}
-              >
-                {l}
-              </button>
-            ))}
-          </nav>
-        )}
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center gap-3 py-20 text-mono-400">
             <p className="font-label text-sm uppercase tracking-widest">No se encontraron canciones</p>
@@ -153,6 +137,39 @@ export default function LibraryIndex(props: LibraryIndexProps) {
                 />
               </section>
             ))}
+          </div>
+        )}
+        {letters.length > 1 && (
+          // AFTER the sections, deliberately — this uses `absolute` positioning
+          // inside the `relative` wrapper above, not a float, so DOM order no
+          // longer places it: the wrapper's `pr-6` gutter is what the rail sits
+          // in. `50vh`, not `top-1/2`: on a `sticky` box both a percentage and a
+          // `vh` unit resolve against the same scrollport, so the two are not in
+          // conflict here (an earlier version of this comment said otherwise and
+          // was wrong) — `50vh` is kept because it states the viewport-relative
+          // intent (vertical centre of the SCROLLPORT) plainly, instead of
+          // leaning on a percentage to mean the same thing implicitly. Plain
+          // <button>s by the same row exemption the plan records: bare tap
+          // targets in a rail, not the Button primitive's chrome.
+          <div className="absolute inset-y-0 right-0">
+            <nav
+              aria-label="Índice alfabético"
+              className="sticky top-[50vh] flex -translate-y-1/2 flex-col items-center"
+            >
+              {letters.map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  onClick={() => jump(l)}
+                  // iOS index-bar shape — targets under 24 px by ruling (R1),
+                  // adjacent letters need the density.
+                  className="px-2 py-0.5 font-label text-[10px] text-ink-dim hover:text-accent focus:outline-none focus-visible:text-accent"
+                  aria-label={`Ir a la letra ${l}`}
+                >
+                  {l}
+                </button>
+              ))}
+            </nav>
           </div>
         )}
       </div>

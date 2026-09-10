@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   parseLibraryParams, serializeLibraryParams, applyLibraryFilters, groupByLetter, libraryKeys, TIPO_SLUGS,
+  searchPosts, makeLibraryFuse,
 } from "../libraryIndex";
 import type { Post } from "../interface";
 
@@ -49,6 +50,11 @@ describe("applyLibraryFilters", () => {
   it("3+ char queries are fuzzy and keep prefix matches first", () => {
     const titles = applyLibraryFilters(POSTS, parseLibraryParams({ q: "alab" })).map((p) => p.title);
     expect(titles[0]).toBe("Alaba");
+  });
+  it("a query runs first over the whole catalogue; tag/author/key then narrow that order without re-sorting", () => {
+    const fuse = makeLibraryFuse(POSTS);
+    const expected = searchPosts(POSTS, "e", fuse).filter((p) => (p.tags ?? []).some((t) => t.slug?.current === "up-beat"));
+    expect(applyLibraryFilters(POSTS, parseLibraryParams({ tag: "up-beat", q: "e" }), fuse)).toEqual(expected);
   });
 });
 

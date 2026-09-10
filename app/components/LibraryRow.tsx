@@ -8,6 +8,7 @@
 import { memo } from "react";
 import type { Post } from "@/app/utils/interface";
 import { usePlayer } from "@/app/context/PlayerContext";
+import { haptic } from "@/app/utils/haptics";
 
 const LibraryRow = memo(function LibraryRow({ post }: { post: Post }) {
   const { openSheet } = usePlayer();
@@ -15,9 +16,13 @@ const LibraryRow = memo(function LibraryRow({ post }: { post: Post }) {
   return (
     <button
       type="button"
-      onClick={() => openSheet(post._id)}
+      onClick={() => {
+        // Native only, fire-and-forget (see haptics.ts) — never gates opening the sheet.
+        void haptic("selection");
+        openSheet(post._id);
+      }}
       aria-label={`${post.title}${post.author ? `, ${post.author}` : ""}${post.key ? `, tonalidad ${post.key}` : ""}`}
-      className="group flex min-h-[56px] w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors duration-fast ease-out-brand hover:bg-accent/[0.055] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+      className="group flex min-h-[56px] w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors duration-fast ease-out-brand hover:bg-accent/[0.055] active:bg-accent/[0.08] active:scale-[0.995] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
     >
       <span className="brand-key-dial shrink-0 font-display text-sm uppercase">{post.key || "—"}</span>
       <span className="min-w-0 flex-1">

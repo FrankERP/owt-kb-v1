@@ -3,7 +3,7 @@ import Navbar from "@/app/components/Navbar";
 import LibraryIndex from "@/app/components/LibraryIndex";
 import { client } from "@/sanity/lib/client";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
-import { parseLibraryParams } from "@/app/utils/libraryIndex";
+import { parseLibraryParams, serializeLibraryParams } from "@/app/utils/libraryIndex";
 import type { Post, Tag, Author } from "@/app/utils/interface";
 
 export const metadata: Metadata = {
@@ -36,16 +36,26 @@ export default async function BibliotecaPage({
   await requireWorshipPage("/biblioteca");
   const sp = await searchParams;
   const data = await client.fetch<{ posts: Post[]; tags: Tag[]; authors: Author[] }>(QUERY);
+  // `parseLibraryParams` lives in a NEUTRAL module (no "use client"), so this
+  // Server Component may CALL it — see ADR-0028.
+  const initial = parseLibraryParams(sp);
   return (
     <div>
       <Navbar title="Biblioteca" tags schedule />
-      {/* `parseLibraryParams` lives in a NEUTRAL module (no "use client"), so this
-          Server Component may CALL it — see ADR-0028. */}
+      {/* `key` forces a fresh MOUNT on a real navigation to a new `?q=`/`?tag=`
+          (the /tag*, /author* redirects land here with params set). The index
+          now mirrors ITS OWN state into the URL with `history.replaceState`,
+          which never re-renders this Server Component — so without a `key`,
+          navigating from one param set to another would find the index still
+          holding the FIRST navigation's filters, since `initial` only seeds
+          state on mount. Typing never changes `sp`/`key` (`replaceState` is
+          not a navigation), so it never remounts the index mid-keystroke. */}
       <LibraryIndex
+        key={serializeLibraryParams(initial)}
         posts={data.posts ?? []}
         tags={data.tags ?? []}
         authors={data.authors ?? []}
-        initial={parseLibraryParams(sp)}
+        initial={initial}
       />
     </div>
   );

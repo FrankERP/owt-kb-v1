@@ -10,9 +10,7 @@ import type { Post } from "@/app/utils/interface";
 
 installMotionTestEnv();
 
-const replace = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ replace }),
   usePathname: () => "/biblioteca",
 }));
 
@@ -36,7 +34,6 @@ function mount() {
 
 afterEach(() => {
   cleanup();
-  replace.mockReset();
   openSheet.mockReset();
 });
 
@@ -79,9 +76,12 @@ describe("LibraryIndex", () => {
     expect(openSheet).toHaveBeenCalledWith("a1");
   });
 
-  it("mirrors the query into the URL with replace, so typing does not grow history", () => {
+  it("mirrors the query into the URL with history.replaceState — no server round-trip, no history growth", () => {
+    const replaceState = vi.spyOn(window.history, "replaceState");
     mount();
+    expect(replaceState).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText(/Buscar canciones/), { target: { value: "ala" } });
-    expect(replace).toHaveBeenCalledWith("/biblioteca?q=ala", { scroll: false });
+    expect(replaceState).toHaveBeenCalledWith(window.history.state, "", "/biblioteca?q=ala");
+    replaceState.mockRestore();
   });
 });

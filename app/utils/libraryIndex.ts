@@ -73,16 +73,20 @@ export function searchPosts(posts: Post[], q: string, fuse: Fuse<Post> = makeLib
 
 const byTitle = (a: Post, b: Post) => normalizeText(a.title).localeCompare(normalizeText(b.title));
 
+// A query orders by relevance, so it runs FIRST over the WHOLE catalogue (using
+// the shared `fuse`, built once by the caller over every post — rebuilding it
+// per filter change is the cost this ordering avoids). Filters then narrow
+// that order with `.filter`, which preserves it. Without a query there is no
+// relevance order to preserve, so filters run first and A–Z sort runs last.
 export function applyLibraryFilters(posts: Post[], f: LibraryFilters, fuse?: Fuse<Post>): Post[] {
-  let out = posts;
+  let out = f.q ? searchPosts(posts, f.q, fuse) : posts;
   if (f.tags.length) out = out.filter((p) => f.tags.every((slug) => (p.tags ?? []).some((t) => t.slug?.current === slug)));
   if (f.author) {
     const a = normalizeText(f.author);
     out = out.filter((p) => (p.authors ?? []).some((x) => x.slug?.current === f.author) || normalizeText(p.author ?? "") === a);
   }
   if (f.key) out = out.filter((p) => (p.key ?? "").trim() === f.key);
-  // A query orders by relevance; otherwise A–Z on the folded title.
-  return f.q ? searchPosts(out, f.q, fuse && out === posts ? fuse : undefined) : [...out].sort(byTitle);
+  return f.q ? out : [...out].sort(byTitle);
 }
 
 export type LetterGroup = { letter: string; posts: Post[] };
