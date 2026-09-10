@@ -42,6 +42,17 @@ const nextConfig = {
       },
     ];
   },
+
+  // R1 (spec §12.2, decision H): the tag and author pages fold into the library.
+  // permanent → 308; bookmarks and the old nav keep working, no data change.
+  async redirects() {
+    return [
+      { source: "/tag",            destination: "/biblioteca",            permanent: true },
+      { source: "/tag/:slug",      destination: "/biblioteca?tag=:slug",  permanent: true },
+      { source: "/author",         destination: "/biblioteca",            permanent: true },
+      { source: "/author/:slug",   destination: "/biblioteca?author=:slug", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

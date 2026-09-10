@@ -48,7 +48,7 @@ describe("BottomNav", () => {
     const names = Array.from(nav.querySelectorAll("a, button")).map((n) => n.textContent?.trim());
     expect(names).toEqual(["Inicio", "Calendario", "Biblioteca"]);
     expect(screen.getByRole("link", { name: "Calendario" }).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("link", { name: "Biblioteca" }).getAttribute("href")).toBe("/tag");
+    expect(screen.getByRole("link", { name: "Biblioteca" }).getAttribute("href")).toBe("/biblioteca");
     expect(nav.querySelectorAll("[data-sliding-indicator]")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Más" })).toBeNull();
   });

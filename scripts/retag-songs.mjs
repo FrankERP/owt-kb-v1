@@ -37,7 +37,7 @@ const client = createClient({
 
 // ── Vocabulary ─────────────────────────────────────────────────────────────────
 
-/** Functional tags the app pins in TagSearchList — never touched by the theme pass. */
+/** Functional tags the app pins as Tipo (`TIPO_SLUGS` in app/utils/libraryIndex.ts) — never touched by the theme pass. */
 const TEMPO_TAGS = new Set(["Up Beat", "Down Beat", "Transition"]);
 
 /** Artist / band tags that must leave `tags` (they are `authors` now). Deleted at the end. */
@@ -445,7 +445,7 @@ async function main() {
     await client.delete(t._id);
     console.log(`deleted tag ${t.name}`);
   }
-  console.log("\nDONE. /tag, /tag/[slug] and / revalidate within 60 s; /posts/[slug] within 1 h.");
+  console.log("\nDONE. /biblioteca and / revalidate within 60 s; /posts/[slug] within 1 h.");
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

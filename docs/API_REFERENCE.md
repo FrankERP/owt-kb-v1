@@ -28,7 +28,7 @@ is blocked). Roles: `super-admin` > `admin` > `content-editor` > `member`. Many 
 ## Shared side-effect helpers
 
 - `revalidateServiceViews()` → revalidates `/`, `/schedule`, `/posts/[slug]`.
-- `revalidateSongViews()` → `/`, `/posts/[slug]`, `/tag`, `/tag/[slug]`.
+- `revalidateSongViews()` → `/`, `/posts/[slug]`, `/biblioteca` (R1 — `/tag*`/`/author*` are now redirects with no cache of their own).
 - `sendPush(memberIds, category, payload)` — FCM, category-gated by `notifPrefs`.
 - `sendAssignmentEmails(...)` / `sendAssignmentEmailsBatch(...)` — allowlist + opt-out gated.
 - `notifyProposalSubmitted(...)` — push/email fan-out for proposals. **Fail-closed on identity:**
