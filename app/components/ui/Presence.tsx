@@ -9,6 +9,12 @@
 // reverse smoothly because AnimatePresence tracks the in-flight value; a
 // show→hide→show within EXIT_MS never snaps.
 //
+// The enter transition is per-variant: `sheet` enters on `SPRINGS.sheet`
+// (matching `CueDialog`'s sheet — bottom sheets and the audio transport should
+// spring into place, not ease), every other variant enters on the tokenised
+// `ENTER` ease. Exit always stays on `EXIT` regardless of variant — a spring on
+// the way out would overshoot past the edge it's leaving toward.
+//
 // A `Presence` mounted already-shown does NOT animate in by default — `initial`
 // controls the FIRST RENDER OF THIS INSTANCE, not page load, so a toast created on
 // demand or a row appended to a list would otherwise snap in. For the common case
@@ -28,7 +34,7 @@
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import type { ComponentPropsWithoutRef } from "react";
-import { EASE_IN, EASE_OUT, EXIT_MS, MS, VARIANTS, type VariantName } from "@/app/utils/motionPresets";
+import { EASE_IN, EASE_OUT, EXIT_MS, MS, SPRINGS, VARIANTS, type VariantName } from "@/app/utils/motionPresets";
 
 type Host = "div" | "section" | "aside" | "li";
 
@@ -51,6 +57,9 @@ type Props = Omit<
 
 const ENTER = { duration: MS.base / 1000, ease: EASE_OUT };
 const EXIT = { duration: EXIT_MS / 1000, ease: EASE_IN };
+
+/** The sheet variant enters on SPRINGS.sheet; every other variant enters on ENTER. */
+const enterFor = (variant: VariantName) => (variant === "sheet" ? SPRINGS.sheet : ENTER);
 
 export default function Presence({
   show,
@@ -76,7 +85,7 @@ export default function Presence({
         <Tag
           key="presence"
           initial={v.initial}
-          animate={{ ...v.animate, transition: ENTER }}
+          animate={{ ...v.animate, transition: enterFor(variant) }}
           exit={{ ...v.exit, transition: EXIT }}
           onAnimationComplete={(definition) => {
             // motion passes the completed animation's DEFINITION object (the `animate`

@@ -108,4 +108,26 @@ describe("Presence", () => {
     // final computed value synchronously — "rise" animates opacity to 1.
     expect(el.style.opacity).toBe("1");
   });
+
+  it("renders the sheet variant without crashing, reaching opacity 1 after show flips true", async () => {
+    // The sheet variant enters on SPRINGS.sheet instead of the tokenised ENTER —
+    // a spring has no fixed duration, so it cannot be observed as a timed value
+    // under jsdom/skipAnimations. This only asserts the variant wires up (no
+    // crash) and lands at its resting opacity, not the spring's motion curve.
+    const { rerender } = render(
+      <MotionProvider>
+        <Presence show={false} variant="sheet" data-testid="sheet">
+          Reproductor
+        </Presence>
+      </MotionProvider>,
+    );
+    rerender(
+      <MotionProvider>
+        <Presence show variant="sheet" data-testid="sheet">
+          Reproductor
+        </Presence>
+      </MotionProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("sheet").style.opacity).toBe("1"));
+  });
 });

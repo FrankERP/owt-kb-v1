@@ -59,7 +59,7 @@ export default function AudioTransport({
             aria-valuemax={Math.round(duration)}
             aria-valuenow={Math.round(currentTime)}
             aria-valuetext={fmtTime(currentTime)}
-            className="group relative h-1.5 flex-1 cursor-pointer rounded-full bg-accent-deep/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt"
+            className="group relative h-1.5 flex-1 cursor-pointer overflow-hidden rounded-full bg-accent-deep/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               onSeek((e.clientX - rect.left) / rect.width);
@@ -78,7 +78,7 @@ export default function AudioTransport({
             }}
           >
             <div
-              className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-fast ease-out-brand group-hover:bg-accent/80"
+              className="h-full w-full origin-left bg-accent transition-transform duration-fast ease-out-brand group-hover:bg-accent/80"
               style={{ transform: `scaleX(${progress})` }}
             />
             <div className="absolute inset-y-0 -bottom-1 -top-1 left-0 right-0 opacity-0 group-hover:opacity-100" style={{ cursor: "pointer" }} />
