@@ -199,10 +199,13 @@ several exist precisely to stop a plausible-looking change.
   the guard. The height is measured, not a constant, because the banner wraps
   to two lines on a phone.
 - **The phone tab bar publishes its MEASURED height as `--bottom-nav-h` (px) on `<html>`**
-  plus a `has-bottom-nav` class; `brand.css` pads the route main under that class and
-  every fixed-bottom element (toasts, the audio transport, the song FAB) offsets by the
-  variable. `bottomNavOffsetSync.test.ts` is the guard — a new fixed-bottom element
-  joins its list.
+  plus a `has-bottom-nav` class; `brand.css` pads the route main under that class. Fixed-bottom
+  elements must clear either the inset (when the bar is absent) or the bar's own height
+  (which already includes the inset) when it is present. Elements that must also clear the
+  inset when the bar is absent use `max(env(safe-area-inset-bottom), var(--bottom-nav-h, 0px))`
+  (toasts); elements that sit flush on the bar use `var(--bottom-nav-h, 0px)` alone (the audio
+  transport, whose own inset padding is zeroed under `html.has-bottom-nav`; the song FAB).
+  `bottomNavOffsetSync.test.ts` is the guard — a new fixed-bottom element joins its list.
 - **NextAuth's `update()` never rejects and returns `null` on every failure**
   (`fetchData` swallows network, non-2xx and parse errors; `update` returns
   `undefined` while loading). A handler that only inspects the returned

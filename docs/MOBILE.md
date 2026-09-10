@@ -117,11 +117,14 @@ signing" → select your Apple Developer team.
 `BottomNav` (phone-only, `lg:hidden`) carries the bottom safe-area inset itself
 (`env(safe-area-inset-bottom)` padding inside the bar) and publishes its own
 MEASURED height as `--bottom-nav-h` on `<html>`, plus a `has-bottom-nav` class,
-while it is on screen. Every other fixed-bottom element (toasts, the audio
-transport, the song FAB) offsets by `var(--bottom-nav-h, 0px)` — never by the
-safe-area inset directly, because the bar's height already includes it and
-stacking both would double-pad. `bottomNavOffsetSync.test.ts` is the guard; a
-new fixed-bottom element joins its list.
+while it is on screen. Fixed-bottom elements must clear either the inset (when
+the bar is absent) or the bar's own height (which already includes the inset) when
+it is present. Elements that must also clear the inset when the bar is absent use
+`max(env(safe-area-inset-bottom), var(--bottom-nav-h, 0px))` (toasts); elements
+that sit flush on the bar use `var(--bottom-nav-h, 0px)` alone (the audio
+transport, whose own inset padding is zeroed under `html.has-bottom-nav`; the
+song FAB). `bottomNavOffsetSync.test.ts` is the guard; a new fixed-bottom element
+joins its list.
 
 ## Notes
 
