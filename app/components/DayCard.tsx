@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Setlist } from "../utils/interface";
+import { Setlist, SetlistSong } from "../utils/interface";
 import { buildRuns } from "../utils/medley";
 import { ChainLinkIcon } from "./ChainLinkIcon";
 import PracticePlaylistButton from "./PracticePlaylistButton";
@@ -11,6 +11,8 @@ import { SetlistEditor } from "./admin/SetlistEditor";
 import CueDialog from "./ui/CueDialog";
 import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
+import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
+import NumberRoll from "./ui/NumberRoll";
 
 export interface DayCardProps {
   day: string;
@@ -23,6 +25,18 @@ export interface DayCardProps {
   chorus?: Array<{ member_name: string; alias?: string }>;
   roleId?: string;
   isNext?: boolean;
+  /**
+   * `card` is the stacked card every surface has always rendered. `wide` is the
+   * run sheet on home (spec §12.1): setlist and team side by side from `lg`, so
+   * the next service fits one screen instead of scrolling past the seats.
+   */
+  layout?: "card" | "wide";
+  /**
+   * The card is the page's hero: it carries ONE primary action, `Ensayar`, in
+   * the header — and therefore drops the inline practice pill on the Setlist
+   * rail, so the same affordance never appears twice on one card.
+   */
+  hero?: boolean;
 }
 
 const SUNDAY_THEME = {
@@ -55,7 +69,7 @@ const SPECIAL_THEME = {
   accentVar:    "--info-fg-rgb",
 };
 
-export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus, roleId, isNext }: DayCardProps) {
+export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const [editSetlist, setEditSetlist] = useState(false);
@@ -87,6 +101,8 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
   const shortDate = date
     ? new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })
     : "";
+  const days = date ? daysUntil(date) : null;
+  const wide = layout === "wide";
 
   // Group songs into medley runs
   const runs = hasSetlist ? buildRuns(setlist!.songs) : [];
@@ -94,32 +110,25 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
   return (
     <>
       <div className={`brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)] border ${t.border} shadow-xl ${t.shadow}`}>
-        {/* Header */}
-        <div className={`${t.headerBg} border-b px-5 py-5 ${t.headerBorder}`}>
-          <div className="flex items-start justify-between gap-4">
+        {/* Header — day · date, and at most two things on the right: the
+            countdown (next service only) and the hero's one action. §18 keeps
+            one eyebrow per surface, so the `Servicio` label and the long date
+            are gone; the date the header already shows is the date. */}
+        <div className={`${t.headerBg} border-b px-5 py-4 ${t.headerBorder}`}>
+          <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className={`mb-1 font-label text-[10px] uppercase tracking-[0.24em] ${t.accentMuted}`}>Servicio</p>
-              <h3 className="font-display text-2xl font-bold uppercase leading-none text-ink md:text-3xl lg:text-4xl">
-                {day}
+              <h3 className="font-display text-2xl font-bold uppercase leading-none text-ink md:text-3xl">
+                {day}{shortDate && <span className={`${t.accentMuted} font-normal`}> · {shortDate}</span>}
               </h3>
-              {date && (
-                <p className="mt-2 truncate font-body text-xs capitalize text-ink/60 md:text-sm">
-                  {new Date(date.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", {
-                    weekday: "long", year: "numeric", month: "long", day: "numeric",
-                  })}
-                </p>
-              )}
             </div>
-            <div className="flex shrink-0 flex-col items-end gap-2">
-              {date && (
-                <span className="rounded-lg border border-ink/10 bg-surface-base/35 px-3 py-2 text-center font-label text-[11px] uppercase tracking-[0.15em] text-ink/70 shadow-inner">
-                  {shortDate}
+            <div className="flex shrink-0 items-center gap-2">
+              {isNext && days !== null && (
+                <span className="rounded-full border border-positive-fg/35 bg-positive-fg/10 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-positive-fg">
+                  <NumberRoll value={formatCountdown(days)} />
                 </span>
               )}
-              {isNext && (
-                <span className="rounded-full border border-positive-fg/35 bg-positive-fg/10 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-positive-fg">
-                  Próximo
-                </span>
+              {hero && hasSetlist && (
+                <PracticePlaylistButton variant="hero" songIds={setlist!.songs.map((s) => s._id)} accentVar={t.accentVar} />
               )}
             </div>
           </div>
@@ -133,137 +142,109 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
             </section>
           )}
 
-          {/* Setlist */}
-          {hasSetlist && (
-            <section>
-              <div className="flex items-center justify-between mb-2">
-                <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50">
-                  Setlist
-                </h4>
-                <div className="flex items-center gap-3">
-                  <PracticePlaylistButton songIds={setlist!.songs.map(s => s._id)} accentVar={t.accentVar} />
-                  {canEdit && date && (
-                    <button
-                      onClick={() => setEditSetlist(true)}
-                      className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
-                    >
-                      <PencilIcon />
-                      Editar
-                    </button>
-                  )}
+          {/* The run sheet reads left-to-right from `lg`: songs in the wide
+              column, seats in a fixed 20rem rail. `space-y-5` is the stacked
+              gap and has to go once the two are columns, or the rail starts a
+              row lower than the setlist. */}
+          <div className={wide ? "space-y-5 lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-8 lg:space-y-0" : "space-y-5"}>
+            {/* Setlist */}
+            {hasSetlist && (
+              <section>
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50">
+                    Setlist
+                  </h4>
+                  <div className="flex items-center gap-3">
+                    {!hero && <PracticePlaylistButton songIds={setlist!.songs.map(s => s._id)} accentVar={t.accentVar} />}
+                    {canEdit && date && (
+                      <button
+                        onClick={() => setEditSetlist(true)}
+                        className="flex items-center gap-1 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-accent transition-colors"
+                      >
+                        <PencilIcon />
+                        Editar
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <ol className="divide-y divide-ink-dim/[0.06]">
-                {runs.map((run) => {
-                  // Single-song medley groups render as plain singles
-                  if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
-                    const { song, n } = run.kind === "single" ? run : run.songs[0];
+                <ol className="divide-y divide-ink-dim/[0.06]">
+                  {runs.map((run) => {
+                    // Single-song medley groups render as plain singles
+                    if (run.kind === "single" || (run.kind === "medley" && run.songs.length === 1)) {
+                      const { song, n } = run.kind === "single" ? run : run.songs[0];
+                      return (
+                        <li key={song._id}>
+                          <SongRow song={song} n={n} accent={t.accent} onOpen={openSheet} />
+                        </li>
+                      );
+                    }
+                    // Multi-song medley group — left-spine bracket, no box
                     return (
-                      <li key={song._id}>
-                        <button
-                          onClick={() => openSheet(song._id, song.play_key || undefined)}
-                          className="group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-accent/[0.055]"
-                        >
-                          <span className="font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
-                          <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                            <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
-                            {song.author && <span className="text-mono-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
-                          </div>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {song.play_key && song.key && song.play_key !== song.key && (
-                              <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-mono-700 bg-mono-800/50 text-mono-500 leading-tight">orig. {song.key}</span>
+                      <li key={run.songs[0].song._id + "_m"} className="relative pl-4 my-0.5">
+                        {/* vertical accent spine */}
+                        <span
+                          aria-hidden
+                          className="absolute left-1 top-6 bottom-2 w-[2px] rounded-full"
+                          style={{ background: `linear-gradient(to bottom, ${themeColour(t.accentVar, 0)}, ${themeColour(t.accentVar, 0.3333)} 12%, ${themeColour(t.accentVar, 0.3333)} 88%, ${themeColour(t.accentVar, 0)})` }}
+                        />
+                        {/* MEDLEY label */}
+                        {/* `color` on the wrapper, not on the icon: ChainLinkIcon strokes with
+                            `currentColor` by default, and `var()` is NOT substituted inside an SVG
+                            presentation attribute — a token passed as `color` would be dropped
+                            silently. The sibling span sets its own colour, so it is unaffected. */}
+                        <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5" style={{ color: themeColour(t.accentVar) }}>
+                          <ChainLinkIcon opacity={0.65} />
+                          <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${themeColour(t.accentVar, 0.6)}` }}>Medley</span>
+                        </div>
+                        {run.songs.map(({ song, n }, si) => (
+                          <div key={song._id}>
+                            {si > 0 && (
+                              <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${themeColour(t.accentVar, 0.4392)}` }}>+</span>
                             )}
-                            <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
+                            <SongRow song={song} n={n} accent={t.accent} onOpen={openSheet} dense />
                           </div>
-                        </button>
+                        ))}
                       </li>
                     );
-                  }
-                  // Multi-song medley group — left-spine bracket, no box
-                  return (
-                    <li key={run.songs[0].song._id + "_m"} className="relative pl-4 my-0.5">
-                      {/* vertical accent spine */}
-                      <span
-                        aria-hidden
-                        className="absolute left-1 top-6 bottom-2 w-[2px] rounded-full"
-                        style={{ background: `linear-gradient(to bottom, ${themeColour(t.accentVar, 0)}, ${themeColour(t.accentVar, 0.3333)} 12%, ${themeColour(t.accentVar, 0.3333)} 88%, ${themeColour(t.accentVar, 0)})` }}
-                      />
-                      {/* MEDLEY label */}
-                      {/* `color` on the wrapper, not on the icon: ChainLinkIcon strokes with
-                          `currentColor` by default, and `var()` is NOT substituted inside an SVG
-                          presentation attribute — a token passed as `color` would be dropped
-                          silently. The sibling span sets its own colour, so it is unaffected. */}
-                      <div className="flex items-center gap-1 pl-2 -ml-2 mb-0.5" style={{ color: themeColour(t.accentVar) }}>
-                        <ChainLinkIcon opacity={0.65} />
-                        <span className="font-label text-[10px] uppercase tracking-[0.18em]" style={{ color: `${themeColour(t.accentVar, 0.6)}` }}>Medley</span>
-                      </div>
-                      {run.songs.map(({ song, n }, si) => (
-                        <div key={song._id}>
-                          {si > 0 && (
-                            <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${themeColour(t.accentVar, 0.4392)}` }}>+</span>
-                          )}
-                          <button
-                            onClick={() => openSheet(song._id, song.play_key || undefined)}
-                            className="group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent/[0.055]"
-                          >
-                            <span className="font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
-                            <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-                              <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
-                              {song.author && <span className="text-mono-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {song.play_key && song.key && song.play_key !== song.key && (
-                                <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-mono-700 bg-mono-800/50 text-mono-500 leading-tight">orig. {song.key}</span>
-                              )}
-                              <span className={`font-label text-xs font-semibold ${t.accent}`}>{song.play_key || song.key}</span>
-                            </div>
-                          </button>
-                        </div>
-                      ))}
-                    </li>
-                  );
-                })}
-              </ol>
-            </section>
-          )}
+                  })}
+                </ol>
+              </section>
+            )}
 
-          {/* Team */}
-          {hasRole && (
-            <section className={hasSetlist ? "border-t border-ink-dim/[0.12] pt-5" : ""}>
-              <h4 className="font-label text-xs md:text-sm lg:text-base uppercase tracking-widest text-surface-ink-l70-d50 mb-3">
-                Equipo
-              </h4>
-
-              {(leads?.length || bgvs?.length || chorus?.length) ? (
-                <div>
-                  <SectionDivider label="Voces" accent={t.accentMuted} />
-                  <div className="grid grid-cols-3 gap-x-3">
-                    <VocalCol label="Lead" names={leads ?? []} highlightName={myName} duplicateNames={vocesDups} />
-                    <VocalCol label="BGVs" names={(bgvs ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
-                    <VocalCol label="Coro" names={(chorus ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
+            {/* Team */}
+            {hasRole && (
+              <section className={hasSetlist ? `border-t border-ink-dim/[0.12] pt-5${wide ? " lg:border-t-0 lg:pt-0" : ""}` : ""}>
+                {(leads?.length || bgvs?.length || chorus?.length) ? (
+                  <div>
+                    <SectionDivider label="Voces" accent={t.accentMuted} />
+                    <div className="grid grid-cols-3 gap-x-3">
+                      <VocalCol label="Lead" names={leads ?? []} highlightName={myName} duplicateNames={vocesDups} />
+                      <VocalCol label="BGVs" names={(bgvs ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
+                      <VocalCol label="Coro" names={(chorus ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
+                    </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
 
-              {instruments && instruments.filter(s => s.person).length > 0 && (
-                <div>
-                  <SectionDivider label="Instrumentos" accent={t.accentMuted} />
-                  <div className="flex flex-wrap gap-x-3 gap-y-2">
-                    {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentVar={t.accentVar} highlightName={myName} isDuplicate={instrDups.has(s.person.toLowerCase().trim())} />)}
+                {instruments && instruments.filter(s => s.person).length > 0 && (
+                  <div>
+                    <SectionDivider label="Instrumentos" accent={t.accentMuted} />
+                    <div className="flex flex-wrap gap-x-3 gap-y-2">
+                      {instruments.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentVar={t.accentVar} highlightName={myName} isDuplicate={instrDups.has(s.person.toLowerCase().trim())} />)}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {fohTeam && fohTeam.filter(s => s.person).length > 0 && (
-                <div>
-                  <SectionDivider label="Front of House" accent={t.accentMuted} />
-                  <div className="flex flex-wrap gap-x-3 gap-y-2">
-                    {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentVar={t.accentVar} highlightName={myName} isDuplicate={fohDups.has(s.person.toLowerCase().trim())} />)}
+                {fohTeam && fohTeam.filter(s => s.person).length > 0 && (
+                  <div>
+                    <SectionDivider label="Front of House" accent={t.accentMuted} />
+                    <div className="flex flex-wrap gap-x-3 gap-y-2">
+                      {fohTeam.filter(s => s.person).map((s, i) => <Row key={i} label={s.label} value={s.person} accentVar={t.accentVar} highlightName={myName} isDuplicate={fohDups.has(s.person.toLowerCase().trim())} />)}
+                    </div>
                   </div>
-                </div>
-              )}
-            </section>
-          )}
+                )}
+              </section>
+            )}
+          </div>
         </div>
       </div>
 
@@ -297,6 +278,44 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+/**
+ * One run-sheet row: order · title · artist · key · BPM (spec §12.1). The single
+ * and medley branches carried a byte-identical copy of this markup each, which is
+ * exactly how a new column lands in one of them and not the other. `dense` is the
+ * only real difference: a medley's members sit tighter because the `+` between
+ * them already spaces the run.
+ *
+ * The row is a `<button>` rather than the house `Button`: the ROW is the
+ * affordance, edge to edge, the same exemption `LibraryRow` takes.
+ */
+function SongRow({ song, n, accent, onOpen, dense = false }: {
+  song: SetlistSong;
+  n: number;
+  accent: string;
+  onOpen: (songId: string, playKey?: string) => void;
+  dense?: boolean;
+}) {
+  return (
+    <button
+      onClick={() => onOpen(song._id, song.play_key || undefined)}
+      className={`group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 ${dense ? "py-2" : "py-2.5"} text-left transition-colors hover:bg-accent/[0.055]`}
+    >
+      <span className="font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
+      <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
+        <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
+        {song.author && <span className="text-mono-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
+      </div>
+      <div className="flex items-center gap-1.5 shrink-0">
+        {song.play_key && song.key && song.play_key !== song.key && (
+          <span className="font-label text-[11px] px-1.5 py-0.5 rounded border border-mono-700 bg-mono-800/50 text-mono-500 leading-tight">orig. {song.key}</span>
+        )}
+        <span className={`font-label text-xs font-semibold ${accent}`}>{song.play_key || song.key}</span>
+        {song.bpm && <span className="hidden w-10 text-right font-label text-[11px] text-mono-500 tabular-nums sm:inline">{song.bpm}</span>}
+      </div>
+    </button>
+  );
+}
 
 // Lowercased names that appear more than once within a single section
 function findDuplicates(names: string[]): Set<string> {

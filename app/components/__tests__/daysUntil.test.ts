@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { daysUntil } from "../NextServiceHero";
+import { daysUntil, formatCountdown } from "../../utils/daysUntil";
 
 describe("daysUntil", () => {
   // Fixed reference "now" (local time) so the test is deterministic.
@@ -25,5 +25,16 @@ describe("daysUntil", () => {
 
   it("ignores any time component in the date string", () => {
     expect(daysUntil("2026-07-02T00:00:00Z", now)).toBe(1);
+  });
+});
+
+describe("formatCountdown", () => {
+  it("names today and tomorrow rather than counting them", () => {
+    expect(formatCountdown(0)).toBe("Hoy");
+    expect(formatCountdown(1)).toBe("Mañana");
+  });
+
+  it("counts the days further out", () => {
+    expect(formatCountdown(5)).toBe("En 5 días");
   });
 });

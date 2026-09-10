@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 311,
-    "filesScanned": 283,
+    "literalRows": 312,
+    "filesScanned": 284,
     "filesWithColour": 49,
     "byCategory": {
       "2": 2,
       "4": 70,
-      "8": 88,
+      "8": 89,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 117,
+      "B": 118,
       "exempt": 35,
       "keep": 234,
       "C": 6,
@@ -3187,7 +3187,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 96,
+      "line": 112,
       "disposition": "B",
       "reason": null
     },
@@ -3199,7 +3199,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 397,
+      "line": 416,
       "disposition": "B",
       "reason": null
     },
@@ -3343,7 +3343,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 105,
+      "line": 118,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/PracticePlaylistButton.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
+      "line": 136,
       "disposition": "B",
       "reason": null
     },
@@ -3355,7 +3367,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 103,
+      "line": 134,
       "disposition": "B",
       "reason": null
     },
@@ -3367,7 +3379,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 108,
+      "line": 139,
       "disposition": "B",
       "reason": null
     },

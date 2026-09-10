@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const BUDGET: Record<string, number> = {
   ">Cue<": 0,                 // removed in M0b-1 (CueDialog)
-  ">Servicio<": 1,            // DayCard header — goes in R1
+  ">Servicio<": 0,            // removed in R1 (DayCard header — day · date carries it)
   "Índice musical": 0,        // SongSearchList — removed in R1
   "títulos": 0,               // home library count — removed in R1
   "Repertorio": 0,            // PostComponent's song-card eyebrow — removed in R1 (spec §18)
