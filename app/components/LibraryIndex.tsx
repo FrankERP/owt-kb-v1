@@ -179,9 +179,12 @@ export default function LibraryIndex(props: LibraryIndexProps) {
             {groups.map((g) => (
               <section key={g.letter || "resultados"} aria-label={g.letter ? `Letra ${g.letter}` : "Resultados"}>
                 {g.letter && (
+                  {/* A small pill, not a full-width band: on desktop the band read as
+                      a heavy bar with one letter in its corner (Frank, 2026-09-10). The
+                      sticky box is the pill itself, so nothing spans the list. */}
                   <h2
                     id={`letra-${g.letter}`}
-                    className={`sticky ${UNDER_NAVBAR} z-[1] bg-surface-base/90 py-1 font-display text-lg text-accent backdrop-blur-sm`}
+                    className={`sticky ${UNDER_NAVBAR} z-[1] my-1 inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-md bg-surface-base/85 px-2 font-display text-base text-accent backdrop-blur-sm`}
                   >
                     {g.letter}
                   </h2>
