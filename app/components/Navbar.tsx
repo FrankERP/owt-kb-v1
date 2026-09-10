@@ -44,18 +44,21 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
             </p>
           </div>
         </Link>
-        <NavLinks schedule={schedule} tags={tags} />
-
-        {/* Centered title */}
-        <div className="pointer-events-none absolute left-1/2 top-1/2 flex w-1/3 min-w-0 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden">
-          <p className="font-display text-sm sm:text-lg lg:text-xl uppercase tracking-[0.1em] text-ink truncate w-full text-center">
-            {title}
-          </p>
-          {author && (
-            <p className="font-label text-[10px] lg:text-[11px] text-ink-dim uppercase tracking-widest truncate w-full text-center">
-              {author}
+        {/* Centered block: on desktop the link row takes the centre and the
+            page's own heading carries the title; on phones the bar keeps the
+            title and the tab bar carries navigation. */}
+        <div className="pointer-events-none absolute left-1/2 top-1/2 flex w-1/3 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center lg:w-auto lg:max-w-[60%]">
+          <div className="lg:hidden w-full min-w-0 flex flex-col items-center overflow-hidden">
+            <p className="font-display text-sm sm:text-lg lg:text-xl uppercase tracking-[0.1em] text-ink truncate w-full text-center">
+              {title}
             </p>
-          )}
+            {author && (
+              <p className="font-label text-[10px] lg:text-[11px] text-ink-dim uppercase tracking-widest truncate w-full text-center">
+                {author}
+              </p>
+            )}
+          </div>
+          <NavLinks schedule={schedule} tags={tags} />
         </div>
 
         {/* Right: single avatar/menu */}
