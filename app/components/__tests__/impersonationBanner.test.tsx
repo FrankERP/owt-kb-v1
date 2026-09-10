@@ -15,6 +15,10 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { installMotionTestEnv } from "../ui/__tests__/motionTestSetup";
+import { MotionProvider } from "../ui/MotionProvider";
+
+installMotionTestEnv();
 
 const h = vi.hoisted(() => ({
   isImpersonating: true,
@@ -46,28 +50,43 @@ afterEach(() => {
 
 const salir = () => screen.getByRole("button", { name: /salir/i });
 
+// `Presence` (motion/react-m) needs `MotionProvider`'s feature chunk to ever
+// resolve an animation — bare outside it, an `m.*` element sticks at its
+// `initial` values forever, so `onEntered` never fires (see MotionProvider.tsx).
+const renderBanner = () => render(<ImpersonationBanner />, { wrapper: MotionProvider });
+
 describe("ImpersonationBanner", () => {
   it("marks the root while impersonating, so the navbar stacks below it", () => {
-    render(<ImpersonationBanner />);
+    renderBanner();
     expect(document.documentElement.classList.contains("impersonating")).toBe(true);
   });
 
   it("clears that mark when the banner goes away", () => {
-    const { unmount } = render(<ImpersonationBanner />);
+    const { unmount } = renderBanner();
     unmount();
     expect(document.documentElement.classList.contains("impersonating")).toBe(false);
   });
 
+  it("publishes the measured height once the drop-in lands, not before", async () => {
+    renderBanner();
+    const bar = document.querySelector(".impersonation-bar") as HTMLElement;
+    Object.defineProperty(bar, "offsetHeight", { configurable: true, value: 56 });
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue("--impersonation-h")).toMatch(/px$/)
+    );
+    expect(document.documentElement.style.getPropertyValue("--impersonation-h")).toBe("56px");
+  });
+
   it("returns to /admin when the session really did stop impersonating", async () => {
     h.update.mockResolvedValue({ user: { isImpersonating: false } });
-    render(<ImpersonationBanner />);
+    renderBanner();
     fireEvent.click(salir());
     await waitFor(() => expect(h.push).toHaveBeenCalledWith("/admin"));
   });
 
   it("stays put and says so when the session comes back still impersonating", async () => {
     h.update.mockResolvedValue({ user: { isImpersonating: true } });
-    render(<ImpersonationBanner />);
+    renderBanner();
     fireEvent.click(salir());
 
     await screen.findByText(/no se pudo salir/i);
@@ -83,7 +102,7 @@ describe("ImpersonationBanner", () => {
   // every real-world failure, leaving the admin on /admin still impersonating.
   it("stays put when the update resolves null, which is how it really fails", async () => {
     h.update.mockResolvedValue(null);
-    render(<ImpersonationBanner />);
+    renderBanner();
     fireEvent.click(salir());
 
     await screen.findByText(/no se pudo salir/i);
@@ -93,7 +112,7 @@ describe("ImpersonationBanner", () => {
 
   it("stays put when the update rejects outright", async () => {
     h.update.mockRejectedValue(new Error("network"));
-    render(<ImpersonationBanner />);
+    renderBanner();
     fireEvent.click(salir());
 
     await screen.findByText(/no se pudo salir/i);
@@ -103,7 +122,7 @@ describe("ImpersonationBanner", () => {
 
   it("renders nothing at all when no one is being impersonated", () => {
     h.isImpersonating = false;
-    render(<ImpersonationBanner />);
+    renderBanner();
     expect(screen.queryByRole("button", { name: /salir/i })).toBeNull();
     expect(document.documentElement.classList.contains("impersonating")).toBe(false);
   });

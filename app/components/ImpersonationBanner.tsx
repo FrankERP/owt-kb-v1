@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Presence from "@/app/components/ui/Presence";
 
 const BANNER_CLASS = "impersonating";
 /** Read by `.impersonating .brand-navbar` in brand.css. */
@@ -27,6 +28,16 @@ export default function ImpersonationBanner() {
   // The height is MEASURED, not hard-coded. A constant was ~9px short at
   // desktop width and far shorter than the truth on a phone, where this
   // sentence wraps to two or three lines.
+  const publish = useCallback(() => {
+    const h = barRef.current?.offsetHeight;
+    if (h) document.documentElement.style.setProperty(BANNER_H_VAR, `${h}px`);
+  }, []);
+
+  // The FIRST measurement waits for `onEntered` below — the bar is still
+  // animating into place while this effect runs, so measuring here would
+  // publish a height for a banner that hasn't landed yet. The observer and
+  // resize listener still live here: they publish LATER changes (a wrapped
+  // line on rotation, say), after the drop-in is long done.
   useEffect(() => {
     const root = document.documentElement;
     const clear = () => {
@@ -39,11 +50,6 @@ export default function ImpersonationBanner() {
     }
     root.classList.add(BANNER_CLASS);
     const bar = barRef.current;
-    const publish = () => {
-      const h = barRef.current?.offsetHeight;
-      if (h) root.style.setProperty(BANNER_H_VAR, `${h}px`);
-    };
-    publish();
     // Guarded: jsdom has no ResizeObserver, and the CSS fallback covers it.
     const ro = typeof ResizeObserver !== "undefined" && bar ? new ResizeObserver(publish) : null;
     if (ro && bar) ro.observe(bar);
@@ -53,12 +59,18 @@ export default function ImpersonationBanner() {
       window.removeEventListener("resize", publish);
       clear();
     };
-  }, [active]);
+  }, [active, publish]);
 
-  if (!active) return null;
+  // The first measurement lands with the banner instead of racing it: under
+  // skipAnimations (tests) this fires synchronously after mount, and in a
+  // real browser it fires once the drop-in has actually finished, so the
+  // navbar offset never chases a bar still in motion.
+  const handleEntered = useCallback(() => {
+    publish();
+  }, [publish]);
 
-  const impersonatedName = session.user.name ?? session.user.sanityId;
-  const adminName = session.user.realAdminName ?? "Admin";
+  const impersonatedName = session?.user?.name ?? session?.user?.sanityId;
+  const adminName = session?.user?.realAdminName ?? "Admin";
 
   /**
    * Leaving an impersonated session is a mutation, and it used to navigate
@@ -93,25 +105,30 @@ export default function ImpersonationBanner() {
   }
 
   return (
-    <div ref={barRef} className="sticky top-0 z-[60] w-full bg-warning-fg/90 backdrop-blur-sm text-surface-base flex items-center justify-center gap-3 px-4 py-2">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-        <line x1="12" y1="9" x2="12" y2="13" />
-        <line x1="12" y1="17" x2="12.01" y2="17" />
-      </svg>
-      <span className="font-label text-xs uppercase tracking-widest">
-        {error
-          ? error
-          : <>Viendo como <strong>{impersonatedName}</strong> — sesión de prueba de {adminName}</>}
-      </span>
-      <button
-        type="button"
-        onClick={stopImpersonating}
-        disabled={leaving}
-        className="ml-2 px-3 py-0.5 rounded-md border border-scrim/30 font-label text-xs uppercase tracking-widest hover:bg-scrim/10 transition-colors disabled:opacity-60"
-      >
-        {leaving ? "Saliendo…" : "Salir"}
-      </button>
-    </div>
+    // The positioned/stacked host: `Presence` transforms this element while
+    // dropping it in, so it must carry no `position: fixed` descendant — the
+    // banner has an icon, text and a button, nothing fixed among them.
+    <Presence show={active} appear variant="drop" onEntered={handleEntered} className="sticky top-0 z-[60] w-full">
+      <div ref={barRef} className="impersonation-bar w-full bg-warning-fg/90 backdrop-blur-sm text-surface-base flex items-center justify-center gap-3 px-4 py-2">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+        <span className="font-label text-xs uppercase tracking-widest">
+          {error
+            ? error
+            : <>Viendo como <strong>{impersonatedName}</strong> — sesión de prueba de {adminName}</>}
+        </span>
+        <button
+          type="button"
+          onClick={stopImpersonating}
+          disabled={leaving}
+          className="ml-2 px-3 py-0.5 rounded-md border border-scrim/30 font-label text-xs uppercase tracking-widest hover:bg-scrim/10 transition-colors disabled:opacity-60"
+        >
+          {leaving ? "Saliendo…" : "Salir"}
+        </button>
+      </div>
+    </Presence>
   );
 }
