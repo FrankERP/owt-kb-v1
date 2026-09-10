@@ -7,7 +7,7 @@ the standard-tier requirement.** Rounds 3 and 4 ran past the churn cap on Frank'
 go-ahead each time («Sí, lanza la ronda 3», 13:55 CST; «Por persona, lanza la ronda 4»,
 14:42 CST, 2026-09-09).
 
-Approval, when it comes, is not authorization to implement. Implementation still
+Approval is not authorization to implement; the implementation was separately code-reviewed on the merge range and released 2026-09-10 (PR #57). Implementation still
 requires the plan, the three gates, and a fresh code review of the diff.
 
 ## Risk tier
