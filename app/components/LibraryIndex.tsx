@@ -9,15 +9,17 @@ import type { Post, Tag, Author } from "@/app/utils/interface";
 import {
   applyLibraryFilters,
   groupByLetter,
+  libraryKeys,
   makeLibraryFuse,
   serializeLibraryParams,
-  type LibraryFilters,
+  type LibraryFilters as LibraryFiltersState,
 } from "@/app/utils/libraryIndex";
 import AnimatedList from "./ui/AnimatedList";
 import Button from "./ui/Button";
+import LibraryFilters from "./LibraryFilters";
 import LibraryRow from "./LibraryRow";
 
-export type LibraryIndexProps = { posts: Post[]; tags: Tag[]; authors: Author[]; initial: LibraryFilters };
+export type LibraryIndexProps = { posts: Post[]; tags: Tag[]; authors: Author[]; initial: LibraryFiltersState };
 
 // The navbar is `sticky top-0` with a fixed h-20/lg:h-24 body under the safe-area
 // inset, and publishes no `--navbar-h`; this is the same offset SectionNav uses.
@@ -25,13 +27,12 @@ const UNDER_NAVBAR =
   "top-[calc(5rem+env(safe-area-inset-top))] lg:top-[calc(6rem+env(safe-area-inset-top))] " +
   "scroll-mt-[calc(5rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(6rem+env(safe-area-inset-top))]";
 
-// `tags` and `authors` stay in the props type but are read off `props` in Task 4
-// (the filter drawer) — destructuring them here would be an unused binding.
 export default function LibraryIndex(props: LibraryIndexProps) {
-  const { posts, initial } = props;
+  const { posts, tags, authors, initial } = props;
   const pathname = usePathname();
-  const [filters, setFilters] = useState<LibraryFilters>(initial);
+  const [filters, setFilters] = useState<LibraryFiltersState>(initial);
   const fuse = useMemo(() => makeLibraryFuse(posts), [posts]);
+  const keys = useMemo(() => libraryKeys(posts), [posts]);
 
   // URL mirrors the filters (shareable; the /tag* and /author* redirects land
   // here with them set). `history.replaceState`, deliberately, not the router —
@@ -64,7 +65,7 @@ export default function LibraryIndex(props: LibraryIndexProps) {
     document.getElementById(`letra-${letter}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, []);
 
-  const set = (next: LibraryFilters) => setFilters(next);
+  const set = (next: LibraryFiltersState) => setFilters(next);
   const clear = () => setFilters({ q: "", tags: [], author: "", key: "" });
 
   return (
@@ -95,7 +96,7 @@ export default function LibraryIndex(props: LibraryIndexProps) {
             className="w-full bg-transparent py-3 pl-10 pr-3 font-label text-sm text-ink placeholder:text-placeholder focus:outline-none"
           />
         </div>
-        {/* Task 4: <LibraryFilters filters={filters} onChange={set} tags={props.tags} authors={props.authors} keys={libraryKeys(posts)} /> */}
+        <LibraryFilters filters={filters} onChange={set} tags={tags} authors={authors} keys={keys} />
       </div>
 
       {/* Always mounted so a screen reader keeps ONE live region to announce

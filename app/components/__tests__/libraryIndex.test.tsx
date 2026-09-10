@@ -4,6 +4,7 @@
 // `app/utils/libraryIndex.ts` and is tested there — this file asserts the wiring.
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
 import type { Post } from "@/app/utils/interface";
@@ -27,7 +28,9 @@ const POSTS = [post("a1", "Alabaré"), post("b1", "Bueno es Dios")];
 function mount() {
   return render(
     <MotionProvider>
-      <LibraryIndex posts={POSTS} tags={[]} authors={[]} initial={{ q: "", tags: [], author: "", key: "" }} />
+      <CueDialogProvider>
+        <LibraryIndex posts={POSTS} tags={[]} authors={[]} initial={{ q: "", tags: [], author: "", key: "" }} />
+      </CueDialogProvider>
     </MotionProvider>,
   );
 }
