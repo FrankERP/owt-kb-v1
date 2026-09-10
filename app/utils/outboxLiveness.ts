@@ -364,10 +364,13 @@ export async function reportOutboxLiveness(now: Date = new Date()): Promise<Outb
  * fails the same way the sends did, and says so via `alerted: false`. Two things
  * are worth being precise about, because both are easy to get backwards:
  *
- *   · Layer 1 DOES cover it. A dead transport produces `failed >= 2` on any
- *     sweep carrying two recipients, which is that workflow's red gate. This
- *     case is unobserved only when layer 1 is down TOO — which is exactly the
- *     compound failure layer 3 exists for, but it is a compound one.
+ *   · Layer 1's GitHub caller DOES cover it. A dead transport produces
+ *     `failed >= 2` on any sweep carrying two recipients, which is that
+ *     workflow's red gate. Its Cloud Scheduler caller does not: the route
+ *     answers 200 whatever the report says. So this case is unobserved when
+ *     the GitHub workflow is starved or down — which a healthy Scheduler tick
+ *     does nothing to change — and that is the compound failure layer 3
+ *     exists for.
  *   · The backlog alarm may not. Whether a backlog forms turns on BATCH SIZE
  *     against one send wave, not on how the transport died: a batch that fits in
  *     `SEND_CONCURRENCY` (8) is consumed whole with nothing re-pended, so the
