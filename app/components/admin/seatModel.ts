@@ -138,3 +138,24 @@ export function occupantDeclaresInstrument(
   const name = normalizeSeatName(label);
   return (member.instruments ?? []).some((i) => normalizeSeatName(i) === name);
 }
+
+/**
+ * The member-side write boundary's one predicate: normalize, de-duplicate,
+ * and refuse anything outside `DEFAULT_INSTRUMENT_SEATS`. Shared by POST and
+ * PATCH so create and edit cannot drift, and mirrored by the backfill script
+ * (`scripts/lib/memberInstruments.mjs`, which cannot import TS).
+ */
+export function parseMemberInstruments(
+  raw: unknown,
+): { ok: true; value: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) return { ok: false, error: "Instrumentos debe ser una lista." };
+  const out: string[] = [];
+  for (const item of raw) {
+    const name = normalizeSeatName(item);
+    if (!isKnownInstrument(name)) {
+      return { ok: false, error: `Instrumento no reconocido: ${String(item ?? "").trim()}` };
+    }
+    if (!out.includes(name)) out.push(name);
+  }
+  return { ok: true, value: out };
+}

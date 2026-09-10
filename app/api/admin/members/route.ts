@@ -3,6 +3,7 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { validateMinistryWrite, WORSHIP_MEMBER_GROQ_FILTER } from "@/app/ministries";
+import { parseMemberInstruments } from "@/app/components/admin/seatModel";
 
 // Reading the member list is needed by the Servicios/Disponibilidad panels (admin-accessible).
 // Creating/editing members stays super-admin only (Miembros section).
@@ -21,7 +22,7 @@ export async function GET() {
   // because they are the only role that can edit `ministries` at all.
   const members = await operationalClient.fetch(
     `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) {
-      _id, member_name, alias, email, role, memberType, notifPrefs, ministries, managesMinistries,
+      _id, member_name, alias, email, role, memberType, instruments, notifPrefs, ministries, managesMinistries,
       disabled,
       unavailableDates, unavailabilityNotes,
       "hasPassword": defined(passwordHash) && passwordHash != "",
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest) {
     email?: string;
     role?: string;
     memberType?: string[];
+    instruments?: string[];
     ministries?: string[];
     managesMinistries?: string[];
   };
@@ -68,6 +70,13 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error }, { status: 400 });
   }
 
+  let instruments: string[] | undefined;
+  if (body.instruments !== undefined) {
+    const parsed = parseMemberInstruments(body.instruments);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    instruments = parsed.value;
+  }
+
   const slug = member_name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
   const doc = await writeClient.create({
@@ -77,6 +86,7 @@ export async function POST(req: NextRequest) {
     email: email.trim().toLowerCase(),
     role: role ?? "member",
     memberType: memberType ?? [],
+    ...(instruments !== undefined ? { instruments } : {}),
     ...(ministries !== undefined ? { ministries } : {}),
     ...(managesMinistries !== undefined ? { managesMinistries } : {}),
     slug: { _type: "slug", current: slug },
