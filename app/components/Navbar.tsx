@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import NavMenu from "./NavMenu";
+import NavLinks from "./NavLinks";
 
 interface Props {
   title: string;
@@ -19,7 +20,11 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
       <div className="relative z-[1] mx-auto max-w-7xl h-20 lg:h-24 flex items-center gap-3 sm:gap-5 ps-[max(1.25rem,env(safe-area-inset-left))] pe-[max(1.25rem,env(safe-area-inset-right))]">
 
         {/* Backstage brand lockup */}
-        <Link href="/" aria-label="Ir a Backstage" className="flex shrink-0 items-center gap-3 lg:gap-4">
+        <Link
+          href="/"
+          aria-label="Ir a Backstage"
+          className="flex shrink-0 items-center gap-3 lg:gap-4 active:scale-[0.985] transition-transform duration-fast ease-out-brand"
+        >
           <Image
             src="/icons/backstage-v2-192.png"
             alt=""
@@ -39,6 +44,7 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
             </p>
           </div>
         </Link>
+        <NavLinks schedule={schedule} tags={tags} />
 
         {/* Centered title */}
         <div className="pointer-events-none absolute left-1/2 top-1/2 flex w-1/3 min-w-0 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center overflow-hidden">
