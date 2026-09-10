@@ -8,11 +8,6 @@ import Image from "next/image";
 import Menu, { MenuHeader, MenuItem, MenuSeparator } from "@/app/components/ui/Menu";
 import Presence from "@/app/components/ui/Presence";
 
-interface NavMenuProps {
-  showSchedule?: boolean;
-  showTags?: boolean;
-}
-
 // Cache the badge count briefly so it isn't refetched on every navigation.
 const NOTIF_KEY = "owt_notif_count";
 const NOTIF_TTL = 60 * 1000;
@@ -42,24 +37,10 @@ function useNotifCount(authed: boolean): number {
   return count;
 }
 
-export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
+export default function NavMenu() {
   const { data: session, status } = useSession();
   const user = session?.user ?? null;
   const notifCount = useNotifCount(!!user);
-
-  const isAdmin =
-    user?.role === "super-admin" ||
-    user?.role === "admin" ||
-    user?.role === "content-editor";
-
-  // Ministry filtering is COSMETIC — the pages and APIs carry the enforcement.
-  // Without it, though, a dual-ministry member has no route to /kids and a
-  // kids-only member sees worship links that only bounce.
-  const isSuper = user?.role === "super-admin";
-  const ministries = user?.ministries ?? ["worship"];
-  const inWorship = isSuper || ministries.includes("worship");
-  const inKids = isSuper || ministries.includes("kids");
-  const managesKids = isSuper || (user?.managesMinistries ?? []).includes("kids");
 
   // While the session resolves on the client, reserve the avatar's space to
   // avoid layout shift and a flash of the sign-in link for logged-in users.
@@ -130,19 +111,10 @@ export default function NavMenu({ showSchedule, showTags }: NavMenuProps) {
           <span className="font-label text-xs uppercase tracking-widest text-mono-400">{firstName}</span>
         )}
       </MenuHeader>
-      {/* /me is ministry-neutral, so it stays unconditional. */}
       <MenuItem href="/me">Mi perfil</MenuItem>
-      {showSchedule && inWorship && <MenuItem href="/schedule">Calendario</MenuItem>}
-      {showTags && inWorship && <MenuItem href="/tag">#Tags</MenuItem>}
-      {inKids && <MenuItem href="/kids">Oasis Kids</MenuItem>}
-      {managesKids && <MenuItem href="/kids/admin">Planear Kids</MenuItem>}
-      {/* No `&& inWorship` here on purpose: the three manager roles are
-          worship-scoped by definition (requireActiveManager is role-only),
-          so the extra clause would be dead code or imply a non-worship
-          admin. Nav must agree with the page guard, not invent a rule. */}
-      {isAdmin && <MenuItem href="/admin">Admin</MenuItem>}
+      <MenuItem href="/me#tema">Tema</MenuItem>
       <MenuSeparator />
-      <MenuItem onSelect={() => { clearThemeMirror(); signOut({ callbackUrl: "/" }); }}>
+      <MenuItem onSelect={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}>
         Cerrar sesión
       </MenuItem>
     </Menu>

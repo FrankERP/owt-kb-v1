@@ -25,6 +25,7 @@ function mount(props: { schedule?: boolean; tags?: boolean } = {}) {
 
 const adminUser = { name: "Ana", email: "ana@x", role: "admin", ministries: ["worship"] };
 const kidsUser = { name: "Kiko", email: "kiko@x", role: "member", ministries: ["kids"] };
+const kidsManagerUser = { name: "Marta", email: "marta@x", role: "member", ministries: ["kids"], managesMinistries: ["kids"] };
 
 beforeEach(() => { pathname = "/"; session = null; });
 afterEach(() => { cleanup(); });
@@ -53,5 +54,20 @@ describe("NavLinks", () => {
     const nav = screen.getByLabelText("Secciones");
     const links = Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim());
     expect(links).toEqual(["Kids", "Yo"]);
+  });
+
+  it("shows Planear Kids for a kids manager but not for a plain kids member", () => {
+    session = { user: kidsManagerUser };
+    mount({ schedule: true, tags: true });
+    const nav = screen.getByLabelText("Secciones");
+    const links = Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim());
+    expect(links).toEqual(["Kids", "Planear Kids", "Yo"]);
+
+    cleanup();
+    session = { user: kidsUser };
+    mount({ schedule: true, tags: true });
+    const nav2 = screen.getByLabelText("Secciones");
+    const links2 = Array.from(nav2.querySelectorAll("a")).map((n) => n.textContent?.trim());
+    expect(links2).not.toContain("Planear Kids");
   });
 });

@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 327,
+    "literalRows": 325,
     "filesScanned": 284,
     "filesWithColour": 52,
     "byCategory": {
       "2": 2,
       "4": 73,
-      "8": 101,
+      "8": 99,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 130,
+      "B": 128,
       "exempt": 35,
       "keep": 247,
       "C": 6,
@@ -3031,7 +3031,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 250,
+      "line": 232,
       "disposition": "B",
       "reason": null
     },
@@ -3043,7 +3043,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 251,
+      "line": 233,
       "disposition": "B",
       "reason": null
     },
@@ -3055,7 +3055,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 252,
+      "line": 234,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 164,
       "disposition": "B",
       "reason": null
     },
@@ -3079,7 +3091,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 182,
+      "line": 184,
       "disposition": "B",
       "reason": null
     },
@@ -3091,7 +3103,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 193,
+      "line": 194,
       "disposition": "B",
       "reason": null
     },
@@ -3115,7 +3127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 212,
+      "line": 213,
       "disposition": "B",
       "reason": null
     },
@@ -3127,7 +3139,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 222,
+      "line": 223,
       "disposition": "B",
       "reason": null
     },
@@ -3139,43 +3151,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 232,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 240,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 249,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 259,
+      "line": 231,
       "disposition": "B",
       "reason": null
     },
@@ -3187,7 +3163,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 399,
+      "line": 407,
       "disposition": "B",
       "reason": null
     },
@@ -3199,7 +3175,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 402,
+      "line": 410,
       "disposition": "B",
       "reason": null
     },
@@ -3343,7 +3319,7 @@
       "alpha": null,
       "utility": "ring",
       "carrier": null,
-      "line": 107,
+      "line": 88,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3355,7 +3331,7 @@
       "alpha": null,
       "utility": "ring",
       "carrier": null,
-      "line": 110,
+      "line": 91,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3367,7 +3343,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 116,
+      "line": 97,
       "disposition": "C",
       "reason": null
     },

@@ -1,10 +1,9 @@
 "use client";
 
-// The desktop nav row (spec §19.1, M1 Shell): the same destinations NavMenu
-// already lists in its dropdown, rendered as real links at lg and above with
-// a shared SlidingIndicator underline on the active one. Ministry filtering
-// mirrors BottomNav's derivation for consistency across the three nav
-// surfaces (BottomNav, NavMenu, NavLinks).
+// The desktop nav row (spec §19.1, M1 Shell), rendered as real links at lg
+// and above with a shared SlidingIndicator underline on the active one.
+// Ministry filtering mirrors BottomNav's derivation for consistency across
+// the two nav surfaces: BottomNav on phones, NavLinks at lg+.
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -36,10 +35,12 @@ export default function NavLinks({ schedule = false, tags = false }: { schedule?
   const ministries = user.ministries ?? ["worship"];
   const inWorship = isSuper || ministries.includes("worship");
   const inKids = isSuper || ministries.includes("kids");
+  const managesKids = isSuper || (user.managesMinistries ?? []).includes("kids");
   const links = [
     ...(schedule && inWorship ? [{ href: "/schedule", label: "Calendario", active: pathname.startsWith("/schedule") }] : []),
     ...(tags && inWorship ? [{ href: "/tag", label: "Biblioteca", active: /^\/(tag|posts|author)/.test(pathname) }] : []),
-    ...(inKids ? [{ href: "/kids", label: "Kids", active: pathname.startsWith("/kids") }] : []),
+    ...(inKids ? [{ href: "/kids", label: "Kids", active: pathname.startsWith("/kids") && !pathname.startsWith("/kids/admin") }] : []),
+    ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", active: pathname.startsWith("/kids/admin") }] : []),
     { href: "/me", label: "Yo", active: pathname.startsWith("/me") },
     ...(isAdmin ? [{ href: "/admin", label: "Admin", active: pathname.startsWith("/admin") }] : []),
   ];

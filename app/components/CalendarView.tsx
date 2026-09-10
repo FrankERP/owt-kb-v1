@@ -9,6 +9,7 @@ import { MONTH_NAMES_ES, addMonths, monthRangeLabel, scheduleHref, windowMonths,
 import CueDialog from "./ui/CueDialog";
 import DateField from "./ui/DateField";
 import SegmentedControl from "./ui/SegmentedControl";
+import Button from "./ui/Button";
 import { themeColour } from "@/app/utils/themeColour";
 
 export type ActiveDay = {
@@ -118,28 +119,35 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
 
   return (
     <>
-      {/* Month navigation */}
-      <div className="flex items-center justify-center gap-4 mb-4">
-        <Link
+      {/* Month navigation. On a phone the range label ("Septiembre – Noviembre
+          2026") plus two worded buttons overflowed a 390px row, so the words
+          show from sm: up and the chevrons carry the buttons below that (the
+          aria-labels name them either way). */}
+      <div className="flex items-center justify-center gap-2 sm:gap-4 mb-4">
+        <Button
           href={scheduleHref(addMonths(anchorMonth, -WINDOW_MONTHS))}
           aria-label="Meses anteriores"
-          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:text-ink-muted hover:border-accent/40 dark:hover:border-surface-accent-30 transition-colors"
+          variant="secondary"
+          className="shrink-0"
         >
-          ‹ Anterior
-        </Link>
-        <div className="text-center min-w-[13rem]">
-          <p className="font-display text-base font-bold uppercase">{monthRangeLabel(anchorMonth, WINDOW_MONTHS)}</p>
+          <span aria-hidden>‹</span>
+          <span className="hidden sm:inline">Anterior</span>
+        </Button>
+        <div className="min-w-0 flex-1 text-center sm:flex-none sm:min-w-[13rem]">
+          <p className="font-display text-sm sm:text-base font-bold uppercase">{monthRangeLabel(anchorMonth, WINDOW_MONTHS)}</p>
           {!viewMonth && (
             <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Próximos</p>
           )}
         </div>
-        <Link
+        <Button
           href={scheduleHref(addMonths(anchorMonth, WINDOW_MONTHS))}
           aria-label="Meses siguientes"
-          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:text-ink-muted hover:border-accent/40 dark:hover:border-surface-accent-30 transition-colors"
+          variant="secondary"
+          className="shrink-0"
         >
-          Siguiente ›
-        </Link>
+          <span className="hidden sm:inline">Siguiente</span>
+          <span aria-hidden>›</span>
+        </Button>
       </div>
       <div className="flex items-center justify-center gap-3 mb-8">
         <DateField
