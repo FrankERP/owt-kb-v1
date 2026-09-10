@@ -1,4 +1,5 @@
 import { defineType } from "sanity";
+import { INSTRUMENT_SEAT_OPTIONS } from "./instrumentSeats";
 
 export const teamMembers = defineType({
   name: "teamMembers",
@@ -175,6 +176,20 @@ export const teamMembers = defineType({
         layout: "grid",
       },
       description: "Determina en qué secciones puede aparecer este miembro. Combinar Voz + subtipo de liderazgo para los pools del solver.",
+    },
+    {
+      name: "instruments",
+      title: "Instrumentos",
+      type: "array",
+      of: [{ type: "string" }],
+      options: {
+        list: INSTRUMENT_SEAT_OPTIONS.map((value) => ({ title: value, value })),
+        layout: "grid",
+      },
+      hidden: ({ document }) =>
+        !((document?.memberType as string[] | undefined) ?? []).includes("instrumento"),
+      description:
+        "Qué instrumentos toca. Solo se lee para plazas de instrumento; vacío = no se asigna en automático.",
     },
     {
       name: "profilePhoto",

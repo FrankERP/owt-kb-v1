@@ -106,3 +106,35 @@ export function occupantFitsSeat(
 ): boolean {
   return (member?.memberType ?? []).includes(SEAT_MEMBER_TYPE[category]);
 }
+
+/**
+ * Whether a label names an instrument seat a MEMBER may declare. Membership in
+ * `DEFAULT_INSTRUMENT_SEATS` after normalization — NOT `normalizeSeatName`
+ * alone, which also canonicalizes `console` → `Console`, a FOH seat. The
+ * member-side vocabulary is closed (a typo here would silently make a member
+ * unschedulable); the service-side one stays open to growth.
+ */
+export function isKnownInstrument(label: unknown): boolean {
+  const name = normalizeSeatName(label);
+  return name !== "" && DEFAULT_INSTRUMENT_SEATS.includes(name);
+}
+
+/**
+ * Does this member DECLARE this instrument? Both halves are required: the
+ * `instrumento` Tipo (ADR-0029's only eligibility axis) AND the label in
+ * `instruments`. A leftover declaration on a member whose Tipo was cleared
+ * declares nothing — `instruments` is a refinement of the Tipo, never a second
+ * axis. Absent or empty `instruments` is "declares nothing" (spec D6).
+ *
+ * Read in exactly two places besides the backfill script: `rankCandidates`
+ * (the `undeclared` flag) and `PlannerGrid`'s declaration warning.
+ */
+export function occupantDeclaresInstrument(
+  member: { memberType?: string[]; instruments?: string[] } | undefined,
+  label: string,
+): boolean {
+  if (!member) return false;
+  if (!(member.memberType ?? []).includes("instrumento")) return false;
+  const name = normalizeSeatName(label);
+  return (member.instruments ?? []).some((i) => normalizeSeatName(i) === name);
+}
