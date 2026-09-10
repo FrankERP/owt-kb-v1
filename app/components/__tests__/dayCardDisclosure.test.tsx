@@ -57,6 +57,9 @@ describe("DayCardDisclosure", () => {
     const trigger = screen.getByRole("button", { name: /Sábado/ });
     const region = document.getElementById(trigger.getAttribute("aria-controls")!)!;
     expect(within(region).getByText("Canción s1")).toBeTruthy();
+    // Closed = mounted but unreachable: that is what lets a full card sit here.
+    expect(region.getAttribute("aria-hidden")).toBe("true");
+    expect(region.hasAttribute("inert")).toBe(true);
 
     fireEvent.click(trigger);
     expect(trigger.getAttribute("aria-expanded")).toBe("true");

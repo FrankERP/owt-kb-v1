@@ -28,8 +28,10 @@ export default function DayCardDisclosure(props: DayCardProps) {
   const days = props.date ? daysUntil(props.date) : null;
 
   return (
-    <div className="overflow-hidden rounded-[var(--brand-radius-panel)] border border-ink-dim/15">
-      <button
+    <div className="rounded-[var(--brand-radius-panel)] border border-ink-dim/15">
+      {/* A raw <button>, not the house Button: this is a disclosure row (the row is
+        the affordance), the same exemption SongRow and LibraryRow carry. */}
+    <button
         type="button"
         aria-expanded={open}
         aria-controls={id}

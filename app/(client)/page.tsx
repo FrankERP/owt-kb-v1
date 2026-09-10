@@ -132,11 +132,13 @@ export default async function Home() {
   const hasSunday = paints(sunSetlist, sunRole);
   const hasSaturdayCard = hasSaturday && paints(satSetlist, satRole);
 
-  // Determine the nearest upcoming service date
+  // The nearest upcoming service date AMONG THE SERVICES THAT PAINT. A
+  // published special with no seats and no songs renders nothing, so naming
+  // it "next" would hand the hero slot (and the countdown) to nobody.
   const allDates = [
-    hasSaturday ? (satSongs?.week ?? satRole?.week) : undefined,
-    sunSongs?.week ?? sunRole?.week,
-    ...specials.map((s) => s.date),
+    hasSaturdayCard ? (satSongs?.week ?? satRole?.week) : undefined,
+    hasSunday ? (sunSongs?.week ?? sunRole?.week) : undefined,
+    ...specials.filter((sp) => paints({ songs: sp.songs }, sp)).map((s) => s.date),
   ].filter((d): d is string => !!d && d >= today);
   const nextDate = allDates.sort()[0] ?? null;
 
@@ -196,12 +198,12 @@ export default async function Home() {
       : []),
   ];
 
-  // The hero is the next service. `nextDate` is derived from every upcoming
-  // service, painting or not, so it can name one that renders nothing — and a
-  // week whose services are all in the past names none at all. Either way the
-  // first painting card takes the hero slot rather than leaving the page
-  // headless.
-  const hero = services.find((s) => s.props.isNext) ?? services[0];
+  // The hero is the next service. `nextDate` only ever names a painting
+  // service, so `isNext` finds it whenever anything is upcoming; a week whose
+  // services are all in the past names none, and then the earliest card by
+  // date takes the hero slot rather than leaving the page headless.
+  const byDate = (a: { props: DayCardProps }, b: { props: DayCardProps }) => (a.props.date ?? "9999").localeCompare(b.props.date ?? "9999");
+  const hero = services.find((s) => s.props.isNext) ?? [...services].sort(byDate)[0];
   const rest = services.filter((s) => s !== hero);
 
   return (
