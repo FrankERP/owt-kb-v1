@@ -66,7 +66,7 @@ const BASE_ROLES = [
   "badge-azure-fg", "badge-azure-deep",
 ] as const;
 
-/** The 29 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
+/** The 30 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
 const COMPOSED = [
   "surface-accent-solid", "surface-accent-30", "surface-accent-hover", "edge-accent-subtle",
   "surface-accent-20", "surface-accent-faint", "surface-accent-wash",
@@ -93,6 +93,11 @@ const COMPOSED = [
   // The primary button hover sheen (2026-09-08, Task 7). Same ruling as the
   // skeleton pair above — Task 6's fix round is the precedent.
   "sheen-highlight", // .brand-btn-sheen::after's gradient middle stop
+
+  // The lit card beam (2026-09-10, Task 8, spec §23 decision Q). Same ruling as
+  // the pair above — the conic gradient's alpha-bearing stop belongs to the
+  // token layer, not to a literal in `.brand-lit-card[data-lit]::after`'s body.
+  "lit-beam",
 ] as const;
 
 const UTILITY_PREFIXES = [

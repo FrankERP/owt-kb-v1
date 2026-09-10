@@ -425,6 +425,14 @@
      baked-in alpha belongs to the token layer, not to a literal sitting in
      `.brand-btn-sheen::after`'s rule body. */
   --sheen-highlight:                rgb(var(--on-fill-rgb) / 0.18);
+
+  /* --- Lit card beam, added 2026-09-10 (Task 8, spec §23 decision Q) -----------
+     COMPOSED, same reason as --skeleton-base/--sheen-highlight above: a colour with
+     baked-in alpha belongs to the token layer, not to a literal sitting in
+     `.brand-lit-card[data-lit]::after`'s rule body — the rule-body pin
+     (tokenLayer.test.ts) counts `rgb(var(--role-rgb) / a)` occurrences, and a
+     bare `var(--lit-beam)` in the rule body does not add to it. */
+  --lit-beam:                       rgb(var(--accent-rgb) / 0.9);          /* light: accent-deep @90% */
 }
 
 /* Light branch. `:root` above hardcodes `color-scheme: dark`, which is masked in the
@@ -580,6 +588,7 @@
   --skeleton-base: rgb(var(--accent-deep-rgb) / 0.10);
   --skeleton-sweep: rgb(var(--accent-rgb) / 0.18);
   --sheen-highlight: rgb(var(--on-fill-rgb) / 0.22);
+  --lit-beam: rgb(var(--accent-deep-rgb) / 0.9);
 }
 
 .brand-atmosphere {
@@ -1070,4 +1079,36 @@ html[data-motion="off"] *, html[data-motion="off"] *::before, html[data-motion="
 html[data-motion="off"] .brand-stage-hero::before {
   opacity: 1;
   transform: none;
+}
+
+/* ── Lit card (spec §23, decision Q) — the FIFTH beam site. After the route
+   reveal, the next service's card gets ONE light pass around its border,
+   900 ms, then rests on its own accent border. A rotating conic pseudo-element
+   under a border mask: transform only, no @property (Safari 16.4). Never loops;
+   the global reduced-motion rule above (`*, *::before, *::after`) already zeroes
+   its animation-duration/-delay, because this is a plain `animation:` shorthand —
+   no per-effect override needed here, unlike `.brand-stage-hero::before`, which
+   needs one because its rest frame is opacity 1, not 0. `data-lit` is set by the
+   page (`app/(client)/page.tsx`). ── */
+.brand-lit-card { position: relative; isolation: isolate; border-radius: 16px; } /* --brand-radius-panel's value — DayCard.tsx's own rounded-[var(--brand-radius-panel)], not referenced here: tokenLayer.test.ts pins brand.css's own rule bodies as --brand-radius-free, consumed only from components */
+.brand-lit-card[data-lit]::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: conic-gradient(from 0deg, transparent 0 78%, var(--lit-beam) 92%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  opacity: 0;
+  animation: brand-lit-pass 900ms var(--ease-in-out) 480ms 1 both;
+}
+@keyframes brand-lit-pass {
+  0%   { opacity: 0; transform: rotate(-1turn); }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { opacity: 0; transform: none; }
 }

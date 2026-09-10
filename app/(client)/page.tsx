@@ -227,8 +227,8 @@ export default async function Home() {
         ) : (
           <>
             {/* The hero spans the container — no centred `max-w-3xl` card. The
-                lit-card pass (spec §23) reads `data-lit`; its CSS lands in the
-                next task, and the class is inert until then. */}
+                lit-card pass (spec §23, decision Q) reads `data-lit`; its CSS
+                lives in `app/brand.css` (`.brand-lit-card[data-lit]::after`). */}
             <div className="brand-lit-card" data-lit {...revealProps(1)}>
               <DayCard {...hero.props} layout="wide" hero />
             </div>

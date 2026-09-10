@@ -108,10 +108,11 @@ const config: Config = {
 				"badge-azure-fg": "rgb(var(--badge-azure-fg-rgb) / <alpha-value>)",
 				"badge-azure-deep": "rgb(var(--badge-azure-deep-rgb) / <alpha-value>)",
 
-				// Child B, Layer 2 — the 23 composed tokens (29 today; placeholder,
+				// Child B, Layer 2 — the 23 composed tokens (30 today; placeholder,
 				// edge-control and warning-glow were added 2026-08-12, skeleton-base and
 				// skeleton-sweep on 2026-09-08 (Task 6 fix), sheen-highlight on 2026-09-08
-				// (Task 7, same ruling)). These bake their own alpha
+				// (Task 7, same ruling), lit-beam on 2026-09-10 (Task 8, same ruling)).
+				// These bake their own alpha
 				// and are therefore NOT alpha-capable: no `<alpha-value>`, and an
 				// opacity modifier on one is a bug that B-final's lint clause bans.
 				"surface-accent-solid": "var(--surface-accent-solid)",
@@ -161,6 +162,9 @@ const config: Config = {
 				// The primary button hover sheen (2026-09-08, Task 7, same ruling as
 				// skeleton-base/skeleton-sweep above) — see brand.css.
 				"sheen-highlight": "var(--sheen-highlight)",
+				// The lit card beam (2026-09-10, Task 8, spec §23 decision Q), same
+				// ruling as sheen-highlight above — see brand.css.
+				"lit-beam": "var(--lit-beam)",
 			},
 			fontFamily: {
 				display: ["var(--font-display)", "sans-serif"],

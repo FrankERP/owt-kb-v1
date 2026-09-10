@@ -25,6 +25,32 @@ carries `[data-reveal]` with no inline stagger index; `revealProps(i)`'s inline
 JS twins: `app/utils/motionPresets.ts` (`MS`, `EXIT_MS`, `SPRINGS`, `VARIANTS`).
 Guard: `app/utils/__tests__/motionTokens.test.ts`.
 
+## The beam (signature)
+
+Spec §2.1: "One accent-light sweep, used in exactly four places and nowhere else."
+§23 decision Q (R1, Task 8) added a fifth, CSS-only, harvested from the
+`border-beam` package survey without adding the dependency — still enumerated,
+still one-shot:
+
+1. **Route reveal** — the page's `brand-section-heading` rail draws itself
+   top-to-bottom over 480ms on every navigation. Not the beam gradient itself,
+   just its rail (`@keyframes brand-rail-draw`).
+2. **Skeletons shimmer** — a diagonal accent sweep crossing each placeholder
+   every 1.6s (`--skeleton-sweep`, `@keyframes shimmer`).
+3. **Primary button sheen** — on hover (pointer devices only) a narrow highlight
+   crosses the fill once, 600ms (`--sheen-highlight`, `.brand-btn-sheen`).
+4. **Drop landing** — when a dragged chip lands, the target cell flashes the
+   beam edge once, 120ms.
+5. **The lit card on `/`** (once, 900 ms) — after the route reveal, the next
+   service's hero card gets one light pass around its border, then rests on its
+   own accent border. `.brand-lit-card[data-lit]::after`, `@keyframes
+   brand-lit-pass`, `--lit-beam`. `data-lit` is set by `app/(client)/page.tsx`
+   on the hero card only. Guard: `app/utils/__tests__/litCard.test.ts`.
+
+The beam gradient itself (not just a rail/sweep/sheen derived from it) stays
+exclusive to the sign-in lockup, where it already lived before this list existed
+(`.brand-stage-hero::before`, `@keyframes brand-beam-reveal`).
+
 ## Rules
 
 1. **Only `transform` and `opacity` animate.** `Collapse` (M0b) is the one exception,
