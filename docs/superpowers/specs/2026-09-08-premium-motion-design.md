@@ -171,9 +171,9 @@ keep their behaviour and get only the Button/focus adoption.
 ### 5.0 Shell (`app/(client)/layout.tsx`, Navbar, NavMenu, BottomNav, SectionNav, ImpersonationBanner, AudioPlayer, SongSheet)
 
 - **Route reveal** — `template.tsx` (client, ~10 lines) remounts children per navigation; page sections carry `data-reveal`. The `<main>` wrapper is never transformed (a transformed ancestor breaks every `position: fixed` descendant — the WebKit trap already documented in `CueDialog.tsx:33`).
-- **Navbar** — the inert `transition-[height]` goes. Lockup: press. Desktop gains an active-route underline via `SlidingIndicator` across the nav links rendered by NavMenu when signed in (Calendario · Tags · Yo · Admin).
+- **Navbar** — the inert `transition-[height]` goes. Lockup: press. Desktop gains an active-route underline via `SlidingIndicator` across the nav links rendered by NavMenu when signed in (Calendario · Tags · Yo · Admin) — as planned; shipped as the separate `NavLinks` row (Calendario · Biblioteca · Kids · Planear Kids · Admin by role) after F1/F2 made `NavMenu` account-only.
 - **NavMenu** — avatar: press + ring `fast`; the dropdown becomes `Menu` (scale presence from the avatar corner, 200ms); notification badge pops in with `pop` spring when the count rises. **M1 follow-up F1:** with the tab bar and desktop nav links now covering every destination, NavMenu became a plain ACCOUNT menu at all widths — Mi perfil, Tema, a separator, Cerrar sesión — and no longer repeats Calendario/Tags/Oasis Kids/Planear Kids/Admin.
-- **BottomNav — resurrected (decision B).** Phone-only tab bar: Inicio · Calendario · Biblioteca · Yo · Más (as planned; F2 removed «Yo» — three tabs ship). Active tab: icon lifts 2px and the label brightens; a `layoutId` pill slides between tabs; tap = haptic light. **M1 follow-up F1** moved Tags/Tema/Cerrar sesión out to NavMenu, so "Más" now opens a `Sheet` holding only what the tabs (four at the time, three since F2) cannot fit — Kids, Planear Kids, Admin — and does not render at all (four tabs, no sheet) when none of those apply. **M1 follow-up F2** then removed «Yo» from the tab bar itself — `/me` has one home, the avatar menu's Mi perfil — leaving three worship tabs (or Kids/Planear Kids); a bar with fewer than two items (tabs + «Más») now renders nothing at all. Safe-area bottom padding. Every fixed-bottom element (toasts, FAB, AudioPlayer) offsets by `--bottom-nav-h` published on `<html>` the way `--impersonation-h` is — same guard shape as `impersonationOffsetSync.test.ts`.
+- **BottomNav — resurrected (decision B).** Phone-only tab bar: Inicio · Calendario · Biblioteca · Yo · Más (as planned; F2 removed «Yo» — three tabs ship). Active tab: icon lifts 2px and the label brightens; a `layoutId` pill slides between tabs; tap = haptic light. **M1 follow-up F1** moved Tags/Tema/Cerrar sesión out to NavMenu, so "Más" now opens a `Sheet` holding only what the tabs (four at the time, three since F2) cannot fit — Kids, Planear Kids, Admin — and does not render at all (no sheet; four tabs at F1, three since F2) when none of those apply. **M1 follow-up F2** then removed «Yo» from the tab bar itself — `/me` has one home, the avatar menu's Mi perfil — leaving three worship tabs (or Kids/Planear Kids); a bar with fewer than two items (tabs + «Más») now renders nothing at all. Safe-area bottom padding. Every fixed-bottom element (toasts, FAB, AudioPlayer) offsets by `--bottom-nav-h` published on `<html>` the way `--impersonation-h` is — same guard shape as `impersonationOffsetSync.test.ts`.
 - **SectionNav** — underline becomes `SlidingIndicator`; the active pill scrolls itself into view (`scrollIntoView({inline:"center"})`, behaviour respects reduced motion as the existing `ProposalsPanel` gate does).
 - **ImpersonationBanner** — enters from the top with `rise` (inverted); the `--impersonation-h` measurement runs after the enter completes so the navbar offset does not animate against a moving target.
 - **AudioPlayer transport** — slides up with `sheet` spring when a track starts, slides down when it stops; the progress bar switches from a `width` transition to `transform: scaleX` (origin left), which stays on the compositor.
@@ -983,13 +983,24 @@ same element (`SlidingIndicator` now centres the dot with auto margins), and the
 «‹ Anterior» / «Siguiente ›» row overflowed a 390 px phone — the words show from `sm:` up,
 the chevrons carry the buttons below that, and both are the house `Button`.
 
-**Bundle — over the accepted figure; Frank's call.** Cold, same method: M1 tip
-`/` 117.5 kB · `/admin` 342.5 kB (shared 169.2, chunk not isolable). Δ vs the M0b-2 tip
-**+7.3 / +5.7 kB gz** — `BottomNav` (with its sheet) and `NavLinks` now mount on every
-`(client)` route. Absolute vs "Before M0a": **+40.2 / +40.8 kB gz**, past the +32.9 /
-+35.1 accepted on 2026-09-09. Options: accept M1's cost as the shell's price, or a
-follow-up that lazy-loads the «Más» sheet's body (the only part of the bar that is not
-five links).
+**Bundle — over the accepted figure; ACCEPTED by Frank on 2026-09-10.** Cold, same
+method: M1 tip `/` 117.5 kB · `/admin` 342.5 kB (shared 169.2, chunk not isolable). Δ vs
+the M0b-2 tip **+7.3 / +5.7 kB gz** — `BottomNav` (with its sheet) and `NavLinks` now
+mount on every `(client)` route. Absolute vs "Before M0a": **+40.2 / +40.8 kB gz**, past
+the +32.9 / +35.1 accepted on 2026-09-09. Frank's word at the release was "do as you
+recommend on the cap"; the recommendation, now the ruling: accept +40.2 / +40.8 as the
+programme's recorded cost. The growth is structural (two shell components on every
+route), and the one deferral candidate — the «Más» sheet body — is three rows and their
+icons after F1/F2, so lazy-loading it cannot recover a meaningful number. A same-
+environment A/B at the release (`docs/MOTION.md` ledger) shows the three follow-ups
+moved the routes by −0.4 / +0.5 kB, inside Turbopack's ±0.5 kB build noise. The
+sheet-drag/`AnimatePresence` deferral from Part VIII remains the lever if a later phase
+needs the number down.
+
+**Released to production on 2026-09-10** via PR #55 (merge `c93d4494`, production alias
+verified by `alias` + `githubCommitSha`), after Frank's look on dev on 2026-09-09 and the
+three follow-ups above (dot centring, month-nav overflow, F1/F2), each task-reviewed and
+re-reviewed clean on the branch before the merge.
 
 **Deferred → later phases:** `/biblioteca` and the `/tag*` redirects (R1); long-press
 quick actions and pull-to-refresh (R7); `NavLinks` follows the page's `schedule`/`tags`
