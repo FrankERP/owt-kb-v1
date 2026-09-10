@@ -37,7 +37,7 @@ describe("NavLinks", () => {
     mount({ schedule: true, tags: true });
     const nav = screen.getByLabelText("Secciones");
     const links = Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim());
-    expect(links).toEqual(["Calendario", "Biblioteca", "Yo", "Admin"]);
+    expect(links).toEqual(["Calendario", "Biblioteca", "Admin"]);
     expect(screen.getByRole("link", { name: "Calendario" }).getAttribute("aria-current")).toBe("page");
     expect(nav.querySelectorAll("[data-sliding-indicator]")).toHaveLength(1);
   });
@@ -53,7 +53,7 @@ describe("NavLinks", () => {
     mount({ schedule: true, tags: true });
     const nav = screen.getByLabelText("Secciones");
     const links = Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim());
-    expect(links).toEqual(["Kids", "Yo"]);
+    expect(links).toEqual(["Kids"]);
   });
 
   it("shows Planear Kids for a kids manager but not for a plain kids member", () => {
@@ -61,7 +61,7 @@ describe("NavLinks", () => {
     mount({ schedule: true, tags: true });
     const nav = screen.getByLabelText("Secciones");
     const links = Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim());
-    expect(links).toEqual(["Kids", "Planear Kids", "Yo"]);
+    expect(links).toEqual(["Kids", "Planear Kids"]);
 
     cleanup();
     session = { user: kidsUser };

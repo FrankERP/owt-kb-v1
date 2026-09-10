@@ -407,16 +407,21 @@ and 5 (initials contrast) — `shellPolish.test.ts`.
 M1 is the app chrome: the phone tab bar, the desktop nav links, the avatar badge,
 the impersonation banner, the audio transport, and the song sheet's head.
 
-- **`BottomNav`** (`app/components/BottomNav.tsx`) — four worship tabs (Inicio ·
-  Calendario · Biblioteca · Yo) or the kids-only set (Kids · Planear Kids · Yo),
-  plus a fifth **«Más»** tab that holds only what those four cannot fit: `Kids`
-  (worship member also in Kids), `Planear Kids` (worship member who manages
-  Kids), `Admin` (admin/content-editor/super-admin). **Tema and Cerrar sesión
-  live in the avatar menu (`NavMenu`) now, not here** — M1 follow-up F1 gave
-  every destination one home per width, so the tab bar stopped repeating the
-  account actions. When none of the three rows applies (the common case: a
-  plain worship member with no Kids ministry), the «Más» button itself does not
-  render — the bar shows four tabs — and the sheet never opens. **«Más» is a
+- **`BottomNav`** (`app/components/BottomNav.tsx`) — three worship tabs (Inicio ·
+  Calendario · Biblioteca) or the kids-only set (Kids · Planear Kids when
+  managesKids applies), plus a **«Más»** tab that holds only what those tabs
+  cannot fit: `Kids` (worship member also in Kids), `Planear Kids` (worship
+  member who manages Kids), `Admin` (admin/content-editor/super-admin). **Tema,
+  Cerrar sesión and «Yo» all live in the avatar menu (`NavMenu`) now, not
+  here** — M1 follow-up F1 moved the account actions and F2 moved «Yo»,
+  because `/me` has one home, the avatar menu's «Mi perfil». When none of the
+  three rows applies (the common case: a plain worship member with no Kids
+  ministry), the «Más» button itself does not render — the bar shows the
+  tabs alone — and the sheet never opens. A bar with fewer than two items
+  (tabs + «Más») is not a bar: the kids-only volunteer with no planner rights
+  has one tab and no «Más» row, so `BottomNav` renders nothing at all and
+  publishes neither `--bottom-nav-h` nor `has-bottom-nav` — their avatar menu
+  still carries Mi perfil. **«Más» is a
   `CueDialog` sheet** (`mode="sheet"`, `size="sm"`), not the hand-rolled
   `inert`/backdrop panel it used to be, rendered unconditionally with
   `open={moreOpen}` even when the triggering button is absent (only the button

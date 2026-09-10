@@ -1,14 +1,18 @@
 "use client";
 
-// The phone tab bar (spec §5.0, §19.1, decision B). Four tabs, plus a fifth
-// «Más» tab and its sheet ONLY when there is something the four cannot hold
-// (Kids, Planear Kids, Admin) — Tema and Cerrar sesión live in the avatar menu
-// (NavMenu) now, one home per destination (M1 follow-up F1). It publishes its
-// MEASURED height as --bottom-nav-h on <html> the way the impersonation banner
-// publishes --impersonation-h, so every fixed-bottom element (toasts, the audio
-// transport, the song FAB) clears it without a constant anyone can drift from —
-// bottomNavOffsetSync.test.ts is the guard. Ministry filtering is COSMETIC (the
-// pages enforce), as NavLinks.tsx and ADR-0020 say.
+// The phone tab bar (spec §5.0, §19.1, decision B). Worship tabs: Inicio ·
+// Calendario · Biblioteca. Kids-only: Kids (+ Planear Kids when managesKids).
+// Plus a «Más» tab and its sheet ONLY when there is something the tabs cannot
+// hold (Kids, Planear Kids, Admin) — Tema, Cerrar sesión AND «Yo» all live in
+// the avatar menu (NavMenu) now, one home per destination (M1 follow-up F1,
+// F2). A bar with fewer than two items (tabs + «Más») is not a bar and
+// renders nothing — the kids-only volunteer with no planner rights. It
+// publishes its MEASURED height as --bottom-nav-h on <html> the way the
+// impersonation banner publishes --impersonation-h, so every fixed-bottom
+// element (toasts, the audio transport, the song FAB) clears it without a
+// constant anyone can drift from — bottomNavOffsetSync.test.ts is the guard.
+// Ministry filtering is COSMETIC (the pages enforce), as NavLinks.tsx and
+// ADR-0020 say.
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -29,7 +33,44 @@ export default function BottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const barRef = useRef<HTMLElement | null>(null);
   const user = session?.user ?? null;
-  const hidden = !user || pathname.startsWith("/auth") || pathname.startsWith("/studio");
+  const authHidden = !user || pathname.startsWith("/auth") || pathname.startsWith("/studio");
+
+  const role = user?.role;
+  const isSuper = role === "super-admin";
+  const isAdmin = isSuper || role === "admin" || role === "content-editor";
+  const ministries = user?.ministries ?? ["worship"];
+  const inWorship = isSuper || ministries.includes("worship");
+  const inKids = isSuper || ministries.includes("kids");
+  const managesKids = isSuper || (user?.managesMinistries ?? []).includes("kids");
+
+  const tabs: Tab[] = inWorship
+    ? [
+        { href: "/", label: "Inicio", icon: <HomeIcon />, match: (p) => p === "/" },
+        { href: "/schedule", label: "Calendario", icon: <CalendarIcon />, match: (p) => p.startsWith("/schedule") },
+        // Biblioteca links to /tag until R1 creates /biblioteca and redirects /tag* (spec §12.2).
+        { href: "/tag", label: "Biblioteca", icon: <MusicIcon />, match: (p) => /^\/(tag|posts|author)/.test(p) },
+      ]
+    : [
+        { href: "/kids", label: "Kids", icon: <KidsIcon />, match: (p) => p === "/kids" },
+        ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon />, match: (p: string) => p.startsWith("/kids/admin") }] : []),
+      ];
+
+  const rowClass = "flex min-h-[44px] w-full items-center gap-3 px-5 py-3 font-label text-xs uppercase tracking-widest text-ink hover:bg-accent/5";
+
+  // «Más» holds only what the tabs cannot fit — the avatar menu (NavMenu) now
+  // owns Tema, Cerrar sesión and «Yo». When no row applies, there is nothing
+  // to hold: the bar shows the tabs and the sheet never opens.
+  const moreRows: { href: string; label: string; icon: React.ReactNode }[] = [
+    ...(inWorship && inKids ? [{ href: "/kids", label: "Kids", icon: <KidsIcon /> }] : []),
+    ...(inWorship && managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon /> }] : []),
+    ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: <AdminIcon /> }] : []),
+  ];
+
+  // A bar with fewer than two items (tabs + «Más») is not a bar — the
+  // kids-only volunteer with no planner rights has one tab and no «Más» row,
+  // so there is nothing worth a fixed bottom bar for. Their avatar menu still
+  // carries Mi perfil.
+  const hidden = authHidden || tabs.length + (moreRows.length > 0 ? 1 : 0) < 2;
 
   // Measured, not a constant: the bar wraps to two lines at the largest text
   // scale, and the safe-area inset differs per device. Published only while the
@@ -68,39 +109,6 @@ export default function BottomNav() {
   }, [hidden]);
 
   if (hidden || !user) return null;
-
-  const role = user.role;
-  const isSuper = role === "super-admin";
-  const isAdmin = isSuper || role === "admin" || role === "content-editor";
-  const ministries = user.ministries ?? ["worship"];
-  const inWorship = isSuper || ministries.includes("worship");
-  const inKids = isSuper || ministries.includes("kids");
-  const managesKids = isSuper || (user.managesMinistries ?? []).includes("kids");
-
-  const tabs: Tab[] = inWorship
-    ? [
-        { href: "/", label: "Inicio", icon: <HomeIcon />, match: (p) => p === "/" },
-        { href: "/schedule", label: "Calendario", icon: <CalendarIcon />, match: (p) => p.startsWith("/schedule") },
-        // Biblioteca links to /tag until R1 creates /biblioteca and redirects /tag* (spec §12.2).
-        { href: "/tag", label: "Biblioteca", icon: <MusicIcon />, match: (p) => /^\/(tag|posts|author)/.test(p) },
-        { href: "/me", label: "Yo", icon: <UserIcon />, match: (p) => p.startsWith("/me") },
-      ]
-    : [
-        { href: "/kids", label: "Kids", icon: <KidsIcon />, match: (p) => p === "/kids" },
-        ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon />, match: (p: string) => p.startsWith("/kids/admin") }] : []),
-        { href: "/me", label: "Yo", icon: <UserIcon />, match: (p) => p.startsWith("/me") },
-      ];
-
-  const rowClass = "flex min-h-[44px] w-full items-center gap-3 px-5 py-3 font-label text-xs uppercase tracking-widest text-ink hover:bg-accent/5";
-
-  // «Más» holds only what the four tabs cannot fit — the avatar menu (NavMenu)
-  // now owns Tema and Cerrar sesión. When no row applies, there is nothing to
-  // hold: the bar shows four tabs and the sheet never opens.
-  const moreRows: { href: string; label: string; icon: React.ReactNode }[] = [
-    ...(inWorship && inKids ? [{ href: "/kids", label: "Kids", icon: <KidsIcon /> }] : []),
-    ...(inWorship && managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon /> }] : []),
-    ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: <AdminIcon /> }] : []),
-  ];
 
   return (
     <>
@@ -185,15 +193,6 @@ function MusicIcon() {
       <path d="M9 18V5l12-2v13" />
       <circle cx="6" cy="18" r="3" />
       <circle cx="18" cy="16" r="3" />
-    </svg>
-  );
-}
-
-function UserIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }

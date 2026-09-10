@@ -3,7 +3,8 @@
 // The desktop nav row (spec §19.1, M1 Shell), rendered as real links at lg
 // and above with a shared SlidingIndicator underline on the active one.
 // Ministry filtering mirrors BottomNav's derivation for consistency across
-// the two nav surfaces: BottomNav on phones, NavLinks at lg+.
+// the two nav surfaces: BottomNav on phones, NavLinks at lg+. «Yo» lives in
+// the avatar menu (NavMenu) only — /me has one home (M1 follow-up F2).
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -41,7 +42,6 @@ export default function NavLinks({ schedule = false, tags = false }: { schedule?
     ...(tags && inWorship ? [{ href: "/tag", label: "Biblioteca", active: /^\/(tag|posts|author)/.test(pathname) }] : []),
     ...(inKids ? [{ href: "/kids", label: "Kids", active: pathname.startsWith("/kids") && !pathname.startsWith("/kids/admin") }] : []),
     ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", active: pathname.startsWith("/kids/admin") }] : []),
-    { href: "/me", label: "Yo", active: pathname.startsWith("/me") },
     ...(isAdmin ? [{ href: "/admin", label: "Admin", active: pathname.startsWith("/admin") }] : []),
   ];
   return (

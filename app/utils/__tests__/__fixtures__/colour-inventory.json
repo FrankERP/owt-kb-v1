@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 325,
+    "literalRows": 324,
     "filesScanned": 284,
     "filesWithColour": 52,
     "byCategory": {
       "2": 2,
       "4": 73,
-      "8": 99,
+      "8": 98,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 128,
+      "B": 127,
       "exempt": 35,
       "keep": 247,
       "C": 6,
@@ -3031,6 +3031,18 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
+      "line": 231,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
       "line": 232,
       "disposition": "B",
       "reason": null
@@ -3051,11 +3063,11 @@
       "file": "app/components/BottomNav.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
+      "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
-      "carrier": "fill",
-      "line": 234,
+      "carrier": "stroke",
+      "line": 172,
       "disposition": "B",
       "reason": null
     },
@@ -3067,7 +3079,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 164,
+      "line": 181,
       "disposition": "B",
       "reason": null
     },
@@ -3079,7 +3091,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 173,
+      "line": 192,
       "disposition": "B",
       "reason": null
     },
@@ -3091,7 +3103,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 184,
+      "line": 202,
       "disposition": "B",
       "reason": null
     },
@@ -3103,7 +3115,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 194,
+      "line": 212,
       "disposition": "B",
       "reason": null
     },
@@ -3115,7 +3127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 203,
+      "line": 222,
       "disposition": "B",
       "reason": null
     },
@@ -3127,31 +3139,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 213,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 223,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 231,
+      "line": 230,
       "disposition": "B",
       "reason": null
     },
