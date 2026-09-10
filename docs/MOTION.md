@@ -151,9 +151,11 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `reveal.test.ts` | `revealProps()`'s shape, and that `app/(client)/template.tsx` never wraps the page in a transformed element. |
 | `loadingSkeletons.test.ts` | The four `loading.tsx` files compose `Skeleton` instead of a hand-copied pulse block. |
 | `shellPolish.test.ts` | Spec Part III findings 3 (brand mark loads with `priority`) and 5 (initials avatar contrast in light). |
-| `rawMotionLiterals.test.ts` | Pins `transition-all` (13) and raw `duration-N` (12) counts outside `ui/` at the audited baseline — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. |
-| `cueDialogMount.test.ts` | Counts every LITERAL `open` attribute on a `<CueDialog` source element — not `open={…}` — across `app/**/*.tsx` excluding `__tests__` and `ui/`; per element, not per caller, so a wrapper mounted by several callers still counts once. Pins the count at 11 (re-measured 2026-09-09, fix round 1; the original 2026-09-08 measurement of 7 only caught the direct `{x && <CueDialog open>}` shape and missed wrapper components — AdminPanel's and ServicesPanel's local `Modal`, `SongSheet`'s `SetlistPopover`, `KidsPlanner`'s `SeatPicker` — whose only JSX output is a literal `<CueDialog open …>` conditionally mounted by their own callers). Those four wrapper sites migrate in their own route phases. Lower the count in the same commit that migrates a site to `open={…}`; never raise it. |
+| `rawMotionLiterals.test.ts` | Pins `transition-all` (9) and raw `duration-N` (8) counts outside `ui/` at the audited baseline (down from 13/12 pre-M1 — M1's four migrated sites: `BottomNav`'s sheet becoming a `CueDialog`, `NavMenu`'s avatar-ring transitions, the audio transport's progress fill and play/pause button) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. |
+| `cueDialogMount.test.ts` | Counts every LITERAL `open` attribute on a `<CueDialog` source element — not `open={…}` — across `app/**/*.tsx` excluding `__tests__` and `ui/`; per element, not per caller, so a wrapper mounted by several callers still counts once. Pins the count at 10 (re-measured 2026-09-09, M1 Task 7 — `SongSheet`'s `SetlistPopover` migrated to `open={x}`, down from 11; the original 2026-09-08 measurement of 7 only caught the direct `{x && <CueDialog open>}` shape and missed wrapper components). `AdminPanel`'s and `ServicesPanel`'s local `Modal`s and `KidsPlanner`'s `SeatPicker` remain and migrate in their own route phases. Lower the count in the same commit that migrates a site to `open={…}`; never raise it. |
+| `dialogSemantics.test.ts` | Every file that draws a dismissable full-bleed scrim (`bg-scrim` + `inset-0` + `onClick`) carries `role="dialog"`/`aria-modal`/an accessible name/focus management, or is named in an exemption list with a reason. Floor is 1 (`CueDialog` itself) as of M1 Task 1 — `BottomNav`'s hand-rolled scrim was replaced by a `CueDialog` sheet, so its `NOT_A_DIALOG` entry was deleted along with the overlay it exempted; the exemption list is now empty. A stale exemption (naming a file the scan no longer finds) fails its own check. |
 | `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins six named labels (`>Cue<`, `>Servicio<`, "Índice musical", "títulos", "Backstage operations", "Acceso autorizado") at their audited counts, by equality — a phase that removes one lowers its number in the same commit. |
+| `bottomNavOffsetSync.test.ts` | Names `BottomNav`'s `NAV_H_VAR`/`NAV_CLASS` exports, the `setProperty`/`removeProperty`/`classList` publish-and-clear shapes, `brand.css`'s `--bottom-nav-h` declaration and `html.has-bottom-nav [data-route-main]` padding rule, that every fixed-bottom consumer (`Toast.tsx`, `AudioPlayer.tsx`, `EditSongButton.tsx`) offsets by the variable, and that the client layout mounts `<BottomNav />` inside `<Provider>`. A new fixed-bottom element joins the `it.each` list. |
 
 ## Bundle
 
@@ -184,6 +186,7 @@ Before was measured on the primary checkout at the merge-base commit
 | **`e9d90327` cold rebuild** (M0b-1 Task 1, mid-branch — the commit the row above was actually measured against; fix round 1) | 169.2 kB | 85.5 kB | 310.3 kB | 90.1 kB / 29.5 kB |
 | **`2d635d38` cold rebuild** (the M0b-1 merge; fix round 1) | 169.2 kB | 110.3 kB | 335.3 kB | not cleanly isolable — see note below |
 | **M0b-2 tip** (`857cd2d5`, this branch; fix round 1) | 169.2 kB | 110.2 kB | 336.8 kB | not cleanly isolable — see note below |
+| **M1 tip** (this branch, `3c5e8cd4`) | 169.2 kB | 117.5 kB | 342.5 kB | not cleanly isolable — see note below |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -360,7 +363,100 @@ two real options are to accept the number as the programme's cost, or a later
 architectural deferral of the sheet-drag/AnimatePresence path behind a dynamic
 import — Frank's call.
 
+**M1 tip (`3c5e8cd4`), measured cold, same method as the fix-round-1 rebuilds
+above** (2026-09-09): `git archive HEAD | tar -x` into a clean scratch
+directory, `node_modules` cloned in via APFS `cp -Rc` (an outside symlink is
+rejected by Turbopack's own root detection, same finding as before), `.env.local`
+symlinked, `.next` removed, `next build` from scratch under Node 22 (this
+worktree's default `node` resolves to 20.x — the build was run with Node
+22.22.3 explicitly on `PATH`, per the repo's `engines` field). Shared reproduces
+the M0b-2 tip's figure exactly — **169.2 kB**, no drift — because the migrated
+sites this milestone touches (`BottomNav`, `NavLinks`, `Presence`, `AudioPlayer`,
+`SongSheet`) are all route-rendered code, never `rootMainFiles`/`polyfillFiles`.
+`/` moves **+7.3 kB** (110.2 → 117.5 kB) and `/admin` moves **+5.7 kB** (336.8 →
+342.5 kB) against the M0b-2 tip — both outside the ±3 kB band this task treats
+as noise. The reason is structural, not incidental: `BottomNav` was a file that
+existed but was **not mounted anywhere** before M1 Task 2 (its commit message
+says "BottomNav returns"); M1 is the milestone that actually renders it — plus
+the brand-new `NavLinks` — inside `app/(client)/layout.tsx` and `Navbar.tsx`,
+both of which wrap every route in the `(client)` group, `/` and `/admin`
+included. Both pull in `SlidingIndicator`'s `layoutId` machinery and (`BottomNav`)
+a `CueDialog` sheet on every route that renders the shell, not only the ones
+that open a dialog on their own. The async feature chunk is, again, **not
+cleanly isolable**: its signature strings (`animateVisualElement`,
+`MeasureLayout`, `Exit`) turn up inside a single **422 535 B (422.5 kB)** chunk
+(`44zm1rbsb67qq.js`) — byte-identical in size to the chunk M0b-2 reported at the
+same name and size, unreferenced by either `/` or `/admin`'s
+`page_client-reference-manifest.js`, fused with Studio/gallery vendor code by
+Turbopack the same way it was at the M0b-2 tip. The absolute Δ against "Before
+M0a" (77.3 kB / 301.7 kB) is now `/` **+40.2 kB**, `/admin` **+40.8 kB** —
+**past the accepted cap of +32.9 kB / +35.1 kB by +7.3 kB / +5.7 kB**, the exact
+size of this milestone's own marginal cost above, reported here without
+trimming anything; whether to accept the new number, defer part of the shell
+behind a dynamic import, or hold the milestone is Frank's call, not a decision
+this doc makes for him.
+
 ## Where the walk's findings landed
 
 Part III of the spec catalogues every element. M0a closes findings 3 (lockup priority)
 and 5 (initials contrast) — `shellPolish.test.ts`.
+
+### Shell (M1)
+
+M1 is the app chrome: the phone tab bar, the desktop nav links, the avatar badge,
+the impersonation banner, the audio transport, and the song sheet's head.
+
+- **`BottomNav`** (`app/components/BottomNav.tsx`) — five worship tabs (Inicio ·
+  Calendario · Biblioteca · Yo · Más) or the kids-only set (Kids · Planear Kids ·
+  Yo · Más); **«Más» is a `CueDialog` sheet** (`mode="sheet"`, `size="sm"`), not
+  the hand-rolled `inert`/backdrop panel it used to be. Hidden at `lg` and above,
+  and on `/auth*`/`/studio*`. Publishes its MEASURED `offsetHeight` in px as
+  `--bottom-nav-h` on `<html>` plus a `has-bottom-nav` class while it is mounted
+  AND on screen (the `lg:hidden` media query, not a constant, decides "on
+  screen" — `getComputedStyle(bar).display !== "none"`, since `offsetParent` is
+  always `null` under jsdom regardless of real layout); clears both on unmount.
+  `bottomNavOffsetSync.test.ts` lists every fixed-bottom element that must clear
+  it and how: **toasts** use `max(env(safe-area-inset-bottom),
+  var(--bottom-nav-h, 0px))` (the inset when the bar is absent, the bar — which
+  already carries the inset — when it is present, never both stacked); the
+  **audio transport** sits flush on the bar via `var(--bottom-nav-h, 0px)`
+  alone, with its own inset padding zeroed under `html.has-bottom-nav
+  .audio-player`; the **song FAB** (`EditSongButton`) offsets by `calc(1.5rem +
+  var(--bottom-nav-h, 0px))`. A new fixed-bottom element joins that guard's list
+  in the same commit that adds it.
+- **`NavLinks`** (`app/components/NavLinks.tsx`) — the desktop link row, rendered
+  inside the navbar's centred title block at `lg` and above; the page title that
+  block otherwise shows is `lg:hidden` there (the page's own heading carries it
+  on desktop, and the phone/tablet title stays as before below `lg`). One shared
+  `SlidingIndicator id="nav-links" variant="underline"` renders inside whichever
+  link is active; ministry-filtered the same way `BottomNav` is (cosmetic — the
+  pages themselves enforce access).
+- The **avatar notification badge** (`NavMenu`) now pops in with `<Presence
+  show={notifCount > 0} appear variant="scale">` instead of a plain conditional
+  `<span>`.
+- **`ImpersonationBanner`** drops in on `<Presence variant="drop">` — but
+  `appear` is passed only when impersonation STARTS IN-SESSION, never when a
+  page loads already impersonating. That distinction exists because of the
+  feature-chunk trap documented under "Load-failure behaviour" above: an
+  unconditional `appear` would render an admin's hard-refresh-while-impersonating
+  page at the `drop` variant's `initial` (`opacity: 0`) until the async `motion`
+  chunk resolves — invisible, indefinitely, if the chunk never loads — while the
+  navbar had already reserved space for a banner nobody could see. A mount that
+  is already active renders at rest and publishes `--impersonation-h` (its
+  MEASURED height, same pattern as `--bottom-nav-h`) synchronously, in the same
+  effect that used to run unconditionally; an in-session start animates and
+  publishes the height from `onEntered`, once the drop-in has actually landed.
+- **`AudioPlayer`**'s host is itself a `<Presence show variant="sheet">` (no
+  fixed descendant — the `Presence` host carries `fixed inset-x-0` directly,
+  the allowed exception to rule 5) that enters on `SPRINGS.sheet` and exits on
+  the ordinary `EXIT_MS` ease-out fade (a spring on the way out would overshoot
+  the edge). Its progress fill animates `transform: scaleX(progress)` on a
+  `w-full origin-left` element instead of resizing `width`, inside a track that
+  carries `overflow-hidden` so the track's own rounding clips the fill instead
+  of the fill drawing (and squashing) its own corners at low progress.
+- **`SongSheet`** passes `title={sheet?.title ?? "Canción"}` to its `CueDialog`
+  instead of drawing its own header — the dialog's head (grip on phones, the
+  drag-to-dismiss surface, the `<h2>`) is now the ONLY head, and the hand-rolled
+  eyebrow/title/close-button block is gone. What survived (the author, the
+  key/BPM/time-signature pills) moved into one compact meta row rendered as the
+  dialog's first child, ahead of the scrollable body.
