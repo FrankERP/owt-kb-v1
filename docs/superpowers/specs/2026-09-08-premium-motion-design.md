@@ -1089,6 +1089,42 @@ after the route reveal (decision Q, the beam's fifth and only non-`motion` use).
   "an" inside "Redman"); title search keeps full substring matching since it is what is
   visually shown, sorted prefix-first.
 
+**F3 (Frank's look, 12:30).** Three things off a phone, one commit on the R1 branch.
+1. **The letter rail became an index bar** (`LibraryLetterRail`, extracted from `LibraryIndex`):
+   the letter whose section is in view carries the accent and `aria-current`, fed by ONE
+   `IntersectionObserver` over the `h2#letra-*` headings; a pointer drag scrubs the list under
+   the finger (instant while moving, smooth on a plain tap, `haptic("selection")` per letter,
+   `touch-none`, a `data-scrubbing` pill to hold, `right-1` so it clears the scrollbar gutter).
+   Frank's words: the letters should show the progress of scrolling, not sit beside a scrollbar.
+2. **Search finds artists.** The Fuse index now carries a flat derived `artist` field
+   (`artistOf` = legacy `author` + every `authors[].name`), weight 1.5 under `title`'s 3, and the
+   ≤2-char branch matches it by per-word prefix. Most of the catalogue keeps its artist in
+   `authors[]` with `author` empty, so those songs were unreachable by name before this.
+3. **The drawer searches.** Temas and Artista are both a search box over a chip cloud sized by
+   `postCount`; the Artista `<Select>` is gone (Tonalidad's stays — 15 options is a list).
+
+**F3 rulings.**
+- **A selected chip that does not match the query pins to the front of the cloud** rather than
+  filtering out. A chip nobody can see is a filter nobody can remove.
+- **Artista needs no «Todos» tile** though Tipo does: a chip is a button, so a second tap on the
+  chosen artist fires and clears it — the `SegmentedControl` limitation that forced «Todos» does
+  not apply.
+- **The "in view" band is 64 px, a constant, not the sticky offset.** `rootMargin` takes no
+  `env()` and no `rem`, so it cannot be derived from `UNDER_NAVBAR`; 64 px sits deliberately
+  ABOVE the smallest real offset (5 rem + inset) so the pinned heading is inside the band
+  rather than on its edge.
+- **The rail jumps on `pointerdown`, and the `click` that follows is swallowed** (`detail >= 1`).
+  A click with `detail === 0` is a keyboard activation — the one case with no pointerdown behind
+  it, and the only reason the buttons keep an `onClick` at all.
+- **`activeLetter` is DERIVED from `letters`, never stored as "".** A query collapses the
+  sections; a remembered letter that no longer has one would light up the instant the sections
+  came back, ahead of the observer.
+- **Fuse's `threshold: 0.35` was never the problem** — see the F3 report. A full artist word
+  scores ~0.0007 against the joined string; "hillsong" missed before F3 only because the index
+  had no field containing it. The real limit is the location penalty (`distance: 200`): a word
+  starting past ~character 68 of the joined artist string falls outside the threshold, which no
+  real artist list reaches.
+
 **Bundle (cold, same environment, git-archive builds of `main` `0414ee86` and the R1 tip):**
 `/` 123.5 → **119.0 kB gz (−4.5)** — the catalogue and Fuse left home; `/admin` 350.9 →
 354.8 (+3.9, the run-sheet `DayCard`/disclosure code the admin shell shares); the new

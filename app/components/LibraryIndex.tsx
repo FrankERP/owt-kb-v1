@@ -17,6 +17,7 @@ import {
 import AnimatedList from "./ui/AnimatedList";
 import Button from "./ui/Button";
 import LibraryFilters from "./LibraryFilters";
+import LibraryLetterRail from "./LibraryLetterRail";
 import LibraryRow from "./LibraryRow";
 
 export type LibraryIndexProps = { posts: Post[]; tags: Tag[]; authors: Author[]; initial: LibraryFiltersState };
@@ -26,6 +27,12 @@ export type LibraryIndexProps = { posts: Post[]; tags: Tag[]; authors: Author[];
 const UNDER_NAVBAR =
   "top-[calc(5rem+env(safe-area-inset-top))] lg:top-[calc(6rem+env(safe-area-inset-top))] " +
   "scroll-mt-[calc(5rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(6rem+env(safe-area-inset-top))]";
+
+// Where the "which letter is in view" band starts, in px from the top of the
+// viewport. Deliberately ABOVE the sticky offset above (80 px on a phone, 96 on
+// a desktop, plus the inset) — `rootMargin` takes no `env()`, and a band that
+// began exactly at the offset would leave the pinned heading on its edge.
+const BAND_TOP_PX = 64;
 
 export default function LibraryIndex(props: LibraryIndexProps) {
   const { posts, tags, authors, initial } = props;
@@ -64,9 +71,54 @@ export default function LibraryIndex(props: LibraryIndexProps) {
   );
   const letters = useMemo(() => groups.map((g) => g.letter).filter(Boolean), [groups]);
 
-  const jump = useCallback((letter: string) => {
-    document.getElementById(`letra-${letter}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+  // The rail is an index BAR: it shows where the list is, so the active letter
+  // has to be optimistic on a jump (the scrub must track the finger, not the
+  // scroll animation) and authoritative from the observer afterwards. The
+  // "nothing is current" case is DERIVED, never stored — a query collapses the
+  // sections, and a remembered letter that no longer has a section would
+  // otherwise light up the moment the sections come back, ahead of the observer.
+  const [seenLetter, setSeenLetter] = useState("");
+  const activeLetter = letters.includes(seenLetter) ? seenLetter : "";
+
+  const jump = useCallback((letter: string, behavior: ScrollBehavior = "smooth") => {
+    setSeenLetter(letter);
+    document.getElementById(`letra-${letter}`)?.scrollIntoView({ block: "start", behavior });
   }, []);
+
+  // ONE IntersectionObserver over the headings, never a scroll listener: the
+  // band starts ABOVE the sticky offset (5–6 rem + inset) and ends well short of
+  // the fold, so the heading pinned under the navbar is the one inside it. Two
+  // can intersect at once while the next section pushes the current one out —
+  // `letters` order breaks that tie in favour of the pinned one. When nothing
+  // intersects (a long section scrolled past its own heading) the last heading
+  // above the band wins, which is the section the reader is actually in.
+  useEffect(() => {
+    if (letters.length < 2 || typeof IntersectionObserver === "undefined") return;
+    const els = letters
+      .map((l) => document.getElementById(`letra-${l}`))
+      .filter((el): el is HTMLElement => el !== null);
+    if (els.length === 0) return;
+    const visible = new Set<string>();
+    const letterOf = (el: Element) => el.id.slice("letra-".length);
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) visible.add(letterOf(e.target));
+          else visible.delete(letterOf(e.target));
+        }
+        const inView = letters.find((l) => visible.has(l));
+        if (inView) {
+          setSeenLetter(inView);
+          return;
+        }
+        const passed = els.filter((el) => el.getBoundingClientRect().top < BAND_TOP_PX);
+        setSeenLetter(passed.length ? letterOf(passed[passed.length - 1]) : letters[0]);
+      },
+      { rootMargin: `-${BAND_TOP_PX}px 0px -70% 0px` },
+    );
+    for (const el of els) io.observe(el);
+    return () => io.disconnect();
+  }, [letters]);
 
   const set = (next: LibraryFiltersState) => setFilters(next);
   const clear = () => setFilters({ q: "", tags: [], author: "", key: "" });
@@ -123,7 +175,7 @@ export default function LibraryIndex(props: LibraryIndexProps) {
             <p className="font-label text-sm uppercase tracking-widest">No se encontraron canciones</p>
           </div>
         ) : (
-          <div className={letters.length > 1 ? "pr-6" : ""}>
+          <div className={letters.length > 1 ? "pr-7" : ""}>
             {groups.map((g) => (
               <section key={g.letter || "resultados"} aria-label={g.letter ? `Letra ${g.letter}` : "Resultados"}>
                 {g.letter && (
@@ -144,37 +196,13 @@ export default function LibraryIndex(props: LibraryIndexProps) {
           </div>
         )}
         {letters.length > 1 && (
-          // AFTER the sections, deliberately — this uses `absolute` positioning
-          // inside the `relative` wrapper above, not a float, so DOM order no
-          // longer places it: the wrapper's `pr-6` gutter is what the rail sits
-          // in. `50vh`, not `top-1/2`: on a `sticky` box both a percentage and a
-          // `vh` unit resolve against the same scrollport, so the two are not in
-          // conflict here (an earlier version of this comment said otherwise and
-          // was wrong) — `50vh` is kept because it states the viewport-relative
-          // intent (vertical centre of the SCROLLPORT) plainly, instead of
-          // leaning on a percentage to mean the same thing implicitly. Plain
-          // <button>s by the same row exemption the plan records: bare tap
-          // targets in a rail, not the Button primitive's chrome.
-          <div className="absolute inset-y-0 right-0">
-            <nav
-              aria-label="Índice alfabético"
-              className="sticky top-[50vh] flex -translate-y-1/2 flex-col items-center"
-            >
-              {letters.map((l) => (
-                <button
-                  key={l}
-                  type="button"
-                  onClick={() => jump(l)}
-                  // iOS index-bar shape — targets under 24 px by ruling (R1),
-                  // adjacent letters need the density.
-                  className="px-2 py-0.5 font-label text-[10px] text-ink-dim hover:text-accent focus:outline-none focus-visible:text-accent"
-                  aria-label={`Ir a la letra ${l}`}
-                >
-                  {l}
-                </button>
-              ))}
-            </nav>
-          </div>
+          // AFTER the sections, deliberately — the rail positions itself
+          // `absolute` inside the `relative` wrapper above, not as a float, so
+          // DOM order no longer places it: the wrapper's `pr-7` gutter is what
+          // it sits in — wider than the rail's own `right-1` offset plus its
+          // ~24px pill, so a scrubbing pill never overlaps row content. Its own
+          // chrome, scrub and progress live in the component.
+          <LibraryLetterRail letters={letters} active={activeLetter} onJump={jump} />
         )}
       </div>
     </div>

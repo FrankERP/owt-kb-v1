@@ -2,7 +2,7 @@
 // The /biblioteca client index (R1 Task 3): A–Z sections, the search console and
 // the row's one contract (openSheet). The pure filtering/grouping lives in
 // `app/utils/libraryIndex.ts` and is tested there — this file asserts the wiring.
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
@@ -77,6 +77,37 @@ describe("LibraryIndex", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: /Alabaré/ }));
     expect(openSheet).toHaveBeenCalledWith("a1");
+  });
+
+  it("hands the rail the letter whose section the observer reports in view (F3)", () => {
+    // jsdom has no IntersectionObserver and no layout, so the observer is stubbed
+    // down to its one contract: it hands the index a set of entries. The rail's
+    // own scrub/tap behaviour is `libraryLetterRail.test.tsx`.
+    let fire: ((entries: Array<{ target: Element; isIntersecting: boolean }>) => void) | null = null;
+    const observed: Element[] = [];
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        constructor(cb: (e: Array<{ target: Element; isIntersecting: boolean }>) => void) {
+          fire = cb;
+        }
+        observe(el: Element) {
+          observed.push(el);
+        }
+        disconnect() {}
+      },
+    );
+    mount();
+    // Both headings are observed, and nothing is current until one is in view.
+    expect(observed.map((el) => el.id)).toEqual(["letra-A", "letra-B"]);
+    expect(screen.getAllByRole("button", { name: /^Ir a la letra/ }).map((b) => b.getAttribute("aria-current")))
+      .toEqual([null, null]);
+
+    act(() => fire!([{ target: observed[1], isIntersecting: true }]));
+    expect(screen.getByRole("button", { name: "Ir a la letra B" }).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("button", { name: "Ir a la letra A" }).getAttribute("aria-current")).toBeNull();
+
+    vi.unstubAllGlobals();
   });
 
   it("mirrors the query into the URL with history.replaceState — no server round-trip, no history growth", () => {

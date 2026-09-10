@@ -565,6 +565,29 @@ cards — see spec Part X for the full ledger; the motion-relevant pieces:
   one (no `motion` import, so it costs nothing against the bundle budget below). Guarded by
   `litCard.test.ts`, which reads `brand.css`/`page.tsx` as text and cannot see geometry —
   see the file's own header for what closed that gap.
+- **The letter rail is an INDEX BAR** (`LibraryLetterRail`, F3), not a list of links. It
+  shows progress — the letter whose heading is in view carries `aria-current` and the accent,
+  fed by ONE `IntersectionObserver` over the `h2#letra-*` headings in `LibraryIndex` (never a
+  scroll listener): the band starts at 64 px, above the sticky heading offset, so the heading
+  pinned under the navbar is the one inside it, and the last heading above the band wins when
+  none intersects. And it scrubs — a pointer drag picks the letter under the finger by
+  arithmetic on the rail's own box, jumping `behavior: "auto"` while the finger moves and
+  `"smooth"` on a plain tap, with `haptic("selection")` per letter and `touch-none` so the
+  page does not scroll underneath. A pill (`data-[scrubbing]:`) paints only while a finger is
+  down, so the rail is invisible chrome at rest. Nothing animates through `motion`; reduced
+  motion has nothing to opt out of beyond the smooth tap, which is the browser's own.
+- **The filter drawer searches** (F3). Temas and Artista are both a `normalizeText` search box
+  over a chip cloud sized by `postCount` — a 43-theme, 80-artist catalogue is not a list
+  anyone scans, and the Artista `<Select>` is gone. A SELECTED chip that does not match the
+  query pins to the front of the cloud rather than disappearing: an invisible chip is a filter
+  nobody can remove. Artista is single-select (a second tap clears it, which is why it needs no
+  «Todos» tile) and shows the twelve busiest artists before anyone types. `Tonalidad` keeps its
+  `Select` — 15 options is a list.
+- **Search reads the ARTIST, not the legacy `author` string** (F3). The Fuse index carries one
+  flat derived field, `artist` (`artistOf` = `author` + every `authors[].name`, joined), weight
+  1.5 under `title`'s 3, because `getFn` only ever reads `path[0]` and a nested `authors.name`
+  key would read nothing. Before F3 a song whose artist lived only in `authors[]` — most of the
+  catalogue — was unreachable by name.
 - **The redirects** (`/tag*`/`/author*` → `/biblioteca`, `permanent: true` = 308) carry no
   motion of their own — a 308 is a full navigation, not a client transition — but they are
   why `/biblioteca` needed the `?q=`/`?tag=`/`?author=`/`?key=` URL contract

@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
-// The /biblioteca filter drawer (R1 Task 4): Tipo tiles, theme chips, Artista
-// and Tonalidad selects, and the trigger's own count badge.
+// The /biblioteca filter drawer (R1 Task 4, F3): Tipo tiles, searchable theme
+// and artist chip clouds, the Tonalidad select, and the trigger's own count badge.
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
@@ -19,7 +19,7 @@ const tag = (slug: string, name: string, postCount = 1): Tag => ({
   slug: { current: slug },
   postCount,
 });
-const author = (slug: string, name: string): Author => ({ _id: slug, name, slug: { current: slug } });
+const author = (slug: string, name: string, postCount = 0): Author => ({ _id: slug, name, slug: { current: slug }, postCount });
 
 const TAGS: Tag[] = [
   tag("up-beat", "Up beat", 8),
@@ -28,7 +28,7 @@ const TAGS: Tag[] = [
   tag("alabanza", "Alabanza", 10),
   tag("adoracion", "Adoración", 3),
 ];
-const AUTHORS: Author[] = [author("hillsong", "Hillsong"), author("elevation", "Elevation")];
+const AUTHORS: Author[] = [author("hillsong", "Hillsong", 9), author("elevation", "Elevation", 4)];
 const KEYS = ["C", "D", "G"];
 
 const EMPTY: F = { q: "", tags: [], author: "", key: "" };
@@ -85,15 +85,84 @@ describe("LibraryFilters", () => {
     expect(onChange).toHaveBeenCalledWith({ ...EMPTY, tags: ["alabanza"] });
   });
 
-  it("the Artista select lists authors", () => {
+  it("the Artista cloud lists authors as chips, busiest first — no 80-option dropdown (F3)", () => {
     mount();
     openDrawer();
 
-    const select = screen.getByLabelText("Artista") as HTMLSelectElement;
-    const labels = within(select)
-      .getAllByRole("option")
-      .map((o) => o.textContent);
-    expect(labels).toEqual(["Todos", "Hillsong", "Elevation"]);
+    expect(screen.getByRole("button", { name: /^Hillsong/ })).toBeDefined();
+    expect(screen.getByRole("button", { name: /^Elevation/ })).toBeDefined();
+    expect(screen.queryByLabelText("Artista")).toBeNull();
+  });
+
+  it("typing in the theme search leaves only the matching chip", () => {
+    mount();
+    openDrawer();
+
+    fireEvent.change(screen.getByLabelText("Buscar tema"), { target: { value: "ador" } });
+    expect(screen.getByRole("button", { name: /Adoración/ })).toBeDefined();
+    expect(screen.queryByRole("button", { name: /Alabanza/ })).toBeNull();
+  });
+
+  it("a SELECTED theme survives a query it does not match — an invisible chip is an unremovable filter", () => {
+    mount({ ...EMPTY, tags: ["alabanza"] });
+    openDrawer();
+
+    fireEvent.change(screen.getByLabelText("Buscar tema"), { target: { value: "ador" } });
+    const alabanza = screen.getByRole("button", { name: /Alabanza/ });
+    expect(alabanza.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: /Adoración/ })).toBeDefined();
+  });
+
+  it("a selected theme that does not match the query renders FIRST among the chips", () => {
+    mount({ ...EMPTY, tags: ["alabanza"] });
+    openDrawer();
+
+    fireEvent.change(screen.getByLabelText("Buscar tema"), { target: { value: "ador" } });
+    const chips = screen.getAllByRole("button", { name: /^#/ });
+    expect(chips[0].textContent).toContain("Alabanza");
+  });
+
+  it("a theme query that matches nothing says so", () => {
+    mount();
+    openDrawer();
+
+    fireEvent.change(screen.getByLabelText("Buscar tema"), { target: { value: "zzz" } });
+    expect(screen.getByText("Sin temas que coincidan")).toBeDefined();
+  });
+
+  it("the artist search narrows the cloud, and a chip sets then clears `author`", () => {
+    const onChange = mount();
+    openDrawer();
+
+    fireEvent.change(screen.getByLabelText("Buscar artista"), { target: { value: "hill" } });
+    expect(screen.queryByRole("button", { name: /^Elevation/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Hillsong/ }));
+    expect(onChange).toHaveBeenCalledWith({ ...EMPTY, author: "hillsong" });
+
+    cleanup();
+    const onChange2 = mount({ ...EMPTY, author: "hillsong" });
+    openDrawer();
+    fireEvent.click(screen.getByRole("button", { name: /^Hillsong/ }));
+    expect(onChange2).toHaveBeenCalledWith({ ...EMPTY, author: "" });
+  });
+
+  it("a selected artist outside the top preview still renders FIRST, with an empty query", () => {
+    // 15 authors, none typed: the preview caps at 12 by count, so the
+    // least-busy author (last by count) would not make the cut on its own.
+    const authors = Array.from({ length: 15 }, (_, i) => author(`a${i}`, `Artista ${i}`, 15 - i));
+    const leastBusy = authors[authors.length - 1]; // postCount 1, slug "a14"
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <LibraryFilters filters={{ ...EMPTY, author: leastBusy.slug.current }} onChange={vi.fn()} tags={TAGS} authors={authors} keys={KEYS} />
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    openDrawer();
+
+    const chips = screen.getAllByRole("button", { name: /^Artista \d/ });
+    expect(chips[0].textContent).toContain(leastBusy.name);
+    expect(chips[0].getAttribute("aria-pressed")).toBe("true");
   });
 
   it("the count badge on the trigger reads Filtros · 2 for two active filters", () => {
