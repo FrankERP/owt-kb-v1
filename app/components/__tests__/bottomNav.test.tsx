@@ -38,27 +38,48 @@ describe("BottomNav", () => {
     expect(screen.queryByRole("navigation", { name: "Navegación principal" })).toBeNull();
   });
 
-  // (a) a plain worship member: the five tabs cannot fit nothing that isn't
+  // (a) a plain worship member: the three tabs cannot fit nothing that isn't
   // already a tab (no kids ministry, no admin role), so «Más» does not render
   // and the sheet never opens.
-  it("shows Inicio · Calendario · Biblioteca · Yo for a plain worship member, with aria-current on the route and NO «Más» button", () => {
+  it("shows Inicio · Calendario · Biblioteca for a plain worship member, with aria-current on the route and NO «Más» button", () => {
     pathname = "/schedule";
     mount();
     const nav = screen.getByRole("navigation", { name: "Navegación principal" });
     const names = Array.from(nav.querySelectorAll("a, button")).map((n) => n.textContent?.trim());
-    expect(names).toEqual(["Inicio", "Calendario", "Biblioteca", "Yo"]);
+    expect(names).toEqual(["Inicio", "Calendario", "Biblioteca"]);
     expect(screen.getByRole("link", { name: "Calendario" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("link", { name: "Biblioteca" }).getAttribute("href")).toBe("/tag");
     expect(nav.querySelectorAll("[data-sliding-indicator]")).toHaveLength(1);
     expect(screen.queryByRole("button", { name: "Más" })).toBeNull();
   });
 
-  it("shows Kids · Planear Kids · Yo for a kids manager with no worship ministry, and NO «Más» button", () => {
+  it("shows Kids · Planear Kids for a kids manager with no worship ministry, and NO «Más» button", () => {
     session = { user: { ...worshipUser, ministries: ["kids"], managesMinistries: ["kids"] } };
     mount();
     const nav = screen.getByRole("navigation", { name: "Navegación principal" });
-    expect(Array.from(nav.querySelectorAll("a, button")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids", "Yo"]);
+    expect(Array.from(nav.querySelectorAll("a, button")).map((n) => n.textContent?.trim())).toEqual(["Kids", "Planear Kids"]);
     expect(screen.queryByRole("button", { name: "Más" })).toBeNull();
+  });
+
+  // A kids-only plain member has one tab (Kids) and no «Más» row — fewer than
+  // two items is not a bar, so it renders nothing at all and publishes no
+  // --bottom-nav-h / has-bottom-nav. Their avatar menu still carries Mi perfil.
+  it("renders nothing for a kids-only plain member and publishes no bottom-nav variable or class", () => {
+    session = { user: { ...worshipUser, ministries: ["kids"], managesMinistries: [] } };
+    mount();
+    expect(screen.queryByRole("navigation", { name: "Navegación principal" })).toBeNull();
+    expect(document.documentElement.style.getPropertyValue(NAV_H_VAR)).toBe("");
+    expect(document.documentElement.classList.contains(NAV_CLASS)).toBe(false);
+  });
+
+  it("never shows a Yo item in either tabs or the «Más» sheet", () => {
+    session = { user: { ...worshipUser, role: "super-admin" } };
+    mount();
+    const nav = screen.getByRole("navigation", { name: "Navegación principal" });
+    expect(Array.from(nav.querySelectorAll("a, button")).map((n) => n.textContent?.trim())).not.toContain("Yo");
+    fireEvent.click(screen.getByRole("button", { name: "Más" }));
+    const dialog = screen.getByRole("dialog", { name: "Más" });
+    expect(dialog.textContent).not.toMatch(/Yo/);
   });
 
   it("publishes its measured height on <html> while mounted and clears it on unmount", () => {
