@@ -4,8 +4,9 @@
 //
 // WHY THIS EXISTS
 // ---------------
-// Layer 1 — the GitHub Actions schedule that curls `/api/cron/flush-notifications`
-// every five minutes (declared, and starved by CI volume; see docs/NOTIFICATIONS.md) — is a genuine single point of failure. Layer 2 (the
+// Layer 1 — the Cloud Scheduler job and the GitHub Actions schedule that curl
+// `/api/cron/flush-notifications` every five minutes (the GitHub one starved by
+// CI volume; see docs/NOTIFICATIONS.md, ADR-0032) — is a genuine single point of failure. Layer 2 (the
 // opportunistic sweep inside a committed write) structurally cannot flush the
 // terminal edit of a working session, and the terminal edit is what every notice
 // eventually is. So every notice that ships depends on that workflow or, failing

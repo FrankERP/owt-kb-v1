@@ -6,8 +6,9 @@ import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext
 // genuinely load-bearing. Vercel Hobby allows one cron per day, so the five-minute
 // schedule lives outside Vercel: a Google Cloud Scheduler job (ADR-0032) and
 // `.github/workflows/flush-notifications.yml`, both of which call this route with
-// `CRON_SECRET`. Two callers racing is safe — the sweep claims before it sends.
-// Layer 2 (the opportunistic sweep in
+// `CRON_SECRET`. Two callers racing cannot double-send — the sweep claims before
+// it sends — though a collision splits one backlog across two sweeps. Layer 2
+// (the opportunistic sweep in
 // a writer's `after()` block) cannot flush the terminal edit of a working session
 // and layer 3 is daily, so when this stops, everything is up to 24 hours late —
 // which is what the liveness alarm in `/api/cron/service-reminders` watches for.
@@ -122,8 +123,8 @@ async function getHandler(req: NextRequest) {
 
   // Full budget each round; layer 2 alone is derated. When a setlist notice is
   // re-pended because the send stage ran out of clock, drain again in the same
-  // invocation instead of waiting for the next GitHub tick — nominally five
-  // minutes, but GitHub starves this schedule when the repo is busy with CI,
+  // invocation instead of waiting for the next tick — five minutes from Cloud
+  // Scheduler; the GitHub caller alone is starved when the repo is busy with CI,
   // measured between 0.09 and 2.03 runs/hour (docs/NOTIFICATIONS.md).
   const report = await drainOutbox();
   return NextResponse.json(report);

@@ -49,7 +49,7 @@ hand-writing a fixture that mirrors them).
 
 | Layer | What | Where |
 |---|---|---|
-| 1 — primary | **Google Cloud Scheduler**, `*/5`, since 2026-09-10 ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md)) — plus GitHub Actions, declared `*/5` but starved by this repo's CI volume, kept as an independent second caller — see §"Layer 1 does not run on the schedule it declares" | Scheduler job `flush-notification-outbox` (GCP `eloquent-figure-421401`, `us-central1`) and `.github/workflows/flush-notifications.yml`, both → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
+| 1 — primary | **Google Cloud Scheduler**, `*/5` ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md); live since 2026-09-10) — plus GitHub Actions, declared `*/5` but starved by this repo's CI volume, kept as an independent second caller — see §"Layer 1 does not run on the schedule it declares" | Scheduler job `flush-notification-outbox` (GCP `eloquent-figure-421401`, `us-central1`) and `.github/workflows/flush-notifications.yml`, both → `/api/cron/flush-notifications` (drains up to 5 sweeps per tick when work is re-pended) |
 | 2 — backstop | opportunistic sweep after any queueing write | end of `commitUpserts()` in `serviceMutationSideEffects.ts` — keeps its report and raises the destroyed-mail alarm |
 | 3 — last resort | the daily Vercel cron | `/api/cron/service-reminders` (mails a person about destroyed mail, as layer 2 also does; layer 1 goes red on the same conditions instead — see §"The destroyed-mail alarm") |
 
@@ -88,7 +88,7 @@ layer 2 sweepDeadlineMs  =  SEND_TIMEOUT_MS + (SWEEP_DEADLINE_MS − SEND_TIMEOU
 paragraph said `SWEEP_DEADLINE_MS` was unchanged and that the invocation's worst
 case did not widen; that was wrong, and it is the claim the fix retracts. It does not fire on
 proposal submit or review, which queue nothing; layer 1 is what covers those —
-nominally within five minutes, in practice ranging 0.09–2.03 runs/h with the repo's CI volume (§"Layer 1 does
+nominally within five minutes — the GitHub caller alone ranged 0.09–2.03 runs/h with the repo's CI volume, which is why a Cloud Scheduler job now carries the schedule (§"Layer 1 does
 not run on the schedule it declares"). The proposal-submit **email** (`buildProposalEmail`) is immediate, not
 queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
@@ -189,10 +189,11 @@ shipped defaults, and raising it to keep a test green is the one forbidden move.
 
 ## Layer 1 does not run on the schedule it declares
 
-**Resolved 2026-09-10:** layer 1's primary caller is now a Google Cloud Scheduler
-job ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md)); the GitHub
-workflow stays as a second trigger. Everything below is the measurement that
-forced the move and still describes the GitHub caller's behaviour.
+**Resolved 2026-09-10 (live from 12:58 CST):** layer 1's primary caller is a
+Google Cloud Scheduler job ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md));
+the GitHub workflow stays as a second trigger. Everything below is the
+measurement that forced the move and still describes the GitHub caller's
+behaviour.
 
 The route's own comment calls layer 1 "the PRIMARY one, and genuinely
 load-bearing". **Its schedule is not honoured, and we now know why.**
@@ -242,18 +243,22 @@ rate**, not delivery-%.
 ### What fixed it
 
 An external scheduler hitting `/api/cron/flush-notifications` — Google Cloud
-Scheduler, applied 2026-09-10, ADR-0032. Vercel Pro (which lifts the
-one-cron-per-day Hobby limit) was the other option; rejected on cost. Both need a
-planned rotation of `CRON_SECRET`, which is `Secret`-classified and unreadable —
-see `docs/SECRETS.md`, whose rotation command now writes all three stores.
-Tracked in [issue #25](https://github.com/FrankERP/owt-kb-v1/issues/25).
+Scheduler, set up 2026-09-10, ADR-0032. Vercel Pro (which lifts the
+one-cron-per-day Hobby limit) was the other option; rejected on cost. Scheduler
+needs a planned rotation of `CRON_SECRET`, which is `Secret`-classified and
+unreadable — see `docs/SECRETS.md`, whose rotation command now writes all three
+stores; Pro would not have, since a `vercel.json` cron presents the env var the
+route already verifies. Tracked in
+[issue #25](https://github.com/FrankERP/owt-kb-v1/issues/25).
 
 The Scheduler job: `*/5 * * * *` UTC, `GET` with the bearer in the header, 90 s
 attempt deadline, **zero retries** (the next tick is five minutes away and a retry
 would overlap the sweep it retries). Inspect it with
-`gcloud scheduler jobs describe flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1`;
-`status.code: 0` is a 200 on the last attempt, `16` is a 401 (the bearer no longer
-matches Vercel — rotate). Measure delivery the same way as before:
+`gcloud scheduler jobs describe flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1 --format="value(state,status.code,lastAttemptTime)"`
+— **always with a `--format` projection**, because a bare `describe` prints the
+bearer and `gcloud` logs its stdout to `~/.config/gcloud/logs/`. `status.code`
+empty or `0` is a 200 on the last attempt, `-1` is never attempted, `16` is a 401
+(the bearer no longer matches Vercel — rotate). Measure delivery the same way as before:
 `scripts/measure-cron-delivery.mjs` reads GitHub runs only, so for Scheduler read
 `lastAttemptTime` or the GCP logs.
 
@@ -263,12 +268,16 @@ is what must come back. On the median it comes back at an hour; on a bad day it
 does not come back for half a day. Layer 3's liveness alarm is daily, so a stall
 shorter than that is invisible.
 
-**The mitigation above is applied.** The bearer travels in the HEADER, never in
-a `?secret=` query string, where it would land in access logs. The GitHub
-workflow was kept as a second, independent trigger rather than replaced. Wiring
-the third consumer required rotating `CRON_SECRET` in all three places at once,
-because the stored value is unrecoverable by design — `Sensitive` in Vercel and
-write-only in GitHub Secrets.
+**The mitigation above is applied.** The bearer travels
+in the HEADER, never in a `?secret=` query string, where it would land in access
+logs. The GitHub workflow was kept as a second, independent trigger rather than
+replaced. Wiring the third consumer meant rotating `CRON_SECRET` in all three
+places at once, because the stored value is unrecoverable by design —
+`Sensitive` in Vercel and write-only in GitHub Secrets. Two callers on one
+outbox cannot double-send (the sweep claims before it sends), but a Scheduler
+tick and a late GitHub run CAN overlap and split one backlog across two sweeps
+sharing the SMTP width — the workflow's `concurrency` group serialises GitHub
+only against itself.
 
 ## The proposal thread — what it notifies
 
@@ -494,6 +503,7 @@ applies after all.
 
 ```bash
 gh run list --workflow="Flush notification outbox" --limit 5
+gcloud scheduler jobs describe flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1 --format="value(state,status.code,lastAttemptTime)"
 ```
 
 **Force a sweep now:**

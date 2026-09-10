@@ -13,8 +13,8 @@ cadence collapsed from ~2 runs/h to 0.1–0.3/h (issue #25; the measurement is i
 
 The case that forced the decision: a setlist published on 2026-09-10 at 10:47 CST
 came due at 11:02 and was still unclaimed at 12:02, because the last scheduled
-run had been at 10:02. It went out at 12:03 only because someone ran
-`gh workflow run` by hand.
+run had been at 09:02 — a three-hour gap. It went out at 12:03 only because
+someone ran `gh workflow run` by hand.
 
 ## Decision
 
@@ -26,7 +26,11 @@ attempt deadline and **no retries** — the next tick is five minutes away, and 
 retry would overlap the sweep it is retrying.
 
 The GitHub workflow **stays** as a second, independent trigger. Two callers
-racing is safe: the sweep claims before it sends.
+racing cannot double-send, because the sweep claims before it sends; a
+collision does split one backlog across two sweeps that share the SMTP width,
+which the workflow's `concurrency` group cannot prevent since it serialises
+GitHub only against itself. That cost is accepted: the GitHub caller rarely
+fires, and a split batch is still delivered.
 
 `CRON_SECRET` now has three presenters/verifiers (Vercel, GitHub Actions, Cloud
 Scheduler), and its rotation in `docs/SECRETS.md` writes all three in one command.
@@ -50,6 +54,16 @@ Cloud Scheduler is priced per job (first three per billing account free, then
 
 ## Consequences
 
+- **Live since 2026-09-10 12:58 CST.** The job was created PAUSED with a
+  placeholder bearer, `CRON_SECRET` was rotated into all three stores
+  (`docs/SECRETS.md`, steps 1–3 — twice, because the first pass echoed the
+  value to a terminal), production was redeployed, the job resumed, and a
+  forced tick returned success (`status.code` empty, as the docs predict).
+- `gcloud` logs its arguments and the raw output of `describe` to
+  `~/.config/gcloud/logs/`, so the header update runs with
+  `CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true`, and every `update` or `describe`
+  of this job carries a `--format` projection — `update` echoes the whole job,
+  header included, by default.
 - A rotation of `CRON_SECRET` has a third destination. Forgetting Scheduler
   leaves it presenting the old value: every tick 401s silently in GCP and
   layer 1 degrades back to GitHub's starved cadence with nothing in the app

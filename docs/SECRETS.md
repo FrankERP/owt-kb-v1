@@ -8,6 +8,7 @@ Platforms in play:
 
 - **Vercel** — the deployed Next.js app (`owt-backstage`, team `frank-rochas-projects`). Settings → Environment Variables.
 - **GitHub Actions** — repo secrets for workflows. Settings → Secrets and variables → Actions.
+- **Google Cloud Scheduler** — the `flush-notification-outbox` job in GCP project `eloquent-figure-421401` (`us-central1`) presents `CRON_SECRET` as a request header. Written with `gcloud`, never through the console.
 - **`.env.local`** — local development only, gitignored, loaded via `node --env-file=.env.local` for `scripts/*.mjs`.
 
 ## Retrievability: assume nothing is recoverable
@@ -29,20 +30,22 @@ Worth knowing before you need it, not during:
 
 ### Setting a shared secret without ever handling the value
 
-Write both stores in one shell command, so the value lives only in a variable that is discarded at the end and never reaches your scrollback:
+Write every store in one shell command, so the value lives only in a variable that is discarded at the end and never reaches your scrollback. For `CRON_SECRET` that is three stores — the canonical block is in its entry below. The shape:
 
 ```bash
 SECRET=$(openssl rand -hex 32) && \
-  printf '%s' "$SECRET" | npx vercel env add CRON_SECRET production && \
-  printf '%s' "$SECRET" | gh secret set CRON_SECRET && \
+  printf '%s' "$SECRET" | npx vercel env add <NAME> production && \
+  printf '%s' "$SECRET" | gh secret set <NAME> && \
   unset SECRET
 ```
 
 There is no step where you carry the value between platforms, which is the step that otherwise ends with a secret in a clipboard or a chat log.
 
-### If the two ever drift
+**`gcloud` is the exception to "never reaches your scrollback": it logs every invocation, flag values included, to `~/.config/gcloud/logs/<date>/*.log`, and it logs the raw stdout of `describe` too.** Any `gcloud` command that carries a secret runs with `CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true`, and any `describe` of a job that holds one uses `--format` to project the fields you want. If you forget, delete that day's log directory.
 
-**Rotate both. Do not try to recover the old value.** For a `Sensitive` Vercel variable there is nothing to recover, and the attempt fails silently in the way described above.
+### If the stores ever drift
+
+**Rotate all of them. Do not try to recover the old value.** For a `Sensitive` Vercel variable there is nothing to recover, and the attempt fails silently in the way described above.
 
 Rerun the one-shot command with a fresh value, removing the existing Vercel key first (`vercel env add` refuses to overwrite):
 
@@ -50,7 +53,7 @@ Rerun the one-shot command with a fresh value, removing the existing Vercel key 
 npx vercel env rm CRON_SECRET production
 ```
 
-then the generate-and-write block above, then redeploy. A rotation leaves both stores provably in agreement; a recovery only assumes it, and for a `Sensitive` variable it cannot even do that.
+then the generate-and-write block for that secret, then redeploy. A rotation leaves every store provably in agreement; a recovery only assumes it, and for a `Sensitive` variable it cannot even do that.
 
 `vercel env pull` remains useful for ordinary `Encrypted` variables — for populating a local `.env.local`, for instance. Point it at a scratch path when you only want to inspect, since it rewrites the target file wholesale.
 
@@ -64,13 +67,13 @@ then the generate-and-write block above, then redeploy. A rotation leaves both s
 |---|---|
 | Vercel (Production only) | The routes read `process.env.CRON_SECRET` and compare the presented bearer token against it |
 | GitHub Actions | `.github/workflows/flush-notifications.yml` sends it as `Authorization: Bearer …` |
-| Google Cloud Scheduler | Job `flush-notification-outbox` (project `eloquent-figure-421401`, `us-central1`) sends the same header every five minutes — the primary layer-1 caller since 2026-09-10 ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md)) |
+| Google Cloud Scheduler | Job `flush-notification-outbox` (project `eloquent-figure-421401`, `us-central1`) sends the same header every five minutes — layer 1's primary caller ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md)), live since 2026-09-10 |
 | `.env.local` | Not needed. Only required to exercise the cron routes locally |
 
 **Purpose.** Authorizes the two cron routes. Without it:
 
 - `app/api/cron/service-reminders/route.ts:29` — the daily Vercel cron (service reminders **and** the notification-outbox liveness alarm) returns 403.
-- `app/api/cron/flush-notifications/route.ts:103` — the notification sweep **fails closed**: when `CRON_SECRET` is unset the route 401s every caller, including one presenting nothing. Layer 1 of the notification outbox stops entirely, and members' emails fall back to the daily cron — up to 24 hours late.
+- `app/api/cron/flush-notifications/route.ts:120` — the notification sweep **fails closed**: when `CRON_SECRET` is unset the route 401s every caller, including one presenting nothing. Layer 1 of the notification outbox stops entirely, and members' emails fall back to the daily cron — up to 24 hours late.
 
 **Where the value came from.** A random bearer token with no external issuer — any high-entropy string works. Generate one with `openssl rand -hex 32`.
 
@@ -81,12 +84,15 @@ then the generate-and-write block above, then redeploy. A rotation leaves both s
    SECRET=$(openssl rand -hex 32) && \
      printf '%s' "$SECRET" | npx vercel env add CRON_SECRET production && \
      printf '%s' "$SECRET" | gh secret set CRON_SECRET && \
+     CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true \
      gcloud scheduler jobs update http flush-notification-outbox \
        --project=eloquent-figure-421401 --location=us-central1 \
-       --update-headers="Authorization=Bearer $SECRET" && \
+       --update-headers="Authorization=Bearer $SECRET" \
+       --format="value(name,state)" && \
      unset SECRET
    ```
-   `vercel env add` refuses an existing key, so on a true rotation remove it first with `npx vercel env rm CRON_SECRET production`. The Scheduler header is the one place the value passes through a process argument; `gcloud` does not log it, but do not add `set -x` around this block.
+   The `--format` on the update is load-bearing too: without it `gcloud` prints the whole job to stdout, header included, which is how the value reached a terminal (and from there a chat) on 2026-09-10 and forced an immediate second rotation.
+   `vercel env add` refuses an existing key, so on a true rotation remove it first with `npx vercel env rm CRON_SECRET production`. The Scheduler header is the one place the value passes through a process argument, and **`gcloud` writes its arguments to `~/.config/gcloud/logs/<date>/` unless file logging is off** — the `CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true` prefix is not optional. Do not add `set -x` around this block. If it ran without the prefix, delete that day's log directory.
 2. **Redeploy.** This is the step that is easy to skip and makes the whole thing look broken if you do — Vercel binds env vars at deploy time, so the running production deployment keeps the old value until it is rebuilt:
    ```bash
    npx vercel deploy --prod
@@ -96,13 +102,15 @@ then the generate-and-write block above, then redeploy. A rotation leaves both s
    ```bash
    gh workflow run "Flush notification outbox"
    ```
-   A green run means the new value matches on GitHub's side. A 401 means it does not. Then force one Scheduler tick and read its last status — `code: 0` is a 200, `code: 16` is a 401:
+   A green run means the new value matches on GitHub's side. A 401 means it does not. Then make sure the Scheduler job is ENABLED (it is created paused, and pausing is the incident off switch — a rotation runbook ends with it running), force one tick, wait out the attempt deadline, and read the last status **with a projection, never a bare `describe`** (which would log the bearer):
    ```bash
-   gcloud scheduler jobs run flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1 && \
-     sleep 10 && \
+   gcloud scheduler jobs resume flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1 --format="value(state)" ; \
+     gcloud scheduler jobs run flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1 --format="value(state)" && \
+     sleep 90 && \
      gcloud scheduler jobs describe flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1 --format="value(state,status.code,lastAttemptTime)"
    ```
-   If the job is `PAUSED` (it is created paused, and pausing is the incident off switch), resume it: `gcloud scheduler jobs resume flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1`.
+   (Spelled out rather than through a `$J` variable on purpose: zsh does not word-split an unquoted variable, so `gcloud … $J` there sees one argument and fails with "Please use the location flag".)
+   `status.code` is the `google.rpc.Code` of the last completed attempt: **empty is success (observed 2026-09-10 on the first live tick), `-1` is never attempted, `16` (UNAUTHENTICATED) is a 401** — the bearer no longer matches Vercel. The 401→16 mapping is from Cloud Scheduler's documented HTTP mapping, not yet observed on this job; record the first observed value here. `status` describes the last *completed* attempt and a sweep can run for 60 s, hence the 90 s wait — if `lastAttemptTime` has not advanced, wait and describe again.
 
 **Blast radius of rotation.** From the moment Vercel is updated until the redeploy completes, the deployed app still verifies against the *old* value while GitHub and Scheduler already present the new one — so every flush run goes red (GitHub) or 401s quietly (Scheduler) and no debounced notification email is sent, and Vercel's own daily cron is 403ing in the same window. Nothing is lost: outbox notices accumulate and flush once the values agree. Keep the window to a single deploy by doing step 2 immediately. **A rotation that forgets Scheduler has no alarm:** the job keeps ticking, every tick 401s, and layer 1 silently falls back to GitHub's starved cadence. Step 3's `describe` is the only check.
 

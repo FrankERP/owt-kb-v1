@@ -31,9 +31,12 @@
 #     RESOLVED 2026-09-10 (ADR-0032): the primary caller is now a Google Cloud
 #     Scheduler job (`flush-notification-outbox`, project eloquent-figure-421401,
 #     us-central1) on the same `*/5`. This workflow stays as an independent
-#     second trigger — two callers racing is safe, the sweep claims before it
-#     sends. Do not re-run the cadence experiment, and do not delete this file
-#     to "consolidate": it is the only caller whose failure goes red anywhere.
+#     second trigger — two callers cannot double-send (the sweep claims before
+#     it sends), but the `concurrency` group below serialises this workflow only
+#     against itself, so a Scheduler tick and a late run here can overlap and
+#     split one backlog across two sweeps. Do not re-run the cadence
+#     experiment, and do not delete this file to "consolidate": it is the only
+#     caller whose failure goes red anywhere.
 #   · GitHub DISABLES scheduled workflows after 60 days of repository inactivity,
 #     and that rule applies to public repositories like this one. The daily
 #     liveness alarm in /api/cron/service-reminders is what makes that state loud
