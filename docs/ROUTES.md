@@ -109,7 +109,7 @@ token) for private/fresh data.
 
 ## Notable components per page
 
-- **`/`** — `Navbar`, `DayCard`.
+- **`/`** — `Navbar`, `DayCard` (the next service, `layout="wide"` + `hero`), `DayCardDisclosure` (every other service, collapsed to one line).
 - **`/schedule`** — `Navbar`, `CalendarView`.
 - **`/biblioteca`** — `Navbar`, `LibraryIndex`.
 - **`/me`** — `Navbar`, `NextServiceHero`, `DayCard`, `AddToCalendarButton`,
@@ -127,7 +127,7 @@ See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full comp
 
 ## Special files
 
-- `(client)/loading.tsx` — home DayCard skeleton (group-level suspense).
+- `(client)/loading.tsx` — home run-sheet skeleton: the wide hero card plus two collapsed lines (group-level suspense).
 - `(client)/error.tsx` (C) — branded Spanish error boundary with retry.
 - `(client)/me/loading.tsx`, `(client)/schedule/loading.tsx`,
   `(client)/posts/[slug]/loading.tsx` — per-route skeletons.

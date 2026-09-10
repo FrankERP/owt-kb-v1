@@ -8,27 +8,27 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 312,
-    "filesScanned": 284,
-    "filesWithColour": 49,
+    "literalRows": 314,
+    "filesScanned": 285,
+    "filesWithColour": 50,
     "byCategory": {
       "2": 2,
       "4": 70,
-      "8": 89,
+      "8": 90,
       "9": 10,
-      "11": 7,
+      "11": 8,
       "12": 134
     },
     "byDisposition": {
-      "B": 118,
+      "B": 120,
       "exempt": 35,
-      "keep": 234,
+      "keep": 235,
       "C": 6,
       "D": 15
     },
     "compositingClasses": 19,
     "compositingSelectorOccurrences": 40,
-    "compositingClassNameOccurrences": 56,
+    "compositingClassNameOccurrences": 57,
     "compositingRuleBodies": 39,
     "lightCounterpartClasses": 15,
     "pairs": 11,
@@ -427,7 +427,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 157,
+      "line": 219,
       "disposition": "B",
       "reason": null
     },
@@ -3204,6 +3204,30 @@
       "reason": null
     },
     {
+      "file": "app/components/DayCardDisclosure.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 31,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/DayCardDisclosure.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 53,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/components/EditSongButton.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -3993,6 +4017,14 @@
       "file": "app/(client)/layout.tsx",
       "kind": "className",
       "class": "atmosphere",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/(client)/page.tsx",
+      "kind": "className",
+      "class": "lit-card",
       "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"

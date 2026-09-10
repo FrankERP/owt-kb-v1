@@ -75,12 +75,14 @@ describe("brand.css reveal rules", () => {
 });
 
 describe("home page is the first consumer", () => {
-  it("passes revealProps to the section heading and the card grid", () => {
+  it("passes revealProps to the section heading, the hero card and the disclosures", () => {
     // R1: the library block (and its own revealProps(2) heading) left home for
-    // /biblioteca, so the count drops from 3 to 2 — the "Esta semana" heading
-    // and the card grid.
+    // /biblioteca, dropping the count from 3 to 2; Task 7 split the card grid
+    // into a hero and a collapsed list, so it is 3 again — the "Esta semana"
+    // heading, the lit hero wrapper, and the one site inside the disclosure map
+    // that staggers every collapsed service.
     const src = read("app/(client)/page.tsx");
     expect(src).toMatch(/import \{ revealProps \} from "\.\.\/utils\/reveal"/);
-    expect((src.match(/\{\.\.\.revealProps\(/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((src.match(/\{\.\.\.revealProps\(/g) ?? []).length).toBeGreaterThanOrEqual(3);
   });
 });

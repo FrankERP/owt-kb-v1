@@ -85,7 +85,7 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   call it. `daysUntil` pins "today" to America/Mexico_City (`toLocaleDateString("sv", …)`), not
   the runtime's local date — Vercel is UTC, so reading the bare local date would misreport the
   team's evening as still a day away. `formatCountdown` reads a negative diff as "Hace N días"
-  rather than "En -N días". Consumers: `NextServiceHero`, `DayCard`'s header pill.
+  rather than "En -N días". Consumers: `NextServiceHero`, `DayCard`'s header pill, `DayCardDisclosure`'s collapsed line.
 - **`scheduleMonths.ts`** — pure `YYYY-MM` month arithmetic (leaf module, no clock/React/Sanity):
   `parseMonthParam`, `addMonths`, `monthBounds`, `monthLabel`, `windowMonths`, `windowBounds`,
   `monthRangeLabel`, `scheduleHref`, `MONTH_NAMES_ES`, `WINDOW_MONTHS=3`. Reads via `Date.UTC` for
@@ -306,6 +306,7 @@ Legend: **[C]** client, **[S]** server.
 | Component | Purpose |
 |-----------|---------|
 | `DayCard` [C] | **The core service card** — setlist (medley-grouped via `buildRuns`) + all five seats; embeds `SetlistEditor` for admins + `PracticePlaylistButton`. |
+| `DayCardDisclosure` [C] | A non-next service on `/`, collapsed to one line (day · date · countdown) that opens a `Collapse` onto its `DayCard`. |
 | `NextServiceHero` [C] | Countdown badge ("Hoy"/"Mañana"/"En N días"). Imports `daysUntil`/`formatCountdown` from `app/utils/daysUntil.ts`. |
 | `CalendarView` [C] | Schedule calendar grid; Mexico_City "today" highlight. |
 | `AvailabilityCalendar` [C] | Member self-service unavailability picker. |

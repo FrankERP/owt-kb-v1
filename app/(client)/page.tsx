@@ -2,7 +2,8 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import { Setlist, SetlistSong, SpecialRole } from "../utils/interface";
 import Navbar from "../components/Navbar";
 import { revealProps } from "../utils/reveal";
-import { DayCard } from "../components/DayCard";
+import { DayCard, type DayCardProps } from "../components/DayCard";
+import DayCardDisclosure from "../components/DayCardDisclosure";
 import { paintsDayCard } from "../utils/paintsDayCard";
 import { publishedSetlist } from "../utils/draftGating";
 import { pickUnique } from "../utils/serviceReadSelect";
@@ -105,13 +106,12 @@ export default async function Home() {
   // A Saturday service is only surfaced when it has a published role — a draft
   // Saturday (role filtered out) must not appear at all, setlist or otherwise.
   const hasSaturday = !!satRole;
-  const hasSpecials = specials.length > 0;
 
   // A quiet week would otherwise show the "Esta semana" heading over an empty
-  // grid: DayCard renders nothing for a service with no published setlist and
+  // page: DayCard renders nothing for a service with no published setlist and
   // no assigned seat. Share DayCard's own guard rather than re-deriving it, and
-  // count only the cards that will actually paint — that count also picks the
-  // grid layout.
+  // keep only the services that will actually paint — a collapsed disclosure
+  // whose card renders `null` would open onto nothing.
   //
   // The guard lives in `utils/paintsDayCard`, NOT in `DayCard.tsx`, because this
   // page is a Server Component and `DayCard.tsx` is `"use client"`. Importing it
@@ -131,9 +131,6 @@ export default async function Home() {
     });
   const hasSunday = paints(sunSetlist, sunRole);
   const hasSaturdayCard = hasSaturday && paints(satSetlist, satRole);
-  const specialCards = specials.filter((sp) => paints({ songs: sp.songs }, sp)).length;
-  const totalCards = (hasSaturdayCard ? 1 : 0) + (hasSunday ? 1 : 0) + specialCards;
-  const hasAnyCard = totalCards > 0;
 
   // Determine the nearest upcoming service date
   const allDates = [
@@ -142,6 +139,70 @@ export default async function Home() {
     ...specials.map((s) => s.date),
   ].filter((d): d is string => !!d && d >= today);
   const nextDate = allDates.sort()[0] ?? null;
+
+  // One list, in the order the page has always shown them: specials, Saturday,
+  // Sunday. Splitting it into "the next service" and "the rest" is what makes
+  // home a run sheet (spec §12.1) — the hero card in full, everything else one
+  // line deep in a disclosure.
+  const services: Array<{ key: string; props: DayCardProps }> = [
+    ...specials
+      .filter((sp) => paints({ songs: sp.songs }, sp))
+      .map((sp) => ({
+        key: sp._id,
+        props: {
+          day: sp.service_name || "Servicio Especial",
+          date: sp.date,
+          roleId: sp._id,
+          setlist: sp.songs?.length ? { songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } : undefined,
+          leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
+          instruments: sp.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
+          fohTeam: sp.foh_team?.map((s) => ({ label: s.role, person: s.person })),
+          bgvs: sp.BGVs,
+          chorus: sp.Chorus,
+          isNext: sp.date === nextDate,
+        } satisfies DayCardProps,
+      })),
+    ...(hasSaturdayCard
+      ? [{
+          key: "saturday",
+          props: {
+            day: "Sábado",
+            date: satSongs?.week ?? satRole?.week,
+            setlist: satSetlist,
+            leads: satRole?.Lead?.map((m) => m.alias || m.member_name) ?? [],
+            instruments: satRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
+            fohTeam: satRole?.foh_team?.map((s) => ({ label: s.role, person: s.person })),
+            bgvs: satRole?.BGVs,
+            chorus: satRole?.Chorus,
+            isNext: (satSongs?.week ?? satRole?.week) === nextDate,
+          } satisfies DayCardProps,
+        }]
+      : []),
+    ...(hasSunday
+      ? [{
+          key: "sunday",
+          props: {
+            day: "Domingo",
+            date: sunSongs?.week ?? sunRole?.week,
+            setlist: sunSetlist,
+            leads: sunRole?.Lead?.map((m) => m.alias || m.member_name) ?? [],
+            instruments: sunRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
+            fohTeam: sunRole?.foh_team?.map((s) => ({ label: s.role, person: s.person })),
+            bgvs: sunRole?.BGVs,
+            chorus: sunRole?.Chorus,
+            isNext: (sunSongs?.week ?? sunRole?.week) === nextDate,
+          } satisfies DayCardProps,
+        }]
+      : []),
+  ];
+
+  // The hero is the next service. `nextDate` is derived from every upcoming
+  // service, painting or not, so it can name one that renders nothing — and a
+  // week whose services are all in the past names none at all. Either way the
+  // first painting card takes the hero slot rather than leaving the page
+  // headless.
+  const hero = services.find((s) => s.props.isNext) ?? services[0];
+  const rest = services.filter((s) => s !== hero);
 
   return (
     <div>
@@ -152,7 +213,8 @@ export default async function Home() {
           <p className="font-label text-[10px] uppercase tracking-[0.24em] text-accent">Programación</p>
           <h2 className="mt-1 font-display text-3xl font-semibold text-ink md:text-4xl">Esta semana</h2>
         </div>
-        {!hasAnyCard ? (
+        {/* No hero means no painting service at all — the quiet-week state. */}
+        {!hero ? (
           <div className="flex flex-col items-center gap-3 py-16 text-mono-600">
             <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -161,47 +223,23 @@ export default async function Home() {
             <p className="font-label text-sm uppercase tracking-widest text-center">Aún no hay servicios publicados esta semana</p>
           </div>
         ) : (
-        <div className={`grid grid-cols-1 gap-6 ${totalCards > 1 ? "md:grid-cols-2" : "mx-auto max-w-3xl"}`} {...revealProps(1)}>
-          {hasSpecials && specials.map((sp) => (
-            <DayCard
-              key={sp._id}
-              day={sp.service_name || "Servicio Especial"}
-              date={sp.date}
-              roleId={sp._id}
-              setlist={sp.songs?.length ? { songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } : undefined}
-              leads={sp.Lead?.map((m) => m.alias || m.member_name) ?? []}
-              instruments={sp.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-              fohTeam={sp.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-              bgvs={sp.BGVs}
-              chorus={sp.Chorus}
-              isNext={sp.date === nextDate}
-            />
-          ))}
-          {hasSaturday && (
-            <DayCard
-              day="Sábado"
-              date={satSongs?.week ?? satRole?.week}
-              setlist={satSetlist}
-              leads={satRole?.Lead?.map((m) => m.alias || m.member_name) ?? []}
-              instruments={satRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-              fohTeam={satRole?.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-              bgvs={satRole?.BGVs}
-              chorus={satRole?.Chorus}
-              isNext={(satSongs?.week ?? satRole?.week) === nextDate}
-            />
-          )}
-          <DayCard
-            day="Domingo"
-            date={sunSongs?.week ?? sunRole?.week}
-            setlist={sunSetlist}
-            leads={sunRole?.Lead?.map((m) => m.alias || m.member_name) ?? []}
-            instruments={sunRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-            fohTeam={sunRole?.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-            bgvs={sunRole?.BGVs}
-            chorus={sunRole?.Chorus}
-            isNext={(sunSongs?.week ?? sunRole?.week) === nextDate}
-          />
-        </div>
+          <>
+            {/* The hero spans the container — no centred `max-w-3xl` card. The
+                lit-card pass (spec §23) reads `data-lit`; its CSS lands in the
+                next task, and the class is inert until then. */}
+            <div className="brand-lit-card" data-lit {...revealProps(1)}>
+              <DayCard {...hero.props} layout="wide" hero />
+            </div>
+            {rest.length > 0 && (
+              <div className="mt-4 space-y-3">
+                {rest.map((s, i) => (
+                  <div key={s.key} {...revealProps(2 + i)}>
+                    <DayCardDisclosure {...s.props} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
