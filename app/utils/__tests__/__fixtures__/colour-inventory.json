@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 324,
-    "filesScanned": 284,
+    "filesScanned": 285,
     "filesWithColour": 52,
     "byCategory": {
       "2": 2,
@@ -2407,7 +2407,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 197,
+      "line": 207,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2419,7 +2419,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1135,
+      "line": 1185,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2431,7 +2431,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 233,
+      "line": 243,
       "disposition": "B",
       "reason": null
     },
@@ -2443,7 +2443,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 232,
+      "line": 242,
       "disposition": "B",
       "reason": null
     },
@@ -2455,7 +2455,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1130,
+      "line": 1180,
       "disposition": "B",
       "reason": null
     },
@@ -2467,7 +2467,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1339,
+      "line": 1394,
       "disposition": "B",
       "reason": null
     },
@@ -2479,7 +2479,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1348,
+      "line": 1403,
       "disposition": "B",
       "reason": null
     },
@@ -2491,7 +2491,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1358,
+      "line": 1413,
       "disposition": "B",
       "reason": null
     },
@@ -2503,7 +2503,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1369,
+      "line": 1424,
       "disposition": "B",
       "reason": null
     },
@@ -2515,7 +2515,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 236,
+      "line": 246,
       "disposition": "C",
       "reason": null
     },
@@ -2527,7 +2527,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 231,
+      "line": 241,
       "disposition": "C",
       "reason": null
     },
@@ -2539,7 +2539,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 603,
+      "line": 650,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2623,7 +2623,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 457,
+      "line": 460,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2635,7 +2635,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 563,
+      "line": 566,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2647,19 +2647,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1889,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "disabled:hover:bg",
-      "carrier": null,
-      "line": 1144,
+      "line": 1892,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2671,7 +2659,19 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1294,
+      "line": 1147,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "disabled:hover:bg",
+      "carrier": null,
+      "line": 1297,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2683,7 +2683,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2338,
+      "line": 2362,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2695,7 +2695,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3088,
+      "line": 3135,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2731,7 +2731,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 668,
+      "line": 670,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

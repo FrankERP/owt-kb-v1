@@ -23,6 +23,7 @@ import {
 import { mutationErrorMessage } from "./serviceMutationErrors";
 import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import { fillColumn } from "./localFill";
+import { fillInstruments, isInstrumentRowId } from "./instrumentFill";
 import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
@@ -93,6 +94,8 @@ interface MemberOption {
   member_name: string;
   alias?: string;
   memberType?: string[];
+  /** Declared instrument seats; absent or empty = declares nothing (spec D6). */
+  instruments?: string[];
   unavailableDates?: string[];
 }
 
@@ -2903,7 +2906,9 @@ export default function MonthGenerator({
    * A special is never sent to CP-SAT (E4/E5), so this is the ONLY thing that
    * auto-fills one — and the only thing that keeps a forbidden pair apart while
    * doing it (`localFill.ts`). It is a different mechanism from the solver, not
-   * an extension of it: greedy, single-column, no caps, no backtracking.
+   * an extension of it: greedy, single-column, no caps, no backtracking. Also
+   * the instrument filler (`instrumentFill.ts`), for the same reason and at
+   * the same place.
    *
    * **All three setters, at every exit.** `handleAuto` writes cells directly
    * rather than routing through `handleCellsChange`, so a caller that sets
@@ -2973,9 +2978,21 @@ export default function MonthGenerator({
       next = out.cells;
       filled.push(...out.unfilled);
     }
+    // Instrument seats (spec 2026-09-09 §6.3): after the specials, before the
+    // three setters, on the accumulated cells — so it runs on EVERY exit exactly
+    // as the specials do, and there is still one owner of the setters.
+    const instr = fillInstruments({ columns, rows, cells: next, members, savedWindow, config });
+    next = instr.cells;
+    filled.push(...instr.unfilled);
+
     setCells(next);
+    // On a non-success exit the previous run's entries survive EXCEPT the ones a
+    // local filler owns — special columns, and now every `instrumento:` row on
+    // any column. Instrument entries sit on WEEKEND columns, so without the
+    // second clause every solver refusal (D15's normal failure) would re-append
+    // the same empty seats and «Lugares sin cubrir» would grow each time.
     setUnfilled(prev => [
-      ...(solverUnfilled ?? prev.filter(u => !specialColumnIds.has(u.columnId))),
+      ...(solverUnfilled ?? prev.filter(u => !specialColumnIds.has(u.columnId) && !isInstrumentRowId(u.rowId))),
       ...filled,
     ]);
     setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));

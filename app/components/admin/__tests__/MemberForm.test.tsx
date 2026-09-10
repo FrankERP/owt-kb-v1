@@ -101,3 +101,68 @@ describe("MemberForm — edit mode preference submission", () => {
     expect("emailPrefs" in submitted).toBe(false);
   });
 });
+
+describe("MemberForm — declared instruments", () => {
+  const instrumentalist = { ...baseMember, memberType: ["instrumento"], instruments: ["Keys"] };
+
+  it("hides the Instrumentos grid unless Tipo includes instrumento", () => {
+    const { queryByRole } = render(
+      <MemberForm initial={baseMember} onSubmit={() => {}} onClose={() => {}} loading={false} />,
+    );
+    expect(queryByRole("button", { name: "Keys" })).toBeNull();
+  });
+
+  it("shows the grid with the stored declaration ticked", () => {
+    const { getByRole } = render(
+      <MemberForm initial={instrumentalist} onSubmit={() => {}} onClose={() => {}} loading={false} />,
+    );
+    expect(getByRole("button", { name: "Keys" }).getAttribute("aria-pressed")).toBe("true");
+    expect(getByRole("button", { name: "Drums" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("omits instruments from an edit that never touched the grid", () => {
+    const onSubmit = vi.fn();
+    const { getByPlaceholderText, getByRole } = render(
+      <MemberForm initial={instrumentalist} onSubmit={onSubmit} onClose={() => {}} loading={false} />,
+    );
+    fireEvent.change(getByPlaceholderText("Nombre completo"), { target: { value: "Ana T." } });
+    fireEvent.click(getByRole("button", { name: "Guardar" }));
+    expect("instruments" in onSubmit.mock.calls[0][0]).toBe(false);
+  });
+
+  it("sends the full list when a chip is toggled on edit", () => {
+    const onSubmit = vi.fn();
+    const { getByRole } = render(
+      <MemberForm initial={instrumentalist} onSubmit={onSubmit} onClose={() => {}} loading={false} />,
+    );
+    fireEvent.click(getByRole("button", { name: "Drums" }));
+    fireEvent.click(getByRole("button", { name: "Guardar" }));
+    expect(onSubmit.mock.calls[0][0].instruments).toEqual(["Keys", "Drums"]);
+  });
+
+  it("keeps the local declaration when instrumento is unticked and re-ticked", () => {
+    const onSubmit = vi.fn();
+    const { getByRole } = render(
+      <MemberForm initial={instrumentalist} onSubmit={onSubmit} onClose={() => {}} loading={false} />,
+    );
+    fireEvent.click(getByRole("button", { name: "Instrumento" }));
+    fireEvent.click(getByRole("button", { name: "Instrumento" }));
+    expect(getByRole("button", { name: "Keys" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("on CREATE, omits instruments unless touched and non-empty", () => {
+    const onSubmit = vi.fn();
+    const { getByPlaceholderText, getByRole } = render(
+      <MemberForm onSubmit={onSubmit} onClose={() => {}} loading={false} />,
+    );
+    fireEvent.change(getByPlaceholderText("Nombre completo"), { target: { value: "Nuevo" } });
+    fireEvent.change(getByPlaceholderText("correo@ejemplo.com"), { target: { value: "n@x.com" } });
+    fireEvent.click(getByRole("button", { name: "Instrumento" }));
+    fireEvent.click(getByRole("button", { name: "Guardar" }));
+    expect("instruments" in onSubmit.mock.calls[0][0]).toBe(false);
+
+    fireEvent.click(getByRole("button", { name: "Bass" }));
+    fireEvent.click(getByRole("button", { name: "Guardar" }));
+    expect(onSubmit.mock.calls[1][0].instruments).toEqual(["Bass"]);
+  });
+});

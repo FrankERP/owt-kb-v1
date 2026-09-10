@@ -12,6 +12,7 @@ import type { ParticipantRole } from "@/app/utils/computeParticipation";
 const LEAD = VOICE_SEATS[0];
 const BGV = VOICE_SEATS[1];
 const BASS = instrumentSeatDef("Bass");
+const KEYS = instrumentSeatDef("Keys");
 const DATE = "2026-08-09";
 
 const m = (id: string, name: string, types: string[], unavailable: string[] = []): RankMember =>
@@ -223,5 +224,45 @@ describe("rankCandidates", () => {
       .find((c) => c.id === "m1");
     expect(frank?.blockedReason).toBeNull();
     expect(frank?.alreadyAssigned).toBe(false);
+  });
+});
+
+describe("declared instruments (spec §7)", () => {
+  const players: RankMember[] = [
+    { _id: "k1", member_name: "Zoe", memberType: ["instrumento"], instruments: ["Keys"] },
+    { _id: "k2", member_name: "Ana", memberType: ["instrumento"], instruments: ["Drums"] },
+    { _id: "k3", member_name: "Beto", memberType: ["instrumento"] }, // declares nothing
+  ];
+
+  it("flags a member who does not declare the seat's instrument, and still lists them", () => {
+    const ranked = rankCandidates({ seat: KEYS, date: DATE, members: players, windowRoles: [], assigned: [] });
+    const byId = new Map(ranked.map((c) => [c.id, c]));
+    expect(byId.get("k1")?.undeclared).toBe(false);
+    expect(byId.get("k2")?.undeclared).toBe(true);
+    expect(byId.get("k3")?.undeclared).toBe(true);
+    // Never a block (D6): a human may override.
+    expect(byId.get("k2")?.blockedReason).toBeNull();
+    expect(byId.get("k2")?.eligible).toBe(true);
+  });
+
+  it("sorts declared candidates first — a sort penalty like availability, inside the same bucket", () => {
+    const ids = rankCandidates({ seat: KEYS, date: DATE, members: players, windowRoles: [], assigned: [] })
+      .map((c) => c.id);
+    // Zoe declares Keys and sorts before Ana and Beto despite the later name.
+    expect(ids[0]).toBe("k1");
+    expect(ids.slice(1)).toEqual(["k2", "k3"]);
+  });
+
+  it("is always false for voice and FOH seats", () => {
+    const all = rankCandidates({ seat: LEAD, date: DATE, members: MEMBERS, windowRoles: [], assigned: [] });
+    expect(all.every((c) => c.undeclared === false)).toBe(true);
+  });
+
+  it("still BLOCKS a second instrument seat on the same service (same-category rule is untouched)", () => {
+    const assigned: AssignedSeat[] = [{ seatId: "instrumento:Drums", category: "instrumento", memberId: "k1" }];
+    const zoe = rankCandidates({ seat: KEYS, date: DATE, members: players, windowRoles: [], assigned })
+      .find((c) => c.id === "k1");
+    expect(zoe?.blockedReason).toBe("Ya asignado en Drums");
+    expect(zoe?.eligible).toBe(false);
   });
 });
