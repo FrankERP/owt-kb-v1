@@ -23,8 +23,9 @@ export default function AnimatedList({
   itemClassName?: string;
 }) {
   return (
-    <Host className={className}>
-      <AnimatePresence initial={false}>
+    <Host className={`relative ${className}`.trim()}>
+      {/* popLayout pops leavers out of flow so the survivors slide at once (NumberRoll precedent); the host is `relative` because a popped item positions against it. */}
+      <AnimatePresence initial={false} mode="popLayout">
         {items.map((it) => (
           <m.li
             key={it.key}
