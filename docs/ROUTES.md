@@ -130,7 +130,7 @@ See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full comp
 - `(client)/loading.tsx` — home run-sheet skeleton: the wide hero card plus two collapsed lines (group-level suspense).
 - `(client)/error.tsx` (C) — branded Spanish error boundary with retry.
 - `(client)/me/loading.tsx`, `(client)/schedule/loading.tsx`,
-  `(client)/posts/[slug]/loading.tsx` — per-route skeletons.
+  `(client)/posts/[slug]/loading.tsx`, `(client)/biblioteca/loading.tsx` — per-route skeletons.
 - `(client)/posts/not-found.tsx` — "Canción no encontrada."
 - `(client)/not-found.tsx` — "Página no encontrada": the fallback for every other `notFound()` in the `(client)` group
   (`/me/propose/[roleId]`); `(gallery)` has none.

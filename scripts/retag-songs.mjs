@@ -37,7 +37,7 @@ const client = createClient({
 
 // ── Vocabulary ─────────────────────────────────────────────────────────────────
 
-/** Functional tags the app pins in TagSearchList — never touched by the theme pass. */
+/** Functional tags the app pins as Tipo (`TIPO_SLUGS` in app/utils/libraryIndex.ts) — never touched by the theme pass. */
 const TEMPO_TAGS = new Set(["Up Beat", "Down Beat", "Transition"]);
 
 /** Artist / band tags that must leave `tags` (they are `authors` now). Deleted at the end. */

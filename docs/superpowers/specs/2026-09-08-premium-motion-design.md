@@ -1089,4 +1089,10 @@ after the route reveal (decision Q, the beam's fifth and only non-`motion` use).
   "an" inside "Redman"); title search keeps full substring matching since it is what is
   visually shown, sorted prefix-first.
 
-**Bundle:** measured at release (Task 10) — see `docs/MOTION.md` ledger.
+**Bundle (cold, same environment, git-archive builds of `main` `0414ee86` and the R1 tip):**
+`/` 123.5 → **119.0 kB gz (−4.5)** — the catalogue and Fuse left home; `/admin` 350.9 →
+354.8 (+3.9, the run-sheet `DayCard`/disclosure code the admin shell shares); the new
+`/biblioteca` is 112.9 kB, `/schedule` 121.5; shared 172.5 unchanged. Absolute vs "Before M0a"
+on `/`: the release-day environment reads ~6 kB higher than the ledger's older rows, so the
+honest statement is that R1 gives back about 4.5 of M1's +7.3 on the route members open first.
+Rows in `docs/MOTION.md`'s ledger.

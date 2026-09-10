@@ -41,7 +41,10 @@ export default function LibraryIndex(props: LibraryIndexProps) {
   // Server Component's fetch on every keystroke for a purely local, client-side
   // filter. Rewriting the current history entry keeps the URL honest for
   // reload/Back with no round-trip and no navigation at all. replace, not push
-  // — typing must not grow history.
+  // — typing must not grow history. The cost, same as AdminPanel's: Next's router
+  // never learns the new URL, so tapping the already-active Biblioteca tab after
+  // typing pushes a bare /biblioteca while this list keeps its query (R1 ruling:
+  // a reload resyncs; not worth a server round-trip per keystroke).
   const first = useRef(true);
   useEffect(() => {
     if (first.current) {
