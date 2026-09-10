@@ -98,6 +98,7 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
 | `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
 | `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws «Mes anterior» / «Mes siguiente» icon buttons (the schedule's month strip). |
 | `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
+| `AnimatedList` | client | list reflow: `layout="position"` per row, leavers fade `fast` — `/biblioteca` index. |
 | `haptic(kind)` (`app/utils/haptics.ts`) | neutral | `"light"` (default) on a toggle flip or thumb move, `"selection"` on a tab press, `"medium"` reserved for drop landing (M-planner). Native only; no-op on web; never awaited in a handler. |
 
 ### Load-failure behaviour
