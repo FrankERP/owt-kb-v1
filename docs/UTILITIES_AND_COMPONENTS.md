@@ -91,9 +91,12 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 - **`libraryIndex.ts`** ([libraryIndex.ts](../app/utils/libraryIndex.ts)) — pure `/biblioteca`
   logic, neutral (no React) so the Server Component page and the client index share one truth:
   `parseLibraryParams`/`serializeLibraryParams` (the `?q=`/`?tag=`/`?author=`/`?key=` URL
-  contract), `searchPosts` (≤2 chars → accent-folded substring with a per-word author-prefix
+  contract), `searchPosts` (≤2 chars → accent-folded substring with a per-word artist-prefix
   narrowing, prefix-first; 3+ chars → Fuse, prefix-first — the former `SongSearchList`
-  algorithm, moved here with that one narrowing), `applyLibraryFilters` (query first when
+  algorithm, moved here with that one narrowing), `artistOf` (the legacy `author` string
+  plus every `authors[].name`, joined — the ONE flat field both branches search, since Fuse's
+  `getFn` reads only `path[0]` and a nested `authors.name` key would read nothing),
+  `applyLibraryFilters` (query first when
   present since it carries a relevance order, filters first and A–Z last otherwise),
   `groupByLetter`, `libraryKeys`, `TIPO_SLUGS`.
 - **`scheduleMonths.ts`** — pure `YYYY-MM` month arithmetic (leaf module, no clock/React/Sanity):
@@ -312,9 +315,10 @@ Legend: **[C]** client, **[S]** server.
 ### Library (`/biblioteca`, R1 — pure logic in `libraryIndex.ts`, above)
 | Component | Purpose |
 |-----------|---------|
-| `LibraryIndex` [C] | The `/biblioteca` client index: search console, A–Z sections of `LibraryRow`s via `AnimatedList`, letter rail after the sections, and `LibraryFilters`. Mirrors its own filter state into the URL with `history.replaceState` (never the router — a `router.replace` would re-run the Server Component's fetch on every keystroke); replaced `SongSearchList`/`PostComponent`. |
+| `LibraryIndex` [C] | The `/biblioteca` client index: search console, A–Z sections of `LibraryRow`s via `AnimatedList`, the `LibraryLetterRail` after the sections, and `LibraryFilters`. Owns the ONE `IntersectionObserver` over the `h2#letra-*` headings that tells the rail which letter is in view (band from 64 px to 30 % of the viewport; the last heading above it wins when none intersects), and mirrors its own filter state into the URL with `history.replaceState` (never the router — a `router.replace` would re-run the Server Component's fetch on every keystroke); replaced `SongSearchList`/`PostComponent`. |
+| `LibraryLetterRail` [C] | The A–Z rail as an iOS-style **index bar** (F3): `active` (from the index's observer) is accent + `font-semibold` + `aria-current`, and a pointer drag SCRUBS — the letter under the finger by arithmetic on the rail's box, `behavior: "auto"` while moving and `"smooth"` on a plain tap, `haptic("selection")` per letter, `touch-none`, and a `data-scrubbing` pill for the finger to hold. Plain `<button>`s by the recorded row exemption. |
 | `LibraryRow` [C] | One song row: key · title/artist · BPM · tags. A plain `<button>` in an `<li>`, not the `Button` primitive — the recorded row exemption (`DayCard`'s setlist rows precedent): the row IS the affordance. Memoized (~140 rows). |
-| `LibraryFilters` [C] | The filter drawer (`CueDialog` sheet): Tipo as three `SegmentedControl` tiles plus a «Todos» clear tile, theme chips sized by count, Artista and Tonalidad `Select`s. Replaced `AuthorSearchList`/`TagSearchList`. |
+| `LibraryFilters` [C] | The filter drawer (`CueDialog` sheet): Tipo as three `SegmentedControl` tiles plus a «Todos» clear tile, then **searchable** chip clouds for Temas (multi-select) and Artista (single-select, the twelve busiest shown before a query, `Select` retired in F3) — both sized by `postCount`, both pinning a selected chip to the front when it does not match the query. Tonalidad keeps its `Select`. Replaced `AuthorSearchList`/`TagSearchList`. |
 
 ### Services / setlists (member-facing)
 | Component | Purpose |

@@ -16,6 +16,16 @@ const POSTS = [
   post("Bueno es", { author: "Hillsong", key: "D", tags: [tag("up-beat"), tag("amor")] }),
 ];
 
+// F3: the artist lives in `authors[]` and the legacy `author` string is empty —
+// the shape most of the catalogue actually has. Kept out of POSTS so the
+// pre-F3 expectations above (counts, A–Z order) keep stating what they stated.
+const REFERENCED = post("Agua Viva", {
+  author: "",
+  key: "E",
+  tags: [tag("up-beat")],
+  authors: [{ _id: "a2", name: "Hillsong Worship", slug: { current: "hillsong-worship" } }],
+});
+
 describe("parseLibraryParams / serializeLibraryParams", () => {
   it("reads q, tag (comma list), author, key; ignores unknown keys", () => {
     expect(parseLibraryParams({ q: "ala", tag: "up-beat,amor", author: "redman", key: "G", x: "1" }))
@@ -50,6 +60,21 @@ describe("applyLibraryFilters", () => {
   it("3+ char queries are fuzzy and keep prefix matches first", () => {
     const titles = applyLibraryFilters(POSTS, parseLibraryParams({ q: "alab" })).map((p) => p.title);
     expect(titles[0]).toBe("Alaba");
+  });
+  it("finds a song by an artist that only exists as a reference — legacy `author` empty (F3)", () => {
+    // The real catalogue shape: `author` blank, the artist in `authors[]`. Before
+    // F3 the Fuse index only carried `author`, so this post was unreachable by name.
+    const titles = applyLibraryFilters([...POSTS, REFERENCED], parseLibraryParams({ q: "hillsong" })).map((p) => p.title);
+    expect(titles).toContain("Agua Viva");
+  });
+  it("a 1-2 char query reaches the referenced artist too, by per-word prefix", () => {
+    // "Bueno es" comes along: its legacy `author` is "Hillsong" too.
+    expect(applyLibraryFilters([...POSTS, REFERENCED], parseLibraryParams({ q: "hi" })).map((p) => p.title))
+      .toEqual(["Agua Viva", "Bueno es"]);
+  });
+  it("the short-query narrowing still holds: a mid-token artist substring does not match", () => {
+    // "or" sits inside "Worship" but starts no word of it.
+    expect(applyLibraryFilters([...POSTS, REFERENCED], parseLibraryParams({ q: "or" })).map((p) => p.title)).toEqual([]);
   });
   it("a query runs first over the whole catalogue; tag/author/key then narrow that order without re-sorting", () => {
     const fuse = makeLibraryFuse(POSTS);
