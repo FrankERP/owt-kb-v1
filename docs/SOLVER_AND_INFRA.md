@@ -258,8 +258,11 @@ Both of the first two are listed by exact `file + operation` in the protected-re
 - `import-setlist-history.mjs`, `import-schedule.ts` — **retired**, see above.
 - `backfill-member-instruments.mjs` — one-shot, dry-run by default, `--apply` with consent:
   derives `teamMembers.instruments` from held `instruments[]` seats. `setIfMissing` +
-  `ifRevisionId`, backup to `.backfill-backups/`, closed vocabulary only. Ran once on
-  production on <date> (fill in after the apply).
+  `ifRevisionId`, backup to `.backfill-backups/`, closed vocabulary only. **Status:** dry
+  run against production on 2026-09-09 (12 Tipo-`instrumento` members: 11 would be
+  written, 1 skipped «sin historial», 0 «no reconocido»); `--apply` pending Frank's
+  explicit consent and must run BEFORE the `preview` push (spec §5) — until it runs,
+  every seated instrumentalist renders «no declara …» on every stored month.
 
 ### Accounts / auth
 - `set-password.ts` (tsx) — `MEMBER_ID=… PASSWORD=… npx tsx scripts/set-password.ts` — bcrypt a

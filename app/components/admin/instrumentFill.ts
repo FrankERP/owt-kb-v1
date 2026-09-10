@@ -182,9 +182,11 @@ export function fillInstruments(input: FillInstrumentsInput): FillInstrumentsRes
 /**
  * The filler's ordering key (§6.2 step 3): fewest instrument seats this month
  * (per member, all rows), then did NOT play on the immediately previous weekend
- * column (the alternation), then `member_name` in Spanish collation. Decorated
- * with the incoming index so ties are broken explicitly, never by trusting the
- * engine's sort.
+ * column (the alternation), then `RankedCandidate.name` — `displayName`, i.e.
+ * alias when set, else `member_name` — in Spanish collation (the name the
+ * picker shows; a deliberate choice over raw `member_name`). Decorated with the
+ * incoming index so ties are broken explicitly, never by trusting the engine's
+ * sort.
  */
 export function orderForFill(
   pool: RankedCandidate[],

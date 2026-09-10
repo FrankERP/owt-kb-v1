@@ -362,7 +362,8 @@ export function rowAppliesTo(row: GridRow, column: Pick<GridColumn, "type">): bo
  * Whether **Auto** (the CP-SAT solve) fills this cell. A row that does not apply
  * is never solvable; beyond that, the solver covers Lead and BGV on both
  * WEEKEND service types and Coro on Sundays only, and instrument and FOH rows
- * are always manual (D5).
+ * are never solved by CP-SAT (D5); instrument rows are filled locally by
+ * `instrumentFill.ts`, FOH stays manual.
  *
  * **Specials are never solvable** (E4/E5): they are never sent to the solver, so
  * nothing in a response can name one. `weekForColumn` returning `null` for a

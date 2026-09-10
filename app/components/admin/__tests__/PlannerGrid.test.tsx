@@ -579,7 +579,9 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     // member on a Bass seat is a Tipo mismatch, which the grid now warns about
     // separately — in amber, so a red-only assertion would pass while showing
     // the very thing the test says is legitimate.
-    const dualDuty = [{ _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"] }];
+    const dualDuty = [
+      { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"], instruments: ["Bass"] },
+    ];
     const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "auto" },
       { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },

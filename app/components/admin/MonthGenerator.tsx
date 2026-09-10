@@ -91,6 +91,8 @@ interface MemberOption {
   member_name: string;
   alias?: string;
   memberType?: string[];
+  /** Declared instrument seats; absent or empty = declares nothing (spec D6). */
+  instruments?: string[];
   unavailableDates?: string[];
 }
 
