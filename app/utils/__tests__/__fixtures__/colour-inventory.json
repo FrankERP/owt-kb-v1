@@ -8,11 +8,11 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 320,
+    "literalRows": 316,
     "filesScanned": 285,
     "filesWithColour": 50,
     "byCategory": {
-      "2": 6,
+      "2": 2,
       "4": 72,
       "8": 90,
       "9": 10,
@@ -20,17 +20,17 @@
       "12": 134
     },
     "byDisposition": {
-      "B": 125,
-      "exempt": 36,
+      "B": 120,
+      "exempt": 40,
       "keep": 237,
       "C": 6,
-      "D": 16
+      "D": 15
     },
     "compositingClasses": 20,
-    "compositingSelectorOccurrences": 42,
+    "compositingSelectorOccurrences": 44,
     "compositingClassNameOccurrences": 57,
-    "compositingRuleBodies": 41,
-    "lightCounterpartClasses": 16,
+    "compositingRuleBodies": 43,
+    "lightCounterpartClasses": 15,
     "pairs": 11,
     "pairsDifferingInAlpha": 0
   },
@@ -2089,54 +2089,6 @@
     },
     {
       "file": "app/brand.css",
-      "category": 2,
-      "categoryName": "bare-hex",
-      "value": "#000",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 1102,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/brand.css",
-      "category": 2,
-      "categoryName": "bare-hex",
-      "value": "#000",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 1102,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/brand.css",
-      "category": 2,
-      "categoryName": "bare-hex",
-      "value": "#000",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 1104,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/brand.css",
-      "category": 2,
-      "categoryName": "bare-hex",
-      "value": "#000",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 1104,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/brand.css",
       "category": 4,
       "categoryName": "colour-keyword",
       "value": "transparent",
@@ -2431,7 +2383,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1101,
+      "line": 1131,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2443,7 +2395,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1101,
+      "line": 1131,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3953,9 +3905,9 @@
       "file": "app/brand.css",
       "kind": "selector",
       "class": "lit-card",
-      "count": 2,
-      "disposition": "D",
-      "reason": null
+      "count": 4,
+      "disposition": "exempt",
+      "reason": "No colour in any rule body — needs no light counterpart"
     },
     {
       "file": "app/brand.css",
@@ -4756,8 +4708,28 @@
         "lit-card"
       ],
       "ordinal": 40,
-      "disposition": "B",
-      "reason": null
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "lit-card"
+      ],
+      "ordinal": 41,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "lit-card"
+      ],
+      "ordinal": 42,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
     }
   ],
   "pairs": [

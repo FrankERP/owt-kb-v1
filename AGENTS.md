@@ -255,7 +255,7 @@ tokens are `--motion-*` / `--ease-*`; `motion` is importable only under
 `app/components/ui/**` — see `docs/MOTION.md` and ADR-0031.
 
 ## Colour tokens
-Colour lives in **67 base roles + 29 composed tokens** (`app/brand.css` `:root`,
+Colour lives in **67 base roles + 30 composed tokens** (`app/brand.css` `:root`,
 `tailwind.config.ts`). The seven retired `--brand-*` COLOUR variables and their `brand.*`
 Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
 `--brand-duration-*`) survive.

@@ -228,8 +228,12 @@ export default async function Home() {
           <>
             {/* The hero spans the container — no centred `max-w-3xl` card. The
                 lit-card pass (spec §23, decision Q) reads `data-lit`; its CSS
-                lives in `app/brand.css` (`.brand-lit-card[data-lit]::after`). */}
-            <div className="brand-lit-card" data-lit {...revealProps(1)}>
+                lives in `app/brand.css` (`.brand-lit-card[data-lit]::before`).
+                The wrapper clips (that is how the beam stays on the border), so
+                it carries the elevation the DayCard's own `shadow-xl` can no
+                longer cast — accent-tinted whatever the day, because the
+                Saturday/special tints belong to the card's border. */}
+            <div className="brand-lit-card shadow-xl shadow-accent/10" data-lit {...revealProps(1)}>
               <DayCard {...hero.props} layout="wide" hero />
             </div>
             {rest.length > 0 && (

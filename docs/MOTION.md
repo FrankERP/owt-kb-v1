@@ -39,13 +39,18 @@ still one-shot:
    every 1.6s (`--skeleton-sweep`, `@keyframes shimmer`).
 3. **Primary button sheen** — on hover (pointer devices only) a narrow highlight
    crosses the fill once, 600ms (`--sheen-highlight`, `.brand-btn-sheen`).
-4. **Drop landing** — when a dragged chip lands, the target cell flashes the
-   beam edge once, 120ms.
+4. **Drop landing** (spec §2.1, not yet built — lands with the drag-and-drop
+   phase) — when a dragged chip lands, the target cell flashes the beam edge
+   once, 120ms.
 5. **The lit card on `/`** (once, 900 ms) — after the route reveal, the next
    service's hero card gets one light pass around its border, then rests on its
-   own accent border. `.brand-lit-card[data-lit]::after`, `@keyframes
+   own accent border. `.brand-lit-card[data-lit]::before`, `@keyframes
    brand-lit-pass`, `--lit-beam`. `data-lit` is set by `app/(client)/page.tsx`
-   on the hero card only. Guard: `app/utils/__tests__/litCard.test.ts`.
+   on the hero card only. The wrapper CLIPS and an unmasked conic layer spins
+   under the card, so the light only shows in the 1 px gap the wrapper's
+   `padding` opens — a mask would rotate with the layer and slash across the
+   card. Guard: `app/utils/__tests__/litCard.test.ts`, which cannot see
+   geometry; the browser evidence is in the Task 8 fix-round report.
 
 The beam gradient itself (not just a rail/sweep/sheen derived from it) stays
 exclusive to the sign-in lockup, where it already lived before this list existed

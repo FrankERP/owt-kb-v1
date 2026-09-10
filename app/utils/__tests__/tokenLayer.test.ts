@@ -1,7 +1,9 @@
 // Guard for Child B's token layer (slice B1).
 //
-// B1 is purely additive: it introduces 18 base roles and 29 composed tokens and
-// REMOVES NOTHING, so nothing renders differently. That makes it the one slice
+// B1 is purely additive: it introduces 18 base roles and 29 composed tokens AS B1
+// SHIPPED THEM — historical figures, not running totals; the live arrays hold 67
+// and 30 today, and COMPOSED's dated entries below say who added what since — and
+// it REMOVES NOTHING, so nothing renders differently. That makes it the one slice
 // where a bug is invisible at runtime — the tokens can be wrong, misspelled, or
 // missing on one side and the app looks exactly the same until a later batch
 // migrates a call site onto them and the colour quietly disappears.

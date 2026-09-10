@@ -588,7 +588,7 @@
   --skeleton-base: rgb(var(--accent-deep-rgb) / 0.10);
   --skeleton-sweep: rgb(var(--accent-rgb) / 0.18);
   --sheen-highlight: rgb(var(--on-fill-rgb) / 0.22);
-  --lit-beam: rgb(var(--accent-deep-rgb) / 0.9);
+  --lit-beam: rgb(var(--accent-rgb) / 0.9);                     /* light: accent-deep @90% */
 }
 
 .brand-atmosphere {
@@ -1083,26 +1083,52 @@ html[data-motion="off"] .brand-stage-hero::before {
 
 /* ── Lit card (spec §23, decision Q) — the FIFTH beam site. After the route
    reveal, the next service's card gets ONE light pass around its border,
-   900 ms, then rests on its own accent border. A rotating conic pseudo-element
-   under a border mask: transform only, no @property (Safari 16.4). Never loops;
-   the global reduced-motion rule above (`*, *::before, *::after`) already zeroes
-   its animation-duration/-delay, because this is a plain `animation:` shorthand —
-   no per-effect override needed here, unlike `.brand-stage-hero::before`, which
-   needs one because its rest frame is opacity 1, not 0. `data-lit` is set by the
-   page (`app/(client)/page.tsx`). ── */
+   900 ms, then rests on its own accent border. Transform only, no @property
+   (Safari 16.4). Never loops; the global reduced-motion rule above
+   (`*, *::before, *::after`) already zeroes its animation-duration/-delay,
+   because this is a plain `animation:` shorthand — no per-effect override
+   needed here, unlike `.brand-stage-hero::before`, which needs one because its
+   rest frame is opacity 1, not 0. `data-lit` is set by the page
+   (`app/(client)/page.tsx`).
+
+   NOT a mask on the rotating layer: a mask lives in the element's own box, so
+   it rotates WITH it and the "ring" becomes a line slashing across the card.
+   House precedent instead (`.brand-btn-sheen`, `.brand-skeleton`): the wrapper
+   CLIPS, an UNMASKED conic layer spins underneath, and the card sits on top —
+   the only light that escapes is what the 1 px `padding` gap leaves showing.
+   The wrapper's clip also eats the DayCard's own `shadow-xl`, so the hero
+   wrapper carries the shadow in `app/(client)/page.tsx`.
+
+   The card is NOT fully opaque — `.brand-surface` layers a 0.68/0.82/0.76
+   gradient over `rgb(var(--surface-console-rgb) / 0.72)`, ~91–95 % effective —
+   so a trace of the wedge does reach the interior. Measured in Chromium against
+   the real dark tokens, over the whole pass: the 1 px gap peaks at Δ 115–200 of
+   255 at EVERY point of the ring, the card's interior never exceeds Δ 15, and
+   the page outside the wrapper never moves at all (Δ 0). The light is the
+   border; the interior trace sits under the accent the `.brand-atmosphere`
+   gradients already put behind the card. ── */
 .brand-lit-card { position: relative; isolation: isolate; border-radius: 16px; } /* --brand-radius-panel's value — DayCard.tsx's own rounded-[var(--brand-radius-panel)], not referenced here: tokenLayer.test.ts pins brand.css's own rule bodies as --brand-radius-free, consumed only from components */
-.brand-lit-card[data-lit]::after {
+/* The spinner: the wrapper's box grown by 800 px on every side. A rotating box
+   covers the wrapper at EVERY angle once its shorter side reaches the wrapper's
+   diagonal, and a fixed inset reaches that for any card up to 1600 px wide at
+   any height — the hero is capped at 1232 px (`max-w-7xl` minus `px-6` in
+   `app/(client)/page.tsx`) and measured 1232 × 257, a 4.8 : 1 box with a
+   1259 px diagonal.
+   PERCENTAGES CANNOT DO THIS: they scale BOTH axes, so a wide, flat card keeps
+   its aspect ratio however large the layer grows. Measured over the pass at that
+   hero, `inset: -100%` (3× → 771 px short side) leaves 81 of 2834 ring pixels
+   never lit, along the top and right edges; `-150%` (4× → 1028 px, still under
+   the diagonal) happens to light all of them today, which is a property of this
+   hero's height rather than of the rule. */
+.brand-lit-card[data-lit] { overflow: hidden; padding: 1px; }
+.brand-lit-card[data-lit] > * { position: relative; z-index: 1; }
+.brand-lit-card[data-lit]::before {
   content: "";
   position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  padding: 1px;
+  z-index: 0;
+  inset: -800px;
   pointer-events: none;
   background: conic-gradient(from 0deg, transparent 0 78%, var(--lit-beam) 92%, transparent 100%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-          mask-composite: exclude;
   opacity: 0;
   animation: brand-lit-pass 900ms var(--ease-in-out) 480ms 1 both;
 }
