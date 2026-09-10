@@ -1006,3 +1006,87 @@ re-reviewed clean on the branch before the merge.
 quick actions and pull-to-refresh (R7); `NavLinks` follows the page's `schedule`/`tags`
 flags, so the row changes shape on `/kids` (Control Room / R5 to unify); the desktop row
 has no wrap for a sixth link.
+
+# Part X — R1 (2026-09-10)
+
+Branch `claude/motion-r1-library` (from `main`, HEAD before this task `408b0db2`). Nine
+tasks: pure library logic, the `AnimatedList` primitive, the `/biblioteca` route + index +
+filters, the `/tag*`/`/author*` redirects, the home run sheet (`DayCard`'s `layout`/`hero`
++ `DayCardDisclosure`), the lit-card beam pass, and this documentation task.
+
+**Shipped (§12.1/§12.2 in full).** `libraryIndex.ts` — neutral params/filters/search/A–Z,
+moved from `SongSearchList`'s algorithm with one narrowing (short queries match authors
+per-word-prefix, not mid-token substring). `AnimatedList` — the list-reflow primitive.
+`/biblioteca` — one Server Component fetch (catalogue + tags-with-counts +
+authors-with-counts), `LibraryIndex` (search console, A–Z sections via `AnimatedList`,
+letter rail, `LibraryFilters` drawer), `LibraryRow`. `next.config.mjs` redirects: `/tag`,
+`/tag/:slug`, `/author`, `/author/:slug` → `/biblioteca` (`?tag=`/`?author=`), all
+`permanent: true`. The old `/tag*`/`/author*` pages and `SongSearchList`/`PostComponent`/
+`TagSearchList`/`AuthorSearchList` deleted. Home became a run sheet: `DayCard` grew a
+`layout?: "card" | "wide"` and `hero?: boolean`, plus a day · date header and a countdown
+pill (`daysUntil`); the next service renders in full (`layout="wide" hero`), every other
+painting service collapses into `DayCardDisclosure`. `PracticePlaylistButton` grew
+`variant="hero"`. The label budget dropped `>Servicio<`, "Índice musical", "títulos" and
+"Repertorio" to zero. The lit card — one CSS-only beam pass around the hero card's border
+after the route reveal (decision Q, the beam's fifth and only non-`motion` use).
+
+**Rulings.**
+- **The row pattern is exempt from `Button`** — `LibraryRow`, `DayCardDisclosure`'s header,
+  and the letter rail's buttons all carry a plain `<button>`, the same ruling `DayCard`'s
+  setlist rows already set: the row IS the affordance, so it carries no eyebrow and no "Ver".
+- **The redirects are `permanent: true` — 308, not 307.** The old URLs are gone, not
+  temporarily moved; a 308 lets browsers and crawlers update bookmarks/indexes rather than
+  re-checking the source on every visit.
+- **The filter drawer carries Artista and Tonalidad** because the standalone author index
+  page is gone — `/author/[slug]` used to be the only Artista-scoped view, and folding it
+  into a drawer field is what makes that scoping survive the redirect.
+- **`nextDate` is computed over painting services only.** A published special with no seats
+  and no songs renders nothing (`paintsDayCard`), so it is never named "next" — naming it
+  would hand the hero slot and the countdown to a card that renders `null`.
+- **A wide card needs a team, not just a setlist.** `layout="wide"` only takes effect when
+  both `hasSetlist` and `hasRole` are true — a setlist with no assigned team has nothing to
+  put in the second column, so it stays single-column instead of leaving a rail empty.
+- **`daysUntil` pins "today" to America/Mexico_City**, not the runtime's local date — the
+  countdown is read on Vercel (UTC), and a bare local date would misreport the team's
+  evening as still a day away.
+- **«Todos» is how a Tipo is cleared.** `SegmentedControl` never fires `onChange` for the
+  already-checked option, so "tap the selected tile again to clear it" cannot exist as a
+  gesture; a fourth tile, «Todos», is the explicit clear action instead.
+- **Long-press quick actions and pull-to-refresh stay R7** — unchanged from the Part IX
+  deferral; R1 did not pull either forward.
+- **The `Setlist` rail stays as `Editar`'s home.** The inline practice pill and the admin
+  "Editar" affordance both live on the setlist section's header row; `hero` mode only
+  removes the inline pill (replaced by the header's `Ensayar`), never the edit control.
+- **Hero `Ensayar` is accent-toned on every day**, Saturday and special services included —
+  `PracticePlaylistButton variant="hero"` always renders the house `Button variant="primary"`
+  rather than picking up the day's own theme colour (`SATURDAY_THEME`/`SPECIAL_THEME`), a
+  deliberate choice at Frank's look so the one primary action on the hero card reads the
+  same regardless of which day it is.
+
+**Deviations from the plan, accepted.**
+- **The lit-card construction** — a clipped wrapper plus an UNMASKED spinning conic layer,
+  `inset: -800px`, so the only light that escapes is the 1 px gap the wrapper's `padding`
+  opens. The plan's original design masked the rotating layer to a ring; that shipped once
+  and painted a diagonal line across the whole card, because a `mask`/`-webkit-mask` lives
+  in the rotating element's own box and rotates with it. `litCard.test.ts` pins the
+  no-mask rule as a named regression; the browser evidence (four paused-frame screenshots,
+  a per-pixel delta) is in `task-8-fix1-report.md`, not in the guard — the guard cannot see
+  geometry.
+- **`AnimatedList`'s `mode="popLayout"`**, not the plan's plain `layout` prop — popping a
+  leaving row out of flow (the `NumberRoll` precedent) is what lets the survivors slide to
+  their new place in one motion instead of jumping as the leaver's space collapses under
+  them mid-animation.
+- **The letter rail sits after the A–Z sections in DOM order**, absolutely positioned inside
+  the `relative` list wrapper rather than floated or reordered with CSS — so it never
+  competes with section content for layout space, and its `sticky top-[50vh]` centring reads
+  against the same scrollport the sections scroll in.
+- **The index mirrors its own URL state with `window.history.replaceState`**, not the Next
+  router (the `AdminPanel` `?tab=` precedent) — a `router.replace` would re-run the Server
+  Component's fetch on every keystroke for a filter that is entirely client-side; `replace`
+  (never `push`) keeps Back from growing one history entry per keystroke.
+- **Short-query author matching is per-word-prefix**, not substring — a 1–2 character query
+  against the raw author string false-positived on any word containing it mid-token (e.g.
+  "an" inside "Redman"); title search keeps full substring matching since it is what is
+  visually shown, sorted prefix-first.
+
+**Bundle:** measured at release (Task 10) — see `docs/MOTION.md` ledger.

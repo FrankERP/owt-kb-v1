@@ -148,21 +148,27 @@ bugs — respect it.
 
 | Page | Strategy | Detail |
 |------|----------|--------|
-| `/` (home / "Esta semana") | ISR `revalidate = 60` | This weekend's services + full song list. |
+| `/` (home / "Esta semana") | ISR `revalidate = 60` | This weekend's services as a run sheet (R1): the next service in full, every other one collapsed to a line via `DayCardDisclosure`. |
 | `/schedule` | ISR `revalidate = 60` | Upcoming services; `?m=` month browse. |
-| `/author`, `/author/[slug]`, `/tag`, `/tag/[slug]` | ISR `revalidate = 60` | Indexes + filtered song lists. |
+| `/biblioteca` | ISR `revalidate = 60` fetch, dynamic by `searchParams` | R1: the song library — A–Z index of rows with a search console, letter rail and filter drawer (Tipo, tema, artista, tonalidad). One cached fetch (catalogue + tags + authors) serves every `?q=`/`?tag=`/`?author=`/`?key=`; filtering is client-side, so `searchParams` makes the page dynamic without invalidating the fetch cache. |
 | `/me` | ISR `revalidate = 60` | Member's assignments/profile (session-scoped data fetched fresh via `serverClient`). |
 | `/posts/[slug]` | **SSG** `revalidate = 3600` + `generateStaticParams()` | All song pages prebuilt. |
 | `/me/propose/[roleId]` | `revalidate = 0` | Always dynamic (proposal editing). |
 | `/admin` | dynamic | Session-gated; data fetched client-side from `/api/admin/*`. |
 | `/studio` | `dynamic = 'force-static'` | Sanity Studio SPA. |
 
+**R1 redirects (`next.config.mjs`):** `/tag`, `/tag/[slug]`, `/author`, `/author/[slug]` are
+`permanent: true` (308) redirects into `/biblioteca` (`?tag=`/`?author=` respectively) — the
+old index/filter pages are gone, not just replaced; bookmarks keep working, no data change.
+See [ROUTES.md](ROUTES.md#redirects).
+
 **The cache contract:** any admin/API route that mutates content **must** call the matching
 revalidate helper in [`app/utils/revalidate.ts`](../app/utils/revalidate.ts) (or
 `revalidatePath`) or the ISR page stays stale:
 
 - `revalidateServiceViews()` → `/`, `/schedule`, `/posts/[slug]` (setlist/team/service changes).
-- `revalidateSongViews()` → `/`, `/posts/[slug]`, `/tag`, `/tag/[slug]` (song content changes).
+- `revalidateSongViews()` → `/`, `/posts/[slug]`, `/biblioteca` (song content changes). R1
+  turns `/tag*`/`/author*` into redirects, which hold no cache of their own to invalidate.
 
 **Five Sanity clients** back this (`client` in [`sanity/lib/client.ts`](../sanity/lib/client.ts);
 `serverClient` + `writeClient` in [`sanity/lib/serverClient.ts`](../sanity/lib/serverClient.ts);

@@ -129,7 +129,7 @@ exclusive to the sign-in lockup, where it already lived before this list existed
 | `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
 | `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws «Mes anterior» / «Mes siguiente» icon buttons (the schedule's month strip). |
 | `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
-| `AnimatedList` | client | list reflow: `layout="position"` per row, leavers fade `fast` — `/biblioteca` index. |
+| `AnimatedList` | client | list reflow: `mode="popLayout"` pops leavers out of flow so the survivors slide at once (`layout="position"` per row, leavers fade `fast`); the host renders `relative` because a popped item positions against it — `/biblioteca` index. |
 | `haptic(kind)` (`app/utils/haptics.ts`) | neutral | `"light"` (default) on a toggle flip or thumb move, `"selection"` on a tab press, `"medium"` reserved for drop landing (M-planner). Native only; no-op on web; never awaited in a handler. |
 
 ### Load-failure behaviour
@@ -186,7 +186,9 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `rawMotionLiterals.test.ts` | Pins `transition-all` (9) and raw `duration-N` (8) counts outside `ui/` at the audited baseline (down from 13/12 pre-M1 — M1's four migrated sites: `BottomNav`'s sheet becoming a `CueDialog`, `NavMenu`'s avatar-ring transitions, the audio transport's progress fill and play/pause button) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. |
 | `cueDialogMount.test.ts` | Counts every LITERAL `open` attribute on a `<CueDialog` source element — not `open={…}` — across `app/**/*.tsx` excluding `__tests__` and `ui/`; per element, not per caller, so a wrapper mounted by several callers still counts once. Pins the count at 10 (re-measured 2026-09-09, M1 Task 7 — `SongSheet`'s `SetlistPopover` migrated to `open={x}`, down from 11; the original 2026-09-08 measurement of 7 only caught the direct `{x && <CueDialog open>}` shape and missed wrapper components). `AdminPanel`'s and `ServicesPanel`'s local `Modal`s and `KidsPlanner`'s `SeatPicker` remain and migrate in their own route phases. Lower the count in the same commit that migrates a site to `open={…}`; never raise it. |
 | `dialogSemantics.test.ts` | Every file that draws a dismissable full-bleed scrim (`bg-scrim` + `inset-0` + `onClick`) carries `role="dialog"`/`aria-modal`/an accessible name/focus management, or is named in an exemption list with a reason. Floor is 1 (`CueDialog` itself) as of M1 Task 1 — `BottomNav`'s hand-rolled scrim was replaced by a `CueDialog` sheet, so its `NOT_A_DIALOG` entry was deleted along with the overlay it exempted; the exemption list is now empty. A stale exemption (naming a file the scan no longer finds) fails its own check. |
-| `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins six named labels (`>Cue<`, `>Servicio<`, "Índice musical", "títulos", "Backstage operations", "Acceso autorizado") at their audited counts, by equality — a phase that removes one lowers its number in the same commit. |
+| `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins seven named labels at their audited counts, by equality — a phase that removes one lowers its number in the same commit. `>Cue<` (0, M0b-1), `>Servicio<` (0, R1 — `DayCard`'s day · date header carries it now), "Índice musical" (0, R1 — `SongSearchList` removed), "títulos" (0, R1 — the home library count removed), "Repertorio" (0, R1 — `PostComponent`'s song-card eyebrow removed), "Backstage operations" (1) and "Acceso autorizado" (1) still open, both due in R5. |
+| `redirects.test.ts` | R1 (spec §12.2, decision H): `next.config.mjs`'s `redirects()` folds `/tag`, `/tag/:slug`, `/author`, `/author/:slug` into `/biblioteca` (`?tag=:slug`/`?author=:slug`), all `permanent: true` (308). |
+| `litCard.test.ts` | The home hero card's one-shot light pass (R1, decision Q — see "The beam" above). Cannot see geometry (jsdom), so it pins the CSS contract instead. |
 | `bottomNavOffsetSync.test.ts` | Names `BottomNav`'s `NAV_H_VAR`/`NAV_CLASS` exports, the `setProperty`/`removeProperty`/`classList` publish-and-clear shapes, `brand.css`'s `--bottom-nav-h` declaration and `html.has-bottom-nav [data-route-main]` padding rule, that every fixed-bottom consumer (`Toast.tsx`, `AudioPlayer.tsx`, `EditSongButton.tsx`) offsets by the variable, and that the client layout mounts `<BottomNav />` inside `<Provider>`. A new fixed-bottom element joins the `it.each` list. |
 
 ## Bundle
@@ -529,3 +531,40 @@ the impersonation banner, the audio transport, and the song sheet's head.
   eyebrow/title/close-button block is gone. What survived (the author, the
   key/BPM/time-signature pills) moved into one compact meta row rendered as the
   dialog's first child, ahead of the scrollable body.
+
+### Library and run sheet (R1)
+
+`/tag*`/`/author*` folded into `/biblioteca`, and home stopped being a wall of stacked
+cards — see spec Part X for the full ledger; the motion-relevant pieces:
+
+- **`AnimatedList`** (`app/components/ui/AnimatedList.tsx`) is the list-reflow primitive
+  R1 introduced: `mode="popLayout"` pops a leaving row out of flow (the `NumberRoll`
+  precedent) so the survivors slide to their new place at once instead of jumping as the
+  leaver's space collapses under them; the host is `relative` because a popped item
+  positions against it. `/biblioteca` is the one consumer — every A–Z section renders its
+  rows through it, so filtering (Tipo, tema, artista, tonalidad, the search query) reflows
+  rather than replacing the list wholesale.
+- **The row pattern is now recorded twice more.** `LibraryRow` and `DayCardDisclosure`'s
+  header both carry a plain `<button>` inside an `<li>`/wrapping `div` rather than the
+  `Button` primitive — the ruling `DayCard`'s setlist rows already set: the row itself IS
+  the affordance, so it carries no eyebrow and no "Ver" label. The letter rail's own
+  buttons (after the A–Z sections, absolutely positioned in the `relative` list wrapper —
+  DOM order no longer decides placement) take the same exemption for the same reason: bare
+  tap targets in an index rail, not chrome.
+- **The label budget moved four labels to zero** (`labelBudget.test.ts`, spec §18): `>Servicio<`
+  (the old per-card "Servicio" eyebrow — `DayCard`'s day · date header carries that now),
+  "Índice musical" and "títulos" (the old home song-list heading and its count — home shows
+  the run sheet only, the song list moved to `/biblioteca` with no repeated count of its
+  own; the ONE count on that surface lives in the search placeholder), and "Repertorio"
+  (`PostComponent`'s song-card eyebrow — the card itself is gone).
+- **The lit card** (`.brand-lit-card`, `--lit-beam` — see "The beam" above) is the home
+  hero's one-shot border pass; it is the fifth enumerated beam use and the first CSS-only
+  one (no `motion` import, so it costs nothing against the bundle budget below). Guarded by
+  `litCard.test.ts`, which reads `brand.css`/`page.tsx` as text and cannot see geometry —
+  see the file's own header for what closed that gap.
+- **The redirects** (`/tag*`/`/author*` → `/biblioteca`, `permanent: true` = 308) carry no
+  motion of their own — a 308 is a full navigation, not a client transition — but they are
+  why `/biblioteca` needed the `?q=`/`?tag=`/`?author=`/`?key=` URL contract
+  (`libraryIndex.ts`'s `parseLibraryParams`/`serializeLibraryParams`) rather than being
+  free to invent its own params: a bookmark to the old `/tag/:slug` has to land already
+  filtered. Guarded by `redirects.test.ts`.

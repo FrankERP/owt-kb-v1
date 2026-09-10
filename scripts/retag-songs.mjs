@@ -445,7 +445,7 @@ async function main() {
     await client.delete(t._id);
     console.log(`deleted tag ${t.name}`);
   }
-  console.log("\nDONE. /tag, /tag/[slug] and / revalidate within 60 s; /posts/[slug] within 1 h.");
+  console.log("\nDONE. /biblioteca and / revalidate within 60 s; /posts/[slug] within 1 h.");
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
