@@ -413,7 +413,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   **not** session-based). Finds members assigned to **tomorrow's** published services
   (America/Mexico_City) and pushes a `reminders` notification ("Sirves mañana"). Scheduled by
   `vercel.json` at `0 1 * * *` (01:00 UTC daily). The only endpoint scheduled by `vercel.json` —
-  Vercel Hobby allows one cron per day, so the other two are driven by GitHub Actions.
+  Vercel Hobby allows one cron per day, so the other two are driven from outside Vercel — the flush by a Google Cloud Scheduler job plus GitHub Actions (ADR-0032), the probe by hand.
 
 - **`GET /api/cron/flush-notifications`** — same secret-based auth (401 otherwise). Runs one
   `sweepOutbox()` at full budget: the notification outbox's primary flush trigger. Driven by
