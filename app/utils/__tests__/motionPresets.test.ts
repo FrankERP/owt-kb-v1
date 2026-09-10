@@ -24,6 +24,9 @@ describe("motionPresets", () => {
           expect(allowed.has(key), `${name}.${phase}.${key}`).toBe(true);
         }
       }
+      // Presence.onEntered's guard (opacity === 1) relies on every animate phase
+      // landing at opacity 1, pinned by this assertion.
+      expect((v.animate as { opacity?: number }).opacity, `${name}.animate.opacity`).toBe(1);
     }
   });
 
