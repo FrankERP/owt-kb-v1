@@ -1,6 +1,13 @@
 "use client";
 
-import { useState } from "react";
+// The phone tab bar (spec §5.0, §19.1, decision B). Five tabs, one sheet. It
+// publishes its MEASURED height as --bottom-nav-h on <html> the way the
+// impersonation banner publishes --impersonation-h, so every fixed-bottom
+// element (toasts, the audio transport, the song FAB) clears it without a
+// constant anyone can drift from — bottomNavOffsetSync.test.ts is the guard.
+// Ministry filtering is COSMETIC (the pages enforce), as NavMenu says.
+
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -8,140 +15,165 @@ import { useSession, signOut } from "next-auth/react";
 import { clearThemeMirror } from "@/app/utils/themePref";
 import { haptic } from "@/app/utils/haptics";
 import SlidingIndicator from "./ui/SlidingIndicator";
+import CueDialog from "./ui/CueDialog";
+
+export const NAV_H_VAR = "--bottom-nav-h";
+export const NAV_CLASS = "has-bottom-nav";
+
+type Tab = { href: string; label: string; icon: React.ReactNode; match: (p: string) => boolean };
 
 export default function BottomNav() {
   const { data: session } = useSession();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "/";
   const [moreOpen, setMoreOpen] = useState(false);
+  const barRef = useRef<HTMLElement | null>(null);
+  const user = session?.user ?? null;
+  const hidden = !user || pathname.startsWith("/auth") || pathname.startsWith("/studio");
 
-  if (!session?.user || pathname?.startsWith("/auth") || pathname?.startsWith("/studio")) {
-    return null;
-  }
+  // Measured, not a constant: the bar wraps to two lines at the largest text
+  // scale, and the safe-area inset differs per device. Published only while the
+  // bar is on screen (the media query below hides it at lg), cleared on unmount.
+  //
+  // `offsetParent` is a shortcut for "not display:none, not detached", but
+  // jsdom returns `null` for it on every element regardless of layout — using
+  // it here would read the bar as off-screen even when it is genuinely
+  // rendered under test. `getComputedStyle(bar).display !== "none"` gives the
+  // same real-browser answer (the `lg:hidden` media query sets `display:
+  // none`) without the jsdom false negative.
+  useEffect(() => {
+    if (hidden) return;
+    const root = document.documentElement;
+    const publish = () => {
+      const bar = barRef.current;
+      const onScreen = bar && getComputedStyle(bar).display !== "none";
+      if (bar && onScreen && bar.offsetHeight) {
+        root.style.setProperty(NAV_H_VAR, `${bar.offsetHeight}px`);
+        root.classList.add(NAV_CLASS);
+      } else {
+        root.style.removeProperty(NAV_H_VAR);
+        root.classList.remove(NAV_CLASS);
+      }
+    };
+    publish();
+    const ro = typeof ResizeObserver !== "undefined" && barRef.current ? new ResizeObserver(publish) : null;
+    if (ro && barRef.current) ro.observe(barRef.current);
+    window.addEventListener("resize", publish);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", publish);
+      root.style.removeProperty(NAV_H_VAR);
+      root.classList.remove(NAV_CLASS);
+    };
+  }, [hidden]);
 
-  const isAdmin = session.user.role === "super-admin" || session.user.role === "admin" || session.user.role === "content-editor";
+  if (hidden || !user) return null;
 
-  const tabs = [
-    { href: "/schedule", label: "Calendario", icon: <CalendarIcon /> },
-    { href: "/tag",      label: "Tags",        icon: <MusicIcon /> },
-    { href: "/me",       label: "Yo",         icon: <UserIcon /> },
-  ];
+  const role = user.role;
+  const isSuper = role === "super-admin";
+  const isAdmin = isSuper || role === "admin" || role === "content-editor";
+  const ministries = user.ministries ?? ["worship"];
+  const inWorship = isSuper || ministries.includes("worship");
+  const inKids = isSuper || ministries.includes("kids");
+  const managesKids = isSuper || (user.managesMinistries ?? []).includes("kids");
 
-  const isActive = (href: string) =>
-    pathname === href || (href !== "/" && pathname?.startsWith(href));
+  const tabs: Tab[] = inWorship
+    ? [
+        { href: "/", label: "Inicio", icon: <HomeIcon />, match: (p) => p === "/" },
+        { href: "/schedule", label: "Calendario", icon: <CalendarIcon />, match: (p) => p.startsWith("/schedule") },
+        // Biblioteca links to /tag until R1 creates /biblioteca and redirects /tag* (spec §12.2).
+        { href: "/tag", label: "Biblioteca", icon: <MusicIcon />, match: (p) => /^\/(tag|posts|author)/.test(p) },
+        { href: "/me", label: "Yo", icon: <UserIcon />, match: (p) => p.startsWith("/me") },
+      ]
+    : [
+        { href: "/kids", label: "Kids", icon: <KidsIcon />, match: (p) => p === "/kids" },
+        ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon />, match: (p: string) => p.startsWith("/kids/admin") }] : []),
+        { href: "/me", label: "Yo", icon: <UserIcon />, match: (p) => p.startsWith("/me") },
+      ];
+
+  const rowClass = "flex min-h-[44px] w-full items-center gap-3 px-5 py-3 font-label text-xs uppercase tracking-widest text-ink hover:bg-accent/5";
 
   return (
     <>
-      {/* Backdrop */}
-      {moreOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-scrim/50 backdrop-blur-sm lg:hidden"
-          onClick={() => setMoreOpen(false)}
-        />
-      )}
-
-      {/* More sheet — slides up from above the bar. `inert` when closed so its
-          controls leave the tab order and the accessibility tree (they stay in
-          the DOM only to animate). */}
-      <div
-        id="bottom-nav-more"
-        inert={!moreOpen}
-        className={`fixed inset-x-0 bottom-16 z-50 lg:hidden transition-all duration-300 ease-out ${
-          moreOpen ? "translate-y-0 opacity-100 pointer-events-auto" : "translate-y-4 opacity-0 pointer-events-none"
-        }`}
+      <nav
+        ref={barRef}
+        aria-label="Navegación principal"
+        className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-surface-base/90 backdrop-blur-sm border-t border-accent/15"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="mx-3 bg-surface-raised-alt border border-accent/20 rounded-2xl overflow-hidden shadow-2xl">
-          {/* User info */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-accent/10">
-            {session.user.image ? (
-              <Image
-                src={session.user.image}
-                alt=""
-                width={40}
-                height={40}
-                className="rounded-full shrink-0"
-              />
-            ) : (
-              <div className="w-10 h-10 rounded-full bg-accent-deep flex items-center justify-center shrink-0">
-                <span className="font-label text-sm text-accent">
-                  {session.user.name?.slice(0, 2).toUpperCase()}
-                </span>
-              </div>
-            )}
-            <div className="min-w-0">
-              <p className="font-body text-sm font-semibold truncate">{session.user.name}</p>
-              <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 truncate">
-                {session.user.email}
-              </p>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="divide-y divide-accent/10">
-            {isAdmin && (
-              <Link
-                href="/admin"
-                onClick={() => setMoreOpen(false)}
-                className="flex items-center gap-3 px-5 py-4 text-mono-400 hover:text-accent hover:bg-accent/5 transition-colors"
-              >
-                <ShieldIcon />
-                <span className="font-label text-xs uppercase tracking-widest">Admin</span>
-              </Link>
-            )}
-            <button
-              onClick={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}
-              className="w-full flex items-center gap-3 px-5 py-4 text-negative-fg hover:bg-negative-strong/10 transition-colors"
-            >
-              <SignOutIcon />
-              <span className="font-label text-xs uppercase tracking-widest">Salir</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom bar */}
-      <nav aria-label="Navegación principal" className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-surface-base/90 backdrop-blur-sm border-t border-accent/15"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="flex items-stretch h-16 max-w-7xl mx-auto">
-          {tabs.map(tab => {
-            const active = isActive(tab.href);
+          {tabs.map((tab) => {
+            const active = tab.match(pathname);
             return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              onClick={() => { void haptic("selection"); setMoreOpen(false); }}
-              aria-current={active ? "page" : undefined}
-              className={`relative flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
-                active
-                  ? "text-accent"
-                  : "text-mono-500 hover:text-mono-300"
-              }`}
-            >
-              {active && <SlidingIndicator id="bottom-nav" variant="dot" />}
-              <span className={`transition-transform duration-fast ease-out-brand ${active ? "-translate-y-0.5" : ""}`}>{tab.icon}</span>
-              <span className="font-label text-[10px] uppercase tracking-widest">{tab.label}</span>
-            </Link>
+              <Link
+                key={tab.href}
+                href={tab.href}
+                onClick={() => { void haptic("selection"); setMoreOpen(false); }}
+                aria-current={active ? "page" : undefined}
+                className={`relative flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-fast ease-out-brand ${
+                  active ? "text-accent" : "text-mono-500 hover:text-mono-300"
+                }`}
+              >
+                {active && <SlidingIndicator id="bottom-nav" variant="dot" />}
+                <span className={`transition-transform duration-fast ease-out-brand ${active ? "-translate-y-0.5" : ""}`}>{tab.icon}</span>
+                <span className="font-label text-[10px] uppercase tracking-widest">{tab.label}</span>
+              </Link>
             );
           })}
           <button
-            onClick={() => setMoreOpen(v => !v)}
-            // No `aria-haspopup`, for the reason NavMenu records at its own
-            // dropdown: this sheet is a disclosure of navigation links, not a
-            // menu widget — there is no arrow-key navigation — and
-            // `aria-haspopup`'s "true" token is defined as "menu", so it would
-            // promise behaviour that does not exist. `aria-expanded` plus
-            // `aria-controls` describe a disclosure honestly.
+            type="button"
+            onClick={() => { void haptic("selection"); setMoreOpen(true); }}
+            aria-haspopup="dialog"
             aria-expanded={moreOpen}
-            aria-controls="bottom-nav-more"
-            className={`flex-1 flex flex-col items-center justify-center gap-1 transition-colors ${
+            className={`relative flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-fast ease-out-brand ${
               moreOpen ? "text-accent" : "text-mono-500 hover:text-mono-300"
             }`}
           >
-            <MoreIcon />
+            <span><MoreIcon /></span>
             <span className="font-label text-[10px] uppercase tracking-widest">Más</span>
           </button>
         </div>
       </nav>
+
+      <CueDialog open={moreOpen} mode="sheet" size="sm" title="Más" label="Más" onDismiss={() => setMoreOpen(false)}>
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-accent/10">
+          {user.image ? (
+            // unoptimized: serve the original JPEG/PNG, not Next's WebP — the iOS
+            // WKWebView (Capacitor wrap) fails to decode the optimized WebP avatar.
+            <Image src={user.image} alt="" width={40} height={40} unoptimized className="rounded-full shrink-0" />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-accent-deep flex items-center justify-center shrink-0">
+              <span className="font-label text-sm text-accent">{user.name?.slice(0, 2).toUpperCase()}</span>
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="font-body text-sm font-semibold truncate">{user.name}</p>
+            <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 truncate">{user.email}</p>
+          </div>
+        </div>
+        <div className="divide-y divide-accent/10">
+          {inWorship && inKids && <Link href="/kids" onClick={() => setMoreOpen(false)} className={rowClass}><KidsIcon />Kids</Link>}
+          {inWorship && managesKids && <Link href="/kids/admin" onClick={() => setMoreOpen(false)} className={rowClass}><PlanIcon />Planear Kids</Link>}
+          {isAdmin && <Link href="/admin" onClick={() => setMoreOpen(false)} className={rowClass}><AdminIcon />Admin</Link>}
+          <Link href="/me#tema" onClick={() => setMoreOpen(false)} className={rowClass}><ThemeIcon />Tema</Link>
+          <button
+            type="button"
+            onClick={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}
+            className={`${rowClass} text-negative-fg hover:bg-negative-strong/10`}
+          >
+            <SignOutIcon />Cerrar sesión
+          </button>
+        </div>
+      </CueDialog>
     </>
+  );
+}
+
+function HomeIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
+      <path d="M3 11.5 12 4l9 7.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M5 10v10h14V10" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
@@ -175,20 +207,49 @@ function UserIcon() {
   );
 }
 
+function KidsIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="6" r="3" />
+      <path d="M5 21c0-4 3-6 7-6s7 2 7 6" />
+      <path d="M9 12v3M15 12v3" />
+    </svg>
+  );
+}
+
+function PlanIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="3" y="4" width="18" height="17" rx="2" />
+      <path d="M3 9h18" />
+      <path d="M8 13h3M8 17h6" />
+    </svg>
+  );
+}
+
+function AdminIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  );
+}
+
+function ThemeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="12" cy="12" r="5" />
+      <path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
+    </svg>
+  );
+}
+
 function MoreIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="5" r="1" fill="currentColor" stroke="none" />
       <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
       <circle cx="12" cy="19" r="1" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-
-function ShieldIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   );
 }

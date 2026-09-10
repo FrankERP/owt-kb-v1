@@ -1,21 +1,43 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Presence from "@/app/components/ui/Presence";
 
 const BANNER_CLASS = "impersonating";
 /** Read by `.impersonating .brand-navbar` in brand.css. */
 const BANNER_H_VAR = "--impersonation-h";
 
 export default function ImpersonationBanner() {
-  const { data: session, update } = useSession();
+  const { data: session, status, update } = useSession();
   const router = useRouter();
   const [leaving, setLeaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
   const active = !!session?.user?.isImpersonating;
+  // NOT the first render: `Provider.tsx` mounts a bare `<SessionProvider>`, so
+  // the first client render is always `status === "loading"` with `active`
+  // false, whether or not the session turns out to be mid-impersonation. A
+  // plain "frozen at first render" flag reads that loading render as "not yet
+  // active" and takes the ANIMATED path on a hard refresh mid-impersonation —
+  // the exact feature-chunk trap this mechanism exists to close, just moved
+  // one render later.
+  //
+  // So this resolves from the first NON-loading status instead: null until
+  // then, and the effect below latches it once `status` leaves "loading".
+  // `null` also covers the render where `status` and `active` resolve to
+  // "authenticated" + true in the same tick — the check below treats that as
+  // already-active too, since there is no observable earlier render to have
+  // shown it any other way.
+  const [activeAtLoad, setActiveAtLoad] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (activeAtLoad === null && status !== "loading") setActiveAtLoad(active);
+  }, [status, active, activeAtLoad]);
+
+  const alreadyActive = activeAtLoad === true || (activeAtLoad === null && active);
 
   // Both this banner and the navbar are `sticky top-0`, in different
   // containers, so they occupied the same strip and the banner's higher
@@ -27,6 +49,24 @@ export default function ImpersonationBanner() {
   // The height is MEASURED, not hard-coded. A constant was ~9px short at
   // desktop width and far shorter than the truth on a phone, where this
   // sentence wraps to two or three lines.
+  const publish = useCallback(() => {
+    const h = barRef.current?.offsetHeight;
+    if (h) document.documentElement.style.setProperty(BANNER_H_VAR, `${h}px`);
+  }, []);
+
+  // Two paths to the FIRST measurement, because there are two ways to arrive
+  // active:
+  //   - Already active as of the first resolved session status
+  //     (`alreadyActive`): there is no enter animation (see `appear` below),
+  //     the bar is visible at once, so it is measured at once, right here.
+  //   - Impersonation started in this session (resolved as inactive, then
+  //     became active): the bar drops in, and measuring before it lands would
+  //     publish a height for a banner that hasn't finished moving —
+  //     `handleEntered` below does that measurement once the drop-in actually
+  //     completes.
+  // The observer and resize listener live here either way: they publish LATER
+  // changes (a wrapped line on rotation, say), long after either first
+  // measurement.
   useEffect(() => {
     const root = document.documentElement;
     const clear = () => {
@@ -38,12 +78,8 @@ export default function ImpersonationBanner() {
       return;
     }
     root.classList.add(BANNER_CLASS);
+    if (alreadyActive) publish();
     const bar = barRef.current;
-    const publish = () => {
-      const h = barRef.current?.offsetHeight;
-      if (h) root.style.setProperty(BANNER_H_VAR, `${h}px`);
-    };
-    publish();
     // Guarded: jsdom has no ResizeObserver, and the CSS fallback covers it.
     const ro = typeof ResizeObserver !== "undefined" && bar ? new ResizeObserver(publish) : null;
     if (ro && bar) ro.observe(bar);
@@ -53,12 +89,21 @@ export default function ImpersonationBanner() {
       window.removeEventListener("resize", publish);
       clear();
     };
-  }, [active]);
+  }, [active, alreadyActive, publish]);
 
-  if (!active) return null;
+  // Fires only on the animated path (`appear` below is true there): under
+  // skipAnimations (tests) this fires synchronously after mount, and in a
+  // real browser it fires once the drop-in has actually finished, so the
+  // navbar offset never chases a bar still in motion. It never fires when the
+  // session already resolved active — `alreadyActive` above measures that
+  // case synchronously instead, since an already-shown `Presence` without
+  // `appear` runs no enter animation and calls no completion callback.
+  const handleEntered = useCallback(() => {
+    publish();
+  }, [publish]);
 
-  const impersonatedName = session.user.name ?? session.user.sanityId;
-  const adminName = session.user.realAdminName ?? "Admin";
+  const impersonatedName = session?.user?.name ?? session?.user?.sanityId;
+  const adminName = session?.user?.realAdminName ?? "Admin";
 
   /**
    * Leaving an impersonated session is a mutation, and it used to navigate
@@ -92,26 +137,45 @@ export default function ImpersonationBanner() {
     }
   }
 
+  // `AnimatePresence` (inside `Presence`) remembers whether it is being
+  // mounted for the FIRST time to decide whether `appear` really means "skip
+  // the enter animation" — and it makes that call once, on its own first
+  // commit, regardless of whether it had a child to show then. Mounting it
+  // while `status` is still "loading" (`active` always false, per
+  // `Provider.tsx`'s bare `<SessionProvider>`) burns that one chance before
+  // we know whether the resolved session is already active — a later render
+  // adding the child is always an "enter", `appear` or not. So `Presence`
+  // itself waits for the first resolved status: nothing renders in the
+  // meantime regardless (an inactive session shows nothing either way), but
+  // once it does mount, `active`/`appear` are already correct for a session
+  // that resolved active.
+  if (status === "loading") return null;
+
   return (
-    <div ref={barRef} className="sticky top-0 z-[60] w-full bg-warning-fg/90 backdrop-blur-sm text-surface-base flex items-center justify-center gap-3 px-4 py-2">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-        <line x1="12" y1="9" x2="12" y2="13" />
-        <line x1="12" y1="17" x2="12.01" y2="17" />
-      </svg>
-      <span className="font-label text-xs uppercase tracking-widest">
-        {error
-          ? error
-          : <>Viendo como <strong>{impersonatedName}</strong> — sesión de prueba de {adminName}</>}
-      </span>
-      <button
-        type="button"
-        onClick={stopImpersonating}
-        disabled={leaving}
-        className="ml-2 px-3 py-0.5 rounded-md border border-scrim/30 font-label text-xs uppercase tracking-widest hover:bg-scrim/10 transition-colors disabled:opacity-60"
-      >
-        {leaving ? "Saliendo…" : "Salir"}
-      </button>
-    </div>
+    // The positioned/stacked host: `Presence` transforms this element while
+    // dropping it in, so it must carry no `position: fixed` descendant — the
+    // banner has an icon, text and a button, nothing fixed among them.
+    <Presence show={active} appear={activeAtLoad === false} variant="drop" onEntered={handleEntered} className="sticky top-0 z-[60] w-full">
+      <div ref={barRef} className="impersonation-bar w-full bg-warning-fg/90 backdrop-blur-sm text-surface-base flex items-center justify-center gap-3 px-4 py-2">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
+          <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          <line x1="12" y1="9" x2="12" y2="13" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
+        <span className="font-label text-xs uppercase tracking-widest">
+          {error
+            ? error
+            : <>Viendo como <strong>{impersonatedName}</strong> — sesión de prueba de {adminName}</>}
+        </span>
+        <button
+          type="button"
+          onClick={stopImpersonating}
+          disabled={leaving}
+          className="ml-2 px-3 py-0.5 rounded-md border border-scrim/30 font-label text-xs uppercase tracking-widest hover:bg-scrim/10 transition-colors disabled:opacity-60"
+        >
+          {leaving ? "Saliendo…" : "Salir"}
+        </button>
+      </div>
+    </Presence>
   );
 }

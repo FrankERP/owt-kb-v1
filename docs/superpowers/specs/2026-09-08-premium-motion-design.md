@@ -924,3 +924,51 @@ at this commit.
 strip (→ Song page, decision K); `ServicesPanel`'s multi-select month pills (not a
 segmented control; → §12.5); a dev warning when `SegmentedControl` gets neither `label` nor
 `labelledBy`; `DateField`'s `label`/`id` typing to match `Select`'s union.
+
+# Part IX — M1 Shell (2026-09-09)
+
+Branch `claude/motion-m1-shell` (from `main` 5d214bbf), plan
+`docs/superpowers/plans/2026-09-09-motion-m1-shell.md`. Eight tasks, each with a fresh
+implementer and a task review; five fix rounds, every one re-reviewed; one final fix wave
+after the whole-branch review.
+
+**Shipped (§5.0 in full, less what earlier phases had done).** `BottomNav` returns
+(decision B): Inicio · Calendario · Biblioteca · Yo · Más for worship members, Kids ·
+Planear Kids · Yo · Más for a kids-only member; «Más» is a `CueDialog` sheet (Kids,
+Planear Kids, Admin, Tema → `/me#tema`, Cerrar sesión, conditioned by role and ministry);
+the bar publishes its MEASURED height as `--bottom-nav-h` (px) plus `has-bottom-nav` on
+`<html>` while on screen, the route main pads under it, toasts clear
+`max(inset, bar)`, the audio transport sits flush on the bar, the song FAB offsets by the
+variable — `bottomNavOffsetSync.test.ts` pins the halves. Desktop: `NavLinks` (Calendario
+· Biblioteca · Kids · Yo · Admin) take the navbar's centre at lg+ with one
+`SlidingIndicator` underline; the page title stays in the bar below lg. The avatar ring
+transitions on `--motion-fast`; the notification badge pops in through `Presence`. The
+impersonation banner drops in (`Presence drop`, new) and publishes `--impersonation-h`
+after landing (`Presence.onEntered`, new) — but only when impersonation starts in the
+session: a page loaded already impersonating renders at rest and measures at once, decided
+from the first resolved session status. The audio transport springs in on `SPRINGS.sheet`
+(the `sheet` variant now enters on the spring) and its progress fill animates `scaleX`
+inside a clipping wrapper. `SongSheet` passes a real `title`, so the dialog's head is the
+grip and the hand-rolled header with its "Canción" eyebrow is gone (§20 stacked headers);
+`SetlistPopover` renders `open={x}` (`cueDialogMount` 10).
+
+**Rulings.** Biblioteca links to `/tag` until R1 creates `/biblioteca`; Tema is a link,
+not a second write path; the kids-only «Tags» row was removed (isolation invariant over
+the plan); «Más» is a `CueDialog` (the `dialogSemantics` exemption went; its floor is 1);
+`transition-[height]` needed no task (already guarded). **Deviations from §5.0,
+accepted:** the badge pops on the eased `scale` enter rather than the `pop` spring (quieter
+at 14 px); the tab indicator is a dot above the icon rather than a pill behind it (the
+pill read as a button at phone scale).
+
+**Bundle — over the accepted figure; Frank's call.** Cold, same method: M1 tip
+`/` 117.5 kB · `/admin` 342.5 kB (shared 169.2, chunk not isolable). Δ vs the M0b-2 tip
+**+7.3 / +5.7 kB gz** — `BottomNav` (with its sheet) and `NavLinks` now mount on every
+`(client)` route. Absolute vs "Before M0a": **+40.2 / +40.8 kB gz**, past the +32.9 /
++35.1 accepted on 2026-09-09. Options: accept M1's cost as the shell's price, or a
+follow-up that lazy-loads the «Más» sheet's body (the only part of the bar that is not
+five links).
+
+**Deferred → later phases:** `/biblioteca` and the `/tag*` redirects (R1); long-press
+quick actions and pull-to-refresh (R7); `NavLinks` follows the page's `schedule`/`tags`
+flags, so the row changes shape on `/kids` (Control Room / R5 to unify); the desktop row
+has no wrap for a sixth link.

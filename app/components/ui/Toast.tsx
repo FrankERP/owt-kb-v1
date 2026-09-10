@@ -111,7 +111,9 @@ function ToastViewport({ items, onDismiss }: { items: ToastRecord[]; onDismiss: 
       aria-live="polite"
       aria-relevant="additions"
       className="pointer-events-none fixed inset-x-0 z-[95] flex flex-col items-center gap-2 px-4"
-      style={{ bottom: "calc(1.5rem + env(safe-area-inset-bottom) + var(--bottom-nav-h, 0px))" }}
+      // The bottom-nav bar includes its own safe-area inset in its height; max() uses the inset
+      // when there is no bar, and the bar's measured height (which already includes the inset) when it exists.
+      style={{ bottom: "calc(1.5rem + max(env(safe-area-inset-bottom), var(--bottom-nav-h, 0px)))" }}
     >
       {/* A region that exists before its text is what gets announced. Errors are
           mirrored into an assertive region that is likewise always mounted. */}

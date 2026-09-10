@@ -9,6 +9,12 @@
 // reverse smoothly because AnimatePresence tracks the in-flight value; a
 // show→hide→show within EXIT_MS never snaps.
 //
+// The enter transition is per-variant: `sheet` enters on `SPRINGS.sheet`
+// (matching `CueDialog`'s sheet — bottom sheets and the audio transport should
+// spring into place, not ease), every other variant enters on the tokenised
+// `ENTER` ease. Exit always stays on `EXIT` regardless of variant — a spring on
+// the way out would overshoot past the edge it's leaving toward.
+//
 // A `Presence` mounted already-shown does NOT animate in by default — `initial`
 // controls the FIRST RENDER OF THIS INSTANCE, not page load, so a toast created on
 // demand or a row appended to a list would otherwise snap in. For the common case
@@ -28,7 +34,7 @@
 import { AnimatePresence } from "motion/react";
 import * as m from "motion/react-m";
 import type { ComponentPropsWithoutRef } from "react";
-import { EASE_IN, EASE_OUT, EXIT_MS, MS, VARIANTS, type VariantName } from "@/app/utils/motionPresets";
+import { EASE_IN, EASE_OUT, EXIT_MS, MS, SPRINGS, VARIANTS, type VariantName } from "@/app/utils/motionPresets";
 
 type Host = "div" | "section" | "aside" | "li";
 
@@ -42,11 +48,18 @@ type Props = Omit<
   /** Animate the enter transition even when this instance mounts already-shown. */
   appear?: boolean;
   onExited?: () => void;
+  /** Fires once the ENTER animation completes — under skipAnimations, synchronously after mount.
+    * A `Presence` mounted already-shown without `appear` runs no enter animation, so
+    * `onEntered` never fires there. Pass `appear` when you need the callback on mount. */
+  onEntered?: () => void;
   children: React.ReactNode;
 };
 
 const ENTER = { duration: MS.base / 1000, ease: EASE_OUT };
 const EXIT = { duration: EXIT_MS / 1000, ease: EASE_IN };
+
+/** The sheet variant enters on SPRINGS.sheet; every other variant enters on ENTER. */
+const enterFor = (variant: VariantName) => (variant === "sheet" ? SPRINGS.sheet : ENTER);
 
 export default function Presence({
   show,
@@ -54,6 +67,7 @@ export default function Presence({
   as = "div",
   appear = false,
   onExited,
+  onEntered,
   children,
   ...rest
 }: Props) {
@@ -71,8 +85,19 @@ export default function Presence({
         <Tag
           key="presence"
           initial={v.initial}
-          animate={{ ...v.animate, transition: ENTER }}
+          animate={{ ...v.animate, transition: enterFor(variant) }}
           exit={{ ...v.exit, transition: EXIT }}
+          onAnimationComplete={(definition) => {
+            // motion passes the completed animation's DEFINITION object (the `animate`
+            // for an enter, the `exit` for an exit). Distinguish by content: only the
+            // enter target lands on opacity 1. This guard relies on every VARIANTS.*.animate
+            // having opacity: 1, pinned by motionPresets.test.ts.
+            const opacity =
+              typeof definition === "object" && definition !== null && "opacity" in definition
+                ? (definition as { opacity?: number }).opacity
+                : undefined;
+            if (opacity === 1) onEntered?.();
+          }}
           {...rest}
         >
           {children}

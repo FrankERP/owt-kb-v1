@@ -11,7 +11,14 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 
 // Audited 2026-09-08 after M0a Task 8; rawDuration 12→10 on 2026-09-09 (M0b-2
 // Task 3: the Popular/A–Z pills became SegmentedControl). LOWER freely; never raise.
-const BASELINE = { transitionAll: 13, rawDuration: 10 };
+// 2026-09-09 M1 Task 1: BottomNav's sheet became a CueDialog (−1 transition-all, −1 duration-300).
+// 2026-09-09 M1 Task 4: NavMenu's two avatar rings drop transition-all for a tokenised
+// box-shadow/transform transition (−2 transition-all).
+// 2026-09-09 M1 Task 6: AudioTransport's play/pause button drops transition-all for a
+// tokenised background-color/transform transition (−1 transition-all); its progress
+// fill drops transition-[width] duration-100 for a tokenised transform: scaleX transition
+// (−1 duration-N).
+const BASELINE = { transitionAll: 9, rawDuration: 8 };
 
 function tsxFiles(): string[] {
   const out: string[] = [];

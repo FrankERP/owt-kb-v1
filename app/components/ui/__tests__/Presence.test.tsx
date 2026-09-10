@@ -9,10 +9,25 @@ import Presence from "../Presence";
 installMotionTestEnv();
 afterEach(cleanup);
 
-function Harness({ show, onExited }: { show: boolean; onExited?: () => void }) {
+function Harness({
+  show,
+  onExited,
+  onEntered,
+}: {
+  show: boolean;
+  onExited?: () => void;
+  onEntered?: () => void;
+}) {
   return (
     <MotionProvider>
-      <Presence show={show} variant="rise" role="status" data-testid="toast" onExited={onExited}>
+      <Presence
+        show={show}
+        variant="rise"
+        role="status"
+        data-testid="toast"
+        onExited={onExited}
+        onEntered={onEntered}
+      >
         Guardado
       </Presence>
     </MotionProvider>
@@ -72,11 +87,47 @@ describe("Presence", () => {
     expect(el.getAttribute("role")).toBe("status");
   });
 
+  it("calls onEntered once after show flips false→true, and not on exit", async () => {
+    const onEntered = vi.fn();
+    const onExited = vi.fn();
+    const { rerender } = render(<Harness show={false} onEntered={onEntered} onExited={onExited} />);
+    expect(onEntered).not.toHaveBeenCalled();
+
+    rerender(<Harness show onEntered={onEntered} onExited={onExited} />);
+    await waitFor(() => expect(onEntered).toHaveBeenCalledTimes(1));
+
+    rerender(<Harness show={false} onEntered={onEntered} onExited={onExited} />);
+    await waitFor(() => expect(onExited).toHaveBeenCalledTimes(1));
+    expect(onEntered).toHaveBeenCalledTimes(1);
+  });
+
   it("applies the variant's motion styles to the host", () => {
     render(<Harness show />);
     const el = screen.getByTestId("toast");
     // Animations are skipped in tests (installMotionTestEnv), so motion writes the
     // final computed value synchronously — "rise" animates opacity to 1.
     expect(el.style.opacity).toBe("1");
+  });
+
+  it("renders the sheet variant without crashing, reaching opacity 1 after show flips true", async () => {
+    // The sheet variant enters on SPRINGS.sheet instead of the tokenised ENTER —
+    // a spring has no fixed duration, so it cannot be observed as a timed value
+    // under jsdom/skipAnimations. This only asserts the variant wires up (no
+    // crash) and lands at its resting opacity, not the spring's motion curve.
+    const { rerender } = render(
+      <MotionProvider>
+        <Presence show={false} variant="sheet" data-testid="sheet">
+          Reproductor
+        </Presence>
+      </MotionProvider>,
+    );
+    rerender(
+      <MotionProvider>
+        <Presence show variant="sheet" data-testid="sheet">
+          Reproductor
+        </Presence>
+      </MotionProvider>,
+    );
+    await waitFor(() => expect(screen.getByTestId("sheet").style.opacity).toBe("1"));
   });
 });
