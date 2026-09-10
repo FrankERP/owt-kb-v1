@@ -1,6 +1,6 @@
 // Pure library logic (spec §12.2). NEUTRAL module — no React, no "use client" —
 // so the /biblioteca Server Component and the client index share one truth.
-// Search is the former SongSearchList's algorithm, moved here unchanged:
+// Search is the former SongSearchList's algorithm, moved here with ONE narrowing (see authorStartsWith below):
 // ≤2 chars → accent-folded substring, prefix first; 3+ → Fuse, prefix first.
 import Fuse, { IFuseOptions } from "fuse.js";
 import type { Post } from "./interface";
