@@ -135,3 +135,15 @@ delivers nothing. Verified against production before the merge:
 keepIds contract has to hold at every selection surface simultaneously, and the
 `moveGate` refusal has to name retirement rather than falling through to the
 `memberType` branch. The audit that produced this ADR found both broken.
+
+## Refinements (2026-09-09)
+
+**`teamMembers.instruments` narrows the `instrumento` Tipo for instrument seats only.** It
+is not a second eligibility axis: a member with no `instrumento` Tipo is eligible for
+nothing regardless of the field, and a member with the Tipo but no declaration is still
+LISTED by the picker (sorted after declared players, flagged «sin declarar», never blocked)
+— only the automatic filler refuses to seat them. It is read in exactly three places:
+`rankCandidates` (the `undeclared` flag, which the filler also uses for its per-row declarer
+count), `occupantDeclaresInstrument` (the planner's second amber line), and the backfill
+script. Adding a fourth reader means restating the rule, which is how the retirement axis
+drifted. Spec: `docs/superpowers/specs/2026-09-09-member-instruments-auto-fill-design.md`.
