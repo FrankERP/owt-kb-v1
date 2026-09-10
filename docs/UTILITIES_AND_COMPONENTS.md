@@ -188,8 +188,8 @@ state a save actually persists against the last saved one.
   needs `role="dialog"`, `aria-modal`, a name, and Escape. `dialogSemantics.test.ts`
   enumerates every overlay drawn with a clickable `bg-scrim` and fails on one that skips
   this (per file, and keyed to that token — see its header for what it cannot see);
-  `NOT_A_DIALOG` there holds the justified exemptions (today: `BottomNav`'s sheet, which
-  uses `inert` instead).
+  `NOT_A_DIALOG` there holds the justified exemptions (none today — `BottomNav`'s sheet
+  became a `CueDialog` in M1 and its exemption went with it).
 
 ### Colour inventory & token guards (light-mode migration, Child A1)
 - **`scripts/colour-inventory.mjs`** — emits every colour decision in `app/**` (plus

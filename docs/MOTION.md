@@ -397,9 +397,8 @@ Turbopack the same way it was at the M0b-2 tip. The absolute Δ against "Before
 M0a" (77.3 kB / 301.7 kB) is now `/` **+40.2 kB**, `/admin` **+40.8 kB** —
 **past the accepted cap of +32.9 kB / +35.1 kB by +7.3 kB / +5.7 kB**, the exact
 size of this milestone's own marginal cost above, reported here without
-trimming anything; whether to accept the new number, defer part of the shell
-behind a dynamic import, or hold the milestone is Frank's call, not a decision
-this doc makes for him.
+trimming anything. Frank accepted the new number on 2026-09-10 at the M1 release
+(the cap-status paragraph above; spec Part IX has the reasoning).
 
 ## Where the walk's findings landed
 
