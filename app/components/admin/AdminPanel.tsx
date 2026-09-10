@@ -31,6 +31,7 @@ import {
   type MinistryId,
 } from "@/app/ministries";
 import { interpretMemberDeleteResponse } from "@/app/utils/memberDelete";
+import { DEFAULT_INSTRUMENT_SEATS } from "./seatModel";
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -41,6 +42,8 @@ interface Member {
   email: string;
   role: OWTRole;
   memberType?: string[];
+  /** Declared instrument seats; absent or empty = declares nothing (spec D6). */
+  instruments?: string[];
   hasPassword: boolean;
   photoUrl?: string;
   notifPrefs?: Record<string, unknown>;
@@ -58,6 +61,13 @@ interface MemberFormData {
   email: string;
   role: OWTRole;
   memberType: string[];
+  /**
+   * Present on EDIT only when the admin touched the Instrumentos grid, and on
+   * CREATE only when touched and non-empty — the same touched-field discipline
+   * as `ministries`, so editing an email never writes `[]` over an untouched
+   * field and a new member is not frozen at `[]` for the backfill (spec §4.4).
+   */
+  instruments?: string[];
   /**
    * Only the per-type email toggles the admin actually touched this editing
    * session, sent flat to PATCH. Absent (or empty) when adding, or when
@@ -307,6 +317,13 @@ export function MemberForm({
   const [email, setEmail]           = useState(initial?.email ?? "");
   const [role, setRole]             = useState<OWTRole>(initial?.role ?? "member");
   const [memberType, setMemberType] = useState<string[]>(initial?.memberType ?? []);
+  // Kept even while `instrumento` is unticked, so re-ticking restores it.
+  const [instruments, setInstruments] = useState<string[]>(initial?.instruments ?? []);
+  const [touchedInstruments, setTouchedInstruments] = useState(false);
+  const toggleInstrument = (value: string) => {
+    setInstruments(prev => prev.includes(value) ? prev.filter(i => i !== value) : [...prev, value]);
+    setTouchedInstruments(true);
+  };
   // RESOLVED per-type values, not the raw fields: a member who opted out of the
   // legacy `notifPrefs.email` has all five unset, and unset renders as its `true`
   // default — five switches ON for someone receiving nothing. This is what
@@ -388,6 +405,7 @@ export function MemberForm({
           member_name: name, alias, email, role, memberType,
           ...(initial && touchedPrefFields.size > 0 ? { emailPrefs: touchedEmailPrefs } : {}),
           ...touchedMinistries,
+          ...(touchedInstruments && (initial || instruments.length > 0) ? { instruments } : {}),
         });
       }}
       className="space-y-4"
@@ -421,6 +439,7 @@ export function MemberForm({
               <button
                 key={value}
                 type="button"
+                aria-pressed={active}
                 onClick={() => toggleType(value)}
                 className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
                   active
@@ -434,6 +453,34 @@ export function MemberForm({
           })}
         </div>
       </div>
+      {memberType.includes("instrumento") && (
+        <div className="space-y-2">
+          <label className="font-label text-xs uppercase tracking-widest text-mono-500">Instrumentos</label>
+          <div className="flex gap-2">
+            {DEFAULT_INSTRUMENT_SEATS.map((value) => {
+              const active = instruments.includes(value);
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggleInstrument(value)}
+                  className={`flex-1 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
+                    active
+                      ? "border-accent bg-accent/15 text-accent"
+                      : "border-accent/20 text-mono-500 hover:border-accent/50"
+                  }`}
+                >
+                  {value}
+                </button>
+              );
+            })}
+          </div>
+          <p className="font-body text-[11px] text-mono-500">
+            Vacío = no se asigna en automático; el planner lo sigue listando como «sin declarar».
+          </p>
+        </div>
+      )}
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Ministerios</label>
         <div className="flex gap-2">
@@ -836,11 +883,14 @@ export default function AdminPanel({
       // without them, a Kids volunteer normalizes to `["worship"]` and holds the
       // whole song catalog, schedule, tags and authors until someone remembers a
       // second edit — with no signal to the admin that it happened.
-      const { member_name, alias, email, role, memberType, ministries, managesMinistries } = data;
+      const { member_name, alias, email, role, memberType, ministries, managesMinistries, instruments } = data;
       const res = await fetch("/api/admin/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ member_name, alias, email, role, memberType, ministries, managesMinistries }),
+        body: JSON.stringify({
+          member_name, alias, email, role, memberType, ministries, managesMinistries,
+          ...(instruments !== undefined ? { instruments } : {}),
+        }),
       });
       if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Miembro agregado."); }
       else setModalError("Error al agregar miembro.");
@@ -1198,6 +1248,11 @@ export default function AdminPanel({
                   {(m.memberType ?? []).map(t => (
                     <span key={t} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-mono-400 border border-accent/15">
                       {TYPE_LABEL[t] ?? t}
+                    </span>
+                  ))}
+                  {(m.instruments ?? []).map(i => (
+                    <span key={`instr-${i}`} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-mono-500/10 text-mono-400 border border-mono-500/20">
+                      {i}
                     </span>
                   ))}
                   {m.disabled === true && (
