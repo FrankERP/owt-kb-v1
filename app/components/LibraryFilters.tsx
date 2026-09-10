@@ -36,8 +36,9 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
         <div className="space-y-6 p-5">
           <section>
             <p className="mb-2 font-label text-[11px] uppercase tracking-widest text-ink-dim">Tipo</p>
-            <SegmentedControl label="Tipo de canción" tone="filled" value={tipo ?? ""} onChange={setTipo}
-              options={[{ value: "" as const, label: "Todos" }, ...TIPO_SLUGS.map((s) => ({ value: s, label: TIPO_LABEL[s], badge: tags.find((t) => t.slug.current === s)?.postCount }))]} />
+            {/* Four tiles must fit a 390 px sheet: small size, full width, equal shares. No count badges — they read as alerts. */}
+            <SegmentedControl label="Tipo de canción" tone="filled" size="sm" className="flex w-full [&>button]:flex-1 [&>button]:px-1" value={tipo ?? ""} onChange={setTipo}
+              options={[{ value: "" as const, label: "Todos" }, ...TIPO_SLUGS.map((s) => ({ value: s, label: TIPO_LABEL[s] }))]} />
           </section>
           <section>
             <p className="mb-2 font-label text-[11px] uppercase tracking-widest text-ink-dim">Temas</p>
