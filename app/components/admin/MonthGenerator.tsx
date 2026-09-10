@@ -27,6 +27,9 @@ import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
+import Checkbox from "@/app/components/ui/Checkbox";
+import DateField from "@/app/components/ui/DateField";
+import Select from "@/app/components/ui/Select";
 import {
   editableConfig,
   sameSolverConfig,
@@ -462,10 +465,14 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
       <div className="rounded border border-accent/10 divide-y divide-accent/5">
         {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-mono-600 italic">Sin resultados</p>}
         {visible.map(m => (
-          <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${config[field].includes(m._id) ? "bg-accent/10" : "hover:bg-accent/5"}`}>
-            <input type="checkbox" checked={config[field].includes(m._id)} onChange={() => onToggle(m._id)} className="accent-accent" />
+          <Checkbox
+            key={m._id}
+            className={`w-full px-2 py-1 text-xs transition-colors ${config[field].includes(m._id) ? "bg-accent/10" : "hover:bg-accent/5"}`}
+            checked={config[field].includes(m._id)}
+            onChange={() => onToggle(m._id)}
+          >
             <span className="font-body">{dn(m)}</span>
-          </label>
+          </Checkbox>
         ))}
       </div>
       {config[field].length > 0 && (
@@ -553,7 +560,6 @@ function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () =
 
 // ─── Rule builder — add forms ─────────────────────────────────────────────────
 
-const rbSel = "px-2 py-1 rounded border border-accent/15 bg-surface-raised-alt font-body text-xs focus:outline-none focus:border-accent w-full";
 const rbIn  = "px-2 py-1 rounded border border-accent/15 bg-transparent font-body text-xs focus:outline-none focus:border-accent";
 
 function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
@@ -593,9 +599,9 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
       {/* Person */}
       <div>
         <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona</p>
-        <select className={rbSel} value={person} onChange={e => setPerson(e.target.value)}>
+        <Select size="sm" aria-label="Persona" value={person} onChange={e => setPerson(e.target.value)}>
           {names.map(n => <option key={n} value={n}>{n}</option>)}
-        </select>
+        </Select>
       </div>
 
       {/* Exclusion pattern pills */}
@@ -650,33 +656,35 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
           {weekEx.map(we => (
             <div key={we.id} className="flex flex-wrap gap-1.5 items-center">
               {/*
-                `rbSel` bakes in `w-full` for its many full-width callers
-                elsewhere in this file. Tailwind emits `.w-full` AFTER `.w-20`
-                in the generated stylesheet, so on equal specificity `w-full`
-                silently wins the cascade and this select renders at
-                container width — an explicit `max-w` is required to actually
-                pin it narrow (same reasoning as the pattern selects' cap).
+                `Select`'s className lands on its outer wrapper, not the inner
+                `<select>` (which always carries its own `w-full`) — an
+                explicit `max-w` on the wrapper is still required to pin it
+                narrow (same reasoning as the pattern selects' cap).
               */}
-              <select
-                className={`${rbSel} w-20 max-w-[80px] flex-none`}
+              <Select
+                size="sm"
+                aria-label="Semana"
+                className="w-24 max-w-[96px] flex-none"
                 value={we.week}
                 onChange={e => setWeekEx(ws => ws.map(x => x.id === we.id ? { ...x, week: Number(e.target.value) } : x))}
               >
                 {[1,2,3,4,5].map(n => <option key={n} value={n}>Sem {n}</option>)}
-              </select>
+              </Select>
               {/*
                 D-defect-1: this used to be `flex-1` with no cap, so at the
                 full-width panel it absorbed all free space and pushed the
                 delete button off the card's right edge. Capped and allowed
                 to wrap instead — same fix as the Caps row below.
               */}
-              <select
-                className={`${rbSel} flex-1 min-w-[140px] max-w-[220px]`}
+              <Select
+                size="sm"
+                aria-label="Patrón"
+                className="flex-1 min-w-[140px] max-w-[220px]"
                 value={we.pattern}
                 onChange={e => setWeekEx(ws => ws.map(x => x.id === we.id ? { ...x, pattern: e.target.value } : x))}
               >
                 {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
+              </Select>
               <button type="button" onClick={() => setWeekEx(ws => ws.filter(x => x.id !== we.id))} className="text-mono-600 hover:text-negative-fg text-sm flex-none">×</button>
             </div>
           ))}
@@ -702,23 +710,27 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
             // truncated — the row now folds onto a second line rather than
             // spilling out of the card.
             <div key={cap.id} className="flex flex-wrap gap-1.5 items-center">
-              <select
-                className={`${rbSel} flex-1 min-w-[140px] max-w-[220px]`}
+              <Select
+                size="sm"
+                aria-label="Patrón"
+                className="flex-1 min-w-[140px] max-w-[220px]"
                 value={cap.pattern}
                 onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, pattern: e.target.value } : x))}
               >
                 {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-              </select>
-              {/* Same `w-full`-vs-fixed-width cascade issue as the week select above. */}
-              <select
-                className={`${rbSel} w-14 max-w-[56px] flex-none`}
+              </Select>
+              {/* Same wrapper-vs-inner-select width note as the week select above. */}
+              <Select
+                size="sm"
+                aria-label="Operador"
+                className="w-16 max-w-[64px] flex-none"
                 value={cap.op}
                 onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, op: e.target.value as any } : x))}
               >
                 <option value="<=">≤</option>
                 <option value=">=">≥</option>
                 <option value="==">= </option>
-              </select>
+              </Select>
               {cap.relative ? (
                 <div className="flex items-center gap-0.5 flex-none">
                   <span className="font-label text-[10px] text-accent/70">sem−</span>
@@ -792,22 +804,22 @@ function ConflictForm({ members, onAdd, onCancel, initialValues }: {
       <div className="grid grid-cols-2 gap-2">
         <div>
           <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona A</p>
-          <select className={rbSel} value={personA} onChange={e => setPersonA(e.target.value)}>
+          <Select size="sm" aria-label="Persona A" value={personA} onChange={e => setPersonA(e.target.value)}>
             {names.map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
+          </Select>
         </div>
         <div>
           <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Persona B</p>
-          <select className={rbSel} value={personB} onChange={e => setPersonB(e.target.value)}>
+          <Select size="sm" aria-label="Persona B" value={personB} onChange={e => setPersonB(e.target.value)}>
             {names.map(n => <option key={n} value={n}>{n}</option>)}
-          </select>
+          </Select>
         </div>
       </div>
       <div>
         <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Patrón — no pueden coincidir en</p>
-        <select className={rbSel} value={pattern} onChange={e => setPattern(e.target.value)}>
+        <Select size="sm" aria-label="Patrón — no pueden coincidir en" value={pattern} onChange={e => setPattern(e.target.value)}>
           {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
-        </select>
+        </Select>
       </div>
       {personA === personB && personA && (
         <p className="font-label text-[10px] text-negative-fg">Selecciona dos personas distintas</p>
@@ -849,13 +861,14 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
             const name    = dn(m);
             const checked = selected.includes(name);
             return (
-              <label key={m._id} className={`flex items-center gap-2 px-2 py-1 cursor-pointer text-xs transition-colors ${checked ? "bg-accent/10" : "hover:bg-accent/5"}`}>
-                <input
-                  type="checkbox" checked={checked} className="accent-accent"
-                  onChange={() => setSelected(s => checked ? s.filter(p => p !== name) : [...s, name])}
-                />
+              <Checkbox
+                key={m._id}
+                className={`w-full px-2 py-1 text-xs transition-colors ${checked ? "bg-accent/10" : "hover:bg-accent/5"}`}
+                checked={checked}
+                onChange={() => setSelected(s => checked ? s.filter(p => p !== name) : [...s, name])}
+              >
                 <span className="font-body">{name}</span>
-              </label>
+              </Checkbox>
             );
           })}
         </div>
@@ -865,9 +878,9 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
       </div>
       <div>
         <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Debe aparecer en</p>
-        <select className={rbSel} value={pattern} onChange={e => setPattern(e.target.value)}>
+        <Select size="sm" aria-label="Debe aparecer en" value={pattern} onChange={e => setPattern(e.target.value)}>
           {PATTERNS.map(p => <option key={p.value} value={p.value}>{p.label} ({p.value})</option>)}
-        </select>
+        </Select>
       </div>
       <div className="flex gap-2 pt-1">
         <button type="button" onClick={onCancel} className="flex-1 py-1 rounded font-label text-[11px] uppercase tracking-widest border border-accent/20 text-mono-500 hover:text-accent hover:border-accent transition-colors">
@@ -1874,7 +1887,6 @@ export default function MonthGenerator({
   }
 
   const inCls  = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors";
-  const selCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-surface-raised-alt font-body text-sm focus:outline-none focus:border-accent transition-colors";
 
   // Unconditional (D9/E21): the solve always addresses the full month's
   // Sundays — only RENDERING/CREATION is gated by `columns` below.
@@ -2002,7 +2014,25 @@ export default function MonthGenerator({
       const escaped = typeof CSS !== "undefined" && typeof CSS.escape === "function"
         ? CSS.escape(focusRoleId)
         : focusRoleId.replace(/["\\]/g, "\\$&");
-      document.querySelector(`[data-grid-column-id="${escaped}"]`)?.scrollIntoView({ block: "nearest", inline: "center" });
+      const el = document.querySelector<HTMLElement>(`[data-grid-column-id="${escaped}"]`);
+      if (!el) return;
+      // `scrollIntoView({ inline: "center" })` scrolls EVERY scrollable
+      // ancestor, not just the grid's own horizontal scroller — when that
+      // scroller alone cannot centre the column, the browser keeps climbing
+      // and reaches `.brand-admin-shell` (`overflow: hidden`, which is still
+      // scrollable by script). The shell shifts left and clips its own
+      // content. Centre the known horizontal scroller by hand instead, then
+      // let `scrollIntoView` handle only the vertical axis with `inline:
+      // "nearest"` — the column is already inside the scroller's visible box
+      // by then, so no ancestor needs a horizontal scroll.
+      const scroller = el.closest<HTMLElement>("[data-planner-scroller]");
+      if (scroller) {
+        const elRect = el.getBoundingClientRect();
+        const scrollerRect = scroller.getBoundingClientRect();
+        scroller.scrollLeft +=
+          (elRect.left + elRect.width / 2) - (scrollerRect.left + scrollerRect.width / 2);
+      }
+      el.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
     return () => cancelAnimationFrame(frame);
   }, [focusRoleId, storedGenerationKey, storedMode]);
@@ -3287,10 +3317,9 @@ export default function MonthGenerator({
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-mono-500">Mes</label>
-          <select className={selCls} value={month} onChange={e => setMonth(Number(e.target.value))}>
+          <Select id="mg-month" label="Mes" size="md" value={month} onChange={e => setMonth(Number(e.target.value))}>
             {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </select>
+          </Select>
         </div>
         <div className="space-y-1">
           <label className="font-label text-xs uppercase tracking-widest text-mono-500">Año</label>
@@ -3455,18 +3484,21 @@ export default function MonthGenerator({
             </button>
           ) : (
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
-              <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
-                Tipo
-                <select value={createType} disabled={storedMutationLocked} onChange={(event) => setCreateType(event.target.value as ServiceType)} className={selCls}>
-                  <option value="sunday_role">Domingo</option>
-                  <option value="saturday_role">Sábado</option>
-                  <option value="special_role">Especial</option>
-                </select>
-              </label>
-              <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
-                Fecha
-                <input type="date" value={createDate} disabled={storedMutationLocked} min={`${monthPrefix}-01`} max={`${monthPrefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`} onChange={(event) => setCreateDate(event.target.value)} className={inCls} />
-              </label>
+              <Select id="mg-create-type" label="Tipo" size="md" value={createType} disabled={storedMutationLocked} onChange={(event) => setCreateType(event.target.value as ServiceType)}>
+                <option value="sunday_role">Domingo</option>
+                <option value="saturday_role">Sábado</option>
+                <option value="special_role">Especial</option>
+              </Select>
+              <DateField
+                kind="date"
+                id="mg-create-date"
+                label="Fecha"
+                value={createDate}
+                disabled={storedMutationLocked}
+                min={`${monthPrefix}-01`}
+                max={`${monthPrefix}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`}
+                onChange={(event) => setCreateDate(event.target.value)}
+              />
               {createType === "special_role" ? (
                 <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
                   Nombre
@@ -3581,26 +3613,17 @@ export default function MonthGenerator({
 
       {storedMode && (
         <div className="grid gap-2 rounded-lg border border-accent/15 p-3 md:grid-cols-[0.8fr_1fr_1fr_auto] md:items-end">
-          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
-            Sección
-            <select value={sectionSwapPath} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapPath(event.target.value as StoredSectionPath)} className={selCls}>
-              {STORED_SECTION_OPTIONS.map((option) => <option key={option.path} value={option.path}>{option.label}</option>)}
-            </select>
-          </label>
-          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
-            Primer servicio
-            <select value={sectionSwapFirst} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapFirst(event.target.value)} className={selCls}>
-              <option value="">Seleccionar…</option>
-              {storedSectionServiceOptions.map((option) => <option key={`a:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
-            </select>
-          </label>
-          <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
-            Segundo servicio
-            <select value={sectionSwapSecond} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapSecond(event.target.value)} className={selCls}>
-              <option value="">Seleccionar…</option>
-              {storedSectionServiceOptions.map((option) => <option key={`b:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
-            </select>
-          </label>
+          <Select id="mg-section-swap-path" label="Sección" size="md" value={sectionSwapPath} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapPath(event.target.value as StoredSectionPath)}>
+            {STORED_SECTION_OPTIONS.map((option) => <option key={option.path} value={option.path}>{option.label}</option>)}
+          </Select>
+          <Select id="mg-section-swap-first" label="Primer servicio" size="md" value={sectionSwapFirst} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapFirst(event.target.value)}>
+            <option value="">Seleccionar…</option>
+            {storedSectionServiceOptions.map((option) => <option key={`a:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
+          </Select>
+          <Select id="mg-section-swap-second" label="Segundo servicio" size="md" value={sectionSwapSecond} disabled={storedSwapInteractionBlocked} onChange={(event) => setSectionSwapSecond(event.target.value)}>
+            <option value="">Seleccionar…</option>
+            {storedSectionServiceOptions.map((option) => <option key={`b:${option.column.roleId}`} value={option.column.roleId}>{option.label}</option>)}
+          </Select>
           <button
             type="button"
             onClick={() => void handleSectionSwap()}
@@ -3789,19 +3812,18 @@ export default function MonthGenerator({
             {" "}Esta acción no se puede deshacer.
           </p>
           {clearSelection.published.length > 0 && (
-            <label className="flex items-start gap-2 font-body text-xs text-mono-300">
-              <input
-                type="checkbox"
-                className="mt-0.5"
-                checked={clearIncludePublished}
-                disabled={clearing}
-                onChange={(event) => setClearIncludePublished(event.target.checked)}
-              />
+            <Checkbox
+              align="start"
+              className="font-body text-xs text-mono-300"
+              checked={clearIncludePublished}
+              disabled={clearing}
+              onChange={(event) => setClearIncludePublished(event.target.checked)}
+            >
               <span>
                 Incluir {clearSelection.published.length} servicio{clearSelection.published.length !== 1 ? "s" : ""} publicado{clearSelection.published.length !== 1 ? "s" : ""}.
                 {" "}Los asignados recibirán aviso de que ya no participan.
               </span>
-            </label>
+            </Checkbox>
           )}
           {clearSelection.selected.length === 0 && (
             <p className="font-body text-xs text-mono-400">No hay borradores en este mes; marca «Incluir publicados» para eliminarlos.</p>

@@ -836,9 +836,12 @@ new colour in a rule body is a composed token at every `--warning-glow` touch po
 # Part VII — M0b-1 shipped
 
 M0b-1 (overlays and controls — `CueDialog`, `Toast`/`useToast`, `Menu`/`MenuItem`/
-`MenuSeparator`/`MenuHeader`, `Collapse`, the gallery's own `GalleryMotion`) is
-implemented on branch `claude/motion-m0b-overlays-controls`; commit range
-`603f1eb4..0219cc3e` and the two docs commits after it. Full reference in `docs/MOTION.md`
+`MenuSeparator`/`MenuHeader`, `Collapse`, the gallery's own `GalleryMotion`) was
+**released to production on 2026-09-09** via PR #52 (merge `2d635d38`, alias verified).
+Branch `claude/motion-m0b-overlays-controls`, range `603f1eb4..0c478b5a`, of which
+`e686fab3..0c478b5a` is the wave after Frank's dev look: 150 px drag threshold,
+the whole head as the grip, the `×` `sr-only` on phone sheets, the day sheet's
+`CERRAR` footer gone. Full reference in `docs/MOTION.md`
 — primitives table, the "Load-failure behaviour" section (§Part VI's "Toast/Menu/Collapse
 need a load-failure fallback" resolved: `Collapse`/`CueDialog` render already-open via
 `initial={false}`; `Toast`/`Menu` animate in from `initial` since they only ever open long
@@ -856,3 +859,62 @@ held swap block → M7b; Kids inline statuses → M8; a `Menu`'s Escape inside a
 §Part VI's 40 kB gz async-chunk cap: `domMax` measured at **28.8 kB gz** (88.0 kB
 raw) — under the cap, so the sliding indicator kept `layoutId`. See MOTION.md's
 Bundle section for the full A/B measurement.
+
+# Part VIII — M0b-2 controls (2026-09-09)
+
+Branch `claude/motion-m0b2-controls` (from `main` 2d635d38), plan
+`docs/superpowers/plans/2026-09-09-motion-m0b2-controls.md`. Thirteen tasks, each with a
+fresh implementer and a task review; ten fix rounds in all, every one re-reviewed.
+
+**Shipped.** Seven primitives under `app/components/ui/` and one util:
+`SegmentedControl` (radiogroup, roving arrows, `layoutId` thumb — the reason M0b-1 paid
+for `domMax`), `SlidingIndicator` + `useActiveIntoView` (tab bars), `Switch` (spring knob,
+haptic, one off-state anchor for both sites), `Checkbox` (drawn box over the native input;
+`align`, `tone`), `Select` (tokenised chrome over the native `<select>`, sizes `sm/md/lg`),
+`DateField` (native date/month under the chrome; month steppers), `NumberRoll` (old value
+rises out, new rises in), and `haptic(kind)` behind `@capacitor/haptics` (no-op on web;
+`ios/` Package.swift regenerated; `docs/MOBILE.md` gains the plugin table).
+
+**Migrated.** 11 segmented sites (theme, text size, Calendario/Lista, Popular/A–Z ×2,
+Tipo/Rol, A→Z/Z→A, ministry scope, proposal filters with the pending badge, chart versions,
+the participation view — the last was a `<select>`), 3 tab bars (admin `TabBar`,
+`SectionNav`, `BottomNav` with the icon lift and a haptic), 2 switches, 5 checkboxes,
+23 selects (9 + MonthGenerator's 14), 3 date/month inputs, 4 rolling values. **No native
+`<select>`, `<input type="checkbox">`, `type="date"` or `type="month"` remains under
+`app/**`** — decision M's 39 sites are the radio trio and the number/text inputs short of
+complete, which are not M0b-2 primitives.
+
+**Overlay follow-ups closed.** A `Menu` inside a `CueDialog` owns Escape (the dialog's
+capture listener yields when the key's target is inside an open menu or on its expanded
+trigger); the toast viewport is a persistent polite region with an always-mounted alert
+mirror for errors; a sheet decides sheet-or-card on the open edge and holds it.
+
+**Gallery.** `/theme-gallery/{dark,light}/controls` renders every primitive in every state
+(hermetic, its own `ToastProvider`); `themeGallery.test.ts` pins five fixtures.
+
+**Rulings taken during execution** (all in the plan's SDD ledger; each reversible):
+`Select` ships the native half only — the desktop `Menu` popover with type-ahead goes with
+the Control Room remake (§12.5); one `Switch`, one off-state, the higher-contrast anchor
+(`mono-300` light / `mono-600` dark) for both sites, and `brand.css`'s white/black census
+now counts six literals; `Checkbox` takes `align` because a same-property utility passed
+through `className` cannot beat one the primitive sets; the rule editor's nine selects use
+`size="sm"` and the two narrowest widened; `NumberRoll`'s host is positioned so the exiting
+value is clipped; `useActiveIntoView` scrolls on activation only, never on mount.
+
+**Bundle — the cap is OPEN and it is Frank's number.** Measured cold, same environment,
+identical script (`docs/MOTION.md` §Bundle): `e9d90327` (M0b-1 Task 1, mid-branch) `/`
+85.5 kB · `/admin` 310.3 kB; `2d635d38` (the M0b-1 merge) 110.3 · 335.3; M0b-2 tip
+110.2 · 336.8. So **M0b-1's own shipped cost was +24.8 / +25.0 kB gz** — the ledger's
+87.9/307.1 row had been measured before `Toast`, `Menu`, `Collapse` and the expanded
+`CueDialog` landed — and **M0b-2 adds −0.1 / +1.5 kB**. Against "Before M0a"
+(77.3 / 301.7) the absolute delta is **+32.9 / +35.1 kB gz, over §7's +25 kB line.**
+Ruling R was recorded pending Frank's word; the number above is what he decides on. The
+async feature chunk cannot be isolated at the tip (Turbopack fused it with Studio code into
+one async chunk that no first-load path references), so the 40 kB async line has no figure
+at this commit.
+
+**Deferred → later phases:** the desktop `Select` popover (§12.5); the kill-switch confirm
+(decision O → Control Room); `SongSheet`'s hand-rolled header (→ M1); the 12-key transposer
+strip (→ Song page, decision K); `ServicesPanel`'s multi-select month pills (not a
+segmented control; → §12.5); a dev warning when `SegmentedControl` gets neither `label` nor
+`labelledBy`; `DateField`'s `label`/`id` typing to match `Select`'s union.

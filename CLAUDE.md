@@ -230,6 +230,11 @@ duration?, hold?, action? })`, portalled, `z-[95]` above `CueDialog`), `Menu`
 (`app/components/ui/Menu.tsx` — every anchored dropdown; real `role="menu"` semantics,
 roving focus, merges the trigger's own ref), `Collapse` (`app/components/ui/Collapse.tsx`
 — every disclosure; the one place height animates, on user-triggered opens only),
+`SegmentedControl` (`app/components/ui/SegmentedControl.tsx` — every one-of-N choice;
+never `aria-pressed` toggles), `SlidingIndicator` (tab bars), `Switch`, `Checkbox`,
+`Select`, `DateField` (native controls under house chrome — never a bare
+`<select>`/`<input type="checkbox|date|month">` in `app/**`), `NumberRoll`,
+`haptic()` (`app/utils/haptics.ts` — native only, fire-and-forget),
 `CueDialog` (`app/components/ui/CueDialog.tsx` — every dialog, never a hand-rolled
 `fixed inset-0` shell; render `<CueDialog open={x}>`, never a literal `open` behind a
 conditional — directly or inside a wrapper component (a local `Modal`, a

@@ -48,7 +48,7 @@ function shownNames(members: { member_name: string }[]) {
   return members.filter((m) => screen.queryByText(m.member_name) !== null).map((m) => m.member_name);
 }
 
-const scopeButton = (label: string) => screen.getByRole("button", { name: new RegExp(`^${label}`) });
+const scopeButton = (label: string) => screen.getByRole("radio", { name: new RegExp(`^${label}`) });
 
 beforeEach(() => vi.unstubAllGlobals());
 afterEach(cleanup);
@@ -57,7 +57,7 @@ describe("Miembros — ministry scope", () => {
   it("defaults to Alabanza and hides a kids-only member", async () => {
     await mount([LEGACY, WORSHIP, KIDS, BOTH]);
     expect(shownNames([LEGACY, WORSHIP, KIDS, BOTH])).toEqual(["Ana Legacy", "Beto Worship", "Dani Ambos"]);
-    expect(scopeButton("Alabanza").getAttribute("aria-pressed")).toBe("true");
+    expect(scopeButton("Alabanza").getAttribute("aria-checked")).toBe("true");
   });
 
   it("KEEPS a legacy member with NO stored ministries in the default view", async () => {

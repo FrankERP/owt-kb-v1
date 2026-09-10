@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -28,11 +28,18 @@ vi.mock("../PlannerGrid", () => ({
   }) => (
     <div data-testid="stored-grid">
       <span data-testid="stored-row-count">{rows.length}</span>
-      {columns.map((column) => (
-        <span key={column.columnId} data-testid="stored-column" data-column-id={column.columnId}>
-          {column.columnId}
-        </span>
-      ))}
+      <div data-planner-scroller="">
+        {columns.map((column) => (
+          <span
+            key={column.columnId}
+            data-testid="stored-column"
+            data-column-id={column.columnId}
+            data-grid-column-id={column.columnId}
+          >
+            {column.columnId}
+          </span>
+        ))}
+      </div>
       <button
         type="button"
         disabled={mutationLocked}
@@ -180,6 +187,7 @@ function renderStored(roles: ServiceRole[], options: {
   initialMonth?: string;
   storedCapabilities?: ComponentProps<typeof MonthGenerator>["storedCapabilities"];
   onCleared?: ComponentProps<typeof MonthGenerator>["onCleared"];
+  focusRoleId?: string;
 } = {}) {
   const storedSource = source(roles);
   const onClose = vi.fn();
@@ -197,6 +205,7 @@ function renderStored(roles: ServiceRole[], options: {
       onClose={onClose}
       onCreated={vi.fn()}
       onCleared={options.onCleared}
+      focusRoleId={options.focusRoleId}
     />,
   );
   return { ...result, storedSource, onClose };
@@ -936,6 +945,41 @@ describe("MonthGenerator — stored mode", () => {
 
     expect(screen.getByText("Los equipos de sábado solo se intercambian con otro sábado.")).not.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("centers a focusRoleId column in its own horizontal scroller and never asks scrollIntoView to center inline", async () => {
+    // Regression: `scrollIntoView({ inline: "center" })` climbs every
+    // scrollable ancestor, including `.brand-admin-shell` (`overflow:
+    // hidden`, still scrollable by script) — the shell shifted and clipped
+    // its own content. The fix centers the known `[data-planner-scroller]`
+    // by hand and asks `scrollIntoView` only for the vertical axis.
+    const originalScrollIntoView = Element.prototype.scrollIntoView;
+    const scrollIntoViewSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoViewSpy;
+
+    try {
+      renderStored(
+        [role(), role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" })],
+        { focusRoleId: "role-b" },
+      );
+
+      const scroller = document.querySelector<HTMLElement>("[data-planner-scroller]")!;
+      const column = document.querySelector<HTMLElement>('[data-grid-column-id="role-b"]')!;
+      Object.defineProperty(scroller, "scrollLeft", { value: 0, writable: true, configurable: true });
+      vi.spyOn(scroller, "getBoundingClientRect").mockReturnValue({ left: 0, width: 400 } as DOMRect);
+      vi.spyOn(column, "getBoundingClientRect").mockReturnValue({ left: 500, width: 100 } as DOMRect);
+
+      await act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      });
+
+      expect(scrollIntoViewSpy).toHaveBeenCalledWith(expect.objectContaining({ inline: "nearest" }));
+      expect(scrollIntoViewSpy).not.toHaveBeenCalledWith(expect.objectContaining({ inline: "center" }));
+      // Column center (550) minus scroller center (200) = 350.
+      expect(scroller.scrollLeft).toBe(350);
+    } finally {
+      Element.prototype.scrollIntoView = originalScrollIntoView;
+    }
   });
 });
 

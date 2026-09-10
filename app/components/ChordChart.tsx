@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import SegmentedControl from "./ui/SegmentedControl";
+import Switch from "./ui/Switch";
+import NumberRoll from "./ui/NumberRoll";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -140,24 +143,16 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
 
       {/* Chart tabs */}
       {charts.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {charts.map((c, i) => (
-            <button
-              key={i}
-              type="button"
-              onClick={() => handleTabChange(i)}
-              aria-label={`${c.key || `Tonalidad ${i + 1}`} · versión ${i + 1} de ${charts.length}`}
-              aria-pressed={i === activeIdx}
-              className={`font-label text-xs uppercase tracking-widest px-4 py-1.5 rounded-full border transition-colors ${
-                i === activeIdx
-                  ? "border-accent bg-accent/15 text-accent"
-                  : "border-surface-accent-l25-d20 text-mono-500 hover:border-accent/50 dark:hover:border-surface-accent-l25-d20 hover:text-accent"
-              }`}
-            >
-              {c.key || `Tonalidad ${i + 1}`}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          label="Versión"
+          value={String(activeIdx)}
+          onChange={(v) => handleTabChange(Number(v))}
+          options={charts.map((c, i) => ({
+            value: String(i),
+            label: c.key || `Tonalidad ${i + 1}`,
+            ariaLabel: `${c.key || `Tonalidad ${i + 1}`} · versión ${i + 1} de ${charts.length}`,
+          }))}
+        />
       )}
 
       {/* ChordPro controls */}
@@ -204,31 +199,19 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
                 title="Posición de capo para tocar con acordes abiertos en la tonalidad seleccionada"
               >
                 <CapoIcon />
-                {capo.fret === 0
-                  ? `Acordes abiertos (${capo.shapeKey})`
-                  : `Capo ${capo.fret} · formas de ${capo.shapeKey}`}
+                <NumberRoll value={capo.fret === 0 ? `Acordes abiertos (${capo.shapeKey})` : `Capo ${capo.fret} · formas de ${capo.shapeKey}`} />
               </span>
             </div>
           )}
 
           {/* Chord toggle */}
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              role="switch"
+            <Switch
+              size="sm"
               aria-label="Mostrar acordes"
-              aria-checked={showChords}
-              onClick={() => setShowChords((v) => !v)}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${
-                showChords ? "bg-accent" : "bg-mono-300 dark:bg-mono-600"
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                  showChords ? "translate-x-4" : "translate-x-0"
-                }`}
-              />
-            </button>
+              checked={showChords}
+              onChange={setShowChords}
+            />
             <span className="font-label text-xs uppercase tracking-widest text-mono-500 dark:text-mono-400 select-none">
               Acordes
             </span>

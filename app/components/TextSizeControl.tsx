@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { PRESETS, TextScaleMode, applyScale, getStoredMode, setStoredMode } from "@/app/utils/textZoom";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
 
 /**
  * Segmented text-size control. Persists the choice device-locally and applies it
@@ -25,26 +26,12 @@ export default function TextSizeControl() {
       <p className="font-body text-sm text-mono-500 dark:text-mono-400 mb-4">
         &quot;Automático&quot; sigue el ajuste de tu dispositivo. Elige un tamaño fijo para anularlo.
       </p>
-      <div className="flex flex-wrap gap-2">
-        {PRESETS.map((p) => {
-          const active = p.mode === mode;
-          return (
-            <button
-              key={p.mode}
-              type="button"
-              onClick={() => choose(p.mode)}
-              aria-pressed={active}
-              className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-full border transition-colors ${
-                active
-                  ? "border-accent text-accent bg-accent/10"
-                  : "border-surface-accent-l25-d20 text-mono-500 dark:text-mono-400 hover:border-accent/50 dark:hover:border-surface-accent-l25-d20"
-              }`}
-            >
-              {p.label}
-            </button>
-          );
-        })}
-      </div>
+      <SegmentedControl
+        label="Tamaño de texto"
+        value={mode}
+        onChange={choose}
+        options={PRESETS.map((p) => ({ value: p.mode, label: p.label }))}
+      />
       <p className="font-body text-base mt-4 text-mono-600 dark:text-ink-muted/70">
         Texto de ejemplo — así se verá el contenido de la app.
       </p>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { draftTargetKey } from "./plannerModel";
+import Select from "@/app/components/ui/Select";
 
 /**
  * The month generator's date picker (E1/E2). Replaces the two Domingos/Sábados
@@ -379,21 +380,22 @@ export default function MonthCalendar({
           <p className="font-label text-[11px] uppercase tracking-widest text-info-fg">
             Nuevo servicio especial
           </p>
-          <select
+          <Select
             aria-label="Fecha del servicio especial"
+            size="lg"
+            className="w-full"
             value={openDate}
             onChange={(e) => {
               setNotice(null);
               setComposerDate(e.target.value);
             }}
-            className="min-h-[44px] w-full px-3 py-2 rounded-lg border border-accent/20 bg-surface-raised-alt font-body text-sm focus:outline-none focus:border-accent transition-colors"
           >
             {days.map((d) => (
               <option key={d} value={d}>
                 {optionLabel(d)}
               </option>
             ))}
-          </select>
+          </Select>
           <input
             aria-label="Nombre del servicio especial"
             placeholder="Nombre (p. ej. Bautizos)"

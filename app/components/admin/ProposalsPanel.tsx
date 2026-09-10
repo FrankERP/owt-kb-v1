@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/app/components/ui/Toast";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
 
 import {
@@ -654,35 +655,26 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
 
   return (
     <div className="space-y-6">
-      {/* Filter tabs */}
-      <div className="flex flex-wrap gap-1 p-1 rounded-xl border border-edge-accent-subtle w-fit">
-        {FILTER_TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => {
-              // A manual filter change is the user taking over: drop the handoff
-              // highlight/notice so nothing stale stays on screen.
-              setFilter(id);
-              setHighlightIds([]);
-              setConflictKey(null);
-              setHandoffNotice(null);
-              scrollTargetRef.current = null;
-            }}
-            className={`relative font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
-              filter === id
-                ? "bg-surface-accent-solid text-on-fill"
-                : "text-mono-500 hover:text-accent"
-            }`}
-          >
-            {label}
-            {id === "pending" && pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-recency-fg text-scrim font-bold text-[10px] flex items-center justify-center">
-                {pendingCount}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        label="Filtrar propuestas"
+        tone="filled"
+        className="w-fit"
+        value={filter}
+        onChange={(id) => {
+          // A manual filter change is the user taking over: drop the handoff
+          // highlight/notice so nothing stale stays on screen.
+          setFilter(id);
+          setHighlightIds([]);
+          setConflictKey(null);
+          setHandoffNotice(null);
+          scrollTargetRef.current = null;
+        }}
+        options={FILTER_TABS.map(({ id, label }) => ({
+          value: id,
+          label,
+          badge: id === "pending" ? pendingCount : undefined,
+        }))}
+      />
 
       {/* Handoff notice: a changed / missing / unloadable target, never silent. */}
       {handoffNotice && (

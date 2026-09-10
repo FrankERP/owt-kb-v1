@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
+import Select from "@/app/components/ui/Select";
 
 export interface AvailabilityMember {
   _id: string;
@@ -186,25 +187,19 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="space-y-1">
-          <label
-            htmlFor="kids-availability-member"
-            className="block font-label text-[11px] uppercase tracking-widest text-mono-500"
-          >
-            Miembro
-          </label>
-          <select
+          <Select
             id="kids-availability-member"
+            label="Miembro"
             value={selectedId}
             onChange={(e) => selectMember(e.target.value)}
             disabled={saving}
-            className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-ink focus:border-accent/50 focus:outline-none disabled:opacity-40 dark:focus:border-surface-accent-l40-d20"
           >
             {members.map((member) => (
               <option key={member._id} value={member._id} className="bg-surface-base">
                 {displayName(member)}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <button
           type="button"
