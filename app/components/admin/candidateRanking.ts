@@ -15,7 +15,7 @@ import {
   serviceWeekKey,
   type ParticipantRole,
 } from "@/app/utils/computeParticipation";
-import type { SeatCategory, SeatDef } from "./seatModel";
+import { occupantDeclaresInstrument, type SeatCategory, type SeatDef } from "./seatModel";
 import { evaluate } from "./ruleEnforcement";
 import type { GridColumn, SolverConfig } from "./plannerModel";
 
@@ -24,6 +24,8 @@ export interface RankMember {
   member_name: string;
   alias?: string;
   memberType?: string[];
+  /** Declared instrument seats (spec D6): absent or empty = declares nothing. */
+  instruments?: string[];
   unavailableDates?: string[];
 }
 
@@ -61,6 +63,15 @@ export interface RankedCandidate {
    * which is why the loop gets the stricter predicate.
    */
   eligible: boolean;
+  /**
+   * `instrumento` seats only: the member does not declare this seat's
+   * instrument (`occupantDeclaresInstrument`). A SORT penalty like
+   * `available`, never a block (D6) — and deliberately NOT folded into
+   * `eligible`: the picker must keep listing undeclared members so a human can
+   * override, while the instrument filler filters on this flag explicitly.
+   * Always `false` for voice and FOH seats.
+   */
+  undeclared: boolean;
   /** Services in the window, on the participation week rule. */
   load: number;
   /** One cell per week, oldest first. */
@@ -198,6 +209,8 @@ export function rankCandidates(input: {
       // Pad on the left so every strip is the same width regardless of history.
       const recent = [...Array(Math.max(0, weeks - strip.length)).fill(false), ...strip];
       const available = !(m.unavailableDates ?? []).includes(date);
+      const undeclared =
+        seat.category === "instrumento" && !occupantDeclaresInstrument(m, seat.label);
       // `seat` crosses as the row: for every voice seat `seat.id === row.id`,
       // and the rules only ever bind voice rows.
       const verdict = evaluate({ member: m, row: seat, column, sundayDates, assigned, members, config });
@@ -210,12 +223,13 @@ export function rankCandidates(input: {
         blockedReason,
         ruleBlockedReason,
         eligible: !blockedReason && !ruleBlockedReason && available,
+        undeclared,
         load: loadById.get(m._id) ?? 0,
         recent,
       };
     });
 
-  // THE SORT IS DELIBERATELY UNCHANGED (P7b), in two respects:
+  // THE SORT IS DELIBERATELY UNCHANGED (P7b) in two respects, and changed in ONE:
   //
   //  • No fairness term. The user settled this: "I don't want them necessarily
   //    buried, just not pushed up top always, if it's just visual then it
@@ -226,8 +240,12 @@ export function rankCandidates(input: {
   //    load-ordered position and renders disabled with the rule named — E6
   //    accepts that the people a rule protects sit at the top of every list;
   //    that is precisely WHY the rule has to be hard rather than a nudge.
+  //  • `undeclared` IS a sort key (spec 2026-09-09 §7): on an instrument seat a
+  //    member who does not declare the instrument sorts after those who do,
+  //    with the same weight as unavailability. A penalty, never a block — the
+  //    row stays selectable so a human can override (D6).
   const rank = (c: RankedCandidate) =>
-    (c.blockedReason ? 100 : 0) + (c.available ? 0 : 10) + (c.alreadyAssigned ? 1 : 0);
+    (c.blockedReason ? 100 : 0) + (c.available ? 0 : 10) + (c.undeclared ? 10 : 0) + (c.alreadyAssigned ? 1 : 0);
 
   return rows.sort(
     (a, b) => rank(a) - rank(b) || a.load - b.load || a.name.localeCompare(b.name, "es"),

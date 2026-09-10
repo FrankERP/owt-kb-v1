@@ -206,7 +206,7 @@ export function orderByEffectiveLoad(
 
 // ─── The fill ────────────────────────────────────────────────────────────────
 
-function withAutoCell(cells: GridCell[], columnId: string, rowId: string, memberIds: string[]): GridCell[] {
+export function withAutoCell(cells: GridCell[], columnId: string, rowId: string, memberIds: string[]): GridCell[] {
   const idx = cells.findIndex((c) => c.columnId === columnId && c.rowId === rowId);
   // `origin: "auto"`, matching `applySolveResponse` against `withUpdatedCell`'s
   // `"manual"`. Nothing reads the field for behaviour today; setting it

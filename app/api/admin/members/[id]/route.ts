@@ -15,6 +15,7 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import { revalidatePath } from "next/cache";
 import { NOTIFY_PREF_FIELD, wantsNotification, type NotifyKind } from "@/app/utils/notifyPrefs";
 import { validateMinistryWrite } from "@/app/ministries";
+import { parseMemberInstruments } from "@/app/components/admin/seatModel";
 
 const EMAIL_KINDS = Object.keys(NOTIFY_PREF_FIELD) as NotifyKind[];
 
@@ -38,6 +39,7 @@ export async function PATCH(
     email?: string;
     role?: string;
     memberType?: string[];
+    instruments?: string[];
     ministries?: string[];
     managesMinistries?: string[];
     // Legacy fallback field. No UI writes it any more (§5 of the notification
@@ -65,6 +67,16 @@ export async function PATCH(
   if (body.role) patch.role = body.role;
   // Keep only recognised member types (drops unknown values rather than storing them).
   if (Array.isArray(body.memberType)) patch.memberType = body.memberType.filter(t => VALID_MEMBER_TYPES.includes(t));
+
+  // Declared instruments (spec 2026-09-09 §4.2). `!== undefined` guard like
+  // `ministries`: an absent field is untouched, so the form's touched-field
+  // discipline holds and the backfill's "no stored field" predicate stays true.
+  // `[]` IS stored — "declares nothing" is a legitimate value (D6).
+  if (body.instruments !== undefined) {
+    const parsed = parseMemberInstruments(body.instruments);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+    patch.instruments = parsed.value;
+  }
 
   // Ministry membership/management. The guard is `!== undefined`, so a body that
   // never mentions a field leaves the stored value ALONE — the form sends only

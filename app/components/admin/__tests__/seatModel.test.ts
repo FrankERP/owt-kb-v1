@@ -11,10 +11,13 @@ import {
   VOICE_SEATS,
   fohSeatDef,
   instrumentSeatDef,
+  isKnownInstrument,
   normalizeSeatName,
+  occupantDeclaresInstrument,
   occupantFitsSeat,
   SEAT_MEMBER_TYPE,
 } from "../seatModel";
+import { INSTRUMENT_SEAT_OPTIONS } from "@/sanity/schemas/instrumentSeats";
 
 describe("normalizeSeatName", () => {
   it("collapses every production spelling onto one canonical form", () => {
@@ -117,5 +120,38 @@ describe("occupantFitsSeat", () => {
     // `sunday_lead` is a solver-pool subtype, not a seat requirement: the Lead
     // seat asks for `voz`, exactly as `rankCandidates` does.
     expect(occupantFitsSeat({ memberType: ["sunday_lead"] }, "voz")).toBe(false);
+  });
+});
+
+describe("isKnownInstrument", () => {
+  it("accepts every default seat in any spelling normalizeSeatName collapses", () => {
+    for (const s of DEFAULT_INSTRUMENT_SEATS) expect(isKnownInstrument(s)).toBe(true);
+    expect(isKnownInstrument(" drums ")).toBe(true);
+    expect(isKnownInstrument("KEYS")).toBe(true);
+  });
+  it("rejects FOH seats and free text — normalizeSeatName alone is not the test", () => {
+    // `console` canonicalizes to `Console`, which is a FOH seat, not an instrument.
+    expect(isKnownInstrument("console")).toBe(false);
+    expect(isKnownInstrument("Piano")).toBe(false);
+    expect(isKnownInstrument("")).toBe(false);
+    expect(isKnownInstrument(undefined)).toBe(false);
+  });
+});
+
+describe("occupantDeclaresInstrument", () => {
+  it("needs BOTH the instrumento Tipo and the label", () => {
+    expect(occupantDeclaresInstrument({ memberType: ["instrumento"], instruments: ["Keys"] }, "Keys")).toBe(true);
+    expect(occupantDeclaresInstrument({ memberType: ["instrumento"], instruments: ["Keys"] }, "keys")).toBe(true);
+    // Leftover declaration on a member whose Tipo was cleared declares nothing.
+    expect(occupantDeclaresInstrument({ memberType: [], instruments: ["Keys"] }, "Keys")).toBe(false);
+    expect(occupantDeclaresInstrument({ memberType: ["instrumento"], instruments: [] }, "Keys")).toBe(false);
+    expect(occupantDeclaresInstrument({ memberType: ["instrumento"] }, "Keys")).toBe(false);
+    expect(occupantDeclaresInstrument(undefined, "Keys")).toBe(false);
+  });
+});
+
+describe("the Studio option list", () => {
+  it("is exactly the seat vocabulary, so a member can only ever declare a seat that exists", () => {
+    expect([...INSTRUMENT_SEAT_OPTIONS]).toEqual(DEFAULT_INSTRUMENT_SEATS);
   });
 });

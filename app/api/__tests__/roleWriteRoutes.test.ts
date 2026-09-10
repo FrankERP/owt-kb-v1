@@ -441,7 +441,7 @@ describe("GET /api/admin/members — canonical candidates", () => {
     const query = operationalFetch.mock.calls[0][0] as string;
     expect(query).toContain('*[_type == "teamMembers"');
     expect(query).toContain("| order(member_name asc)");
-    expect(query).toContain("_id, member_name, alias, email, role, memberType, notifPrefs");
+    expect(query).toContain("_id, member_name, alias, email, role, memberType, instruments, notifPrefs");
     expect(query).toContain('"hasPassword": defined(passwordHash) && passwordHash != ""');
     // Ministry-scoped since P1: worship admins see worship members only.
     // Behaviour is covered in `adminMemberVisibility.test.ts`.
