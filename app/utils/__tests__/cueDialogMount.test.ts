@@ -32,7 +32,12 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // that share this anti-pattern; counting every literal `open` on a
 // `<CueDialog` element (direct or inside a wrapper) measures 11. LOWER in the
 // same commit that migrates a site to `open={…}`; never raise it.
-const BASELINE = 11;
+//
+// 11→10 (2026-09-09, motion M1 Task 7): `SongSheet`'s `SetlistPopover`
+// migrated to `<CueDialog open={open} …>` — the caller now keeps it mounted
+// and drives visibility with the boolean instead of mounting it
+// conditionally.
+const BASELINE = 10;
 
 // Every literal `open` boolean attribute on a `<CueDialog` element — bare
 // `open`, never `open={…}`. Matches regardless of what (if anything)
