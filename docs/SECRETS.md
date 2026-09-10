@@ -58,12 +58,13 @@ then the generate-and-write block above, then redeploy. A rotation leaves both s
 
 ## `CRON_SECRET`
 
-**Needed in: Vercel *and* GitHub Actions.** Both, for different halves of the same handshake — Vercel holds the verifier, GitHub holds the presenter. The two values must match byte-for-byte.
+**Needed in: Vercel, GitHub Actions *and* Google Cloud Scheduler.** Three stores, one handshake — Vercel holds the verifier, the other two are presenters. All three values must match byte-for-byte.
 
 | Platform | Role |
 |---|---|
-| Vercel | The routes read `process.env.CRON_SECRET` and compare the presented bearer token against it |
+| Vercel (Production only) | The routes read `process.env.CRON_SECRET` and compare the presented bearer token against it |
 | GitHub Actions | `.github/workflows/flush-notifications.yml` sends it as `Authorization: Bearer …` |
+| Google Cloud Scheduler | Job `flush-notification-outbox` (project `eloquent-figure-421401`, `us-central1`) sends the same header every five minutes — the primary layer-1 caller since 2026-09-10 ([ADR-0032](adr/0032-layer-1-runs-on-cloud-scheduler.md)) |
 | `.env.local` | Not needed. Only required to exercise the cron routes locally |
 
 **Purpose.** Authorizes the two cron routes. Without it:
@@ -75,26 +76,35 @@ then the generate-and-write block above, then redeploy. A rotation leaves both s
 
 **How to rotate.**
 
-1. Write both stores in one command, per "Setting a shared secret without ever handling the value" above:
+1. Write all three stores in one command, per "Setting a shared secret without ever handling the value" above. Run it from a checkout linked to `owt-backstage` (`.vercel/project.json`) and with `gcloud` on the solver project:
    ```bash
    SECRET=$(openssl rand -hex 32) && \
      printf '%s' "$SECRET" | npx vercel env add CRON_SECRET production && \
      printf '%s' "$SECRET" | gh secret set CRON_SECRET && \
+     gcloud scheduler jobs update http flush-notification-outbox \
+       --project=eloquent-figure-421401 --location=us-central1 \
+       --update-headers="Authorization=Bearer $SECRET" && \
      unset SECRET
    ```
-   `vercel env add` refuses an existing key, so on a true rotation remove it first with `npx vercel env rm CRON_SECRET production`.
+   `vercel env add` refuses an existing key, so on a true rotation remove it first with `npx vercel env rm CRON_SECRET production`. The Scheduler header is the one place the value passes through a process argument; `gcloud` does not log it, but do not add `set -x` around this block.
 2. **Redeploy.** This is the step that is easy to skip and makes the whole thing look broken if you do — Vercel binds env vars at deploy time, so the running production deployment keeps the old value until it is rebuilt:
    ```bash
    npx vercel deploy --prod
    ```
    Or dashboard → Deployments → ⋯ → Redeploy.
-3. Verify end to end:
+3. Verify end to end, on both presenters:
    ```bash
    gh workflow run "Flush notification outbox"
    ```
-   A green run means the new value matches on both sides. A 401 means it does not.
+   A green run means the new value matches on GitHub's side. A 401 means it does not. Then force one Scheduler tick and read its last status — `code: 0` is a 200, `code: 16` is a 401:
+   ```bash
+   gcloud scheduler jobs run flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1 && \
+     sleep 10 && \
+     gcloud scheduler jobs describe flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1 --format="value(state,status.code,lastAttemptTime)"
+   ```
+   If the job is `PAUSED` (it is created paused, and pausing is the incident off switch), resume it: `gcloud scheduler jobs resume flush-notification-outbox --project=eloquent-figure-421401 --location=us-central1`.
 
-**Blast radius of rotation.** From the moment Vercel is updated until the redeploy completes, the deployed app still verifies against the *old* value while GitHub already presents the new one — so every flush run goes red and no debounced notification email is sent, and Vercel's own daily cron is 403ing in the same window. Nothing is lost: outbox notices accumulate and flush once the values agree. Keep the window to a single deploy by doing step 2 immediately.
+**Blast radius of rotation.** From the moment Vercel is updated until the redeploy completes, the deployed app still verifies against the *old* value while GitHub and Scheduler already present the new one — so every flush run goes red (GitHub) or 401s quietly (Scheduler) and no debounced notification email is sent, and Vercel's own daily cron is 403ing in the same window. Nothing is lost: outbox notices accumulate and flush once the values agree. Keep the window to a single deploy by doing step 2 immediately. **A rotation that forgets Scheduler has no alarm:** the job keeps ticking, every tick 401s, and layer 1 silently falls back to GitHub's starved cadence. Step 3's `describe` is the only check.
 
 ---
 

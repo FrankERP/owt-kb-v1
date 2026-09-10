@@ -4,8 +4,10 @@ import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext
 
 // LAYER 1 of the outbox's three flush triggers (spec §3) — the PRIMARY one, and
 // genuinely load-bearing. Vercel Hobby allows one cron per day, so the five-minute
-// schedule lives outside Vercel, in `.github/workflows/flush-notifications.yml`,
-// which curls this route with `CRON_SECRET`. Layer 2 (the opportunistic sweep in
+// schedule lives outside Vercel: a Google Cloud Scheduler job (ADR-0032) and
+// `.github/workflows/flush-notifications.yml`, both of which call this route with
+// `CRON_SECRET`. Two callers racing is safe — the sweep claims before it sends.
+// Layer 2 (the opportunistic sweep in
 // a writer's `after()` block) cannot flush the terminal edit of a working session
 // and layer 3 is daily, so when this stops, everything is up to 24 hours late —
 // which is what the liveness alarm in `/api/cron/service-reminders` watches for.
