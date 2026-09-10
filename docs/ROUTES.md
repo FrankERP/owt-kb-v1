@@ -22,7 +22,9 @@ and per-page guards (`requireActiveSession` / `requireActiveManager`).
   icons, Apple web-app config) and `viewport` (`viewportFit: "cover"`, themeColor `#010b17`).
   Wraps children in [`<Provider>`](../app/utils/Provider.tsx) (SessionProvider → ThemeProvider
   system-default, `enableSystem` → `ThemeBootstrap` → PlayerProvider) and mounts persistent chrome: `ImpersonationBanner`,
-  `ActivityPing`, `NativeAuthBootstrap`, `TextScaleBootstrap`, `AudioPlayer`, `SongSheet`.
+  `ActivityPing`, `NativeAuthBootstrap`, `TextScaleBootstrap`, `AudioPlayer`, `SongSheet`, `BottomNav`.
+  `BottomNav` is mounted on every `(client)` route for signed-in members (hidden ≥ `lg`, and on
+  `/auth*`/`/studio*`); see "Safe area and the tab bar" in [MOBILE.md](MOBILE.md).
 - **`app/(admin)/layout.tsx`** (server) — separate root used only for Studio (Orbitron font,
   `CmsNavbar`, its own metadata). Studio does **not** inherit the client chrome.
 
@@ -105,7 +107,7 @@ token) for private/fresh data.
   `EditSongButton`, `PortableText`.
 - **`/admin`** — `Navbar`, `AdminPanel` composing the `app/components/admin/*` panels.
 - **Always mounted (client layout)** — `ImpersonationBanner`, `ActivityPing`, `AudioPlayer`,
-  `SongSheet`, `NativeAuthBootstrap`, `TextScaleBootstrap`.
+  `SongSheet`, `NativeAuthBootstrap`, `TextScaleBootstrap`, `BottomNav`.
 
 See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full component inventory.
 
