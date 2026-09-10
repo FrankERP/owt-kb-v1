@@ -113,4 +113,5 @@ problems above. If it is ever done, the token copy must stop being the
 authorization source first.
 
 ADR-0007 still holds everywhere else: `Navbar` stays session-free, and
-`NavMenu`'s ministry filtering is cosmetic. See that record's Amendment section.
+`NavLinks`/`BottomNav`'s ministry filtering is cosmetic (`NavMenu` is
+account-only since 2026-09-09). See that record's Amendment section.

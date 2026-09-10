@@ -313,8 +313,9 @@ Legend: **[C]** client, **[S]** server.
 | `ImpersonationBanner` [C] | Banner + "stop impersonating" when `session.user.isImpersonating`. |
 | `ActivityPing` [C] | "Last seen" ping, ≤ once / 30 min. |
 | `Navbar` [S] | Top navbar shell; deliberately **non-async** (session resolved client-side) so pages stay ISR-renderable. |
-| `NavMenu` [C] | Nav menu + notification badge. |
-| `BottomNav` [C] | Mobile bottom tab bar. |
+| `NavMenu` [C] | Account menu (Mi perfil, Tema, Cerrar sesión) + notification badge (the badge pops in on `Presence appear variant="scale"`). |
+| `BottomNav` [C] | Mobile bottom tab bar — three worship tabs (Inicio · Calendario · Biblioteca) or the kids set; «Más» only when Kids / Planear Kids / Admin apply; hidden when fewer than two items; «Más» is a `CueDialog` sheet. Publishes its measured height as `--bottom-nav-h` + a `has-bottom-nav` class on `<html>` while on screen; hidden ≥ `lg` and on `/auth*`/`/studio*`. |
+| `NavLinks` [C] | Desktop nav link row, rendered in the navbar's centred title block at `lg`+ (the title itself goes `lg:hidden` there); one shared `SlidingIndicator` underline. |
 | `SectionNav` [C] | In-page section anchors. |
 | `Header` [S], `CmsNavbar` [S], `icons.tsx` [S] | Page header / Studio navbar / SVG icons. |
 | `SignOutButton` [C] | Sign out. Clears the theme mirror first — see `themePref.ts`. (`ThemeSwitch` was deleted in `33c6e15`; the theme picker is now `ui/ThemeControl.tsx` at `/me`.) |
@@ -325,7 +326,7 @@ Legend: **[C]** client, **[S]** server.
 | Component | Purpose |
 |-----------|---------|
 | `MotionProvider` [C] | Loads `motion`'s DOM features (`domMax`) as an async chunk after hydration (not inline); `reducedMotion="user"`. |
-| `Presence` [C] | Mount/unmount with an exit animation; variants `fade` `rise` `scale` `sheet`. |
+| `Presence` [C] | Mount/unmount with an exit animation; variants `fade` `rise` `scale` `sheet` `drop`. `sheet` enters on `SPRINGS.sheet` (every other variant, and every exit, stays on the ordinary duration/ease). `onEntered?: () => void` fires once the enter animation completes — never on an already-shown mount without `appear`. |
 | `Skeleton` / `SkeletonGroup` [N] | Shimmer placeholders; one `aria-busy` status region per loading surface. |
 | `Button` [N] | The house button: six variants, three sizes, press physics, primary sheen, `busy`, `href`. |
 | `revealProps()` (`app/utils/reveal.ts`) [N] | CSS route reveal; `app/(client)/template.tsx` replays it per navigation. |

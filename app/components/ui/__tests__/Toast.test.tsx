@@ -56,8 +56,13 @@ describe("Toast", () => {
     fireEvent.click(screen.getByText("go"));
     const root = document.querySelector("[data-toast-root]");
     expect(root).not.toBeNull();
-    expect(root!.querySelector("[role=status]")).not.toBeNull();
+    const viewport = root!.querySelector("[role=status]");
+    expect(viewport).not.toBeNull();
     expect(root!.closest("[data-cue-app-root]")).toBeNull();
+    // Viewport uses max() to clear the bar's height when present, and the inset when absent.
+    const styleAttr = viewport!.getAttribute("style");
+    expect(styleAttr).toBeTruthy();
+    expect(styleAttr).toContain("max(");
   });
 
   it("caps the stack at three, dropping the oldest", () => {

@@ -8,6 +8,7 @@ import ActivityPing from "../components/ActivityPing";
 import ImpersonationBanner from "../components/ImpersonationBanner";
 import AudioPlayer from "../components/AudioPlayer";
 import SongSheet from "../components/SongSheet";
+import BottomNav from "../components/BottomNav";
 import NativeAuthBootstrap from "../components/NativeAuthBootstrap";
 import TextScaleBootstrap from "../components/TextScaleBootstrap";
 
@@ -89,6 +90,7 @@ export default function RootLayout({
           <TextScaleBootstrap />
           <AudioPlayer />
           <SongSheet />
+          <BottomNav />
         </Provider>
       </body>
     </html>

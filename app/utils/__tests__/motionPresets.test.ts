@@ -8,6 +8,14 @@ describe("motionPresets", () => {
     expect(SPRINGS.settle).toEqual({ type: "spring", stiffness: 300, damping: 28 });
   });
 
+  it("has the drop variant used by badge pops (spec: enter fast, exit faster)", () => {
+    expect(VARIANTS.drop).toEqual({
+      initial: { opacity: 0, y: -8 },
+      animate: { opacity: 1, y: 0 },
+      exit: { opacity: 0, y: -8 },
+    });
+  });
+
   it("every variant animates only opacity and transform-family keys", () => {
     const allowed = new Set(["opacity", "y", "x", "scale"]);
     for (const [name, v] of Object.entries(VARIANTS)) {
@@ -16,6 +24,9 @@ describe("motionPresets", () => {
           expect(allowed.has(key), `${name}.${phase}.${key}`).toBe(true);
         }
       }
+      // Presence.onEntered's guard (opacity === 1) relies on every animate phase
+      // landing at opacity 1, pinned by this assertion.
+      expect((v.animate as { opacity?: number }).opacity, `${name}.animate.opacity`).toBe(1);
     }
   });
 

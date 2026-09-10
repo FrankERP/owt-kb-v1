@@ -37,8 +37,8 @@
   --impersonation-h: 3.5rem;
 
   /* Height of the bottom nav on phones, so a toast's bottom offset clears it.
-     0 until M1's BottomNav publishes the measured value (same pattern as
-     --impersonation-h above). Not a colour. */
+     0 while the bar is off screen; BottomNav publishes the measured value over
+     it (same pattern as --impersonation-h above). Not a colour. */
   --bottom-nav-h: 0px;
 
   /* ---- Child B, Layer 1: the 18 base roles -------------------------------
@@ -614,6 +614,16 @@
 .impersonating .brand-navbar {
   top: var(--impersonation-h);
 }
+
+/* The page pads for the tab bar only while the bar is on screen: BottomNav adds
+   the class with the measured height (bottomNavOffsetSync.test.ts). */
+html.has-bottom-nav [data-route-main] { padding-bottom: var(--bottom-nav-h); }
+
+/* The audio transport carries its own safe-area padding until the tab bar is on
+   screen — the bar's own height already includes that inset, so stacking both
+   would double-pad the player (bottomNavOffsetSync.test.ts). */
+.audio-player { padding-bottom: env(safe-area-inset-bottom); }
+html.has-bottom-nav .audio-player { padding-bottom: 0; }
 
 .brand-navbar::before {
   position: absolute;

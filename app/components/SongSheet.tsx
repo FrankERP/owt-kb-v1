@@ -59,7 +59,10 @@ export default function SongSheet() {
     player,
   } = usePlayer();
   const isOpen = !!(sheet || sheetLoading || sheetError);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  // No control in the meta row is a natural focus anchor (it's text and pills,
+  // not buttons), so this points at the scrollable body root instead —
+  // `tabIndex={-1}` makes it a valid, non-tab-stop restore/fallback target.
+  const focusAnchorRef = useRef<HTMLDivElement>(null);
   const [progress, setProgress] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -107,51 +110,46 @@ export default function SongSheet() {
   const hasHistory  = (sheet?.history?.length ?? 0) > 0;
   const hasContent  = hasChords || hasBody;
   const sheetTrack = sheet && player.track?.songSlug === sheet.slug ? player.track : null;
+  const activeSetEntry = openSetIdx !== null ? sheet?.history?.[openSetIdx] : undefined;
 
   return (
     <>
       <CueDialog
         open={isOpen}
+        title={sheet?.title ?? "Canción"}
         label={sheet?.title ? `Canción: ${sheet.title}` : "Detalle de canción"}
         mode="sheet"
         size="lg"
-        fallbackFocusRef={closeButtonRef}
+        fallbackFocusRef={focusAnchorRef}
         onDismiss={closeSheet}
       >
 
-        {/* Header */}
-        <div className="flex shrink-0 items-start justify-between border-b border-accent/10 bg-surface-raised/35 px-5 py-5">
-          <div className="flex-1 min-w-0 pr-3">
-            {sheetLoading ? (
-              <div className="space-y-2">
-                <div className="h-5 w-3/4 rounded bg-accent-deep/30 animate-pulse" />
-                <div className="h-4 w-1/2 rounded bg-accent-deep/20 animate-pulse" />
-              </div>
-            ) : sheet ? (
-              <>
-                <p className="mb-1 font-label text-[10px] uppercase tracking-[0.22em] text-accent/70">Canción</p>
-                <h2 className="font-display text-3xl leading-snug text-ink">{sheet.title}</h2>
-                {sheet.author && (
-                  <p className="font-body text-sm text-mono-400 mt-0.5">{sheet.author}</p>
-                )}
-              </>
-            ) : (
-              <h2 className="font-display text-xl leading-snug">Canción</h2>
+        {/* Meta row — key/BPM/author, moved out of the old hand-rolled header */}
+        {sheet && (
+          <div className="px-5 pt-3 flex flex-wrap items-center gap-2">
+            {sheet.author && (
+              <span className="font-body text-sm text-mono-400">{sheet.author}</span>
+            )}
+            {sheet.key && (
+              <span className="brand-key-dial px-3 font-display text-sm">
+                {sheet.key}
+              </span>
+            )}
+            {sheet.bpm && (
+              <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
+                {sheet.bpm} BPM
+              </span>
+            )}
+            {sheet.timeSig && (
+              <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
+                {sheet.timeSig}
+              </span>
             )}
           </div>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={closeSheet}
-            className="p-2 -mr-2 rounded-lg text-mono-500 hover:text-mono-300 hover:bg-surface-lift/5 transition-colors shrink-0"
-            aria-label="Cerrar"
-          >
-            <CloseIcon />
-          </button>
-        </div>
+        )}
 
         {/* Scrollable body */}
-        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+        <div ref={focusAnchorRef} tabIndex={-1} className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
           {sheetLoading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
@@ -160,25 +158,6 @@ export default function SongSheet() {
             </div>
           ) : sheet ? (
             <>
-              {/* Key / BPM / timeSig pills */}
-              <div className="flex flex-wrap gap-2">
-                {sheet.key && (
-                  <span className="brand-key-dial px-3 font-display text-sm">
-                    {sheet.key}
-                  </span>
-                )}
-                {sheet.bpm && (
-                  <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
-                    {sheet.bpm} BPM
-                  </span>
-                )}
-                {sheet.timeSig && (
-                  <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
-                    {sheet.timeSig}
-                  </span>
-                )}
-              </div>
-
               {/* Lyrics / Chords — primary content */}
               {hasContent && (
                 <div>
@@ -250,7 +229,7 @@ export default function SongSheet() {
                     progress={progress}
                     onToggle={togglePlay}
                     onSeek={seek}
-                    onClose={() => closePlayer(closeButtonRef.current)}
+                    onClose={() => closePlayer(focusAnchorRef.current)}
                   />
                 </div>
               )}
@@ -379,15 +358,14 @@ export default function SongSheet() {
       </CueDialog>
 
       {/* Setlist popover — the whole set for a chosen history week */}
-      {openSetIdx !== null && sheet?.history?.[openSetIdx] && (
-        <SetlistPopover
-          entry={sheet.history[openSetIdx]}
-          currentSongId={sheet._id}
-          fallbackFocusRef={closeButtonRef}
-          onClose={() => setOpenSetIdx(null)}
-          onPick={(songId, playKey) => { setOpenSetIdx(null); openSheet(songId, playKey); }}
-        />
-      )}
+      <SetlistPopover
+        open={!!activeSetEntry}
+        entry={activeSetEntry}
+        currentSongId={sheet?._id}
+        fallbackFocusRef={focusAnchorRef}
+        onClose={() => setOpenSetIdx(null)}
+        onPick={(songId, playKey) => { setOpenSetIdx(null); openSheet(songId, playKey); }}
+      />
     </>
   );
 }
@@ -395,29 +373,31 @@ export default function SongSheet() {
 // ─── Setlist popover ──────────────────────────────────────────────────────────
 
 function SetlistPopover({
+  open,
   entry,
   currentSongId,
   fallbackFocusRef,
   onClose,
   onPick,
 }: {
-  entry: SongHistoryEntry;
-  currentSongId: string;
-  fallbackFocusRef: React.RefObject<HTMLButtonElement | null>;
+  open: boolean;
+  entry?: SongHistoryEntry;
+  currentSongId?: string;
+  fallbackFocusRef: React.RefObject<HTMLElement | null>;
   onClose: () => void;
   onPick: (songId: string, playKey?: string) => void;
 }) {
   return (
-    <CueDialog open title="Set completo" label="Set completo" size="sm" fallbackFocusRef={fallbackFocusRef} onDismiss={onClose}>
+    <CueDialog open={open} title="Set completo" label="Set completo" size="sm" fallbackFocusRef={fallbackFocusRef} onDismiss={onClose}>
       <div>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-accent/10 bg-accent/[0.04]">
           <div>
             <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-0.5">
-              {entry._type === "featuredSongs" ? "Domingo" : "Sábado"} · Set completo
+              {entry?._type === "featuredSongs" ? "Domingo" : "Sábado"} · Set completo
             </p>
             <p className="font-body text-sm font-semibold text-mono-200">
-              {formatHistoryDate(entry.week)}
+              {entry ? formatHistoryDate(entry.week) : ""}
             </p>
           </div>
           <button
@@ -431,7 +411,7 @@ function SetlistPopover({
 
         {/* Songs */}
         <ol className="max-h-[60vh] overflow-y-auto py-1.5">
-          {entry.setlist!.map((song, i) => {
+          {entry?.setlist?.map((song, i) => {
             const isCurrent = song.id === currentSongId;
             return (
               <li key={i}>

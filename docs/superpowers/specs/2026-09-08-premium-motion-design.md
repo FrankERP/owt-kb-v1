@@ -172,8 +172,8 @@ keep their behaviour and get only the Button/focus adoption.
 
 - **Route reveal** — `template.tsx` (client, ~10 lines) remounts children per navigation; page sections carry `data-reveal`. The `<main>` wrapper is never transformed (a transformed ancestor breaks every `position: fixed` descendant — the WebKit trap already documented in `CueDialog.tsx:33`).
 - **Navbar** — the inert `transition-[height]` goes. Lockup: press. Desktop gains an active-route underline via `SlidingIndicator` across the nav links rendered by NavMenu when signed in (Calendario · Tags · Yo · Admin).
-- **NavMenu** — avatar: press + ring `fast`; the dropdown becomes `Menu` (scale presence from the avatar corner, 200ms); notification badge pops in with `pop` spring when the count rises.
-- **BottomNav — resurrected (decision B).** Phone-only tab bar: Inicio · Calendario · Biblioteca · Yo · Más. Active tab: icon lifts 2px and the label brightens; a `layoutId` pill slides between tabs; tap = haptic light. "Más" opens a `Sheet` (Kids, Planear Kids, Admin, Tags, Tema, Cerrar sesión) with the existing `inert` handling. Safe-area bottom padding. Every fixed-bottom element (toasts, FAB, AudioPlayer) offsets by `--bottom-nav-h` published on `<html>` the way `--impersonation-h` is — same guard shape as `impersonationOffsetSync.test.ts`.
+- **NavMenu** — avatar: press + ring `fast`; the dropdown becomes `Menu` (scale presence from the avatar corner, 200ms); notification badge pops in with `pop` spring when the count rises. **M1 follow-up F1:** with the tab bar and desktop nav links now covering every destination, NavMenu became a plain ACCOUNT menu at all widths — Mi perfil, Tema, a separator, Cerrar sesión — and no longer repeats Calendario/Tags/Oasis Kids/Planear Kids/Admin.
+- **BottomNav — resurrected (decision B).** Phone-only tab bar: Inicio · Calendario · Biblioteca · Yo · Más (as planned; F2 removed «Yo» — three tabs ship). Active tab: icon lifts 2px and the label brightens; a `layoutId` pill slides between tabs; tap = haptic light. **M1 follow-up F1** moved Tags/Tema/Cerrar sesión out to NavMenu, so "Más" now opens a `Sheet` holding only what the tabs (four at the time, three since F2) cannot fit — Kids, Planear Kids, Admin — and does not render at all (four tabs, no sheet) when none of those apply. **M1 follow-up F2** then removed «Yo» from the tab bar itself — `/me` has one home, the avatar menu's Mi perfil — leaving three worship tabs (or Kids/Planear Kids); a bar with fewer than two items (tabs + «Más») now renders nothing at all. Safe-area bottom padding. Every fixed-bottom element (toasts, FAB, AudioPlayer) offsets by `--bottom-nav-h` published on `<html>` the way `--impersonation-h` is — same guard shape as `impersonationOffsetSync.test.ts`.
 - **SectionNav** — underline becomes `SlidingIndicator`; the active pill scrolls itself into view (`scrollIntoView({inline:"center"})`, behaviour respects reduced motion as the existing `ProposalsPanel` gate does).
 - **ImpersonationBanner** — enters from the top with `rise` (inverted); the `--impersonation-h` measurement runs after the enter completes so the navbar offset does not animate against a moving target.
 - **AudioPlayer transport** — slides up with `sheet` spring when a track starts, slides down when it stops; the progress bar switches from a `width` transition to `transform: scaleX` (origin left), which stays on the compositor.
@@ -924,3 +924,74 @@ at this commit.
 strip (→ Song page, decision K); `ServicesPanel`'s multi-select month pills (not a
 segmented control; → §12.5); a dev warning when `SegmentedControl` gets neither `label` nor
 `labelledBy`; `DateField`'s `label`/`id` typing to match `Select`'s union.
+
+# Part IX — M1 Shell (2026-09-09)
+
+Branch `claude/motion-m1-shell` (from `main` 5d214bbf), plan
+`docs/superpowers/plans/2026-09-09-motion-m1-shell.md`. Eight tasks, each with a fresh
+implementer and a task review; five fix rounds, every one re-reviewed; one final fix wave
+after the whole-branch review.
+
+**Shipped (§5.0 in full, less what earlier phases had done).** `BottomNav` returns
+(decision B): Inicio · Calendario · Biblioteca · Yo · Más for worship members, Kids ·
+Planear Kids · Yo · Más for a kids-only member — **superseded the same day by F2**: «Yo»
+left both bars (its one home is the avatar menu), leaving Inicio · Calendario · Biblioteca
+or Kids · Planear Kids, and a bar with fewer than two items does not render; «Más» is a `CueDialog` sheet (Kids,
+Planear Kids, Admin, Tema → `/me#tema`, Cerrar sesión, conditioned by role and ministry)
+— **superseded the same day by task F1** (below): Tema and Cerrar sesión moved to
+`NavMenu`, so «Más» now holds Kids/Planear Kids/Admin only and does not render at all
+when none apply. The bar publishes its MEASURED height as `--bottom-nav-h` (px) plus `has-bottom-nav` on
+`<html>` while on screen, the route main pads under it, toasts clear
+`max(inset, bar)`, the audio transport sits flush on the bar, the song FAB offsets by the
+variable — `bottomNavOffsetSync.test.ts` pins the halves. Desktop: `NavLinks` (Calendario
+· Biblioteca · Kids · Planear Kids · Admin — «Yo» gone with F2) take the navbar's centre at lg+ with one
+`SlidingIndicator` underline; the page title stays in the bar below lg. The avatar ring
+transitions on `--motion-fast`; the notification badge pops in through `Presence`. The
+impersonation banner drops in (`Presence drop`, new) and publishes `--impersonation-h`
+after landing (`Presence.onEntered`, new) — but only when impersonation starts in the
+session: a page loaded already impersonating renders at rest and measures at once, decided
+from the first resolved session status. The audio transport springs in on `SPRINGS.sheet`
+(the `sheet` variant now enters on the spring) and its progress fill animates `scaleX`
+inside a clipping wrapper. `SongSheet` passes a real `title`, so the dialog's head is the
+grip and the hand-rolled header with its "Canción" eyebrow is gone (§20 stacked headers);
+`SetlistPopover` renders `open={x}` (`cueDialogMount` 10).
+
+**Rulings.** Biblioteca links to `/tag` until R1 creates `/biblioteca`; Tema is a link,
+not a second write path; the kids-only «Tags» row was removed (isolation invariant over
+the plan); «Más» is a `CueDialog` (the `dialogSemantics` exemption went; its floor is 1);
+`transition-[height]` needed no task (already guarded). **Deviations from §5.0,
+accepted:** the badge pops on the eased `scale` enter rather than the `pop` spring (quieter
+at 14 px); the tab indicator is a dot above the icon rather than a pill behind it (the
+pill read as a button at phone scale).
+
+**Follow-up F1 (same day): one home per destination.** Frank's look at the shipped shell:
+the avatar menu (`NavMenu`) still repeated every destination the tab bar and desktop nav
+links already carried. Ruling: the top bar keeps the page title, the notification badge and
+the impersonation offset anchor; `NavMenu` becomes an ACCOUNT menu at every width — Mi
+perfil, Tema, a separator, Cerrar sesión — and drops Calendario/#Tags/Oasis
+Kids/Planear Kids/Admin along with their ministry/role computations. `BottomNav`'s «Más»
+sheet drops the user block, the Tema row and the Cerrar sesión row; its rows are now
+computed first (Kids, Planear Kids, Admin), and when none applies the «Más» button itself
+does not render — the bar shows four tabs and the sheet never opens. F2 (22:28): «Yo» left
+both bars — `/me` has one home, the avatar menu; a bar with fewer than two items does not
+render (kids-only volunteers).
+Review of F1 found `/kids/admin` had lost its only lg+ home, so `NavLinks` gained «Planear
+Kids» for kids managers (one link current at a time; the sign-out landing is `/auth/signin`
+at all three sites). Two smaller items from the same look: the tab bar's active dot sat
+off-centre because motion's layout `transform` overwrote the Tailwind translate on the
+same element (`SlidingIndicator` now centres the dot with auto margins), and the schedule's
+«‹ Anterior» / «Siguiente ›» row overflowed a 390 px phone — the words show from `sm:` up,
+the chevrons carry the buttons below that, and both are the house `Button`.
+
+**Bundle — over the accepted figure; Frank's call.** Cold, same method: M1 tip
+`/` 117.5 kB · `/admin` 342.5 kB (shared 169.2, chunk not isolable). Δ vs the M0b-2 tip
+**+7.3 / +5.7 kB gz** — `BottomNav` (with its sheet) and `NavLinks` now mount on every
+`(client)` route. Absolute vs "Before M0a": **+40.2 / +40.8 kB gz**, past the +32.9 /
++35.1 accepted on 2026-09-09. Options: accept M1's cost as the shell's price, or a
+follow-up that lazy-loads the «Más» sheet's body (the only part of the bar that is not
+five links).
+
+**Deferred → later phases:** `/biblioteca` and the `/tag*` redirects (R1); long-press
+quick actions and pull-to-refresh (R7); `NavLinks` follows the page's `schedule`/`tags`
+flags, so the row changes shape on `/kids` (Control Room / R5 to unify); the desktop row
+has no wrap for a sixth link.
