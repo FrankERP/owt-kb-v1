@@ -42,13 +42,10 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | URL | File | Type | Access | Rendering | Description |
 |-----|------|------|--------|-----------|-------------|
 | `/theme-gallery/[theme]/[fixture]` | `(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` | S | **Public** (ADR-0017) | SSG (6 static) | Theme gallery. `[theme]` ∈ `dark\|light`, `[fixture]` ∈ `swatches\|dialog\|planner`; `dynamicParams=false` 404s anything else. Renders real components from hardcoded fixtures — no session read, no fetch. Review surface for the light-mode migration. |
-| `/` | `(client)/page.tsx` | S | Public* | ISR 60s | Home "Esta semana." This weekend's Sat/Sun/special services + full searchable song list. |
-| `/schedule` | `(client)/schedule/page.tsx` | S | Public* | ISR 60s | Upcoming services calendar; `?m=YYYY-MM` month browse. |
-| `/author` | `(client)/author/page.tsx` | S | Public* | ISR 60s | Artist index with per-author counts. |
-| `/author/[slug]` | `(client)/author/[slug]/page.tsx` | S | Public* | ISR 60s | Songs by one author (`generateMetadata` sets title). `notFound()` for unknown slugs. |
-| `/tag` | `(client)/tag/page.tsx` | S | Public* | ISR 60s | Tag index with counts. |
-| `/tag/[slug]` | `(client)/tag/[slug]/page.tsx` | S | Public* | ISR 60s | Songs filtered by tag. `notFound()` for unknown slugs. |
-| `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Public* | **SSG** 3600s + `generateStaticParams` | Song detail: lyrics/chords, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
+| `/` | `(client)/page.tsx` | S | Worship | ISR 60s | Home "Esta semana." This weekend's Sat/Sun/special services. |
+| `/schedule` | `(client)/schedule/page.tsx` | S | Worship | ISR 60s | Upcoming services calendar; `?m=YYYY-MM` month browse. |
+| `/biblioteca` | `(client)/biblioteca/page.tsx` | S | Worship | ISR 60s fetch, dynamic by `searchParams` | The song library (R1): one fetch (catalogue + tags + authors), A–Z index with a search console, letter rail and a filter drawer (Tipo, tema, artista, tonalidad). `?q=`/`?tag=`/`?author=` seed initial state; the index mirrors its own state back into the URL without a round-trip. |
+| `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song detail: lyrics/chords, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
 | `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi perfil": upcoming assignments, proposal CTAs, availability, profile settings. |
 | `/me/propose/[roleId]` | `(client)/me/propose/[roleId]/page.tsx` | S | **Lead-only** | dynamic (`revalidate=0`) | Setlist proposal editor for a service the user Leads. |
 | `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Admin dashboard shell; data fetched client-side from `/api/admin/*`. `?tab=` opens a specific tab, filtered by role. |
@@ -64,13 +61,24 @@ anonymous internet, deliberately, because it is prerendered and reads nothing.
 
 ### Dynamic segments
 - `posts/[slug]` → `post.slug.current` (has `generateStaticParams()`).
-- `author/[slug]` → `author.slug.current`; `tag/[slug]` → `tag.slug.current`.
 - `me/propose/[roleId]` → a role doc `_id` where the current user is in `Lead[]`; else `notFound()`.
 - `studio/[[...tool]]` → optional catch-all for Studio's internal router.
+
+### Redirects
+`next.config.mjs`'s `redirects()` (R1, spec §12.2, decision H): the tag and author pages folded
+into the library, permanent (308) so bookmarks and the old nav keep working.
+
+| Source | Destination |
+|--------|-------------|
+| `/tag` | `/biblioteca` |
+| `/tag/:slug` | `/biblioteca?tag=:slug` |
+| `/author` | `/biblioteca` |
+| `/author/:slug` | `/biblioteca?author=:slug` |
 
 ### Access-control enforcement (page level)
 | Route | Guard |
 |-------|-------|
+| `/`, `/schedule`, `/posts/[slug]`, `/biblioteca` | `requireWorshipPage()` → ministry-scoped, redirects a kids-only member |
 | `/me` | `requireActiveSession()` → redirect `/auth/signin?callbackUrl=/me` |
 | `/me/propose/[roleId]` | `requireWorshipPage()` + GROQ requires user in `Lead[]`, else `notFound()` |
 | `/admin` | `requireActiveManager()` → `redirect("/")` |
@@ -80,15 +88,17 @@ anonymous internet, deliberately, because it is prerendered and reads nothing.
 
 ## Data fetching per page (high level)
 
-- **`/`** — `POSTS_QUERY` (all songs) + a combined weekend query pulling `featuredSongs`/
-  `saturdarSongs`/`sunday_role`/`saturday_role`/`special_role`; applies `publishedSetlist()`.
+- **`/`** — a combined weekend query pulling `featuredSongs`/`saturdarSongs`/`sunday_role`/
+  `saturday_role`/`special_role`; applies `publishedSetlist()`.
 - **`/schedule`** — combined query over role + setlist docs across a date window derived from
   `?m=` via `scheduleMonths.ts`.
+- **`/biblioteca`** — one combined query: the catalogue (former home `POSTS_QUERY`, plus author
+  refs), tags with counts (former `/tag` query) and authors with counts (former `/author`
+  query). Filtering is client-side, so one cached fetch serves every `?q=`/`?tag=`/`?author=`.
 - **`/me`** — `requireActiveSession()`, then `Promise.all` of member profile (`serverClient`),
   the member's assignments (`client`), shared proposals per led service (`serverClient`), and
   service dates; uses `describeContributors`.
 - **`/posts/[slug]`** — full `post` projection + last-3 past plays (bounded `week < today`).
-- **`/author`,`/tag` indexes** — grouped queries with per-item `postCount` + distinct total.
 - **`/admin`** — only `requireActiveManager()`; panels fetch client-side.
 
 Two clients: `client` (CDN read, `useCdn:false`) for cacheable page data; `serverClient` (read
@@ -98,8 +108,9 @@ token) for private/fresh data.
 
 ## Notable components per page
 
-- **`/`** — `Navbar`, `DayCard`, `SongSearchList`.
+- **`/`** — `Navbar`, `DayCard`.
 - **`/schedule`** — `Navbar`, `CalendarView`.
+- **`/biblioteca`** — `Navbar`, `LibraryIndex`.
 - **`/me`** — `Navbar`, `NextServiceHero`, `DayCard`, `AddToCalendarButton`,
   `AvailabilityCalendar`, `ProfilePanel`, `TextSizeControl`.
 - **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
@@ -121,7 +132,7 @@ See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full comp
   `(client)/posts/[slug]/loading.tsx` — per-route skeletons.
 - `(client)/posts/not-found.tsx` — "Canción no encontrada."
 - `(client)/not-found.tsx` — "Página no encontrada": the fallback for every other `notFound()` in the `(client)` group
-  (`/author/[slug]`, `/tag/[slug]`, `/me/propose/[roleId]`); `(gallery)` has none.
+  (`/me/propose/[roleId]`); `(gallery)` has none.
 - No `error.tsx`/`not-found.tsx` in the `(admin)` group.
 
 ---
@@ -130,7 +141,7 @@ See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full comp
 
 | File | Setting |
 |------|---------|
-| `/`, `/schedule`, `/author`, `/author/[slug]`, `/tag`, `/tag/[slug]`, `/me` | `export const revalidate = 60` |
+| `/`, `/schedule`, `/biblioteca`, `/me` | `export const revalidate = 60` |
 | `/posts/[slug]` | `revalidate = 3600` + `generateStaticParams()` |
 | `/me/propose/[roleId]` | `revalidate = 0` (always dynamic) |
 | `/studio/[[...tool]]` | `export const dynamic = 'force-static'` |

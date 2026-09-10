@@ -47,8 +47,7 @@ export default function BottomNav() {
     ? [
         { href: "/", label: "Inicio", icon: <HomeIcon />, match: (p) => p === "/" },
         { href: "/schedule", label: "Calendario", icon: <CalendarIcon />, match: (p) => p.startsWith("/schedule") },
-        // Biblioteca links to /tag until R1 creates /biblioteca and redirects /tag* (spec §12.2).
-        { href: "/tag", label: "Biblioteca", icon: <MusicIcon />, match: (p) => /^\/(tag|posts|author)/.test(p) },
+        { href: "/biblioteca", label: "Biblioteca", icon: <MusicIcon />, match: (p) => /^\/(biblioteca|posts)/.test(p) },
       ]
     : [
         { href: "/kids", label: "Kids", icon: <KidsIcon />, match: (p) => p === "/kids" },

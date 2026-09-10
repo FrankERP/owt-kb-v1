@@ -75,9 +75,12 @@ describe("brand.css reveal rules", () => {
 });
 
 describe("home page is the first consumer", () => {
-  it("passes revealProps to both section headings and the card grid", () => {
+  it("passes revealProps to the section heading and the card grid", () => {
+    // R1: the library block (and its own revealProps(2) heading) left home for
+    // /biblioteca, so the count drops from 3 to 2 — the "Esta semana" heading
+    // and the card grid.
     const src = read("app/(client)/page.tsx");
     expect(src).toMatch(/import \{ revealProps \} from "\.\.\/utils\/reveal"/);
-    expect((src.match(/\{\.\.\.revealProps\(/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    expect((src.match(/\{\.\.\.revealProps\(/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 });

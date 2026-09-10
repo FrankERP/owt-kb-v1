@@ -8,27 +8,27 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 326,
-    "filesScanned": 291,
-    "filesWithColour": 53,
+    "literalRows": 311,
+    "filesScanned": 283,
+    "filesWithColour": 49,
     "byCategory": {
       "2": 2,
-      "4": 74,
-      "8": 99,
+      "4": 70,
+      "8": 88,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 128,
+      "B": 117,
       "exempt": 35,
-      "keep": 250,
+      "keep": 234,
       "C": 6,
       "D": 15
     },
     "compositingClasses": 19,
     "compositingSelectorOccurrences": 40,
-    "compositingClassNameOccurrences": 70,
+    "compositingClassNameOccurrences": 56,
     "compositingRuleBodies": 39,
     "lightCounterpartClasses": 15,
     "pairs": 11,
@@ -427,7 +427,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 167,
+      "line": 157,
       "disposition": "B",
       "reason": null
     },
@@ -2952,30 +2952,6 @@
       "reason": null
     },
     {
-      "file": "app/components/AuthorSearchList.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 57,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/AuthorSearchList.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 65,
-      "disposition": "B",
-      "reason": null
-    },
-    {
       "file": "app/components/AvailabilityCalendar.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -3031,6 +3007,18 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
+      "line": 230,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
       "line": 231,
       "disposition": "B",
       "reason": null
@@ -3051,11 +3039,11 @@
       "file": "app/components/BottomNav.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
+      "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
-      "carrier": "fill",
-      "line": 233,
+      "carrier": "stroke",
+      "line": 171,
       "disposition": "B",
       "reason": null
     },
@@ -3067,7 +3055,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 172,
+      "line": 180,
       "disposition": "B",
       "reason": null
     },
@@ -3079,7 +3067,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 181,
+      "line": 191,
       "disposition": "B",
       "reason": null
     },
@@ -3091,7 +3079,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 192,
+      "line": 201,
       "disposition": "B",
       "reason": null
     },
@@ -3103,7 +3091,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 202,
+      "line": 211,
       "disposition": "B",
       "reason": null
     },
@@ -3115,7 +3103,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 212,
+      "line": 221,
       "disposition": "B",
       "reason": null
     },
@@ -3127,19 +3115,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 222,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 230,
+      "line": 229,
       "disposition": "B",
       "reason": null
     },
@@ -3360,18 +3336,6 @@
       "reason": null
     },
     {
-      "file": "app/components/PostComponent.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 86,
-      "disposition": "B",
-      "reason": null
-    },
-    {
       "file": "app/components/PracticePlaylistButton.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -3516,54 +3480,6 @@
       "reason": null
     },
     {
-      "file": "app/components/SongSearchList.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 100,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/SongSearchList.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 90,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/SongSearchList.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 109,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/SongSearchList.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 121,
-      "disposition": "B",
-      "reason": null
-    },
-    {
       "file": "app/components/SongSheet.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -3634,102 +3550,6 @@
       "line": 491,
       "disposition": "B",
       "reason": null
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 126,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 23,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 34,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 45,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 131,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 143,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 230,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "to-transparent",
-      "alpha": null,
-      "utility": "to",
-      "carrier": null,
-      "line": 164,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
     },
     {
       "file": "app/components/ThemeBootstrap.tsx",
@@ -4169,7 +3989,7 @@
       "file": "app/(client)/page.tsx",
       "kind": "className",
       "class": "section-heading",
-      "count": 2,
+      "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
     },
@@ -4234,22 +4054,6 @@
       "kind": "className",
       "class": "surface-interactive",
       "count": 2,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/(client)/tag/[slug]/page.tsx",
-      "kind": "className",
-      "class": "song-hero",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/(client)/tag/page.tsx",
-      "kind": "className",
-      "class": "song-hero",
-      "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
     },
@@ -4318,46 +4122,6 @@
       "reason": "Usage site of a compositing class"
     },
     {
-      "file": "app/components/PostComponent.tsx",
-      "kind": "className",
-      "class": "key-dial",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/PostComponent.tsx",
-      "kind": "className",
-      "class": "library-module",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/PostComponent.tsx",
-      "kind": "className",
-      "class": "surface-interactive",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/SongSearchList.tsx",
-      "kind": "className",
-      "class": "search-console",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/SongSearchList.tsx",
-      "kind": "className",
-      "class": "section-heading",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
       "file": "app/components/SongSheet.tsx",
       "kind": "className",
       "class": "key-dial",
@@ -4386,46 +4150,6 @@
       "kind": "className",
       "class": "surface-interactive",
       "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "kind": "className",
-      "class": "facet-panel",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "kind": "className",
-      "class": "library-module",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "kind": "className",
-      "class": "search-console",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "kind": "className",
-      "class": "surface",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/TagSearchList.tsx",
-      "kind": "className",
-      "class": "surface-interactive",
-      "count": 2,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
     },

@@ -10,8 +10,9 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const BUDGET: Record<string, number> = {
   ">Cue<": 0,                 // removed in M0b-1 (CueDialog)
   ">Servicio<": 1,            // DayCard header — goes in R1
-  "Índice musical": 1,        // SongSearchList — goes in R1
-  "títulos": 1,               // home library count — goes in R1
+  "Índice musical": 0,        // SongSearchList — removed in R1
+  "títulos": 0,               // home library count — removed in R1
+  "Repertorio": 0,            // /biblioteca eyebrow — DayCardDisclosure (R6/R7)
   "Backstage operations": 1,  // /admin eyebrow — goes in R5
   "Acceso autorizado": 1,     // /admin pill — goes in R5
 };

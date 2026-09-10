@@ -1,8 +1,6 @@
-import { client } from "@/sanity/lib/client";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import { Setlist, SetlistSong, SpecialRole } from "../utils/interface";
 import Navbar from "../components/Navbar";
-import SongSearchList from "../components/SongSearchList";
 import { revealProps } from "../utils/reveal";
 import { DayCard } from "../components/DayCard";
 import { paintsDayCard } from "../utils/paintsDayCard";
@@ -32,11 +30,6 @@ function getThisWeekend(): { sat: string; sun: string } {
 }
 
 // ─── Queries ────────────────────────────────────────────────────────────────
-
-const POSTS_QUERY = `*[_type == "post"] | order(title asc) {
-  _id, _createdAt, title, author, slug, publishDate, excerpt, timeSig, bpm, key,
-  tags[]->{ _id, slug, name }
-}`;
 
 const SETLIST_FIELDS = `songs[]{
   play_key,
@@ -87,16 +80,13 @@ export default async function Home() {
     Chorus: { member_name: string; alias?: string }[];
   };
 
-  const [posts, weekend] = await Promise.all([
-    client.fetch(POSTS_QUERY),
-    operationalClient.fetch<{
-      sunSongs: Setlist[];
-      satSongs: Setlist[];
-      sunRole: WeekendRole[];
-      satRole: WeekendRole[];
-      specials: SpecialRole[];
-    }>(WEEKEND_QUERY, { sun, sat, today }),
-  ]);
+  const weekend = await operationalClient.fetch<{
+    sunSongs: Setlist[];
+    satSongs: Setlist[];
+    sunRole: WeekendRole[];
+    satRole: WeekendRole[];
+    specials: SpecialRole[];
+  }>(WEEKEND_QUERY, { sun, sat, today });
 
   // Fail closed on an ambiguous weekend target: a duplicate canonical document
   // yields null (nothing rendered) rather than an arbitrary `[0]`.
@@ -214,19 +204,6 @@ export default async function Home() {
         </div>
         )}
       </div>
-
-      <div className="mx-auto max-w-7xl px-6 pt-8">
-        <div className="mb-7 flex items-end justify-between gap-4 border-b border-ink-dim/10 pb-5" {...revealProps(2)}>
-          <div className="brand-section-heading">
-            <p className="font-label text-[10px] uppercase tracking-[0.24em] text-accent">Biblioteca</p>
-            <h2 className="mt-1 font-display text-3xl font-semibold text-ink md:text-4xl">Todas las canciones</h2>
-          </div>
-          <p className="hidden font-label text-[11px] uppercase tracking-widest text-ink-dim sm:block">
-            {posts?.length ?? 0} títulos
-          </p>
-        </div>
-      </div>
-      <SongSearchList posts={posts ?? []} />
     </div>
   );
 }
