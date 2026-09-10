@@ -26,14 +26,19 @@ export default function LibraryLetterRail({ letters, active, onJump }: LibraryLe
   const scrubbingRef = useRef(false);
   const lastLetter = useRef("");
 
-  /** Which letter sits under `clientY` — arithmetic on the rail's own box, so a
-   *  finger past either end clamps to the first/last letter instead of missing. */
+  /** Which letter sits under `clientY` — arithmetic on the first letter
+   *  BUTTON's own rect, not the nav's border box: the nav carries `py-1`, and
+   *  dividing its full (padded) height by the letter count skews every band by
+   *  that padding. A button's rect already sits inside the content box, so its
+   *  own top is the content-box top and its own height is the true step; a
+   *  finger past either end still clamps to the first/last letter. */
   const letterAt = useCallback(
     (clientY: number): string => {
       const el = railRef.current;
-      if (!el || letters.length === 0) return "";
-      const rect = el.getBoundingClientRect();
-      const step = rect.height / letters.length;
+      const first = el?.children[0] as Element | undefined;
+      if (!first || letters.length === 0) return "";
+      const rect = first.getBoundingClientRect();
+      const step = rect.height;
       const i = step > 0 ? Math.floor((clientY - rect.top) / step) : 0;
       return letters[Math.min(letters.length - 1, Math.max(0, i))];
     },
@@ -77,6 +82,10 @@ export default function LibraryLetterRail({ letters, active, onJump }: LibraryLe
           "data-[scrubbing]:rounded-full data-[scrubbing]:bg-surface-base/80 data-[scrubbing]:backdrop-blur-sm"
         }
         onPointerDown={(e) => {
+          // A second finger, a stylus alongside a palm, or a non-primary
+          // button must not hijack the scrub already tracking the primary
+          // pointer.
+          if (!e.isPrimary || e.button !== 0) return;
           scrubbingRef.current = true;
           lastLetter.current = "";
           setScrubbing(true);
@@ -92,10 +101,18 @@ export default function LibraryLetterRail({ letters, active, onJump }: LibraryLe
         }}
         onPointerMove={(e) => {
           if (!scrubbingRef.current) return;
+          // A browser that refused capture (see above) never fires
+          // pointerup/cancel off-element — the move stream is the only signal
+          // left that the finger lifted, so a stale `buttons === 0` ends it.
+          if (e.buttons === 0) {
+            endScrub();
+            return;
+          }
           select(letterAt(e.clientY), "auto");
         }}
         onPointerUp={endScrub}
         onPointerCancel={endScrub}
+        onPointerLeave={endScrub}
         onLostPointerCapture={endScrub}
       >
         {letters.map((l) => (

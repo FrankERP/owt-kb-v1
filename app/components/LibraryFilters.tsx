@@ -22,6 +22,9 @@ const TIPO_LABEL: Record<Tipo, string> = { "up-beat": "Up beat", "down-beat": "D
 /** Artists shown before anyone types. The busiest few are the useful default; the
  *  rest are reachable by name, which is how a search box earns its place. */
 const ARTIST_PREVIEW = 12;
+/** A typed query can match dozens of names; the cloud caps at this many chips
+ *  and names the rest instead of rendering them all. */
+const ARTIST_QUERY_CAP = 24;
 
 const EYEBROW = "mb-2 font-label text-[11px] uppercase tracking-widest text-ink-dim";
 // Chip size follows count, in three steps — the same scale for themes and artists.
@@ -64,12 +67,15 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
   }, [themes, themeQ, filters.tags]);
 
   const artistMax = Math.max(1, ...authors.map((a) => a.postCount ?? 0));
-  const shownArtists = useMemo(() => {
+  const { shown: shownArtists, hiddenArtistCount } = useMemo(() => {
     const q = normalizeText(artistQ.trim());
     const byCount = [...authors].sort((a, b) => (b.postCount ?? 0) - (a.postCount ?? 0));
-    const pool = q ? byCount.filter((a) => normalizeText(a.name).includes(q)) : byCount.slice(0, ARTIST_PREVIEW);
+    const matches = q ? byCount.filter((a) => normalizeText(a.name).includes(q)) : null;
+    const pool = matches ? matches.slice(0, ARTIST_QUERY_CAP) : byCount.slice(0, ARTIST_PREVIEW);
     const selected = authors.find((a) => a.slug.current === filters.author);
-    return selected ? [selected, ...pool.filter((a) => a._id !== selected._id)] : pool;
+    const shown = selected ? [selected, ...pool.filter((a) => a._id !== selected._id)] : pool;
+    const hiddenArtistCount = matches && matches.length > ARTIST_QUERY_CAP ? matches.length - ARTIST_QUERY_CAP : 0;
+    return { shown, hiddenArtistCount };
   }, [authors, artistQ, filters.author]);
 
   const toggleTag = (slug: string) => onChange({ ...filters, tags: filters.tags.includes(slug) ? filters.tags.filter((s) => s !== slug) : [...filters.tags, slug] });
@@ -88,7 +94,7 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
         Filtros{count > 0 ? ` · ${count}` : ""}
       </Button>
       <CueDialog open={open} mode="sheet" size="md" title="Filtros" label="Filtros" onDismiss={() => setOpen(false)}>
-        <div className="space-y-6 p-5">
+        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
           <section>
             <p className={EYEBROW}>Tipo</p>
             {/* Four tiles must fit a 390 px sheet: small size, full width, equal shares. No count badges — they read as alerts. */}
@@ -114,6 +120,9 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
               ))}
             </div>
             {shownArtists.length === 0 && <p className="font-label text-xs text-ink-dim">Sin artistas que coincidan</p>}
+            {hiddenArtistCount > 0 && (
+              <p className="mt-1.5 font-label text-xs text-ink-dim">…y {hiddenArtistCount} más — sigue escribiendo</p>
+            )}
           </section>
           {/* The two-column grid survives with one child on purpose: Tonalidad
               keeps the half-width it had beside Artista, instead of stretching

@@ -175,7 +175,7 @@ export default function LibraryIndex(props: LibraryIndexProps) {
             <p className="font-label text-sm uppercase tracking-widest">No se encontraron canciones</p>
           </div>
         ) : (
-          <div className={letters.length > 1 ? "pr-6" : ""}>
+          <div className={letters.length > 1 ? "pr-7" : ""}>
             {groups.map((g) => (
               <section key={g.letter || "resultados"} aria-label={g.letter ? `Letra ${g.letter}` : "Resultados"}>
                 {g.letter && (
@@ -198,8 +198,10 @@ export default function LibraryIndex(props: LibraryIndexProps) {
         {letters.length > 1 && (
           // AFTER the sections, deliberately — the rail positions itself
           // `absolute` inside the `relative` wrapper above, not as a float, so
-          // DOM order no longer places it: the wrapper's `pr-6` gutter is what
-          // it sits in. Its own chrome, scrub and progress live in the component.
+          // DOM order no longer places it: the wrapper's `pr-7` gutter is what
+          // it sits in — wider than the rail's own `right-1` offset plus its
+          // ~24px pill, so a scrubbing pill never overlaps row content. Its own
+          // chrome, scrub and progress live in the component.
           <LibraryLetterRail letters={letters} active={activeLetter} onJump={jump} />
         )}
       </div>
