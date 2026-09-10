@@ -137,7 +137,9 @@ export default function BottomNav() {
       <CueDialog open={moreOpen} mode="sheet" size="sm" title="Más" label="Más" onDismiss={() => setMoreOpen(false)}>
         <div className="flex items-center gap-3 px-5 py-4 border-b border-accent/10">
           {user.image ? (
-            <Image src={user.image} alt="" width={40} height={40} className="rounded-full shrink-0" />
+            // unoptimized: serve the original JPEG/PNG, not Next's WebP — the iOS
+            // WKWebView (Capacitor wrap) fails to decode the optimized WebP avatar.
+            <Image src={user.image} alt="" width={40} height={40} unoptimized className="rounded-full shrink-0" />
           ) : (
             <div className="w-10 h-10 rounded-full bg-accent-deep flex items-center justify-center shrink-0">
               <span className="font-label text-sm text-accent">{user.name?.slice(0, 2).toUpperCase()}</span>
@@ -148,11 +150,10 @@ export default function BottomNav() {
             <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 truncate">{user.email}</p>
           </div>
         </div>
-        <div className="divide-y divide-accent/10 pb-[env(safe-area-inset-bottom)]">
+        <div className="divide-y divide-accent/10">
           {inWorship && inKids && <Link href="/kids" onClick={() => setMoreOpen(false)} className={rowClass}><KidsIcon />Kids</Link>}
           {inWorship && managesKids && <Link href="/kids/admin" onClick={() => setMoreOpen(false)} className={rowClass}><PlanIcon />Planear Kids</Link>}
           {isAdmin && <Link href="/admin" onClick={() => setMoreOpen(false)} className={rowClass}><AdminIcon />Admin</Link>}
-          {!inWorship && <Link href="/tag" onClick={() => setMoreOpen(false)} className={rowClass}><MusicIcon />Tags</Link>}
           <Link href="/me#tema" onClick={() => setMoreOpen(false)} className={rowClass}><ThemeIcon />Tema</Link>
           <button
             type="button"

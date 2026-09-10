@@ -69,6 +69,15 @@ describe("BottomNav", () => {
     expect(document.documentElement.classList.contains(NAV_CLASS)).toBe(false);
   });
 
+  // requireWorshipPage bounces a kids-only member away from /tag; NavMenu
+  // already hides this link there, and the Más sheet must match.
+  it("never shows a Tags link in the Más sheet for a kids-only member", () => {
+    session = { user: { ...worshipUser, ministries: ["kids"], managesMinistries: ["kids"] } };
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Más" }));
+    expect(screen.queryByRole("link", { name: /tags/i })).toBeNull();
+  });
+
   it("opens Más as a sheet dialog with Tema and Cerrar sesión, and Admin only for managers", () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Más" }));

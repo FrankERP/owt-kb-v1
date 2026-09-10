@@ -44,7 +44,7 @@ export default function NavLinks({ schedule = false, tags = false }: { schedule?
     ...(isAdmin ? [{ href: "/admin", label: "Admin", active: pathname.startsWith("/admin") }] : []),
   ];
   return (
-    <div className="hidden lg:flex items-center gap-1 pointer-events-auto" aria-label="Secciones">
+    <div role="group" className="hidden lg:flex items-center gap-1 pointer-events-auto" aria-label="Secciones">
       {links.map((l) => <NavLink key={l.href} {...l} />)}
     </div>
   );

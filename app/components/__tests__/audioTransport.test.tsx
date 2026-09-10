@@ -20,7 +20,7 @@ describe("AudioTransport", () => {
       />,
     );
 
-    const fill = getByRole("slider").firstElementChild as HTMLElement;
+    const fill = getByRole("slider").querySelector("[data-progress-fill]") as HTMLElement;
     expect(fill.style.transform).toBe("scaleX(0.5)");
     expect(fill.style.width).toBe("");
   });

@@ -22,6 +22,7 @@ installMotionTestEnv();
 
 const h = vi.hoisted(() => ({
   isImpersonating: true,
+  status: "authenticated" as "loading" | "authenticated" | "unauthenticated",
   update: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
@@ -30,6 +31,7 @@ const h = vi.hoisted(() => ({
 vi.mock("next-auth/react", () => ({
   useSession: vi.fn(() => ({
     data: { user: { isImpersonating: h.isImpersonating, name: "Ana", sanityId: "m1", realAdminName: "Frank" } },
+    status: h.status,
     update: h.update,
   })),
 }));
@@ -42,6 +44,7 @@ import ImpersonationBanner from "../ImpersonationBanner";
 afterEach(() => {
   cleanup();
   h.isImpersonating = true;
+  h.status = "authenticated";
   h.update.mockReset();
   h.push.mockReset();
   h.refresh.mockReset();
@@ -67,9 +70,18 @@ describe("ImpersonationBanner", () => {
     expect(document.documentElement.classList.contains("impersonating")).toBe(false);
   });
 
+  // Impersonation starts DURING this session: the resolved session (first
+  // non-loading status) was NOT impersonating, and only later does it become
+  // active — the animated path, so the height is measured via `onEntered`
+  // once the drop-in lands, not before.
   it("publishes the measured height once the drop-in lands, not before — impersonation started in this session", async () => {
+    h.status = "loading";
     h.isImpersonating = false;
     const { rerender } = renderBanner();
+    expect(document.documentElement.classList.contains("impersonating")).toBe(false);
+
+    h.status = "authenticated";
+    rerender(<ImpersonationBanner />);
     expect(document.documentElement.classList.contains("impersonating")).toBe(false);
 
     h.isImpersonating = true;
@@ -82,18 +94,30 @@ describe("ImpersonationBanner", () => {
     expect(document.documentElement.style.getPropertyValue("--impersonation-h")).toBe("56px");
   });
 
-  // The mount that already IS active — an admin hard-refreshing while
-  // impersonating. Without `appear` there is no enter animation, so the bar
-  // must be visible and measured synchronously, feature chunk or not (the
-  // finding this fix addresses: with `appear` unconditional, this mount sat
-  // at the drop variant's `initial` — opacity: 0 — until the async motion
-  // chunk resolved, or forever if it never did).
-  it("renders at rest and measures synchronously when the mount is already active", () => {
+  // The mount that already IS active as of the first RESOLVED session status
+  // — an admin hard-refreshing while impersonating. `Provider.tsx` mounts a
+  // bare `<SessionProvider>`, so the very first client render is always
+  // `status: "loading"`; here the session resolves already impersonating.
+  // Without `appear` there is no enter animation, so the bar must be visible
+  // and measured at rest, feature chunk or not (the finding this fix
+  // addresses: keying "already active" off the literal first render read that
+  // loading render as inactive and took the ANIMATED path instead).
+  it("renders at rest and measures once the resolved session is already active — hard refresh mid-impersonation", async () => {
     const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight");
     Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => 56 });
     try {
-      renderBanner();
-      expect(document.documentElement.style.getPropertyValue("--impersonation-h")).toBe("56px");
+      h.status = "loading";
+      h.isImpersonating = false;
+      const { rerender } = renderBanner();
+      expect(document.documentElement.classList.contains("impersonating")).toBe(false);
+
+      h.status = "authenticated";
+      h.isImpersonating = true;
+      rerender(<ImpersonationBanner />);
+
+      await waitFor(() =>
+        expect(document.documentElement.style.getPropertyValue("--impersonation-h")).toBe("56px")
+      );
       const host = document.querySelector(".impersonation-bar")?.parentElement as HTMLElement;
       expect(["", "1"]).toContain(host.style.opacity);
     } finally {

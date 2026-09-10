@@ -2923,7 +2923,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 105,
+      "line": 113,
       "disposition": "B",
       "reason": null
     },
@@ -2935,7 +2935,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 113,
+      "line": 121,
       "disposition": "B",
       "reason": null
     },
@@ -2947,7 +2947,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 122,
+      "line": 130,
       "disposition": "B",
       "reason": null
     },
@@ -3031,18 +3031,6 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 249,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/BottomNav.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
       "line": 250,
       "disposition": "B",
       "reason": null
@@ -3063,11 +3051,11 @@
       "file": "app/components/BottomNav.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
+      "value": "fill=\"currentColor\"",
       "alpha": null,
       "utility": null,
-      "carrier": "stroke",
-      "line": 172,
+      "carrier": "fill",
+      "line": 252,
       "disposition": "B",
       "reason": null
     },
@@ -3079,7 +3067,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 181,
+      "line": 173,
       "disposition": "B",
       "reason": null
     },
@@ -3091,7 +3079,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 192,
+      "line": 182,
       "disposition": "B",
       "reason": null
     },
@@ -3103,7 +3091,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 202,
+      "line": 193,
       "disposition": "B",
       "reason": null
     },
@@ -3115,7 +3103,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 211,
+      "line": 203,
       "disposition": "B",
       "reason": null
     },
@@ -3127,7 +3115,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 221,
+      "line": 212,
       "disposition": "B",
       "reason": null
     },
@@ -3139,7 +3127,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 231,
+      "line": 222,
       "disposition": "B",
       "reason": null
     },
@@ -3151,7 +3139,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 239,
+      "line": 232,
       "disposition": "B",
       "reason": null
     },
@@ -3163,7 +3151,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 248,
+      "line": 240,
       "disposition": "B",
       "reason": null
     },
@@ -3175,7 +3163,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 258,
+      "line": 249,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/BottomNav.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 259,
       "disposition": "B",
       "reason": null
     },
@@ -3331,7 +3331,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 133,
+      "line": 160,
       "disposition": "B",
       "reason": null
     },
