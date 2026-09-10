@@ -16,14 +16,14 @@ describe("ChordChart accessibility", () => {
       />,
     );
 
-    const first = getByRole("button", { name: "D · versión 1 de 2" });
-    const second = getByRole("button", { name: "D · versión 2 de 2" });
-    expect(first.getAttribute("aria-pressed")).toBe("true");
-    expect(second.getAttribute("aria-pressed")).toBe("false");
+    const first = getByRole("radio", { name: "D · versión 1 de 2" });
+    const second = getByRole("radio", { name: "D · versión 2 de 2" });
+    expect(first.getAttribute("aria-checked")).toBe("true");
+    expect(second.getAttribute("aria-checked")).toBe("false");
 
     fireEvent.click(second);
-    expect(first.getAttribute("aria-pressed")).toBe("false");
-    expect(second.getAttribute("aria-pressed")).toBe("true");
+    expect(first.getAttribute("aria-checked")).toBe("false");
+    expect(second.getAttribute("aria-checked")).toBe("true");
   });
 
   it("names the chord visibility switch while preserving checked state", () => {

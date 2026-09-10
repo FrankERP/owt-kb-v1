@@ -23,7 +23,8 @@ no scroll-driven animations.
 `MotionConfig reducedMotion="user"`). The feature set is genuinely lazily loaded: it
 ships as its own chunk fetched after hydration, not inlined into the first-load
 script, which is what keeps `LazyMotion`'s name honest and is the only way a future
-`domMax` (M0b's `SlidingIndicator`) fits without inflating every route's first paint.
+`domMax` (M0b's `SlidingIndicator`) fits without inflating every route's first paint
+(adopted in M0b-1: 28.8 kB gz, within ruling R — see the Bundle section of `docs/MOTION.md`).
 `motion` is importable ONLY from `app/components/ui/**` and `app/utils/motion*`
 (`motionImportBoundary.test.ts`). Feature components compose primitives — `Presence`,
 `Collapse`, `SegmentedControl`, `Toast`, `Menu`, `CueDialog` — and never `m.*`.

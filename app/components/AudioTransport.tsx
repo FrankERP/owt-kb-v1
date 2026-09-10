@@ -32,7 +32,7 @@ export default function AudioTransport({
     <div className="max-w-7xl mx-auto flex items-center gap-3 px-4 py-3">
       <button
         onClick={onToggle}
-        className="w-11 h-11 rounded-full bg-accent/15 border border-accent/40 flex items-center justify-center text-accent shrink-0 hover:bg-accent/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt active:scale-95 transition-all"
+        className="w-11 h-11 rounded-full bg-accent/15 border border-accent/40 flex items-center justify-center text-accent shrink-0 hover:bg-accent/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt active:scale-95 transition-[background-color,transform] duration-fast ease-out-brand"
         aria-label={isPlaying ? `Pausar ${track.songTitle} — ${track.title}` : `Reproducir ${track.songTitle} — ${track.title}`}
       >
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
@@ -77,10 +77,18 @@ export default function AudioTransport({
               }
             }}
           >
-            <div
-              className="h-full rounded-full bg-accent transition-[width] duration-100 group-hover:bg-accent/80"
-              style={{ width: `${progress * 100}%` }}
-            />
+            {/* Clips the fill only — the hit overlay below stays a direct child of
+                the track, unclipped, so its `-top-1/-bottom-1` reach past the
+                1.5px track still lands (an `overflow-hidden` on the track itself
+                shrank the seek zone from ~14px to 6px). The track keeps its own
+                `rounded-full` for the visible edge. */}
+            <div className="absolute inset-0 rounded-full overflow-hidden">
+              <div
+                data-progress-fill
+                className="h-full w-full origin-left bg-accent transition-transform duration-fast ease-out-brand group-hover:bg-accent/80"
+                style={{ transform: `scaleX(${progress})` }}
+              />
+            </div>
             <div className="absolute inset-y-0 -bottom-1 -top-1 left-0 right-0 opacity-0 group-hover:opacity-100" style={{ cursor: "pointer" }} />
           </div>
           <span className="w-8 shrink-0 font-label text-[11px] tabular-nums text-mono-600">

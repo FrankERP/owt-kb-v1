@@ -147,7 +147,7 @@ site, the same shape as `clientBoundary.test.ts`.
 | `SegmentedControl` | `role=radiogroup` pills with a sliding `layoutId` thumb | ThemeControl, TextSizeControl, Calendario/Lista, Popular/A–Z, ChordChart chart tabs |
 | `Tabs` (indicator only) | `SlidingIndicator` under/behind the active tab, scroll-active-into-view | AdminPanel `TabBar`, SectionNav |
 | `Presence` | `AnimatePresence` wrapper with the four house variants: `fade`, `rise`, `sheet`, `scale` | every conditional `{open && …}` that should animate |
-| `CueDialog` (upgraded) | enter/exit: card = scale 0.96→1 + fade over `slow`; sheet = spring from `translateY(100%)`; backdrop fades; drag-down-to-dismiss on the sheet handle (pointer events, threshold 80px or velocity); `CueDialogProvider` gains a `closing` state so focus restores after the exit completes | its 13 consumers + `SeatPicker` + `SongFormModal` + `ProposalEditor` confirm, which migrate onto it |
+| `CueDialog` (upgraded) | enter/exit: card = scale 0.96→1 + fade over `slow`; sheet = spring from `translateY(100%)`; backdrop fades; drag-down-to-dismiss from the sheet head — handle and title bar (pointer events, threshold 150px or velocity — 80px as first built, doubled on Frank's dev look 2026-09-09); `CueDialogProvider` gains a `closing` state so focus restores after the exit completes | its 13 consumers + `SeatPicker` + `SongFormModal` + `ProposalEditor` confirm, which migrate onto it |
 | `Toast` + `ToastViewport` + `useToast()` | one stack, bottom-centre above the tab bar and safe area, `rise` in / `fade` out, `role=status` (or `alert` for errors), holds the existing `useTransientValue` semantics including `hold` | the 13 hand-rolled toasts |
 | `Menu` | anchored popover with `scale` presence, outside-click and Escape, arrow-key roving focus | NavMenu dropdown, PracticePlaylistButton, ServiceReadinessCard "Más acciones", AvailabilityCalendar note popover |
 | `Collapse` | measured `height: auto` animation with fade, `aria-expanded` wiring, chevron rotation | ActivityPanel, IntegrityQueuePanel, "Roles previos", "Recurrente", "Agregar canción" |
@@ -172,8 +172,8 @@ keep their behaviour and get only the Button/focus adoption.
 
 - **Route reveal** — `template.tsx` (client, ~10 lines) remounts children per navigation; page sections carry `data-reveal`. The `<main>` wrapper is never transformed (a transformed ancestor breaks every `position: fixed` descendant — the WebKit trap already documented in `CueDialog.tsx:33`).
 - **Navbar** — the inert `transition-[height]` goes. Lockup: press. Desktop gains an active-route underline via `SlidingIndicator` across the nav links rendered by NavMenu when signed in (Calendario · Tags · Yo · Admin).
-- **NavMenu** — avatar: press + ring `fast`; the dropdown becomes `Menu` (scale presence from the avatar corner, 200ms); notification badge pops in with `pop` spring when the count rises.
-- **BottomNav — resurrected (decision B).** Phone-only tab bar: Inicio · Calendario · Biblioteca · Yo · Más. Active tab: icon lifts 2px and the label brightens; a `layoutId` pill slides between tabs; tap = haptic light. "Más" opens a `Sheet` (Kids, Planear Kids, Admin, Tags, Tema, Cerrar sesión) with the existing `inert` handling. Safe-area bottom padding. Every fixed-bottom element (toasts, FAB, AudioPlayer) offsets by `--bottom-nav-h` published on `<html>` the way `--impersonation-h` is — same guard shape as `impersonationOffsetSync.test.ts`.
+- **NavMenu** — avatar: press + ring `fast`; the dropdown becomes `Menu` (scale presence from the avatar corner, 200ms); notification badge pops in with `pop` spring when the count rises. **M1 follow-up F1:** with the tab bar and desktop nav links now covering every destination, NavMenu became a plain ACCOUNT menu at all widths — Mi perfil, Tema, a separator, Cerrar sesión — and no longer repeats Calendario/Tags/Oasis Kids/Planear Kids/Admin.
+- **BottomNav — resurrected (decision B).** Phone-only tab bar: Inicio · Calendario · Biblioteca · Yo · Más (as planned; F2 removed «Yo» — three tabs ship). Active tab: icon lifts 2px and the label brightens; a `layoutId` pill slides between tabs; tap = haptic light. **M1 follow-up F1** moved Tags/Tema/Cerrar sesión out to NavMenu, so "Más" now opens a `Sheet` holding only what the tabs (four at the time, three since F2) cannot fit — Kids, Planear Kids, Admin — and does not render at all (four tabs, no sheet) when none of those apply. **M1 follow-up F2** then removed «Yo» from the tab bar itself — `/me` has one home, the avatar menu's Mi perfil — leaving three worship tabs (or Kids/Planear Kids); a bar with fewer than two items (tabs + «Más») now renders nothing at all. Safe-area bottom padding. Every fixed-bottom element (toasts, FAB, AudioPlayer) offsets by `--bottom-nav-h` published on `<html>` the way `--impersonation-h` is — same guard shape as `impersonationOffsetSync.test.ts`.
 - **SectionNav** — underline becomes `SlidingIndicator`; the active pill scrolls itself into view (`scrollIntoView({inline:"center"})`, behaviour respects reduced motion as the existing `ProposalsPanel` gate does).
 - **ImpersonationBanner** — enters from the top with `rise` (inverted); the `--impersonation-h` measurement runs after the enter completes so the navbar offset does not animate against a moving target.
 - **AudioPlayer transport** — slides up with `sheet` spring when a track starts, slides down when it stops; the progress bar switches from a `width` transition to `transform: scaleX` (origin left), which stays on the compositor.
@@ -697,7 +697,7 @@ Motion vocabulary from §2.3; nothing here adds a colour or a face.
 | Element | T | P | Prim |
 |---|---|---|---|
 | Cue card dialog | instant, `CUE` eyebrow, `×` | scale 0.96→1 + fade `slow`; eyebrow gone | CueDialog |
-| Cue sheet (phone) | instant, handle drawn, `CERRAR` + `×` | spring up; drag-to-dismiss on the handle; one close control; content is the card itself (no stacked headers) | CueDialog |
+| Cue sheet (phone) | instant, handle drawn, `CERRAR` + `×` | spring up; drag-to-dismiss from the whole head (handle + title bar, since 2026-09-09); one close control: the grip itself (Frank, 2026-09-09) — the `×` is `sr-only` on the phone sheet for VoiceOver and keyboard, visible on the ≥640px card which has no drag; the `CERRAR` footer is gone; content is the card itself (no stacked headers) | CueDialog |
 | Backdrop | `scrim/0.68 + blur` instant | fades `base`; blur stays (it is cheap when not animated) | CueDialog |
 | Hand-rolled modals (`SeatPicker`, `SongFormModal`, proposal confirm) | three shells | all on `CueDialog` | CueDialog |
 | Menus (`Más acciones`, avatar, practice playlist, note popover) | instant | `Menu` | Menu |
@@ -721,7 +721,7 @@ Motion vocabulary from §2.3; nothing here adds a colour or a face.
   Finding 5 (initials contrast) as part of the shell; ships the label budget as a
   `labelBudget.test.ts` that counts `uppercase tracking-widest` inside `ui/` primitives'
   consumers and fails above the audited baseline.
-- **M1** removes the redundant `CERRAR`, adds drag-to-dismiss, collapses stacked headers.
+- **M0b-1** removed the redundant `CERRAR` and added drag-to-dismiss (from the whole head since 2026-09-09); **M1** collapses stacked headers.
 - **R1** promotes Contenido's row to the library (not a new design).
 - **R2** replaces the month input with `DateField`.
 - **R5** removes the admin shell's `overflow-x: hidden` and the five-frame nesting together.
@@ -809,3 +809,189 @@ It ships in R1 with the run sheet, and it is the FIFTH place the beam appears; �
 Alternative: decline both — keep the four beam sites and no lit card.
 
 **Approved by Frank 2026-09-08 11:03 CST.** Q joins the Part IV ledger; R1 carries the lit card.
+
+---
+
+# Part VI — After M0a (2026-09-08, 16:30 CST)
+
+M0a shipped to production in PR #50 (`main` 4b218d61; production alias verified 16:31 CST, dpl_88mcKgSeV3Rjo69EAqDsYCXtk1X9). Measured in `docs/MOTION.md`: first-load
++12.4 kB gz on `/`, +12.5 kB on `/admin`, plus a 15.8 kB gz async motion-feature chunk. The
+25 kB figure in §7 was written for a synchronous feature load and mis-estimated `domAnimation` at
+18 kB; the whole-branch review moved the features to an async chunk, which is the only shape under
+which M0b's layout animations (`domMax`) fit.
+
+**R. Bundle cap, restated (coordinator's ruling, pending Frank's word):** §7's **+25 kB gz on
+first-load JS** stands as written and is measured as MOTION.md measures it. A second line is added:
+**the async motion-feature chunk is capped at 40 kB gz.** M0b measures `domMax` against that line
+before adopting `layoutId`; if it does not fit, the sliding indicator is a measured CSS transform
+without `layoutId`.
+
+M0b rules learned in M0a: no `Presence appear` above the fold (features arrive after hydration);
+the vendor feature loader has no rejection handling, so Toast/Menu/Collapse need a load-failure
+fallback; the theme gallery mounts no MotionProvider, so its `controls` fixture must add a
+gallery-side `LazyMotion` with `MotionGlobalConfig.skipAnimations` keyed off `data-motion="off"`;
+new colour in a rule body is a composed token at every `--warning-glow` touch point; `Button` needs
+`forwardRef` before `Menu` can use it as a trigger.
+
+# Part VII — M0b-1 shipped
+
+M0b-1 (overlays and controls — `CueDialog`, `Toast`/`useToast`, `Menu`/`MenuItem`/
+`MenuSeparator`/`MenuHeader`, `Collapse`, the gallery's own `GalleryMotion`) was
+**released to production on 2026-09-09** via PR #52 (merge `2d635d38`, alias verified).
+Branch `claude/motion-m0b-overlays-controls`, range `603f1eb4..0c478b5a`, of which
+`e686fab3..0c478b5a` is the wave after Frank's dev look: 150 px drag threshold,
+the whole head as the grip, the `×` `sr-only` on phone sheets, the day sheet's
+`CERRAR` footer gone. Full reference in `docs/MOTION.md`
+— primitives table, the "Load-failure behaviour" section (§Part VI's "Toast/Menu/Collapse
+need a load-failure fallback" resolved: `Collapse`/`CueDialog` render already-open via
+`initial={false}`; `Toast`/`Menu` animate in from `initial` since they only ever open long
+after the feature chunk has had time to load; a `CueDialog` opened after mount before the
+chunk lands is invisible while inerting the page), and the Guards table
+(`cueDialogMount.test.ts`, `labelBudget.test.ts`).
+
+**Deferred from M0b-1 → M0b-2, M1, M5–M8:** `SegmentedControl`, `SlidingIndicator`,
+`Switch`, `Checkbox`, `Select`, `DateField`, `NumberRoll`, haptics and the `controls`
+gallery fixture; the 11 literal-`open` `CueDialog` sites (tracked by `cueDialogMount.test.ts`)
+deferred to their route phases; `AvailabilityCalendar`'s note popover → M5; `MonthGenerator`'s
+held swap block → M7b; Kids inline statuses → M8; a `Menu`'s Escape inside a `CueDialog`
+(`CalendarView`'s day sheet) → M0b-2; the 640 px viewport variant fixed at dialog open → M0b-2.
+
+§Part VI's 40 kB gz async-chunk cap: `domMax` measured at **28.8 kB gz** (88.0 kB
+raw) — under the cap, so the sliding indicator kept `layoutId`. See MOTION.md's
+Bundle section for the full A/B measurement.
+
+# Part VIII — M0b-2 controls (2026-09-09)
+
+Branch `claude/motion-m0b2-controls` (from `main` 2d635d38), plan
+`docs/superpowers/plans/2026-09-09-motion-m0b2-controls.md`. Thirteen tasks, each with a
+fresh implementer and a task review; ten fix rounds in all, every one re-reviewed.
+**Released to production on 2026-09-09** via PR #53 (merge `40fa9683`), after Frank's
+look on dev found one pre-existing bug — opening the month editor from a card's
+«Editar equipo» scrolled the admin shell instead of the grid (`scrollIntoView` reaching
+an `overflow: hidden` ancestor) — fixed as `8f3dfc87` on the branch before the merge.
+
+**Shipped.** Seven primitives under `app/components/ui/` and one util:
+`SegmentedControl` (radiogroup, roving arrows, `layoutId` thumb — the reason M0b-1 paid
+for `domMax`), `SlidingIndicator` + `useActiveIntoView` (tab bars), `Switch` (spring knob,
+haptic, one off-state anchor for both sites), `Checkbox` (drawn box over the native input;
+`align`, `tone`), `Select` (tokenised chrome over the native `<select>`, sizes `sm/md/lg`),
+`DateField` (native date/month under the chrome; month steppers), `NumberRoll` (old value
+rises out, new rises in), and `haptic(kind)` behind `@capacitor/haptics` (no-op on web;
+`ios/` Package.swift regenerated; `docs/MOBILE.md` gains the plugin table).
+
+**Migrated.** 11 segmented sites (theme, text size, Calendario/Lista, Popular/A–Z ×2,
+Tipo/Rol, A→Z/Z→A, ministry scope, proposal filters with the pending badge, chart versions,
+the participation view — the last was a `<select>`), 3 tab bars (admin `TabBar`,
+`SectionNav`, `BottomNav` with the icon lift and a haptic), 2 switches, 5 checkboxes,
+23 selects (9 + MonthGenerator's 14), 3 date/month inputs, 4 rolling values. **No native
+`<select>`, `<input type="checkbox">`, `type="date"` or `type="month"` remains under
+`app/**`** — decision M's 39 sites are the radio trio and the number/text inputs short of
+complete, which are not M0b-2 primitives.
+
+**Overlay follow-ups closed.** A `Menu` inside a `CueDialog` owns Escape (the dialog's
+capture listener yields when the key's target is inside an open menu or on its expanded
+trigger); the toast viewport is a persistent polite region with an always-mounted alert
+mirror for errors; a sheet decides sheet-or-card on the open edge and holds it.
+
+**Gallery.** `/theme-gallery/{dark,light}/controls` renders every primitive in every state
+(hermetic, its own `ToastProvider`); `themeGallery.test.ts` pins five fixtures.
+
+**Rulings taken during execution** (all in the plan's SDD ledger; each reversible):
+`Select` ships the native half only — the desktop `Menu` popover with type-ahead goes with
+the Control Room remake (§12.5); one `Switch`, one off-state, the higher-contrast anchor
+(`mono-300` light / `mono-600` dark) for both sites, and `brand.css`'s white/black census
+now counts six literals; `Checkbox` takes `align` because a same-property utility passed
+through `className` cannot beat one the primitive sets; the rule editor's nine selects use
+`size="sm"` and the two narrowest widened; `NumberRoll`'s host is positioned so the exiting
+value is clipped; `useActiveIntoView` scrolls on activation only, never on mount.
+
+**Bundle — the cap, decided.** Measured cold, same environment,
+identical script (`docs/MOTION.md` §Bundle): `e9d90327` (M0b-1 Task 1, mid-branch) `/`
+85.5 kB · `/admin` 310.3 kB; `2d635d38` (the M0b-1 merge) 110.3 · 335.3; M0b-2 tip
+110.2 · 336.8. So **M0b-1's own shipped cost was +24.8 / +25.0 kB gz** — the ledger's
+87.9/307.1 row had been measured before `Toast`, `Menu`, `Collapse` and the expanded
+`CueDialog` landed — and **M0b-2 adds −0.1 / +1.5 kB**. Against "Before M0a"
+(77.3 / 301.7) the absolute delta is **+32.9 / +35.1 kB gz, over §7's +25 kB line.**
+**Frank accepted the number on 2026-09-09 ("merge, accept"):** +32.9 / +35.1 kB gz is the
+programme's recorded cost and supersedes §7's +25 kB line and ruling R's first clause;
+the 40 kB async line stands. The
+async feature chunk cannot be isolated at the tip (Turbopack fused it with Studio code into
+one async chunk that no first-load path references), so the 40 kB async line has no figure
+at this commit.
+
+**Deferred → later phases:** the desktop `Select` popover (§12.5); the kill-switch confirm
+(decision O → Control Room); `SongSheet`'s hand-rolled header (→ M1); the 12-key transposer
+strip (→ Song page, decision K); `ServicesPanel`'s multi-select month pills (not a
+segmented control; → §12.5); a dev warning when `SegmentedControl` gets neither `label` nor
+`labelledBy`; `DateField`'s `label`/`id` typing to match `Select`'s union.
+
+# Part IX — M1 Shell (2026-09-09)
+
+Branch `claude/motion-m1-shell` (from `main` 5d214bbf), plan
+`docs/superpowers/plans/2026-09-09-motion-m1-shell.md`. Eight tasks, each with a fresh
+implementer and a task review; five fix rounds, every one re-reviewed; one final fix wave
+after the whole-branch review.
+
+**Shipped (§5.0 in full, less what earlier phases had done).** `BottomNav` returns
+(decision B): Inicio · Calendario · Biblioteca · Yo · Más for worship members, Kids ·
+Planear Kids · Yo · Más for a kids-only member — **superseded the same day by F2**: «Yo»
+left both bars (its one home is the avatar menu), leaving Inicio · Calendario · Biblioteca
+or Kids · Planear Kids, and a bar with fewer than two items does not render; «Más» is a `CueDialog` sheet (Kids,
+Planear Kids, Admin, Tema → `/me#tema`, Cerrar sesión, conditioned by role and ministry)
+— **superseded the same day by task F1** (below): Tema and Cerrar sesión moved to
+`NavMenu`, so «Más» now holds Kids/Planear Kids/Admin only and does not render at all
+when none apply. The bar publishes its MEASURED height as `--bottom-nav-h` (px) plus `has-bottom-nav` on
+`<html>` while on screen, the route main pads under it, toasts clear
+`max(inset, bar)`, the audio transport sits flush on the bar, the song FAB offsets by the
+variable — `bottomNavOffsetSync.test.ts` pins the halves. Desktop: `NavLinks` (Calendario
+· Biblioteca · Kids · Planear Kids · Admin — «Yo» gone with F2) take the navbar's centre at lg+ with one
+`SlidingIndicator` underline; the page title stays in the bar below lg. The avatar ring
+transitions on `--motion-fast`; the notification badge pops in through `Presence`. The
+impersonation banner drops in (`Presence drop`, new) and publishes `--impersonation-h`
+after landing (`Presence.onEntered`, new) — but only when impersonation starts in the
+session: a page loaded already impersonating renders at rest and measures at once, decided
+from the first resolved session status. The audio transport springs in on `SPRINGS.sheet`
+(the `sheet` variant now enters on the spring) and its progress fill animates `scaleX`
+inside a clipping wrapper. `SongSheet` passes a real `title`, so the dialog's head is the
+grip and the hand-rolled header with its "Canción" eyebrow is gone (§20 stacked headers);
+`SetlistPopover` renders `open={x}` (`cueDialogMount` 10).
+
+**Rulings.** Biblioteca links to `/tag` until R1 creates `/biblioteca`; Tema is a link,
+not a second write path; the kids-only «Tags» row was removed (isolation invariant over
+the plan); «Más» is a `CueDialog` (the `dialogSemantics` exemption went; its floor is 1);
+`transition-[height]` needed no task (already guarded). **Deviations from §5.0,
+accepted:** the badge pops on the eased `scale` enter rather than the `pop` spring (quieter
+at 14 px); the tab indicator is a dot above the icon rather than a pill behind it (the
+pill read as a button at phone scale).
+
+**Follow-up F1 (same day): one home per destination.** Frank's look at the shipped shell:
+the avatar menu (`NavMenu`) still repeated every destination the tab bar and desktop nav
+links already carried. Ruling: the top bar keeps the page title, the notification badge and
+the impersonation offset anchor; `NavMenu` becomes an ACCOUNT menu at every width — Mi
+perfil, Tema, a separator, Cerrar sesión — and drops Calendario/#Tags/Oasis
+Kids/Planear Kids/Admin along with their ministry/role computations. `BottomNav`'s «Más»
+sheet drops the user block, the Tema row and the Cerrar sesión row; its rows are now
+computed first (Kids, Planear Kids, Admin), and when none applies the «Más» button itself
+does not render — the bar shows four tabs and the sheet never opens. F2 (22:28): «Yo» left
+both bars — `/me` has one home, the avatar menu; a bar with fewer than two items does not
+render (kids-only volunteers).
+Review of F1 found `/kids/admin` had lost its only lg+ home, so `NavLinks` gained «Planear
+Kids» for kids managers (one link current at a time; the sign-out landing is `/auth/signin`
+at all three sites). Two smaller items from the same look: the tab bar's active dot sat
+off-centre because motion's layout `transform` overwrote the Tailwind translate on the
+same element (`SlidingIndicator` now centres the dot with auto margins), and the schedule's
+«‹ Anterior» / «Siguiente ›» row overflowed a 390 px phone — the words show from `sm:` up,
+the chevrons carry the buttons below that, and both are the house `Button`.
+
+**Bundle — over the accepted figure; Frank's call.** Cold, same method: M1 tip
+`/` 117.5 kB · `/admin` 342.5 kB (shared 169.2, chunk not isolable). Δ vs the M0b-2 tip
+**+7.3 / +5.7 kB gz** — `BottomNav` (with its sheet) and `NavLinks` now mount on every
+`(client)` route. Absolute vs "Before M0a": **+40.2 / +40.8 kB gz**, past the +32.9 /
++35.1 accepted on 2026-09-09. Options: accept M1's cost as the shell's price, or a
+follow-up that lazy-loads the «Más» sheet's body (the only part of the bar that is not
+five links).
+
+**Deferred → later phases:** `/biblioteca` and the `/tag*` redirects (R1); long-press
+quick actions and pull-to-refresh (R7); `NavLinks` follows the page's `schedule`/`tags`
+flags, so the row changes shape on `/kids` (Control Room / R5 to unify); the desktop row
+has no wrap for a sixth link.

@@ -134,6 +134,8 @@ import {
   describePreflightReason,
 } from "./serviceCardModel";
 import CueDialog from "../ui/CueDialog";
+import Checkbox from "@/app/components/ui/Checkbox";
+import DateField from "@/app/components/ui/DateField";
 // T4 of the drag-and-drop plan. `moveOccupant` imports `withUpdatedCell` back
 // out of this file, so these two modules are a cycle — a deliberate one: T2's
 // whole point is that the move composes THIS file's single write helper twice
@@ -1663,7 +1665,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const stickyLabel = "sticky left-0 z-10 bg-surface-base";
 
   const gridBlock = (
-    <div className={fullScreen ? undefined : "overflow-x-auto"}>
+    <div data-planner-scroller="" className={fullScreen ? undefined : "overflow-x-auto"}>
       <div
         className="grid"
         style={{ gridTemplateColumns: `${labelTrack} repeat(${columns.length}, ${dateTrack})` }}
@@ -2340,17 +2342,16 @@ function ColumnHeader({
       {stored && (
         <div className="space-y-1.5 pt-1">
           {readOnly && <p className="font-body text-[10px] text-warning-strong">Solo lectura: revisa la integridad del servicio.</p>}
-          <label className="block font-label text-[9px] uppercase tracking-widest text-mono-500">
-            Fecha
-            <input
-              type="date"
-              value={column.date}
-              disabled={readOnly || mutationLocked || !!storedDateBlockedReason}
-              title={storedDateBlockedReason ?? undefined}
-              onChange={(event) => onStoredHeaderChange?.(column.columnId, { date: event.target.value })}
-              className="mt-1 w-full rounded border border-accent/15 bg-transparent px-1.5 py-1 font-body text-[11px] text-ink-muted"
-            />
-          </label>
+          <DateField
+            kind="date"
+            size="sm"
+            id={`col-date-${column.columnId}`}
+            label="Fecha"
+            value={column.date}
+            disabled={readOnly || mutationLocked || !!storedDateBlockedReason}
+            title={storedDateBlockedReason ?? undefined}
+            onChange={(event) => onStoredHeaderChange?.(column.columnId, { date: event.target.value })}
+          />
           {column.type === "special_role" && (
             <label className="block font-label text-[9px] uppercase tracking-widest text-mono-500">
               Nombre
@@ -2368,16 +2369,15 @@ function ColumnHeader({
           shows it as skipped and refuses the toggle instead of offering an
           un-skip that changes nothing. */}
       {!stored && (
-        <label className="flex items-center gap-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
-          <input
-            type="checkbox"
-            checked={skipped || blockCopy !== null}
-            disabled={blockCopy !== null}
-            onChange={onToggleSkip}
-            aria-label={`Omitir ${column.date}`}
-          />
+        <Checkbox
+          className="font-label text-[10px] uppercase tracking-widest text-mono-500"
+          checked={skipped || blockCopy !== null}
+          disabled={blockCopy !== null}
+          onChange={onToggleSkip}
+          aria-label={`Omitir ${column.date}`}
+        >
           Omitir
-        </label>
+        </Checkbox>
       )}
       {!stored && blockCopy && (
         <p className={`font-body text-[10px] text-warning-strong ${CARD_STYLE.longText}`}>{blockCopy}</p>

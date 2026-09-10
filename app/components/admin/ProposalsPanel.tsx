@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useToast } from "@/app/components/ui/Toast";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
 
 import {
@@ -408,7 +409,7 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [toast, setToastValue] = useTransientValue<{ msg: string; ok: boolean } | null>(null, 3000);
+  const { toast } = useToast();
   const [filter, setFilter] = useState<ProposalFilter>("pending");
   const [highlightIds, setHighlightIds] = useState<string[]>([]);
   const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
@@ -421,7 +422,7 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
   const cardRefs = useRef(new Map<string, HTMLDivElement | null>());
   const scrollTargetRef = useRef<string | null>(null);
 
-  const showToast = (msg: string, ok = true) => setToastValue({ msg, ok });
+  const showToast = (msg: string, ok = true) => toast({ message: msg, tone: ok ? "ok" : "error" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -654,35 +655,26 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
 
   return (
     <div className="space-y-6">
-      {/* Filter tabs */}
-      <div className="flex flex-wrap gap-1 p-1 rounded-xl border border-edge-accent-subtle w-fit">
-        {FILTER_TABS.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => {
-              // A manual filter change is the user taking over: drop the handoff
-              // highlight/notice so nothing stale stays on screen.
-              setFilter(id);
-              setHighlightIds([]);
-              setConflictKey(null);
-              setHandoffNotice(null);
-              scrollTargetRef.current = null;
-            }}
-            className={`relative font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors ${
-              filter === id
-                ? "bg-surface-accent-solid text-on-fill"
-                : "text-mono-500 hover:text-accent"
-            }`}
-          >
-            {label}
-            {id === "pending" && pendingCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-recency-fg text-scrim font-bold text-[10px] flex items-center justify-center">
-                {pendingCount}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <SegmentedControl
+        label="Filtrar propuestas"
+        tone="filled"
+        className="w-fit"
+        value={filter}
+        onChange={(id) => {
+          // A manual filter change is the user taking over: drop the handoff
+          // highlight/notice so nothing stale stays on screen.
+          setFilter(id);
+          setHighlightIds([]);
+          setConflictKey(null);
+          setHandoffNotice(null);
+          scrollTargetRef.current = null;
+        }}
+        options={FILTER_TABS.map(({ id, label }) => ({
+          value: id,
+          label,
+          badge: id === "pending" ? pendingCount : undefined,
+        }))}
+      />
 
       {/* Handoff notice: a changed / missing / unloadable target, never silent. */}
       {handoffNotice && (
@@ -786,17 +778,6 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
                 and moving 9 is the same broken-button feeling in reverse. */}
             {`Ver ${(stepsToShowMore - windowSteps) * WIDEN_STEP_MONTHS} meses más`}
           </button>
-        </div>
-      )}
-
-      {/* Toast */}
-      {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
-          toast.ok
-            ? "bg-surface-raised-alt border-accent/30"
-            : "bg-negative-surface-deep/80 border-negative-strong/30"
-        }`}>
-          {toast.msg}
         </div>
       )}
     </div>

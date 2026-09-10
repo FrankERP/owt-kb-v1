@@ -117,7 +117,12 @@ describe("brand.css — (a) every colour var() referenced is declared", () => {
     // exactly the event this assertion existed to survive — so it now names what they
     // became. It goes red if either site stops referencing a property, or if the scan
     // narrows back to the token files.
-    const admin = read("app/components/admin/AdminPanel.tsx");
+    //
+    // The admin site moved on 2026-09-09 (M0b-2 Task 5): the active tab's pill
+    // shadow used to live inline on AdminPanel's button and now lives in the
+    // shared `SlidingIndicator` primitive it renders, so the `--accent-rgb`
+    // reference moved with it.
+    const admin = read("app/components/ui/SlidingIndicator.tsx");
     const adminPage = read("app/(client)/admin/page.tsx");
     expect(referencedProperties(admin)).toContain("--accent-rgb");
     expect(referencedProperties(adminPage)).toContain("--positive-fg-rgb");

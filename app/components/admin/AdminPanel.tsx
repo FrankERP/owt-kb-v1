@@ -21,8 +21,13 @@ import {
 import { visibleAdminTabs } from "./adminTabs";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import Checkbox from "@/app/components/ui/Checkbox";
+import Select from "@/app/components/ui/Select";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useToast } from "../ui/Toast";
+import SegmentedControl from "../ui/SegmentedControl";
+import SlidingIndicator, { useActiveIntoView } from "../ui/SlidingIndicator";
+import { haptic } from "@/app/utils/haptics";
 import {
   ALL_MINISTRY_IDS,
   MANAGEABLE_MINISTRY_IDS,
@@ -148,22 +153,24 @@ export function MinistryScopeBar({
 }) {
   if (!visible) return null;
   return (
-    <div className="brand-search-console flex shrink-0 self-start overflow-hidden">
-      {MINISTRY_SCOPES.map((s) => (
-        <button
-          key={s}
-          type="button"
-          aria-pressed={value === s}
-          onClick={() => onChange(s)}
-          className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-            value === s ? "bg-accent/15 text-accent" : "text-ink-dim hover:text-accent"
-          }`}
-        >
-          {MINISTRY_SCOPE_LABEL(s)}
-          <span className="ml-1.5 opacity-60">{s === "all" ? total : counts[s]}</span>
-        </button>
-      ))}
-    </div>
+    <SegmentedControl
+      label="Ministerio"
+      tone="filled"
+      // brand-search-console deliberately wins over the primitive's filled chrome
+      // so the control matches the search input beside it.
+      className="brand-search-console self-start"
+      value={value}
+      onChange={onChange}
+      options={MINISTRY_SCOPES.map((s) => ({
+        value: s,
+        label: (
+          <>
+            {MINISTRY_SCOPE_LABEL(s)}
+            <span className="ml-1.5 opacity-60">{s === "all" ? total : counts[s]}</span>
+          </>
+        ),
+      }))}
+    />
   );
 }
 
@@ -198,9 +205,6 @@ const ROLE_LABEL: Record<OWTRole, string> = {
 // ─── Shared input style ────────────────────────────────────────────────────────
 const inputCls =
   "brand-search-console w-full px-3 py-2.5 bg-transparent font-body text-sm focus:outline-none transition-colors";
-
-const selectCls =
-  "brand-search-console w-full px-3 py-2.5 bg-surface-base font-body text-sm focus:outline-none transition-colors";
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 function Avatar({
@@ -423,12 +427,11 @@ export function MemberForm({
         <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="correo@ejemplo.com" />
       </div>
       <div className="space-y-1">
-        <label className="font-label text-xs uppercase tracking-widest text-mono-500">Rol</label>
-        <select className={selectCls} value={role} onChange={(e) => setRole(e.target.value as OWTRole)}>
+        <Select id="member-role" label="Rol" value={role} onChange={(e) => setRole(e.target.value as OWTRole)}>
           {ROLES.map((r) => (
             <option key={r.value} value={r.value}>{r.label}</option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="space-y-2">
         <label className="font-label text-xs uppercase tracking-widest text-mono-500">Tipo</label>
@@ -614,6 +617,24 @@ function PasswordForm({
 // one reducer owns both and a manual tab change cannot leave a stale target.
 type Tab = AdminTabId;
 
+function TabItem({ id, label, active, onChange }: { id: Tab; label: string; active: boolean; onChange: (t: Tab) => void }) {
+  const ref = useActiveIntoView(active);
+  return (
+    <button
+      ref={ref}
+      type="button"
+      aria-current={active ? "page" : undefined}
+      onClick={() => { void haptic("selection"); onChange(id); }}
+      className={`relative font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
+        active ? "text-accent" : "text-ink-dim hover:bg-accent/[0.04] hover:text-ink"
+      }`}
+    >
+      {active && <SlidingIndicator id="admin-tabs" />}
+      <span className="relative">{label}</span>
+    </button>
+  );
+}
+
 function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) => void; role: OWTRole }) {
   const visible = visibleAdminTabs(role);
   return (
@@ -621,19 +642,7 @@ function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) =>
       <div className="overflow-x-auto -mx-2 px-2 pb-1">
         <div className="brand-admin-tabs flex min-w-full w-max gap-1 rounded-xl p-1.5">
           {visible.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              aria-current={active === id ? "page" : undefined}
-              onClick={() => onChange(id)}
-              className={`font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
-                active === id
-                  ? "bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgb(var(--accent-rgb)/0.15)]"
-                  : "text-ink-dim hover:bg-accent/[0.04] hover:text-ink"
-              }`}
-            >
-              {label}
-            </button>
+            <TabItem key={id} id={id} label={label} active={active === id} onChange={onChange} />
           ))}
         </div>
       </div>
@@ -777,7 +786,8 @@ export default function AdminPanel({
   const [modal, setModal]       = useState<ModalState>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [toast, showToast]      = useTransientValue<string | null>(null, 3000);
+  const { toast } = useToast();
+  const showToast = useCallback((msg: string) => toast({ message: msg }), [toast]);
   const [query, setQuery]           = useState("");
   const [filterKey, setFilterKey]   = useState<FilterKey>("type");
   const [filterValue, setFilterValue] = useState("");
@@ -1112,28 +1122,26 @@ export default function AdminPanel({
 
         {/* Row 1: filter key + filter value + sort direction */}
         <div className="flex gap-2 flex-wrap">
-          {/* Filter by: type | role */}
-          <div className="brand-search-console flex shrink-0 overflow-hidden">
-            {(["type", "role"] as FilterKey[]).map((k) => (
-              <button
-                key={k}
-                onClick={() => { setFilterKey(k); setFilterValue(""); }}
-                className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-                  filterKey === k
-                    ? "bg-accent/15 text-accent"
-                    : "text-ink-dim hover:text-accent"
-                }`}
-              >
-                {k === "type" ? "Tipo" : "Rol"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="Filtrar por"
+            tone="filled"
+            // brand-search-console deliberately wins over the primitive's filled chrome
+            // so the control matches the search input beside it.
+            className="brand-search-console shrink-0"
+            value={filterKey}
+            onChange={(k) => { setFilterKey(k); setFilterValue(""); }}
+            options={[
+              { value: "type", label: "Tipo" },
+              { value: "role", label: "Rol" },
+            ]}
+          />
 
           {/* Filter value dropdown */}
-          <select
+          <Select
+            aria-label={filterKey === "type" ? "Tipo" : "Rol"}
+            className="min-w-[120px] flex-1"
             value={filterValue}
             onChange={(e) => setFilterValue(e.target.value)}
-            className="brand-search-console min-w-[120px] flex-1 bg-surface-base px-3 py-2 font-body text-sm text-ink/80 focus:outline-none"
           >
             <option value="">{filterKey === "type" ? "Todos los tipos" : "Todos los roles"}</option>
             {filterKey === "type"
@@ -1147,24 +1155,21 @@ export default function AdminPanel({
                 ].map((o) => <option key={o.value} value={o.value}>{o.label}</option>)
               : ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)
             }
-          </select>
+          </Select>
 
-          {/* Sort direction */}
-          <div className="brand-search-console flex shrink-0 overflow-hidden">
-            {(["asc", "desc"] as SortDir[]).map((d) => (
-              <button
-                key={d}
-                onClick={() => setSortDir(d)}
-                className={`px-3 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-                  sortDir === d
-                    ? "bg-accent/15 text-accent"
-                    : "text-ink-dim hover:text-accent"
-                }`}
-              >
-                {d === "asc" ? "A→Z" : "Z→A"}
-              </button>
-            ))}
-          </div>
+          <SegmentedControl
+            label="Orden"
+            tone="filled"
+            // brand-search-console deliberately wins over the primitive's filled chrome
+            // so the control matches the search input beside it.
+            className="brand-search-console shrink-0"
+            value={sortDir}
+            onChange={setSortDir}
+            options={[
+              { value: "asc", label: "A→Z" },
+              { value: "desc", label: "Z→A" },
+            ]}
+          />
         </div>
 
         {/* Row 2: search */}
@@ -1267,18 +1272,16 @@ export default function AdminPanel({
                       <span className="font-label text-[10px] uppercase tracking-widest text-mono-600">
                         Acceso a la app
                       </span>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          className="accent-negative-fg"
-                          checked={m.disabled === true}
-                          disabled={submitting}
-                          onChange={(e) => handleDisableAccess(m._id, e.target.checked)}
-                        />
+                      <Checkbox
+                        tone="negative"
+                        checked={m.disabled === true}
+                        disabled={submitting}
+                        onChange={(e) => handleDisableAccess(m._id, e.target.checked)}
+                      >
                         <span className="font-body text-xs text-mono-400">
                           Deshabilitar acceso (kill switch)
                         </span>
-                      </label>
+                      </Checkbox>
                     </div>
                   </div>
                 )}
@@ -1333,13 +1336,6 @@ export default function AdminPanel({
         className="sr-only"
         onChange={handlePhotoChange}
       />
-
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-xl bg-surface-raised-alt border border-accent/30 font-label text-xs uppercase tracking-widest shadow-xl">
-          {toast}
-        </div>
-      )}
 
       {/* ── Modals ── */}
       {modal?.type === "add" && (

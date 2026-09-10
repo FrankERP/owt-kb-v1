@@ -26,6 +26,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 import ProposalEditor, { proposalSnapshot } from "../ProposalEditor";
+import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
+import { ToastProvider } from "@/app/components/ui/Toast";
 
 afterEach(() => {
   cleanup();
@@ -70,6 +72,18 @@ function mockApi(proposalBody: unknown, status = 200) {
 const unsaved = () => screen.queryByText(/cambios sin guardar/i);
 const volver = () => screen.getByRole("button", { name: /volver/i });
 
+// `ProposalEditor` always renders its submit-confirmation `CueDialog` now
+// (open or not), so every mount needs the provider it portals into.
+function renderEditor(props: Parameters<typeof ProposalEditor>[0]) {
+  return render(
+    <ToastProvider>
+      <CueDialogProvider>
+        <ProposalEditor {...props} />
+      </CueDialogProvider>
+    </ToastProvider>,
+  );
+}
+
 // ─── The fingerprint ──────────────────────────────────────────────────────────
 
 describe("proposalSnapshot", () => {
@@ -108,7 +122,7 @@ describe("proposalSnapshot", () => {
 describe("proposal editor — leaving with unsaved work", () => {
   it("starts clean, and leaving does not interrogate the member", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<ProposalEditor roleDoc={roleDoc} proposal={proposal} currentUserId="member-1" />);
+    renderEditor({ roleDoc, proposal, currentUserId: "member-1" });
 
     expect(unsaved()).toBeNull();
     fireEvent.click(volver());
@@ -118,7 +132,7 @@ describe("proposal editor — leaving with unsaved work", () => {
 
   it("flags an edited team message and blocks the exit the member declines", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<ProposalEditor roleDoc={roleDoc} proposal={proposal} currentUserId="member-1" />);
+    renderEditor({ roleDoc, proposal, currentUserId: "member-1" });
 
     fireEvent.change(screen.getByLabelText(/mensaje para el equipo/i), {
       target: { value: "Salmo 100" },
@@ -132,7 +146,7 @@ describe("proposal editor — leaving with unsaved work", () => {
 
   it("lets the member leave anyway once they confirm", () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<ProposalEditor roleDoc={roleDoc} proposal={proposal} currentUserId="member-1" />);
+    renderEditor({ roleDoc, proposal, currentUserId: "member-1" });
 
     fireEvent.change(screen.getByLabelText(/mensaje para el equipo/i), {
       target: { value: "Salmo 100" },
@@ -144,7 +158,7 @@ describe("proposal editor — leaving with unsaved work", () => {
   it("re-seeds clean after a save, so it does not nag about work already stored", async () => {
     mockApi({ _id: "proposal-1", status: "draft", _rev: "rev-2" });
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<ProposalEditor roleDoc={roleDoc} proposal={proposal} currentUserId="member-1" />);
+    renderEditor({ roleDoc, proposal, currentUserId: "member-1" });
 
     fireEvent.change(screen.getByLabelText(/mensaje para el equipo/i), {
       target: { value: "Salmo 100" },
@@ -161,7 +175,7 @@ describe("proposal editor — leaving with unsaved work", () => {
   it("re-seeds clean after a FIRST save, which mints the id that drops lead notes", async () => {
     mockApi({ _id: "proposal-new", status: "draft", _rev: "rev-1" });
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<ProposalEditor roleDoc={roleDoc} proposal={null} currentUserId="member-1" />);
+    renderEditor({ roleDoc, proposal: null, currentUserId: "member-1" });
 
     fireEvent.change(screen.getByLabelText(/notas privadas/i), {
       target: { value: "Pedimos ensayo extra" },
@@ -178,7 +192,7 @@ describe("proposal editor — leaving with unsaved work", () => {
   it("keeps warning when the save was refused — the work is still only on screen", async () => {
     mockApi({}, 409);
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
-    render(<ProposalEditor roleDoc={roleDoc} proposal={proposal} currentUserId="member-1" />);
+    renderEditor({ roleDoc, proposal, currentUserId: "member-1" });
 
     fireEvent.change(screen.getByLabelText(/mensaje para el equipo/i), {
       target: { value: "Salmo 100" },

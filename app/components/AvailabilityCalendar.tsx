@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
+import Collapse from "@/app/components/ui/Collapse";
+import Select from "@/app/components/ui/Select";
 
 interface Props {
   /** The revision this page was rendered at — the save's `ifRevisionId` guard. */
@@ -328,65 +330,60 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h3 className="font-display text-lg uppercase tracking-wide">Disponibilidad</h3>
-          <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
-            Marca los días en que no puedes asistir
-          </p>
+      {/* Header + the recurring panel it opens. They share a wrapper so the
+          panel is not a child of `space-y-4`: a closed Collapse is a zero-height
+          child, but the 16px gap around it would still be reserved. */}
+      <div>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="font-display text-lg uppercase tracking-wide">Disponibilidad</h3>
+            <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
+              Marca los días en que no puedes asistir
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setRecurOpen(v => !v)}
+              aria-expanded={recurOpen}
+              aria-controls="availability-recur"
+              className={`px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
+                recurOpen
+                  ? "border-accent text-accent"
+                  : "border-surface-accent-30 text-mono-500 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent"
+              }`}
+            >
+              Repetir…
+            </button>
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving || !dirty}
+              className={`px-4 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
+                dirty
+                  ? "bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 ring-1 ring-warning-strong/50"
+                  : "bg-surface-accent-solid text-on-fill"
+              }`}
+            >
+              {saving ? "Guardando..." : saved ? "Guardado ✓" : dirty ? "Guardar •" : "Guardar"}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setRecurOpen(v => !v)}
-            aria-expanded={recurOpen}
-            className={`px-3 py-2 rounded-lg border font-label text-xs uppercase tracking-widest transition-colors ${
-              recurOpen
-                ? "border-accent text-accent"
-                : "border-surface-accent-30 text-mono-500 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent"
-            }`}
-          >
-            Repetir…
-          </button>
-          <button
-            type="button"
-            onClick={save}
-            disabled={saving || !dirty}
-            className={`px-4 py-2 rounded-lg font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50 ${
-              dirty
-                ? "bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 ring-1 ring-warning-strong/50"
-                : "bg-surface-accent-solid text-on-fill"
-            }`}
-          >
-            {saving ? "Guardando..." : saved ? "Guardado ✓" : dirty ? "Guardar •" : "Guardar"}
-          </button>
-        </div>
-      </div>
 
-      {/* Recurring pattern */}
-      {recurOpen && (
-        <div className="rounded-xl border border-accent/20 bg-accent/[0.04] p-4 space-y-3">
+        {/* Recurring pattern */}
+        <Collapse open={recurOpen} id="availability-recur" className="mt-4 rounded-xl border border-accent/20 bg-accent/[0.04] p-4 space-y-3">
           <p className="font-label text-[11px] uppercase tracking-widest text-accent/70">
             Marcar un día recurrente como no disponible
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={recurDow}
-              onChange={e => setRecurDow(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
-            >
+            <Select aria-label="Día de la semana" value={recurDow} onChange={e => setRecurDow(Number(e.target.value))}>
               {WEEKDAYS.map((w, i) => <option key={i} value={i} className="bg-surface-base">{w}</option>)}
-            </select>
-            <select
-              value={recurInterval}
-              onChange={e => setRecurInterval(Number(e.target.value))}
-              className="rounded-lg border border-surface-accent-l40-d20 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 focus:outline-none focus:border-accent/50 dark:focus:border-surface-accent-l40-d20"
-            >
+            </Select>
+            <Select aria-label="Cada cuántas semanas" value={recurInterval} onChange={e => setRecurInterval(Number(e.target.value))}>
               <option value={1} className="bg-surface-base">Cada semana</option>
               <option value={2} className="bg-surface-base">Cada 2 semanas</option>
               <option value={4} className="bg-surface-base">Cada 4 semanas</option>
-            </select>
+            </Select>
             <button
               type="button"
               onClick={() => applyRecurring(true)}
@@ -405,8 +402,8 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
           <p className="font-body text-xs text-mono-500">
             <span className="text-mono-400">Marcar</span> agrega o <span className="text-mono-400">Quitar serie</span> borra ese día durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-mono-400">Guardar</span>.
           </p>
-        </div>
-      )}
+        </Collapse>
+      </div>
 
       {upcomingCount > 0 && (
         <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong">

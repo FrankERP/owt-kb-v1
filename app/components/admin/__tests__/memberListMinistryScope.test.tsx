@@ -27,6 +27,7 @@ vi.mock("../ProposalsPanel", () => ({ default: () => null }));
 vi.mock("../IntegrityQueuePanel", () => ({ default: () => null }));
 
 import AdminPanel from "../AdminPanel";
+import { ToastProvider } from "../../ui/Toast";
 
 const LEGACY  = { _id: "1", member_name: "Ana Legacy",  email: "ana@x.mx",  role: "member", memberType: ["voz"], hasPassword: true };
 const WORSHIP = { _id: "2", member_name: "Beto Worship", email: "beto@x.mx", role: "member", memberType: ["voz"], hasPassword: true, ministries: ["worship"] };
@@ -35,7 +36,7 @@ const BOTH    = { _id: "4", member_name: "Dani Ambos",  email: "dani@x.mx", role
 
 async function mount(members: unknown[]) {
   vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => members })));
-  const view = render(<AdminPanel role="super-admin" />);
+  const view = render(<ToastProvider><AdminPanel role="super-admin" /></ToastProvider>);
   // The count line renders only once the fetch has settled — waiting on the
   // heading would pass while the list is still empty.
   await waitFor(() => expect(screen.queryByText(/miembros?$/)).not.toBeNull());
@@ -47,7 +48,7 @@ function shownNames(members: { member_name: string }[]) {
   return members.filter((m) => screen.queryByText(m.member_name) !== null).map((m) => m.member_name);
 }
 
-const scopeButton = (label: string) => screen.getByRole("button", { name: new RegExp(`^${label}`) });
+const scopeButton = (label: string) => screen.getByRole("radio", { name: new RegExp(`^${label}`) });
 
 beforeEach(() => vi.unstubAllGlobals());
 afterEach(cleanup);
@@ -56,7 +57,7 @@ describe("Miembros — ministry scope", () => {
   it("defaults to Alabanza and hides a kids-only member", async () => {
     await mount([LEGACY, WORSHIP, KIDS, BOTH]);
     expect(shownNames([LEGACY, WORSHIP, KIDS, BOTH])).toEqual(["Ana Legacy", "Beto Worship", "Dani Ambos"]);
-    expect(scopeButton("Alabanza").getAttribute("aria-pressed")).toBe("true");
+    expect(scopeButton("Alabanza").getAttribute("aria-checked")).toBe("true");
   });
 
   it("KEEPS a legacy member with NO stored ministries in the default view", async () => {

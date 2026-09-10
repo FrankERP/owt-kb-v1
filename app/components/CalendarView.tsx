@@ -7,6 +7,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { MONTH_NAMES_ES, addMonths, monthRangeLabel, scheduleHref, windowMonths, WINDOW_MONTHS } from "../utils/scheduleMonths";
 import CueDialog from "./ui/CueDialog";
+import DateField from "./ui/DateField";
+import SegmentedControl from "./ui/SegmentedControl";
+import Button from "./ui/Button";
 import { themeColour } from "@/app/utils/themeColour";
 
 export type ActiveDay = {
@@ -116,39 +119,48 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
 
   return (
     <>
-      {/* Month navigation */}
-      <div className="flex items-center justify-center gap-4 mb-4">
-        <Link
+      {/* Month navigation. On a phone the range label ("Septiembre – Noviembre
+          2026") plus two worded buttons overflowed a 390px row, so the words
+          show from sm: up and the chevrons carry the buttons below that (the
+          aria-labels name them either way). */}
+      <div className="flex items-center justify-center gap-2 sm:gap-4 mb-4">
+        <Button
           href={scheduleHref(addMonths(anchorMonth, -WINDOW_MONTHS))}
           aria-label="Meses anteriores"
-          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:text-ink-muted hover:border-accent/40 dark:hover:border-surface-accent-30 transition-colors"
+          variant="secondary"
+          className="shrink-0"
         >
-          ‹ Anterior
-        </Link>
-        <div className="text-center min-w-[13rem]">
-          <p className="font-display text-base font-bold uppercase">{monthRangeLabel(anchorMonth, WINDOW_MONTHS)}</p>
+          <span aria-hidden>‹</span>
+          <span className="hidden sm:inline">Anterior</span>
+        </Button>
+        <div className="min-w-0 flex-1 text-center sm:flex-none sm:min-w-[13rem]">
+          <p className="font-display text-sm sm:text-base font-bold uppercase">{monthRangeLabel(anchorMonth, WINDOW_MONTHS)}</p>
           {!viewMonth && (
             <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Próximos</p>
           )}
         </div>
-        <Link
+        <Button
           href={scheduleHref(addMonths(anchorMonth, WINDOW_MONTHS))}
           aria-label="Meses siguientes"
-          className="px-3 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest text-mono-400 hover:text-ink-muted hover:border-accent/40 dark:hover:border-surface-accent-30 transition-colors"
+          variant="secondary"
+          className="shrink-0"
         >
-          Siguiente ›
-        </Link>
+          <span className="hidden sm:inline">Siguiente</span>
+          <span aria-hidden>›</span>
+        </Button>
       </div>
       <div className="flex items-center justify-center gap-3 mb-8">
-        <label className="flex items-center gap-2">
-          <span className="sr-only">Ir al mes</span>
-          <input
-            type="month"
-            value={anchorMonth}
-            onChange={(e) => { if (e.target.value) router.push(scheduleHref(e.target.value)); }}
-            className="bg-transparent border border-surface-accent-30 rounded-lg px-3 py-1.5 font-label text-xs text-ink-muted"
-          />
-        </label>
+        <DateField
+          kind="month"
+          aria-label="Ir al mes"
+          value={anchorMonth}
+          onChange={(e) => { if (e.target.value) router.push(scheduleHref(e.target.value)); }}
+          onStep={(d) => {
+            const [y, mo] = anchorMonth.split("-").map(Number);
+            const next = new Date(y, mo - 1 + d, 1);
+            router.push(scheduleHref(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`));
+          }}
+        />
         {viewMonth && (
           <Link
             href="/schedule"
@@ -161,30 +173,16 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
 
       {/* View toggle */}
       <div className="flex justify-center mb-8">
-        <div className="flex rounded-lg border border-surface-accent-30 overflow-hidden">
-          <button
-            onClick={() => setView("calendar")}
-            aria-pressed={view === "calendar"}
-            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors ${
-              view === "calendar"
-                ? "bg-surface-accent-solid text-on-fill"
-                : "text-mono-500 hover:text-ink-muted"
-            }`}
-          >
-            Calendario
-          </button>
-          <button
-            onClick={() => setView("list")}
-            aria-pressed={view === "list"}
-            className={`px-5 py-2 font-label text-xs uppercase tracking-widest transition-colors border-l border-accent-deep/30 dark:border-accent/20 ${
-              view === "list"
-                ? "bg-surface-accent-solid text-on-fill"
-                : "text-mono-500 hover:text-ink-muted"
-            }`}
-          >
-            Lista
-          </button>
-        </div>
+        <SegmentedControl
+          label="Vista"
+          tone="filled"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "calendar", label: "Calendario" },
+            { value: "list", label: "Lista" },
+          ]}
+        />
       </div>
 
       {/* Legend */}
@@ -320,12 +318,6 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
                 roleId={d.roleId}
               />
             ))}
-            <button
-              onClick={dismiss}
-              className="w-full font-label text-xs uppercase tracking-widest text-mono-500 hover:text-mono-300 transition-colors py-2"
-            >
-              Cerrar
-            </button>
           </div>
         </CueDialog>
       )}

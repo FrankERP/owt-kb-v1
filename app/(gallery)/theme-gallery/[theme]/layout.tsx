@@ -23,6 +23,7 @@
 
 import type { Metadata } from "next";
 import { displayFont, bodyFont, labelFont } from "../../../brandFonts";
+import GalleryMotion from "./GalleryMotion";
 
 // The `(client)` one specifically: it carries the `@layer base` font bindings, while
 // `app/(admin)/globals.css` is three bare `@tailwind` directives. Import the wrong one
@@ -78,7 +79,7 @@ export default async function ThemeGalleryLayout({
         affordance no baseline exercises.
       */}
       <body className="brand-atmosphere font-body min-h-screen bg-surface-base text-ink">
-        {children}
+        <GalleryMotion>{children}</GalleryMotion>
       </body>
     </html>
   );

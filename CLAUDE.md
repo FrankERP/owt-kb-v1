@@ -198,6 +198,14 @@ several exist precisely to stop a plausible-looking change.
   two halves, so they must move together — `impersonationOffsetSync.test.ts` is
   the guard. The height is measured, not a constant, because the banner wraps
   to two lines on a phone.
+- **The phone tab bar publishes its MEASURED height as `--bottom-nav-h` (px) on `<html>`**
+  plus a `has-bottom-nav` class; `brand.css` pads the route main under that class. Fixed-bottom
+  elements must clear either the inset (when the bar is absent) or the bar's own height
+  (which already includes the inset) when it is present. Elements that must also clear the
+  inset when the bar is absent use `max(env(safe-area-inset-bottom), var(--bottom-nav-h, 0px))`
+  (toasts); elements that sit flush on the bar use `var(--bottom-nav-h, 0px)` alone (the audio
+  transport, whose own inset padding is zeroed under `html.has-bottom-nav`; the song FAB).
+  `bottomNavOffsetSync.test.ts` is the guard — a new fixed-bottom element joins its list.
 - **NextAuth's `update()` never rejects and returns `null` on every failure**
   (`fetchData` swallows network, non-2xx and parse errors; `update` returns
   `undefined` while loading). A handler that only inspects the returned
@@ -218,16 +226,33 @@ the guard), `isMemberActive` (30s-TTL auth gate),
 per-type email-preference resolver — nothing reads `notifPrefs` directly),
 `sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette),
 `themeColour` (`app/utils/themeColour.ts`), `useTransientValue` (`[value, show, reset,
-hold]` — every auto-dismissing toast and "Guardado ✓" flash. A bare
-`setTimeout(() => setToast(null))` leaks its timer, so a second toast inherits the
-first one's clock and an error can vanish in 100ms. Use `hold` for a message that must
-PERSIST until something replaces it — `MonthGenerator`'s swap toast, which reports
-writes that landed in Sanity but could not be verified. Never hand-roll the timer),
-`Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never an inline
-class string), `Presence` (every animated conditional), `Skeleton`/`SkeletonGroup` (every
-loading placeholder), `revealProps` (route reveal). Motion tokens are `--motion-*` /
-`--ease-*`; `motion` is importable only under `app/components/ui/**` — see `docs/MOTION.md`
-and ADR-0031.
+hold]` — an inline, in-place flash next to the control that produced it, e.g.
+"Guardado ✓" beside a save button. A bare `setTimeout(() => setToast(null))` leaks its
+timer, so a second flash inherits the first one's clock and an error can vanish in
+100ms. Use `hold` for a message that must PERSIST until something replaces it —
+`MonthGenerator`'s swap toast, which reports writes that landed in Sanity but could
+not be verified. Never hand-roll the timer. For a FIXED, stacked notification use
+`useToast` instead — the two are not interchangeable), `useToast`
+(`app/components/ui/Toast.tsx` — the ONLY fixed toast stack; `toast({ message, tone?,
+duration?, hold?, action? })`, portalled, `z-[95]` above `CueDialog`), `Menu`
+(`app/components/ui/Menu.tsx` — every anchored dropdown; real `role="menu"` semantics,
+roving focus, merges the trigger's own ref), `Collapse` (`app/components/ui/Collapse.tsx`
+— every disclosure; the one place height animates, on user-triggered opens only),
+`SegmentedControl` (`app/components/ui/SegmentedControl.tsx` — every one-of-N choice;
+never `aria-pressed` toggles), `SlidingIndicator` (tab bars), `Switch`, `Checkbox`,
+`Select`, `DateField` (native controls under house chrome — never a bare
+`<select>`/`<input type="checkbox|date|month">` in `app/**`), `NumberRoll`,
+`haptic()` (`app/utils/haptics.ts` — native only, fire-and-forget),
+`CueDialog` (`app/components/ui/CueDialog.tsx` — every dialog, never a hand-rolled
+`fixed inset-0` shell; render `<CueDialog open={x}>`, never a literal `open` behind a
+conditional — directly or inside a wrapper component (a local `Modal`, a
+`SetlistPopover`, a `SeatPicker`) whose only JSX output is `<CueDialog open …>` — a
+dialog element with a literal `open` gets no enter/exit either way;
+`cueDialogMount.test.ts` is the guard), `Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never
+an inline class string), `Presence` (every animated conditional), `Skeleton`/
+`SkeletonGroup` (every loading placeholder), `revealProps` (route reveal). Motion
+tokens are `--motion-*` / `--ease-*`; `motion` is importable only under
+`app/components/ui/**` — see `docs/MOTION.md` and ADR-0031.
 
 ## Colour tokens
 Colour lives in **67 base roles + 29 composed tokens** (`app/brand.css` `:root`,

@@ -179,15 +179,17 @@ state a save actually persists against the last saved one.
     write landed but could not be verified, or a recovery control rendered inside the message.
   - NOTE: all three callbacks are `useCallback`s, not `useState` setters — ESLint cannot assume
     they are stable, so name them in an effect's dependency array.
-- **`focusTrap.ts`** (`trapTabTarget` pure tab math) + **`useFocusTrap.ts`** (WAI-ARIA dialog
-  focus hook). **Any overlay with a dismissable scrim must use it** — a clickable full-bleed
-  `bg-scrim` means content is stacked over a still-interactive page, so the overlay also needs
-  `role="dialog"`, `aria-modal`, a name, and Escape. `dialogSemantics.test.ts` enumerates every
-  overlay drawn with a clickable `bg-scrim` and fails on one that skips this (per file,
-  and keyed to that token — see its header for what it cannot see); `NOT_A_DIALOG` there holds the justified
-  exemptions (today: `BottomNav`'s sheet, which uses `inert` instead). `CueDialog` uses the
-  `trapTabTarget` primitive directly rather than the hook, because it also traps portalled
-  satellite nodes.
+- **`focusTrap.ts`** (`trapTabTarget` pure tab math) + **`useFocusTrap.ts`** (retired
+  2026-09-09 — no production consumer since M0b-1; kept because `app/utils/__tests__/
+  dialogSemantics.test.ts` accepts `useFocusTrap` or `trapTabTarget` as proof of focus
+  management). **Any overlay with a dismissable scrim must be focus-managed** — use
+  `CueDialog`; a bespoke overlay may call `trapTabTarget` directly. A clickable full-bleed
+  `bg-scrim` means content is stacked over a still-interactive page, so the overlay also
+  needs `role="dialog"`, `aria-modal`, a name, and Escape. `dialogSemantics.test.ts`
+  enumerates every overlay drawn with a clickable `bg-scrim` and fails on one that skips
+  this (per file, and keyed to that token — see its header for what it cannot see);
+  `NOT_A_DIALOG` there holds the justified exemptions (today: `BottomNav`'s sheet, which
+  uses `inert` instead).
 
 ### Colour inventory & token guards (light-mode migration, Child A1)
 - **`scripts/colour-inventory.mjs`** — emits every colour decision in `app/**` (plus
@@ -311,8 +313,9 @@ Legend: **[C]** client, **[S]** server.
 | `ImpersonationBanner` [C] | Banner + "stop impersonating" when `session.user.isImpersonating`. |
 | `ActivityPing` [C] | "Last seen" ping, ≤ once / 30 min. |
 | `Navbar` [S] | Top navbar shell; deliberately **non-async** (session resolved client-side) so pages stay ISR-renderable. |
-| `NavMenu` [C] | Nav menu + notification badge. |
-| `BottomNav` [C] | Mobile bottom tab bar. |
+| `NavMenu` [C] | Account menu (Mi perfil, Tema, Cerrar sesión) + notification badge (the badge pops in on `Presence appear variant="scale"`). |
+| `BottomNav` [C] | Mobile bottom tab bar — three worship tabs (Inicio · Calendario · Biblioteca) or the kids set; «Más» only when Kids / Planear Kids / Admin apply; hidden when fewer than two items; «Más» is a `CueDialog` sheet. Publishes its measured height as `--bottom-nav-h` + a `has-bottom-nav` class on `<html>` while on screen; hidden ≥ `lg` and on `/auth*`/`/studio*`. |
+| `NavLinks` [C] | Desktop nav link row, rendered in the navbar's centred title block at `lg`+ (the title itself goes `lg:hidden` there); one shared `SlidingIndicator` underline. |
 | `SectionNav` [C] | In-page section anchors. |
 | `Header` [S], `CmsNavbar` [S], `icons.tsx` [S] | Page header / Studio navbar / SVG icons. |
 | `SignOutButton` [C] | Sign out. Clears the theme mirror first — see `themePref.ts`. (`ThemeSwitch` was deleted in `33c6e15`; the theme picker is now `ui/ThemeControl.tsx` at `/me`.) |
@@ -322,11 +325,27 @@ Legend: **[C]** client, **[S]** server.
 ### Motion primitives (`app/components/ui/`, see [MOTION.md](MOTION.md))
 | Component | Purpose |
 |-----------|---------|
-| `MotionProvider` [C] | Loads `motion`'s DOM features as an async chunk after hydration (not inline); `reducedMotion="user"`. |
-| `Presence` [C] | Mount/unmount with an exit animation; variants `fade` `rise` `scale` `sheet`. |
+| `MotionProvider` [C] | Loads `motion`'s DOM features (`domMax`) as an async chunk after hydration (not inline); `reducedMotion="user"`. |
+| `Presence` [C] | Mount/unmount with an exit animation; variants `fade` `rise` `scale` `sheet` `drop`. `sheet` enters on `SPRINGS.sheet` (every other variant, and every exit, stays on the ordinary duration/ease). `onEntered?: () => void` fires once the enter animation completes — never on an already-shown mount without `appear`. |
 | `Skeleton` / `SkeletonGroup` [N] | Shimmer placeholders; one `aria-busy` status region per loading surface. |
 | `Button` [N] | The house button: six variants, three sizes, press physics, primary sheen, `busy`, `href`. |
 | `revealProps()` (`app/utils/reveal.ts`) [N] | CSS route reveal; `app/(client)/template.tsx` replays it per navigation. |
+| `CueDialog` [C] | The ONE dialog shell — never a hand-rolled `fixed inset-0` scrim. `mode="modal"` \| `"sheet"` (a sheet is only a sheet below 640px); drag-to-dismiss from the sheet's head (handle + title bar — on a phone it is the only visible close control, the × is `sr-only` there; 150 px of travel or a 0.5 px/ms flick — `SHEET_DISMISS`); `onDismiss(reason)` where `reason` is `"escape" \| "backdrop" \| "drag"`. Traps focus, stacks layers, supports a portalled focus "satellite". Always render `<CueDialog open={x}>`, never `{x && <CueDialog open>}` — see `cueDialogMount.test.ts`. |
+| `Toast` / `useToast` [C] | The ONE fixed toast stack. `toast({ message, tone?, duration?, hold?, action? })`; `hold` persists until `dismiss(id)`. `useTransientValue` stays for an inline flash next to the control that produced it. |
+| `Menu` / `MenuItem` / `MenuSeparator` / `MenuHeader` [C] | The ONE anchored dropdown. `role="menu"`, roving focus, merges the trigger's own ref. Inside a `CueDialog` the menu owns Escape (first Escape closes the menu, the second the dialog) — M0b-2. |
+| `Collapse` [C] | The ONE disclosure. Real height animation (the one exception to transform/opacity-only); children stay mounted while closed, `inert` + `aria-hidden`. |
+| `SegmentedControl` [C] | The ONE segmented control — `role="radiogroup"`, arrow keys move the selection with wrap, the checked option is the sole tab stop; `value={null}` means nothing chosen yet. One `layoutId` thumb. Sizes `sm`/`md`; tones `outline`/`filled`; `badge`/`busy` per option. Never `aria-pressed` toggles for a one-of-N choice. |
+| `SlidingIndicator` / `useActiveIntoView` [C] | The active marker for tab bars (admin `TabBar`, `SectionNav`, `BottomNav`). Semantics stay on the items (`aria-current`); the hook scrolls the active item into view. |
+| `Switch` [C] | The ONE switch — `role="switch"`, `aria-checked`, a `<button>`; knob springs with `initial={false}`; haptic on flip. Sizes `sm`/`md`. |
+| `Checkbox` [N] | The ONE checkbox — native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in. `tone="negative"` for the kill switch. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop, not a `className` — a same-property utility passed through `className` cannot beat one the primitive already sets, since stylesheet order (not specificity) decides which of two same-specificity classes wins. |
+| `Select` [N] | The ONE select — native `<select>` under tokenised chrome plus a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md` plus a 44 px minimum height on the element itself). `label` + `id`, or `aria-label`. |
+| `DateField` [N] | The ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws the prev/next month buttons. |
+| `NumberRoll` [C] | A value that changes in place: old rises out, new rises in, one grid cell. `initial={false}`. |
+| `haptic()` (`app/utils/haptics.ts`) [N] | Native-only haptic feedback; no-op on web; fire-and-forget, never awaited in a handler. |
+| `GalleryMotion` (`app/(gallery)/theme-gallery/[theme]/`) [C] | The theme gallery's own `LazyMotion` — the gallery mounts no `Provider`/`MotionProvider`, so this wrapper loads `domMax` synchronously and honours `data-motion="off"` so a baseline capture is deterministic. |
+
+See [MOTION.md](MOTION.md) for the full primitive reference, the load-failure
+behaviour of each, and the guards that pin them.
 
 [N] = neutral module (no `"use client"`, no hooks) — renderable from either side (ADR-0028).
 
@@ -341,7 +360,7 @@ Legend: **[C]** client, **[S]** server.
 | `PlannerGrid` | Renders the month grid `plannerModel` computes — dates across and seats down. Applicable admitted cells are editable; integrity-defective stored columns stay visible and read-only. An occupant whose «Tipo» no longer fits the seat is tinted amber and named under the cell, and the picker gives them a removal-only row — `rankCandidates` filters them out, so that row is their only exit (ADR-0029). `MonthGenerator` owns `cells`/`counts` and mutations. Owns the **three-column workspace**: Participaciones (216px), grid, and candidate picker (240px while a cell is active). The chart width is a content floor derived from `ParticipationSidebar`. **Pantalla completa** manages focus, traps Tab, locks body scroll, `inert`s the rest of `<body>`, applies safe-area padding, and portals to `document.body` for Safari. The grid scrolls horizontally rather than squeezing its `minmax(150px, 1fr)` date columns; row labels remain sticky. Its `planner-wide` root lets `app/brand.css` lift the admin frame cap through `:has()`. |
 | `MonthGenerator` | Owns create-planning and stored editing in the shared three-part `PlannerGrid`. Create mode retains solver preview/Auto and fairness history. Stored mode owns create-one, explicit full-roster save, date/name edits, team/seat swaps, frozen attempts, and roles/integrity readback reconciliation. |
 | `SetlistEditor` | Inline setlist builder (reorder/remove, play-key, medley via `normalizeMedleyTags`). |
-| `SongFormModal` | Song create/edit form + reusable `Modal`. Exports `Modal`, `SongForm`, `blankForm`, `songToForm`, `buildPayload`. Charts are edited via `ChordChartsFields` ([ADR-0018](adr/0018-lyrics-and-charts-are-independent.md)). |
+| `SongFormModal` | Song create/edit form. Exports `SongForm`, `blankForm`, `songToForm`, `buildPayload`. Its own `Modal` wrapper was removed in M0b-1 — dead export, no JSX caller (`AdminPanel`/`ServicesPanel` each own a local `Modal`); every caller mounts `SongForm` inside its own `CueDialog`. Charts are edited via `ChordChartsFields` ([ADR-0018](adr/0018-lyrics-and-charts-are-independent.md)). |
 | `ContentPanel` | Song-library CRUD (via `SongForm`). |
 | `ProposalsPanel` | Admin review of lead proposals (approve / request changes / reopen). Order and date window come from `proposalListView.ts`: buckets stay `pending → changes_requested → approved → draft`, `approved` reads newest-first (archive) and every other status soonest-first (queue); `approved`/`draft` older than the current month are hidden behind `Ver N meses más`, while `pending`/`changes_requested` are never windowed out. A handoff to an older proposal widens the window before the card is scrolled to, as does approving a past-dated one (the card would otherwise vanish under the admin). Widening jumps to the newest hidden row rather than a blind +3 months, so every press reveals something. **The window is client-side only:** `GET /api/admin/proposals` still returns the entire history with its full song joins, so the payload is unbounded and only the render is windowed — server-side windowing was deliberately deferred out of Release 1. |
 | `ProposalThread` | The private lead ↔ admin conversation on a proposal, shared by the lead editor and the admin card. **Renders unconditionally** — it replaced blocks gated on `lead_notes` being present and on `changes_requested`, and inheriting either condition would hide the thread on a `pending` proposal, which is where the conversation happens. Four rules that look cosmetic and are not: the author label is keyed on `author_role`, never on a missing name (two migrated messages have no author, and falling back to "Admin" would misattribute an author-less lead note); timestamps convert the ISO datetime to a local calendar day *first* and compare day strings, never elapsed hours; the composer closes when the **service** passes, not on approval, and both routes enforce that server-side because a hidden composer is not a guard; and the composer clears **only on success**, since the channel's whole promise is that nothing written is lost. Posting patches one record in place — never `load()`, which unmounts every card and wipes in-progress change-request notes. |

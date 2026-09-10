@@ -1,6 +1,7 @@
 "use client";
 
 import { DayCard, DayCardProps } from "./DayCard";
+import NumberRoll from "./ui/NumberRoll";
 
 type NextServiceHeroProps = DayCardProps;
 
@@ -34,7 +35,7 @@ export default function NextServiceHero(props: NextServiceHeroProps) {
         </div>
         {countdownText && (
           <span className="shrink-0 rounded-full border border-positive-fg/25 bg-positive-fg/[0.055] px-3 py-1.5 font-label text-[10px] uppercase tracking-widest text-positive-fg">
-            {countdownText}
+            <NumberRoll value={countdownText} />
           </span>
         )}
       </div>

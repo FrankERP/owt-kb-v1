@@ -10,7 +10,7 @@ import { songToForm } from "@/app/components/admin/SongFormModal";
 import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
 import { chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
 import { Post } from "@/app/utils/interface";
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useToast } from "@/app/components/ui/Toast";
 
 interface SongTag { _id: string; name: string; slug: { current: string }; }
 interface SongAuthor { _id: string; name: string; }
@@ -80,7 +80,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
   const [authorState, setAuthorState] = useState<LoadState>("idle");
   const [saving, setSaving] = useState(false);
   const [formStatus, setFormStatus] = useState<{ tone: "error" | "pending"; message: string } | null>(null);
-  const [toast, showToast] = useTransientValue<string | null>(null, 3000);
+  const { toast } = useToast();
 
   const loadTags = useCallback(async () => {
     if (tagState === "ready" || tagState === "loading") return;
@@ -189,7 +189,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
       });
       if (!res.ok) throw new Error("save failed");
       setOpen(false);
-      showToast("Canción actualizada.");
+      toast({ message: "Canción actualizada." });
       router.refresh();
     } catch {
       setFormStatus({ tone: "error", message: "No se pudo guardar. Revisa la conexión e intenta otra vez." });
@@ -222,7 +222,8 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           ref={triggerRef}
           type="button"
           onClick={handleOpen}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full border border-accent/30 bg-surface-accent-solid text-on-fill px-4 py-2.5 font-label text-xs uppercase tracking-widest shadow-lg transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
+          className="fixed right-6 z-40 flex items-center gap-2 rounded-full border border-accent/30 bg-surface-accent-solid text-on-fill px-4 py-2.5 font-label text-xs uppercase tracking-widest shadow-lg transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
+          style={{ bottom: "calc(1.5rem + var(--bottom-nav-h, 0px))" }}
           aria-label={`Editar canción ${post.title}`}
         >
           <PencilIcon />
@@ -423,12 +424,6 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           </div>
         </form>
       </CueDialog>
-
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 z-[95] -translate-x-1/2 whitespace-nowrap rounded-xl border border-accent/30 bg-surface-raised-alt px-5 py-3 font-label text-xs uppercase tracking-widest shadow-xl">
-          {toast}
-        </div>
-      )}
     </>
   );
 }

@@ -39,6 +39,16 @@ export const VARIANTS = {
   scale: { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.98 } },
   /** y in percent of own height is expressed by the consumer via `style`; here y is px. */
   sheet: { initial: { opacity: 0, y: 24 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: 24 } },
+  /** A banner dropping in from above — the impersonation banner's entrance. */
+  drop: { initial: { opacity: 0, y: -8 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -8 } },
 } as const satisfies Record<string, Variant>;
 
 export type VariantName = keyof typeof VARIANTS;
+
+/**
+ * Sheet drag-to-dismiss (spec §19.4): past this travel OR faster than this, the sheet
+ * closes. Distance was 80 px in the first M0b-1 build; Frank tried it on dev on 2026-09-09
+ * and asked for roughly double, so a deliberate pull closes the sheet and a nudge does not.
+ * A flick still closes it through the velocity arm.
+ */
+export const SHEET_DISMISS = { distance: 150, velocity: 0.5 } as const; // px, px/ms

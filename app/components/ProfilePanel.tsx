@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useId } from "react";
 import CueDialog from "./ui/CueDialog";
 import CueDialogStatus from "./ui/CueDialogStatus";
 import EmailPrefToggles, { EMAIL_PREF_ROWS, resolveEmailPrefs } from "./ui/EmailPrefToggles";
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useToast } from "./ui/Toast";
 
 interface MemberProfile {
   _id: string;
@@ -77,7 +77,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
   const triggerRef = useRef<HTMLButtonElement>(null);
   const ids = useId();
   const fid = (name: string) => `${ids}-${name}`;
-  const [toast, setToastValue] = useTransientValue<{ msg: string; ok: boolean } | null>(null, 3500);
+  const { toast } = useToast();
   const [panelStatus, setPanelStatus] = useState<{ tone: "error" | "pending"; message: string } | null>(null);
 
   // Identity form
@@ -111,7 +111,7 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
     setEmailPrefs(resolveEmailPrefs(initialMember.notifPrefs));
   }, [initialMember]);
 
-  const showToast = (msg: string, ok = true) => setToastValue({ msg, ok });
+  const showToast = (msg: string, ok = true) => toast({ message: msg, tone: ok ? "ok" : "error", duration: 3500 });
 
   const handleSaveProfile = async () => {
     setSavingProfile(true);
@@ -359,17 +359,6 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
           </div>
         </div>
       </CueDialog>
-
-      {/* Toast */}
-      {toast && (
-        <div role={toast.ok ? "status" : "alert"} className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl border font-label text-xs uppercase tracking-widest shadow-xl ${
-          toast.ok
-            ? "bg-surface-raised-alt border-accent/30"
-            : "bg-negative-surface-deep/80 border-negative-border"
-        }`}>
-          {toast.msg}
-        </div>
-      )}
     </>
   );
 }
