@@ -8,7 +8,7 @@
 // publishes --impersonation-h, so every fixed-bottom element (toasts, the audio
 // transport, the song FAB) clears it without a constant anyone can drift from —
 // bottomNavOffsetSync.test.ts is the guard. Ministry filtering is COSMETIC (the
-// pages enforce), as NavMenu says.
+// pages enforce), as NavLinks.tsx and ADR-0020 say.
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -93,7 +93,7 @@ export default function BottomNav() {
 
   const rowClass = "flex min-h-[44px] w-full items-center gap-3 px-5 py-3 font-label text-xs uppercase tracking-widest text-ink hover:bg-accent/5";
 
-  // «Más» holds only what the five tabs cannot fit — the avatar menu (NavMenu)
+  // «Más» holds only what the four tabs cannot fit — the avatar menu (NavMenu)
   // now owns Tema and Cerrar sesión. When no row applies, there is nothing to
   // hold: the bar shows four tabs and the sheet never opens.
   const moreRows: { href: string; label: string; icon: React.ReactNode }[] = [

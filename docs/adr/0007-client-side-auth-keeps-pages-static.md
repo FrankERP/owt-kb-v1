@@ -56,9 +56,10 @@ per-page rather than in the middleware.
   original reason every page went dynamic, and it is still not the place for a
   session read.
 - Session state — now including `ministries`/`managesMinistries` — still
-  resolves **client-side** in `NavMenu`, which filters the nav by ministry.
-  That follows this ADR's pattern rather than breaking it: nav filtering is
-  cosmetic, the page gate is the enforcement.
+  resolves **client-side** in `NavLinks`/`BottomNav`, which filter the nav by
+  ministry (`NavMenu` is account-only since 2026-09-09). That follows this
+  ADR's pattern rather than breaking it: nav filtering is cosmetic, the page
+  gate is the enforcement.
 - `EditSongButton`'s `useSession()` check remains **cosmetic**. The real gate is
   still `app/api/song/[id]/route.ts`, now `requireMinistryMember("worship")`
   instead of `requireActiveSession()`.

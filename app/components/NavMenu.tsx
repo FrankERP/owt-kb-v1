@@ -114,7 +114,7 @@ export default function NavMenu() {
       <MenuItem href="/me">Mi perfil</MenuItem>
       <MenuItem href="/me#tema">Tema</MenuItem>
       <MenuSeparator />
-      <MenuItem onSelect={() => { clearThemeMirror(); signOut({ callbackUrl: "/" }); }}>
+      <MenuItem onSelect={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}>
         Cerrar sesión
       </MenuItem>
     </Menu>
