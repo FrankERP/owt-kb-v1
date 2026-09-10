@@ -115,12 +115,15 @@ import {
   type RankMember,
 } from "./candidateRanking";
 import {
+  DEFAULT_INSTRUMENT_SEATS,
   fohSeatDef,
   instrumentSeatDef,
   normalizeSeatName,
+  occupantDeclaresInstrument,
   occupantFitsSeat,
   type SeatCategory,
 } from "./seatModel";
+import { renderableUnfilled } from "./instrumentFill";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import type { TargetPreflight } from "./serviceReadiness";
 import {
@@ -626,6 +629,19 @@ export default function PlannerGrid(props: PlannerGridProps) {
     return !!found && !occupantFitsSeat(found, category);
   };
 
+  /**
+   * Seated on an instrument row whose label the occupant does not DECLARE
+   * (spec §7). A second question beside `seatMismatch`, with its own line, so a
+   * reader can tell a stale Tipo from a missing declaration. Custom rows
+   * outside the vocabulary never warn: nobody can declare them, and a warning
+   * naming a remedy the member form cannot perform is the ADR-0029 defect class.
+   */
+  const instrumentUndeclared = (id: string, row: GridRow) => {
+    if (row.category !== "instrumento" || !DEFAULT_INSTRUMENT_SEATS.includes(row.label)) return false;
+    const found = membersById.get(id);
+    return !!found && !occupantDeclaresInstrument(found, row.label);
+  };
+
   // D12: `inGridDrafts` — the whole grid's current occupancy, converted to the
   // shape `rankCandidates` consumes, so "assigned earlier in THIS grid" can be
   // read as load. Recomputed once per render, reused for every cell.
@@ -643,11 +659,18 @@ export default function PlannerGrid(props: PlannerGridProps) {
     return map;
   }, [cells]);
 
+  // The render-time gate (§6.3): an instrument entry whose cell now has an
+  // occupant (a human filled it after Auto) drops out of both the count and
+  // the per-cell marker. Voice and special entries are per SLOT and pass
+  // through untouched — computed once here so both readers agree by
+  // construction rather than by two call sites staying in sync.
+  const visibleUnfilled = useMemo(() => renderableUnfilled(unfilled, cells), [unfilled, cells]);
+
   const unfilledByKey = useMemo(() => {
     const set = new Set<string>();
-    for (const u of unfilled) set.add(cellKey(u.columnId, u.rowId));
+    for (const u of visibleUnfilled) set.add(cellKey(u.columnId, u.rowId));
     return set;
-  }, [unfilled]);
+  }, [visibleUnfilled]);
 
   const unaddressableSet = useMemo(() => new Set(unaddressableDates), [unaddressableDates]);
 
@@ -1679,6 +1702,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             }
             memberName={memberName}
             seatMismatch={seatMismatch}
+            instrumentUndeclared={instrumentUndeclared}
             onOpen={(columnId) => {
               if (mutationLocked) return;
               const column = columnById.get(columnId);
@@ -2065,9 +2089,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
       <p className="font-body text-[11px] text-mono-500">
         El líder siempre se asigna; primero queda vacío el coro, luego BGV.
       </p>
-      {unfilled.length > 0 && (
+      {visibleUnfilled.length > 0 && (
         <p className="font-body text-xs text-warning-strong">
-          Lugares sin cubrir (faltó gente): {unfilled.length}
+          Lugares sin cubrir (faltó gente): {visibleUnfilled.length}
         </p>
       )}
 
@@ -2396,6 +2420,7 @@ function RowGroup({
   violationsByColumnId,
   memberName,
   seatMismatch,
+  instrumentUndeclared,
   onOpen,
   onRemove,
   removeError,
@@ -2418,6 +2443,8 @@ function RowGroup({
   memberName: (id: string) => string;
   /** Seated but no longer carrying this seat's «Tipo» — see the main component. */
   seatMismatch: (memberId: string, category: SeatCategory) => boolean;
+  /** Seated on an instrument row but does not DECLARE that instrument — see the main component. */
+  instrumentUndeclared: (memberId: string, row: GridRow) => boolean;
   onOpen: (columnId: string) => void;
   onRemove?: () => void;
   removeError: string | null;
@@ -2485,6 +2512,7 @@ function RowGroup({
         const memberIds = cell?.occupants.map((o) => o.memberId) ?? [];
         const duplicates = duplicatesByColumnId(column.columnId);
         const mismatched = memberIds.filter((id) => seatMismatch(id, row.category));
+        const undeclared = memberIds.filter((id) => instrumentUndeclared(id, row));
         return (
           <GridCellView
             key={column.columnId}
@@ -2493,6 +2521,7 @@ function RowGroup({
             memberIds={memberIds}
             memberName={memberName}
             mismatched={mismatched}
+            undeclared={undeclared}
             duplicates={duplicates}
             violations={violationsByColumnId(column.columnId)}
             unfilled={unfilledByKey.has(cellKey(column.columnId, row.id))}
@@ -2527,6 +2556,7 @@ function GridCellView({
   memberIds,
   memberName,
   mismatched,
+  undeclared,
   duplicates,
   violations,
   unfilled,
@@ -2544,6 +2574,8 @@ function GridCellView({
   memberName: (id: string) => string;
   /** Occupants of THIS cell no longer carrying the seat's «Tipo». */
   mismatched: string[];
+  /** Occupants of an instrument cell who do not declare its instrument. */
+  undeclared: string[];
   duplicates: Map<string, string[]>;
   violations: Map<string, SeatedViolation>;
   unfilled: boolean;
@@ -2576,6 +2608,7 @@ function GridCellView({
   // whether the occupant is currently visible.
   const hiddenHasDuplicate = hiddenIds.some((id) => duplicates.get(id)?.includes(row.id));
   const mismatchedSet = new Set(mismatched);
+  const undeclaredSet = new Set(undeclared);
 
   // E13 + P10, split. A violation the admin overrode renders as a NAMED
   // exception; one they did not renders as a refusal still to be fixed. Both are
@@ -2743,7 +2776,9 @@ function GridCellView({
                 // the one assistive tech performs.
                 aria-label={`${marked ? "Cancelar el movimiento de" : "Marcar para mover a"} ${memberName(id)}${
                   isDuplicate || ruleBroken ? " (conflicto)" : ""
-                }${tipoMismatch ? " (Tipo no permitido)" : ""}`}
+                }${tipoMismatch ? " (Tipo no permitido)" : ""}${
+                  undeclaredSet.has(id) ? " (instrumento no declarado)" : ""
+                }`}
                 // NO `onClick`, deliberately (user ruling, 2026-08-06). A pointer
                 // click on a name keeps doing exactly what it always has: it
                 // falls through to the cell, which opens the picker — or places
@@ -2846,6 +2881,13 @@ function GridCellView({
             ⚠ {memberName(id)}: su Tipo ya no incluye {TYPE_LABEL[row.category]} — ábrelo para quitarlo
           </p>
         ))}
+        {/* Seated, but does not DECLARE this instrument (spec §7). Its own line,
+            separate from the Tipo one: two questions, two answers. */}
+        {undeclared.map((id) => (
+          <p key={`instr-${id}`} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
+            ⚠ {memberName(id)}: no declara {row.label} — revísalo en Miembros
+          </p>
+        ))}
         {unfilled && (
           <p className="font-label text-[9px] uppercase tracking-widest text-warning-strong">Sin cubrir</p>
         )}
@@ -2943,6 +2985,11 @@ function CandidateRow({
           {!candidate.available && (
             <span className="rounded-full border border-warning-fg/40 bg-warning-fg/10 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-wide text-warning-strong">
               No disp.
+            </span>
+          )}
+          {candidate.undeclared && (
+            <span className="rounded-full border border-warning-fg/40 bg-warning-fg/10 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-wide text-warning-strong">
+              Sin declarar
             </span>
           )}
           {candidate.alreadyAssigned && (
