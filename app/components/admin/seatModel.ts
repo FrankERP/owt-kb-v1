@@ -106,3 +106,56 @@ export function occupantFitsSeat(
 ): boolean {
   return (member?.memberType ?? []).includes(SEAT_MEMBER_TYPE[category]);
 }
+
+/**
+ * Whether a label names an instrument seat a MEMBER may declare. Membership in
+ * `DEFAULT_INSTRUMENT_SEATS` after normalization — NOT `normalizeSeatName`
+ * alone, which also canonicalizes `console` → `Console`, a FOH seat. The
+ * member-side vocabulary is closed (a typo here would silently make a member
+ * unschedulable); the service-side one stays open to growth.
+ */
+export function isKnownInstrument(label: unknown): boolean {
+  const name = normalizeSeatName(label);
+  return name !== "" && DEFAULT_INSTRUMENT_SEATS.includes(name);
+}
+
+/**
+ * Does this member DECLARE this instrument? Both halves are required: the
+ * `instrumento` Tipo (ADR-0029's only eligibility axis) AND the label in
+ * `instruments`. A leftover declaration on a member whose Tipo was cleared
+ * declares nothing — `instruments` is a refinement of the Tipo, never a second
+ * axis. Absent or empty `instruments` is "declares nothing" (spec D6).
+ *
+ * Read in exactly two places besides the backfill script: `rankCandidates`
+ * (the `undeclared` flag) and `PlannerGrid`'s declaration warning.
+ */
+export function occupantDeclaresInstrument(
+  member: { memberType?: string[]; instruments?: string[] } | undefined,
+  label: string,
+): boolean {
+  if (!member) return false;
+  if (!(member.memberType ?? []).includes("instrumento")) return false;
+  const name = normalizeSeatName(label);
+  return (member.instruments ?? []).some((i) => normalizeSeatName(i) === name);
+}
+
+/**
+ * The member-side write boundary's one predicate: normalize, de-duplicate,
+ * and refuse anything outside `DEFAULT_INSTRUMENT_SEATS`. Shared by POST and
+ * PATCH so create and edit cannot drift, and mirrored by the backfill script
+ * (`scripts/lib/memberInstruments.mjs`, which cannot import TS).
+ */
+export function parseMemberInstruments(
+  raw: unknown,
+): { ok: true; value: string[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw)) return { ok: false, error: "Instrumentos debe ser una lista." };
+  const out: string[] = [];
+  for (const item of raw) {
+    const name = normalizeSeatName(item);
+    if (!isKnownInstrument(name)) {
+      return { ok: false, error: `Instrumento no reconocido: ${String(item ?? "").trim()}` };
+    }
+    if (!out.includes(name)) out.push(name);
+  }
+  return { ok: true, value: out };
+}

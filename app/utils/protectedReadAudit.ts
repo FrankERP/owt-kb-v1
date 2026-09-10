@@ -418,6 +418,14 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
     removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
   },
   {
+    file: "scripts/backfill-member-instruments.mjs",
+    operation: "module",
+    reason:
+      "one-off migration: READS role documents' instruments[] seats as evidence of who has played what (sunday_role/saturday_role/special_role), and writes only teamMembers.instruments — never a role document — via setIfMissing guarded by ifRevisionId. Dry-run by default; --apply is gated on explicit consent. The audit's protected-write signal is the heuristic seeing role type names in the same module as a transaction, not an actual role-document mutation",
+    removalOwner:
+      "one-off migration tooling (never A2 — retire alongside the other one-shot writers once applied to production)",
+  },
+  {
     file: "scripts/bootstrap-weekend-locks.mjs",
     operation: "module",
     reason:

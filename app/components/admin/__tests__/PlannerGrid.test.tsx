@@ -579,7 +579,9 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     // member on a Bass seat is a Tipo mismatch, which the grid now warns about
     // separately — in amber, so a red-only assertion would pass while showing
     // the very thing the test says is legitimate.
-    const dualDuty = [{ _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"] }];
+    const dualDuty = [
+      { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"], instruments: ["Bass"] },
+    ];
     const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m1"], origin: "auto" },
       { date: "2026-08-09", rowId: "instrumento:Bass", memberIds: ["m1"], origin: "manual" },
@@ -604,8 +606,12 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     // m1 really does double duty here, so their Tipo has to say so: the grid
     // now warns about an occupant seated where their Tipo no longer allows,
     // and a `voz`-only fixture on a Bass seat is that warning, not this test's
-    // subject.
-    const dualDuty = [{ _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"] }];
+    // subject. `instruments: ["Bass"]` keeps them out of the newer declared-
+    // instrument warning (spec §7) too, so the Bass cell's `⚠` count stays
+    // this test's own subject rather than either.
+    const dualDuty = [
+      { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"], instruments: ["Bass"] },
+    ];
     const { container } = render(<PlannerGrid {...baseProps({ cells, members: dualDuty })} />);
     const leadCell = cellFor(container, "lead", "2026-08-09");
     const bgvCell = cellFor(container, "bgv", "2026-08-09");
@@ -632,8 +638,11 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     // m1 really does double duty here, so their Tipo has to say so: the grid
     // now warns about an occupant seated where their Tipo no longer allows,
     // and a `voz`-only fixture on a Bass seat is that warning, not this test's
-    // subject.
-    const dualDuty = [{ _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"] }];
+    // subject. `instruments: ["Bass", "Keys"]` keeps the newer declared-
+    // instrument warning (spec §7) from adding a second `⚠` on those two cells.
+    const dualDuty = [
+      { _id: "m1", member_name: "Frank", memberType: ["voz", "instrumento"], instruments: ["Bass", "Keys"] },
+    ];
     const { container } = render(<PlannerGrid {...baseProps({ cells, members: dualDuty })} />);
     for (const rowId of ["lead", "bgv", "instrumento:Bass", "instrumento:Keys"]) {
       expect(
@@ -1535,5 +1544,90 @@ describe("PlannerGrid — a config persisted before `conflicts`/`presence` exist
     fireEvent.click(cellFor(container, "lead", SPECIAL_DATE));
     expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBe("true");
     expect(candidateLi("Frank").getAttribute("aria-disabled")).toBeNull();
+  });
+});
+
+describe("declared instruments on the planner (spec §7, §6.3)", () => {
+  const KEYS_ROW = "instrumento:Keys";
+  const FIRST_COLUMN_ID = SUNDAY_ONLY[0].columnId;
+  const keysPlayer: RankMember = {
+    _id: "k1",
+    member_name: "Zoe Keys",
+    memberType: ["instrumento"],
+    instruments: ["Keys"],
+  };
+  const drummer: RankMember = {
+    _id: "d1",
+    member_name: "Ana Drums",
+    memberType: ["instrumento"],
+    instruments: ["Drums"],
+  };
+
+  it("labels an undeclared candidate «Sin declarar» in its own element and sorts it after declared ones", () => {
+    const { container } = render(
+      <PlannerGrid {...baseProps({ members: [drummer, keysPlayer] })} />,
+    );
+    // Open the Keys picker on the first column.
+    fireEvent.click(container.querySelector(`[data-row-id="${KEYS_ROW}"]`)!);
+    const picker = container.querySelector("[data-candidate-picker]") as HTMLElement;
+    const rows = within(picker).getAllByRole("button", { name: /Keys|Drums/ });
+    expect(rows[0].textContent).toContain("Zoe Keys");
+    const ana = rows.find((r) => r.textContent?.includes("Ana Drums"))!;
+    expect(within(ana).getByText("Sin declarar")).toBeTruthy();
+    expect(within(ana).getByText("Ana Drums")).toBeTruthy(); // name is its own text node
+  });
+
+  it("warns on an instrument cell whose occupant does not declare the instrument, naming it", () => {
+    const { container } = render(
+      <PlannerGrid
+        {...baseProps({
+          members: [drummer],
+          cells: [{ columnId: FIRST_COLUMN_ID, rowId: KEYS_ROW, occupants: [{ memberId: "d1" }], origin: "manual" }],
+        })}
+      />,
+    );
+    const cell = container.querySelector(`[data-row-id="${KEYS_ROW}"]`)!;
+    expect(cell.textContent).toContain("Ana Drums: no declara Keys — revísalo en Miembros");
+    expect(cell.textContent).not.toContain("su Tipo ya no incluye");
+  });
+
+  it("does not warn on a custom instrument row outside the vocabulary", () => {
+    const { container } = render(
+      <PlannerGrid
+        {...baseProps({
+          members: [drummer],
+          rows: [...buildRows(), { id: "instrumento:Piano", label: "Piano", category: "instrumento", target: 1 }],
+          cells: [{ columnId: FIRST_COLUMN_ID, rowId: "instrumento:Piano", occupants: [{ memberId: "d1" }], origin: "manual" }],
+        })}
+      />,
+    );
+    expect(container.querySelector(`[data-row-id="instrumento:Piano"]`)!.textContent).not.toContain("no declara");
+  });
+
+  it("drops an instrument «Sin cubrir» once a human fills the cell, and keeps a partial Coro's two", () => {
+    const unfilled = [
+      { columnId: FIRST_COLUMN_ID, rowId: KEYS_ROW },
+      { columnId: FIRST_COLUMN_ID, rowId: "coro" },
+      { columnId: FIRST_COLUMN_ID, rowId: "coro" },
+    ];
+    const { container, rerender } = render(
+      <PlannerGrid {...baseProps({ members: [keysPlayer], unfilled })} />,
+    );
+    expect(screen.getByText("Lugares sin cubrir (faltó gente): 3")).toBeTruthy();
+    rerender(
+      <PlannerGrid
+        {...baseProps({
+          members: [keysPlayer],
+          unfilled,
+          cells: [
+            { columnId: FIRST_COLUMN_ID, rowId: KEYS_ROW, occupants: [{ memberId: "k1" }], origin: "manual" },
+            { columnId: FIRST_COLUMN_ID, rowId: "coro", occupants: [{ memberId: "k1" }], origin: "manual" },
+          ],
+        })}
+      />,
+    );
+    expect(screen.getByText("Lugares sin cubrir (faltó gente): 2")).toBeTruthy();
+    expect(container.querySelector(`[data-row-id="${KEYS_ROW}"]`)!.textContent).not.toContain("Sin cubrir");
+    expect(container.querySelector(`[data-row-id="coro"]`)!.textContent).toContain("Sin cubrir");
   });
 });

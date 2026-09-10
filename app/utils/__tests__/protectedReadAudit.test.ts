@@ -489,6 +489,7 @@ describe("A2 handoff allowlist", () => {
       [
         "e2e/service-readiness/lib/dataset.ts#module",
         "scripts/backfill-legacy-seat-arrays.mjs#module",
+        "scripts/backfill-member-instruments.mjs#module",
         "scripts/bootstrap-weekend-locks.mjs#module",
         // Child A Phase E added this read-only reconcile and listed it nowhere, so
         // the audit failed on the commit that introduced it.
