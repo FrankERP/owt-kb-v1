@@ -32,7 +32,7 @@ export default function AudioTransport({
     <div className="max-w-7xl mx-auto flex items-center gap-3 px-4 py-3">
       <button
         onClick={onToggle}
-        className="w-11 h-11 rounded-full bg-accent/15 border border-accent/40 flex items-center justify-center text-accent shrink-0 hover:bg-accent/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt active:scale-95 transition-all"
+        className="w-11 h-11 rounded-full bg-accent/15 border border-accent/40 flex items-center justify-center text-accent shrink-0 hover:bg-accent/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt active:scale-95 transition-[background-color,transform] duration-fast ease-out-brand"
         aria-label={isPlaying ? `Pausar ${track.songTitle} — ${track.title}` : `Reproducir ${track.songTitle} — ${track.title}`}
       >
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
@@ -78,8 +78,8 @@ export default function AudioTransport({
             }}
           >
             <div
-              className="h-full rounded-full bg-accent transition-[width] duration-100 group-hover:bg-accent/80"
-              style={{ width: `${progress * 100}%` }}
+              className="h-full w-full origin-left rounded-full bg-accent transition-transform duration-fast ease-out-brand group-hover:bg-accent/80"
+              style={{ transform: `scaleX(${progress})` }}
             />
             <div className="absolute inset-y-0 -bottom-1 -top-1 left-0 right-0 opacity-0 group-hover:opacity-100" style={{ cursor: "pointer" }} />
           </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { usePlayer } from "@/app/context/PlayerContext";
 import AudioTransport from "./AudioTransport";
+import Presence from "./ui/Presence";
 
 export default function AudioPlayer() {
   const { player, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError } = usePlayer();
@@ -35,25 +36,31 @@ export default function AudioPlayer() {
     if (!player.track) { setProgress(0); setCurrentTime(0); setDuration(0); }
   }, [player.track]);
 
-  if (!player.track || sheet || sheetLoading || sheetError) return null;
-
-  const { track, isPlaying } = player;
+  const visible = !!player.track && !sheet && !sheetLoading && !sheetError;
 
   return (
-    <div
+    <Presence
+      show={visible}
+      appear
+      variant="sheet"
       className="audio-player fixed inset-x-0 z-40 bg-surface-raised-alt/95 backdrop-blur-md border-t border-accent/20 shadow-lg"
       style={{ bottom: "var(--bottom-nav-h, 0px)" }}
     >
-      <AudioTransport
-        track={track}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        duration={duration}
-        progress={progress}
-        onToggle={togglePlay}
-        onSeek={seek}
-        onClose={() => closePlayer()}
-      />
-    </div>
+      {/* Presence keeps rendering this last-committed subtree while it exits, so
+          `player.track` never goes null mid-fade — but guard anyway: it stays the
+          cheapest way to satisfy the type checker without a stale-track ref. */}
+      {player.track && (
+        <AudioTransport
+          track={player.track}
+          isPlaying={player.isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          progress={progress}
+          onToggle={togglePlay}
+          onSeek={seek}
+          onClose={() => closePlayer()}
+        />
+      )}
+    </Presence>
   );
 }
