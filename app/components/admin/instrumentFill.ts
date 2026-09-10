@@ -42,7 +42,7 @@ import {
   type GridRow,
   type SolverConfig,
 } from "./plannerModel";
-import { isKnownInstrument } from "./seatModel";
+import { instrumentSeatDef, isKnownInstrument } from "./seatModel";
 
 export const INSTRUMENT_ROW_PREFIX = "instrumento:";
 
@@ -74,7 +74,14 @@ type Seat = { columnId: string; rowId: string };
 
 const isWeekend = (c: GridColumn) => c.type === "sunday_role" || c.type === "saturday_role";
 
-/** Step 0 — every auto instrument cell on a weekend column, emptied, in one pass. */
+/**
+ * Step 0 — every auto instrument cell on a weekend column, emptied, in one
+ * pass. If the same member is re-picked into this seat later this run, the
+ * fresh `GridOccupant` carries no `itemKey` even though the vacated one did —
+ * dropping it is knowingly inert today: no writer reads `itemKey` off an
+ * instrument occupant, and `serializeStoredColumn` rebuilds the stored array
+ * from `memberId` + the row's label, not from a carried-over key.
+ */
 function vacateAutoInstrumentCells(cells: GridCell[], weekendIds: Set<string>): GridCell[] {
   return cells.map((c) =>
     weekendIds.has(c.columnId) && isInstrumentRowId(c.rowId) && c.origin === "auto"
@@ -111,10 +118,21 @@ export function fillInstruments(input: FillInstrumentsInput): FillInstrumentsRes
   const weekendIds = new Set(weekend.map((c) => c.columnId));
   let working = vacateAutoInstrumentCells(input.cells, weekendIds);
 
-  // Rows the filler may touch: instrument rows inside the member vocabulary.
-  // A custom planner row («Nuevo instrumento») is outside it — nobody can
-  // declare it, so it is never filled and never produces a marker (D1).
-  const instrumentRows = rows.filter((r) => isInstrumentRowId(r.id) && isKnownInstrument(r.label));
+  // Rows the filler may touch: instrument rows inside the member vocabulary
+  // AND whose id agrees with the id `seatDefForRow` would derive from the
+  // row's own label. Stored-mode rows keep their case as written on the role
+  // document (`normalizeLabel`, not `normalizeSeatName`), so a legacy-spelled
+  // row like `{ id: "instrumento:keys", label: "keys" }` passes
+  // `isKnownInstrument` (case-insensitive) but collides on id with the
+  // canonical `instrumento:Keys` row — `seatDefForRow` maps BOTH to the same
+  // seat, so filling the legacy row would double-seat one instrument under a
+  // non-canonical label. Requiring `instrumentSeatDef(row.label).id ===
+  // row.id` is what `seatDefForRow(row).id === row.id` must hold for
+  // everything the filler touches; a legacy-spelled row then stays manual,
+  // with no marker, exactly like a zero-declarer row.
+  const instrumentRows = rows.filter(
+    (r) => isInstrumentRowId(r.id) && isKnownInstrument(r.label) && instrumentSeatDef(r.label).id === r.id,
+  );
 
   let previousColumnId: string | null = null;
   for (const column of weekend) {

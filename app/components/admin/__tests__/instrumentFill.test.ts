@@ -139,6 +139,27 @@ describe("fillInstruments — scope and markers", () => {
     expect(out.cells).toContain(foh);
     expect(out.cells.find((c) => c.rowId === KEYS)?.origin).toBe("auto");
   });
+
+  it("never fills a legacy-spelled stored row whose id does not match the canonical seat (review finding 1)", () => {
+    // A role document stored `instrument: "keys"` before it was normalized to
+    // "Keys"; stored-mode row-building keeps the case as written, so the row
+    // reads `{ id: "instrumento:keys", label: "keys" }` — case-insensitively a
+    // known instrument, but `instrumentSeatDef("keys").id` is `instrumento:Keys`,
+    // not `instrumento:keys`. Filling it would double-seat one instrument
+    // under a non-canonical id/label.
+    const legacyRow = { id: "instrumento:keys", label: "keys", category: "instrumento" as const, target: 1 };
+    const out = fillInstruments({
+      columns: COLS,
+      rows: [...ROWS, legacyRow],
+      cells: [cell(COLS[0].columnId, legacyRow.id, [])],
+      members: [p("a", "Ana", ["Keys"])],
+      savedWindow: [],
+    });
+    expect(out.cells.some((c) => c.rowId === legacyRow.id && c.occupants.length > 0)).toBe(false);
+    expect(out.unfilled.some((u) => u.rowId === legacyRow.id)).toBe(false);
+    // The canonical row still fills.
+    expect(occupantsOf(out.cells, COLS[0].columnId, KEYS)).toEqual(["a"]);
+  });
 });
 
 describe("fillInstruments — re-run semantics", () => {
@@ -164,6 +185,14 @@ describe("fillInstruments — re-run semantics", () => {
     const out = run([p("a", "Ana", ["Drums"]), p("b", "Beto", ["Drums"])], [stale, manual]);
     expect(occupantsOf(out.cells, COLS[1].columnId, DRUMS)).toEqual(["b"]);
     expect(occupantsOf(out.cells, COLS[0].columnId, DRUMS)).toEqual(["a"]);
+  });
+
+  it("leaves an auto instrument cell on a SPECIAL column untouched by the vacate (by reference)", () => {
+    const special = col("2026-03-18", "special_role");
+    const specialAuto = cell(special.columnId, DRUMS, ["b"], "auto");
+    const out = run([p("a", "Ana", ["Drums"])], [specialAuto], [...COLS, special]);
+    expect(out.cells).toContain(specialAuto);
+    expect(occupantsOf(out.cells, special.columnId, DRUMS)).toEqual(["b"]);
   });
 });
 
