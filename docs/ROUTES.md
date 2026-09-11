@@ -113,9 +113,11 @@ token) for private/fresh data.
 - **`/schedule`** — `Navbar`, `CalendarView` (composition only: `ScheduleHeader`, `DayStrip`, the
   Agenda|Mes `SegmentedControl`, `AgendaView` or the month grid, the day sheet `CueDialog`).
 - **`/biblioteca`** — `Navbar`, `LibraryIndex`.
-- **`/me`** — `Navbar`, `NextServiceHero`, `DayCard`, `AddToCalendarButton`,
-  `availability/MyAvailabilityPanel` (the weekend list, with the month `AvailabilityGrid`
-  behind «Ver calendario»), `ProfilePanel`, `TextSizeControl`.
+- **`/me`** — `Navbar`, `MeHeader` (the identity header: name, Tipo chips, and the one
+  countdown line), `DayCard` (the next service, `hero`, no `isNext` — the header already
+  carries the countdown), `DayCardDisclosure` (every other service, collapsed),
+  `AddToCalendarButton`, `availability/MyAvailabilityPanel` (the weekend list, with the
+  month `AvailabilityGrid` behind «Ver calendario»), `ProfilePanel`, `TextSizeControl`.
 - **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
 - **`/posts/[slug]`** — `Navbar`, `SectionNav`, `ChordChart`, `SongAudioSection`,
   `EditSongButton`, `PortableText`.

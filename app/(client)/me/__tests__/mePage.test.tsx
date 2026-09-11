@@ -49,7 +49,7 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
 // next/image or browser-only APIs. They are stubbed with a marker so the test can
 // still tell whether the surrounding section rendered.
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
-vi.mock("@/app/components/NextServiceHero", () => ({ default: () => <p>HERO</p> }));
+vi.mock("@/app/components/DayCard", () => ({ DayCard: () => <p>HERO</p> }));
 vi.mock("@/app/components/DayCardDisclosure", () => ({ default: () => <p>DAYCARD</p> }));
 vi.mock("@/app/components/AddToCalendarButton", () => ({ default: () => null }));
 vi.mock("@/app/components/availability/MyAvailabilityPanel", () => ({ default: () => <p>CALENDARIO</p> }));
@@ -97,12 +97,21 @@ beforeEach(() => {
 describe("/me worship gating", () => {
   it("renders no worship section at all for a KIDS-ONLY member", async () => {
     getMemberAccess.mockResolvedValue(access(["kids"]));
+    // A Tipo is a worship eligibility axis — even a member whose profile still
+    // carries one (never cleared on a ministry switch) must see no chip for it.
+    serverFetch.mockResolvedValue({
+      _id: "m1", member_name: "Ana", alias: "Ana", memberType: ["voz", "sunday_lead"],
+    });
     const html = await renderPage();
     // R3: the heading is gone for EVERYONE, the empty line only for this member.
     expect(html).not.toContain("Mis próximos servicios");
     expect(html).not.toContain("Sin servicios asignados próximamente");
     // The identity header still renders — it is the page, not a worship surface.
     expect(html).toContain("Ana");
+    // Tipo chips are worship copy: fixture 1 rules a kids-only member sees none,
+    // even though the stored `memberType` is non-empty.
+    expect(html).not.toContain("Líder Domingo");
+    expect(html).not.toContain("Voz");
     // The kids half is exactly what they DO get.
     expect(html).toContain("Mis roles en Oasis Kids");
   });
@@ -140,6 +149,23 @@ describe("/me worship gating", () => {
     // R3: the worship half is now the header's line (the `h2` is gone).
     expect(html).toContain("Sin servicios asignados próximamente");
     expect(html).toContain("Mis roles en Oasis Kids");
+  });
+
+  // DUAL-MINISTRY PRECEDENCE (fix round 1, ruling 6): the header's ONE line
+  // picks the nearest of ANY ministry, not "worship first if the member is in
+  // it". A worship member with nothing of their own assigned this week, but a
+  // Kids Sunday coming up, sees the Kids line — not the worship empty state,
+  // which would bury real news under a line that says nothing happened.
+  it("gives a dual-ministry member with no worship assignment the KIDS line, not the worship empty state", async () => {
+    getMemberAccess.mockResolvedValue(access(["worship", "kids"]));
+    opFetch.mockImplementation(async (q: string) => {
+      if (q.includes('"sundays"')) return { sundays: [], saturdays: [], specials: [] };
+      if (q.includes('_type == "kidsSchedule"')) return [{ date: "2026-09-13", ensenanza: true }];
+      return [];
+    });
+    const html = await renderPage();
+    expect(html).toContain("En Oasis Kids te toca el");
+    expect(html).not.toContain("Sin servicios asignados próximamente");
   });
 
   it("keeps the profile and availability panels for a kids-only member", async () => {

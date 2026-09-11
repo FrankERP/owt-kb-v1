@@ -6,9 +6,8 @@ import { redirect } from "next/navigation";
 import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
-import type { DayCardProps } from "@/app/components/DayCard";
+import { DayCard, type DayCardProps } from "@/app/components/DayCard";
 import DayCardDisclosure from "@/app/components/DayCardDisclosure";
-import NextServiceHero from "@/app/components/NextServiceHero";
 import MeHeader from "@/app/components/MeHeader";
 import ProfilePanel from "@/app/components/ProfilePanel";
 import TextSizeControl from "@/app/components/TextSizeControl";
@@ -21,6 +20,7 @@ import { describeContributors } from "@/app/utils/proposalContributors";
 import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { orderProposals } from "@/app/utils/serviceReadModel";
 import { nextSeatLine, seatLabel } from "@/app/utils/myWeek";
+import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { revealProps } from "@/app/utils/reveal";
 import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
 
@@ -337,6 +337,36 @@ export default async function MePage() {
     .filter((a): a is { dateKey: string; day: string; doc: RoleDoc } => a !== null)
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
+  // The `DayCardProps` for one assignment, so the hero and the collapsed rows
+  // below it are fed from ONE place — they were two copies of the same nine
+  // props, and the R1 split is exactly where a drift between them would hide.
+  const cardProps = ({ day, doc, dateKey }: (typeof allAssignments)[number]): DayCardProps => ({
+    day,
+    date: dateKey,
+    roleId: day !== "Domingo" && day !== "Sábado" ? doc._id : undefined,
+    setlist: doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined),
+    leads: doc.Lead?.map((m) => m.alias || m.member_name),
+    instruments: doc.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
+    fohTeam: doc.foh_team?.map((s) => ({ label: s.role, person: s.person })),
+    bgvs: doc.BGVs,
+    chorus: doc.Chorus,
+  });
+
+  // Only the assignments whose card will actually paint something reach the
+  // header/hero split below — same guard, same reason as the home page's own
+  // `paintsDayCard` filter (`app/(client)/page.tsx`): a published role whose
+  // seats were all cleared is a normal stored state, not a corrupt one, and a
+  // header naming a service that renders nothing would be worse than silence.
+  const visibleAssignments = allAssignments.filter((a) => {
+    const { setlist, leads, instruments, fohTeam, bgvs, chorus } = cardProps(a);
+    return paintsDayCard({ setlist, leads, instruments, fohTeam, bgvs, chorus });
+  });
+
+  // The hero is the earliest visible assignment (the list is already sorted by
+  // `dateKey` above); everything after it collapses to a `DayCardDisclosure` row.
+  const heroAssignment = visibleAssignments[0] ?? null;
+  const restAssignments = visibleAssignments.slice(1);
+
   // Only well-formed calendar days reach the availability calendar's date math.
   const calendarServiceDates = (Array.isArray(serviceDates) ? serviceDates : [])
     .map((d) => serviceDayKey(d))
@@ -349,10 +379,10 @@ export default async function MePage() {
   // precisely so this Server Component may call them (ADR-0028) — `MeHeader` is a
   // client module and receives the result as data, never a function.
   const nextSeat = nextSeatLine(
-    allAssignments.map(({ dateKey, day, doc }) => ({ dateKey, day, seat: seatLabel(doc) })),
+    visibleAssignments.map(({ dateKey, day, doc }) => ({ dateKey, day, seat: seatLabel(doc) })),
   );
 
-  const calendarServices = allAssignments.map(({ dateKey, day, doc }) => {
+  const calendarServices = visibleAssignments.map(({ dateKey, day, doc }) => {
     const role = seatLabel(doc);
     return {
       uid: doc._id,
@@ -426,21 +456,6 @@ export default async function MePage() {
     );
   }
 
-  // The `DayCardProps` for one assignment, so the hero and the collapsed rows
-  // below it are fed from ONE place — they were two copies of the same nine
-  // props, and the R1 split is exactly where a drift between them would hide.
-  const cardProps = ({ day, doc, dateKey }: (typeof allAssignments)[number]): DayCardProps => ({
-    day,
-    date: dateKey,
-    roleId: day !== "Domingo" && day !== "Sábado" ? doc._id : undefined,
-    setlist: doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined),
-    leads: doc.Lead?.map((m) => m.alias || m.member_name),
-    instruments: doc.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
-    fohTeam: doc.foh_team?.map((s) => ({ label: s.role, person: s.person })),
-    bgvs: doc.BGVs,
-    chorus: doc.Chorus,
-  });
-
   // Tema and Tamaño de texto, shared by both arms of the `member` branch below so
   // the `#ajustes` anchor lands whatever the profile read returned.
   const settings = (
@@ -463,7 +478,9 @@ export default async function MePage() {
             `h2`s ("Mis próximos servicios" / "Próximos servicios") are gone, and
             «Sin servicios asignados próximamente» moved INTO this line. `inWorship`
             is passed so that a kids-only volunteer still gets no worship copy —
-            the empty state is itself a worship surface (spec §5.1).
+            the empty state is itself a worship surface (spec §5.1). Tipo chips are
+            worship copy too — a member's Tipo is the worship eligibility axis, so a
+            kids-only volunteer sees no chips either.
 
             Both lines are gated HERE as well as by the reads above (which a
             kids-only member never runs). That is deliberate belt-and-braces: the
@@ -476,7 +493,7 @@ export default async function MePage() {
             name={member?.member_name || session.user.name || "Mi perfil"}
             alias={member?.alias}
             photoUrl={member?.photoUrl}
-            memberTypes={member?.memberType}
+            memberTypes={inWorship ? member?.memberType : undefined}
             next={inWorship ? nextSeat : null}
             kidsNext={inKids ? (kidsAssignments[0]?.day ?? null) : null}
             inWorship={inWorship}
@@ -487,22 +504,37 @@ export default async function MePage() {
             that ministry, and absent entirely when there are none: the header says
             so, so an empty column here would say it twice. The next service is the
             full hero; every other one is a collapsed `DayCardDisclosure` row (R1),
-            each still followed by its own proposal CTA. */}
-        {inWorship && allAssignments.length > 0 && (
+            each still followed by its own proposal CTA.
+
+            The hero renders as `<DayCard {...} hero />` directly, WITHOUT `isNext`
+            — the header above already carries the one countdown pill for this
+            service (`next`/`nextSeat`), and `isNext` is what makes `DayCard` draw
+            its OWN countdown pill. Passing both would put two countdowns for the
+            same date on one page; the header owns it, the hero card just shows the
+            "Ensayar" action. */}
+        {inWorship && heroAssignment && (
           <div className="space-y-4" {...revealProps(1)}>
             <div className="flex justify-end">
               <AddToCalendarButton services={calendarServices} />
             </div>
-            {allAssignments.map((assignment, i) => (
-              <div key={assignment.doc._id}>
-                {i === 0 ? (
-                  <NextServiceHero {...cardProps(assignment)} />
-                ) : (
-                  <DayCardDisclosure {...cardProps(assignment)} />
-                )}
-                {renderProposalCta(assignment.doc)}
-              </div>
-            ))}
+            <div key={heroAssignment.doc._id}>
+              <DayCard {...cardProps(heroAssignment)} hero />
+              {renderProposalCta(heroAssignment.doc)}
+            </div>
+            {restAssignments.length > 0 && (
+              <>
+                {/* Visually silent — the collapsed rows read fine without a printed
+                    heading, but a screen reader landing mid-page needs to know it
+                    left the hero and entered the rest of the run sheet. */}
+                <h2 className="sr-only">Después</h2>
+                {restAssignments.map((assignment) => (
+                  <div key={assignment.doc._id}>
+                    <DayCardDisclosure {...cardProps(assignment)} />
+                    {renderProposalCta(assignment.doc)}
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
 

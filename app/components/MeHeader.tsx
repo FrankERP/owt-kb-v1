@@ -21,6 +21,7 @@ import Button from "./ui/Button";
 import NumberRoll from "./ui/NumberRoll";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import type { SeatAssignment } from "@/app/utils/myWeek";
+import { MEMBER_TYPE_LABEL } from "@/app/utils/memberTypes";
 
 type Props = {
   name: string;
@@ -34,18 +35,6 @@ type Props = {
   kidsNext?: string | null;
   /** Worship membership — see the note above. */
   inWorship?: boolean;
-};
-
-// "voz" → "Voz". Same axis /admin's Tipo filter spells (`AdminPanel`'s
-// TYPE_LABEL), in full words rather than its table abbreviations: this is the
-// member's own profile, where there is room.
-const TYPE_LABEL: Record<string, string> = {
-  voz: "Voz",
-  instrumento: "Instrumento",
-  foh: "FOH",
-  sunday_lead: "Líder Domingo",
-  saturday_lead: "Líder Sábado",
-  support: "Soporte",
 };
 
 /** Local noon, never a bare `new Date(iso)` — the UTC day-flip invariant. */
@@ -123,7 +112,7 @@ export default function MeHeader({
                 key={t}
                 className="rounded-full border border-surface-accent-30 px-2.5 py-0.5 font-label text-[10px] uppercase tracking-widest text-mono-500"
               >
-                {TYPE_LABEL[t] ?? t}
+                {MEMBER_TYPE_LABEL[t] ?? t}
               </li>
             ))}
           </ul>
