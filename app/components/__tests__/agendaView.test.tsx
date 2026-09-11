@@ -207,6 +207,21 @@ describe("AgendaView", () => {
     expect(rows()[0].getAttribute("aria-label")).toMatch(/, te toca: Keys$/);
   });
 
+  it("F1 — says «te tocó», past tense, for a seated row the fetch already passed", () => {
+    mockUser = { alias: "Sofi" };
+    render(
+      <MotionProvider>
+        <AgendaView
+          activeDays={{ "2026-09-06": [sunday("2026-09-06", { leads: ["Ana"], instruments: [{ label: "Keys", person: "Sofi" }] })] }}
+          todayStr="2026-09-10"
+          onSelect={vi.fn()}
+          emptyMessage="vacío"
+        />
+      </MotionProvider>,
+    );
+    expect(rows()[0].getAttribute("aria-label")).toMatch(/, te tocó: Keys$/);
+  });
+
   it("gives no pill to a member not seated in the row", () => {
     mockUser = { alias: "Beto" };
     mountAgenda({

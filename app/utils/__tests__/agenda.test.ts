@@ -102,6 +102,9 @@ describe("myNameFromSession", () => {
   it("falls back to name when there is no alias", () => {
     expect(myNameFromSession({ name: "Sofía Ramírez" })).toBe("sofía ramírez");
   });
+  it("trims the name fallback too", () => {
+    expect(myNameFromSession({ name: " Sofía Ramírez " })).toBe("sofía ramírez");
+  });
   it("is empty for a signed-out or nameless session", () => {
     expect(myNameFromSession(undefined)).toBe("");
     expect(myNameFromSession({})).toBe("");
@@ -119,5 +122,9 @@ describe("mySeats", () => {
   });
   it("seats nobody when `myName` is empty", () => {
     expect(mySeats(sun("2026-09-13"), "")).toEqual([]);
+  });
+  it("dedupes a member seated on two instrument seats with the same label", () => {
+    const e = sun("2026-09-13", { leads: [], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Keys", person: "Sofi" }] });
+    expect(mySeats(e, "sofi")).toEqual(["Keys"]);
   });
 });

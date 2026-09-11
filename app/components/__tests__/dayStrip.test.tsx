@@ -169,6 +169,49 @@ describe("DayStrip", () => {
     mountStrip();
     expect(document.querySelector(".bg-positive-fg")).toBeNull();
   });
+
+  it("F1 — adds «te toca» to a mine cell's label, and only that cell", () => {
+    mountStrip({ myName: "ana" }); // matches leads: ["Ana"] on 2026-09-13
+    expect(cell("13 de septiembre").getAttribute("aria-label")).toMatch(/, te toca$/);
+    expect(cell("12 de septiembre").getAttribute("aria-label")).not.toMatch(/te toca/);
+  });
+
+  it("F1 — one dot slot: today-only pulses in the neutral colour, mine-only is a static positive dot, both together share the slot", () => {
+    // 10 September is `todayStr` and carries no service by default — add one seated
+    // by "ana" so a single cell is both `today` and `mine` at once.
+    const withTodayMine: Record<string, ActiveDay[]> = { ...ACTIVE, "2026-09-10": [sunday("2026-09-10")] };
+    mountStrip({ myName: "ana", activeDays: withTodayMine });
+
+    const todayMine = cell("10 de septiembre");
+    const dotsInTodayMine = todayMine.querySelectorAll(".bg-positive-fg, .bg-current");
+    expect(dotsInTodayMine).toHaveLength(1);
+    expect(dotsInTodayMine[0].classList.contains("bg-positive-fg")).toBe(true);
+    expect(dotsInTodayMine[0].classList.contains("brand-today-pulse")).toBe(true);
+
+    const mineOnly = cell("13 de septiembre");
+    const dotsInMineOnly = mineOnly.querySelectorAll(".bg-positive-fg, .bg-current");
+    expect(dotsInMineOnly).toHaveLength(1);
+    expect(dotsInMineOnly[0].classList.contains("bg-positive-fg")).toBe(true);
+    expect(dotsInMineOnly[0].classList.contains("brand-today-pulse")).toBe(false);
+  });
+
+  it("F1 — today-only (not mine) still shows one pulsing, non-positive dot", () => {
+    mountStrip(); // no myName: 10 September is today but nobody's
+    const today = cell("10 de septiembre");
+    const dots = today.querySelectorAll(".bg-positive-fg, .bg-current");
+    expect(dots).toHaveLength(1);
+    expect(dots[0].classList.contains("bg-current")).toBe(true);
+    expect(dots[0].classList.contains("brand-today-pulse")).toBe(true);
+  });
+
+  it("F1 — every cell has at most two flow children (the dow/num spans); dots and the multiple mark are absolutely positioned", () => {
+    const withTodayMine: Record<string, ActiveDay[]> = { ...ACTIVE, "2026-09-10": [sunday("2026-09-10")] };
+    mountStrip({ myName: "ana", activeDays: withTodayMine });
+    for (const b of cells()) {
+      const flowChildren = Array.from(b.children).filter((c) => !c.classList.contains("absolute"));
+      expect(flowChildren.length).toBeLessThanOrEqual(2);
+    }
+  });
 });
 
 describe("brand.css — .brand-today-pulse", () => {

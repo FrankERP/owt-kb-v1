@@ -28,7 +28,7 @@ const voices = (e: ActiveDay) => [
  *  ONE reader of `session.user`, so the card and the agenda can never disagree on who
  *  "you" is. */
 export function myNameFromSession(user?: { alias?: string | null; name?: string | null }): string {
-  return (user?.alias?.trim() || user?.name || "").toLowerCase();
+  return (user?.alias?.trim() || user?.name?.trim() || "").toLowerCase();
 }
 
 /** The seat labels where `myName` (already lowercased/trimmed) is seated, in DayCard's
@@ -43,7 +43,7 @@ export function mySeats(e: ActiveDay, myName: string): string[] {
   if ((e.chorus ?? []).some((m) => seated(m.alias || m.member_name))) seats.push("Coro");
   for (const s of e.instruments ?? []) if (seated(s.person)) seats.push(s.label);
   for (const s of e.fohTeam ?? []) if (seated(s.person)) seats.push(s.label);
-  return seats;
+  return [...new Set(seats)];
 }
 
 /** Conflicts = people seated twice within ONE section (voces / instrumentos / foh). */

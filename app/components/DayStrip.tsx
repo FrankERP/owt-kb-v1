@@ -97,7 +97,7 @@ export default function DayStrip({
               type="button"
               disabled={!d.tone}
               aria-current={d.today ? "date" : undefined}
-              aria-label={`${label}${entries.length ? `, ${entries.map((e) => e.day).join(", ")}` : ""}`}
+              aria-label={`${label}${entries.length ? `, ${entries.map((e) => e.day).join(", ")}` : ""}${d.mine ? ", te toca" : ""}`}
               onClick={() => {
                 // Native only, fire-and-forget (see haptics.ts) — never gates the pick.
                 void haptic("selection");
@@ -109,15 +109,20 @@ export default function DayStrip({
             >
               <span className="font-label text-[10px] uppercase tracking-widest opacity-70">{d.dow}</span>
               <span className="font-display text-sm font-bold">{d.num}</span>
-              {/* F1 — a second, positive dot under the number: the same «you»
-                  signal DayCard gives a seat, so a lit day the member is seated
-                  in reads as theirs before the sheet opens. */}
-              {d.mine && <span aria-hidden className="h-1 w-1 rounded-full bg-positive-fg" />}
-              {d.today && (
+              {/* F1 — one absolutely positioned dot slot shared by «today» and «mine»,
+                  so a today+mine cell never stacks two marks: positive when the member
+                  is seated (the same «you» signal DayCard gives a seat), pulsing when
+                  it's today, both at once when it's both. */}
+              {(d.today || d.mine) && (
                 // Centred with a negative margin, NOT `-translate-x-1/2`: the pulse
                 // animates `transform`, which would override a translate utility for
                 // the whole pass and then drop it at `transform: none`.
-                <span className="brand-today-pulse absolute bottom-0.5 left-1/2 -ml-0.5 h-1 w-1 rounded-full bg-current opacity-60" />
+                <span
+                  aria-hidden
+                  className={`absolute bottom-0.5 left-1/2 -ml-0.5 h-1 w-1 rounded-full ${
+                    d.mine ? "bg-positive-fg" : "bg-current opacity-60"
+                  } ${d.today ? "brand-today-pulse" : ""}`}
+                />
               )}
               {d.multiple && (
                 <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-current opacity-80" />

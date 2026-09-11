@@ -71,7 +71,7 @@ export default function AgendaView({
         const long = fmt(row.date, { weekday: "long", day: "numeric", month: "long" });
         // The seats where the signed-in member is serving THIS row — «you»'s own
         // tone (DayCard's positive glow), read from the neutral helper so the row
-        // and the card can never disagree on who "you" is or where they're seated.
+        // and the card can never disagree on who "you" is.
         const seats = mySeats(row.entry, myName);
         return (
           <div key={row.key}>
@@ -100,7 +100,7 @@ export default function AgendaView({
               // The label carries what the eye sees, in the same order: the day
               // name, the long date, the countdown (upcoming rows only), the
               // summary, the conflict count, then the «you» signal.
-              aria-label={`${row.entry.day}, ${long}${countdown ? `, ${countdown}` : ""}, ${row.summary}${row.conflicts ? `, ${conflictLabel(row.conflicts)}` : ""}${seats.length ? `, te toca: ${seats.join(", ")}` : ""}`}
+              aria-label={`${row.entry.day}, ${long}${countdown ? `, ${countdown}` : ""}, ${row.summary}${row.conflicts ? `, ${conflictLabel(row.conflicts)}` : ""}${seats.length ? `, ${upcoming ? "te toca" : "te tocó"}: ${seats.join(", ")}` : ""}`}
               className="group relative flex w-full items-center gap-3 rounded-xl py-3 pl-4 pr-3 text-left transition-[color,background-color,transform] duration-fast ease-out-brand hover:bg-accent/[0.055] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 active:scale-[0.995]"
             >
               <span
