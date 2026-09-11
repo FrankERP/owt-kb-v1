@@ -127,7 +127,7 @@ exclusive to the sign-in lockup, where it already lived before this list existed
 | `Switch` | client | the ONE switch — `role="switch"`, `aria-checked`, a `<button>`; knob springs (`SPRINGS.pop`) with `initial={false}` so the first paint is the real state; haptic on flip. Sizes `sm`/`md`. |
 | `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` for the kill switch. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop rather than a `className` because a same-property utility passed through `className` cannot beat one the primitive already sets — two classes for the same property land at equal specificity in the compiled stylesheet, and the one emitted LATER wins regardless of call-site order, so an `items-center` baked into the component always beats an `items-start` passed in from outside. Name it with `children` or `aria-label`. |
 | `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
-| `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws «Mes anterior» / «Mes siguiente» icon buttons (the schedule's month strip). |
+| `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws an optional prev/next icon-button pair around the input, the parent's job to interpret. `ScheduleHeader` does NOT pass `onStep` (R2 Task 4 ruling — its own header arrows already page the month, under the same accessible names a second stepper pair would duplicate); the one live consumer is the theme gallery's `ControlsFixture`. |
 | `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
 | `AnimatedList` | client | list reflow: `mode="popLayout"` pops leavers out of flow so the survivors slide at once (`layout="position"` per row, leavers fade `fast`); the host renders `relative` because a popped item positions against it — `/biblioteca` index. |
 | `SwipeStrip` | client | `<SwipeStrip onSwipe={(dir: -1 \| 1) => void} threshold={64}>` — the schedule's strip-paging drag (R2: the day strip pages its visible WEEK; the header's arrows page the month). `m.div drag="x"` locked to the horizontal axis (`dragDirectionLock`), pinned at the origin (`dragConstraints={{ left: 0, right: 0 }}`) with elastic give (`dragElastic={0.2}`) and `dragSnapToOrigin`; the snap-back spring is `SPRINGS.settle` passed as `dragTransition`, which motion's drag controller spreads into the release animation and so overrides its default inertia rather than tuning it. `style.touchAction: "pan-y"` keeps vertical page scroll alive under a finger that starts on the strip — and is why the wrapped content must fit the width rather than scroll horizontally. `onSwipe` fires once per completed drag past `threshold` px of travel OR `SWIPE.velocity` (500 px/s); the decision is the exported pure `swipeDirection(offsetX, velocityX, threshold?)`, tested directly since jsdom cannot drive motion's `drag` gesture. Keyboard paging is not this component's job — the header's own prev/next buttons cover the month axis. Reduced motion is not detected here; `MotionConfig reducedMotion="user"` already collapses the snap-back to duration 0 app-wide, same as `Presence`/`CueDialog`. |
@@ -595,3 +595,71 @@ cards — see spec Part X for the full ledger; the motion-relevant pieces:
   (`libraryIndex.ts`'s `parseLibraryParams`/`serializeLibraryParams`) rather than being
   free to invent its own params: a bookmark to the old `/tag/:slug` has to land already
   filtered. Guarded by `redirects.test.ts`.
+
+### Schedule (R2)
+
+`/schedule` opened on a three-month grid and asked the reader to scan ~90 cells for the lit
+ones to answer "when do I serve next." R2 makes the agenda the default: one row per service,
+in date order, under a month divider — see spec Part XI for the full ledger; the motion-
+relevant pieces:
+
+- **`ScheduleHeader`** (`app/components/ScheduleHeader.tsx`) replaces the old range-label-plus-
+  worded-buttons row, which overflowed a 390 px phone. One `h2` truncates inside a
+  `min-w-0 flex-1` cell instead of carrying a fixed width, so the overflow is gone by
+  construction; the arrows either side are `Button variant="icon"` **with `href`**, so paging
+  is a navigation (`?m=`, one month per press) and the route reveal carries the transition
+  (decision C) — the back button keeps working. The month `DateField` carries no `onStep`
+  stepper pair (see its row above) — the arrows already own those accessible names. With the
+  page's own `h2` gone, this header IS the route's heading; the rolling (non-browsing) view
+  adds a small «Próximos» sublabel under the month so a reader knows the named month is where
+  the rolling fetch starts, not a month being browsed.
+- **`DayStrip`** (`app/components/DayStrip.tsx`) is a WEEK strip, not the month-long scroller
+  the plan drew: seven cells in a `grid-cols-7`, no inner scroller. The plan's month-long strip
+  shipped once and could not be finger-scrolled — `SwipeStrip`'s own host sets
+  `touch-action: pan-y`, so the browser never hands the horizontal axis to a nested scroller,
+  and the only way to reach day 20 on a phone was the swipe, which paged the whole month. So
+  the drag now pages the WEEK in client state (`onSwipe` → `onWeekChange?(mondayIso)`, which
+  `CalendarView` uses to scroll the agenda to the paged week), and the header's arrows keep the
+  month axis — two gestures, two axes, neither hidden behind the other. A caption above the
+  cells (`weekRangeLabel`, e.g. «7 – 13 sep») is the only label that moves, since the header's
+  month heading does not. **Today's dot pulses once** on reveal (`brand-today-pulse`, 600 ms,
+  ends on `transform: none` so it never becomes a containing block for a fixed descendant) and
+  then rests at the month grid's ordinary dot opacity — centred with a negative margin rather
+  than a translate, because the pulse animates `transform` and would override a translate
+  utility for the whole pass.
+- **`SwipeStrip`** (`app/components/ui/SwipeStrip.tsx`, added mid-R2 — see its primitives row
+  above) is the drag-with-snap host both the strip and the header's month paging were built
+  against; the strip is its one production consumer.
+- **`AgendaView`** (`app/components/AgendaView.tsx`) lays out service days only, one row each:
+  day · short date, an upcoming-only countdown pill (`NumberRoll`), who leads and how many
+  songs (`summarizeService`), and `⚠ N conflicto(s)` (`conflictLabel`) when someone is seated
+  twice within one section. All of the arithmetic — ordering, month breaks, the summary line,
+  the conflict count — lives in `app/utils/agenda.ts` (`agendaRows`), so this component only
+  lays it out; a special service names itself in the row (Sábado/Domingo don't, the day word
+  already says it). Rows open the existing day sheet (`CueDialog`, unchanged).
+- **The mode crossfade is a plain keyed fade, not stacked panels.** `CalendarView` keys
+  `Presence` on the mode (`agenda` | `month`), so switching unmounts one panel and mounts the
+  other — no exit, no host of known height. The plan's stacked-panels design needs exactly
+  that: a host tall enough for the taller panel, and the agenda is as tall as the fetch window
+  has services while the grid is three months, so any `min-h` big enough for one leaves the
+  other in blank space. This is the plan's own recorded fallback, not an improvised deviation.
+  `appear` is `switched` — **false until the reader actually flips the `SegmentedControl`** —
+  so first paint renders at rest (the M0b rule against `appear` above the fold, ADR-0031; the
+  `ImpersonationBanner` `activeAtLoad` precedent); the crossfade exists for switches only.
+- **Deviations from the plan, accepted.**
+  - **The strip is a week strip, not the plan's month-long scroller** — see `DayStrip` above;
+    the plan's design could not be finger-scrolled inside `SwipeStrip`'s own drag host.
+  - **The swipe pages weeks, not months** — the month axis stays on the header's arrows, a
+    server-driven navigation; the week axis is the one gesture the strip's container can
+    actually deliver.
+  - **Conflicts are counted per SECTION** (voces / instrumentos / foh), not per service —
+    `serviceConflicts` sums `findDuplicates` over each section separately, so the same person
+    seated in two different sections is not a conflict, only a repeat within one.
+  - **The crossfade is a plain keyed fade, no stacked-panel height trick** — see above.
+  - **`appear` only after a switch**, never on the mode the route mounts with — the M0b rule.
+  - **Month paging is server-driven and enters via the route reveal** (decision C) rather than
+    a directional slide; decision C makes every schedule transition enter-only anyway, so a
+    slide had nothing to pair against.
+  - **Deferred to R7:** pull-to-refresh, long-press quick actions — unchanged from the Part IX/
+    Part X deferral, R2 did not pull either forward.
+- **Bundle:** measured at release (Task 6) — see the "Bundle" section above for the row.

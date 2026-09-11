@@ -103,6 +103,17 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   `parseMonthParam`, `addMonths`, `monthBounds`, `monthLabel`, `windowMonths`, `windowBounds`,
   `monthRangeLabel`, `scheduleHref`, `MONTH_NAMES_ES`, `WINDOW_MONTHS=3`. Reads via `Date.UTC` for
   TZ stability.
+- **`agenda.ts`** ([agenda.ts](../app/utils/agenda.ts)) — pure `/schedule` logic (R2, neutral, no
+  React): **`findDuplicates(names)`** (moved here from `DayCard`, which still imports it) is the
+  ONE same-section-repeat check, so `DayCard`'s ⚠ marks and the agenda's conflict count can never
+  disagree; **`serviceConflicts(entry)`** sums it over voces/instrumentos/foh separately (a person
+  seated in two different sections is not a conflict, only a repeat within one), with
+  **`conflictLabel(n)`** as the one "N conflicto"/"N conflictos" plural rule the row's chip and its
+  `aria-label` both read. `serviceTone`, `summarizeService`, `agendaRows` (ordering + month breaks
+  + the summary/conflict fields, sorted Sábado → Domingo → especial within a date) back
+  `AgendaView`; `mondayOf`/`addDays`/`weekStripDays`/`monthStripDays` are the day-strip's UTC date
+  arithmetic (`monthStripDays` is unused by any component since the strip became week-only, but
+  keeps its tests).
 - **`ics.buildICS(events, calName?)`** ([ics.ts](../app/utils/ics.ts)) — minimal all-day `.ics`
   builder. **Timezone convention** (local-noon rendering, Mexico_City) is applied inline across
   utils/components; there is no single dateUtils module — see [ARCHITECTURE §10](ARCHITECTURE.md#11-timezone--dates).
@@ -323,10 +334,13 @@ Legend: **[C]** client, **[S]** server.
 ### Services / setlists (member-facing)
 | Component | Purpose |
 |-----------|---------|
-| `DayCard` [C] | **The core service card / R1 run-sheet card** — day · date header, countdown pill, setlist (medley-grouped via `buildRuns`) + all five seats; embeds `SetlistEditor` for admins + `PracticePlaylistButton`. `layout?: "card" \| "wide"` — `wide` puts setlist and team side by side from `lg` (only when both a setlist AND a team are present); `hero?: boolean` makes the card the page's one primary action, `PracticePlaylistButton variant="hero"` ("Ensayar") in the header, dropping the inline pill from the Setlist rail so the affordance never repeats. |
+| `DayCard` [C] | **The core service card / R1 run-sheet card** — day · date header, countdown pill, setlist (medley-grouped via `buildRuns`) + all five seats; embeds `SetlistEditor` for admins + `PracticePlaylistButton`. `layout?: "card" \| "wide"` — `wide` puts setlist and team side by side from `lg` (only when both a setlist AND a team are present); `hero?: boolean` makes the card the page's one primary action, `PracticePlaylistButton variant="hero"` ("Ensayar") in the header, dropping the inline pill from the Setlist rail so the affordance never repeats. Its ⚠ duplicate-seat marks read `findDuplicates` from `app/utils/agenda.ts` (R2 — moved out of this file so the schedule agenda's conflict count can never disagree with the card's own marks). |
 | `DayCardDisclosure` [C] | A non-next service on `/`, collapsed to one line (day · date · countdown) that opens a `Collapse` onto its `DayCard`. |
 | `NextServiceHero` [C] | Countdown badge ("Hoy"/"Mañana"/"En N días"). Imports `daysUntil`/`formatCountdown` from `app/utils/daysUntil.ts`. |
-| `CalendarView` [C] | Schedule calendar grid; Mexico_City "today" highlight. |
+| `ScheduleHeader` [C] | **The `/schedule` month header (R2)** — `‹ MES AÑO ›` icon-button arrows (`Button variant="icon"` with `href`, so paging is a `?m=` navigation carried by the route reveal, one month per press) around a truncating `h2` that is now the route's own heading; below it, a jump-to-any-month `DateField` (no `onStep` — the arrows already own "Mes anterior"/"Mes siguiente") plus a «Hoy» reset while browsing. The rolling (default) view adds a «Próximos» sublabel under the month. |
+| `DayStrip` [C] | **The `/schedule` WEEK strip (R2)** — seven cells (`grid-cols-7`), every day of the visible week rendered but only service days pressable; opens on today's week (or the anchor month's first service-day week). A `SwipeStrip` drag pages the week client-side (`onWeekChange` scrolls the agenda to it); the header's arrows page the month instead — two axes, two gestures. Today's dot pulses once on reveal. Cells share the month grid's tone classes so the two views can't disagree about what a colour means. |
+| `AgendaView` [C] | **The `/schedule` agenda (R2, default view)** — service days only, one row each, under a month divider: day · short date, an upcoming-only countdown pill, who leads and how many songs, `⚠ N conflicto(s)`. All ordering/summary/conflict arithmetic lives in `app/utils/agenda.ts`'s `agendaRows`; a special service names itself in the row (Sábado/Domingo don't). Rows open the same day `CueDialog` sheet as the month grid. |
+| `CalendarView` [C] | **The `/schedule` host, composition only (R2)** — `ScheduleHeader`, `DayStrip`, an Agenda\|Mes `SegmentedControl` (agenda default), then `AgendaView` or the three-month grid (Mexico_City "today" highlight, unchanged), and the shared day-sheet `CueDialog`. The mode switch is a plain keyed `Presence` fade (no stacked panels — neither view has a fixed height), `appear` only after the reader actually flips the control so first paint renders at rest. The retired «Lista» mode (full `DayCard`s stacked per weekend) is gone; the agenda replaces it. |
 | `AvailabilityCalendar` [C] | Member self-service unavailability picker. |
 | `AddToCalendarButton` [C] | Downloads `.ics` of the member's assignments. |
 | `ChainLinkIcon` [S] | Medley-link row icon. |
@@ -366,6 +380,7 @@ Legend: **[C]** client, **[S]** server.
 | `Select` [N] | The ONE select — native `<select>` under tokenised chrome plus a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md` plus a 44 px minimum height on the element itself). `label` + `id`, or `aria-label`. |
 | `DateField` [N] | The ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws the prev/next month buttons. |
 | `NumberRoll` [C] | A value that changes in place: old rises out, new rises in, one grid cell. `initial={false}`. |
+| `SwipeStrip` [C] | The ONE drag-with-snap host (R2) — `<SwipeStrip onSwipe={(dir: -1 \| 1) => void} threshold={64}>`; `/schedule`'s `DayStrip` is its one consumer, paging the visible week. `drag="x"` locked to the horizontal axis, pinned at the origin with elastic give and a spring snap-back; `touch-action: pan-y` keeps vertical page scroll alive, which is also why wrapped content must fit the width rather than scroll horizontally inside it. The exported `swipeDirection(offsetX, velocityX, threshold?)` is the pure decision, tested directly since jsdom can't drive `motion`'s drag gesture. |
 | `haptic()` (`app/utils/haptics.ts`) [N] | Native-only haptic feedback; no-op on web; fire-and-forget, never awaited in a handler. |
 | `GalleryMotion` (`app/(gallery)/theme-gallery/[theme]/`) [C] | The theme gallery's own `LazyMotion` — the gallery mounts no `Provider`/`MotionProvider`, so this wrapper loads `domMax` synchronously and honours `data-motion="off"` so a baseline capture is deterministic. |
 

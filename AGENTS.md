@@ -243,7 +243,11 @@ never `aria-pressed` toggles), `SlidingIndicator` (tab bars), `Switch`, `Checkbo
 `Select`, `DateField` (native controls under house chrome — never a bare
 `<select>`/`<input type="checkbox|date|month">` in `app/**`), `NumberRoll`,
 `AnimatedList` (`app/components/ui/AnimatedList.tsx` — every list that reflows on filter),
-`daysUntil`/`formatCountdown` (`app/utils/daysUntil.ts` — the ONLY countdown; CDMX-pinned),
+`SwipeStrip` (`app/components/ui/SwipeStrip.tsx` — the one drag-with-snap host, `onSwipe(dir)`
+past a distance/velocity threshold; the schedule's week strip is its one consumer),
+`findDuplicates`/`serviceConflicts` (`app/utils/agenda.ts` — the ONE same-section-repeat check;
+`DayCard`'s ⚠ marks and the schedule agenda's conflict count both read it so they can never
+disagree), `daysUntil`/`formatCountdown` (`app/utils/daysUntil.ts` — the ONLY countdown; CDMX-pinned),
 `haptic()` (`app/utils/haptics.ts` — native only, fire-and-forget),
 `CueDialog` (`app/components/ui/CueDialog.tsx` — every dialog, never a hand-rolled
 `fixed inset-0` shell; render `<CueDialog open={x}>`, never a literal `open` behind a
