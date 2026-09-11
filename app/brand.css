@@ -1138,3 +1138,22 @@ html[data-motion="off"] .brand-stage-hero::before {
   90%  { opacity: 1; }
   100% { opacity: 0; transform: none; }
 }
+
+/* ── Today's dot (spec §12.3, R2) — the day strip's `today` cell carries a 4 px dot
+   that pulses ONCE on reveal and then rests at the same opacity the month grid's
+   dot has always had. Transform and opacity only (rule 1); never loops, and the
+   global reduced-motion block above already zeroes its duration and delay, because
+   this is a plain `animation:` shorthand — no per-effect override (rule 4).
+   The 100 % frame ends on `transform: none`, not `scale(1)`: under `fill: both` a
+   non-`none` transform stays on the element forever and makes it a containing
+   block for any `position: fixed` descendant (rule 5, `brand-lit-pass`'s precedent).
+   The dot's own centring is a negative margin rather than a translate — see
+   `DayStrip.tsx`, where a translate utility would be overridden by these frames. ── */
+.brand-today-pulse {
+  animation: brand-today-pulse 600ms var(--ease-out) 1 both;
+}
+@keyframes brand-today-pulse {
+  0%   { opacity: 0.6; transform: scale(1); }
+  45%  { opacity: 1; transform: scale(2.4); }
+  100% { opacity: 0.6; transform: none; }
+}

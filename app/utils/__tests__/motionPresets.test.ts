@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { SHEET_DISMISS, SPRINGS, VARIANTS, EXIT_MS } from "../motionPresets";
+import { SHEET_DISMISS, SPRINGS, SWIPE, VARIANTS, EXIT_MS } from "../motionPresets";
 
 describe("motionPresets", () => {
   it("names the three springs from spec §2.3 with their constants", () => {
@@ -35,6 +35,12 @@ describe("motionPresets", () => {
     // would let a stray scroll close a sheet. 150 px is Frank's call from dev on
     // 2026-09-09 ("almost twice" the original 80).
     expect(SHEET_DISMISS).toEqual({ distance: 150, velocity: 0.5 });
+  });
+
+  it("pins the swipe-strip paging thresholds (R2 month strip)", () => {
+    // px and px/s (PanInfo's own units — see the in-file comment on why this
+    // differs from SHEET_DISMISS's px/ms).
+    expect(SWIPE).toEqual({ distance: 64, velocity: 500 });
   });
 
   it("exits are faster than enters (spec: enter fast, exit faster)", () => {

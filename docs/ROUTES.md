@@ -43,7 +43,7 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 |-----|------|------|--------|-----------|-------------|
 | `/theme-gallery/[theme]/[fixture]` | `(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` | S | **Public** (ADR-0017) | SSG (6 static) | Theme gallery. `[theme]` ∈ `dark\|light`, `[fixture]` ∈ `swatches\|dialog\|planner`; `dynamicParams=false` 404s anything else. Renders real components from hardcoded fixtures — no session read, no fetch. Review surface for the light-mode migration. |
 | `/` | `(client)/page.tsx` | S | Worship | ISR 60s | Home "Esta semana." This weekend's Sat/Sun/special services. |
-| `/schedule` | `(client)/schedule/page.tsx` | S | Worship | ISR 60s | Upcoming services calendar; `?m=YYYY-MM` month browse. |
+| `/schedule` | `(client)/schedule/page.tsx` | S | Worship | ISR 60s | Upcoming services. Agenda (one row per service) is the default view, `Mes` the month grid; `?m=YYYY-MM` browses one month per header-arrow press, still fetching a `WINDOW_MONTHS`-wide window (default: rolling today → +95 days). |
 | `/biblioteca` | `(client)/biblioteca/page.tsx` | S | Worship | ISR 60s fetch, dynamic by `searchParams` | The song library (R1): one fetch (catalogue + tags + authors), A–Z index with a search console, letter rail and a filter drawer (Tipo, tema, artista, tonalidad). `?q=`/`?tag=`/`?author=` seed initial state; the index mirrors its own state back into the URL without a round-trip. |
 | `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song detail: lyrics/chords, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
 | `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi perfil": upcoming assignments, proposal CTAs, availability, profile settings. |
@@ -110,7 +110,8 @@ token) for private/fresh data.
 ## Notable components per page
 
 - **`/`** — `Navbar`, `DayCard` (the next service, `layout="wide"` + `hero`), `DayCardDisclosure` (every other service, collapsed to one line).
-- **`/schedule`** — `Navbar`, `CalendarView`.
+- **`/schedule`** — `Navbar`, `CalendarView` (composition only: `ScheduleHeader`, `DayStrip`, the
+  Agenda|Mes `SegmentedControl`, `AgendaView` or the month grid, the day sheet `CueDialog`).
 - **`/biblioteca`** — `Navbar`, `LibraryIndex`.
 - **`/me`** — `Navbar`, `NextServiceHero`, `DayCard`, `AddToCalendarButton`,
   `AvailabilityCalendar`, `ProfilePanel`, `TextSizeControl`.
