@@ -2,7 +2,7 @@
 
 Members get an email when the setlist of a service they serve appears or
 changes, and when they are added to, removed from, or moved within a service.
-Changes are debounced 15 minutes per subject and grouped into one email per
+Changes are debounced 5 minutes per subject (15 until 2026-09-10) and grouped into one email per
 person.
 
 - **Design and reasoning:** [`superpowers/specs/2026-07-27-service-notification-emails-design.md`](superpowers/specs/2026-07-27-service-notification-emails-design.md) — the authority on every rule.
@@ -23,7 +23,7 @@ sends one email each, and deletes them.
 writer commits ──▶ after() queues a notice (own transaction, writeClient)
                         │
                         ▼
-              notificationOutbox  ◀── debounced: notifyAfter slides 15 min
+              notificationOutbox  ◀── debounced: notifyAfter slides 5 min
                         │              per edit, hard ceiling 60 min
                         ▼
    sweep: gate ▶ select ▶ claim ▶ classify ▶ filter ▶ group ▶ send ▶ consume
@@ -263,11 +263,12 @@ empty is a 200 on the last attempt, `-1` is never attempted (both observed 2026-
 `scripts/measure-cron-delivery.mjs` reads GitHub runs only, so for Scheduler read
 `lastAttemptTime` or the GCP logs.
 
-**The practical consequence:** a notice becomes due 15 minutes after it is queued,
+**The practical consequence:** a notice becomes due 5 minutes after it is queued,
 and layer 2 (the writer's own `after()` sweep) has already run by then, so layer 1
-is what must come back. On the median it comes back at an hour; on a bad day it
-does not come back for half a day. Layer 3's liveness alarm is daily, so a stall
-shorter than that is invisible.
+is what must come back. With only the GitHub caller running, the median was an
+hour and a bad day was half a day; with Scheduler the next tick is at most five
+minutes away. Layer 3's liveness alarm is daily, so a stall shorter than that is
+still invisible.
 
 **The mitigation above is applied.** The bearer travels
 in the HEADER, never in a `?secret=` query string, where it would land in access
@@ -295,7 +296,7 @@ the `request_changes` transition have all stopped mirroring. `lead_notes` and
 and the thread is the only record of what was said.
 
 Audience, debounce and preference key are unchanged: the same admin set resolved
-at flush, the same 15–60 minute window, the same `notifPrefs.emailProposals`.
+at flush, the same 5–60 minute window, the same `notifPrefs.emailProposals`.
 
 A notice minted before that cutover carries `beforeNotes` and no count. It is
 classified against the thread too — against the **newest `lead_note` body**,
@@ -338,7 +339,7 @@ and emails admins as it always has (outside this delivery and unchanged by it).
 
 The fourth sends **nothing**, which is why the invariant is "at most one" rather
 than "exactly one". A lead posts while `pending`, so a notice is queued and no
-push fires. An admin reads the thread and approves inside the 15–60 minute
+push fires. An admin reads the thread and approves inside the 5–60 minute
 debounce — the ordinary flow, since reading the message is what prompts the
 approval. At flush the live status is no longer reviewable, the notice
 classifies to `null`, and it is consumed. The other admins never learn the
@@ -631,7 +632,7 @@ pending notification.
 
 | Name | Default | Meaning |
 |---|---|---|
-| `NOTIFY_DEBOUNCE_MINUTES` | 15 | Quiet period before a subject flushes |
+| `NOTIFY_DEBOUNCE_MINUTES` | 15 | Quiet period before a subject flushes. **Production and Preview run `5` since 2026-09-10.** Measured over the outbox's first six weeks (Sanity transaction history, 2026-07-28 → 09-10: 74 app edits on 32 services/proposals): a 15-minute window collapsed 9 bursts into 59 notices, a 5-minute one would have produced 63 — four more emails in six weeks, every notice ten minutes sooner. Only four bursts ever spanned more than five minutes, three of them on proposals, whose thread does not collapse anyway. Delivery is now the debounce plus up to one Scheduler tick: 5–10 min after the last edit |
 | `NOTIFY_MAX_WINDOW_MINUTES` | 60 | Hard ceiling from first queue; defeats starvation |
 | `NOTIFY_CLAIM_TTL_MINUTES` | 5 | Lease on a claimed notice; expiry makes it due again |
 | `NOTIFY_SEND_BUDGET_MS` | 40000 | Wall-clock bound on the send loop |
