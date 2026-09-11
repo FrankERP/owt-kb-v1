@@ -227,6 +227,8 @@ Before was measured on the primary checkout at the merge-base commit
 | **`main` at `0414ee86`, R1 release-day rebuild** (git-archive cold build, APFS-cloned `node_modules`, same environment as the R1 row) | 172.5 kB | 123.5 kB | 350.9 kB | not cleanly isolable — see note below |
 | **R1 tip `96555761`** (same environment; the library leaves home for `/biblioteca`) | 172.5 kB | 119.0 kB | 354.8 kB | not cleanly isolable — see note below |
 | **R1 tip — `/biblioteca`** (new route, same build) | 172.5 kB | 112.9 kB (`/biblioteca`) | 121.5 kB (`/schedule`) | — |
+| **`main 6e9a195c`, R2 release-day rebuild** (git-archive cold build, same environment as the R1 rows) | 172.5 kB | 121.5 kB (`/schedule`) | 355.7 kB | 114.2 kB (`/biblioteca`) |
+| **R2 tip `444d015d`** (same environment; the week strip, the agenda and `SwipeStrip`) | 172.5 kB | 123.1 kB (`/schedule`, +1.6) | 356.4 kB (+0.7, build noise) | 114.2 kB (`/biblioteca`, unchanged) |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -628,8 +630,9 @@ relevant pieces:
   than a translate, because the pulse animates `transform` and would override a translate
   utility for the whole pass.
 - **`SwipeStrip`** (`app/components/ui/SwipeStrip.tsx`, added mid-R2 — see its primitives row
-  above) is the drag-with-snap host both the strip and the header's month paging were built
-  against; the strip is its one production consumer.
+  above) is the drag-with-snap host the week strip was built against; the strip is its one
+  production consumer. The header's own month paging is not a drag — it's two `Button
+  variant="icon"` links (`href`, a `?m=` navigation).
 - **`AgendaView`** (`app/components/AgendaView.tsx`) lays out service days only, one row each:
   day · short date, an upcoming-only countdown pill (`NumberRoll`), who leads and how many
   songs (`summarizeService`), and `⚠ N conflicto(s)` (`conflictLabel`) when someone is seated
@@ -662,4 +665,8 @@ relevant pieces:
     slide had nothing to pair against.
   - **Deferred to R7:** pull-to-refresh, long-press quick actions — unchanged from the Part IX/
     Part X deferral, R2 did not pull either forward.
-- **Bundle:** measured at release (Task 6) — see the "Bundle" section above for the row.
+- **Bundle:** `main 6e9a195c` → `R2 tip 444d015d` (git-archive cold build, same
+  environment): `/schedule` 121.5 kB → 123.1 kB (+1.6), `/biblioteca` 114.2 kB
+  unchanged, `/admin` 355.7 kB → 356.4 kB (+0.7, build noise); shared unchanged. The
+  week strip, the agenda and `SwipeStrip` cost 1.6 kB on the route — see the "Bundle"
+  section above for the rows.

@@ -1176,7 +1176,8 @@ reshaped to match.
   the only way to reach day 20 was the swipe, and the swipe paged the whole month. Days 8–30
   were unreachable by touch while looking reachable. The fix is what spec §12.3's ASCII always
   called it: seven cells, no inner scroller, the week that contains today (or the anchor
-  month's first service day) as the initial view.
+  month's first DAY's week — `mondayOf(anchorMonth + "-01")`, service day or not) as
+  the initial view.
 - **The swipe pages weeks, not months.** With the strip narrowed to one week, its drag became
   the week-paging gesture (client state, `onWeekChange`); the month axis stays where the plan
   put it, on the header's arrows (server-driven, `?m=`).
@@ -1210,4 +1211,7 @@ reshaped to match.
   mounted the agenda with `Presence appear` unconditionally true, which would have animated
   the very first paint — caught before merge, not after.
 
-**Bundle:** measured at release (Task 6) — see the `docs/MOTION.md` ledger.
+**Bundle:** `main 6e9a195c` → `R2 tip 444d015d` (git-archive cold build, same env):
+`/schedule` 121.5 kB → 123.1 kB (+1.6), `/biblioteca` 114.2 kB → 114.2 kB (unchanged),
+`/admin` 355.7 kB → 356.4 kB (+0.7, build noise); shared unchanged. The week strip, the
+agenda and `SwipeStrip` cost 1.6 kB on the route — see the `docs/MOTION.md` ledger.
