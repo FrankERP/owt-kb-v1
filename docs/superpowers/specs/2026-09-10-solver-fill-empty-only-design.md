@@ -161,7 +161,7 @@ the per-service occupancy limit, the soft consecutive-repeat penalty, and
 replace semantics stays correct. The rejected design had to restate each of those by hand
 and got two of them wrong twice.
 
-### 5.1 The three changes that make a pin possible
+### 5.1 The four changes that make a pin possible
 
 **Candidacy, scoped to the pin.** `build_candidate_map` adds P to `candidates[slot.key]`
 for the slots of (R, W) and **nowhere else**. P gains no candidacy in any other role, week
@@ -173,26 +173,76 @@ slots. Pin three leads where there are two seats and the row grows to three; it 
 shrinks. This is the inverse of the rejected design and it is why over-pinning cannot be an
 infeasibility.
 
-**Fairness slack, not fairness exemption.** A pin is a service the solver did not choose, so
-holding it against the spread would punish the admin for their own decision — and the global
-spread is *hard*, with only tiers 1 and 2 (`:794`, `:1101-1115`), so a half-filled month
-(this feature's entire use case) would make every Stage B tier infeasible and return the
-fairness-free Stage A result. The escape valve already exists and absence already uses it:
-`combined_slack = fairness_slack + absence_slack` at `:1063-1066`. Pins join that sum — a
-person with K pins gets K slack — and the same addition is made to `role_fairness_slack` per
-role. The pinned services still *count*; they simply cannot make the month infeasible.
+**Pinned-only people join `all_people`, and leave the fairness groups.** A pinned person who
+is in no pool is absent from `all_people`, which is derived from the pools alone (`:452`).
+That is not a nuisance: `assignments` is seeded `{p: [] for p in all_people}` (`:979`) and
+then appended to per solved variable (`:982`), so such a person raises `KeyError`, escapes
+`solve_from_dict`'s `except (ValueError, RuntimeError)` (`:1216`), and reaches the admin as
+"Solver service returned HTTP 500". The same omission silently skips them at every other
+site keyed on `all_people` rather than on `x`: `total_counts` and `role_counts` (`:983-985`),
+the per-service occupancy limit (`:755`), `total_vars` / `overall_total_vars` (`:772-781`),
+`role_vars` (`:822`), and the soft consecutive penalty (`:907`).
 
-### 5.2 The four exemptions where a rule would contradict a pin
+So the solver unions the pinned names into `all_people` after the pool exclusivity guard —
+which compares the three pools against each other (`:453-454`) and is unaffected — and adds
+them to **no** pool, so `is_eligible` still keeps them out of every candidate list the pin
+did not grant. They are then **excluded from the global and per-role fairness groups**: the
+solver cannot choose them anywhere, so including them would let a person it has no power
+over set `gmin` and cap everyone else.
 
-E3 says the pin wins. These are the only places a hard rule can contradict one, and each
-exemption is scoped to the pinned assignment itself:
+**Fairness: the hard spread is over the seats the solver chose.** A pin is a service the
+solver did not choose, so it must not be able to make the month infeasible — and the global
+spread is *hard*, with only tiers 1 and 2 (`:794`, `:1120-1133`). The hard comparison
+therefore runs over each person's **solver-chosen** count, `total_vars[p]` minus their pin
+count, and the same subtraction is made in the per-role spread. Pins still reach the
+optimiser through `ov_total` (`:777-781`), which feeds the soft `overall_spread` at `:949`,
+so the solver still *compensates* — a person the admin pinned four times is already ahead,
+and the objective pushes the remaining seats toward everyone else.
+
+**Not fairness slack, which looks right and is not.** Routing pins through `combined_slack`
+(`:1065-1066`) is the obvious move and it fails: giving most people slack empties the
+`strict` group, and `solve_schedule:1072-1074` then resets `strict` to everyone and sets
+`relaxed = {}` — discarding every pin's slack, **every absence's slack, and every authored
+`fairness_slack N` rule**. A reviewer reproduced exactly that on a 12-person month (34, 30
+and 26 pins all collapse `strict` to zero), including the Stage-A fairness-free fallback
+this paragraph exists to prevent, and it regresses shipped absence behaviour on every pinned
+run. §11 carries a guard that reaches that branch.
+
+### 5.2 The five exemptions where a rule would contradict a pin
+
+E3 says the pin wins. Each exemption is scoped to the pinned assignment itself. The list is
+the product of executing the mechanism against the real solver, not of reading it — the first
+four were derived by reading and the fifth, which breaks the feature's headline use case on
+the rules the team runs today, was not.
 
 | Rule | Exemption |
 |---|---|
 | Week exclusion (availability), `:679-690` | Not applied to the slots of a pinned (P, R, W). Every **other** slot that week stays excluded, so pinning someone into Sunday does not make them available for Saturday. |
 | Pair exclusion, `:711-722` | Skipped for a (week, service) where **both** sides are pinned. With one side pinned the rule keeps full force and pushes the other person out — which is the wanted behaviour. |
 | Consecutive, `:744-751` | Skipped when the person is pinned in both weeks for matching roles. |
-| DSL count rules, `:886-897` | For `<=` and `==`, the bound becomes `max(rule.value, pinned_count)` so the pins themselves cannot be infeasible. `>=` needs nothing: pins only help satisfy it. |
+| DSL count rules, `:886-897` | For `<=` and `==`, the bound becomes `max(rule.value, pinned_count)` so the pins themselves cannot be infeasible. |
+| **Any "at least one of these" requirement whose row the pins have filled** | Skipped for that row and week. See below — this is the exemption the first draft missed, and it is the one that breaks the headline use case. |
+
+**The saturated-row family.** Rows grow to `max(default, pins)`, which fits the pins but
+leaves **no headroom**: when pins fill a row, the solver cannot place anyone else in it. Every
+hard constraint of the shape "at least one X must appear in this row and week" is then
+unsatisfiable. There are three instances, and the first fires on the shipped rule set:
+
+- **Weekly presence** (`:732-742`). `any_of(Hugo, Jakey) on Sun.BGV each_week` is a rule the
+  team runs today (`solverConfigDefaults.ts:95-97`). Take a solved board, hand-swap Jakey out
+  of one week's Sun.BGV for somebody else — the manual correction this whole feature exists
+  to preserve — turn the switch on, press Auto, and the month returns `ok: false`. Reproduced.
+- **The Saturday dedicated-lead anchor** (`:705-709`). Pin both `Sat.Lead` seats of a week
+  with non-dedicated leads, which the picker permits, and `sum(dedicated_terms) >= 1` cannot
+  hold. Reproduced.
+- **DSL `>=` count rules** (`:894-895`). An earlier draft of this spec said "`>=` needs
+  nothing: pins only help satisfy it", which is false in the crowding direction:
+  `Niza Sun.Choir >= 3` with the Choir rows pinned full is infeasible. Reproduced.
+
+All three surfaced as `diagnose_infeasibility`'s generic message, which names a missing Lead
+— the wrong cause — leaving the admin with no way to find the offending cell. So each is
+skipped when its row is saturated by pins, on the same principle as the other four
+exemptions, and §6 gains a notice naming the rule that was set aside.
 
 **One consultation of the same exclusions that is easy to miss.** Weekly presence filters
 its terms through `excluded_pwr` (`:727-741`), which is built from the same week-exclusion
