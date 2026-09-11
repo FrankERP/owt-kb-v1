@@ -105,4 +105,19 @@ describe("MeHeader", () => {
     expect(container.querySelector("img")?.getAttribute("src")).toBe("https://example.test/ana.jpg");
     expect(screen.getByRole("link", { name: "Editar perfil" }).getAttribute("href")).toBe("#ajustes");
   });
+
+  it("handles a null memberTypes (Sanity null for unset array) without throwing", () => {
+    freezeToday();
+    mount(
+      <MeHeader
+        name="Dev Verificador"
+        memberTypes={null}
+        inWorship
+        next={{ dateKey: "2026-09-13", day: "Domingo", seat: "Lead" }}
+      />,
+    );
+    // Should render the name and line without crashing.
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Dev Verificador");
+    expect(screen.getByText(/Te toca el domingo/i)).toBeTruthy();
+  });
 });
