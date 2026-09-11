@@ -1298,12 +1298,12 @@ are gone, the header is the page's heading.
   member's `memberType` is the worship eligibility axis (CLAUDE.md), so handing it to
   `MeHeader` for a kids-only volunteer would print worship copy on a page a kids-only
   member is otherwise never shown any of.
-- **`memberTypes.ts` holds neutral, full-word labels** — "Tipo" used to have three
-  independent copies (the header's chip text, `/admin`'s abbreviated table labels, and
-  the admin PATCH route's write allowlist) with nothing to stop them drifting apart.
-  `/admin` keeps its own `TYPE_ABBR` deliberately: a dense table needs "Líder Dom", not
-  "Líder Domingo", and that is an abbreviation of the canonical label, not a second
-  source of it.
+- **`memberTypes.ts` holds neutral, full-word labels** — "Tipo" already had two
+  independent copies (`/admin`'s abbreviated table labels and the admin PATCH route's
+  write allowlist) with nothing to stop them drifting apart, and the header's chip
+  text was about to become a third. `/admin` keeps its own `TYPE_ABBR` deliberately: a
+  dense table needs "Líder Dom", not "Líder Domingo", and that is an abbreviation of
+  the canonical label, not a second source of it.
 - **Dual-ministry precedence: worship wins, Kids is the fallback.** A member in both
   ministries with nothing of their own assigned in worship but a Kids Sunday coming up
   sees the Kids line — the header's one line names the NEAREST thing of any ministry,
@@ -1358,6 +1358,11 @@ are gone, the header is the page's heading.
   Frank's look should confirm the jump lands on `SettingsCard`, not merely that the
   anchor exists in the DOM.
 
-**Bundle:** measured at release.
+**Bundle:** `main df19f1b5` → `R3 tip 4b3e18ad` (git-archive cold build, same env):
+`/me` 129.8 kB → 132.2 kB (+2.4), `/admin` 356.5 kB → 356.9 kB (+0.4), `/` 119.9 kB →
+120.4 kB (+0.5), `/schedule` 123.6 kB → 124.1 kB (+0.5), `/biblioteca` 114.2 kB →
+114.3 kB (+0.1); shared unchanged. The header, weekend list and `SettingsCard` cost
+2.4 kB on `/me`; the pill `tone` on `Button` touches every other route by
+~0.4–0.5 kB — see the `docs/MOTION.md` ledger.
 
 **Release:** pending.

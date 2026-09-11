@@ -604,9 +604,11 @@ export default async function MePage() {
                 Recarga la página; si sigue igual, avísale a un administrador.
               </p>
             </section>
-            {/* Tema and Tamaño de texto are device-local, so they survive a failed
-                profile read — and `#ajustes` keeps a target for the header link.
-                No `member`, so the card renders without its Perfil subsection. */}
+            {/* Tamaño de texto is device-local, so it survives a failed profile
+                read; Tema is not — it PATCHes /api/me/theme and reports its own
+                write failure — but the card still renders so `#ajustes` keeps a
+                target for the header link. No `member`, so the card renders
+                without its Perfil subsection. */}
             <SettingsCard member={null} {...revealProps(4)} />
           </>
         )}

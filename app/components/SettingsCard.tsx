@@ -10,8 +10,9 @@
 // anchor still lands on something.
 //
 // `member` is nullable on purpose — a failed profile read on /me still renders
-// Tema and Tamaño de texto (both device-local), just without the Perfil
-// subsection, which has nothing to edit without a profile.
+// Tema and Tamaño de texto, just without the Perfil subsection, which has
+// nothing to edit without a profile. Tamaño de texto is device-local; Tema is
+// not — it PATCHes /api/me/theme and reports its own write failure.
 import type { ComponentPropsWithoutRef } from "react";
 import ProfilePanel, { type MemberProfile } from "@/app/components/ProfilePanel";
 import TextSizeControl from "@/app/components/TextSizeControl";

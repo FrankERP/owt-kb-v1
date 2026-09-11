@@ -35,15 +35,17 @@ const VARIANT: Record<ButtonVariant, string> = {
   ghost: "rounded-lg text-mono-500 hover:text-accent",
   danger: "rounded-lg bg-negative-surface/60 text-ink hover:bg-negative-border/60",
   icon: "rounded-lg w-9 h-9 p-0 text-mono-500 hover:text-accent hover:bg-surface-lift/5",
-  pill: "rounded-full border border-surface-accent-30 text-mono-500 hover:text-accent aria-pressed:border-accent aria-pressed:text-accent aria-pressed:bg-accent/10",
+  pill: "rounded-full border border-surface-accent-30 text-mono-500 hover:text-accent",
 };
 
-// The `availability` tone overrides the pill's own pressed triplet. Text is
-// `soft`, not `strong` — `strong` measures 3.67:1 on the pressed fill in light,
-// below the 4.5 floor; `soft` clears 5.17:1 light / 9.16:1 dark
-// (`app/utils/__tests__/lightContrast.test.ts` pins it).
+// The pressed triplet lives entirely in PILL_TONE, never in VARIANT.pill —
+// two sources emitting a pressed triplet for the same element left the
+// winner decided by Tailwind's emission order, not by which tone was asked
+// for. Text is `soft`, not `strong`, on the availability tone — `strong`
+// measures 3.67:1 on the pressed fill in light, below the 4.5 floor; `soft`
+// clears 5.17:1 light / 9.16:1 dark (`app/utils/__tests__/lightContrast.test.ts` pins it).
 const PILL_TONE: Record<PillTone, string> = {
-  accent: "",
+  accent: "aria-pressed:border-accent aria-pressed:text-accent aria-pressed:bg-accent/10",
   availability:
     "aria-pressed:border-availability-strong aria-pressed:text-availability-soft aria-pressed:bg-availability-fg/20",
 };

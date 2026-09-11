@@ -14,7 +14,7 @@
 //
 // A closed Collapse is a zero-height child; a `space-y-*`/`gap` PARENT still
 // reserves its gap, so carry the gap on the Collapse's own className instead
-// (see AvailabilityCalendar, ServicesPanel).
+// (see MyAvailabilityPanel, ServicesPanel).
 
 import { useEffect, useRef, useState } from "react";
 import * as m from "motion/react-m";

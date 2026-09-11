@@ -68,9 +68,9 @@ describe("useTransientValue", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  // `reset` exists for invalidation that is not time-based — AvailabilityCalendar
-  // clears "Guardado ✓" the moment a date is edited. The point is that it CANCELS:
-  // faking a reset by showing the idle value would arm another timer.
+  // `reset` exists for invalidation that is not time-based — MyAvailabilityPanel's
+  // `useAvailability` clears its saved flag the moment a date is edited. The point
+  // is that it CANCELS: faking a reset by showing the idle value would arm another timer.
   it("reset returns to idle now and cancels the pending timer", () => {
     function Resettable() {
       const [toast, showToast, reset] = useTransientValue<string | null>(null, 3000);

@@ -1,8 +1,9 @@
 // "Tipo" (`memberType`) — the ONLY worship eligibility axis (see the schema's
 // own field description). This is the canonical list and Spanish label map: it
-// used to be three separate copies (`MeHeader`'s chip labels, `/admin`'s
-// abbreviated table labels, and the PATCH route's write allowlist) with nothing
-// to stop them from drifting apart.
+// used to be two separate copies (`/admin`'s abbreviated table labels and the
+// PATCH route's write allowlist) with nothing to stop them from drifting apart
+// — `MeHeader`'s Tipo chips would have been a third if this module hadn't
+// centralized the list first.
 //
 // Mirrors `sanity/schemas/worshipTeam.ts`'s `memberType.options.list` exactly —
 // `memberTypes.test.ts` reads that schema and pins the two together. Neutral

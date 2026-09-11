@@ -229,7 +229,8 @@ Before was measured on the primary checkout at the merge-base commit
 | **R1 tip — `/biblioteca`** (new route, same build) | 172.5 kB | 112.9 kB (`/biblioteca`) | 121.5 kB (`/schedule`) | — |
 | **`main 6e9a195c`, R2 release-day rebuild** (git-archive cold build, same environment as the R1 rows) | 172.5 kB | 121.5 kB (`/schedule`) | 355.7 kB | 114.2 kB (`/biblioteca`) |
 | **R2 tip `444d015d`** (same environment; the week strip, the agenda and `SwipeStrip`) | 172.5 kB | 123.1 kB (`/schedule`, +1.6) | 356.4 kB (+0.7, build noise) | 114.2 kB (`/biblioteca`, unchanged) |
-| **R3 tip** (`/me` — the header, weekend list, `SettingsCard`) | — | — | — | measured at release. |
+| **`main df19f1b5`, R3 release-day rebuild** (git-archive cold build, same environment as the R2 rows) | 172.5 kB | 129.8 kB (`/me`) | 356.5 kB | 119.9 kB (`/`; `/schedule` 123.6 kB, `/biblioteca` 114.2 kB) |
+| **R3 tip `4b3e18ad`** (the header, weekend list, `SettingsCard`; the pill `tone` on `Button` touches every route by ~0.4–0.5 kB) | 172.5 kB | 132.2 kB (`/me`, +2.4) | 356.9 kB (+0.4) | 120.4 kB (`/`, +0.5); `/schedule` 124.1 kB (+0.5), `/biblioteca` 114.3 kB (+0.1) |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -751,11 +752,17 @@ the full ledger; the motion-relevant pieces:
     `app/components/availability/AvailabilityGrid.tsx`, beside the rest of `/me`'s
     availability surfaces rather than staying at the top level.
   - **`app/utils/memberTypes.ts`** was not in the plan — it came out of a fix round once
-    `MeHeader`'s Tipo chips needed labels and the admin PATCH route's write allowlist and
-    `/admin`'s own abbreviated table labels turned out to be three independent copies of
-    the same six-value list with nothing stopping them from drifting apart.
+    `MeHeader`'s Tipo chips needed labels: the admin PATCH route's write allowlist and
+    `/admin`'s own abbreviated table labels were already two independent copies of the
+    same six-value list with nothing stopping them from drifting apart, and `MeHeader`
+    was about to become a third.
   - **`NextServiceHero` is deleted**, not reused as the plan assumed — the hero now
     renders as a direct `<DayCard {...} hero />`, and the countdown that used to live in
     the hero component now lives in `MeHeader` instead; a wrapper that only forwarded
     props to `DayCard` had no remaining job once the header owned the countdown.
-- **Bundle:** measured at release.
+- **Bundle:** `main df19f1b5` → `R3 tip 4b3e18ad` (git-archive cold build, same
+  environment as the R2 rows): `/me` 129.8 kB → 132.2 kB (+2.4), `/admin` 356.5 kB →
+  356.9 kB (+0.4), `/` 119.9 kB → 120.4 kB (+0.5), `/schedule` 123.6 kB → 124.1 kB
+  (+0.5), `/biblioteca` 114.2 kB → 114.3 kB (+0.1); shared unchanged. The header, the
+  weekend list and `SettingsCard` cost 2.4 kB on `/me`; the pill `tone` on `Button`
+  touches every other route by ~0.4–0.5 kB — see the "Bundle" section above for the rows.
