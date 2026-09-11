@@ -28,9 +28,9 @@ export default function SettingsCard({ member, className = "", ...rest }: Props)
       className={`rounded-2xl border border-surface-accent-20 divide-y divide-ink-dim/10 ${className}`}
       {...rest}
     >
-      <div className="p-5">
-        <ThemeControl bare />
-      </div>
+      {/* ThemeControl returns null while impersonating, so it owns its own padding
+          to avoid leaving an empty divided box when it is hidden */}
+      <ThemeControl bare />
       <div className="p-5">
         <TextSizeControl bare />
       </div>

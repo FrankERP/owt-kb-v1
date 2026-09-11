@@ -12,10 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("next-auth/react", () => ({
   // ThemeControl reads `isImpersonating` off the session; a plain member session
   // renders the control normally.
-  useSession: () => ({ data: { user: { name: "Ana" } }, status: "authenticated" }),
+  useSession: vi.fn(() => ({ data: { user: { name: "Ana" } }, status: "authenticated" })),
 }));
 
 import SettingsCard from "../SettingsCard";
+import { useSession } from "next-auth/react";
 import { CueDialogProvider } from "../ui/CueDialogProvider";
 import { ToastProvider } from "../ui/Toast";
 
@@ -47,10 +48,12 @@ describe("SettingsCard", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })));
   });
 
-  it("renders one #ajustes card holding #tema, with all three headings when a profile is present", () => {
+  it("renders one #ajustes card holding #tema as a direct child, with all three headings when a profile is present", () => {
     const { container } = renderCard(baseMember);
-    expect(container.querySelector("#ajustes")).not.toBeNull();
-    expect(container.querySelector("#tema")).not.toBeNull();
+    const ajustes = container.querySelector("#ajustes");
+    expect(ajustes).not.toBeNull();
+    // #tema is a direct child of #ajustes, not wrapped in a div
+    expect(ajustes?.querySelector(":scope > #tema")).not.toBeNull();
     expect(screen.queryByRole("heading", { name: "Tema" })).not.toBeNull();
     expect(screen.queryByRole("heading", { name: "Tamaño de texto" })).not.toBeNull();
     expect(screen.queryByRole("heading", { name: "Perfil" })).not.toBeNull();
@@ -75,5 +78,22 @@ describe("SettingsCard", () => {
     // Four, not five — the member role hides the admin-only "Propuestas" row
     // (see emailPrefToggles.test.tsx for the full resolution contract).
     expect(switches).toHaveLength(4);
+  });
+
+  it("drops #tema entirely while impersonating (ThemeControl returns null) with no empty box", () => {
+    (useSession as any).mockImplementation(() => ({
+      data: { user: { name: "Super", isImpersonating: true } },
+      status: "authenticated",
+    }));
+    try {
+      const { container } = renderCard(null);
+      // #tema should be null since ThemeControl returns null when impersonating
+      expect(container.querySelector("#tema")).toBeNull();
+      // The first element child of #ajustes should be Tamaño de texto, not an empty div
+      const ajustes = container.querySelector("#ajustes");
+      expect(ajustes?.firstElementChild?.textContent).toContain("Tamaño de texto");
+    } finally {
+      (useSession as any).mockReset();
+    }
   });
 });

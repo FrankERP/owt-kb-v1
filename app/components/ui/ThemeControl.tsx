@@ -78,7 +78,7 @@ export default function ThemeControl({ bare = false }: { bare?: boolean } = {}) 
   }
 
   return (
-    <section id="tema" className={bare ? "" : "rounded-2xl border border-surface-accent-20 p-5"}>
+    <section id="tema" className={bare ? "p-5" : "rounded-2xl border border-surface-accent-20 p-5"}>
       <h3 id="tema-h" className={`font-display text-lg font-bold ${bare ? "" : "mb-1"}`}>Tema</h3>
       <p className="font-body text-sm text-mono-500 dark:text-mono-400 mb-4">
         Por defecto la app sigue el modo de tu teléfono. Tu elección te sigue en
