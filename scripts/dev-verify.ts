@@ -213,10 +213,14 @@ async function main(): Promise<void> {
       // confirm) also substring-matches the modal's "Cerrar Eliminar servicio"
       // close button, and `.first()` clicks the close — dismissing the very
       // action under test. Exact-first makes an unambiguous name unambiguous.
+      // `radio` joined on 2026-09-10: every one-of-N choice is a SegmentedControl
+      // (role="radiogroup" of role="radio"), and without it `--click "Mes"` fell
+      // through to the substring match and clicked «Mes anterior» — silently.
       const roleNames = (exact: boolean) =>
         page.getByRole("button", { name, exact })
           .or(page.getByRole("link", { name, exact }))
-          .or(page.getByRole("menuitem", { name, exact }));
+          .or(page.getByRole("menuitem", { name, exact }))
+          .or(page.getByRole("radio", { name, exact }));
       const exactMatches = roleNames(true);
       const el = (await exactMatches.count()) > 0 ? exactMatches.first() : roleNames(false).first();
       await el.click({ timeout: 10_000 }).catch(() => report.pageErrors.push(`click:${name} not found`));

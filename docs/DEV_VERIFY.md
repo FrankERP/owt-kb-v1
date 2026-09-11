@@ -130,7 +130,7 @@ Kill switch: set `disabled: true` on `member-dev-verify` in Studio; the seed scr
 touches that field, so rotating afterwards keeps it disabled. Rotate: new hash, re-run
 `--apply`, update `DEV_VERIFY_PASSWORD`, delete the storage state.
 
-`--click` matches an element by accessible name across the `button`, `link`, and `menuitem`
+`--click` matches an element by accessible name across the `button`, `link`, `menuitem` and `radio` (SegmentedControl options)
 roles — admin destructive actions live behind a kebab whose items are `menuitem` — and
 prefers an exact name match over a substring one, so a modal's confirm (`Eliminar`) is not
 shadowed by its close control (`Cerrar Eliminar servicio`).
