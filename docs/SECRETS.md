@@ -396,4 +396,22 @@ that order, and the window is zero.
 
 Other variables in use — `NEXTAUTH_*`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
 
-Notification-outbox tuning knobs (`NOTIFY_DEBOUNCE_MINUTES`, `NOTIFY_MAX_WINDOW_MINUTES`, `NOTIFY_CLAIM_TTL_MINUTES`, `NOTIFY_SEND_BUDGET_MS`, `NOTIFY_FLUSH_EMAIL_LIMIT`, `NOTIFY_STALE_ALERT_HOURS`) are configuration, not secrets, and all have code defaults. They are specified in `docs/superpowers/specs/2026-07-27-service-notification-emails-design.md` §9.
+Notification-outbox tuning knobs (`NOTIFY_DEBOUNCE_MINUTES`, `NOTIFY_MAX_WINDOW_MINUTES`, `NOTIFY_CLAIM_TTL_MINUTES`, `NOTIFY_SEND_BUDGET_MS`, `NOTIFY_FLUSH_EMAIL_LIMIT`, `NOTIFY_STALE_ALERT_HOURS`) are configuration, not secrets, and all have code defaults. They are specified in `docs/superpowers/specs/2026-07-27-service-notification-emails-design.md` §9. Two are currently overridden in Vercel and recorded in this file: `NOTIFY_FLUSH_EMAIL_LIMIT` (above) and `NOTIFY_DEBOUNCE_MINUTES` (below).
+
+---
+
+## `NOTIFY_DEBOUNCE_MINUTES` (when overridden in Vercel)
+
+**Not a secret** — a tuning knob with a code default of 15. Listed because it is **set to `5` on Production and Preview since 2026-09-10**, as plain `Config` (readable), and a knob set in a dashboard with no record is exactly what this file exists to prevent. The measurement that justified 5 is in the `docs/NOTIFICATIONS.md` configuration table.
+
+**Needed in: Vercel Production and Preview.** Preview carries it so dev rehearses the same timing. Not in GitHub Actions or Cloud Scheduler — the callers never read it. Not in `.env.local` unless you want `scripts/requeue-*.mjs` to mint notices with the production window instead of the code default.
+
+**How to change.** `vercel env add` refuses an existing key:
+
+```bash
+npx vercel env rm NOTIFY_DEBOUNCE_MINUTES production --yes && printf '5' | npx vercel env add NOTIFY_DEBOUNCE_MINUTES production --type config
+```
+
+Same for `preview`. **Then redeploy** — the value binds at build time. To go back to the code default, remove it and redeploy.
+
+**Blast radius.** None mid-change: a notice already queued keeps its own `notifyAfter`; the new value applies to the next edit. A zero, empty or non-numeric value falls back to 15.

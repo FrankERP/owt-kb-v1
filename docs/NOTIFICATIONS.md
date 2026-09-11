@@ -265,9 +265,10 @@ empty is a 200 on the last attempt, `-1` is never attempted (both observed 2026-
 
 **The practical consequence:** a notice becomes due 5 minutes after it is queued,
 and layer 2 (the writer's own `after()` sweep) has already run by then, so layer 1
-is what must come back. On the median it comes back at an hour; on a bad day it
-does not come back for half a day. Layer 3's liveness alarm is daily, so a stall
-shorter than that is invisible.
+is what must come back. With only the GitHub caller running, the median was an
+hour and a bad day was half a day; with Scheduler the next tick is at most five
+minutes away. Layer 3's liveness alarm is daily, so a stall shorter than that is
+still invisible.
 
 **The mitigation above is applied.** The bearer travels
 in the HEADER, never in a `?secret=` query string, where it would land in access
@@ -295,7 +296,7 @@ the `request_changes` transition have all stopped mirroring. `lead_notes` and
 and the thread is the only record of what was said.
 
 Audience, debounce and preference key are unchanged: the same admin set resolved
-at flush, the same debounce–60 minute window, the same `notifPrefs.emailProposals`.
+at flush, the same 5–60 minute window, the same `notifPrefs.emailProposals`.
 
 A notice minted before that cutover carries `beforeNotes` and no count. It is
 classified against the thread too — against the **newest `lead_note` body**,
