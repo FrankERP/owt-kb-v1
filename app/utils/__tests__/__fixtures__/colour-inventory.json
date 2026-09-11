@@ -8,30 +8,30 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 317,
-    "filesScanned": 288,
-    "filesWithColour": 51,
+    "literalRows": 319,
+    "filesScanned": 290,
+    "filesWithColour": 52,
     "byCategory": {
       "2": 2,
-      "4": 73,
+      "4": 75,
       "8": 90,
       "9": 10,
       "11": 8,
       "12": 134
     },
     "byDisposition": {
-      "B": 120,
-      "exempt": 40,
-      "keep": 239,
+      "B": 122,
+      "exempt": 42,
+      "keep": 240,
       "C": 6,
       "D": 15
     },
-    "compositingClasses": 20,
-    "compositingSelectorOccurrences": 44,
-    "compositingClassNameOccurrences": 58,
-    "compositingRuleBodies": 43,
+    "compositingClasses": 21,
+    "compositingSelectorOccurrences": 45,
+    "compositingClassNameOccurrences": 59,
+    "compositingRuleBodies": 44,
     "lightCounterpartClasses": 15,
-    "pairs": 11,
+    "pairs": 12,
     "pairsDifferingInAlpha": 0
   },
   "literalRows": [
@@ -3252,6 +3252,30 @@
       "reason": null
     },
     {
+      "file": "app/components/DayStrip.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-current",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 105,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/DayStrip.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-current",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 108,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/components/EditSongButton.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -4002,6 +4026,14 @@
       "reason": null
     },
     {
+      "file": "app/brand.css",
+      "kind": "selector",
+      "class": "today-pulse",
+      "count": 1,
+      "disposition": "exempt",
+      "reason": "No colour in any rule body — needs no light counterpart"
+    },
+    {
       "file": "app/(admin)/layout.tsx",
       "kind": "className",
       "class": "atmosphere",
@@ -4165,6 +4197,14 @@
       "file": "app/components/DayCard.tsx",
       "kind": "className",
       "class": "surface",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/DayStrip.tsx",
+      "kind": "className",
+      "class": "today-pulse",
       "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
@@ -4750,6 +4790,16 @@
       "ordinal": 42,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "today-pulse"
+      ],
+      "ordinal": 43,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
     }
   ],
   "pairs": [
@@ -4804,6 +4854,15 @@
       "light": "mono-200",
       "lightAlpha": null,
       "dark": "mono-800",
+      "darkAlpha": null,
+      "alphaDiffers": false
+    },
+    {
+      "file": "app/components/DayStrip.tsx",
+      "utility": "text",
+      "light": "mono-400",
+      "lightAlpha": null,
+      "dark": "mono-400",
       "darkAlpha": null,
       "alphaDiffers": false
     },
