@@ -104,48 +104,88 @@ taking the solver's output only for empty ones — is rejected outright: the sol
 know about the pins, could seat the same person twice in one service, and would compute
 fairness over a roster nobody will use.
 
-**Identity.** Pins name people the way the rest of the request does, by resolved
-`member_name` via `memberIdToName`. A pinned person who is in no pool is injected into
-`support` exactly as DSL-named people already are (`buildSolveRequest`'s `extraSupport`),
-so they exist in `all_people` and carry their own availability exclusions.
+**Identity, and why a pin never widens a pool.** Pins name people the way the rest of the
+request does, by resolved `member_name` via `memberIdToName`. A pinned person must exist in
+`all_people` so the counts can see them — but they must **not** be injected into a pool the
+way DSL-named people are. `validate_config` sets `pools["Sun.BGV"] = pools["Sat.BGV"] =
+pools["Sun.Choir"] = set(all_people)` (`gcf/owt_solver_v2.py:458-464`), so injecting a
+person makes them a candidate for BGV and Coro in every service of the month, and the
+global fairness spread then actively pushes the solver to seat them elsewhere.
+
+The reachable harm is precise. The documented way to stop scheduling someone is to clear
+their Tipo (CLAUDE.md, ADR-0029); that removes them from the picker but leaves them seated
+in drafts already built. E1 would pin that seat, injection would make them a candidate
+everywhere, and the next Auto would spread them across the month — the app undoing an
+admin's deliberate removal. The DSL precedent does not cover this: a DSL name is a rule an
+admin wrote, and `buildSolveRequest` already refuses a Tipo-less DSL name
+(`plannerModel.ts:766-777`).
+
+So the request carries pinned-only people in `all_people` and the solver subtracts them
+from every pool. They are counted, never chosen.
 
 ## 5. The solver: a pinned seat is not a seat
 
-This is the whole mechanism, and its value is what it makes impossible.
+A pinned seat produces no slot, so no `x` variable exists for it and no constraint can
+touch it. That is what makes E3 true by construction rather than by care.
 
-**Slot construction.** `build_slots` emits, for each role and week, the seats that remain
-after the pins: `max(0, seats_for_role - pins_for(role, week))`. Pinned seats never become
-slots, so no `x` variable exists for them and no constraint can touch them.
+**It does not fall out for free.** Every mechanism in `create_model_and_solve` that
+iterates slots or counts people has to be told about the pins, and the table below is the
+complete enumeration — not an illustration. An implementation that handles the mandatory
+lead and stops has broken at least four hard rules.
 
-**The pinned person enters as a constant, in exactly two places.**
+| Mechanism (`gcf/owt_solver_v2.py`) | Pin treatment |
+|---|---|
+| Decision vars `x` `:637-640`, `filled` `:644-652` | None needed: a pinned seat is not a slot. |
+| Mandatory lead, `>= 1` per service `:654-659` | Enforced only when the service has no pinned lead. |
+| `weighted_empty` `:661-676` | None needed: it sums over slots, and a pinned seat is not one, nor is it empty. |
+| Week exclusions (availability) `:679-690` | Not applied to a pinned person-week. This is E3 made explicit — the admin already overrode availability in the picker — and it is the one relaxation in this table. |
+| Saturday dedicated lead `:692-708` | Satisfied by a pinned dedicated lead. Without this the rule forces a *second* dedicated lead into the leftover seat, or goes infeasible when no other is eligible. |
+| Pair exclusion `:711-722` | A pinned A forces every term of B to `0` in that service. The rule keeps its full force with one side fixed. |
+| Weekly presence `any_of … each_week` `:727-741` | Satisfied for a week in which a group member is pinned into a matching role. |
+| Consecutive `:744-751` | A pin in week W forbids the person's matching-role vars in W±1, and a pin in both W and W+1 is a conflict the client reports (§6), never an infeasibility. |
+| One slot per service per person `:754-765` | A pinned person's vars in that service are forced to `0`. |
+| `total_vars` `:770-774` | **Pins are NOT added here.** See below. |
+| `ov_total` `:776-780` | Pins are added here, beside `hist_total`. Its domain grows to `total_slots + max_hist_total + max_pins`. |
+| Global fairness spread `:783-797` | Unchanged — it reads `total_vars`. |
+| `overall_spread` `:799+` and the objective | Sees the pins through `ov_total`. |
+| Per-role spread `:860-884` | Unchanged — it reads `role_vars`, the solver's own choices. |
+| DSL count rules `:886-897` | The cap on the solver's additions becomes `max(0, cap - pinned_count_for_that_role)`, so the month's real total never exceeds the admin's cap. A cap the pins alone already exceed is reported by the client (§6), never enforced into infeasibility. |
+| `build_schedule_view` `:1142` | Pinned people are emitted in their role lists. See §5.1. |
+| `total_counts` / `role_counts` `:983-986` | Include the pins, so the response is self-consistent with the roster it reports. |
 
-1. **Participation count.** `total_vars[person]` gains the person's pin count for the
-   month, the same shape `hist_total` already uses at `:772-776`. A pinned assignment is a
-   real service and must weigh on fairness like one.
-2. **Per-service occupancy.** The existing "one slot per service per week per person"
-   constraint (`:754-765`) becomes, for a pinned person-service: the sum of their variables
-   in that service is `0`. They are already seated there; the solver must not seat them
-   again.
+**Why pins go into `ov_total` and not `total_vars`.** They are different shapes, and the
+first draft of this spec got that wrong. `total_vars` feeds `model.Add(gmax - gmin <=
+fairness_limit)` at `:795` — a **hard** constraint whose only tiers are 1 and 2
+(`solve_schedule` `:1101-1115`). A half-filled month is this feature's entire use case, and
+pinned counts there are routinely spread by three or more across the fairness group, so
+pins in `total_vars` would make every Stage B tier infeasible and quietly return the
+fairness-free Stage A result after burning the 40-second budget. `hist_total` enters
+`ov_total` instead, which feeds `overall_spread`, a **soft** objective term at `:949`.
+Pins belong with history: for this month's purposes they are already-decided fact, and they
+should *inform* the optimiser without being able to make it fail.
 
-**What falls out with no further code.** No rule can break a pin, because a pin is not a
-variable. A pinned seat never counts as empty, because it is not a slot and
-`weighted_empty` sums over slots. Over-pinning is representable without error: pin three
-leads where there are two seats and the role simply contributes no slots that week.
+### 5.1 The response must carry the pins back
 
-**The one constraint that needs an explicit offset.** "At least one Lead per service"
-(`:654-659`) counts `filled` over lead slots. With a pinned lead there may be no lead slots
-left to satisfy it. It becomes: enforce `sum(filled[lead slots]) >= 1` only when the
-service has no pinned lead. A service whose lead is pinned already has one.
+`applySolveResponse` REPLACES a solvable cell — `occupants: ids.map(...)` for every row and
+column the response names, with no merge against `previousCells`
+(`plannerModel.ts:925-936`). Since a pinned person has no variables, they are absent from
+`result.assignments` and therefore from the view, so a solver that merely "honoured" the
+pins would hand back a roster that the client then writes over the pinned cells — deleting
+exactly what the switch promised to keep, while `pinned_honored` reported success.
 
-**What pins do NOT relax.** Rules keep governing every seat the solver still chooses. If A
-is pinned and a pair rule separates A from B, B is pushed out of that service — the rule is
-intact, it simply now has a fixed left-hand side. If two *pins* conflict with each other,
-both stand, and the client's notice (§6) is the only consequence.
+Therefore `build_schedule_view` emits pinned people in their role lists alongside the
+solver's own picks, and the client's replace semantics stays untouched.
 
-**`unfilled_seats` renumbering.** Pins shrink the slot list, so `slot_index` values shift.
-The client maps an unfilled entry to a row and a date, never to an index
-(`mapUnfilledSeats`, `plannerModel.ts:958`), so the shift is invisible — but the count per
-row changes, and the tests pin that.
+**`origin` is preserved, not restamped.** `applySolveResponse` writes `origin: "auto"`
+today. A pinned cell whose occupant set comes back unchanged keeps the `origin` it had, or
+a seat the admin placed by hand would be relabelled as the solver's — which would corrupt
+both §7's count of hand-placed seats and `instrumentFill.ts`'s `origin === "auto"`
+ownership test, whose whole job is telling its own picks from a human's.
+
+**`unfilled_seats` renumbering.** Pins shrink the slot list, so `slot_index` shifts. The
+client maps an unfilled entry to a row and a date, never to an index (`mapUnfilledSeats`,
+`plannerModel.ts:958`), so the shift is invisible — but the count per row changes, and the
+tests pin that.
 
 ## 6. Conflicts: named on the board, never blocking
 
@@ -160,6 +200,15 @@ established — the colour says something is wrong, the line says who and what:
 | A hard rule separates them from someone else in that service | ⚠ Nombre y Otro: una regla los separa — se va a respetar tu decisión |
 | They are not in the pool that role draws from | ⚠ Nombre: no está en el pool de Lead — se va a respetar tu decisión |
 | More people are pinned in the row than it has seats | ⚠ 3 personas fijadas en una fila de 2 lugares |
+| The pins alone meet or exceed a hard DSL cap for that role | ⚠ Nombre ya tiene 2 lugares fijados en Lead y una regla le pone tope de 2 |
+| The same person is pinned in consecutive weeks against a `!consecutive` rule | ⚠ Nombre: una regla le prohíbe semanas seguidas en BGV — se va a respetar tu decisión |
+
+**How this composes with the amber already on the board.** `ruleViolationsForColumn`
+(`ruleEnforcement.ts:479+`) already renders a violation for a seated pair conflict, and the
+«Regla anulada» marker already records a deliberate override. These notices do not add a
+second line for a fact already shown: where an existing marker covers the case, the pin
+notice is that marker, and only the cases the existing machinery cannot express — the pool
+mismatch, the over-pinned row, the cap, the consecutive pair — add a line of their own.
 
 None of these blocks Auto, and none of them blocks saving. They exist so that a roster that
 contradicts the rules is never silent.
@@ -184,6 +233,12 @@ the month-level items confirm, through `CueDialog`, and the confirmation names t
 says FOH is preserved, says nothing is written until save, and separately counts how many
 of the seats being discarded were placed by hand. A service-level clear is immediate;
 re-running Auto is the undo.
+
+**The Auto confirmation copy changes with the switch.** Today it reads «Esto reemplazará
+toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes»
+(`PlannerGrid.tsx:2035-2040`), which becomes false the moment the switch is on. With it on
+the dialog says instead that Auto will fill only the empty seats and names how many. A
+label that promises more than it does is the defect this spec already cites once.
 
 **Naming.** Not «Limpiar mes», which already means deleting stored services from Sanity
 (`clearMonthModel.ts`). «Borrar» here empties seats on the board and writes nothing by
@@ -223,11 +278,24 @@ app — so this state exists in the window between them, and again on any rollba
 not the other.
 
 `SolveResponse` therefore gains `pinned_honored?: number`, the count of pins the solver
-actually consumed. When the switch is on and pins were sent, the client **refuses to apply**
-a response whose `pinned_honored` does not equal the number of pins sent, reports «El solver
-no respetó los lugares fijados; no se aplicó nada» and leaves the board untouched. Refusing
-is correct here even though §6 never blocks: §6 is about the admin's own contradictions,
-this is about a solver that did not do what it was asked.
+actually consumed. When the switch is on and pins were sent, the client **refuses to apply
+the voice roster** from a response whose `pinned_honored` does not equal the number of pins
+sent, and reports «El solver no respetó los lugares fijados; no se aplicó nada». Refusing is
+correct here even though §6 never blocks: §6 is about the admin's own contradictions, this
+is about a solver that did not do what it was asked.
+
+Two details that decide whether the check works:
+
+- **Pins are deduplicated before the count is taken.** The same person can legitimately
+  appear once per row, but a duplicated occupant within one cell would inflate the sent
+  count and fail the comparison on a correct solve.
+- **The refusal is an exit of `handleAuto`, and obeys that function's contract.** Every
+  exit calls `applySpecialFill` exactly once, which owns `setCells`/`setUnfilled`/`setDrafts`
+  and also runs the specials and instrument fillers (`MonthGenerator.tsx:2940`). The refusal
+  exit does the same: the voice roster is discarded, the local fillers still run, and the
+  error line carries the message. "Leaves the board untouched" means the solver's voice
+  output is not applied — not that the exit skips the setters, which would violate the
+  documented contract.
 
 ## 10. Error handling
 
