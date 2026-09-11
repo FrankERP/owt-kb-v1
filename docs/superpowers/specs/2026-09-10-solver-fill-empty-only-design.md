@@ -268,6 +268,12 @@ affect the instrument filler, whose ownership test is scoped to `instrumento:` r
 (`instrumentFill.ts:87`) which `applySolveResponse` never writes — a claim an earlier draft
 of this spec got wrong in the other direction.
 
+**Occupant order is not preserved.** `build_schedule_view` sorts each role's names (`:1168`)
+and `applySolveResponse` rebuilds `occupants` from that list, so a pinned cell's occupants
+come back alphabetised. The cell is therefore not byte-identical across a run even when its
+membership is unchanged. That is acceptable — nothing downstream reads occupant order — but
+it is why §11 asserts the occupant **set** and the `origin`, never the array.
+
 **`unfilled_seats` renumbering.** Rows that grew have more slots, so `slot_index` shifts.
 The client maps an unfilled entry by role and week, never by index (`:958-986`), so the
 shift is invisible — but the count per row changes, and the tests pin that.
@@ -283,6 +289,7 @@ Computed on the client when the person is seated. Five cases:
 | They are not in the pool that role draws from | ⚠ Nombre: no está en el pool de Lead — se va a respetar tu decisión | **New** |
 | More people are pinned in the row than it has seats | ⚠ 3 personas fijadas en una fila de 2 lugares | **New** |
 | The same person is pinned twice in one service | ⚠ Nombre está fijado dos veces en este servicio — solo se respeta el primero | **New**, and §4 says why it should be unreachable |
+| The pins fill a row that a rule requires someone specific in | ⚠ Llenaste BGV del 13 sep y una regla pide a Hugo o Jakey ahí — se va a respetar tu decisión | **New**, §5.2 |
 
 **The availability notice is genuinely new, and it is the one the requirement named.** It
 does not exist today in any form: `blockingReasons` reads `PersonRestriction.weekExclusions`,
@@ -298,7 +305,7 @@ describing a rule no admin can create. §5.2 still exempts the constraint, becau
 parser accepts the form and a hand-edited document could carry one.
 
 Where an existing marker already renders the fact, these notices **are** that marker; only
-the four marked "New" add a line of their own.
+the five marked "New" add a line of their own.
 
 ## 7. The switch and the «Borrar» menu
 
@@ -324,7 +331,15 @@ A label that promised more than it does is a defect this repo keeps recording.
 **A clear routes through `handleCellsChange`.** Create mode derives `drafts` there
 (`MonthGenerator.tsx:2467-2487`); a clear that called `setCells` directly would empty the
 grid while «Crear N borradores» still posted the people just removed. The same pass drops
-any `unfilled` marker on a cleared cell, which would otherwise outlive the seat it described.
+any `unfilled` marker on a cleared cell, which would otherwise outlive the seat it described —
+and that is **new behaviour in a shared handler**: `handleCellsChange` does not touch
+`unfilled` today, so the change is visible to every other caller and belongs in its own
+review.
+
+**Skipped columns are pinned like any other.** Auto deliberately ignores `skippedColumnIds`
+(`MonthGenerator.tsx:2940-2945`); cells sitting on a skipped column are still occupied, so
+the switch pins them. Intended, and stated because the alternative reading is just as
+plausible.
 
 **The Auto confirmation copy changes with the switch.** Today it reads «Esto reemplazará
 toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes»
@@ -404,10 +419,19 @@ and behaved otherwise:
   NOT auto-seated on the other service of that weekend.
 - A pinned person who is in **no pool** is seated at their pin and appears nowhere else in
   the month. Run with and without the pin and diff the rosters.
-- **Fairness does not collapse.** A half-filled month with pins spread three or more apart
-  still returns `fairness_relaxed: false`, and the global spread over the solver's own
-  choices matches the un-pinned baseline. This is the reproduced round-2 regression, kept as
-  a permanent guard.
+- **Fairness does not collapse, on a case that reaches the dangerous branch.** The guard pins
+  enough of the month that a slack-based design would empty the `strict` group
+  (`solve_schedule:1072-1074`) — twenty-six or more pins on a twelve-person month is the
+  reproduced threshold — and asserts `fairness_relaxed: false`, a global spread over the
+  solver's own choices matching the un-pinned baseline, and that an unavailable member's
+  absence slack still applies. A guard that only pins a few seats passes under both designs
+  and proves nothing.
+- **A saturated row does not fail the month.** With `any_of(Hugo, Jakey) on Sun.BGV` in the
+  rules, pin that row full for one week with neither of them: the month still solves. Same
+  for both Saturday lead seats pinned with non-dedicated leads, and for a `>=` count rule
+  whose row is pinned full.
+- **A pinned person in no pool does not crash.** The reproduced `KeyError` at `:982`, kept as
+  a guard: they are seated at their pin, appear nowhere else, and appear in `total_counts`.
 - A pinned dedicated Saturday lead satisfies the anchor with no second dedicated lead forced
   in; a pinned group member satisfies weekly presence; a pinned assignment counts toward a
   DSL cap and the solver adds no more than the cap allows.
@@ -429,7 +453,7 @@ own suite.
 ## 12. Documentation in the same delivery
 
 `docs/SOLVER_AND_INFRA.md` — the `pinned` field, the fixed-variable mechanism, the three
-enabling changes, the four exemptions, the handshake. `docs/MONTH_GRID_EDITING.md` — the
+enabling changes, the five exemptions, the handshake. `docs/MONTH_GRID_EDITING.md` — the
 switch, the menu, the confirmation copy. One ADR: **pins are fixed variables with scoped
 candidacy and fairness slack, not removed seats with constant offsets** — recording the
 rejected design and the reproduced fairness collapse that ended it, so nobody re-derives the
@@ -442,6 +466,13 @@ the only thing standing between an admin and a silent overwrite. Therefore: merg
 change first and confirm Cloud Build deployed it, then merge the app change. The
 `preview`-first push order applies to the app half as usual, and the dev alias is verified by
 `alias` + `githubCommitSha` before the PR to `main`.
+
+**Said out loud: one Cloud Function serves both environments.** The solver half never reaches
+`preview` first, so "merge the solver first" means it is live in production before any human
+has watched it work. That is inherent to the existing architecture, not introduced here, and
+what makes it safe is the guard §11 requires: a request with no `pinned` key must produce
+byte-identical output to today on a fixed seed. Until the app starts sending pins, the
+deployed change is inert for everyone.
 
 ## 14. Out of scope
 
