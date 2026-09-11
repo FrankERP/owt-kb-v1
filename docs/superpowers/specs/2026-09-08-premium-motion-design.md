@@ -1224,3 +1224,11 @@ seat order — Lead, BGVs, Coro, instruments, FOH); a seated row in `AgendaView`
 `Tú · Lead, Keys` pill and a positive glow on its tone rail, and a seated, lit day in `DayStrip`
 gets a second dot under the number (`StripDay.mine`, `CalendarView` deriving `myName` once for
 the strip). See `docs/MOTION.md`'s R2 section for the full ledger.
+
+**Released to production on 2026-09-10** via PR #63 (merge `50c76163`, production alias
+verified by `alias` + `githubCommitSha`), after Frank's look on dev (F1, the «Tú» signal) and
+a re-merge of `main` while #62 landed under the PR. The F1 review's fix round corrected the
+strip's dot to share today's slot (one dot, positive wins, the pulse stays today's) and made the
+strip cell announce «te toca». Precondition now on the record: the «Tú» signal matches by
+display name (`alias || member_name`), so that name must be unique team-wide. Carried to R7:
+pull-to-refresh, long-press.
