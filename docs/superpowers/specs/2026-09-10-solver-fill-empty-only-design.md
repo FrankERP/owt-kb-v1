@@ -8,8 +8,16 @@ an automated filler may rewrite a stored role document — a gate whose failure 
 overwriting a service the team has already seen. Requirement: **two sequential fresh
 `APPROVED` verdicts on byte-identical text**.
 
-This is **delivery 2 of 2**. Delivery 1 (declared instruments and automatic instrument
-fill) shipped 2026-09-10 in PR #57 and is independent; nothing here changes it.
+Delivery 1 (declared instruments and automatic instrument fill) shipped 2026-09-10 in
+PR #57 and is independent; nothing here changes it.
+
+**Scope split, 2026-09-10.** Frank asked that this also work on already-created draft
+services. The round-1 review showed that half is not a missing paragraph but a second
+design problem — stored columns are keyed by Sanity `_id` while unfilled markers are emitted
+with a `create:` prefix, and the calendar state the request is built from belongs to create
+mode — so it would arrive undesigned behind a half that had been reviewed. Frank chose to
+split it (§14). This spec is create mode only; stored drafts get their own spec and their
+own review.
 
 ## 1. The brief
 
@@ -17,8 +25,8 @@ Frank, during delivery 1's brainstorm: «me gustaría tener una opción para que
 llene únicamente los espacios vacíos, en vez de sobre escribir todo». Today «Generar mes»
 rewrites every solvable voice row on every weekend column, so a manual correction survives
 exactly until the next Auto. He also asked for a delete control with a menu offering every
-level of granularity, and for the whole thing to work on draft services, not only on a
-month being previewed for the first time.
+level of granularity. He also asked for it to work on already-created draft services; that
+half is deferred to its own delivery for the reason recorded above.
 
 ## 2. What the repo says today
 
@@ -66,12 +74,11 @@ Every row verified against the tree at `ae792034`.
 - **E6 — One «Borrar» button with a menu**, at two scopes (the focused service, the month)
   across the categories the solver and the instrument filler can rebuild. FOH is never
   cleared in bulk: nothing refills it, so clearing it is guaranteed rework.
-- **E7 — Auto and the clears are gated on the SERVICE's state, not the panel's mode.**
-  They are available for a service that is a draft (`published === false`) and never for a
-  published one. This replaces the create-mode-only rule. Frank asked for drafts explicitly
-  on 2026-09-10 after the create-mode-only scope had been agreed; the gate moved rather
-  than widening, because the earlier reason for the narrow scope — the fear of notifying
-  the team — turned out not to apply to drafts.
+- **E7 — Auto and the clears stay where Auto already lives: create mode.** The Auto button
+  is gated on `mode === "create"` (`PlannerGrid.tsx:1997`) and this delivery does not move
+  that gate. Extending both to stored draft services is a separate delivery (§14). Nothing
+  here reads or writes a stored role document, so no published service can be touched by
+  construction rather than by a check.
 - **E8 — The response must prove the pins were honored.** A silently-ignoring old solver
   is a real deployment state, not a hypothetical. See §9.
 
@@ -223,7 +230,7 @@ lugares vacíos.» Its state is component state, not persisted — a per-run cho
 item so the admin sees what they are about to lose:
 
 - **Este servicio** — Voces · Instrumentos · Voces e instrumentos
-- **Todo el mes** (drafts only) — Voces del mes · Voces e instrumentos del mes
+- **Todo el mes** — Voces del mes · Voces e instrumentos del mes
 
 No item is called «Todo», because none of them clears everything: FOH always survives
 (E6). A label that promised more than it does is the defect this repo keeps recording.
@@ -249,24 +256,13 @@ time in the picker, as today.
 
 ## 8. Where Auto and the clears are available
 
-The gate is per column and has two conjuncts, both already computable:
+Create mode only, which is where Auto already lives (`PlannerGrid.tsx:1997`). The clears
+are offered on the same columns Auto is, and both act on grid state alone: a create-mode
+column has no stored document behind it, so nothing in this delivery can reach a service
+the team has already seen. That safety property is structural, not a gate that could be got
+wrong.
 
-1. `published === false` on the stored column (`storedRoleReadModel.ts:120`), which is the
-   strict reading the repo's draft-gating rule requires — missing or `true` is
-   member-visible and therefore out of bounds.
-2. The existing stored-column admission check, unchanged, so a service whose data is
-   incoherent stays read-only for this too.
-
-A create-mode column has no stored document and is always eligible.
-
-**A month mixes both.** «Todo el mes» means every DRAFT service of the month and says so in
-those words; a published service is not counted, not cleared, and not touched by Auto. This
-is the gate whose failure is worst — rewriting a roster the team has already seen — and it
-is the first thing the adversarial review is asked to attack.
-
-**Saving.** In stored mode Auto stages cells and marks those roles dirty; the admin commits
-through the existing «Guardar N servicios», per document and revision-guarded. No new
-writer is introduced, and nothing reaches Sanity on the Auto click itself.
+Nothing reaches Sanity until the existing «Crear N borradores» runs, unchanged.
 
 ## 9. The version handshake
 
@@ -324,9 +320,8 @@ produces byte-identical output to today, on a fixed seed.
 **Client.** `buildSolveRequest` emits one pin per occupied voice cell on a weekend column
 when the switch is on, none when it is off, and none from a special column. The four
 conflict notices render and none of them disables Auto or save. The refusal of §9 leaves
-cells untouched. The clears empty exactly the rows their item names and never FOH. The
-per-column gate: a published column offers neither Auto nor a clear, and «Todo el mes»
-counts drafts only.
+cells untouched. The clears empty exactly the rows their item names and never FOH, and
+«Todo el mes» counts every column of the preview.
 
 **Gates.** `npx tsc --noEmit`, `npm test`, `npx eslint .` with 0 errors, plus the solver's
 own suite.
@@ -349,7 +344,17 @@ by `alias` + `githubCommitSha` before the PR to `main`.
 
 ## 14. Out of scope
 
-Pins for instrument or FOH seats — the instrument filler is client-side and already leaves
-occupied cells alone. Any change to stored-mode publication, to «Limpiar mes», or to the
+**Auto and the clears on already-created draft services — deferred to its own spec.** It
+needs a stored-mode request builder (the weeks and Saturdays a stored month actually has,
+not the create-mode calendar state), a column mapping in both directions (stored columns are
+keyed by the Sanity `_id` at `storedRoleReadModel.ts:113` while `mapUnfilledSeats` emits
+`create:${draftTargetKey(...)}` at `plannerModel.ts:1023`, so today every unfilled marker
+would address a column that does not exist and vanish silently), an explicit treatment of
+published services sitting inside the same month, and an answer for the fairness history,
+which a stored-mode save does not record today — only `handleConfirm` does
+(`MonthGenerator.tsx:3262`). That list is the starting point for its brainstorm.
+
+Also out: pins for instrument or FOH seats — the instrument filler is client-side and
+already leaves occupied cells alone. Any change to publication, to «Limpiar mes», or to the
 participation sidebar. Persisting the switch across sessions. Auto on published services,
-in any form.
+in any form or delivery.
