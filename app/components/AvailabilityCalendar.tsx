@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import { useAvailability } from "@/app/components/availability/useAvailability";
 import Collapse from "@/app/components/ui/Collapse";
 import Select from "@/app/components/ui/Select";
 
@@ -12,17 +12,6 @@ interface Props {
   serviceDates?: string[];
   initialNotes?: { date: string; note: string }[];
 }
-
-/** What the PATCH reports as the member's stored state — on 200 and on 409 alike. */
-interface ServerState {
-  _rev: string | null;
-  unavailableDates: string[];
-  unavailabilityNotes: { date: string; note: string }[];
-}
-
-const CONFLICT_MSG =
-  "Tu disponibilidad cambió mientras esta página estaba abierta — tus cambios NO se guardaron. " +
-  "El calendario ya muestra las fechas actuales: vuelve a marcarlas y guarda otra vez.";
 
 const MONTHS_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -51,16 +40,6 @@ function buildCalendar(year: number, month: number): (string | null)[] {
 function fmtDayLabel(iso: string): string {
   const d = new Date(iso + "T12:00:00");
   return d.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
-}
-
-// Stable fingerprint of the saved state, to detect unsaved changes.
-function snapshot(dates: Set<string>, notes: Map<string, string>): string {
-  const ds = Array.from(dates).sort();
-  const ns = Array.from(notes.entries())
-    .filter(([d, n]) => dates.has(d) && n.trim())
-    .map(([d, n]) => [d, n.trim()] as [string, string])
-    .sort((a, b) => a[0].localeCompare(b[0]));
-  return JSON.stringify([ds, ns]);
 }
 
 interface Popover { iso: string; x: number; y: number; above: boolean }
@@ -92,39 +71,33 @@ export function popoverPosition(
 }
 
 export default function AvailabilityCalendar({ initialRev, initialDates, serviceDates = [], initialNotes = [] }: Props) {
-  const [dates, setDates]   = useState<Set<string>>(new Set(initialDates));
   const serviceSet = new Set(serviceDates);
-  const [saving, setSaving] = useState(false);
-  const [saved, flashSaved, clearSaved] = useTransientValue(false, 2500);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  // The conflict notice is HELD, never flashed: it reports a write that did NOT
-  // land, and it must outlive the seconds a toast gets.
-  const [conflict, , clearConflict, holdConflict] = useTransientValue<string | null>(null, 2500);
-  // The revision every save is written against; refreshed from each reply.
-  const [rev, setRev]       = useState(initialRev);
   const [page, setPage]     = useState(0);
 
-  const [notes, setNotes]   = useState<Map<string, string>>(
-    () => new Map(initialNotes.map(n => [n.date, n.note]))
-  );
   const [popover, setPopover] = useState<Popover | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // The day button the open popover belongs to, so its position can be
   // recomputed rather than frozen at click time.
   const anchorRef = useRef<HTMLButtonElement | null>(null);
 
+  // Every edit, the dirty fingerprint and the revision-guarded save live in the
+  // hook; this component owns only what the grid itself draws.
+  const {
+    dates, notes, todayIso, upcomingCount,
+    mark, remove, setNote, applyRecurring,
+    save, saving, saved, dirty, saveError, conflict,
+  } = useAvailability({
+    initialRev, initialDates, initialNotes,
+    // A conflict drops the pending edits, so the popover can be pinned to a date
+    // that is gone — it closes in the same update the adoption lands in.
+    onAdopt: () => setPopover(null),
+  });
+
   const [recurOpen, setRecurOpen]         = useState(false);
   const [recurDow, setRecurDow]           = useState(0); // 0 = Domingo
   const [recurInterval, setRecurInterval] = useState(1);
 
-  // Saved-state snapshot `dirty` compares against; reset after each successful save.
-  const [initialSnap, setInitialSnap] = useState(() => snapshot(new Set(initialDates), new Map(initialNotes.map(n => [n.date, n.note]))));
-  const dirty = snapshot(dates, notes) !== initialSnap;
-
-  const now      = new Date();
-  const todayIso = now.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
-
-  const upcomingCount = Array.from(dates).filter(d => d >= todayIso).length;
+  const now = new Date();
 
   const allMonths = Array.from({ length: TOTAL_MONTHS }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
@@ -190,20 +163,9 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
     return () => window.removeEventListener("keydown", onKey);
   }, [popover]);
 
-  // Warn before leaving (tab close / refresh / external nav) with unsaved changes.
-  useEffect(() => {
-    if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [dirty]);
-
   function handleDateClick(iso: string, e: React.MouseEvent<HTMLButtonElement>) {
-    if (!dates.has(iso)) {
-      // Select the date
-      setDates(prev => { const n = new Set(prev); n.add(iso); return n; });
-      clearSaved();
-    }
+    // Select the date (a no-op when it is already marked)
+    mark(iso);
     // Open popover (whether newly selected or re-clicking to edit note)
     anchorRef.current = e.currentTarget;
     const pos = popoverPosition(e.currentTarget.getBoundingClientRect(), window.innerWidth, window.innerHeight);
@@ -211,114 +173,13 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
   }
 
   function removeDate(iso: string) {
-    setDates(prev => { const n = new Set(prev); n.delete(iso); return n; });
-    setNotes(prev => { const m = new Map(prev); m.delete(iso); return m; });
-    clearSaved();
+    remove(iso);
     setPopover(null);
   }
 
-  // Expand a recurring weekday pattern into concrete future dates (next 12 months),
-  // then either mark (add) the whole run or clear (remove) it.
-  function applyRecurring(add: boolean) {
-    const cur = new Date();
-    cur.setHours(12, 0, 0, 0);
-    while (cur.getDay() !== recurDow) cur.setDate(cur.getDate() + 1);
-    const end = new Date();
-    end.setDate(end.getDate() + 365);
-
-    const series: string[] = [];
-    while (cur <= end) {
-      const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
-      if (iso >= todayIso) series.push(iso);
-      cur.setDate(cur.getDate() + 7 * recurInterval);
-    }
-    setDates(prev => { const n = new Set(prev); series.forEach(d => (add ? n.add(d) : n.delete(d))); return n; });
-    if (!add) setNotes(prev => { const m = new Map(prev); series.forEach(d => m.delete(d)); return m; });
-    clearSaved();
+  function applySeries(add: boolean) {
+    applyRecurring(recurDow, recurInterval, add);
     setRecurOpen(false);
-  }
-
-  /** Adopt the server's arrays, dropping the pending edits with them. */
-  function adopt(server: ServerState) {
-    const serverDates = new Set(server.unavailableDates ?? []);
-    const serverNotes = new Map((server.unavailabilityNotes ?? []).map(n => [n.date, n.note]));
-    setDates(serverDates);
-    setNotes(serverNotes);
-    setInitialSnap(snapshot(serverDates, serverNotes));
-    if (server._rev) setRev(server._rev);
-    setPopover(null);
-    clearSaved();
-  }
-
-  /**
-   * The PATCH replaces BOTH arrays wholesale from a snapshot this page took when
-   * it loaded, so it carries the revision it read at and the server refuses a
-   * stale one. On that 409 the pending edits are DISCARDED, not retried:
-   * re-sending a stale set against a fresh revision is the very deletion the
-   * guard just stopped — the member re-marks the dates against real state.
-   *
-   * The one exception is a conflict where the server's availability is
-   * BYTE-IDENTICAL to the base these edits were built on. That is not the race;
-   * it is a sibling write to the same `teamMembers` document — `ProfilePanel`
-   * sits on this same page and saves alias, email, photo, password and
-   * notification prefs. Re-issuing the edits against the fresh revision then
-   * cannot delete anything, so it happens once, silently, instead of throwing
-   * the member's work away for a field they changed themselves seconds ago.
-   */
-  async function save() {
-    setSaving(true);
-    setSaveError(null);
-    clearConflict();
-    try {
-      const notesPayload = Array.from(notes.entries())
-        .filter(([d, n]) => dates.has(d) && n.trim())
-        .map(([date, note]) => ({ date, note: note.trim() }));
-      const baseSnap = initialSnap;
-
-      let attemptRev = rev;
-      // At most two attempts: the second can only be the sibling-write rebase,
-      // and its own conflict is treated as a real one.
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const res = await fetch("/api/me/availability", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            _rev: attemptRev,
-            unavailableDates: Array.from(dates),
-            unavailabilityNotes: notesPayload,
-          }),
-        });
-
-        if (res.ok) {
-          const server = (await res.json()) as ServerState;
-          // Only the revision is adopted, not the arrays: the reply echoes what
-          // was just sent, and overwriting local state here would delete a date
-          // toggled while the request was in flight.
-          if (server._rev) setRev(server._rev);
-          setInitialSnap(snapshot(dates, notes));
-          flashSaved(true);
-          return;
-        }
-        if (res.status !== 409) throw new Error(`Server returned ${res.status}`);
-
-        const server = (await res.json()) as ServerState;
-        const serverSnap = snapshot(
-          new Set(server.unavailableDates ?? []),
-          new Map((server.unavailabilityNotes ?? []).map(n => [n.date, n.note])),
-        );
-        if (attempt === 0 && server._rev && serverSnap === baseSnap) {
-          attemptRev = server._rev;
-          continue;
-        }
-        adopt(server);
-        holdConflict(CONFLICT_MSG);
-        return;
-      }
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : "Error al guardar");
-    } finally {
-      setSaving(false);
-    }
   }
 
   const first = visibleMonths[0];
@@ -386,14 +247,14 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
             </Select>
             <button
               type="button"
-              onClick={() => applyRecurring(true)}
+              onClick={() => applySeries(true)}
               className="px-4 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors"
             >
               Marcar
             </button>
             <button
               type="button"
-              onClick={() => applyRecurring(false)}
+              onClick={() => applySeries(false)}
               className="px-4 py-2 rounded-lg border border-surface-accent-l40-d20 font-label text-xs uppercase tracking-widest text-mono-400 hover:border-negative-strong/40 hover:text-negative-fg transition-colors"
             >
               Quitar serie
@@ -566,16 +427,7 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
               type="text"
               placeholder="Razón (opcional)..."
               value={notes.get(popover.iso) ?? ""}
-              onChange={e => {
-                const val = e.target.value;
-                setNotes(prev => {
-                  const m = new Map(prev);
-                  if (val) m.set(popover.iso, val);
-                  else m.delete(popover.iso);
-                  return m;
-                });
-                clearSaved();
-              }}
+              onChange={e => setNote(popover.iso, e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") setPopover(null); }}
               className="w-full rounded-lg border border-surface-accent-l50-d15 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 placeholder:text-placeholder focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"
             />

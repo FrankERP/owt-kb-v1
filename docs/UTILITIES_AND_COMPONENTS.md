@@ -179,8 +179,11 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 ### Unsaved-work fingerprints
 Two editors warn before discarding work, and each compares a stable fingerprint of the
 state a save actually persists against the last saved one.
-- **`snapshot(dates, notes)`** ([AvailabilityCalendar.tsx](../app/components/AvailabilityCalendar.tsx))
-  — feeds `dirty`, the "Cambios sin guardar" marker and the `beforeunload` guard.
+- **`snapshot(dates, notes)`** ([useAvailability.ts](../app/components/availability/useAvailability.ts))
+  — feeds `dirty`, the "Cambios sin guardar" marker and the `beforeunload` guard. It lives in
+  the hook that owns the availability edits and the revision-guarded save, not in the grid
+  that draws them: `AvailabilityCalendar` reads `dates`, `dirty`, `save()` and the rest from
+  `useAvailability` and keeps only its popover, paging and recurring-panel state.
 - **`proposalSnapshot(songs, teamNotes, leadNotes, proposalId)`**
   ([ProposalEditor.tsx](../app/\(client\)/me/propose/[roleId]/ProposalEditor.tsx)) — the same
   job for the setlist proposal editor. Takes the proposal id because `lead_notes` is only
