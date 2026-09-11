@@ -1139,3 +1139,79 @@ Tipo tiles fitted at 390 px, F3, the letter pill) and a re-merge of `main` twice
 releases (#57, #59, #60) landed under the PR. Two design questions from the look stay open
 for R2+: the hero «Ensayar» is accent-toned on Saturday/special headers; library rows show
 BPM at phone width while the home run sheet hides it.
+
+# Part XI — R2 (2026-09-10)
+
+Branch `claude/motion-r2-schedule`. Five tasks: pure agenda logic, the `SwipeStrip`
+primitive, the schedule header + day strip, the agenda view + mode host, and this
+documentation task.
+
+**Shipped (§12.3 in full).** `app/utils/agenda.ts` — neutral: `findDuplicates` (moved out of
+`DayCard`), `serviceTone`, `serviceConflicts`, `conflictLabel`, `summarizeService`,
+`agendaRows`, `mondayOf`/`addDays`/`weekStripDays`/`monthStripDays`. `SwipeStrip` — the
+drag-with-snap host, `motion`'s `dragTransition` override documented in-file. `ScheduleHeader`
+— icon-button arrows that step ONE month via `?m=` (a navigation, so the route reveal carries
+it), a jump-to-any-month `DateField` with no stepper pair, a «Próximos» sublabel in the
+rolling view. `DayStrip` — a WEEK strip (seven cells, swipe pages weeks client-side,
+`onWeekChange` scrolls the agenda; today's dot pulses once). `AgendaView` — service days only,
+one row per service, `DOM 13 SEP` + countdown pill + summary + `⚠ N conflicto(s)`; specials
+name themselves; rows open the existing day sheet. `CalendarView` becomes the host
+(`Agenda | Mes`, a plain keyed `Presence` fade with `appear` only after a switch — the M0b
+rule); «Lista» retires. `page.tsx` drops its own `h2` (the header IS the heading now) and
+computes `today` once, threading it into both the fetch and `todayStr`. `loading.tsx`
+reshaped to match.
+
+**Rulings.**
+- **Agenda | Mes replaces Calendario | Lista.** The agenda answers "when do I serve next"
+  directly — one row per service — where the grid made the reader scan ~90 cells for the lit
+  ones and «Lista» stacked the same full `DayCard`s the day sheet already shows, at ten times
+  the height. The grid stays as `Mes`, for planning a month at a glance; agenda is the default.
+- **The header's arrows step ONE month while the fetch window is unchanged** — three months
+  from the anchor in browse mode, the rolling 95-day window by default. Paging the header
+  never changes how much data a view holds, only which slice starts it.
+- **The strip is a WEEK strip, not the plan's month-long scroller.** The plan called for the
+  whole anchor month in one snapped, horizontally-scrollable row; it shipped once and could
+  not be finger-scrolled on a phone, because `SwipeStrip`'s own host sets
+  `touch-action: pan-y` — the browser never hands the horizontal axis to a nested scroller, so
+  the only way to reach day 20 was the swipe, and the swipe paged the whole month. Days 8–30
+  were unreachable by touch while looking reachable. The fix is what spec §12.3's ASCII always
+  called it: seven cells, no inner scroller, the week that contains today (or the anchor
+  month's first DAY's week — `mondayOf(anchorMonth + "-01")`, service day or not) as
+  the initial view.
+- **The swipe pages weeks, not months.** With the strip narrowed to one week, its drag became
+  the week-paging gesture (client state, `onWeekChange`); the month axis stays where the plan
+  put it, on the header's arrows (server-driven, `?m=`).
+- **Conflicts are counted per SECTION** (voces / instrumentos / foh), summed —
+  `serviceConflicts` runs `findDuplicates` over each section separately rather than the whole
+  service, so a person seated in two different sections (a lead who is also on an instrument)
+  is not flagged, only a repeat within one section is.
+- **The crossfade is a plain keyed fade, not the plan's stacked panels.** Stacking needs a
+  host of known height; neither view has one here — the agenda is as tall as the fetch window
+  has services, the grid is three months — so any `min-h` big enough for the taller panel
+  leaves the shorter one in blank space. `Presence` keyed on the mode (unmount one, mount the
+  other, no exit) is the plan's own recorded fallback, taken as the primary design.
+- **`appear` only after a switch**, never on the mode the route mounts with — a fix-round
+  ruling (Task 4's review), the same M0b rule (ADR-0031) `ImpersonationBanner`'s
+  `activeAtLoad` already sets: `Presence appear` above the fold is the one thing that rule
+  forbids, so the crossfade exists for switches only and first paint renders at rest.
+- **Month paging is server-driven and enters via the route reveal** (decision C), not a
+  directional slide — decision C makes every schedule transition enter-only anyway, so a
+  slide would have had nothing to pair against; a `?m=` navigation is treated exactly like any
+  other route change.
+- **Deferred to R7:** pull-to-refresh, long-press quick actions — unchanged from the Part IX/
+  Part X deferral, R2 did not pull either forward.
+
+**Deviations from the plan, accepted.**
+- **The strip narrowed from a month scroller to a week strip** mid-branch (`dedff38a`) — see
+  the ruling above; the plan's own ASCII in §12.3 already described a week strip, so this is a
+  correction back to the spec rather than a new design.
+- **The crossfade shipped as the plan's recorded fallback**, not its primary stacked-panel
+  design — see the ruling above.
+- **`appear={switched}` was added in a fix round** (`7782748f`) after the first cut of Task 4
+  mounted the agenda with `Presence appear` unconditionally true, which would have animated
+  the very first paint — caught before merge, not after.
+
+**Bundle:** `main 6e9a195c` → `R2 tip 444d015d` (git-archive cold build, same env):
+`/schedule` 121.5 kB → 123.1 kB (+1.6), `/biblioteca` 114.2 kB → 114.2 kB (unchanged),
+`/admin` 355.7 kB → 356.4 kB (+0.7, build noise); shared unchanged. The week strip, the
+agenda and `SwipeStrip` cost 1.6 kB on the route — see the `docs/MOTION.md` ledger.

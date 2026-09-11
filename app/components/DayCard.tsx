@@ -12,6 +12,7 @@ import CueDialog from "./ui/CueDialog";
 import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
+import { findDuplicates } from "@/app/utils/agenda";
 import NumberRoll from "./ui/NumberRoll";
 
 export interface DayCardProps {
@@ -318,18 +319,6 @@ function SongRow({ song, n, accent, onOpen, dense = false }: {
       </div>
     </button>
   );
-}
-
-// Lowercased names that appear more than once within a single section
-function findDuplicates(names: string[]): Set<string> {
-  const counts = new Map<string, number>();
-  for (const n of names) {
-    const k = n.toLowerCase().trim();
-    if (k) counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
-  const dups = new Set<string>();
-  for (const [k, c] of counts) if (c > 1) dups.add(k);
-  return dups;
 }
 
 function VocalCol({ label, names, highlightName, duplicateNames }: { label: string; names: string[]; highlightName?: string; duplicateNames?: Set<string> }) {

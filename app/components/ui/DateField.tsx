@@ -1,7 +1,10 @@
 // The ONE date/month field (spec §19.3, decision M). NEUTRAL. The input stays
 // native — the OS picker is the control — and the chrome is tokenised. In month
-// kind an optional stepper pair turns it into the month strip the schedule page
-// uses; the parent owns what a step means (a router push, a state change).
+// kind an optional stepper pair turns it into a month strip; the parent owns
+// what a step means (a router push, a state change). The schedule header does
+// NOT use `onStep` (R2 Task 4 ruling: its own arrows page the month instead,
+// with the same accessible names a second stepper pair would duplicate) — the
+// one live consumer is the theme gallery's `ControlsFixture`.
 
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import Button from "./Button";
