@@ -85,7 +85,31 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   call it. `daysUntil` pins "today" to America/Mexico_City (`toLocaleDateString("sv", …)`), not
   the runtime's local date — Vercel is UTC, so reading the bare local date would misreport the
   team's evening as still a day away. `formatCountdown` reads a negative diff as "Hace N días"
-  rather than "En -N días". Consumers: `NextServiceHero`, `DayCard`'s header pill, `DayCardDisclosure`'s collapsed line.
+  rather than "En -N días". Consumers: `MeHeader`'s countdown pill, `DayCard`'s header pill
+  (`isNext` only — `/me`'s hero card omits it, since `MeHeader` already carries the countdown),
+  `DayCardDisclosure`'s collapsed line.
+- **`nextWeekends(todayIso, count)`**, **`weekendLabel(weekend)`** ([weekends.ts](../app/utils/weekends.ts))
+  — the ten rows `WeekendList` offers (R3), also neutral and CDMX-pinned (local noon, never a bare
+  `new Date(iso)`). `nextWeekends` counts the CURRENT weekend while its Sunday is still ahead, so a
+  member opening `/me` on the Saturday or Sunday they are living through still sees that row first
+  rather than the one after it. `weekendLabel` renders one line — «12 – 13 sep», or «31 oct – 1 nov»
+  when the two days cross a month.
+- **`seatLabel(doc)`**, **`nextSeatLine(assignments)`** ([myWeek.ts](../app/utils/myWeek.ts)) —
+  the one line `/me`'s header leads with (R3). `seatLabel` is the page's old `myRoleLabel`
+  (Lead · instrument · FOH: role · BGV · Coro, always in that order), now shared with the
+  `.ics` event body so the two can no longer name a seat differently. `nextSeatLine` reduces
+  to the EARLIEST `dateKey`, not `[0]` — the header is the page's one claim about what is
+  next, so it re-derives rather than trusting the caller's sort. Both are neutral (no
+  imports) because `app/(client)/me/page.tsx` is a Server Component and calls them directly
+  (ADR-0028); `MeHeader` ("use client") only renders the result.
+- **`MEMBER_TYPES`**, **`MEMBER_TYPE_LABEL`** ([memberTypes.ts](../app/utils/memberTypes.ts))
+  — "Tipo" (`memberType`), the ONLY worship eligibility axis. Mirrors
+  `sanity/schemas/worshipTeam.ts`'s `memberType.options.list` exactly, pinned by
+  `memberTypes.test.ts`, which reads the schema source and checks both against it. This
+  used to be three independent copies — `MeHeader`'s chip labels, `/admin`'s abbreviated
+  table labels, and the admin PATCH route's write allowlist — with nothing to stop them
+  drifting apart; `/admin` still keeps its own `TYPE_ABBR` (dense abbreviations for a
+  table row, not a second source of the values or the full-word labels).
 
 ### Library (R1)
 - **`libraryIndex.ts`** ([libraryIndex.ts](../app/utils/libraryIndex.ts)) — pure `/biblioteca`
@@ -179,8 +203,11 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 ### Unsaved-work fingerprints
 Two editors warn before discarding work, and each compares a stable fingerprint of the
 state a save actually persists against the last saved one.
-- **`snapshot(dates, notes)`** ([AvailabilityCalendar.tsx](../app/components/AvailabilityCalendar.tsx))
-  — feeds `dirty`, the "Cambios sin guardar" marker and the `beforeunload` guard.
+- **`snapshot(dates, notes)`** ([useAvailability.ts](../app/components/availability/useAvailability.ts))
+  — feeds `dirty`, the "Cambios sin guardar" marker and the `beforeunload` guard. It lives in
+  the hook that owns the availability edits and the revision-guarded save, not in the views
+  that draw them: `MyAvailabilityPanel` calls `useAvailability` ONCE and passes that state to
+  `WeekendList` and to `AvailabilityGrid`, which keeps only its paging.
 - **`proposalSnapshot(songs, teamNotes, leadNotes, proposalId)`**
   ([ProposalEditor.tsx](../app/\(client\)/me/propose/[roleId]/ProposalEditor.tsx)) — the same
   job for the setlist proposal editor. Takes the proposal id because `lead_notes` is only
@@ -189,10 +216,11 @@ state a save actually persists against the last saved one.
 
 ### Popover placement
 - **`popoverPosition(rect, viewportW, viewportH)`**
-  ([AvailabilityCalendar.tsx](../app/components/AvailabilityCalendar.tsx)) — placement for the
+  ([NotePopover.tsx](../app/components/availability/NotePopover.tsx)) — placement for the
   availability note popover, pure so the flip and the clamps are testable (jsdom reports
-  every rect as zero). The popover recomputes from its day button on scroll; it must NOT
-  close on scroll, because the mobile keyboard fires scroll and resize.
+  every rect as zero). The popover recomputes from its anchor (a weekend toggle's «Razón»
+  button or a grid day) on scroll; it must NOT close on scroll, because the mobile keyboard
+  fires scroll and resize.
 
 ### Mobile / accessibility
 - **`native.ts`** — `isNativeApp()`, `nativeGoogleSilentIdToken()` (cold-start silent re-auth
@@ -200,8 +228,10 @@ state a save actually persists against the last saved one.
 - **`textZoom.ts`** — text-scale presets (`auto`/1.0/1.2/1.4/1.6), `getStoredMode`/`setStoredMode`
   (localStorage), `applyScale` (native `@capacitor/text-zoom` or web `-webkit-text-size-adjust`).
 - **`useTransientValue.ts`** — `[value, show, reset, hold] = useTransientValue(idle, ms)`. A
-  value that reverts to `idle` after `ms`: every toast and the availability calendar's
-  "Guardado ✓". **Use it instead of `setTimeout(() => setToast(null), …)`** — eight sites had
+  value that reverts to `idle` after `ms`: an inline, in-place flash next to the control
+  that produced it, e.g. `MonthGenerator`'s swap toast — never the fixed `useToast` stack
+  ("Guardado ✓" on `/me` is a `useToast` toast now, not this). **Use it instead of
+  `setTimeout(() => setToast(null), …)`** — eight sites had
   hand-rolled that and all eight leaked the timer, so a second toast inside the window
   inherited the first one's clock. The costly pair is success-then-error: the error is the
   message that flashes and disappears, and the toast is often the only signal a mutation
@@ -280,7 +310,13 @@ state a save actually persists against the last saved one.
   `themePref` from `ThemeBootstrap`'s context, never to `resolvedTheme` (which is `"dark"` for
   an explicit-Dark member and an unset one alike). **PATCHes first and paints only on
   `res.ok`** — an optimistic paint whose write failed would strand the member in a theme they
-  never persisted, with no later load able to correct it. Hidden while impersonating.
+  never persisted, with no later load able to correct it. Hidden while impersonating (returns
+  `null`). **`bare` (R3)** drops the rounded border/background but KEEPS its own `p-5`
+  padding, unlike `SettingsCard`'s other two subsections (which wrap themselves): the control
+  owns its own padding precisely because it can return `null`, so `SettingsCard` never wraps
+  it in a `div` that would leave an empty box inside the card's `divide-y` sections while
+  impersonating. `id="tema"` still renders either way, so `ThemeAnnouncement`'s `#tema`
+  anchor lands on something.
 
 **Two PWA remnants, recorded together.** `appleWebApp.statusBarStyle` stays
 `black-translucent`: it is what makes the WebView extend under the iOS status bar, and every
@@ -340,20 +376,24 @@ Legend: **[C]** client, **[S]** server.
 | Component | Purpose |
 |-----------|---------|
 | `DayCard` [C] | **The core service card / R1 run-sheet card** — day · date header, countdown pill, setlist (medley-grouped via `buildRuns`) + all five seats; embeds `SetlistEditor` for admins + `PracticePlaylistButton`. `layout?: "card" \| "wide"` — `wide` puts setlist and team side by side from `lg` (only when both a setlist AND a team are present); `hero?: boolean` makes the card the page's one primary action, `PracticePlaylistButton variant="hero"` ("Ensayar") in the header, dropping the inline pill from the Setlist rail so the affordance never repeats. Its ⚠ duplicate-seat marks read `findDuplicates` from `app/utils/agenda.ts` (R2 — moved out of this file so the schedule agenda's conflict count can never disagree with the card's own marks). |
-| `DayCardDisclosure` [C] | A non-next service on `/`, collapsed to one line (day · date · countdown) that opens a `Collapse` onto its `DayCard`. |
-| `NextServiceHero` [C] | Countdown badge ("Hoy"/"Mañana"/"En N días"). Imports `daysUntil`/`formatCountdown` from `app/utils/daysUntil.ts`. |
+| `DayCardDisclosure` [C] | A non-next service on `/` or `/me`, collapsed to one line (day · date · countdown) that opens a `Collapse` onto its `DayCard`. |
 | `ScheduleHeader` [C] | **The `/schedule` month header (R2)** — `‹ MES AÑO ›` icon-button arrows (`Button variant="icon"` with `href`, so paging is a `?m=` navigation carried by the route reveal, one month per press) around a truncating `h2` that is now the route's own heading; below it, a jump-to-any-month `DateField` (no `onStep` — the arrows already own "Mes anterior"/"Mes siguiente") plus a «Hoy» reset while browsing. The rolling (default) view adds a «Próximos» sublabel under the month. |
 | `DayStrip` [C] | **The `/schedule` WEEK strip (R2)** — seven cells (`grid-cols-7`), every day of the visible week rendered but only service days pressable; opens on today's week (or the anchor month's first day's week, `mondayOf(anchorMonth + "-01")`, when today falls outside that month). A `SwipeStrip` drag pages the week client-side (`onWeekChange` scrolls the agenda to it); the header's arrows page the month instead — two axes, two gestures. Today's dot pulses once on reveal. Cells share the month grid's tone classes so the two views can't disagree about what a colour means. **F1:** an optional `myName` prop (from `CalendarView`'s `myNameFromSession`) flags a seated, lit day with a second positive dot under the number (`StripDay.mine`). |
 | `AgendaView` [C] | **The `/schedule` agenda (R2, default view)** — service days only, one row each, under a month divider: day · short date, an upcoming-only countdown pill, who leads and how many songs, `⚠ N conflicto(s)`. All ordering/summary/conflict arithmetic lives in `app/utils/agenda.ts`'s `agendaRows`; a special service names itself in the row (Sábado/Domingo don't). Rows open the same day `CueDialog` sheet as the month grid. **F1:** its own `useSession` (same pattern as `DayCard`) plus `mySeats` pill a `Tú · Lead, Keys` badge and glow the tone rail on a row where the signed-in member is seated; `aria-label` gains `, te toca: Lead, Keys`. |
 | `CalendarView` [C] | **The `/schedule` host, composition only (R2)** — `ScheduleHeader`, `DayStrip`, an Agenda\|Mes `SegmentedControl` (agenda default), then `AgendaView` or the three-month grid (Mexico_City "today" highlight, unchanged), and the shared day-sheet `CueDialog`. The mode switch is a plain keyed `Presence` fade (no stacked panels — neither view has a fixed height), `appear` only after the reader actually flips the control so first paint renders at rest. The retired «Lista» mode (full `DayCard`s stacked per weekend) is gone; the agenda replaces it. **F1:** derives `myName` once via `myNameFromSession(session?.user)` and passes it to `DayStrip`. |
-| `AvailabilityCalendar` [C] | Member self-service unavailability picker. |
+| `availability/MyAvailabilityPanel` [C] | **`/me`'s availability host (R3)** — renamed off `AvailabilityPanel` in fix round 1, which shared its name with the unrelated admin `AvailabilityPanel` below (different directory, different job): calls `useAvailability` once and renders `WeekendList`, the shared «Repetir…» recurring panel, «Guardar» (`busy`/`busyLabel`; success is a `useToast` "Guardado ✓", not an inline flash), the dirty/error/held-conflict notices, the `AvailabilityGrid` behind a «Ver calendario» `Collapse`, and the one `NotePopover` both surfaces open. «Quitar serie» calls `closeNote()` before dropping the recurring pattern, so a popover pinned to a date the series just removed cannot outlive it. |
+| `WeekendList` [C] | **`/me`'s default availability surface (R3)** — the next ten weekends from `nextWeekends(todayIso, 10)`, each a «12 – 13 sep» row with `SÁB`/`DOM` `Button variant="pill" tone="availability" size="lg"` toggles (`aria-pressed` = «no puedo»; the 44 px touch target also applies to the «Razón» ghost) and a service dot on a day in `serviceDates`. A day already in the past renders `disabled` — it is not a toggle. Toggling fires `haptic("selection")`. |
+| `AvailabilityGrid` [C] | **The twelve-month grid (R3)**, moved to `app/components/availability/AvailabilityGrid.tsx` in fix round 1 (was `app/components/AvailabilityCalendar.tsx`) — a controlled view (`state`, `serviceDates`, `openNote`, `closeNote`, `noteIso`) behind `/me`'s «Ver calendario» disclosure, for what ten weekend rows cannot say. Owns paging only. |
+| `NotePopover` [C] | **The «Razón» note editor (R3)** — one non-modal positioned field per panel (never a `CueDialog`: nothing underneath goes inert), owned by `MyAvailabilityPanel` so `useAvailability`'s `onAdopt` can close it in the same update a conflict adopts the server's dates. Exports `popoverPosition` and `fmtDayLabel`. |
 | `AddToCalendarButton` [C] | Downloads `.ics` of the member's assignments. |
 | `ChainLinkIcon` [S] | Medley-link row icon. |
 
 ### Members / profile / navigation
 | Component | Purpose |
 |-----------|---------|
-| `ProfilePanel` [C] | Member self-profile (alias, photo, password, notif prefs); focus-trapped. |
+| `MeHeader` [C] | **`/me`'s identity header (R3)** — IS the page's heading, replacing the two `h2`s ("Mis próximos servicios" / "Próximos servicios"). Avatar/initials, name, alias, Tipo chips (`MEMBER_TYPE_LABEL`, worship-gated — a kids-only member gets none), «Editar perfil» (`Button variant="ghost" href="#ajustes"`), and ONE line in priority order: the next worship service (`nextSeatLine`/`seatLabel`, `NumberRoll` countdown), else the next Kids Sunday, else — worship members only — «Sin servicios asignados próximamente». Receives everything as plain data (`next`, `kidsNext`, `inWorship`) because the page is a Server Component (ADR-0028). |
+| `SettingsCard` [S] | **`/me`'s one Ajustes card (R3)** — `section#ajustes`, `divide-y` — replaces three separate framed cards with `ThemeControl bare`, `TextSizeControl bare` and, when the profile read succeeded, `ProfilePanel … bare`. NEUTRAL (no hooks, no `"use client"`) so this Server Component renders its client children as JSX rather than calling them (ADR-0028); `member` is nullable on purpose — a failed profile read still shows Tema and Tamaño de texto, just without the Perfil subsection. Tamaño de texto is device-local; Tema still renders and reports its own write failure. |
+| `ProfilePanel` [C] | Member self-profile (alias, photo, password, notif prefs); focus-trapped. `bare` (R3) drops its own card border/background/padding when `SettingsCard` already owns that chrome. |
 | `ImpersonationBanner` [C] | Banner + "stop impersonating" when `session.user.isImpersonating`. |
 | `ActivityPing` [C] | "Last seen" ping, ≤ once / 30 min. |
 | `Navbar` [S] | Top navbar shell; deliberately **non-async** (session resolved client-side) so pages stay ISR-renderable. |
@@ -364,7 +404,7 @@ Legend: **[C]** client, **[S]** server.
 | `CmsNavbar` [S], `icons.tsx` [S] | Studio navbar / SVG icons. (`Header` [S], the old page-header component with a `/tag` link, was deleted in R1 — zero importers since `Navbar` replaced it.) |
 | `SignOutButton` [C] | Sign out. Clears the theme mirror first — see `themePref.ts`. (`ThemeSwitch` was deleted in `33c6e15`; the theme picker is now `ui/ThemeControl.tsx` at `/me`.) |
 | `NativeAuthBootstrap` [C] | Native cold-start silent Google re-auth. |
-| `TextScaleBootstrap` [C] / `TextSizeControl` [C] | Apply stored text scale / segmented size control. |
+| `TextScaleBootstrap` [C] / `TextSizeControl` [C] | Apply stored text scale / segmented size control. `TextSizeControl`'s `bare` (R3) drops its own card border/padding for `SettingsCard`. |
 
 ### Motion primitives (`app/components/ui/`, see [MOTION.md](MOTION.md))
 | Component | Purpose |
@@ -372,7 +412,7 @@ Legend: **[C]** client, **[S]** server.
 | `MotionProvider` [C] | Loads `motion`'s DOM features (`domMax`) as an async chunk after hydration (not inline); `reducedMotion="user"`. |
 | `Presence` [C] | Mount/unmount with an exit animation; variants `fade` `rise` `scale` `sheet` `drop`. `sheet` enters on `SPRINGS.sheet` (every other variant, and every exit, stays on the ordinary duration/ease). `onEntered?: () => void` fires once the enter animation completes — never on an already-shown mount without `appear`. |
 | `Skeleton` / `SkeletonGroup` [N] | Shimmer placeholders; one `aria-busy` status region per loading surface. |
-| `Button` [N] | The house button: six variants, three sizes, press physics, primary sheen, `busy`, `href`. |
+| `Button` [N] | The house button: six variants, three sizes, press physics, primary sheen, `busy`, `href`. The `pill` variant takes a `tone` (`"accent"` default, `"availability"` — WeekendList's weekend toggles; pressed text is `soft`, not `strong`, to clear 4.5:1 in light). |
 | `revealProps()` (`app/utils/reveal.ts`) [N] | CSS route reveal; `app/(client)/template.tsx` replays it per navigation. |
 | `CueDialog` [C] | The ONE dialog shell — never a hand-rolled `fixed inset-0` scrim. `mode="modal"` \| `"sheet"` (a sheet is only a sheet below 640px); drag-to-dismiss from the sheet's head (handle + title bar — on a phone it is the only visible close control, the × is `sr-only` there; 150 px of travel or a 0.5 px/ms flick — `SHEET_DISMISS`); `onDismiss(reason)` where `reason` is `"escape" \| "backdrop" \| "drag"`. Traps focus, stacks layers, supports a portalled focus "satellite". Always render `<CueDialog open={x}>`, never `{x && <CueDialog open>}` — see `cueDialogMount.test.ts`. |
 | `Toast` / `useToast` [C] | The ONE fixed toast stack. `toast({ message, tone?, duration?, hold?, action? })`; `hold` persists until `dismiss(id)`. `useTransientValue` stays for an inline flash next to the control that produced it. |

@@ -159,7 +159,7 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
   const [staleReload, setStaleReload] = useState(false);
 
   // Saved-state snapshot `dirty` compares against; re-seeded after each
-  // successful save. Same shape as AvailabilityCalendar's, and for the same
+  // successful save. Same shape as `useAvailability`'s, and for the same
   // reason: this editor holds a whole setlist and had no guard at all, so
   // "Volver" discarded a reordered, retuned, medley-linked list in silence.
   const [initialSnap, setInitialSnap] = useState(() =>

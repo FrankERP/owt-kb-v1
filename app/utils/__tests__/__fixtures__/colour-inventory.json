@@ -8,27 +8,27 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 319,
-    "filesScanned": 291,
-    "filesWithColour": 52,
+    "literalRows": 316,
+    "filesScanned": 299,
+    "filesWithColour": 54,
     "byCategory": {
       "2": 2,
-      "4": 75,
-      "8": 90,
+      "4": 74,
+      "8": 87,
       "9": 10,
-      "11": 8,
+      "11": 9,
       "12": 134
     },
     "byDisposition": {
-      "B": 122,
+      "B": 120,
       "exempt": 42,
-      "keep": 240,
-      "C": 6,
+      "keep": 239,
+      "C": 5,
       "D": 15
     },
     "compositingClasses": 21,
     "compositingSelectorOccurrences": 45,
-    "compositingClassNameOccurrences": 59,
+    "compositingClassNameOccurrences": 58,
     "compositingRuleBodies": 44,
     "lightCounterpartClasses": 15,
     "pairs": 12,
@@ -216,14 +216,14 @@
       "reason": "Static viewport themeColor. Child E makes it theme-responsive under parent invariant 17."
     },
     {
-      "file": "app/(client)/me/page.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
+      "file": "app/(client)/me/loading.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
       "alpha": null,
       "utility": null,
-      "carrier": "stroke",
-      "line": 370,
+      "carrier": null,
+      "line": 43,
       "disposition": "B",
       "reason": null
     },
@@ -235,19 +235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 390,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/(client)/me/page.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 402,
+      "line": 399,
       "disposition": "B",
       "reason": null
     },
@@ -271,7 +259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 449,
+      "line": 431,
       "disposition": "B",
       "reason": null
     },
@@ -283,7 +271,19 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 555,
+      "line": 448,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/(client)/me/page.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 566,
       "disposition": "B",
       "reason": null
     },
@@ -2407,7 +2407,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 30,
+      "line": 35,
       "disposition": "B",
       "reason": null
     },
@@ -2431,7 +2431,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 207,
+      "line": 210,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2443,7 +2443,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1185,
+      "line": 1188,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2455,7 +2455,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 243,
+      "line": 246,
       "disposition": "B",
       "reason": null
     },
@@ -2467,7 +2467,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 242,
+      "line": 245,
       "disposition": "B",
       "reason": null
     },
@@ -2479,7 +2479,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1180,
+      "line": 1183,
       "disposition": "B",
       "reason": null
     },
@@ -2491,7 +2491,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1394,
+      "line": 1397,
       "disposition": "B",
       "reason": null
     },
@@ -2503,7 +2503,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1403,
+      "line": 1406,
       "disposition": "B",
       "reason": null
     },
@@ -2515,7 +2515,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1413,
+      "line": 1416,
       "disposition": "B",
       "reason": null
     },
@@ -2527,7 +2527,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1424,
+      "line": 1427,
       "disposition": "B",
       "reason": null
     },
@@ -2539,7 +2539,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 246,
+      "line": 249,
       "disposition": "C",
       "reason": null
     },
@@ -2551,7 +2551,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 241,
+      "line": 244,
       "disposition": "C",
       "reason": null
     },
@@ -2563,7 +2563,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 650,
+      "line": 653,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2976,50 +2976,50 @@
       "reason": null
     },
     {
-      "file": "app/components/AvailabilityCalendar.tsx",
+      "file": "app/components/availability/AvailabilityGrid.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 557,
+      "line": 196,
       "disposition": "B",
       "reason": null
     },
     {
-      "file": "app/components/AvailabilityCalendar.tsx",
+      "file": "app/components/availability/AvailabilityGrid.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 589,
+      "line": 204,
       "disposition": "B",
       "reason": null
     },
     {
-      "file": "app/components/AvailabilityCalendar.tsx",
+      "file": "app/components/availability/NotePopover.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 603,
+      "line": 155,
       "disposition": "B",
       "reason": null
     },
     {
-      "file": "app/components/AvailabilityCalendar.tsx",
+      "file": "app/components/availability/NotePopover.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 611,
+      "line": 178,
       "disposition": "B",
       "reason": null
     },
@@ -3475,7 +3475,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 21,
+      "line": 23,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3483,35 +3483,11 @@
       "file": "app/components/ProfilePanel.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
-      "line": 48,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 47,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 237,
+      "line": 250,
       "disposition": "B",
       "reason": null
     },
@@ -3523,19 +3499,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 51,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "text-white",
-      "alpha": null,
-      "utility": "text",
-      "carrier": null,
-      "line": 46,
+      "line": 50,
       "disposition": "C",
       "reason": null
     },
@@ -4245,14 +4209,6 @@
       "file": "app/components/Navbar.tsx",
       "kind": "className",
       "class": "navbar",
-      "count": 1,
-      "disposition": "keep",
-      "reason": "Usage site of a compositing class"
-    },
-    {
-      "file": "app/components/NextServiceHero.tsx",
-      "kind": "className",
-      "class": "section-heading",
       "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"

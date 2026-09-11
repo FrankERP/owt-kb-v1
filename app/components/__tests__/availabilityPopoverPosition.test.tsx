@@ -17,8 +17,23 @@
 // the rect as an argument for exactly this reason.
 
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AvailabilityCalendar, { popoverPosition } from "../AvailabilityCalendar";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { installMotionTestEnv } from "../ui/__tests__/motionTestSetup";
+import { MotionProvider } from "../ui/MotionProvider";
+import MyAvailabilityPanel from "../availability/MyAvailabilityPanel";
+import { popoverPosition } from "../availability/NotePopover";
+
+// R3: the popover is shared by both availability surfaces, so it lives in
+// `availability/NotePopover` and the panel owns the one instance. The behaviour
+// below is unchanged — it is still opened from a day cell in the grid.
+vi.mock("@/app/components/ui/Toast", () => ({
+  useToast: () => ({ toast: vi.fn(), dismiss: vi.fn() }),
+}));
+vi.mock("@/app/utils/haptics", () => ({ haptic: vi.fn() }));
+
+installMotionTestEnv();
+// Warm the LazyMotion feature chunk (ADR-0031), precedent Menu.test.tsx.
+beforeAll(async () => { await import("../ui/motionFeatures"); });
 
 const VIEWPORT_W = 390; // iPhone-ish
 const VIEWPORT_H = 844;
@@ -51,7 +66,7 @@ describe("popoverPosition", () => {
   });
 });
 
-describe("AvailabilityCalendar — the popover survives a scroll", () => {
+describe("MyAvailabilityPanel — the popover survives a scroll", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-09-15T12:00:00-06:00"));
@@ -64,7 +79,12 @@ describe("AvailabilityCalendar — the popover survives a scroll", () => {
   });
 
   function openNoteOn(month: string, day: number) {
-    render(<AvailabilityCalendar initialRev="rev-1" initialDates={[]} initialNotes={[]} />);
+    render(
+      <MotionProvider>
+        <MyAvailabilityPanel initialRev="rev-1" initialDates={[]} initialNotes={[]} />
+      </MotionProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Ver calendario" }));
     const card = screen.getByText(month).closest("div")!;
     const cell = Array.from(card.querySelectorAll("button")).find(
       (b) => b.textContent?.trim() === String(day),

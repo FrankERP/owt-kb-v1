@@ -1,7 +1,7 @@
 // The service countdown, in one neutral module: `daysUntil` used to live in
-// `NextServiceHero.tsx` ("use client"), and R1 gave it three consumers — the
-// hero, `DayCard`'s header pill and the collapsed disclosure. No imports, no
-// hooks, so a Server Component may call it too.
+// the hero that is now `MeHeader.tsx` ("use client"), and R1 gave it three
+// consumers — the hero, `DayCard`'s header pill and the collapsed disclosure.
+// No imports, no hooks, so a Server Component may call it too.
 
 // Whole days from `now` to the service date. Both anchors are pinned to LOCAL
 // noon so the difference is a clean integer — comparing local midnight against
