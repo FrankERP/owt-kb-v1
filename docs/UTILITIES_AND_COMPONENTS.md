@@ -181,9 +181,9 @@ Two editors warn before discarding work, and each compares a stable fingerprint 
 state a save actually persists against the last saved one.
 - **`snapshot(dates, notes)`** ([useAvailability.ts](../app/components/availability/useAvailability.ts))
   — feeds `dirty`, the "Cambios sin guardar" marker and the `beforeunload` guard. It lives in
-  the hook that owns the availability edits and the revision-guarded save, not in the grid
-  that draws them: `AvailabilityCalendar` reads `dates`, `dirty`, `save()` and the rest from
-  `useAvailability` and keeps only its popover, paging and recurring-panel state.
+  the hook that owns the availability edits and the revision-guarded save, not in the views
+  that draw them: `AvailabilityPanel` calls `useAvailability` ONCE and passes that state to
+  `WeekendList` and to `AvailabilityGrid`, which keeps only its paging.
 - **`proposalSnapshot(songs, teamNotes, leadNotes, proposalId)`**
   ([ProposalEditor.tsx](../app/\(client\)/me/propose/[roleId]/ProposalEditor.tsx)) — the same
   job for the setlist proposal editor. Takes the proposal id because `lead_notes` is only
@@ -192,10 +192,11 @@ state a save actually persists against the last saved one.
 
 ### Popover placement
 - **`popoverPosition(rect, viewportW, viewportH)`**
-  ([AvailabilityCalendar.tsx](../app/components/AvailabilityCalendar.tsx)) — placement for the
+  ([NotePopover.tsx](../app/components/availability/NotePopover.tsx)) — placement for the
   availability note popover, pure so the flip and the clamps are testable (jsdom reports
-  every rect as zero). The popover recomputes from its day button on scroll; it must NOT
-  close on scroll, because the mobile keyboard fires scroll and resize.
+  every rect as zero). The popover recomputes from its anchor (a weekend toggle's «Razón»
+  button or a grid day) on scroll; it must NOT close on scroll, because the mobile keyboard
+  fires scroll and resize.
 
 ### Mobile / accessibility
 - **`native.ts`** — `isNativeApp()`, `nativeGoogleSilentIdToken()` (cold-start silent re-auth
@@ -349,7 +350,10 @@ Legend: **[C]** client, **[S]** server.
 | `DayStrip` [C] | **The `/schedule` WEEK strip (R2)** — seven cells (`grid-cols-7`), every day of the visible week rendered but only service days pressable; opens on today's week (or the anchor month's first day's week, `mondayOf(anchorMonth + "-01")`, when today falls outside that month). A `SwipeStrip` drag pages the week client-side (`onWeekChange` scrolls the agenda to it); the header's arrows page the month instead — two axes, two gestures. Today's dot pulses once on reveal. Cells share the month grid's tone classes so the two views can't disagree about what a colour means. **F1:** an optional `myName` prop (from `CalendarView`'s `myNameFromSession`) flags a seated, lit day with a second positive dot under the number (`StripDay.mine`). |
 | `AgendaView` [C] | **The `/schedule` agenda (R2, default view)** — service days only, one row each, under a month divider: day · short date, an upcoming-only countdown pill, who leads and how many songs, `⚠ N conflicto(s)`. All ordering/summary/conflict arithmetic lives in `app/utils/agenda.ts`'s `agendaRows`; a special service names itself in the row (Sábado/Domingo don't). Rows open the same day `CueDialog` sheet as the month grid. **F1:** its own `useSession` (same pattern as `DayCard`) plus `mySeats` pill a `Tú · Lead, Keys` badge and glow the tone rail on a row where the signed-in member is seated; `aria-label` gains `, te toca: Lead, Keys`. |
 | `CalendarView` [C] | **The `/schedule` host, composition only (R2)** — `ScheduleHeader`, `DayStrip`, an Agenda\|Mes `SegmentedControl` (agenda default), then `AgendaView` or the three-month grid (Mexico_City "today" highlight, unchanged), and the shared day-sheet `CueDialog`. The mode switch is a plain keyed `Presence` fade (no stacked panels — neither view has a fixed height), `appear` only after the reader actually flips the control so first paint renders at rest. The retired «Lista» mode (full `DayCard`s stacked per weekend) is gone; the agenda replaces it. **F1:** derives `myName` once via `myNameFromSession(session?.user)` and passes it to `DayStrip`. |
-| `AvailabilityCalendar` [C] | Member self-service unavailability picker. |
+| `availability/AvailabilityPanel` [C] | **`/me`'s availability host (R3)** — note the name is shared with the unrelated admin `AvailabilityPanel` below (different directory, different job): calls `useAvailability` once and renders `WeekendList`, the shared «Repetir…» recurring panel, «Guardar» (`busy`/`busyLabel`; success is a `useToast` "Guardado ✓", not an inline flash), the dirty/error/held-conflict notices, the `AvailabilityGrid` behind a «Ver calendario» `Collapse`, and the one `NotePopover` both surfaces open. |
+| `WeekendList` [C] | **`/me`'s default availability surface (R3)** — the next ten weekends from `nextWeekends(todayIso, 10)`, each a «12 – 13 sep» row with `SÁB`/`DOM` `Button variant="pill"` toggles (`aria-pressed` = «no puedo», in the `availability` tone), a service dot on a day in `serviceDates`, and a «Razón» ghost button on a marked day. Toggling fires `haptic("selection")`. |
+| `AvailabilityGrid` [C] | **The twelve-month grid (R3), in `AvailabilityCalendar.tsx`** — now a controlled view (`state`, `serviceDates`, `openNote`, `closeNote`, `noteIso`) behind `/me`'s «Ver calendario» disclosure, for what ten weekend rows cannot say. Owns paging only. |
+| `NotePopover` [C] | **The «Razón» note editor (R3)** — one non-modal positioned field per panel (never a `CueDialog`: nothing underneath goes inert), owned by `AvailabilityPanel` so `useAvailability`'s `onAdopt` can close it in the same update a conflict adopts the server's dates. Exports `popoverPosition` and `fmtDayLabel`. |
 | `AddToCalendarButton` [C] | Downloads `.ics` of the member's assignments. |
 | `ChainLinkIcon` [S] | Medley-link row icon. |
 

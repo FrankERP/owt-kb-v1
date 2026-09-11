@@ -2,8 +2,8 @@
 // The member's side of the `unavailableDates` lost-update race, in the client.
 //
 // `app/api/__tests__/meAvailabilityConflict.test.ts` proves the route refuses a
-// stale write. This file proves the calendar does the right thing with that
-// refusal, which is where the data can still be lost:
+// stale write. This file proves the availability panel does the right thing with
+// that refusal, which is where the data can still be lost:
 //
 //   * a real conflict DISCARDS the pending edits — re-sending a stale set
 //     against a fresh revision is the very deletion the route just stopped —
@@ -15,8 +15,24 @@
 //     rebase onto the fresh revision exactly once.
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AvailabilityCalendar from "../AvailabilityCalendar";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { installMotionTestEnv } from "../ui/__tests__/motionTestSetup";
+import { MotionProvider } from "../ui/MotionProvider";
+import AvailabilityPanel from "../availability/AvailabilityPanel";
+
+// R3 re-point: the panel is the host that calls `useAvailability` and owns the
+// save, so the contract this file guards is now asserted where it lives. The grid
+// is one of its two surfaces, behind «Ver calendario» — the test opens it, because
+// the day cells are how an edit is expressed here.
+const toastMock = vi.fn();
+vi.mock("@/app/components/ui/Toast", () => ({
+  useToast: () => ({ toast: toastMock, dismiss: vi.fn() }),
+}));
+vi.mock("@/app/utils/haptics", () => ({ haptic: vi.fn() }));
+
+installMotionTestEnv();
+// Warm the LazyMotion feature chunk (ADR-0031), precedent Menu.test.tsx.
+beforeAll(async () => { await import("../ui/motionFeatures"); });
 
 // A marked cell carries an availability fill — `/30` normally, `/50` while its
 // note popover is open (clicking a date opens it).
@@ -38,7 +54,7 @@ function cell(month: string, day: number): HTMLButtonElement {
 
 const marked = (month: string, day: number) => cell(month, day).className.includes(MARKED);
 
-// "Guardar" / "Guardar •" / "Guardando..." / "Guardado ✓" — one button, four labels.
+// One button, two labels: «Guardar» and «Guardando…» while the PATCH is in flight.
 const saveButton = () => screen.getByRole("button", { name: /Guarda/ });
 
 const fetchMock = vi.fn();
@@ -53,6 +69,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date("2026-09-15T12:00:00-06:00"));
   fetchMock.mockReset();
+  toastMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -63,12 +80,17 @@ afterEach(() => {
 });
 
 function renderCalendar() {
-  return render(
-    <AvailabilityCalendar initialRev="rev-1" initialDates={["2026-09-20"]} initialNotes={[]} />,
+  const r = render(
+    <MotionProvider>
+      <AvailabilityPanel initialRev="rev-1" initialDates={["2026-09-20"]} initialNotes={[]} />
+    </MotionProvider>,
   );
+  // The grid lives behind a disclosure now; open it before reaching for a day.
+  fireEvent.click(screen.getByRole("button", { name: "Ver calendario" }));
+  return r;
 }
 
-describe("AvailabilityCalendar — saving against a revision", () => {
+describe("AvailabilityPanel — saving against a revision", () => {
   it("sends the revision it was rendered at, and the one the reply reports next time", async () => {
     renderCalendar();
     fetchMock.mockResolvedValueOnce(
@@ -181,7 +203,10 @@ describe("AvailabilityCalendar — saving against a revision", () => {
     expect(marked("Octubre 2026", 4)).toBe(true);
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.queryByText("Cambios sin guardar")).toBeNull();
-    await waitFor(() => expect(saveButton().textContent).toContain("Guardado"));
+    // "Guardado ✓" is a toast now, not a label swap on the button.
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ message: "Guardado ✓", tone: "ok" })),
+    );
   });
 
   it("gives up after ONE rebase, discarding rather than looping", async () => {

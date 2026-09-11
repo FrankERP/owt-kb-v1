@@ -45,7 +45,7 @@ vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/components/NextServiceHero", () => ({ default: () => <p>HERO</p> }));
 vi.mock("@/app/components/DayCard", () => ({ DayCard: () => <p>DAYCARD</p> }));
 vi.mock("@/app/components/AddToCalendarButton", () => ({ default: () => null }));
-vi.mock("@/app/components/AvailabilityCalendar", () => ({ default: () => <p>CALENDARIO</p> }));
+vi.mock("@/app/components/availability/AvailabilityPanel", () => ({ default: () => <p>CALENDARIO</p> }));
 vi.mock("@/app/components/ProfilePanel", () => ({ default: () => <p>PERFIL</p> }));
 vi.mock("@/app/components/TextSizeControl", () => ({ default: () => null }));
 vi.mock("@/app/components/ui/ThemeControl", () => ({ default: () => null }));

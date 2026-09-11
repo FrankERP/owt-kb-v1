@@ -9,8 +9,8 @@
   ],
   "summary": {
     "literalRows": 319,
-    "filesScanned": 292,
-    "filesWithColour": 52,
+    "filesScanned": 296,
+    "filesWithColour": 53,
     "byCategory": {
       "2": 2,
       "4": 75,
@@ -2976,14 +2976,26 @@
       "reason": null
     },
     {
-      "file": "app/components/AvailabilityCalendar.tsx",
+      "file": "app/components/availability/NotePopover.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 418,
+      "line": 155,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/availability/NotePopover.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 178,
       "disposition": "B",
       "reason": null
     },
@@ -2995,7 +3007,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 441,
+      "line": 196,
       "disposition": "B",
       "reason": null
     },
@@ -3007,19 +3019,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 455,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/AvailabilityCalendar.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 463,
+      "line": 204,
       "disposition": "B",
       "reason": null
     },

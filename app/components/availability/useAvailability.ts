@@ -18,6 +18,15 @@ interface Options {
    * renders over a dropped date.
    */
   onAdopt?: () => void;
+  /**
+   * Called once per save that the server ACCEPTED — the `/me` panel raises its
+   * "Guardado ✓" toast here.
+   *
+   * A consumer cannot infer this from the returned flags: `saved` is also false
+   * while a save is in flight and while a conflict is being adopted, so an effect
+   * on it reports success from a transition rather than from the 200 itself.
+   */
+  onSaved?: () => void;
 }
 
 /** What the PATCH reports as the member's stored state — on 200 and on 409 alike. */
@@ -70,7 +79,7 @@ export interface Availability {
  * the same state without a calendar — the grid keeps only its own popover,
  * paging and recurring-panel state.
  */
-export function useAvailability({ initialRev, initialDates, initialNotes = [], onAdopt }: Options): Availability {
+export function useAvailability({ initialRev, initialDates, initialNotes = [], onAdopt, onSaved }: Options): Availability {
   const [dates, setDates] = useState<Set<string>>(new Set(initialDates));
   const [notes, setNotes] = useState<Map<string, string>>(
     () => new Map(initialNotes.map(n => [n.date, n.note]))
@@ -206,6 +215,7 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
           if (server._rev) setRev(server._rev);
           setInitialSnap(snapshot(dates, notes));
           flashSaved(true);
+          onSaved?.();
           return;
         }
         if (res.status !== 409) throw new Error(`Server returned ${res.status}`);

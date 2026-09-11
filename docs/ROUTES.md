@@ -114,7 +114,8 @@ token) for private/fresh data.
   Agenda|Mes `SegmentedControl`, `AgendaView` or the month grid, the day sheet `CueDialog`).
 - **`/biblioteca`** — `Navbar`, `LibraryIndex`.
 - **`/me`** — `Navbar`, `NextServiceHero`, `DayCard`, `AddToCalendarButton`,
-  `AvailabilityCalendar`, `ProfilePanel`, `TextSizeControl`.
+  `availability/AvailabilityPanel` (the weekend list, with the month `AvailabilityGrid`
+  behind «Ver calendario»), `ProfilePanel`, `TextSizeControl`.
 - **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
 - **`/posts/[slug]`** — `Navbar`, `SectionNav`, `ChordChart`, `SongAudioSection`,
   `EditSongButton`, `PortableText`.
