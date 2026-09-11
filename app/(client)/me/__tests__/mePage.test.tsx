@@ -12,6 +12,13 @@
 // the worship READS never run for them. It also pins the deliberate exception —
 // the availability calendar's service-date read is NOT ministry-scoped (that is
 // separately recorded), so it must keep firing for everyone.
+//
+// R3 MOVED THE SURFACE, NOT THE RULE. The two `h2`s are gone (the identity header
+// is the heading now) and "Sin servicios asignados próximamente" is a line in
+// `MeHeader`, not a block in the services column — so the empty-state assertions
+// below now prove the HEADER's gating. `MeHeader` is therefore rendered for real
+// here rather than stubbed: stubbing it would leave the kids-only case asserting
+// nothing.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ReactNode } from "react";
@@ -43,7 +50,7 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
 // still tell whether the surrounding section rendered.
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/components/NextServiceHero", () => ({ default: () => <p>HERO</p> }));
-vi.mock("@/app/components/DayCard", () => ({ DayCard: () => <p>DAYCARD</p> }));
+vi.mock("@/app/components/DayCardDisclosure", () => ({ default: () => <p>DAYCARD</p> }));
 vi.mock("@/app/components/AddToCalendarButton", () => ({ default: () => null }));
 vi.mock("@/app/components/availability/MyAvailabilityPanel", () => ({ default: () => <p>CALENDARIO</p> }));
 vi.mock("@/app/components/ProfilePanel", () => ({ default: () => <p>PERFIL</p> }));
@@ -91,8 +98,11 @@ describe("/me worship gating", () => {
   it("renders no worship section at all for a KIDS-ONLY member", async () => {
     getMemberAccess.mockResolvedValue(access(["kids"]));
     const html = await renderPage();
+    // R3: the heading is gone for EVERYONE, the empty line only for this member.
     expect(html).not.toContain("Mis próximos servicios");
     expect(html).not.toContain("Sin servicios asignados próximamente");
+    // The identity header still renders — it is the page, not a worship surface.
+    expect(html).toContain("Ana");
     // The kids half is exactly what they DO get.
     expect(html).toContain("Mis roles en Oasis Kids");
   });
@@ -114,7 +124,10 @@ describe("/me worship gating", () => {
   it("renders the worship section, empty state included, for a worship member", async () => {
     getMemberAccess.mockResolvedValue(access(["worship"]));
     const html = await renderPage();
-    expect(html).toContain("Mis próximos servicios");
+    // R3: the `h2` is gone (the header is the heading) and the empty state is the
+    // header's LINE. A worship member with nothing assigned gets no services
+    // column at all — the header already said it, once.
+    expect(html).not.toContain("Mis próximos servicios");
     expect(html).toContain("Sin servicios asignados próximamente");
     expect(html).not.toContain("Mis roles en Oasis Kids");
     expect(queries().some((q) => q.includes("setlistCandidates"))).toBe(true);
@@ -124,7 +137,8 @@ describe("/me worship gating", () => {
   it("gives a member of BOTH ministries both sections", async () => {
     getMemberAccess.mockResolvedValue(access(["worship", "kids"]));
     const html = await renderPage();
-    expect(html).toContain("Mis próximos servicios");
+    // R3: the worship half is now the header's line (the `h2` is gone).
+    expect(html).toContain("Sin servicios asignados próximamente");
     expect(html).toContain("Mis roles en Oasis Kids");
   });
 
@@ -150,7 +164,10 @@ describe("/me worship gating", () => {
     expect(html).toContain("No pudimos cargar tu perfil");
     // Not asserting a live-region role: this is server-rendered and present at
     // first paint, so there is nothing being inserted for one to announce.
-    // The rest of the page is unaffected — this is not a whole-page failure.
-    expect(html).toContain("Mis próximos servicios");
+    // The rest of the page is unaffected — this is not a whole-page failure: the
+    // header still renders (R3 falls its name back to the session) and so does
+    // the Ajustes anchor, because Tema and Tamaño de texto are device-local.
+    expect(html).toContain("Sin servicios asignados próximamente");
+    expect(html).toContain('id="ajustes"');
   });
 });

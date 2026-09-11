@@ -6,8 +6,10 @@ import { redirect } from "next/navigation";
 import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
-import { DayCard } from "@/app/components/DayCard";
+import type { DayCardProps } from "@/app/components/DayCard";
+import DayCardDisclosure from "@/app/components/DayCardDisclosure";
 import NextServiceHero from "@/app/components/NextServiceHero";
+import MeHeader from "@/app/components/MeHeader";
 import ProfilePanel from "@/app/components/ProfilePanel";
 import TextSizeControl from "@/app/components/TextSizeControl";
 import ThemeControl from "@/app/components/ui/ThemeControl";
@@ -18,6 +20,8 @@ import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
 import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { orderProposals } from "@/app/utils/serviceReadModel";
+import { nextSeatLine, seatLabel } from "@/app/utils/myWeek";
+import { revealProps } from "@/app/utils/reveal";
 import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
 
 export const metadata: Metadata = {
@@ -340,19 +344,16 @@ export default async function MePage() {
 
   const navbarTitle = member?.alias?.trim() || "Mi perfil";
 
-  // The member's specific seat(s) for a service, for the calendar event body.
-  function myRoleLabel(doc: RoleDoc): string {
-    const roles: string[] = [];
-    if (doc.isLead) roles.push("Lead");
-    if (doc.myInstrument) roles.push(doc.myInstrument);
-    if (doc.myFohRole) roles.push(`FOH: ${doc.myFohRole}`);
-    if (doc.isBGV) roles.push("BGV");
-    if (doc.isChorus) roles.push("Coro");
-    return roles.join(" · ");
-  }
+  // The header's one line: which service is next and which seat the member holds
+  // in it. `nextSeatLine`/`seatLabel` live in the NEUTRAL `app/utils/myWeek.ts`
+  // precisely so this Server Component may call them (ADR-0028) — `MeHeader` is a
+  // client module and receives the result as data, never a function.
+  const nextSeat = nextSeatLine(
+    allAssignments.map(({ dateKey, day, doc }) => ({ dateKey, day, seat: seatLabel(doc) })),
+  );
 
   const calendarServices = allAssignments.map(({ dateKey, day, doc }) => {
-    const role = myRoleLabel(doc);
+    const role = seatLabel(doc);
     return {
       uid: doc._id,
       date: dateKey,
@@ -425,6 +426,30 @@ export default async function MePage() {
     );
   }
 
+  // The `DayCardProps` for one assignment, so the hero and the collapsed rows
+  // below it are fed from ONE place — they were two copies of the same nine
+  // props, and the R1 split is exactly where a drift between them would hide.
+  const cardProps = ({ day, doc, dateKey }: (typeof allAssignments)[number]): DayCardProps => ({
+    day,
+    date: dateKey,
+    roleId: day !== "Domingo" && day !== "Sábado" ? doc._id : undefined,
+    setlist: doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined),
+    leads: doc.Lead?.map((m) => m.alias || m.member_name),
+    instruments: doc.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
+    fohTeam: doc.foh_team?.map((s) => ({ label: s.role, person: s.person })),
+    bgvs: doc.BGVs,
+    chorus: doc.Chorus,
+  });
+
+  // Tema and Tamaño de texto, shared by both arms of the `member` branch below so
+  // the `#ajustes` anchor lands whatever the profile read returned.
+  const settings = (
+    <>
+      <ThemeControl />
+      <TextSizeControl />
+    </>
+  );
+
   return (
     <div>
       <Navbar title={navbarTitle} schedule tags />
@@ -434,91 +459,56 @@ export default async function MePage() {
             calendar and ProfilePanel — most of a phone-page away. */}
         <ThemeAnnouncement />
 
+        {/* The page's heading, and the only place the empty state is said: the two
+            `h2`s ("Mis próximos servicios" / "Próximos servicios") are gone, and
+            «Sin servicios asignados próximamente» moved INTO this line. `inWorship`
+            is passed so that a kids-only volunteer still gets no worship copy —
+            the empty state is itself a worship surface (spec §5.1).
+
+            Both lines are gated HERE as well as by the reads above (which a
+            kids-only member never runs). That is deliberate belt-and-braces: the
+            header is the one surface that claims "this is what you have to do", so
+            it must stay correct if a read ever stops being ministry-skipped. */}
+        <div {...revealProps(0)}>
+          <MeHeader
+            // A null profile read is reported by its own panel below; the header
+            // still renders, falling back to the session's name.
+            name={member?.member_name || session.user.name || "Mi perfil"}
+            alias={member?.alias}
+            photoUrl={member?.photoUrl}
+            memberTypes={member?.memberType}
+            next={inWorship ? nextSeat : null}
+            kidsNext={inKids ? (kidsAssignments[0]?.day ?? null) : null}
+            inWorship={inWorship}
+          />
+        </div>
+
         {/* Upcoming WORSHIP services — hidden outright for a member who is not in
-            that ministry, empty state included: a kids-only volunteer has no
-            worship surface at all (spec §5.1), and "Sin servicios asignados
-            próximamente" is still a worship surface. */}
-        {inWorship && (
-          <div>
-            {allAssignments.length === 0 ? (
-              <>
-                <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-2">
-                  Mis próximos servicios
-                </h2>
-                <div className="flex flex-col items-center gap-3 py-20 text-mono-600">
-                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                  </svg>
-                  <p className="font-label text-sm uppercase tracking-widest">Sin servicios asignados próximamente</p>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-10">
-                {/* Toolbar */}
-                <div className="flex justify-end -mb-6">
-                  <AddToCalendarButton services={calendarServices} />
-                </div>
-
-                {/* Hero: next assignment */}
-                {(() => {
-                  const { day, doc, dateKey } = allAssignments[0];
-                  const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined);
-                  return (
-                    <div>
-                      <NextServiceHero
-                        day={day}
-                        date={dateKey}
-                        roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
-                        setlist={setlist}
-                        leads={doc.Lead?.map((m) => m.alias || m.member_name)}
-                        instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-                        fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-                        bgvs={doc.BGVs}
-                        chorus={doc.Chorus}
-                      />
-                      {renderProposalCta(doc)}
-                    </div>
-                  );
-                })()}
-
-                {/* Remaining assignments */}
-                {allAssignments.length > 1 && (
-                  <div>
-                    <h2 className="font-display text-center text-xl md:text-2xl font-bold mb-6">
-                      Próximos servicios
-                    </h2>
-                    <div className="space-y-6">
-                      {allAssignments.slice(1).map(({ day, doc, dateKey }) => {
-                        const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined);
-                        return (
-                          <div key={doc._id}>
-                            <DayCard
-                              day={day}
-                              date={dateKey}
-                              roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
-                              setlist={setlist}
-                              leads={doc.Lead?.map((m) => m.alias || m.member_name)}
-                              instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-                              fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-                              bgvs={doc.BGVs}
-                              chorus={doc.Chorus}
-                            />
-                            {renderProposalCta(doc)}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
+            that ministry, and absent entirely when there are none: the header says
+            so, so an empty column here would say it twice. The next service is the
+            full hero; every other one is a collapsed `DayCardDisclosure` row (R1),
+            each still followed by its own proposal CTA. */}
+        {inWorship && allAssignments.length > 0 && (
+          <div className="space-y-4" {...revealProps(1)}>
+            <div className="flex justify-end">
+              <AddToCalendarButton services={calendarServices} />
+            </div>
+            {allAssignments.map((assignment, i) => (
+              <div key={assignment.doc._id}>
+                {i === 0 ? (
+                  <NextServiceHero {...cardProps(assignment)} />
+                ) : (
+                  <DayCardDisclosure {...cardProps(assignment)} />
                 )}
+                {renderProposalCta(assignment.doc)}
               </div>
-            )}
+            ))}
           </div>
         )}
 
         {/* Oasis Kids — only for members of that ministry */}
         {inKids && (
-          <section aria-labelledby="mis-roles-kids">
+          <section aria-labelledby="mis-roles-kids" {...revealProps(2)}>
             <h2
               id="mis-roles-kids"
               className="font-display text-center text-xl md:text-2xl font-bold mb-6"
@@ -570,30 +560,39 @@ export default async function MePage() {
             null means the read did not find theirs. */}
         {member ? (
           <>
-            <MyAvailabilityPanel
-              initialRev={member._rev}
-              initialDates={member.unavailableDates ?? []}
-              initialNotes={member.unavailabilityNotes ?? []}
-              serviceDates={calendarServiceDates}
-            />
-            <ProfilePanel initialMember={member} />
+            <div {...revealProps(3)}>
+              <MyAvailabilityPanel
+                initialRev={member._rev}
+                initialDates={member.unavailableDates ?? []}
+                initialNotes={member.unavailabilityNotes ?? []}
+                serviceDates={calendarServiceDates}
+              />
+            </div>
+            <div id="ajustes" className="space-y-12" {...revealProps(4)}>
+              <ProfilePanel initialMember={member} />
+              {settings}
+            </div>
           </>
         ) : (
-          // No live-region role: this is server-rendered and present at first
-          // paint, so nothing is being INSERTED for a live region to announce,
-          // and screen readers treat already-present live content
-          // inconsistently. The heading carries the message.
-          <section className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center">
-            <h2 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h2>
-            <p className="font-body text-sm text-mono-500 mt-1">
-              Tus días no disponibles y tus ajustes no están disponibles ahora mismo.
-              Recarga la página; si sigue igual, avísale a un administrador.
-            </p>
-          </section>
+          <>
+            {/* No live-region role: this is server-rendered and present at first
+                paint, so nothing is being INSERTED for a live region to announce,
+                and screen readers treat already-present live content
+                inconsistently. The heading carries the message. */}
+            <section className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center" {...revealProps(3)}>
+              <h2 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h2>
+              <p className="font-body text-sm text-mono-500 mt-1">
+                Tus días no disponibles y tus ajustes no están disponibles ahora mismo.
+                Recarga la página; si sigue igual, avísale a un administrador.
+              </p>
+            </section>
+            {/* Tema and Tamaño de texto are device-local, so they survive a failed
+                profile read — and `#ajustes` keeps a target for the header link. */}
+            <div id="ajustes" className="space-y-12" {...revealProps(4)}>
+              {settings}
+            </div>
+          </>
         )}
-        <ThemeControl />
-        <TextSizeControl />
-
       </div>
     </div>
   );

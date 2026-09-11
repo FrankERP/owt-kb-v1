@@ -9,14 +9,14 @@
   ],
   "summary": {
     "literalRows": 319,
-    "filesScanned": 296,
-    "filesWithColour": 53,
+    "filesScanned": 298,
+    "filesWithColour": 54,
     "byCategory": {
       "2": 2,
       "4": 75,
-      "8": 90,
+      "8": 89,
       "9": 10,
-      "11": 8,
+      "11": 9,
       "12": 134
     },
     "byDisposition": {
@@ -216,14 +216,14 @@
       "reason": "Static viewport themeColor. Child E makes it theme-responsive under parent invariant 17."
     },
     {
-      "file": "app/(client)/me/page.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
+      "file": "app/(client)/me/loading.tsx",
+      "category": 11,
+      "categoryName": "arbitrary-value-var-brand",
+      "value": "[var(--brand-radius-panel)]",
       "alpha": null,
       "utility": null,
-      "carrier": "stroke",
-      "line": 370,
+      "carrier": null,
+      "line": 43,
       "disposition": "B",
       "reason": null
     },
@@ -235,7 +235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 390,
+      "line": 371,
       "disposition": "B",
       "reason": null
     },
@@ -247,7 +247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 402,
+      "line": 391,
       "disposition": "B",
       "reason": null
     },
@@ -259,7 +259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 419,
+      "line": 403,
       "disposition": "B",
       "reason": null
     },
@@ -271,7 +271,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 449,
+      "line": 420,
       "disposition": "B",
       "reason": null
     },
@@ -283,7 +283,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 555,
+      "line": 545,
       "disposition": "B",
       "reason": null
     },
@@ -2407,7 +2407,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 30,
+      "line": 35,
       "disposition": "B",
       "reason": null
     },

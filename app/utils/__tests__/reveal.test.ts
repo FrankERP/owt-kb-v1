@@ -86,3 +86,14 @@ describe("home page is the first consumer", () => {
     expect((src.match(/\{\.\.\.revealProps\(/g) ?? []).length).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe("/me staggers its five blocks", () => {
+  it("reveals the header, the services, Kids, availability and Ajustes in order", () => {
+    // R3: the page is "Mi semana" — identity header (0), services (1), Oasis Kids
+    // (2), availability (3), Ajustes (4). The count is a floor, not an equality:
+    // the `member`-null arm carries its own (3) and (4) for the same two blocks.
+    const src = read("app/(client)/me/page.tsx");
+    expect(src).toMatch(/import \{ revealProps \} from "@\/app\/utils\/reveal"/);
+    for (const i of [0, 1, 2, 3, 4]) expect(src).toContain(`{...revealProps(${i})}`);
+  });
+});
