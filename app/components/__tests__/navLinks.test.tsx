@@ -39,6 +39,7 @@ describe("NavLinks", () => {
     const links = Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim());
     expect(links).toEqual(["Calendario", "Biblioteca", "Admin"]);
     expect(screen.getByRole("link", { name: "Calendario" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("link", { name: "Biblioteca" }).getAttribute("href")).toBe("/biblioteca");
     expect(nav.querySelectorAll("[data-sliding-indicator]")).toHaveLength(1);
   });
 

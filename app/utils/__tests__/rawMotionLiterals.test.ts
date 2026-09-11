@@ -18,7 +18,10 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // tokenised background-color/transform transition (−1 transition-all); its progress
 // fill drops transition-[width] duration-100 for a tokenised transform: scaleX transition
 // (−1 duration-N).
-const BASELINE = { transitionAll: 9, rawDuration: 8 };
+// 2026-09-10 R1 Task 5: SongSearchList.tsx, PostComponent.tsx, TagSearchList.tsx and
+// AuthorSearchList.tsx deleted (the library left home for /biblioteca) — their two
+// transition-all sites and all eight raw duration-N sites went with them.
+const BASELINE = { transitionAll: 7, rawDuration: 0 };
 
 function tsxFiles(): string[] {
   const out: string[] = [];

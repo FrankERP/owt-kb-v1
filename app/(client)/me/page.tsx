@@ -171,7 +171,7 @@ export default async function MePage() {
               play_key,
               medley_tag,
               "title": song->title, "slug": song->slug, "_id": song->_id,
-              "author": song->author, "key": song->key,
+              "author": song->author, "bpm": song->bpm, "key": song->key,
             },
             week,
             team_notes,
@@ -194,7 +194,7 @@ export default async function MePage() {
               play_key,
               medley_tag,
               "title": song->title, "slug": song->slug, "_id": song->_id,
-              "author": song->author, "key": song->key,
+              "author": song->author, "bpm": song->bpm, "key": song->key,
             },
             week,
             team_notes,
@@ -216,7 +216,7 @@ export default async function MePage() {
             play_key,
             medley_tag,
             "title": song->title, "slug": song->slug, "_id": song->_id,
-            "author": song->author, "key": song->key,
+            "author": song->author, "bpm": song->bpm, "key": song->key,
           }
         }
       }`,

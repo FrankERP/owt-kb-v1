@@ -39,7 +39,7 @@ export default function NavLinks({ schedule = false, tags = false }: { schedule?
   const managesKids = isSuper || (user.managesMinistries ?? []).includes("kids");
   const links = [
     ...(schedule && inWorship ? [{ href: "/schedule", label: "Calendario", active: pathname.startsWith("/schedule") }] : []),
-    ...(tags && inWorship ? [{ href: "/tag", label: "Biblioteca", active: /^\/(tag|posts|author)/.test(pathname) }] : []),
+    ...(tags && inWorship ? [{ href: "/biblioteca", label: "Biblioteca", active: /^\/(biblioteca|posts)/.test(pathname) }] : []),
     ...(inKids ? [{ href: "/kids", label: "Kids", active: pathname.startsWith("/kids") && !pathname.startsWith("/kids/admin") }] : []),
     ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", active: pathname.startsWith("/kids/admin") }] : []),
     ...(isAdmin ? [{ href: "/admin", label: "Admin", active: pathname.startsWith("/admin") }] : []),

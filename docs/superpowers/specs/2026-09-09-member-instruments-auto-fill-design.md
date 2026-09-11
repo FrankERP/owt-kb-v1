@@ -1,6 +1,6 @@
 # Declared instruments and automatic instrument fill — design spec
 
-**Date:** 2026-09-09 · **Status:** Decisions D1–D6 approved in chat by Frank 2026-09-09; adversarial review APPROVED on digest `d4a0fe34…` (round 4, see the review log beside this file); the items under §12 were adopted after that approval and are un-reviewed · **Risk tier:** standard
+**Date:** 2026-09-09 · **Status:** Decisions D1–D6 approved in chat by Frank 2026-09-09; adversarial review APPROVED on digest `d4a0fe34…` (round 4, see the review log beside this file); the items under §12 were adopted after that approval and are un-reviewed · **Released to production 2026-09-10** (PR #57, `main` `ffcf9a99`; backfill applied the same day) · **Risk tier:** standard
 (a new optional field on `teamMembers`, a pure client-side filler, and a one-off
 guarded backfill script; no production writer contract, serializer, auth boundary or
 concurrency protocol changes — the solver is NOT touched). Pipeline: this spec → user

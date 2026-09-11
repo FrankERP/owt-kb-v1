@@ -80,6 +80,25 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   true, and `[]` is exactly what clearing the "Letra" field stores.
 
 ### Dates & schedule
+- **`daysUntil(dateStr, now?)`**, **`formatCountdown(days)`** ([daysUntil.ts](../app/utils/daysUntil.ts))
+  — the service countdown, in a neutral module with no imports/hooks so a Server Component may
+  call it. `daysUntil` pins "today" to America/Mexico_City (`toLocaleDateString("sv", …)`), not
+  the runtime's local date — Vercel is UTC, so reading the bare local date would misreport the
+  team's evening as still a day away. `formatCountdown` reads a negative diff as "Hace N días"
+  rather than "En -N días". Consumers: `NextServiceHero`, `DayCard`'s header pill, `DayCardDisclosure`'s collapsed line.
+
+### Library (R1)
+- **`libraryIndex.ts`** ([libraryIndex.ts](../app/utils/libraryIndex.ts)) — pure `/biblioteca`
+  logic, neutral (no React) so the Server Component page and the client index share one truth:
+  `parseLibraryParams`/`serializeLibraryParams` (the `?q=`/`?tag=`/`?author=`/`?key=` URL
+  contract), `searchPosts` (≤2 chars → accent-folded substring with a per-word artist-prefix
+  narrowing, prefix-first; 3+ chars → Fuse, prefix-first — the former `SongSearchList`
+  algorithm, moved here with that one narrowing), `artistOf` (the legacy `author` string
+  plus every `authors[].name`, joined — the ONE flat field both branches search, since Fuse's
+  `getFn` reads only `path[0]` and a nested `authors.name` key would read nothing),
+  `applyLibraryFilters` (query first when
+  present since it carries a relevance order, filters first and A–Z last otherwise),
+  `groupByLetter`, `libraryKeys`, `TIPO_SLUGS`.
 - **`scheduleMonths.ts`** — pure `YYYY-MM` month arithmetic (leaf module, no clock/React/Sanity):
   `parseMonthParam`, `addMonths`, `monthBounds`, `monthLabel`, `windowMonths`, `windowBounds`,
   `monthRangeLabel`, `scheduleHref`, `MONTH_NAMES_ES`, `WINDOW_MONTHS=3`. Reads via `Date.UTC` for
@@ -275,8 +294,8 @@ writes nothing to Sanity and fails soft toward showing the banner again.
   `openSheet(songId, playKey?)` (fetches `/api/song/{id}`) / `closeSheet`.
 
 **Performance note:** the value is `useMemo`'d over state + stable callbacks so the ~140 song
-cards don't all re-render on every provider render. Consumers: `AudioPlayer`, `DayCard`,
-`SongSheet`, `PostComponent`, `SongAudioSection`.
+rows don't all re-render on every provider render. Consumers: `AudioPlayer`, `DayCard`,
+`SongSheet`, `LibraryRow`, `SongAudioSection`.
 
 ---
 
@@ -287,20 +306,26 @@ Legend: **[C]** client, **[S]** server.
 ### Songs (browse / play / sheet)
 | Component | Purpose |
 |-----------|---------|
-| `PostComponent` [C] | Single song card in the grid (memoized; renders ~140×). |
-| `SongSearchList` [C] | Searchable song grid (`normalizeText`). |
 | `SongSheet` [C] | Full lyrics + chords overlay (PortableText, focus-trapped, play-history) — driven by `PlayerContext`. |
 | `ChordChart` [C] | ChordPro parser/renderer. Exports **`transposeChord(chord, semitones)`** + capo suggestions. Tested. |
 | `SongAudioSection` [C] | A song's audio tracks, wired to the player. |
 | `AudioPlayer` [C] | Global bottom audio bar (scrub/time). |
-| `PracticePlaylistButton` [C] | Opens a YouTube playlist for a setlist (`musica`/`letras`). |
-| `AuthorSearchList` / `TagSearchList` [C] | Author / tag indexes with search. |
+| `PracticePlaylistButton` [C] | Opens a YouTube playlist for a setlist (`musica`/`letras`). `variant?: "inline" \| "hero"` is chrome only — the menu, popup reservation and failure states are shared; `inline` is the accent pill on the Setlist rail, `hero` is the run sheet's one primary action (the house `Button`, label "Ensayar"). |
+
+### Library (`/biblioteca`, R1 — pure logic in `libraryIndex.ts`, above)
+| Component | Purpose |
+|-----------|---------|
+| `LibraryIndex` [C] | The `/biblioteca` client index: search console, A–Z sections of `LibraryRow`s via `AnimatedList`, the `LibraryLetterRail` after the sections, and `LibraryFilters`. Owns the ONE `IntersectionObserver` over the `h2#letra-*` headings that tells the rail which letter is in view (band from 64 px to 30 % of the viewport; the last heading above it wins when none intersects), and mirrors its own filter state into the URL with `history.replaceState` (never the router — a `router.replace` would re-run the Server Component's fetch on every keystroke); replaced `SongSearchList`/`PostComponent`. |
+| `LibraryLetterRail` [C] | The A–Z rail as an iOS-style **index bar** (F3): `active` (from the index's observer) is accent + `font-semibold` + `aria-current`, and a pointer drag SCRUBS — the letter under the finger by arithmetic on the rail's box, `behavior: "auto"` while moving and `"smooth"` on a plain tap, `haptic("selection")` per letter, `touch-none`, and a `data-scrubbing` pill for the finger to hold. Plain `<button>`s by the recorded row exemption. |
+| `LibraryRow` [C] | One song row: key · title/artist · BPM · tags. A plain `<button>` in an `<li>`, not the `Button` primitive — the recorded row exemption (`DayCard`'s setlist rows precedent): the row IS the affordance. Memoized (~140 rows). |
+| `LibraryFilters` [C] | The filter drawer (`CueDialog` sheet): Tipo as three `SegmentedControl` tiles plus a «Todos» clear tile, then **searchable** chip clouds for Temas (multi-select) and Artista (single-select, the twelve busiest shown before a query, `Select` retired in F3) — both sized by `postCount`, both pinning a selected chip to the front when it does not match the query. Tonalidad keeps its `Select`. Replaced `AuthorSearchList`/`TagSearchList`. |
 
 ### Services / setlists (member-facing)
 | Component | Purpose |
 |-----------|---------|
-| `DayCard` [C] | **The core service card** — setlist (medley-grouped via `buildRuns`) + all five seats; embeds `SetlistEditor` for admins + `PracticePlaylistButton`. |
-| `NextServiceHero` [C] | Countdown badge ("Hoy"/"Mañana"/"En N días"). Exports **`daysUntil(dateStr, now?)`** (local-noon day diff). Tested. |
+| `DayCard` [C] | **The core service card / R1 run-sheet card** — day · date header, countdown pill, setlist (medley-grouped via `buildRuns`) + all five seats; embeds `SetlistEditor` for admins + `PracticePlaylistButton`. `layout?: "card" \| "wide"` — `wide` puts setlist and team side by side from `lg` (only when both a setlist AND a team are present); `hero?: boolean` makes the card the page's one primary action, `PracticePlaylistButton variant="hero"` ("Ensayar") in the header, dropping the inline pill from the Setlist rail so the affordance never repeats. |
+| `DayCardDisclosure` [C] | A non-next service on `/`, collapsed to one line (day · date · countdown) that opens a `Collapse` onto its `DayCard`. |
+| `NextServiceHero` [C] | Countdown badge ("Hoy"/"Mañana"/"En N días"). Imports `daysUntil`/`formatCountdown` from `app/utils/daysUntil.ts`. |
 | `CalendarView` [C] | Schedule calendar grid; Mexico_City "today" highlight. |
 | `AvailabilityCalendar` [C] | Member self-service unavailability picker. |
 | `AddToCalendarButton` [C] | Downloads `.ics` of the member's assignments. |
@@ -317,7 +342,7 @@ Legend: **[C]** client, **[S]** server.
 | `BottomNav` [C] | Mobile bottom tab bar — three worship tabs (Inicio · Calendario · Biblioteca) or the kids set; «Más» only when Kids / Planear Kids / Admin apply; hidden when fewer than two items; «Más» is a `CueDialog` sheet. Publishes its measured height as `--bottom-nav-h` + a `has-bottom-nav` class on `<html>` while on screen; hidden ≥ `lg` and on `/auth*`/`/studio*`. |
 | `NavLinks` [C] | Desktop nav link row, rendered in the navbar's centred title block at `lg`+ (the title itself goes `lg:hidden` there); one shared `SlidingIndicator` underline. |
 | `SectionNav` [C] | In-page section anchors. |
-| `Header` [S], `CmsNavbar` [S], `icons.tsx` [S] | Page header / Studio navbar / SVG icons. |
+| `CmsNavbar` [S], `icons.tsx` [S] | Studio navbar / SVG icons. (`Header` [S], the old page-header component with a `/tag` link, was deleted in R1 — zero importers since `Navbar` replaced it.) |
 | `SignOutButton` [C] | Sign out. Clears the theme mirror first — see `themePref.ts`. (`ThemeSwitch` was deleted in `33c6e15`; the theme picker is now `ui/ThemeControl.tsx` at `/me`.) |
 | `NativeAuthBootstrap` [C] | Native cold-start silent Google re-auth. |
 | `TextScaleBootstrap` [C] / `TextSizeControl` [C] | Apply stored text scale / segmented size control. |

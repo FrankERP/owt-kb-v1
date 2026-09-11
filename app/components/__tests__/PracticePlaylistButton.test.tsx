@@ -12,7 +12,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderButton(props: { songIds: string[]; accentVar: string }) {
+function renderButton(props: { songIds: string[]; accentVar: string; variant?: "inline" | "hero" }) {
   return render(
     <MotionProvider>
       <PracticePlaylistButton {...props} />
@@ -167,5 +167,20 @@ describe("PracticePlaylistButton", () => {
 
     expect((await findByRole("status")).textContent).toContain("No se pudo crear la playlist");
     expect((popup as any).close).toHaveBeenCalled();
+  });
+
+  it("as the hero, is the house primary button labelled Ensayar and opens the same menu", async () => {
+    const { getByRole } = renderButton({ songIds: ["song-1"], accentVar: "--accent-rgb", variant: "hero" });
+    await act(async () => {});
+
+    const trigger = getByRole("button", { name: /Ensayar/i });
+    // The house primary, not the accent pill: the variant is chrome only, so the
+    // menu behind it must be the same one.
+    expect(trigger.className).toContain("bg-surface-accent-solid");
+    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+
+    fireEvent.click(trigger);
+    expect(getByRole("menuitem", { name: /Música/i })).toBeTruthy();
+    expect(getByRole("menuitem", { name: /Letras/i })).toBeTruthy();
   });
 });
