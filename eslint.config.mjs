@@ -126,7 +126,7 @@ export default defineConfig([
           // double-applies it. `bg-surface-accent-solid/20` is 20% of an already-20%
           // colour, and it reads like it means 20%.
           selector:
-            "Literal[value=/\\b(bg|text|border|ring|divide|from|via|to|fill|stroke|shadow|outline|decoration|caret|accent)-(surface-accent|surface-ink|edge-accent|edge-control|placeholder|warning-glow|skeleton-base|skeleton-sweep|sheen-highlight)[a-z0-9-]*\\/[0-9]/]",
+            "Literal[value=/\\b(bg|text|border|ring|divide|from|via|to|fill|stroke|shadow|outline|decoration|caret|accent)-(surface-accent|surface-ink|edge-accent|edge-control|placeholder|warning-glow|skeleton-base|skeleton-sweep|sheen-highlight|lit-beam)[a-z0-9-]*\\/[0-9]/]",
           message:
             "Opacity modifier on a composed token. Layer-2 tokens already carry their " +
             "alpha — use a Layer-1 role with a modifier instead.",

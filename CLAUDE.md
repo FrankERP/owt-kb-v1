@@ -242,6 +242,8 @@ roving focus, merges the trigger's own ref), `Collapse` (`app/components/ui/Coll
 never `aria-pressed` toggles), `SlidingIndicator` (tab bars), `Switch`, `Checkbox`,
 `Select`, `DateField` (native controls under house chrome — never a bare
 `<select>`/`<input type="checkbox|date|month">` in `app/**`), `NumberRoll`,
+`AnimatedList` (`app/components/ui/AnimatedList.tsx` — every list that reflows on filter),
+`daysUntil`/`formatCountdown` (`app/utils/daysUntil.ts` — the ONLY countdown; CDMX-pinned),
 `haptic()` (`app/utils/haptics.ts` — native only, fire-and-forget),
 `CueDialog` (`app/components/ui/CueDialog.tsx` — every dialog, never a hand-rolled
 `fixed inset-0` shell; render `<CueDialog open={x}>`, never a literal `open` behind a
@@ -255,7 +257,7 @@ tokens are `--motion-*` / `--ease-*`; `motion` is importable only under
 `app/components/ui/**` — see `docs/MOTION.md` and ADR-0031.
 
 ## Colour tokens
-Colour lives in **67 base roles + 29 composed tokens** (`app/brand.css` `:root`,
+Colour lives in **67 base roles + 30 composed tokens** (`app/brand.css` `:root`,
 `tailwind.config.ts`). The seven retired `--brand-*` COLOUR variables and their `brand.*`
 Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
 `--brand-duration-*`) survive.

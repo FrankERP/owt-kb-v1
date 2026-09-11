@@ -1006,3 +1006,129 @@ re-reviewed clean on the branch before the merge.
 quick actions and pull-to-refresh (R7); `NavLinks` follows the page's `schedule`/`tags`
 flags, so the row changes shape on `/kids` (Control Room / R5 to unify); the desktop row
 has no wrap for a sixth link.
+
+# Part X — R1 (2026-09-10)
+
+Branch `claude/motion-r1-library` (from `main`, HEAD before this task `408b0db2`). Nine
+tasks: pure library logic, the `AnimatedList` primitive, the `/biblioteca` route + index +
+filters, the `/tag*`/`/author*` redirects, the home run sheet (`DayCard`'s `layout`/`hero`
++ `DayCardDisclosure`), the lit-card beam pass, and this documentation task.
+
+**Shipped (§12.1/§12.2 in full).** `libraryIndex.ts` — neutral params/filters/search/A–Z,
+moved from `SongSearchList`'s algorithm with one narrowing (short queries match authors
+per-word-prefix, not mid-token substring). `AnimatedList` — the list-reflow primitive.
+`/biblioteca` — one Server Component fetch (catalogue + tags-with-counts +
+authors-with-counts), `LibraryIndex` (search console, A–Z sections via `AnimatedList`,
+letter rail, `LibraryFilters` drawer), `LibraryRow`. `next.config.mjs` redirects: `/tag`,
+`/tag/:slug`, `/author`, `/author/:slug` → `/biblioteca` (`?tag=`/`?author=`), all
+`permanent: true`. The old `/tag*`/`/author*` pages and `SongSearchList`/`PostComponent`/
+`TagSearchList`/`AuthorSearchList` deleted. Home became a run sheet: `DayCard` grew a
+`layout?: "card" | "wide"` and `hero?: boolean`, plus a day · date header and a countdown
+pill (`daysUntil`); the next service renders in full (`layout="wide" hero`), every other
+painting service collapses into `DayCardDisclosure`. `PracticePlaylistButton` grew
+`variant="hero"`. The label budget dropped `>Servicio<`, "Índice musical", "títulos" and
+"Repertorio" to zero. The lit card — one CSS-only beam pass around the hero card's border
+after the route reveal (decision Q, the beam's fifth and only non-`motion` use).
+
+**Rulings.**
+- **The row pattern is exempt from `Button`** — `LibraryRow`, `DayCardDisclosure`'s header,
+  and the letter rail's buttons all carry a plain `<button>`, the same ruling `DayCard`'s
+  setlist rows already set: the row IS the affordance, so it carries no eyebrow and no "Ver".
+- **The redirects are `permanent: true` — 308, not 307.** The old URLs are gone, not
+  temporarily moved; a 308 lets browsers and crawlers update bookmarks/indexes rather than
+  re-checking the source on every visit.
+- **The filter drawer carries Artista and Tonalidad** because the standalone author index
+  page is gone — `/author/[slug]` used to be the only Artista-scoped view, and folding it
+  into a drawer field is what makes that scoping survive the redirect.
+- **`nextDate` is computed over painting services only.** A published special with no seats
+  and no songs renders nothing (`paintsDayCard`), so it is never named "next" — naming it
+  would hand the hero slot and the countdown to a card that renders `null`.
+- **A wide card needs a team, not just a setlist.** `layout="wide"` only takes effect when
+  both `hasSetlist` and `hasRole` are true — a setlist with no assigned team has nothing to
+  put in the second column, so it stays single-column instead of leaving a rail empty.
+- **`daysUntil` pins "today" to America/Mexico_City**, not the runtime's local date — the
+  countdown is read on Vercel (UTC), and a bare local date would misreport the team's
+  evening as still a day away.
+- **«Todos» is how a Tipo is cleared.** `SegmentedControl` never fires `onChange` for the
+  already-checked option, so "tap the selected tile again to clear it" cannot exist as a
+  gesture; a fourth tile, «Todos», is the explicit clear action instead.
+- **Long-press quick actions and pull-to-refresh stay R7** — unchanged from the Part IX
+  deferral; R1 did not pull either forward.
+- **The `Setlist` rail stays as `Editar`'s home.** The inline practice pill and the admin
+  "Editar" affordance both live on the setlist section's header row; `hero` mode only
+  removes the inline pill (replaced by the header's `Ensayar`), never the edit control.
+- **Hero `Ensayar` is accent-toned on every day**, Saturday and special services included —
+  `PracticePlaylistButton variant="hero"` always renders the house `Button variant="primary"`
+  rather than picking up the day's own theme colour (`SATURDAY_THEME`/`SPECIAL_THEME`), a
+  deliberate choice at Frank's look so the one primary action on the hero card reads the
+  same regardless of which day it is.
+
+**Deviations from the plan, accepted.**
+- **The lit-card construction** — a clipped wrapper plus an UNMASKED spinning conic layer,
+  `inset: -800px`, so the only light that escapes is the 1 px gap the wrapper's `padding`
+  opens. The plan's original design masked the rotating layer to a ring; that shipped once
+  and painted a diagonal line across the whole card, because a `mask`/`-webkit-mask` lives
+  in the rotating element's own box and rotates with it. `litCard.test.ts` pins the
+  no-mask rule as a named regression; the browser evidence (four paused-frame screenshots,
+  a per-pixel delta) is in `task-8-fix1-report.md`, not in the guard — the guard cannot see
+  geometry.
+- **`AnimatedList`'s `mode="popLayout"`**, not the plan's plain `layout` prop — popping a
+  leaving row out of flow (the `NumberRoll` precedent) is what lets the survivors slide to
+  their new place in one motion instead of jumping as the leaver's space collapses under
+  them mid-animation.
+- **The letter rail sits after the A–Z sections in DOM order**, absolutely positioned inside
+  the `relative` list wrapper rather than floated or reordered with CSS — so it never
+  competes with section content for layout space, and its `sticky top-[50vh]` centring reads
+  against the same scrollport the sections scroll in.
+- **The index mirrors its own URL state with `window.history.replaceState`**, not the Next
+  router (the `AdminPanel` `?tab=` precedent) — a `router.replace` would re-run the Server
+  Component's fetch on every keystroke for a filter that is entirely client-side; `replace`
+  (never `push`) keeps Back from growing one history entry per keystroke.
+- **Short-query author matching is per-word-prefix**, not substring — a 1–2 character query
+  against the raw author string false-positived on any word containing it mid-token (e.g.
+  "an" inside "Redman"); title search keeps full substring matching since it is what is
+  visually shown, sorted prefix-first.
+
+**F3 (Frank's look, 12:30).** Three things off a phone, one commit on the R1 branch.
+1. **The letter rail became an index bar** (`LibraryLetterRail`, extracted from `LibraryIndex`):
+   the letter whose section is in view carries the accent and `aria-current`, fed by ONE
+   `IntersectionObserver` over the `h2#letra-*` headings; a pointer drag scrubs the list under
+   the finger (instant while moving, smooth on a plain tap, `haptic("selection")` per letter,
+   `touch-none`, a `data-scrubbing` pill to hold, `right-1` so it clears the scrollbar gutter).
+   Frank's words: the letters should show the progress of scrolling, not sit beside a scrollbar.
+2. **Search finds artists.** The Fuse index now carries a flat derived `artist` field
+   (`artistOf` = legacy `author` + every `authors[].name`), weight 1.5 under `title`'s 3, and the
+   ≤2-char branch matches it by per-word prefix. Most of the catalogue keeps its artist in
+   `authors[]` with `author` empty, so those songs were unreachable by name before this.
+3. **The drawer searches.** Temas and Artista are both a search box over a chip cloud sized by
+   `postCount`; the Artista `<Select>` is gone (Tonalidad's stays — 15 options is a list).
+
+**F3 rulings.**
+- **A selected chip that does not match the query pins to the front of the cloud** rather than
+  filtering out. A chip nobody can see is a filter nobody can remove.
+- **Artista needs no «Todos» tile** though Tipo does: a chip is a button, so a second tap on the
+  chosen artist fires and clears it — the `SegmentedControl` limitation that forced «Todos» does
+  not apply.
+- **The "in view" band is 64 px, a constant, not the sticky offset.** `rootMargin` takes no
+  `env()` and no `rem`, so it cannot be derived from `UNDER_NAVBAR`; 64 px sits deliberately
+  ABOVE the smallest real offset (5 rem + inset) so the pinned heading is inside the band
+  rather than on its edge.
+- **The rail jumps on `pointerdown`, and the `click` that follows is swallowed** (`detail >= 1`).
+  A click with `detail === 0` is a keyboard activation — the one case with no pointerdown behind
+  it, and the only reason the buttons keep an `onClick` at all.
+- **`activeLetter` is DERIVED from `letters`, never stored as "".** A query collapses the
+  sections; a remembered letter that no longer has one would light up the instant the sections
+  came back, ahead of the observer.
+- **Fuse's `threshold: 0.35` was never the problem** — see the F3 report. A full artist word
+  scores ~0.0007 against the joined string; "hillsong" missed before F3 only because the index
+  had no field containing it. The real limit is the location penalty (`distance: 200`): a word
+  starting past ~character 68 of the joined artist string falls outside the threshold, which no
+  real artist list reaches.
+
+**Bundle (cold, same environment, git-archive builds of `main` `0414ee86` and the R1 tip):**
+`/` 123.5 → **119.0 kB gz (−4.5)** — the catalogue and Fuse left home; `/admin` 350.9 →
+354.8 (+3.9, the run-sheet `DayCard`/disclosure code the admin shell shares); the new
+`/biblioteca` is 112.9 kB, `/schedule` 121.5; shared 172.5 unchanged. Absolute vs "Before M0a"
+on `/`: the release-day environment reads ~6 kB higher than the ledger's older rows, so the
+honest statement is that R1 gives back about 4.5 of M1's +7.3 on the route members open first.
+Rows in `docs/MOTION.md`'s ledger.

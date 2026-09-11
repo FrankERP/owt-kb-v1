@@ -25,6 +25,37 @@ carries `[data-reveal]` with no inline stagger index; `revealProps(i)`'s inline
 JS twins: `app/utils/motionPresets.ts` (`MS`, `EXIT_MS`, `SPRINGS`, `VARIANTS`).
 Guard: `app/utils/__tests__/motionTokens.test.ts`.
 
+## The beam (signature)
+
+Spec §2.1: "One accent-light sweep, used in exactly four places and nowhere else."
+§23 decision Q (R1, Task 8) added a fifth, CSS-only, harvested from the
+`border-beam` package survey without adding the dependency — still enumerated,
+still one-shot:
+
+1. **Route reveal** — the page's `brand-section-heading` rail draws itself
+   top-to-bottom over 480ms on every navigation. Not the beam gradient itself,
+   just its rail (`@keyframes brand-rail-draw`).
+2. **Skeletons shimmer** — a diagonal accent sweep crossing each placeholder
+   every 1.6s (`--skeleton-sweep`, `@keyframes shimmer`).
+3. **Primary button sheen** — on hover (pointer devices only) a narrow highlight
+   crosses the fill once, 600ms (`--sheen-highlight`, `.brand-btn-sheen`).
+4. **Drop landing** (spec §2.1, not yet built — lands with the drag-and-drop
+   phase) — when a dragged chip lands, the target cell flashes the beam edge
+   once, 120ms.
+5. **The lit card on `/`** (once, 900 ms) — after the route reveal, the next
+   service's hero card gets one light pass around its border, then rests on its
+   own accent border. `.brand-lit-card[data-lit]::before`, `@keyframes
+   brand-lit-pass`, `--lit-beam`. `data-lit` is set by `app/(client)/page.tsx`
+   on the hero card only. The wrapper CLIPS and an unmasked conic layer spins
+   under the card, so the light only shows in the 1 px gap the wrapper's
+   `padding` opens — a mask would rotate with the layer and slash across the
+   card. Guard: `app/utils/__tests__/litCard.test.ts`, which cannot see
+   geometry; the browser evidence is in the Task 8 fix-round report.
+
+The beam gradient itself (not just a rail/sweep/sheen derived from it) stays
+exclusive to the sign-in lockup, where it already lived before this list existed
+(`.brand-stage-hero::before`, `@keyframes brand-beam-reveal`).
+
 ## Rules
 
 1. **Only `transform` and `opacity` animate.** `Collapse` (M0b) is the one exception,
@@ -98,6 +129,7 @@ Guard: `app/utils/__tests__/motionTokens.test.ts`.
 | `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
 | `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws «Mes anterior» / «Mes siguiente» icon buttons (the schedule's month strip). |
 | `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
+| `AnimatedList` | client | list reflow: `mode="popLayout"` pops leavers out of flow so the survivors slide at once (`layout="position"` per row, leavers fade `fast`); the host renders `relative` because a popped item positions against it — `/biblioteca` index. |
 | `haptic(kind)` (`app/utils/haptics.ts`) | neutral | `"light"` (default) on a toggle flip or thumb move, `"selection"` on a tab press, `"medium"` reserved for drop landing (M-planner). Native only; no-op on web; never awaited in a handler. |
 
 ### Load-failure behaviour
@@ -151,10 +183,12 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `reveal.test.ts` | `revealProps()`'s shape, and that `app/(client)/template.tsx` never wraps the page in a transformed element. |
 | `loadingSkeletons.test.ts` | The four `loading.tsx` files compose `Skeleton` instead of a hand-copied pulse block. |
 | `shellPolish.test.ts` | Spec Part III findings 3 (brand mark loads with `priority`) and 5 (initials avatar contrast in light). |
-| `rawMotionLiterals.test.ts` | Pins `transition-all` (9) and raw `duration-N` (8) counts outside `ui/` at the audited baseline (down from 13/12 pre-M1 — M1's four migrated sites: `BottomNav`'s sheet becoming a `CueDialog`, `NavMenu`'s avatar-ring transitions, the audio transport's progress fill and play/pause button) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. |
+| `rawMotionLiterals.test.ts` | Pins `transition-all` (7) and raw `duration-N` (0) counts outside `ui/` at the audited baseline (13/12 pre-M1 → 9/8 after M1 → 7/0 after R1 deleted the tag/author lists — M1's four migrated sites: `BottomNav`'s sheet becoming a `CueDialog`, `NavMenu`'s avatar-ring transitions, the audio transport's progress fill and play/pause button) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. |
 | `cueDialogMount.test.ts` | Counts every LITERAL `open` attribute on a `<CueDialog` source element — not `open={…}` — across `app/**/*.tsx` excluding `__tests__` and `ui/`; per element, not per caller, so a wrapper mounted by several callers still counts once. Pins the count at 10 (re-measured 2026-09-09, M1 Task 7 — `SongSheet`'s `SetlistPopover` migrated to `open={x}`, down from 11; the original 2026-09-08 measurement of 7 only caught the direct `{x && <CueDialog open>}` shape and missed wrapper components). `AdminPanel`'s and `ServicesPanel`'s local `Modal`s and `KidsPlanner`'s `SeatPicker` remain and migrate in their own route phases. Lower the count in the same commit that migrates a site to `open={…}`; never raise it. |
 | `dialogSemantics.test.ts` | Every file that draws a dismissable full-bleed scrim (`bg-scrim` + `inset-0` + `onClick`) carries `role="dialog"`/`aria-modal`/an accessible name/focus management, or is named in an exemption list with a reason. Floor is 1 (`CueDialog` itself) as of M1 Task 1 — `BottomNav`'s hand-rolled scrim was replaced by a `CueDialog` sheet, so its `NOT_A_DIALOG` entry was deleted along with the overlay it exempted; the exemption list is now empty. A stale exemption (naming a file the scan no longer finds) fails its own check. |
-| `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins six named labels (`>Cue<`, `>Servicio<`, "Índice musical", "títulos", "Backstage operations", "Acceso autorizado") at their audited counts, by equality — a phase that removes one lowers its number in the same commit. |
+| `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins seven named labels at their audited counts, by equality — a phase that removes one lowers its number in the same commit. `>Cue<` (0, M0b-1), `>Servicio<` (0, R1 — `DayCard`'s day · date header carries it now), "Índice musical" (0, R1 — `SongSearchList` removed), "títulos" (0, R1 — the home library count removed), "Repertorio" (0, R1 — `PostComponent`'s song-card eyebrow removed), "Backstage operations" (1) and "Acceso autorizado" (1) still open, both due in R5. |
+| `redirects.test.ts` | R1 (spec §12.2, decision H): `next.config.mjs`'s `redirects()` folds `/tag`, `/tag/:slug`, `/author`, `/author/:slug` into `/biblioteca` (`?tag=:slug`/`?author=:slug`), all `permanent: true` (308). |
+| `litCard.test.ts` | The home hero card's one-shot light pass (R1, decision Q — see "The beam" above). Cannot see geometry (jsdom), so it pins the CSS contract instead. |
 | `bottomNavOffsetSync.test.ts` | Names `BottomNav`'s `NAV_H_VAR`/`NAV_CLASS` exports, the `setProperty`/`removeProperty`/`classList` publish-and-clear shapes, `brand.css`'s `--bottom-nav-h` declaration and `html.has-bottom-nav [data-route-main]` padding rule, that every fixed-bottom consumer (`Toast.tsx`, `AudioPlayer.tsx`, `EditSongButton.tsx`) offsets by the variable, and that the client layout mounts `<BottomNav />` inside `<Provider>`. A new fixed-bottom element joins the `it.each` list. |
 
 ## Bundle
@@ -189,6 +223,9 @@ Before was measured on the primary checkout at the merge-base commit
 | **M1 tip** (this branch, `3c5e8cd4`) | 169.2 kB | 117.5 kB | 342.5 kB | not cleanly isolable — see note below |
 | **M1 tip `3c5e8cd4`, release-day rebuild** (worktree, 2026-09-10 — a different environment: every column reads higher, shared included, so compare only within this pair) | 172.5 kB | 123.9 kB | 350.5 kB | not cleanly isolable — see note below |
 | **M1 merge `c93d4494`** (same environment as the row above; the three follow-ups — dot centring, month-nav overflow, F1/F2) | 172.5 kB | 123.5 kB | 351.0 kB | not cleanly isolable — see note below |
+| **`main` at `0414ee86`, R1 release-day rebuild** (git-archive cold build, APFS-cloned `node_modules`, same environment as the R1 row) | 172.5 kB | 123.5 kB | 350.9 kB | not cleanly isolable — see note below |
+| **R1 tip `96555761`** (same environment; the library leaves home for `/biblioteca`) | 172.5 kB | 119.0 kB | 354.8 kB | not cleanly isolable — see note below |
+| **R1 tip — `/biblioteca`** (new route, same build) | 172.5 kB | 112.9 kB (`/biblioteca`) | 121.5 kB (`/schedule`) | — |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -497,3 +534,63 @@ the impersonation banner, the audio transport, and the song sheet's head.
   eyebrow/title/close-button block is gone. What survived (the author, the
   key/BPM/time-signature pills) moved into one compact meta row rendered as the
   dialog's first child, ahead of the scrollable body.
+
+### Library and run sheet (R1)
+
+`/tag*`/`/author*` folded into `/biblioteca`, and home stopped being a wall of stacked
+cards — see spec Part X for the full ledger; the motion-relevant pieces:
+
+- **`AnimatedList`** (`app/components/ui/AnimatedList.tsx`) is the list-reflow primitive
+  R1 introduced: `mode="popLayout"` pops a leaving row out of flow (the `NumberRoll`
+  precedent) so the survivors slide to their new place at once instead of jumping as the
+  leaver's space collapses under them; the host is `relative` because a popped item
+  positions against it. `/biblioteca` is the one consumer — every A–Z section renders its
+  rows through it, so filtering (Tipo, tema, artista, tonalidad, the search query) reflows
+  rather than replacing the list wholesale.
+- **The row pattern is now recorded twice more.** `LibraryRow` and `DayCardDisclosure`'s
+  header both carry a plain `<button>` inside an `<li>`/wrapping `div` rather than the
+  `Button` primitive — the ruling `DayCard`'s setlist rows already set: the row itself IS
+  the affordance, so it carries no eyebrow and no "Ver" label. The letter rail's own
+  buttons (after the A–Z sections, absolutely positioned in the `relative` list wrapper —
+  DOM order no longer decides placement) take the same exemption for the same reason: bare
+  tap targets in an index rail, not chrome.
+- **The label budget moved four labels to zero** (`labelBudget.test.ts`, spec §18): `>Servicio<`
+  (the old per-card "Servicio" eyebrow — `DayCard`'s day · date header carries that now),
+  "Índice musical" and "títulos" (the old home song-list heading and its count — home shows
+  the run sheet only, the song list moved to `/biblioteca` with no repeated count of its
+  own; the ONE count on that surface lives in the search placeholder), and "Repertorio"
+  (`PostComponent`'s song-card eyebrow — the card itself is gone).
+- **The lit card** (`.brand-lit-card`, `--lit-beam` — see "The beam" above) is the home
+  hero's one-shot border pass; it is the fifth enumerated beam use and the first CSS-only
+  one (no `motion` import, so it costs nothing against the bundle budget below). Guarded by
+  `litCard.test.ts`, which reads `brand.css`/`page.tsx` as text and cannot see geometry —
+  see the file's own header for what closed that gap.
+- **The letter rail is an INDEX BAR** (`LibraryLetterRail`, F3), not a list of links. It
+  shows progress — the letter whose heading is in view carries `aria-current` and the accent,
+  fed by ONE `IntersectionObserver` over the `h2#letra-*` headings in `LibraryIndex` (never a
+  scroll listener): the band starts at 64 px, above the sticky heading offset, so the heading
+  pinned under the navbar is the one inside it, and the last heading above the band wins when
+  none intersects. And it scrubs — a pointer drag picks the letter under the finger by
+  arithmetic on the rail's own box, jumping `behavior: "auto"` while the finger moves and
+  `"smooth"` on a plain tap, with `haptic("selection")` per letter and `touch-none` so the
+  page does not scroll underneath. A pill (`data-[scrubbing]:`) paints only while a finger is
+  down, so the rail is invisible chrome at rest. Nothing animates through `motion`; reduced
+  motion has nothing to opt out of beyond the smooth tap, which is the browser's own.
+- **The filter drawer searches** (F3). Temas and Artista are both a `normalizeText` search box
+  over a chip cloud sized by `postCount` — a 43-theme, 80-artist catalogue is not a list
+  anyone scans, and the Artista `<Select>` is gone. A SELECTED chip that does not match the
+  query pins to the front of the cloud rather than disappearing: an invisible chip is a filter
+  nobody can remove. Artista is single-select (a second tap clears it, which is why it needs no
+  «Todos» tile) and shows the twelve busiest artists before anyone types. `Tonalidad` keeps its
+  `Select` — 15 options is a list.
+- **Search reads the ARTIST, not the legacy `author` string** (F3). The Fuse index carries one
+  flat derived field, `artist` (`artistOf` = `author` + every `authors[].name`, joined), weight
+  1.5 under `title`'s 3, because `getFn` only ever reads `path[0]` and a nested `authors.name`
+  key would read nothing. Before F3 a song whose artist lived only in `authors[]` — most of the
+  catalogue — was unreachable by name.
+- **The redirects** (`/tag*`/`/author*` → `/biblioteca`, `permanent: true` = 308) carry no
+  motion of their own — a 308 is a full navigation, not a client transition — but they are
+  why `/biblioteca` needed the `?q=`/`?tag=`/`?author=`/`?key=` URL contract
+  (`libraryIndex.ts`'s `parseLibraryParams`/`serializeLibraryParams`) rather than being
+  free to invent its own params: a bookmark to the old `/tag/:slug` has to land already
+  filtered. Guarded by `redirects.test.ts`.

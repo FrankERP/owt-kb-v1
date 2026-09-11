@@ -334,8 +334,9 @@ needs, and only an enforceable state enables mutable grid operations
 
 - **`tag`** ([`tag.ts`](../sanity/schemas/tag.ts)): `{ name, slug }`. Referenced by `post.tags[]`.
 - **`author`** ([`author.ts`](../sanity/schemas/author.ts)): `{ name, slug }`. Referenced by
-  `post.authors[]`. Author docs power `/author` and `/author/[slug]`. Created idempotently by
-  slug via `/api/content/authors`.
+  `post.authors[]`. Author docs power the Artista filter on `/biblioteca` (R1 folded the
+  standalone `/author`, `/author/[slug]` index pages into it, `?author=:slug`-addressable).
+  Created idempotently by slug via `/api/content/authors`.
 
 ---
 

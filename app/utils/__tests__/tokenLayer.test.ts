@@ -1,7 +1,9 @@
 // Guard for Child B's token layer (slice B1).
 //
-// B1 is purely additive: it introduces 18 base roles and 29 composed tokens and
-// REMOVES NOTHING, so nothing renders differently. That makes it the one slice
+// B1 is purely additive: it introduces 18 base roles and 29 composed tokens AS B1
+// SHIPPED THEM — historical figures, not running totals; the live arrays hold 67
+// and 30 today, and COMPOSED's dated entries below say who added what since — and
+// it REMOVES NOTHING, so nothing renders differently. That makes it the one slice
 // where a bug is invisible at runtime — the tokens can be wrong, misspelled, or
 // missing on one side and the app looks exactly the same until a later batch
 // migrates a call site onto them and the colour quietly disappears.
@@ -66,7 +68,7 @@ const BASE_ROLES = [
   "badge-azure-fg", "badge-azure-deep",
 ] as const;
 
-/** The 29 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
+/** The 30 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
 const COMPOSED = [
   "surface-accent-solid", "surface-accent-30", "surface-accent-hover", "edge-accent-subtle",
   "surface-accent-20", "surface-accent-faint", "surface-accent-wash",
@@ -93,6 +95,11 @@ const COMPOSED = [
   // The primary button hover sheen (2026-09-08, Task 7). Same ruling as the
   // skeleton pair above — Task 6's fix round is the precedent.
   "sheen-highlight", // .brand-btn-sheen::after's gradient middle stop
+
+  // The lit card beam (2026-09-10, Task 8, spec §23 decision Q). Same ruling as
+  // the pair above — the conic gradient's alpha-bearing stop belongs to the
+  // token layer, not to a literal in `.brand-lit-card[data-lit]::after`'s body.
+  "lit-beam",
 ] as const;
 
 const UTILITY_PREFIXES = [

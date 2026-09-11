@@ -19,10 +19,11 @@ export function revalidateKidsViews() {
   revalidatePath("/me");
 }
 
-// Song content changes → home song list, song pages, tag listings.
+// Song content changes → home song list, song pages, the library index.
+// R1 turns `/tag*` and `/author*` into redirects into `/biblioteca`; a redirect
+// holds no cache of its own to invalidate.
 export function revalidateSongViews() {
   revalidatePath("/");
   revalidatePath("/posts/[slug]", "page");
-  revalidatePath("/tag");
-  revalidatePath("/tag/[slug]", "page");
+  revalidatePath("/biblioteca");
 }

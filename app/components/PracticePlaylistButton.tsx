@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { themeColour } from "@/app/utils/themeColour";
 import Menu, { MenuItem } from "@/app/components/ui/Menu";
+import Button from "@/app/components/ui/Button";
 
 type PracticeMode = "musica" | "letras";
 type PracticeState = "idle" | "loading" | "empty" | "blocked" | "error";
@@ -10,7 +11,21 @@ type PracticeState = "idle" | "loading" | "empty" | "blocked" | "error";
 // Opens a YouTube playlist of the setlist's songs for personal practice.
 // Two modes: "musica" (musical reference) or "letras" (Spanish lyrics, falling
 // back to the musical reference per song).
-export default function PracticePlaylistButton({ songIds, accentVar }: { songIds: string[]; accentVar: string }) {
+//
+// `variant` is chrome only — the menu, the popup reservation and every failure
+// state are shared. `inline` is the accent pill that sits on the Setlist rail;
+// `hero` is the run sheet's one primary action (spec §12.1), the house Button at
+// `lg` in the card header. Only the IDLE label differs: "Practicar" reads as one
+// affordance among several, "Ensayar" as the thing you came to do.
+export default function PracticePlaylistButton({
+  songIds,
+  accentVar,
+  variant = "inline",
+}: {
+  songIds: string[];
+  accentVar: string;
+  variant?: "inline" | "hero";
+}) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pendingRef = useRef(false);
   const [state, setState] = useState<PracticeState>("idle");
@@ -82,7 +97,7 @@ export default function PracticePlaylistButton({ songIds, accentVar }: { songIds
         ? "Permitir popup"
         : state === "error"
           ? "Reintentar"
-          : "Practicar";
+          : variant === "hero" ? "Ensayar" : "Practicar";
 
   return (
     <div className="relative inline-block">
@@ -90,25 +105,48 @@ export default function PracticePlaylistButton({ songIds, accentVar }: { songIds
         label="Practicar el set en YouTube"
         align="end"
         trigger={
-          <button
-            ref={triggerRef}
-            type="button"
-            onClick={(event) => { guardPending(event); }}
-            onKeyDown={onTriggerKeyDown}
-            aria-disabled={pending ? "true" : undefined}
-            title="Practicar el set en YouTube"
-            style={{ color: themeColour(accentVar), borderColor: `${themeColour(accentVar, 0.3333)}`, background: `${themeColour(accentVar, 0.0784)}` }}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-full border font-label text-[11px] uppercase tracking-widest transition-opacity hover:opacity-80 aria-disabled:opacity-50"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
-              <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" />
-            </svg>
-            {label}
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-          </button>
+          variant === "hero" ? (
+            // Manual label swap + `aria-disabled`, not `Button`'s `busy` prop:
+            // `busy` sets the native `disabled` attribute, which yanks the
+            // element out of the tab order and drops focus. `restoreTrigger()`
+            // re-focuses THIS trigger once the fetch settles (success or
+            // failure); a `disabled` button can't receive that focus back,
+            // breaking restoration for the pending Ensayar trigger.
+            <Button
+              ref={triggerRef}
+              variant="primary"
+              size="lg"
+              onClick={(event) => { guardPending(event); }}
+              onKeyDown={onTriggerKeyDown}
+              aria-disabled={pending ? "true" : undefined}
+              title="Practicar el set en YouTube"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <polygon points="5 3 20 12 5 21" />
+              </svg>
+              {label}
+            </Button>
+          ) : (
+            <button
+              ref={triggerRef}
+              type="button"
+              onClick={(event) => { guardPending(event); }}
+              onKeyDown={onTriggerKeyDown}
+              aria-disabled={pending ? "true" : undefined}
+              title="Practicar el set en YouTube"
+              style={{ color: themeColour(accentVar), borderColor: `${themeColour(accentVar, 0.3333)}`, background: `${themeColour(accentVar, 0.0784)}` }}
+              className="flex items-center gap-1.5 px-2 py-1 rounded-full border font-label text-[11px] uppercase tracking-widest transition-opacity hover:opacity-80 aria-disabled:opacity-50"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                <polygon points="10 8 16 12 10 16 10 8" fill="currentColor" stroke="none" />
+              </svg>
+              {label}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          )
         }
       >
         <MenuItem onSelect={() => void go("musica")}>
