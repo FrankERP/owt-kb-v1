@@ -81,10 +81,11 @@ if (unknown.length) {
 }
 
 const APPLY = ARGV.includes("--apply");
-// `--now` collapses the 15-minute debounce to zero so the batch is due
-// immediately. The debounce exists to coalesce a burst of edits into one email;
-// there is no burst here, and waiting a quarter of an hour to watch a rehearsal
-// flush is the kind of delay that gets a step skipped.
+// `--now` collapses the debounce to zero so the batch is due immediately. The
+// debounce exists to coalesce a burst of edits into one email; there is no
+// burst here, and waiting to watch a rehearsal flush is the kind of delay that
+// gets a step skipped. Note the script mints `notifyAfter` from the CODE default
+// (15 min) unless `.env.local` sets `NOTIFY_DEBOUNCE_MINUTES`; production runs 5.
 const NOW_FLAG = ARGV.includes("--now");
 const roleIds = ARGV.filter((a) => !a.startsWith("--"));
 
