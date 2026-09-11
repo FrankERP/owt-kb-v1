@@ -27,8 +27,9 @@ type Props = {
   name: string;
   alias?: string;
   photoUrl?: string;
-  /** Raw `memberType` values — "Tipo", the only worship eligibility axis. */
-  memberTypes?: string[];
+  /** Raw `memberType` values — "Tipo", the only worship eligibility axis. Sanity
+      returns `null` for an unset array, so `undefined` alone is not the absent case. */
+  memberTypes?: string[] | null;
   /** The member's next worship service, already reduced by `nextSeatLine`. */
   next?: SeatAssignment | null;
   /** The member's next Oasis Kids Sunday (`YYYY-MM-DD`), if any. */
@@ -49,13 +50,13 @@ export default function MeHeader({
   name,
   alias,
   photoUrl,
-  memberTypes = [],
+  memberTypes,
   next = null,
   kidsNext = null,
   inWorship = false,
 }: Props) {
   const initials = (alias || name).trim().slice(0, 2).toUpperCase() || "??";
-  const types = memberTypes.filter((t) => typeof t === "string" && t.trim() !== "");
+  const types = (memberTypes ?? []).filter((t) => typeof t === "string" && t.trim() !== "");
 
   // ONE line, in priority order: the next worship service, else the next Kids
   // Sunday, else — for a worship member only — the empty state.

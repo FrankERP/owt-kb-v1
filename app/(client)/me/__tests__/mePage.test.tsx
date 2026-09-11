@@ -175,6 +175,22 @@ describe("/me worship gating", () => {
     expect(html).toContain("PERFIL");
   });
 
+  it("renders the page without crashing when memberType is null (Sanity null for unset array)", async () => {
+    // The dev-verify bot has memberType: null in production — a legitimate state.
+    // The page must render and pass the heading to MeHeader without throwing.
+    getMemberAccess.mockResolvedValue(access(["worship"]));
+    serverFetch.mockResolvedValue({
+      _id: "m1", member_name: "Dev Verificador", alias: "Verificador",
+      memberType: null,
+    });
+    const html = await renderPage();
+    // MeHeader renders the name, not an error.
+    expect(html).toContain("Dev Verificador");
+    expect(html).toContain("Sin servicios asignados próximamente");
+    // No error boundary or exception text.
+    expect(html).not.toContain("Algo salió mal");
+  });
+
   // Both panels hang off the same member read, and both used to be gated on
   // their own `member &&`. A null read therefore removed two thirds of this
   // page's controls without a word, on a page that otherwise rendered fine — so

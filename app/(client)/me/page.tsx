@@ -96,10 +96,10 @@ export default async function MePage() {
     email: string;
     role: string;
     alias?: string;
-    memberType?: string[];
+    memberType?: string[] | null;
     notifPrefs?: Record<string, unknown>;
-    unavailableDates?: string[];
-    unavailabilityNotes?: { date: string; note: string }[];
+    unavailableDates?: string[] | null;
+    unavailabilityNotes?: { date: string; note: string }[] | null;
     photoUrl?: string;
     hasPassword: boolean;
   } | null>(
