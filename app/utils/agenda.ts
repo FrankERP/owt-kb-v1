@@ -61,14 +61,41 @@ export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[]
 export type StripDay = { date: string; num: number; dow: string; tone: Tone | null; today: boolean; multiple: boolean };
 const DOW = ["D", "L", "M", "X", "J", "V", "S"]; // getUTCDay order, Spanish initials
 
+/** Add n days (may be negative) to a "YYYY-MM-DD". UTC arithmetic on a date-only
+ *  string, same reason `monthBounds` reads UTC: there is no time to shift. */
+export function addDays(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+/** The Monday on or before `iso`, as "YYYY-MM-DD". Sunday belongs to the week that
+ *  ENDS on it (the strip and the month grid both run Monday → Sunday). */
+export function mondayOf(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
+  return addDays(iso, dow === 0 ? -6 : 1 - dow);
+}
+
+function stripDay(date: string, activeDays: Record<string, ActiveDay[]>, todayStr: string): StripDay {
+  const [y, m, d] = date.split("-").map(Number);
+  const entries = activeDays[date] ?? [];
+  const tones = entries.map(serviceTone);
+  const tone: Tone | null = tones.includes("special") ? "special" : tones.includes("sat") ? "sat" : tones.includes("sun") ? "sun" : null;
+  return { date, num: d, dow: DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], tone, today: date === todayStr, multiple: entries.length > 1 };
+}
+
 export function monthStripDays(ym: string, activeDays: Record<string, ActiveDay[]>, todayStr: string): StripDay[] {
   const [y, m] = ym.split("-").map(Number);
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  return Array.from({ length: last }, (_, i) => {
-    const date = `${ym}-${String(i + 1).padStart(2, "0")}`;
-    const entries = activeDays[date] ?? [];
-    const tones = entries.map(serviceTone);
-    const tone: Tone | null = tones.includes("special") ? "special" : tones.includes("sat") ? "sat" : tones.includes("sun") ? "sun" : null;
-    return { date, num: i + 1, dow: DOW[new Date(Date.UTC(y, m - 1, i + 1)).getUTCDay()], tone, today: date === todayStr, multiple: entries.length > 1 };
-  });
+  return Array.from({ length: last }, (_, i) => stripDay(`${ym}-${String(i + 1).padStart(2, "0")}`, activeDays, todayStr));
+}
+
+/** The seven days of one week, Monday first. `mondayIso` is normalized through
+ *  `mondayOf`, so any day of the week resolves to the same seven cells — the strip's
+ *  own paging arithmetic can never drift off a Monday. Lit tones come from
+ *  `activeDays` whatever month the day falls in: the week is the unit here, not the
+ *  month. */
+export function weekStripDays(mondayIso: string, activeDays: Record<string, ActiveDay[]>, todayStr: string): StripDay[] {
+  const start = mondayOf(mondayIso);
+  return Array.from({ length: 7 }, (_, i) => stripDay(addDays(start, i), activeDays, todayStr));
 }

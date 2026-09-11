@@ -1,23 +1,25 @@
 /** @vitest-environment jsdom */
-// R2 Task 3 — the schedule's month header and day strip.
+// R2 Task 3 — the schedule's month header and week strip.
 //
-// What these assert is the WIRING: the strip's one cell per calendar day, which of
-// them are reachable (a day with no service is `disabled`, so the whole month is
-// legible without being clickable), which one is today, and that a pick reports the
-// ISO date the sheet will be opened with. `monthStripDays` itself is tested in
-// `app/utils/__tests__/agenda.test.ts` — this file never re-derives a tone.
+// What these assert is the WIRING: seven cells per view (the strip is a week strip,
+// not a month scroller), which of them are reachable (a day with no service is
+// `disabled`, so the week is legible without being clickable), which one is today,
+// that a pick reports the ISO date the sheet will be opened with, and that a swipe
+// pages the week client-side while reporting the new Monday. `weekStripDays` itself is
+// tested in `app/utils/__tests__/agenda.test.ts` — this file never re-derives a tone.
 //
-// jsdom has no layout, so two things are stubbed rather than exercised:
-// `scrollIntoView` (absent in jsdom entirely) and motion's drag gesture, which
-// cannot be driven without pointer capture — see `SwipeStrip.test.tsx`, whose pure
-// `swipeDirection` helper carries the threshold arithmetic.
+// `SwipeStrip` is mocked: motion's drag gesture cannot be driven in jsdom (no layout,
+// no pointer capture — see `SwipeStrip.test.tsx`, whose pure `swipeDirection` helper
+// carries the threshold arithmetic), so the mock exposes `onSwipe` through two test
+// buttons instead. They are `data-testid`-tagged so the cell queries can exclude them.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
+import type { ComponentProps, ReactNode } from "react";
 import type { ActiveDay } from "../CalendarView";
 
 installMotionTestEnv();
@@ -25,83 +27,136 @@ installMotionTestEnv();
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
+const haptic = vi.fn();
+vi.mock("../../utils/haptics", () => ({ haptic: (kind: string) => haptic(kind) }));
+
+vi.mock("../ui/SwipeStrip", () => ({
+  default: ({
+    onSwipe,
+    className,
+    children,
+  }: {
+    onSwipe: (direction: -1 | 1) => void;
+    className?: string;
+    children: ReactNode;
+  }) => (
+    <div className={className}>
+      <button type="button" data-testid="swipe-next" onClick={() => onSwipe(1)} />
+      <button type="button" data-testid="swipe-prev" onClick={() => onSwipe(-1)} />
+      {children}
+    </div>
+  ),
+}));
+
 import DayStrip from "../DayStrip";
 import ScheduleHeader from "../ScheduleHeader";
-
-beforeAll(() => {
-  // Not implemented in jsdom at all — the mount-time scroll would throw.
-  Element.prototype.scrollIntoView = vi.fn();
-});
 
 afterEach(() => {
   cleanup();
   push.mockReset();
+  haptic.mockReset();
 });
 
 const sunday = (date: string): ActiveDay => ({ day: "Domingo", date, leads: ["Ana"] });
 const saturday = (date: string): ActiveDay => ({ day: "Sábado", date, leads: ["Beto"] });
 const special = (date: string): ActiveDay => ({ day: "Aniversario", date, roleId: "r1" });
 
-// September 2026: the 5th is a Saturday, the 6th a Sunday, the 20th special.
+// September 2026: the 12th/19th are Saturdays, the 13th/20th Sundays, the 20th also
+// carries a special. Two consecutive weeks, so a swipe has somewhere lit to land.
 const ACTIVE: Record<string, ActiveDay[]> = {
-  "2026-09-05": [saturday("2026-09-05")],
-  "2026-09-06": [sunday("2026-09-06")],
+  "2026-09-12": [saturday("2026-09-12")],
+  "2026-09-13": [sunday("2026-09-13")],
+  "2026-09-19": [saturday("2026-09-19")],
   "2026-09-20": [sunday("2026-09-20"), special("2026-09-20")],
 };
 
-function mountStrip(onPick = vi.fn(), todayStr = "2026-09-10") {
+/** The day cells, excluding the mocked SwipeStrip's two test triggers. */
+const cells = () => screen.getAllByRole("button").filter((b) => !(b as HTMLElement).dataset.testid);
+const cell = (label: string) => cells().find((b) => b.getAttribute("aria-label")?.includes(label))!;
+
+function mountStrip(props: Partial<ComponentProps<typeof DayStrip>> = {}) {
+  const onPick = props.onPick ?? vi.fn();
   render(
     <MotionProvider>
-      <DayStrip anchorMonth="2026-09" activeDays={ACTIVE} todayStr={todayStr} onPick={onPick} />
+      <DayStrip
+        anchorMonth="2026-09"
+        activeDays={ACTIVE}
+        todayStr="2026-09-10"
+        {...props}
+        onPick={onPick}
+      />
     </MotionProvider>,
   );
   return onPick;
 }
 
 describe("DayStrip", () => {
-  it("renders one cell per calendar day of the anchor month", () => {
+  it("renders the seven days of today's week, Monday first", () => {
     mountStrip();
-    expect(screen.getAllByRole("button")).toHaveLength(30);
+    expect(cells()).toHaveLength(7);
+    expect(cells().map((b) => b.textContent)).toEqual(["L7", "M8", "X9", "J10", "V11", "S12", "D13"]);
+    expect(screen.getByText(/^7 – 13 sep/)).toBeTruthy();
   });
 
   it("enables only the days that carry a service", () => {
     mountStrip();
-    const enabled = screen
-      .getAllByRole("button")
-      .filter((b) => !(b as HTMLButtonElement).disabled)
-      .map((b) => b.textContent);
-    expect(enabled).toHaveLength(3);
-    expect(enabled.join(" ")).toContain("5");
-    expect(enabled.join(" ")).toContain("6");
-    expect(enabled.join(" ")).toContain("20");
+    const enabled = cells().filter((b) => !(b as HTMLButtonElement).disabled);
+    expect(enabled.map((b) => b.textContent)).toEqual(["S12", "D13"]);
   });
 
   it("marks today with aria-current, service or not", () => {
-    mountStrip(vi.fn(), "2026-09-10");
-    const current = screen.getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "date");
+    mountStrip();
+    const current = cells().filter((b) => b.getAttribute("aria-current") === "date");
     expect(current).toHaveLength(1);
     expect(current[0].textContent).toContain("10");
     expect((current[0] as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("reports the ISO date of a picked service day", () => {
+  it("reports the ISO date of a picked service day, with one haptic", () => {
     const onPick = mountStrip();
-    const day6 = screen.getAllByRole("button").find((b) => b.getAttribute("aria-label")?.includes("6 de septiembre"))!;
-    fireEvent.click(day6);
-    expect(onPick).toHaveBeenCalledWith("2026-09-06");
+    fireEvent.click(cell("13 de septiembre"));
+    expect(onPick).toHaveBeenCalledWith("2026-09-13");
+    expect(haptic).toHaveBeenCalledTimes(1);
+    expect(haptic).toHaveBeenCalledWith("selection");
   });
 
   it("never reports a day with no service", () => {
     const onPick = mountStrip();
-    const day7 = screen.getAllByRole("button").find((b) => b.getAttribute("aria-label")?.includes("7 de septiembre"))!;
-    fireEvent.click(day7);
+    fireEvent.click(cell("9 de septiembre"));
     expect(onPick).not.toHaveBeenCalled();
   });
 
   it("names the services of a day in its label", () => {
     mountStrip();
-    const day20 = screen.getAllByRole("button").find((b) => b.getAttribute("aria-label")?.includes("20 de septiembre"))!;
-    expect(day20.getAttribute("aria-label")).toContain("Domingo, Aniversario");
+    fireEvent.click(screen.getByTestId("swipe-next"));
+    expect(cell("20 de septiembre").getAttribute("aria-label")).toContain("Domingo, Aniversario");
+  });
+
+  it("pages the week on a swipe and reports the new Monday — no navigation", () => {
+    const onWeekChange = vi.fn();
+    mountStrip({ onWeekChange });
+    fireEvent.click(screen.getByTestId("swipe-next"));
+    expect(cells().map((b) => b.textContent)).toEqual(["L14", "M15", "X16", "J17", "V18", "S19", "D20"]);
+    expect(onWeekChange).toHaveBeenCalledWith("2026-09-14");
+    expect(push).not.toHaveBeenCalled();
+    expect(screen.getByText(/^14 – 20 sep/)).toBeTruthy();
+    // The week left today behind, so nothing is current any more.
+    expect(cells().some((b) => b.getAttribute("aria-current") === "date")).toBe(false);
+  });
+
+  it("pages backwards past the month boundary, still lighting nothing it should not", () => {
+    mountStrip();
+    fireEvent.click(screen.getByTestId("swipe-prev"));
+    fireEvent.click(screen.getByTestId("swipe-prev"));
+    expect(cells().map((b) => b.textContent)).toEqual(["L24", "M25", "X26", "J27", "V28", "S29", "D30"]);
+    expect(screen.getByText(/^24 – 30 ago/)).toBeTruthy();
+    expect(cells().every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+  });
+
+  it("opens on the week of the first day when the anchor month has no today", () => {
+    mountStrip({ anchorMonth: "2026-10" });
+    // 1 Oct 2026 is a Thursday, so its week starts Monday 28 September.
+    expect(cells().map((b) => b.textContent)).toEqual(["L28", "M29", "X30", "J1", "V2", "S3", "D4"]);
   });
 });
 

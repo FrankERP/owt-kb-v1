@@ -1,8 +1,9 @@
 "use client";
 // app/components/ui/SwipeStrip.tsx
-// R2's month-paging gesture: the schedule's day strip (Task 3) wraps its content
-// here so a horizontal drag pages the month, mirroring the header's own
-// prev/next buttons rather than replacing them.
+// R2's strip-paging gesture: the schedule's day strip (Task 3) wraps its content
+// here so a horizontal drag pages the visible WEEK — seven days per view, paged
+// client-side. The header's own prev/next buttons page the MONTH, so the gesture
+// complements them rather than duplicating them.
 //
 // `drag="x"` is locked to the horizontal axis (`dragDirectionLock`) and pinned at
 // the origin (`dragConstraints={{ left: 0, right: 0 }}`) with elastic give while a
@@ -13,10 +14,11 @@
 // in VisualElementDragControls), so a `type: "spring"` override there replaces the
 // default inertia entirely rather than merely tuning its bounce. `style.touchAction:
 // "pan-y"` keeps vertical page scroll alive under a finger that starts on the strip —
-// only the horizontal axis is claimed.
+// only the horizontal axis is claimed, which is also why the wrapped content must FIT
+// the width: a horizontal scroller nested in here could never be finger-scrolled.
 //
 // Keyboard paging is NOT this component's job — the header's own prev/next buttons
-// (Task 3) cover that; this primitive is pointer/touch only, same division CueDialog
+// (Task 3) cover the month axis; this primitive is pointer/touch only, same division CueDialog
 // draws between its drag-to-dismiss head and its Escape handler.
 //
 // Reduced motion is not detected here. `MotionConfig reducedMotion="user"`
