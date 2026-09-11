@@ -9,9 +9,7 @@ import Navbar from "@/app/components/Navbar";
 import { DayCard, type DayCardProps } from "@/app/components/DayCard";
 import DayCardDisclosure from "@/app/components/DayCardDisclosure";
 import MeHeader from "@/app/components/MeHeader";
-import ProfilePanel from "@/app/components/ProfilePanel";
-import TextSizeControl from "@/app/components/TextSizeControl";
-import ThemeControl from "@/app/components/ui/ThemeControl";
+import SettingsCard from "@/app/components/SettingsCard";
 import ThemeAnnouncement from "@/app/components/ui/ThemeAnnouncement";
 import MyAvailabilityPanel from "@/app/components/availability/MyAvailabilityPanel";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
@@ -456,15 +454,6 @@ export default async function MePage() {
     );
   }
 
-  // Tema and Tamaño de texto, shared by both arms of the `member` branch below so
-  // the `#ajustes` anchor lands whatever the profile read returned.
-  const settings = (
-    <>
-      <ThemeControl />
-      <TextSizeControl />
-    </>
-  );
-
   return (
     <div>
       <Navbar title={navbarTitle} schedule tags />
@@ -600,10 +589,7 @@ export default async function MePage() {
                 serviceDates={calendarServiceDates}
               />
             </div>
-            <div id="ajustes" className="space-y-12" {...revealProps(4)}>
-              <ProfilePanel initialMember={member} />
-              {settings}
-            </div>
+            <SettingsCard member={member} {...revealProps(4)} />
           </>
         ) : (
           <>
@@ -619,10 +605,9 @@ export default async function MePage() {
               </p>
             </section>
             {/* Tema and Tamaño de texto are device-local, so they survive a failed
-                profile read — and `#ajustes` keeps a target for the header link. */}
-            <div id="ajustes" className="space-y-12" {...revealProps(4)}>
-              {settings}
-            </div>
+                profile read — and `#ajustes` keeps a target for the header link.
+                No `member`, so the card renders without its Perfil subsection. */}
+            <SettingsCard member={null} {...revealProps(4)} />
           </>
         )}
       </div>

@@ -8,22 +8,22 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 319,
-    "filesScanned": 298,
+    "literalRows": 316,
+    "filesScanned": 299,
     "filesWithColour": 54,
     "byCategory": {
       "2": 2,
-      "4": 75,
-      "8": 89,
+      "4": 74,
+      "8": 87,
       "9": 10,
       "11": 9,
       "12": 134
     },
     "byDisposition": {
-      "B": 122,
+      "B": 120,
       "exempt": 42,
       "keep": 239,
-      "C": 6,
+      "C": 5,
       "D": 15
     },
     "compositingClasses": 21,
@@ -235,7 +235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 401,
+      "line": 399,
       "disposition": "B",
       "reason": null
     },
@@ -247,7 +247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 421,
+      "line": 419,
       "disposition": "B",
       "reason": null
     },
@@ -259,7 +259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 433,
+      "line": 431,
       "disposition": "B",
       "reason": null
     },
@@ -271,7 +271,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 450,
+      "line": 448,
       "disposition": "B",
       "reason": null
     },
@@ -283,7 +283,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 577,
+      "line": 566,
       "disposition": "B",
       "reason": null
     },
@@ -3475,7 +3475,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 21,
+      "line": 23,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3483,35 +3483,11 @@
       "file": "app/components/ProfilePanel.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
-      "line": 48,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 47,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 237,
+      "line": 250,
       "disposition": "B",
       "reason": null
     },
@@ -3523,19 +3499,7 @@
       "alpha": null,
       "utility": "stroke",
       "carrier": null,
-      "line": 51,
-      "disposition": "C",
-      "reason": null
-    },
-    {
-      "file": "app/components/ProfilePanel.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "text-white",
-      "alpha": null,
-      "utility": "text",
-      "carrier": null,
-      "line": 46,
+      "line": 50,
       "disposition": "C",
       "reason": null
     },

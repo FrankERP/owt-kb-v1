@@ -33,7 +33,7 @@ const OPTIONS: ReadonlyArray<{ value: ThemePref; label: string }> = [
  * `resolvedTheme` — which is "dark" for an explicit-Dark member and an unset one
  * alike, and would therefore make the third state unrepresentable.
  */
-export default function ThemeControl() {
+export default function ThemeControl({ bare = false }: { bare?: boolean } = {}) {
   const { pref, loaded, setPref } = useThemePref();
   const { setTheme } = useTheme();
   const { data } = useSession();
@@ -78,8 +78,8 @@ export default function ThemeControl() {
   }
 
   return (
-    <section id="tema" className="rounded-2xl border border-surface-accent-20 p-5">
-      <h3 id="tema-h" className="font-display text-lg font-bold mb-1">Tema</h3>
+    <section id="tema" className={bare ? "" : "rounded-2xl border border-surface-accent-20 p-5"}>
+      <h3 id="tema-h" className={`font-display text-lg font-bold ${bare ? "" : "mb-1"}`}>Tema</h3>
       <p className="font-body text-sm text-mono-500 dark:text-mono-400 mb-4">
         Por defecto la app sigue el modo de tu teléfono. Tu elección te sigue en
         todos tus dispositivos.
