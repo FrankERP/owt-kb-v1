@@ -13,8 +13,11 @@ import type { SetlistSong } from "@/app/utils/interface";
 installMotionTestEnv();
 
 vi.mock("@/app/context/PlayerContext", () => ({ usePlayer: () => ({ openSheet: vi.fn() }) }));
+// Mutable so a test can seat a different session alias — the F1 refactor's guard
+// needs one seated on an instrument, same pattern as `agendaView.test.tsx`.
+let mockUser: { name?: string; alias?: string; role?: string } = { name: "Ana", alias: "Ani", role: "member" };
 vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: { user: { name: "Ana", alias: "Ani", role: "member" } } }),
+  useSession: () => ({ data: { user: mockUser } }),
 }));
 
 import { DayCard, type DayCardProps } from "../DayCard";
@@ -35,6 +38,7 @@ function mount(props: Partial<DayCardProps> = {}) {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  mockUser = { name: "Ana", alias: "Ani", role: "member" };
 });
 
 describe("DayCard", () => {
@@ -96,5 +100,12 @@ describe("DayCard", () => {
   it("stacks a `wide` card with a setlist but no team, instead of reserving an empty rail", () => {
     const { container } = mount({ layout: "wide", leads: [] });
     expect(container.querySelector(".lg\\:grid")).toBeNull();
+  });
+
+  it("F1 — highlights the positive `isMe` glow for a session alias seated on an instrument", () => {
+    mockUser = { alias: "Sofi", role: "member" };
+    mount({ leads: ["Ana"], instruments: [{ label: "Keys", person: "Sofi" }] });
+    const row = screen.getByText("Sofi");
+    expect(row.className).toContain("text-positive-fg");
   });
 });

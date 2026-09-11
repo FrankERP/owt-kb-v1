@@ -54,6 +54,7 @@ export default function DayStrip({
   todayStr,
   onPick,
   onWeekChange,
+  myName = "",
 }: {
   anchorMonth: string;
   activeDays: Record<string, ActiveDay[]>;
@@ -61,6 +62,9 @@ export default function DayStrip({
   onPick: (date: string) => void;
   /** The Monday of the week now on screen, after a swipe. Task 4 uses it to scroll the agenda. */
   onWeekChange?: (mondayIso: string) => void;
+  /** `myNameFromSession(session?.user)`, derived once by `CalendarView` — flags the
+   *  «you» dot (F1). Omitted, no day is ever `mine`. */
+  myName?: string;
 }) {
   // Which week the strip opens on: today's when the anchor month contains today,
   // else the week of that month's first day. From there it is the swipe's state —
@@ -68,7 +72,7 @@ export default function DayStrip({
   const [weekStart, setWeekStart] = useState(() =>
     mondayOf(todayStr.startsWith(`${anchorMonth}-`) ? todayStr : `${anchorMonth}-01`),
   );
-  const days = weekStripDays(weekStart, activeDays, todayStr);
+  const days = weekStripDays(weekStart, activeDays, todayStr, myName);
 
   const handleSwipe = (direction: -1 | 1) => {
     const next = addDays(weekStart, 7 * direction);
@@ -93,7 +97,7 @@ export default function DayStrip({
               type="button"
               disabled={!d.tone}
               aria-current={d.today ? "date" : undefined}
-              aria-label={`${label}${entries.length ? `, ${entries.map((e) => e.day).join(", ")}` : ""}`}
+              aria-label={`${label}${entries.length ? `, ${entries.map((e) => e.day).join(", ")}` : ""}${d.mine ? ", te toca" : ""}`}
               onClick={() => {
                 // Native only, fire-and-forget (see haptics.ts) — never gates the pick.
                 void haptic("selection");
@@ -105,11 +109,20 @@ export default function DayStrip({
             >
               <span className="font-label text-[10px] uppercase tracking-widest opacity-70">{d.dow}</span>
               <span className="font-display text-sm font-bold">{d.num}</span>
-              {d.today && (
+              {/* F1 — one absolutely positioned dot slot shared by «today» and «mine»,
+                  so a today+mine cell never stacks two marks: positive when the member
+                  is seated (the same «you» signal DayCard gives a seat), pulsing when
+                  it's today, both at once when it's both. */}
+              {(d.today || d.mine) && (
                 // Centred with a negative margin, NOT `-translate-x-1/2`: the pulse
                 // animates `transform`, which would override a translate utility for
                 // the whole pass and then drop it at `transform: none`.
-                <span className="brand-today-pulse absolute bottom-0.5 left-1/2 -ml-0.5 h-1 w-1 rounded-full bg-current opacity-60" />
+                <span
+                  aria-hidden
+                  className={`absolute bottom-0.5 left-1/2 -ml-0.5 h-1 w-1 rounded-full ${
+                    d.mine ? "bg-positive-fg" : "bg-current opacity-60"
+                  } ${d.today ? "brand-today-pulse" : ""}`}
+                />
               )}
               {d.multiple && (
                 <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-current opacity-80" />

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays } from "../agenda";
+import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays, mySeats, myNameFromSession } from "../agenda";
 import type { ActiveDay } from "../../components/CalendarView";
 
 const sun = (date: string, extra: Partial<ActiveDay> = {}): ActiveDay => ({ day: "Domingo", date, leads: ["Jakey", "Marianne"], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Bass", person: "Mkz" }], setlist: { songs: Array(5).fill({ _id: "s", title: "t" }) as never, week: date }, ...extra });
@@ -86,5 +86,45 @@ describe("weekStripDays", () => {
   it("flags a day carrying more than one service", () => {
     const days = weekStripDays("2026-09-14", { "2026-09-20": [sun("2026-09-20"), special("2026-09-20")] }, "2026-09-10");
     expect(days[6]).toMatchObject({ tone: "special", multiple: true });
+  });
+  it("flags the day a member is seated in, `mine`, only when `myName` is given", () => {
+    const active = { "2026-09-13": [sun("2026-09-13", { instruments: [{ label: "Keys", person: "Sofi" }] })] };
+    expect(weekStripDays("2026-09-09", active, "2026-09-10")[6].mine).toBe(false);
+    expect(weekStripDays("2026-09-09", active, "2026-09-10", "sofi")[6].mine).toBe(true);
+    expect(weekStripDays("2026-09-09", active, "2026-09-10", "nadie")[6].mine).toBe(false);
+  });
+});
+
+describe("myNameFromSession", () => {
+  it("prefers the trimmed alias over the name, lowercased", () => {
+    expect(myNameFromSession({ alias: " Sofi ", name: "Sofía Ramírez" })).toBe("sofi");
+  });
+  it("falls back to name when there is no alias", () => {
+    expect(myNameFromSession({ name: "Sofía Ramírez" })).toBe("sofía ramírez");
+  });
+  it("trims the name fallback too", () => {
+    expect(myNameFromSession({ name: " Sofía Ramírez " })).toBe("sofía ramírez");
+  });
+  it("is empty for a signed-out or nameless session", () => {
+    expect(myNameFromSession(undefined)).toBe("");
+    expect(myNameFromSession({})).toBe("");
+  });
+});
+
+describe("mySeats", () => {
+  it("lists Lead and the instrument for a member seated in both, in DayCard's order", () => {
+    const e = sun("2026-09-13", { leads: ["Sofi"], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Bass", person: "Mkz" }] });
+    expect(mySeats(e, "sofi")).toEqual(["Lead", "Keys"]);
+  });
+  it("matches by alias in bgvs/chorus, case- and whitespace-insensitively", () => {
+    const e = sun("2026-09-13", { leads: [], instruments: [], bgvs: [{ member_name: "Sofía Ramírez", alias: "Sofi" }] });
+    expect(mySeats(e, "sofi")).toEqual(["BGVs"]);
+  });
+  it("seats nobody when `myName` is empty", () => {
+    expect(mySeats(sun("2026-09-13"), "")).toEqual([]);
+  });
+  it("dedupes a member seated on two instrument seats with the same label", () => {
+    const e = sun("2026-09-13", { leads: [], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Keys", person: "Sofi" }] });
+    expect(mySeats(e, "sofi")).toEqual(["Keys"]);
   });
 });

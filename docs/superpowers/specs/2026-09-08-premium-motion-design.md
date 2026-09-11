@@ -1215,3 +1215,12 @@ reshaped to match.
 `/schedule` 121.5 kB → 123.1 kB (+1.6), `/biblioteca` 114.2 kB → 114.2 kB (unchanged),
 `/admin` 355.7 kB → 356.4 kB (+0.7, build noise); shared unchanged. The week strip, the
 agenda and `SwipeStrip` cost 1.6 kB on the route — see the `docs/MOTION.md` ledger.
+
+**F1 (Frank's look, 20:49).** The agenda's rows carried no signal for "it's you" — the retired
+«Lista» mode's stacked `DayCard`s glowed a seat positive for the signed-in member, and the
+one-line agenda dropped it. Fix: `app/utils/agenda.ts` gained `myNameFromSession` (the one
+reader of `session.user`, now shared with `DayCard`) and `mySeats(entry, myName)` (DayCard's own
+seat order — Lead, BGVs, Coro, instruments, FOH); a seated row in `AgendaView` carries a
+`Tú · Lead, Keys` pill and a positive glow on its tone rail, and a seated, lit day in `DayStrip`
+gets a second dot under the number (`StripDay.mine`, `CalendarView` deriving `myName` once for
+the strip). See `docs/MOTION.md`'s R2 section for the full ledger.

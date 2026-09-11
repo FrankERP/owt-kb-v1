@@ -14,7 +14,13 @@
 // lives in `app/utils/agenda.ts` (`agendaRows`), so this file only lays it out. The
 // conflict flag therefore counts what `DayCard`'s own ⚠ marks count, by construction:
 // both read `findDuplicates` from that module.
-import { agendaRows, conflictLabel, type Tone } from "../utils/agenda";
+//
+// F1 — a row where the signed-in member is seated carries a «Tú · Lead, Keys» pill
+// and a positive glow on its tone rail, the same «you» signal `DayCard` gives a seat
+// (`mySeats`/`myNameFromSession`, `app/utils/agenda.ts`) — the agenda had dropped it
+// when it replaced the stacked `DayCard`s the old «Lista» mode rendered.
+import { useSession } from "next-auth/react";
+import { agendaRows, conflictLabel, mySeats, myNameFromSession, type Tone } from "../utils/agenda";
 import type { ActiveDay } from "./CalendarView";
 import { daysUntil, formatCountdown } from "../utils/daysUntil";
 import { monthLabel } from "../utils/scheduleMonths";
@@ -44,6 +50,8 @@ export default function AgendaView({
   onSelect: (date: string) => void;
   emptyMessage: string;
 }) {
+  const { data: session } = useSession();
+  const myName = myNameFromSession(session?.user);
   const rows = agendaRows(activeDays);
 
   if (rows.length === 0) {
@@ -61,6 +69,10 @@ export default function AgendaView({
         const upcoming = row.date >= todayStr && days >= 0;
         const countdown = upcoming ? formatCountdown(days) : "";
         const long = fmt(row.date, { weekday: "long", day: "numeric", month: "long" });
+        // The seats where the signed-in member is serving THIS row — «you»'s own
+        // tone (DayCard's positive glow), read from the neutral helper so the row
+        // and the card can never disagree on who "you" is.
+        const seats = mySeats(row.entry, myName);
         return (
           <div key={row.key}>
             {row.monthStart && (
@@ -87,11 +99,16 @@ export default function AgendaView({
               }}
               // The label carries what the eye sees, in the same order: the day
               // name, the long date, the countdown (upcoming rows only), the
-              // summary, then the conflict count.
-              aria-label={`${row.entry.day}, ${long}${countdown ? `, ${countdown}` : ""}, ${row.summary}${row.conflicts ? `, ${conflictLabel(row.conflicts)}` : ""}`}
+              // summary, the conflict count, then the «you» signal.
+              aria-label={`${row.entry.day}, ${long}${countdown ? `, ${countdown}` : ""}, ${row.summary}${row.conflicts ? `, ${conflictLabel(row.conflicts)}` : ""}${seats.length ? `, ${upcoming ? "te toca" : "te tocó"}: ${seats.join(", ")}` : ""}`}
               className="group relative flex w-full items-center gap-3 rounded-xl py-3 pl-4 pr-3 text-left transition-[color,background-color,transform] duration-fast ease-out-brand hover:bg-accent/[0.055] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 active:scale-[0.995]"
             >
-              <span aria-hidden className={`absolute bottom-2 left-0 top-2 w-0.5 rounded-full ${RAIL[row.tone]}`} />
+              <span
+                aria-hidden
+                className={`absolute bottom-2 left-0 top-2 w-0.5 rounded-full ${RAIL[row.tone]}${
+                  seats.length ? " shadow-[0_0_10px_rgb(var(--positive-fg-rgb)/0.6)]" : ""
+                }`}
+              />
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-baseline gap-x-2">
                   <span className="font-display text-sm font-bold uppercase text-ink transition-colors group-hover:text-accent">
@@ -105,6 +122,14 @@ export default function AgendaView({
                   {upcoming && (
                     <span className="rounded-full bg-accent/10 px-2 py-px font-label text-[10px] uppercase tracking-widest text-accent">
                       <NumberRoll value={countdown} />
+                    </span>
+                  )}
+                  {/* DayCard's «you» tone — the same positive pill/glow the seats
+                      themselves glow with there, so the two surfaces read as one
+                      signal. */}
+                  {seats.length > 0 && (
+                    <span className="rounded-full border border-positive-fg/35 bg-positive-fg/10 px-2.5 py-0.5 font-label text-[10px] uppercase tracking-widest text-positive-fg">
+                      Tú · {seats.join(", ")}
                     </span>
                   )}
                 </span>

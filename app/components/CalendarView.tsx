@@ -31,9 +31,11 @@
 // props but does NOT remount it, and without the key the strip would keep showing
 // the week it was on.
 import { useCallback, useRef, useState } from "react";
+import { useSession } from "next-auth/react";
 import { DayCard } from "./DayCard";
 import { Setlist } from "../utils/interface";
 import { MONTH_NAMES_ES, monthRangeLabel, WINDOW_MONTHS, windowMonths } from "../utils/scheduleMonths";
+import { myNameFromSession } from "../utils/agenda";
 import AgendaView from "./AgendaView";
 import DayStrip from "./DayStrip";
 import ScheduleHeader from "./ScheduleHeader";
@@ -87,6 +89,10 @@ export default function CalendarView({ activeDays, viewMonth, todayStr }: Props)
   const [switched, setSwitched] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  // Derived once here (F1) so `DayStrip`'s dot and `AgendaView`'s own pill (which
+  // reads `useSession` directly, same as `DayCard`) can never disagree on who "you" is.
+  const { data: session } = useSession();
+  const myName = myNameFromSession(session?.user);
 
   const dismiss = useCallback(() => setSelected(null), []);
 
@@ -131,6 +137,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr }: Props)
         todayStr={todayStr}
         onPick={setSelected}
         onWeekChange={handleWeekChange}
+        myName={myName}
       />
 
       <div className="mb-6 flex justify-center">

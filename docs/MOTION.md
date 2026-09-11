@@ -640,6 +640,17 @@ relevant pieces:
   the conflict count — lives in `app/utils/agenda.ts` (`agendaRows`), so this component only
   lays it out; a special service names itself in the row (Sábado/Domingo don't, the day word
   already says it). Rows open the existing day sheet (`CueDialog`, unchanged).
+- **F1 — the agenda says when it's you.** The retired «Lista» rendered stacked `DayCard`s,
+  whose seats glow positive for the signed-in member (`myName` = `alias?.trim() || name`,
+  lowercased); the agenda's one-line rows dropped that signal entirely. `app/utils/agenda.ts`
+  gained `myNameFromSession` (the one reader of `session.user`, now shared by `DayCard`) and
+  `mySeats(entry, myName)` (the seat labels in DayCard's own order: Lead, BGVs, Coro, each
+  instrument, each FOH seat). A row where `mySeats` is non-empty carries a `Tú · Lead, Keys`
+  pill after the countdown and a positive glow on its tone rail (DayCard's own «you» tone);
+  `aria-label` gains `, te toca: Lead, Keys`. The week strip's lit-and-seated day gets a second,
+  positive dot under the number (`StripDay.mine`, `weekStripDays`/`monthStripDays`'s new
+  optional `myName` argument); `CalendarView` derives `myName` once and passes it to `DayStrip`,
+  while `AgendaView` reads its own `useSession` (same pattern as `DayCard`).
 - **The mode crossfade is a plain keyed fade, not stacked panels.** `CalendarView` keys
   `Presence` on the mode (`agenda` | `month`), so switching unmounts one panel and mounts the
   other — no exit, no host of known height. The plan's stacked-panels design needs exactly
