@@ -1132,3 +1132,10 @@ after the route reveal (decision Q, the beam's fifth and only non-`motion` use).
 on `/`: the release-day environment reads ~6 kB higher than the ledger's older rows, so the
 honest statement is that R1 gives back about 4.5 of M1's +7.3 on the route members open first.
 Rows in `docs/MOTION.md`'s ledger.
+
+**Released to production on 2026-09-10** via PR #58 (merge `baada1c7`, production alias
+verified by `alias` + `githubCommitSha`), after Frank's look on dev (three follow-ups: the
+Tipo tiles fitted at 390 px, F3, the letter pill) and a re-merge of `main` twice while other
+releases (#57, #59, #60) landed under the PR. Two design questions from the look stay open
+for R2+: the hero «Ensayar» is accent-toned on Saturday/special headers; library rows show
+BPM at phone width while the home run sheet hides it.
