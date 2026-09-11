@@ -14,7 +14,7 @@
 // lives in `app/utils/agenda.ts` (`agendaRows`), so this file only lays it out. The
 // conflict flag therefore counts what `DayCard`'s own ⚠ marks count, by construction:
 // both read `findDuplicates` from that module.
-import { agendaRows, type Tone } from "../utils/agenda";
+import { agendaRows, conflictLabel, type Tone } from "../utils/agenda";
 import type { ActiveDay } from "./CalendarView";
 import { daysUntil, formatCountdown } from "../utils/daysUntil";
 import { monthLabel } from "../utils/scheduleMonths";
@@ -59,6 +59,7 @@ export default function AgendaView({
         // the client's own clock disagrees; `days >= 0` is the second half of the same
         // guard, because `formatCountdown` only FLOORS a past date («Hace 3 días»).
         const upcoming = row.date >= todayStr && days >= 0;
+        const countdown = upcoming ? formatCountdown(days) : "";
         const long = fmt(row.date, { weekday: "long", day: "numeric", month: "long" });
         return (
           <div key={row.key}>
@@ -84,7 +85,10 @@ export default function AgendaView({
                 void haptic("selection");
                 onSelect(row.date);
               }}
-              aria-label={`${row.entry.day}, ${long}${row.conflicts ? `, ${row.conflicts} conflictos` : ""}`}
+              // The label carries what the eye sees, in the same order: the day
+              // name, the long date, the countdown (upcoming rows only), the
+              // summary, then the conflict count.
+              aria-label={`${row.entry.day}, ${long}${countdown ? `, ${countdown}` : ""}, ${row.summary}${row.conflicts ? `, ${conflictLabel(row.conflicts)}` : ""}`}
               className="group relative flex w-full items-center gap-3 rounded-xl py-3 pl-4 pr-3 text-left transition-[color,background-color,transform] duration-fast ease-out-brand hover:bg-accent/[0.055] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 active:scale-[0.995]"
             >
               <span aria-hidden className={`absolute bottom-2 left-0 top-2 w-0.5 rounded-full ${RAIL[row.tone]}`} />
@@ -93,9 +97,14 @@ export default function AgendaView({
                   <span className="font-display text-sm font-bold uppercase text-ink transition-colors group-hover:text-accent">
                     {fmt(row.date, { weekday: "short" })} {fmt(row.date, { day: "numeric", month: "short" })}
                   </span>
+                  {/* A special names itself here — Sábado/Domingo don't, the day
+                      word already says it. */}
+                  {row.tone === "special" && (
+                    <span className="min-w-0 truncate font-body text-sm text-ink-dim">{row.entry.day}</span>
+                  )}
                   {upcoming && (
                     <span className="rounded-full bg-accent/10 px-2 py-px font-label text-[10px] uppercase tracking-widest text-accent">
-                      <NumberRoll value={formatCountdown(days)} />
+                      <NumberRoll value={countdown} />
                     </span>
                   )}
                 </span>
@@ -103,7 +112,7 @@ export default function AgendaView({
               </span>
               {row.conflicts > 0 && (
                 <span className="shrink-0 font-label text-[11px] uppercase tracking-widest text-warning-fg">
-                  ⚠ {row.conflicts} {row.conflicts === 1 ? "conflicto" : "conflictos"}
+                  ⚠ {conflictLabel(row.conflicts)}
                 </span>
               )}
             </button>

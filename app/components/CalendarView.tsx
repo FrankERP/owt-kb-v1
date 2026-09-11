@@ -15,13 +15,16 @@
 //
 // The mode crossfade is the RECORDED FALLBACK, not the plan's stacked panels: a
 // plain, enter-only fade. `Presence` is KEYED ON THE MODE, so switching unmounts
-// one panel and mounts the other (no exit — the whole AnimatePresence goes with it)
-// and the new panel fades in with `appear`. The stacked variant needs both panels
-// absolutely positioned inside a host of known height, and neither panel here has
-// one: the agenda is as tall as the fetch window has services and the grid is three
-// months (one column on a phone), so any `min-h` big enough to hold the taller one
-// would leave the shorter one sitting in a screenful of blank space. One fade, no
-// height jump, nothing overlapping.
+// one panel and mounts the other (no exit — the whole AnimatePresence goes with it).
+// `appear` is `switched` — false until the reader actually flips the
+// SegmentedControl — so first paint renders at rest: `Presence appear` above the
+// fold is the one thing M0b forbids (ADR-0031), the crossfade exists for switches
+// only. The stacked variant needs both panels absolutely positioned inside a host
+// of known height, and neither panel here has one: the agenda is as tall as the
+// fetch window has services and the grid is three months (one column on a phone),
+// so any `min-h` big enough to hold the taller one would leave the shorter one
+// sitting in a screenful of blank space. One fade, no height jump, nothing
+// overlapping.
 //
 // `DayStrip` is keyed on `anchorMonth` because it seeds its own week state from the
 // props once: a month change is a route push that re-renders this component with new
@@ -77,6 +80,11 @@ function firstDayOffset(year: number, month: number) {
 
 export default function CalendarView({ activeDays, viewMonth, todayStr }: Props) {
   const [mode, setMode] = useState<"agenda" | "month">("agenda");
+  // `false` until the reader actually flips the SegmentedControl: first paint
+  // renders at rest (M0b — never `appear` above the fold, ADR-0031), the
+  // crossfade exists for switches only (ImpersonationBanner's `activeAtLoad`
+  // precedent, `ImpersonationBanner.tsx`).
+  const [switched, setSwitched] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -130,7 +138,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr }: Props)
           label="Vista"
           tone="filled"
           value={mode}
-          onChange={setMode}
+          onChange={(v) => { setSwitched(true); setMode(v); }}
           options={[
             { value: "agenda", label: "Agenda" },
             { value: "month", label: "Mes" },
@@ -139,7 +147,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr }: Props)
       </div>
 
       <div ref={panelRef}>
-        <Presence key={mode} show appear>
+        <Presence key={mode} show appear={switched} data-testid="mode-panel">
           {mode === "agenda" ? (
             <AgendaView
               activeDays={activeDays}

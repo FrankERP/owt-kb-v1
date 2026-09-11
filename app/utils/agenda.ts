@@ -31,6 +31,12 @@ export function serviceConflicts(e: ActiveDay): number {
   return findDuplicates(voices(e)).size + findDuplicates(instr).size + findDuplicates(foh).size;
 }
 
+/** "N conflicto" | "N conflictos" — the ONE plural rule, so the row's chip and
+ *  its `aria-label` can never disagree on the wording. */
+export function conflictLabel(n: number): string {
+  return `${n} ${n === 1 ? "conflicto" : "conflictos"}`;
+}
+
 export function summarizeService(e: ActiveDay): string {
   const parts: string[] = [];
   if (e.leads?.length) parts.push(`Lead ${e.leads.join(", ")}`);

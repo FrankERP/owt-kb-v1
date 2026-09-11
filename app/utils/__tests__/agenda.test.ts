@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findDuplicates, serviceTone, serviceConflicts, summarizeService, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays } from "../agenda";
+import { findDuplicates, serviceTone, serviceConflicts, summarizeService, conflictLabel, agendaRows, monthStripDays, weekStripDays, mondayOf, addDays } from "../agenda";
 import type { ActiveDay } from "../../components/CalendarView";
 
 const sun = (date: string, extra: Partial<ActiveDay> = {}): ActiveDay => ({ day: "Domingo", date, leads: ["Jakey", "Marianne"], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Bass", person: "Mkz" }], setlist: { songs: Array(5).fill({ _id: "s", title: "t" }) as never, week: date }, ...extra });
@@ -21,6 +21,13 @@ describe("serviceTone / serviceConflicts", () => {
     const e = sun("2026-09-13", { leads: ["Ana", "Ana"], instruments: [{ label: "Keys", person: "Sofi" }, { label: "Bass", person: "sofi" }] });
     expect(serviceConflicts(e)).toBe(2);
     expect(serviceConflicts(sun("2026-09-13"))).toBe(0);
+  });
+});
+describe("conflictLabel", () => {
+  it("says «conflicto» for one, «conflictos» otherwise, singular and plural alike", () => {
+    expect(conflictLabel(1)).toBe("1 conflicto");
+    expect(conflictLabel(2)).toBe("2 conflictos");
+    expect(conflictLabel(0)).toBe("0 conflictos");
   });
 });
 describe("summarizeService", () => {

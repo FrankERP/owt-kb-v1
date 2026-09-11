@@ -63,6 +63,9 @@ const song = (id: string): SetlistSong =>
 const sunday = (date: string, extra: Partial<ActiveDay> = {}): ActiveDay =>
   ({ day: "Domingo", date, leads: ["Ana"], ...extra });
 
+const special = (date: string, extra: Partial<ActiveDay> = {}): ActiveDay =>
+  ({ day: "Noche de alabanza", date, roleId: "sp1", leads: ["Ana"], ...extra });
+
 // 13 and 20 September, 4 October — two months, so a divider has to appear twice.
 const ACTIVE: Record<string, ActiveDay[]> = {
   "2026-09-13": [
@@ -108,9 +111,29 @@ describe("AgendaView", () => {
     expect(within(row).getByText("Lead Ana, Beto · Keys Sofi · 2 canciones")).toBeTruthy();
   });
 
-  it("names the day and the long date in the row's label", () => {
+  it("names the day, the long date, the countdown and the summary in the row's label", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0)); // 2026-09-10 local
     mountAgenda();
-    expect(rows()[0].getAttribute("aria-label")).toMatch(/^Domingo, .*13.*septiembre$/i);
+    expect(rows()[0].getAttribute("aria-label")).toMatch(
+      /^Domingo, .*13.*septiembre, En 3 días, Lead Ana, Beto · Keys Sofi · 2 canciones$/i,
+    );
+  });
+
+  it("carries no countdown in the label for a day the fetch already passed", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0));
+    render(
+      <MotionProvider>
+        <AgendaView
+          activeDays={{ "2026-09-06": [sunday("2026-09-06")] }}
+          todayStr="2026-09-10"
+          onSelect={vi.fn()}
+          emptyMessage="vacío"
+        />
+      </MotionProvider>,
+    );
+    expect(rows()[0].getAttribute("aria-label")).toMatch(/^Domingo, .*6.*septiembre, Lead Ana$/i);
   });
 
   it("counts down to an upcoming service in the pill", () => {
@@ -152,12 +175,42 @@ describe("AgendaView", () => {
     expect(rows()[0].getAttribute("aria-label")).toMatch(/, 2 conflictos$/);
   });
 
-  it("says «conflicto» in the singular, and nothing at all when there is none", () => {
+  it("says «conflicto» in the singular — same wording in the chip and the label — and nothing at all when there is none", () => {
     mountAgenda({ "2026-09-13": [sunday("2026-09-13", { leads: ["Ana", "Ana"] })] });
     expect(within(rows()[0]).getByText("⚠ 1 conflicto")).toBeTruthy();
+    expect(rows()[0].getAttribute("aria-label")).toMatch(/, 1 conflicto$/);
     cleanup();
     mountAgenda();
     expect(screen.queryByText(/⚠/)).toBeNull();
+    expect(rows()[0].getAttribute("aria-label")).not.toMatch(/conflicto/);
+  });
+
+  it("names a special service after its date — Sábado/Domingo rows don't repeat the day word", () => {
+    mountAgenda({ "2026-09-13": [special("2026-09-13")] });
+    expect(within(rows()[0]).getByText("Noche de alabanza")).toBeTruthy();
+    // A regular Sunday/Saturday row carries no second name — the day word already said it.
+    cleanup();
+    mountAgenda({ "2026-09-13": [sunday("2026-09-13")] });
+    expect(within(rows()[0]).queryByText("Domingo")).toBeNull();
+  });
+
+  it("gates the countdown on todayStr, not the client's clock, even mid-window", () => {
+    // The client thinks it's 2026-09-01; the SERVER fetched from 2026-09-10 (a
+    // browsed month, say). A row on 2026-09-05 sits before that boundary, so no
+    // pill — the `row.date >= todayStr` half of the guard, isolated from `days >= 0`.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 1, 9, 0, 0)); // 2026-09-01 local
+    render(
+      <MotionProvider>
+        <AgendaView
+          activeDays={{ "2026-09-05": [sunday("2026-09-05")] }}
+          todayStr="2026-09-10"
+          onSelect={vi.fn()}
+          emptyMessage="vacío"
+        />
+      </MotionProvider>,
+    );
+    expect(rows()[0].textContent).not.toMatch(/Hace|En \d|Hoy|Mañana/);
   });
 
   it("reports the ISO date of the picked row", () => {
@@ -190,6 +243,14 @@ describe("CalendarView host", () => {
     expect(rows()).toHaveLength(3);
     expect(screen.queryByText("Varios servicios")).toBeNull();
     expect(screen.queryByText("Mié")).toBeNull();
+  });
+
+  it("renders the first paint at rest — no `appear` above the fold (M0b, ADR-0031)", () => {
+    // `Presence.test.tsx`'s own precedent for `appear={false}`: the crossfade
+    // exists for MODE SWITCHES only, so the panel that mounts on first render
+    // must not carry the enter animation's opacity: 0.
+    mountHost();
+    expect(["", "1"]).toContain(screen.getByTestId("mode-panel").style.opacity);
   });
 
   it("switches to Mes: the month grid and its legend, and no agenda rows", () => {

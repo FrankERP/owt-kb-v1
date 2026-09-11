@@ -50,22 +50,24 @@ const SCHEDULE_QUERY = `{
   }
 }`;
 
-async function getScheduleData(viewMonth: string | null) {
-  let today: string;
+async function getScheduleData(viewMonth: string | null, today: string) {
+  let fetchFrom: string;
   let limit: string;
   let weekStart: string;
 
   if (viewMonth) {
     // Browse mode: a WINDOW_MONTHS window starting at the selected month
     // (day 1 of the anchor → last day of the final month), incl. the current
-    // month, so already-past services this month are reachable.
+    // month, so already-past services this month are reachable. `today` (the
+    // real CDMX today) plays no part in this boundary — it only marks the
+    // strip/agenda's "today" and gates the countdown pill.
     const { from, to } = windowBounds(viewMonth, WINDOW_MONTHS);
-    today = from;
+    fetchFrom = from;
     limit = to;
     weekStart = from;
   } else {
     // Default mode: rolling today → +95 days (unchanged).
-    today = localToday();
+    fetchFrom = today;
     const [y, m, d] = today.split("-").map(Number);
     limit = new Date(Date.UTC(y, m - 1, d + 95)).toISOString().slice(0, 10);
     const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
@@ -82,7 +84,7 @@ async function getScheduleData(viewMonth: string | null) {
     sunSetlists: Setlist[];
     satSetlists: Setlist[];
     specials: SpecialRole[];
-  }>(SCHEDULE_QUERY, { today, limit, weekStart });
+  }>(SCHEDULE_QUERY, { today: fetchFrom, limit, weekStart });
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -94,7 +96,13 @@ export default async function SchedulePage({
 }) {
   await requireWorshipPage("/schedule");
   const viewMonth = parseMonthParam((await searchParams).m);
-  const { sundays, saturdays, sunSetlists, satSetlists, specials } = await getScheduleData(viewMonth);
+  // ONE `today`: computed here, once, and threaded both into the fetch (which
+  // uses it only in the default rolling view — a browsed month's boundary is
+  // the window, not `today`) and into `CalendarView` as `todayStr`, so the
+  // strip's marker and the agenda's countdowns can never read a different
+  // "now" than the data they describe.
+  const today = localToday();
+  const { sundays, saturdays, sunSetlists, satSetlists, specials } = await getScheduleData(viewMonth, today);
 
   // Fail closed on an ambiguous weekend target. A duplicate canonical role or
   // setlist for the same week yields NO entry for that week rather than a
@@ -163,10 +171,11 @@ export default async function SchedulePage({
       <Navbar title="Calendario" tags schedule />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
         {/* No page heading: `ScheduleHeader`'s month IS the route's heading (R2
-            Task 4). `todayStr` is the server's CDMX today — the same boundary the
-            fetch above used — so the strip's marker and the agenda's countdowns
-            can never disagree with the data they describe. */}
-        <CalendarView activeDays={activeDays} viewMonth={viewMonth} todayStr={localToday()} />
+            Task 4). `todayStr` is the same `today` the fetch above computed —
+            in browse mode the fetch's own boundary is the WINDOW, not `today`,
+            so here `todayStr` only marks today on the strip and gates the
+            countdown pill. */}
+        <CalendarView activeDays={activeDays} viewMonth={viewMonth} todayStr={today} />
       </div>
     </div>
   );
