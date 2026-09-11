@@ -94,6 +94,22 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   member opening `/me` on the Saturday or Sunday they are living through still sees that row first
   rather than the one after it. `weekendLabel` renders one line — «12 – 13 sep», or «31 oct – 1 nov»
   when the two days cross a month.
+- **`seatLabel(doc)`**, **`nextSeatLine(assignments)`** ([myWeek.ts](../app/utils/myWeek.ts)) —
+  the one line `/me`'s header leads with (R3). `seatLabel` is the page's old `myRoleLabel`
+  (Lead · instrument · FOH: role · BGV · Coro, always in that order), now shared with the
+  `.ics` event body so the two can no longer name a seat differently. `nextSeatLine` reduces
+  to the EARLIEST `dateKey`, not `[0]` — the header is the page's one claim about what is
+  next, so it re-derives rather than trusting the caller's sort. Both are neutral (no
+  imports) because `app/(client)/me/page.tsx` is a Server Component and calls them directly
+  (ADR-0028); `MeHeader` ("use client") only renders the result.
+- **`MEMBER_TYPES`**, **`MEMBER_TYPE_LABEL`** ([memberTypes.ts](../app/utils/memberTypes.ts))
+  — "Tipo" (`memberType`), the ONLY worship eligibility axis. Mirrors
+  `sanity/schemas/worshipTeam.ts`'s `memberType.options.list` exactly, pinned by
+  `memberTypes.test.ts`, which reads the schema source and checks both against it. This
+  used to be three independent copies — `MeHeader`'s chip labels, `/admin`'s abbreviated
+  table labels, and the admin PATCH route's write allowlist — with nothing to stop them
+  drifting apart; `/admin` still keeps its own `TYPE_ABBR` (dense abbreviations for a
+  table row, not a second source of the values or the full-word labels).
 
 ### Library (R1)
 - **`libraryIndex.ts`** ([libraryIndex.ts](../app/utils/libraryIndex.ts)) — pure `/biblioteca`
@@ -292,7 +308,13 @@ state a save actually persists against the last saved one.
   `themePref` from `ThemeBootstrap`'s context, never to `resolvedTheme` (which is `"dark"` for
   an explicit-Dark member and an unset one alike). **PATCHes first and paints only on
   `res.ok`** — an optimistic paint whose write failed would strand the member in a theme they
-  never persisted, with no later load able to correct it. Hidden while impersonating.
+  never persisted, with no later load able to correct it. Hidden while impersonating (returns
+  `null`). **`bare` (R3)** drops the rounded border/background but KEEPS its own `p-5`
+  padding, unlike `SettingsCard`'s other two subsections (which wrap themselves): the control
+  owns its own padding precisely because it can return `null`, so `SettingsCard` never wraps
+  it in a `div` that would leave an empty box inside the card's `divide-y` sections while
+  impersonating. `id="tema"` still renders either way, so `ThemeAnnouncement`'s `#tema`
+  anchor lands on something.
 
 **Two PWA remnants, recorded together.** `appleWebApp.statusBarStyle` stays
 `black-translucent`: it is what makes the WebView extend under the iOS status bar, and every
@@ -367,7 +389,9 @@ Legend: **[C]** client, **[S]** server.
 ### Members / profile / navigation
 | Component | Purpose |
 |-----------|---------|
-| `ProfilePanel` [C] | Member self-profile (alias, photo, password, notif prefs); focus-trapped. |
+| `MeHeader` [C] | **`/me`'s identity header (R3)** — IS the page's heading, replacing the two `h2`s ("Mis próximos servicios" / "Próximos servicios"). Avatar/initials, name, alias, Tipo chips (`MEMBER_TYPE_LABEL`, worship-gated — a kids-only member gets none), «Editar perfil» (`Button variant="ghost" href="#ajustes"`), and ONE line in priority order: the next worship service (`nextSeatLine`/`seatLabel`, `NumberRoll` countdown), else the next Kids Sunday, else — worship members only — «Sin servicios asignados próximamente». Receives everything as plain data (`next`, `kidsNext`, `inWorship`) because the page is a Server Component (ADR-0028). |
+| `SettingsCard` [S] | **`/me`'s one Ajustes card (R3)** — `section#ajustes`, `divide-y` — replaces three separate framed cards with `ThemeControl bare`, `TextSizeControl bare` and, when the profile read succeeded, `ProfilePanel … bare`. NEUTRAL (no hooks, no `"use client"`) so this Server Component renders its client children as JSX rather than calling them (ADR-0028); `member` is nullable on purpose — a failed profile read still shows Tema and Tamaño de texto (device-local), just without the Perfil subsection. |
+| `ProfilePanel` [C] | Member self-profile (alias, photo, password, notif prefs); focus-trapped. `bare` (R3) drops its own card border/background/padding when `SettingsCard` already owns that chrome. |
 | `ImpersonationBanner` [C] | Banner + "stop impersonating" when `session.user.isImpersonating`. |
 | `ActivityPing` [C] | "Last seen" ping, ≤ once / 30 min. |
 | `Navbar` [S] | Top navbar shell; deliberately **non-async** (session resolved client-side) so pages stay ISR-renderable. |
@@ -378,7 +402,7 @@ Legend: **[C]** client, **[S]** server.
 | `CmsNavbar` [S], `icons.tsx` [S] | Studio navbar / SVG icons. (`Header` [S], the old page-header component with a `/tag` link, was deleted in R1 — zero importers since `Navbar` replaced it.) |
 | `SignOutButton` [C] | Sign out. Clears the theme mirror first — see `themePref.ts`. (`ThemeSwitch` was deleted in `33c6e15`; the theme picker is now `ui/ThemeControl.tsx` at `/me`.) |
 | `NativeAuthBootstrap` [C] | Native cold-start silent Google re-auth. |
-| `TextScaleBootstrap` [C] / `TextSizeControl` [C] | Apply stored text scale / segmented size control. |
+| `TextScaleBootstrap` [C] / `TextSizeControl` [C] | Apply stored text scale / segmented size control. `TextSizeControl`'s `bare` (R3) drops its own card border/padding for `SettingsCard`. |
 
 ### Motion primitives (`app/components/ui/`, see [MOTION.md](MOTION.md))
 | Component | Purpose |

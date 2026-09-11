@@ -256,9 +256,18 @@ conditional — directly or inside a wrapper component (a local `Modal`, a
 dialog element with a literal `open` gets no enter/exit either way;
 `cueDialogMount.test.ts` is the guard), `Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never
 an inline class string), `Presence` (every animated conditional), `Skeleton`/
-`SkeletonGroup` (every loading placeholder), `revealProps` (route reveal). Motion
-tokens are `--motion-*` / `--ease-*`; `motion` is importable only under
-`app/components/ui/**` — see `docs/MOTION.md` and ADR-0031.
+`SkeletonGroup` (every loading placeholder), `revealProps` (route reveal),
+`useAvailability` (`app/components/availability/useAvailability.ts` — the ONLY
+client-side availability writer; `MyAvailabilityPanel` calls it once and hands the
+state down to `WeekendList` and `AvailabilityGrid`, which only render — two hook
+calls would be two revisions racing into the same document), `nextWeekends`/
+`weekendLabel` (`app/utils/weekends.ts` — the ten weekend rows `WeekendList`
+offers; CDMX-pinned, never a bare `new Date(iso)`), `MEMBER_TYPE_LABEL`
+(`app/utils/memberTypes.ts` — the ONLY Tipo display map, mirrors the
+`worshipTeam` schema; `/admin`'s `TYPE_ABBR` is that table's own abbreviations,
+not a second source). Motion tokens are `--motion-*` / `--ease-*`; `motion` is
+importable only under `app/components/ui/**` — see `docs/MOTION.md` and
+ADR-0031.
 
 ## Colour tokens
 Colour lives in **67 base roles + 30 composed tokens** (`app/brand.css` `:root`,

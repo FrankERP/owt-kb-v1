@@ -46,7 +46,7 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | `/schedule` | `(client)/schedule/page.tsx` | S | Worship | ISR 60s | Upcoming services. Agenda (one row per service) is the default view, `Mes` the month grid; `?m=YYYY-MM` browses one month per header-arrow press, still fetching a `WINDOW_MONTHS`-wide window (default: rolling today → +95 days). |
 | `/biblioteca` | `(client)/biblioteca/page.tsx` | S | Worship | ISR 60s fetch, dynamic by `searchParams` | The song library (R1): one fetch (catalogue + tags + authors), A–Z index with a search console, letter rail and a filter drawer (Tipo, tema, artista, tonalidad). `?q=`/`?tag=`/`?author=` seed initial state; the index mirrors its own state back into the URL without a round-trip. |
 | `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song detail: lyrics/chords, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
-| `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi perfil": upcoming assignments, proposal CTAs, availability, profile settings. |
+| `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi semana" (R3): the identity header (next service + seat + countdown, or the next Kids Sunday), upcoming assignments and proposal CTAs, availability as weekends, and one Ajustes card. |
 | `/me/propose/[roleId]` | `(client)/me/propose/[roleId]/page.tsx` | S | **Lead-only** | dynamic (`revalidate=0`) | Setlist proposal editor for a service the user Leads. |
 | `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Admin dashboard shell; data fetched client-side from `/api/admin/*`. `?tab=` opens a specific tab, filtered by role. |
 | `/auth/signin` | `(client)/auth/signin/page.tsx` | C | Public | — | Google SSO (web + native) + email/password. |
@@ -117,7 +117,9 @@ token) for private/fresh data.
   countdown line), `DayCard` (the next service, `hero`, no `isNext` — the header already
   carries the countdown), `DayCardDisclosure` (every other service, collapsed),
   `AddToCalendarButton`, `availability/MyAvailabilityPanel` (the weekend list, with the
-  month `AvailabilityGrid` behind «Ver calendario»), `ProfilePanel`, `TextSizeControl`.
+  month `AvailabilityGrid` behind «Ver calendario»), `SettingsCard` (one card holding
+  `ThemeControl`, `TextSizeControl` and `ProfilePanel` `bare` — no longer three
+  separate cards).
 - **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
 - **`/posts/[slug]`** — `Navbar`, `SectionNav`, `ChordChart`, `SongAudioSection`,
   `EditSongButton`, `PortableText`.

@@ -1232,3 +1232,132 @@ strip's dot to share today's slot (one dot, positive wins, the pulse stays today
 strip cell announce «te toca». Precondition now on the record: the «Tú» signal matches by
 display name (`alias || member_name`), so that name must be unique team-wide. Carried to R7:
 pull-to-refresh, long-press.
+
+# Part XII — R3 (2026-09-11)
+
+Branch `claude/motion-r3-me`. Four implementation tasks plus this documentation task:
+the availability save machinery as a hook, the weekend list with the grid behind a
+disclosure, the identity header and services column, and one Ajustes card.
+
+**Shipped (§12.4 in full).** `app/components/availability/useAvailability.ts` — the
+revision-guarded PATCH, the one-time sibling rebase, the held conflict, the dirty
+fingerprint and the `beforeunload` guard, moved verbatim out of the grid component so a
+second surface could read and write the same `unavailableDates` without a second
+revision racing the first. `app/utils/weekends.ts` — neutral: `nextWeekends(todayIso,
+count)`, `weekendLabel(weekend)`. `app/components/availability/WeekendList.tsx` — the
+next ten weekends as `SÁB`/`DOM` pill pairs, the twelve-month grid moved to
+`app/components/availability/AvailabilityGrid.tsx` behind «Ver calendario»
+(`Collapse`). `app/components/availability/MyAvailabilityPanel.tsx` — the host, calling
+`useAvailability` once and owning the shared «Repetir…» recurring panel and the one
+`NotePopover` both surfaces open. `app/utils/myWeek.ts` — neutral: `seatLabel(doc)`,
+`nextSeatLine(assignments)`. `app/components/MeHeader.tsx` — the identity header:
+avatar, name, alias, worship-gated Tipo chips, and the one line («Te toca el domingo 13
+· Lead» with a `NumberRoll` countdown, or the next Kids Sunday, or the worship empty
+state). `app/utils/memberTypes.ts` — `MEMBER_TYPES`/`MEMBER_TYPE_LABEL`, mirroring the
+`worshipTeam` schema, pinned by a parity test. `app/components/SettingsCard.tsx` — one
+`section#ajustes` holding `ThemeControl`, `TextSizeControl` and `ProfilePanel`, each
+`bare`. `app/(client)/me/page.tsx` — reordered: `ThemeAnnouncement` → `MeHeader` →
+services (hero + collapsed `DayCardDisclosure` rows) → Kids → `MyAvailabilityPanel` →
+`SettingsCard`; both retired `h2`s ("Mis próximos servicios" / "Próximos servicios")
+are gone, the header is the page's heading.
+
+**Rulings.**
+- **Weekend toggles are pill `Button`s with `aria-pressed`, not a `SegmentedControl`.**
+  A `SegmentedControl` is a one-of-N choice with a sliding thumb; a weekend's two days
+  are two INDEPENDENT booleans — a member can be unavailable Saturday, Sunday, both or
+  neither — which is exactly the shape `aria-pressed` toggles cover and a radiogroup
+  does not. `Button` gained a `tone` prop (`accent` default, `availability`) in fix
+  round 1 once the pill's own pressed colours measured 3.67:1 in light, below the 4.5
+  floor; the `availability` tone's `soft` text clears 5.17:1 light / 9.16:1 dark.
+- **The grid stays, for edge cases, behind a disclosure.** The weekend list answers "can
+  you serve this weekend"; a Tuesday rehearsal or a two-week trip needs a date the list
+  cannot express, so the twelve-month grid remains, unchanged in behaviour, opened by
+  «Ver calendario» rather than being the default — same shape as R2's Mes-behind-Agenda
+  ruling in Part XI.
+- **The recurring panel is shared**, not duplicated. It moved from the grid up to
+  `MyAvailabilityPanel`, the same host that owns the one `useAvailability` call, so
+  «Marcar»/«Quitar serie» write against the state both `WeekendList` and the grid render
+  rather than a copy either view could drift from.
+- **"Guardado" is a toast, not an inline flash.** The old flash was a transient `saved`
+  boolean that was also `false` while the save was in flight — reading it as "success"
+  conflated a transition with a result. `useAvailability` gained an `onSaved` callback
+  fired only on an actual 200, and the panel raises a `useToast` toast from it, which
+  survives the surrounding list re-rendering (an inline flash pinned to a row does not,
+  once the toggle it was next to has already been redrawn by the save).
+- **The header replaces the two `h2`s.** «Mis próximos servicios» and «Próximos
+  servicios» named what the member was looking at; `MeHeader`'s one line says what they
+  have to DO, and it IS the page's heading — no ARIA landmark stands in for either
+  retired heading, because the header already carries that role. An `sr-only` "Después"
+  heading precedes the collapsed rows, for a screen reader crossing from the hero into
+  the rest of the run sheet.
+- **`NextServiceHero` is deleted.** Its only job — wrapping `DayCard` with a countdown —
+  moved into `MeHeader` (the countdown) and a direct `<DayCard {...} hero />` (the card),
+  once the header owned the one countdown the page needs. Passing `isNext` to that hero
+  card as well would have put two countdowns for the same date on one page.
+- **Tipo chips are gated on worship membership**, the same gate as the empty state — a
+  member's `memberType` is the worship eligibility axis (CLAUDE.md), so handing it to
+  `MeHeader` for a kids-only volunteer would print worship copy on a page a kids-only
+  member is otherwise never shown any of.
+- **`memberTypes.ts` holds neutral, full-word labels** — "Tipo" used to have three
+  independent copies (the header's chip text, `/admin`'s abbreviated table labels, and
+  the admin PATCH route's write allowlist) with nothing to stop them drifting apart.
+  `/admin` keeps its own `TYPE_ABBR` deliberately: a dense table needs "Líder Dom", not
+  "Líder Domingo", and that is an abbreviation of the canonical label, not a second
+  source of it.
+- **Dual-ministry precedence: worship wins, Kids is the fallback.** A member in both
+  ministries with nothing of their own assigned in worship but a Kids Sunday coming up
+  sees the Kids line — the header's one line names the NEAREST thing of any ministry,
+  not "worship first, unconditionally." A worship assignment, when one exists, still
+  wins over a nearer Kids Sunday, because the page's other worship surfaces (the hero,
+  the proposal CTAs) are already keyed to that same assignment and a header naming a
+  different service would point at content the rest of the page does not show.
+- **`ThemeAnnouncement` dismiss is a `Presence` exit, no `appear`.** `show` starts
+  `false` and flips in a mount effect, so the instance is already mounted (at rest) by
+  the time it becomes visible, and the ordinary `show → true` enter runs without
+  `appear` — passing `appear` here would both violate the M0b above-the-fold rule and be
+  redundant, since nothing needs to animate in on top of the already-running mount enter.
+- **Past days are disabled, not pressable; every toggle clears 44 px.** A member cannot
+  "mark" a weekend that already happened, so a past day renders `disabled` rather than
+  as a togglable pill; the `SÁB`/`DOM` pills and the «Razón» ghost sit at `size="lg"` for
+  the touch target, and the pressed pill's text is `text-availability-soft`, not
+  `-strong`, to hold contrast in light.
+- **`SettingsCard`'s impersonation ruling.** `ThemeControl` returns `null` while
+  impersonating; `SettingsCard` does not wrap it in a padding `div` the way it wraps
+  `TextSizeControl`, because a wrapped `null` still reserves the padding and leaves an
+  empty box in the card's `divide-y` sections. `ThemeControl`'s own `bare` mode keeps its
+  `p-5` padding rather than shedding it, so it owns the space it needs and nothing more
+  when it renders, and nothing at all when it doesn't.
+
+**Deviations from the plan, accepted.**
+- **The host renamed to `MyAvailabilityPanel`**, not the plan's `Availability` — caught
+  in fix round 1, once the plan's name turned out to collide with the unrelated admin
+  `AvailabilityPanel`.
+- **The grid moved file** from `app/components/AvailabilityCalendar.tsx` to
+  `app/components/availability/AvailabilityGrid.tsx`, beside the rest of `/me`'s
+  availability surfaces rather than staying at the top level — a fix-round tidy, not a
+  behaviour change; its two existing conflict/popover-position tests re-pointed at the
+  new host and pass unchanged.
+- **`app/utils/memberTypes.ts` was not in the plan.** It came out of a fix round once
+  `MeHeader`'s Tipo chips needed a label source and the admin PATCH route's write
+  allowlist and `/admin`'s abbreviated table turned out to already be two independent
+  copies of the same six values — a third copy for the chips would have made it three.
+- **`NextServiceHero` is deleted**, not reused as the plan's architecture line assumed.
+  The plan's own text still lists it as a reused component; the header absorbing the
+  countdown made the wrapper's only remaining job — forwarding props to `DayCard` —
+  redundant.
+
+**Open notes for Frank's look.**
+- `NotePopover` positions against its anchor's `getBoundingClientRect()`, which does not
+  account for the mobile tab bar's `--bottom-nav-h` reservation — a «Razón» button near
+  the bottom of the weekend list could open a popover that sits partly under the bar on
+  a phone. Not caught by any test, since `bottomNavOffsetSync.test.ts` only enumerates
+  fixed-bottom elements and the popover is positioned, not fixed.
+- `MeHeader`'s «Editar perfil» is `href="#ajustes"`, the same hash-anchor pattern
+  `ThemeAnnouncement` already uses for `#tema` — the scroll itself is untested in an
+  actual browser (jsdom does not implement scroll-into-view for hash navigation), so
+  Frank's look should confirm the jump lands on `SettingsCard`, not merely that the
+  anchor exists in the DOM.
+
+**Bundle:** measured at release.
+
+**Release:** pending.
