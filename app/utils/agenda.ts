@@ -24,6 +24,28 @@ const voices = (e: ActiveDay) => [
   ...(e.chorus ?? []).map((m) => m.alias || m.member_name),
 ];
 
+/** The display name used in role cards is alias || name (`DayCard`'s own rule) — the
+ *  ONE reader of `session.user`, so the card and the agenda can never disagree on who
+ *  "you" is. */
+export function myNameFromSession(user?: { alias?: string | null; name?: string | null }): string {
+  return (user?.alias?.trim() || user?.name || "").toLowerCase();
+}
+
+/** The seat labels where `myName` (already lowercased/trimmed) is seated, in DayCard's
+ *  own order and casing: Lead, BGVs, Coro, then each instrument, then each FOH seat. An
+ *  empty `myName` (signed out, or no alias/name) seats nobody. */
+export function mySeats(e: ActiveDay, myName: string): string[] {
+  if (!myName) return [];
+  const seated = (name?: string) => !!name && name.toLowerCase().trim() === myName;
+  const seats: string[] = [];
+  if ((e.leads ?? []).some(seated)) seats.push("Lead");
+  if ((e.bgvs ?? []).some((m) => seated(m.alias || m.member_name))) seats.push("BGVs");
+  if ((e.chorus ?? []).some((m) => seated(m.alias || m.member_name))) seats.push("Coro");
+  for (const s of e.instruments ?? []) if (seated(s.person)) seats.push(s.label);
+  for (const s of e.fohTeam ?? []) if (seated(s.person)) seats.push(s.label);
+  return seats;
+}
+
 /** Conflicts = people seated twice within ONE section (voces / instrumentos / foh). */
 export function serviceConflicts(e: ActiveDay): number {
   const instr = (e.instruments ?? []).filter((s) => s.person).map((s) => s.person);
@@ -64,7 +86,7 @@ export function agendaRows(activeDays: Record<string, ActiveDay[]>): AgendaRow[]
   });
 }
 
-export type StripDay = { date: string; num: number; dow: string; tone: Tone | null; today: boolean; multiple: boolean };
+export type StripDay = { date: string; num: number; dow: string; tone: Tone | null; today: boolean; multiple: boolean; mine: boolean };
 const DOW = ["D", "L", "M", "X", "J", "V", "S"]; // getUTCDay order, Spanish initials
 
 /** Add n days (may be negative) to a "YYYY-MM-DD". UTC arithmetic on a date-only
@@ -82,26 +104,28 @@ export function mondayOf(iso: string): string {
   return addDays(iso, dow === 0 ? -6 : 1 - dow);
 }
 
-function stripDay(date: string, activeDays: Record<string, ActiveDay[]>, todayStr: string): StripDay {
+function stripDay(date: string, activeDays: Record<string, ActiveDay[]>, todayStr: string, myName: string): StripDay {
   const [y, m, d] = date.split("-").map(Number);
   const entries = activeDays[date] ?? [];
   const tones = entries.map(serviceTone);
   const tone: Tone | null = tones.includes("special") ? "special" : tones.includes("sat") ? "sat" : tones.includes("sun") ? "sun" : null;
-  return { date, num: d, dow: DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], tone, today: date === todayStr, multiple: entries.length > 1 };
+  const mine = !!myName && entries.some((e) => mySeats(e, myName).length > 0);
+  return { date, num: d, dow: DOW[new Date(Date.UTC(y, m - 1, d)).getUTCDay()], tone, today: date === todayStr, multiple: entries.length > 1, mine };
 }
 
-export function monthStripDays(ym: string, activeDays: Record<string, ActiveDay[]>, todayStr: string): StripDay[] {
+export function monthStripDays(ym: string, activeDays: Record<string, ActiveDay[]>, todayStr: string, myName = ""): StripDay[] {
   const [y, m] = ym.split("-").map(Number);
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  return Array.from({ length: last }, (_, i) => stripDay(`${ym}-${String(i + 1).padStart(2, "0")}`, activeDays, todayStr));
+  return Array.from({ length: last }, (_, i) => stripDay(`${ym}-${String(i + 1).padStart(2, "0")}`, activeDays, todayStr, myName));
 }
 
 /** The seven days of one week, Monday first. `mondayIso` is normalized through
  *  `mondayOf`, so any day of the week resolves to the same seven cells — the strip's
  *  own paging arithmetic can never drift off a Monday. Lit tones come from
  *  `activeDays` whatever month the day falls in: the week is the unit here, not the
- *  month. */
-export function weekStripDays(mondayIso: string, activeDays: Record<string, ActiveDay[]>, todayStr: string): StripDay[] {
+ *  month. `myName` (already lowercased/trimmed, from `myNameFromSession`) flags the
+ *  `mine` dot; omitted, no day is ever `mine`. */
+export function weekStripDays(mondayIso: string, activeDays: Record<string, ActiveDay[]>, todayStr: string, myName = ""): StripDay[] {
   const start = mondayOf(mondayIso);
-  return Array.from({ length: 7 }, (_, i) => stripDay(addDays(start, i), activeDays, todayStr));
+  return Array.from({ length: 7 }, (_, i) => stripDay(addDays(start, i), activeDays, todayStr, myName));
 }

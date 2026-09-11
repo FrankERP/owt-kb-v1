@@ -158,6 +158,17 @@ describe("DayStrip", () => {
     // 1 Oct 2026 is a Thursday, so its week starts Monday 28 September.
     expect(cells().map((b) => b.textContent)).toEqual(["L28", "M29", "X30", "J1", "V2", "S3", "D4"]);
   });
+
+  it("F1 — dots the day the signed-in member is seated in, and only that one", () => {
+    mountStrip({ myName: "ana" }); // matches leads: ["Ana"] on 2026-09-13
+    expect(cell("13 de septiembre").querySelector(".bg-positive-fg")).not.toBeNull();
+    expect(cell("12 de septiembre").querySelector(".bg-positive-fg")).toBeNull();
+  });
+
+  it("dots no day when `myName` is omitted", () => {
+    mountStrip();
+    expect(document.querySelector(".bg-positive-fg")).toBeNull();
+  });
 });
 
 describe("brand.css — .brand-today-pulse", () => {

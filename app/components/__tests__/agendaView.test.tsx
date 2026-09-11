@@ -24,8 +24,11 @@ import type { SetlistSong } from "@/app/utils/interface";
 installMotionTestEnv();
 
 vi.mock("@/app/context/PlayerContext", () => ({ usePlayer: () => ({ openSheet: vi.fn() }) }));
+// Mutable so a test can play a different signed-in member — the F1 «Tú» pill
+// needs one seated in a row and one who isn't, same pattern as `bottomNav.test.tsx`.
+let mockUser: { name?: string; alias?: string; role?: string } = { name: "Ana", alias: "Ani", role: "member" };
 vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: { user: { name: "Ana", alias: "Ani", role: "member" } } }),
+  useSession: () => ({ data: { user: mockUser } }),
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("../ui/SwipeStrip", () => ({
@@ -55,6 +58,7 @@ beforeAll(async () => { await import("@/app/components/ui/motionFeatures"); });
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  mockUser = { name: "Ana", alias: "Ani", role: "member" };
 });
 
 const song = (id: string): SetlistSong =>
@@ -192,6 +196,24 @@ describe("AgendaView", () => {
     cleanup();
     mountAgenda({ "2026-09-13": [sunday("2026-09-13")] });
     expect(within(rows()[0]).queryByText("Domingo")).toBeNull();
+  });
+
+  it("F1 — pills «Tú · Keys» for the row where the signed-in member is seated", () => {
+    mockUser = { alias: "Sofi" };
+    mountAgenda({
+      "2026-09-13": [sunday("2026-09-13", { leads: ["Ana"], instruments: [{ label: "Keys", person: "Sofi" }] })],
+    });
+    expect(within(rows()[0]).getByText("Tú · Keys")).toBeTruthy();
+    expect(rows()[0].getAttribute("aria-label")).toMatch(/, te toca: Keys$/);
+  });
+
+  it("gives no pill to a member not seated in the row", () => {
+    mockUser = { alias: "Beto" };
+    mountAgenda({
+      "2026-09-13": [sunday("2026-09-13", { leads: ["Ana"], instruments: [{ label: "Keys", person: "Sofi" }] })],
+    });
+    expect(within(rows()[0]).queryByText(/^Tú/)).toBeNull();
+    expect(rows()[0].getAttribute("aria-label")).not.toMatch(/te toca/);
   });
 
   it("gates the countdown on todayStr, not the client's clock, even mid-window", () => {

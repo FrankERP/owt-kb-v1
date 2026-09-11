@@ -54,6 +54,7 @@ export default function DayStrip({
   todayStr,
   onPick,
   onWeekChange,
+  myName = "",
 }: {
   anchorMonth: string;
   activeDays: Record<string, ActiveDay[]>;
@@ -61,6 +62,9 @@ export default function DayStrip({
   onPick: (date: string) => void;
   /** The Monday of the week now on screen, after a swipe. Task 4 uses it to scroll the agenda. */
   onWeekChange?: (mondayIso: string) => void;
+  /** `myNameFromSession(session?.user)`, derived once by `CalendarView` — flags the
+   *  «you» dot (F1). Omitted, no day is ever `mine`. */
+  myName?: string;
 }) {
   // Which week the strip opens on: today's when the anchor month contains today,
   // else the week of that month's first day. From there it is the swipe's state —
@@ -68,7 +72,7 @@ export default function DayStrip({
   const [weekStart, setWeekStart] = useState(() =>
     mondayOf(todayStr.startsWith(`${anchorMonth}-`) ? todayStr : `${anchorMonth}-01`),
   );
-  const days = weekStripDays(weekStart, activeDays, todayStr);
+  const days = weekStripDays(weekStart, activeDays, todayStr, myName);
 
   const handleSwipe = (direction: -1 | 1) => {
     const next = addDays(weekStart, 7 * direction);
@@ -105,6 +109,10 @@ export default function DayStrip({
             >
               <span className="font-label text-[10px] uppercase tracking-widest opacity-70">{d.dow}</span>
               <span className="font-display text-sm font-bold">{d.num}</span>
+              {/* F1 — a second, positive dot under the number: the same «you»
+                  signal DayCard gives a seat, so a lit day the member is seated
+                  in reads as theirs before the sheet opens. */}
+              {d.mine && <span aria-hidden className="h-1 w-1 rounded-full bg-positive-fg" />}
               {d.today && (
                 // Centred with a negative margin, NOT `-translate-x-1/2`: the pulse
                 // animates `transform`, which would override a translate utility for

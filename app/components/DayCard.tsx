@@ -12,7 +12,7 @@ import CueDialog from "./ui/CueDialog";
 import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
-import { findDuplicates } from "@/app/utils/agenda";
+import { findDuplicates, myNameFromSession } from "@/app/utils/agenda";
 import NumberRoll from "./ui/NumberRoll";
 
 export interface DayCardProps {
@@ -79,8 +79,9 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
   const hasRole     = !!(leads?.length || instruments?.length || fohTeam?.length || bgvs?.length || chorus?.length);
   const hasSetlist  = !!(setlist?.songs?.length);
 
-  // The display name used in role cards is alias || member_name — match both
-  const myName = (session?.user?.alias?.trim() || session?.user?.name || "").toLowerCase();
+  // The display name used in role cards is alias || member_name — the same helper
+  // the agenda reads (`myNameFromSession`), so the two surfaces can never disagree.
+  const myName = myNameFromSession(session?.user);
 
   // Detect the same person assigned twice within one section (voces / instrumentos / foh).
   // A person may appear once in voces AND once in instrumentos — that's fine.
