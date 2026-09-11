@@ -52,3 +52,12 @@ export type VariantName = keyof typeof VARIANTS;
  * A flick still closes it through the velocity arm.
  */
 export const SHEET_DISMISS = { distance: 150, velocity: 0.5 } as const; // px, px/ms
+
+/**
+ * `SwipeStrip` paging (R2, month strip): past this travel OR faster than this,
+ * a horizontal drag pages instead of springing back. Units differ from
+ * `SHEET_DISMISS` on purpose — `SwipeStrip` reads motion's own `PanInfo`, whose
+ * `velocity` is already px/s (`SHEET_DISMISS` reads a hand-rolled pointer
+ * timer in px/ms), so 500 here is the same "quick flick" feel as 0.5 above.
+ */
+export const SWIPE = { distance: 64, velocity: 500 } as const; // px, px/s
