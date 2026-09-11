@@ -3,7 +3,7 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
 import CalendarView, { ActiveDay } from "@/app/components/CalendarView";
 import { SundayRole, SaturdayRole, Setlist, SpecialRole, SetlistSong } from "@/app/utils/interface";
-import { parseMonthParam, monthRangeLabel, windowBounds, WINDOW_MONTHS } from "@/app/utils/scheduleMonths";
+import { parseMonthParam, windowBounds, WINDOW_MONTHS } from "@/app/utils/scheduleMonths";
 import { indexUniqueByKey, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 
@@ -162,10 +162,11 @@ export default async function SchedulePage({
     <div>
       <Navbar title="Calendario" tags schedule />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
-        <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-10">
-          {viewMonth ? monthRangeLabel(viewMonth, WINDOW_MONTHS) : "Próximos fines de semana"}
-        </h2>
-        <CalendarView activeDays={activeDays} viewMonth={viewMonth} />
+        {/* No page heading: `ScheduleHeader`'s month IS the route's heading (R2
+            Task 4). `todayStr` is the server's CDMX today — the same boundary the
+            fetch above used — so the strip's marker and the agenda's countdowns
+            can never disagree with the data they describe. */}
+        <CalendarView activeDays={activeDays} viewMonth={viewMonth} todayStr={localToday()} />
       </div>
     </div>
   );

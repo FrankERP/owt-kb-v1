@@ -1,15 +1,42 @@
 "use client";
-
-import { useState, useCallback } from "react";
+// app/components/CalendarView.tsx
+// The /schedule host (spec §12.3, R2 Task 4). Composition only:
+//
+//   ScheduleHeader (month, arrows, jump-to-month)
+//   DayStrip       (the week, swipeable — pages weeks client-side)
+//   Agenda | Mes   (SegmentedControl, agenda by default)
+//   AgendaView  ·or·  the month grid + legend
+//   CueDialog      (the day sheet, unchanged)
+//
+// The «Lista» mode and its `getWeekends` weekend-grouping are GONE: the agenda
+// answers the same question (which days carry a service, who leads, how many songs)
+// in one line per service instead of a stack of full cards, and the sheet still
+// carries the full `DayCard` for whichever day is tapped.
+//
+// The mode crossfade is the RECORDED FALLBACK, not the plan's stacked panels: a
+// plain, enter-only fade. `Presence` is KEYED ON THE MODE, so switching unmounts
+// one panel and mounts the other (no exit — the whole AnimatePresence goes with it)
+// and the new panel fades in with `appear`. The stacked variant needs both panels
+// absolutely positioned inside a host of known height, and neither panel here has
+// one: the agenda is as tall as the fetch window has services and the grid is three
+// months (one column on a phone), so any `min-h` big enough to hold the taller one
+// would leave the shorter one sitting in a screenful of blank space. One fade, no
+// height jump, nothing overlapping.
+//
+// `DayStrip` is keyed on `anchorMonth` because it seeds its own week state from the
+// props once: a month change is a route push that re-renders this component with new
+// props but does NOT remount it, and without the key the strip would keep showing
+// the week it was on.
+import { useCallback, useRef, useState } from "react";
 import { DayCard } from "./DayCard";
 import { Setlist } from "../utils/interface";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { MONTH_NAMES_ES, addMonths, monthRangeLabel, scheduleHref, windowMonths, WINDOW_MONTHS } from "../utils/scheduleMonths";
+import { MONTH_NAMES_ES, monthRangeLabel, WINDOW_MONTHS, windowMonths } from "../utils/scheduleMonths";
+import AgendaView from "./AgendaView";
+import DayStrip from "./DayStrip";
+import ScheduleHeader from "./ScheduleHeader";
 import CueDialog from "./ui/CueDialog";
-import DateField from "./ui/DateField";
+import Presence from "./ui/Presence";
 import SegmentedControl from "./ui/SegmentedControl";
-import Button from "./ui/Button";
 import { themeColour } from "@/app/utils/themeColour";
 
 export type ActiveDay = {
@@ -27,6 +54,8 @@ export type ActiveDay = {
 interface Props {
   activeDays: Record<string, ActiveDay[]>;
   viewMonth?: string | null; // "YYYY-MM" in browse mode; undefined/null = default rolling view
+  /** "Today" as the SERVER computed it (CDMX) — the same boundary the fetch used. */
+  todayStr: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -44,58 +73,15 @@ function firstDayOffset(year: number, month: number) {
   return (dow + 6) % 7; // Monday-first
 }
 
-type WeekGroup = {
-  sunDate?: string;
-  sun?: ActiveDay;
-  sat?: ActiveDay;
-  satDate?: string;
-  specials: Array<{ dateStr: string; data: ActiveDay }>;
-};
-
-function getWeekends(activeDays: Record<string, ActiveDay[]>) {
-  const map = new Map<string, WeekGroup>();
-
-  const getOrCreate = (key: string): WeekGroup =>
-    map.get(key) ?? { specials: [] };
-
-  Object.entries(activeDays).forEach(([dateStr, entries]) => {
-    const [y, m, d] = dateStr.split("-").map(Number);
-    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0=Sun
-    const daysToSun = dow === 0 ? 0 : 7 - dow;
-    const sunKey = new Date(Date.UTC(y, m - 1, d + daysToSun)).toISOString().slice(0, 10);
-
-    entries.forEach((data) => {
-      const prev = getOrCreate(sunKey);
-      if (data.roleId) {
-        prev.specials.push({ dateStr, data });
-        map.set(sunKey, prev);
-      } else if (data.day === "Domingo") {
-        map.set(sunKey, { ...prev, sun: data, sunDate: dateStr });
-      } else if (data.day === "Sábado") {
-        map.set(sunKey, { ...prev, sat: data, satDate: dateStr });
-      } else {
-        prev.specials.push({ dateStr, data });
-        map.set(sunKey, prev);
-      }
-    });
-  });
-
-  return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-}
-
 // ─── Root component ───────────────────────────────────────────────────────────
 
-export default function CalendarView({ activeDays, viewMonth }: Props) {
-  // Pin "today" to Mexico City time so the highlight matches the server-fetched
-  // schedule data (which is keyed to that timezone); otherwise a user in another
-  // timezone near midnight sees the marker on the wrong day.
-  const todayStr = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
-  const [view, setView] = useState<"calendar" | "list">("calendar");
+export default function CalendarView({ activeDays, viewMonth, todayStr }: Props) {
+  const [mode, setMode] = useState<"agenda" | "month">("agenda");
   const [selected, setSelected] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const dismiss = useCallback(() => setSelected(null), []);
 
-  const router = useRouter();
   const anchorMonth = viewMonth ?? todayStr.slice(0, 7);
 
   const [todayYear, todayMonth] = todayStr.split("-").map(Number);
@@ -115,192 +101,95 @@ export default function CalendarView({ activeDays, viewMonth }: Props) {
     : "No hay servicios próximos.";
 
   const selectedEntries = selected ? (activeDays[selected] ?? []) : [];
-  const weekends = getWeekends(activeDays);
+
+  // A swipe on the strip brings the agenda along: the first row on or after the new
+  // week's Monday scrolls into view. `block: "nearest"` so a row already on screen
+  // does not move, and the call is optional — jsdom has no `scrollIntoView` and the
+  // gesture must never depend on it (nor on the Mes mode, where no row is rendered).
+  const handleWeekChange = useCallback((mondayIso: string) => {
+    const rows = panelRef.current?.querySelectorAll<HTMLElement>("[data-date]");
+    const target = Array.from(rows ?? []).find((row) => (row.dataset.date ?? "") >= mondayIso);
+    target?.scrollIntoView?.({ block: "nearest" });
+  }, []);
 
   return (
     <>
-      {/* Month navigation. On a phone the range label ("Septiembre – Noviembre
-          2026") plus two worded buttons overflowed a 390px row, so the words
-          show from sm: up and the chevrons carry the buttons below that (the
-          aria-labels name them either way). */}
-      <div className="flex items-center justify-center gap-2 sm:gap-4 mb-4">
-        <Button
-          href={scheduleHref(addMonths(anchorMonth, -WINDOW_MONTHS))}
-          aria-label="Meses anteriores"
-          variant="secondary"
-          className="shrink-0"
-        >
-          <span aria-hidden>‹</span>
-          <span className="hidden sm:inline">Anterior</span>
-        </Button>
-        <div className="min-w-0 flex-1 text-center sm:flex-none sm:min-w-[13rem]">
-          <p className="font-display text-sm sm:text-base font-bold uppercase">{monthRangeLabel(anchorMonth, WINDOW_MONTHS)}</p>
-          {!viewMonth && (
-            <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Próximos</p>
-          )}
-        </div>
-        <Button
-          href={scheduleHref(addMonths(anchorMonth, WINDOW_MONTHS))}
-          aria-label="Meses siguientes"
-          variant="secondary"
-          className="shrink-0"
-        >
-          <span className="hidden sm:inline">Siguiente</span>
-          <span aria-hidden>›</span>
-        </Button>
-      </div>
-      <div className="flex items-center justify-center gap-3 mb-8">
-        <DateField
-          kind="month"
-          aria-label="Ir al mes"
-          value={anchorMonth}
-          onChange={(e) => { if (e.target.value) router.push(scheduleHref(e.target.value)); }}
-          onStep={(d) => {
-            const [y, mo] = anchorMonth.split("-").map(Number);
-            const next = new Date(y, mo - 1 + d, 1);
-            router.push(scheduleHref(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`));
-          }}
-        />
-        {viewMonth && (
-          <Link
-            href="/schedule"
-            className="px-4 py-1.5 rounded-lg border border-accent/40 font-label text-xs uppercase tracking-widest text-accent hover:bg-accent-deep/40 transition-colors"
-          >
-            Hoy
-          </Link>
-        )}
-      </div>
+      <ScheduleHeader anchorMonth={anchorMonth} viewMonth={viewMonth} />
 
-      {/* View toggle */}
-      <div className="flex justify-center mb-8">
+      <DayStrip
+        key={anchorMonth}
+        anchorMonth={anchorMonth}
+        activeDays={activeDays}
+        todayStr={todayStr}
+        onPick={setSelected}
+        onWeekChange={handleWeekChange}
+      />
+
+      <div className="mb-6 flex justify-center">
         <SegmentedControl
           label="Vista"
           tone="filled"
-          value={view}
-          onChange={setView}
+          value={mode}
+          onChange={setMode}
           options={[
-            { value: "calendar", label: "Calendario" },
-            { value: "list", label: "Lista" },
+            { value: "agenda", label: "Agenda" },
+            { value: "month", label: "Mes" },
           ]}
         />
       </div>
 
-      {/* Legend */}
-      {!isEmpty && view === "calendar" && (
-        <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mb-8">
-          {([
-            ["--accent-rgb", "Domingo"],
-            ["--warning-fg-rgb", "Sábado"],
-            ["--info-fg-rgb", "Especial"],
-          ] as const).map(([color, label]) => (
-            <span key={label} className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-[4px] border" style={{ borderColor: themeColour(color, 0.502), background: themeColour(color, 0.2) }} />
-              <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</span>
-            </span>
-          ))}
-          <span className="flex items-center gap-1.5">
-            <span className="relative w-3 h-3 rounded-[4px] border border-accent/50 bg-accent-deep/50">
-              <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-accent" />
-            </span>
-            <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">Varios servicios</span>
-          </span>
-        </div>
-      )}
-
-      {/* Empty state (owns both grid and list) */}
-      {isEmpty && (
-        <p className="text-center font-label text-sm text-mono-400 py-20">{emptyMessage}</p>
-      )}
-
-      {/* Calendar view */}
-      {!isEmpty && view === "calendar" && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
-          {months.map(({ year, month }) => (
-            <MonthGrid
-              key={`${year}-${month}`}
-              year={year}
-              month={month}
+      <div ref={panelRef}>
+        <Presence key={mode} show appear>
+          {mode === "agenda" ? (
+            <AgendaView
               activeDays={activeDays}
               todayStr={todayStr}
-              selected={selected}
               onSelect={setSelected}
+              emptyMessage={emptyMessage}
             />
-          ))}
-        </div>
-      )}
-
-      {/* List view */}
-      {!isEmpty && view === "list" && (
-        <div className="space-y-14">
-          {weekends.map(([sundayKey, { sat, satDate, sun, sunDate, specials }]) => {
-            const label = new Date(sundayKey + "T12:00:00").toLocaleDateString("es-ES", {
-              month: "long", day: "numeric",
-            });
-            const monthYear = new Date(sundayKey + "T12:00:00").toLocaleDateString("es-ES", {
-              year: "numeric", month: "long",
-            });
-            const totalCards = specials.length + (sat ? 1 : 0) + (sun ? 1 : 0);
-
-            return (
-              <div key={sundayKey}>
-                <div className="flex items-center gap-4 mb-6">
-                  <div className="flex-1 h-px bg-surface-accent-faint" />
-                  <div className="text-center shrink-0">
-                    <p className="font-display text-base md:text-lg font-bold uppercase">{label}</p>
-                    <p className="font-label text-[11px] md:text-xs uppercase tracking-widest text-mono-500">{monthYear}</p>
-                  </div>
-                  <div className="flex-1 h-px bg-surface-accent-faint" />
-                </div>
-
-                <div className={`grid grid-cols-1 gap-6 ${totalCards > 1 ? "md:grid-cols-2" : "max-w-xl mx-auto"}`}>
-                  {specials.map(({ dateStr, data }) => (
-                    <DayCard
-                      key={dateStr + data.day}
-                      day={data.day}
-                      date={dateStr}
-                      setlist={data.setlist}
-                      leads={data.leads}
-                      instruments={data.instruments}
-                      fohTeam={data.fohTeam}
-                      bgvs={data.bgvs}
-                      chorus={data.chorus}
-                      roleId={data.roleId}
-                    />
-                  ))}
-                  {sat && satDate && (
-                    <DayCard
-                      day="Sábado"
-                      date={satDate}
-                      setlist={sat.setlist}
-                      leads={sat.leads}
-                      instruments={sat.instruments}
-                      fohTeam={sat.fohTeam}
-                      bgvs={sat.bgvs}
-                      chorus={sat.chorus}
-                      roleId={sat.roleId}
-                    />
-                  )}
-                  {sun && sunDate && (
-                    <DayCard
-                      day="Domingo"
-                      date={sunDate}
-                      setlist={sun.setlist}
-                      leads={sun.leads}
-                      instruments={sun.instruments}
-                      fohTeam={sun.fohTeam}
-                      bgvs={sun.bgvs}
-                      chorus={sun.chorus}
-                      roleId={sun.roleId}
-                    />
-                  )}
-                </div>
+          ) : isEmpty ? (
+            <p className="py-20 text-center font-label text-sm text-mono-400">{emptyMessage}</p>
+          ) : (
+            <>
+              {/* Legend — only the grid needs one; the agenda names the day in words. */}
+              <div className="mb-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+                {([
+                  ["--accent-rgb", "Domingo"],
+                  ["--warning-fg-rgb", "Sábado"],
+                  ["--info-fg-rgb", "Especial"],
+                ] as const).map(([color, label]) => (
+                  <span key={label} className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-[4px] border" style={{ borderColor: themeColour(color, 0.502), background: themeColour(color, 0.2) }} />
+                    <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</span>
+                  </span>
+                ))}
+                <span className="flex items-center gap-1.5">
+                  <span className="relative w-3 h-3 rounded-[4px] border border-accent/50 bg-accent-deep/50">
+                    <span className="absolute top-0 right-0 w-1.5 h-1.5 rounded-full bg-accent" />
+                  </span>
+                  <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">Varios servicios</span>
+                </span>
               </div>
-            );
-          })}
-        </div>
-      )}
 
-      {/* Modal (calendar view) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                {months.map(({ year, month }) => (
+                  <MonthGrid
+                    key={`${year}-${month}`}
+                    year={year}
+                    month={month}
+                    activeDays={activeDays}
+                    todayStr={todayStr}
+                    selected={selected}
+                    onSelect={setSelected}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </Presence>
+      </div>
+
+      {/* Modal (both modes) */}
       {selectedEntries.length > 0 && (
         <CueDialog open title="Detalle del día" label="Detalle del día" mode="sheet" size="md" onDismiss={dismiss}>
           <div className="max-h-[78svh] space-y-4 overflow-y-auto p-4 scrollbar-hide">
@@ -374,18 +263,21 @@ function MonthGrid({
           // Pick display color: if mixed, purple takes priority to signal "multiple"
           const colorKey = hasSpecial ? "special" : hasSat ? "sat" : "sun";
 
-          let cls = "aspect-square flex flex-col items-center justify-center rounded-lg text-sm font-label transition-colors relative ";
+          // §5.2 press: the cell scales under a finger. `transform` joins the
+          // transition list so it eases back out, and stays OFF the disabled cells —
+          // a day with no service is not an affordance.
+          let cls = "aspect-square flex flex-col items-center justify-center rounded-lg text-sm font-label transition-[color,background-color,border-color,transform] duration-fast ease-out-brand relative ";
 
           if (isSelected) {
-            cls += colorKey === "sat" ? "bg-warning-fg text-surface-base font-bold"
-                 : colorKey === "sun" ? "bg-accent text-surface-base font-bold"
-                 : "bg-info-fg text-surface-base font-bold";
+            cls += colorKey === "sat" ? "bg-warning-fg text-surface-base font-bold active:scale-[0.94]"
+                 : colorKey === "sun" ? "bg-accent text-surface-base font-bold active:scale-[0.94]"
+                 : "bg-info-fg text-surface-base font-bold active:scale-[0.94]";
           } else if (hasActive) {
             cls += colorKey === "sat"
-              ? "bg-warning-surface/50 border border-warning-fg/50 text-warning-fg cursor-pointer hover:bg-warning-surface/80 hover:border-warning-fg"
+              ? "bg-warning-surface/50 border border-warning-fg/50 text-warning-fg cursor-pointer active:scale-[0.94] hover:bg-warning-surface/80 hover:border-warning-fg"
               : colorKey === "special"
-              ? "bg-info-surface/50 border border-info-fg/50 text-info-fg cursor-pointer hover:bg-info-surface/80 hover:border-info-fg"
-              : "bg-accent-deep/50 border border-accent/50 text-accent cursor-pointer hover:bg-accent-deep/80 hover:border-accent";
+              ? "bg-info-surface/50 border border-info-fg/50 text-info-fg cursor-pointer active:scale-[0.94] hover:bg-info-surface/80 hover:border-info-fg"
+              : "bg-accent-deep/50 border border-accent/50 text-accent cursor-pointer active:scale-[0.94] hover:bg-accent-deep/80 hover:border-accent";
           } else {
             cls += "text-mono-400 dark:text-mono-400 cursor-default";
           }

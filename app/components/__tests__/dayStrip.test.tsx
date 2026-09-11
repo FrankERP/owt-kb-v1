@@ -202,9 +202,21 @@ describe("ScheduleHeader", () => {
     expect(screen.queryByRole("link", { name: "Hoy" })).toBeNull();
   });
 
-  it("steps the route one month per stepper press", () => {
+  it("leaves the month field without steppers — the arrows are the one-month step", () => {
+    // R2 Task 4 ruling: `DateField`'s `onStep` pair would be a SECOND «Mes
+    // anterior»/«Mes siguiente» control with the same accessible names as the
+    // arrows above it. The field jumps to any month; it does not step.
     render(<ScheduleHeader anchorMonth="2026-09" viewMonth={null} />);
-    fireEvent.click(screen.getByRole("button", { name: "Mes siguiente" }));
-    expect(push).toHaveBeenCalledWith("/schedule?m=2026-10");
+    expect(screen.queryByRole("button", { name: "Mes siguiente" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mes anterior" })).toBeNull();
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it("sublabels the rolling view «Próximos», and never a browsed month", () => {
+    render(<ScheduleHeader anchorMonth="2026-09" viewMonth={null} />);
+    expect(screen.getByText("Próximos")).toBeTruthy();
+    cleanup();
+    render(<ScheduleHeader anchorMonth="2026-12" viewMonth="2026-12" />);
+    expect(screen.queryByText("Próximos")).toBeNull();
   });
 });
