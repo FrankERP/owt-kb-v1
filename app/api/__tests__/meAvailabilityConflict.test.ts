@@ -166,7 +166,7 @@ describe("/me renders the calendar with the revision it read", () => {
     expect(page).toMatch(/_id, _rev, member_name/);
   });
 
-  it("passes it to AvailabilityCalendar", () => {
+  it("passes it to MyAvailabilityPanel", () => {
     expect(page).toMatch(/initialRev=\{member\._rev\}/);
   });
 });

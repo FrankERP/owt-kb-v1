@@ -12,7 +12,7 @@ import ProfilePanel from "@/app/components/ProfilePanel";
 import TextSizeControl from "@/app/components/TextSizeControl";
 import ThemeControl from "@/app/components/ui/ThemeControl";
 import ThemeAnnouncement from "@/app/components/ui/ThemeAnnouncement";
-import AvailabilityPanel from "@/app/components/availability/AvailabilityPanel";
+import MyAvailabilityPanel from "@/app/components/availability/MyAvailabilityPanel";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
@@ -570,7 +570,7 @@ export default async function MePage() {
             null means the read did not find theirs. */}
         {member ? (
           <>
-            <AvailabilityPanel
+            <MyAvailabilityPanel
               initialRev={member._rev}
               initialDates={member.unavailableDates ?? []}
               initialNotes={member.unavailabilityNotes ?? []}

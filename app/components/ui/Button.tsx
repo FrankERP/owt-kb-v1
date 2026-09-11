@@ -17,6 +17,8 @@ import type { ComponentPropsWithoutRef, ReactNode, Ref } from "react";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "icon" | "pill";
 export type ButtonSize = "sm" | "md" | "lg";
+/** The pill's pressed colour — `accent` (the default) or the availability tone. */
+export type PillTone = "accent" | "availability";
 
 const BASE =
   "inline-flex items-center justify-center gap-2 select-none font-label uppercase tracking-widest " +
@@ -36,15 +38,26 @@ const VARIANT: Record<ButtonVariant, string> = {
   pill: "rounded-full border border-surface-accent-30 text-mono-500 hover:text-accent aria-pressed:border-accent aria-pressed:text-accent aria-pressed:bg-accent/10",
 };
 
+// The `availability` tone overrides the pill's own pressed triplet. Text is
+// `soft`, not `strong` — `strong` measures 3.67:1 on the pressed fill in light,
+// below the 4.5 floor; `soft` clears 5.17:1 light / 9.16:1 dark
+// (`app/utils/__tests__/lightContrast.test.ts` pins it).
+const PILL_TONE: Record<PillTone, string> = {
+  accent: "",
+  availability:
+    "aria-pressed:border-availability-strong aria-pressed:text-availability-soft aria-pressed:bg-availability-fg/20",
+};
+
 const SIZE: Record<ButtonSize, string> = {
   sm: "text-[11px] px-3 py-1",
   md: "text-xs px-4 py-2",
   lg: "text-xs px-4 min-h-[44px]",
 };
 
-export function buttonClass(variant: ButtonVariant, size: ButtonSize, extra = ""): string {
+export function buttonClass(variant: ButtonVariant, size: ButtonSize, extra = "", tone: PillTone = "accent"): string {
   const s = variant === "icon" ? (size === "lg" ? "min-h-[44px] min-w-[44px]" : "") : SIZE[size];
-  return `${BASE} ${VARIANT[variant]} ${s} ${extra}`.replace(/\s+/g, " ").trim();
+  const t = variant === "pill" ? PILL_TONE[tone] : "";
+  return `${BASE} ${VARIANT[variant]} ${t} ${s} ${extra}`.replace(/\s+/g, " ").trim();
 }
 
 type Common = {
@@ -53,6 +66,8 @@ type Common = {
   busy?: boolean;
   busyLabel?: string;
   active?: boolean;
+  /** The pill's pressed colour. Ignored on every other variant. */
+  tone?: PillTone;
   className?: string;
   children: ReactNode;
 };
@@ -72,12 +87,12 @@ export type ButtonProps = ButtonOnlyProps | LinkOnlyProps;
 // React 19 delivers `ref` as an ordinary prop to function components — no
 // `forwardRef` wrapper needed to accept and pass it on.
 export default function Button(props: ButtonProps) {
-  const { variant = "secondary", size = "md", busy = false, busyLabel, active, className = "", children } = props;
-  const cls = buttonClass(variant, size, className);
+  const { variant = "secondary", size = "md", busy = false, busyLabel, active, tone = "accent", className = "", children } = props;
+  const cls = buttonClass(variant, size, className, tone);
   const label = busy && busyLabel ? busyLabel : children;
 
   if ("href" in props && typeof props.href === "string") {
-    const { href, variant: _v, size: _s, active: _a, className: _c, children: _ch, ref, ...rest } =
+    const { href, variant: _v, size: _s, active: _a, tone: _t, className: _c, children: _ch, ref, ...rest } =
       props as LinkOnlyProps;
     return (
       <Link href={href} className={cls} ref={ref} {...rest}>
@@ -92,6 +107,7 @@ export default function Button(props: ButtonProps) {
     busy: _b,
     busyLabel: _bl,
     active: _a,
+    tone: _t,
     className: _c,
     children: _ch,
     ref,

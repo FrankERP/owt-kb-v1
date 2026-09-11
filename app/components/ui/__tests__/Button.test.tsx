@@ -59,6 +59,20 @@ describe("Button", () => {
     expect(screen.getByRole("button").getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("pill tone=\"availability\" carries the availability pressed triplet, text soft not strong", () => {
+    render(<Button variant="pill" tone="availability" active>SÁB</Button>);
+    const cls = screen.getByRole("button").className;
+    expect(cls).toContain("aria-pressed:border-availability-strong");
+    expect(cls).toContain("aria-pressed:text-availability-soft");
+    expect(cls).toContain("aria-pressed:bg-availability-fg/20");
+    expect(cls).not.toContain("aria-pressed:text-availability-strong");
+  });
+
+  it("pill defaults to the accent tone, unaffected by tone on any other variant", () => {
+    expect(buttonClass("pill", "md")).toContain("aria-pressed:text-accent");
+    expect(buttonClass("secondary", "md", "", "availability")).not.toContain("availability");
+  });
+
   it("busy is a type error on the link branch", () => {
     // @ts-expect-error busy is not representable on a link
     render(<Button href="/" busy>x</Button>);

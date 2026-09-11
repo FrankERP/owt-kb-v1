@@ -2976,6 +2976,30 @@
       "reason": null
     },
     {
+      "file": "app/components/availability/AvailabilityGrid.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 196,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/availability/AvailabilityGrid.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 204,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/components/availability/NotePopover.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -2996,30 +3020,6 @@
       "utility": null,
       "carrier": "stroke",
       "line": 178,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/AvailabilityCalendar.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 196,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/AvailabilityCalendar.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 204,
       "disposition": "B",
       "reason": null
     },

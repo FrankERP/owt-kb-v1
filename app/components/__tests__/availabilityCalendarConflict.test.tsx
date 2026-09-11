@@ -18,7 +18,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMotionTestEnv } from "../ui/__tests__/motionTestSetup";
 import { MotionProvider } from "../ui/MotionProvider";
-import AvailabilityPanel from "../availability/AvailabilityPanel";
+import MyAvailabilityPanel from "../availability/MyAvailabilityPanel";
 
 // R3 re-point: the panel is the host that calls `useAvailability` and owns the
 // save, so the contract this file guards is now asserted where it lives. The grid
@@ -82,7 +82,7 @@ afterEach(() => {
 function renderCalendar() {
   const r = render(
     <MotionProvider>
-      <AvailabilityPanel initialRev="rev-1" initialDates={["2026-09-20"]} initialNotes={[]} />
+      <MyAvailabilityPanel initialRev="rev-1" initialDates={["2026-09-20"]} initialNotes={[]} />
     </MotionProvider>,
   );
   // The grid lives behind a disclosure now; open it before reaching for a day.
@@ -90,7 +90,7 @@ function renderCalendar() {
   return r;
 }
 
-describe("AvailabilityPanel — saving against a revision", () => {
+describe("MyAvailabilityPanel — saving against a revision", () => {
   it("sends the revision it was rendered at, and the one the reply reports next time", async () => {
     renderCalendar();
     fetchMock.mockResolvedValueOnce(

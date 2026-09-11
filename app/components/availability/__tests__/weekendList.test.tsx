@@ -2,7 +2,7 @@
 //
 // «Mi semana»'s availability surface: ten weekend rows, two taps, one save.
 //
-// Rendered through the HOST (`AvailabilityPanel`), never the list alone, because
+// Rendered through the HOST (`MyAvailabilityPanel`), never the list alone, because
 // the list is only half the contract — the toggles, the save button, the toast and
 // the grid disclosure all read one `useAvailability`, and a test that mounted
 // `WeekendList` with a hand-made state object would prove nothing about the thing
@@ -16,7 +16,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
-import AvailabilityPanel from "../AvailabilityPanel";
+import MyAvailabilityPanel from "../MyAvailabilityPanel";
 
 const toastMock = vi.fn();
 vi.mock("@/app/components/ui/Toast", () => ({
@@ -54,7 +54,7 @@ afterEach(() => {
 function renderPanel(serviceDates: string[] = []) {
   return render(
     <MotionProvider>
-      <AvailabilityPanel
+      <MyAvailabilityPanel
         initialRev="rev-1"
         initialDates={[]}
         initialNotes={[]}
@@ -119,11 +119,34 @@ describe("WeekendList", () => {
     expect(saveButton().disabled).toBe(true);
   });
 
+  it("on a Sunday, the first row's SÁB is a past day — disabled, and unclickable", () => {
+    // The weekend still counts (its Sunday is today), but the Saturday half of
+    // it already happened.
+    vi.setSystemTime(new Date("2026-09-13T12:00:00-06:00"));
+    renderPanel();
+    const first = rows()[0] as HTMLElement;
+    const saturday = within(first).getByRole("button", { name: /sábado, 12/ });
+    expect(saturday.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(saturday);
+    expect(saturday.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByText("Cambios sin guardar")).toBeNull();
+  });
+
   it("says which day has a service, and only that day", () => {
     renderPanel(["2026-09-13"]);
     const first = rows()[0] as HTMLElement;
     expect(within(first).getByRole("button", { name: /domingo, 13/ }).getAttribute("aria-label")).toContain("hay servicio");
     expect(within(first).getByRole("button", { name: /sábado, 12/ }).getAttribute("aria-label")).not.toContain("hay servicio");
+  });
+
+  it("renders the service dot marker itself on a service day, not just its label", () => {
+    renderPanel(["2026-09-13"]);
+    const first = rows()[0] as HTMLElement;
+    const sunday = within(first).getByRole("button", { name: /domingo, 13/ });
+    const saturday = within(first).getByRole("button", { name: /sábado, 12/ });
+    expect(sunday.querySelector('span[aria-hidden="true"]')).not.toBeNull();
+    expect(saturday.querySelector('span[aria-hidden="true"]')).toBeNull();
   });
 
   it("offers «Razón» for a marked day, and it opens the note field for THAT day", () => {

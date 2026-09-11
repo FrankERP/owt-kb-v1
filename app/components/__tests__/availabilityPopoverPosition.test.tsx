@@ -20,7 +20,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMotionTestEnv } from "../ui/__tests__/motionTestSetup";
 import { MotionProvider } from "../ui/MotionProvider";
-import AvailabilityPanel from "../availability/AvailabilityPanel";
+import MyAvailabilityPanel from "../availability/MyAvailabilityPanel";
 import { popoverPosition } from "../availability/NotePopover";
 
 // R3: the popover is shared by both availability surfaces, so it lives in
@@ -66,7 +66,7 @@ describe("popoverPosition", () => {
   });
 });
 
-describe("AvailabilityPanel — the popover survives a scroll", () => {
+describe("MyAvailabilityPanel — the popover survives a scroll", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-09-15T12:00:00-06:00"));
@@ -81,7 +81,7 @@ describe("AvailabilityPanel — the popover survives a scroll", () => {
   function openNoteOn(month: string, day: number) {
     render(
       <MotionProvider>
-        <AvailabilityPanel initialRev="rev-1" initialDates={[]} initialNotes={[]} />
+        <MyAvailabilityPanel initialRev="rev-1" initialDates={[]} initialNotes={[]} />
       </MotionProvider>,
     );
     fireEvent.click(screen.getByRole("button", { name: "Ver calendario" }));

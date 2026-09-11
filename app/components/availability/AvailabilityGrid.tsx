@@ -7,11 +7,11 @@
 //
 // It owns nothing but paging: every edit, the dirty fingerprint and the
 // revision-guarded save live in `useAvailability`, which the HOST
-// (`availability/AvailabilityPanel`) calls once for both surfaces, and the note
-// popover is the host's single `NotePopover`.
+// (`availability/MyAvailabilityPanel`) calls once for both surfaces, and the
+// note popover is the host's single `NotePopover`.
 //
-// The file name stays `AvailabilityCalendar.tsx` on purpose (the R3 plan's
-// ruling): two committed test files import it from here.
+// Moved here from `app/components/AvailabilityCalendar.tsx` (fix round 1) —
+// the grid lives beside the rest of `/me`'s availability surfaces now.
 
 import { useState } from "react";
 import type { Availability } from "@/app/components/availability/useAvailability";

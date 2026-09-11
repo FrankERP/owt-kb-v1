@@ -8,10 +8,11 @@
 // host's single `useAvailability`; the grid behind «Ver calendario» stays for a
 // Tuesday rehearsal or a two-week trip.
 //
-// PRESSED MEANS «no puedo». The pill's own `aria-pressed` accent is overridden to
-// the `availability` tone through `className`: those utilities are generated after
-// `accent`'s (their keys sit later in `tailwind.config.ts`), so the later rule
-// wins — this is the one ordering fact the two class sets depend on.
+// PRESSED MEANS «no puedo», in the pill's `availability` tone (Button primitive) —
+// text `soft`, not `strong`, which is what clears 4.5:1 in light (fix round 1).
+//
+// A day already past is not a toggle: it renders `disabled` rather than pressable,
+// so the member cannot "mark" a weekend that already happened.
 
 import Button from "@/app/components/ui/Button";
 import { haptic } from "@/app/utils/haptics";
@@ -21,9 +22,6 @@ import type { Availability } from "./useAvailability";
 
 /** Ten weeks ahead: past the month a setlist is planned in, short enough to scan. */
 const ROWS = 10;
-
-const PRESSED_TONE =
-  "relative aria-pressed:border-availability-strong aria-pressed:text-availability-strong aria-pressed:bg-availability-fg/20";
 
 export default function WeekendList({
   state,
@@ -48,12 +46,15 @@ export default function WeekendList({
     const marked = dates.has(iso);
     const hasService = serviceSet.has(iso);
     const note = notes.get(iso)?.trim();
+    const isPast = iso < todayIso;
     return (
       <div className="flex flex-col items-center gap-1">
         <Button
           variant="pill"
-          size="sm"
+          size="lg"
+          tone="availability"
           active={marked}
+          disabled={isPast}
           onClick={() => {
             // Un-marking drops the note with the date, so a popover still pinned
             // to it would be editing a reason that can never be saved.
@@ -62,7 +63,7 @@ export default function WeekendList({
             void haptic("selection");
           }}
           aria-label={`${fmtDayLabel(iso)}${hasService ? ", hay servicio" : ""}${marked ? ", no puedo" : ""}`}
-          className={PRESSED_TONE}
+          className="relative"
         >
           {short}
           {hasService && (
@@ -75,7 +76,7 @@ export default function WeekendList({
         {marked && (
           <Button
             variant="ghost"
-            size="sm"
+            size="lg"
             onClick={e => openNote(iso, e.currentTarget)}
             aria-label={`Razón para ${fmtDayLabel(iso)}${note ? ", con nota" : ""}`}
           >

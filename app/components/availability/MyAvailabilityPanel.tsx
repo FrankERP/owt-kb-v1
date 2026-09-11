@@ -18,7 +18,7 @@
 // flag that is also false while saving.
 
 import { useRef, useState } from "react";
-import AvailabilityGrid from "@/app/components/AvailabilityCalendar";
+import AvailabilityGrid from "./AvailabilityGrid";
 import Button from "@/app/components/ui/Button";
 import Collapse from "@/app/components/ui/Collapse";
 import Select from "@/app/components/ui/Select";
@@ -37,7 +37,7 @@ interface Props {
 
 const WEEKDAYS = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
-export default function AvailabilityPanel({ initialRev, initialDates, serviceDates = [], initialNotes = [] }: Props) {
+export default function MyAvailabilityPanel({ initialRev, initialDates, serviceDates = [], initialNotes = [] }: Props) {
   const { toast } = useToast();
 
   const [popover, setPopover] = useState<NoteAnchor | null>(null);
@@ -66,6 +66,11 @@ export default function AvailabilityPanel({ initialRev, initialDates, serviceDat
   const closeNote = () => setPopover(null);
 
   function applySeries(add: boolean) {
+    // «Quitar serie» can drop the very date the note popover is pinned to — the
+    // last seam `onAdopt` doesn't cover, because this isn't a conflict, it's the
+    // member's own edit. Close it here, before the removal, rather than leaving
+    // it open on a date no longer marked.
+    if (!add) closeNote();
     applyRecurring(recurDow, recurInterval, add);
     setRecurOpen(false);
   }
