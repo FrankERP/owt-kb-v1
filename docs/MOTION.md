@@ -495,7 +495,7 @@ the impersonation banner, the audio transport, and the song sheet's head.
 - The **avatar notification badge** (`NavMenu`) now pops in with `<Presence
   show={notifCount > 0} appear variant="scale">` instead of a plain conditional
   `<span>`. **`NavMenu` is an ACCOUNT menu, all widths** (M1 follow-up F1):
-  `Mi perfil` (`/me`), `Tema` (`/me#tema`), a separator, `Cerrar sesión` — it no
+  `Mi perfil` (`/me/ajustes`), `Tema` (`/me/ajustes#tema`), a separator, `Cerrar sesión` — it no
   longer repeats Calendario, #Tags, Oasis Kids, Planear Kids or Admin, which
   already have a home in `NavLinks` (desktop) or `BottomNav`'s tabs/«Más» sheet
   (phone). The `showSchedule`/`showTags` props and their ministry/role

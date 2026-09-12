@@ -41,12 +41,12 @@ vi.mock("@/app/components/TextSizeControl", () => ({ default: () => <p>Tamaño d
 vi.mock("@/app/components/ProfilePanel", () => ({ default: () => <p>PERFIL</p> }));
 
 import AjustesPage from "../page";
+import { MEMBER_PROFILE_QUERY } from "../../queries";
 
 const session = { user: { role: "member", sanityId: "m1", email: "x@y.z", name: "Ana" } };
 
 const profile = {
   _id: "m1",
-  _rev: "rev-1",
   member_name: "Ana Torres",
   alias: "Ana",
   email: "ana@example.com",
@@ -113,5 +113,9 @@ describe("/me/ajustes", () => {
     // The calendar's fields belong to `/me/disponibilidad`.
     expect(query).not.toContain("unavailableDates");
     expect(query).not.toContain("unavailabilityNotes");
+  });
+
+  it("carries no revision: no profile write takes ifRevisionId", () => {
+    expect(MEMBER_PROFILE_QUERY).not.toContain("_rev");
   });
 });

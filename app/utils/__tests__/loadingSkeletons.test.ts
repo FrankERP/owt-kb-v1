@@ -11,6 +11,7 @@ const FILES = [
   "app/(client)/loading.tsx",
   "app/(client)/me/loading.tsx",
   "app/(client)/me/disponibilidad/loading.tsx",
+  "app/(client)/me/ajustes/loading.tsx",
   "app/(client)/schedule/loading.tsx",
   "app/(client)/posts/[slug]/loading.tsx",
   "app/(client)/biblioteca/loading.tsx",

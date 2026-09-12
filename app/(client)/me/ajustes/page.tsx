@@ -37,12 +37,6 @@ export default async function AjustesPage() {
   // non-optional there because every `teamMembers` document carries them.
   const member = await serverClient.fetch<{
     _id: string;
-    // `_rev` comes back with the shared projection and is NOT a save precondition
-    // here: `ProfilePanel` PATCHes its fields through `/api/me`, `/api/me/photo`,
-    // `/api/me/password` and `/api/me/notif-prefs`, none of which take an
-    // `ifRevisionId`. Do not start writing with it — the one write a revision
-    // guards is the availability calendar's, on `/me/disponibilidad`.
-    _rev: string;
     member_name: string;
     email: string;
     role: string;

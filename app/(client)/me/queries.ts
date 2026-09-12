@@ -71,7 +71,7 @@ export function horizon(): { today: string; limit: string } {
  * above, and Tipo is read by `/me` for the header chips.
  */
 export const MEMBER_PROFILE_QUERY = `*[_type == "teamMembers" && _id == $id][0] {
-      _id, _rev, member_name, alias, email, role, notifPrefs,
+      _id, member_name, alias, email, role, notifPrefs,
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
       "hasPassword": defined(passwordHash) && passwordHash != ""
     }`;
