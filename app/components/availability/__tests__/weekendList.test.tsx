@@ -127,6 +127,14 @@ describe("WeekendList", () => {
     expect(saveButton().disabled).toBe(true);
   });
 
+  it("on a Friday, the first row's VIE is today — enabled, not a past day", () => {
+    vi.setSystemTime(new Date("2026-09-11T12:00:00-06:00"));
+    renderPanel();
+    const first = rows()[0] as HTMLElement;
+    const friday = within(first).getByRole("button", { name: /viernes, 11/ });
+    expect(friday.hasAttribute("disabled")).toBe(false);
+  });
+
   it("on a Saturday, the first row's VIE is a past day — disabled, and unclickable", () => {
     // Friday already happened; the weekend itself still counts (its Sunday is ahead).
     vi.setSystemTime(new Date("2026-09-12T12:00:00-06:00"));

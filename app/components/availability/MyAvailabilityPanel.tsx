@@ -99,7 +99,8 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
     setRangeOpen(false);
   }
 
-  const canApplyRange = rangeStart !== "" && rangeEnd !== "" && rangeEnd >= rangeStart;
+  const canApplyRange =
+    rangeStart !== "" && rangeEnd !== "" && rangeEnd >= rangeStart && rangeEnd >= todayIso;
 
   return (
     <div className="space-y-4">

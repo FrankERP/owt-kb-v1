@@ -25,6 +25,8 @@ describe("nextWeekends", () => {
   });
 
   it("keeps THIS weekend while its Sunday is still ahead", () => {
+    // Friday: rehearsal day, the weekend's own Friday is today.
+    expect(nextWeekends("2026-09-11", 1)[0]).toEqual({ fri: "2026-09-11", sat: "2026-09-12", sun: "2026-09-13" });
     // Saturday: the weekend starts today.
     expect(nextWeekends("2026-09-12", 1)[0]).toEqual({ fri: "2026-09-11", sat: "2026-09-12", sun: "2026-09-13" });
     // Sunday: the weekend's Saturday is yesterday, and the row stays.

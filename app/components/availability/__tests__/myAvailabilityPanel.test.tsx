@@ -70,6 +70,24 @@ describe("MyAvailabilityPanel — Rango…", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("keeps «Marcar» disabled for an all-past range", () => {
+    renderPanel();
+
+    const toggle = screen.getByRole("button", { name: "Rango…" });
+    fireEvent.click(toggle);
+
+    const range = document.getElementById("availability-range")!;
+    const desde = within(range).getByLabelText("Desde") as HTMLInputElement;
+    const hasta = within(range).getByLabelText("Hasta") as HTMLInputElement;
+    const marcar = within(range).getByRole("button", { name: "Marcar" }) as HTMLButtonElement;
+
+    // "Today" is pinned to 2026-09-09; both ends of the range are before it.
+    fireEvent.change(desde, { target: { value: "2026-09-01" } });
+    fireEvent.change(hasta, { target: { value: "2026-09-05" } });
+
+    expect(marcar.disabled).toBe(true);
+  });
+
   it("opening «Rango…» closes an open «Repetir…» panel and vice versa", () => {
     renderPanel();
     const recur = screen.getByRole("button", { name: "Repetir…" });

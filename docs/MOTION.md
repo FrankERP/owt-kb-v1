@@ -772,9 +772,15 @@ the full ledger; the motion-relevant pieces:
   and a special service mid-week needs more than the ten weekend rows can express, so
   `useAvailability` gained `applyRange(startIso, endIso, add)` and `MyAvailabilityPanel`
   a «Rango…» `Collapse` beside «Repetir…» (two `DateField kind="date"` inputs, opening
-  one panel closes the other). Three `size="lg"` pills at 390 px still fit the row
-  without wrapping — each pill is ~56–64 px (`px-4` + `text-xs` glyphs + border) at
-  `gap-1.5`, so three plus gaps run ~185–210 px against a ~340–358 px content width once
-  the label column (`shrink`, ~70–90 px for «11 – 13 sep») and the row's own `gap-3` are
-  subtracted; no pill-size change was needed. Neither ask changed the grid, which stays
-  for a single weekday the range panel doesn't fit either.
+  one panel closes the other). Three `size="lg"` pills at 390 px do NOT always fit
+  beside the label on one line: the page's `px-6` leaves 342 px of content, and a
+  marked day's «Razón ✓» ghost (`size="lg"`, ~90 px) widens its column, so three
+  marked columns plus gaps run ~297 px — against a month-crossing label like
+  «30 oct – 1 nov» (~100 px), the row needs ~409 px, more than the 342 px available
+  (fix round 1, review). The `<li>` is `flex flex-wrap … justify-between`, the label
+  `whitespace-nowrap` (never `shrink`, which is the flex default and was a no-op),
+  and the pill cluster `ml-auto`: it right-aligns beside the label when there is
+  room and wraps onto its own line, still right-aligned, when there is not — the
+  cluster wraps under the label, never the label into word-per-line. No pill-size
+  change was needed. Neither ask changed the grid, which stays for a single weekday
+  the range panel doesn't fit either.
