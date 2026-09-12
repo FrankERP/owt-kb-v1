@@ -81,7 +81,7 @@ Every row verified against the tree at `ae792034`, which is unchanged in `gcf/` 
 
   The instrument half is not free, and an earlier draft of this spec left it out while
   claiming it was already handled. `fillInstruments` runs at **every** exit of `handleAuto`,
-  inside `applySpecialFill` (`MonthGenerator.tsx:2986-2988`), and it opens by calling
+  inside `applySpecialFill` (`MonthGenerator.tsx:2984-2986`), and it opens by calling
   `vacateAutoInstrumentCells` (`instrumentFill.ts:119`), which empties every weekend
   instrument cell whose `origin === "auto"` (`:85-90`). Only `origin: "manual"` picks survive
   it. So without this decision, pressing Auto twice with the switch on would leave the voices
@@ -221,18 +221,18 @@ three-pin action collapsed a whole month in review:
 
 The **soft** terms are deliberately left alone and keep seeing the totals: `ov_total`
 (`:777-781`) feeding `overall_spread` at `:949`, and `role_spread_vars` over
-`overall_role_vars` (`:812-843`) feeding the objective at `:956`. That is what makes the
-solver *compensate* — a person the admin pinned four times is already ahead, so the objective
-pushes the remaining seats toward everyone else. Subtracting in the soft terms as well would
-throw that compensation away, which is the opposite of what this feature wants.
+`overall_role_vars` (`:812-843`) feeding the objective at `:956`. Subtracting in the soft terms as well
+would leave the objective blind to the pins entirely; leaving them alone is what keeps the
+*preference* ordering aware of who is already ahead.
 
-**The compensation is bounded, and the ADR must say so.** The hard spreads now run over
+**But the soft preference does not win, and the ADR must say so.** The hard spreads now run over
 solver-chosen seats, so a pinned person looks to them as though they have served nothing and
 is pushed *up* toward parity on top of their pins. Measured in review: three pins on one
 member took her from five total services to six while the rest sat at four. That is the price
-of never failing the month, it is the right trade, and it is the opposite of what "the
-objective pushes seats toward everyone else" sounds like — so §12's ADR records it plainly
-rather than leaving it to be rediscovered as a bug.
+of never failing the month, it is the right trade, and it is the opposite of what a reader
+expects from "the soft terms still see the totals" — the hard spread overrides the soft
+preference every time — so §12's ADR records it plainly rather than leaving it to be
+rediscovered as a bug.
 
 Reproduced in review before the two per-role guards were named: pinning one person into
 `Sun.Lead` for three weeks drove every Stage B tier infeasible, `solve_schedule:1137` returned
@@ -249,6 +249,13 @@ client applied it. The fingerprint of that failure is a reported limit of `len(s
 and 26 pins all collapse `strict` to zero), including the Stage-A fairness-free fallback
 this paragraph exists to prevent, and it regresses shipped absence behaviour on every pinned
 run. §11 carries a guard that reaches that branch.
+
+**The `strict` collapse branch must exclude pinned-only people too.** `:1072-1074` rebuilds
+`strict` from `all_people` when it falls below two — and `all_people` now contains the
+pinned-only names this section removed from the fairness groups. A literal implementation
+would let a person the solver has no power over set `gmin`, on exactly the thin-roster months
+where the fallback fires. The rebuild is therefore over `all_people` minus the pinned-only
+set, and §11 asserts it on a month that reaches the branch.
 
 ### 5.2 The exemptions where a rule would contradict a pin
 
@@ -405,10 +412,14 @@ item so the admin sees what they are about to lose:
 The same menu appears in each column's header with the scope fixed to that service. Only the
 month-level items confirm, through `CueDialog`, naming the count, saying FOH is preserved,
 saying nothing is written until «Crear N borradores», and separately counting how many of
-the discarded seats were placed by hand — a figure that is **optimistic by design**: §5.3
-keeps a cell's `origin` when it holds any pinned occupant, so the solver's own picks inside a
-cell the admin started count as hand-placed. Over-reporting what the admin will lose is the
-safe direction for a confirmation dialog. A service-level clear is immediate; re-running Auto
+the discarded seats were placed by hand — a figure that is **approximate in both directions,
+and the dialog's wording must not promise otherwise**. It over-reports because §5.3 keeps a
+cell's `origin` when it holds any pinned occupant, so the solver's own picks inside a cell the
+admin started count as hand-placed. It also **under-reports**: `withAutoCell` stamps
+`origin: "auto"` on a cell a human partly filled (`localFill.ts:211-221`, and its own comment
+says so), so a special's Lead seat the admin seeded and the filler then topped up reads as
+zero hand-placed. The count is a hint about scale, not a guarantee, and the copy says
+«aproximadamente» rather than asserting a number. A service-level clear is immediate; re-running Auto
 is the undo.
 
 No item is called «Todo», because none of them clears everything: FOH always survives (E6).
@@ -420,9 +431,17 @@ grid while «Crear N borradores» still posted the people just removed. The same
 any `unfilled` marker on a cleared cell, which would otherwise outlive the seat it described —
 and that is **new behaviour in a shared handler**: `handleCellsChange` does not touch
 `unfilled` today, and every manual edit routes through it. Dropping a marker whose cell was
-just emptied is correct for every caller, not only for the clears, so it ships here rather
+just emptied is right for every caller, not only for the clears, so it ships here rather
 than in a separate delivery — but it is called out because the blast radius is wider than
 the feature that motivates it, and §11 covers the manual-edit path as well as the clear.
+
+**And it makes the displayed count fall as empty seats rise, which is intended.** `unfilled`
+is one entry per missing SLOT, so a Coro cell holding one of three carries two markers.
+Emptying that cell by hand drops both, and «Lugares sin cubrir (faltó gente)»
+(`PlannerGrid.tsx:2096`) counts down while three seats are now empty. That is correct for
+what the label says — those seats are empty because a human emptied them, not because
+nobody was available — but it looks like a bug to anyone reading the number alone, so §11
+asserts it deliberately rather than leaving it to be "fixed" later.
 
 **Skipped columns are pinned like any other.** Auto deliberately ignores `skippedColumnIds`
 (`MonthGenerator.tsx:2940-2945`); cells sitting on a skipped column are still occupied, so
@@ -470,7 +489,7 @@ about a solver that did not do what it was asked.
 
 **The refusal is an exit of `handleAuto` and obeys that function's contract.** Every exit
 calls `applySpecialFill` exactly once, which owns `setCells`/`setUnfilled`/`setDrafts` and
-runs the specials and instrument fillers (`MonthGenerator.tsx:2957-2994`). The refusal exit
+runs the specials and instrument fillers (`MonthGenerator.tsx:2954-2999`). The refusal exit
 does the same: the solver's voice roster is discarded, the local fillers still run, the error
 line carries the message. "Nothing is applied" means the voice roster, not the setters.
 
@@ -616,6 +635,12 @@ has watched it work. That is inherent to the existing architecture, not introduc
 what makes it safe is the guard §11 requires: a request with no `pinned` key must produce
 byte-identical output to today on a fixed seed. Until the app starts sending pins, the
 deployed change is inert for everyone.
+
+**Rollback is one-sided, and that is the point.** Reverting the app commit is sufficient: the
+app stops sending `pinned`, and by the byte-identity property the deployed solver then
+behaves exactly as it does today. The solver half needs no revert and must not be reverted in
+a hurry — a rollback of the app alone is complete, and rolling back the Cloud Function while
+a pinned app is still live would make §9's refusal fire on every Auto instead.
 
 ## 14. Out of scope
 
