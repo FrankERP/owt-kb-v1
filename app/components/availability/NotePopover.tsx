@@ -15,11 +15,10 @@
 import { useEffect, useRef } from "react";
 import { fmtDayLabel, rangeLabel } from "./dragSelect";
 
-// `fmtDayLabel` lives in `dragSelect.ts` now — that module needs it for
-// `rangeLabel` and this one imports `rangeLabel` back, so keeping the
-// definition here would make a cycle. Re-exported so existing importers of
-// `NotePopover` need no change.
-export { fmtDayLabel };
+// `fmtDayLabel` lives in `dragSelect.ts` — that module needs it for `rangeLabel`
+// and this one imports `rangeLabel` back, so keeping the definition here would
+// make a cycle. The re-export that existed for `WeekendList` went with it (F3):
+// import from `dragSelect.ts` directly.
 
 /** Height the popover is laid out against; it has no measured height until it exists. */
 const POPOVER_H = 160;

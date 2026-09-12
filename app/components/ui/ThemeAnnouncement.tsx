@@ -62,7 +62,10 @@ export default function ThemeAnnouncement() {
       <p className="font-body text-sm text-ink flex-1">
         <strong className="font-display font-bold">Ahora puedes elegir el tema.</strong>{" "}
         La app sigue el modo claro u oscuro de tu teléfono. ¿Prefieres uno fijo?{" "}
-        <a href="#tema" className="underline text-accent hover:no-underline">
+        {/* Cross-page since F3: ThemeControl lives on `/me/ajustes`, so a bare
+            `#tema` would land on nothing. The banner stays on `/me` — it is the
+            invitation, and the settings page is the destination. */}
+        <a href="/me/ajustes#tema" className="underline text-accent hover:no-underline">
           Elígelo aquí
         </a>
         .

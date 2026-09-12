@@ -97,13 +97,15 @@ describe("MeHeader", () => {
     expect(container.textContent).not.toContain("Te toca");
   });
 
-  it("serves the avatar unoptimized, and points «Editar perfil» at the Ajustes card", () => {
+  it("serves the avatar unoptimized, and carries no «Editar perfil» button", () => {
     freezeToday();
     const { container } = mount(<MeHeader name="Ana" photoUrl="https://example.test/ana.jpg" inWorship />);
     // `alt=""` on purpose — the name sits beside it, so the avatar is decorative,
     // which is why this queries the element rather than an image role.
     expect(container.querySelector("img")?.getAttribute("src")).toBe("https://example.test/ana.jpg");
-    expect(screen.getByRole("link", { name: "Editar perfil" }).getAttribute("href")).toBe("#ajustes");
+    // F3: settings are a page of their own (`/me/ajustes`), one tap away in the
+    // avatar menu, so the header no longer carries a second way in.
+    expect(screen.queryByRole("link", { name: "Editar perfil" })).toBeNull();
   });
 
   it("handles a null memberTypes (Sanity null for unset array) without throwing", () => {

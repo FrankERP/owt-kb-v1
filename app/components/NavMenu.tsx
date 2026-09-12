@@ -111,8 +111,10 @@ export default function NavMenu() {
           <span className="font-label text-xs uppercase tracking-widest text-mono-400">{firstName}</span>
         )}
       </MenuHeader>
-      <MenuItem href="/me">Mi perfil</MenuItem>
-      <MenuItem href="/me#tema">Tema</MenuItem>
+      {/* F3: both are `/me/ajustes` — the profile editor and Tema live there, and
+          this menu is the only way in since «Editar perfil» left `MeHeader`. */}
+      <MenuItem href="/me/ajustes">Mi perfil</MenuItem>
+      <MenuItem href="/me/ajustes#tema">Tema</MenuItem>
       <MenuSeparator />
       <MenuItem onSelect={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}>
         Cerrar sesión

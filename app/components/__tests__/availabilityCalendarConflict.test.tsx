@@ -21,9 +21,9 @@ import { MotionProvider } from "../ui/MotionProvider";
 import MyAvailabilityPanel from "../availability/MyAvailabilityPanel";
 
 // R3 re-point: the panel is the host that calls `useAvailability` and owns the
-// save, so the contract this file guards is now asserted where it lives. The grid
-// is one of its two surfaces, behind «Ver calendario» — the test opens it, because
-// the day cells are how an edit is expressed here.
+// save, so the contract this file guards is now asserted where it lives. F3 made
+// the grid the panel's ONLY surface and mounted it open — `/me/disponibilidad` is
+// the calendar — so the day cells are reachable without opening a disclosure.
 const toastMock = vi.fn();
 vi.mock("@/app/components/ui/Toast", () => ({
   useToast: () => ({ toast: toastMock, dismiss: vi.fn() }),
@@ -85,8 +85,7 @@ function renderCalendar() {
       <MyAvailabilityPanel initialRev="rev-1" initialDates={["2026-09-20"]} initialNotes={[]} />
     </MotionProvider>,
   );
-  // The grid lives behind a disclosure now; open it before reaching for a day.
-  fireEvent.click(screen.getByRole("button", { name: "Ver calendario" }));
+  // The grid is mounted open (F3): no disclosure to pass through.
   return r;
 }
 

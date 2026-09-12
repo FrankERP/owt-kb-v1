@@ -1,13 +1,18 @@
 "use client";
 
-// `/me`'s availability panel (R3): the weekend list, the shared recurring
-// pattern, the save, and the twelve-month grid behind «Ver calendario».
+// `/me/disponibilidad`'s availability panel (R3, split out in F3): the
+// twelve-month grid, the shared recurring pattern, and the save.
 //
-// ONE `useAvailability` for the whole panel, and that is the point of the host:
-// two surfaces edit the same `unavailableDates` against ONE revision. Two hook
-// calls would be two revisions, two dirty fingerprints and two save buttons
-// racing each other into the same Sanity document — the lost update the route's
-// `ifRevisionId` guard exists to refuse.
+// ONE `useAvailability` for the whole panel, and that is still the point of the
+// host even now that the grid is its only surface: every edit — a tap, a drag, a
+// recurring series — goes through ONE revision and ONE dirty fingerprint. Two
+// hook calls would be two revisions and two save buttons racing each other into
+// the same Sanity document, the lost update the route's `ifRevisionId` guard
+// exists to refuse.
+//
+// F3 retired the weekend pills and the Desde/Hasta fields: the calendar is the
+// page, so it is mounted open rather than hidden behind «Ver calendario», and it
+// is the one way to mark a date.
 //
 // The note popover is the host's too, for the same reason the hook is: a conflict
 // replaces the local arrays, so the date a popover is pinned to can be gone.
@@ -24,7 +29,6 @@ import Collapse from "@/app/components/ui/Collapse";
 import Select from "@/app/components/ui/Select";
 import { useToast } from "@/app/components/ui/Toast";
 import NotePopover, { popoverPosition, type NoteAnchor } from "./NotePopover";
-import WeekendList from "./WeekendList";
 import { useAvailability } from "./useAvailability";
 
 interface Props {
@@ -45,7 +49,6 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
   // rather than frozen at click time.
   const anchorRef = useRef<HTMLElement | null>(null);
 
-  const [gridOpen, setGridOpen] = useState(false);
   const [recurOpen, setRecurOpen]         = useState(false);
   const [recurDow, setRecurDow]           = useState(0); // 0 = Domingo
   const [recurInterval, setRecurInterval] = useState(1);
@@ -57,7 +60,7 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
     onAdopt: () => setPopover(null),
     onSaved: () => toast({ message: "Guardado ✓", tone: "ok", duration: 2500 }),
   });
-  const { notes, setNote, remove, applyRecurring, save, saving, dirty, saveError, conflict } = state;
+  const { notes, setNote, remove, applyRecurring, save, saving, dirty, saveError, conflict, upcomingCount } = state;
 
   // `isos` arrives from the grid's drag-select: one popover, one «Razón», every
   // day in the span. `iso` stays the anchor and the positioning key.
@@ -77,22 +80,20 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
     setRecurOpen(false);
   }
 
-  // The range by dates moved into the grid (R3 F2), beside the drag that
-  // expresses the same thing — so there is no second panel to keep mutually
-  // exclusive with «Repetir…» here any more.
+  // «Repetir…» is the panel's one disclosure: the range by dates moved into the
+  // grid in F2 and retired in F3, so there is nothing left to keep it mutually
+  // exclusive with.
   function toggleRecur() {
     setRecurOpen(v => !v);
   }
 
   return (
     <div className="space-y-4">
-      <WeekendList
-        state={state}
-        serviceDates={serviceDates}
-        openNote={openNote}
-        closeNote={closeNote}
-        noteIso={popover?.iso ?? null}
-      />
+      {upcomingCount > 0 && (
+        <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong">
+          {upcomingCount} fecha{upcomingCount !== 1 ? "s" : ""} marcada{upcomingCount !== 1 ? "s" : ""} como no disponible
+        </p>
+      )}
 
       {/* The actions, and the recurring panel one of them opens. They share a
           wrapper so the panel is not a child of `space-y-4`: a closed Collapse is
@@ -161,27 +162,16 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
         </p>
       )}
 
-      {/* The grid, for what ten weekend rows cannot say. Same wrapper reason as
-          the recurring panel above. */}
-      <div>
-        <Button
-          variant="ghost"
-          onClick={() => setGridOpen(v => !v)}
-          aria-expanded={gridOpen}
-          aria-controls="availability-grid"
-        >
-          Ver calendario
-        </Button>
-        <Collapse open={gridOpen} id="availability-grid" className="mt-4">
-          <AvailabilityGrid
-            state={state}
-            serviceDates={serviceDates}
-            openNote={openNote}
-            closeNote={closeNote}
-            noteIso={popover?.iso ?? null}
-          />
-        </Collapse>
-      </div>
+      {/* The grid: the one surface that marks a date (F3). Mounted, never behind a
+          disclosure — this page exists to show it. It goes last so «Guardar» and
+          the notices stay above the three month tiles, where they were. */}
+      <AvailabilityGrid
+        state={state}
+        serviceDates={serviceDates}
+        openNote={openNote}
+        closeNote={closeNote}
+        noteIso={popover?.iso ?? null}
+      />
 
       <NotePopover
         popover={popover}

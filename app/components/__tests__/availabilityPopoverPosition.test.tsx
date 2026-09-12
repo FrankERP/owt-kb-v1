@@ -23,9 +23,10 @@ import { MotionProvider } from "../ui/MotionProvider";
 import MyAvailabilityPanel from "../availability/MyAvailabilityPanel";
 import NotePopover, { popoverPosition } from "../availability/NotePopover";
 
-// R3: the popover is shared by both availability surfaces, so it lives in
-// `availability/NotePopover` and the panel owns the one instance. The behaviour
-// below is unchanged — it is still opened from a day cell in the grid.
+// R3: the popover lives in `availability/NotePopover` and the panel owns the one
+// instance (it was shared by two surfaces then; F3 left only the grid). The
+// behaviour below is unchanged — it is still opened from a day cell, and the grid
+// is mounted open now, so there is no disclosure to click through first.
 vi.mock("@/app/components/ui/Toast", () => ({
   useToast: () => ({ toast: vi.fn(), dismiss: vi.fn() }),
 }));
@@ -92,7 +93,6 @@ describe("MyAvailabilityPanel — the popover survives a scroll", () => {
         <MyAvailabilityPanel initialRev="rev-1" initialDates={[]} initialNotes={[]} />
       </MotionProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Ver calendario" }));
     const card = screen.getByText(month).closest("div")!;
     const cell = Array.from(card.querySelectorAll("button")).find(
       (b) => b.textContent?.trim() === String(day),

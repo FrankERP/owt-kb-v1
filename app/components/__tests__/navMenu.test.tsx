@@ -41,8 +41,10 @@ describe("NavMenu — account menu", () => {
     const menu = screen.getByRole("menu", { name: "Menú de cuenta" });
     const items = Array.from(menu.querySelectorAll('[role="menuitem"]')).map((n) => n.textContent?.trim());
     expect(items).toEqual(["Mi perfil", "Tema", "Cerrar sesión"]);
-    expect(screen.getByRole("menuitem", { name: "Mi perfil" }).getAttribute("href")).toBe("/me");
-    expect(screen.getByRole("menuitem", { name: "Tema" }).getAttribute("href")).toBe("/me#tema");
+    // F3: both point at the settings PAGE — «Mi perfil» is the profile editor,
+    // which left `/me` with Tema and Tamaño de texto.
+    expect(screen.getByRole("menuitem", { name: "Mi perfil" }).getAttribute("href")).toBe("/me/ajustes");
+    expect(screen.getByRole("menuitem", { name: "Tema" }).getAttribute("href")).toBe("/me/ajustes#tema");
 
     expect(screen.queryByRole("menuitem", { name: "Calendario" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "#Tags" })).toBeNull();

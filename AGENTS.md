@@ -258,12 +258,9 @@ dialog element with a literal `open` gets no enter/exit either way;
 an inline class string), `Presence` (every animated conditional), `Skeleton`/
 `SkeletonGroup` (every loading placeholder), `revealProps` (route reveal),
 `useAvailability` (`app/components/availability/useAvailability.ts` — the ONLY
-client-side availability writer; `MyAvailabilityPanel` calls it once and hands the
-state down to `WeekendList` and `AvailabilityGrid`, which only render — two hook
-calls would be two revisions racing into the same document), `nextWeekends`/
-`weekendLabel` (`app/utils/weekends.ts` — the ten Friday–Sunday rows `WeekendList`
-offers, Friday added for rehearsal days (F1); CDMX-pinned, never a bare
-`new Date(iso)`), `MEMBER_TYPE_LABEL`
+client-side availability writer; `MyAvailabilityPanel` (on `/me/disponibilidad`)
+calls it once and hands the state down to `AvailabilityGrid`, which only renders —
+two hook calls would be two revisions racing into the same document), `MEMBER_TYPE_LABEL`
 (`app/utils/memberTypes.ts` — the ONLY Tipo display map, mirrors the
 `worshipTeam` schema; `/admin`'s `TYPE_ABBR` is that table's own abbreviations,
 not a second source). Motion tokens are `--motion-*` / `--ease-*`; `motion` is

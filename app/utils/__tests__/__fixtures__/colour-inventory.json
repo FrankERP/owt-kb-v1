@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 316,
-    "filesScanned": 300,
+    "filesScanned": 303,
     "filesWithColour": 54,
     "byCategory": {
       "2": 2,
@@ -223,7 +223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 43,
+      "line": 45,
       "disposition": "B",
       "reason": null
     },
@@ -235,7 +235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 399,
+      "line": 371,
       "disposition": "B",
       "reason": null
     },
@@ -247,7 +247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 419,
+      "line": 391,
       "disposition": "B",
       "reason": null
     },
@@ -259,7 +259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 431,
+      "line": 403,
       "disposition": "B",
       "reason": null
     },
@@ -271,7 +271,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 448,
+      "line": 420,
       "disposition": "B",
       "reason": null
     },
@@ -283,7 +283,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 566,
+      "line": 540,
       "disposition": "B",
       "reason": null
     },
@@ -2983,7 +2983,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 537,
+      "line": 478,
       "disposition": "B",
       "reason": null
     },
@@ -2995,7 +2995,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 545,
+      "line": 486,
       "disposition": "B",
       "reason": null
     },
@@ -3007,7 +3007,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 168,
+      "line": 167,
       "disposition": "B",
       "reason": null
     },
@@ -3019,7 +3019,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 191,
+      "line": 190,
       "disposition": "B",
       "reason": null
     },

@@ -1,15 +1,17 @@
 /** @vitest-environment jsdom */
 //
-// The «Rango por fechas» panel: a special service mid-week needs more than the
-// ten weekend rows can express. Rendered through the host, same reason as
-// `weekendList.test.tsx` — the range write goes through the one
-// `useAvailability` the panel shares with the list and the grid.
+// The availability host's own shape (R3 F3): the calendar IS the page now
+// (`/me/disponibilidad`), so the grid is no longer behind a «Ver calendario»
+// disclosure and there is no second surface — the weekend pills and the
+// Desde/Hasta fields retired with F3, leaving one way to mark a date.
 //
-// R3 F2 re-point: the date fields moved INSIDE the grid, beside the drag that
-// expresses the same range, so every case opens «Ver calendario» first. The
-// panel itself no longer offers a range button at all.
+// What is pinned here is exactly that: the grid is mounted on first render, the
+// retired affordances are gone, and «Repetir…» — the host's one remaining
+// disclosure — still toggles. The edits themselves go through the single
+// `useAvailability` the host owns, which is why this renders the host rather
+// than the grid (`availabilityCalendarConflict.test.tsx` pins the save).
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
@@ -25,7 +27,7 @@ installMotionTestEnv();
 beforeAll(async () => { await import("@/app/components/ui/motionFeatures"); });
 
 beforeEach(() => {
-  // Wednesday 9 September 2026, same pin as weekendList.test.tsx.
+  // Wednesday 9 September 2026 — the first visible page is Septiembre–Noviembre.
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date("2026-09-09T12:00:00-06:00"));
   vi.stubGlobal("fetch", vi.fn());
@@ -37,14 +39,6 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** The date fields live in the grid now: open it, then the disclosure. */
-function openRangeFields() {
-  fireEvent.click(screen.getByRole("button", { name: "Ver calendario" }));
-  const toggle = screen.getByRole("button", { name: "Rango por fechas" });
-  fireEvent.click(toggle);
-  return toggle;
-}
-
 function renderPanel() {
   return render(
     <MotionProvider>
@@ -53,60 +47,43 @@ function renderPanel() {
   );
 }
 
-describe("MyAvailabilityPanel — Rango por fechas", () => {
-  it("opens the range panel, marks a span, and reflects it in the upcoming count", () => {
+describe("MyAvailabilityPanel — one surface (R3 F3)", () => {
+  it("renders the grid open, with no «Ver calendario» disclosure to find first", () => {
     renderPanel();
-
-    const toggle = openRangeFields();
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-
-    const range = document.getElementById("availability-range")!;
-    const desde = within(range).getByLabelText("Desde") as HTMLInputElement;
-    const hasta = within(range).getByLabelText("Hasta") as HTMLInputElement;
-    // Every Collapse keeps its children mounted, so scope to this one —
-    // «Repetir…» has its own «Marcar» button too.
-    const marcar = within(range).getByRole("button", { name: "Marcar" }) as HTMLButtonElement;
-    expect(marcar.disabled).toBe(true);
-
-    fireEvent.change(desde, { target: { value: "2026-09-16" } });
-    fireEvent.change(hasta, { target: { value: "2026-09-18" } });
-    expect(marcar.disabled).toBe(false);
-
-    fireEvent.click(marcar);
-
-    expect(screen.getByText(/3 fechas marcadas como no disponible/)).toBeTruthy();
-    expect(screen.getByText("Cambios sin guardar")).toBeTruthy();
-    // The panel closes after applying, like «Marcar» does for the recurring series.
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("button", { name: "Ver calendario" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Seleccionar fechas" })).toBeTruthy();
+    expect(screen.getByText("Septiembre 2026")).toBeTruthy();
   });
 
-  it("keeps «Marcar» disabled for an all-past range", () => {
-    renderPanel();
-
-    openRangeFields();
-
-    const range = document.getElementById("availability-range")!;
-    const desde = within(range).getByLabelText("Desde") as HTMLInputElement;
-    const hasta = within(range).getByLabelText("Hasta") as HTMLInputElement;
-    const marcar = within(range).getByRole("button", { name: "Marcar" }) as HTMLButtonElement;
-
-    // "Today" is pinned to 2026-09-09; both ends of the range are before it.
-    fireEvent.change(desde, { target: { value: "2026-09-01" } });
-    fireEvent.change(hasta, { target: { value: "2026-09-05" } });
-
-    expect(marcar.disabled).toBe(true);
-  });
-
-  it("the panel offers no range button of its own — the fields are the grid's now", () => {
+  it("offers none of the retired range surfaces", () => {
     renderPanel();
     expect(screen.queryByRole("button", { name: "Rango…" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Rango por fechas" })).toBeNull();
+    expect(screen.queryByLabelText("Desde")).toBeNull();
+    expect(screen.queryByLabelText("Hasta")).toBeNull();
+    // The weekend pills went with them: no VIE/SÁB/DOM toggles anywhere.
+    expect(screen.queryByRole("button", { name: /^VIE$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^SÁB$/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^DOM$/ })).toBeNull();
+  });
 
-    // «Repetir…» is the panel's only disclosure left, and it still toggles.
+  it("«Repetir…» is the host's one disclosure, and it still toggles", () => {
+    renderPanel();
     const recur = screen.getByRole("button", { name: "Repetir…" });
+    expect(recur.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(recur);
     expect(recur.getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(recur);
     expect(recur.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("counts the dates it was rendered with, and «Guardar» waits for an edit", () => {
+    render(
+      <MotionProvider>
+        <MyAvailabilityPanel initialRev="rev-1" initialDates={["2026-09-20", "2026-10-04"]} initialNotes={[]} />
+      </MotionProvider>,
+    );
+    expect(screen.getByText(/2 fechas marcadas como no disponible/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Guardar" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });

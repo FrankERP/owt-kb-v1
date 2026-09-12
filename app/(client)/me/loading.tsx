@@ -1,7 +1,9 @@
 import Skeleton, { SkeletonGroup, NavbarSkeleton } from "../../components/ui/Skeleton";
 
-// The shape `/me` actually lands in (R3): the identity header, the next service as
-// a full card, the rest as collapsed lines, the weekend list, the Ajustes card.
+// The shape `/me` actually lands in (R3, F3): the identity header, the next
+// service as a full card, the rest as collapsed lines, and the one link line to
+// `/me/disponibilidad`. No Ajustes block — the settings card is `/me/ajustes`,
+// which has its own skeleton.
 // A skeleton that still drew the old two-column tail would move everything on
 // hydration, which is the one thing it exists to prevent.
 export default function MeLoading() {
@@ -47,22 +49,11 @@ export default function MeLoading() {
           ))}
         </div>
 
-        {/* Availability: ten weekends, each with its two day toggles. */}
-        <div className="rounded-2xl border border-surface-accent-20 p-5 space-y-3">
+        {/* The availability link: one row, its label and its count. */}
+        <div className="rounded-xl border border-accent/15 px-4 py-3 flex items-center justify-between gap-3">
           <Skeleton className="h-5 w-36" />
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((j) => (
-            <div key={j} className="flex items-center justify-between gap-3">
-              <Skeleton className="h-4 w-28" />
-              <div className="flex gap-2 shrink-0">
-                <Skeleton className="h-9 w-16" rounded="full" />
-                <Skeleton className="h-9 w-16" rounded="full" />
-              </div>
-            </div>
-          ))}
+          <Skeleton className="h-3 w-28 shrink-0" />
         </div>
-
-        {/* Ajustes. */}
-        <Skeleton className="h-64" rounded="lg" />
       </div>
     </SkeletonGroup>
   );

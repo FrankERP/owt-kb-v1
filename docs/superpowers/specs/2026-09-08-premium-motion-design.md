@@ -1450,3 +1450,63 @@ the one-way latch (solid, once reached, for the rest of that drag) feels right w
 finger drifts back up into the fading tile rather than resetting.
 
 **Release:** pending.
+
+### F3 — three pages (2026-09-12)
+
+Frank's ask, verbatim: "too many buttons that select the unavailable dates … remove the
+pills with the calendar … the /me page does too many things now — settings, hero cards,
+unavailable dates, edit profile."
+
+**Rulings, with reasons:**
+- **Split by QUESTION, not by component.** `/me` becomes "Mi semana" — who am I and when
+  do I serve; `/me/disponibilidad` — when can't I serve, the calendar alone;
+  `/me/ajustes` — how does the app work for me, the one `SettingsCard`. Each is its own
+  Server Component route with its own `loading.tsx`, session guard and `callbackUrl`, not
+  a scrolled-past section of one page, sharing the member/service-date GROQ through a
+  neutral `app/(client)/me/queries.ts` so a projection edit cannot drift between the pages
+  that read it.
+- **One surface marks availability, not four.** By F2, a member had FOUR ways to say the
+  same thing: the weekend pills (`WeekendList`), the panel's «Rango…» fields (F1), the
+  grid's Desde/Hasta fields (F2), and the drag gesture itself (F2). F3 keeps exactly one —
+  the twelve-month grid, tap for a single day, «Seleccionar fechas» for a drag range,
+  «Repetir…» for a weekday pattern — and deletes `WeekendList.tsx`, `weekends.ts`
+  (`nextWeekends`/`weekendLabel`), the panel's «Ver calendario» `Collapse`, and the grid's
+  «Rango por fechas» `Collapse` with its two `DateField`s.
+- **«Seleccionar fechas» is KEPT.** Frank's ask singled out the pills, not the drag
+  gesture F2 shipped two days earlier — the calendar page still scrolls vertically, so
+  the shadow-month overlay the drag needs still has a page to scroll past. Dropping it
+  would have undone F2 for no reason F3's own complaint gives.
+- **«Editar perfil» is DROPPED from `MeHeader`.** Settings are one tap away in the avatar
+  menu (`/me/ajustes`, `/me/ajustes#tema`) once they have their own page; a second link to
+  the same destination sitting in the header was exactly the kind of redundancy the split
+  was meant to remove, not a feature to preserve.
+- **The §12.4 "one page" ruling is reversed, and here is why.** R3 (§12.4 above)
+  deliberately built `/me` as one page — header, hero, the weekend list, the grid behind a
+  disclosure, and `SettingsCard` all in one scroll — reasoning that a member's whole
+  self-service surface belonged together, with the grid's disclosure as the release valve
+  for "too much on one page." Frank's F3 look found the reasoning wrong, not just the
+  amount: a page answering "when do I serve," "when can't I," and "how do I configure the
+  app" is three different jobs behind one URL, and a disclosure treats the SYMPTOM (too
+  much content) without asking whether the page has too many JOBS. F3 answers that
+  question instead: three pages, one job each, reached from `/me`'s own link row and the
+  avatar menu.
+
+**Review trail:** Task 1 (`/me/disponibilidad`, the calendar alone) drew one fresh-code-review
+round: **APPROVED, 4 LOW** — docs deferred to Task 3 on the record; two of the four LOW
+findings (a kids-only test not pinning that no ministry is read; the horizon assertion
+compared against a literal instead of the same `horizon()` expression the page uses) were
+folded into Task 2's dispatch rather than spent on a second round. Task 2 (`/me/ajustes`,
+settings on their own page) drew **CHANGES_REQUIRED, 2 MEDIUM + 1 LOW**: `MEMBER_PROFILE_QUERY`
+carried a dead `_rev` — shipped verbatim from the brief, but no `/me/ajustes` write
+(`/api/me`, `/api/me/photo`, `/api/me/password`, `/api/me/notif-prefs`) takes an
+`ifRevisionId`, so a revision flowing through a page that never writes with it invited a
+future misuse (MEDIUM); the new `app/(client)/me/ajustes/loading.tsx` was missing from
+`loadingSkeletons.test.ts`'s scanned file list, the split's own skeleton guard left
+uncovered (MEDIUM); a stale `/me#tema` line survived in `docs/MOTION.md` after the anchor
+moved to `/me/ajustes#tema` (LOW). All three findings were fixed in one commit ahead of
+this documentation task, verified by the full gate chain re-run on the final tree — the
+churn cap (two rounds before Frank's explicit go-ahead) was not reached.
+
+**Bundle:** measured at release.
+
+**Release:** pending.
