@@ -21,6 +21,13 @@ vi.mock("@/app/utils/authGuards", () => ({
   requireActiveSession: () => requireActiveSession(),
 }));
 
+// Mocked so the kids-only case can assert it is NEVER called: this page reads no
+// ministry at all, and an accidental gate here would be invisible otherwise.
+const getMemberAccess = vi.fn();
+vi.mock("@/app/utils/memberAccess", () => ({
+  getMemberAccess: (id: string) => getMemberAccess(id),
+}));
+
 const serverFetch = vi.fn();
 vi.mock("@/sanity/lib/serverClient", () => ({
   serverClient: { fetch: (q: string, p: Record<string, unknown>) => serverFetch(q, p) },
@@ -52,6 +59,7 @@ beforeEach(() => {
   redirect.mockReset();
   requireActiveSession.mockReset();
   requireActiveSession.mockResolvedValue(session);
+  getMemberAccess.mockReset();
   serverFetch.mockReset();
   serverFetch.mockResolvedValue({ _id: "m1", _rev: "rev-1", member_name: "Ana", alias: "Ana" });
   opFetch.mockReset();
@@ -73,6 +81,8 @@ describe("/me/disponibilidad", () => {
     expect(html).not.toContain("Mis próximos servicios");
     expect(html).not.toContain("Sin servicios asignados próximamente");
     expect(html).not.toContain("Mis roles en Oasis Kids");
+    // The gate is the session, never the ministry.
+    expect(getMemberAccess).not.toHaveBeenCalled();
   });
 
   it("says so when the member read comes back empty, instead of a calendar that cannot save", async () => {
@@ -92,8 +102,12 @@ describe("/me/disponibilidad", () => {
     expect(params.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(params.limit).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(params.limit > params.today).toBe(true);
-    // A year ahead, not a week: the grid offers twelve months.
-    expect(Number(params.limit.slice(0, 4))).toBe(Number(params.today.slice(0, 4)) + 1);
+    // A year ahead, not a week: the grid offers twelve months. Computed with the
+    // same expression `horizon()` uses rather than "next calendar year" — on 1
+    // January of a year following a leap year the two disagree.
+    const expectedLimit = new Date(Date.now() + 365 * 86400 * 1000)
+      .toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+    expect(params.limit).toBe(expectedLimit);
   });
 
   it("never drops the revision the save is guarded by", async () => {

@@ -231,9 +231,9 @@ describe("the theme announcement writes nothing to the server", () => {
   });
 
   it("anchors to the control rather than saying 'below'", () => {
-    // ThemeControl renders well below the fold on /me, past the service cards,
-    // the availability calendar and ProfilePanel.
-    expect(code).toMatch(/href="#tema"/);
+    // The banner lives on `/me`; ThemeControl lives on `/me/ajustes` since F3,
+    // so the anchor is cross-page and the bare hash would land on nothing.
+    expect(code).toMatch(/href="\/me\/ajustes#tema"/);
     const control = readFileSync(
       path.join(process.cwd(), "app/components/ui/ThemeControl.tsx"), "utf8",
     );

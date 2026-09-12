@@ -56,9 +56,10 @@ vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/components/DayCard", () => ({ DayCard: () => <p>HERO</p> }));
 vi.mock("@/app/components/DayCardDisclosure", () => ({ default: () => <p>DAYCARD</p> }));
 vi.mock("@/app/components/AddToCalendarButton", () => ({ default: () => null }));
+// Kept even though F3 moved the settings card to `/me/ajustes`: the marker is
+// what makes the "no settings on this page" assertions below mean something —
+// without it, `not.toContain("PERFIL")` would pass for any reason at all.
 vi.mock("@/app/components/ProfilePanel", () => ({ default: () => <p>PERFIL</p> }));
-vi.mock("@/app/components/TextSizeControl", () => ({ default: () => null }));
-vi.mock("@/app/components/ui/ThemeControl", () => ({ default: () => null }));
 vi.mock("@/app/components/ui/ThemeAnnouncement", () => ({ default: () => null }));
 // The href matters now: the availability link is the whole of what replaced the
 // panel, so the mock renders a real anchor rather than swallowing it.
@@ -174,12 +175,16 @@ describe("/me worship gating", () => {
     expect(html).not.toContain("Sin servicios asignados próximamente");
   });
 
-  it("keeps the availability link and the settings card for a kids-only member", async () => {
+  it("keeps the availability link for a kids-only member, and holds no settings at all", async () => {
+    // F3: Tema, Tamaño de texto and Perfil are `/me/ajustes` now, reached from the
+    // avatar menu. `/me` answers "who am I and when do I serve" and nothing else,
+    // so the settings card must not be here for ANY member.
     getMemberAccess.mockResolvedValue(access(["kids"]));
     const html = await renderPage();
     expect(html).toContain('href="/me/disponibilidad"');
     expect(html).toContain("Sin fechas marcadas");
-    expect(html).toContain("PERFIL");
+    expect(html).not.toContain("PERFIL");
+    expect(html).not.toContain('id="ajustes"');
   });
 
   it("counts only UPCOMING unavailable dates on the link", async () => {
@@ -230,7 +235,7 @@ describe("/me worship gating", () => {
   // page's controls without a word, on a page that otherwise rendered fine — so
   // it read as a feature the member does not have, not as something that
   // failed. Every signed-in member has a document; null means the read missed.
-  it("says so when the member read comes back empty, instead of dropping the link and the card", async () => {
+  it("says so when the member read comes back empty, instead of dropping the link without a word", async () => {
     getMemberAccess.mockResolvedValue(access(["worship"]));
     serverFetch.mockResolvedValue(null);
     const html = await renderPage();
@@ -241,9 +246,10 @@ describe("/me worship gating", () => {
     // Not asserting a live-region role: this is server-rendered and present at
     // first paint, so there is nothing being inserted for one to announce.
     // The rest of the page is unaffected — this is not a whole-page failure: the
-    // header still renders (R3 falls its name back to the session) and so does
-    // the Ajustes anchor, because Tema and Tamaño de texto are device-local.
+    // header still renders (R3 falls its name back to the session). The settings
+    // card is not part of "the rest" any more: F3 moved it to `/me/ajustes`,
+    // which renders its own device-local half on a failed read.
     expect(html).toContain("Sin servicios asignados próximamente");
-    expect(html).toContain('id="ajustes"');
+    expect(html).not.toContain('id="ajustes"');
   });
 });

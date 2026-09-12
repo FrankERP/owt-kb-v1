@@ -17,7 +17,6 @@
 // pins it.
 
 import Image from "next/image";
-import Button from "./ui/Button";
 import NumberRoll from "./ui/NumberRoll";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import type { SeatAssignment } from "@/app/utils/myWeek";
@@ -119,10 +118,6 @@ export default function MeHeader({
           </ul>
         )}
       </div>
-
-      <Button variant="ghost" size="sm" href="#ajustes" className="shrink-0">
-        Editar perfil
-      </Button>
 
       {line && (
         <p className="flex w-full flex-wrap items-center gap-3 font-body text-base text-ink">

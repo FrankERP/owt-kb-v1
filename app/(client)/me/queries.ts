@@ -56,3 +56,22 @@ export function horizon(): { today: string; limit: string } {
     .toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
   return { today, limit };
 }
+
+/**
+ * The member's own profile, as `ProfilePanel`'s `MemberProfile` needs it — the
+ * read behind `/me/ajustes`.
+ *
+ * `photoUrl` coalesces the uploaded avatar over the Google one: a member who
+ * uploaded their own picture keeps it after a Google sign-in refreshes the
+ * mirrored URL. `hasPassword` is a BOOLEAN, never the hash — the panel only needs
+ * to know whether it says «Cambiar contraseña» or «Crear contraseña», and the
+ * hash has no business leaving the server.
+ *
+ * No availability here and no `memberType`: the calendar has its own projection
+ * above, and Tipo is read by `/me` for the header chips.
+ */
+export const MEMBER_PROFILE_QUERY = `*[_type == "teamMembers" && _id == $id][0] {
+      _id, _rev, member_name, alias, email, role, notifPrefs,
+      "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
+      "hasPassword": defined(passwordHash) && passwordHash != ""
+    }`;

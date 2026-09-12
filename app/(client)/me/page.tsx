@@ -9,7 +9,6 @@ import Navbar from "@/app/components/Navbar";
 import { DayCard, type DayCardProps } from "@/app/components/DayCard";
 import DayCardDisclosure from "@/app/components/DayCardDisclosure";
 import MeHeader from "@/app/components/MeHeader";
-import SettingsCard from "@/app/components/SettingsCard";
 import ThemeAnnouncement from "@/app/components/ui/ThemeAnnouncement";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
@@ -24,7 +23,7 @@ import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTyp
 
 export const metadata: Metadata = {
   title: "Mi perfil — Oasis Worship Team",
-  description: "Tus próximos servicios, disponibilidad y ajustes de perfil.",
+  description: "Tus próximos servicios y tu disponibilidad.",
 };
 
 export const revalidate = 60;
@@ -80,29 +79,26 @@ export default async function MePage() {
 
   const { sanityId } = session.user;
 
-  // `unavailableDates` survives the F3 split for ONE reason: the count on the
-  // link to `/me/disponibilidad`. `_rev` does NOT — the save precondition belongs
-  // to the page that renders the calendar, and carrying a revision this page
-  // never writes with would only invite a future editor to write with it.
+  // What this page still needs, and nothing else. `unavailableDates` survives the
+  // F3 split for ONE reason: the count on the link to `/me/disponibilidad`. The
+  // profile fields (`email`, `role`, `notifPrefs`, `hasPassword`) went with the
+  // settings card to `/me/ajustes`, which reads them with `MEMBER_PROFILE_QUERY`;
+  // `photoUrl` and `memberType` stay because the header paints the avatar and the
+  // Tipo chips. `_rev` is not here either — the save precondition belongs to the
+  // page that renders the calendar, and carrying a revision this page never
+  // writes with would only invite a future editor to write with it.
   const member = await serverClient.fetch<{
     _id: string;
-    // Non-optional to match ProfilePanel's MemberProfile, which this feeds:
-    // every teamMembers document carries them.
     member_name: string;
-    email: string;
-    role: string;
     alias?: string;
     memberType?: string[] | null;
-    notifPrefs?: Record<string, unknown>;
     unavailableDates?: string[] | null;
     photoUrl?: string;
-    hasPassword: boolean;
   } | null>(
     `*[_type == "teamMembers" && _id == $id][0] {
-      _id, member_name, alias, email, role, memberType, notifPrefs,
+      _id, member_name, alias, memberType,
       unavailableDates,
-      "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
-      "hasPassword": defined(passwordHash) && passwordHash != ""
+      "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl)
     }`,
     { id: sanityId }
   );
@@ -434,9 +430,11 @@ export default async function MePage() {
     <div>
       <Navbar title={navbarTitle} schedule tags />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
-        {/* Top of /me, per parent Q2. Its "Elígelo aquí" is an anchor to #tema,
-            because ThemeControl renders below the service cards, the availability
-            calendar and ProfilePanel — most of a phone-page away. */}
+        {/* Top of /me, per parent Q2. Its "Elígelo aquí" links to
+            `/me/ajustes#tema`: F3 moved ThemeControl to its own page, so the
+            anchor is cross-page and a bare `#tema` would land on nothing. The
+            banner stays HERE — it is the invitation, and `/me` is where members
+            arrive; the settings page is the destination. */}
         <ThemeAnnouncement />
 
         {/* The page's heading, and the only place the empty state is said: the two
@@ -547,58 +545,45 @@ export default async function MePage() {
           </section>
         )}
 
-        {/* The availability link + profile settings.
-            Both hang off the SAME `member` read, so they are branched together
-            rather than each on its own `member &&`. A null read used to remove
-            both without a word — two thirds of this page's controls simply not
-            there, on a page that otherwise rendered fine, so it looked like a
-            feature the member does not have rather than something that failed.
-            It is not an empty state: every signed-in member has a document, so
-            null means the read did not find theirs.
+        {/* The availability link.
+            A null read is not an empty state: every signed-in member has a
+            document, so null means the read did not find theirs — and it is said
+            out loud rather than silently dropping the line, which would read as a
+            feature this member does not have.
 
-            F3: the calendar itself moved to `/me/disponibilidad` — this is the
-            one line that points at it, with the count as the answer to "did I
-            already tell them?". A `Link`, rendered by a Server Component, which
-            is legal: what ADR-0028 forbids is CALLING a client value. */}
+            F3: the calendar moved to `/me/disponibilidad` and the settings card to
+            `/me/ajustes` (the avatar menu points there) — this is the one line
+            left, with the count as the answer to "did I already tell them?". A
+            `Link`, rendered by a Server Component, which is legal: what ADR-0028
+            forbids is CALLING a client value. */}
         {member ? (
-          <>
-            <Link
-              href="/me/disponibilidad"
-              className="flex items-center justify-between gap-3 rounded-xl border border-accent/15 px-4 py-3 hover:border-accent/40 transition-colors"
-              {...revealProps(3)}
-            >
-              <span className="font-display text-base uppercase tracking-wide">Disponibilidad</span>
-              <span className="flex items-center gap-2">
-                <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-                  {upcomingUnavailable === 0
-                    ? "Sin fechas marcadas"
-                    : `${upcomingUnavailable} fecha${upcomingUnavailable === 1 ? "" : "s"} marcada${upcomingUnavailable === 1 ? "" : "s"}`}
-                </span>
-                <span aria-hidden="true" className="font-body text-mono-500">›</span>
+          <Link
+            href="/me/disponibilidad"
+            className="flex items-center justify-between gap-3 rounded-xl border border-accent/15 px-4 py-3 hover:border-accent/40 transition-colors"
+            {...revealProps(3)}
+          >
+            <span className="font-display text-base uppercase tracking-wide">Disponibilidad</span>
+            <span className="flex items-center gap-2">
+              <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
+                {upcomingUnavailable === 0
+                  ? "Sin fechas marcadas"
+                  : `${upcomingUnavailable} fecha${upcomingUnavailable === 1 ? "" : "s"} marcada${upcomingUnavailable === 1 ? "" : "s"}`}
               </span>
-            </Link>
-            <SettingsCard member={member} {...revealProps(4)} />
-          </>
+              <span aria-hidden="true" className="font-body text-mono-500">›</span>
+            </span>
+          </Link>
         ) : (
-          <>
-            {/* No live-region role: this is server-rendered and present at first
-                paint, so nothing is being INSERTED for a live region to announce,
-                and screen readers treat already-present live content
-                inconsistently. The heading carries the message. */}
-            <section className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center" {...revealProps(3)}>
-              <h2 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h2>
-              <p className="font-body text-sm text-mono-500 mt-1">
-                Tu disponibilidad y tus ajustes no están disponibles ahora mismo.
-                Recarga la página; si sigue igual, avísale a un administrador.
-              </p>
-            </section>
-            {/* Tamaño de texto is device-local, so it survives a failed profile
-                read; Tema is not — it PATCHes /api/me/theme and reports its own
-                write failure — but the card still renders so `#ajustes` keeps a
-                target for the header link. No `member`, so the card renders
-                without its Perfil subsection. */}
-            <SettingsCard member={null} {...revealProps(4)} />
-          </>
+          /* No live-region role: this is server-rendered and present at first
+             paint, so nothing is being INSERTED for a live region to announce,
+             and screen readers treat already-present live content
+             inconsistently. The heading carries the message. */
+          <section className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center" {...revealProps(3)}>
+            <h2 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h2>
+            <p className="font-body text-sm text-mono-500 mt-1">
+              Tu disponibilidad no está disponible ahora mismo.
+              Recarga la página; si sigue igual, avísale a un administrador.
+            </p>
+          </section>
         )}
       </div>
     </div>

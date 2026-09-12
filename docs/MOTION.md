@@ -738,7 +738,8 @@ the full ledger; the motion-relevant pieces:
   `p-5` padding in `bare` mode rather than being wrapped in a padding `div` by the card —
   a wrapped `null` still reserves the padding, leaving an empty box in the card's
   `divide-y` sections; an unwrapped `null` leaves nothing at all. `id="tema"` renders
-  either way, so `ThemeAnnouncement`'s `#tema` anchor still lands on something.
+  either way, so the cross-page `/me/ajustes#tema` anchors (`ThemeAnnouncement` on `/me`,
+  the avatar menu's «Tema») still land on something.
 - **`ThemeAnnouncement` dismisses through `Presence`, not `show && <aside>`** — the
   dismiss gets an exit instead of vanishing (spec §5.6). No `appear`: `show` starts
   `false` and flips in a mount effect, so the instance is already mounted when it becomes

@@ -1,15 +1,16 @@
-// The one Ajustes card on /me — Tema, Tamaño de texto and (when the profile
-// read succeeded) the profile, as three subsections of a single bordered card
-// rather than three separate ones. NEUTRAL module — no hooks, no "use client" —
+// The one Ajustes card, and since F3 the whole of `/me/ajustes` — Tema, Tamaño de
+// texto and (when the profile read succeeded) the profile, as three subsections of
+// a single bordered card rather than three separate ones. NEUTRAL module — no hooks, no "use client" —
 // so this Server Component renders its client children (`ThemeControl`,
 // `TextSizeControl`, `ProfilePanel`) as JSX (ADR-0028); it never CALLS them.
 //
 // `#tema` stays reachable: ThemeControl keeps rendering its own `id="tema"`
 // (just without its standalone card chrome, via its `bare` prop), nested inside
-// this card's own Tema subsection, so `ThemeAnnouncement`'s `href="#tema"`
-// anchor still lands on something.
+// this card's own Tema subsection, so the cross-page anchors that point here —
+// `ThemeAnnouncement`'s and the avatar menu's `/me/ajustes#tema` — still land on
+// something.
 //
-// `member` is nullable on purpose — a failed profile read on /me still renders
+// `member` is nullable on purpose — a failed profile read still renders
 // Tema and Tamaño de texto, just without the Perfil subsection, which has
 // nothing to edit without a profile. Tamaño de texto is device-local; Tema is
 // not — it PATCHes /api/me/theme and reports its own write failure.

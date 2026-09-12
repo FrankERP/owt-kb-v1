@@ -87,14 +87,27 @@ describe("home page is the first consumer", () => {
   });
 });
 
-describe("/me staggers its five blocks", () => {
-  it("reveals the header, the services, Kids, the availability link and Ajustes in order", () => {
-    // R3: the page is "Mi semana" — identity header (0), services (1), Oasis Kids
-    // (2), the link to `/me/disponibilidad` (3, the calendar itself moved there in
-    // F3), Ajustes (4). The count is a floor, not an equality: the `member`-null
-    // arm carries its own (3) and (4) for the same two blocks.
+describe("/me staggers its four blocks", () => {
+  it("reveals the header, the services, Kids and the availability link in order", () => {
+    // R3 F3: the page is "Mi semana" — identity header (0), services (1), Oasis
+    // Kids (2), the link to `/me/disponibilidad` (3). It ends at 3: the calendar
+    // and the Ajustes card are `/me/disponibilidad` and `/me/ajustes` now, each
+    // with its own contiguous indices. The `member`-null arm carries its own (3)
+    // for the same block, which is why indices are checked for presence.
     const src = read("app/(client)/me/page.tsx");
     expect(src).toMatch(/import \{ revealProps \} from "@\/app\/utils\/reveal"/);
-    for (const i of [0, 1, 2, 3, 4]) expect(src).toContain(`{...revealProps(${i})}`);
+    for (const i of [0, 1, 2, 3]) expect(src).toContain(`{...revealProps(${i})}`);
+    expect(src).not.toContain("{...revealProps(4)}");
+  });
+
+  it("staggers each child page from 0, contiguously", () => {
+    // Every page starts its own stagger at 0 — an index inherited from the parent
+    // would delay the first block of a page that has no earlier blocks.
+    for (const route of ["disponibilidad", "ajustes"]) {
+      const src = read(`app/(client)/me/${route}/page.tsx`);
+      expect(src).toMatch(/import \{ revealProps \} from "@\/app\/utils\/reveal"/);
+      expect(src).toContain("{...revealProps(0)}");
+      expect(src).toContain("{...revealProps(1)}");
+    }
   });
 });

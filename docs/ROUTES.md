@@ -46,7 +46,9 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | `/schedule` | `(client)/schedule/page.tsx` | S | Worship | ISR 60s | Upcoming services. Agenda (one row per service) is the default view, `Mes` the month grid; `?m=YYYY-MM` browses one month per header-arrow press, still fetching a `WINDOW_MONTHS`-wide window (default: rolling today → +95 days). |
 | `/biblioteca` | `(client)/biblioteca/page.tsx` | S | Worship | ISR 60s fetch, dynamic by `searchParams` | The song library (R1): one fetch (catalogue + tags + authors), A–Z index with a search console, letter rail and a filter drawer (Tipo, tema, artista, tonalidad). `?q=`/`?tag=`/`?author=` seed initial state; the index mirrors its own state back into the URL without a round-trip. |
 | `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song detail: lyrics/chords, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
-| `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi semana" (R3): the identity header (next service + seat + countdown, or the next Kids Sunday), upcoming assignments and proposal CTAs, availability as weekends, and one Ajustes card. |
+| `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi semana" (R3 F3): the identity header (next service + seat + countdown, or the next Kids Sunday), upcoming assignments and proposal CTAs, the Kids block, and ONE link line to `/me/disponibilidad` carrying the count of upcoming marked dates. No calendar and no settings — both are their own pages now. |
+| `/me/disponibilidad` | `(client)/me/disponibilidad/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | The availability calendar, alone (R3 F3): `MyAvailabilityPanel` with the month grid always open, «Seleccionar fechas», «Repetir…» and the per-day note. A kids-only volunteer reaches it. |
+| `/me/ajustes` | `(client)/me/ajustes/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | Ajustes, alone (R3 F3): the one `SettingsCard` — Tema, Tamaño de texto, Perfil. Reached from the avatar menu («Mi perfil», «Tema» → `#tema`) and from `ThemeAnnouncement` on `/me`. |
 | `/me/propose/[roleId]` | `(client)/me/propose/[roleId]/page.tsx` | S | **Lead-only** | dynamic (`revalidate=0`) | Setlist proposal editor for a service the user Leads. |
 | `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Admin dashboard shell; data fetched client-side from `/api/admin/*`. `?tab=` opens a specific tab, filtered by role. |
 | `/auth/signin` | `(client)/auth/signin/page.tsx` | C | Public | — | Google SSO (web + native) + email/password. |
@@ -81,6 +83,7 @@ into the library, permanent (308) so bookmarks and the old nav keep working.
 |-------|-------|
 | `/`, `/schedule`, `/posts/[slug]`, `/biblioteca` | `requireWorshipPage()` → ministry-scoped, redirects a kids-only member |
 | `/me` | `requireActiveSession()` → redirect `/auth/signin?callbackUrl=/me` |
+| `/me/disponibilidad`, `/me/ajustes` | `requireActiveSession()` → redirect with that route's own `callbackUrl`. Ministry-neutral by design: neither reads a ministry. |
 | `/me/propose/[roleId]` | `requireWorshipPage()` + GROQ requires user in `Lead[]`, else `notFound()` |
 | `/admin` | `requireActiveManager()` → `redirect("/")` |
 | `/studio/*` | `proxy.ts` role check (admin/super-admin) + Sanity Studio's own auth |
@@ -96,9 +99,16 @@ into the library, permanent (308) so bookmarks and the old nav keep working.
 - **`/biblioteca`** — one combined query: the catalogue (former home `POSTS_QUERY`, plus author
   refs), tags with counts (former `/tag` query) and authors with counts (former `/author`
   query). Filtering is client-side, so one cached fetch serves every `?q=`/`?tag=`/`?author=`.
-- **`/me`** — `requireActiveSession()`, then `Promise.all` of member profile (`serverClient`),
-  the member's assignments (`client`), shared proposals per led service (`serverClient`), and
-  service dates; uses `describeContributors`.
+- **`/me`** — `requireActiveSession()`, then the member read (`serverClient`: `_id`,
+  `member_name`, `alias`, `memberType`, `unavailableDates`, `photoUrl`) and, for a worship
+  member only, the assignments + shared proposals (`operationalClient`/`serverClient`); uses
+  `describeContributors`.
+- **`/me/disponibilidad`** — `requireActiveSession()`, then `Promise.all` of
+  `MEMBER_AVAILABILITY_QUERY` (`serverClient` — `_rev` is the save precondition) and
+  `SERVICE_DATES_QUERY` over `horizon()` (`operationalClient`). Both in
+  `(client)/me/queries.ts`, a neutral module the three `/me` pages share.
+- **`/me/ajustes`** — `requireActiveSession()`, then one `MEMBER_PROFILE_QUERY` read
+  (`serverClient`) — the fields `ProfilePanel` edits.
 - **`/posts/[slug]`** — full `post` projection + last-3 past plays (bounded `week < today`).
 - **`/admin`** — only `requireActiveManager()`; panels fetch client-side.
 
@@ -116,10 +126,12 @@ token) for private/fresh data.
 - **`/me`** — `Navbar`, `MeHeader` (the identity header: name, Tipo chips, and the one
   countdown line), `DayCard` (the next service, `hero`, no `isNext` — the header already
   carries the countdown), `DayCardDisclosure` (every other service, collapsed),
-  `AddToCalendarButton`, `availability/MyAvailabilityPanel` (the weekend list, with the
-  month `AvailabilityGrid` behind «Ver calendario»), `SettingsCard` (one card holding
-  `ThemeControl`, `TextSizeControl` and `ProfilePanel` `bare` — no longer three
-  separate cards).
+  `AddToCalendarButton`, and a `Link` row to `/me/disponibilidad`. `MeHeader` carries no
+  «Editar perfil» since F3 — the avatar menu is the way into settings.
+- **`/me/disponibilidad`** — `Navbar`, `availability/MyAvailabilityPanel` (the month
+  `AvailabilityGrid` always open; no weekend pills, no Desde/Hasta fields).
+- **`/me/ajustes`** — `Navbar`, `SettingsCard` (one card holding `ThemeControl`,
+  `TextSizeControl` and `ProfilePanel` `bare` — no longer three separate cards).
 - **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
 - **`/posts/[slug]`** — `Navbar`, `SectionNav`, `ChordChart`, `SongAudioSection`,
   `EditSongButton`, `PortableText`.
@@ -135,7 +147,8 @@ See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full comp
 
 - `(client)/loading.tsx` — home run-sheet skeleton: the wide hero card plus two collapsed lines (group-level suspense).
 - `(client)/error.tsx` (C) — branded Spanish error boundary with retry.
-- `(client)/me/loading.tsx`, `(client)/schedule/loading.tsx`,
+- `(client)/me/loading.tsx`, `(client)/me/disponibilidad/loading.tsx`,
+  `(client)/me/ajustes/loading.tsx`, `(client)/schedule/loading.tsx`,
   `(client)/posts/[slug]/loading.tsx`, `(client)/biblioteca/loading.tsx` — per-route skeletons.
 - `(client)/posts/not-found.tsx` — "Canción no encontrada."
 - `(client)/not-found.tsx` — "Página no encontrada": the fallback for every other `notFound()` in the `(client)` group

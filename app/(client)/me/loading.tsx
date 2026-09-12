@@ -1,8 +1,9 @@
 import Skeleton, { SkeletonGroup, NavbarSkeleton } from "../../components/ui/Skeleton";
 
 // The shape `/me` actually lands in (R3, F3): the identity header, the next
-// service as a full card, the rest as collapsed lines, the one link line to
-// `/me/disponibilidad`, the Ajustes card.
+// service as a full card, the rest as collapsed lines, and the one link line to
+// `/me/disponibilidad`. No Ajustes block — the settings card is `/me/ajustes`,
+// which has its own skeleton.
 // A skeleton that still drew the old two-column tail would move everything on
 // hydration, which is the one thing it exists to prevent.
 export default function MeLoading() {
@@ -53,9 +54,6 @@ export default function MeLoading() {
           <Skeleton className="h-5 w-36" />
           <Skeleton className="h-3 w-28 shrink-0" />
         </div>
-
-        {/* Ajustes. */}
-        <Skeleton className="h-64" rounded="lg" />
       </div>
     </SkeletonGroup>
   );
