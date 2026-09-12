@@ -370,4 +370,34 @@ describe("AvailabilityGrid — drag-select", () => {
     expect(applyRangeMock.mock.calls).toEqual([["2026-09-16", "2026-09-18", true]]);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("after a drag that latched solid and a pointerCancel, a new drag resets the latch", () => {
+    // The solid latch persists across a cancelled drag if not cleared, so the next
+    // drag starts with a non-zero opacity even when the finger is far from the
+    // bottom edge. This test ensures the cancel clears it via onPointerCancel and
+    // the next down clears it again to be sure.
+    const months = renderGrid();
+    enterMode();
+
+    // First drag: reach the bottom and latch solid.
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    over(cell("2026-11-30"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM });
+    expect(document.querySelector("[data-shadow]")!.getAttribute("data-solid")).toBe("true");
+
+    // Cancel the drag.
+    fireEvent.pointerCancel(months, { pointerId: 1 });
+    expect(document.querySelector("[data-shadow]")).toBeNull();
+
+    // Second drag: move far from the bottom. The overlay should NOT be solid.
+    over(cell("2026-09-15"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    over(cell("2026-09-16"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM - 40 });
+
+    const tile = document.querySelector("[data-shadow]");
+    expect(tile).not.toBeNull();
+    expect(tile!.getAttribute("data-solid")).toBe("false");
+  });
 });

@@ -207,6 +207,8 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
     if (!selecting || !e.isPrimary || e.button !== 0) return;
     const iso = isoFromPoint(e.clientX, e.clientY);
     if (!iso || iso < todayIso) return;
+    // A lost pointerup must not carry the latch into the next drag.
+    solidRef.current = false;
     // Capture, so the rest of the gesture arrives here even as the finger leaves
     // the cell it started on. That is also why `isoFromPoint` exists: with the
     // pointer captured, the event target stops telling us which day is under it.
@@ -290,6 +292,10 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
 
   function goTo(next: number) {
     closeNote();
+    // Paging mid-drag ends the drag without committing.
+    setDragNow(null);
+    solidRef.current = false;
+    setShadow(0);
     setPage(next);
   }
 
