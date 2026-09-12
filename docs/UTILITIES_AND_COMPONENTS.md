@@ -213,8 +213,7 @@ state a save actually persists against the last saved one.
   `applyRange(startIso, endIso, add)` (F1, Frank's look) is the same shape as `applyRecurring`
   but for a contiguous inclusive span rather than a weekday pattern — a special service mid-week
   the ten weekend rows can't express. It skips days before `todayIso` at either end, caps the
-  span at 366 days, and no-ops on a reversed range; `AvailabilityGrid`'s «Rango por fechas»
-  fields (moved there from the panel in F2) are its one caller.
+  span at 366 days, and no-ops on a reversed range; both callers live in `AvailabilityGrid` — the «Rango por fechas» fields and the drag release.
 - **`proposalSnapshot(songs, teamNotes, leadNotes, proposalId)`**
   ([ProposalEditor.tsx](../app/\(client\)/me/propose/[roleId]/ProposalEditor.tsx)) — the same
   job for the setlist proposal editor. Takes the proposal id because `lead_notes` is only

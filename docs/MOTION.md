@@ -705,7 +705,7 @@ the full ledger; the motion-relevant pieces:
 - **`WeekendList`** is the default availability surface: the next ten weekends
   (`nextWeekends`/`weekendLabel`, `app/utils/weekends.ts`), each a row of two
   `Button variant="pill" tone="availability" size="lg"` toggles (`aria-pressed`), «SÁB» and
-  «DOM». **Ruling: pill toggles, not `SegmentedControl`, are right here** — a
+  «DOM» (two before F1; three since — see the F1 bullet below). **Ruling: pill toggles, not `SegmentedControl`, are right here** — a
   `SegmentedControl` is a one-of-N choice with a sliding thumb, and a weekend's two days
   are two INDEPENDENT booleans (a member can be unavailable Saturday, Sunday, both, or
   neither), which is exactly the shape `Button`'s `pill` variant with `aria-pressed`

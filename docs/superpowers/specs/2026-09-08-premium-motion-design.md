@@ -1384,8 +1384,7 @@ future round:
   marking five separate days by hand for a multi-day trip that isn't aligned to a
   weekend was the gap. `useAvailability.applyRange(startIso, endIso, add)` marks (or
   clears) an inclusive span in one call, on the same revision-guarded state the weekend
-  list and the grid already share; `MyAvailabilityPanel`'s «Rango…» panel is its one
-  caller.
+  list and the grid already share; `MyAvailabilityPanel`'s «Rango…» panel was its one caller until F2 (below) moved the fields into `AvailabilityGrid` under «Rango por fechas»; both callers now live in `AvailabilityGrid` — the date fields and the drag release.
 - **The grid stays for single weekdays.** Neither ask replaces the twelve-month grid
   behind «Ver calendario» — a lone Tuesday rehearsal is still one tap on a calendar day,
   not a one-day "range." The grid, the weekend rows and the range panel now cover three

@@ -370,4 +370,80 @@ describe("AvailabilityGrid — drag-select", () => {
     expect(applyRangeMock.mock.calls).toEqual([["2026-09-16", "2026-09-18", true]]);
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
+
+  it("a lost pointerup does not carry the latch into the next drag", () => {
+    // A pointerup may be lost (or misfired elsewhere), leaving the latch solid.
+    // The next pointerdown MUST reset it, or the second drag inherits the latched
+    // state and appears solid even though the finger is far from the bottom edge.
+    // This guards the `solidRef.current = false` in `onPointerDown`.
+    const months = renderGrid();
+    enterMode();
+
+    // First drag: reach the bottom and latch solid.
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    over(cell("2026-11-30"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM });
+    expect(document.querySelector("[data-shadow]")!.getAttribute("data-solid")).toBe("true");
+
+    // NO pointerup or pointerCancel — simulate a lost release event.
+    // The latch is still active in the component's ref.
+
+    // Second drag: same pointerId, isPrimary, but on the 13th (different day).
+    over(cell("2026-09-13"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    // Move far from the bottom: 40px up the tile.
+    over(cell("2026-09-13"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM - 40 });
+
+    // The overlay should exist but NOT be solid. If the latch was not reset
+    // in onPointerDown, it would still be solid from the lost first drag.
+    const tile = document.querySelector("[data-shadow]");
+    expect(tile).not.toBeNull();
+    expect(tile!.getAttribute("data-solid")).toBe("false");
+  });
+
+  it("paging mid-drag ends the drag without committing", () => {
+    // A click on «Siguiente» while dragging must cancel the gesture, reset the
+    // drag state, and reset the latch. If a move event arrives after paging
+    // before a new down, the latch must not persist from the old drag.
+    // This guards the `solidRef.current = false` in `goTo`.
+    const months = renderGrid();
+    enterMode();
+
+    // Drag to the bottom and latch solid on page 0.
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    over(cell("2026-11-30"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM });
+    expect(document.querySelector("[data-shadow]")!.getAttribute("data-solid")).toBe("true");
+
+    // Page to page 1. goTo must reset dragRef, solidRef, and shadow.
+    const nextButton = screen.getByRole("button", { name: /Siguiente/ });
+    fireEvent.click(nextButton);
+
+    // The shadow is gone and the page advanced.
+    expect(document.querySelector("[data-shadow]")).toBeNull();
+    expect(screen.getByText("Diciembre 2026 – Febrero 2027")).toBeTruthy();
+
+    // Simulate an edge case: a move event arrives on the new page without
+    // a new down. This tests that the latch was reset in goTo, not relying
+    // on onPointerDown to reset it.
+    over(cell("2027-01-15"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM - 40 });
+
+    // The shadow should NOT be solid. If the latch wasn't reset in goTo,
+    // it would still be true even though we're far from the bottom.
+    // Since dragRef.current is null, this move doesn't update the drag,
+    // but it still renders the shadow. The shadow opacity is based on solidRef.
+    const tile = document.querySelector("[data-shadow]");
+    if (tile) {
+      expect(tile.getAttribute("data-solid")).toBe("false");
+    }
+
+    // A pointerUp also must not commit anything.
+    fireEvent.pointerUp(months, { pointerId: 1 });
+    expect(applyRangeMock).not.toHaveBeenCalled();
+    expect(openNoteMock).not.toHaveBeenCalled();
+  });
 });
