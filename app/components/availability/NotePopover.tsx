@@ -53,7 +53,11 @@ export function popoverPosition(
     // Clamped at both ends: the right clamp alone goes negative on a viewport
     // narrower than the popover.
     x: Math.max(8, Math.min(rect.left, viewportW - POPOVER_W)),
-    y: above ? rect.top - POPOVER_H - 6 : rect.bottom + 6,
+    // `y` is clamped for the same reason in the other axis: flipping above a
+    // day that sits near the TOP of a short viewport (a phone with the keyboard
+    // up, or a range whose first mounted day is the first row of a month) puts
+    // the popover at a negative offset and off the screen entirely.
+    y: Math.max(8, above ? rect.top - POPOVER_H - 6 : rect.bottom + 6),
     above,
   };
 }

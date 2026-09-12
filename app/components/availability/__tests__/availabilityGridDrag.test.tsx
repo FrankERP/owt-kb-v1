@@ -67,9 +67,9 @@ beforeEach(() => {
   openNoteMock.mockReset();
   closeNoteMock.mockReset();
   hapticMock.mockReset();
-  // The release opens the popover on the next frame, once paging has mounted
-  // the anchor cell. Run it inline so the assertion does not need a flush.
-  vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { cb(0); return 0; });
+  // The release opens the popover from an EFFECT, not a frame callback: the
+  // anchor cell only exists once the page turn has committed. `fireEvent` already
+  // flushes effects, so nothing has to be stubbed or advanced here.
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
     top: 100, bottom: TILE_BOTTOM, height: 400, left: 0, right: 300, width: 300, x: 0, y: 100,
     toJSON: () => ({}),
@@ -227,6 +227,10 @@ describe("AvailabilityGrid — drag-select", () => {
     expect(tile.getAttribute("data-solid")).toBe("false");
     expect(tile.getAttribute("aria-hidden")).toBe("true");
     expect(tile.textContent).toContain("Diciembre");
+    // It is an OVERLAY inside the last visible tile, not a fourth tile below the
+    // row: its host is the one that still carries Noviembre's own days.
+    expect(tile.className).toContain("absolute");
+    expect(tile.parentElement!.querySelector('[data-iso="2026-11-30"]')).not.toBeNull();
 
     over(cell("2026-09-14"));
     fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM });
@@ -250,6 +254,57 @@ describe("AvailabilityGrid — drag-select", () => {
     expect(applyRangeMock.mock.calls).toEqual([["2026-09-12", "2026-12-01", true]]);
     expect(screen.getByText("Diciembre 2026 – Febrero 2027")).toBeTruthy();
     expect(document.querySelector("[data-shadow]")).toBeNull();
+
+    // The note still belongs to the range's first day, but it is ANCHORED to the
+    // first day still on screen — September unmounted with the page turn, and a
+    // detached node would position the popover from a zero rect.
+    const [iso, anchor, isos] = openNoteMock.mock.calls[0] as [string, HTMLElement, string[]];
+    expect(iso).toBe("2026-09-12");
+    expect(anchor).toBe(cell("2026-12-01"));
+    expect(anchor.getAttribute("data-iso")).toBe("2026-12-01");
+    expect(isos[0]).toBe("2026-09-12");
+    expect(isos[isos.length - 1]).toBe("2026-12-01");
+  });
+
+  it("a release with no intermediate move still commits the day under the finger", () => {
+    // `pointermove` is continuous and `pointerup` discrete: React may not have
+    // committed the last move when the release runs, so the handler reads the
+    // live drag from a ref and re-resolves the end from the release's own point.
+    const months = renderGrid();
+    enterMode();
+
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    over(cell("2026-09-16"));
+    fireEvent.pointerUp(months, { pointerId: 1, clientX: 10, clientY: 200 });
+
+    expect(applyRangeMock.mock.calls).toEqual([["2026-09-12", "2026-09-16", true]]);
+  });
+
+  it("a second finger neither moves the anchor nor commits the range", () => {
+    const months = renderGrid();
+    enterMode();
+
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    over(cell("2026-09-14"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: 200 });
+
+    // A second touch: non-primary, its own id. Its down must not re-anchor, its
+    // move must not drag, and its lift must not commit anything.
+    over(cell("2026-09-20"));
+    fireEvent.pointerDown(months, { pointerId: 2, isPrimary: false, button: 0, clientX: 80, clientY: 200 });
+    fireEvent.pointerMove(months, { pointerId: 2, buttons: 1, clientX: 80, clientY: 200 });
+    fireEvent.pointerUp(months, { pointerId: 2, clientX: 80, clientY: 200 });
+
+    expect(applyRangeMock).not.toHaveBeenCalled();
+    expect(openNoteMock).not.toHaveBeenCalled();
+    expect(cell("2026-09-20").className).not.toContain("ring-availability-strong/50");
+
+    // The original finger still owns the drag it started.
+    over(cell("2026-09-14"));
+    fireEvent.pointerUp(months, { pointerId: 1, clientX: 10, clientY: 200 });
+    expect(applyRangeMock.mock.calls).toEqual([["2026-09-12", "2026-09-14", true]]);
   });
 
   it("the date fields live inside the grid and mark a span through the hook", () => {

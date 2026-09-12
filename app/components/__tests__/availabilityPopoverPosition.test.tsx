@@ -59,6 +59,14 @@ describe("popoverPosition", () => {
     expect(popoverPosition({ top: 0, bottom: 44, left: 10 }, 240, VIEWPORT_H).x).toBe(8);
   });
 
+  it("never goes off the TOP when it flips above a day in a short viewport", () => {
+    // A phone with the keyboard up: there is no room below, so it flips above —
+    // and 160px above a day in the first row is a negative offset.
+    const { y, above } = popoverPosition({ top: 40, bottom: 84, left: 40 }, VIEWPORT_W, 200);
+    expect(above).toBe(true);
+    expect(y).toBe(8);
+  });
+
   it("tracks its day: the same cell after a scroll gives a new position", () => {
     const atRest = popoverPosition({ top: 400, bottom: 444, left: 40 }, VIEWPORT_W, VIEWPORT_H);
     const scrolledUp = popoverPosition({ top: 100, bottom: 144, left: 40 }, VIEWPORT_W, VIEWPORT_H);

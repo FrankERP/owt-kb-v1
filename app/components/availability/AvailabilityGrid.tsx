@@ -7,9 +7,14 @@
 //
 // It owns paging AND the selection gesture (R3 F2): «Seleccionar fechas» turns
 // the months into a drag surface, a drag marks the whole span at once, and the
-// next month fades in as a "shadow" tile when the finger nears the bottom of
-// the page — no auto-scroll, and no long-press anywhere (the mode is a button,
-// so a slow tap can never arm a selection by accident).
+// next month fades in as a "shadow" OVERLAY — an absolutely positioned tile
+// INSIDE the last visible month's bounds, reading as a card sliding up over its
+// last rows — when the finger nears the bottom of the page. No auto-scroll
+// during the gesture (the page never moves under the finger), and no long-press
+// anywhere (the mode is a button, so a slow tap can never arm a selection by
+// accident). The gesture belongs to ONE pointer: the first primary finger down
+// owns it until it lifts, and a second finger is ignored rather than allowed to
+// move or commit someone else's range.
 //
 // What it still does NOT own is the data: every edit, the dirty fingerprint and
 // the revision-guarded save live in `useAvailability`, which the HOST
@@ -42,6 +47,13 @@ interface Props {
   noteIso?: string | null;
 }
 
+/** The live span: where the finger went down, where it is now (either order), whose finger. */
+interface Drag {
+  anchor: string;
+  current: string;
+  pointerId: number;
+}
+
 const MONTHS_ES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
@@ -72,10 +84,20 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
   // went down, current = where it is now, either order); `shadow` is the next
   // month's opacity, 0 when it is not offered at all.
   const [selecting, setSelecting] = useState(false);
-  const [drag, setDrag] = useState<{ anchor: string; current: string } | null>(null);
+  const [drag, setDrag] = useState<Drag | null>(null);
   const [shadow, setShadow] = useState(0);
+  // The SAME span, mirrored synchronously. `pointermove` is a continuous event,
+  // so React may still be rendering its last one when the discrete `pointerup`
+  // runs — the state closure a release reads can be a frame behind, which drops
+  // the last day of every fast drag. The handlers read this; the render reads
+  // the state.
+  const dragRef      = useRef<Drag | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastTileRef  = useRef<HTMLDivElement | null>(null);
+  // The note the release asked for, opened from an effect rather than inline:
+  // ending inside the shadow month turns the page, and the anchor cell only
+  // exists once THAT render has committed.
+  const [pendingNote, setPendingNote] = useState<{ iso: string; days: string[] } | null>(null);
 
   // The date fields, moved here from `MyAvailabilityPanel` (F2).
   const [rangeOpen, setRangeOpen]   = useState(false);
@@ -83,6 +105,12 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
   const [rangeEnd, setRangeEnd]     = useState("");
 
   const { dates, notes, todayIso, mark, applyRange } = state;
+
+  /** Write the live span to the ref FIRST, so a release in the same tick sees it. */
+  function setDragNow(next: Drag | null) {
+    dragRef.current = next;
+    setDrag(next);
+  }
 
   const now = new Date();
 
@@ -112,17 +140,40 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
   useEffect(() => {
     if (!drag) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { setDrag(null); setShadow(0); }
+      if (e.key === "Escape") { dragRef.current = null; setDrag(null); setShadow(0); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [drag]);
 
+  // Open the range's note once the release's render has committed.
+  //
+  // The anchor must be a MOUNTED day: a drag that ended in the shadow month
+  // turned the page, so `days[0]` lives on the page that just unmounted and a
+  // detached node positions the popover from a zero rect — off-screen on a
+  // phone. Anchor to the first day of the range that is actually on screen
+  // (`iso` stays `days[0]`, the note's key and title), and scroll it into view:
+  // the no-auto-scroll rule covers the gesture, not what happens after it.
+  useEffect(() => {
+    if (!pendingNote) return;
+    const container = containerRef.current;
+    const el =
+      pendingNote.days
+        .map(d => container?.querySelector<HTMLElement>(`[data-iso="${d}"]`))
+        .find(Boolean) ?? container;
+    if (el) {
+      // jsdom has no `scrollIntoView`, and neither does every embedded webview.
+      if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center" });
+      openNote(pendingNote.iso, el, pendingNote.days);
+    }
+    setPendingNote(null);
+  }, [pendingNote, openNote]);
+
   function toggleSelecting() {
     // Both directions: the popover is anchored to a cell whose style is about to
     // change, and a half-finished drag must never survive the mode switch.
     closeNote();
-    setDrag(null);
+    setDragNow(null);
     setShadow(0);
     setSelecting(v => !v);
   }
@@ -135,7 +186,9 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    if (!selecting || e.button !== 0) return;
+    // One finger owns the gesture. A second touch arrives as a non-primary
+    // pointer, and letting it through would move the anchor mid-drag.
+    if (!selecting || !e.isPrimary || e.button !== 0) return;
     const iso = isoFromPoint(e.clientX, e.clientY);
     if (!iso || iso < todayIso) return;
     // Capture, so the rest of the gesture arrives here even as the finger leaves
@@ -149,16 +202,19 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
       // jsdom has no pointer capture, and a device can refuse it. The gesture
       // still works through `elementFromPoint`; capture only keeps it smooth.
     }
-    setDrag({ anchor: iso, current: iso });
+    setDragNow({ anchor: iso, current: iso, pointerId: e.pointerId });
     void haptic("medium");
     e.preventDefault();
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
-    if (!drag) return;
+    const live = dragRef.current;
+    if (!live || e.pointerId !== live.pointerId) return;
     const iso = isoFromPoint(e.clientX, e.clientY);
-    if (iso && iso !== drag.current) {
-      setDrag({ ...drag, current: iso });
+    // Against the REF, not the state: two moves in one frame would otherwise
+    // both read the old `current` and fire the selection haptic twice.
+    if (iso && iso !== live.current) {
+      setDragNow({ ...live, current: iso });
       void haptic("selection");
     }
     // How close the finger is to the bottom of the last VISIBLE month decides
@@ -179,32 +235,33 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const live = dragRef.current;
+    // A second finger lifting must not end — or commit — the first one's drag.
+    if (live && e.pointerId !== live.pointerId) return;
     releaseCapture(e);
-    if (drag) {
+    if (live) {
       // The days FIRST: paging below re-renders the grid, and the span has to be
       // read from the drag that just ended, not from what is on screen after.
-      const days = isoRange(drag.anchor, drag.current, todayIso);
+      // The release's own point wins over the last rendered `current`, which may
+      // be a frame stale — a tap-then-lift with no move in between has none.
+      const end = isoFromPoint(e.clientX, e.clientY) ?? live.current;
+      const days = isoRange(live.anchor, end, todayIso);
       if (days.length) {
         applyRange(days[0], days[days.length - 1], true);
         // Ending inside the shadow month means the member meant to go there.
-        if (shadowMonthFirstIso && drag.current >= shadowMonthFirstIso) setPage(page + 1);
-        const first = days[0];
-        // Next frame, so the anchor cell exists after a page turn.
-        requestAnimationFrame(() => {
-          const el =
-            containerRef.current?.querySelector<HTMLElement>(`[data-iso="${first}"]`) ??
-            containerRef.current;
-          if (el) openNote(first, el, days);
-        });
+        if (shadowMonthFirstIso && end >= shadowMonthFirstIso) setPage(page + 1);
+        setPendingNote({ iso: days[0], days });
       }
     }
-    setDrag(null);
+    setDragNow(null);
     setShadow(0);
   }
 
   function onPointerCancel(e: React.PointerEvent<HTMLDivElement>) {
+    const live = dragRef.current;
+    if (live && e.pointerId !== live.pointerId) return;
     releaseCapture(e);
-    setDrag(null);
+    setDragNow(null);
     setShadow(0);
   }
 
@@ -233,8 +290,7 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
 
   function monthTile(
     { year, month }: { year: number; month: number },
-    isLast: boolean,
-    isShadow: boolean,
+    { isLast = false, isShadow = false }: { isLast?: boolean; isShadow?: boolean } = {},
   ) {
     const cells = buildCalendar(year, month);
     return (
@@ -245,7 +301,15 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
         data-solid={isShadow ? (shadow >= 1 ? "true" : "false") : undefined}
         aria-hidden={isShadow ? "true" : undefined}
         style={isShadow ? { opacity: shadow } : undefined}
-        className="rounded-xl border border-accent/15 bg-accent/[0.04] p-3"
+        className={`rounded-xl border border-accent/15 p-3 ${
+          isShadow
+            // The overlay: an opaque card pinned to the bottom of its host tile,
+            // covering its last rows as it solidifies. `pointer-events` stay ON
+            // so `isoFromPoint` resolves into it — `dragSelect` is what refuses a
+            // day until `data-solid` says the finger really reached the month.
+            ? "absolute inset-x-0 bottom-0 bg-surface-base shadow-2xl shadow-elevation/60"
+            : "bg-accent/[0.04]"
+        }${isLast ? " relative" : ""}`}
       >
         <p className="font-label text-[11px] uppercase tracking-widest text-accent/70 mb-2 text-center">
           {MONTHS_ES[month - 1]} {year}
@@ -304,6 +368,8 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
             );
           })}
         </div>
+        {/* The shadow of the next page's first month, INSIDE this tile. */}
+        {isLast && canNext && shadowMonth && shadow > 0 && monthTile(shadowMonth, { isShadow: true })}
       </div>
     );
   }
@@ -409,10 +475,10 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerCancel}
       >
-        {/* `lastTileRef` stays on the last VISIBLE month — the shadow must not
-            become the thing the shadow's own distance is measured from. */}
-        {visibleMonths.map((m, i) => monthTile(m, i === visibleMonths.length - 1, false))}
-        {shadowMonth && shadow > 0 && monthTile(shadowMonth, false, true)}
+        {/* `lastTileRef` stays on the last VISIBLE month — it is the overlay's
+            HOST, and the distance that fades the overlay in is measured from its
+            bottom, never from the overlay itself. */}
+        {visibleMonths.map((m, i) => monthTile(m, { isLast: i === visibleMonths.length - 1 }))}
       </div>
 
       {/* Page dots */}
