@@ -698,11 +698,11 @@ the full ledger; the motion-relevant pieces:
   component so a second surface can read and write the same state without a calendar.
   `MyAvailabilityPanel` (the host, renamed off `AvailabilityPanel` mid-branch — that name
   collided with the unrelated admin panel) calls it exactly ONCE and hands the resulting
-  state down to `WeekendList` and to `AvailabilityGrid`, which keep only what they draw.
+  state down to `AvailabilityGrid` (and, until F3, `WeekendList`), which keeps only what it draws.
   Two hook calls on the same `unavailableDates` would be two revisions and two dirty
   fingerprints racing into the same Sanity document — the lost-update guard `ifRevisionId`
   exists to refuse.
-- **`WeekendList`** is the default availability surface: the next ten weekends
+- **`WeekendList`** (retired in F3, kept as history) was the default availability surface: the next ten weekends
   (`nextWeekends`/`weekendLabel`, `app/utils/weekends.ts`), each a row of two
   `Button variant="pill" tone="availability" size="lg"` toggles (`aria-pressed`), «SÁB» and
   «DOM» (two before F1; three since — see the F1 bullet below). **Ruling: pill toggles, not `SegmentedControl`, are right here** — a
@@ -714,7 +714,7 @@ the full ledger; the motion-relevant pieces:
   `strong`, which is what clears 4.5:1 in light); a day already past renders `disabled`
   rather than pressable, and the pills plus the «Razón» ghost sit at `size="lg"` for the
   44 px touch target.
-- **The twelve-month grid stays**, for a Tuesday rehearsal or a two-week trip the weekend
+- **The twelve-month grid stays** (since F3 it is the ONLY surface, always open on `/me/disponibilidad` — the «Ver calendario» disclosure below is history), for a Tuesday rehearsal or a two-week trip the weekend
   list cannot express, behind a `Collapse` opened by «Ver calendario» — a disclosure, not
   a second default: the grid answers the edge case, the list answers the common one. The
   shared «Repetir…» recurring panel moved up to the host for the same reason the hook did,
@@ -899,5 +899,5 @@ the full ledger; the motion-relevant pieces:
     survived in this file after the anchor moved to `/me/ajustes#tema` (LOW). All three
     fixed in the commit before this one, verified by the gate chain re-run on the
     final tree — the churn cap (two rounds max) was not reached.
-- **Bundle:** measured at release.
+- **Bundle:** `main df19f1b5` → `F3 tip 8df4d0d7` (git-archive cold build, gzip −9): shared 172.5 → 172.5; `/me` 129.8 → 119.9 kB (−9.9); `/me/disponibilidad` 105.1 kB (new); `/me/ajustes` 103.1 kB (new); `/` 119.9 → 118.0 (−1.9); `/schedule` 123.6 → 121.7 (−1.9); `/admin` 356.5 → 354.4 (−2.1) — the weekend list and the date fields left, and every route shed the pill tone's unused variants.
 - **Release:** pending.
