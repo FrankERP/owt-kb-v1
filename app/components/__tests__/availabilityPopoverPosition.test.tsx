@@ -21,7 +21,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { installMotionTestEnv } from "../ui/__tests__/motionTestSetup";
 import { MotionProvider } from "../ui/MotionProvider";
 import MyAvailabilityPanel from "../availability/MyAvailabilityPanel";
-import { popoverPosition } from "../availability/NotePopover";
+import NotePopover, { popoverPosition } from "../availability/NotePopover";
 
 // R3: the popover is shared by both availability surfaces, so it lives in
 // `availability/NotePopover` and the panel owns the one instance. The behaviour
@@ -106,5 +106,50 @@ describe("MyAvailabilityPanel — the popover survives a scroll", () => {
 
     expect(noteField()).not.toBeNull();
     expect((noteField() as HTMLInputElement).value).toBe("Viaje");
+  });
+});
+
+describe("NotePopover — a range popover edits every day at once", () => {
+  afterEach(cleanup);
+
+  function renderRange() {
+    const setNote = vi.fn();
+    const remove = vi.fn();
+    const setPopover = vi.fn();
+    render(
+      <NotePopover
+        popover={{ iso: "2026-09-12", isos: ["2026-09-12", "2026-09-13", "2026-09-14"], x: 0, y: 0, above: false }}
+        setPopover={setPopover}
+        anchorRef={{ current: null }}
+        notes={new Map()}
+        setNote={setNote}
+        remove={remove}
+      />,
+    );
+    return { setNote, remove, setPopover };
+  }
+
+  it("titles the popover with the range label", () => {
+    renderRange();
+    expect(screen.getByText("del 12 al 14 de septiembre")).not.toBeNull();
+  });
+
+  it("writes the same note to every day in the range", () => {
+    const { setNote } = renderRange();
+    fireEvent.change(screen.getByPlaceholderText(/razón/i), { target: { value: "viaje" } });
+    expect(setNote).toHaveBeenCalledTimes(3);
+    expect(setNote).toHaveBeenCalledWith("2026-09-12", "viaje");
+    expect(setNote).toHaveBeenCalledWith("2026-09-13", "viaje");
+    expect(setNote).toHaveBeenCalledWith("2026-09-14", "viaje");
+  });
+
+  it("removes every day in the range and closes", () => {
+    const { remove, setPopover } = renderRange();
+    fireEvent.click(screen.getByText("Quitar estas fechas"));
+    expect(remove).toHaveBeenCalledTimes(3);
+    expect(remove).toHaveBeenCalledWith("2026-09-12");
+    expect(remove).toHaveBeenCalledWith("2026-09-13");
+    expect(remove).toHaveBeenCalledWith("2026-09-14");
+    expect(setPopover).toHaveBeenCalledWith(null);
   });
 });
