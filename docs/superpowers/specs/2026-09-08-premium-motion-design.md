@@ -1393,3 +1393,61 @@ future round:
   one shared `useAvailability` underneath all three.
 
 **Release:** pending.
+
+### F2 — drag-select (2026-09-12)
+
+Frank's ask, verbatim: "What if we went back to the calendar view and range selection
+was a holded click dragged through the calendar. Whenever the user's selection is close
+to the end of month, a 'shadow' of the next month appears underneath and the closer the
+user gets to the next month it becomes more solid and selectable as well. Once the
+selection is done, then the 'Razón' pop up shows" — followed by "make the page not
+scrollable [while selecting] … make sure we won't trigger the selection a long press
+activates … a button to activate this mode like 'Seleccionar fechas no disponibles'".
+
+**Rulings, with reasons:**
+- **A mode button, not a long-press.** The long-press gesture is already claimed by the
+  phone browser itself (text selection, the iOS callout menu) — arming the drag on a held
+  touch would race the browser's own gesture recognizer for the same input. «Seleccionar
+  fechas» ⇄ «Listo» removes the race by making entry deliberate.
+- **The overlay renders inside the last visible tile's own bounds, on every breakpoint** —
+  not the plan's tile below the row. The plan's version sat below the fold on a phone,
+  which both grew the page the mode promises never to scroll and meant a finger reaching
+  for the "next month" landed on nothing visible. One code path (always where the finger
+  actually is) cost a redesign of a single tile; it was cheaper than a mobile-only branch.
+- **Solidity latches for the rest of the drag** once the finger first reaches the host
+  tile's bottom edge, rather than tracking `clientY >= bottom` live. The overlay's cells
+  sit inside the host's own padding and border, so they never reach that exact edge
+  themselves — without the latch there is no finger position simultaneously "over a
+  next-month cell" and "past the threshold." (See the review trail below — this is what
+  the second HIGH round forced.)
+- **The overlay stays inert (`pointer-events-none`, `aria-hidden`) while it is still
+  fading.** It sits on top of the host's own lower rows while fading in; leaving pointer
+  events on there would resolve nothing on a move and commit a stale end on release —
+  wrong, with no error.
+- **No auto-scroll during the gesture, ever.** The page must not move under the finger;
+  the shadow overlay is what stands in for "the next month is now reachable."
+- **The Desde/Hasta date fields stay**, moved from the panel into the grid under «Rango
+  por fechas» — the keyboard/VoiceOver path to the exact same range a drag expresses, so
+  removing them would drop accessibility rather than just tidy a UI.
+- **One note for the whole range.** `NoteAnchor` gained `isos?: string[]`; the popover
+  edits every day in the range with one «Razón» and one «Quitar estas fechas», never a
+  popover per day.
+
+**Review trail:** Task 1 (the pure model) drew one HIGH — `isoFromPoint` was reading the
+`data-shadow`/`data-solid` flags on the cell itself, but Task 2 places them on the month
+tile ancestor; fixed in the same round. Task 2 (the grid) drew one HIGH (the note's anchor
+day could already be unmounted if the release turned the page before the popover opened —
+fixed with a post-commit effect anchored to the first still-mounted day) plus two MEDIUMs
+(a second finger could re-anchor or commit the gesture; `pointerup` could read a
+one-frame-stale render closure — fixed with `isPrimary`/`pointerId` pinning and a
+synchronously-mirrored `dragRef`). The fix round's own overlay geometry then drew two NEW
+HIGHs on re-review — the overlay's cells never actually reached the "solid" threshold, and
+the still-fading overlay covered the host's live rows with pointer events on — both closed
+by the solidity latch and `pointer-events-none` above.
+
+**Open device checks, for Frank's look:** whether the fading overlay leaves enough of the
+host month visible to still read the current month while the shadow solidifies; whether
+the one-way latch (solid, once reached, for the rest of that drag) feels right when a
+finger drifts back up into the fading tile rather than resetting.
+
+**Release:** pending.

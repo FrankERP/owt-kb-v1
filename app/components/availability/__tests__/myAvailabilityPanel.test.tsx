@@ -1,9 +1,13 @@
 /** @vitest-environment jsdom */
 //
-// The «Rango…» panel (F1, Frank's look): a special service mid-week needs more
-// than the ten weekend rows can express. Rendered through the host, same reason
-// as `weekendList.test.tsx` — the range write goes through the one
+// The «Rango por fechas» panel: a special service mid-week needs more than the
+// ten weekend rows can express. Rendered through the host, same reason as
+// `weekendList.test.tsx` — the range write goes through the one
 // `useAvailability` the panel shares with the list and the grid.
+//
+// R3 F2 re-point: the date fields moved INSIDE the grid, beside the drag that
+// expresses the same range, so every case opens «Ver calendario» first. The
+// panel itself no longer offers a range button at all.
 
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -33,6 +37,14 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** The date fields live in the grid now: open it, then the disclosure. */
+function openRangeFields() {
+  fireEvent.click(screen.getByRole("button", { name: "Ver calendario" }));
+  const toggle = screen.getByRole("button", { name: "Rango por fechas" });
+  fireEvent.click(toggle);
+  return toggle;
+}
+
 function renderPanel() {
   return render(
     <MotionProvider>
@@ -41,19 +53,17 @@ function renderPanel() {
   );
 }
 
-describe("MyAvailabilityPanel — Rango…", () => {
+describe("MyAvailabilityPanel — Rango por fechas", () => {
   it("opens the range panel, marks a span, and reflects it in the upcoming count", () => {
     renderPanel();
 
-    const toggle = screen.getByRole("button", { name: "Rango…" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(toggle);
+    const toggle = openRangeFields();
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
 
     const range = document.getElementById("availability-range")!;
     const desde = within(range).getByLabelText("Desde") as HTMLInputElement;
     const hasta = within(range).getByLabelText("Hasta") as HTMLInputElement;
-    // Both panels' children stay mounted (Collapse), so scope to this one —
+    // Every Collapse keeps its children mounted, so scope to this one —
     // «Repetir…» has its own «Marcar» button too.
     const marcar = within(range).getByRole("button", { name: "Marcar" }) as HTMLButtonElement;
     expect(marcar.disabled).toBe(true);
@@ -73,8 +83,7 @@ describe("MyAvailabilityPanel — Rango…", () => {
   it("keeps «Marcar» disabled for an all-past range", () => {
     renderPanel();
 
-    const toggle = screen.getByRole("button", { name: "Rango…" });
-    fireEvent.click(toggle);
+    openRangeFields();
 
     const range = document.getElementById("availability-range")!;
     const desde = within(range).getByLabelText("Desde") as HTMLInputElement;
@@ -88,16 +97,16 @@ describe("MyAvailabilityPanel — Rango…", () => {
     expect(marcar.disabled).toBe(true);
   });
 
-  it("opening «Rango…» closes an open «Repetir…» panel and vice versa", () => {
+  it("the panel offers no range button of its own — the fields are the grid's now", () => {
     renderPanel();
-    const recur = screen.getByRole("button", { name: "Repetir…" });
-    const range = screen.getByRole("button", { name: "Rango…" });
+    expect(screen.queryByRole("button", { name: "Rango…" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Rango por fechas" })).toBeNull();
 
+    // «Repetir…» is the panel's only disclosure left, and it still toggles.
+    const recur = screen.getByRole("button", { name: "Repetir…" });
     fireEvent.click(recur);
     expect(recur.getAttribute("aria-expanded")).toBe("true");
-
-    fireEvent.click(range);
-    expect(range.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(recur);
     expect(recur.getAttribute("aria-expanded")).toBe("false");
   });
 });

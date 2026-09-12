@@ -13,6 +13,13 @@
 // must go inert.
 
 import { useEffect, useRef } from "react";
+import { fmtDayLabel, rangeLabel } from "./dragSelect";
+
+// `fmtDayLabel` lives in `dragSelect.ts` now — that module needs it for
+// `rangeLabel` and this one imports `rangeLabel` back, so keeping the
+// definition here would make a cycle. Re-exported so existing importers of
+// `NotePopover` need no change.
+export { fmtDayLabel };
 
 /** Height the popover is laid out against; it has no measured height until it exists. */
 const POPOVER_H = 160;
@@ -21,6 +28,8 @@ const POPOVER_W = 272;
 /** The open popover: which date, and where it sits in viewport coordinates. */
 export interface NoteAnchor {
   iso: string;
+  /** The full range, ascending, when this popover covers more than one day. `iso` stays the anchor/first day and the positioning key. */
+  isos?: string[];
   x: number;
   y: number;
   above: boolean;
@@ -44,15 +53,13 @@ export function popoverPosition(
     // Clamped at both ends: the right clamp alone goes negative on a viewport
     // narrower than the popover.
     x: Math.max(8, Math.min(rect.left, viewportW - POPOVER_W)),
-    y: above ? rect.top - POPOVER_H - 6 : rect.bottom + 6,
+    // `y` is clamped for the same reason in the other axis: flipping above a
+    // day that sits near the TOP of a short viewport (a phone with the keyboard
+    // up, or a range whose first mounted day is the first row of a month) puts
+    // the popover at a negative offset and off the screen entirely.
+    y: Math.max(8, above ? rect.top - POPOVER_H - 6 : rect.bottom + 6),
     above,
   };
-}
-
-/** The long Spanish day label — the popover's title, and both surfaces' a11y names. */
-export function fmtDayLabel(iso: string): string {
-  const d = new Date(iso + "T12:00:00");
-  return d.toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" });
 }
 
 export default function NotePopover({
@@ -132,6 +139,12 @@ export default function NotePopover({
 
   if (!popover) return null;
 
+  // A range popover edits every day in `isos` with one note; a single-day
+  // popover (no `isos`, or a one-day range) keeps the original behaviour.
+  const days = popover.isos?.length ? popover.isos : [popover.iso];
+  const isRange = days.length > 1;
+  const title = isRange ? rangeLabel(days[0], days[days.length - 1]) : fmtDayLabel(popover.iso);
+
   return (
     <>
       {/* Backdrop — click outside to close */}
@@ -144,7 +157,7 @@ export default function NotePopover({
         {/* Date label + close */}
         <div className="flex items-start justify-between gap-2">
           <p className="font-label text-[11px] uppercase tracking-widest text-availability-strong leading-tight capitalize">
-            {fmtDayLabel(popover.iso)}
+            {title}
           </p>
           <button
             type="button"
@@ -163,22 +176,22 @@ export default function NotePopover({
           ref={inputRef}
           type="text"
           placeholder="Razón (opcional)..."
-          value={notes.get(popover.iso) ?? ""}
-          onChange={e => setNote(popover.iso, e.target.value)}
+          value={notes.get(days[0]) ?? ""}
+          onChange={e => days.forEach(d => setNote(d, e.target.value))}
           onKeyDown={e => { if (e.key === "Enter") close(); }}
           className="w-full rounded-lg border border-surface-accent-l50-d15 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 placeholder:text-placeholder focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"
         />
 
-        {/* Remove date */}
+        {/* Remove date(s) */}
         <button
           type="button"
-          onClick={() => { remove(popover.iso); close(); }}
+          onClick={() => { days.forEach(d => remove(d)); close(); }}
           className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg border border-negative-strong/20 font-label text-[11px] uppercase tracking-widest text-negative-fg/80 hover:border-negative-strong/40 hover:text-negative-fg transition-colors"
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
-          Quitar esta fecha
+          {isRange ? "Quitar estas fechas" : "Quitar esta fecha"}
         </button>
       </div>
     </>
