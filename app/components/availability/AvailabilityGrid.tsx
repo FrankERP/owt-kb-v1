@@ -12,9 +12,16 @@
 // last rows — when the finger nears the bottom of the page. No auto-scroll
 // during the gesture (the page never moves under the finger), and no long-press
 // anywhere (the mode is a button, so a slow tap can never arm a selection by
-// accident). The gesture belongs to ONE pointer: the first primary finger down
-// owns it until it lifts, and a second finger is ignored rather than allowed to
-// move or commit someone else's range.
+// accident). Reaching the host tile's bottom LATCHES the overlay solid for the
+// rest of that drag, because the overlay's own cells stop short of that bottom
+// edge (padding and border): without the latch there is no finger position that
+// is both over a next-month day AND past the threshold that makes it
+// selectable. While it is still fading the overlay is inert, so a move over the
+// host's covered rows still resolves the day underneath.
+//
+// The gesture belongs to ONE pointer: the first primary finger down owns it
+// until it lifts, and a second finger is ignored rather than allowed to move or
+// commit someone else's range.
 //
 // What it still does NOT own is the data: every edit, the dirty fingerprint and
 // the revision-guarded save live in `useAvailability`, which the HOST
@@ -92,6 +99,12 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
   // the last day of every fast drag. The handlers read this; the render reads
   // the state.
   const dragRef      = useRef<Drag | null>(null);
+  // Latched once the finger has reached the host tile's bottom, until the
+  // gesture ends. The overlay's cells sit INSIDE the host's padding and border,
+  // so the band where `bottom - clientY <= 0` is below every day it offers —
+  // un-latched, a finger could never be over a solid next-month cell. Latched,
+  // it reaches the bottom once and then moves back up into the days.
+  const solidRef     = useRef(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const lastTileRef  = useRef<HTMLDivElement | null>(null);
   // The note the release asked for, opened from an effect rather than inline:
@@ -140,7 +153,7 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
   useEffect(() => {
     if (!drag) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { dragRef.current = null; setDrag(null); setShadow(0); }
+      if (e.key === "Escape") { dragRef.current = null; solidRef.current = false; setDrag(null); setShadow(0); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -163,7 +176,9 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
         .find(Boolean) ?? container;
     if (el) {
       // jsdom has no `scrollIntoView`, and neither does every embedded webview.
-      if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "center" });
+      // `nearest`: a day already on screen — the common release — must not be
+      // yanked to the middle of the viewport just because a note opened.
+      if (typeof el.scrollIntoView === "function") el.scrollIntoView({ block: "nearest" });
       openNote(pendingNote.iso, el, pendingNote.days);
     }
     setPendingNote(null);
@@ -174,6 +189,7 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
     // change, and a half-finished drag must never survive the mode switch.
     closeNote();
     setDragNow(null);
+    solidRef.current = false;
     setShadow(0);
     setSelecting(v => !v);
   }
@@ -218,10 +234,15 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
       void haptic("selection");
     }
     // How close the finger is to the bottom of the last VISIBLE month decides
-    // how solid the next one looks — the page itself never scrolls.
+    // how solid the next one looks — the page itself never scrolls. Once it has
+    // ARRIVED there the overlay stays solid for the rest of the drag; see
+    // `solidRef`.
     const tile = lastTileRef.current;
-    if (canNext && tile) setShadow(shadowOpacity(tile.getBoundingClientRect().bottom - e.clientY));
-    else setShadow(0);
+    if (canNext && tile) {
+      const distance = tile.getBoundingClientRect().bottom - e.clientY;
+      if (distance <= 0) solidRef.current = true;
+      setShadow(solidRef.current ? 1 : shadowOpacity(distance));
+    } else setShadow(0);
   }
 
   function releaseCapture(e: React.PointerEvent<HTMLDivElement>) {
@@ -254,6 +275,7 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
       }
     }
     setDragNow(null);
+    solidRef.current = false;
     setShadow(0);
   }
 
@@ -262,6 +284,7 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
     if (live && e.pointerId !== live.pointerId) return;
     releaseCapture(e);
     setDragNow(null);
+    solidRef.current = false;
     setShadow(0);
   }
 
@@ -304,10 +327,14 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
         className={`rounded-xl border border-accent/15 p-3 ${
           isShadow
             // The overlay: an opaque card pinned to the bottom of its host tile,
-            // covering its last rows as it solidifies. `pointer-events` stay ON
-            // so `isoFromPoint` resolves into it — `dragSelect` is what refuses a
-            // day until `data-solid` says the finger really reached the month.
-            ? "absolute inset-x-0 bottom-0 bg-surface-base shadow-2xl shadow-elevation/60"
+            // covering its last rows as it solidifies. INERT until it is solid —
+            // it sits over days the finger is still meant to be selecting, and an
+            // un-resolvable move there would leave the release committing a stale
+            // end. Once solid it takes the pointer and its own days resolve
+            // (`dragSelect` still refuses a non-solid one, as defence in depth).
+            ? `absolute inset-x-0 bottom-0 bg-surface-base shadow-2xl shadow-elevation/60${
+                shadow >= 1 ? "" : " pointer-events-none"
+              }`
             : "bg-accent/[0.04]"
         }${isLast ? " relative" : ""}`}
       >

@@ -266,6 +266,49 @@ describe("AvailabilityGrid — drag-select", () => {
     expect(isos[isos.length - 1]).toBe("2026-12-01");
   });
 
+  it("once reached, the shadow STAYS solid so its own days can be selected", () => {
+    // The overlay's cells end above its host tile's bottom edge (padding and
+    // border), so the band where the distance is zero sits below every day it
+    // offers. Solidity therefore latches: touch the bottom once, then move back
+    // up into December.
+    const months = renderGrid();
+    enterMode();
+
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    over(cell("2026-11-30"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM });
+    expect(document.querySelector("[data-shadow]")!.getAttribute("data-solid")).toBe("true");
+
+    // 40px back up the tile — un-latched this would fade to 0.67 and stop
+    // resolving, which is exactly the position a finger reaches December from.
+    over(cell("2026-12-03"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM - 40 });
+    expect(document.querySelector("[data-shadow]")!.getAttribute("data-solid")).toBe("true");
+    expect(cell("2026-12-03").className).toContain("ring-availability-strong/50");
+
+    fireEvent.pointerUp(months, { pointerId: 1, clientX: 10, clientY: TILE_BOTTOM - 40 });
+    expect(applyRangeMock.mock.calls).toEqual([["2026-09-12", "2026-12-03", true]]);
+  });
+
+  it("the shadow is inert while it fades and takes the pointer only once solid", () => {
+    // While fading it lies over the host's own lower rows: if it ate the pointer
+    // there, every move would resolve nothing and the release would commit a
+    // stale end — the wrong range, silently.
+    const months = renderGrid();
+    enterMode();
+
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    over(cell("2026-09-13"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM - 60 });
+    expect(document.querySelector("[data-shadow]")!.className).toContain("pointer-events-none");
+
+    over(cell("2026-09-14"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM });
+    expect(document.querySelector("[data-shadow]")!.className).not.toContain("pointer-events-none");
+  });
+
   it("a release with no intermediate move still commits the day under the finger", () => {
     // `pointermove` is continuous and `pointerup` discrete: React may not have
     // committed the last move when the release runs, so the handler reads the
