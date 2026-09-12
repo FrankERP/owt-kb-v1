@@ -73,7 +73,7 @@ describe("isoFromPoint", () => {
     return { elementFromPoint: () => el } as unknown as Pick<Document, "elementFromPoint">;
   }
 
-  it("returns the iso of the closest [data-iso] host", () => {
+  it("returns the iso of the closest [data-iso] host (no shadow attributes)", () => {
     const host = document.createElement("button");
     host.setAttribute("data-iso", "2026-09-12");
     const span = document.createElement("span");
@@ -82,18 +82,22 @@ describe("isoFromPoint", () => {
   });
 
   it("returns null for an un-solid shadow host", () => {
+    const wrapper = document.createElement("div");
+    wrapper.setAttribute("data-shadow", "true");
+    wrapper.setAttribute("data-solid", "false");
     const host = document.createElement("button");
     host.setAttribute("data-iso", "2026-09-20");
-    host.setAttribute("data-shadow", "true");
-    host.setAttribute("data-solid", "false");
+    wrapper.appendChild(host);
     expect(isoFromPoint(1, 2, fakeDoc(host))).toBeNull();
   });
 
   it("returns the iso for a solid shadow host", () => {
+    const wrapper = document.createElement("div");
+    wrapper.setAttribute("data-shadow", "true");
+    wrapper.setAttribute("data-solid", "true");
     const host = document.createElement("button");
     host.setAttribute("data-iso", "2026-09-20");
-    host.setAttribute("data-shadow", "true");
-    host.setAttribute("data-solid", "true");
+    wrapper.appendChild(host);
     expect(isoFromPoint(1, 2, fakeDoc(host))).toBe("2026-09-20");
   });
 

@@ -52,17 +52,20 @@ export function shadowOpacity(distancePx: number, reach = 120): number {
  *
  * A shadow tile that is not yet solid (`data-shadow="true" data-solid="false"`)
  * is not selectable — the finger has to actually reach it, not just pass near
- * it. `doc` defaults to `document` but is injectable so this is testable with
- * a fake `elementFromPoint` and no real layout.
+ * it. The shadow flag lives on the month tile, an ancestor of the cell. `doc`
+ * defaults to `document` but is injectable so this is testable with a fake
+ * `elementFromPoint` and no real layout.
  */
 export function isoFromPoint(
   x: number,
   y: number,
   doc: Pick<Document, "elementFromPoint"> = document,
 ): string | null {
-  const host = doc.elementFromPoint(x, y)?.closest("[data-iso]");
+  const el = doc.elementFromPoint(x, y);
+  const host = el?.closest("[data-iso]");
   if (!host) return null;
-  if (host.getAttribute("data-shadow") === "true" && host.getAttribute("data-solid") === "false") {
+  const shadow = el?.closest("[data-shadow]");
+  if (shadow?.getAttribute("data-shadow") === "true" && shadow.getAttribute("data-solid") === "false") {
     return null;
   }
   return host.getAttribute("data-iso");
