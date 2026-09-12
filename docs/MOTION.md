@@ -115,7 +115,7 @@ exclusive to the sign-in lockup, where it already lived before this list existed
 | `MotionProvider` | client | mounted once in `app/utils/Provider.tsx`; `LazyMotion features={() => import("./motionFeatures").then(…)} strict` (async chunk, not the synchronous `domAnimation` value) + `MotionConfig reducedMotion="user"`. An `m.*` element renders its `initial` values until the chunk resolves; the vendor loader has no rejection handling, so if the chunk fails to fetch an `m` element stays at its pre-feature state and a `Presence` exit never completes — see "Load-failure behaviour" below for what each M0b overlay primitive does about it. |
 | `Presence` | client | `<Presence show={open} variant="rise">` — exit before unmount. Hosts `div` \| `section` \| `aside` \| `li` only (block-level — a transform is dropped on a non-replaced inline element). `appear` defaults to **false**: a `Presence` mounted already-shown does not animate in unless `appear` is passed; for the common case — a mounted `Presence` that toggles `show` — do nothing, the enter animation runs on every `show→true` transition regardless. Pass `appear` only for an instance that mounts already-shown and must still animate in (an on-demand toast, a newly appended list row). `onEntered` fires after the enter animation completes; a mount that is already shown without `appear` runs no enter animation, so the callback never fires there. The `sheet` variant enters on `SPRINGS.sheet` (exit stays `EXIT_MS`). |
 | `Skeleton`, `SkeletonGroup` | neutral | loading placeholders with the shimmer; one `aria-busy` status region per loading surface |
-| `Button` | neutral | `variant` primary/secondary/ghost/danger/icon/pill · `size` sm/md/lg · `busy`/`busyLabel` · `href`. Defaults to `md`; the spec's phone-width `lg` default is applied per call site, not by the primitive. `busy`/`busyLabel` are rejected by the types on the `href` branch — a link has no loading state to represent. `className` is additive only (appended after the variant/size classes, never a padding/radius/colour override). The `primary` variant sets `overflow: hidden` for the hover sheen, so an absolutely positioned badge nested inside a primary button is clipped — anchor badges outside the button instead. The `pill` variant also takes a `tone` (R3): `"accent"` (default) or `"availability"` — `WeekendList`'s weekend toggles, whose pressed text is `soft` rather than `strong` to clear 4.5:1 contrast in light. |
+| `Button` | neutral | `variant` primary/secondary/ghost/danger/icon/pill · `size` sm/md/lg · `busy`/`busyLabel` · `href`. Defaults to `md`; the spec's phone-width `lg` default is applied per call site, not by the primitive. `busy`/`busyLabel` are rejected by the types on the `href` branch — a link has no loading state to represent. `className` is additive only (appended after the variant/size classes, never a padding/radius/colour override). The `primary` variant sets `overflow: hidden` for the hover sheen, so an absolutely positioned badge nested inside a primary button is clipped — anchor badges outside the button instead. The `pill` variant also takes a `tone` (R3): `"accent"` (default) or `"availability"` — `AvailabilityGrid`'s «Seleccionar fechas» pill since F3 retired the tone's original consumer, `WeekendList`'s weekend toggles; pressed text is `soft` rather than `strong` to clear 4.5:1 contrast in light. |
 | `revealProps(i)` (`app/utils/reveal.ts`) | neutral | spread on a block a page reveals; `template.tsx` replays it per navigation |
 | `CueDialog` | client | the ONE dialog shell — never a hand-rolled `fixed inset-0` scrim. `mode="modal"` \| `"sheet"`; a `"sheet"` dialog is only a sheet below 640px — at ≥640px it renders the same centred-card motion as a modal, decided when the dialog opens (`useMemo` on the `open` edge) and held until it closes. Drag-to-dismiss lives on the sheet's HEAD — the handle and the title bar as one grip, never the body (hand-rolled pointer events, not the `drag` prop — the gesture is one-axis and the sheet body still needs to scroll; on the phone sheet the × is `sr-only` (the grip is the close control; the button stays for VoiceOver and keyboard focus, and the ≥640px card keeps it visible); every sheet passes a `title` (`SongSheet` since M1), so the head is the grip everywhere; it closes past `SHEET_DISMISS.distance` = 150 px of travel OR above 0.5 px/ms, and springs back otherwise); a sheet's exit slides fully out (`y: "100%"`), it does not recoil partway like a modal's scale-fade. `onDismiss(reason: DismissReason)` where `DismissReason` is `"escape" \| "backdrop" \| "drag"`. Layers register with the provider so Escape and inert-ing only ever affect the top one. Traps focus via `trapTabTarget`, and can extend its Tab ring to a portalled "satellite" node via `useCueDialogFocusSatellite()` (no production consumer registers one today; see the in-file comment). **Render `<CueDialog open={x}>`, never a literal `open` behind a conditional** — whether that conditional is `{x && <CueDialog open>}` directly, or a wrapper component (a local `Modal`, a `SetlistPopover`, a `SeatPicker`) whose only JSX output is `<CueDialog open …>` and which its caller mounts conditionally. Either way the dialog element is created and destroyed by React instead of opened and closed by the `open` prop, so it never runs CueDialog's own enter/exit — `cueDialogMount.test.ts` pins the current backlog and ratchets it down. A `Menu` inside a `CueDialog` owns Escape: the dialog's capture-phase listener yields when the key's target is inside an open menu or on its expanded trigger, so the first Escape closes the menu and the second the dialog (M0b-2). The sheet/card decision is taken when the dialog OPENS and held until it closes. |
 | `Toast` / `useToast` | client | the ONE toast stack — `useTransientValue` stays for an inline "Guardado ✓" flash next to the control that produced it, `useToast` is for anything that needs a FIXED, stacked notification. `toast({ message, tone?, duration?, hold?, action? })`: `tone` is `"ok" \| "error" \| "info"`; `hold` persists until something calls `dismiss(id)` (never a bare `setTimeout`); `action` renders a button inside the toast that both fires and dismisses. Portals to its own viewport node, `z-[95]` (above `CueDialog`'s `z-[90]`, so a save confirmation is visible over a dialog), bottom-anchored at `calc(1.5rem + max(env(safe-area-inset-bottom), var(--bottom-nav-h, 0px)))` so it clears the mobile tab bar. |
@@ -767,7 +767,9 @@ the full ledger; the motion-relevant pieces:
   (+0.5), `/biblioteca` 114.2 kB → 114.3 kB (+0.1); shared unchanged. The header, the
   weekend list and `SettingsCard` cost 2.4 kB on `/me`; the pill `tone` on `Button`
   touches every other route by ~0.4–0.5 kB — see the "Bundle" section above for the rows.
-- **F1 (Frank's look):** two asks after seeing R3 live — rehearsals are Fridays, so each
+- **F1 (Frank's look) — retired in F3 (2026-09-12), kept as history.** The weekend rows
+  and the range panel this bullet describes are gone: `WeekendList` was deleted and its
+  «Rango…» `Collapse` went with F2 below. Two asks after seeing R3 live — rehearsals are Fridays, so each
   `Weekend` (`app/utils/weekends.ts`) grew a `fri` field and `WeekendList` rows became
   `VIE`/`SÁB`/`DOM` triplets (`weekendLabel` now spans Friday → Sunday, «11 – 13 sep»);
   and a special service mid-week needs more than the ten weekend rows can express, so
@@ -843,3 +845,59 @@ the full ledger; the motion-relevant pieces:
     fechas» — they are the keyboard/VoiceOver path to the exact same range a drag
     expresses, so they belong beside the gesture rather than a panel away. The panel's
     own «Rango…» button is retired (see the F1 bullet above, which this supersedes).
+    **Retired in F3 (2026-09-12):** the Desde/Hasta fields themselves are gone — see the
+    F3 bullet group below for why (four ways to express one range was the accretion
+    Frank asked to undo).
+- **F3 (2026-09-12): three pages.** Frank's look at F2, verbatim: "too many buttons that
+  select the unavailable dates … remove the pills with the calendar … the /me page does
+  too many things now — settings, hero cards, unavailable dates, edit profile." `/me`
+  split into `/me` ("Mi semana"), `/me/disponibilidad` (the calendar alone) and
+  `/me/ajustes` (Tema, Tamaño de texto, Perfil) — see spec Part XII, F3 for the full
+  ledger; the motion-relevant pieces:
+  - **The split is by QUESTION, not by component.** `/me` answers "who am I and when do
+    I serve"; `/me/disponibilidad` answers "when can't I serve"; `/me/ajustes` answers
+    "how does the app work for me." Each page keeps its own `revealProps` sequence
+    starting at 0 rather than inheriting an offset from `/me`, because each is now its
+    own entry point (its own `loading.tsx`, its own session guard, its own
+    `callbackUrl`), not a scrolled-past section of one page.
+  - **One surface marks availability, not four.** The weekend pills (`WeekendList`),
+    the panel's «Rango…» fields (F1) and the grid's Desde/Hasta fields (F2) are all
+    gone; the twelve-month grid — tap for one day, «Seleccionar fechas» for a drag
+    range, «Repetir…» for a weekday pattern — is what remains, mounted OPEN on
+    `/me/disponibilidad` with no «Ver calendario» disclosure around it. «Seleccionar
+    fechas» is KEPT (Frank's ruling) — the calendar page still scrolls vertically, so
+    the drag gesture that needed the shadow-month overlay in F2 still has a page to
+    scroll past. «Editar perfil» is DROPPED from `MeHeader` — settings are one tap away
+    in the avatar menu now, so a second link to the same destination on `/me` itself
+    was the redundancy the split was meant to remove.
+  - **The §12.4 "one page" ruling is reversed, and here is why.** R3 (§12.4 above)
+    deliberately built `/me` as one page — header, hero, the weekend list, the grid
+    behind a disclosure, and `SettingsCard` all in one scroll — on the theory that a
+    member's whole self-service surface belonged together. Frank's F3 look found the
+    theory wrong in practice: a page that answers "when do I serve," "when can't I,"
+    and "how do I configure the app" is three answers wearing one URL, and the fix R3
+    reached for (a disclosure around the grid) treated the symptom — too much on the
+    page — without asking whether the page was doing too many jobs. F3 does the latter:
+    three pages, one job each, linked from `/me` and the avatar menu rather than
+    scrolled past.
+  - **`app/(client)/me/queries.ts`** is the one addition that makes three pages cheaper
+    than three copies: `MEMBER_AVAILABILITY_QUERY`, `MEMBER_PROFILE_QUERY`,
+    `SERVICE_DATES_QUERY` and `horizon()`, neutral so every Server Component under
+    `app/(client)/me/**` can import and call them directly (ADR-0028). `/me`'s own
+    projection dropped the profile fields it no longer renders (`role`, `email`,
+    `notifPrefs`, `hasPassword`) — `photoUrl` stays, for the header avatar;
+    `/me/ajustes`'s
+    `MEMBER_PROFILE_QUERY` carries no `_rev` — no profile write takes `ifRevisionId`
+    (dropped in the Task 2 fix round, after shipping verbatim from the brief first).
+  - **Review trail.** Task 1 (`/me/disponibilidad`) drew one fresh-code-review round:
+    APPROVED, 4 LOW (docs deferred to this task on record; two LOW findings about a
+    kids-only test's ministry-read assertion and the horizon-comparison expression
+    folded into Task 2's dispatch rather than a second round). Task 2 (`/me/ajustes`)
+    drew CHANGES_REQUIRED, 2 MEDIUM + 1 LOW: `MEMBER_PROFILE_QUERY` carried a dead
+    `_rev` no write uses (MEDIUM); the new `loading.tsx` was missing from
+    `loadingSkeletons.test.ts`'s scanned file list (MEDIUM); a stale `/me#tema` line
+    survived in this file after the anchor moved to `/me/ajustes#tema` (LOW). All three
+    fixed in the commit before this one, verified by the gate chain re-run on the
+    final tree — the churn cap (two rounds max) was not reached.
+- **Bundle:** measured at release.
+- **Release:** pending.

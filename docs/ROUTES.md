@@ -161,7 +161,7 @@ See [UTILITIES_AND_COMPONENTS.md](UTILITIES_AND_COMPONENTS.md) for the full comp
 
 | File | Setting |
 |------|---------|
-| `/`, `/schedule`, `/biblioteca`, `/me` | `export const revalidate = 60` |
+| `/`, `/schedule`, `/biblioteca`, `/me`, `/me/disponibilidad`, `/me/ajustes` | `export const revalidate = 60` |
 | `/posts/[slug]` | `revalidate = 3600` + `generateStaticParams()` |
 | `/me/propose/[roleId]` | `revalidate = 0` (always dynamic) |
 | `/studio/[[...tool]]` | `export const dynamic = 'force-static'` |
