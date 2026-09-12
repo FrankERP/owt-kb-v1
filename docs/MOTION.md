@@ -772,7 +772,8 @@ the full ledger; the motion-relevant pieces:
   and a special service mid-week needs more than the ten weekend rows can express, so
   `useAvailability` gained `applyRange(startIso, endIso, add)` and `MyAvailabilityPanel`
   a «Rango…» `Collapse` beside «Repetir…» (two `DateField kind="date"` inputs, opening
-  one panel closes the other). Three `size="lg"` pills at 390 px do NOT always fit
+  one panel closes the other) — **superseded by F2 below**, which moves those same fields
+  into `AvailabilityGrid` under «Rango por fechas». Three `size="lg"` pills at 390 px do NOT always fit
   beside the label on one line: the page's `px-6` leaves 342 px of content, and a
   marked day's «Razón ✓» ghost (`size="lg"`, ~90 px) widens its column, so three
   marked columns plus gaps run ~297 px — against a month-crossing label like
@@ -784,3 +785,60 @@ the full ledger; the motion-relevant pieces:
   cluster wraps under the label, never the label into word-per-line. No pill-size
   change was needed. Neither ask changed the grid, which stays for a single weekday
   the range panel doesn't fit either.
+- **F2 (drag-select, 2026-09-12).** Frank's next look asked for the range itself to come
+  from dragging through the calendar rather than typing two dates: a held-click drag
+  across the days, a "shadow" of the next month fading in underneath as the finger
+  nears the bottom of the page and solidifying into selectable as it arrives, one
+  «Razón» once the drag is released.
+  - **A `Button` («Seleccionar fechas» ⇄ «Listo»), never a long-press**, arms the mode —
+    the long-press gesture is already spoken for on a phone browser (text selection, the
+    iOS callout menu), so reusing it for the drag would race the browser's own gesture
+    recognizer for the same touch. A mode button removes the race outright: entering it
+    is deliberate, and a slow tap outside it does nothing.
+  - **Inside the mode the months container takes over the touch surface**:
+    `touch-action: none`, `user-select`/`-webkit-user-select: none`,
+    `-webkit-touch-callout: none`, and `onContextMenu` is cancelled — the finger's whole
+    gesture belongs to the grid, not to page scroll, text selection, or the callout menu.
+  - **Pointer capture + `isoFromPoint`.** `onPointerDown` calls
+    `setPointerCapture(pointerId)` on the container so the rest of the gesture keeps
+    arriving there even once the finger has left the cell it started on — but a captured
+    pointer's events target the CONTAINER, not the cell underneath, so
+    `isoFromPoint(x, y)` (`dragSelect.ts`) resolves the day the same way regardless:
+    `document.elementFromPoint(x, y)?.closest("[data-iso]")`.
+  - **One finger owns the drag.** The gesture is pinned to the first primary pointer's
+    `pointerId`; a second finger down, moving, or lifting is ignored rather than allowed
+    to re-anchor or commit someone else's range.
+  - **Release reads a ref, not the render closure.** `pointermove` is continuous, so
+    React can still be rendering its last one when the discrete `pointerup` fires — the
+    state closure a release would read can be a frame behind, dropping the last day of a
+    fast drag (or every day of a tap-and-lift). `dragRef` mirrors the live span
+    synchronously; the handlers read the ref, only the render reads the state.
+  - **No auto-scroll during the drag, ever** — the page must never move under the
+    finger. Instead the next month fades in as an OVERLAY absolutely positioned INSIDE
+    the last visible month's own tile, covering its last rows as it solidifies
+    (`shadowOpacity(distance)` over a 120px reach measured from the host tile's bottom
+    edge) — never a fourth tile below the row, which would grow the very page the mode
+    promises not to scroll. It is `aria-hidden`/`pointer-events-none` and inert while
+    still fading, so a move over the host's covered rows still resolves the day
+    underneath rather than resolving nothing.
+  - **Solidity LATCHES for the rest of the drag** once the finger first reaches the host
+    tile's bottom edge. The overlay's own cells sit inside the host's padding and
+    border, so they never quite reach that edge themselves — without the latch there is
+    no finger position that is simultaneously "over a next-month cell" and "past the
+    threshold that makes it selectable." Latched, the finger can move back up into the
+    fading tile and its days resolve.
+  - **Release → `applyRange` → the page flips if the end fell in the next month → the
+    «Razón» popover opens from a post-commit effect**, anchored to the first day of the
+    range that is still MOUNTED (a drag ending in the shadow month turns the page before
+    the popover would open, so the literal first day of the range can already be gone).
+    `scrollIntoView({ block: "nearest" })` only moves the day when it has to, and
+    `popoverPosition` clamps `y` at a minimum of 8px so flipping the popover above a
+    first-row day cannot push it negative.
+  - **One note for the whole range** — `NoteAnchor` gained `isos?: string[]`;
+    `NotePopover` edits every day in `isos` with the same «Razón» and one «Quitar estas
+    fechas», keyed off `days = popover.isos?.length ? popover.isos : [popover.iso]` so
+    the single-day path is unchanged.
+  - **The Desde/Hasta date fields moved from the panel into the grid**, under «Rango por
+    fechas» — they are the keyboard/VoiceOver path to the exact same range a drag
+    expresses, so they belong beside the gesture rather than a panel away. The panel's
+    own «Rango…» button is retired (see the F1 bullet above, which this supersedes).
