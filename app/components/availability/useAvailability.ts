@@ -63,6 +63,8 @@ export interface Availability {
   setNote: (iso: string, text: string) => void;
   /** Expand a weekday pattern over the next 12 months and mark (or clear) the run. */
   applyRecurring: (dow: number, interval: number, add: boolean) => void;
+  /** Mark (or clear) every day from `startIso` to `endIso` inclusive — a special-service week. */
+  applyRange: (startIso: string, endIso: string, add: boolean) => void;
   save: () => Promise<void>;
   saving: boolean;
   saved: boolean;
@@ -156,6 +158,32 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
     clearSaved();
   }
 
+  /**
+   * Mark (or clear) every date from `startIso` to `endIso` inclusive — the
+   * special-service-mid-week case the ten weekend rows cannot express.
+   *
+   * A reversed range (`endIso < startIso`) is a no-op rather than an empty mark,
+   * since the panel's «Marcar» is disabled until `hasta >= desde` anyway — this
+   * guard is for a caller that skips that check. The 366-day cap matches
+   * `applyRecurring`'s own 12-month horizon; a spot mistakenly given a year+ span
+   * marks a bounded run instead of hanging the tab on a runaway loop.
+   */
+  function applyRange(startIso: string, endIso: string, add: boolean) {
+    if (endIso < startIso) return;
+    const cur = new Date(startIso.slice(0, 10) + "T12:00:00");
+    const end = new Date(endIso.slice(0, 10) + "T12:00:00");
+
+    const series: string[] = [];
+    for (let i = 0; i <= 365 && cur <= end; i++) {
+      const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, "0")}-${String(cur.getDate()).padStart(2, "0")}`;
+      if (iso >= todayIso) series.push(iso);
+      cur.setDate(cur.getDate() + 1);
+    }
+    setDates(prev => { const n = new Set(prev); series.forEach(d => (add ? n.add(d) : n.delete(d))); return n; });
+    if (!add) setNotes(prev => { const m = new Map(prev); series.forEach(d => m.delete(d)); return m; });
+    clearSaved();
+  }
+
   /** Adopt the server's arrays, dropping the pending edits with them. */
   function adopt(server: ServerState) {
     const serverDates = new Set(server.unavailableDates ?? []);
@@ -242,7 +270,7 @@ export function useAvailability({ initialRev, initialDates, initialNotes = [], o
 
   return {
     dates, notes, todayIso, upcomingCount,
-    mark, remove, toggle, setNote, applyRecurring,
+    mark, remove, toggle, setNote, applyRecurring, applyRange,
     save, saving, saved, dirty, saveError, conflict,
   };
 }

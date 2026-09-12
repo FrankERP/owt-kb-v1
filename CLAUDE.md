@@ -261,8 +261,9 @@ an inline class string), `Presence` (every animated conditional), `Skeleton`/
 client-side availability writer; `MyAvailabilityPanel` calls it once and hands the
 state down to `WeekendList` and `AvailabilityGrid`, which only render — two hook
 calls would be two revisions racing into the same document), `nextWeekends`/
-`weekendLabel` (`app/utils/weekends.ts` — the ten weekend rows `WeekendList`
-offers; CDMX-pinned, never a bare `new Date(iso)`), `MEMBER_TYPE_LABEL`
+`weekendLabel` (`app/utils/weekends.ts` — the ten Friday–Sunday rows `WeekendList`
+offers, Friday added for rehearsal days (F1); CDMX-pinned, never a bare
+`new Date(iso)`), `MEMBER_TYPE_LABEL`
 (`app/utils/memberTypes.ts` — the ONLY Tipo display map, mirrors the
 `worshipTeam` schema; `/admin`'s `TYPE_ABBR` is that table's own abbreviations,
 not a second source). Motion tokens are `--motion-*` / `--ease-*`; `motion` is

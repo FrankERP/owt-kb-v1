@@ -21,6 +21,7 @@ import { useRef, useState } from "react";
 import AvailabilityGrid from "./AvailabilityGrid";
 import Button from "@/app/components/ui/Button";
 import Collapse from "@/app/components/ui/Collapse";
+import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
 import { useToast } from "@/app/components/ui/Toast";
 import NotePopover, { popoverPosition, type NoteAnchor } from "./NotePopover";
@@ -50,6 +51,10 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
   const [recurDow, setRecurDow]           = useState(0); // 0 = Domingo
   const [recurInterval, setRecurInterval] = useState(1);
 
+  const [rangeOpen, setRangeOpen] = useState(false);
+  const [rangeStart, setRangeStart] = useState("");
+  const [rangeEnd, setRangeEnd]     = useState("");
+
   const state = useAvailability({
     initialRev, initialDates, initialNotes,
     // A conflict drops the pending edits, so the popover can be pinned to a date
@@ -57,7 +62,7 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
     onAdopt: () => setPopover(null),
     onSaved: () => toast({ message: "Guardado ✓", tone: "ok", duration: 2500 }),
   });
-  const { notes, setNote, remove, applyRecurring, save, saving, dirty, saveError, conflict } = state;
+  const { notes, todayIso, setNote, remove, applyRecurring, applyRange, save, saving, dirty, saveError, conflict } = state;
 
   function openNote(iso: string, anchor: HTMLElement) {
     anchorRef.current = anchor;
@@ -75,6 +80,27 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
     setRecurOpen(false);
   }
 
+  function toggleRecur() {
+    setRangeOpen(false);
+    setRecurOpen(v => !v);
+  }
+
+  function toggleRange() {
+    setRecurOpen(false);
+    setRangeOpen(v => !v);
+  }
+
+  function applySpan(add: boolean) {
+    // Same reason as «Quitar serie»: dropping a range can remove the date the
+    // note popover is pinned to, and this is the member's own edit, not a
+    // conflict `onAdopt` would catch.
+    if (!add) closeNote();
+    applyRange(rangeStart, rangeEnd, add);
+    setRangeOpen(false);
+  }
+
+  const canApplyRange = rangeStart !== "" && rangeEnd !== "" && rangeEnd >= rangeStart;
+
   return (
     <div className="space-y-4">
       <WeekendList
@@ -91,11 +117,18 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            onClick={() => setRecurOpen(v => !v)}
+            onClick={toggleRecur}
             aria-expanded={recurOpen}
             aria-controls="availability-recur"
           >
             Repetir…
+          </Button>
+          <Button
+            onClick={toggleRange}
+            aria-expanded={rangeOpen}
+            aria-controls="availability-range"
+          >
+            Rango…
           </Button>
           <Button
             variant="primary"
@@ -127,6 +160,38 @@ export default function MyAvailabilityPanel({ initialRev, initialDates, serviceD
           </div>
           <p className="font-body text-xs text-mono-500">
             <span className="text-mono-400">Marcar</span> agrega o <span className="text-mono-400">Quitar serie</span> borra ese día durante los próximos 12 meses. Puedes ajustar días sueltos después; recuerda <span className="text-mono-400">Guardar</span>.
+          </p>
+        </Collapse>
+
+        {/* Date range — a special service mid-week the ten weekend rows can't say */}
+        <Collapse open={rangeOpen} id="availability-range" className="mt-4 rounded-xl border border-accent/20 bg-accent/[0.04] p-4 space-y-3">
+          <p className="font-label text-[11px] uppercase tracking-widest text-accent/70">
+            Marcar varios días seguidos como no disponibles
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <DateField
+              kind="date"
+              aria-label="Desde"
+              min={todayIso}
+              value={rangeStart}
+              onChange={e => {
+                const v = e.target.value;
+                setRangeStart(v);
+                if (rangeEnd && rangeEnd < v) setRangeEnd(v);
+              }}
+            />
+            <DateField
+              kind="date"
+              aria-label="Hasta"
+              min={rangeStart || todayIso}
+              value={rangeEnd}
+              onChange={e => setRangeEnd(e.target.value)}
+            />
+            <Button variant="primary" onClick={() => applySpan(true)} disabled={!canApplyRange}>Marcar</Button>
+            <Button onClick={() => applySpan(false)} disabled={!canApplyRange}>Quitar rango</Button>
+          </div>
+          <p className="font-body text-xs text-mono-500">
+            <span className="text-mono-400">Marcar</span> agrega o <span className="text-mono-400">Quitar rango</span> borra cada día entre las dos fechas, incluyéndolas. Puedes ajustar días sueltos después; recuerda <span className="text-mono-400">Guardar</span>.
           </p>
         </Collapse>
       </div>

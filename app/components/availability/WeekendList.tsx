@@ -91,14 +91,15 @@ export default function WeekendList({
     <div>
       <h3 className="font-display text-lg uppercase tracking-wide">Disponibilidad</h3>
       <p className="font-label text-xs uppercase tracking-widest text-mono-500 mt-0.5">
-        Marca los fines de semana en que no puedes
+        Marca los días en que no puedes · el viernes es ensayo
       </p>
 
       <ul className="mt-3 divide-y divide-ink-dim/[0.06]">
         {weekends.map(w => (
           <li key={w.sat} className="flex items-start justify-between gap-3 py-2">
-            <span className="font-body text-sm text-mono-300 pt-1.5">{weekendLabel(w)}</span>
-            <div className="flex items-start gap-2">
+            <span className="font-body text-sm text-mono-300 pt-1.5 shrink">{weekendLabel(w)}</span>
+            <div className="flex items-start gap-1.5">
+              {day(w.fri, "VIE")}
               {day(w.sat, "SÁB")}
               {day(w.sun, "DOM")}
             </div>

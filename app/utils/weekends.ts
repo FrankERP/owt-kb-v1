@@ -8,6 +8,8 @@
 // every row of the list by one (CLAUDE.md's timezone invariant).
 
 export interface Weekend {
+  /** `YYYY-MM-DD` of the Friday before `sat` — rehearsal day (F1, Frank's look). */
+  fri: string;
   /** `YYYY-MM-DD` of the Saturday. */
   sat: string;
   /** `YYYY-MM-DD` of the Sunday that follows it. */
@@ -40,20 +42,22 @@ export function nextWeekends(todayIso: string, count: number): Weekend[] {
 
   const out: Weekend[] = [];
   for (let i = 0; i < count; i++) {
+    const fri = new Date(sat);
+    fri.setDate(sat.getDate() - 1);
     const sun = new Date(sat);
     sun.setDate(sat.getDate() + 1);
-    out.push({ sat: isoOf(sat), sun: isoOf(sun) });
+    out.push({ fri: isoOf(fri), sat: isoOf(sat), sun: isoOf(sun) });
     sat.setDate(sat.getDate() + 7);
   }
   return out;
 }
 
 /**
- * A weekend as one short line: «12 – 13 sep», and «31 oct – 1 nov» when the two
- * days fall in different months.
+ * A weekend as one short line, Friday through Sunday: «11 – 13 sep», and
+ * «30 oct – 1 nov» when the span crosses a month.
  */
-export function weekendLabel({ sat, sun }: Weekend): string {
-  const a = noon(sat);
+export function weekendLabel({ fri, sun }: Weekend): string {
+  const a = noon(fri);
   const b = noon(sun);
   const month = (d: Date) => d.toLocaleDateString("es-MX", { month: "short" });
   return a.getMonth() === b.getMonth()

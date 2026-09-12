@@ -68,16 +68,24 @@ const rows = () => screen.getByRole("list").querySelectorAll("li");
 const saveButton = () => screen.getByRole("button", { name: /Guarda/ }) as HTMLButtonElement;
 
 describe("WeekendList", () => {
-  it("offers the next ten weekends, this one first, Saturday before Sunday", () => {
+  it("offers the next ten weekends, this one first, Friday through Sunday", () => {
     renderPanel();
     const list = rows();
     expect(list).toHaveLength(10);
-    expect(list[0].textContent).toContain("12 – 13 sep");
-    // Ten weeks out: 14/15 November.
-    expect(list[9].textContent).toContain("14 – 15 nov");
-    const [sat, sun] = within(list[0] as HTMLElement).getAllByRole("button");
+    expect(list[0].textContent).toContain("11 – 13 sep");
+    // Ten weeks out: 13/14/15 November.
+    expect(list[9].textContent).toContain("13 – 15 nov");
+    const [fri, sat, sun] = within(list[0] as HTMLElement).getAllByRole("button");
+    expect(fri.textContent).toContain("VIE");
     expect(sat.textContent).toContain("SÁB");
     expect(sun.textContent).toContain("DOM");
+  });
+
+  it("names the Friday pill in Spanish, rehearsal day before the weekend", () => {
+    renderPanel();
+    const first = rows()[0] as HTMLElement;
+    const friday = within(first).getByRole("button", { name: /viernes, 11 de septiembre/ });
+    expect(friday).toBeTruthy();
   });
 
   it("marks the Sunday it was told to, enables the save, and sends that date", async () => {
@@ -117,6 +125,19 @@ describe("WeekendList", () => {
     fireEvent.click(sunday);
     expect(sunday.getAttribute("aria-pressed")).toBe("false");
     expect(saveButton().disabled).toBe(true);
+  });
+
+  it("on a Saturday, the first row's VIE is a past day — disabled, and unclickable", () => {
+    // Friday already happened; the weekend itself still counts (its Sunday is ahead).
+    vi.setSystemTime(new Date("2026-09-12T12:00:00-06:00"));
+    renderPanel();
+    const first = rows()[0] as HTMLElement;
+    const friday = within(first).getByRole("button", { name: /viernes, 11/ });
+    expect(friday.hasAttribute("disabled")).toBe(true);
+
+    fireEvent.click(friday);
+    expect(friday.getAttribute("aria-pressed")).toBe("false");
+    expect(screen.queryByText("Cambios sin guardar")).toBeNull();
   });
 
   it("on a Sunday, the first row's SÁB is a past day — disabled, and unclickable", () => {

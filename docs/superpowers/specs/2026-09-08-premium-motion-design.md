@@ -1365,4 +1365,31 @@ are gone, the header is the page's heading.
 2.4 kB on `/me`; the pill `tone` on `Button` touches every other route by
 ~0.4–0.5 kB — see the `docs/MOTION.md` ledger.
 
+### F1 — after Frank's look (2026-09-12)
+
+Frank's look at R3 surfaced two asks, both taken as rulings rather than deferred to a
+future round:
+
+- **Fridays are rehearsal days.** The team rehearses the Friday before a Sunday (or
+  Saturday) service, so a weekend row that only asked about Saturday/Sunday was asking
+  half the question a member needed to answer. Each `Weekend` now spans Friday through
+  Sunday — the row answers «¿este fin de semana puedes?» for the whole weekend
+  including its rehearsal, not just the service days. A Friday still carries a service
+  dot if one is genuinely scheduled there (the dot rule is `serviceSet.has(iso)` for any
+  day, unchanged), since a special Friday service is real; it simply never carries one
+  in the ordinary case, because rehearsals are not service documents.
+- **A range panel covers the special-service-mid-week case the ten rows cannot.** Ten
+  weekend rows answer "can you serve this weekend, one of the next ten" — they say
+  nothing about a Wednesday evening service inserted between two ordinary weekends, and
+  marking five separate days by hand for a multi-day trip that isn't aligned to a
+  weekend was the gap. `useAvailability.applyRange(startIso, endIso, add)` marks (or
+  clears) an inclusive span in one call, on the same revision-guarded state the weekend
+  list and the grid already share; `MyAvailabilityPanel`'s «Rango…» panel is its one
+  caller.
+- **The grid stays for single weekdays.** Neither ask replaces the twelve-month grid
+  behind «Ver calendario» — a lone Tuesday rehearsal is still one tap on a calendar day,
+  not a one-day "range." The grid, the weekend rows and the range panel now cover three
+  distinct shapes (a single arbitrary day, a recurring weekday, a contiguous span) with
+  one shared `useAvailability` underneath all three.
+
 **Release:** pending.

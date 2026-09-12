@@ -766,3 +766,15 @@ the full ledger; the motion-relevant pieces:
   (+0.5), `/biblioteca` 114.2 kB → 114.3 kB (+0.1); shared unchanged. The header, the
   weekend list and `SettingsCard` cost 2.4 kB on `/me`; the pill `tone` on `Button`
   touches every other route by ~0.4–0.5 kB — see the "Bundle" section above for the rows.
+- **F1 (Frank's look):** two asks after seeing R3 live — rehearsals are Fridays, so each
+  `Weekend` (`app/utils/weekends.ts`) grew a `fri` field and `WeekendList` rows became
+  `VIE`/`SÁB`/`DOM` triplets (`weekendLabel` now spans Friday → Sunday, «11 – 13 sep»);
+  and a special service mid-week needs more than the ten weekend rows can express, so
+  `useAvailability` gained `applyRange(startIso, endIso, add)` and `MyAvailabilityPanel`
+  a «Rango…» `Collapse` beside «Repetir…» (two `DateField kind="date"` inputs, opening
+  one panel closes the other). Three `size="lg"` pills at 390 px still fit the row
+  without wrapping — each pill is ~56–64 px (`px-4` + `text-xs` glyphs + border) at
+  `gap-1.5`, so three plus gaps run ~185–210 px against a ~340–358 px content width once
+  the label column (`shrink`, ~70–90 px for «11 – 13 sep») and the row's own `gap-3` are
+  subtracted; no pill-size change was needed. Neither ask changed the grid, which stays
+  for a single weekday the range panel doesn't fit either.
