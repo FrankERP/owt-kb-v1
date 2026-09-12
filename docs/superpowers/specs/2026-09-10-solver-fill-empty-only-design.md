@@ -226,6 +226,14 @@ solver *compensate* — a person the admin pinned four times is already ahead, s
 pushes the remaining seats toward everyone else. Subtracting in the soft terms as well would
 throw that compensation away, which is the opposite of what this feature wants.
 
+**The compensation is bounded, and the ADR must say so.** The hard spreads now run over
+solver-chosen seats, so a pinned person looks to them as though they have served nothing and
+is pushed *up* toward parity on top of their pins. Measured in review: three pins on one
+member took her from five total services to six while the rest sat at four. That is the price
+of never failing the month, it is the right trade, and it is the opposite of what "the
+objective pushes seats toward everyone else" sounds like — so §12's ADR records it plainly
+rather than leaving it to be rediscovered as a bug.
+
 Reproduced in review before the two per-role guards were named: pinning one person into
 `Sun.Lead` for three weeks drove every Stage B tier infeasible, `solve_schedule:1137` returned
 the fairness-free `stage_a`, and the resulting board gave one member zero services while
@@ -242,12 +250,11 @@ and 26 pins all collapse `strict` to zero), including the Stage-A fairness-free 
 this paragraph exists to prevent, and it regresses shipped absence behaviour on every pinned
 run. §11 carries a guard that reaches that branch.
 
-### 5.2 The five exemptions where a rule would contradict a pin
+### 5.2 The exemptions where a rule would contradict a pin
 
-E3 says the pin wins. Each exemption is scoped to the pinned assignment itself. The list is
-the product of executing the mechanism against the real solver, not of reading it — the first
-four were derived by reading and the fifth, which breaks the feature's headline use case on
-the rules the team runs today, was not.
+E3 says the pin wins. The first four exemptions below are scoped to the pinned assignment
+itself; the fifth is a family, and re-keying it correctly took three rounds of executing the
+mechanism against the real solver. Nothing in this section was derived by reading alone.
 
 | Rule | Exemption |
 |---|---|
@@ -257,46 +264,61 @@ the rules the team runs today, was not.
 | DSL count rules, `:886-897` | For `<=` and `==`, the bound becomes `max(rule.value, pinned_count)` so the pins themselves cannot be infeasible. Crowding is the other direction and is handled below. |
 | **Any "at least one of these" requirement whose row the pins have filled** | Skipped for that row and week. See below — this is the exemption the first draft missed, and it is the one that breaks the headline use case. |
 
-**The saturated-row family.** Rows grow to `max(default, pins)`, which fits the pins but
-leaves **no headroom**: when pins fill a row, the solver cannot place anyone else in it. Every
-hard constraint of the shape "at least one X must appear in this row and week" is then
-unsatisfiable. There are three instances, and the first fires on the shipped rule set:
+**The unsatisfiable-requirement family, and why "saturated row" was the wrong key.** Rows
+grow to `max(default, pins)`, so a pinned row has no spare capacity — but capacity is only
+one of several ways pins can make a requirement impossible, and an earlier draft keyed the
+exemption on it. Review broke that draft with **one pin** on the rules the team runs today.
+The others run through the per-service occupancy limit at `:754-765`, which allows each
+person one slot per service per week: pinning someone into `Sun.Lead` removes them from
+every other Sunday role that week, in a row that is nowhere near full.
 
-- **Weekly presence** (`:732-742`). `any_of(Hugo, Jakey) on Sun.BGV each_week` is a rule the
-  team runs today (`solverConfigDefaults.ts:95-97`). Take a solved board, hand-swap Jakey out
-  of one week's Sun.BGV for somebody else — the manual correction this whole feature exists
-  to preserve — turn the switch on, press Auto, and the month returns `ok: false`. Reproduced.
-- **The Saturday dedicated-lead anchor** (`:705-709`). Pin both `Sat.Lead` seats of a week
-  with non-dedicated leads, which the picker permits, and `sum(dedicated_terms) >= 1` cannot
-  hold. Reproduced.
-- **DSL `>=` and `==` count rules** (`:894-897`). An earlier draft said "`>=` needs nothing:
-  pins only help satisfy it", which is false in the crowding direction: `Niza Sun.Choir >= 3`
-  with the Choir rows pinned full is infeasible. `==` fails the same way and for the same
-  reason — reproduced with `Niza Sun.Choir == 2` and nine legal pins — and `==` is authorable
-  from the rules panel (`MonthGenerator.tsx:735`). A first draft treated `==` only in the
-  over-pinning direction and left this half open.
+Three reproductions, each from a month that solves without pins:
 
-  A count rule is month-scoped across several `(role, week)` rows, so "skip it for that row"
-  has no meaning. The rule is therefore **dropped entirely when any row it ranges over is
-  saturated by pins**. That is deliberately over-broad — it gives up the rule for the whole
-  month when one week is full — and it is chosen because the alternative, narrowing the bound
-  per row, silently changes what the admin's rule means. §11 pins the choice so a later reader
-  does not "fix" it into the quieter version.
+- **One pin.** Hugo pinned into `Sun.Lead` week 1 while Jakey has marked that Sunday
+  unavailable in the member app. `any_of(Hugo, Jakey) on Sun.BGV each_week`
+  (`solverConfigDefaults.ts:95-97`) then has Jakey filtered out by `excluded_pwr` and Hugo
+  barred from BGV by the occupancy limit. The BGV row is empty. `ok: false`.
+- **One pin.** Lucía, the only dedicated Saturday lead in the defaults, pinned into
+  `Sat.BGV`. The anchor at `:705-709` still sees a non-empty `dedicated_terms`, the
+  `Sat.Lead` row holds no pins at all, and `sum(dedicated_terms) >= 1` cannot hold.
+- **Three pins.** `Niza Sun.Choir >= 3` with Niza pinned into `Sun.Lead` for three of four
+  weeks: her maximum achievable Choir count is 1 and no row is saturated.
 
-All three surfaced as `diagnose_infeasibility`'s generic message, which names a missing Lead
-— the wrong cause — leaving the admin with no way to find the offending cell. So each is
-skipped when its row is saturated by pins, on the same principle as the other four
-exemptions, and §6 gains a notice naming the rule that was set aside.
+So the exemption is keyed on **satisfiability under the pins**, which subsumes saturation:
 
-**One consultation of the same exclusions that is easy to miss.** Weekly presence filters
-its terms through `excluded_pwr` (`:727-741`), which is built from the same week-exclusion
-rules. A pinned person who is unavailable would be filtered out of the terms they are
-supposed to satisfy, so `excluded_pwr` excludes pinned triples too. Same principle as the
-first row of the table, applied at its second call site.
+> Every "at least one of S must appear here" requirement in the model is skipped when the
+> pins have made it unsatisfiable — that is, when no member of S can still be assigned there,
+> each one being either already pinned into it (in which case it is satisfied and nothing is
+> skipped), pinned into another role of that service that week, week-excluded, or facing a
+> row with no unpinned slot left. A month-scoped count rule is dropped when the person's
+> **maximum achievable count under the pins** falls below its bound.
 
-`compute_absence_slack` (`:513`) is deliberately **not** adjusted: a pinned unavailable
-person keeps the slack their absences earn them. It is slack they may not need, which is
-harmless, and removing it would be a second rule about the same fact.
+Five instances, and the list is the model's complete set of "at least" requirements:
+
+| Requirement | Where |
+|---|---|
+| At least one Lead per service | `:654-659` |
+| The dedicated Saturday lead anchor | `:705-709` |
+| Weekly presence, `any_of(…) each_week` | `:732-742` |
+| DSL `>=` count rules | `:894-895` |
+| DSL `==` count rules | `:896-897` |
+
+**Yes, that includes the mandatory lead.** It is the one constraint the solver is otherwise
+built never to relax, and the reasoning is E3 applied honestly: if the admin has pinned every
+lead-pool member into other roles of that service, the service genuinely has no lead, and
+that is their decision. The seat is left empty and reported through `unfilled_seats` like any
+other shortfall, which is the signal the planner already renders. The alternative is failing
+the whole month over a roster the admin built on purpose.
+
+**The count-rule remedy is deliberately over-broad.** A `>=` or `==` rule is month-scoped, so
+there is no single row to exempt; the rule is dropped for the month rather than narrowed per
+row, because narrowing silently changes what the admin's rule means. §11 pins the choice so a
+later reader does not "fix" it into the quieter version.
+
+**What this buys §10.** With the family keyed this way, a pin cannot make the model
+infeasible at all: every requirement it could contradict is skipped precisely when it becomes
+impossible. That is what lets §10 leave `diagnose_infeasibility` unchanged — not an
+assumption, but a consequence, and §11 tests it per instance.
 
 ### 5.3 The response
 
@@ -311,6 +333,16 @@ describes it. The rule is therefore: a cell that contains **any** pinned occupan
 affect the instrument filler, whose ownership test is scoped to `instrumento:` rows
 (`instrumentFill.ts:87`) which `applySolveResponse` never writes — a claim an earlier draft
 of this spec got wrong in the other direction.
+
+**`known` is built after the union.** `known = set(all_people)` (`:466`) feeds both
+`parse_dsl_rules` call sites (`:467`, `:1059`), so building it after the union is what lets a
+DSL clause name a pinned-only person without a 422 — and, more importantly, keeps the two
+sites from ending up with different sets.
+
+**Pins are derived through `isSolvable(row, column)`**, the same test `applySolveResponse`
+uses to decide which cells it rewrites (`plannerModel.ts:919`). The set of cells that gets
+pinned and the set that gets overwritten are then the same set by construction, rather than
+two role maps that can drift apart.
 
 **Occupant order is not preserved.** `build_schedule_view` sorts each role's names (`:1168`)
 and `applySolveResponse` rebuilds `occupants` from that list, so a pinned cell's occupants
@@ -343,11 +375,12 @@ availability lives in `member.unavailableDates` and only becomes a DSL string in
 renders no availability line at all (`PlannerGrid.tsx:2861-2891`). Assuming the existing
 amber covered it would have shipped E3's *guaranteed* collision silent.
 
-**No notice for the Saturday anchor.** §5.2 promises a notice for each saturated-row
-instance, but the dedicated-Saturday-lead anchor is built into the solver rather than
-authored, so there is no rule to name in the copy. Pinning both `Sat.Lead` seats with
-non-dedicated leads sets it aside silently; that is accepted, because inventing a name for a
-rule the admin cannot see or edit would be worse than the silence.
+**No notice for the two built-in requirements.** The dedicated-Saturday-lead anchor and the
+mandatory lead are built into the solver rather than authored, so there is no rule to name in
+the copy. Setting either aside is silent — with one exception that carries the signal anyway:
+a lead seat skipped under §5.2 is reported through `unfilled_seats` and renders as «Sin
+cubrir» on the cell, which is the planner's existing language for a seat nobody filled.
+Inventing a name for a rule the admin cannot see or edit would be worse than the silence.
 
 **No consecutive-rule notice.** The rules panel cannot author a `!consecutive` clause
 (`restrictionToDs`, `plannerModel.ts:572-599`), so a notice for it would be unreachable code
@@ -372,7 +405,10 @@ item so the admin sees what they are about to lose:
 The same menu appears in each column's header with the scope fixed to that service. Only the
 month-level items confirm, through `CueDialog`, naming the count, saying FOH is preserved,
 saying nothing is written until «Crear N borradores», and separately counting how many of
-the discarded seats were placed by hand. A service-level clear is immediate; re-running Auto
+the discarded seats were placed by hand — a figure that is **optimistic by design**: §5.3
+keeps a cell's `origin` when it holds any pinned occupant, so the solver's own picks inside a
+cell the admin started count as hand-placed. Over-reporting what the admin will lose is the
+safe direction for a confirmation dialog. A service-level clear is immediate; re-running Auto
 is the undo.
 
 No item is called «Todo», because none of them clears everything: FOH always survives (E6).
@@ -454,10 +490,18 @@ required.
 - A pin naming a week outside the month is a client bug, and the solver refuses it the way
   it already refuses an out-of-range week exclusion (`:679-683`): a `ValueError` naming the
   week, surfaced through the solver's ordinary error path.
-- Stage A can still be infeasible for reasons unrelated to pins (no available lead). The
-  diagnostic is unchanged. §5.1 and §5.2 together are what keep pins from being a new cause:
-  rows grow rather than overflow, candidacy is granted rather than assumed, contradicting
-  rules are exempted, and slack absorbs the fairness cost.
+- Stage A can still be infeasible for reasons unrelated to pins (no available lead in a
+  month nobody pinned). The diagnostic is unchanged, and that is a **consequence of §5.2's
+  predicate, not an assumption**: rows grow rather than overflow, candidacy is granted rather
+  than assumed, every "at least one" requirement is skipped exactly when the pins make it
+  impossible, and the hard spreads run over solver-chosen counts so fairness cannot fail
+  either. An earlier draft asserted this completeness while keying the exemptions on row
+  saturation, and review killed that month with a single pin.
+- **Two pins for one person in one service** are refused by the solver with a `ValueError`
+  naming the person and the service, not left to produce two `== 1` constraints against the
+  `<= 1` occupancy limit and kill the month with a generic diagnostic. The client already
+  prevents the arrangement (§4) and the picker prevents it upstream; this is the cheap
+  backstop that turns a month-wide failure into a message.
 - The client-mutation invariant is unchanged: the Auto fetch keeps its try/catch/finally, its
   `res.ok` check and its loading-flag reset.
 - A clear never fails: it is local state.
@@ -487,10 +531,22 @@ and behaved otherwise:
     a slack-based design empties the `strict` group (`solve_schedule:1072-1074`): assert
     `fairness_relaxed: false`, a global spread over the solver's own choices matching the
     un-pinned baseline, and that an unavailable member's absence slack still applies.
-- **A saturated row does not fail the month.** With `any_of(Hugo, Jakey) on Sun.BGV` in the
-  rules, pin that row full for one week with neither of them: the month still solves. Same
-  for both Saturday lead seats pinned with non-dedicated leads, and for a `>=` count rule
-  whose row is pinned full.
+- **No requirement fails the month, and the pins come from a HAND-EDITED board.** This is
+  the test-design point, not a detail: a pin set drawn from the solver's own output satisfies
+  every rule by construction, so it passes over a broken exemption. Every case below starts
+  from a solved month and then **moves one person from the role the solver chose into another
+  role of the same service**, which is exactly what an admin does.
+  - Weekly presence: one of `any_of(Hugo, Jakey)` pinned into `Sun.Lead` that week — and the
+    variant where the other one has marked that Sunday unavailable, which is the one-pin
+    reproduction.
+  - The Saturday anchor: the only dedicated Saturday lead pinned into `Sat.BGV`.
+  - `>=` and `==` count rules: the named person pinned into another role for enough weeks
+    that the bound becomes unreachable; assert the rule is dropped for the month, not
+    narrowed.
+  - The mandatory lead: every lead-pool member pinned into other roles of one service;
+    assert `ok: true`, the lead seat reported in `unfilled_seats`, and no exception.
+  Also keep the saturation variants (row pinned full) — they are a subset of the same
+  predicate and cheap to hold.
 - **A pinned person in no pool does not crash, and gains nothing.** The reproduced `KeyError`
   at `:982`, kept as a guard: they are seated at their pin, appear nowhere else in the month,
   and their `total_counts` equals their pin count exactly. That last assertion is what catches
@@ -532,9 +588,12 @@ own suite.
 `docs/SOLVER_AND_INFRA.md` — the `pinned` field, the fixed-variable mechanism, the three
 enabling changes, the five exemptions, the handshake. `docs/MONTH_GRID_EDITING.md` — the
 switch, the menu, the confirmation copy. One ADR: **pins are fixed variables with scoped
-candidacy and fairness slack, not removed seats with constant offsets** — recording the
-rejected design and the reproduced fairness collapse that ended it, so nobody re-derives the
-elegant-looking version. No new secret or env var, so `docs/SECRETS.md` is untouched.
+candidacy, hard spreads over solver-chosen seats, and exemptions keyed on satisfiability** —
+recording the rejected remove-the-seat design and the reproduced fairness collapse that ended
+it, the rejected fairness-slack answer and the `strict`-collapse branch that killed it, the
+rejected row-saturation key and the one-pin reproduction that killed that, and the bounded
+compensation §5.1 measures. Four rejected designs, each with the execution that disproved it,
+so nobody re-derives the elegant-looking version. No new secret or env var, so `docs/SECRETS.md` is untouched.
 
 ## 13. Rollout
 
