@@ -176,6 +176,42 @@ describe("useAvailability", () => {
     expect(result.current.dates.size).toBe(0);
   });
 
+  it("marks an inclusive date range, skipping past days, crossing a month", () => {
+    const { result } = setup([]);
+    // today is 2026-09-15; range spans the month boundary.
+    act(() => result.current.applyRange("2026-09-28", "2026-10-02", true));
+    expect(Array.from(result.current.dates).sort()).toEqual([
+      "2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02",
+    ]);
+    expect(result.current.dirty).toBe(true);
+  });
+
+  it("skips days before today at both ends of the range", () => {
+    const { result } = setup([]);
+    act(() => result.current.applyRange("2026-09-10", "2026-09-17", true));
+    // 15/16/17 are today-or-later; 10-14 are past and skipped.
+    expect(Array.from(result.current.dates).sort()).toEqual(["2026-09-15", "2026-09-16", "2026-09-17"]);
+  });
+
+  it("is a no-op when the range is reversed", () => {
+    const { result } = setup([]);
+    act(() => result.current.applyRange("2026-09-20", "2026-09-18", true));
+    expect(result.current.dates.size).toBe(0);
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it("removes a range, dropping notes with it", () => {
+    const { result } = setup([]);
+    act(() => result.current.applyRange("2026-09-20", "2026-09-22", true));
+    act(() => result.current.setNote("2026-09-21", "viaje"));
+    expect(result.current.notes.get("2026-09-21")).toBe("viaje");
+
+    act(() => result.current.applyRange("2026-09-20", "2026-09-22", false));
+    expect(result.current.dates.size).toBe(0);
+    expect(result.current.notes.has("2026-09-21")).toBe(false);
+    expect(result.current.dirty).toBe(false);
+  });
+
   it("reports a non-conflict failure and stays dirty", async () => {
     const { result } = setup();
     fetchMock.mockResolvedValueOnce(reply(500, {}));

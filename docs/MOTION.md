@@ -766,3 +766,21 @@ the full ledger; the motion-relevant pieces:
   (+0.5), `/biblioteca` 114.2 kB → 114.3 kB (+0.1); shared unchanged. The header, the
   weekend list and `SettingsCard` cost 2.4 kB on `/me`; the pill `tone` on `Button`
   touches every other route by ~0.4–0.5 kB — see the "Bundle" section above for the rows.
+- **F1 (Frank's look):** two asks after seeing R3 live — rehearsals are Fridays, so each
+  `Weekend` (`app/utils/weekends.ts`) grew a `fri` field and `WeekendList` rows became
+  `VIE`/`SÁB`/`DOM` triplets (`weekendLabel` now spans Friday → Sunday, «11 – 13 sep»);
+  and a special service mid-week needs more than the ten weekend rows can express, so
+  `useAvailability` gained `applyRange(startIso, endIso, add)` and `MyAvailabilityPanel`
+  a «Rango…» `Collapse` beside «Repetir…» (two `DateField kind="date"` inputs, opening
+  one panel closes the other). Three `size="lg"` pills at 390 px do NOT always fit
+  beside the label on one line: the page's `px-6` leaves 342 px of content, and a
+  marked day's «Razón ✓» ghost (`size="lg"`, ~90 px) widens its column, so three
+  marked columns plus gaps run ~297 px — against a month-crossing label like
+  «30 oct – 1 nov» (~100 px), the row needs ~409 px, more than the 342 px available
+  (fix round 1, review). The `<li>` is `flex flex-wrap … justify-between`, the label
+  `whitespace-nowrap` (never `shrink`, which is the flex default and was a no-op),
+  and the pill cluster `ml-auto`: it right-aligns beside the label when there is
+  room and wraps onto its own line, still right-aligned, when there is not — the
+  cluster wraps under the label, never the label into word-per-line. No pill-size
+  change was needed. Neither ask changed the grid, which stays for a single weekday
+  the range panel doesn't fit either.
