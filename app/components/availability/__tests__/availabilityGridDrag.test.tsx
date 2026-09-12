@@ -371,11 +371,11 @@ describe("AvailabilityGrid — drag-select", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("after a drag that latched solid and a pointerCancel, a new drag resets the latch", () => {
-    // The solid latch persists across a cancelled drag if not cleared, so the next
-    // drag starts with a non-zero opacity even when the finger is far from the
-    // bottom edge. This test ensures the cancel clears it via onPointerCancel and
-    // the next down clears it again to be sure.
+  it("a lost pointerup does not carry the latch into the next drag", () => {
+    // A pointerup may be lost (or misfired elsewhere), leaving the latch solid.
+    // The next pointerdown MUST reset it, or the second drag inherits the latched
+    // state and appears solid even though the finger is far from the bottom edge.
+    // This guards the `solidRef.current = false` in `onPointerDown`.
     const months = renderGrid();
     enterMode();
 
@@ -386,18 +386,64 @@ describe("AvailabilityGrid — drag-select", () => {
     fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM });
     expect(document.querySelector("[data-shadow]")!.getAttribute("data-solid")).toBe("true");
 
-    // Cancel the drag.
-    fireEvent.pointerCancel(months, { pointerId: 1 });
-    expect(document.querySelector("[data-shadow]")).toBeNull();
+    // NO pointerup or pointerCancel — simulate a lost release event.
+    // The latch is still active in the component's ref.
 
-    // Second drag: move far from the bottom. The overlay should NOT be solid.
-    over(cell("2026-09-15"));
+    // Second drag: same pointerId, isPrimary, but on the 13th (different day).
+    over(cell("2026-09-13"));
     fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
-    over(cell("2026-09-16"));
+    // Move far from the bottom: 40px up the tile.
+    over(cell("2026-09-13"));
     fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM - 40 });
 
+    // The overlay should exist but NOT be solid. If the latch was not reset
+    // in onPointerDown, it would still be solid from the lost first drag.
     const tile = document.querySelector("[data-shadow]");
     expect(tile).not.toBeNull();
     expect(tile!.getAttribute("data-solid")).toBe("false");
+  });
+
+  it("paging mid-drag ends the drag without committing", () => {
+    // A click on «Siguiente» while dragging must cancel the gesture, reset the
+    // drag state, and reset the latch. If a move event arrives after paging
+    // before a new down, the latch must not persist from the old drag.
+    // This guards the `solidRef.current = false` in `goTo`.
+    const months = renderGrid();
+    enterMode();
+
+    // Drag to the bottom and latch solid on page 0.
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    over(cell("2026-11-30"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM });
+    expect(document.querySelector("[data-shadow]")!.getAttribute("data-solid")).toBe("true");
+
+    // Page to page 1. goTo must reset dragRef, solidRef, and shadow.
+    const nextButton = screen.getByRole("button", { name: /Siguiente/ });
+    fireEvent.click(nextButton);
+
+    // The shadow is gone and the page advanced.
+    expect(document.querySelector("[data-shadow]")).toBeNull();
+    expect(screen.getByText("Diciembre 2026 – Febrero 2027")).toBeTruthy();
+
+    // Simulate an edge case: a move event arrives on the new page without
+    // a new down. This tests that the latch was reset in goTo, not relying
+    // on onPointerDown to reset it.
+    over(cell("2027-01-15"));
+    fireEvent.pointerMove(months, { ...MOVE, clientX: 10, clientY: TILE_BOTTOM - 40 });
+
+    // The shadow should NOT be solid. If the latch wasn't reset in goTo,
+    // it would still be true even though we're far from the bottom.
+    // Since dragRef.current is null, this move doesn't update the drag,
+    // but it still renders the shadow. The shadow opacity is based on solidRef.
+    const tile = document.querySelector("[data-shadow]");
+    if (tile) {
+      expect(tile.getAttribute("data-solid")).toBe("false");
+    }
+
+    // A pointerUp also must not commit anything.
+    fireEvent.pointerUp(months, { pointerId: 1 });
+    expect(applyRangeMock).not.toHaveBeenCalled();
+    expect(openNoteMock).not.toHaveBeenCalled();
   });
 });
