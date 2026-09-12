@@ -350,25 +350,11 @@ describe("AvailabilityGrid — drag-select", () => {
     expect(applyRangeMock.mock.calls).toEqual([["2026-09-12", "2026-09-14", true]]);
   });
 
-  it("the date fields live inside the grid and mark a span through the hook", () => {
+  it("offers no date fields — F3 retired them, the drag is the only range", () => {
     renderGrid();
-    const toggle = screen.getByRole("button", { name: "Rango por fechas" });
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute("aria-expanded")).toBe("true");
-
-    const desde  = screen.getByLabelText("Desde") as HTMLInputElement;
-    const hasta  = screen.getByLabelText("Hasta") as HTMLInputElement;
-    const marcar = screen.getByRole("button", { name: "Marcar" }) as HTMLButtonElement;
-    expect(marcar.disabled).toBe(true);
-
-    fireEvent.change(desde, { target: { value: "2026-09-16" } });
-    fireEvent.change(hasta, { target: { value: "2026-09-18" } });
-    expect(marcar.disabled).toBe(false);
-    fireEvent.click(marcar);
-
-    expect(applyRangeMock.mock.calls).toEqual([["2026-09-16", "2026-09-18", true]]);
-    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("button", { name: "Rango por fechas" })).toBeNull();
+    expect(screen.queryByLabelText("Desde")).toBeNull();
+    expect(screen.queryByLabelText("Hasta")).toBeNull();
   });
 
   it("a lost pointerup does not carry the latch into the next drag", () => {

@@ -9,9 +9,13 @@
 // is the thing the acceptance criterion forbids.
 //
 // This file pins both halves: the section is absent for a kids-only member AND
-// the worship READS never run for them. It also pins the deliberate exception —
-// the availability calendar's service-date read is NOT ministry-scoped (that is
-// separately recorded), so it must keep firing for everyone.
+// the worship READS never run for them.
+//
+// R3 F3 MOVED THE CALENDAR OFF THIS PAGE. The availability panel — and with it
+// the service-date read that was deliberately NOT ministry-scoped — now lives on
+// `/me/disponibilidad` (`disponibilidadPage.test.tsx`). What `/me` keeps is ONE
+// link to it, carrying the count of upcoming marked dates, which is why the
+// count arithmetic is pinned below: it is the only availability logic left here.
 //
 // R3 MOVED THE SURFACE, NOT THE RULE. The two `h2`s are gone (the identity header
 // is the heading now) and "Sin servicios asignados próximamente" is a line in
@@ -52,13 +56,14 @@ vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("@/app/components/DayCard", () => ({ DayCard: () => <p>HERO</p> }));
 vi.mock("@/app/components/DayCardDisclosure", () => ({ default: () => <p>DAYCARD</p> }));
 vi.mock("@/app/components/AddToCalendarButton", () => ({ default: () => null }));
-vi.mock("@/app/components/availability/MyAvailabilityPanel", () => ({ default: () => <p>CALENDARIO</p> }));
 vi.mock("@/app/components/ProfilePanel", () => ({ default: () => <p>PERFIL</p> }));
 vi.mock("@/app/components/TextSizeControl", () => ({ default: () => null }));
 vi.mock("@/app/components/ui/ThemeControl", () => ({ default: () => null }));
 vi.mock("@/app/components/ui/ThemeAnnouncement", () => ({ default: () => null }));
+// The href matters now: the availability link is the whole of what replaced the
+// panel, so the mock renders a real anchor rather than swallowing it.
 vi.mock("next/link", () => ({
-  default: ({ children }: { href: string; children?: ReactNode }) => children,
+  default: ({ href, children }: { href: string; children?: ReactNode }) => <a href={href}>{children}</a>,
 }));
 
 import MePage from "../page";
@@ -123,11 +128,12 @@ describe("/me worship gating", () => {
     expect(queries().some((q) => q.includes("setlistProposal"))).toBe(false);
   });
 
-  it("still reads the availability calendar's service dates for a kids-only member", async () => {
-    // Deliberately NOT ministry-scoped in this delivery — see the header note.
+  it("no longer reads the availability calendar's service dates — that read moved with the calendar", async () => {
+    // F3: the dates feed the grid, and the grid is `/me/disponibilidad` now. A
+    // kids-only member used to pay for this read here for a panel below.
     getMemberAccess.mockResolvedValue(access(["kids"]));
     await renderPage();
-    expect(queries().some((q) => q.includes('_type == "special_role"'))).toBe(true);
+    expect(queries().some((q) => q.includes('_type == "special_role"'))).toBe(false);
   });
 
   it("renders the worship section, empty state included, for a worship member", async () => {
@@ -168,11 +174,39 @@ describe("/me worship gating", () => {
     expect(html).not.toContain("Sin servicios asignados próximamente");
   });
 
-  it("keeps the profile and availability panels for a kids-only member", async () => {
+  it("keeps the availability link and the settings card for a kids-only member", async () => {
     getMemberAccess.mockResolvedValue(access(["kids"]));
     const html = await renderPage();
-    expect(html).toContain("CALENDARIO");
+    expect(html).toContain('href="/me/disponibilidad"');
+    expect(html).toContain("Sin fechas marcadas");
     expect(html).toContain("PERFIL");
+  });
+
+  it("counts only UPCOMING unavailable dates on the link", async () => {
+    // A member who marked dates years ago must not read "3 fechas marcadas"
+    // forever: the count answers "what have I told the team about from here on".
+    getMemberAccess.mockResolvedValue(access(["worship"]));
+    const iso = (plusDays: number) =>
+      new Date(Date.now() + plusDays * 86400 * 1000)
+        .toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+    serverFetch.mockResolvedValue({
+      _id: "m1", member_name: "Ana", alias: "Ana",
+      unavailableDates: ["2020-01-01", iso(2), iso(9)],
+    });
+    const html = await renderPage();
+    expect(html).toContain("2 fechas marcadas");
+  });
+
+  it("says «1 fecha marcada» in the singular", async () => {
+    getMemberAccess.mockResolvedValue(access(["worship"]));
+    const iso = new Date(Date.now() + 3 * 86400 * 1000)
+      .toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
+    serverFetch.mockResolvedValue({
+      _id: "m1", member_name: "Ana", alias: "Ana", unavailableDates: [iso],
+    });
+    const html = await renderPage();
+    expect(html).toContain("1 fecha marcada");
+    expect(html).not.toContain("1 fechas marcadas");
   });
 
   it("renders the page without crashing when memberType is null (Sanity null for unset array)", async () => {
@@ -196,12 +230,12 @@ describe("/me worship gating", () => {
   // page's controls without a word, on a page that otherwise rendered fine — so
   // it read as a feature the member does not have, not as something that
   // failed. Every signed-in member has a document; null means the read missed.
-  it("says so when the member read comes back empty, instead of dropping both panels", async () => {
+  it("says so when the member read comes back empty, instead of dropping the link and the card", async () => {
     getMemberAccess.mockResolvedValue(access(["worship"]));
     serverFetch.mockResolvedValue(null);
     const html = await renderPage();
 
-    expect(html).not.toContain("CALENDARIO");
+    expect(html).not.toContain('href="/me/disponibilidad"');
     expect(html).not.toContain("PERFIL");
     expect(html).toContain("No pudimos cargar tu perfil");
     // Not asserting a live-region role: this is server-rendered and present at

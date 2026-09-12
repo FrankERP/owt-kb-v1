@@ -1,9 +1,9 @@
 "use client";
 
-// The twelve-month availability grid — a CONTROLLED view behind «Ver
-// calendario» on `/me` (R3). The weekend list is the default surface; this is
-// what a member opens to mark a Tuesday, a holiday week, or anything the ten
-// weekend rows cannot express.
+// The twelve-month availability grid — the CONTROLLED view that IS
+// `/me/disponibilidad` (R3, F3). It was one of two surfaces behind «Ver
+// calendario»; F3 retired the weekend pills and made this the only way to mark a
+// date, so it is mounted open and has the page to itself.
 //
 // It owns paging AND the selection gesture (R3 F2): «Seleccionar fechas» turns
 // the months into a drag surface, a drag marks the whole span at once, and the
@@ -30,14 +30,13 @@
 // open for a range. The selection arithmetic lives in `dragSelect.ts`, which is
 // pure because jsdom has no layout.
 //
-// The Desde/Hasta date fields moved here from the panel in F2: they are the
-// keyboard and VoiceOver path to the same range a drag expresses, so they
-// belong beside it rather than two surfaces away.
+// The Desde/Hasta date fields that arrived here in F2 are GONE (F3): four ways to
+// express one range was the accretion Frank asked to undo. A range is a drag; a
+// single day is a tap; a pattern is «Repetir…» on the host. The keyboard path to
+// a range is the per-day buttons, which every day of the twelve months has.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "@/app/components/ui/Button";
-import Collapse from "@/app/components/ui/Collapse";
-import DateField from "@/app/components/ui/DateField";
 import type { Availability } from "@/app/components/availability/useAvailability";
 import { fmtDayLabel, isoFromPoint, isoRange, shadowOpacity } from "@/app/components/availability/dragSelect";
 import { haptic } from "@/app/utils/haptics";
@@ -111,11 +110,6 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
   // ending inside the shadow month turns the page, and the anchor cell only
   // exists once THAT render has committed.
   const [pendingNote, setPendingNote] = useState<{ iso: string; days: string[] } | null>(null);
-
-  // The date fields, moved here from `MyAvailabilityPanel` (F2).
-  const [rangeOpen, setRangeOpen]   = useState(false);
-  const [rangeStart, setRangeStart] = useState("");
-  const [rangeEnd, setRangeEnd]     = useState("");
 
   const { dates, notes, todayIso, mark, applyRange } = state;
 
@@ -299,17 +293,6 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
     setPage(next);
   }
 
-  function applySpan(add: boolean) {
-    // Dropping a range can remove the very date the note popover is pinned to,
-    // and this is the member's own edit, not a conflict `onAdopt` would catch.
-    if (!add) closeNote();
-    applyRange(rangeStart, rangeEnd, add);
-    setRangeOpen(false);
-  }
-
-  const canApplyRange =
-    rangeStart !== "" && rangeEnd !== "" && rangeEnd >= rangeStart && rangeEnd >= todayIso;
-
   const first = visibleMonths[0];
   const last  = visibleMonths[visibleMonths.length - 1];
   const rangeHeading =
@@ -409,61 +392,19 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
 
   return (
     <div className="space-y-4">
-      {/* Selection mode + the keyboard path to the same range */}
+      {/* Selection mode */}
       <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* A pill, for the one variant that publishes `aria-pressed` — the mode
-              is a two-state toggle, and the availability tone is this surface's. */}
-          <Button variant="pill" tone="availability" onClick={toggleSelecting} active={selecting}>
-            {selecting ? "Listo" : "Seleccionar fechas"}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => setRangeOpen(v => !v)}
-            aria-expanded={rangeOpen}
-            aria-controls="availability-range"
-          >
-            Rango por fechas
-          </Button>
-        </div>
+        {/* A pill, for the one variant that publishes `aria-pressed` — the mode
+            is a two-state toggle, and the availability tone is this surface's. */}
+        <Button variant="pill" tone="availability" onClick={toggleSelecting} active={selecting}>
+          {selecting ? "Listo" : "Seleccionar fechas"}
+        </Button>
 
         {selecting && (
           <p className="font-body text-xs text-mono-500">
             Arrastra sobre los días que no puedes. Suelta para escribir la razón.
           </p>
         )}
-
-        {/* Date range — a special service mid-week the ten weekend rows can't say */}
-        <Collapse open={rangeOpen} id="availability-range" className="mt-2 rounded-xl border border-accent/20 bg-accent/[0.04] p-4 space-y-3">
-          <p className="font-label text-[11px] uppercase tracking-widest text-accent/70">
-            Marcar varios días seguidos como no disponibles
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <DateField
-              kind="date"
-              aria-label="Desde"
-              min={todayIso}
-              value={rangeStart}
-              onChange={e => {
-                const v = e.target.value;
-                setRangeStart(v);
-                if (rangeEnd && rangeEnd < v) setRangeEnd(v);
-              }}
-            />
-            <DateField
-              kind="date"
-              aria-label="Hasta"
-              min={rangeStart || todayIso}
-              value={rangeEnd}
-              onChange={e => setRangeEnd(e.target.value)}
-            />
-            <Button variant="primary" onClick={() => applySpan(true)} disabled={!canApplyRange}>Marcar</Button>
-            <Button onClick={() => applySpan(false)} disabled={!canApplyRange}>Quitar rango</Button>
-          </div>
-          <p className="font-body text-xs text-mono-500">
-            <span className="text-mono-400">Marcar</span> agrega o <span className="text-mono-400">Quitar rango</span> borra cada día entre las dos fechas, incluyéndolas. Puedes ajustar días sueltos después; recuerda <span className="text-mono-400">Guardar</span>.
-          </p>
-        </Collapse>
       </div>
 
       {/* Navigation */}

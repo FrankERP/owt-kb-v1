@@ -204,8 +204,10 @@ describe("light theme — WCAG AA contrast", () => {
 });
 
 // ---------------------------------------------------------------------------
-// The availability pill's PRESSED fill (Button's `pill` `tone="availability"`,
-// WeekendList), pinned by file because it composites a SOLID text role over an
+// The availability pill's PRESSED fill (Button's `pill` `tone="availability"` —
+// `AvailabilityGrid`'s «Seleccionar fechas» ⇄ «Listo» mode toggle, the tone's one
+// consumer since F3 retired the weekend pills), pinned by file because it
+// composites a SOLID text role over an
 // ALPHA-tinted background (`aria-pressed:bg-availability-fg/20`) — neither
 // FOREGROUND_ON_FILL above (two solid roles) nor the alpha-text guard below
 // (alpha on the TEXT, not the fill) can see this shape.

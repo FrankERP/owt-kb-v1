@@ -60,7 +60,8 @@ describe("Button", () => {
   });
 
   it("pill tone=\"availability\" carries the availability pressed triplet, text soft not strong", () => {
-    render(<Button variant="pill" tone="availability" active>SÁB</Button>);
+    // The tone's one consumer since F3: the grid's «Seleccionar fechas» ⇄ «Listo».
+    render(<Button variant="pill" tone="availability" active>Listo</Button>);
     const cls = screen.getByRole("button").className;
     expect(cls).toContain("aria-pressed:border-availability-strong");
     expect(cls).toContain("aria-pressed:text-availability-soft");

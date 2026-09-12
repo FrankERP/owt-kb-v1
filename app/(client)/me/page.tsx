@@ -11,7 +11,6 @@ import DayCardDisclosure from "@/app/components/DayCardDisclosure";
 import MeHeader from "@/app/components/MeHeader";
 import SettingsCard from "@/app/components/SettingsCard";
 import ThemeAnnouncement from "@/app/components/ui/ThemeAnnouncement";
-import MyAvailabilityPanel from "@/app/components/availability/MyAvailabilityPanel";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
@@ -20,6 +19,7 @@ import { orderProposals } from "@/app/utils/serviceReadModel";
 import { nextSeatLine, seatLabel } from "@/app/utils/myWeek";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { revealProps } from "@/app/utils/reveal";
+import { horizon } from "./queries";
 import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
 
 export const metadata: Metadata = {
@@ -28,8 +28,6 @@ export const metadata: Metadata = {
 };
 
 export const revalidate = 60;
-
-const TZ = "America/Mexico_City";
 
 const STATUS_LABEL: Record<ProposalStatus, string> = {
   draft: "Continuar propuesta",
@@ -82,14 +80,12 @@ export default async function MePage() {
 
   const { sanityId } = session.user;
 
-  // The generic is load-bearing, not decoration: `_rev` is REQUIRED below by
-  // `initialRev`, and an untyped fetch would let a projection edit drop it
-  // silently — at which point `PATCH /api/me/availability` 400s and EVERY
-  // member loses the ability to save availability, with only "Server returned
-  // 400" on screen. Typed, the compiler refuses the projection instead.
+  // `unavailableDates` survives the F3 split for ONE reason: the count on the
+  // link to `/me/disponibilidad`. `_rev` does NOT — the save precondition belongs
+  // to the page that renders the calendar, and carrying a revision this page
+  // never writes with would only invite a future editor to write with it.
   const member = await serverClient.fetch<{
     _id: string;
-    _rev: string;
     // Non-optional to match ProfilePanel's MemberProfile, which this feeds:
     // every teamMembers document carries them.
     member_name: string;
@@ -99,27 +95,19 @@ export default async function MePage() {
     memberType?: string[] | null;
     notifPrefs?: Record<string, unknown>;
     unavailableDates?: string[] | null;
-    unavailabilityNotes?: { date: string; note: string }[] | null;
     photoUrl?: string;
     hasPassword: boolean;
   } | null>(
-    // `_rev` feeds the availability calendar's save precondition: the PATCH
-    // requires the revision this page was rendered at, because a Kids manager
-    // can write the same two fields while this tab sits open.
     `*[_type == "teamMembers" && _id == $id][0] {
-      _id, _rev, member_name, alias, email, role, memberType, notifPrefs,
-      unavailableDates, unavailabilityNotes,
+      _id, member_name, alias, email, role, memberType, notifPrefs,
+      unavailableDates,
       "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
       "hasPassword": defined(passwordHash) && passwordHash != ""
     }`,
     { id: sanityId }
   );
 
-  const today = new Date().toLocaleDateString("sv", { timeZone: TZ });
-  // Server component: a fresh per-request date is the intended behavior.
-  // eslint-disable-next-line react-hooks/purity
-  const limit = new Date(Date.now() + 365 * 86400 * 1000)
-    .toLocaleDateString("sv", { timeZone: TZ });
+  const { today, limit } = horizon();
 
   const memberFilter = `(
     $id in Lead[]._ref ||
@@ -129,10 +117,6 @@ export default async function MePage() {
     $id in foh_team[].person._ref
   )`;
 
-  // eslint-disable-next-line react-hooks/purity -- server component, as above
-  const calendarLimit = new Date(Date.now() + 365 * 86400 * 1000)
-    .toLocaleDateString("sv", { timeZone: TZ });
-
   // Ministry membership decides which halves of this page exist at all, so it is
   // resolved BEFORE the reads: a kids-only member must not even query worship.
   // `getMemberAccess` is the 30s-TTL entry `requireActiveSession` already filled,
@@ -141,19 +125,19 @@ export default async function MePage() {
   const inWorship = ministries.includes("worship");
   const inKids = ministries.includes("kids");
 
-  // All three reads below touch protected service types, so they go through the
+  // Both reads below touch protected service types, so they go through the
   // canonical (published-perspective) client — a `drafts.*` overlay is never a
   // member's assignment, proposal, or calendar date. The member's OWN profile
   // read above stays on `serverClient`: it needs the read token and `teamMembers`
   // is not a protected service type. Weekend setlists are fetched as arrays and
   // collapsed with `pickUnique` below, never `[0]`.
   //
-  // The first two are WORSHIP reads and are skipped entirely for a member who is
-  // not in that ministry — nothing downstream of them renders for such a member
-  // (spec §5.1: worship surfaces are "none"), so querying and discarding would be
-  // pure cost. The third is not skipped: it feeds the availability calendar, which
-  // every member sees.
-  const [data, proposals, serviceDates] = await Promise.all([
+  // Both are WORSHIP reads and are skipped entirely for a member who is not in
+  // that ministry — nothing downstream of them renders for such a member (spec
+  // §5.1: worship surfaces are "none"), so querying and discarding would be pure
+  // cost. The calendar's service-date read left with the calendar (F3); it lives
+  // on `/me/disponibilidad`, which is where its ministry-neutrality is recorded.
+  const [data, proposals] = await Promise.all([
     inWorship ? operationalClient.fetch(
       `{
         "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
@@ -238,14 +222,6 @@ export default async function MePage() {
       }`,
       { id: sanityId, today }
     ) : [],
-    operationalClient.fetch<string[]>(
-      `[
-        ...*[_type == "sunday_role"   && week >= $today && week <= $limit && published != false].week,
-        ...*[_type == "saturday_role" && week >= $today && week <= $limit && published != false].week,
-        ...*[_type == "special_role"  && date >= $today && date <= $limit && published != false].date,
-      ]`,
-      { today, limit: calendarLimit }
-    ),
   ]);
 
   // Oasis Kids: only for members whose ministries include it, so a worship-only
@@ -365,10 +341,10 @@ export default async function MePage() {
   const heroAssignment = visibleAssignments[0] ?? null;
   const restAssignments = visibleAssignments.slice(1);
 
-  // Only well-formed calendar days reach the availability calendar's date math.
-  const calendarServiceDates = (Array.isArray(serviceDates) ? serviceDates : [])
-    .map((d) => serviceDayKey(d))
-    .filter((d): d is string => d !== null);
+  // The link to the calendar carries ONE number: how many dates the member has
+  // marked from today on. A count that included the past would read "3 fechas
+  // marcadas" forever, which is not what the line is answering.
+  const upcomingUnavailable = (member?.unavailableDates ?? []).filter((d) => d >= today).length;
 
   const navbarTitle = member?.alias?.trim() || "Mi perfil";
 
@@ -571,24 +547,36 @@ export default async function MePage() {
           </section>
         )}
 
-        {/* Availability + profile settings.
+        {/* The availability link + profile settings.
             Both hang off the SAME `member` read, so they are branched together
             rather than each on its own `member &&`. A null read used to remove
             both without a word — two thirds of this page's controls simply not
             there, on a page that otherwise rendered fine, so it looked like a
             feature the member does not have rather than something that failed.
             It is not an empty state: every signed-in member has a document, so
-            null means the read did not find theirs. */}
+            null means the read did not find theirs.
+
+            F3: the calendar itself moved to `/me/disponibilidad` — this is the
+            one line that points at it, with the count as the answer to "did I
+            already tell them?". A `Link`, rendered by a Server Component, which
+            is legal: what ADR-0028 forbids is CALLING a client value. */}
         {member ? (
           <>
-            <div {...revealProps(3)}>
-              <MyAvailabilityPanel
-                initialRev={member._rev}
-                initialDates={member.unavailableDates ?? []}
-                initialNotes={member.unavailabilityNotes ?? []}
-                serviceDates={calendarServiceDates}
-              />
-            </div>
+            <Link
+              href="/me/disponibilidad"
+              className="flex items-center justify-between gap-3 rounded-xl border border-accent/15 px-4 py-3 hover:border-accent/40 transition-colors"
+              {...revealProps(3)}
+            >
+              <span className="font-display text-base uppercase tracking-wide">Disponibilidad</span>
+              <span className="flex items-center gap-2">
+                <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
+                  {upcomingUnavailable === 0
+                    ? "Sin fechas marcadas"
+                    : `${upcomingUnavailable} fecha${upcomingUnavailable === 1 ? "" : "s"} marcada${upcomingUnavailable === 1 ? "" : "s"}`}
+                </span>
+                <span aria-hidden="true" className="font-body text-mono-500">›</span>
+              </span>
+            </Link>
             <SettingsCard member={member} {...revealProps(4)} />
           </>
         ) : (
@@ -600,7 +588,7 @@ export default async function MePage() {
             <section className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center" {...revealProps(3)}>
               <h2 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h2>
               <p className="font-body text-sm text-mono-500 mt-1">
-                Tus días no disponibles y tus ajustes no están disponibles ahora mismo.
+                Tu disponibilidad y tus ajustes no están disponibles ahora mismo.
                 Recarga la página; si sigue igual, avísale a un administrador.
               </p>
             </section>

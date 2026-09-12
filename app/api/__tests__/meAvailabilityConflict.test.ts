@@ -153,17 +153,22 @@ describe("GET /api/me/availability", () => {
   });
 });
 
-describe("/me renders the calendar with the revision it read", () => {
+describe("/me/disponibilidad renders the calendar with the revision it read", () => {
   // There is no callable seam for a server component's props, and the failure it
   // guards is total: a page that does not thread `_rev` turns EVERY member's
-  // save into a 400.
+  // save into a 400. F3 moved the calendar — and therefore this obligation — off
+  // `/me` and onto `/me/disponibilidad`, whose projection lives in `me/queries.ts`.
   const page = readFileSync(
-    new URL("../../(client)/me/page.tsx", import.meta.url),
+    new URL("../../(client)/me/disponibilidad/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const queries = readFileSync(
+    new URL("../../(client)/me/queries.ts", import.meta.url),
     "utf8",
   );
 
   it("projects `_rev` on the member read", () => {
-    expect(page).toMatch(/_id, _rev, member_name/);
+    expect(queries).toMatch(/_id, _rev, member_name/);
   });
 
   it("passes it to MyAvailabilityPanel", () => {
