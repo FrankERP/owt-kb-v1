@@ -6,28 +6,27 @@ import { redirect } from "next/navigation";
 import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import Navbar from "@/app/components/Navbar";
-import { DayCard } from "@/app/components/DayCard";
-import NextServiceHero from "@/app/components/NextServiceHero";
-import ProfilePanel from "@/app/components/ProfilePanel";
-import TextSizeControl from "@/app/components/TextSizeControl";
-import ThemeControl from "@/app/components/ui/ThemeControl";
+import { DayCard, type DayCardProps } from "@/app/components/DayCard";
+import DayCardDisclosure from "@/app/components/DayCardDisclosure";
+import MeHeader from "@/app/components/MeHeader";
 import ThemeAnnouncement from "@/app/components/ui/ThemeAnnouncement";
-import AvailabilityCalendar from "@/app/components/AvailabilityCalendar";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
 import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { orderProposals } from "@/app/utils/serviceReadModel";
+import { nextSeatLine, seatLabel } from "@/app/utils/myWeek";
+import { paintsDayCard } from "@/app/utils/paintsDayCard";
+import { revealProps } from "@/app/utils/reveal";
+import { horizon } from "./queries";
 import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
 
 export const metadata: Metadata = {
   title: "Mi perfil — Oasis Worship Team",
-  description: "Tus próximos servicios, disponibilidad y ajustes de perfil.",
+  description: "Tus próximos servicios y tu disponibilidad.",
 };
 
 export const revalidate = 60;
-
-const TZ = "America/Mexico_City";
 
 const STATUS_LABEL: Record<ProposalStatus, string> = {
   draft: "Continuar propuesta",
@@ -80,44 +79,31 @@ export default async function MePage() {
 
   const { sanityId } = session.user;
 
-  // The generic is load-bearing, not decoration: `_rev` is REQUIRED below by
-  // `initialRev`, and an untyped fetch would let a projection edit drop it
-  // silently — at which point `PATCH /api/me/availability` 400s and EVERY
-  // member loses the ability to save availability, with only "Server returned
-  // 400" on screen. Typed, the compiler refuses the projection instead.
+  // What this page still needs, and nothing else. `unavailableDates` survives the
+  // F3 split for ONE reason: the count on the link to `/me/disponibilidad`. The
+  // profile fields (`email`, `role`, `notifPrefs`, `hasPassword`) went with the
+  // settings card to `/me/ajustes`, which reads them with `MEMBER_PROFILE_QUERY`;
+  // `photoUrl` and `memberType` stay because the header paints the avatar and the
+  // Tipo chips. `_rev` is not here either — the save precondition belongs to the
+  // page that renders the calendar, and carrying a revision this page never
+  // writes with would only invite a future editor to write with it.
   const member = await serverClient.fetch<{
     _id: string;
-    _rev: string;
-    // Non-optional to match ProfilePanel's MemberProfile, which this feeds:
-    // every teamMembers document carries them.
     member_name: string;
-    email: string;
-    role: string;
     alias?: string;
-    memberType?: string[];
-    notifPrefs?: Record<string, unknown>;
-    unavailableDates?: string[];
-    unavailabilityNotes?: { date: string; note: string }[];
+    memberType?: string[] | null;
+    unavailableDates?: string[] | null;
     photoUrl?: string;
-    hasPassword: boolean;
   } | null>(
-    // `_rev` feeds the availability calendar's save precondition: the PATCH
-    // requires the revision this page was rendered at, because a Kids manager
-    // can write the same two fields while this tab sits open.
     `*[_type == "teamMembers" && _id == $id][0] {
-      _id, _rev, member_name, alias, email, role, memberType, notifPrefs,
-      unavailableDates, unavailabilityNotes,
-      "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl),
-      "hasPassword": defined(passwordHash) && passwordHash != ""
+      _id, member_name, alias, memberType,
+      unavailableDates,
+      "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl)
     }`,
     { id: sanityId }
   );
 
-  const today = new Date().toLocaleDateString("sv", { timeZone: TZ });
-  // Server component: a fresh per-request date is the intended behavior.
-  // eslint-disable-next-line react-hooks/purity
-  const limit = new Date(Date.now() + 365 * 86400 * 1000)
-    .toLocaleDateString("sv", { timeZone: TZ });
+  const { today, limit } = horizon();
 
   const memberFilter = `(
     $id in Lead[]._ref ||
@@ -127,10 +113,6 @@ export default async function MePage() {
     $id in foh_team[].person._ref
   )`;
 
-  // eslint-disable-next-line react-hooks/purity -- server component, as above
-  const calendarLimit = new Date(Date.now() + 365 * 86400 * 1000)
-    .toLocaleDateString("sv", { timeZone: TZ });
-
   // Ministry membership decides which halves of this page exist at all, so it is
   // resolved BEFORE the reads: a kids-only member must not even query worship.
   // `getMemberAccess` is the 30s-TTL entry `requireActiveSession` already filled,
@@ -139,19 +121,19 @@ export default async function MePage() {
   const inWorship = ministries.includes("worship");
   const inKids = ministries.includes("kids");
 
-  // All three reads below touch protected service types, so they go through the
+  // Both reads below touch protected service types, so they go through the
   // canonical (published-perspective) client — a `drafts.*` overlay is never a
   // member's assignment, proposal, or calendar date. The member's OWN profile
   // read above stays on `serverClient`: it needs the read token and `teamMembers`
   // is not a protected service type. Weekend setlists are fetched as arrays and
   // collapsed with `pickUnique` below, never `[0]`.
   //
-  // The first two are WORSHIP reads and are skipped entirely for a member who is
-  // not in that ministry — nothing downstream of them renders for such a member
-  // (spec §5.1: worship surfaces are "none"), so querying and discarding would be
-  // pure cost. The third is not skipped: it feeds the availability calendar, which
-  // every member sees.
-  const [data, proposals, serviceDates] = await Promise.all([
+  // Both are WORSHIP reads and are skipped entirely for a member who is not in
+  // that ministry — nothing downstream of them renders for such a member (spec
+  // §5.1: worship surfaces are "none"), so querying and discarding would be pure
+  // cost. The calendar's service-date read left with the calendar (F3); it lives
+  // on `/me/disponibilidad`, which is where its ministry-neutrality is recorded.
+  const [data, proposals] = await Promise.all([
     inWorship ? operationalClient.fetch(
       `{
         "sundays": *[_type == "sunday_role" && week >= $today && week <= $limit && published != false && ${memberFilter}] | order(week asc) {
@@ -236,14 +218,6 @@ export default async function MePage() {
       }`,
       { id: sanityId, today }
     ) : [],
-    operationalClient.fetch<string[]>(
-      `[
-        ...*[_type == "sunday_role"   && week >= $today && week <= $limit && published != false].week,
-        ...*[_type == "saturday_role" && week >= $today && week <= $limit && published != false].week,
-        ...*[_type == "special_role"  && date >= $today && date <= $limit && published != false].date,
-      ]`,
-      { today, limit: calendarLimit }
-    ),
   ]);
 
   // Oasis Kids: only for members whose ministries include it, so a worship-only
@@ -333,26 +307,53 @@ export default async function MePage() {
     .filter((a): a is { dateKey: string; day: string; doc: RoleDoc } => a !== null)
     .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
 
-  // Only well-formed calendar days reach the availability calendar's date math.
-  const calendarServiceDates = (Array.isArray(serviceDates) ? serviceDates : [])
-    .map((d) => serviceDayKey(d))
-    .filter((d): d is string => d !== null);
+  // The `DayCardProps` for one assignment, so the hero and the collapsed rows
+  // below it are fed from ONE place — they were two copies of the same nine
+  // props, and the R1 split is exactly where a drift between them would hide.
+  const cardProps = ({ day, doc, dateKey }: (typeof allAssignments)[number]): DayCardProps => ({
+    day,
+    date: dateKey,
+    roleId: day !== "Domingo" && day !== "Sábado" ? doc._id : undefined,
+    setlist: doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined),
+    leads: doc.Lead?.map((m) => m.alias || m.member_name),
+    instruments: doc.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
+    fohTeam: doc.foh_team?.map((s) => ({ label: s.role, person: s.person })),
+    bgvs: doc.BGVs,
+    chorus: doc.Chorus,
+  });
+
+  // Only the assignments whose card will actually paint something reach the
+  // header/hero split below — same guard, same reason as the home page's own
+  // `paintsDayCard` filter (`app/(client)/page.tsx`): a published role whose
+  // seats were all cleared is a normal stored state, not a corrupt one, and a
+  // header naming a service that renders nothing would be worse than silence.
+  const visibleAssignments = allAssignments.filter((a) => {
+    const { setlist, leads, instruments, fohTeam, bgvs, chorus } = cardProps(a);
+    return paintsDayCard({ setlist, leads, instruments, fohTeam, bgvs, chorus });
+  });
+
+  // The hero is the earliest visible assignment (the list is already sorted by
+  // `dateKey` above); everything after it collapses to a `DayCardDisclosure` row.
+  const heroAssignment = visibleAssignments[0] ?? null;
+  const restAssignments = visibleAssignments.slice(1);
+
+  // The link to the calendar carries ONE number: how many dates the member has
+  // marked from today on. A count that included the past would read "3 fechas
+  // marcadas" forever, which is not what the line is answering.
+  const upcomingUnavailable = (member?.unavailableDates ?? []).filter((d) => d >= today).length;
 
   const navbarTitle = member?.alias?.trim() || "Mi perfil";
 
-  // The member's specific seat(s) for a service, for the calendar event body.
-  function myRoleLabel(doc: RoleDoc): string {
-    const roles: string[] = [];
-    if (doc.isLead) roles.push("Lead");
-    if (doc.myInstrument) roles.push(doc.myInstrument);
-    if (doc.myFohRole) roles.push(`FOH: ${doc.myFohRole}`);
-    if (doc.isBGV) roles.push("BGV");
-    if (doc.isChorus) roles.push("Coro");
-    return roles.join(" · ");
-  }
+  // The header's one line: which service is next and which seat the member holds
+  // in it. `nextSeatLine`/`seatLabel` live in the NEUTRAL `app/utils/myWeek.ts`
+  // precisely so this Server Component may call them (ADR-0028) — `MeHeader` is a
+  // client module and receives the result as data, never a function.
+  const nextSeat = nextSeatLine(
+    visibleAssignments.map(({ dateKey, day, doc }) => ({ dateKey, day, seat: seatLabel(doc) })),
+  );
 
-  const calendarServices = allAssignments.map(({ dateKey, day, doc }) => {
-    const role = myRoleLabel(doc);
+  const calendarServices = visibleAssignments.map(({ dateKey, day, doc }) => {
+    const role = seatLabel(doc);
     return {
       uid: doc._id,
       date: dateKey,
@@ -429,96 +430,80 @@ export default async function MePage() {
     <div>
       <Navbar title={navbarTitle} schedule tags />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
-        {/* Top of /me, per parent Q2. Its "Elígelo aquí" is an anchor to #tema,
-            because ThemeControl renders below the service cards, the availability
-            calendar and ProfilePanel — most of a phone-page away. */}
+        {/* Top of /me, per parent Q2. Its "Elígelo aquí" links to
+            `/me/ajustes#tema`: F3 moved ThemeControl to its own page, so the
+            anchor is cross-page and a bare `#tema` would land on nothing. The
+            banner stays HERE — it is the invitation, and `/me` is where members
+            arrive; the settings page is the destination. */}
         <ThemeAnnouncement />
 
+        {/* The page's heading, and the only place the empty state is said: the two
+            `h2`s ("Mis próximos servicios" / "Próximos servicios") are gone, and
+            «Sin servicios asignados próximamente» moved INTO this line. `inWorship`
+            is passed so that a kids-only volunteer still gets no worship copy —
+            the empty state is itself a worship surface (spec §5.1). Tipo chips are
+            worship copy too — a member's Tipo is the worship eligibility axis, so a
+            kids-only volunteer sees no chips either.
+
+            Both lines are gated HERE as well as by the reads above (which a
+            kids-only member never runs). That is deliberate belt-and-braces: the
+            header is the one surface that claims "this is what you have to do", so
+            it must stay correct if a read ever stops being ministry-skipped. */}
+        <div {...revealProps(0)}>
+          <MeHeader
+            // A null profile read is reported by its own panel below; the header
+            // still renders, falling back to the session's name.
+            name={member?.member_name || session.user.name || "Mi perfil"}
+            alias={member?.alias}
+            photoUrl={member?.photoUrl}
+            memberTypes={inWorship ? member?.memberType : undefined}
+            next={inWorship ? nextSeat : null}
+            kidsNext={inKids ? (kidsAssignments[0]?.day ?? null) : null}
+            inWorship={inWorship}
+          />
+        </div>
+
         {/* Upcoming WORSHIP services — hidden outright for a member who is not in
-            that ministry, empty state included: a kids-only volunteer has no
-            worship surface at all (spec §5.1), and "Sin servicios asignados
-            próximamente" is still a worship surface. */}
-        {inWorship && (
-          <div>
-            {allAssignments.length === 0 ? (
+            that ministry, and absent entirely when there are none: the header says
+            so, so an empty column here would say it twice. The next service is the
+            full hero; every other one is a collapsed `DayCardDisclosure` row (R1),
+            each still followed by its own proposal CTA.
+
+            The hero renders as `<DayCard {...} hero />` directly, WITHOUT `isNext`
+            — the header above already carries the one countdown pill for this
+            service (`next`/`nextSeat`), and `isNext` is what makes `DayCard` draw
+            its OWN countdown pill. Passing both would put two countdowns for the
+            same date on one page; the header owns it, the hero card just shows the
+            "Ensayar" action. */}
+        {inWorship && heroAssignment && (
+          <div className="space-y-4" {...revealProps(1)}>
+            <div className="flex justify-end">
+              <AddToCalendarButton services={calendarServices} />
+            </div>
+            <div key={heroAssignment.doc._id}>
+              <DayCard {...cardProps(heroAssignment)} hero />
+              {renderProposalCta(heroAssignment.doc)}
+            </div>
+            {restAssignments.length > 0 && (
               <>
-                <h2 className="font-display text-center text-2xl md:text-3xl font-bold mb-2">
-                  Mis próximos servicios
-                </h2>
-                <div className="flex flex-col items-center gap-3 py-20 text-mono-600">
-                  <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                    <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                  </svg>
-                  <p className="font-label text-sm uppercase tracking-widest">Sin servicios asignados próximamente</p>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-10">
-                {/* Toolbar */}
-                <div className="flex justify-end -mb-6">
-                  <AddToCalendarButton services={calendarServices} />
-                </div>
-
-                {/* Hero: next assignment */}
-                {(() => {
-                  const { day, doc, dateKey } = allAssignments[0];
-                  const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined);
-                  return (
-                    <div>
-                      <NextServiceHero
-                        day={day}
-                        date={dateKey}
-                        roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
-                        setlist={setlist}
-                        leads={doc.Lead?.map((m) => m.alias || m.member_name)}
-                        instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-                        fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-                        bgvs={doc.BGVs}
-                        chorus={doc.Chorus}
-                      />
-                      {renderProposalCta(doc)}
-                    </div>
-                  );
-                })()}
-
-                {/* Remaining assignments */}
-                {allAssignments.length > 1 && (
-                  <div>
-                    <h2 className="font-display text-center text-xl md:text-2xl font-bold mb-6">
-                      Próximos servicios
-                    </h2>
-                    <div className="space-y-6">
-                      {allAssignments.slice(1).map(({ day, doc, dateKey }) => {
-                        const setlist = doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined);
-                        return (
-                          <div key={doc._id}>
-                            <DayCard
-                              day={day}
-                              date={dateKey}
-                              roleId={day !== "Domingo" && day !== "Sábado" ? doc._id : undefined}
-                              setlist={setlist}
-                              leads={doc.Lead?.map((m) => m.alias || m.member_name)}
-                              instruments={doc.instruments?.map((s) => ({ label: s.instrument, person: s.person }))}
-                              fohTeam={doc.foh_team?.map((s) => ({ label: s.role, person: s.person }))}
-                              bgvs={doc.BGVs}
-                              chorus={doc.Chorus}
-                            />
-                            {renderProposalCta(doc)}
-                          </div>
-                        );
-                      })}
-                    </div>
+                {/* Visually silent — the collapsed rows read fine without a printed
+                    heading, but a screen reader landing mid-page needs to know it
+                    left the hero and entered the rest of the run sheet. */}
+                <h2 className="sr-only">Después</h2>
+                {restAssignments.map((assignment) => (
+                  <div key={assignment.doc._id}>
+                    <DayCardDisclosure {...cardProps(assignment)} />
+                    {renderProposalCta(assignment.doc)}
                   </div>
-                )}
-              </div>
+                ))}
+              </>
             )}
           </div>
         )}
 
         {/* Oasis Kids — only for members of that ministry */}
         {inKids && (
-          <section aria-labelledby="mis-roles-kids">
+          <section aria-labelledby="mis-roles-kids" {...revealProps(2)}>
             <h2
               id="mis-roles-kids"
               className="font-display text-center text-xl md:text-2xl font-bold mb-6"
@@ -560,40 +545,46 @@ export default async function MePage() {
           </section>
         )}
 
-        {/* Availability + profile settings.
-            Both hang off the SAME `member` read, so they are branched together
-            rather than each on its own `member &&`. A null read used to remove
-            both without a word — two thirds of this page's controls simply not
-            there, on a page that otherwise rendered fine, so it looked like a
-            feature the member does not have rather than something that failed.
-            It is not an empty state: every signed-in member has a document, so
-            null means the read did not find theirs. */}
+        {/* The availability link.
+            A null read is not an empty state: every signed-in member has a
+            document, so null means the read did not find theirs — and it is said
+            out loud rather than silently dropping the line, which would read as a
+            feature this member does not have.
+
+            F3: the calendar moved to `/me/disponibilidad` and the settings card to
+            `/me/ajustes` (the avatar menu points there) — this is the one line
+            left, with the count as the answer to "did I already tell them?". A
+            `Link`, rendered by a Server Component, which is legal: what ADR-0028
+            forbids is CALLING a client value. */}
         {member ? (
-          <>
-            <AvailabilityCalendar
-              initialRev={member._rev}
-              initialDates={member.unavailableDates ?? []}
-              initialNotes={member.unavailabilityNotes ?? []}
-              serviceDates={calendarServiceDates}
-            />
-            <ProfilePanel initialMember={member} />
-          </>
+          <Link
+            href="/me/disponibilidad"
+            className="flex items-center justify-between gap-3 rounded-xl border border-accent/15 px-4 py-3 hover:border-accent/40 transition-colors"
+            {...revealProps(3)}
+          >
+            <span className="font-display text-base uppercase tracking-wide">Disponibilidad</span>
+            <span className="flex items-center gap-2">
+              <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
+                {upcomingUnavailable === 0
+                  ? "Sin fechas marcadas"
+                  : `${upcomingUnavailable} fecha${upcomingUnavailable === 1 ? "" : "s"} marcada${upcomingUnavailable === 1 ? "" : "s"}`}
+              </span>
+              <span aria-hidden="true" className="font-body text-mono-500">›</span>
+            </span>
+          </Link>
         ) : (
-          // No live-region role: this is server-rendered and present at first
-          // paint, so nothing is being INSERTED for a live region to announce,
-          // and screen readers treat already-present live content
-          // inconsistently. The heading carries the message.
-          <section className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center">
+          /* No live-region role: this is server-rendered and present at first
+             paint, so nothing is being INSERTED for a live region to announce,
+             and screen readers treat already-present live content
+             inconsistently. The heading carries the message. */
+          <section className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center" {...revealProps(3)}>
             <h2 className="font-display text-lg uppercase text-negative-fg">No pudimos cargar tu perfil</h2>
             <p className="font-body text-sm text-mono-500 mt-1">
-              Tus días no disponibles y tus ajustes no están disponibles ahora mismo.
+              Tu disponibilidad no está disponible ahora mismo.
               Recarga la página; si sigue igual, avísale a un administrador.
             </p>
           </section>
         )}
-        <ThemeControl />
-        <TextSizeControl />
-
       </div>
     </div>
   );

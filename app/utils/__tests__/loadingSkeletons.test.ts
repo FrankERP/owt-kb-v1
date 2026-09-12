@@ -1,5 +1,5 @@
 // app/utils/__tests__/loadingSkeletons.test.ts
-// The five loading.tsx files compose Skeleton instead of hand-copying pulse blocks
+// Every loading.tsx file composes Skeleton instead of hand-copying pulse blocks
 // (spec §4, §5.1–§5.3). Pulse is the pre-M0 spelling; a new one fails here.
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
@@ -10,6 +10,8 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const FILES = [
   "app/(client)/loading.tsx",
   "app/(client)/me/loading.tsx",
+  "app/(client)/me/disponibilidad/loading.tsx",
+  "app/(client)/me/ajustes/loading.tsx",
   "app/(client)/schedule/loading.tsx",
   "app/(client)/posts/[slug]/loading.tsx",
   "app/(client)/biblioteca/loading.tsx",

@@ -17,8 +17,24 @@
 // the rect as an argument for exactly this reason.
 
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AvailabilityCalendar, { popoverPosition } from "../AvailabilityCalendar";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { installMotionTestEnv } from "../ui/__tests__/motionTestSetup";
+import { MotionProvider } from "../ui/MotionProvider";
+import MyAvailabilityPanel from "../availability/MyAvailabilityPanel";
+import NotePopover, { popoverPosition } from "../availability/NotePopover";
+
+// R3: the popover lives in `availability/NotePopover` and the panel owns the one
+// instance (it was shared by two surfaces then; F3 left only the grid). The
+// behaviour below is unchanged — it is still opened from a day cell, and the grid
+// is mounted open now, so there is no disclosure to click through first.
+vi.mock("@/app/components/ui/Toast", () => ({
+  useToast: () => ({ toast: vi.fn(), dismiss: vi.fn() }),
+}));
+vi.mock("@/app/utils/haptics", () => ({ haptic: vi.fn() }));
+
+installMotionTestEnv();
+// Warm the LazyMotion feature chunk (ADR-0031), precedent Menu.test.tsx.
+beforeAll(async () => { await import("../ui/motionFeatures"); });
 
 const VIEWPORT_W = 390; // iPhone-ish
 const VIEWPORT_H = 844;
@@ -44,6 +60,14 @@ describe("popoverPosition", () => {
     expect(popoverPosition({ top: 0, bottom: 44, left: 10 }, 240, VIEWPORT_H).x).toBe(8);
   });
 
+  it("never goes off the TOP when it flips above a day in a short viewport", () => {
+    // A phone with the keyboard up: there is no room below, so it flips above —
+    // and 160px above a day in the first row is a negative offset.
+    const { y, above } = popoverPosition({ top: 40, bottom: 84, left: 40 }, VIEWPORT_W, 200);
+    expect(above).toBe(true);
+    expect(y).toBe(8);
+  });
+
   it("tracks its day: the same cell after a scroll gives a new position", () => {
     const atRest = popoverPosition({ top: 400, bottom: 444, left: 40 }, VIEWPORT_W, VIEWPORT_H);
     const scrolledUp = popoverPosition({ top: 100, bottom: 144, left: 40 }, VIEWPORT_W, VIEWPORT_H);
@@ -51,7 +75,7 @@ describe("popoverPosition", () => {
   });
 });
 
-describe("AvailabilityCalendar — the popover survives a scroll", () => {
+describe("MyAvailabilityPanel — the popover survives a scroll", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     vi.setSystemTime(new Date("2026-09-15T12:00:00-06:00"));
@@ -64,7 +88,11 @@ describe("AvailabilityCalendar — the popover survives a scroll", () => {
   });
 
   function openNoteOn(month: string, day: number) {
-    render(<AvailabilityCalendar initialRev="rev-1" initialDates={[]} initialNotes={[]} />);
+    render(
+      <MotionProvider>
+        <MyAvailabilityPanel initialRev="rev-1" initialDates={[]} initialNotes={[]} />
+      </MotionProvider>,
+    );
     const card = screen.getByText(month).closest("div")!;
     const cell = Array.from(card.querySelectorAll("button")).find(
       (b) => b.textContent?.trim() === String(day),
@@ -86,5 +114,50 @@ describe("AvailabilityCalendar — the popover survives a scroll", () => {
 
     expect(noteField()).not.toBeNull();
     expect((noteField() as HTMLInputElement).value).toBe("Viaje");
+  });
+});
+
+describe("NotePopover — a range popover edits every day at once", () => {
+  afterEach(cleanup);
+
+  function renderRange() {
+    const setNote = vi.fn();
+    const remove = vi.fn();
+    const setPopover = vi.fn();
+    render(
+      <NotePopover
+        popover={{ iso: "2026-09-12", isos: ["2026-09-12", "2026-09-13", "2026-09-14"], x: 0, y: 0, above: false }}
+        setPopover={setPopover}
+        anchorRef={{ current: null }}
+        notes={new Map()}
+        setNote={setNote}
+        remove={remove}
+      />,
+    );
+    return { setNote, remove, setPopover };
+  }
+
+  it("titles the popover with the range label", () => {
+    renderRange();
+    expect(screen.getByText("del 12 al 14 de septiembre")).not.toBeNull();
+  });
+
+  it("writes the same note to every day in the range", () => {
+    const { setNote } = renderRange();
+    fireEvent.change(screen.getByPlaceholderText(/razón/i), { target: { value: "viaje" } });
+    expect(setNote).toHaveBeenCalledTimes(3);
+    expect(setNote).toHaveBeenCalledWith("2026-09-12", "viaje");
+    expect(setNote).toHaveBeenCalledWith("2026-09-13", "viaje");
+    expect(setNote).toHaveBeenCalledWith("2026-09-14", "viaje");
+  });
+
+  it("removes every day in the range and closes", () => {
+    const { remove, setPopover } = renderRange();
+    fireEvent.click(screen.getByText("Quitar estas fechas"));
+    expect(remove).toHaveBeenCalledTimes(3);
+    expect(remove).toHaveBeenCalledWith("2026-09-12");
+    expect(remove).toHaveBeenCalledWith("2026-09-13");
+    expect(remove).toHaveBeenCalledWith("2026-09-14");
+    expect(setPopover).toHaveBeenCalledWith(null);
   });
 });

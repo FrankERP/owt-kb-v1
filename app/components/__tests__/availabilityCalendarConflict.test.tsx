@@ -2,8 +2,8 @@
 // The member's side of the `unavailableDates` lost-update race, in the client.
 //
 // `app/api/__tests__/meAvailabilityConflict.test.ts` proves the route refuses a
-// stale write. This file proves the calendar does the right thing with that
-// refusal, which is where the data can still be lost:
+// stale write. This file proves the availability panel does the right thing with
+// that refusal, which is where the data can still be lost:
 //
 //   * a real conflict DISCARDS the pending edits — re-sending a stale set
 //     against a fresh revision is the very deletion the route just stopped —
@@ -15,8 +15,24 @@
 //     rebase onto the fresh revision exactly once.
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AvailabilityCalendar from "../AvailabilityCalendar";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { installMotionTestEnv } from "../ui/__tests__/motionTestSetup";
+import { MotionProvider } from "../ui/MotionProvider";
+import MyAvailabilityPanel from "../availability/MyAvailabilityPanel";
+
+// R3 re-point: the panel is the host that calls `useAvailability` and owns the
+// save, so the contract this file guards is now asserted where it lives. F3 made
+// the grid the panel's ONLY surface and mounted it open — `/me/disponibilidad` is
+// the calendar — so the day cells are reachable without opening a disclosure.
+const toastMock = vi.fn();
+vi.mock("@/app/components/ui/Toast", () => ({
+  useToast: () => ({ toast: toastMock, dismiss: vi.fn() }),
+}));
+vi.mock("@/app/utils/haptics", () => ({ haptic: vi.fn() }));
+
+installMotionTestEnv();
+// Warm the LazyMotion feature chunk (ADR-0031), precedent Menu.test.tsx.
+beforeAll(async () => { await import("../ui/motionFeatures"); });
 
 // A marked cell carries an availability fill — `/30` normally, `/50` while its
 // note popover is open (clicking a date opens it).
@@ -38,7 +54,7 @@ function cell(month: string, day: number): HTMLButtonElement {
 
 const marked = (month: string, day: number) => cell(month, day).className.includes(MARKED);
 
-// "Guardar" / "Guardar •" / "Guardando..." / "Guardado ✓" — one button, four labels.
+// One button, two labels: «Guardar» and «Guardando…» while the PATCH is in flight.
 const saveButton = () => screen.getByRole("button", { name: /Guarda/ });
 
 const fetchMock = vi.fn();
@@ -53,6 +69,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   vi.setSystemTime(new Date("2026-09-15T12:00:00-06:00"));
   fetchMock.mockReset();
+  toastMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -63,12 +80,16 @@ afterEach(() => {
 });
 
 function renderCalendar() {
-  return render(
-    <AvailabilityCalendar initialRev="rev-1" initialDates={["2026-09-20"]} initialNotes={[]} />,
+  const r = render(
+    <MotionProvider>
+      <MyAvailabilityPanel initialRev="rev-1" initialDates={["2026-09-20"]} initialNotes={[]} />
+    </MotionProvider>,
   );
+  // The grid is mounted open (F3): no disclosure to pass through.
+  return r;
 }
 
-describe("AvailabilityCalendar — saving against a revision", () => {
+describe("MyAvailabilityPanel — saving against a revision", () => {
   it("sends the revision it was rendered at, and the one the reply reports next time", async () => {
     renderCalendar();
     fetchMock.mockResolvedValueOnce(
@@ -181,7 +202,10 @@ describe("AvailabilityCalendar — saving against a revision", () => {
     expect(marked("Octubre 2026", 4)).toBe(true);
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.queryByText("Cambios sin guardar")).toBeNull();
-    await waitFor(() => expect(saveButton().textContent).toContain("Guardado"));
+    // "Guardado ✓" is a toast now, not a label swap on the button.
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ message: "Guardado ✓", tone: "ok" })),
+    );
   });
 
   it("gives up after ONE rebase, discarding rather than looping", async () => {

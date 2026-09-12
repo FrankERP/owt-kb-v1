@@ -204,6 +204,32 @@ describe("light theme — WCAG AA contrast", () => {
 });
 
 // ---------------------------------------------------------------------------
+// The availability pill's PRESSED fill (Button's `pill` `tone="availability"` —
+// `AvailabilityGrid`'s «Seleccionar fechas» ⇄ «Listo» mode toggle, the tone's one
+// consumer since F3 retired the weekend pills), pinned by file because it
+// composites a SOLID text role over an
+// ALPHA-tinted background (`aria-pressed:bg-availability-fg/20`) — neither
+// FOREGROUND_ON_FILL above (two solid roles) nor the alpha-text guard below
+// (alpha on the TEXT, not the fill) can see this shape.
+// ---------------------------------------------------------------------------
+describe("the availability pill's pressed fill (Button tone=\"availability\")", () => {
+  it("text-availability-soft clears 4.5:1 on bg-availability-fg/20, in both themes", () => {
+    // `availability-strong` was the first choice and fails here — 3.67:1 in
+    // light — which is why the pill uses `soft`, not `strong` (fix round 1).
+    for (const [theme, roles] of [["dark", DARK], ["light", LIGHT]] as const) {
+      const fg = roles.get("availability-fg")!;
+      const base = roles.get("surface-base")!;
+      const fill = fg.map((c, i) => c * 0.2 + base[i] * 0.8) as [number, number, number];
+      const r = contrast(roles.get("availability-soft")!, fill);
+      expect(
+        r,
+        `availability-soft on bg-availability-fg/20 is ${r.toFixed(2)}:1 in ${theme}`,
+      ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The two control affordances, pinned in BOTH themes.
 //
 // These existed as `ink-dim/70` (placeholder) and `ink-dim/25` (input border)

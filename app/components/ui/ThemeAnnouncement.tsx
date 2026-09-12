@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Button from "./Button";
+import Presence from "./Presence";
 
 /**
  * The Spanish announcement for the theme rollout (parent Q2's bounded default:
@@ -45,17 +46,26 @@ export default function ThemeAnnouncement() {
     }
   }
 
-  if (!show) return null;
-
+  // `Presence`, not `show && <aside>`: the dismiss gets an exit instead of
+  // vanishing (spec §5.6). NO `appear` — `show` starts false and flips in the
+  // mount effect, so this instance is already mounted when it becomes visible and
+  // the ordinary show→true enter runs. `appear` would be the M0b violation (an
+  // above-the-fold element animating in on first paint) AND redundant here.
   return (
-    <aside
+    <Presence
+      show={show}
+      variant="rise"
+      as="aside"
       className="rounded-2xl border border-surface-accent-30 bg-surface-accent-faint p-4 mb-4 flex items-start gap-3"
       aria-label="Novedad: tema de la aplicación"
     >
       <p className="font-body text-sm text-ink flex-1">
         <strong className="font-display font-bold">Ahora puedes elegir el tema.</strong>{" "}
         La app sigue el modo claro u oscuro de tu teléfono. ¿Prefieres uno fijo?{" "}
-        <a href="#tema" className="underline text-accent hover:no-underline">
+        {/* Cross-page since F3: ThemeControl lives on `/me/ajustes`, so a bare
+            `#tema` would land on nothing. The banner stays on `/me` — it is the
+            invitation, and the settings page is the destination. */}
+        <a href="/me/ajustes#tema" className="underline text-accent hover:no-underline">
           Elígelo aquí
         </a>
         .
@@ -63,6 +73,6 @@ export default function ThemeAnnouncement() {
       <Button variant="ghost" size="sm" onClick={dismiss} aria-label="Descartar aviso" className="shrink-0">
         Ocultar
       </Button>
-    </aside>
+    </Presence>
   );
 }

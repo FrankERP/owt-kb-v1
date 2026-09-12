@@ -1232,3 +1232,281 @@ strip's dot to share today's slot (one dot, positive wins, the pulse stays today
 strip cell announce «te toca». Precondition now on the record: the «Tú» signal matches by
 display name (`alias || member_name`), so that name must be unique team-wide. Carried to R7:
 pull-to-refresh, long-press.
+
+# Part XII — R3 (2026-09-11)
+
+Branch `claude/motion-r3-me`. Four implementation tasks plus this documentation task:
+the availability save machinery as a hook, the weekend list with the grid behind a
+disclosure, the identity header and services column, and one Ajustes card.
+
+**Shipped (§12.4 in full).** `app/components/availability/useAvailability.ts` — the
+revision-guarded PATCH, the one-time sibling rebase, the held conflict, the dirty
+fingerprint and the `beforeunload` guard, moved verbatim out of the grid component so a
+second surface could read and write the same `unavailableDates` without a second
+revision racing the first. `app/utils/weekends.ts` — neutral: `nextWeekends(todayIso,
+count)`, `weekendLabel(weekend)`. `app/components/availability/WeekendList.tsx` — the
+next ten weekends as `SÁB`/`DOM` pill pairs, the twelve-month grid moved to
+`app/components/availability/AvailabilityGrid.tsx` behind «Ver calendario»
+(`Collapse`). `app/components/availability/MyAvailabilityPanel.tsx` — the host, calling
+`useAvailability` once and owning the shared «Repetir…» recurring panel and the one
+`NotePopover` both surfaces open. `app/utils/myWeek.ts` — neutral: `seatLabel(doc)`,
+`nextSeatLine(assignments)`. `app/components/MeHeader.tsx` — the identity header:
+avatar, name, alias, worship-gated Tipo chips, and the one line («Te toca el domingo 13
+· Lead» with a `NumberRoll` countdown, or the next Kids Sunday, or the worship empty
+state). `app/utils/memberTypes.ts` — `MEMBER_TYPES`/`MEMBER_TYPE_LABEL`, mirroring the
+`worshipTeam` schema, pinned by a parity test. `app/components/SettingsCard.tsx` — one
+`section#ajustes` holding `ThemeControl`, `TextSizeControl` and `ProfilePanel`, each
+`bare`. `app/(client)/me/page.tsx` — reordered: `ThemeAnnouncement` → `MeHeader` →
+services (hero + collapsed `DayCardDisclosure` rows) → Kids → `MyAvailabilityPanel` →
+`SettingsCard`; both retired `h2`s ("Mis próximos servicios" / "Próximos servicios")
+are gone, the header is the page's heading.
+
+**Rulings.**
+- **Weekend toggles are pill `Button`s with `aria-pressed`, not a `SegmentedControl`.**
+  A `SegmentedControl` is a one-of-N choice with a sliding thumb; a weekend's two days
+  are two INDEPENDENT booleans — a member can be unavailable Saturday, Sunday, both or
+  neither — which is exactly the shape `aria-pressed` toggles cover and a radiogroup
+  does not. `Button` gained a `tone` prop (`accent` default, `availability`) in fix
+  round 1 once the pill's own pressed colours measured 3.67:1 in light, below the 4.5
+  floor; the `availability` tone's `soft` text clears 5.17:1 light / 9.16:1 dark.
+- **The grid stays, for edge cases, behind a disclosure.** The weekend list answers "can
+  you serve this weekend"; a Tuesday rehearsal or a two-week trip needs a date the list
+  cannot express, so the twelve-month grid remains, unchanged in behaviour, opened by
+  «Ver calendario» rather than being the default — same shape as R2's Mes-behind-Agenda
+  ruling in Part XI.
+- **The recurring panel is shared**, not duplicated. It moved from the grid up to
+  `MyAvailabilityPanel`, the same host that owns the one `useAvailability` call, so
+  «Marcar»/«Quitar serie» write against the state both `WeekendList` and the grid render
+  rather than a copy either view could drift from.
+- **"Guardado" is a toast, not an inline flash.** The old flash was a transient `saved`
+  boolean that was also `false` while the save was in flight — reading it as "success"
+  conflated a transition with a result. `useAvailability` gained an `onSaved` callback
+  fired only on an actual 200, and the panel raises a `useToast` toast from it, which
+  survives the surrounding list re-rendering (an inline flash pinned to a row does not,
+  once the toggle it was next to has already been redrawn by the save).
+- **The header replaces the two `h2`s.** «Mis próximos servicios» and «Próximos
+  servicios» named what the member was looking at; `MeHeader`'s one line says what they
+  have to DO, and it IS the page's heading — no ARIA landmark stands in for either
+  retired heading, because the header already carries that role. An `sr-only` "Después"
+  heading precedes the collapsed rows, for a screen reader crossing from the hero into
+  the rest of the run sheet.
+- **`NextServiceHero` is deleted.** Its only job — wrapping `DayCard` with a countdown —
+  moved into `MeHeader` (the countdown) and a direct `<DayCard {...} hero />` (the card),
+  once the header owned the one countdown the page needs. Passing `isNext` to that hero
+  card as well would have put two countdowns for the same date on one page.
+- **Tipo chips are gated on worship membership**, the same gate as the empty state — a
+  member's `memberType` is the worship eligibility axis (CLAUDE.md), so handing it to
+  `MeHeader` for a kids-only volunteer would print worship copy on a page a kids-only
+  member is otherwise never shown any of.
+- **`memberTypes.ts` holds neutral, full-word labels** — "Tipo" already had two
+  independent copies (`/admin`'s abbreviated table labels and the admin PATCH route's
+  write allowlist) with nothing to stop them drifting apart, and the header's chip
+  text was about to become a third. `/admin` keeps its own `TYPE_ABBR` deliberately: a
+  dense table needs "Líder Dom", not "Líder Domingo", and that is an abbreviation of
+  the canonical label, not a second source of it.
+- **Dual-ministry precedence: worship wins, Kids is the fallback.** A member in both
+  ministries with nothing of their own assigned in worship but a Kids Sunday coming up
+  sees the Kids line — the header's one line names the NEAREST thing of any ministry,
+  not "worship first, unconditionally." A worship assignment, when one exists, still
+  wins over a nearer Kids Sunday, because the page's other worship surfaces (the hero,
+  the proposal CTAs) are already keyed to that same assignment and a header naming a
+  different service would point at content the rest of the page does not show.
+- **`ThemeAnnouncement` dismiss is a `Presence` exit, no `appear`.** `show` starts
+  `false` and flips in a mount effect, so the instance is already mounted (at rest) by
+  the time it becomes visible, and the ordinary `show → true` enter runs without
+  `appear` — passing `appear` here would both violate the M0b above-the-fold rule and be
+  redundant, since nothing needs to animate in on top of the already-running mount enter.
+- **Past days are disabled, not pressable; every toggle clears 44 px.** A member cannot
+  "mark" a weekend that already happened, so a past day renders `disabled` rather than
+  as a togglable pill; the `SÁB`/`DOM` pills and the «Razón» ghost sit at `size="lg"` for
+  the touch target, and the pressed pill's text is `text-availability-soft`, not
+  `-strong`, to hold contrast in light.
+- **`SettingsCard`'s impersonation ruling.** `ThemeControl` returns `null` while
+  impersonating; `SettingsCard` does not wrap it in a padding `div` the way it wraps
+  `TextSizeControl`, because a wrapped `null` still reserves the padding and leaves an
+  empty box in the card's `divide-y` sections. `ThemeControl`'s own `bare` mode keeps its
+  `p-5` padding rather than shedding it, so it owns the space it needs and nothing more
+  when it renders, and nothing at all when it doesn't.
+
+**Deviations from the plan, accepted.**
+- **The host renamed to `MyAvailabilityPanel`**, not the plan's `Availability` — caught
+  in fix round 1, once the plan's name turned out to collide with the unrelated admin
+  `AvailabilityPanel`.
+- **The grid moved file** from `app/components/AvailabilityCalendar.tsx` to
+  `app/components/availability/AvailabilityGrid.tsx`, beside the rest of `/me`'s
+  availability surfaces rather than staying at the top level — a fix-round tidy, not a
+  behaviour change; its two existing conflict/popover-position tests re-pointed at the
+  new host and pass unchanged.
+- **`app/utils/memberTypes.ts` was not in the plan.** It came out of a fix round once
+  `MeHeader`'s Tipo chips needed a label source and the admin PATCH route's write
+  allowlist and `/admin`'s abbreviated table turned out to already be two independent
+  copies of the same six values — a third copy for the chips would have made it three.
+- **`NextServiceHero` is deleted**, not reused as the plan's architecture line assumed.
+  The plan's own text still lists it as a reused component; the header absorbing the
+  countdown made the wrapper's only remaining job — forwarding props to `DayCard` —
+  redundant.
+
+**Open notes for Frank's look.**
+- `NotePopover` positions against its anchor's `getBoundingClientRect()`, which does not
+  account for the mobile tab bar's `--bottom-nav-h` reservation — a «Razón» button near
+  the bottom of the weekend list could open a popover that sits partly under the bar on
+  a phone. Not caught by any test, since `bottomNavOffsetSync.test.ts` only enumerates
+  fixed-bottom elements and the popover is positioned, not fixed.
+- `MeHeader`'s «Editar perfil» is `href="#ajustes"`, the same hash-anchor pattern
+  `ThemeAnnouncement` already uses for `#tema` — the scroll itself is untested in an
+  actual browser (jsdom does not implement scroll-into-view for hash navigation), so
+  Frank's look should confirm the jump lands on `SettingsCard`, not merely that the
+  anchor exists in the DOM.
+
+**Bundle:** `main df19f1b5` → `R3 tip 4b3e18ad` (git-archive cold build, same env):
+`/me` 129.8 kB → 132.2 kB (+2.4), `/admin` 356.5 kB → 356.9 kB (+0.4), `/` 119.9 kB →
+120.4 kB (+0.5), `/schedule` 123.6 kB → 124.1 kB (+0.5), `/biblioteca` 114.2 kB →
+114.3 kB (+0.1); shared unchanged. The header, weekend list and `SettingsCard` cost
+2.4 kB on `/me`; the pill `tone` on `Button` touches every other route by
+~0.4–0.5 kB — see the `docs/MOTION.md` ledger.
+
+### F1 — after Frank's look (2026-09-12)
+
+Frank's look at R3 surfaced two asks, both taken as rulings rather than deferred to a
+future round:
+
+- **Fridays are rehearsal days.** The team rehearses the Friday before a Sunday (or
+  Saturday) service, so a weekend row that only asked about Saturday/Sunday was asking
+  half the question a member needed to answer. Each `Weekend` now spans Friday through
+  Sunday — the row answers «¿este fin de semana puedes?» for the whole weekend
+  including its rehearsal, not just the service days. A Friday still carries a service
+  dot if one is genuinely scheduled there (the dot rule is `serviceSet.has(iso)` for any
+  day, unchanged), since a special Friday service is real; it simply never carries one
+  in the ordinary case, because rehearsals are not service documents.
+- **A range panel covers the special-service-mid-week case the ten rows cannot.** Ten
+  weekend rows answer "can you serve this weekend, one of the next ten" — they say
+  nothing about a Wednesday evening service inserted between two ordinary weekends, and
+  marking five separate days by hand for a multi-day trip that isn't aligned to a
+  weekend was the gap. `useAvailability.applyRange(startIso, endIso, add)` marks (or
+  clears) an inclusive span in one call, on the same revision-guarded state the weekend
+  list and the grid already share; `MyAvailabilityPanel`'s «Rango…» panel was its one caller until F2 (below) moved the fields into `AvailabilityGrid` under «Rango por fechas»; both callers now live in `AvailabilityGrid` — the date fields and the drag release.
+- **The grid stays for single weekdays.** Neither ask replaces the twelve-month grid
+  behind «Ver calendario» — a lone Tuesday rehearsal is still one tap on a calendar day,
+  not a one-day "range." The grid, the weekend rows and the range panel now cover three
+  distinct shapes (a single arbitrary day, a recurring weekday, a contiguous span) with
+  one shared `useAvailability` underneath all three.
+
+**Release:** pending.
+
+### F2 — drag-select (2026-09-12)
+
+Frank's ask, verbatim: "What if we went back to the calendar view and range selection
+was a holded click dragged through the calendar. Whenever the user's selection is close
+to the end of month, a 'shadow' of the next month appears underneath and the closer the
+user gets to the next month it becomes more solid and selectable as well. Once the
+selection is done, then the 'Razón' pop up shows" — followed by "make the page not
+scrollable [while selecting] … make sure we won't trigger the selection a long press
+activates … a button to activate this mode like 'Seleccionar fechas no disponibles'".
+
+**Rulings, with reasons:**
+- **A mode button, not a long-press.** The long-press gesture is already claimed by the
+  phone browser itself (text selection, the iOS callout menu) — arming the drag on a held
+  touch would race the browser's own gesture recognizer for the same input. «Seleccionar
+  fechas» ⇄ «Listo» removes the race by making entry deliberate.
+- **The overlay renders inside the last visible tile's own bounds, on every breakpoint** —
+  not the plan's tile below the row. The plan's version sat below the fold on a phone,
+  which both grew the page the mode promises never to scroll and meant a finger reaching
+  for the "next month" landed on nothing visible. One code path (always where the finger
+  actually is) cost a redesign of a single tile; it was cheaper than a mobile-only branch.
+- **Solidity latches for the rest of the drag** once the finger first reaches the host
+  tile's bottom edge, rather than tracking `clientY >= bottom` live. The overlay's cells
+  sit inside the host's own padding and border, so they never reach that exact edge
+  themselves — without the latch there is no finger position simultaneously "over a
+  next-month cell" and "past the threshold." (See the review trail below — this is what
+  the second HIGH round forced.)
+- **The overlay stays inert (`pointer-events-none`, `aria-hidden`) while it is still
+  fading.** It sits on top of the host's own lower rows while fading in; leaving pointer
+  events on there would resolve nothing on a move and commit a stale end on release —
+  wrong, with no error.
+- **No auto-scroll during the gesture, ever.** The page must not move under the finger;
+  the shadow overlay is what stands in for "the next month is now reachable."
+- **The Desde/Hasta date fields stay**, moved from the panel into the grid under «Rango
+  por fechas» — the keyboard/VoiceOver path to the exact same range a drag expresses, so
+  removing them would drop accessibility rather than just tidy a UI.
+- **One note for the whole range.** `NoteAnchor` gained `isos?: string[]`; the popover
+  edits every day in the range with one «Razón» and one «Quitar estas fechas», never a
+  popover per day.
+
+**Review trail:** Task 1 (the pure model) drew one HIGH — `isoFromPoint` was reading the
+`data-shadow`/`data-solid` flags on the cell itself, but Task 2 places them on the month
+tile ancestor; fixed in the same round. Task 2 (the grid) drew one HIGH (the note's anchor
+day could already be unmounted if the release turned the page before the popover opened —
+fixed with a post-commit effect anchored to the first still-mounted day) plus two MEDIUMs
+(a second finger could re-anchor or commit the gesture; `pointerup` could read a
+one-frame-stale render closure — fixed with `isPrimary`/`pointerId` pinning and a
+synchronously-mirrored `dragRef`). The fix round's own overlay geometry then drew two NEW
+HIGHs on re-review — the overlay's cells never actually reached the "solid" threshold, and
+the still-fading overlay covered the host's live rows with pointer events on — both closed
+by the solidity latch and `pointer-events-none` above.
+
+**Open device checks, for Frank's look:** whether the fading overlay leaves enough of the
+host month visible to still read the current month while the shadow solidifies; whether
+the one-way latch (solid, once reached, for the rest of that drag) feels right when a
+finger drifts back up into the fading tile rather than resetting.
+
+**Release:** pending.
+
+### F3 — three pages (2026-09-12)
+
+Frank's ask, verbatim: "too many buttons that select the unavailable dates … remove the
+pills with the calendar … the /me page does too many things now — settings, hero cards,
+unavailable dates, edit profile."
+
+**Rulings, with reasons:**
+- **Split by QUESTION, not by component.** `/me` becomes "Mi semana" — who am I and when
+  do I serve; `/me/disponibilidad` — when can't I serve, the calendar alone;
+  `/me/ajustes` — how does the app work for me, the one `SettingsCard`. Each is its own
+  Server Component route with its own `loading.tsx`, session guard and `callbackUrl`, not
+  a scrolled-past section of one page, sharing the member/service-date GROQ through a
+  neutral `app/(client)/me/queries.ts` so a projection edit cannot drift between the pages
+  that read it.
+- **One surface marks availability, not four.** By F2, a member had FOUR ways to say the
+  same thing: the weekend pills (`WeekendList`), the panel's «Rango…» fields (F1), the
+  grid's Desde/Hasta fields (F2), and the drag gesture itself (F2). F3 keeps exactly one —
+  the twelve-month grid, tap for a single day, «Seleccionar fechas» for a drag range,
+  «Repetir…» for a weekday pattern — and deletes `WeekendList.tsx`, `weekends.ts`
+  (`nextWeekends`/`weekendLabel`), the panel's «Ver calendario» `Collapse`, and the grid's
+  «Rango por fechas» `Collapse` with its two `DateField`s.
+- **«Seleccionar fechas» is KEPT.** Frank's ask singled out the pills, not the drag
+  gesture F2 shipped two days earlier — the calendar page still scrolls vertically, so
+  the shadow-month overlay the drag needs still has a page to scroll past. Dropping it
+  would have undone F2 for no reason F3's own complaint gives.
+- **«Editar perfil» is DROPPED from `MeHeader`.** Settings are one tap away in the avatar
+  menu (`/me/ajustes`, `/me/ajustes#tema`) once they have their own page; a second link to
+  the same destination sitting in the header was exactly the kind of redundancy the split
+  was meant to remove, not a feature to preserve.
+- **The §12.4 "one page" ruling is reversed, and here is why.** R3 (§12.4 above)
+  deliberately built `/me` as one page — header, hero, the weekend list, the grid behind a
+  disclosure, and `SettingsCard` all in one scroll — reasoning that a member's whole
+  self-service surface belonged together, with the grid's disclosure as the release valve
+  for "too much on one page." Frank's F3 look found the reasoning wrong, not just the
+  amount: a page answering "when do I serve," "when can't I," and "how do I configure the
+  app" is three different jobs behind one URL, and a disclosure treats the SYMPTOM (too
+  much content) without asking whether the page has too many JOBS. F3 answers that
+  question instead: three pages, one job each, reached from `/me`'s own link row and the
+  avatar menu.
+
+**Review trail:** Task 1 (`/me/disponibilidad`, the calendar alone) drew one fresh-code-review
+round: **APPROVED, 4 LOW** — docs deferred to Task 3 on the record; two of the four LOW
+findings (a kids-only test not pinning that no ministry is read; the horizon assertion
+compared against a literal instead of the same `horizon()` expression the page uses) were
+folded into Task 2's dispatch rather than spent on a second round. Task 2 (`/me/ajustes`,
+settings on their own page) drew **CHANGES_REQUIRED, 2 MEDIUM + 1 LOW**: `MEMBER_PROFILE_QUERY`
+carried a dead `_rev` — shipped verbatim from the brief, but no `/me/ajustes` write
+(`/api/me`, `/api/me/photo`, `/api/me/password`, `/api/me/notif-prefs`) takes an
+`ifRevisionId`, so a revision flowing through a page that never writes with it invited a
+future misuse (MEDIUM); the new `app/(client)/me/ajustes/loading.tsx` was missing from
+`loadingSkeletons.test.ts`'s scanned file list, the split's own skeleton guard left
+uncovered (MEDIUM); a stale `/me#tema` line survived in `docs/MOTION.md` after the anchor
+moved to `/me/ajustes#tema` (LOW). All three findings were fixed in one commit ahead of
+this documentation task, verified by the full gate chain re-run on the final tree — the
+churn cap (two rounds before Frank's explicit go-ahead) was not reached.
+
+**Bundle:** `main df19f1b5` → `F3 tip 8df4d0d7` (git-archive cold build, gzip −9): shared 172.5 → 172.5; `/me` 129.8 → 119.9 kB (−9.9); `/me/disponibilidad` 105.1 kB (new); `/me/ajustes` 103.1 kB (new); `/` 119.9 → 118.0 (−1.9); `/schedule` 123.6 → 121.7 (−1.9); `/admin` 356.5 → 354.4 (−2.1) — the weekend list and the date fields left, and every route shed the pill tone's unused variants.
+
+**Release:** pending.
