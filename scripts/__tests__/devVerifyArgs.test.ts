@@ -23,6 +23,7 @@ describe("dev-verify args", () => {
       fullPage: false,
       text: false,
       a11y: false,
+      touch: false,
       console: false,
       viewport: { width: 1280, height: 800 },
       clicks: [],
@@ -38,9 +39,15 @@ describe("dev-verify args", () => {
     ]);
     expect(parsed).toEqual({
       route: "/admin", baseUrl: "https://x", screenshot: "out.png", fullPage: true,
-      text: true, a11y: true, console: true, viewport: { width: 375, height: 812 }, theme: "dark",
+      text: true, a11y: true, touch: false, console: true, viewport: { width: 375, height: 812 }, theme: "dark",
       clicks: ["Editar mes", "Cerrar"], waitFor: "Servicios", json: true,
     });
+  });
+
+  it("sets touch: true from --touch", () => {
+    const parsed = parseArgs(["--route", "/admin", "--touch"]);
+    expect(isArgsError(parsed)).toBe(false);
+    expect((parsed as { touch: boolean }).touch).toBe(true);
   });
 
   it("rejects bad viewport, bad theme, unknown flags and missing values", () => {
