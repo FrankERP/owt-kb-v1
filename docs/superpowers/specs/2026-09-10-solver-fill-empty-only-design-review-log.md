@@ -2,9 +2,10 @@
 
 Artifact: `2026-09-10-solver-fill-empty-only-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
-**Status: open — six rounds, no approval yet.** The mechanism was rewritten twice: once
+**Status: open — seven rounds, no approval yet.** The mechanism was rewritten twice: once
 after round 2 (onto pins-as-fixed-variables) and once after round 6 (onto soft rules).
-Current canonical digest `da922d6afb21fb47…`, commit `527876e0`.
+**Round 7 verified the rewritten mechanism sound** and found its two blockers elsewhere.
+Current canonical digest `3f849049…`, commit `5e640764`.
 
 Approval is not authorization to implement. Implementation still requires the plan, the three
 gates, and a fresh code review of the diff.
@@ -27,6 +28,7 @@ byte-identical text.
 | 4 | — | `c9cc50bd` / `f5aff11e` | CHANGES_REQUIRED | yes (4 blockers) |
 | 5 | — | `37cd3876` | CHANGES_REQUIRED | yes (2 blockers, one root cause) |
 | 6 | `3d99b384566d7987…` | `3193b2c4` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
+| 7 | `da922d6afb21fb47…` | `6bf8e4a4` | CHANGES_REQUIRED | yes (2 blockers, both verified) |
 
 Every round used a brand-new `skeptical-reviewer` dispatch given only the reviewer brief, an
 immutable snapshot whose digest was verified equal to the canonical file before dispatch, the
@@ -126,3 +128,61 @@ the §5.1 compensation sentence that contradicted the paragraph below it, the `s
 rebuild excluding pinned-only people, the hand-placed count under-reporting as well as
 over-reporting, the `unfilled` count falling as empty seats rise, the app-only rollback, and
 three citation corrections. None of this has been through a review round.
+
+## Round 7 — the mechanism cleared; the blockers moved outward
+
+**The rewrite held.** The reviewer did not re-execute the patched solver; instead they
+constructed a **feasibility certificate** — pins set, every other `x` at 0 — and checked it
+against every `model.Add` in `create_model_and_solve` (`:645-897`). The only hard survivors are
+the `filled` definitions, the scoped week exclusions, the `<= 1` occupancy limit and the
+pin-adjusted spreads, all satisfied at adjusted count 0. So a pin cannot make the month
+infeasible, analytically and independently of the author's execution run. `isSolvable`
+(`plannerModel.ts:374-380`) covers exactly the five pin roles, so the role union is complete.
+
+Both blockers are in territory the first six rounds never reached, which is what a mechanism
+being settled looks like.
+
+1. **The switch destroys the admin's recorded rule waivers.** `applySolveResponse` rebuilds a
+   cell as `{columnId, rowId, occupants, origin}` (`plannerModel.ts:929-936`), dropping
+   `overrides` and `overrideReasons` — whose own doc-comment says they live on the cell
+   because it survives "a re-render, a step round-trip **and a re-solve**". Today that drop is
+   correct *by accident*: the solver enforces pair rules and exclusions hard, so the waived
+   seat never comes back and pruning the waiver is right. §5.2 makes those rules soft and pins
+   the seat, so it **does** come back, into a cell with no waiver —
+   `ruleViolationsForColumn:535-536` takes the `waived === undefined` path and reports
+   `{ overridden: false }`, a fresh red violation on a seat the admin already decided. It
+   cascades: the sanctioned seat is no longer removed from `sanctionFree` (`:542`), so the
+   partner of a waived pair flags too. Directly contradicts E1.
+   **Fixed:** a pinned cell keeps `origin`, `overrides` and `overrideReasons`, pruned to the
+   occupants that came back, reusing `withUpdatedCell`'s existing prune
+   (`PlannerGrid.tsx:452-465`); the clears drop them, because a surviving waiver would
+   pre-sanction the cell's next occupant. §11 gets the waived-pair assertion.
+
+2. **§13's production-first rollout rested on a suite no gate runs.** `.github/workflows/ci.yml:36-52`
+   runs `tsc`, `vitest`, `eslint` and nothing else; `package.json` has no python script;
+   `gcf/cloudbuild.yaml` is a single `gcloud functions deploy` with no test step. So
+   `gcf/test_owt_solver_v2.py` — holding the byte-identity guard, the fairness-collapse guards,
+   the rules-stay-hard control and the pinned-only `KeyError` guard — runs only when a human
+   remembers, and the `gates` check CLAUDE.md makes the merge condition for `main` proves
+   nothing about a `gcf/**`-only PR. Meanwhile §13 ships the solver to production without
+   preview *and* names that suite as what makes doing so safe. CLAUDE.md's own words:
+   "that property is what makes it a control rather than an intention."
+   **Fixed:** the delivery adds a `pytest gcf/` step to the existing `gates` job (not a second
+   workflow, so one required check keeps meaning "everything passed"), and §13's rollout order
+   now starts after that gate is green on `main`.
+
+Non-blocking, all seven adopted and each re-checked first: the Stage B nest is four-deep and
+its `optimize=False` passes set no objective at all (`:899-903`), so `violation_target` is
+emitted as an unconditional constraint rather than an objective term; the solver has no
+calendar (`build_slots:547-562`) so the two built-in requirements reach `pin_violations` as
+`builtin:` markers the client localises, not as Spanish date strings; the `all_people` union
+re-sorts; the clear menu's behaviour over special columns is stated (a special's Coro and its
+instruments are never refilled, so they survive); a weekend column whose `weekForColumn` is
+`null` contributes no pins; the skewed-pin fixture is sized so the tier is genuinely
+satisfiable; the Auto confirmation's instrument sentence changes too; the marker-dropping pass
+sits after `handleCellsChange`'s stored-mode early return.
+
+**What round 7 says about the two earlier rewrites.** Rounds 3–6 all landed on §5.2. Round 7
+found nothing there — the first round since round 2 that did not. Its findings are a client
+field the spec never inventoried and a CI gap, i.e. the ordinary surface of a feature spec
+rather than a mechanism defect.
