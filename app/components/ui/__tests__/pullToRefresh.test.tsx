@@ -47,18 +47,27 @@ function setScrollY(y: number) {
 }
 
 /** jsdom has no constructible TouchEvent; the component only reads `touches`. */
-function touchEvent(type: string, y: number, fingers = 1) {
+function touchEvent(type: string, y: number, fingers = 1, x = 0) {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, "touches", {
-    value: Array.from({ length: fingers }, () => ({ clientY: y })),
+    value: Array.from({ length: fingers }, () => ({ clientY: y, clientX: x })),
   });
   return event;
 }
 
-function fire(type: string, y: number, fingers = 1) {
-  const event = touchEvent(type, y, fingers);
+function fire(type: string, y: number, fingers = 1, x = 0) {
+  const event = touchEvent(type, y, fingers, x);
   act(() => {
     window.dispatchEvent(event);
+  });
+  return event;
+}
+
+/** Same event, dispatched on a node so the listener sees a real `target`. */
+function fireOn(target: Element, type: string, y: number) {
+  const event = touchEvent(type, y);
+  act(() => {
+    target.dispatchEvent(event);
   });
   return event;
 }
@@ -101,6 +110,9 @@ describe("PullToRefresh", () => {
   });
 
   it("refreshes once past the threshold, with a haptic", () => {
+    // Exactly one refresh per pull: the listener effect must not re-run
+    // mid-gesture on a new `useRouter()` identity (it reads `routerRef`), or the
+    // travel would be dropped before `touchend` and the pull would do nothing.
     mount();
     fire("touchstart", 100);
     fire("touchmove", 180);
@@ -138,11 +150,22 @@ describe("PullToRefresh", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
-  it("registers no touch listeners without the tab bar's class (desktop, and the phone before hydration)", () => {
+  it("registers no touch listeners at all without the tab bar's class (desktop, and the phone before hydration)", () => {
     document.documentElement.classList.remove("has-bottom-nav");
     const spy = vi.spyOn(window, "addEventListener");
     mount();
+    const touchTypes = spy.mock.calls.map(([type]) => type).filter(type => String(type).startsWith("touch"));
+    expect(touchTypes).toEqual([]);
+    spy.mockRestore();
+  });
+
+  it("attaches the non-passive touchmove only once a touch starts at the top", () => {
+    const spy = vi.spyOn(window, "addEventListener");
+    mount();
     expect(spy.mock.calls.some(([type]) => type === "touchmove")).toBe(false);
+    fire("touchstart", 100);
+    const move = spy.mock.calls.find(([type]) => type === "touchmove");
+    expect(move?.[2]).toEqual({ passive: false });
     spy.mockRestore();
   });
 
@@ -177,6 +200,76 @@ describe("PullToRefresh", () => {
     const move = fire("touchmove", 180);
     expect(move.defaultPrevented).toBe(false);
     fire("touchend", 180);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("ignores a horizontal swipe — the axis is locked on the first move past the slop", () => {
+    mount();
+    fire("touchstart", 100, 1, 0);
+    const move = fire("touchmove", 120, 1, 80);
+    expect(move.defaultPrevented).toBe(false);
+    expect(railHeightPx()).toBe(0);
+    // One-shot: the rest of the gesture stays the swipe's, however vertical it turns.
+    const later = fire("touchmove", 220, 1, 80);
+    expect(later.defaultPrevented).toBe(false);
+    fire("touchend", 220);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("arms nothing for a touch that starts inside [data-pull-ignore]", () => {
+    mount(
+      <div data-pull-ignore="">
+        <button type="button">dentro</button>
+      </div>,
+    );
+    const inside = document.querySelector("button")!;
+    fireOn(inside, "touchstart", 100);
+    const move = fire("touchmove", 180);
+    expect(move.defaultPrevented).toBe(false);
+    expect(railHeightPx()).toBe(0);
+    fire("touchend", 180);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("refreshes once even when a second pull lands before the floor has passed", () => {
+    mount();
+    fire("touchstart", 100);
+    fire("touchmove", 180);
+    fire("touchend", 180);
+    fire("touchstart", 100);
+    const move = fire("touchmove", 180);
+    fire("touchend", 180);
+    expect(move.defaultPrevented).toBe(false);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(haptic).toHaveBeenCalledTimes(1);
+  });
+
+  it("never claims an upward drag from the top", () => {
+    mount();
+    fire("touchstart", 200);
+    const move = fire("touchmove", 120);
+    expect(move.defaultPrevented).toBe(false);
+    expect(railHeightPx()).toBe(0);
+    fire("touchend", 120);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps pulling through the iOS rubber band, where scrollY goes negative", () => {
+    mount();
+    fire("touchstart", 100);
+    setScrollY(-30);
+    const move = fire("touchmove", 180);
+    expect(move.defaultPrevented).toBe(true);
+    expect(railHeightPx()).toBeGreaterThan(0);
+  });
+
+  it("touchcancel drops the pull without refreshing", () => {
+    mount();
+    fire("touchstart", 100);
+    fire("touchmove", 180);
+    expect(railHeightPx()).toBeGreaterThan(0);
+    fire("touchcancel", 180);
+    expect(railHeightPx()).toBe(0);
     expect(refresh).not.toHaveBeenCalled();
   });
 

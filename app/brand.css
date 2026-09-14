@@ -631,9 +631,12 @@ html.has-bottom-nav [data-route-main] { padding-bottom: var(--bottom-nav-h); }
 /* Pull-to-refresh (R7, spec §12.8) takes over the downward overscroll at the top
    of the page on the phone. `contain` stops the chain there — without it Chrome
    Android runs ITS OWN pull-to-refresh on the same gesture and the page reloads
-   under our rail. Scoped to the class so a desktop (where PullToRefresh never
-   arms) keeps the browser's default overscroll behaviour untouched. */
-html.has-bottom-nav body { overscroll-behavior-y: contain; }
+   under our rail. It sits on the ROOT element, not on `body`: the viewport's
+   overscroll behaviour is read from `<html>` (the propagation from `body` to the
+   viewport that `background` enjoys does not apply here), so the same rule on
+   `body` alone leaves the browser gesture armed. Scoped to the class so a desktop
+   (where PullToRefresh never arms) keeps the default behaviour untouched. */
+html.has-bottom-nav { overscroll-behavior-y: contain; }
 
 /* The pull rail's «working» sweep: the lit card's own beam token travelling
    left→right over the accent bar while router.refresh() is in flight. Plain

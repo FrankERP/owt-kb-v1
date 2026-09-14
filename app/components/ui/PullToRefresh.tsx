@@ -24,11 +24,35 @@
 // nothing about an open dialog would otherwise stop the pull.
 //
 // `preventDefault()` is called ONLY when the pull is genuinely ours —
-// `dy > 8 && window.scrollY === 0`, one finger. Everywhere else the native
-// scroll must be exactly as it was; a listener that pre-empts it is how a page
-// stops scrolling on a phone with nothing in the console. `brand.css` adds
-// `overscroll-behavior-y: contain` under the same class so Chrome Android's own
-// pull-to-refresh does not fire on top of this one.
+// `dy > 8 && window.scrollY <= 0`, one finger, vertical. Everywhere else the
+// native scroll must be exactly as it was; a listener that pre-empts it is how a
+// page stops scrolling on a phone with nothing in the console. `brand.css` adds
+// `overscroll-behavior-y: contain` on the ROOT element under the same class
+// (the viewport reads the property from `<html>`, not from `<body>`) so Chrome
+// Android's own pull-to-refresh does not fire on top of this one.
+//
+// FOUR RULES DECIDE WHETHER A TOUCH IS A PULL, all checked in `touchstart`:
+//   • `window.scrollY <= 0` — **`<=`, never `===`**. During the iOS rubber band
+//     `scrollY` goes NEGATIVE, so an equality test freezes the pull at exactly
+//     the moment the platform is already showing overscroll.
+//   • One finger. A pinch is not a pull.
+//   • The touch did not start inside `[data-pull-ignore]` — the surfaces that
+//     own their own gesture (`SwipeStrip`'s drag host, `AvailabilityGrid`'s
+//     months while «Seleccionar fechas» is on) opt out by marking their host.
+//   • No refresh is already in flight (`refreshing` is mirrored into a ref so
+//     the check is synchronous — a second pull landing in the same task must
+//     not queue a second `router.refresh()`).
+// A fifth is decided on the FIRST move past the 8 px slop: if the finger has
+// travelled further on x than on y it is a horizontal gesture, and the pull is
+// locked out for the REST of that touch (one-shot, like motion's
+// `dragDirectionLock`) rather than re-evaluated frame by frame.
+//
+// THE NON-PASSIVE LISTENER ONLY EXISTS DURING A CANDIDATE PULL. `touchstart` is
+// passive and stays attached while armed; the `{ passive: false }` `touchmove`
+// (plus `touchend`/`touchcancel`) is attached by `touchstart` once the four
+// rules pass and removed again on end/cancel. A permanently attached non-passive
+// `touchmove` costs the browser its scroll fast-path on every touch in the app,
+// including the ones this component will never claim.
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -73,8 +97,17 @@ export default function PullToRefresh() {
   }, [router]);
 
   const startY = useRef<number | null>(null);
+  const startX = useRef(0);
   const dyRef = useRef(0);
   const startedAt = useRef(0);
+
+  // `refreshing` read synchronously from inside a listener: the state update
+  // that follows a committed pull has not rendered yet when the next touch
+  // arrives, and the second pull must see the refresh already in flight.
+  const refreshingRef = useRef(false);
+  useEffect(() => {
+    refreshingRef.current = refreshing;
+  }, [refreshing]);
 
   // Armed = the tab bar is on screen AND the pointer is coarse. Re-checked on
   // every <html> class change, because the bar publishes its class after
@@ -100,23 +133,31 @@ export default function PullToRefresh() {
   useEffect(() => {
     if (!armed || dialogOpen) return;
 
-    const onStart = (event: TouchEvent) => {
-      if (event.touches.length > 1 || window.scrollY !== 0) {
-        startY.current = null;
-        return;
-      }
-      startY.current = event.touches[0]?.clientY ?? null;
-      dyRef.current = 0;
-    };
+    // Whether the axis has already been decided in our favour for this touch.
+    // `false` again on every `touchstart`; a horizontal decision ends the touch
+    // outright (the listeners come off) rather than leaving a flag to re-check.
+    let vertical = false;
 
-    const onMove = (event: TouchEvent) => {
+    function onMove(event: TouchEvent) {
       if (startY.current === null) return;
       if (event.touches.length > 1) {
         reset();
         return;
       }
       const distance = (event.touches[0]?.clientY ?? 0) - startY.current;
-      if (distance > CLAIM_PX && window.scrollY === 0) {
+      if (!vertical) {
+        const across = (event.touches[0]?.clientX ?? 0) - startX.current;
+        if (Math.abs(distance) <= CLAIM_PX && Math.abs(across) <= CLAIM_PX) return;
+        if (Math.abs(across) > Math.abs(distance)) {
+          // A horizontal gesture — a swipe, a carousel, a drag. Hands the whole
+          // touch back, once and for good.
+          detach();
+          reset();
+          return;
+        }
+        vertical = true;
+      }
+      if (distance > CLAIM_PX && window.scrollY <= 0) {
         // The ONE place the native gesture is taken over.
         event.preventDefault();
         dyRef.current = distance;
@@ -124,29 +165,56 @@ export default function PullToRefresh() {
         return;
       }
       if (distance <= 0) reset();
-    };
+    }
 
-    const onEnd = () => {
+    function onEnd() {
+      detach();
       const distance = dyRef.current;
       reset();
-      if (!shouldRefresh(distance)) return;
+      if (refreshingRef.current || !shouldRefresh(distance)) return;
       void haptic("medium");
       startedAt.current = Date.now();
+      // Set BEFORE the state update: the ref is what the next `touchstart` in
+      // this same task reads.
+      refreshingRef.current = true;
       setRefreshing(true);
       startTransition(() => {
         routerRef.current.refresh();
       });
+    }
+
+    function onCancel() {
+      detach();
+      reset();
+    }
+
+    const detach = () => {
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+      window.removeEventListener("touchcancel", onCancel);
+    };
+
+    const onStart = (event: TouchEvent) => {
+      startY.current = null;
+      if (refreshingRef.current) return;
+      if (event.touches.length > 1 || window.scrollY > 0) return;
+      const target = event.target as Element | null;
+      if (target?.closest?.("[data-pull-ignore]")) return;
+      const touch = event.touches[0];
+      if (!touch) return;
+      startY.current = touch.clientY;
+      startX.current = touch.clientX ?? 0;
+      dyRef.current = 0;
+      vertical = false;
+      window.addEventListener("touchmove", onMove, { passive: false });
+      window.addEventListener("touchend", onEnd);
+      window.addEventListener("touchcancel", onCancel);
     };
 
     window.addEventListener("touchstart", onStart, { passive: true });
-    window.addEventListener("touchmove", onMove, { passive: false });
-    window.addEventListener("touchend", onEnd);
-    window.addEventListener("touchcancel", reset);
     return () => {
       window.removeEventListener("touchstart", onStart);
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onEnd);
-      window.removeEventListener("touchcancel", reset);
+      detach();
       reset();
     };
   }, [armed, dialogOpen, reset]);
