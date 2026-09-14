@@ -3259,7 +3259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 87,
+      "line": 77,
       "disposition": "B",
       "reason": null
     },
@@ -3271,7 +3271,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 112,
+      "line": 102,
       "disposition": "B",
       "reason": null
     },

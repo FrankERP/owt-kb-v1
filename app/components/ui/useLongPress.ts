@@ -134,11 +134,8 @@ export default function useLongPress(
         // (Chrome/Edge's own addition to a `contextmenu` MouseEvent) never
         // reaches `e` itself — only `e.nativeEvent` carries it.
         const pointerType = (e.nativeEvent as MouseEvent & { pointerType?: string }).pointerType;
-<<<<<<< HEAD
-=======
         // No mouse signal ⇒ prevented only: a touch press has already fired (or
         // will), and a keyboard-invoked menu is indistinguishable from it here.
->>>>>>> claude/motion-r7-appwide
         const isMouse = pointerType ? pointerType === "mouse" : e.button === 2;
         if (!isMouse) return;
         fire(false);

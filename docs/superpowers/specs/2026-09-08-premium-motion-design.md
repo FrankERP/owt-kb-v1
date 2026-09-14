@@ -1551,14 +1551,6 @@ convenience rather than by page.
 
 **Shipped.** `app/api/cue/route.ts` + `app/utils/cue.ts` + `app/components/ui/CueStrip.tsx`
 — the next-service cue under the title on every route but `/` and `/me`.
-<<<<<<< HEAD
-`app/components/ui/Blackout.tsx` — `blackout()`, the sign-out exit, wired into
-`SignOutButton` and `NavMenu`. `app/components/ui/PullToRefresh.tsx` +
-`app/components/ui/pullModel.ts` — pull-to-refresh, mounted once in
-`app/(client)/layout.tsx`. `app/components/ui/useLongPress.ts` +
-`app/components/ui/QuickActions.tsx`, wired into `app/components/LibraryRow.tsx` and
-`app/components/DayCardDisclosure.tsx`.
-=======
 `app/components/ui/Blackout.tsx` — `blackout()`, the sign-out exit, wired into the
 three sign-out call sites: `SignOutButton`, `NavMenu`, and
 `app/(client)/auth/not-a-member/page.tsx`. `app/components/ui/PullToRefresh.tsx` +
@@ -1567,7 +1559,6 @@ three sign-out call sites: `SignOutButton`, `NavMenu`, and
 `app/components/ui/QuickActions.tsx`, wired into `app/components/LibraryRow.tsx` (which
 reports the press up to `app/components/LibraryIndex.tsx`, the owner of the page's ONE
 sheet) and `app/components/DayCardDisclosure.tsx`.
->>>>>>> claude/motion-r7-appwide
 
 **Rulings, with reasons.**
 - **The cue is fetched client-side, not read into `Navbar` server-side.** `Navbar` reads
@@ -1655,8 +1646,6 @@ sheet) and `app/components/DayCardDisclosure.tsx`.
   `onStart`; explicit touchmove-removal assertions).
 - **Task 4 (long-press + `QuickActions`):** APPROVED, 4 LOW parked for the final fix
   wave.
-<<<<<<< HEAD
-=======
 - **Final wave landed as `5ac795f5`**, verified by a whole-branch code review, which
   raised 2 MEDIUM + 3 LOW. All five are fixed in this wave: **M1** — ~140 closed
   `CueDialog`s on `/biblioteca`, one per `LibraryRow`, each subscribed to the CueDialog
@@ -1673,7 +1662,6 @@ sheet) and `app/components/DayCardDisclosure.tsx`.
   **L3** — a false comment in `PullToRefresh`'s `onStart` claimed the first pull's
   listeners were already detached; they are not, and the `reset()` is what ends the pull
   in flight. Review trail closed.
->>>>>>> claude/motion-r7-appwide
 
 **Open notes for Frank's look.**
 - The iOS bounce feel — whether the rail's resistance (half the finger's travel,

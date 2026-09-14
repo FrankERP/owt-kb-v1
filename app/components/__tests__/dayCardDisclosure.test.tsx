@@ -124,15 +124,10 @@ describe("DayCardDisclosure quick actions", () => {
 
   // R7 final wave: the disclosure's own UID must equal `/me`'s `<_id>@owt`
   // form for the same service document, or a member's export from the two
-<<<<<<< HEAD
-  // surfaces creates two calendar entries for one service.
-  it("the .ics UID is `<serviceId>@owt` when a serviceId is provided", async () => {
-=======
   // surfaces creates two calendar entries for one service. The id goes in RAW —
   // a mixed-case Sanity `_id` here, since `/me` exports the `_id` untouched and
   // case-folding it would mint that second entry.
   it("the .ics UID is the RAW `<serviceId>@owt`, case included", async () => {
->>>>>>> claude/motion-r7-appwide
     vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     vi.setSystemTime(new Date(2026, 8, 8, 9, 0, 0));
     let text = "";
@@ -149,11 +144,7 @@ describe("DayCardDisclosure quick actions", () => {
           <DayCardDisclosure
             day="Sábado"
             date="2026-09-19"
-<<<<<<< HEAD
-            serviceId="abc123"
-=======
             serviceId="Abc123"
->>>>>>> claude/motion-r7-appwide
             setlist={{ week: "2026-09-19", songs: [song] }}
             leads={["Ana"]}
           />
@@ -164,11 +155,7 @@ describe("DayCardDisclosure quick actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Añadir a mi calendario" }));
     // Flush the Blob#text() microtask queued above.
     await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-<<<<<<< HEAD
-    expect(text).toContain("UID:abc123@owt");
-=======
     expect(text).toContain("UID:Abc123@owt");
->>>>>>> claude/motion-r7-appwide
     click.mockRestore();
   });
 });
