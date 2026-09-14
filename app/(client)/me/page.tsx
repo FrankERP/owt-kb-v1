@@ -313,6 +313,7 @@ export default async function MePage() {
     day,
     date: dateKey,
     roleId: day !== "Domingo" && day !== "Sábado" ? doc._id : undefined,
+    serviceId: doc._id,
     setlist: doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined),
     leads: doc.Lead?.map((m) => m.alias || m.member_name),
     instruments: doc.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
@@ -427,7 +428,8 @@ export default async function MePage() {
 
   return (
     <div>
-      <Navbar title={navbarTitle} schedule tags />
+      {/* `cue={false}`: `MeHeader` already carries the next-service countdown. */}
+      <Navbar title={navbarTitle} schedule tags cue={false} />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
         {/* The theme-rollout announcement used to sit here. It was retired on
             2026-09-13 — see ADR-0033. Do not reintroduce it with a client-side

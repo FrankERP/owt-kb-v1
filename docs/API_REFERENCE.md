@@ -263,6 +263,7 @@ two-way isolation rule (see `CLAUDE.md` § Auth). All mutating routes call
 |-------|---------|------|---------|
 | `/api/activity/ping` | POST | active session | Heartbeat — patches own `lastSeen`. Failure swallowed. Returns `{ok:true}`. |
 | `/api/notifications/count` | GET | active session (returns `{count:0}` if none) | Nav badge. Admins: count of `pending` proposals. Members/leads: own `changes_requested` proposals. |
+| `/api/cue` | GET | active session (401 otherwise — the strip treats any non-ok as "no strip") | Navbar cue strip: `{cue: {dateKey, kind, day} | null}`, the member's next service. **Ministry-scoped by SKIPPED QUERY, not by filter** — a worship member never causes a `kidsSchedule` read and a kids-only volunteer never causes a worship one. Worship side is the min of `sunday_role.week` / `saturday_role.week` / `special_role.date` with `published != false`; kids side is the next `kidsSchedule` with the stricter `published == true`. `Cache-Control: private, max-age=60`; `CueStrip` caches the same 60 s in `sessionStorage`. |
 
 ---
 

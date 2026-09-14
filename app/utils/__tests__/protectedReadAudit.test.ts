@@ -561,6 +561,7 @@ describe("git-tracked protected read inventory", () => {
       "app/api/song/[id]/route.ts",
       "app/api/me/songs/route.ts",
       "app/api/notifications/count/route.ts",
+      "app/api/cue/route.ts",
       "app/api/admin/roles/route.ts",
       "app/api/admin/proposals/route.ts",
       "app/api/me/proposals/route.ts",

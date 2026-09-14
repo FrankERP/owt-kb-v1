@@ -119,6 +119,10 @@ token) for private/fresh data.
 
 ## Notable components per page
 
+`Navbar` carries `CueStrip` (the next-service cue, fetched client-side from `/api/cue` — see
+[API_REFERENCE.md](API_REFERENCE.md)) on every route except `/` and `/me`, which pass `cue={false}`
+because their own headers already show the countdown.
+
 - **`/`** — `Navbar`, `DayCard` (the next service, `layout="wide"` + `hero`), `DayCardDisclosure` (every other service, collapsed to one line).
 - **`/schedule`** — `Navbar`, `CalendarView` (composition only: `ScheduleHeader`, `DayStrip`, the
   Agenda|Mes `SegmentedControl`, `AgendaView` or the month grid, the day sheet `CueDialog`).

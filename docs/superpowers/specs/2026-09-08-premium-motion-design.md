@@ -1540,3 +1540,123 @@ calendar is one tap from everywhere; the row on Mi semana stays for its count; a
   second path to the same edit was the thing to remove, not keep in sync.
 
 **Release:** merged to `main` as `512cd3be` (PR #65, 2026-09-13 18:48 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last verified at `7c6bf572`.
+
+# Part XIII — R7 (2026-09-13)
+
+Branch `claude/motion-r7-appwide`. Four implementation tasks plus this documentation
+task: the navbar cue strip and its API, the sign-out blackout, pull-to-refresh on the
+phone, and long-press quick actions on rows — §12.8, decision L. Unlike R1–R3, none of
+these belong to one route; they apply across the app, so the ledger is organised by
+convenience rather than by page.
+
+**Shipped.** `app/api/cue/route.ts` + `app/utils/cue.ts` + `app/components/ui/CueStrip.tsx`
+— the next-service cue under the title on every route but `/` and `/me`.
+`app/components/ui/Blackout.tsx` — `blackout()`, the sign-out exit, wired into
+`SignOutButton` and `NavMenu`. `app/components/ui/PullToRefresh.tsx` +
+`app/components/ui/pullModel.ts` — pull-to-refresh, mounted once in
+`app/(client)/layout.tsx`. `app/components/ui/useLongPress.ts` +
+`app/components/ui/QuickActions.tsx`, wired into `app/components/LibraryRow.tsx` and
+`app/components/DayCardDisclosure.tsx`.
+
+**Rulings, with reasons.**
+- **The cue is fetched client-side, not read into `Navbar` server-side.** `Navbar` reads
+  no session today, which is what lets every page that renders it stay static/ISR;
+  reading the cue there would make the whole shell dynamic just to paint one label.
+  Fetched after paint instead, exactly like the notification badge, with a shared
+  in-flight promise so the phone and desktop instances (both mount per page) ask the API
+  once, not twice.
+- **Hidden on `/` and `/me`.** Both already carry the countdown in their own headers
+  (`DayCard`'s hero countdown; `MeHeader`'s one line) — a third copy under the title
+  would repeat state the page already states more prominently. `CueStrip` checks the
+  pathname itself as the belt to `Navbar`'s `cue` prop suspenders.
+- **Both-ministry precedence: earlier date wins, tie goes to worship** (`pickCue`) — a
+  member in both ministries whose Sunday morning is the kids room has a worship call
+  that same day, earlier than the kids service it precedes, so the tie is never actually
+  ambiguous in practice.
+- **Ministry-gated by skipping the query, not by filtering the response** — `/api/cue`
+  reads the caller's `ministries` and only issues the worship read for a worship member,
+  only the kids read for a kids one, the same isolation every other ministry-scoped read
+  in the app carries (CLAUDE.md).
+- **`blackout()` is a plain CSS transition, not `motion`.** It fires from a synchronous
+  click handler and is meant to outlive the component that rendered the trigger, through
+  the redirect that replaces the document — `motion` assumes an element that lives
+  inside React's tree for its whole life, which this one deliberately does not.
+  `cancel()` exists because `signOut()` can throw; without it a failed sign-out would
+  leave the page permanently black.
+- **Pull-to-refresh is phone-only, armed by `has-bottom-nav` + a coarse pointer** — the
+  same signal `BottomNav` already publishes, re-checked through a `MutationObserver`
+  since the bar's class arrives after hydration. A desktop browser, or a phone browser
+  on a route with no tab bar (`/auth`, `/studio`), never arms the gesture.
+- **The content is never translated.** The rail is a sibling `fixed` element at the
+  viewport's top edge, never a transform on `<main>` — a transformed ancestor becomes
+  the containing block for every `position: fixed` descendant (the FAB, the audio
+  transport, the toasts), the ADR-0031 trap `reveal.test.ts` exists to keep shut.
+- **`overscroll-behavior-y: contain` moved to the root element** under
+  `html.has-bottom-nav`, not `body` — the viewport reads the property from `<html>`, so a
+  `body` declaration left Chrome Android's own pull-to-refresh armed underneath this
+  one (fix round 1, review finding).
+- **Long-press timings: 450 ms / 8 px / scroll-cancel / one swallowed click.** 450 ms of
+  a still primary pointer opens the sheet; 8 px of travel, a lift, a leave, a cancel, or
+  any `scroll` (capture phase) cancels it first — the scroll rule is load-bearing on a
+  phone, since a flick that starts on a row holds the finger within a few pixels for its
+  first frames. The row's own `onClick` is swallowed exactly once so a fired press never
+  also opens the tap's destination.
+- **Desktop right-click opens the same sheet.** A mouse held still for 450 ms is an
+  accident and the OS context menu wins the race anyway, so `contextmenu` from a mouse
+  fires the sheet immediately instead; from a touch it is only `preventDefault`ed, since
+  the press itself already fired or will.
+- **Per-row actions were chosen for what each row already does, not padded to a fixed
+  count.** `LibraryRow`: «Abrir» and «Copiar enlace». `DayCardDisclosure`: «Ver en
+  calendario» and «Añadir a mi calendario». Neither carries a destructive action — a
+  quick-actions sheet is for a second convenience, not for something that needs its own
+  confirmation step.
+
+**Deviations from the plan, accepted.**
+- `DayCard`'s own setlist rows (`SongRow`) were left out of the long-press sweep — they
+  already carry the row-is-the-affordance exemption for a different reason (opening the
+  player), and a long press there would compete with the row's existing tap instead of
+  adding to it.
+- No «Practicar» quick action on `LibraryRow` — the player exposes exactly one song
+  entry point (`openSheet`), which «Abrir» already calls; a second button calling the
+  same function would be two names for one action.
+- The `contextmenu` mouse test (`pointerType ? pointerType === "mouse" : button === 2`)
+  was accepted as written rather than simplified to `pointerType === "mouse"` alone —
+  Safari and Firefox send no `pointerType` on a `contextmenu` `MouseEvent` at all, and
+  the simpler form would silently drop desktop right-click support on both.
+
+**Review trail.**
+- **Task 1 (cue API + strip):** CHANGES_REQUIRED, 1 MEDIUM + 3 LOW — reserve the line's
+  height so `Navbar`'s remount-per-route doesn't shift the title block; cache keyed by
+  `sanityId` (not just a bare TTL) plus `Vary: Cookie` on the response; `cueLabel(cue,
+  now)` taking the caller's clock directly instead of round-tripping "today" through a
+  string; two tests strengthened. Fixed in one round; scoped re-review CLEAN.
+- **Task 2 (blackout):** APPROVED outright. A LOW rejection-path test and a double-tap
+  note parked for the final fix wave.
+- **Task 3 (pull-to-refresh):** CHANGES_REQUIRED, 1 HIGH + 4 MEDIUM + 2 LOW. The HIGH:
+  `scrollY === 0` froze the pull mid-iOS-bounce, since the rubber band drives `scrollY`
+  negative — fixed to `<= 0` everywhere. The MEDIUMs: the one-shot axis lock;
+  `data-pull-ignore` on `SwipeStrip`'s drag host and `AvailabilityGrid`'s months during
+  «Seleccionar fechas»; `overscroll-behavior-y` moved from `body` to `html`; the
+  `refreshingRef` in-flight guard so a second pull in the same task can't queue a second
+  refresh. The LOWs: attaching `touchmove` per-gesture rather than permanently; tests for
+  an upward drag, a horizontal gesture, `touchcancel`, and a second pull while refreshing.
+  Fixed in one round; scoped re-review CLEAN (2 LOW parked: `reset()` on a multi-finger
+  `onStart`; explicit touchmove-removal assertions).
+- **Task 4 (long-press + `QuickActions`):** APPROVED, 4 LOW parked for the final fix
+  wave.
+
+**Open notes for Frank's look.**
+- The iOS bounce feel — whether the rail's resistance (half the finger's travel,
+  capped at 60 px) reads as natural against the platform's own rubber band, which this
+  gesture deliberately coexists with rather than suppresses.
+- The 8 px slop on both gestures (pull and long-press) — whether it is loose enough for
+  a real thumb on a moving bus and tight enough that an ordinary tap or scroll never
+  misfires either one.
+- Long-press on iOS specifically, after a prevented `contextmenu` — Safari's native
+  callout menu and text-selection UI are the two things `useLongPress`'s `style` and
+  cancellation rules are aimed at suppressing, and only a real device confirms they
+  stay suppressed across iOS versions.
+
+**Bundle:** measured at release.
+
+**Release:** pending.

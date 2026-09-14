@@ -13,13 +13,25 @@
 // still runs `usePlayer`/`useSession`; both providers are global, and a closed
 // Collapse is inert + aria-hidden, so nothing inside it is reachable.
 
+//
+// A long press on the row (R7 Task 4, spec §12.8) opens its quick actions —
+// the agenda, or this one service as an .ics — instead of toggling it open.
+
 import { useId, useState } from "react";
+import { useRouter } from "next/navigation";
 import { DayCard, type DayCardProps } from "./DayCard";
 import Collapse from "./ui/Collapse";
+import QuickActions, { type QuickAction } from "./ui/QuickActions";
+import useLongPress from "./ui/useLongPress";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
+import { buildICS, type ICSEvent } from "@/app/utils/ics";
+import { normalizeText } from "@/app/utils/normalizeText";
 
 export default function DayCardDisclosure(props: DayCardProps) {
   const [open, setOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const longPress = useLongPress(() => setActionsOpen(true));
+  const router = useRouter();
   const id = useId();
   // Local noon, never a bare `new Date(iso)` — the UTC day-flip invariant.
   const shortDate = props.date
@@ -27,12 +39,44 @@ export default function DayCardDisclosure(props: DayCardProps) {
     : "";
   const days = props.date ? daysUntil(props.date) : null;
 
+  // The same blob-download mechanics as `AddToCalendarButton`, for the ONE service
+  // this row stands for rather than the member's whole upcoming list. The UID
+  // prefers `serviceId` (the service document's own `_id`, set at both call
+  // sites) over `roleId` (only ever set for a special) so a weekend service
+  // gets a stable per-document UID too, matching `/me`'s `<_id>@owt` form —
+  // `normalizeText` strips accents/case so the `${date}-${day}` fallback never
+  // carries non-ASCII into the UID.
+  function addToCalendar() {
+    if (!props.date) return;
+    const event: ICSEvent = {
+      uid: normalizeText(props.serviceId || props.roleId || `${props.date}-${props.day}`),
+      date: props.date,
+      title: `${props.day} · OWT`,
+      description: props.setlist?.songs?.map((s) => s.title).filter(Boolean).join(" · ") || undefined,
+    };
+    const blob = new Blob([buildICS([event])], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `servicio-owt-${props.date.slice(0, 10)}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  const actions: QuickAction[] = [
+    { label: "Ver en calendario", onSelect: () => router.push("/schedule") },
+    ...(props.date ? [{ label: "Añadir a mi calendario", onSelect: addToCalendar } satisfies QuickAction] : []),
+  ];
+
   return (
     <div className="rounded-[var(--brand-radius-panel)] border border-ink-dim/15">
       {/* A raw <button>, not the house Button: this is a disclosure row (the row is
         the affordance), the same exemption SongRow and LibraryRow carry. */}
     <button
         type="button"
+        {...longPress}
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((o) => !o)}
@@ -65,6 +109,12 @@ export default function DayCardDisclosure(props: DayCardProps) {
       <Collapse open={open} id={id} className="px-2 pb-2">
         <DayCard {...props} />
       </Collapse>
+      <QuickActions
+        open={actionsOpen}
+        onClose={() => setActionsOpen(false)}
+        title={`${props.day}${shortDate ? ` · ${shortDate}` : ""}`}
+        actions={actions}
+      />
     </div>
   );
 }

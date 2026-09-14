@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
+import { ToastProvider } from "@/app/components/ui/Toast";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
 import type { Post } from "@/app/utils/interface";
 
@@ -29,7 +30,11 @@ function mount() {
   return render(
     <MotionProvider>
       <CueDialogProvider>
-        <LibraryIndex posts={POSTS} tags={[]} authors={[]} initial={{ q: "", tags: [], author: "", key: "" }} />
+        {/* R7: `LibraryRow`'s «Copiar enlace» quick action reports itself through
+            the global toast stack, which `Provider` mounts in the app. */}
+        <ToastProvider>
+          <LibraryIndex posts={POSTS} tags={[]} authors={[]} initial={{ q: "", tags: [], author: "", key: "" }} />
+        </ToastProvider>
       </CueDialogProvider>
     </MotionProvider>,
   );

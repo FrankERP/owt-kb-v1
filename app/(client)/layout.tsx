@@ -11,6 +11,7 @@ import SongSheet from "../components/SongSheet";
 import BottomNav from "../components/BottomNav";
 import NativeAuthBootstrap from "../components/NativeAuthBootstrap";
 import TextScaleBootstrap from "../components/TextScaleBootstrap";
+import PullToRefresh from "../components/ui/PullToRefresh";
 
 export const metadata: Metadata = {
   title: "Oasis Worship Team",
@@ -83,6 +84,14 @@ export default function RootLayout({
         <Provider>
           <ImpersonationBanner />
           <ActivityPing />
+          {/*
+            A SIBLING of <main>, never a wrapper: the pull indicator is its own
+            `fixed` rail and the page content is never translated, because a
+            transformed ancestor becomes the containing block for every
+            `position: fixed` descendant (ADR-0031; `reveal.test.ts` guards the
+            same property on `template.tsx`).
+          */}
+          <PullToRefresh />
           <main data-route-main="" tabIndex={-1} className="mx-auto max-w-7xl pb-0 focus:outline-none">
             {children}
           </main>
