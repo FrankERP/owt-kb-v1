@@ -313,6 +313,7 @@ export default async function MePage() {
     day,
     date: dateKey,
     roleId: day !== "Domingo" && day !== "Sábado" ? doc._id : undefined,
+    serviceId: doc._id,
     setlist: doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined),
     leads: doc.Lead?.map((m) => m.alias || m.member_name),
     instruments: doc.instruments?.map((s) => ({ label: s.instrument, person: s.person })),

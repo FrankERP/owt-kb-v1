@@ -273,6 +273,52 @@ describe("PullToRefresh", () => {
     expect(refresh).not.toHaveBeenCalled();
   });
 
+  it("removes the touchmove/touchend/touchcancel listeners after touchend", () => {
+    mount();
+    fire("touchstart", 100);
+    fire("touchmove", 180);
+    const spy = vi.spyOn(window, "removeEventListener");
+    fire("touchend", 180);
+    const removed = spy.mock.calls.map(([type]) => type);
+    expect(removed).toEqual(expect.arrayContaining(["touchmove", "touchend", "touchcancel"]));
+    spy.mockRestore();
+  });
+
+  it("removes the touchmove/touchend/touchcancel listeners after touchcancel", () => {
+    mount();
+    fire("touchstart", 100);
+    fire("touchmove", 180);
+    const spy = vi.spyOn(window, "removeEventListener");
+    fire("touchcancel", 180);
+    const removed = spy.mock.calls.map(([type]) => type);
+    expect(removed).toEqual(expect.arrayContaining(["touchmove", "touchend", "touchcancel"]));
+    spy.mockRestore();
+  });
+
+  it("removes the touchmove/touchend/touchcancel listeners once the horizontal lock-out fires", () => {
+    mount();
+    fire("touchstart", 100, 1, 0);
+    const spy = vi.spyOn(window, "removeEventListener");
+    fire("touchmove", 120, 1, 80);
+    const removed = spy.mock.calls.map(([type]) => type);
+    expect(removed).toEqual(expect.arrayContaining(["touchmove", "touchend", "touchcancel"]));
+    spy.mockRestore();
+  });
+
+  it("a second finger landing mid-pull cannot leave stale travel for its own lift to commit", () => {
+    // Pull past the threshold, then — before releasing — a second touchstart
+    // arrives with two fingers already down (a real multi-finger landing fires
+    // touchstart with `touches.length` already 2). `reset()` must run before the
+    // multi-finger bail so the second touch's own `touchend` sees no travel.
+    mount();
+    fire("touchstart", 100);
+    fire("touchmove", 180);
+    expect(railHeightPx()).toBeGreaterThan(0);
+    fire("touchstart", 100, 2);
+    fire("touchend", 100);
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
   it("holds the refreshing rail for at least 600 ms, then collapses", async () => {
     vi.useFakeTimers();
     mount();

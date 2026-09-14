@@ -134,4 +134,62 @@ describe("useLongPress", () => {
     expect(el.style.userSelect).toBe("none");
     expect(el.style.webkitUserSelect || el.style.getPropertyValue("-webkit-user-select")).toBe("none");
   });
+
+  // R7 final wave: the scroll listener is armed on pointerdown, not always-on.
+  it("adds no scroll listener before a pointerdown, and removes it once cancelled", () => {
+    vi.useFakeTimers();
+    const addSpy = vi.spyOn(window, "addEventListener");
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    const el = mount(vi.fn());
+    expect(addSpy.mock.calls.some(([type]) => type === "scroll")).toBe(false);
+    down(el);
+    expect(addSpy.mock.calls.some(([type]) => type === "scroll")).toBe(true);
+    fireEvent.pointerUp(el, { isPrimary: true });
+    expect(removeSpy.mock.calls.some(([type]) => type === "scroll")).toBe(true);
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
+  });
+
+  it("a keydown resets a swallowed click — Enter/Space activation is untouched", () => {
+    vi.useFakeTimers();
+    const onLongPress = vi.fn();
+    const onClick = vi.fn();
+    const el = mount(onLongPress, onClick);
+    down(el);
+    vi.advanceTimersByTime(450);
+    fireEvent.pointerUp(el, { isPrimary: true });
+    // The long press fired and armed the click-swallow; a keydown on the same
+    // row (Enter activating it via focus) must clear that flag rather than
+    // eating the click the keydown is about to produce.
+    fireEvent.keyDown(el, { key: "Enter" });
+    fireEvent.click(el);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  // `fireEvent.contextMenu`'s `EventInit` drops any property MouseEvent's own
+  // interface doesn't declare — including `pointerType` — so a native
+  // `MouseEvent` built by hand, with `pointerType` set directly on it, is the
+  // only way to exercise the branch that actually reads it (`e.nativeEvent`,
+  // not the React-proxied `e`).
+  function contextMenuEvent(init: { pointerType?: string; button?: number }) {
+    const event = new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: init.button ?? 0 });
+    if (init.pointerType) Object.defineProperty(event, "pointerType", { value: init.pointerType });
+    return event;
+  }
+
+  it("opens on a contextmenu with pointerType mouse and button 0 — pointerType wins over button", () => {
+    const onLongPress = vi.fn();
+    const el = mount(onLongPress);
+    const notPrevented = fireEvent(el, contextMenuEvent({ pointerType: "mouse", button: 0 }));
+    expect(onLongPress).toHaveBeenCalledTimes(1);
+    expect(notPrevented).toBe(false);
+  });
+
+  it("a touch contextmenu (pointerType touch) is only prevented, never fires", () => {
+    const onLongPress = vi.fn();
+    const el = mount(onLongPress);
+    const notPrevented = fireEvent(el, contextMenuEvent({ pointerType: "touch" }));
+    expect(onLongPress).not.toHaveBeenCalled();
+    expect(notPrevented).toBe(false);
+  });
 });

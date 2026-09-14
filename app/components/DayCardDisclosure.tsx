@@ -25,6 +25,7 @@ import QuickActions, { type QuickAction } from "./ui/QuickActions";
 import useLongPress from "./ui/useLongPress";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { buildICS, type ICSEvent } from "@/app/utils/ics";
+import { normalizeText } from "@/app/utils/normalizeText";
 
 export default function DayCardDisclosure(props: DayCardProps) {
   const [open, setOpen] = useState(false);
@@ -39,11 +40,16 @@ export default function DayCardDisclosure(props: DayCardProps) {
   const days = props.date ? daysUntil(props.date) : null;
 
   // The same blob-download mechanics as `AddToCalendarButton`, for the ONE service
-  // this row stands for rather than the member's whole upcoming list.
+  // this row stands for rather than the member's whole upcoming list. The UID
+  // prefers `serviceId` (the service document's own `_id`, set at both call
+  // sites) over `roleId` (only ever set for a special) so a weekend service
+  // gets a stable per-document UID too, matching `/me`'s `<_id>@owt` form —
+  // `normalizeText` strips accents/case so the `${date}-${day}` fallback never
+  // carries non-ASCII into the UID.
   function addToCalendar() {
     if (!props.date) return;
     const event: ICSEvent = {
-      uid: props.roleId || `${props.date}-${props.day}`,
+      uid: normalizeText(props.serviceId || props.roleId || `${props.date}-${props.day}`),
       date: props.date,
       title: `${props.day} · OWT`,
       description: props.setlist?.songs?.map((s) => s.title).filter(Boolean).join(" · ") || undefined,
