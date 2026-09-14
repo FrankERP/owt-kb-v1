@@ -2,10 +2,10 @@
 
 Artifact: `2026-09-10-solver-fill-empty-only-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
-**Status: open — eight rounds, no approval yet.** The mechanism was rewritten twice: once
+**Status: open — nine rounds, no approval yet.** The mechanism was rewritten twice: once
 after round 2 (onto pins-as-fixed-variables) and once after round 6 (onto soft rules).
 **Round 7 verified the rewritten mechanism sound** and found its two blockers elsewhere.
-Current canonical digest `774c2775…`, commit `4db4aa27`.
+Current canonical digest `71d9f0c7…`, commit `186baad0`.
 
 Approval is not authorization to implement. Implementation still requires the plan, the three
 gates, and a fresh code review of the diff.
@@ -30,6 +30,7 @@ byte-identical text.
 | 6 | `3d99b384566d7987…` | `3193b2c4` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
 | 7 | `da922d6afb21fb47…` | `6bf8e4a4` | CHANGES_REQUIRED | yes (2 blockers, both verified) |
 | 8 | `3f8490496bc16f37…` | `6bbc15dd` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
+| 9 | `774c27754f3f79ea…` | `3a206274` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
 
 Every round used a brand-new `skeptical-reviewer` dispatch given only the reviewer brief, an
 immutable snapshot whose digest was verified equal to the canonical file before dispatch, the
@@ -242,3 +243,53 @@ assertion that would have caught this blocker.
 and found a client field and a CI gap, round 8 found the last piece of the mechanism that was
 carried over unexamined from the rejected design. Each round's finding has been further from
 the core and closer to the ordinary surface of a spec.
+
+## Round 9 — a waiver written as a repeal
+
+One blocker, reproduced on four seeds, and it is the first one whose defect was **only in the
+prose**: the author's own verified solver patch already scoped the violation booleans per
+week, but the spec described a weaker design — and the implementer follows the spec.
+
+**§5.2 said "relaxing a rule switches it off for the month"** and defended that with a
+measurement taken on a **count** rule (`Gaby Sun.BGV <= 1` staying at its bound after
+relaxation). The reviewer showed the evidence does not generalise, and why it is structural:
+`role_spread_vars` puts per-role counts in the objective (`:812-843`, `:956`), so a relaxed
+count cap is still pulled back — but **nothing in the objective mentions pairings or group
+presence**. A month-wide boolean on those families leaves the solver free to break them
+anywhere. Reproduced against the shipped solver by deleting one rule at a time (seeds 7, 42,
+101, 2024): pair rule off → the pair appears together in weeks with no pin; presence off →
+gaps in weeks the admin never touched.
+
+It would also have been **invisible**. `blockingReasons` evaluates restrictions and pair
+conflicts only and never presence rules (`ruleEnforcement.ts:217`, `:346-412`), so a broken
+presence rule renders nothing on the grid. The only signal would have been one amber line
+naming a rule with no week, under a switch whose own copy promises it only fills empty seats.
+
+**Fixed:** each boolean is scoped to the constraint **instance** — rule × week for presence,
+rule × week × service for pairs, rule × week-pair for consecutive, week × service for the
+mandatory lead, week for the Saturday anchor. DSL count rules keep one boolean per rule, and
+the spec now says why that is not an inconsistency: `role_vars` are month totals, so the rule
+has exactly one instance and no week to narrow to. Entries for per-week families carry their
+week and, for pairs, their service — which is what lets §6 say «en la semana 3» instead of
+implying a month-long repeal, and what §11 now asserts discriminatingly (the old
+`len(pin_violations) == 1` assertion passes under both designs).
+
+Author's verification after the fix: the presence gap lands in week 3 alone on four seeds
+while the rule keeps holding in weeks 1, 2 and 4.
+
+Six non-blocking items adopted. The one worth naming: **§11's byte-identity guard is the
+easiest assertion in the spec to write vacuously** — `assert solve(cfg) == solve(cfg)` against
+the new solver passes trivially, and it is what §13's whole rollback story rests on. It now
+compares against a frozen golden captured against today's code and committed with the CI step,
+which §13's step-zero ordering already makes natural. The rest: the completeness claim is
+scoped to the boolean path (candidacy-granted rules never reach `pin_violations`); a month
+infeasible for its own reasons gets a copy form that does not blame a pin; a timed-out pinned
+month reads as a degraded-fairness month rather than an error; the optimise branch gains no
+violation term (the ceiling is a constraint, and a new priority tier would multiply an already
+~3.8e20 top weight); `pinned_honored` is counted after the solver's own dedup.
+
+**Pattern across 6–9.** Round 6 killed the exemption enumeration; round 7 cleared the mechanism
+analytically and found a client field and a CI gap; round 8 found the last unexamined piece
+carried over from the rejected design; round 9 found a place where the prose understated the
+mechanism that was actually built. The defects are moving from the design into the description
+of it.
