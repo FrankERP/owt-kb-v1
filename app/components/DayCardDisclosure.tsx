@@ -43,13 +43,16 @@ export default function DayCardDisclosure(props: DayCardProps) {
   // this row stands for rather than the member's whole upcoming list. The UID
   // prefers `serviceId` (the service document's own `_id`, set at both call
   // sites) over `roleId` (only ever set for a special) so a weekend service
-  // gets a stable per-document UID too, matching `/me`'s `<_id>@owt` form —
-  // `normalizeText` strips accents/case so the `${date}-${day}` fallback never
-  // carries non-ASCII into the UID.
+  // gets a stable per-document UID too, matching `/me`'s `<_id>@owt` form.
+  // A Sanity `_id` goes in RAW — `/me`'s own export uses the raw `_id`, and a
+  // document id may carry uppercase, so folding it here would mint a SECOND UID
+  // for the same service and the calendar would hold two copies of it. Only the
+  // `${date}-${day}` fallback is `normalizeText`ed, because `props.day` is a
+  // Spanish label ("Sábado") and non-ASCII has no business in a UID.
   function addToCalendar() {
     if (!props.date) return;
     const event: ICSEvent = {
-      uid: normalizeText(props.serviceId || props.roleId || `${props.date}-${props.day}`),
+      uid: props.serviceId || props.roleId || normalizeText(`${props.date}-${props.day}`),
       date: props.date,
       title: `${props.day} · OWT`,
       description: props.setlist?.songs?.map((s) => s.title).filter(Boolean).join(" · ") || undefined,
