@@ -315,14 +315,47 @@ being broken, and the solver minimises how many it breaks, strictly above every 
 objective. The pin wins by construction. There is no list to complete, and a rule form nobody
 has thought of yet is covered the moment it is built this way.
 
-| Constraint | Where | Soft form under pins |
-|---|---|---|
-| At least one Lead per service | `:654-659` | `sum(filled) >= 1 - v` |
-| Dedicated Saturday lead anchor | `:705-709` | `sum(dedicated_terms) >= 1 - v` |
-| Weekly presence, `any_of(…) each_week` | `:732-742` | `sum(terms) >= 1 - v` |
-| Pair exclusion | `:711-722` | `sum(lt) + sum(rt) <= 1 + v·n` |
-| Consecutive | `:744-751` | `sum(w1) + sum(w2) <= 1 + v·n` |
-| DSL count rules, all three operators | `:885-896` | `expr >= value - v·B` and/or `expr <= value + v·B`, **one `v` per rule** so an `==` reports as one relaxed rule rather than two halves |
+**Each boolean is scoped to the constraint INSTANCE, not to the rule.** The booleans are
+created inside the same loops that build the constraints, so a rule that produces one
+constraint per week produces one boolean per week. Nothing else would be safe: relaxing an
+authored rule for the whole month would break it in services the admin never pinned.
+
+| Constraint | Where | One `v` per | Soft form under pins |
+|---|---|---|---|
+| At least one Lead per service | `:654-659` | week × service | `sum(filled) >= 1 - v` |
+| Dedicated Saturday lead anchor | `:705-709` | week | `sum(dedicated_terms) >= 1 - v` |
+| Weekly presence, `any_of(…) each_week` | `:732-742` | rule × week | `sum(terms) >= 1 - v` |
+| Pair exclusion | `:711-722` | rule × week × service | `sum(lt) + sum(rt) <= 1 + v·n` |
+| Consecutive | `:744-751` | rule × week pair | `sum(w1) + sum(w2) <= 1 + v·n` |
+| DSL count rules, all three operators | `:885-896` | **rule** — see below | `expr >= value - v·B` and/or `expr <= value + v·B`, one `v` per rule so an `==` reports as one relaxed rule rather than two halves |
+
+**Each entry must identify its instance, not just its rule.** A pair rule produces one boolean
+per week **per service**, so `W3: A !with B on *.Lead` alone is ambiguous between the Sunday
+and the Saturday of that week — two different waivers collapsing into one line the admin
+cannot act on. The entry carries the service too (`W3 Sun: …`), and §11 asserts that two
+relaxed instances of one rule produce two distinct entries.
+
+**Why the count rules are the exception, and it is not an inconsistency.** A DSL count rule is
+built over `role_vars`, which are **month totals** (`:822`), so the rule has exactly one
+instance. There is no week to narrow it to. Every other family is per-week by construction,
+and each gets the narrowest scope that exists.
+
+**This is the difference between a waiver and a repeal, and the spec previously got it
+wrong.** An earlier draft said "relaxing a rule switches it off for the month" and defended it
+with a measurement taken on a **count** rule — the only family the objective pulls back on its
+own, because `role_spread_vars` puts per-role counts in the objective (`:812-843`, `:956`).
+Nothing in the objective mentions pairings or group presence, so a month-wide boolean on those
+leaves the solver free to break them anywhere. Reproduced: `any_of(Hugo, Jakey) on Sun.BGV
+each_week` with Jakey out in week 3 and a pin occupying Hugo that week — under month-wide
+scope the rule also fails in weeks the admin never touched; under instance scope the gap is in
+week 3 alone, on four seeds. And it would have been **invisible**: `blockingReasons` evaluates
+restrictions and pair conflicts only and never presence (`ruleEnforcement.ts:217`, `:346-412`),
+so the grid renders nothing for a broken presence rule.
+
+So a `pin_violations` entry for a per-week family **carries its week** — `W3: any_of(Hugo,
+Jakey) on Sun.BGV each_week` — which is also what lets §6 say «en la semana 3» instead of
+implying the whole month. A count rule's entry carries no week, correctly, because it has
+none.
 
 Two constraints stay hard, and neither can be contradicted by a pin. The **per-service
 occupancy limit** (`:754-765`) is what a pin means — one seat per service — and §4 rejects
@@ -343,13 +376,19 @@ Stage A and of the optimising passes, and on the rest only the ceiling holds. `m
 <= violation_target)` is therefore emitted unconditionally at model-build time, exactly where
 `empty_target` already is (`:677-678`), never inside an objective branch.
 
-**Relaxing a rule switches it off for the month, not by the minimum amount.** This is the
-same deliberately over-broad choice the earlier draft made for count rules, kept for the same
-reason: narrowing a rule per row silently changes what the admin's rule means. In practice
-the ordinary objective still holds the result at the bound — measured: `Gaby Sun.BGV <= 1`
-with Gaby pinned into `Sun.BGV` twice relaxes the cap and gives her exactly her two pinned
-weeks, not more — but that is the objective's doing and the spec claims no guarantee. §11
-asserts the observed behaviour rather than a bound.
+**And the optimise branch gains no violation term.** The ceiling is a constraint, which is the
+whole reason it works on the objective-less passes; adding a priority tier above `Sun.Lead`
+instead would multiply `compute_priority_weights`' top weight — already ~3.8e20 on a four-week
+month with history — by `overall_limit + 1` again. The prose above invites that tidy-up; this
+sentence forecloses it.
+
+**Within its instance, a relaxed constraint is off rather than loosened by the minimum
+amount.** For the per-week families the instance *is* the minimum scope, so there is nothing
+further to narrow. For a count rule the instance is the month, and the bound genuinely stops
+binding — but the ordinary objective still holds the result there, because per-role counts are
+in it: measured, `Gaby Sun.BGV <= 1` with Gaby pinned into `Sun.BGV` twice relaxes the cap and
+gives her exactly her two pinned weeks, not more, on four seeds. That is the objective's doing
+and the spec claims no guarantee; §11 asserts the observed behaviour rather than a bound.
 
 **With no pins, none of this is built.** `soft = bool(pin_set)`; every constraint above is
 emitted exactly as it is today and no boolean exists. That is what keeps §13's byte-identity
@@ -452,7 +491,7 @@ Computed on the client when the person is seated. Six cases:
 | They are not in the pool that role draws from | ⚠ Nombre: no está en el pool de Lead — se va a respetar tu decisión | **New** |
 | More people are pinned in the row than it has seats | ⚠ 3 personas fijadas en una fila de 2 lugares | **New** |
 | The same person is pinned twice in one service | ⚠ Nombre está fijado dos veces en este servicio — solo se respeta el primero | **New**, and §4 says why it should be unreachable |
-| A rule had to be set aside to honour the pins | ⚠ Se dejó de aplicar una regla para respetar lo que fijaste: «Hugo Sun.BGV <= 2» | **New**, and it is **reported by the solver**, not guessed by the client — one line per entry in `pin_violations` (§5.2) |
+| A rule had to be set aside to honour the pins | ⚠ Se dejó de aplicar una regla en la semana 3 para respetar lo que fijaste: «any_of(Hugo, Jakey) on Sun.BGV each_week» — the week phrase is omitted for a month-scoped count rule | **New**, and it is **reported by the solver**, not guessed by the client — one line per entry in `pin_violations` (§5.2) |
 
 **The availability notice is genuinely new, and it is the one the requirement named.** It
 does not exist today in any form: `blockingReasons` reads `PersonRestriction.weekExclusions`,
@@ -462,12 +501,31 @@ availability lives in `member.unavailableDates` and only becomes a DSL string in
 renders no availability line at all (`PlannerGrid.tsx:2861-2891`). Assuming the existing
 amber covered it would have shipped E3's *guaranteed* collision silent.
 
+**The notice names the week when there is one.** Per-week families (presence, pair,
+consecutive, and the two builtins) carry it in the entry; a DSL count rule is month-scoped and
+carries none, so its copy omits the phrase rather than inventing a week. «En la semana 3» is
+what stops an admin reading a one-week waiver as a month-long repeal — the distinction §5.2
+exists to preserve.
+
+**A second form, for when no pin caused it.** `soft = bool(pin_set)` is model-wide, so with
+one pin anywhere a month that today fails on an unsatisfiable authored rule instead comes back
+with that rule in `pin_violations` — and «para respetar lo que fijaste» would blame a pin that
+caused nothing. When the relaxed constraint's instance contains **no pin at all**, the copy is
+«No se pudo aplicar esta regla en la semana 3», with no mention of pinning. The client can tell
+the two apart: it sent the pins, and the entry carries its week.
+
 **The rule-set-aside notice is the solver's, and that is the point.** An earlier draft had
 the client predict which rule a pin would clash with, from the rules it could see. It cannot
 see enough — a pair rule and a count cap are model constraints, and three review rounds each
 found another case the prediction missed (§5.2). Now the solver reports what it actually
 relaxed and the client renders that list verbatim. A rule form added later needs no client
-change to be named correctly.
+change to be named correctly — **provided it is built on a violation boolean**, and that
+qualifier is the completeness boundary. A pin also sets aside `!in <pattern>` forbidden-role
+rules and pool membership by *granting candidacy* (§5.1), and scopes off `!in week N` for its
+own row (§5.2); none of those produce a `pin_violations` entry. Nothing is lost today — the
+existing `blockingReasons` markers cover both (`ruleEnforcement.ts:346-412`) — but a future
+rule enforced by filtering candidates rather than by a constraint stays silent unless it is
+given a boolean too.
 
 **No notice for the two built-in requirements.** The dedicated-Saturday-lead anchor and the
 mandatory lead are built into the solver rather than authored, so there is no rule to name in
@@ -560,7 +618,7 @@ the switch pins them. Intended, and stated because the alternative reading is ju
 plausible.
 
 **Both sentences of the Auto confirmation change, not just the voice one.** The dialog also
-says «Las asignaciones manuales de instrumentos y FOH no se tocan» (`PlannerGrid.tsx:2033-2034`),
+says «Las asignaciones manuales de instrumentos y FOH no se tocan» (`PlannerGrid.tsx:2033-2038`),
 which under the switch understates the guarantee: no instrument assignment is touched, manual
 or not (E1). With the switch off that sentence stays exactly as it is.
 
@@ -598,7 +656,9 @@ this state exists in the window between them, and again on any rollback of one b
 other.
 
 `SolveResponse` gains `pinned_honored?: number`, the count of pin constraints the solver
-added. When the switch is on and pins were sent, the client **refuses to apply the voice
+added — **counted after the solver's own dedup and refusals**, so the client's post-dedup pin
+count (§4) and this number are the same by definition rather than by two independent dedup
+implementations happening to agree. When the switch is on and pins were sent, the client **refuses to apply the voice
 roster** unless both hold:
 
 1. `pinned_honored` equals the number of pins sent, and
@@ -671,6 +731,13 @@ required.
   `<= 1` occupancy limit and kill the month with a generic diagnostic. The client already
   prevents the arrangement (§4) and the picker prevents it upstream; this is the cheap
   backstop that turns a month-wide failure into a message.
+- **A timed-out pinned month looks like a fairness-free month, not like an error.**
+  `solver_total_budget_seconds` is 40 on a ~0.33-vCPU container, and Stage B's exhaustion path
+  returns the fairness-free `stage_a` silently (`:1124-1125`, `:1137`). The violation booleans
+  and the extra objective tier move that budget, and CI runs on a faster machine than
+  production, so §11's `len(slots) + 1` fingerprint can pass in CI and fire in the field. The
+  admin sees a legal, pin-honouring month with a wide spread and the existing degraded-fairness
+  notice — which is the right outcome, and is stated here so it is not read as a new bug.
 - The client-mutation invariant is unchanged: the Auto fetch keeps its try/catch/finally, its
   `res.ok` check and its loading-flag reset.
 - A clear never fails: it is local state.
@@ -729,6 +796,13 @@ and behaved otherwise:
   | An unreachable `>=` / `==` bound | The named person pinned elsewhere for enough weeks; assert the rule is relaxed for the month, not narrowed |
   | Nothing left to lead with | Every lead-pool member pinned into other roles of one service; assert `ok: true`, the lead seat in `unfilled_seats`, and no exception |
 
+- **A relaxation stays inside its own week.** The discriminating case, and the one the
+  existing assertions miss: `any_of(Hugo, Jakey) on Sun.BGV each_week` with Jakey unavailable
+  in week 3 and a pin occupying Hugo that week. Assert `pin_violations` is exactly
+  `["W3: any_of(Hugo, Jakey) on Sun.BGV each_week"]` **and that the rule still holds in weeks
+  1, 2 and 4**. A month-wide boolean passes `len(pin_violations) == 1` and fails this — which
+  is why the count assertion alone is not enough. Repeat for a pair rule (same week, same
+  service) and for consecutive.
 - **The relaxation is minimal in count, and the objective is what keeps the amount small.**
   Assert that a month needing one rule relaxed relaxes exactly one — `len(pin_violations) == 1`
   — and that Stage B never returns more violations than Stage A found, which is the
@@ -748,7 +822,12 @@ and behaved otherwise:
   in; a pinned group member satisfies weekly presence; a pinned assignment counts toward a
   DSL cap and the solver adds no more than the cap allows.
 - Over-pinning a row is accepted: the row grows, nothing is dropped, no infeasibility.
-- A request with no `pinned` key produces byte-identical output to today, on a fixed seed.
+- **A request with no `pinned` key produces byte-identical output to today, on a fixed seed —
+  compared against a FROZEN LITERAL, never a second call.** `assert solve(cfg) == solve(cfg)`
+  passes trivially against the new solver and proves nothing, and this is the assertion §13's
+  entire rollback story rests on. §13's step zero makes the honest version natural: the CI step
+  lands *before* the solver change, so the golden is captured against today's code and
+  committed with it. Three seeds, three goldens.
 
 **Client.** `buildSolveRequest` gains the grid inputs it needs — `cells`, `columns` and
 `rows` — and derives each pin's week from `weekForColumn(column, sundayDatesFull)`, the
