@@ -218,6 +218,12 @@ export default function CueDialog({
   useEffect(() => {
     layerRefs.current = { restoreFocusRef, fallbackFocusRef };
   }, [restoreFocusRef, fallbackFocusRef]);
+  //
+  // READ-ONLY, though the type says otherwise: `RefObject`'s `current` is writable
+  // and these have a getter and no setter, so a future `layer.restoreFocusRef
+  // .current = x` in the provider would typecheck and throw at runtime. Nothing
+  // writes them today — the provider only ever reads — and the getter is the
+  // point, so the constraint is recorded here rather than designed around.
   const liveRestoreRef = useRef<React.RefObject<HTMLElement | null>>({
     get current() { return layerRefs.current.restoreFocusRef?.current ?? null; },
   });

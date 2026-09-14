@@ -17,9 +17,9 @@ array:
 ```
 
 `onDismiss` is an inline arrow in most consumers (`onDismiss={() => setOpen(false)}`),
-and a new identity on every render; the seven that pass a named handler are not
-guaranteed stable either, and nothing in the type or the lint rule asks them to
-be. The three surfaces that broke all share
+and a new identity on every render; the six that pass a named handler are not
+guaranteed stable either — one of them is a `useCallback`, the rest are plain
+function declarations — and nothing in the type or the lint rule asks them to be. The three surfaces that broke all share
 one shape: **the state being typed is declared in the component that renders the
 dialog.** So a keystroke re-rendered that component, `onDismiss` changed
 identity, the effect re-ran, and focus jumped to the dialog's first control.
@@ -70,9 +70,11 @@ failure is silent, member-facing, and invisible to every gate.
 **Satisfy `react-hooks/exhaustive-deps` and keep one effect.** That lint rule is
 what the original code was obeying, and obeying it is what shipped the bug: the
 array it wants is correct for the listener and wrong for the focus call. Note
-that `CueDialog` itself carries no `eslint-disable` — both narrowed effects read
+that neither narrowed FOCUS effect needs an `eslint-disable` — both read
 everything else through refs, so the rule is satisfied and a future reader gets
-no warning hinting that the arrays are deliberate. The comments are. (The two
+no warning hinting that the arrays are deliberate. The comments are. (The one
+disable in `CueDialog.tsx`, at `sheetMotion`'s `useMemo`, predates this delivery
+and has nothing to do with focus.) (The two
 disables in this delivery are elsewhere: `ProfilePanel.tsx` and
 `AvailabilityCalendar.tsx`.)
 
