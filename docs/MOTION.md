@@ -916,4 +916,4 @@ the full ledger; the motion-relevant pieces:
   goes through the mode, where a tap is a one-day drag through the same pointer
   flow as a real range.
 - **Bundle:** `main df19f1b5` → `F3 tip 8df4d0d7` (git-archive cold build, gzip −9): shared 172.5 → 172.5; `/me` 129.8 → 119.9 kB (−9.9); `/me/disponibilidad` 105.1 kB (new); `/me/ajustes` 103.1 kB (new); `/` 119.9 → 118.0 (−1.9); `/schedule` 123.6 → 121.7 (−1.9); `/admin` 356.5 → 354.4 (−2.1) — the weekend list and the date fields left, and every route shed the pill tone's unused variants.
-- **Release:** pending.
+- **Release:** merged to `main` as `512cd3be` (PR #65, 2026-09-13 18:48 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last verified at `7c6bf572`.

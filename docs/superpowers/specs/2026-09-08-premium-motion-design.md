@@ -1390,7 +1390,7 @@ future round:
   distinct shapes (a single arbitrary day, a recurring weekday, a contiguous span) with
   one shared `useAvailability` underneath all three.
 
-**Release:** pending.
+**Release:** merged to `main` as `512cd3be` (PR #65, 2026-09-13 18:48 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last verified at `7c6bf572`.
 
 ### F2 — drag-select (2026-09-12)
 
@@ -1448,7 +1448,7 @@ host month visible to still read the current month while the shadow solidifies; 
 the one-way latch (solid, once reached, for the rest of that drag) feels right when a
 finger drifts back up into the fading tile rather than resetting.
 
-**Release:** pending.
+**Release:** merged to `main` as `512cd3be` (PR #65, 2026-09-13 18:48 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last verified at `7c6bf572`.
 
 ### F3 — three pages (2026-09-12)
 
@@ -1539,4 +1539,4 @@ calendar is one tap from everywhere; the row on Mi semana stays for its count; a
   range through the same `onPointerDown`/`onPointerUp` flow a drag uses, and a
   second path to the same edit was the thing to remove, not keep in sync.
 
-**Release:** pending.
+**Release:** merged to `main` as `512cd3be` (PR #65, 2026-09-13 18:48 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last verified at `7c6bf572`.
