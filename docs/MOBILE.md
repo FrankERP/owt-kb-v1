@@ -97,7 +97,7 @@ signing" → select your Apple Developer team.
 
 | Plugin | Used by | Web behaviour |
 |---|---|---|
-| `@capacitor/text-zoom` | `app/utils/textZoom.ts` | falls back to a CSS scale |
+| `@capacitor/text-zoom` | `app/utils/textZoom.ts` | **same mechanism as native.** The iOS plugin bridges only `getPreferred`; `set` falls through to the package's own JS, which assigns `document.body.style.webkitTextSizeAdjust`. So both platforms end at one CSS property — the web path writes it on `documentElement` instead of `body`, which inherits the same. Layout must therefore survive TEXT growing while px/rem boxes do not: see `app/utils/__tests__/textZoomLayout.test.ts`. |
 | `@capgo/capacitor-social-login` | `app/utils/native.ts` | not loaded |
 | `@capacitor/haptics` | `app/utils/haptics.ts` — `haptic("light")` on a toggle flip or a segmented thumb move, `haptic("selection")` on a tab press (spec decision D) | no-op: `isNativeApp()` is false, the module is never imported |
 

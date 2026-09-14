@@ -117,7 +117,13 @@ export default function BottomNav() {
         className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-surface-base/90 backdrop-blur-sm border-t border-accent/15"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="flex items-stretch h-16 max-w-7xl mx-auto">
+        {/* `min-h-16`, not `h-16`. The measured height published as
+            `--bottom-nav-h` is only honest if the bar may actually grow: with a
+            fixed height a label that needs a second line at «Máximo» text size
+            would overflow a box still reporting 64px, and every consumer of the
+            variable (toasts, the audio player, the song FAB) would clear the
+            wrong amount. */}
+        <div className="flex items-stretch min-h-16 max-w-7xl mx-auto">
           {tabs.map((tab) => {
             const active = tab.match(pathname);
             return (

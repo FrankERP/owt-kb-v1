@@ -70,9 +70,12 @@ export default function ScheduleHeader({
         </Button>
       </div>
       <div className="mb-6 flex items-center justify-center gap-3">
+        {/* `min-w-40` + `max-w-full`: the OS renders "septiembre de 2026" inside
+            this control and a fixed 160px box clips it at «Máximo» text size,
+            leaving the member unable to read which month is selected. */}
         <DateField
           kind="month"
-          className="w-40"
+          className="min-w-40 max-w-full"
           aria-label="Ir al mes"
           value={anchorMonth}
           onChange={(e) => { if (e.target.value) router.push(scheduleHref(e.target.value)); }}
