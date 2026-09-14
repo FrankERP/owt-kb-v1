@@ -131,13 +131,25 @@ describe("payload", () => {
     expect(rowsToPayload(rows)).toEqual([
       { label: "Spotify", url: "https://s" },
       { _key: "stored", label: "YouTube", url: "https://y" },
-      { label: "", url: "" },
     ]);
     for (const row of rowsToPayload(rows)) expect("id" in row).toBe(false);
   });
 
-  it("keeps a blank row, which is what both editors did before this module", () => {
-    expect(rowsToPayload(rows)).toHaveLength(3);
+  it("DROPS the wholly blank row — it used to 400 the entire save", () => {
+    // Changed deliberately, paired with the server: `isSafeHttpUrl("")` is false,
+    // so the «Agregar» row nobody filled in made the write route reject the whole
+    // request and the admin lost every other edit in the form.
+    // `app/utils/linkRowWrite.ts` drops it there too, so an old client cannot
+    // reintroduce the trap.
+    expect(rowsToPayload(rows)).toHaveLength(2);
+    expect(rowsToPayload([{ id: "x", label: "   ", url: "  " }])).toEqual([]);
+  });
+
+  it("keeps a row the admin typed a label into, so the route can name it", () => {
+    // Half-filled is not blank: dropping it silently would lose what they typed.
+    expect(rowsToPayload([{ id: "x", label: "Spotify", url: "" }])).toEqual([
+      { label: "Spotify", url: "" },
+    ]);
   });
 
 });

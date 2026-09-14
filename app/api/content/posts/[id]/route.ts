@@ -4,23 +4,16 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import { textToBody } from "@/app/utils/lyrics";
 import { revalidateSongViews } from "@/app/utils/revalidate";
 import { normalizeChordCharts } from "@/app/utils/chordChartWrite";
+import { isSafeHttpUrl, normalizeLinkRows } from "@/app/utils/linkRowWrite";
 
 function rng() { return Math.random().toString(36).slice(2, 9); }
-
-function isSafeHttpUrl(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  try {
-    const u = new URL(value);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch { return false; }
-}
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!await requireActiveManager()) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para editar canciones." }, { status: 403 });
   }
 
   const { id } = await params;
@@ -40,15 +33,24 @@ export async function PATCH(
     authorIds?: string[];
   };
 
-  if (body.referenceLinks?.some((l) => !isSafeHttpUrl(l.url))) {
-    return NextResponse.json({ error: "referenceLinks must use http(s)" }, { status: 400 });
+  // Both lists drop their blank «Agregar» row rather than 400ing the whole
+  // PATCH over it — see `linkRowWrite.ts`. A row with a label but no URL still
+  // fails, and the error names it.
+  const links = normalizeLinkRows(body.referenceLinks, {
+    type: "referenceLink", labelField: "label", humanName: "Links de referencia", mintKey: rng,
+  });
+  if (!links.ok) {
+    return NextResponse.json({ error: links.error }, { status: 400 });
   }
-  if (body.tutorials?.some((t) => !isSafeHttpUrl(t.url))) {
-    return NextResponse.json({ error: "tutorials must use http(s)" }, { status: 400 });
+  const tutorials = normalizeLinkRows(body.tutorials, {
+    type: "tutorial", labelField: "title", humanName: "Tutoriales", mintKey: rng,
+  });
+  if (!tutorials.ok) {
+    return NextResponse.json({ error: tutorials.error }, { status: 400 });
   }
   for (const u of [body.musicalReferenceUrl, body.lyricsVideoUrl]) {
     if (u != null && u !== "" && !isSafeHttpUrl(u)) {
-      return NextResponse.json({ error: "reference URLs must use http(s)" }, { status: 400 });
+      return NextResponse.json({ error: "Las URLs de referencia deben empezar con http:// o https://" }, { status: 400 });
     }
   }
 
@@ -60,10 +62,10 @@ export async function PATCH(
     `*[_id == $id][0]{ _type }`, { id }
   );
   if (!target) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "No se encontró la canción." }, { status: 404 });
   }
   if (target._type !== "post") {
-    return NextResponse.json({ error: "Not a song" }, { status: 400 });
+    return NextResponse.json({ error: "Ese documento no es una canción." }, { status: 400 });
   }
 
   const patch: Record<string, unknown> = {};
@@ -85,22 +87,20 @@ export async function PATCH(
   if (body.chords  != null) {
     const normalized = normalizeChordCharts(body.chords, rng);
     if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
+      return NextResponse.json(
+      // `normalized.error` is developer-shaped («chords[0] has a duplicate _key») and
+      // the editor now shows what this route says, so it is summarised for the
+      // person reading it. The precise text stays in the server log.
+      { error: "No se pudieron guardar los acordes.", detail: normalized.error },
+      { status: 400 },
+    );
     }
     patch.chords = normalized.charts;
   }
-  if (body.referenceLinks != null) {
-    patch.referenceLinks = body.referenceLinks.map((l) => ({
-      _type: "referenceLink", _key: rng(), label: l.label, url: l.url,
-    }));
-  }
+  if (body.referenceLinks != null) patch.referenceLinks = links.rows;
   if (body.musicalReferenceUrl != null) patch.musicalReferenceUrl = body.musicalReferenceUrl || undefined;
   if (body.lyricsVideoUrl != null)      patch.lyricsVideoUrl = body.lyricsVideoUrl || undefined;
-  if (body.tutorials != null) {
-    patch.tutorials2 = body.tutorials.map((t) => ({
-      _type: "tutorial", _key: rng(), title: t.title, url: t.url,
-    }));
-  }
+  if (body.tutorials != null) patch.tutorials2 = tutorials.rows;
   if (body.tagIds != null) {
     patch.tags = body.tagIds.map((id) => ({
       _type: "reference", _ref: id, _key: rng(),
@@ -118,11 +118,11 @@ export async function DELETE(
 ) {
   const session = await requireActiveManager();
   if (!session) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para editar canciones." }, { status: 403 });
   }
   // DELETE requires admin or super-admin (not content-editor)
   if (session.user.role === "content-editor") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para editar canciones." }, { status: 403 });
   }
 
   const { id } = await params;

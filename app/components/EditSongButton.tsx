@@ -12,6 +12,7 @@ import { chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
 import { addRow, newRowId, removeRow, rowsFromStored, rowsToPayload, updateRow, type RowDraft } from "@/app/utils/songFormRows";
 import { Post } from "@/app/utils/interface";
 import { useToast } from "@/app/components/ui/Toast";
+import { writeErrorMessage } from "@/app/utils/writeError";
 
 interface SongTag { _id: string; name: string; slug: { current: string }; }
 interface SongAuthor { _id: string; name: string; }
@@ -195,7 +196,16 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildEditSongPayload(form)),
       });
-      if (!res.ok) throw new Error("save failed");
+      if (!res.ok) {
+        // The route knows WHICH link is wrong; printing only the generic line
+        // made that knowledge unreachable — see `writeError.ts`.
+        const message = await writeErrorMessage(res);
+        setFormStatus({
+          tone: "error",
+          message: message ?? "No se pudo guardar. Revisa la conexión e intenta otra vez.",
+        });
+        return;
+      }
       setOpen(false);
       toast({ message: "Canción actualizada." });
       router.refresh();
