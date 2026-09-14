@@ -11,8 +11,20 @@
 // Deliberately NOT a `CueDialog`: it is a non-modal field beside the control that
 // opened it, the member keeps reading the list behind it, and nothing underneath
 // must go inert.
+//
+// Portalled to `document.body` (Frank's look, 2026-09-13): it renders `position:
+// fixed` elements, and `fixed` positions against the nearest transformed/animated
+// ancestor rather than the viewport when one exists — the trap `CueDialog.tsx`
+// documents in full. On `/me/disponibilidad` that ancestor is the route-reveal
+// host (`[data-reveal]`, `app/brand.css` ~1017, an animated `transform`), so the
+// popover rendered inside it and landed at the host's own offset instead of the
+// day cell's viewport position — reproduced on dev at 1440×900: the day cell sat
+// at ~(503,615) and the popover rendered at ~(785,845), the difference being the
+// block's own offset. A portal escapes that ancestor entirely, the same pattern
+// `Toast.tsx`/`CueDialog.tsx` use to get an SSR-safe body node.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { fmtDayLabel, rangeLabel } from "./dragSelect";
 
 // `fmtDayLabel` lives in `dragSelect.ts` — that module needs it for `rangeLabel`
@@ -80,6 +92,12 @@ export default function NotePopover({
   const inputRef = useRef<HTMLInputElement>(null);
   const close = () => setPopover(null);
 
+  // `document.body` itself, not a dedicated child node (contrast `Toast.tsx`):
+  // this popover has no viewport it needs to own, just an escape from the
+  // reveal host's transform. Set in an effect so SSR never sees `document`.
+  const [body, setBody] = useState<HTMLElement | null>(null);
+  useEffect(() => { setBody(document.body); }, []);
+
   // Focus the input whenever the popover opens (or moves to another date).
   useEffect(() => {
     if (popover) {
@@ -136,7 +154,7 @@ export default function NotePopover({
     return () => window.removeEventListener("keydown", onKey);
   }, [popover, setPopover]);
 
-  if (!popover) return null;
+  if (!popover || !body) return null;
 
   // A range popover edits every day in `isos` with one note; a single-day
   // popover (no `isos`, or a one-day range) keeps the original behaviour.
@@ -144,7 +162,7 @@ export default function NotePopover({
   const isRange = days.length > 1;
   const title = isRange ? rangeLabel(days[0], days[days.length - 1]) : fmtDayLabel(popover.iso);
 
-  return (
+  return createPortal(
     <>
       {/* Backdrop — click outside to close */}
       <div className="fixed inset-0 z-40" onClick={close} />
@@ -193,6 +211,7 @@ export default function NotePopover({
           {isRange ? "Quitar estas fechas" : "Quitar esta fecha"}
         </button>
       </div>
-    </>
+    </>,
+    body,
   );
 }

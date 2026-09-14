@@ -32,8 +32,17 @@
 //
 // The Desde/Hasta date fields that arrived here in F2 are GONE (F3): four ways to
 // express one range was the accretion Frank asked to undo. A range is a drag; a
-// single day is a tap; a pattern is «Repetir…» on the host. The keyboard path to
-// a range is the per-day buttons, which every day of the twelve months has.
+// single day is a tap; a pattern is «Repetir…» on the host.
+//
+// Outside «Seleccionar fechas» the grid is READ-ONLY (Frank's look, 2026-09-13):
+// day cells carry no `onClick`, `aria-disabled="true"` and `tabIndex={-1}` — a
+// tap outside the mode used to mark-and-open a single day through
+// `handleDateClick`, which meant every casual look at the calendar was one
+// misplaced tap from editing it. Every edit now goes through the mode: a tap
+// inside it is a one-day drag through the same pointer flow as a real range
+// (`onPointerDown`/`onPointerUp` below), which already marks the day and opens
+// its note. `handleDateClick` is gone, not disabled — there is no second path
+// left to keep in sync with the drag one.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Button from "@/app/components/ui/Button";
@@ -111,7 +120,7 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
   // exists once THAT render has committed.
   const [pendingNote, setPendingNote] = useState<{ iso: string; days: string[] } | null>(null);
 
-  const { dates, notes, todayIso, mark, applyRange } = state;
+  const { dates, notes, todayIso, applyRange } = state;
 
   /** Write the live span to the ref FIRST, so a release in the same tick sees it. */
   function setDragNow(next: Drag | null) {
@@ -186,13 +195,6 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
     solidRef.current = false;
     setShadow(0);
     setSelecting(v => !v);
-  }
-
-  function handleDateClick(iso: string, e: React.MouseEvent<HTMLButtonElement>) {
-    // Select the date (a no-op when it is already marked)
-    mark(iso);
-    // Open the note popover (whether newly selected or re-clicking to edit note)
-    openNote(iso, e.currentTarget);
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -351,12 +353,13 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
               <button
                 key={iso}
                 type="button"
-                // Inside the mode the pointer flow owns the day: a click here
-                // would mark it a second time and open a single-day popover over
-                // the range's one.
-                onClick={e => { if (!isPast && !selecting && !isShadow) handleDateClick(iso, e); }}
+                // No `onClick` at all, in any mode: inside «Seleccionar fechas» a
+                // tap is a one-day drag through `onPointerDown`/`onPointerUp`
+                // below, which already marks the day and opens its note; outside
+                // it the cell is read-only, `aria-disabled` and un-tabbable.
                 disabled={isPast}
-                tabIndex={isShadow ? -1 : undefined}
+                aria-disabled={!selecting ? "true" : undefined}
+                tabIndex={isShadow || !selecting ? -1 : undefined}
                 // Every cell, past ones included — `isoRange` is what drops the
                 // past, so the drag can cross them without losing the finger.
                 data-iso={iso}
@@ -369,8 +372,8 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
                     : isPopoverOpen
                     ? "bg-availability-fg/50 text-availability-faint border border-availability-strong ring-1 ring-availability-strong/40"
                     : unavailable
-                    ? "bg-availability-fg/30 text-availability-soft border border-availability-fg/50 hover:bg-availability-fg/40"
-                    : "text-mono-300 hover:bg-accent/10 hover:text-accent"
+                    ? `bg-availability-fg/30 text-availability-soft border border-availability-fg/50${selecting ? " hover:bg-availability-fg/40" : ""}`
+                    : `text-mono-300${selecting ? " hover:bg-accent/10 hover:text-accent" : ""}`
                 }`}
               >
                 {dayNum}
@@ -395,16 +398,17 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
       {/* Selection mode */}
       <div className="space-y-2">
         {/* A pill, for the one variant that publishes `aria-pressed` — the mode
-            is a two-state toggle, and the availability tone is this surface's. */}
+            is a two-state toggle, and the availability tone is this surface's.
+            It is also the ONLY door into an edit: outside it the grid is read-only. */}
         <Button variant="pill" tone="availability" onClick={toggleSelecting} active={selecting}>
           {selecting ? "Listo" : "Seleccionar fechas"}
         </Button>
 
-        {selecting && (
-          <p className="font-body text-xs text-mono-500">
-            Arrastra sobre los días que no puedes. Suelta para escribir la razón.
-          </p>
-        )}
+        <p className="font-body text-xs text-mono-500">
+          {selecting
+            ? "Arrastra sobre los días que no puedes. Suelta para escribir la razón."
+            : "Toca «Seleccionar fechas» para marcar o editar días."}
+        </p>
       </div>
 
       {/* Navigation */}
