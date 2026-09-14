@@ -9,7 +9,7 @@ import CueDialogStatus from "@/app/components/ui/CueDialogStatus";
 import { songToForm } from "@/app/components/admin/SongFormModal";
 import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
 import { chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
-import { addRow, removeRow, rowsFromStored, rowsToPayload, updateRow, type RowDraft } from "@/app/utils/songFormRows";
+import { addRow, newRowId, removeRow, rowsFromStored, rowsToPayload, updateRow, type RowDraft } from "@/app/utils/songFormRows";
 import { Post } from "@/app/utils/interface";
 import { useToast } from "@/app/components/ui/Toast";
 
@@ -138,12 +138,22 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
 
   // Every one of the six addresses a row BY ID. An index would put the identity
   // back in the position, which is the defect (issue #69).
-  const addTutorial = () => setForm((f) => ({ ...f, tutorials: addRow(f.tutorials) }));
+  // The id is minted OUTSIDE the updater: a state updater must be pure, and
+  // `addRow` calls `Math.random()`. `songFormCharts.ts`'s consumers do the same.
+  const addTutorial = () => {
+    const id = newRowId();
+    setForm((f) => ({ ...f, tutorials: addRow(f.tutorials, () => id) }));
+  };
   const removeTutorial = (id: string) => setForm((f) => ({ ...f, tutorials: removeRow(f.tutorials, id) }));
   const updateTutorial = (id: string, key: "label" | "url", val: string) =>
     setForm((f) => ({ ...f, tutorials: updateRow(f.tutorials, id, key, val) }));
 
-  const addRefLink = () => setForm((f) => ({ ...f, referenceLinks: addRow(f.referenceLinks) }));
+  // The id is minted OUTSIDE the updater: a state updater must be pure, and
+  // `addRow` calls `Math.random()`. `songFormCharts.ts`'s consumers do the same.
+  const addRefLink = () => {
+    const id = newRowId();
+    setForm((f) => ({ ...f, referenceLinks: addRow(f.referenceLinks, () => id) }));
+  };
   const removeRefLink = (id: string) => setForm((f) => ({ ...f, referenceLinks: removeRow(f.referenceLinks, id) }));
   const updateRefLink = (id: string, key: "label" | "url", val: string) =>
     setForm((f) => ({ ...f, referenceLinks: updateRow(f.referenceLinks, id, key, val) }));

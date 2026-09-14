@@ -36,9 +36,16 @@ export type RowPayload = {
 
 type StoredRow = { _key?: string; label?: string; url?: string; title?: string };
 
-function defaultLocalId(): string {
+/**
+ * A fresh row identity. Exported because a state updater must be PURE and this
+ * one is not — the editors mint the id before calling `setForm`, the way
+ * `songFormCharts.ts`'s consumers already do.
+ */
+export function newRowId(): string {
   return `local-${Math.random().toString(36).slice(2, 9)}`;
 }
+
+const defaultLocalId = newRowId;
 
 function asText(value: unknown): string {
   return typeof value === "string" ? value : "";
@@ -92,10 +99,19 @@ export function updateRow(rows: RowDraft[], id: string, field: "label" | "url", 
 /**
  * Strip the client id for the wire, keeping `_key` where the row has one.
  *
- * Unlike `chartsToPayload` this drops NOTHING: a link whose fields are both
- * blank is the editor's own "I am about to type here" row, and silently
- * discarding it on save would be a different surprise. Callers that want the
- * empty rows gone should say so.
+ * Unlike `chartsToPayload` this drops NOTHING, and that is preserved behaviour
+ * rather than a judgement: both editors sent blank rows before this module
+ * existed. Worth knowing what happens to one, because it is not "an empty link
+ * gets saved" — `isSafeHttpUrl("")` is false, so the write route 400s the WHOLE
+ * request and the admin loses every other edit in the form with it. That is a
+ * pre-existing defect of its own, not something to fix by quietly changing what
+ * this function returns.
+ *
+ * `_key` is defensive here. Both write routes re-mint a key for every row on
+ * every save, and no projection in `app/**` even reads these arrays' keys back,
+ * so a stored `_key` never actually makes the round trip today — unlike chords,
+ * which are projected with theirs. Keeping it costs nothing and stops this from
+ * being the reason a future projection change loses keys.
  */
 export function rowsToPayload(rows: RowDraft[]): RowPayload[] {
   return rows.map((row) => {
@@ -103,9 +119,4 @@ export function rowsToPayload(rows: RowDraft[]): RowPayload[] {
     if (row._key) out._key = row._key;
     return out;
   });
-}
-
-/** `rowsToPayload` with the wholly-empty rows removed. */
-export function rowsToPayloadCompact(rows: RowDraft[]): RowPayload[] {
-  return rowsToPayload(rows.filter((row) => row.label.trim() !== "" || row.url.trim() !== ""));
 }

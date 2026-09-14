@@ -15,7 +15,6 @@ import {
   removeRow,
   rowsFromStored,
   rowsToPayload,
-  rowsToPayloadCompact,
   updateRow,
   type RowDraft,
 } from "../songFormRows";
@@ -99,7 +98,9 @@ describe("updateRow", () => {
     expect(updateRow(withKey, "k", "label", "z")[0]._key).toBe("k");
   });
 
-  it("returns the SAME array for an unknown id, so an edit cannot cause a render", () => {
+  it("returns the SAME array for an unknown id — the identity check is the point", () => {
+    // Not a render optimisation: both call sites wrap this in `setForm`, which
+    // allocates a new form object either way.
     expect(updateRow(rows, "missing", "label", "x")).toBe(rows);
   });
 });
@@ -134,12 +135,8 @@ describe("payload", () => {
     for (const row of rowsToPayload(rows)) expect("id" in row).toBe(false);
   });
 
-  it("keeps a blank row by default — a half-added row vanishing on save is its own surprise", () => {
+  it("keeps a blank row, which is what both editors did before this module", () => {
     expect(rowsToPayload(rows)).toHaveLength(3);
   });
 
-  it("compact drops the wholly-empty rows, and only those", () => {
-    expect(rowsToPayloadCompact(rows)).toHaveLength(2);
-    expect(rowsToPayloadCompact([{ id: "x", label: "solo etiqueta", url: "" }])).toHaveLength(1);
-  });
 });

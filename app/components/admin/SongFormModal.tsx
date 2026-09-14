@@ -4,7 +4,7 @@ import { useState, useRef, useId } from "react";
 import type { PortableTextBody } from "@/app/utils/interface";
 import { bodyToLyrics } from "@/app/utils/lyrics";
 import { chartsFromSong, chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
-import { addRow, removeRow, rowsFromStored, rowsToPayload, updateRow, type RowDraft } from "@/app/utils/songFormRows";
+import { addRow, newRowId, removeRow, rowsFromStored, rowsToPayload, updateRow, type RowDraft } from "@/app/utils/songFormRows";
 import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -136,7 +136,12 @@ export function SongForm({
 
   // All three address a row BY ID. An index would put the identity back in the
   // position, which is the defect (issue #69).
-  const addRefLink = () => setForm((f) => ({ ...f, referenceLinks: addRow(f.referenceLinks) }));
+  // The id is minted OUTSIDE the updater: a state updater must be pure, and
+  // `addRow` calls `Math.random()`. `songFormCharts.ts`'s consumers do the same.
+  const addRefLink = () => {
+    const id = newRowId();
+    setForm((f) => ({ ...f, referenceLinks: addRow(f.referenceLinks, () => id) }));
+  };
 
   const updateRefLink = (id: string, key: "label" | "url", val: string) =>
     setForm((f) => ({ ...f, referenceLinks: updateRow(f.referenceLinks, id, key, val) }));
