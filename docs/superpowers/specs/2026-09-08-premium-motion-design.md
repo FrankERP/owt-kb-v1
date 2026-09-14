@@ -1509,4 +1509,12 @@ churn cap (two rounds before Frank's explicit go-ahead) was not reached.
 
 **Bundle:** `main df19f1b5` → `F3 tip 8df4d0d7` (git-archive cold build, gzip −9): shared 172.5 → 172.5; `/me` 129.8 → 119.9 kB (−9.9); `/me/disponibilidad` 105.1 kB (new); `/me/ajustes` 103.1 kB (new); `/` 119.9 → 118.0 (−1.9); `/schedule` 123.6 → 121.7 (−1.9); `/admin` 356.5 → 354.4 (−2.1) — the weekend list and the date fields left, and every route shed the pill tone's unused variants.
 
+**Frank's look (2026-09-13):** repointing «Mi perfil» to `/me/ajustes` above left `/me`
+("Mi semana") with no entry point at all — the tab bars already dropped «Yo» at M1 F2, so
+the avatar menu was the only door, and F3 had just pointed that door somewhere else.
+Ruling: the avatar menu is `/me`'s one home, so it must name it — `Mi semana` (`/me`),
+`Ajustes` (`/me/ajustes`), a separator, `Cerrar sesión`. «Tema» is folded into Ajustes
+rather than kept as its own item; `ThemeAnnouncement`'s `#tema` anchor on `/me` is
+unaffected.
+
 **Release:** pending.

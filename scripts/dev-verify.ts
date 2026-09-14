@@ -59,6 +59,11 @@ async function newContext(origin: string, args: ParsedArgs, bypass: string | nul
     baseURL: origin,
     viewport: args.viewport,
     colorScheme: args.theme,
+    // `--touch`: a phone-shaped context, so a gesture bug (a tap that lands on
+    // the menu item that just rendered under the finger) reproduces here instead
+    // of only on Frank's phone.
+    hasTouch: args.touch,
+    isMobile: args.touch,
     // NO extraHTTPHeaders: Playwright sends those with EVERY request, including
     // cdn.sanity.io and vercel.com. The bypass header is injected per request, for
     // the target origin only, inside the route handler below.
@@ -223,7 +228,7 @@ async function main(): Promise<void> {
           .or(page.getByRole("radio", { name, exact }));
       const exactMatches = roleNames(true);
       const el = (await exactMatches.count()) > 0 ? exactMatches.first() : roleNames(false).first();
-      await el.click({ timeout: 10_000 }).catch(() => report.pageErrors.push(`click:${name} not found`));
+      await (args.touch ? el.tap({ timeout: 10_000 }) : el.click({ timeout: 10_000 })).catch(() => report.pageErrors.push(`click:${name} not found`));
       // This does NOT wait for what the click FETCHED: `waitForLoadState`
       // resolves as soon as the current navigation's lifecycle is done, and a
       // click that opens a dialog starts no navigation. `--wait` below is the

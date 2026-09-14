@@ -459,14 +459,14 @@ the impersonation banner, the audio transport, and the song sheet's head.
   member who manages Kids), `Admin` (admin/content-editor/super-admin). **Tema,
   Cerrar sesión and «Yo» all live in the avatar menu (`NavMenu`) now, not
   here** — M1 follow-up F1 moved the account actions and F2 moved «Yo»,
-  because `/me` has one home, the avatar menu's «Mi perfil». When none of the
+  because `/me` has one home, the avatar menu. When none of the
   three rows applies (the common case: a plain worship member with no Kids
   ministry), the «Más» button itself does not render — the bar shows the
   tabs alone — and the sheet never opens. A bar with fewer than two items
   (tabs + «Más») is not a bar: the kids-only volunteer with no planner rights
   has one tab and no «Más» row, so `BottomNav` renders nothing at all and
   publishes neither `--bottom-nav-h` nor `has-bottom-nav` — their avatar menu
-  still carries Mi perfil. **«Más» is a
+  still carries Mi semana. **«Más» is a
   `CueDialog` sheet** (`mode="sheet"`, `size="sm"`), not the hand-rolled
   `inert`/backdrop panel it used to be, rendered unconditionally with
   `open={moreOpen}` even when the triggering button is absent (only the button
@@ -495,7 +495,11 @@ the impersonation banner, the audio transport, and the song sheet's head.
 - The **avatar notification badge** (`NavMenu`) now pops in with `<Presence
   show={notifCount > 0} appear variant="scale">` instead of a plain conditional
   `<span>`. **`NavMenu` is an ACCOUNT menu, all widths** (M1 follow-up F1):
-  `Mi perfil` (`/me/ajustes`), `Tema` (`/me/ajustes#tema`), a separator, `Cerrar sesión` — it no
+  `Mi semana` (`/me`), `Ajustes` (`/me/ajustes`), a separator, `Cerrar sesión` — Frank's
+  look at R3 F3 (2026-09-13) found «Mi perfil» pointing only at `/me/ajustes`,
+  leaving `/me` («Mi semana») unreachable except by URL since the tab bars
+  dropped «Yo» at F2; the menu is `/me`'s one home, so it now names both
+  halves, and Tema folds into Ajustes rather than getting its own item. It no
   longer repeats Calendario, #Tags, Oasis Kids, Planear Kids or Admin, which
   already have a home in `NavLinks` (desktop) or `BottomNav`'s tabs/«Más» sheet
   (phone). The `showSchedule`/`showTags` props and their ministry/role
@@ -738,8 +742,9 @@ the full ledger; the motion-relevant pieces:
   `p-5` padding in `bare` mode rather than being wrapped in a padding `div` by the card —
   a wrapped `null` still reserves the padding, leaving an empty box in the card's
   `divide-y` sections; an unwrapped `null` leaves nothing at all. `id="tema"` renders
-  either way, so the cross-page `/me/ajustes#tema` anchors (`ThemeAnnouncement` on `/me`,
-  the avatar menu's «Tema») still land on something.
+  either way, so the cross-page `/me/ajustes#tema` anchor (`ThemeAnnouncement` on `/me`)
+  still lands on something — the avatar menu itself has no `#tema` item since the R3 F3
+  look-fix folded Tema into Ajustes.
 - **`ThemeAnnouncement` dismisses through `Presence`, not `show && <aside>`** — the
   dismiss gets an exit instead of vanishing (spec §5.6). No `appear`: `show` starts
   `false` and flips in a mount effect, so the instance is already mounted when it becomes
