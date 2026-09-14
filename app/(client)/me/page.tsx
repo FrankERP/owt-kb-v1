@@ -555,11 +555,15 @@ export default async function MePage() {
         {member ? (
           <Link
             href="/me/disponibilidad"
-            className="flex items-center justify-between gap-3 rounded-xl border border-accent/15 px-4 py-3 hover:border-accent/40 transition-colors"
+            /* `flex-wrap`: «Disponibilidad» is one unbreakable word and the count
+               beside it is another, so at «Máximo» text size the row floors wider
+               than the phone and runs off the screen. Wrapping puts the count on
+               its own line instead. */
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-accent/15 px-4 py-3 hover:border-accent/40 transition-colors"
             {...revealProps(3)}
           >
             <span className="font-display text-base uppercase tracking-wide">Disponibilidad</span>
-            <span className="flex items-center gap-2">
+            <span className="flex min-w-0 items-center gap-2">
               <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
                 {upcomingUnavailable === 0
                   ? "Sin fechas marcadas"

@@ -48,7 +48,10 @@ export default function AudioTransport({
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="w-8 shrink-0 text-right font-label text-[11px] tabular-nums text-mono-600">
+          {/* `min-w`, not `w`: 32px fits "10:32" at normal text and clips it at
+              «Máximo», where the same string is ~48px. A minimum keeps the two
+              readouts aligned without capping them. */}
+          <span className="min-w-8 shrink-0 text-right font-label text-[11px] tabular-nums text-mono-600">
             {fmtTime(currentTime)}
           </span>
           <div
@@ -91,7 +94,7 @@ export default function AudioTransport({
             </div>
             <div className="absolute inset-y-0 -bottom-1 -top-1 left-0 right-0 opacity-0 group-hover:opacity-100" style={{ cursor: "pointer" }} />
           </div>
-          <span className="w-8 shrink-0 font-label text-[11px] tabular-nums text-mono-600">
+          <span className="min-w-8 shrink-0 font-label text-[11px] tabular-nums text-mono-600">
             {fmtTime(duration)}
           </span>
         </div>

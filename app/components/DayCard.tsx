@@ -120,13 +120,19 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
             one eyebrow per surface, so the `Servicio` label and the long date
             are gone; the date the header already shows is the date. */}
         <div className={`${t.headerBg} border-b px-5 py-4 ${t.headerBorder}`}>
-          <div className="flex items-center justify-between gap-4">
+          {/* `flex-wrap` + a wrapping title. `min-w-0` alone was the wrong half of
+              the pair: it let the title's BOX shrink while the text kept painting
+              over the countdown and «Ensayar», which the panel's `overflow-hidden`
+              then cut off. At «Máximo» text size the right-hand block alone is
+              ~220px and cannot shrink, so the title has to be allowed a second
+              line instead of a collision. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
-              <h3 className="font-display text-2xl font-bold uppercase leading-none text-ink md:text-3xl">
+              <h3 className="font-display text-2xl font-bold uppercase leading-none text-ink md:text-3xl break-words">
                 {day}{shortDate && <span className={`${t.accentMuted} font-normal`}> · {shortDate}</span>}
               </h3>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
               {isNext && days !== null && (
                 <span className="rounded-full border border-positive-fg/35 bg-positive-fg/10 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-positive-fg">
                   <NumberRoll value={formatCountdown(days)} />
@@ -222,7 +228,12 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 {(leads?.length || bgvs?.length || chorus?.length) ? (
                   <div>
                     <SectionDivider label="Voces" accent={t.accentMuted} />
-                    <div className="grid grid-cols-3 gap-x-3">
+                    {/* auto-fit + an em-based floor, not `grid-cols-3`: the track
+                        minimum grows with the TEXT, so a member on «Máximo» text size
+                        gets two columns and then one instead of three columns whose
+                        names overlap each other. `minmax(0,…)`'s upper half keeps a
+                        long name from pushing the card wider than the phone. */}
+                    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,4.5em),1fr))] gap-x-3 gap-y-3">
                       <VocalCol label="Lead" names={leads ?? []} highlightName={myName} duplicateNames={vocesDups} />
                       <VocalCol label="BGVs" names={(bgvs ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
                       <VocalCol label="Coro" names={(chorus ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
@@ -325,9 +336,15 @@ function SongRow({ song, n, accent, onOpen, dense = false }: {
 function VocalCol({ label, names, highlightName, duplicateNames }: { label: string; names: string[]; highlightName?: string; duplicateNames?: Set<string> }) {
   if (!names.length) return <div />;
   return (
-    <div>
+    <div className="min-w-0">
       <p className="font-label text-xs uppercase tracking-widest text-mono-400 mb-0.5">{label}</p>
-      <p className="font-body text-sm md:text-base lg:text-lg leading-snug">
+      {/* `break-words`, not `anywhere`: a name breaks only when that one name is
+          wider than its column — at «Máximo» text size it is — and the paragraph's
+          min-content stays the longest name rather than a single letter, which is
+          what `anywhere` would do to a flex or grid child. Before this the names
+          could not break at all and simply painted over the next column, where the
+          card's `overflow-hidden` cut them off. */}
+      <p className="font-body text-sm md:text-base lg:text-lg leading-snug break-words">
         {names.map((name, i) => {
           const key  = name.toLowerCase().trim();
           const isDup = !!duplicateNames?.has(key);
@@ -337,16 +354,16 @@ function VocalCol({ label, names, highlightName, duplicateNames }: { label: stri
               {i > 0 && ", "}
               {isDup ? (
                 <span
-                  className="font-semibold text-warning-strong whitespace-nowrap"
+                  className="font-semibold text-warning-strong"
                   style={{ textShadow: "0 0 10px rgb(var(--warning-strong-rgb) / 0.65)" }}
                 >⚠&nbsp;{name}</span>
               ) : isMe ? (
                 <span
-                  className="font-semibold text-positive-fg whitespace-nowrap"
+                  className="font-semibold text-positive-fg"
                   style={{ textShadow: "0 0 10px rgb(var(--positive-fg-rgb) / 0.8)" }}
                 >{name}</span>
               ) : (
-                <span className="whitespace-nowrap">{name}</span>
+                <span>{name}</span>
               )}
             </span>
           );
