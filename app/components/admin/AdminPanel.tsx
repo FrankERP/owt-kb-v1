@@ -90,7 +90,10 @@ interface MemberFormData {
   managesMinistries?: string[];
 }
 
-const TYPE_LABEL: Record<string, string> = {
+// The table's own abbreviations — deliberately not `MEMBER_TYPE_LABEL`'s full
+// words (`app/utils/memberTypes.ts`): this is a dense list, not the member's
+// own profile, where there is room to spell "Líder Domingo" out.
+const TYPE_ABBR: Record<string, string> = {
   voz: "Voz", instrumento: "Instr.", foh: "FOH",
   sunday_lead: "Líder Dom", saturday_lead: "Líder Sáb", support: "Soporte",
 };
@@ -1252,7 +1255,7 @@ export default function AdminPanel({
                   <p className="font-body text-sm text-surface-ink-l50-d35 truncate">{m.email}</p>
                   {(m.memberType ?? []).map(t => (
                     <span key={t} className="font-label text-[10px] uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-accent/10 text-mono-400 border border-accent/15">
-                      {TYPE_LABEL[t] ?? t}
+                      {TYPE_ABBR[t] ?? t}
                     </span>
                   ))}
                   {(m.instruments ?? []).map(i => (

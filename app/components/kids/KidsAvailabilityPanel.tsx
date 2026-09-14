@@ -42,7 +42,7 @@ const iso = (year: number, month: number, day: number) =>
 
 /**
  * A month grid, Monday-first, with leading blanks. Built from local `Date`s the
- * same way `AvailabilityCalendar` does — the cell VALUES are composed as strings
+ * same way `AvailabilityGrid` does — the cell VALUES are composed as strings
  * (never `toISOString`), so no cell can drift a day.
  */
 export function monthCells(year: number, month: number): (string | null)[] {

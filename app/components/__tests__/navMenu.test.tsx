@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 // NavMenu is now an ACCOUNT menu, all widths (M1 follow-up F1): the destinations
 // it used to repeat (Calendario, #Tags, Oasis Kids, Planear Kids, Admin) live in
-// NavLinks/BottomNav now, and NavMenu keeps only Mi perfil, Tema and Cerrar sesión.
+// NavLinks/BottomNav now, and NavMenu keeps only Mi semana, Ajustes and Cerrar sesión.
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
@@ -34,15 +34,21 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("NavMenu — account menu", () => {
-  it("once opened, shows Mi perfil, Tema, Cerrar sesión and none of the retired destinations", async () => {
+  it("once opened, shows Mi semana, Disponibilidad, Ajustes, Cerrar sesión and none of the retired destinations", async () => {
     mount();
     await act(async () => {});
     fireEvent.click(screen.getByRole("button", { name: /Menú de usuario/ }));
     const menu = screen.getByRole("menu", { name: "Menú de cuenta" });
     const items = Array.from(menu.querySelectorAll('[role="menuitem"]')).map((n) => n.textContent?.trim());
-    expect(items).toEqual(["Mi perfil", "Tema", "Cerrar sesión"]);
-    expect(screen.getByRole("menuitem", { name: "Mi perfil" }).getAttribute("href")).toBe("/me");
-    expect(screen.getByRole("menuitem", { name: "Tema" }).getAttribute("href")).toBe("/me#tema");
+    expect(items).toEqual(["Mi semana", "Disponibilidad", "Ajustes", "Cerrar sesión"]);
+    // F3 fix (Frank's look, 2026-09-13): the menu is /me's only entry point, so
+    // it must name all three halves — Mi semana at `/me`, Disponibilidad at
+    // `/me/disponibilidad`, Ajustes at `/me/ajustes`.
+    // Tema folded into Ajustes; it is no longer a menu item.
+    expect(screen.getByRole("menuitem", { name: "Mi semana" }).getAttribute("href")).toBe("/me");
+    expect(screen.getByRole("menuitem", { name: "Disponibilidad" }).getAttribute("href")).toBe("/me/disponibilidad");
+    expect(screen.getByRole("menuitem", { name: "Ajustes" }).getAttribute("href")).toBe("/me/ajustes");
+    expect(screen.queryByRole("menuitem", { name: "Tema" })).toBeNull();
 
     expect(screen.queryByRole("menuitem", { name: "Calendario" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "#Tags" })).toBeNull();

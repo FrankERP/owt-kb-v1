@@ -1,7 +1,7 @@
 "use client";
 
 // A number (or short label) that changes in place (spec §4): the old value rises
-// out, the new one rises in. NextServiceHero's countdown, the readiness card's
+// out, the new one rises in. MeHeader's countdown, the readiness card's
 // relative day, the participation total, ChordChart's capo readout. Both values
 // share one grid cell so the width never jumps; `initial={false}` so the first
 // paint is the value, not an animation. The host is positioned (relative) so that

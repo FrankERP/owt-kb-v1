@@ -111,8 +111,12 @@ export default function NavMenu() {
           <span className="font-label text-xs uppercase tracking-widest text-mono-400">{firstName}</span>
         )}
       </MenuHeader>
-      <MenuItem href="/me">Mi perfil</MenuItem>
-      <MenuItem href="/me#tema">Tema</MenuItem>
+      {/* F3 split /me into Mi semana / Disponibilidad / Ajustes and the tab bars
+          lost «Yo» in M1 F2, so this menu is /me's one entry point — it lists all
+          three halves. Tema lives inside Ajustes. */}
+      <MenuItem href="/me">Mi semana</MenuItem>
+      <MenuItem href="/me/disponibilidad">Disponibilidad</MenuItem>
+      <MenuItem href="/me/ajustes">Ajustes</MenuItem>
       <MenuSeparator />
       <MenuItem onSelect={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}>
         Cerrar sesión

@@ -68,7 +68,7 @@ export default function BottomNav() {
   // A bar with fewer than two items (tabs + «Más») is not a bar — the
   // kids-only volunteer with no planner rights has one tab and no «Más» row,
   // so there is nothing worth a fixed bottom bar for. Their avatar menu still
-  // carries Mi perfil.
+  // carries Mi semana.
   const hidden = authHidden || tabs.length + (moreRows.length > 0 ? 1 : 0) < 2;
 
   // Measured, not a constant: the bar wraps to two lines at the largest text

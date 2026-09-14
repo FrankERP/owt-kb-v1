@@ -63,7 +63,7 @@ describe("BottomNav", () => {
 
   // A kids-only plain member has one tab (Kids) and no «Más» row — fewer than
   // two items is not a bar, so it renders nothing at all and publishes no
-  // --bottom-nav-h / has-bottom-nav. Their avatar menu still carries Mi perfil.
+  // --bottom-nav-h / has-bottom-nav. Their avatar menu still carries Mi semana.
   it("renders nothing for a kids-only plain member and publishes no bottom-nav variable or class", () => {
     session = { user: { ...worshipUser, ministries: ["kids"], managesMinistries: [] } };
     mount();

@@ -245,9 +245,9 @@ describe("the theme announcement stays retired", () => {
     expect(hits, "see ADR-0033 — a new announcement needs a per-member server flag").toEqual([]);
   });
 
-  it("keeps the #tema anchor NavMenu links to", () => {
-    // `/me#tema` is a MenuItem in NavMenu; the target lives on ThemeControl and
-    // outlived the banner that also pointed at it.
+  it("keeps the #tema anchor the avatar menu links to", () => {
+    // `/me/ajustes#tema` is a MenuItem in the avatar menu; the target lives on
+    // ThemeControl and outlived the banner that also pointed at it.
     const control = readFileSync(
       path.join(process.cwd(), "app/components/ui/ThemeControl.tsx"), "utf8",
     );

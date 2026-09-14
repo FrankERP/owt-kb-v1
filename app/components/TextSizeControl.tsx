@@ -8,7 +8,7 @@ import SegmentedControl from "@/app/components/ui/SegmentedControl";
  * Segmented text-size control. Persists the choice device-locally and applies it
  * immediately. "Automático" follows the device accessibility setting on native.
  */
-export default function TextSizeControl() {
+export default function TextSizeControl({ bare = false }: { bare?: boolean } = {}) {
   const [mode, setMode] = useState<TextScaleMode>("auto");
 
   // Initialise from storage after mount (localStorage is client-only).
@@ -21,8 +21,8 @@ export default function TextSizeControl() {
   }
 
   return (
-    <section className="rounded-2xl border border-surface-accent-20 p-5">
-      <h3 className="font-display text-lg font-bold mb-1">Tamaño de texto</h3>
+    <section className={bare ? "" : "rounded-2xl border border-surface-accent-20 p-5"}>
+      <h3 className={`font-display text-lg font-bold ${bare ? "" : "mb-1"}`}>Tamaño de texto</h3>
       <p className="font-body text-sm text-mono-500 dark:text-mono-400 mb-4">
         &quot;Automático&quot; sigue el ajuste de tu dispositivo. Elige un tamaño fijo para anularlo.
       </p>

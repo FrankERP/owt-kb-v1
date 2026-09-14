@@ -16,6 +16,7 @@ import { revalidatePath } from "next/cache";
 import { NOTIFY_PREF_FIELD, wantsNotification, type NotifyKind } from "@/app/utils/notifyPrefs";
 import { validateMinistryWrite } from "@/app/ministries";
 import { parseMemberInstruments } from "@/app/components/admin/seatModel";
+import { MEMBER_TYPES } from "@/app/utils/memberTypes";
 
 const EMAIL_KINDS = Object.keys(NOTIFY_PREF_FIELD) as NotifyKind[];
 
@@ -54,7 +55,6 @@ export async function PATCH(
   };
 
   const VALID_ROLES = ["super-admin", "admin", "content-editor", "member"];
-  const VALID_MEMBER_TYPES = ["voz", "instrumento", "foh", "sunday_lead", "saturday_lead", "support"];
 
   if (body.role !== undefined && !VALID_ROLES.includes(body.role)) {
     return NextResponse.json({ error: "Invalid role" }, { status: 400 });
@@ -66,7 +66,12 @@ export async function PATCH(
   if (body.email?.trim()) patch.email = body.email.trim().toLowerCase();
   if (body.role) patch.role = body.role;
   // Keep only recognised member types (drops unknown values rather than storing them).
-  if (Array.isArray(body.memberType)) patch.memberType = body.memberType.filter(t => VALID_MEMBER_TYPES.includes(t));
+  // `MEMBER_TYPES` is the canonical six values, shared with `MeHeader`'s chips and
+  // `/admin`'s `TYPE_ABBR` — see `app/utils/memberTypes.ts`.
+  if (Array.isArray(body.memberType)) {
+    const valid: readonly string[] = MEMBER_TYPES;
+    patch.memberType = body.memberType.filter(t => valid.includes(t));
+  }
 
   // Declared instruments (spec 2026-09-09 §4.2). `!== undefined` guard like
   // `ministries`: an absent field is untouched, so the form's touched-field

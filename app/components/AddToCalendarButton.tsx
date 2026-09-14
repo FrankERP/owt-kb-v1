@@ -1,5 +1,6 @@
 "use client";
 
+import Button from "./ui/Button";
 import { buildICS, ICSEvent } from "@/app/utils/ics";
 
 // Downloads an .ics of the member's upcoming assigned services so they can
@@ -20,19 +21,23 @@ export default function AddToCalendarButton({ services }: { services: ICSEvent[]
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  // The house Button (R3): the download behaviour is untouched, only the chrome —
+  // this was one of the inline spellings the button inventory counted.
   return (
-    <button
-      type="button"
+    <Button
+      variant="secondary"
+      size="sm"
       onClick={download}
       title="Descargar tus servicios como evento de calendario (.ics)"
-      className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-lg border border-surface-accent-30 font-label text-[11px] uppercase tracking-widest text-mono-400 hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent transition-colors"
     >
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      {/* `currentColor`: `var()` is not substituted inside an SVG presentation
+          attribute, so the stroke inherits the Button's own colour. */}
+      <svg aria-hidden width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
         <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
         <line x1="12" y1="14" x2="12" y2="18" /><line x1="10" y1="16" x2="14" y2="16" />
       </svg>
       Añadir a calendario
-    </button>
+    </Button>
   );
 }

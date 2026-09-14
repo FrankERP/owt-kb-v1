@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useRef, useEffect, useId } from "react";
+import Button from "./ui/Button";
 import CueDialog from "./ui/CueDialog";
 import CueDialogStatus from "./ui/CueDialogStatus";
 import EmailPrefToggles, { EMAIL_PREF_ROWS, resolveEmailPrefs } from "./ui/EmailPrefToggles";
+import Skeleton from "./ui/Skeleton";
 import { useToast } from "./ui/Toast";
 
-interface MemberProfile {
+export interface MemberProfile {
   _id: string;
   member_name: string;
   alias?: string;
@@ -43,10 +45,7 @@ function Avatar({
       {onClick && (
         <div className="absolute inset-0 bg-scrim/50 flex flex-col items-center justify-center gap-1 opacity-0 group-hover/av:opacity-100 transition-opacity">
           {uploading ? (
-            <svg className="animate-spin w-4 h-4 text-white" viewBox="0 0 24 24" fill="none">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-            </svg>
+            <Skeleton rounded="full" className="w-4 h-4" />
           ) : (
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="stroke-white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -71,7 +70,14 @@ function Avatar({
   );
 }
 
-export default function ProfilePanel({ initialMember }: { initialMember: MemberProfile }) {
+export default function ProfilePanel({
+  initialMember,
+  bare = false,
+}: {
+  initialMember: MemberProfile;
+  /** Drops the compact card's own border/background/padding when a parent (SettingsCard) already owns that chrome. */
+  bare?: boolean;
+}) {
   const [member, setMember]   = useState(initialMember);
   const [open, setOpen]       = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -220,7 +226,14 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
   return (
     <>
       {/* ── Compact profile card ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 px-5 py-4 rounded-2xl border border-edge-accent-subtle bg-accent/5">
+      <div
+        className={
+          bare
+            ? "flex items-center gap-4"
+            : "flex items-center gap-4 px-5 py-4 rounded-2xl border border-edge-accent-subtle bg-accent/5"
+        }
+      >
+
         <Avatar name={displayName} photoUrl={member.photoUrl} size="sm" />
         <div className="flex-1 min-w-0">
           <p className="font-display text-base leading-tight truncate">{displayName}</p>
@@ -296,13 +309,15 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
                 />
               </div>
             </div>
-            <button
+            <Button
               type="submit"
-              disabled={savingProfile}
-              className="w-full py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50"
+              variant="primary"
+              busy={savingProfile}
+              busyLabel="Guardando…"
+              className="w-full"
             >
-              {savingProfile ? "Guardando…" : "Guardar cambios"}
-            </button>
+              Guardar cambios
+            </Button>
           </form>
 
           {/* Password */}
