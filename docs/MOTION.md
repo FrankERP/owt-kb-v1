@@ -867,8 +867,8 @@ the full ledger; the motion-relevant pieces:
     `callbackUrl`), not a scrolled-past section of one page.
   - **One surface marks availability, not four.** The weekend pills (`WeekendList`),
     the panel's «Rango…» fields (F1) and the grid's Desde/Hasta fields (F2) are all
-    gone; the twelve-month grid — tap for one day, «Seleccionar fechas» for a drag
-    range, «Repetir…» for a weekday pattern — is what remains, mounted OPEN on
+    gone; the twelve-month grid — «Seleccionar fechas» for a tap or a drag range,
+    «Repetir…» for a weekday pattern — is what remains, mounted OPEN on
     `/me/disponibilidad` with no «Ver calendario» disclosure around it. «Seleccionar
     fechas» is KEPT (Frank's ruling) — the calendar page still scrolls vertically, so
     the drag gesture that needed the shadow-month overlay in F2 still has a page to
@@ -904,5 +904,16 @@ the full ledger; the motion-relevant pieces:
     survived in this file after the anchor moved to `/me/ajustes#tema` (LOW). All three
     fixed in the commit before this one, verified by the gate chain re-run on the
     final tree — the churn cap (two rounds max) was not reached.
+- **Frank's look (2026-09-13), two fixes.** (1) `NotePopover` now portals to
+  `document.body` — it is `position: fixed` and was rendering inside `/me/disponibilidad`'s
+  route-reveal host (`[data-reveal]`, an animated `transform`, which becomes the
+  containing block for a `fixed` descendant), so it landed at the host's own
+  offset instead of the day cell's viewport position (reproduced on dev at
+  1440×900: cell ~(503,615), popover ~(785,845)). (2) The grid is read-only
+  outside «Seleccionar fechas» — `handleDateClick` is gone, day cells carry no
+  `onClick` and are `aria-disabled`/untabbable when the mode is off, so a casual
+  look at the calendar can no longer mark or open a day by accident; any edit now
+  goes through the mode, where a tap is a one-day drag through the same pointer
+  flow as a real range.
 - **Bundle:** `main df19f1b5` → `F3 tip 8df4d0d7` (git-archive cold build, gzip −9): shared 172.5 → 172.5; `/me` 129.8 → 119.9 kB (−9.9); `/me/disponibilidad` 105.1 kB (new); `/me/ajustes` 103.1 kB (new); `/` 119.9 → 118.0 (−1.9); `/schedule` 123.6 → 121.7 (−1.9); `/admin` 356.5 → 354.4 (−2.1) — the weekend list and the date fields left, and every route shed the pill tone's unused variants.
 - **Release:** pending.

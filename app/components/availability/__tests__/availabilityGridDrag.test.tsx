@@ -116,13 +116,31 @@ const DOWN = { pointerId: 1, isPrimary: true, button: 0 } as const;
 const MOVE = { pointerId: 1, buttons: 1 } as const;
 
 describe("AvailabilityGrid — drag-select", () => {
-  it("outside the mode a cell click still marks the day and opens its single-day note", () => {
+  it("outside the mode a cell click does nothing — every edit goes through «Seleccionar fechas»", () => {
     renderGrid();
     const target = cell("2026-09-12");
+    expect(target.getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(target);
 
-    expect(markMock).toHaveBeenCalledWith("2026-09-12");
-    expect(openNoteMock.mock.calls).toEqual([["2026-09-12", target]]);
+    expect(markMock).not.toHaveBeenCalled();
+    expect(applyRangeMock).not.toHaveBeenCalled();
+    expect(openNoteMock).not.toHaveBeenCalled();
+  });
+
+  it("inside the mode a tap on an already-marked day opens its note, with no side effect beyond the no-op add", () => {
+    // `onPointerUp` always calls `applyRange` for the tapped day, marked or not
+    // — the hook's own `applyRange` is what makes re-adding an already-marked
+    // day a no-op, not a check here. The behaviour worth pinning is that the tap
+    // still opens the day's note exactly once, with no second commit.
+    const months = renderGrid();
+    enterMode();
+
+    over(cell("2026-09-12"));
+    fireEvent.pointerDown(months, { ...DOWN, clientX: 10, clientY: 200 });
+    fireEvent.pointerUp(months, { pointerId: 1, clientX: 10, clientY: 200 });
+
+    expect(applyRangeMock.mock.calls).toEqual([["2026-09-12", "2026-09-12", true]]);
+    expect(openNoteMock.mock.calls).toEqual([["2026-09-12", cell("2026-09-12"), ["2026-09-12"]]]);
   });
 
   it("a drag commits the whole range once and opens ONE note for it", () => {

@@ -87,17 +87,24 @@ describe("MyAvailabilityPanel — the popover survives a scroll", () => {
     vi.useRealTimers();
   });
 
+  // The grid is read-only outside «Seleccionar fechas» (Frank's look,
+  // 2026-09-13): opening a note is a one-day drag through the mode's pointer
+  // flow, not a plain click on the cell.
   function openNoteOn(month: string, day: number) {
     render(
       <MotionProvider>
         <MyAvailabilityPanel initialRev="rev-1" initialDates={[]} initialNotes={[]} />
       </MotionProvider>,
     );
+    fireEvent.click(screen.getByRole("button", { name: "Seleccionar fechas" }));
     const card = screen.getByText(month).closest("div")!;
     const cell = Array.from(card.querySelectorAll("button")).find(
       (b) => b.textContent?.trim() === String(day),
-    );
-    fireEvent.click(cell!);
+    )!;
+    document.elementFromPoint = () => cell;
+    const months = document.getElementById("availability-months")!;
+    fireEvent.pointerDown(months, { pointerId: 1, isPrimary: true, button: 0, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(months, { pointerId: 1, clientX: 10, clientY: 10 });
   }
 
   const noteField = () => screen.queryByPlaceholderText(/razón/i);
@@ -124,7 +131,7 @@ describe("NotePopover — a range popover edits every day at once", () => {
     const setNote = vi.fn();
     const remove = vi.fn();
     const setPopover = vi.fn();
-    render(
+    const { container } = render(
       <NotePopover
         popover={{ iso: "2026-09-12", isos: ["2026-09-12", "2026-09-13", "2026-09-14"], x: 0, y: 0, above: false }}
         setPopover={setPopover}
@@ -134,12 +141,24 @@ describe("NotePopover — a range popover edits every day at once", () => {
         remove={remove}
       />,
     );
-    return { setNote, remove, setPopover };
+    return { setNote, remove, setPopover, container };
   }
 
   it("titles the popover with the range label", () => {
     renderRange();
     expect(screen.getByText("del 12 al 14 de septiembre")).not.toBeNull();
+  });
+
+  it("portals to document.body — not into the reveal host's transformed container", () => {
+    // `NotePopover` is `position: fixed`, and a `fixed` descendant of a
+    // transformed/animated ancestor (`[data-reveal]`) positions against that
+    // ancestor instead of the viewport — the same trap `CueDialog.tsx` documents.
+    // A portal is the escape: the panel must render on `document.body`, never as
+    // a descendant of whatever RTL mounted it into.
+    const { container } = renderRange();
+    const panel = screen.getByText("del 12 al 14 de septiembre").closest("div")!;
+    expect(container.contains(panel)).toBe(false);
+    expect(document.body.contains(panel)).toBe(true);
   });
 
   it("writes the same note to every day in the range", () => {

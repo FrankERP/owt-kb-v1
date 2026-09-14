@@ -54,6 +54,22 @@ function cell(month: string, day: number): HTMLButtonElement {
 
 const marked = (month: string, day: number) => cell(month, day).className.includes(MARKED);
 
+// The grid is read-only outside «Seleccionar fechas» (Frank's look, 2026-09-13):
+// marking a day is a one-day drag through the mode, not a plain click. Enter the
+// mode only if it is not already on — the mode persists across a single test's
+// several marks, and re-clicking the pill while it reads «Listo» would turn it
+// back off instead of doing nothing.
+function markDate(month: string, day: number) {
+  if (!screen.queryByRole("button", { name: "Listo" })) {
+    fireEvent.click(screen.getByRole("button", { name: "Seleccionar fechas" }));
+  }
+  const months = document.getElementById("availability-months")!;
+  const target = cell(month, day);
+  document.elementFromPoint = () => target;
+  fireEvent.pointerDown(months, { pointerId: 1, isPrimary: true, button: 0, clientX: 10, clientY: 10 });
+  fireEvent.pointerUp(months, { pointerId: 1, clientX: 10, clientY: 10 });
+}
+
 // One button, two labels: «Guardar» and «Guardando…» while the PATCH is in flight.
 const saveButton = () => screen.getByRole("button", { name: /Guarda/ });
 
@@ -96,7 +112,7 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
       reply(200, { _rev: "rev-2", unavailableDates: ["2026-09-20", "2026-10-04"], unavailabilityNotes: [] }),
     );
 
-    fireEvent.click(cell("Octubre 2026", 4));
+    markDate("Octubre 2026", 4);
     fireEvent.click(saveButton());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(bodyOf(0)).toEqual({
@@ -108,7 +124,7 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
     fetchMock.mockResolvedValueOnce(
       reply(200, { _rev: "rev-3", unavailableDates: ["2026-09-20", "2026-10-04", "2026-10-11"], unavailabilityNotes: [] }),
     );
-    fireEvent.click(cell("Octubre 2026", 11));
+    markDate("Octubre 2026", 11);
     fireEvent.click(saveButton());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     // The new revision, not the stale one it was rendered with.
@@ -127,7 +143,7 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
       }),
     );
 
-    fireEvent.click(cell("Octubre 2026", 4));
+    markDate("Octubre 2026", 4);
     fireEvent.click(saveButton());
     await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
 
@@ -159,7 +175,7 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
     fetchMock.mockResolvedValueOnce(
       reply(200, { _rev: "rev-10", unavailableDates: [], unavailabilityNotes: [] }),
     );
-    fireEvent.click(cell("Octubre 2026", 4));
+    markDate("Octubre 2026", 4);
     fireEvent.click(saveButton());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     expect(bodyOf(1)).toEqual({
@@ -187,7 +203,7 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
         reply(200, { _rev: "rev-5", unavailableDates: ["2026-09-20", "2026-10-04"], unavailabilityNotes: [] }),
       );
 
-    fireEvent.click(cell("Octubre 2026", 4));
+    markDate("Octubre 2026", 4);
     fireEvent.click(saveButton());
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 
@@ -219,7 +235,7 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
       }),
     );
 
-    fireEvent.click(cell("Octubre 2026", 4));
+    markDate("Octubre 2026", 4);
     fireEvent.click(saveButton());
     await waitFor(() => expect(screen.getByRole("status")).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -230,7 +246,7 @@ describe("MyAvailabilityPanel — saving against a revision", () => {
     renderCalendar();
     fetchMock.mockResolvedValueOnce(reply(500, {}));
 
-    fireEvent.click(cell("Octubre 2026", 4));
+    markDate("Octubre 2026", 4);
     fireEvent.click(saveButton());
 
     await waitFor(() => expect(screen.getByText(/No se pudo guardar/)).toBeTruthy());

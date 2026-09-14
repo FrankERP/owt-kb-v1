@@ -1518,4 +1518,25 @@ anchor on `/me` is unaffected. «Disponibilidad» joined the avatar menu (2026-0
 calendar is one tap from everywhere; the row on Mi semana stays for its count; a link from
 `/schedule` deliberately not added (team schedule vs personal editing).
 
+**Frank's look (2026-09-13), two more rulings.**
+
+- **The «Razón» popover portals to `document.body`.** Reproduced on dev at 1440×900:
+  the day cell sat at ~(503,615) and the popover rendered at ~(785,845), the offset
+  being the page block's own offset. `NotePopover` is `position: fixed` and was
+  rendering inside `/me/disponibilidad`'s route-reveal host (`[data-reveal]`,
+  `app/brand.css` ~1017, an animated `transform`), which becomes the containing
+  block for a `fixed` descendant instead of the viewport — the same trap
+  `CueDialog.tsx` documents. Ruling: `createPortal` to `document.body`, the
+  `Toast.tsx`/`CueDialog.tsx` pattern (an SSR-safe node obtained via `useState`
+  set in an effect). Everything else about the popover — positioning, scroll
+  reposition, Escape, focus — is unchanged.
+- **Any edit goes through «Seleccionar fechas».** Outside the mode the grid was
+  still one tap from marking or opening a day (`handleDateClick`), which meant a
+  casual look at the calendar could edit it by accident. Ruling: day cells carry
+  no `onClick`, `aria-disabled="true"` and `tabIndex={-1}` outside the mode
+  (marked/service/note visuals stay, so the month still reads); `handleDateClick`
+  is deleted rather than gated, because inside the mode a tap is already a one-day
+  range through the same `onPointerDown`/`onPointerUp` flow a drag uses, and a
+  second path to the same edit was the thing to remove, not keep in sync.
+
 **Release:** pending.
