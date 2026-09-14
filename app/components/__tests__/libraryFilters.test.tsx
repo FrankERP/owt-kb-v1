@@ -169,4 +169,46 @@ describe("LibraryFilters", () => {
     mount({ ...EMPTY, tags: ["alabanza"], author: "hillsong" });
     expect(screen.getByRole("button", { name: "Filtros · 2" })).toBeDefined();
   });
+  // ── The typing bug, on this surface (audited 2026-09-13) ────────────────────
+  //
+  // The team reported it on `/me` («the keyboard closes after one key press»),
+  // but this drawer had it too and nobody said so: `CueDialog`'s entry-focus
+  // effect depended on `onDismiss`, this component passes an inline arrow, and
+  // `themeQ` lives HERE — in the component that renders the dialog. So every
+  // character re-ran the effect and threw the caret onto the drawer's close
+  // button; on a phone the keyboard shuts with it.
+  //
+  // The tests above already type into this field. They never asserted on
+  // `document.activeElement`, which is exactly why a live member-facing bug sat
+  // under a green suite for weeks. That assertion is the whole guard.
+  describe("typing in the drawer keeps the caret in the field", () => {
+    it("survives a whole word in Buscar tema", () => {
+      mount();
+      openDrawer();
+      const search = screen.getByLabelText("Buscar tema") as HTMLInputElement;
+      search.focus();
+
+      for (const char of ["a", "d", "o", "r"]) {
+        fireEvent.change(search, { target: { value: search.value + char } });
+        expect(
+          document.activeElement,
+          "focus left Buscar tema mid-word — on iOS that closes the keyboard",
+        ).toBe(search);
+      }
+      expect(search.value).toBe("ador");
+    });
+
+    it("survives a whole word in Buscar artista", () => {
+      mount();
+      openDrawer();
+      const search = screen.getByLabelText("Buscar artista") as HTMLInputElement;
+      search.focus();
+
+      for (const char of ["h", "i", "l", "l"]) {
+        fireEvent.change(search, { target: { value: search.value + char } });
+        expect(document.activeElement).toBe(search);
+      }
+      expect(search.value).toBe("hill");
+    });
+  });
 });

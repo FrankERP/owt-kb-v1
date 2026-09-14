@@ -209,3 +209,45 @@ describe("ProfilePanel notification section", () => {
     expect(target.hasAttribute("disabled")).toBe(false);
   });
 });
+
+// ── The surface the team actually reported (2026-09-13) ──────────────────────
+//
+// «On the phone, and on keyboard pc, team members can't write when they want to
+// edit their profile. The keyboard closes after one key press.»
+//
+// The cause was in `CueDialog`, not here: its entry-focus effect listed
+// `onDismiss` among its dependencies, and this panel passes an inline arrow, so
+// every keystroke re-ran the effect and pulled focus to the dialog's first
+// control. `CueDialog.test.tsx` guards the primitive. This guards the REPORTED
+// path end to end, because that is the one a member walks and the one whose
+// breakage nobody noticed for a month of gates being green.
+describe("ProfilePanel identity fields accept typing", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({}) })));
+  });
+
+  it("keeps the caret in Alias for a whole word", () => {
+    const { getByLabelText } = openProfile({});
+    const alias = getByLabelText("Alias") as HTMLInputElement;
+    act(() => alias.focus());
+
+    for (const char of ["N", "a", "c", "h", "o"]) {
+      act(() => { fireEvent.change(alias, { target: { value: alias.value + char } }); });
+      expect(
+        document.activeElement,
+        "focus left Alias mid-word — on iOS that closes the soft keyboard",
+      ).toBe(alias);
+    }
+    expect(alias.value).toBe("Nacho");
+  });
+
+  it("keeps the caret in Email too", () => {
+    const { getByLabelText } = openProfile({});
+    const email = getByLabelText("Email") as HTMLInputElement;
+    act(() => email.focus());
+    act(() => { fireEvent.change(email, { target: { value: "a" } }); });
+    act(() => { fireEvent.change(email, { target: { value: "ab" } }); });
+    expect(document.activeElement).toBe(email);
+    expect(email.value).toBe("ab");
+  });
+});

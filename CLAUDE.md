@@ -211,6 +211,18 @@ several exist precisely to stop a plausible-looking change.
   `undefined` while loading). A handler that only inspects the returned
   session's fields reads every real failure as success — check for nullish
   FIRST. Both impersonation handlers do; see `ImpersonationBanner`.
+- **A `CueDialog` effect that MOVES FOCUS depends on the presence edge only** —
+  entry focus is `[open, top]` (and skips when focus is already inside the shell);
+  layer registration is `[id, mounted, registerLayer]`, because its cleanup is the
+  unregister and the provider restores focus behind it. Never `onDismiss`, never a
+  ref prop: most consumers pass an inline arrow and none is guaranteed stable, so
+  those re-run the effect on EVERY render and throw the caret onto the close button — on iOS the keyboard
+  closes with it, which is how members lost the ability to edit their profile,
+  `/biblioteca`'s filter search and the song editor, for weeks, with all three
+  gates green (ADR-0034). The Tab/Escape listener may keep unstable deps; binding
+  a listener moves no focus. Four typing tests are the guard — `CueDialog`,
+  `ProfilePanel`, `LibraryFilters`, `EditSongButton` — and each one asserts on
+  `document.activeElement`, not just on the typed value.
 - **`app/(client)/template.tsx` renders a fragment, never a wrapper.** A transformed
   ancestor is a containing block for every `position: fixed` descendant (FAB, audio
   transport, toasts). `reveal.test.ts` is the guard.

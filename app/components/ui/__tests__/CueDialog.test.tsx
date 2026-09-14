@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createPortal } from "react-dom";
+import { useRef, useState } from "react";
 import CueDialog, { useCueDialogFocusSatellite } from "../CueDialog";
 import { CueDialogProvider, type DismissReason } from "../CueDialogProvider";
 import CueDialogStatus from "../CueDialogStatus";
@@ -626,5 +627,135 @@ describe("CueDialog motion", () => {
       Object.defineProperty(window, "matchMedia", { writable: true, configurable: true, value: original });
     }
     expect(onDismiss).toHaveBeenCalledWith("drag");
+  });
+});
+
+// ── The typing bug (reported 2026-09-13) ────────────────────────────────────
+//
+// Members could not edit their profile: on a phone the keyboard closed after
+// ONE key, and on a laptop the caret left the field after one character.
+//
+// The cause was not in the form. The initial-focus effect below listed
+// `onDismiss` among its dependencies, and every consumer passes an inline
+// arrow (`onDismiss={() => setOpen(false)}`) — a new identity on every render.
+// So each keystroke re-ran the effect and moved focus to `focusables(shell)[0]`,
+// the close button. iOS closes the soft keyboard when the focused element stops
+// being a text field, which is exactly what the team saw.
+//
+// This harness reproduces it with the real thing a consumer writes: state that
+// changes as you type, and an inline handler.
+describe("CueDialog typing", () => {
+  function TypingHarness() {
+    const [open, setOpen] = useState(true);
+    const [value, setValue] = useState("");
+    return (
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open={open} title="Editar perfil" onDismiss={() => setOpen(false)}>
+            <button>Cerrar</button>
+            <input
+              aria-label="Alias"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+            />
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>
+    );
+  }
+
+  it("does not steal focus back to the first control on every keystroke", () => {
+    render(<TypingHarness />);
+    const input = screen.getByLabelText("Alias") as HTMLInputElement;
+    act(() => input.focus());
+    expect(document.activeElement).toBe(input);
+
+    for (const char of ["F", "r", "a", "n", "k"]) {
+      fireEvent.change(input, { target: { value: input.value + char } });
+      expect(
+        document.activeElement,
+        "focus left the field mid-word — on iOS that closes the keyboard",
+      ).toBe(input);
+    }
+    expect(input.value).toBe("Frank");
+  });
+
+  it("still puts initial focus in the dialog when it opens", () => {
+    // The guard must not cost the entry point: a freshly opened dialog still
+    // takes focus from whatever the page had.
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    outside.focus();
+    render(<TypingHarness />);
+    expect(document.activeElement).not.toBe(outside);
+    expect(document.querySelector("[role=\"dialog\"]")?.contains(document.activeElement)).toBe(true);
+    outside.remove();
+  });
+  it("restores to the CURRENT restoreFocusRef, not the one it was registered with", async () => {
+    // The layer record is handed to the provider once, at registration, and
+    // dereferenced once, at unregister. Narrowing the registration effect's
+    // dependencies (so a consumer's render cannot re-run it) would have frozen
+    // those ref objects as they were when the dialog opened — swap the prop
+    // mid-dialog and focus would restore to the stale target. The record gets a
+    // live view of the mirror instead; this is that property.
+    function Swappable() {
+      const a = useRef<HTMLButtonElement>(null);
+      const b = useRef<HTMLButtonElement>(null);
+      const [useB, setUseB] = useState(false);
+      const [open, setOpen] = useState(true);
+      return (
+        <MotionProvider>
+          <CueDialogProvider>
+            <button ref={a} data-testid="a">A</button>
+            <button ref={b} data-testid="b">B</button>
+            <button data-testid="swap" onClick={() => setUseB(true)}>swap</button>
+            <button data-testid="close" onClick={() => setOpen(false)}>close</button>
+            <CueDialog open={open} title="Swap" restoreFocusRef={useB ? b : a} onDismiss={() => setOpen(false)}>
+              <button>Dentro</button>
+            </CueDialog>
+          </CueDialogProvider>
+        </MotionProvider>
+      );
+    }
+
+    render(<Swappable />);
+    act(() => { fireEvent.click(screen.getByTestId("swap")); });
+    act(() => { fireEvent.click(screen.getByTestId("close")); });
+    await waitFor(() => expect(document.querySelector("[role=dialog]")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("b")));
+  });
+  it("restores through the CURRENT fallbackFocusRef when a nested dialog closes", async () => {
+    // The other half of the same property, and it needs its own case: the parent
+    // `fallbackRef` is read on a DIFFERENT provider branch (a child closing over a
+    // still-open parent), so a pass-through there survives the restoreFocusRef
+    // guard above untouched.
+    function NestedSwap() {
+      const f1 = useRef<HTMLInputElement>(null);
+      const f2 = useRef<HTMLInputElement>(null);
+      const [useSecond, setUseSecond] = useState(false);
+      const [childOpen, setChildOpen] = useState(true);
+      return (
+        <MotionProvider>
+          <CueDialogProvider>
+            <CueDialog open title="Padre" fallbackFocusRef={useSecond ? f2 : f1} onDismiss={() => {}}>
+              <input ref={f1} data-testid="f1" />
+              <input ref={f2} data-testid="f2" />
+              <button data-testid="swap" onClick={() => setUseSecond(true)}>swap</button>
+              <button data-testid="close-child" onClick={() => setChildOpen(false)}>cerrar</button>
+              <CueDialog open={childOpen} title="Hijo" onDismiss={() => setChildOpen(false)}>
+                <button>Dentro</button>
+              </CueDialog>
+            </CueDialog>
+          </CueDialogProvider>
+        </MotionProvider>
+      );
+    }
+
+    render(<NestedSwap />);
+    act(() => { fireEvent.click(screen.getByTestId("swap")); });
+    act(() => { fireEvent.click(screen.getByTestId("close-child")); });
+    // The provider defers its restore by a frame, and the child's exit animation
+    // runs first, so this waits rather than asserting immediately.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("f2")));
   });
 });
