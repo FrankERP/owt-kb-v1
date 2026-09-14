@@ -2,10 +2,10 @@
 
 Artifact: `2026-09-10-solver-fill-empty-only-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
-**Status: open — seven rounds, no approval yet.** The mechanism was rewritten twice: once
+**Status: open — eight rounds, no approval yet.** The mechanism was rewritten twice: once
 after round 2 (onto pins-as-fixed-variables) and once after round 6 (onto soft rules).
 **Round 7 verified the rewritten mechanism sound** and found its two blockers elsewhere.
-Current canonical digest `3f849049…`, commit `5e640764`.
+Current canonical digest `774c2775…`, commit `4db4aa27`.
 
 Approval is not authorization to implement. Implementation still requires the plan, the three
 gates, and a fresh code review of the diff.
@@ -29,6 +29,7 @@ byte-identical text.
 | 5 | — | `37cd3876` | CHANGES_REQUIRED | yes (2 blockers, one root cause) |
 | 6 | `3d99b384566d7987…` | `3193b2c4` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
 | 7 | `da922d6afb21fb47…` | `6bf8e4a4` | CHANGES_REQUIRED | yes (2 blockers, both verified) |
+| 8 | `3f8490496bc16f37…` | `6bbc15dd` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
 
 Every round used a brand-new `skeptical-reviewer` dispatch given only the reviewer brief, an
 immutable snapshot whose digest was verified equal to the canonical file before dispatch, the
@@ -186,3 +187,58 @@ sits after `handleCellsChange`'s stored-mode early return.
 found nothing there — the first round since round 2 that did not. Its findings are a client
 field the spec never inventoried and a CI gap, i.e. the ordinary surface of a feature spec
 rather than a mechanism defect.
+
+## Round 8 — the fairness adjustment was the wrong one, and provably so
+
+The reviewer built their own prototype of §5 against a copy of the solver and ran it. Byte
+identity with no pins, the pinned-only `KeyError` guard and the union-after-`pools` placement
+all confirmed independently. One blocker.
+
+**§5.1's hard-spread SUBTRACTION over-served the pinned member, and its stated justification
+was false.** The spec bounded `total_vars[p] - n[p]` by `gmax`/`gmin` and called the resulting
+over-service "the price of never failing the month". There is no such price. The upper bounds
+of the two forms are algebraically identical — `t[p] - n[p] <= gmax` ⟺ `t[p] <= gmax + n[p]` —
+but the lower bounds are not: subtraction forces `t[p] >= gmin + n[p]`, i.e. a **full
+solver-chosen share on top of the pins**, while per-person slack asks only
+`t[p] >= gmin - n[p]`. Slack's feasible set is a strict superset, so it cannot fail a month
+subtraction solves.
+
+Reproduced by the author on an independent fixture (12 people, 4 weeks, 2 Saturdays, seed
+fixed, no DSL rules; baseline spread 4–5, Sunday leads 2/2/2/2):
+
+| Pins | Subtraction | Per-person slack |
+|---|---|---|
+| Rachel → `Sun.Lead` W1–3 | **7** total, **4 of 8** Sunday leads, `sun_bgv` tier relaxed to 2 | **5** total, **3** Sunday leads (exactly her pins), every tier at 1 |
+| Vale → `Sun.Choir` W1–4 | **8** total against everyone else's 4 | ≤ 5, baseline distribution preserved |
+
+The author's numbers are worse than the reviewer's on the same shape. In product terms: the
+admin seats Rachel to lead three Sundays, turns on «Solo llenar vacíos», and Auto hands her
+the fourth Sunday plus three more services — the opposite of what the feature means.
+
+Everything subtraction was introduced to protect was re-verified on the slack build: no
+fall-through to the fairness-free `stage_a` (no reported limit equal to `len(slots) + 1`), the
+52-pin round-trip still identical at 52/52, byte identity on three seeds, and both round-6
+reproductions still solving and naming the correct relaxed rule. Slack is better on every axis
+measured, including the one subtraction existed for.
+
+**Fixed**, and it settles a semantic the spec had never stated: **a pinned service counts
+toward that person's share**. §12's ADR records subtraction as a rejected alternative with the
+numbers above, since it is the form a reader will re-derive.
+
+Non-blocking, all nine adopted and each re-checked first. The one worth naming: §8 claimed the
+create-mode restriction was "structural, not a gate that could be got wrong" — false.
+`handleCellsChange` runs `setCells(next)` **and** `setTouchedStoredRoleIds(...)` before its
+stored-mode early return (`MonthGenerator.tsx:2467-2483`), so a «Borrar» rendered without a
+`mode === "create"` guard would stage emptied seats on real service documents for the next
+Save. §11 now asserts that neither control renders in stored mode. The rest: the mandatory lead
+goes soft month-wide once any pin exists, so `diagnose_infeasibility`'s remedy text moves into
+§6's copy; a `Sat.*` pin on a week with no Saturday gets a `ValueError`; the menu gains
+«Instrumentos del mes»; one pin per *occupant*, not per cell; the handshake must not fire on an
+empty board; the CI step pins python 3.12; `cloudbuild.yaml` is at the repo root; and §11's
+skewed-pin case now asserts the distribution, not only that nothing was relaxed — which is the
+assertion that would have caught this blocker.
+
+**Pattern across 6–8.** Round 6 killed the exemption enumeration, round 7 cleared the mechanism
+and found a client field and a CI gap, round 8 found the last piece of the mechanism that was
+carried over unexamined from the rejected design. Each round's finding has been further from
+the core and closer to the ordinary surface of a spec.
