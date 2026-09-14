@@ -112,9 +112,10 @@ export default function NavMenu() {
         )}
       </MenuHeader>
       {/* F3 split /me into Mi semana / Disponibilidad / Ajustes and the tab bars
-          lost «Yo» in M1 F2, so this menu is /me's one entry point — it must
-          name both halves, not just the settings one. Tema lives inside Ajustes. */}
+          lost «Yo» in M1 F2, so this menu is /me's one entry point — it lists all
+          three halves. Tema lives inside Ajustes. */}
       <MenuItem href="/me">Mi semana</MenuItem>
+      <MenuItem href="/me/disponibilidad">Disponibilidad</MenuItem>
       <MenuItem href="/me/ajustes">Ajustes</MenuItem>
       <MenuSeparator />
       <MenuItem onSelect={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}>
