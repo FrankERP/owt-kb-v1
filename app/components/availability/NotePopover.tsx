@@ -98,11 +98,19 @@ export default function NotePopover({
   const [body, setBody] = useState<HTMLElement | null>(null);
   useEffect(() => { setBody(document.body); }, []);
 
-  // Focus the input whenever the popover opens (or moves to another date).
+  // Focus the input whenever the popover opens (or moves to another date). The
+  // timer is CLEARED on cleanup: a popover dismissed inside the 50 ms still fired
+  // its focus, pulling the caret into a note field the member had just closed.
+  //
+  // The dependency is the DAY, deliberately — typing a note must not re-run this.
+  // (Ported by hand from `AvailabilityCalendar.tsx` when the dialog-typing fix
+  // met this file's split: same defect, different home, and a merge would have
+  // carried the fix past it in silence.)
   useEffect(() => {
-    if (popover) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!popover) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the DAY is the edge
   }, [popover?.iso]);
 
   /**
