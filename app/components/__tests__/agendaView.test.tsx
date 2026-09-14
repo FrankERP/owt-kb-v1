@@ -199,6 +199,15 @@ describe("AgendaView", () => {
   });
 
   it("F1 — pills «Tú · Keys» for the row where the signed-in member is seated", () => {
+    // The clock is FIXED here for the same reason four tests above it fix theirs:
+    // `mountAgenda` passes `todayStr="2026-09-10"`, but `upcoming` is
+    // `row.date >= todayStr && days >= 0`, and `daysUntil` reads the real clock
+    // on purpose (AgendaView:65 — a browsed month must not go stale against a
+    // page rendered yesterday). So the tense in this aria-label followed the
+    // machine's own date: green on 2026-09-13, red on the 14th, and red for
+    // every PR gate after it.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 10, 9, 0, 0)); // 2026-09-10 local
     mockUser = { alias: "Sofi" };
     mountAgenda({
       "2026-09-13": [sunday("2026-09-13", { leads: ["Ana"], instruments: [{ label: "Keys", person: "Sofi" }] })],
