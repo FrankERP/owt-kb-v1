@@ -50,7 +50,7 @@ export async function PATCH(
   }
   for (const u of [body.musicalReferenceUrl, body.lyricsVideoUrl]) {
     if (u != null && u !== "" && !isSafeHttpUrl(u)) {
-      return NextResponse.json({ error: "reference URLs must use http(s)" }, { status: 400 });
+      return NextResponse.json({ error: "Las URLs de referencia deben empezar con http:// o https://" }, { status: 400 });
     }
   }
 
@@ -62,10 +62,10 @@ export async function PATCH(
     `*[_id == $id][0]{ _type }`, { id }
   );
   if (!target) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json({ error: "No se encontró la canción." }, { status: 404 });
   }
   if (target._type !== "post") {
-    return NextResponse.json({ error: "Not a song" }, { status: 400 });
+    return NextResponse.json({ error: "Ese documento no es una canción." }, { status: 400 });
   }
 
   const patch: Record<string, unknown> = {};

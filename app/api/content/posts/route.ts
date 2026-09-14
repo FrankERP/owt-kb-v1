@@ -49,12 +49,12 @@ export async function POST(req: NextRequest) {
   };
 
   if (!body.title?.trim()) {
-    return NextResponse.json({ error: "title required" }, { status: 400 });
+    return NextResponse.json({ error: "El título es obligatorio." }, { status: 400 });
   }
 
   for (const u of [body.musicalReferenceUrl, body.lyricsVideoUrl]) {
     if (u != null && u !== "" && !isSafeHttpUrl(u)) {
-      return NextResponse.json({ error: "reference URLs must use http(s)" }, { status: 400 });
+      return NextResponse.json({ error: "Las URLs de referencia deben empezar con http:// o https://" }, { status: 400 });
     }
   }
 

@@ -160,6 +160,20 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 
 ### Content conversion
 - **`textToBody(text)`**, **`bodyToLyrics(body)`**, **`groupBySections(blocks)`**
+- **`linkRowWrite.ts`** — server-side normalisation for the song editors' link rows
+  (`referenceLinks` on both write routes, `tutorials2` on PATCH). A row with neither
+  label nor URL is DROPPED, following `normalizeChordCharts`'s precedent for a blank
+  chart; a row with a label but no usable URL still fails, with the label quoted in the
+  error. Before this, the blank «Agregar» row made `isSafeHttpUrl("")` false and 400'd
+  the ENTIRE request, so an admin lost the lyrics, charts and tags edited in the same
+  form. `rowsToPayload` (`songFormRows.ts`) drops the same rows client-side, so the
+  common case never reaches the route.
+- **`writeError.ts`** — `writeErrorMessage(res)`: the message a write route sent, when it
+  sent one worth showing. Returns `undefined` for anything that is not a short single-line
+  string, so a caller always falls back to its own copy and a stack trace or an HTML error
+  page can never reach a toast. The three song-editor save handlers use it — before, they
+  discarded the body and printed «Error al actualizar.» over a 400 that knew exactly which
+  link was wrong.
   ([lyrics.ts](../app/utils/lyrics.ts)) — plain-text ⇄ Portable Text (`# ` → h3, `**bold**`,
   `*italic*`, blank line → stanza break). Used by the song form and SongSheet.
 - **`pickPracticeVideoUrl(song, mode)`**, **`extractYouTubeId(url)`** ([practiceVideo.ts](../app/utils/practiceVideo.ts))
@@ -245,14 +259,6 @@ state a save actually persists against the last saved one.
 ### Mobile / accessibility
 - **`native.ts`** — `isNativeApp()`, `nativeGoogleSilentIdToken()` (cold-start silent re-auth
   only if already logged in), `nativeGoogleIdToken()` (interactive).
-- **`linkRowWrite.ts`** — server-side normalisation for the song editors' link rows
-  (`referenceLinks` on both write routes, `tutorials2` on PATCH). A row with neither
-  label nor URL is DROPPED, following `normalizeChordCharts`'s precedent for a blank
-  chart; a row with a label but no usable URL still fails, with the label quoted in the
-  error. Before this, the blank «Agregar» row made `isSafeHttpUrl("")` false and 400'd
-  the ENTIRE request, so an admin lost the lyrics, charts and tags edited in the same
-  form. `rowsToPayload` (`songFormRows.ts`) drops the same rows client-side, so the
-  common case never reaches the route.
 - **`textZoom.ts`** — text-scale presets (`auto`/1.0/1.2/1.4/1.6), `getStoredMode`/`setStoredMode`
   (localStorage), `applyScale`. Native and web are NOT two mechanisms: `@capacitor/text-zoom`
   implements only `getPreferred` natively on iOS, so `set` runs the package's JS shim, which
@@ -488,7 +494,7 @@ behaviour of each, and the guards that pin them.
 | `PlannerGrid` | Renders the month grid `plannerModel` computes — dates across and seats down. Applicable admitted cells are editable; integrity-defective stored columns stay visible and read-only. An occupant whose «Tipo» no longer fits the seat is tinted amber and named under the cell, and the picker gives them a removal-only row — `rankCandidates` filters them out, so that row is their only exit (ADR-0029). `MonthGenerator` owns `cells`/`counts` and mutations. Owns the **three-column workspace**: Participaciones (216px), grid, and candidate picker (240px while a cell is active). The chart width is a content floor derived from `ParticipationSidebar`. **Pantalla completa** manages focus, traps Tab, locks body scroll, `inert`s the rest of `<body>`, applies safe-area padding, and portals to `document.body` for Safari. The grid scrolls horizontally rather than squeezing its `minmax(150px, 1fr)` date columns; row labels remain sticky. Its `planner-wide` root lets `app/brand.css` lift the admin frame cap through `:has()`. |
 | `MonthGenerator` | Owns create-planning and stored editing in the shared three-part `PlannerGrid`. Create mode retains solver preview/Auto and fairness history. Stored mode owns create-one, explicit full-roster save, date/name edits, team/seat swaps, frozen attempts, and roles/integrity readback reconciliation. |
 | `SetlistEditor` | Inline setlist builder (reorder/remove, play-key, medley via `normalizeMedleyTags`). |
-| `SongFormModal` | Song create/edit form. Exports `SongForm`, `blankForm`, `songToForm`, `buildPayload`. Its own `Modal` wrapper was removed in M0b-1 — dead export, no JSX caller (`AdminPanel`/`ServicesPanel` each own a local `Modal`); every caller mounts `SongForm` inside its own `CueDialog`. Charts are edited via `ChordChartsFields` ([ADR-0018](adr/0018-lyrics-and-charts-are-independent.md)). Repeatable rows (reference links here, links **and** tutorials in `EditSongButton`) hold a client `id` from `app/utils/songFormRows.ts` and are keyed by it, never by array position — deleting a middle row otherwise hands its DOM node, and the caret, to the row that slides up (issue #69). `rowsToPayload` strips the id; it also passes a stored `_key` through, but defensively — both write routes re-mint a key for every row on every save and no projection reads these arrays' keys back, unlike chords. |
+| `SongFormModal` | Song create/edit form. Exports `SongForm`, `blankForm`, `songToForm`, `buildPayload`. Its own `Modal` wrapper was removed in M0b-1 — dead export, no JSX caller (`AdminPanel`/`ServicesPanel` each own a local `Modal`); every caller mounts `SongForm` inside its own `CueDialog`. Charts are edited via `ChordChartsFields` ([ADR-0018](adr/0018-lyrics-and-charts-are-independent.md)). Repeatable rows (reference links here, links **and** tutorials in `EditSongButton`) hold a client `id` from `app/utils/songFormRows.ts` and are keyed by it, never by array position — deleting a middle row otherwise hands its DOM node, and the caret, to the row that slides up (issue #69). `rowsToPayload` strips the id, DROPS a row with neither label nor URL (the blank «Agregar» row used to 400 the whole save — see `linkRowWrite.ts`), and passes a stored `_key` through defensively — both write routes re-mint a key for every row on every save and no projection reads these arrays' keys back, unlike chords. |
 | `ContentPanel` | Song-library CRUD (via `SongForm`). |
 | `ProposalsPanel` | Admin review of lead proposals (approve / request changes / reopen). Order and date window come from `proposalListView.ts`: buckets stay `pending → changes_requested → approved → draft`, `approved` reads newest-first (archive) and every other status soonest-first (queue); `approved`/`draft` older than the current month are hidden behind `Ver N meses más`, while `pending`/`changes_requested` are never windowed out. A handoff to an older proposal widens the window before the card is scrolled to, as does approving a past-dated one (the card would otherwise vanish under the admin). Widening jumps to the newest hidden row rather than a blind +3 months, so every press reveals something. **The window is client-side only:** `GET /api/admin/proposals` still returns the entire history with its full song joins, so the payload is unbounded and only the render is windowed — server-side windowing was deliberately deferred out of Release 1. |
 | `ProposalThread` | The private lead ↔ admin conversation on a proposal, shared by the lead editor and the admin card. **Renders unconditionally** — it replaced blocks gated on `lead_notes` being present and on `changes_requested`, and inheriting either condition would hide the thread on a `pending` proposal, which is where the conversation happens. Four rules that look cosmetic and are not: the author label is keyed on `author_role`, never on a missing name (two migrated messages have no author, and falling back to "Admin" would misattribute an author-less lead note); timestamps convert the ISO datetime to a local calendar day *first* and compare day strings, never elapsed hours; the composer closes when the **service** passes, not on approval, and both routes enforce that server-side because a hidden composer is not a guard; and the composer clears **only on success**, since the channel's whole promise is that nothing written is lost. Posting patches one record in place — never `load()`, which unmounts every card and wipes in-progress change-request notes. |

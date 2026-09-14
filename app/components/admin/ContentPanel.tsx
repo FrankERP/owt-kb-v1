@@ -12,6 +12,7 @@ import {
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
 import { useToast } from "../ui/Toast";
+import { writeErrorMessage } from "@/app/utils/writeError";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -120,7 +121,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         body: JSON.stringify(buildPayload(form)),
       });
       if (res.ok) { setModal(null); setModalError(null); fetchAll(); showToast("Canción creada."); }
-      else setModalError("Error al crear canción.");
+      else setModalError(await writeErrorMessage(res) ?? "Error al crear canción.");
     } catch {
       setModalError("Error de conexión.");
     } finally {
@@ -138,7 +139,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         body: JSON.stringify(buildPayload(form)),
       });
       if (res.ok) { setModal(null); setModalError(null); fetchAll(); showToast("Canción actualizada."); }
-      else setModalError("Error al actualizar.");
+      else setModalError(await writeErrorMessage(res) ?? "Error al actualizar.");
     } catch {
       setModalError("Error de conexión.");
     } finally {

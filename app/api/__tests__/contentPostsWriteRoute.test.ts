@@ -224,3 +224,32 @@ describe("an empty link row never costs the rest of the form", () => {
     expect(h.sets).toHaveLength(0);
   });
 });
+
+describe("the protocol guard is wired on every list, not just the one that was reported", () => {
+  // Both of these passed with the guard DELETED until they existed — the fix
+  // moved `isSafeHttpUrl` into one module used by three lists across two
+  // production writers, and only the PATCH reference-links path was pinned.
+  it("POST refuses a javascript: reference link and writes nothing", async () => {
+    const res = await POST(req({ title: "X", referenceLinks: [{ label: "X", url: "javascript:alert(1)" }] }));
+    expect(res.status).toBe(400);
+    expect(h.created).toHaveLength(0);
+  });
+
+  it("PATCH refuses a javascript: TUTORIAL url and writes nothing", async () => {
+    const res = await PATCH(
+      req({ tutorials: [{ title: "X", url: "javascript:alert(1)" }] }),
+      { params: Promise.resolve({ id: "song-1" }) },
+    );
+    expect(res.status).toBe(400);
+    expect(h.sets).toHaveLength(0);
+  });
+
+  it("PATCH refuses a data: tutorial url too", async () => {
+    const res = await PATCH(
+      req({ tutorials: [{ title: "X", url: "data:text/html,<script>" }] }),
+      { params: Promise.resolve({ id: "song-1" }) },
+    );
+    expect(res.status).toBe(400);
+    expect(h.sets).toHaveLength(0);
+  });
+});
