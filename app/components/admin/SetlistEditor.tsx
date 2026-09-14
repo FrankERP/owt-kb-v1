@@ -9,6 +9,7 @@ import CueDialogStatus from "../ui/CueDialogStatus";
 import { canEditSetlistResponse, SETLIST_READ_ISSUE_COPY } from "../../utils/setlistReadContract";
 import { serviceDayOffset, serviceTodayIso } from "./serviceReadiness";
 import { MUTATION_TIMEOUT_MS } from "./serviceMutationErrors";
+import { writeErrorMessage } from "@/app/utils/writeError";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -281,7 +282,10 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
         signal: controller.signal,
         body: JSON.stringify(buildPayload(form)),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        setCreateError(await writeErrorMessage(res) ?? "No se pudo crear la canción.");
+        return;
+      }
       const doc = await res.json();
       addSong({
         _id:    doc._id,

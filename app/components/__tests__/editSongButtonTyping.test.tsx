@@ -148,3 +148,43 @@ describe("EditSongButton repeatable rows are keyed by identity, not position", (
     expect((document.activeElement as HTMLInputElement).value).toBe("bateria");
   });
 });
+
+describe("a failed save shows what the route said", () => {
+  it("prints the route's own message instead of the generic line", async () => {
+    // The route knows WHICH link is wrong. Before `writeErrorMessage` every
+    // handler threw the body away and printed a fixed sentence, so the admin
+    // read «No se pudo guardar.» over a 400 that named the row.
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (String(url).startsWith("/api/content/posts/")) {
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({ error: "«Spotify» necesita una URL que empiece con http:// o https://" }),
+        };
+      }
+      return { ok: true, json: async () => [] };
+    }));
+
+    openEditor();
+    const form = document.querySelector("form")!;
+    await act(async () => { fireEvent.submit(form); });
+
+    expect(await screen.findByText(/«Spotify» necesita una URL/)).toBeTruthy();
+    expect(screen.queryByText(/No se pudo guardar/)).toBeNull();
+  });
+
+  it("falls back to its own copy when the body carries nothing usable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (String(url).startsWith("/api/content/posts/")) {
+        return { ok: false, status: 500, json: async () => { throw new SyntaxError("not json"); } };
+      }
+      return { ok: true, json: async () => [] };
+    }));
+
+    openEditor();
+    const form = document.querySelector("form")!;
+    await act(async () => { fireEvent.submit(form); });
+
+    expect(await screen.findByText(/No se pudo guardar/)).toBeTruthy();
+  });
+});

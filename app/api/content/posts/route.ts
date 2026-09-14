@@ -4,20 +4,13 @@ import { serverClient, writeClient } from "@/sanity/lib/serverClient";
 import { textToBody } from "@/app/utils/lyrics";
 import { revalidateSongViews } from "@/app/utils/revalidate";
 import { normalizeChordCharts } from "@/app/utils/chordChartWrite";
+import { isSafeHttpUrl, normalizeLinkRows } from "@/app/utils/linkRowWrite";
 
 function rng() { return Math.random().toString(36).slice(2, 9); }
 
-function isSafeHttpUrl(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  try {
-    const u = new URL(value);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch { return false; }
-}
-
 export async function GET() {
   if (!await requireActiveManager()) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para editar canciones." }, { status: 403 });
   }
 
   const posts = await serverClient.fetch(
@@ -37,7 +30,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   if (!await requireActiveManager()) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para editar canciones." }, { status: 403 });
   }
 
   const body = await req.json() as {
@@ -56,15 +49,12 @@ export async function POST(req: NextRequest) {
   };
 
   if (!body.title?.trim()) {
-    return NextResponse.json({ error: "title required" }, { status: 400 });
+    return NextResponse.json({ error: "El título es obligatorio." }, { status: 400 });
   }
 
-  if (body.referenceLinks?.some((l) => !isSafeHttpUrl(l.url))) {
-    return NextResponse.json({ error: "referenceLinks must use http(s)" }, { status: 400 });
-  }
   for (const u of [body.musicalReferenceUrl, body.lyricsVideoUrl]) {
     if (u != null && u !== "" && !isSafeHttpUrl(u)) {
-      return NextResponse.json({ error: "reference URLs must use http(s)" }, { status: 400 });
+      return NextResponse.json({ error: "Las URLs de referencia deben empezar con http:// o https://" }, { status: 400 });
     }
   }
 
@@ -84,7 +74,22 @@ export async function POST(req: NextRequest) {
 
   const chords = normalizeChordCharts(body.chords ?? [], rng);
   if (!chords.ok) {
-    return NextResponse.json({ error: chords.error }, { status: 400 });
+    return NextResponse.json(
+      // `chords.error` is developer-shaped («chords[0] has a duplicate _key») and
+      // the editor now shows what this route says, so it is summarised for the
+      // person reading it. The precise text stays in the server log.
+      { error: "No se pudieron guardar los acordes.", detail: chords.error },
+      { status: 400 },
+    );
+  }
+
+  // Drops the blank «Agregar» row instead of 400ing the whole save over it —
+  // see `linkRowWrite.ts`. A row with a label but no URL still fails, by name.
+  const links = normalizeLinkRows(body.referenceLinks, {
+    type: "referenceLink", labelField: "label", humanName: "Links de referencia", mintKey: rng,
+  });
+  if (!links.ok) {
+    return NextResponse.json({ error: links.error }, { status: 400 });
   }
 
   const doc = await writeClient.create({
@@ -98,9 +103,7 @@ export async function POST(req: NextRequest) {
     timeSig: body.timeSig?.trim() ?? "",
     body: body.lyrics ? textToBody(body.lyrics) : [],
     chords: chords.charts,
-    referenceLinks: (body.referenceLinks ?? []).map((l) => ({
-      _type: "referenceLink", _key: rng(), label: l.label, url: l.url,
-    })),
+    referenceLinks: links.rows,
     musicalReferenceUrl: body.musicalReferenceUrl?.trim() || undefined,
     lyricsVideoUrl: body.lyricsVideoUrl?.trim() || undefined,
     tags: (body.tagIds ?? []).map((id) => ({

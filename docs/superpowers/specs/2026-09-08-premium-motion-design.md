@@ -1677,4 +1677,4 @@ sheet) and `app/components/DayCardDisclosure.tsx`.
 
 **Bundle:** `main 61d5330f` → `R7 tip 6fcfb22c` (git-archive cold builds, gzip −9; the two later fix commits move classes and one sheet, not chunks): shared 172.5 → 172.5; `/` 118.0 → 122.1 (+4.1); `/schedule` 121.7 → 124.1 (+2.4); `/biblioteca` 111.9 → 116.9 (+5.0, the long-press hook and the page's one sheet); `/me` 119.5 → 123.1 (+3.6); `/admin` 354.4 → 357.0 (+2.6). Within the accepted absolute cap measured in this environment.
 
-**Release:** pending.
+**Release:** merged to `main` as `2fae55b8` (PR #72, 2026-09-13 21:2x CST, after PR #71 landed); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`, 21:22 CST). Preview last verified at `7f5c52c7`.

@@ -97,7 +97,11 @@ describe("PATCH /api/content/posts/[id] chords", () => {
     expect(h.patchedIds).toEqual([]);
     expect(h.revalidateSongViews).not.toHaveBeenCalled();
     const body = await res.json();
-    expect(body.error).toMatch(/_key/i);
+    // `error` is what the editor now PRINTS, so it is a sentence; the developer
+    // text this test has always protected moved to `detail`, where it still
+    // reaches the server log and a network tab.
+    expect(body.error).toBe("No se pudieron guardar los acordes.");
+    expect(body.detail).toMatch(/_key/i);
   });
 
   it("rejects a chart missing content with 4xx and does not commit", async () => {
@@ -156,5 +160,100 @@ describe("slug page chord projection", () => {
   it("projects _key on chords so EditSongButton can round-trip identity", () => {
     const src = readFileSync("app/(client)/posts/[slug]/page.tsx", "utf8");
     expect(src).toContain("chords[]{ _key, key, content }");
+  });
+});
+
+describe("an empty link row never costs the rest of the form", () => {
+  // The reported shape: the admin presses «Agregar link de referencia», types
+  // nothing, and saves. `isSafeHttpUrl("")` is false, so BOTH routes used to
+  // reject the whole request — lyrics, charts, tags and title with it — and the
+  // editor only said "Error al actualizar."
+  const blank = { label: "", url: "" };
+
+  it("PATCH saves the rest of the form and drops the blank row", async () => {
+    const res = await PATCH(
+      req({
+        title: "Grande es tu fidelidad",
+        lyrics: "Grande es tu fidelidad",
+        referenceLinks: [{ label: "Spotify", url: "https://open.spotify.com/x" }, blank],
+      }),
+      { params: Promise.resolve({ id: "song-1" }) },
+    );
+    expect(res.status).toBe(200);
+    const links = h.sets[0].referenceLinks as Array<{ label: string; url: string }>;
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({ label: "Spotify", url: "https://open.spotify.com/x" });
+    // The point of the fix: the edit made in the same save survived.
+    expect(h.sets[0].title).toBe("Grande es tu fidelidad");
+    expect(h.sets[0].body).toBeTruthy();
+  });
+
+  it("PATCH drops a blank TUTORIAL row too", async () => {
+    const res = await PATCH(
+      req({ tutorials: [{ title: "Teclado", url: "https://t.test" }, { title: "", url: "" }] }),
+      { params: Promise.resolve({ id: "song-1" }) },
+    );
+    expect(res.status).toBe(200);
+    const tutorials = h.sets[0].tutorials2 as Array<{ title: string }>;
+    expect(tutorials).toHaveLength(1);
+    expect(tutorials[0]).toMatchObject({ _type: "tutorial", title: "Teclado" });
+  });
+
+  it("POST drops it on create", async () => {
+    const res = await POST(
+      req({ title: "Nueva", referenceLinks: [blank, { label: "YouTube", url: "https://youtu.be/y" }] }),
+    );
+    expect(res.status).toBe(201);
+    const links = h.created[0].referenceLinks as Array<{ label: string }>;
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({ label: "YouTube" });
+  });
+
+  it("still refuses a row the admin typed a label into, and names it", async () => {
+    const res = await PATCH(
+      req({ referenceLinks: [{ label: "Spotify", url: "" }] }),
+      { params: Promise.resolve({ id: "song-1" }) },
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain("Spotify");
+    expect(h.sets).toHaveLength(0);
+  });
+
+  it("still refuses a non-http URL — the protocol guard is untouched", async () => {
+    const res = await PATCH(
+      req({ referenceLinks: [{ label: "X", url: "javascript:alert(1)" }] }),
+      { params: Promise.resolve({ id: "song-1" }) },
+    );
+    expect(res.status).toBe(400);
+    expect(h.sets).toHaveLength(0);
+  });
+});
+
+describe("the protocol guard is wired on every list, not just the one that was reported", () => {
+  // Both of these passed with the guard DELETED until they existed — the fix
+  // moved `isSafeHttpUrl` into one module used by three lists across two
+  // production writers, and only the PATCH reference-links path was pinned.
+  it("POST refuses a javascript: reference link and writes nothing", async () => {
+    const res = await POST(req({ title: "X", referenceLinks: [{ label: "X", url: "javascript:alert(1)" }] }));
+    expect(res.status).toBe(400);
+    expect(h.created).toHaveLength(0);
+  });
+
+  it("PATCH refuses a javascript: TUTORIAL url and writes nothing", async () => {
+    const res = await PATCH(
+      req({ tutorials: [{ title: "X", url: "javascript:alert(1)" }] }),
+      { params: Promise.resolve({ id: "song-1" }) },
+    );
+    expect(res.status).toBe(400);
+    expect(h.sets).toHaveLength(0);
+  });
+
+  it("PATCH refuses a data: tutorial url too", async () => {
+    const res = await PATCH(
+      req({ tutorials: [{ title: "X", url: "data:text/html,<script>" }] }),
+      { params: Promise.resolve({ id: "song-1" }) },
+    );
+    expect(res.status).toBe(400);
+    expect(h.sets).toHaveLength(0);
   });
 });
