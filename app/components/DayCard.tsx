@@ -127,13 +127,36 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
             one eyebrow per surface, so the `Servicio` label and the long date
             are gone; the date the header already shows is the date. */}
         <div className={`${t.headerBg} border-b px-5 py-4 ${t.headerBorder}`}>
-          <div className="flex items-center justify-between gap-4">
+          {/* THE ROW WRAPS, and that is a deliberate visual change on the app's most
+              looked-at surface — verified in the iOS Simulator at every preset,
+              because both cheaper options are worse at one end or the other:
+
+                • `min-w-0` + `break-words` on the title and NO wrap: correct at
+                  Normal (the title takes two lines beside the controls, exactly as
+                  it shipped), but at «Máximo» the right-hand block is ~220px of
+                  unshrinkable pill + «Ensayar», so the title's box collapses to a
+                  couple of characters and paints ONE LETTER PER LINE down the card,
+                  with «Ensayar» clipped by `overflow-hidden` anyway.
+                • no wrap and no break rule — what shipped: the title's text simply
+                  painted over the controls and was cut off.
+
+              At «Máximo» the title and «Ensayar» genuinely do not fit one line on a
+              phone; something has to give, and a second line is the only thing that
+              gives without losing content. `ml-auto` keeps the controls where the
+              design puts them, because a lone item on a wrapped `justify-between`
+              line otherwise falls back to flex-start. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
-              <h3 className="font-display text-2xl font-bold uppercase leading-none text-ink md:text-3xl">
+              <h3 className="font-display text-2xl font-bold uppercase leading-none text-ink md:text-3xl break-words">
                 {day}{shortDate && <span className={`${t.accentMuted} font-normal`}> · {shortDate}</span>}
               </h3>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            {/* NO `shrink-0` here, and it wraps too. With `shrink-0` this block sat
+                at its max-content width — pill + «Ensayar» ≈ 350px at «Máximo» —
+                and hung out past a 314px card, where the panel's `overflow-hidden`
+                simply cut «ENSAYAR» in half (seen in the simulator). Letting it
+                shrink lets its own two children stack, right-aligned. */}
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
               {isNext && days !== null && (
                 <span className="rounded-full border border-positive-fg/35 bg-positive-fg/10 px-2.5 py-1 font-label text-[10px] uppercase tracking-widest text-positive-fg">
                   <NumberRoll value={formatCountdown(days)} />
@@ -229,7 +252,12 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                 {(leads?.length || bgvs?.length || chorus?.length) ? (
                   <div>
                     <SectionDivider label="Voces" accent={t.accentMuted} />
-                    <div className="grid grid-cols-3 gap-x-3">
+                    {/* auto-fit + an em-based floor, not `grid-cols-3`: the track
+                        minimum grows with the TEXT, so a member on «Máximo» text size
+                        gets two columns and then one instead of three columns whose
+                        names overlap each other. `minmax(0,…)`'s upper half keeps a
+                        long name from pushing the card wider than the phone. */}
+                    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,4.5em),1fr))] gap-x-3 gap-y-3">
                       <VocalCol label="Lead" names={leads ?? []} highlightName={myName} duplicateNames={vocesDups} />
                       <VocalCol label="BGVs" names={(bgvs ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
                       <VocalCol label="Coro" names={(chorus ?? []).map(m => m.alias || m.member_name)} highlightName={myName} duplicateNames={vocesDups} />
@@ -332,9 +360,15 @@ function SongRow({ song, n, accent, onOpen, dense = false }: {
 function VocalCol({ label, names, highlightName, duplicateNames }: { label: string; names: string[]; highlightName?: string; duplicateNames?: Set<string> }) {
   if (!names.length) return <div />;
   return (
-    <div>
+    <div className="min-w-0">
       <p className="font-label text-xs uppercase tracking-widest text-mono-400 mb-0.5">{label}</p>
-      <p className="font-body text-sm md:text-base lg:text-lg leading-snug">
+      {/* `break-words`, not `anywhere`: a name breaks only when that one name is
+          wider than its column — at «Máximo» text size it is — and the paragraph's
+          min-content stays the longest name rather than a single letter, which is
+          what `anywhere` would do to a flex or grid child. Before this the names
+          could not break at all and simply painted over the next column, where the
+          card's `overflow-hidden` cut them off. */}
+      <p className="font-body text-sm md:text-base lg:text-lg leading-snug break-words">
         {names.map((name, i) => {
           const key  = name.toLowerCase().trim();
           const isDup = !!duplicateNames?.has(key);
@@ -344,16 +378,16 @@ function VocalCol({ label, names, highlightName, duplicateNames }: { label: stri
               {i > 0 && ", "}
               {isDup ? (
                 <span
-                  className="font-semibold text-warning-strong whitespace-nowrap"
+                  className="font-semibold text-warning-strong"
                   style={{ textShadow: "0 0 10px rgb(var(--warning-strong-rgb) / 0.65)" }}
                 >⚠&nbsp;{name}</span>
               ) : isMe ? (
                 <span
-                  className="font-semibold text-positive-fg whitespace-nowrap"
+                  className="font-semibold text-positive-fg"
                   style={{ textShadow: "0 0 10px rgb(var(--positive-fg-rgb) / 0.8)" }}
                 >{name}</span>
               ) : (
-                <span className="whitespace-nowrap">{name}</span>
+                <span>{name}</span>
               )}
             </span>
           );

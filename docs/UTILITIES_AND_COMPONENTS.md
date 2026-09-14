@@ -246,7 +246,12 @@ state a save actually persists against the last saved one.
 - **`native.ts`** — `isNativeApp()`, `nativeGoogleSilentIdToken()` (cold-start silent re-auth
   only if already logged in), `nativeGoogleIdToken()` (interactive).
 - **`textZoom.ts`** — text-scale presets (`auto`/1.0/1.2/1.4/1.6), `getStoredMode`/`setStoredMode`
-  (localStorage), `applyScale` (native `@capacitor/text-zoom` or web `-webkit-text-size-adjust`).
+  (localStorage), `applyScale`. Native and web are NOT two mechanisms: `@capacitor/text-zoom`
+  implements only `getPreferred` natively on iOS, so `set` runs the package's JS shim, which
+  writes `-webkit-text-size-adjust` — the same property the web path writes. Only TEXT scales;
+  px/rem boxes do not, which is what `textZoomLayout.test.ts` guards after the «Máximo» layout
+  breakage of 2026-09-13. Font-relative lengths (`em`, `ch`) DO follow the adjustment in WebKit,
+  verified in the iOS Simulator.
 - **`useTransientValue.ts`** — `[value, show, reset, hold] = useTransientValue(idle, ms)`. A
   value that reverts to `idle` after `ms`: an inline, in-place flash next to the control
   that produced it, e.g. `MonthGenerator`'s swap toast — never the fixed `useToast` stack

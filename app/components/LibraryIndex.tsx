@@ -125,8 +125,15 @@ export default function LibraryIndex(props: LibraryIndexProps) {
 
   return (
     <div className="mx-auto max-w-7xl px-6 pb-16 pt-8">
+      {/* `min-w-0` on the search box, `size={1}` on the input: a text input's
+          intrinsic minimum is ~20 characters WIDE IN ITS OWN FONT, so at «Máximo»
+          text size the field alone floors at ~320px and shoves «Filtros» off a
+          375pt screen — taking the page into sideways scroll. `min-w-0` is what
+          lets the flex item shrink at all; `size={1}` lowers the intrinsic floor it
+          would otherwise carry, and is belt-and-braces next to the `w-full` on the
+          input rather than a second necessary half. */}
       <div className="mb-6 flex items-center gap-2">
-        <div className="brand-search-console relative flex-1">
+        <div className="brand-search-console relative min-w-0 flex-1">
           <svg
             className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-accent/65"
             width="15"
@@ -143,6 +150,7 @@ export default function LibraryIndex(props: LibraryIndexProps) {
           </svg>
           <input
             type="search"
+            size={1}
             value={filters.q}
             onChange={(e) => set({ ...filters, q: e.target.value })}
             // The ONE count on this surface (spec §18) lives in the placeholder.
