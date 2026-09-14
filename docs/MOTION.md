@@ -131,7 +131,12 @@ exclusive to the sign-in lockup, where it already lived before this list existed
 | `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
 | `AnimatedList` | client | list reflow: `mode="popLayout"` pops leavers out of flow so the survivors slide at once (`layout="position"` per row, leavers fade `fast`); the host renders `relative` because a popped item positions against it — `/biblioteca` index. |
 | `SwipeStrip` | client | `<SwipeStrip onSwipe={(dir: -1 \| 1) => void} threshold={64}>` — the schedule's strip-paging drag (R2: the day strip pages its visible WEEK; the header's arrows page the month). `m.div drag="x"` locked to the horizontal axis (`dragDirectionLock`), pinned at the origin (`dragConstraints={{ left: 0, right: 0 }}`) with elastic give (`dragElastic={0.2}`) and `dragSnapToOrigin`; the snap-back spring is `SPRINGS.settle` passed as `dragTransition`, which motion's drag controller spreads into the release animation and so overrides its default inertia rather than tuning it. `style.touchAction: "pan-y"` keeps vertical page scroll alive under a finger that starts on the strip — and is why the wrapped content must fit the width rather than scroll horizontally. `onSwipe` fires once per completed drag past `threshold` px of travel OR `SWIPE.velocity` (500 px/s); the decision is the exported pure `swipeDirection(offsetX, velocityX, threshold?)`, tested directly since jsdom cannot drive motion's `drag` gesture. Keyboard paging is not this component's job — the header's own prev/next buttons cover the month axis. Reduced motion is not detected here; `MotionConfig reducedMotion="user"` already collapses the snap-back to duration 0 app-wide, same as `Presence`/`CueDialog`. |
-| `haptic(kind)` (`app/utils/haptics.ts`) | neutral | `"light"` (default) on a toggle flip or thumb move, `"selection"` on a tab press, `"medium"` reserved for drop landing (M-planner). Native only; no-op on web; never awaited in a handler. |
+| `CueStrip` (R7) | client | the navbar cue (§12.8) — the member's next service under the title, on every route but `/` and `/me`. Fetched client-side after paint like the notification badge (`Navbar` stays sync/ISR-safe); a shared in-flight promise dedupes the phone/desktop pair mounted per page, `sessionStorage`-cached 60 s and keyed by `sanityId` so a stale identity is a miss, not a leak. Reserves its line's height whenever armed, not just once the label paints — `Navbar` remounts every route change. |
+| `Blackout` (`blackout()`, `app/components/ui/Blackout.tsx`) (R7) | client | the stage vocabulary's exit (§12.8), used once: sign-out. A plain CSS opacity transition on a `div` appended to `document.body` — deliberately not `motion`, since it fires synchronously from a click handler and outlives the component that rendered the trigger. `{ done, cancel }`; `cancel()` removes the overlay so a `signOut` that throws never leaves the page black. Instant under reduced motion. |
+| `PullToRefresh` / `pullModel` (R7) | client / neutral | pull-to-refresh on the phone (§12.8, decision L), mounted once in `app/(client)/layout.tsx`. THE CONTENT IS NEVER TRANSLATED — the rail is a sibling `fixed` element at the viewport top, never a transform on `<main>` (ADR-0031). Arms only on `has-bottom-nav` + a coarse pointer, and only while no `CueDialog` layer is open. `touchmove`/`touchend`/`touchcancel` (`{ passive: false }`) attach per-gesture, only once `touchstart`'s checks pass. `preventDefault()` fires only past 8 px at `window.scrollY <= 0` (`<=`, never `===` — the iOS bounce drives `scrollY` negative); the axis locks once, on the first move past the slop. `[data-pull-ignore]` opts a surface out (`SwipeStrip`'s host, `AvailabilityGrid`'s months while «Seleccionar fechas» is armed). `pullModel.ts` holds the arithmetic (`THRESHOLD`, `MAX`, `pullProgress`, `shouldRefresh`, `railHeight`) apart from the component, since the gesture can't be driven with fidelity in jsdom. A commit calls `router.refresh()` once, with a 600 ms floor on the rail's "refreshing" state. `brand.css`'s `overscroll-behavior-y: contain` sits on the root element under `html.has-bottom-nav` so Chrome Android's own pull-to-refresh doesn't fire underneath. |
+| `useLongPress(onLongPress, { ms?, move? })` (R7) | client | the ONE long-press gesture (§12.8, decision L) — 450 ms of a still primary pointer, cancelled by a lift, a cancel, the pointer leaving the row, a move past 8 px, or ANY `scroll` (capture phase, so a scrolling container counts). Nothing is drawn while the timer runs; the feedback is `haptic("medium")` plus whatever the callback opens. The fired press swallows the row's next `click` once through a capture-phase handler on the same element (the `SwipeStrip` precedent), cleared by the next `pointerdown`. A MOUSE `contextmenu` (`pointerType === "mouse"`, or `button === 2` where the browser sends no `pointerType`) fires it immediately — desktop right-click opens the same sheet. A `contextmenu` with no mouse signal is only `preventDefault`ed: a touch one (the press already fired or will) and, indistinguishably from it, a keyboard-invoked menu (Shift+F10 / the Menu key send `button 0` and no `pointerType`) — keyboard-invoked menus on rows are not supported, the row's own tap is the affordance. Spread the whole return on the row, `style` included (kills the iOS callout and text selection). |
+| `QuickActions` (R7) | client | what a long press opens — a `CueDialog mode="sheet"` with one full-width, left-aligned `Button variant="ghost" size="lg"` per action and «Cancelar» last. `actions: { label, onSelect?, href?, tone?, icon? }[]`; an `href` action renders `Button href`. Every action closes the sheet. Mounted with `open={open}`, never behind a conditional with a literal `open` — `cueDialogMount.test.ts`. Consumers: `LibraryIndex` (ONE sheet for the whole `/biblioteca` list — the rows report the press through `onQuickActions`, because ~140 mounted sheets subscribing to the CueDialog layer context re-rendered every row on any dialog open/close) and `DayCardDisclosure` (per row; there are a handful). |
+| `haptic(kind)` (`app/utils/haptics.ts`) | neutral | `"light"` (default) on a toggle flip or thumb move, `"selection"` on a tab press, `"medium"` for a landing — a drop (M-planner) and, since R7, a committed `PullToRefresh` pull and a fired `useLongPress`. Native only; no-op on web; never awaited in a handler. |
 
 ### Load-failure behaviour
 
@@ -231,6 +236,8 @@ Before was measured on the primary checkout at the merge-base commit
 | **R2 tip `444d015d`** (same environment; the week strip, the agenda and `SwipeStrip`) | 172.5 kB | 123.1 kB (`/schedule`, +1.6) | 356.4 kB (+0.7, build noise) | 114.2 kB (`/biblioteca`, unchanged) |
 | **`main df19f1b5`, R3 release-day rebuild** (git-archive cold build, same environment as the R2 rows) | 172.5 kB | 129.8 kB (`/me`) | 356.5 kB | 119.9 kB (`/`; `/schedule` 123.6 kB, `/biblioteca` 114.2 kB) |
 | **R3 tip `4b3e18ad`** (the header, weekend list, `SettingsCard`; the pill `tone` on `Button` touches every route by ~0.4–0.5 kB) | 172.5 kB | 132.2 kB (`/me`, +2.4) | 356.9 kB (+0.4) | 120.4 kB (`/`, +0.5); `/schedule` 124.1 kB (+0.5), `/biblioteca` 114.3 kB (+0.1) |
+| **`main 61d5330f`, R7 release-day rebuild** (git-archive cold build, same environment as the R3 rows) | 172.5 kB | 118.0 kB | 354.4 kB | 121.7 kB (`/schedule`) · 111.9 kB (`/biblioteca`) · 119.5 kB (`/me`) |
+| **R7 tip `6fcfb22c`** (the cue strip, blackout, pull-to-refresh rail, long-press hook + sheet; the two later commits move classes and one sheet, not chunks) | 172.5 kB | 122.1 kB (+4.1) | 357.0 kB (+2.6) | 124.1 kB (`/schedule`, +2.4) · 116.9 kB (`/biblioteca`, +5.0) · 123.1 kB (`/me`, +3.6) |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -917,3 +924,174 @@ the full ledger; the motion-relevant pieces:
   flow as a real range.
 - **Bundle:** `main df19f1b5` → `F3 tip 8df4d0d7` (git-archive cold build, gzip −9): shared 172.5 → 172.5; `/me` 129.8 → 119.9 kB (−9.9); `/me/disponibilidad` 105.1 kB (new); `/me/ajustes` 103.1 kB (new); `/` 119.9 → 118.0 (−1.9); `/schedule` 123.6 → 121.7 (−1.9); `/admin` 356.5 → 354.4 (−2.1) — the weekend list and the date fields left, and every route shed the pill tone's unused variants.
 - **Release:** merged to `main` as `512cd3be` (PR #65, 2026-09-13 18:48 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last verified at `7c6bf572`.
+
+### App-wide (R7)
+
+Spec §12.8 / decision L: four conveniences that don't belong to one route because
+they apply everywhere — the navbar cue, the sign-out exit, pull-to-refresh, and a
+second verb on a row via long-press. See spec Part XIII for the full ledger; the
+motion-relevant pieces:
+
+- **`CueStrip`** puts the member's next service under the title on every route
+  except `/` and `/me`, which already carry the countdown in their own headers.
+  Fetched CLIENT-SIDE after paint, exactly like the notification badge — `Navbar`
+  reads no session server-side, so it stays a plain sync component and every page
+  that renders it keeps rendering static/ISR. Two instances mount per page (the
+  phone column, hidden `lg:hidden`, and the desktop line, `hidden lg:block`), so
+  the fetch is deduped through a module-level in-flight promise: without it, both
+  effects fire before either response lands and every page load asks the API
+  twice. The response is cached in `sessionStorage` for 60 s, keyed by the
+  signed-in member's `sanityId` — a stale-identity hit (a shared machine, an
+  impersonation switch mid-session) is treated as a miss, never as someone else's
+  cue leaking through. `Navbar` REMOUNTS on every route change (it is not
+  memoised across pages), so `CueStrip` reserves the line's height as soon as it
+  is armed, not just once the label paints — without the reservation the centred
+  title block shifts ~15px on every navigation while the fetch (or a cache hit
+  that still costs a render) is in flight.
+  - **The cue is ministry-gated at the API by SKIPPING the query, not by
+    filtering the response** — `/api/cue` reads the caller's `ministries` and
+    only issues the worship query when the member is in worship, only the kids
+    query when in kids. A kids-only volunteer must never cause a worship read
+    and a worship member must never cause a `kidsSchedule` read, the same
+    isolation CLAUDE.md's ministries section requires everywhere else.
+  - **Both-ministry precedence: the earlier date wins, and a tie goes to
+    worship** (`pickCue`) — a member in both ministries whose Sunday morning is
+    the kids room has a worship call earlier that same day, so the tie is never
+    actually a coin flip in practice.
+  - **`Vary: Cookie`** on the response, alongside `Cache-Control: private,
+    max-age=60`: the payload is keyed on the session cookie, so any cache that
+    sits between the browser and the route (a CDN, a shared disk cache) must
+    treat two members' requests as two different resources rather than serving
+    one member's cue to another.
+- **`Blackout`** (`blackout()`) is the stage vocabulary's one destructive exit —
+  sign-out — used exactly once. A plain CSS opacity transition on a `div`
+  appended straight to `document.body`, deliberately NOT `motion`: it fires from
+  a synchronous click handler and is meant to outlive whatever component
+  rendered the trigger, all the way through the redirect that replaces the
+  document. `motion` stays reserved for elements that live inside React's own
+  tree for their whole life; this one by design does not. `cancel()` exists
+  because `signOut()` can throw (a network failure, a revoked session) — without
+  it a failed sign-out would leave the page permanently black with no way back.
+  Instant, no transition, under `prefers-reduced-motion: reduce`.
+- **`PullToRefresh`** answers the one thing the phone had no way to ask for: a
+  setlist that changed on the server since the page loaded. Mounted ONCE in
+  `app/(client)/layout.tsx`, not per route.
+  - **The content is never translated.** The rail is a sibling `fixed` element
+    pinned to the very top of the viewport, not a transform on `<main>` or a
+    wrapper around it — a transformed ancestor becomes the containing block for
+    every `position: fixed` descendant (the FAB, the audio transport, the
+    toasts), which is exactly the trap ADR-0031 and `reveal.test.ts` exist to
+    keep shut.
+  - **Window `touchstart` is passive and stays attached while armed; the
+    `{ passive: false }` `touchmove`/`touchend`/`touchcancel` trio is attached
+    PER GESTURE**, only once `touchstart`'s own checks pass, and removed again
+    on end or cancel — a permanently attached non-passive `touchmove` would cost
+    the browser its scroll fast-path on every touch in the app, including the
+    ones this component will never claim.
+  - **`preventDefault()` fires only past 8 px of downward travel at
+    `window.scrollY <= 0`** — `<=`, never `===`: during the iOS rubber band
+    `scrollY` goes NEGATIVE, so an equality test would freeze the pull exactly
+    when the platform is already showing its own overscroll. The axis is
+    decided ONCE, on the first move past the 8 px slop (a one-shot lock, the
+    same shape as `motion`'s `dragDirectionLock`) — a horizontal decision hands
+    the whole touch back for the rest of the gesture rather than re-deciding
+    frame by frame, so a diagonal flick that turns vertical later still belongs
+    to page scroll, not to the pull.
+  - **`[data-pull-ignore]` is the opt-out** for a surface that owns its own
+    gesture on the same touch surface: `SwipeStrip`'s drag host and
+    `AvailabilityGrid`'s months while «Seleccionar fechas» is armed both carry
+    it, so the schedule's week strip and the drag-select calendar never lose a
+    touch to the pull underneath them.
+  - **The rail overlays the navbar rather than sitting under it** — the navbar
+    is `sticky` and travels with the page, so a bar fixed at the true top edge
+    is what reads as "the page itself is being pulled," not a bar wedged
+    between two other elements.
+  - **Armed only on a phone**, and it says so with the tab bar's own signal:
+    `BottomNav`'s `has-bottom-nav` class on `<html>` plus a coarse pointer
+    (`matchMedia("(pointer: coarse)")`). The bar publishes its class after
+    hydration, so a `MutationObserver` on `<html>`'s `class` re-arms
+    `PullToRefresh` when it arrives and disarms it when the bar leaves (a
+    kids-only volunteer, `/auth`, `/studio`).
+  - **`overscroll-behavior-y: contain` moved to the ROOT element** under
+    `html.has-bottom-nav`, not `body` — the viewport reads the property from
+    `<html>`, so a `body` declaration left Chrome Android's own pull-to-refresh
+    armed underneath this one (fix round 1, review finding).
+  - **A commit refreshes once**: `router.refresh()` fires on release past the
+    72 px threshold, and the rail holds its "refreshing" state for a 600 ms
+    floor even when the transition settles instantly (a warm route resolves in
+    ~40 ms) — a flash that disappears before it's seen reads as "nothing
+    happened," which is the one thing a refresh must never look like. A second
+    pull landing in the same task while one is in flight reads a REF
+    (`refreshingRef`), not the not-yet-rendered `refreshing` state, and is
+    dropped at `touchstart`.
+  - **`pullModel.ts`** holds the arithmetic (`THRESHOLD`, `MAX`, `pullProgress`,
+    `shouldRefresh`, `railHeight`) apart from the component and free of hooks —
+    the gesture cannot be driven with any fidelity in jsdom (no layout, no real
+    touch), so the numbers are the part that is genuinely provable by test.
+- **`useLongPress`** gives a row a second verb on the phone: hold 450 ms and its
+  `QuickActions` sheet opens, instead of the one thing a tap already does.
+  - **Timings and cancellation.** 450 ms of a still primary pointer; 8 px of
+    travel, a lift, a pointer leaving the row, a cancel, or ANY `scroll`
+    anywhere (capture phase, so a scrolling ancestor container counts too)
+    cancels the press before it fires. While the timer is pending the row draws
+    NOTHING — no ring, no growing fill — so a press that is about to be
+    cancelled costs a list of ~140 rows no visual state at all.
+  - **One swallowed click.** A fired press must not also register as a tap: the
+    row's own `onClick` is swallowed exactly once through a capture-phase
+    handler on the same element (the `SwipeStrip` precedent), cleared again on
+    the next `pointerdown` so the following honest tap is untouched.
+  - **Desktop right-click opens the same sheet** — a mouse held still for
+    450 ms is an accident, not an intent, and the OS context menu would win the
+    race anyway. `contextmenu` from a MOUSE (`pointerType === "mouse"` where the
+    browser sends one; `button === 2` where it doesn't, since Safari and
+    Firefox put no `pointerType` on a `contextmenu` `MouseEvent`) fires the
+    sheet immediately; a `contextmenu` without a mouse signal (a touch, or a
+    keyboard-invoked menu — Shift+F10 / the Menu key, which look identical to
+    Safari's touch event) is only `preventDefault`ed, because the press itself
+    already fired (or will) and the native callout would fight it; keyboard-
+    invoked menus on rows are not supported — the row's tap is the affordance.
+  - **`QuickActions`** is what opens: a `CueDialog mode="sheet"` — never a
+    hand-rolled sheet — with one full-width, left-aligned `Button variant="ghost"
+    size="lg"` per action and «Cancelar» last, mounted with `open={open}`
+    (`cueDialogMount.test.ts`).
+  - **Per-row actions, and what was left out.** `LibraryRow` (the row only fires
+    `onQuickActions(post)`; `LibraryIndex` owns the ONE sheet for the page): «Abrir» (the same
+    `openSheet` the tap calls) and «Copiar enlace» (clipboard, confirmed or
+    refused through `useToast`) — «Practicar» is deliberately absent, since the
+    player exposes exactly one song entry point and a second button calling it
+    would be two names for one action. `DayCardDisclosure`: «Ver en calendario»
+    and «Añadir a mi calendario» (this one service as an `.ics`, the same blob
+    download `AddToCalendarButton` uses for the whole list). Neither sheet
+    carries a destructive action — a quick-actions sheet is for a second
+    convenience, not for something that needs its own confirmation step.
+
+**Deviations from the plan, accepted.**
+- `DayCard`'s own setlist rows (`SongRow`) were left out of the long-press
+  sweep — they already carry the row-is-the-affordance exemption for a
+  different reason (opening the player), and a long press there would compete
+  with the row's existing tap rather than add to it.
+- No «Practicar» quick action on `LibraryRow` — see above.
+- The `contextmenu` mouse test (`pointerType ? pointerType === "mouse" :
+  button === 2`) was accepted as written rather than simplified, because Safari
+  and Firefox send no `pointerType` on a `contextmenu` `MouseEvent` at all —
+  collapsing the check to `pointerType === "mouse"` alone would silently drop
+  desktop right-click support on both browsers.
+
+**Review trail.** Task 1 (cue API + strip) drew CHANGES_REQUIRED (1 MEDIUM + 3
+LOW: reserve the line; cache keyed by `sanityId` + `Vary: Cookie`; `cueLabel(cue,
+now)` taking the caller's clock directly rather than round-tripping "today"
+through a string; two tests strengthened) — fixed in one round, scoped
+re-review CLEAN. Task 2 (blackout) drew APPROVED outright (a LOW rejection-path
+test and a double-tap note parked for the final fix wave). Task 3 (pull-to-
+refresh) drew CHANGES_REQUIRED (1 HIGH + 4 MEDIUM + 2 LOW: the HIGH was
+`scrollY === 0` freezing the pull mid-iOS-bounce; the MEDIUMs were the one-shot
+axis lock, `data-pull-ignore` on `SwipeStrip`'s host and the drag-select months,
+moving `overscroll-behavior` to `html`, and the `refreshingRef` in-flight guard;
+the LOWs were the per-gesture `touchmove` attachment and tests for up-drag /
+horizontal / `touchcancel` / a second pull) — fixed in one round, scoped
+re-review CLEAN (2 LOW parked: `reset()` on a multi-finger `onStart`; explicit
+touchmove-removal tests). Task 4 (long-press + `QuickActions`) drew APPROVED (4
+LOW parked for the final fix wave).
+
+- **Bundle:** `main 61d5330f` → `R7 tip 6fcfb22c`: shared 172.5 → 172.5; `/` +4.1; `/schedule` +2.4; `/biblioteca` +5.0 (the long-press hook and the page's one sheet); `/me` +3.6; `/admin` +2.6 — see the Bundle table.
+- **Release:** pending.

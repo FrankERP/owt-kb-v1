@@ -217,14 +217,18 @@ describe("AvailabilityGrid — drag-select", () => {
   it("«Listo» leaves the mode and gives the page its scrolling back", () => {
     const months = renderGrid();
     expect(months.style.touchAction).toBe("");
+    expect(months.hasAttribute("data-pull-ignore")).toBe(false);
 
     enterMode();
     const done = screen.getByRole("button", { name: "Listo" });
     expect(done.getAttribute("aria-pressed")).toBe("true");
     expect(months.style.touchAction).toBe("none");
+    // While selecting, the shell's pull-to-refresh must not claim the same finger.
+    expect(months.hasAttribute("data-pull-ignore")).toBe(true);
 
     fireEvent.click(done);
     expect(months.style.touchAction).toBe("");
+    expect(months.hasAttribute("data-pull-ignore")).toBe(false);
     expect(screen.getByRole("button", { name: "Seleccionar fechas" }).getAttribute("aria-pressed")).toBe("false");
     expect(closeNoteMock).toHaveBeenCalled();
   });

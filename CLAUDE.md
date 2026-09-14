@@ -275,7 +275,19 @@ calls it once and hands the state down to `AvailabilityGrid`, which only renders
 two hook calls would be two revisions racing into the same document), `MEMBER_TYPE_LABEL`
 (`app/utils/memberTypes.ts` — the ONLY Tipo display map, mirrors the
 `worshipTeam` schema; `/admin`'s `TYPE_ABBR` is that table's own abbreviations,
-not a second source). Motion tokens are `--motion-*` / `--ease-*`; `motion` is
+not a second source), `useLongPress` (`app/components/ui/useLongPress.ts` — the
+ONLY long-press: 450ms/8px, cancelled by a lift, a leave, or any scroll; a
+mouse `contextmenu` opens the same sheet on desktop), `QuickActions`
+(`app/components/ui/QuickActions.tsx` — the ONLY quick-action sheet a long
+press opens, a `CueDialog mode="sheet"` of ghost buttons plus «Cancelar»),
+`blackout()` (`app/components/ui/Blackout.tsx` — the sign-out exit; a plain
+CSS transition outside `motion` on purpose, since it outlives the component
+that triggered it; `cancel()` covers a `signOut` that throws), `PullToRefresh`
+(`app/components/ui/PullToRefresh.tsx` — mounted once in the client layout,
+never per route; opt a gesture-owning surface out with `data-pull-ignore`),
+`CueStrip` (`app/components/ui/CueStrip.tsx` — the navbar's next-service cue,
+fetched client-side so `Navbar` stays sync). Motion tokens are `--motion-*` /
+`--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and
 ADR-0031.
 

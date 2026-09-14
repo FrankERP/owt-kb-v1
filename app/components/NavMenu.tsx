@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { signOut, useSession } from "next-auth/react";
 import { clearThemeMirror } from "@/app/utils/themePref";
+import { blackout } from "@/app/components/ui/Blackout";
 import Link from "next/link";
 import Image from "next/image";
 import Menu, { MenuHeader, MenuItem, MenuSeparator } from "@/app/components/ui/Menu";
@@ -118,7 +119,18 @@ export default function NavMenu() {
       <MenuItem href="/me/disponibilidad">Disponibilidad</MenuItem>
       <MenuItem href="/me/ajustes">Ajustes</MenuItem>
       <MenuSeparator />
-      <MenuItem onSelect={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}>
+      <MenuItem
+        onSelect={async () => {
+          clearThemeMirror();
+          const b = blackout();
+          try {
+            await b.done;
+            await signOut({ callbackUrl: "/auth/signin" });
+          } catch {
+            b.cancel();
+          }
+        }}
+      >
         Cerrar sesión
       </MenuItem>
     </Menu>

@@ -157,6 +157,10 @@ export default function SwipeStrip({
       onDirectionLock={handleDirectionLock}
       onDragEnd={handleDragEnd}
       onClickCapture={handleClickCapture}
+      // A drag that starts here is this strip's, never the shell's:
+      // `PullToRefresh` bails on a touch inside `[data-pull-ignore]` so the two
+      // gestures cannot both claim the same finger at the top of the page.
+      data-pull-ignore=""
       style={{ touchAction: "pan-y" }}
       className={className}
     >

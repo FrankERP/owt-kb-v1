@@ -6,6 +6,7 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import type { Post, Tag, Author } from "@/app/utils/interface";
+import { usePlayer } from "@/app/context/PlayerContext";
 import {
   applyLibraryFilters,
   groupByLetter,
@@ -19,6 +20,8 @@ import Button from "./ui/Button";
 import LibraryFilters from "./LibraryFilters";
 import LibraryLetterRail from "./LibraryLetterRail";
 import LibraryRow from "./LibraryRow";
+import QuickActions, { type QuickAction } from "./ui/QuickActions";
+import { useToast } from "./ui/Toast";
 
 export type LibraryIndexProps = { posts: Post[]; tags: Tag[]; authors: Author[]; initial: LibraryFiltersState };
 
@@ -120,6 +123,53 @@ export default function LibraryIndex(props: LibraryIndexProps) {
     return () => io.disconnect();
   }, [letters]);
 
+  // ONE quick-actions sheet for the whole page, not one per row. A mounted
+  // `QuickActions` subscribes to the CueDialog layer context, so ~140 closed
+  // sheets meant every dialog open or close anywhere re-rendered every row —
+  // exactly the cost `LibraryRow`'s `memo` exists to avoid. The rows only report
+  // the long press; the sheet lives here.
+  //
+  // The post and the OPEN flag are separate state on purpose: `CueDialog` keeps
+  // its children mounted through the exit animation, so clearing the post on
+  // close would blank the sheet's title while it slides away.
+  const { openSheet } = usePlayer();
+  const { toast } = useToast();
+  const [actionsFor, setActionsFor] = useState<Post | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  // Stable, or `LibraryRow`'s `memo` buys nothing: a new callback identity on
+  // every render is a new prop on all ~140 rows.
+  const onQuickActions = useCallback((post: Post) => {
+    setActionsFor(post);
+    setActionsOpen(true);
+  }, []);
+
+  const slug = actionsFor?.slug?.current;
+  const actions: QuickAction[] = actionsFor
+    ? [
+        { label: "Abrir", onSelect: () => openSheet(actionsFor._id) },
+        // «Practicar» is deliberately absent: the player exposes ONE song entry point
+        // (`openSheet`), which is exactly what «Abrir» already calls — a second button
+        // running the same call would be two names for one action.
+        ...(slug
+          ? [
+              {
+                label: "Copiar enlace",
+                onSelect: async () => {
+                  try {
+                    await navigator.clipboard.writeText(`${window.location.origin}/posts/${slug}`);
+                    toast({ message: "Enlace copiado", tone: "ok", duration: 2000 });
+                  } catch {
+                    // Denied permission, an insecure origin, or no clipboard at all —
+                    // never close as success (the client-handler invariant).
+                    toast({ message: "No se pudo copiar", tone: "error" });
+                  }
+                },
+              } satisfies QuickAction,
+            ]
+          : []),
+      ]
+    : [];
+
   const set = (next: LibraryFiltersState) => setFilters(next);
   const clear = () => setFilters({ q: "", tags: [], author: "", key: "" });
 
@@ -200,7 +250,10 @@ export default function LibraryIndex(props: LibraryIndexProps) {
                 <AnimatedList
                   as="ul"
                   className="divide-y divide-ink-dim/[0.06]"
-                  items={g.posts.map((p) => ({ key: p._id, node: <LibraryRow post={p} /> }))}
+                  items={g.posts.map((p) => ({
+                    key: p._id,
+                    node: <LibraryRow post={p} onQuickActions={onQuickActions} />,
+                  }))}
                 />
               </section>
             ))}
@@ -216,6 +269,13 @@ export default function LibraryIndex(props: LibraryIndexProps) {
           <LibraryLetterRail letters={letters} active={activeLetter} onJump={jump} />
         )}
       </div>
+      <QuickActions
+        open={actionsOpen}
+        onClose={() => setActionsOpen(false)}
+        title={actionsFor?.title ?? ""}
+        subtitle={actionsFor?.author || undefined}
+        actions={actions}
+      />
     </div>
   );
 }

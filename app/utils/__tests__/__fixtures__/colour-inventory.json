@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 316,
-    "filesScanned": 303,
+    "literalRows": 318,
+    "filesScanned": 311,
     "filesWithColour": 54,
     "byCategory": {
       "2": 2,
-      "4": 74,
+      "4": 76,
       "8": 87,
       "9": 10,
       "11": 9,
@@ -22,7 +22,7 @@
     "byDisposition": {
       "B": 120,
       "exempt": 42,
-      "keep": 239,
+      "keep": 241,
       "C": 5,
       "D": 15
     },
@@ -211,7 +211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 50,
+      "line": 51,
       "disposition": "exempt",
       "reason": "Static viewport themeColor. Child E makes it theme-responsive under parent invariant 17."
     },
@@ -235,7 +235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 370,
+      "line": 371,
       "disposition": "B",
       "reason": null
     },
@@ -247,7 +247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 390,
+      "line": 391,
       "disposition": "B",
       "reason": null
     },
@@ -259,7 +259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 402,
+      "line": 403,
       "disposition": "B",
       "reason": null
     },
@@ -271,7 +271,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 419,
+      "line": 420,
       "disposition": "B",
       "reason": null
     },
@@ -283,7 +283,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 536,
+      "line": 538,
       "disposition": "B",
       "reason": null
     },
@@ -427,7 +427,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 221,
+      "line": 226,
       "disposition": "B",
       "reason": null
     },
@@ -2179,7 +2179,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 666,
+      "line": 657,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2191,7 +2191,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 683,
+      "line": 657,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2203,7 +2203,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 683,
+      "line": 700,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2215,7 +2215,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 730,
+      "line": 717,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2227,7 +2227,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 730,
+      "line": 717,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2239,7 +2239,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 757,
+      "line": 764,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2251,7 +2251,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 769,
+      "line": 764,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2263,7 +2263,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 769,
+      "line": 791,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2275,7 +2275,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 819,
+      "line": 803,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2287,7 +2287,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 831,
+      "line": 803,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2299,7 +2299,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 831,
+      "line": 853,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2311,7 +2311,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 843,
+      "line": 865,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2323,7 +2323,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 858,
+      "line": 865,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2335,7 +2335,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 976,
+      "line": 877,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2347,7 +2347,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 976,
+      "line": 892,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2359,7 +2359,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1003,
+      "line": 1010,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2371,7 +2371,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1003,
+      "line": 1010,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2383,7 +2383,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1131,
+      "line": 1037,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2395,7 +2395,31 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1131,
+      "line": 1037,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/brand.css",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 1165,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/brand.css",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 1165,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2983,7 +3007,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 495,
+      "line": 498,
       "disposition": "B",
       "reason": null
     },
@@ -2995,7 +3019,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 503,
+      "line": 506,
       "disposition": "B",
       "reason": null
     },
@@ -3211,7 +3235,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 117,
+      "line": 124,
       "disposition": "B",
       "reason": null
     },
@@ -3223,7 +3247,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 443,
+      "line": 450,
       "disposition": "B",
       "reason": null
     },
@@ -3235,7 +3259,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 31,
+      "line": 77,
       "disposition": "B",
       "reason": null
     },
@@ -3247,7 +3271,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 55,
+      "line": 102,
       "disposition": "B",
       "reason": null
     },
@@ -3367,7 +3391,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 159,
+      "line": 209,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3379,7 +3403,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 143,
+      "line": 193,
       "disposition": "B",
       "reason": null
     },
@@ -3391,7 +3415,7 @@
       "alpha": null,
       "utility": "ring",
       "carrier": null,
-      "line": 88,
+      "line": 89,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3403,7 +3427,7 @@
       "alpha": null,
       "utility": "ring",
       "carrier": null,
-      "line": 91,
+      "line": 92,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3415,7 +3439,7 @@
       "alpha": null,
       "utility": "text",
       "carrier": null,
-      "line": 97,
+      "line": 98,
       "disposition": "C",
       "reason": null
     },

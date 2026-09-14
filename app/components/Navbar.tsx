@@ -3,18 +3,26 @@ import Link from "next/link";
 import Image from "next/image";
 import NavMenu from "./NavMenu";
 import NavLinks from "./NavLinks";
+import CueStrip from "./ui/CueStrip";
 
 interface Props {
   title: string;
   author?: string;
   tags?: boolean;
   schedule?: boolean;
+  /**
+   * The next-service cue under the title (R7 / spec §12.8). Default on: every
+   * route wants it except the two whose own header already carries the
+   * countdown. `CueStrip` also checks the pathname itself — this prop is the
+   * belt to that suspenders, and it keeps the suppression readable at the page.
+   */
+  cue?: boolean;
 }
 
 // Plain (non-async) component: it reads no session server-side, so any page that
 // renders it can still be statically/ISR rendered. Session + notification badge
 // are resolved client-side in NavMenu.
-const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Props) => {
+const Navbar = ({ title = "", author = "", tags = false, schedule = false, cue = true }: Props) => {
   return (
     <nav aria-label="Navegación superior" className="brand-navbar sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
       <div className="relative z-[1] mx-auto max-w-7xl h-20 lg:h-24 flex items-center gap-3 sm:gap-5 ps-[max(1.25rem,env(safe-area-inset-left))] pe-[max(1.25rem,env(safe-area-inset-right))]">
@@ -57,8 +65,14 @@ const Navbar = ({ title = "", author = "", tags = false, schedule = false }: Pro
                 {author}
               </p>
             )}
+            {cue && <CueStrip />}
           </div>
           <NavLinks schedule={schedule} tags={tags} />
+          {/* Desktop: a second line under the link row, where the phone layout
+              puts it under the title. */}
+          {cue && <div className="hidden lg:block">
+            <CueStrip />
+          </div>}
         </div>
 
         {/* Right: single avatar/menu */}

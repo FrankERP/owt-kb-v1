@@ -628,6 +628,40 @@
    the class with the measured height (bottomNavOffsetSync.test.ts). */
 html.has-bottom-nav [data-route-main] { padding-bottom: var(--bottom-nav-h); }
 
+/* Pull-to-refresh (R7, spec §12.8) takes over the downward overscroll at the top
+   of the page on the phone. `contain` stops the chain there — without it Chrome
+   Android runs ITS OWN pull-to-refresh on the same gesture and the page reloads
+   under our rail. It sits on the ROOT element, not on `body`: the viewport's
+   overscroll behaviour is read from `<html>` (the propagation from `body` to the
+   viewport that `background` enjoys does not apply here), so the same rule on
+   `body` alone leaves the browser gesture armed. Scoped to the class so a desktop
+   (where PullToRefresh never arms) keeps the default behaviour untouched. */
+html.has-bottom-nav { overscroll-behavior-y: contain; }
+
+/* The pull rail's «working» sweep: the lit card's own beam token travelling
+   left→right over the accent bar while router.refresh() is in flight. Plain
+   `animation:` shorthand, so the global reduced-motion collapse above already
+   covers it — and PullToRefresh drops this class entirely under reduced motion,
+   leaving the solid bar (transform/opacity only either way). The bar's own
+  colour stays on the element as `bg-accent/70` — no colour literal in this rule
+  body, which tokenLayer.test.ts pins. */
+.pull-rail-beam {
+  position: relative;
+  overflow: hidden;
+}
+.pull-rail-beam::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 0%, var(--lit-beam) 50%, transparent 100%);
+  animation: brand-pull-sweep 1100ms var(--ease-in-out) infinite both;
+}
+@keyframes brand-pull-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+
 /* The audio transport carries its own safe-area padding until the tab bar is on
    screen — the bar's own height already includes that inset, so stacking both
    would double-pad the player (bottomNavOffsetSync.test.ts). */

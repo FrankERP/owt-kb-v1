@@ -450,10 +450,13 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
       </div>
 
       {/* Calendar grid. While selecting, the container owns the gesture: no page
-          scroll under the finger, no text selection, no iOS callout menu. */}
+          scroll under the finger, no text selection, no iOS callout menu — and
+          no pull-to-refresh either, which reads `data-pull-ignore` on the way
+          up from the touch target. */}
       <div
         id="availability-months"
         ref={containerRef}
+        data-pull-ignore={selecting ? "" : undefined}
         className="grid grid-cols-1 sm:grid-cols-3 gap-4"
         style={
           selecting

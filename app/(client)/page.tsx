@@ -39,7 +39,7 @@ const SETLIST_FIELDS = `songs[]{
   "author": song->author, "timeSig": song->timeSig, "bpm": song->bpm, "key": song->key
 }, week, team_notes`;
 
-const ROLE_FIELDS = `week,
+const ROLE_FIELDS = `_id, week,
   Lead[]->{ member_name, alias },
   instruments[]{ instrument, "person": coalesce(person->alias, person->member_name) },
   foh_team[]{ role, "person": coalesce(person->alias, person->member_name) },
@@ -73,6 +73,7 @@ export default async function Home() {
   const today = localToday();
 
   type WeekendRole = {
+    _id: string;
     week: string;
     Lead: { member_name: string; alias?: string }[];
     instruments: { instrument: string; person: string }[];
@@ -155,6 +156,7 @@ export default async function Home() {
           day: sp.service_name || "Servicio Especial",
           date: sp.date,
           roleId: sp._id,
+          serviceId: sp._id,
           setlist: sp.songs?.length ? { songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } : undefined,
           leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
           instruments: sp.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
@@ -170,6 +172,7 @@ export default async function Home() {
           props: {
             day: "Sábado",
             date: satSongs?.week ?? satRole?.week,
+            serviceId: satRole?._id,
             setlist: satSetlist,
             leads: satRole?.Lead?.map((m) => m.alias || m.member_name) ?? [],
             instruments: satRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
@@ -186,6 +189,7 @@ export default async function Home() {
           props: {
             day: "Domingo",
             date: sunSongs?.week ?? sunRole?.week,
+            serviceId: sunRole?._id,
             setlist: sunSetlist,
             leads: sunRole?.Lead?.map((m) => m.alias || m.member_name) ?? [],
             instruments: sunRole?.instruments?.map((s) => ({ label: s.instrument, person: s.person })),
@@ -208,7 +212,8 @@ export default async function Home() {
 
   return (
     <div>
-      <Navbar title="OWT" tags schedule />
+      {/* `cue={false}`: the hero card below is the countdown. */}
+      <Navbar title="OWT" tags schedule cue={false} />
 
       <div className="mx-auto mb-16 max-w-7xl px-6 pt-12">
         <div className="brand-section-heading mb-7" {...revealProps(0)}>

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { clearThemeMirror } from "@/app/utils/themePref";
+import { blackout } from "@/app/components/ui/Blackout";
 
 export default function NotAMemberPage() {
   return (
@@ -19,7 +20,16 @@ export default function NotAMemberPage() {
             sign-in would keep the current session and just loop back here. */}
         <button
           type="button"
-          onClick={() => { clearThemeMirror(); signOut({ callbackUrl: "/auth/signin" }); }}
+          onClick={async () => {
+            clearThemeMirror();
+            const b = blackout();
+            try {
+              await b.done;
+              await signOut({ callbackUrl: "/auth/signin" });
+            } catch {
+              b.cancel();
+            }
+          }}
           className="inline-block font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           Cerrar sesión e intentar con otra cuenta

@@ -5,17 +5,34 @@
 // exemption (the plan's rubric ruling): the row IS the affordance, like DayCard's
 // setlist rows, so it carries no eyebrow and no "Ver". Memoised: ~140 rows share
 // one player context.
+//
+// A long press (R7 Task 4, spec §12.8) reports the row through `onQuickActions`
+// instead of opening the song sheet; the tap is unchanged and the press swallows
+// its own click. The SHEET itself lives once on `LibraryIndex`, not per row: a
+// mounted `QuickActions` subscribes to the CueDialog layer context, so ~140 closed
+// sheets would re-render every row each time any dialog anywhere opened or closed.
 import { memo } from "react";
 import type { Post } from "@/app/utils/interface";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { haptic } from "@/app/utils/haptics";
+import useLongPress from "./ui/useLongPress";
 
-const LibraryRow = memo(function LibraryRow({ post }: { post: Post }) {
+const LibraryRow = memo(function LibraryRow({
+  post,
+  onQuickActions,
+}: {
+  post: Post;
+  // Must be stable (the caller's `useCallback`) or the memo above buys nothing.
+  onQuickActions?: (post: Post) => void;
+}) {
   const { openSheet } = usePlayer();
+  const longPress = useLongPress(() => onQuickActions?.(post));
   const tags = post.tags ?? [];
+
   return (
     <button
       type="button"
+      {...longPress}
       onClick={() => {
         // Native only, fire-and-forget (see haptics.ts) — never gates opening the sheet.
         void haptic("selection");

@@ -25,6 +25,13 @@ export interface DayCardProps {
   bgvs?: Array<{ member_name: string; alias?: string }>;
   chorus?: Array<{ member_name: string; alias?: string }>;
   roleId?: string;
+  /**
+   * The service document's own `_id` (role doc for a special, or the
+   * `sunday_role`/`saturday_role` doc for a weekend card). `DayCardDisclosure`
+   * uses it for the `.ics` UID so a weekend service gets one UID rather than
+   * a `${date}-${day}` string it shares with nothing else on record.
+   */
+  serviceId?: string;
   isNext?: boolean;
   /**
    * `card` is the stacked card every surface has always rendered. `wide` is the
