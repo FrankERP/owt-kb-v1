@@ -4,16 +4,9 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import { textToBody } from "@/app/utils/lyrics";
 import { revalidateSongViews } from "@/app/utils/revalidate";
 import { normalizeChordCharts } from "@/app/utils/chordChartWrite";
+import { isSafeHttpUrl, normalizeLinkRows } from "@/app/utils/linkRowWrite";
 
 function rng() { return Math.random().toString(36).slice(2, 9); }
-
-function isSafeHttpUrl(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  try {
-    const u = new URL(value);
-    return u.protocol === "http:" || u.protocol === "https:";
-  } catch { return false; }
-}
 
 export async function PATCH(
   req: NextRequest,
@@ -40,11 +33,20 @@ export async function PATCH(
     authorIds?: string[];
   };
 
-  if (body.referenceLinks?.some((l) => !isSafeHttpUrl(l.url))) {
-    return NextResponse.json({ error: "referenceLinks must use http(s)" }, { status: 400 });
+  // Both lists drop their blank «Agregar» row rather than 400ing the whole
+  // PATCH over it — see `linkRowWrite.ts`. A row with a label but no URL still
+  // fails, and the error names it.
+  const links = normalizeLinkRows(body.referenceLinks, {
+    type: "referenceLink", labelField: "label", humanName: "Links de referencia", mintKey: rng,
+  });
+  if (!links.ok) {
+    return NextResponse.json({ error: links.error }, { status: 400 });
   }
-  if (body.tutorials?.some((t) => !isSafeHttpUrl(t.url))) {
-    return NextResponse.json({ error: "tutorials must use http(s)" }, { status: 400 });
+  const tutorials = normalizeLinkRows(body.tutorials, {
+    type: "tutorial", labelField: "title", humanName: "Tutoriales", mintKey: rng,
+  });
+  if (!tutorials.ok) {
+    return NextResponse.json({ error: tutorials.error }, { status: 400 });
   }
   for (const u of [body.musicalReferenceUrl, body.lyricsVideoUrl]) {
     if (u != null && u !== "" && !isSafeHttpUrl(u)) {
@@ -89,18 +91,10 @@ export async function PATCH(
     }
     patch.chords = normalized.charts;
   }
-  if (body.referenceLinks != null) {
-    patch.referenceLinks = body.referenceLinks.map((l) => ({
-      _type: "referenceLink", _key: rng(), label: l.label, url: l.url,
-    }));
-  }
+  if (body.referenceLinks != null) patch.referenceLinks = links.rows;
   if (body.musicalReferenceUrl != null) patch.musicalReferenceUrl = body.musicalReferenceUrl || undefined;
   if (body.lyricsVideoUrl != null)      patch.lyricsVideoUrl = body.lyricsVideoUrl || undefined;
-  if (body.tutorials != null) {
-    patch.tutorials2 = body.tutorials.map((t) => ({
-      _type: "tutorial", _key: rng(), title: t.title, url: t.url,
-    }));
-  }
+  if (body.tutorials != null) patch.tutorials2 = tutorials.rows;
   if (body.tagIds != null) {
     patch.tags = body.tagIds.map((id) => ({
       _type: "reference", _ref: id, _key: rng(),

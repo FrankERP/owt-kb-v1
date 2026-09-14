@@ -99,15 +99,20 @@ export function updateRow(rows: RowDraft[], id: string, field: "label" | "url", 
 }
 
 /**
- * Strip the client id for the wire, keeping `_key` where the row has one.
+ * Strip the client id for the wire, keeping `_key` where the row has one, and
+ * DROP a wholly blank row.
  *
- * Unlike `chartsToPayload` this drops NOTHING, and that is preserved behaviour
- * rather than a judgement: both editors sent blank rows before this module
- * existed. Worth knowing what happens to one, because it is not "an empty link
- * gets saved" — `isSafeHttpUrl("")` is false, so the write route 400s the WHOLE
- * request and the admin loses every other edit in the form with it. That is a
- * pre-existing defect of its own, not something to fix by quietly changing what
- * this function returns.
+ * The drop is the client half of one fix. A row with no label and no URL is the
+ * one an admin gets by pressing «Agregar» and then not typing, and it used to
+ * make the write route 400 the ENTIRE request — losing the lyrics, charts and
+ * tags edited in the same form, with only "Error al actualizar." on screen. The
+ * route now drops it too (`app/utils/linkRowWrite.ts`, which follows
+ * `normalizeChordCharts`'s precedent for blank charts), so this is belt and
+ * braces rather than the only guard: an old client cannot reintroduce the trap.
+ *
+ * A row with a LABEL but no URL is deliberately still sent, and still fails —
+ * the admin typed something, so silently discarding it would be the worse
+ * surprise. The route's error names the label.
  *
  * `_key` is defensive here. Both write routes re-mint a key for every row on
  * every save, and no projection in `app/**` even reads these arrays' keys back,
@@ -116,9 +121,11 @@ export function updateRow(rows: RowDraft[], id: string, field: "label" | "url", 
  * being the reason a future projection change loses keys.
  */
 export function rowsToPayload(rows: RowDraft[]): RowPayload[] {
-  return rows.map((row) => {
-    const out: RowPayload = { label: row.label, url: row.url };
-    if (row._key) out._key = row._key;
-    return out;
-  });
+  return rows
+    .filter((row) => row.label.trim() !== "" || row.url.trim() !== "")
+    .map((row) => {
+      const out: RowPayload = { label: row.label, url: row.url };
+      if (row._key) out._key = row._key;
+      return out;
+    });
 }

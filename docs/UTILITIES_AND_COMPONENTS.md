@@ -245,6 +245,14 @@ state a save actually persists against the last saved one.
 ### Mobile / accessibility
 - **`native.ts`** — `isNativeApp()`, `nativeGoogleSilentIdToken()` (cold-start silent re-auth
   only if already logged in), `nativeGoogleIdToken()` (interactive).
+- **`linkRowWrite.ts`** — server-side normalisation for the song editors' link rows
+  (`referenceLinks` on both write routes, `tutorials2` on PATCH). A row with neither
+  label nor URL is DROPPED, following `normalizeChordCharts`'s precedent for a blank
+  chart; a row with a label but no usable URL still fails, with the label quoted in the
+  error. Before this, the blank «Agregar» row made `isSafeHttpUrl("")` false and 400'd
+  the ENTIRE request, so an admin lost the lyrics, charts and tags edited in the same
+  form. `rowsToPayload` (`songFormRows.ts`) drops the same rows client-side, so the
+  common case never reaches the route.
 - **`textZoom.ts`** — text-scale presets (`auto`/1.0/1.2/1.4/1.6), `getStoredMode`/`setStoredMode`
   (localStorage), `applyScale`. Native and web are NOT two mechanisms: `@capacitor/text-zoom`
   implements only `getPreferred` natively on iOS, so `set` runs the package's JS shim, which

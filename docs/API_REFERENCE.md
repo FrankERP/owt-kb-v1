@@ -280,8 +280,8 @@ two-way isolation rule (see `CLAUDE.md` § Auth). All mutating routes call
 
 | Route | Methods | Notes |
 |-------|---------|-------|
-| `/api/content/posts` | GET, POST | GET all songs. POST create song (title required; all URLs must be http(s); resolves `authorIds`→names; `textToBody(lyrics)`; builds slug) → `revalidateSongViews()`, 201. |
-| `/api/content/posts/[id]` | PATCH, DELETE | PATCH partial song update (URL validation; **type-guards target is a `post`**). **DELETE requires admin/super-admin** (content-editor excluded). Both → `revalidateSongViews()`. |
+| `/api/content/posts` | GET, POST | GET all songs. POST create song (title required; all URLs must be http(s); resolves `authorIds`→names; `textToBody(lyrics)`; builds slug) → `revalidateSongViews()`, 201. **Link rows (`referenceLinks`) go through `normalizeLinkRows`**: a row with neither label nor URL is DROPPED, the way `normalizeChordCharts` drops a blank chart — it used to 400 the whole request and lose every other edit in the form. A row WITH a label and no usable URL still 400s, and the error names the label. |
+| `/api/content/posts/[id]` | PATCH, DELETE | PATCH partial song update (URL validation; **type-guards target is a `post`**). Same `normalizeLinkRows` contract as POST, for `referenceLinks` **and** `tutorials`. **DELETE requires admin/super-admin** (content-editor excluded). Both → `revalidateSongViews()`. |
 | `/api/content/tags` | GET, POST | POST is **idempotent by slug** — returns the existing doc (200) or creates (201). |
 | `/api/content/authors` | GET, POST | POST idempotent by slug (via `slugifyAuthor`) — existing (200) or created (201). |
 
