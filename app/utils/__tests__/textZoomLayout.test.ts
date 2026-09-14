@@ -1,9 +1,13 @@
 // Layout that survives TEXT-ONLY zoom (the «Máximo» text size).
 //
-// `app/utils/textZoom.ts` scales text to 1.6× — on native through
-// `@capacitor/text-zoom`, on web through `-webkit-text-size-adjust`. Only the TEXT
-// grows. Every px/rem box — grid tracks, fixed widths, paddings — stays exactly
-// where it was, because the root font-size is never touched.
+// `app/utils/textZoom.ts` scales text to 1.6×. BOTH paths end at the same CSS:
+// `@capacitor/text-zoom` has no native `set` on iOS (only `getPreferred`), so it
+// falls back to its own JS, which sets `document.body.style.webkitTextSizeAdjust`
+// — the same property the web path sets. Only the TEXT grows. Every px/rem box —
+// grid tracks, fixed widths, paddings — stays exactly where it was, because the
+// root font-size is never touched. FONT-RELATIVE lengths (`em`, `ch`) DO follow,
+// which is what makes the `em` track floor below reflow rather than sit still;
+// verified in real WebKit, see the header of the first describe.
 //
 // A member sent screenshots on 2026-09-13: on her phone the service card was cut
 // off at the right edge, the three voice columns painted on top of each other, and
@@ -14,9 +18,17 @@
 // WHY THIS GUARD IS A SOURCE SCAN. jsdom performs no layout: every width it
 // reports is 0, so a rendering test cannot tell a fixed grid from a fluid one.
 // What is pinned here is therefore the STYLE DECISION at each site the audit
-// found, with the measurement that justified it. It is a ratchet, not a proof —
-// the proof was a browser, and the next change to these files should go back to
-// one. A `git grep` for this file's name leads there.
+// found, with the measurement that justified it. It is a ratchet, not a proof.
+//
+// THE PROOF WAS THE iOS SIMULATOR, driving the app's own `TextSizeControl`
+// through «Normal», «Más grande» and «Máximo» in real WebKit on an iPhone 17 Pro
+// (402pt): three voice columns at Normal, two at 1.4× and 1.6×, nothing painted
+// outside its box, nothing clipped, and the month nav wrapping instead of pushing
+// «Siguiente» off the screen. Chromium is NOT a substitute — it ignores
+// `-webkit-text-size-adjust` entirely, so the in-app presets do nothing there and
+// the only way to see this class of bug in a Chromium devtools session is to
+// multiply every computed font-size by hand. The next change to these files
+// should go back to the simulator.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
