@@ -112,3 +112,45 @@ describe("SongFormModal and EditSongButton agree on lyrics and chords", () => {
     expect(b.chords).toEqual(a.chords);
   });
 });
+
+describe("reference links survive the round trip with their identity stripped (issue #69)", () => {
+  // The rows are now keyed by a client `id` so that deleting a middle row does
+  // not hand its DOM node — and the caret — to the row below. That id is a
+  // rendering concern and must never reach Sanity; a stored `_key` must.
+  const SONG = {
+    title: "Grande es tu fidelidad",
+    referenceLinks: [
+      { _key: "ref-1", label: "Spotify", url: "https://open.spotify.com/x" },
+      { label: "YouTube", url: "https://youtu.be/y" },
+    ],
+  };
+
+  it("keeps `_key` where the dataset had one, and mints none where it did not", () => {
+    const form = songToForm(SONG);
+    expect(form.referenceLinks[0]).toMatchObject({ id: "ref-1", _key: "ref-1", label: "Spotify" });
+    expect(form.referenceLinks[1]._key).toBeUndefined();
+    expect(form.referenceLinks[1].id).toBeTruthy();
+  });
+
+  it("sends no client `id` in either editor's payload", () => {
+    const form = songToForm(SONG);
+    for (const row of buildPayload(form).referenceLinks) expect("id" in row).toBe(false);
+    for (const row of buildEditSongPayload(asEditForm(SONG)).referenceLinks) expect("id" in row).toBe(false);
+    expect(buildPayload(form).referenceLinks).toEqual([
+      { _key: "ref-1", label: "Spotify", url: "https://open.spotify.com/x" },
+      { label: "YouTube", url: "https://youtu.be/y" },
+    ]);
+  });
+
+  it("EditSongButton still writes tutorials under `title`, not `label`", () => {
+    // `RowDraft` calls the first column `label` for both lists; the tutorial
+    // schema does not, and the payload is where that translation happens.
+    const form = {
+      ...asEditForm(SONG),
+      tutorials: [{ id: "t1", label: "Tutorial de teclado", url: "https://t" }],
+    };
+    expect(buildEditSongPayload(form).tutorials).toEqual([
+      { title: "Tutorial de teclado", url: "https://t" },
+    ]);
+  });
+});

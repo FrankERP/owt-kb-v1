@@ -4,6 +4,7 @@ import { useState, useRef, useId } from "react";
 import type { PortableTextBody } from "@/app/utils/interface";
 import { bodyToLyrics } from "@/app/utils/lyrics";
 import { chartsFromSong, chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
+import { addRow, newRowId, removeRow, rowsFromStored, rowsToPayload, updateRow, type RowDraft } from "@/app/utils/songFormRows";
 import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,7 +22,10 @@ export interface FormState {
   timeSig: string;
   lyrics: string;
   charts: ChartDraft[];
-  referenceLinks: Array<{ label: string; url: string }>;
+  // Rows carry a client `id` so React keys them by identity, never by position
+  // — removing a middle row otherwise leaves the caret in a node that now shows
+  // a different link (issue #69).
+  referenceLinks: RowDraft[];
   tagIds: string[];
   authorIds: string[];
 }
@@ -34,7 +38,7 @@ interface SongForForm {
   timeSig?: string;
   body?: PortableTextBody;
   chords?: Array<{ _key?: string; key: string; content: string }>;
-  referenceLinks?: Array<{ label: string; url: string }>;
+  referenceLinks?: Array<{ _key?: string; label?: string; url?: string }>;
   tags?: SongTag[];
   authors?: Array<{ _id: string }>;
 }
@@ -63,7 +67,7 @@ export function songToForm(song: SongForForm): FormState {
     timeSig:        song.timeSig ?? "",
     lyrics:         bodyToLyrics(song.body),
     charts:         chartsFromSong(song.chords),
-    referenceLinks: song.referenceLinks ?? [],
+    referenceLinks: rowsFromStored(song.referenceLinks),
     tagIds:         song.tags?.map((t) => t._id) ?? [],
     authorIds:      song.authors?.map((a) => a._id) ?? [],
   };
@@ -78,7 +82,7 @@ export function buildPayload(form: FormState) {
     timeSig: form.timeSig,
     lyrics: form.lyrics,
     chords: chartsToPayload(form.charts),
-    referenceLinks: form.referenceLinks,
+    referenceLinks: rowsToPayload(form.referenceLinks),
     tagIds: form.tagIds,
   };
 }
@@ -130,18 +134,20 @@ export function SongForm({
       authorIds: f.authorIds.includes(id) ? f.authorIds.filter((a) => a !== id) : [...f.authorIds, id],
     }));
 
-  const addRefLink = () =>
-    setForm((f) => ({ ...f, referenceLinks: [...f.referenceLinks, { label: "", url: "" }] }));
+  // All three address a row BY ID. An index would put the identity back in the
+  // position, which is the defect (issue #69).
+  // The id is minted OUTSIDE the updater: a state updater must be pure, and
+  // `addRow` calls `Math.random()`. `songFormCharts.ts`'s consumers do the same.
+  const addRefLink = () => {
+    const id = newRowId();
+    setForm((f) => ({ ...f, referenceLinks: addRow(f.referenceLinks, () => id) }));
+  };
 
-  const updateRefLink = (i: number, key: "label" | "url", val: string) =>
-    setForm((f) => {
-      const links = [...f.referenceLinks];
-      links[i] = { ...links[i], [key]: val };
-      return { ...f, referenceLinks: links };
-    });
+  const updateRefLink = (id: string, key: "label" | "url", val: string) =>
+    setForm((f) => ({ ...f, referenceLinks: updateRow(f.referenceLinks, id, key, val) }));
 
-  const removeRefLink = (i: number) =>
-    setForm((f) => ({ ...f, referenceLinks: f.referenceLinks.filter((_, j) => j !== i) }));
+  const removeRefLink = (id: string) =>
+    setForm((f) => ({ ...f, referenceLinks: removeRow(f.referenceLinks, id) }));
 
   const handleCreateTag = async () => {
     if (!tagSearch.trim() || creatingTag) return;
@@ -359,23 +365,26 @@ export function SongForm({
           <p className="font-body text-xs text-mono-600">Sin links todavía.</p>
         )}
         {form.referenceLinks.map((link, i) => (
-          <div key={i} className="grid grid-cols-[7rem_1fr_auto] gap-2 items-center">
+          <div key={link.id} className="grid grid-cols-[7rem_1fr_auto] gap-2 items-center">
             <input
               className={inputCls}
               value={link.label}
-              onChange={(e) => updateRefLink(i, "label", e.target.value)}
+              onChange={(e) => updateRefLink(link.id, "label", e.target.value)}
               placeholder="Etiqueta"
+              aria-label={`Etiqueta del link ${i + 1}`}
             />
             <input
               className={inputCls}
               value={link.url}
-              onChange={(e) => updateRefLink(i, "url", e.target.value)}
+              onChange={(e) => updateRefLink(link.id, "url", e.target.value)}
               placeholder="https://..."
               type="url"
+              aria-label={`URL del link ${i + 1}`}
             />
             <button
               type="button"
-              onClick={() => removeRefLink(i)}
+              onClick={() => removeRefLink(link.id)}
+              aria-label={`Eliminar link ${i + 1}`}
               className="text-mono-500 hover:text-negative-fg transition-colors text-lg leading-none"
             >
               ×
