@@ -1675,6 +1675,6 @@ sheet) and `app/components/DayCardDisclosure.tsx`.
   cancellation rules are aimed at suppressing, and only a real device confirms they
   stay suppressed across iOS versions.
 
-**Bundle:** measured at release.
+**Bundle:** `main 61d5330f` → `R7 tip 6fcfb22c` (git-archive cold builds, gzip −9; the two later fix commits move classes and one sheet, not chunks): shared 172.5 → 172.5; `/` 118.0 → 122.1 (+4.1); `/schedule` 121.7 → 124.1 (+2.4); `/biblioteca` 111.9 → 116.9 (+5.0, the long-press hook and the page's one sheet); `/me` 119.5 → 123.1 (+3.6); `/admin` 354.4 → 357.0 (+2.6). Within the accepted absolute cap measured in this environment.
 
 **Release:** pending.

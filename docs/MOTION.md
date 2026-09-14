@@ -236,7 +236,8 @@ Before was measured on the primary checkout at the merge-base commit
 | **R2 tip `444d015d`** (same environment; the week strip, the agenda and `SwipeStrip`) | 172.5 kB | 123.1 kB (`/schedule`, +1.6) | 356.4 kB (+0.7, build noise) | 114.2 kB (`/biblioteca`, unchanged) |
 | **`main df19f1b5`, R3 release-day rebuild** (git-archive cold build, same environment as the R2 rows) | 172.5 kB | 129.8 kB (`/me`) | 356.5 kB | 119.9 kB (`/`; `/schedule` 123.6 kB, `/biblioteca` 114.2 kB) |
 | **R3 tip `4b3e18ad`** (the header, weekend list, `SettingsCard`; the pill `tone` on `Button` touches every route by ~0.4–0.5 kB) | 172.5 kB | 132.2 kB (`/me`, +2.4) | 356.9 kB (+0.4) | 120.4 kB (`/`, +0.5); `/schedule` 124.1 kB (+0.5), `/biblioteca` 114.3 kB (+0.1) |
-| **R7 tip** — measured at release. | — | — | — | — |
+| **`main 61d5330f`, R7 release-day rebuild** (git-archive cold build, same environment as the R3 rows) | 172.5 kB | 118.0 kB | 354.4 kB | 121.7 kB (`/schedule`) · 111.9 kB (`/biblioteca`) · 119.5 kB (`/me`) |
+| **R7 tip `6fcfb22c`** (the cue strip, blackout, pull-to-refresh rail, long-press hook + sheet; the two later commits move classes and one sheet, not chunks) | 172.5 kB | 122.1 kB (+4.1) | 357.0 kB (+2.6) | 124.1 kB (`/schedule`, +2.4) · 116.9 kB (`/biblioteca`, +5.0) · 123.1 kB (`/me`, +3.6) |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -1092,5 +1093,5 @@ re-review CLEAN (2 LOW parked: `reset()` on a multi-finger `onStart`; explicit
 touchmove-removal tests). Task 4 (long-press + `QuickActions`) drew APPROVED (4
 LOW parked for the final fix wave).
 
-- **Bundle:** R7 tip — measured at release.
+- **Bundle:** `main 61d5330f` → `R7 tip 6fcfb22c`: shared 172.5 → 172.5; `/` +4.1; `/schedule` +2.4; `/biblioteca` +5.0 (the long-press hook and the page's one sheet); `/me` +3.6; `/admin` +2.6 — see the Bundle table.
 - **Release:** pending.
