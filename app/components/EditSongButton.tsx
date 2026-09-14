@@ -9,6 +9,7 @@ import CueDialogStatus from "@/app/components/ui/CueDialogStatus";
 import { songToForm } from "@/app/components/admin/SongFormModal";
 import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
 import { chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
+import { addRow, removeRow, rowsFromStored, rowsToPayload, updateRow, type RowDraft } from "@/app/utils/songFormRows";
 import { Post } from "@/app/utils/interface";
 import { useToast } from "@/app/components/ui/Toast";
 
@@ -23,8 +24,11 @@ interface FormState {
   timeSig: string;
   lyrics: string;
   charts: ChartDraft[];
-  tutorials: { title: string; url: string }[];
-  referenceLinks: { label: string; url: string }[];
+  // Both row lists carry a client `id` and are keyed by it, never by position —
+  // removing a middle row otherwise leaves the caret in a node now showing a
+  // different row (issue #69). `RowDraft.label` is the tutorial's title.
+  tutorials: RowDraft[];
+  referenceLinks: RowDraft[];
   musicalReferenceUrl: string;
   lyricsVideoUrl: string;
   tagIds: string[];
@@ -41,7 +45,7 @@ function postToForm(post: Post): FormState {
   const shared = songToForm(post);
   return {
     ...shared,
-    tutorials: (post.tutorials2 ?? []).map((t) => ({ title: t.title ?? "", url: t.url ?? "" })),
+    tutorials: rowsFromStored(post.tutorials2),
     musicalReferenceUrl: post.musicalReferenceUrl ?? "",
     lyricsVideoUrl: post.lyricsVideoUrl ?? "",
   };
@@ -56,8 +60,8 @@ export function buildEditSongPayload(form: FormState) {
     timeSig: form.timeSig,
     lyrics: form.lyrics,
     chords: chartsToPayload(form.charts),
-    tutorials: form.tutorials,
-    referenceLinks: form.referenceLinks,
+    tutorials: rowsToPayload(form.tutorials).map(({ label, url }) => ({ title: label, url })),
+    referenceLinks: rowsToPayload(form.referenceLinks),
     musicalReferenceUrl: form.musicalReferenceUrl.trim(),
     lyricsVideoUrl: form.lyricsVideoUrl.trim(),
     tagIds: form.tagIds,
@@ -132,23 +136,17 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
       authorIds: f.authorIds.includes(id) ? f.authorIds.filter((a) => a !== id) : [...f.authorIds, id],
     }));
 
-  const addTutorial = () => setForm((f) => ({ ...f, tutorials: [...f.tutorials, { title: "", url: "" }] }));
-  const removeTutorial = (i: number) => setForm((f) => ({ ...f, tutorials: f.tutorials.filter((_, j) => j !== i) }));
-  const updateTutorial = (i: number, key: "title" | "url", val: string) =>
-    setForm((f) => {
-      const tutorials = [...f.tutorials];
-      tutorials[i] = { ...tutorials[i], [key]: val };
-      return { ...f, tutorials };
-    });
+  // Every one of the six addresses a row BY ID. An index would put the identity
+  // back in the position, which is the defect (issue #69).
+  const addTutorial = () => setForm((f) => ({ ...f, tutorials: addRow(f.tutorials) }));
+  const removeTutorial = (id: string) => setForm((f) => ({ ...f, tutorials: removeRow(f.tutorials, id) }));
+  const updateTutorial = (id: string, key: "label" | "url", val: string) =>
+    setForm((f) => ({ ...f, tutorials: updateRow(f.tutorials, id, key, val) }));
 
-  const addRefLink = () => setForm((f) => ({ ...f, referenceLinks: [...f.referenceLinks, { label: "", url: "" }] }));
-  const removeRefLink = (i: number) => setForm((f) => ({ ...f, referenceLinks: f.referenceLinks.filter((_, j) => j !== i) }));
-  const updateRefLink = (i: number, key: "label" | "url", val: string) =>
-    setForm((f) => {
-      const links = [...f.referenceLinks];
-      links[i] = { ...links[i], [key]: val };
-      return { ...f, referenceLinks: links };
-    });
+  const addRefLink = () => setForm((f) => ({ ...f, referenceLinks: addRow(f.referenceLinks) }));
+  const removeRefLink = (id: string) => setForm((f) => ({ ...f, referenceLinks: removeRow(f.referenceLinks, id) }));
+  const updateRefLink = (id: string, key: "label" | "url", val: string) =>
+    setForm((f) => ({ ...f, referenceLinks: updateRow(f.referenceLinks, id, key, val) }));
 
   const insertLabel = (label: string) => {
     const ta = lyricsRef.current;
@@ -340,14 +338,14 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
               addLabel="Agregar tutorial"
               onAdd={addTutorial}
               rows={form.tutorials.map((tut, i) => ({
-                key: `tutorial-${i}`,
+                key: tut.id,
                 titleLabel: `Título del tutorial ${i + 1}`,
                 urlLabel: `URL del tutorial ${i + 1}`,
-                title: tut.title,
+                title: tut.label,
                 url: tut.url,
-                onTitle: (value: string) => updateTutorial(i, "title", value),
-                onUrl: (value: string) => updateTutorial(i, "url", value),
-                onRemove: () => removeTutorial(i),
+                onTitle: (value: string) => updateTutorial(tut.id, "label", value),
+                onUrl: (value: string) => updateTutorial(tut.id, "url", value),
+                onRemove: () => removeTutorial(tut.id),
                 removeLabel: `Eliminar tutorial ${i + 1}`,
               }))}
             />
@@ -360,14 +358,14 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
               firstHeader="Etiqueta"
               secondHeader="URL"
               rows={form.referenceLinks.map((link, i) => ({
-                key: `link-${i}`,
+                key: link.id,
                 titleLabel: `Etiqueta del link de referencia ${i + 1}`,
                 urlLabel: `URL del link de referencia ${i + 1}`,
                 title: link.label,
                 url: link.url,
-                onTitle: (value: string) => updateRefLink(i, "label", value),
-                onUrl: (value: string) => updateRefLink(i, "url", value),
-                onRemove: () => removeRefLink(i),
+                onTitle: (value: string) => updateRefLink(link.id, "label", value),
+                onUrl: (value: string) => updateRefLink(link.id, "url", value),
+                onRemove: () => removeRefLink(link.id),
                 removeLabel: `Eliminar link de referencia ${i + 1}`,
               }))}
             />
