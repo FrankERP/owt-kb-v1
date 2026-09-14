@@ -1094,4 +1094,4 @@ touchmove-removal tests). Task 4 (long-press + `QuickActions`) drew APPROVED (4
 LOW parked for the final fix wave).
 
 - **Bundle:** `main 61d5330f` → `R7 tip 6fcfb22c`: shared 172.5 → 172.5; `/` +4.1; `/schedule` +2.4; `/biblioteca` +5.0 (the long-press hook and the page's one sheet); `/me` +3.6; `/admin` +2.6 — see the Bundle table.
-- **Release:** pending.
+- **Release:** merged to `main` as `2fae55b8` (PR #72, 2026-09-13 21:2x CST, after PR #71 landed); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`, 21:22 CST). Preview last verified at `7f5c52c7`.
