@@ -29,15 +29,20 @@ const noon = (dateKey: string) => new Date(dateKey.slice(0, 10) + "T12:00:00");
  * on a weekday and must say so ("MIÉ 16"). `es-MX` renders it with a trailing dot
  * in some ICU builds ("sáb.") and without in others, so the dot is stripped before
  * the three letters are taken — the accent is kept, because the app is Spanish.
+ *
+ * `now` goes straight into `daysUntil`, which does its own CDMX pinning — this
+ * function never round-trips "today" through a `YYYY-MM-DD` string of its own,
+ * so a caller's local clock and the countdown's notion of "today" can't drift
+ * apart between the two calls a caller used to have to make.
  */
-export function cueLabel(cue: Cue, today: string): string {
+export function cueLabel(cue: Cue, now: Date = new Date()): string {
   const date = noon(cue.dateKey);
   const abbr = date
     .toLocaleDateString("es-MX", { weekday: "short" })
     .replace(/\.$/, "")
     .slice(0, 3)
     .toUpperCase();
-  const countdown = formatCountdown(daysUntil(cue.dateKey, noon(today))).toUpperCase();
+  const countdown = formatCountdown(daysUntil(cue.dateKey, now)).toUpperCase();
   return `${abbr} ${date.getDate()} · ${countdown}`;
 }
 

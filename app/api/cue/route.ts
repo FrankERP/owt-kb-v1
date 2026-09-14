@@ -60,5 +60,11 @@ export async function GET() {
 
   // Private and short: it is one member's own next service, and it changes at
   // most once a day — the strip's own sessionStorage cache uses the same 60 s.
-  return NextResponse.json({ cue }, { headers: { "Cache-Control": "private, max-age=60" } });
+  // `Vary: Cookie` because the response is keyed on the session cookie: any
+  // shared cache upstream (a CDN, a browser's disk cache) must treat two
+  // members' requests as two different resources.
+  return NextResponse.json(
+    { cue },
+    { headers: { "Cache-Control": "private, max-age=60", "Vary": "Cookie" } },
+  );
 }

@@ -10,24 +10,24 @@ import { cueLabel, pickCue } from "../cue";
 
 describe("cueLabel", () => {
   it("reads «DOM 13 · EN 5 DÍAS» five days out", () => {
-    expect(cueLabel({ dateKey: "2026-09-13", kind: "worship" }, "2026-09-08")).toBe("DOM 13 · EN 5 DÍAS");
+    expect(cueLabel({ dateKey: "2026-09-13", kind: "worship" }, new Date("2026-09-08T12:00:00-06:00"))).toBe("DOM 13 · EN 5 DÍAS");
   });
 
   it("reads «HOY» on the day itself", () => {
-    expect(cueLabel({ dateKey: "2026-09-13", kind: "worship" }, "2026-09-13")).toBe("DOM 13 · HOY");
+    expect(cueLabel({ dateKey: "2026-09-13", kind: "worship" }, new Date("2026-09-13T12:00:00-06:00"))).toBe("DOM 13 · HOY");
   });
 
   it("reads «SÁB 12 · MAÑANA» the day before a Saturday service, accent kept", () => {
-    expect(cueLabel({ dateKey: "2026-09-12", kind: "worship" }, "2026-09-11")).toBe("SÁB 12 · MAÑANA");
+    expect(cueLabel({ dateKey: "2026-09-12", kind: "worship" }, new Date("2026-09-11T12:00:00-06:00"))).toBe("SÁB 12 · MAÑANA");
   });
 
   it("abbreviates a weekday service the same way", () => {
-    expect(cueLabel({ dateKey: "2026-09-16", kind: "worship" }, "2026-09-13")).toBe("MIÉ 16 · EN 3 DÍAS");
+    expect(cueLabel({ dateKey: "2026-09-16", kind: "worship" }, new Date("2026-09-13T12:00:00-06:00"))).toBe("MIÉ 16 · EN 3 DÍAS");
   });
 
   it("pins the day to local noon — never a bare `new Date(iso)` UTC day-flip", () => {
     // At UTC-6 a bare `new Date("2026-09-13")` is Saturday the 12th, 18:00.
-    expect(cueLabel({ dateKey: "2026-09-13", kind: "kids" }, "2026-09-12")).toBe("DOM 13 · MAÑANA");
+    expect(cueLabel({ dateKey: "2026-09-13", kind: "kids" }, new Date("2026-09-12T12:00:00-06:00"))).toBe("DOM 13 · MAÑANA");
   });
 });
 

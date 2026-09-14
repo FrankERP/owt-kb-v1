@@ -19,7 +19,7 @@ import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSe
 installMotionTestEnv();
 
 let pathname = "/biblioteca";
-let session: { user: Record<string, unknown> } | null = { user: { name: "Ana" } };
+let session: { user: Record<string, unknown> } | null = { user: { name: "Ana", sanityId: "member-1" } };
 vi.mock("next/navigation", () => ({ usePathname: () => pathname }));
 vi.mock("next-auth/react", () => ({
   useSession: () => ({ data: session, status: session ? "authenticated" : "unauthenticated" }),
@@ -47,7 +47,7 @@ function mount() {
 
 beforeEach(() => {
   pathname = "/biblioteca";
-  session = { user: { name: "Ana" } };
+  session = { user: { name: "Ana", sanityId: "member-1" } };
   sessionStorage.clear();
   fetchMock.mockReset();
   fetchMock.mockResolvedValue({
@@ -75,8 +75,12 @@ describe("CueStrip", () => {
     }
   });
 
-  it("renders nothing when the response is not ok", async () => {
-    fetchMock.mockResolvedValue({ ok: false, json: async () => ({}) });
+  it("renders nothing when the response is not ok, even if the body carries a real cue", async () => {
+    // A weak version of this test lets `json: async () => ({})` pass for the
+    // wrong reason (no cue in the body at all). Here the body is a VALID,
+    // populated cue payload — proving the strip branches on `ok`, not on
+    // whatever happens to be in the JSON.
+    fetchMock.mockResolvedValue({ ok: false, json: async () => ({ cue: { dateKey: inThreeDays(), kind: "worship" } }) });
     mount();
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(screen.queryByText(/EN 3 DÍAS/)).toBeNull();
@@ -89,16 +93,39 @@ describe("CueStrip", () => {
     expect(screen.queryByText(/EN 3 DÍAS/)).toBeNull();
   });
 
-  it("short-circuits the fetch on a fresh sessionStorage cache", async () => {
-    sessionStorage.setItem(CUE_KEY, JSON.stringify({ c: { dateKey: inThreeDays(), kind: "worship" }, t: Date.now() }));
+  it("short-circuits the fetch on a fresh sessionStorage cache for the same member", async () => {
+    sessionStorage.setItem(
+      CUE_KEY,
+      JSON.stringify({ c: { dateKey: inThreeDays(), kind: "worship" }, t: Date.now(), id: "member-1" }),
+    );
     mount();
     await waitFor(() => expect(screen.getByText(/EN 3 DÍAS/)).toBeTruthy());
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("re-asks once the cached entry is older than its TTL", async () => {
-    sessionStorage.setItem(CUE_KEY, JSON.stringify({ c: null, t: Date.now() - 61_000 }));
+    sessionStorage.setItem(CUE_KEY, JSON.stringify({ c: null, t: Date.now() - 61_000, id: "member-1" }));
     mount();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("treats a cache entry written for another member as a miss", async () => {
+    sessionStorage.setItem(
+      CUE_KEY,
+      JSON.stringify({ c: { dateKey: inThreeDays(), kind: "worship" }, t: Date.now(), id: "someone-else" }),
+    );
+    mount();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("reserves the strip's line before the fetch resolves, so the block never jumps", async () => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    fetchMock.mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; }));
+    const { container } = mount();
+    const wrapper = container.querySelector(".min-h-\\[15px\\]");
+    expect(wrapper).toBeTruthy();
+    expect(screen.queryByText(/EN 3 DÍAS/)).toBeNull();
+    resolveFetch({ ok: true, json: async () => ({ cue: { dateKey: inThreeDays(), kind: "worship" } }) });
+    await waitFor(() => expect(screen.getByText(/EN 3 DÍAS/)).toBeTruthy());
   });
 });

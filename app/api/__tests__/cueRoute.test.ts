@@ -90,4 +90,15 @@ describe("GET /api/cue", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ cue: null });
   });
+
+  it("carries `Vary: Cookie`, since the response is keyed on the session cookie", async () => {
+    h.fetch.mockResolvedValue({ sunday: null, saturday: null, special: null });
+    const res = await GET();
+    expect(res.headers.get("Vary")).toBe("Cookie");
+  });
+
+  it("propagates a Sanity read failure rather than answering with a silent empty cue", async () => {
+    h.fetch.mockRejectedValue(new Error("Sanity is down"));
+    await expect(GET()).rejects.toThrow();
+  });
 });
