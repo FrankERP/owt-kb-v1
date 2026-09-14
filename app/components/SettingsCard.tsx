@@ -6,9 +6,9 @@
 //
 // `#tema` stays reachable: ThemeControl keeps rendering its own `id="tema"`
 // (just without its standalone card chrome, via its `bare` prop), nested inside
-// this card's own Tema subsection, so the cross-page anchors that point here —
-// `ThemeAnnouncement`'s and the avatar menu's `/me/ajustes#tema` — still land on
-// something.
+// this card's own Tema subsection, so the avatar menu's cross-page
+// `/me/ajustes#tema` still lands on something. (The theme announcement banner
+// pointed here too until it was retired on 2026-09-13 — ADR-0033.)
 //
 // `member` is nullable on purpose — a failed profile read still renders
 // Tema and Tamaño de texto, just without the Perfil subsection, which has
