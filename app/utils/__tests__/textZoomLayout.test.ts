@@ -88,7 +88,10 @@ describe("the voices grid reflows instead of overlapping", () => {
     // no wrap at all painted the title over the controls (the shipped bug), and
     // `break-words` without a wrap collapsed the title to one letter per line at
     // «Máximo», where the right-hand block is ~220px that cannot shrink.
-    const header = src.slice(src.indexOf("t.headerBg"), src.indexOf("function VocalCol"));
+    // Bounded at BOTH ends. `function VocalCol` is 230 lines down, so an
+    // open-ended slice was the whole card: planting these classes on any other
+    // element satisfied the assertions while the header itself had lost them.
+    const header = src.slice(src.indexOf("t.headerBg"), src.indexOf("space-y-5 p-5"));
     expect(header).toMatch(/flex flex-wrap items-center justify-between/);
     expect(header, "a lone item on a wrapped justify-between line goes LEFT").toMatch(
       /className="ml-auto flex flex-wrap items-center justify-end gap-2"/,
@@ -99,6 +102,10 @@ describe("the voices grid reflows instead of overlapping", () => {
       /ml-auto flex shrink-0/,
     );
     expect(header).toMatch(/<div className="min-w-0">/);
+    // `day` can be an editor-authored `service_name`: one long token with no space
+    // in it overflows the card at NORMAL size without this, and the panel's
+    // `overflow-hidden` cuts it off.
+    expect(header, "a long service name must be breakable").toMatch(/md:text-3xl break-words"/);
   });
 });
 
@@ -114,9 +121,10 @@ describe("rows of unbreakable Spanish words wrap instead of running off the phon
     // by 16px, which is budget spent against the very wrap this is avoiding.
     expect(src, "the wrap gap must not cost horizontal room").not.toMatch(/justify-between gap-2\b/);
     expect(src).toMatch(/min-w-min flex-1 text-center/);
-    expect(src, "the arrows must not be shrunk into their chevrons").toMatch(
-      /flex shrink-0 items-center gap-1\.5/,
-    );
+    expect(
+      src.match(/flex shrink-0 items-center gap-1\.5/g) ?? [],
+      "BOTH arrows — an existence check passed with «Siguiente» unshrunk",
+    ).toHaveLength(2);
   });
 
   it("the /me availability row wraps its count", () => {
@@ -129,9 +137,9 @@ describe("rows of unbreakable Spanish words wrap instead of running off the phon
 
   it("the library search box can shrink under its own placeholder", () => {
     // A text input's intrinsic minimum is ~20 characters IN ITS OWN FONT, so it
-    // grows with the text and shoved «Filtros» off the screen. Both halves matter:
-    // `min-w-0` lets the flex item shrink, `size={1}` lowers the floor it shrinks
-    // against.
+    // grows with the text and shoved «Filtros» off the screen. `min-w-0` is the
+    // half that does the work; `size={1}` lowers the floor it shrinks against and
+    // is belt-and-braces beside the input's `w-full`.
     const src = read("app/components/LibraryIndex.tsx");
     expect(src).toMatch(/brand-search-console relative min-w-0 flex-1/);
     expect(src).toMatch(/\n\s+size=\{1\}\n/);
