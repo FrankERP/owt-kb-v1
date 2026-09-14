@@ -92,10 +92,15 @@ export default function CueStrip() {
   return (
     <div className="min-h-[15px] lg:min-h-[16.5px]">
       <Presence show={!!label} variant="fade">
-        {/* `aria-live="off"`: it is ambient context, never an announcement. */}
+        {/* `aria-live="off"`: it is ambient context, never an announcement.
+            One line, always: `truncate`/`whitespace-nowrap` like the navbar's own
+            title siblings, so a long cue ("SÁBADO · EN 11 DÍAS") clips instead of
+            wrapping to a second line the reserved height does not cover. The phone
+            tracking is tighter for the same reason — 0.22em at 10px spent the width
+            on letter spacing; the desktop line has room and keeps it. */}
         <p
           aria-live="off"
-          className="font-label text-[10px] lg:text-[11px] uppercase tracking-[0.22em] text-ink-dim"
+          className="w-full truncate whitespace-nowrap text-center font-label text-[10px] lg:text-[11px] uppercase tracking-[0.12em] lg:tracking-[0.22em] text-ink-dim"
         >
           {label}
         </p>

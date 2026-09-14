@@ -195,12 +195,22 @@ export default function PullToRefresh() {
     };
 
     const onStart = (event: TouchEvent) => {
+<<<<<<< HEAD
       // Cleared FIRST, before any bail below: a second finger landing while the
       // first is mid-pull must not leave the prior pull's travel sitting in
       // `dyRef` for that second touch's own `touchend` to read — the listeners
       // for the first pull are already gone (a fresh `touchstart` only fires
       // once the previous one's `touchend`/`touchcancel` detached them), but
       // the refs they wrote were not.
+=======
+      // Cleared FIRST, before any bail below. A second finger landing mid-pull
+      // fires `touchstart` while the FIRST finger's `touchmove`/`touchend` are
+      // still attached — they come off at `touchend`, which has not happened —
+      // so this reset is what ends the pull in flight: `startY` goes null, the
+      // next `onMove` early-returns on it, and the eventual `onEnd` reads a
+      // `dyRef` of 0 and commits nothing. A pinch or a second thumb therefore
+      // abandons the pull rather than handing its travel to the new touch.
+>>>>>>> claude/motion-r7-appwide
       reset();
       if (refreshingRef.current) return;
       if (event.touches.length > 1 || window.scrollY > 0) return;

@@ -1551,12 +1551,23 @@ convenience rather than by page.
 
 **Shipped.** `app/api/cue/route.ts` + `app/utils/cue.ts` + `app/components/ui/CueStrip.tsx`
 — the next-service cue under the title on every route but `/` and `/me`.
+<<<<<<< HEAD
 `app/components/ui/Blackout.tsx` — `blackout()`, the sign-out exit, wired into
 `SignOutButton` and `NavMenu`. `app/components/ui/PullToRefresh.tsx` +
 `app/components/ui/pullModel.ts` — pull-to-refresh, mounted once in
 `app/(client)/layout.tsx`. `app/components/ui/useLongPress.ts` +
 `app/components/ui/QuickActions.tsx`, wired into `app/components/LibraryRow.tsx` and
 `app/components/DayCardDisclosure.tsx`.
+=======
+`app/components/ui/Blackout.tsx` — `blackout()`, the sign-out exit, wired into the
+three sign-out call sites: `SignOutButton`, `NavMenu`, and
+`app/(client)/auth/not-a-member/page.tsx`. `app/components/ui/PullToRefresh.tsx` +
+`app/components/ui/pullModel.ts` — pull-to-refresh, mounted once in
+`app/(client)/layout.tsx`. `app/components/ui/useLongPress.ts` +
+`app/components/ui/QuickActions.tsx`, wired into `app/components/LibraryRow.tsx` (which
+reports the press up to `app/components/LibraryIndex.tsx`, the owner of the page's ONE
+sheet) and `app/components/DayCardDisclosure.tsx`.
+>>>>>>> claude/motion-r7-appwide
 
 **Rulings, with reasons.**
 - **The cue is fetched client-side, not read into `Navbar` server-side.** `Navbar` reads
@@ -1644,6 +1655,25 @@ convenience rather than by page.
   `onStart`; explicit touchmove-removal assertions).
 - **Task 4 (long-press + `QuickActions`):** APPROVED, 4 LOW parked for the final fix
   wave.
+<<<<<<< HEAD
+=======
+- **Final wave landed as `5ac795f5`**, verified by a whole-branch code review, which
+  raised 2 MEDIUM + 3 LOW. All five are fixed in this wave: **M1** — ~140 closed
+  `CueDialog`s on `/biblioteca`, one per `LibraryRow`, each subscribed to the CueDialog
+  layer context, so any dialog open or close re-rendered every row; the sheet is hoisted
+  to `LibraryIndex` and the row reports the press through a stable `onQuickActions`.
+  **M2** — the phone cue label wrapped out of its reserved line; it now truncates on one
+  line with tighter phone tracking (0.12em, 0.22em from `lg:`). **L1** — the `.ics` UID
+  folded the Sanity id through `normalizeText`, which would mint a second calendar entry
+  for a service whose `_id` carries uppercase (`/me` exports the raw `_id`); only the
+  `${date}-${day}` fallback is folded now. **L2** — keyboard-invoked context menus
+  (Shift+F10, the Menu key) arrive as `button 0` with no `pointerType` and are
+  indistinguishable from Safari's touch `contextmenu`; the behaviour stands and the
+  comments/docs now say so plainly rather than implying only touch takes that path.
+  **L3** — a false comment in `PullToRefresh`'s `onStart` claimed the first pull's
+  listeners were already detached; they are not, and the `reset()` is what ends the pull
+  in flight. Review trail closed.
+>>>>>>> claude/motion-r7-appwide
 
 **Open notes for Frank's look.**
 - The iOS bounce feel — whether the rail's resistance (half the finger's travel,

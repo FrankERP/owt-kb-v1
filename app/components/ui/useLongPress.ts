@@ -26,6 +26,13 @@
 // mouse" is `pointerType === "mouse"` when the browser sends one (Chrome, Edge) and
 // `button === 2` when it does not (Safari and Firefox put no `pointerType` on a
 // `contextmenu` MouseEvent) — a touch-generated `contextmenu` carries button 0.
+//
+// A KEYBOARD-invoked context menu (Shift+F10, the Menu key) also arrives as button 0
+// with no `pointerType`, so it is indistinguishable from Safari's touch `contextmenu`
+// and takes the same path: prevented, sheet not opened. That is the honest statement of
+// the behaviour — a `contextmenu` with no mouse signal is prevented, and keyboard-invoked
+// menus on rows are not supported. The row's own tap (Enter/Space) is the affordance,
+// and every quick action it would have offered is reachable another way.
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type React from "react";
 import { haptic } from "@/app/utils/haptics";
@@ -127,6 +134,11 @@ export default function useLongPress(
         // (Chrome/Edge's own addition to a `contextmenu` MouseEvent) never
         // reaches `e` itself — only `e.nativeEvent` carries it.
         const pointerType = (e.nativeEvent as MouseEvent & { pointerType?: string }).pointerType;
+<<<<<<< HEAD
+=======
+        // No mouse signal ⇒ prevented only: a touch press has already fired (or
+        // will), and a keyboard-invoked menu is indistinguishable from it here.
+>>>>>>> claude/motion-r7-appwide
         const isMouse = pointerType ? pointerType === "mouse" : e.button === 2;
         if (!isMouse) return;
         fire(false);

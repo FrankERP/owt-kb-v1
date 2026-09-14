@@ -128,4 +128,15 @@ describe("CueStrip", () => {
     resolveFetch({ ok: true, json: async () => ({ cue: { dateKey: inThreeDays(), kind: "worship" } }) });
     await waitFor(() => expect(screen.getByText(/EN 3 DÍAS/)).toBeTruthy());
   });
+
+  it("keeps the label on ONE line — it clips rather than wrapping out of its reserved height", async () => {
+    mount();
+    const label = await screen.findByText(/EN 3 DÍAS/);
+    const classes = label.className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(["truncate", "whitespace-nowrap", "w-full", "text-center"]));
+    // Tighter tracking on the phone, where the width is the scarce thing; the
+    // desktop line keeps the navbar's 0.22em.
+    expect(classes).toContain("tracking-[0.12em]");
+    expect(classes).toContain("lg:tracking-[0.22em]");
+  });
 });
