@@ -215,8 +215,8 @@ several exist precisely to stop a plausible-looking change.
   entry focus is `[open, top]` (and skips when focus is already inside the shell);
   layer registration is `[id, mounted, registerLayer]`, because its cleanup is the
   unregister and the provider restores focus behind it. Never `onDismiss`, never a
-  ref prop: every consumer passes an inline arrow, so those re-run the effect on
-  EVERY render and throw the caret onto the close button — on iOS the keyboard
+  ref prop: most consumers pass an inline arrow and none is guaranteed stable, so
+  those re-run the effect on EVERY render and throw the caret onto the close button — on iOS the keyboard
   closes with it, which is how members lost the ability to edit their profile,
   `/biblioteca`'s filter search and the song editor, for weeks, with all three
   gates green (ADR-0034). The Tab/Escape listener may keep unstable deps; binding

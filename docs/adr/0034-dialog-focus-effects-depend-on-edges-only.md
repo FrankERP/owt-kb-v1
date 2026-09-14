@@ -16,8 +16,10 @@ array:
 }, [id, isTopLayer, onDismiss, open, top]);
 ```
 
-`onDismiss` is an inline arrow in every consumer (`onDismiss={() => setOpen(false)}`),
-which is a new identity on every render. The three surfaces that broke all share
+`onDismiss` is an inline arrow in most consumers (`onDismiss={() => setOpen(false)}`),
+and a new identity on every render; the seven that pass a named handler are not
+guaranteed stable either, and nothing in the type or the lint rule asks them to
+be. The three surfaces that broke all share
 one shape: **the state being typed is declared in the component that renders the
 dialog.** So a keystroke re-rendered that component, `onDismiss` changed
 identity, the effect re-ran, and focus jumped to the dialog's first control.
@@ -44,7 +46,10 @@ presence edge and nothing else.
   unregister, which the provider follows with a focus restore, so a spurious
   re-run throws focus out of an open dialog — the same class of failure, worse.
   The two ref props it needs are read through a ref mirror refreshed in an
-  effect of its own.
+  effect of its own, and the record is handed LIVE VIEWS of that mirror rather
+  than the ref objects themselves — the provider dereferences the record only at
+  unregister time, so a plain pass-through would have frozen the restore target
+  as it was when the dialog opened.
 - **The Tab/Escape trap** keeps `onDismiss` in its dependencies. Re-binding a
   listener has no side effect, so unstable identities are harmless there. This
   is the distinction that matters: not "which effect", but "does the effect move
@@ -64,9 +69,12 @@ failure is silent, member-facing, and invisible to every gate.
 
 **Satisfy `react-hooks/exhaustive-deps` and keep one effect.** That lint rule is
 what the original code was obeying, and obeying it is what shipped the bug: the
-array it wants is correct for the listener and wrong for the focus call. The
-`eslint-disable` comments in the two places deps are deliberately narrowed are
-part of the decision, not noise around it.
+array it wants is correct for the listener and wrong for the focus call. Note
+that `CueDialog` itself carries no `eslint-disable` — both narrowed effects read
+everything else through refs, so the rule is satisfied and a future reader gets
+no warning hinting that the arrays are deliberate. The comments are. (The two
+disables in this delivery are elsewhere: `ProfilePanel.tsx` and
+`AvailabilityCalendar.tsx`.)
 
 **A source-scan guard on the dependency array.** It would pin today's spelling
 rather than the property, and break on any harmless edit. The behavioural tests
@@ -79,7 +87,16 @@ future version of the lint rule, which will suggest exactly that — reintroduce
 member-facing outage that no gate reports. The four typing tests are what stands
 in the way; do not weaken them to assertions that only check the typed value.
 
-Entry focus no longer fires when focus is already inside the shell. One
-behaviour changed with it, deliberately: when a nested dialog closes and the
-parent becomes top again, the parent keeps the focus the provider just restored
-instead of yanking it to its own close button.
+Entry focus no longer fires when focus is already inside the shell, and two
+consequences of that are worth stating exactly, because both were measured
+rather than reasoned:
+
+- **A focused element removed from inside an open dialog no longer pulls focus
+  back to the close button; it lands on `body`.** That is the price of the
+  edge-only deps and is accepted: Escape still works (the listener is
+  document-capture), and Tab re-enters the dialog because the app root is
+  `inert`. It is a behaviour change, not a new bug.
+- **The nested case did NOT change**, contrary to what is easy to assume. A
+  child dialog's unmount drops focus to `body`, so `contains` is false and entry
+  focus re-fires on the `top` flip — the provider's own restore lands one frame
+  later and wins, exactly as before.
