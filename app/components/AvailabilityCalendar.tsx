@@ -136,11 +136,14 @@ export default function AvailabilityCalendar({ initialRev, initialDates, service
   const canPrev       = page > 0;
   const canNext       = page < totalPages - 1;
 
-  // Focus the input whenever popover opens
+  // Focus the input whenever the popover opens. The timer is CLEARED on cleanup:
+  // a popover dismissed inside the 50 ms still fired its focus, pulling the caret
+  // into a note field the member had just closed.
   useEffect(() => {
-    if (popover) {
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!popover) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the DAY is the edge; typing a note must not re-focus
   }, [popover?.iso]);
 
   /**

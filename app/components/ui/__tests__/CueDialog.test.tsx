@@ -2,6 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createPortal } from "react-dom";
+import { useState } from "react";
 import CueDialog, { useCueDialogFocusSatellite } from "../CueDialog";
 import { CueDialogProvider, type DismissReason } from "../CueDialogProvider";
 import CueDialogStatus from "../CueDialogStatus";
@@ -626,5 +627,68 @@ describe("CueDialog motion", () => {
       Object.defineProperty(window, "matchMedia", { writable: true, configurable: true, value: original });
     }
     expect(onDismiss).toHaveBeenCalledWith("drag");
+  });
+});
+
+// ── The typing bug (reported 2026-09-13) ────────────────────────────────────
+//
+// Members could not edit their profile: on a phone the keyboard closed after
+// ONE key, and on a laptop the caret left the field after one character.
+//
+// The cause was not in the form. The initial-focus effect below listed
+// `onDismiss` among its dependencies, and every consumer passes an inline
+// arrow (`onDismiss={() => setOpen(false)}`) — a new identity on every render.
+// So each keystroke re-ran the effect and moved focus to `focusables(shell)[0]`,
+// the close button. iOS closes the soft keyboard when the focused element stops
+// being a text field, which is exactly what the team saw.
+//
+// This harness reproduces it with the real thing a consumer writes: state that
+// changes as you type, and an inline handler.
+describe("CueDialog typing", () => {
+  function TypingHarness() {
+    const [open, setOpen] = useState(true);
+    const [value, setValue] = useState("");
+    return (
+      <MotionProvider>
+        <CueDialogProvider>
+          <CueDialog open={open} title="Editar perfil" onDismiss={() => setOpen(false)}>
+            <button>Cerrar</button>
+            <input
+              aria-label="Alias"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+            />
+          </CueDialog>
+        </CueDialogProvider>
+      </MotionProvider>
+    );
+  }
+
+  it("does not steal focus back to the first control on every keystroke", () => {
+    render(<TypingHarness />);
+    const input = screen.getByLabelText("Alias") as HTMLInputElement;
+    act(() => input.focus());
+    expect(document.activeElement).toBe(input);
+
+    for (const char of ["F", "r", "a", "n", "k"]) {
+      fireEvent.change(input, { target: { value: input.value + char } });
+      expect(
+        document.activeElement,
+        "focus left the field mid-word — on iOS that closes the keyboard",
+      ).toBe(input);
+    }
+    expect(input.value).toBe("Frank");
+  });
+
+  it("still puts initial focus in the dialog when it opens", () => {
+    // The guard must not cost the entry point: a freshly opened dialog still
+    // takes focus from whatever the page had.
+    const outside = document.createElement("button");
+    document.body.appendChild(outside);
+    outside.focus();
+    render(<TypingHarness />);
+    expect(document.activeElement).not.toBe(outside);
+    expect(document.querySelector("[role=\"dialog\"]")?.contains(document.activeElement)).toBe(true);
+    outside.remove();
   });
 });

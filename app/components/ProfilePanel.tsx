@@ -103,13 +103,28 @@ export default function ProfilePanel({ initialMember }: { initialMember: MemberP
   const [emailPrefs, setEmailPrefs] = useState(() => resolveEmailPrefs(initialMember.notifPrefs));
   const [savingPrefField, setSavingPrefField] = useState<string | null>(null);
 
-  // Sync form state when initialMember prop changes
+  // Re-seed the form when the PERSON changes — keyed on `_id`, not on the object.
+  //
+  // `initialMember` is a fresh object on every server render of `/me`, and this
+  // effect overwrites `alias`/`email` with the server's values. Keyed on the
+  // object it was one `router.refresh()` away from wiping a half-typed alias
+  // mid-word, with no way for the member to tell what happened. Nothing on `/me`
+  // refreshes the route today (audited 2026-09-13: the four `router.refresh()`
+  // calls are all on other surfaces), so this was latent rather than live — but
+  // "latent" here means "the next feature on this page turns it on".
+  //
+  // `_id` is the dependency that expresses the real intent: a DIFFERENT member is
+  // now being shown — a super-admin ending an impersonation is the case that
+  // exists — so the form must be re-seeded. Same member, new object, means the
+  // page re-rendered, and a re-render must not touch what the member is typing.
+  // Post-save sync is unaffected: `handleSaveProfile` sets `member` itself.
   useEffect(() => {
     setMember(initialMember);
     setAlias(initialMember.alias ?? "");
     setEmail(initialMember.email ?? "");
     setEmailPrefs(resolveEmailPrefs(initialMember.notifPrefs));
-  }, [initialMember]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- identity, not the object: see above
+  }, [initialMember._id]);
 
   const showToast = (msg: string, ok = true) => toast({ message: msg, tone: ok ? "ok" : "error", duration: 3500 });
 
