@@ -724,4 +724,38 @@ describe("CueDialog typing", () => {
     await waitFor(() => expect(document.querySelector("[role=dialog]")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("b")));
   });
+  it("restores through the CURRENT fallbackFocusRef when a nested dialog closes", async () => {
+    // The other half of the same property, and it needs its own case: the parent
+    // `fallbackRef` is read on a DIFFERENT provider branch (a child closing over a
+    // still-open parent), so a pass-through there survives the restoreFocusRef
+    // guard above untouched.
+    function NestedSwap() {
+      const f1 = useRef<HTMLInputElement>(null);
+      const f2 = useRef<HTMLInputElement>(null);
+      const [useSecond, setUseSecond] = useState(false);
+      const [childOpen, setChildOpen] = useState(true);
+      return (
+        <MotionProvider>
+          <CueDialogProvider>
+            <CueDialog open title="Padre" fallbackFocusRef={useSecond ? f2 : f1} onDismiss={() => {}}>
+              <input ref={f1} data-testid="f1" />
+              <input ref={f2} data-testid="f2" />
+              <button data-testid="swap" onClick={() => setUseSecond(true)}>swap</button>
+              <button data-testid="close-child" onClick={() => setChildOpen(false)}>cerrar</button>
+              <CueDialog open={childOpen} title="Hijo" onDismiss={() => setChildOpen(false)}>
+                <button>Dentro</button>
+              </CueDialog>
+            </CueDialog>
+          </CueDialogProvider>
+        </MotionProvider>
+      );
+    }
+
+    render(<NestedSwap />);
+    act(() => { fireEvent.click(screen.getByTestId("swap")); });
+    act(() => { fireEvent.click(screen.getByTestId("close-child")); });
+    // The provider defers its restore by a frame, and the child's exit animation
+    // runs first, so this waits rather than asserting immediately.
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("f2")));
+  });
 });
