@@ -77,4 +77,17 @@ describe("NavMenu — account menu", () => {
     expect(blackoutOrder).toBeLessThan(signOutOrder);
     expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/auth/signin" });
   });
+
+  it("cancels the blackout when signOut rejects, instead of leaving the page black", async () => {
+    const cancel = vi.fn();
+    blackoutMock.mockReturnValueOnce({ done: Promise.resolve(), cancel });
+    vi.mocked(signOut).mockRejectedValueOnce(new Error("network"));
+    mount();
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: /Menú de usuario/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Cerrar sesión" }));
+    });
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
 });

@@ -121,4 +121,39 @@ describe("DayCardDisclosure quick actions", () => {
     expect(created[0].type).toContain("text/calendar");
     click.mockRestore();
   });
+
+  // R7 final wave: the disclosure's own UID must equal `/me`'s `<_id>@owt`
+  // form for the same service document, or a member's export from the two
+  // surfaces creates two calendar entries for one service.
+  it("the .ics UID is `<serviceId>@owt` when a serviceId is provided", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    vi.setSystemTime(new Date(2026, 8, 8, 9, 0, 0));
+    let text = "";
+    const createObjectURL = vi.fn((b: Blob) => {
+      void b.text().then((t) => { text = t; });
+      return "blob:mock";
+    });
+    Object.defineProperty(URL, "createObjectURL", { value: createObjectURL, configurable: true });
+    Object.defineProperty(URL, "revokeObjectURL", { value: vi.fn(), configurable: true });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    render(
+      <MotionProvider>
+        <CueDialogProvider>
+          <DayCardDisclosure
+            day="Sábado"
+            date="2026-09-19"
+            serviceId="abc123"
+            setlist={{ week: "2026-09-19", songs: [song] }}
+            leads={["Ana"]}
+          />
+        </CueDialogProvider>
+      </MotionProvider>,
+    );
+    longPress(screen.getByRole("button", { name: /Sábado/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Añadir a mi calendario" }));
+    // Flush the Blob#text() microtask queued above.
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(text).toContain("UID:abc123@owt");
+    click.mockRestore();
+  });
 });

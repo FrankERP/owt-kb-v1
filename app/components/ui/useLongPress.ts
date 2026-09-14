@@ -41,6 +41,7 @@ export interface LongPressHandlers {
   onPointerLeave: () => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onClickCapture: (e: React.MouseEvent) => void;
+  onKeyDownCapture: (e: React.KeyboardEvent) => void;
   style: React.CSSProperties;
 }
 
@@ -67,23 +68,28 @@ export default function useLongPress(
     latest.current = onLongPress;
   }, [onLongPress]);
 
+  // Armed inside `pointerdown`, not always-on: a `window.addEventListener`
+  // call is synchronous and takes effect before any LATER task, so a listener
+  // added the instant the press starts still catches the first scroll frame of
+  // a fast flick — there is no window for it to miss. An always-on listener
+  // cost the app one active `scroll` handler per mounted row (~140 on a long
+  // list) for presses that were never made.
+  const onScrollRef = useRef<(() => void) | null>(null);
+  const stopScrollWatch = useCallback(() => {
+    if (onScrollRef.current) {
+      window.removeEventListener("scroll", onScrollRef.current, true);
+      onScrollRef.current = null;
+    }
+  }, []);
+
   const cancel = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
     origin.current = null;
-  }, []);
+    stopScrollWatch();
+  }, [stopScrollWatch]);
 
-  // One always-on listener rather than one armed per press: `cancel` is two
-  // assignments, and a listener added on `pointerdown` can miss the first scroll
-  // frame of a fast flick.
-  useEffect(() => {
-    const onScroll = () => cancel();
-    window.addEventListener("scroll", onScroll, true);
-    return () => {
-      window.removeEventListener("scroll", onScroll, true);
-      cancel();
-    };
-  }, [cancel]);
+  useEffect(() => () => cancel(), [cancel]);
 
   return useMemo<LongPressHandlers>(() => {
     // `suppress` is false for the mouse path: a right-click produces no click to
@@ -102,6 +108,9 @@ export default function useLongPress(
         cancel();
         origin.current = { x: e.clientX, y: e.clientY };
         timer.current = setTimeout(() => fire(true), ms);
+        const onScroll = () => cancel();
+        onScrollRef.current = onScroll;
+        window.addEventListener("scroll", onScroll, true);
       },
       onPointerMove: (e) => {
         const o = origin.current;
@@ -113,7 +122,11 @@ export default function useLongPress(
       onPointerLeave: cancel,
       onContextMenu: (e) => {
         e.preventDefault();
-        const pointerType = (e as React.MouseEvent & { pointerType?: string }).pointerType;
+        // React's SyntheticEvent only proxies the properties MouseEvent's own
+        // interface declares, so a non-standard extension like `pointerType`
+        // (Chrome/Edge's own addition to a `contextmenu` MouseEvent) never
+        // reaches `e` itself — only `e.nativeEvent` carries it.
+        const pointerType = (e.nativeEvent as MouseEvent & { pointerType?: string }).pointerType;
         const isMouse = pointerType ? pointerType === "mouse" : e.button === 2;
         if (!isMouse) return;
         fire(false);
@@ -123,6 +136,13 @@ export default function useLongPress(
         suppressClick.current = false;
         e.stopPropagation();
         e.preventDefault();
+      },
+      // A keydown can never be the tail of a pointer-driven long press — Enter/
+      // Space activating a focused row is its own, unrelated interaction. A
+      // stale `suppressClick` (a long press fired, then the row kept focus)
+      // would otherwise swallow that keyboard activation's click too.
+      onKeyDownCapture: () => {
+        suppressClick.current = false;
       },
       style: STYLE,
     };

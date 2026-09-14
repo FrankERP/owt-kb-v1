@@ -195,7 +195,13 @@ export default function PullToRefresh() {
     };
 
     const onStart = (event: TouchEvent) => {
-      startY.current = null;
+      // Cleared FIRST, before any bail below: a second finger landing while the
+      // first is mid-pull must not leave the prior pull's travel sitting in
+      // `dyRef` for that second touch's own `touchend` to read — the listeners
+      // for the first pull are already gone (a fresh `touchstart` only fires
+      // once the previous one's `touchend`/`touchcancel` detached them), but
+      // the refs they wrote were not.
+      reset();
       if (refreshingRef.current) return;
       if (event.touches.length > 1 || window.scrollY > 0) return;
       const target = event.target as Element | null;
