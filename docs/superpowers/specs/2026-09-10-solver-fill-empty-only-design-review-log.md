@@ -2,10 +2,10 @@
 
 Artifact: `2026-09-10-solver-fill-empty-only-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
-**Status: open — nine rounds, no approval yet.** The mechanism was rewritten twice: once
+**Status: open — ten rounds, no approval yet.** The mechanism was rewritten twice: once
 after round 2 (onto pins-as-fixed-variables) and once after round 6 (onto soft rules).
 **Round 7 verified the rewritten mechanism sound** and found its two blockers elsewhere.
-Current canonical digest `71d9f0c7…`, commit `186baad0`.
+Current canonical digest `77f8f6f4…`, commit `b8626336`.
 
 Approval is not authorization to implement. Implementation still requires the plan, the three
 gates, and a fresh code review of the diff.
@@ -31,6 +31,11 @@ byte-identical text.
 | 7 | `da922d6afb21fb47…` | `6bf8e4a4` | CHANGES_REQUIRED | yes (2 blockers, both verified) |
 | 8 | `3f8490496bc16f37…` | `6bbc15dd` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
 | 9 | `774c27754f3f79ea…` | `3a206274` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
+| 10 | `71d9f0c7e86b6b4f…` | `64ee73b2` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
+
+Commit hashes for rounds 1–10 are the pre-rewrite ones. The branch was rewritten on
+2026-09-14 to strip `Co-Authored-By` trailers that CLAUDE.md forbids; file contents are
+byte-identical, so every digest above still verifies against the corresponding tree.
 
 Every round used a brand-new `skeptical-reviewer` dispatch given only the reviewer brief, an
 immutable snapshot whose digest was verified equal to the canonical file before dispatch, the
@@ -293,3 +298,69 @@ analytically and found a client field and a CI gap; round 8 found the last unexa
 carried over from the rejected design; round 9 found a place where the prose understated the
 mechanism that was actually built. The defects are moving from the design into the description
 of it.
+
+## Round 10 — the round-9 fix was the blocker
+
+One blocker, reproduced, and it lands squarely on what round 9 had just mandated.
+
+Round 9 correctly rejected `assert solve(cfg) == solve(cfg)` as vacuous and required a
+**frozen literal golden** instead. Round 10 showed a frozen golden is not reproducible either:
+`solver.parameters.max_time_in_seconds` (`:963-966`) is **wall clock**, so a fixed seed fixes
+the search *order*, not where it stops. The returned incumbent depends on how many nodes the
+machine got through.
+
+Reproduced by the author against the repo's own `make_config` fixture, varying only the budget:
+
+| Seed | 9 s | 8 s | 7 s | 6 s | 5 s | 4 s | 3 s |
+|---|---|---|---|---|---|---|---|
+| 1 | = | = | = | = | = | = | = |
+| 42 | = | = | = | = | = | = | = |
+| 7 | = | = | **X** | **X** | **X** | **X** | **X** |
+| 2024 | = | = | = | = | = | = | **X** |
+
+A golden captured on a developer's machine would fail or flake on `ubuntu-latest` — and the
+pressure at §13's step zero would point straight back at the tautology round 9 forbade. The
+reviewer also caught the conflation underneath it: §13 said "by the byte-identity property the
+deployed solver behaves exactly as it does today", but what `soft = bool(pin_set)` buys is an
+identical **model and search**, not identical **output**, which is not a property this solver
+has ever had.
+
+**Fixed with two guards, both measured before writing them.**
+
+1. **A structural fingerprint, now the primary guard.** SHA-256 over the ordered `x` keys, the
+   per-slot candidate lists and the `rand_w` draw sequence — all built before any solve and
+   seeded only by `config.seed` (`:571`, `:633`, `:946`). Measured identical at a 10 s and a
+   3 s budget on all four seeds **including seed 7**, and distinct between seeds. It also
+   catches §13's actual named hazard (`build_slots` losing its `Sun.BGV`/`Sun.Choir`
+   interleave) directly, rather than through the board that hazard happens to perturb.
+2. **The output golden, with a checkable precondition.** Instrument `CpSolver.Solve` and assert
+   the **returning** solve reports `OPTIMAL`. Measured: seeds 1, 42 and 2024 do; seed 7 returns
+   `FEASIBLE` — and seed 7 is exactly the budget-dependent one. The precondition disqualifies
+   the bad fixture automatically instead of relying on a seed chosen by luck.
+
+§13 now claims model identity rather than output identity.
+
+Six non-blocking items adopted, two of them substantive. **`excluded_pwr` is not scoped for a
+pin** (`:728-731`): a pinned member who is also week-excluded is dropped from the weekly-presence
+terms even though their pin satisfies the rule, so E3's *headline* case would have shown a
+spurious «Se dejó de aplicar una regla…». (This was raised as non-blocking in round 6 and never
+applied — a dropped item that took four rounds to resurface.) And **§10's premise was false**:
+the infeasibility diagnostic does not reach the admin today either — the route answers `422`
+(`app/api/admin/solve/route.ts:138`) and `handleAuto` parses the body only when `res.ok`
+(`MonthGenerator.tsx:3058-3065`), so it is dead text in the app. The rest: §6's
+over-pinned-row notice is dropped (§5.1 grows the row and the grid already paints `+N`); the
+`builtin:` markers create a new date-formatting site that takes CLAUDE.md's noon-pinned parse;
+the switch state is owned by `MonthGenerator`, whose three consumers are the ones that matter;
+and the priority weight is ~9.6e16, not ~3.8e20.
+
+The reviewer also flagged, correctly, that the churn cap's state is **not visible from the
+spec** — a fresh reviewer cannot tell whether the go-aheads exist. The spec now opens with a
+pointer to this log, which records that Frank authorised every round past the cap individually
+and in advance.
+
+**Pattern across 6–10.** Round 6 killed the exemption enumeration; 7 cleared the mechanism and
+found a client field and a CI gap; 8 found the last unexamined piece of the rejected design; 9
+found prose describing something weaker than what was built; 10 found that round 9's own remedy
+did not hold. That last one is the signal worth watching: for the first time the defect was
+introduced by the previous round's fix — the failure mode CLAUDE.md records for the 15- and
+19-round loops.
