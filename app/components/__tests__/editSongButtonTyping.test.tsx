@@ -101,3 +101,50 @@ describe("EditSongButton keeps the caret where the editor is typing", () => {
     expect(search.value).toBe("hill");
   });
 });
+describe("EditSongButton repeatable rows are keyed by identity, not position", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => [] })));
+  });
+
+  it("keeps the caret on the SAME link when a row above it is deleted (issue #69)", () => {
+    openEditor();
+    const add = screen.getByRole("button", { name: "Agregar link de referencia" });
+    act(() => { fireEvent.click(add); fireEvent.click(add); fireEvent.click(add); });
+
+    const labelOf = (n: number) =>
+      screen.getByLabelText(`Etiqueta del link de referencia ${n}`) as HTMLInputElement;
+    act(() => { fireEvent.change(labelOf(1), { target: { value: "primero" } }); });
+    act(() => { fireEvent.change(labelOf(2), { target: { value: "segundo" } }); });
+    act(() => { fireEvent.change(labelOf(3), { target: { value: "tercero" } }); });
+
+    // Put the caret in the THIRD row, then delete the SECOND.
+    const third = labelOf(3);
+    act(() => third.focus());
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Eliminar link de referencia 2" })); });
+
+    // Keyed by position, React would have reused the second row's DOM node for
+    // "tercero" and the focused node would now hold a different link. Keyed by
+    // identity, the node the member was in is still theirs.
+    expect(document.activeElement).toBe(third);
+    expect((document.activeElement as HTMLInputElement).value).toBe("tercero");
+    expect(labelOf(1).value).toBe("primero");
+    expect(labelOf(2).value).toBe("tercero");
+    expect(screen.queryByDisplayValue("segundo")).toBeNull();
+  });
+
+  it("does the same for tutorials", () => {
+    openEditor();
+    const add = screen.getByRole("button", { name: "Agregar tutorial" });
+    act(() => { fireEvent.click(add); fireEvent.click(add); });
+    const t1 = screen.getByLabelText("Título del tutorial 1") as HTMLInputElement;
+    const t2 = screen.getByLabelText("Título del tutorial 2") as HTMLInputElement;
+    act(() => { fireEvent.change(t1, { target: { value: "teclado" } }); });
+    act(() => { fireEvent.change(t2, { target: { value: "bateria" } }); });
+
+    act(() => t2.focus());
+    act(() => { fireEvent.click(screen.getByRole("button", { name: "Eliminar tutorial 1" })); });
+
+    expect(document.activeElement).toBe(t2);
+    expect((document.activeElement as HTMLInputElement).value).toBe("bateria");
+  });
+});
