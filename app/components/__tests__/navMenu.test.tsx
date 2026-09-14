@@ -15,7 +15,13 @@ vi.mock("next-auth/react", () => ({
   signOut: vi.fn(async () => {}),
 }));
 
+const { blackoutMock } = vi.hoisted(() => ({
+  blackoutMock: vi.fn(() => ({ done: Promise.resolve(), cancel: vi.fn() })),
+}));
+vi.mock("@/app/components/ui/Blackout", () => ({ blackout: blackoutMock }));
+
 import NavMenu from "../NavMenu";
+import { signOut } from "next-auth/react";
 
 const adminUser = { name: "Ana Admin", email: "ana@x", role: "admin", ministries: ["worship"], managesMinistries: [] };
 
@@ -55,5 +61,20 @@ describe("NavMenu — account menu", () => {
     expect(screen.queryByRole("menuitem", { name: "Admin" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Oasis Kids" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Planear Kids" })).toBeNull();
+  });
+
+  it("«Cerrar sesión» blacks out the page before it signs out", async () => {
+    mount();
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: /Menú de usuario/ }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("menuitem", { name: "Cerrar sesión" }));
+    });
+    expect(blackoutMock).toHaveBeenCalledTimes(1);
+    expect(signOut).toHaveBeenCalledTimes(1);
+    const blackoutOrder = blackoutMock.mock.invocationCallOrder[0];
+    const signOutOrder = vi.mocked(signOut).mock.invocationCallOrder[0];
+    expect(blackoutOrder).toBeLessThan(signOutOrder);
+    expect(signOut).toHaveBeenCalledWith({ callbackUrl: "/auth/signin" });
   });
 });
