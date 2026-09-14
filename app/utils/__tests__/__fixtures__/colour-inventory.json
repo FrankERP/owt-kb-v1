@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 318,
-    "filesScanned": 310,
+    "filesScanned": 311,
     "filesWithColour": 54,
     "byCategory": {
       "2": 2,
@@ -2947,7 +2947,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 47,
+      "line": 51,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2959,7 +2959,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 326,
+      "line": 332,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3031,7 +3031,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 185,
+      "line": 193,
       "disposition": "B",
       "reason": null
     },
@@ -3043,7 +3043,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 208,
+      "line": 216,
       "disposition": "B",
       "reason": null
     },
@@ -3307,7 +3307,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 38,
+      "line": 42,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3319,7 +3319,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 319,
+      "line": 327,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3331,7 +3331,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 487,
+      "line": 495,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3343,7 +3343,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 488,
+      "line": 496,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3355,7 +3355,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 502,
+      "line": 510,
       "disposition": "B",
       "reason": null
     },
@@ -3511,7 +3511,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 250,
+      "line": 265,
       "disposition": "B",
       "reason": null
     },
@@ -3691,7 +3691,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 450,
+      "line": 525,
       "disposition": "B",
       "reason": null
     },
