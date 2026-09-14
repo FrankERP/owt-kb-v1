@@ -196,28 +196,42 @@ export default function CueDialog({
   // it is focus leaving the open dialog for the page behind it — strictly worse
   // than the keystroke-focus-theft fixed below it.
   //
-  // The two ref PROPS used to sit in the array. They are stable in all four
-  // consumers today (every one passes a real `useRef`), but the prop type is
-  // `RefObject<HTMLElement | null>`, which accepts an inline `{ current: null }`
-  // just as happily — and nothing would have caught it, which is precisely how
-  // the entry-focus bug reached the team. They are read through a ref instead,
-  // so the effect cannot be re-run by a consumer's render at all.
+  // The two ref PROPS used to sit in the array. Most consumers pass a real
+  // `useRef`, but the prop type is `RefObject<HTMLElement | null>`, which accepts
+  // an inline `{ current: null }` just as happily — and nothing would have caught
+  // it, which is precisely how the entry-focus bug reached the team. They are read
+  // through a mirror instead, so a consumer's render cannot re-run this effect.
   //
   // The mirror is seeded by `useRef`'s initialiser (so the mount registration
   // already has the right refs) and refreshed in an effect of its own — never
   // during render, which `react-hooks/refs` rejects as an error.
+  //
+  // THE LAYER RECORD GETS A LIVE VIEW, NOT A SNAPSHOT. The provider stores what
+  // it is handed and dereferences it only at UNREGISTER time, so passing
+  // `layerRefs.current.restoreFocusRef` straight through would freeze the ref
+  // objects as they were at registration: swap the prop while the dialog is open
+  // and focus would restore to the OLD target. These two getters read the mirror
+  // at the moment the provider dereferences them, which is what the narrowed
+  // dependency array is supposed to buy — the effect stops re-running WITHOUT the
+  // record going stale.
   const layerRefs = useRef({ restoreFocusRef, fallbackFocusRef });
   useEffect(() => {
     layerRefs.current = { restoreFocusRef, fallbackFocusRef };
   }, [restoreFocusRef, fallbackFocusRef]);
+  const liveRestoreRef = useRef<React.RefObject<HTMLElement | null>>({
+    get current() { return layerRefs.current.restoreFocusRef?.current ?? null; },
+  });
+  const liveFallbackRef = useRef<React.RefObject<HTMLElement | null>>({
+    get current() { return layerRefs.current.fallbackFocusRef?.current ?? null; },
+  });
   useEffect(() => {
     if (!mounted) return;
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     return registerLayer({
       id,
       opener: openerRef.current,
-      restoreFocusRef: layerRefs.current.restoreFocusRef,
-      fallbackRef: layerRefs.current.fallbackFocusRef,
+      restoreFocusRef: liveRestoreRef.current,
+      fallbackRef: liveFallbackRef.current,
       shellRef,
     });
   }, [id, mounted, registerLayer]);
@@ -229,7 +243,7 @@ export default function CueDialog({
   // ── ENTRY FOCUS. Its own effect, and that is the whole point. ──────────────
   //
   // This used to share an effect with the keydown listener below, which needs
-  // `onDismiss` in its dependencies — and every consumer passes an inline arrow
+  // `onDismiss` in its dependencies — and most consumers pass an inline arrow
   // (`onDismiss={() => setOpen(false)}`), a new identity on every render. So the
   // focus call re-ran on EVERY RENDER OF THE CONSUMER, not on the open edge: a
   // member typing in `ProfilePanel`'s Alias field lost the caret after one
@@ -242,10 +256,14 @@ export default function CueDialog({
   //      identity, nothing that changes per keystroke.
   //   2. Focus is never taken from inside the shell. Entry focus means "the page
   //      had focus, bring it in"; if focus already sits on a field in this
-  //      dialog, there is nothing to enter. This also improves the nested case:
-  //      when a child dialog closes and `top` flips back, the provider has
-  //      already restored focus to the control that opened it, and re-running
-  //      this would have yanked it to the close button.
+  //      dialog, there is nothing to enter.
+  //
+  // What this guard does NOT change is the nested case, and the distinction is
+  // worth keeping straight: a child dialog's unmount drops focus to `body`, so
+  // `contains` is false, entry focus DOES re-fire on the `top` flip — and the
+  // provider's own restore, one `requestAnimationFrame` later, lands after it and
+  // wins. Measured, not assumed. The net landing is the same as before this
+  // change; do not "restore" a behaviour here that the provider already owns.
   //
   // `focusables(shell)[0]` is SHELL-ONLY on purpose. A satellite is registered
   // by a child's ref callback, so it is already in the set by the time this

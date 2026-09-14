@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createPortal } from "react-dom";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import CueDialog, { useCueDialogFocusSatellite } from "../CueDialog";
 import { CueDialogProvider, type DismissReason } from "../CueDialogProvider";
 import CueDialogStatus from "../CueDialogStatus";
@@ -690,5 +690,38 @@ describe("CueDialog typing", () => {
     expect(document.activeElement).not.toBe(outside);
     expect(document.querySelector("[role=\"dialog\"]")?.contains(document.activeElement)).toBe(true);
     outside.remove();
+  });
+  it("restores to the CURRENT restoreFocusRef, not the one it was registered with", async () => {
+    // The layer record is handed to the provider once, at registration, and
+    // dereferenced once, at unregister. Narrowing the registration effect's
+    // dependencies (so a consumer's render cannot re-run it) would have frozen
+    // those ref objects as they were when the dialog opened — swap the prop
+    // mid-dialog and focus would restore to the stale target. The record gets a
+    // live view of the mirror instead; this is that property.
+    function Swappable() {
+      const a = useRef<HTMLButtonElement>(null);
+      const b = useRef<HTMLButtonElement>(null);
+      const [useB, setUseB] = useState(false);
+      const [open, setOpen] = useState(true);
+      return (
+        <MotionProvider>
+          <CueDialogProvider>
+            <button ref={a} data-testid="a">A</button>
+            <button ref={b} data-testid="b">B</button>
+            <button data-testid="swap" onClick={() => setUseB(true)}>swap</button>
+            <button data-testid="close" onClick={() => setOpen(false)}>close</button>
+            <CueDialog open={open} title="Swap" restoreFocusRef={useB ? b : a} onDismiss={() => setOpen(false)}>
+              <button>Dentro</button>
+            </CueDialog>
+          </CueDialogProvider>
+        </MotionProvider>
+      );
+    }
+
+    render(<Swappable />);
+    act(() => { fireEvent.click(screen.getByTestId("swap")); });
+    act(() => { fireEvent.click(screen.getByTestId("close")); });
+    await waitFor(() => expect(document.querySelector("[role=dialog]")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("b")));
   });
 });
