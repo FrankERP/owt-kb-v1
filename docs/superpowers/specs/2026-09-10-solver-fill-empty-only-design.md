@@ -27,6 +27,12 @@ and capped every other member at one or two services for the whole month. The me
 below fixes the variable to 1 instead, which makes those interactions automatic. §5 records
 what that buys and what it still costs.
 
+> **Review state.** This spec has been through ten adversarial review rounds; the ledger,
+> including the two mechanism rewrites and Frank's explicit per-round go-ahead for every round
+> past the churn cap, is in `2026-09-10-solver-fill-empty-only-design-review-log.md` beside
+> this file. A reviewer who wants to know whether the cap was respected should read it there —
+> it is deliberately not summarised here, so that no round sees a prior verdict.
+
 ## 1. The brief
 
 Frank, during delivery 1's brainstorm: «me gustaría tener una opción para que el solver
@@ -357,6 +363,16 @@ Jakey) on Sun.BGV each_week` — which is also what lets §6 say «en la semana 
 implying the whole month. A count rule's entry carries no week, correctly, because it has
 none.
 
+**`excluded_pwr` is scoped for a pin too, and missing it would make E3's headline case lie.**
+Weekly presence filters its terms through `excluded_pwr` (`:728-731`, `:739`), which is derived
+from the week-exclusion rules **unconditionally**. So pinning an unavailable member who is also
+in an `any_of(…) each_week` group drops them from the presence terms even though their pin
+satisfies the rule — the constraint then relaxes and §6 shows «Se dejó de aplicar una regla…»
+on the one path the feature exists for. The filter therefore reads
+`(p, week, role) not in excluded_pwr or (p, role, week) in pin_set`, and §11 asserts the pinned
+unavailable group member produces an **empty** `pin_violations`. The Saturday anchor's
+`available_dedicated` (`:701-704`) derives from the same rules and takes the same scoping.
+
 Two constraints stay hard, and neither can be contradicted by a pin. The **per-service
 occupancy limit** (`:754-765`) is what a pin means — one seat per service — and §4 rejects
 the only arrangement that could fight it. The **week exclusion** (`:679-690`) is not made
@@ -378,8 +394,9 @@ Stage A and of the optimising passes, and on the rest only the ceiling holds. `m
 
 **And the optimise branch gains no violation term.** The ceiling is a constraint, which is the
 whole reason it works on the objective-less passes; adding a priority tier above `Sun.Lead`
-instead would multiply `compute_priority_weights`' top weight — already ~3.8e20 on a four-week
-month with history — by `overall_limit + 1` again. The prose above invites that tidy-up; this
+instead would multiply `compute_priority_weights`' top weight — measured ~9.6e16 on a realistic
+four-week month — by `overall_limit + 1` again, reaching ~5.1e18 against an int64 ceiling of
+9.2e18. The prose above invites that tidy-up; this
 sentence forecloses it.
 
 **Within its instance, a relaxed constraint is off rather than loosened by the minimum
@@ -482,14 +499,16 @@ shift is invisible — but the count per row changes, and the tests pin that.
 
 ## 6. Conflicts: named on the board, never blocking
 
-Computed on the client when the person is seated. Six cases:
+Computed on the client when the person is seated, except the last, which the solver reports.
+Five cases; a sixth was dropped in review and is kept in the table struck through, so nobody
+re-adds it:
 
 | Case | Copy | Who renders it |
 |---|---|---|
 | The person marked that date unavailable | ⚠ Nombre: marcó que no puede este día — se va a respetar tu decisión | **New.** Nothing renders this today — see below. |
 | A hard rule separates them from someone else in that service | ⚠ Nombre y Otro: una regla los separa — se va a respetar tu decisión | The existing violation marker, `ruleViolationsForColumn` |
 | They are not in the pool that role draws from | ⚠ Nombre: no está en el pool de Lead — se va a respetar tu decisión | **New** |
-| More people are pinned in the row than it has seats | ⚠ 3 personas fijadas en una fila de 2 lugares | **New** |
+| ~~More people are pinned in the row than it has seats~~ | — | **Dropped.** §5.1 grows the row, so nothing is lost and there is no conflict to name; the grid already paints the over-target `+N` amber for that cell (`hasTarget`, `plannerModel.ts:391-395`). Two ambers for one fact is worse than one. |
 | The same person is pinned twice in one service | ⚠ Nombre está fijado dos veces en este servicio — solo se respeta el primero | **New**, and §4 says why it should be unreachable |
 | A rule had to be set aside to honour the pins | ⚠ Se dejó de aplicar una regla en la semana 3 para respetar lo que fijaste: «any_of(Hugo, Jakey) on Sun.BGV each_week» — the week phrase is omitted for a month-scoped count rule | **New**, and it is **reported by the solver**, not guessed by the client — one line per entry in `pin_violations` (§5.2) |
 
@@ -535,6 +554,11 @@ no «13 sep». They therefore reach `pin_violations` as machine markers — `bui
 `builtin:sat_anchor:W3` — which the client is the only thing that can turn into a date, and
 which §6 renders as «Se dejó abierto el lugar de líder del 13 sep» rather than as a rule name.
 
+**That is a new date-formatting site, so it takes the house rule.** Week index → the Sunday (or
+Saturday) date from `sundayDatesFull` → a label parsed at local noon,
+`new Date(iso.slice(0,10) + "T12:00:00")`, never a bare `new Date(iso)`. CLAUDE.md's timezone
+invariant, and it is named here because the marker format invites a fresh parse.
+
 An authored rule's entry is its `source` string and the client renders it verbatim; a builtin's
 is a marker the client localises. That split is the whole reason `pin_violations` carries
 strings with a prefix rather than free text, and §11 asserts a client that meets an
@@ -550,7 +574,7 @@ parser accepts the form and a hand-edited document could carry one — and if on
 the solver names it in `pin_violations` without any client change.
 
 Where an existing marker already renders the fact, these notices **are** that marker; only
-the five marked "New" add a line of their own.
+the four marked "New" add a line of their own.
 
 ## 7. The switch and the «Borrar» menu
 
@@ -616,6 +640,14 @@ asserts it deliberately rather than leaving it to be "fixed" later.
 (`MonthGenerator.tsx:2940-2945`); cells sitting on a skipped column are still occupied, so
 the switch pins them. Intended, and stated because the alternative reading is just as
 plausible.
+
+**The switch state lives in `MonthGenerator`, not in `PlannerGrid`.** The control renders
+beside the Auto button (`PlannerGrid.tsx:1996-2000`), but all three consumers are in the
+parent — `buildSolveRequest`, §9's handshake, and the `fillInstruments` call inside
+`applySpecialFill`. So the state is owned by `MonthGenerator` and passed down with its setter,
+rather than held locally and threaded back. Stated because the natural place to put a `Switch`
+is next to the button it modifies, and one consumer left reading a stale local copy silently
+unfreezes the instruments — the E1 half with no visible symptom until someone diffs two Autos.
 
 **Both sentences of the Auto confirmation change, not just the voice one.** The dialog also
 says «Las asignaciones manuales de instrumentos y FOH no se tocan» (`PlannerGrid.tsx:2033-2038`),
@@ -716,10 +748,14 @@ required.
 - **Once ANY pin exists, the mandatory-lead constraint is soft for the whole month**, not only
   where the pins are — `soft = bool(pin_set)` is model-wide. So a lead shortfall in week 4,
   caused by nothing but absences, no longer raises: it comes back as
-  `builtin:mandatory_lead:W4:Sun` and a «Sin cubrir» seat. The signal survives, but
-  `diagnose_infeasibility`'s actionable half — «Fix: free up a lead that week, or widen the
-  lead pool» — does not reach the admin. §6's copy for that marker carries the same remedy, so
-  the advice is not lost with the exception.
+  `builtin:mandatory_lead:W4:Sun` and a «Sin cubrir» seat — strictly better than today's
+  failure. **And nothing is lost, because `diagnose_infeasibility`'s actionable half never
+  reached the admin in the first place.** An earlier draft implied it did. It does not: the
+  route answers `422` (`app/api/admin/solve/route.ts:138`) and `handleAuto` parses the body
+  only when `res.ok` (`MonthGenerator.tsx:3058-3065`), so `response` is `null` and the admin
+  already sees the generic «El solver no encontró solución.» The diagnostic is dead text in
+  the app today. §6's copy for the marker carries the remedy, which is the first time that
+  advice reaches anyone.
 - **A `Sat.*` pin on a week with no Saturday service** is refused with a `ValueError` naming the
   week. Unreachable from this client (`weekendWeekIndexes` and `weekForColumn` use the same
   adjacency test, `plannerModel.ts:488-494`, `:845-858`), but the two obvious readings of
@@ -822,12 +858,32 @@ and behaved otherwise:
   in; a pinned group member satisfies weekly presence; a pinned assignment counts toward a
   DSL cap and the solver adds no more than the cap allows.
 - Over-pinning a row is accepted: the row grows, nothing is dropped, no infeasibility.
-- **A request with no `pinned` key produces byte-identical output to today, on a fixed seed —
-  compared against a FROZEN LITERAL, never a second call.** `assert solve(cfg) == solve(cfg)`
-  passes trivially against the new solver and proves nothing, and this is the assertion §13's
-  entire rollback story rests on. §13's step zero makes the honest version natural: the CI step
-  lands *before* the solver change, so the golden is captured against today's code and
-  committed with it. Three seeds, three goldens.
+- **Inertness for a request with no `pinned` key — two guards, because this solver does not
+  have reproducible output and a golden alone would be a flaky lie.**
+
+  *The trap, measured.* `solver.parameters.max_time_in_seconds` (`:963-966`) is **wall clock**,
+  so a fixed seed fixes the search *order*, not where it stops. Run the repo's own
+  `make_config` fixture at falling budgets: seeds 1 and 42 are stable from 3 s to 10 s, seed
+  2024 changes at 3 s, and **seed 7 returns a different schedule at every budget below 8 s**.
+  A golden captured on a developer's machine would fail or flake on `ubuntu-latest`, and the
+  obvious escape under that pressure is the tautology `assert solve(cfg) == solve(cfg)`, which
+  passes against the new solver and proves nothing. So:
+
+  1. **A structural fingerprint, and this is the primary guard.** A SHA-256 over the ordered
+     `x` keys — every `(person, slot.key)` in insertion order — plus the per-slot candidate
+     lists and the `rand_w` draw sequence. All of it is built before any solve and depends only
+     on `config.seed` (`:571`, `:633`, `:946`), so it is machine-independent by construction:
+     measured identical at a 10 s and a 3 s budget on all four seeds, **including seed 7**,
+     while distinct between seeds. It also catches §13's actual named hazard — `build_slots`
+     losing its interleaved `Sun.BGV`/`Sun.Choir` emission — **directly** rather than through
+     the board it happens to perturb. Frozen literal, committed with the CI step, three seeds.
+  2. **An output golden, on fixtures whose time limit provably never binds.** The precondition
+     is checkable and it discriminates: instrument `CpSolver.Solve` and assert the **returning**
+     solve reports `OPTIMAL`. Measured on the repo fixture — seeds 1, 42 and 2024 return
+     `OPTIMAL`; seed 7 returns `FEASIBLE`, and seed 7 is exactly the budget-dependent one. A
+     fixture that returns `FEASIBLE` is disqualified as a golden, and the test says so with an
+     assertion rather than a comment. (The `INFEASIBLE` statuses in between are the fairness
+     ladder probing tiers — normal, and not the returning solve.)
 
 **Client.** `buildSolveRequest` gains the grid inputs it needs — `cells`, `columns` and
 `rows` — and derives each pin's week from `weekForColumn(column, sundayDatesFull)`, the
@@ -939,8 +995,15 @@ byte-identical output to today on a fixed seed. Until the app starts sending pin
 deployed change is inert for everyone.
 
 **Rollback is one-sided, and that is the point.** Reverting the app commit is sufficient: the
-app stops sending `pinned`, and by the byte-identity property the deployed solver then
-behaves exactly as it does today. The solver half needs no revert and must not be reverted in
+app stops sending `pinned`, `soft = bool(pin_set)` is then false, and the deployed solver
+builds **the same model and runs the same search** as today.
+
+**Say it as model identity, not output identity.** This solver has never had reproducible
+output across machines — its time limit is wall clock (`:963-966`), so where the search stops
+depends on the box. What the change buys is that a pinless request constructs an identical
+model and an identical search order; the schedule that comes back is then as reproducible as
+it ever was, which on a fixture whose limit binds is not very. §11's two guards are shaped to
+prove exactly that property and no more, which is why the fingerprint is the primary one. The solver half needs no revert and must not be reverted in
 a hurry — a rollback of the app alone is complete, and rolling back the Cloud Function while
 a pinned app is still live would make §9's refusal fire on every Auto instead.
 
