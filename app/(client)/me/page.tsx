@@ -9,7 +9,6 @@ import Navbar from "@/app/components/Navbar";
 import { DayCard, type DayCardProps } from "@/app/components/DayCard";
 import DayCardDisclosure from "@/app/components/DayCardDisclosure";
 import MeHeader from "@/app/components/MeHeader";
-import ThemeAnnouncement from "@/app/components/ui/ThemeAnnouncement";
 import AddToCalendarButton from "@/app/components/AddToCalendarButton";
 import { Setlist, SetlistSong, ProposalStatus } from "@/app/utils/interface";
 import { describeContributors } from "@/app/utils/proposalContributors";
@@ -430,12 +429,9 @@ export default async function MePage() {
     <div>
       <Navbar title={navbarTitle} schedule tags />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
-        {/* Top of /me, per parent Q2. Its "Elígelo aquí" links to
-            `/me/ajustes#tema`: F3 moved ThemeControl to its own page, so the
-            anchor is cross-page and a bare `#tema` would land on nothing. The
-            banner stays HERE — it is the invitation, and `/me` is where members
-            arrive; the settings page is the destination. */}
-        <ThemeAnnouncement />
+        {/* The theme-rollout announcement used to sit here. It was retired on
+            2026-09-13 — see ADR-0033. Do not reintroduce it with a client-side
+            dismissal. */}
 
         {/* The page's heading, and the only place the empty state is said: the two
             `h2`s ("Mis próximos servicios" / "Próximos servicios") are gone, and

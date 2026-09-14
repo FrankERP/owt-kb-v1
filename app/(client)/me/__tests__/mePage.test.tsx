@@ -60,7 +60,6 @@ vi.mock("@/app/components/AddToCalendarButton", () => ({ default: () => null }))
 // what makes the "no settings on this page" assertions below mean something —
 // without it, `not.toContain("PERFIL")` would pass for any reason at all.
 vi.mock("@/app/components/ProfilePanel", () => ({ default: () => <p>PERFIL</p> }));
-vi.mock("@/app/components/ui/ThemeAnnouncement", () => ({ default: () => null }));
 // The href matters now: the availability link is the whole of what replaced the
 // panel, so the mock renders a real anchor rather than swallowing it.
 vi.mock("next/link", () => ({
