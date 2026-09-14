@@ -411,18 +411,31 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
         </p>
       </div>
 
-      {/* Navigation */}
-      <div className="flex items-center justify-between">
+      {/* Navigation.
+          `flex-wrap` plus a `min-w-0` centre, the shape `ScheduleHeader` already
+          uses. «ANTERIOR», «SIGUIENTE» and «SEPTIEMBRE» are three unbreakable
+          words: at «Máximo» text size they floor at ~450px on a 375pt phone, and
+          the member reported «Siguiente» sitting off the right edge. Wrapping
+          stacks them instead of pushing them off. */}
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
         <button
           type="button"
           onClick={() => goTo(page - 1)}
           disabled={!canPrev}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
+          className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
         >
           <ChevronLeft /> Anterior
         </button>
 
-        <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
+        {/* `flex-1 min-w-min` — the floor is this heading's own longest word.
+            Both neighbours were wrong for a measured reason: `flex-1` alone (zero
+            basis, `min-w-0`) let the box shrink to 117px around a 197px «SEPTIEMBRE»
+            and pushed the page 56px sideways at «Máximo» text size, while a plain
+            `grow` (auto basis) reserved the whole heading and wrapped «Siguiente»
+            onto a second line at NORMAL size, which is a regression for everyone.
+            `min-content` shrinks on a normal phone and stops at the word, so the
+            row wraps only when it genuinely cannot fit. */}
+        <span className="min-w-min flex-1 text-center font-label text-[11px] uppercase tracking-widest text-mono-500">
           {rangeHeading}
         </span>
 
@@ -430,7 +443,7 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
           type="button"
           onClick={() => goTo(page + 1)}
           disabled={!canNext}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
+          className="flex shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-lg border border-accent-deep/40 font-label text-[11px] uppercase tracking-widest text-mono-500 hover:border-accent/40 hover:text-accent disabled:opacity-20 disabled:cursor-default transition-colors"
         >
           Siguiente <ChevronRight />
         </button>
