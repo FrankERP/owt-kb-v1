@@ -49,7 +49,6 @@ vi.mock("@/app/components/AvailabilityCalendar", () => ({ default: () => <p>CALE
 vi.mock("@/app/components/ProfilePanel", () => ({ default: () => <p>PERFIL</p> }));
 vi.mock("@/app/components/TextSizeControl", () => ({ default: () => null }));
 vi.mock("@/app/components/ui/ThemeControl", () => ({ default: () => null }));
-vi.mock("@/app/components/ui/ThemeAnnouncement", () => ({ default: () => null }));
 vi.mock("next/link", () => ({
   default: ({ children }: { href: string; children?: ReactNode }) => children,
 }));

@@ -221,7 +221,6 @@ keep their behaviour and get only the Button/focus adoption.
 
 ### 5.6 `/me`
 
-- **ThemeAnnouncement** — enters with `rise` on first paint instead of appearing on the second; dismiss collapses it (`Collapse` closing + fade).
 - **AddToCalendarButton** — Button `secondary`, press.
 - **NextServiceHero** — reveal first; countdown pill uses `NumberRoll`; the proposal CTA rises last.
 - **Remaining DayCards** — §5.1.
@@ -584,7 +583,7 @@ premium-killer that neither Part I nor Part II named.
 | 7 | **The avatar menu is a plain text list** with no icons, no grouping, no animation; `transition: all` is set but nothing changes | all routes | Medium |
 | 8 | **Lyrics are unstyled.** `Verso 1`, `Coro`, `Puente` render as ordinary lines; on desktop the block sits at x≈400 with the right two-thirds empty | `/posts/[slug]`, SongSheet | Medium |
 | 9 | **Three DayCards in a row on /me**, each ~500 px, before the availability calendar | `/me` | Medium |
-| 10 | **ThemeAnnouncement** (a feature shipped in August) still opens `/me` for anyone who has not dismissed it | `/me` | Low |
+| 10 | ~~**ThemeAnnouncement** (a feature shipped in August) still opens `/me` for anyone who has not dismissed it~~ — **the component was retired 2026-09-13** (its `localStorage` dismissal did not survive a new storage jar, so it kept reopening for members who had dismissed it — [ADR-0033](../../adr/0033-the-theme-announcement-is-retired.md)). R3 has nothing to animate here | `/me` | Resolved |
 | 11 | **Contenido already has the row grammar** Part II proposed for the library: icon · title · artist · tag chips · key badge, ~70 px per song. The library remake is a promotion of an existing pattern, not an invention | `/admin?tab=content` | Confirms §12.2 |
 | 12 | **Sign-in is the best page in the app** and the only one with an entrance. Its stagger is the reference for the route reveal | `/auth/signin` | Confirms §5.10 |
 | 13 | **Bottom sheet works but does not move:** grab handle drawn, no drag, and a redundant `CERRAR` text button under the `×` | `/schedule` phone | Confirms §4 |
