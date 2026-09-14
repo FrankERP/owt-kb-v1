@@ -5,17 +5,54 @@
 // exemption (the plan's rubric ruling): the row IS the affordance, like DayCard's
 // setlist rows, so it carries no eyebrow and no "Ver". Memoised: ~140 rows share
 // one player context.
-import { memo } from "react";
+//
+// A long press (R7 Task 4, spec §12.8) opens the row's quick actions instead of
+// the song sheet; the tap is unchanged and the press swallows its own click.
+import { memo, useState } from "react";
 import type { Post } from "@/app/utils/interface";
 import { usePlayer } from "@/app/context/PlayerContext";
 import { haptic } from "@/app/utils/haptics";
+import QuickActions, { type QuickAction } from "./ui/QuickActions";
+import useLongPress from "./ui/useLongPress";
+import { useToast } from "./ui/Toast";
 
 const LibraryRow = memo(function LibraryRow({ post }: { post: Post }) {
   const { openSheet } = usePlayer();
+  const { toast } = useToast();
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const longPress = useLongPress(() => setActionsOpen(true));
   const tags = post.tags ?? [];
+
+  const slug = post.slug?.current;
+  const actions: QuickAction[] = [
+    { label: "Abrir", onSelect: () => openSheet(post._id) },
+    // «Practicar» is deliberately absent: the player exposes ONE song entry point
+    // (`openSheet`), which is exactly what «Abrir» already calls — a second button
+    // running the same call would be two names for one action.
+    ...(slug
+      ? [
+          {
+            label: "Copiar enlace",
+            onSelect: async () => {
+              try {
+                await navigator.clipboard.writeText(`${window.location.origin}/posts/${slug}`);
+                toast({ message: "Enlace copiado", tone: "ok", duration: 2000 });
+              } catch {
+                // Denied permission, an insecure origin, or no clipboard at all —
+                // never close as success (the client-handler invariant).
+                toast({ message: "No se pudo copiar", tone: "error" });
+              }
+            },
+          } satisfies QuickAction,
+        ]
+      : []),
+  ];
+
   return (
+    <>
     <button
       type="button"
+      {...longPress}
       onClick={() => {
         // Native only, fire-and-forget (see haptics.ts) — never gates opening the sheet.
         void haptic("selection");
@@ -53,6 +90,14 @@ const LibraryRow = memo(function LibraryRow({ post }: { post: Post }) {
         <span className="shrink-0 font-label text-[11px] uppercase tracking-widest text-ink-dim tabular-nums">{post.bpm} BPM</span>
       )}
     </button>
+    <QuickActions
+      open={actionsOpen}
+      onClose={() => setActionsOpen(false)}
+      title={post.title}
+      subtitle={post.author || undefined}
+      actions={actions}
+    />
+    </>
   );
 });
 export default LibraryRow;
