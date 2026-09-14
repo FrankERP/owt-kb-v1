@@ -11,7 +11,7 @@
 //    button silently stops working, permanently, for storage-blocked browsers.
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import {
   isThemePref,
@@ -219,7 +219,30 @@ describe("the theme announcement stays retired", () => {
       "an announcement dismissed in one browser must not reappear in another — see ADR-0033",
     ).toBe(false);
     const me = readFileSync(path.join(process.cwd(), "app/(client)/me/page.tsx"), "utf8");
-    expect(me).not.toMatch(/<ThemeAnnouncement/);
+    expect(me).not.toMatch(/ThemeAnnouncement/);
+  });
+
+  it("leaves the dismissal key unused under app/ — under ANY component name", () => {
+    // The two assertions above are path- and name-exact, so a copy that lands as
+    // `ui/Announcement.tsx` would pass them. This one does not care what the file
+    // is called: the failure ADR-0033 records is the per-storage-jar FLAG, and the
+    // key is the flag. Reusing the name is also its own bug — dismissed jars still
+    // hold "1", so a new banner on that key is invisible to exactly the members
+    // who saw the old one.
+    const hits: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(path.join(process.cwd(), dir), { withFileTypes: true })) {
+        const rel = path.join(dir, e.name);
+        if (e.isDirectory()) { if (e.name !== "node_modules") walk(rel); continue; }
+        if (!/\.(ts|tsx)$/.test(e.name)) continue;
+        if (rel.includes(`__tests__${path.sep}`)) continue;
+        if (readFileSync(path.join(process.cwd(), rel), "utf8").includes("owt-theme-announced")) {
+          hits.push(rel);
+        }
+      }
+    };
+    walk("app");
+    expect(hits, "see ADR-0033 — a new announcement needs a per-member server flag").toEqual([]);
   });
 
   it("keeps the #tema anchor NavMenu links to", () => {

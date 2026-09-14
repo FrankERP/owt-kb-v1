@@ -290,13 +290,17 @@ geometry, not colour. And `manifest.webmanifest`'s `theme_color` is read at inst
 cannot follow a runtime theme. **So an installed iOS PWA keeps dark chrome in light mode.**
 Both are fixed by the iOS work, not by a colour change.
 
-**Three client-side storage keys**, none a secret, all persistent state worth not
+**Two client-side storage keys**, neither a secret, both persistent state worth not
 "cleaning up": **`theme`** is next-themes' own mirror — a paint cache, not the source of
 truth (`themePref` on the member document is), cleared at sign-out so a shared device does
 not show one member's theme to the next; and **`owt-theme-migrated`** is the one-time flag for
-the legacy-mirror reconciliation that runs before the seed in both root layouts; and
-**`owt-theme-announced`** is Child F's per-device dismissal flag for the `/me` banner, which
-writes nothing to Sanity and fails soft toward showing the banner again.
+the legacy-mirror reconciliation that runs before the seed in both root layouts.
+
+A third key, **`owt-theme-announced`**, was Child F's per-device dismissal flag for the `/me`
+theme banner. Nothing reads or writes it since 2026-09-13: the banner was retired because a
+per-storage-jar flag kept re-showing it to members who had dismissed it ([ADR-0033](adr/0033-the-theme-announcement-is-retired.md)).
+**Do not reuse the name** — dismissed jars still hold `"1"`, so a future banner on that key
+would be invisible to exactly the members who saw the old one.
 
 ---
 
