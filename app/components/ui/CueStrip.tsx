@@ -89,8 +89,11 @@ export default function CueStrip() {
 
   if (!reserved) return null;
 
+  // `w-full min-w-0`: under the navbar's `items-center` flex column an auto-width
+  // wrapper sizes to the nowrap label's full width and `truncate` never engages —
+  // a long label would clip at BOTH ends with no ellipsis.
   return (
-    <div className="min-h-[15px] lg:min-h-[16.5px]">
+    <div className="w-full min-w-0 min-h-[15px] lg:min-h-[16.5px]">
       <Presence show={!!label} variant="fade">
         {/* `aria-live="off"`: it is ambient context, never an announcement.
             One line, always: `truncate`/`whitespace-nowrap` like the navbar's own

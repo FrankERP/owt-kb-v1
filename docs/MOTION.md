@@ -1044,14 +1044,17 @@ motion-relevant pieces:
     race anyway. `contextmenu` from a MOUSE (`pointerType === "mouse"` where the
     browser sends one; `button === 2` where it doesn't, since Safari and
     Firefox put no `pointerType` on a `contextmenu` `MouseEvent`) fires the
-    sheet immediately; a TOUCH `contextmenu` is only `preventDefault`ed, because
-    the press itself already fired (or will) and the native callout would fight
-    it.
+    sheet immediately; a `contextmenu` without a mouse signal (a touch, or a
+    keyboard-invoked menu — Shift+F10 / the Menu key, which look identical to
+    Safari's touch event) is only `preventDefault`ed, because the press itself
+    already fired (or will) and the native callout would fight it; keyboard-
+    invoked menus on rows are not supported — the row's tap is the affordance.
   - **`QuickActions`** is what opens: a `CueDialog mode="sheet"` — never a
     hand-rolled sheet — with one full-width, left-aligned `Button variant="ghost"
     size="lg"` per action and «Cancelar» last, mounted with `open={open}`
     (`cueDialogMount.test.ts`).
-  - **Per-row actions, and what was left out.** `LibraryRow`: «Abrir» (the same
+  - **Per-row actions, and what was left out.** `LibraryRow` (the row only fires
+    `onQuickActions(post)`; `LibraryIndex` owns the ONE sheet for the page): «Abrir» (the same
     `openSheet` the tap calls) and «Copiar enlace» (clipboard, confirmed or
     refused through `useToast`) — «Practicar» is deliberately absent, since the
     player exposes exactly one song entry point and a second button calling it
