@@ -26,9 +26,10 @@ function ids() {
 }
 
 describe("rowsFromStored", () => {
-  it("adopts a stored row's `_key` as its identity and keeps it for the write back", () => {
-    // Sanity array-of-object writes need `_key` per item (CLAUDE.md), so a row
-    // that arrived with one must carry it home.
+  it("adopts a stored row's `_key` as its identity and carries it along", () => {
+    // Defensive only: the write routes re-mint every key, so this never round
+    // trips today. It stops the module from being the reason keys are lost if a
+    // projection ever starts reading them.
     const rows = rowsFromStored([{ _key: "abc123", label: "Spotify", url: "https://x" }], ids());
     expect(rows).toEqual([{ id: "abc123", _key: "abc123", label: "Spotify", url: "https://x" }]);
   });
@@ -99,8 +100,8 @@ describe("updateRow", () => {
   });
 
   it("returns the SAME array for an unknown id — the identity check is the point", () => {
-    // Not a render optimisation: both call sites wrap this in `setForm`, which
-    // allocates a new form object either way.
+    // Not a render optimisation: all three call sites wrap this in `setForm`,
+    // which allocates a new form object either way.
     expect(updateRow(rows, "missing", "label", "x")).toBe(rows);
   });
 });

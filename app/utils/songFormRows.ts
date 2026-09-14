@@ -10,9 +10,11 @@
  *
  * The fix is the one `songFormCharts.ts` already made for chord charts, and this
  * module is deliberately its sibling: every row carries a client `id` used as the
- * React key, and the payload builders strip it. Sanity's own `_key` is preserved
- * where a stored row has one, because array-of-object writes need it — see
- * CLAUDE.md's invariants.
+ * React key, and the payload builders strip it. A stored `_key` is carried along
+ * where one arrives, but defensively only: today no projection under `app/**`
+ * reads these arrays' keys and both write routes re-mint them, so the per-item
+ * `_key` invariant is satisfied server-side, not by this module. See
+ * `rowsToPayload`.
  *
  * PURE. No React, no DOM: the editors hold the drafts in their own form state and
  * the arithmetic is tested directly.
