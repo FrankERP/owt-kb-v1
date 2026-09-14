@@ -218,31 +218,55 @@ exclusivity guard is untouched because it compares the three lists against each 
 solver cannot choose them anywhere, so including them would let a person it has no power
 over set `gmin` and cap everyone else.
 
-**Fairness: every HARD spread is over the seats the solver chose; the soft ones see totals.**
+**Fairness: every HARD spread gives each person slack equal to their pin count.**
 A pin is a service the solver did not choose, so it must not be able to make the month
 infeasible. There are **three** hard spreads, not one, and missing two of them is how a
 three-pin action collapsed a whole month in review:
 
-| Hard guard | Where | With pins |
+| Hard guard | Where the change lands | With pins |
 |---|---|---|
-| Global, `gmax - gmin <= fairness_limit` | `:794` | over `total_vars[p]` **minus** that person's pin count |
-| `cur_sun_lead_spread <= sun_lead_limit` | `:865` | over `role_vars[(p,"Sun.Lead")]` **minus** their `Sun.Lead` pin count |
-| `cur_sun_bgv_spread <= sun_bgv_limit` | `:882` | over `role_vars[(p,"Sun.BGV")]` **minus** their `Sun.BGV` pin count |
+| Global, `gmax - gmin <= fairness_limit` (`:794`) | the per-person loops at `:788-790` **and `:791-793`** | `total_vars[p] <= gmax + n[p]`, `>= gmin - n[p]` |
+| `cur_sun_lead_spread <= sun_lead_limit` (`:865`) | `:861-863` | same, with their `Sun.Lead` pin count |
+| `cur_sun_bgv_spread <= sun_bgv_limit` (`:882`) | `:878-880` | same, with their `Sun.BGV` pin count |
+
+The **Where** column names the per-person loops, not the `<= limit` lines: the limit lines are
+where the spread is *bounded*, the loops are where each person is tied to `gmax`/`gmin`. The
+second global loop (`:791-793`) is the one a reader skips — it handles exactly the people who
+already carry absence slack, so missing it mis-bounds the population §11's heavy-pin-load
+test exists to check. The slack **adds** to theirs; it does not replace it.
 
 The **soft** terms are deliberately left alone and keep seeing the totals: `ov_total`
 (`:777-781`) feeding `overall_spread` at `:949`, and `role_spread_vars` over
-`overall_role_vars` (`:812-843`) feeding the objective at `:956`. Subtracting in the soft terms as well
-would leave the objective blind to the pins entirely; leaving them alone is what keeps the
-*preference* ordering aware of who is already ahead.
+`overall_role_vars` (`:812-843`) feeding the objective at `:956`. So the preference ordering
+stays aware of who is already ahead, and — unlike the rejected form below — it is actually
+allowed to act on it.
 
-**But the soft preference does not win, and the ADR must say so.** The hard spreads now run over
-solver-chosen seats, so a pinned person looks to them as though they have served nothing and
-is pushed *up* toward parity on top of their pins. Measured in review: three pins on one
-member took her from five total services to six while the rest sat at four. That is the price
-of never failing the month, it is the right trade, and it is the opposite of what a reader
-expects from "the soft terms still see the totals" — the hard spread overrides the soft
-preference every time — so §12's ADR records it plainly rather than leaving it to be
-rediscovered as a bug.
+**Rejected: subtracting the pin count instead (`total_vars[p] - n[p]` bounded by
+`gmax`/`gmin`).** It looks equivalent and is not. The upper bounds are literally identical
+(`t[p] - n[p] <= gmax` ⟺ `t[p] <= gmax + n[p]`), but the lower bounds are not: subtraction
+forces `t[p] >= gmin + n[p]` — the pinned person must take a full solver-chosen share **on top
+of** their pins — while slack asks only `t[p] >= gmin - n[p]`, letting the pins count as part
+of what they have already served. Slack's feasible set is therefore a strict **superset**, so
+it can never fail a month subtraction solves, and the fairness-collapse protection this whole
+paragraph exists for is not weakened by a single case.
+
+Measured, twelve-person month, seed-fixed, no rules — the baseline spread is 4–5:
+
+| Pins | Subtraction | Slack |
+|---|---|---|
+| Rachel → `Sun.Lead` W1–3 | Rachel **7** total and **4 of 8** Sunday leads; `sun_bgv` tier needlessly relaxed to 2 | Rachel **5** total, **3** Sunday leads — exactly her pins; every tier stays at 1 |
+| Vale → `Sun.Choir` W1–4 | Vale **8** total against everyone else's 4 | Vale ≤ 5; baseline distribution preserved |
+
+Subtraction means: the admin seats Rachel to lead three Sundays, turns the switch on, and Auto
+hands her the fourth Sunday **plus three more services**. That is not a trade, it is the
+opposite of what «llenar solo los vacíos» means — what is already on the board is service the
+person has performed. §12's ADR records subtraction as the rejected alternative with these
+numbers, because it is the form a reader will re-derive.
+
+**The semantics this settles, stated plainly:** a pinned service counts toward that person's
+share. Pin someone into many services and the solver gives them correspondingly less
+elsewhere. That is the intended reading of the requirement, and it is what the table's right
+column shows.
 
 Reproduced in review before the two per-role guards were named: pinning one person into
 `Sun.Lead` for three weeks drove every Stage B tier infeasible, `solve_schedule:1137` returned
@@ -480,7 +504,12 @@ vacíos.» Component state, not persisted — a per-run choice.
 item so the admin sees what they are about to lose:
 
 - **Este servicio** — Voces · Instrumentos · Voces e instrumentos
-- **Todo el mes** — Voces del mes · Voces e instrumentos del mes
+- **Todo el mes** — Voces del mes · **Instrumentos del mes** · Voces e instrumentos del mes
+
+The month scope mirrors the service scope item for item. An earlier draft dropped
+«Instrumentos del mes» for no reason anyone could state, which is exactly the asymmetry «cada
+nivel de granularidad» rules out. **FOH is the one thing no item clears, at either scope** —
+E6, and the menu says so rather than leaving a reader to find the gap.
 
 The same menu appears in each column's header with the scope fixed to that service. Only the
 month-level items confirm, through `CueDialog`, naming the count, saying FOH is preserved,
@@ -546,11 +575,18 @@ itself.
 
 ## 8. Where Auto and the clears are available
 
-Create mode only, which is where Auto already lives (`PlannerGrid.tsx:1997`). Both act on
-grid state alone: a create-mode column has no stored document behind it, so nothing in this
-delivery can reach a service the team has already seen. That safety property is structural,
-not a gate that could be got wrong. Nothing reaches Sanity until the existing «Crear N
-borradores» runs, unchanged.
+Create mode only, which is where Auto already lives (`PlannerGrid.tsx:1997`). Both act on grid
+state alone: a create-mode column has no stored document behind it, so nothing in this delivery
+can reach a service the team has already seen. Nothing reaches Sanity until the existing «Crear
+N borradores» runs, unchanged.
+
+**That safety rests on a RENDER GATE, and it could be got wrong.** `handleCellsChange` runs
+`setTouchedStoredRoleIds(...)` *and* `setCells(next)` **before** its stored-mode early return
+(`MonthGenerator.tsx:2467-2483`). So a «Borrar» control rendered without a `mode === "create"`
+guard would not be inert in stored mode — it would stage emptied seats on real service
+documents and mark their roles touched for the next Save. The switch is the same shape. §11
+therefore asserts that neither the switch nor the «Borrar» menu renders in stored mode, rather
+than trusting a property that is only true because of where the controls are placed.
 
 ## 9. The version handshake
 
@@ -569,8 +605,15 @@ roster** unless both hold:
 2. every pin appears in the returned roster for its own week and role.
 
 The second check is free — the client already holds the response — and is strictly stronger
-than the count, which cannot distinguish "honoured mine" from "honoured that many". On
-failure it reports «El solver no respetó los lugares fijados; no se aplicó nada». Refusing is
+than the count, which cannot distinguish "honoured mine" from "honoured that many".
+
+**With the switch on and ZERO pins sent** — an empty board — there is nothing to honour and
+the handshake does not run. An old solver's response has no `pinned_honored` at all, and
+`undefined === 0` is false, so a naive equality check would refuse the first Auto of every
+month. The condition is "pins were sent AND a check fails"; §11 asserts the empty-board case
+explicitly.
+
+On failure it reports «El solver no respetó los lugares fijados; no se aplicó nada». Refusing is
 correct here even though §6 never blocks: §6 is about the admin's own contradictions, this is
 about a solver that did not do what it was asked.
 
@@ -601,8 +644,8 @@ required.
   the model's shape rather than a claim about a predicate**: every constraint a pin could
   contradict carries a violation boolean, so a pinned model is feasible whenever the un-pinned
   one is — the solver can always pay the rules and seat the pins. Rows grow rather than
-  overflow, candidacy is granted only where the pin points, and the hard spreads run over
-  solver-chosen counts so fairness cannot fail either.
+  overflow, candidacy is granted only where the pin points, and each person's hard spreads
+  carry slack equal to their pin count so fairness cannot fail either.
   **This is the third answer to this question and the first one that is not an argument.**
   The two before it asserted completeness for an enumerated exemption list; review broke the
   first with one pin and the second with two, and in both cases the admin was shown the
@@ -610,6 +653,19 @@ required.
   it. That misdirection is the reason this bullet is not simply "add the pins to
   `diagnose_infeasibility`": a diagnostic for a failure that no longer happens is dead code,
   and the failure not happening is what the admin actually needs.
+- **Once ANY pin exists, the mandatory-lead constraint is soft for the whole month**, not only
+  where the pins are — `soft = bool(pin_set)` is model-wide. So a lead shortfall in week 4,
+  caused by nothing but absences, no longer raises: it comes back as
+  `builtin:mandatory_lead:W4:Sun` and a «Sin cubrir» seat. The signal survives, but
+  `diagnose_infeasibility`'s actionable half — «Fix: free up a lead that week, or widen the
+  lead pool» — does not reach the admin. §6's copy for that marker carries the same remedy, so
+  the advice is not lost with the exception.
+- **A `Sat.*` pin on a week with no Saturday service** is refused with a `ValueError` naming the
+  week. Unreachable from this client (`weekendWeekIndexes` and `weekForColumn` use the same
+  adjacency test, `plannerModel.ts:488-494`, `:845-858`), but the two obvious readings of
+  `max(default_seats, pins_for(R, W))` fail in two different bad ways — one emits
+  `model.Add(0 == 1)` and kills the month with a generic diagnostic, the other invents a
+  Saturday and `build_schedule_view` raises a `KeyError` at `:1147-1148`. Cheaper to reject.
 - **Two pins for one person in one service** are refused by the solver with a `ValueError`
   naming the person and the service, not left to produce two `== 1` constraints against the
   `<= 1` occupancy limit and kill the month with a generic diagnostic. The client already
@@ -636,16 +692,19 @@ and behaved otherwise:
   that passes under a broken design proves nothing, and the first version of this section
   shipped exactly such a guard:
   - *Skewed partial pin.* One person pinned into `Sun.Lead` for three weeks and nothing else
-    — the reproduced collapse. **Size the lead pool so the tier is genuinely satisfiable**:
-    with the hard spread over solver-chosen seats, three pins out of eight `Sun.Lead` slots
-    leave five for everyone else while the pinned person's own adjusted count is 0, so on a
-    thin pool `sl_limit = 1` can be unsatisfiable with nothing wrong. The discriminating
-    assertion is the second one, not the first. Assert `sun_lead_fairness_relaxed: false` and that no reported
+    — the reproduced collapse. Assert `sun_lead_fairness_relaxed: false` and that no reported
     limit equals `len(slots) + 1`, which is the fingerprint of the fall-through to `stage_a`.
-    Repeat for `Sun.BGV`. A version of the mechanism that subtracts pins only from the global
+    Repeat for `Sun.BGV`. A version of the mechanism that gives slack only on the global
     spread fails this and passes a whole-month guard.
+    **Assert the distribution too, not only that nothing was relaxed:** the pinned person's
+    total must land within the un-pinned baseline's spread rather than above it, and their
+    `Sun.Lead` count must equal their pin count. Measured on the fixture, the rejected
+    subtraction form gives 7 total and 4 of 8 Sunday leads where the baseline is 4–5 and 2 —
+    it passes a relaxation-only guard and fails this one, which is the whole point.
   - *Heavy pin load.* Twenty-six or more pins on a twelve-person month, the threshold at which
-    a slack-based design empties the `strict` group (`solve_schedule:1072-1074`): assert
+    routing pins through `combined_slack` would empty the `strict` group
+    (`solve_schedule:1072-1074`) — note this is the **rejected** design's failure, not the
+    per-person slack on the hard guards, which never touches `combined_slack`: assert
     `fairness_relaxed: false`, a global spread over the solver's own choices matching the
     un-pinned baseline, and that an unavailable member's absence slack still applies.
 - **No rule fails the month, and the cases are keyed on the BLOCKING MECHANISM, not on a
@@ -699,10 +758,11 @@ and behaved otherwise:
 (`computeUnaddressableDates`, `MonthGenerator.tsx:2183`) is a weekend column, so the
 special-column filter does not catch it, and a pin with a null week would reach the solver's
 range check as a `ValueError` that fails the whole month over a column nobody can fill anyway.
-Asserted, because the filter that looks sufficient is not. It emits one pin per
-occupied voice cell on a weekend column when the switch is on, none when it is off, and none
-from a special column; it deduplicates
-by person-and-service and reports the duplicate. The four new conflict notices render — the
+Asserted, because the filter that looks sufficient is not. It emits one pin **per occupant**
+of each voice cell on a weekend column when the switch is on — a Coro cell holding three
+people emits three pins, matching §4's one-per-person-per-role-per-week contract — none when
+the switch is off, and none from a special column; it deduplicates by person-and-service and
+reports the duplicate. The four new conflict notices render — the
 availability one especially, since nothing renders it today — and none disables Auto or save.
 The §9 refusal discards the voice roster, still runs the local fillers, and shows the
 message. **A cell holding a pinned occupant keeps its `origin`, its `overrides` and its
@@ -728,7 +788,8 @@ with 0 errors — and **`pytest gcf/`, which no CI job runs today.**
 
 That is a blocker for this delivery rather than a nicety. `.github/workflows/ci.yml:36-52`
 runs types, vitest and eslint and nothing else; `package.json` has no python script; and
-`gcf/cloudbuild.yaml` is a single `gcloud functions deploy` step with no test before it. So
+`cloudbuild.yaml` (repo root, not `gcf/`) is a single `gcloud functions deploy` step with no
+test before it. So
 `gcf/test_owt_solver_v2.py` runs only when a human remembers, and the `gates` check that
 CLAUDE.md makes the merge condition for `main` proves **nothing whatsoever** about a
 `gcf/**`-only PR. A code review of the diff cannot execute it either.
@@ -740,10 +801,13 @@ the guard §11 requires" — and the rollback story is the same property. An une
 an intention, and CLAUDE.md draws that exact line: *"that property is what makes it a control
 rather than an intention."*
 
-**So this delivery adds the gate, in the same change and before the solver merges.** A step in
-the existing `gates` job (`setup-python`, `pip install -r gcf/requirements.txt pytest`,
-`pytest gcf/`) rather than a second workflow, so one required check still means "everything
-passed" and a `gcf/**`-only PR cannot go green on a job that never looked at it. The
+**So this delivery adds the gate, in the same change and before the solver merges.** A step in the existing `gates` job — `setup-python` pinned to **3.12**, matching the function's
+`--runtime=python312` (`cloudbuild.yaml`), then `pip install -r gcf/requirements.txt pytest`
+and `pytest gcf/` — rather than a second workflow, so one required check still means
+"everything passed" and a `gcf/**`-only PR cannot go green on a job that never looked at it.
+Budget: the existing solver suite runs ~17 s and the new pin cases add to it, against the
+job's `timeout-minutes: 15`, with pip cached the way `npm ci` already is. If it ever crowds
+the job the answer is to split the workflow, never to drop the step. The
 byte-identity and inertness assertions are the ones that must be inside it; §13's rollout
 order starts *after* it is green on `main`.
 
@@ -754,10 +818,13 @@ changes, the soft-relaxation objective, `pin_violations`, the handshake.
 `docs/MONTH_GRID_EDITING.md` — the switch, the menu, the confirmation copy, and the rule that
 a pinned cell keeps its waivers. `docs/CI.md` — the new python step in `gates`, what it runs
 and why a `gcf/**`-only PR needs it. One ADR: **pins
-are fixed variables with scoped candidacy, hard spreads over solver-chosen seats, and every
+are fixed variables with scoped candidacy, **per-person pin slack on the hard spreads**, and every
 contradictable rule made soft under a violation-minimising objective** — recording the
 rejected remove-the-seat design and the reproduced fairness collapse that ended it, the
-rejected fairness-slack answer and the `strict`-collapse branch that killed it, **and the two
+rejected fairness-slack answer routed through `combined_slack` and the `strict`-collapse
+branch that killed it, **the rejected pin-count SUBTRACTION on the hard spreads with the
+measured numbers that killed it (a member pinned three times took 7 services against a 4–5
+baseline, and 4 of 8 Sunday leads),** **and the two
 rejected enumerations of exemptions — keyed on row saturation, then on a four-case
 satisfiability predicate — with the one-pin and two-pin reproductions that killed them.**
 That last entry is the ADR's real payload: the enumeration is the design a reader will
