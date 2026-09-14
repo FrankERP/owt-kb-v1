@@ -495,11 +495,11 @@ the impersonation banner, the audio transport, and the song sheet's head.
 - The **avatar notification badge** (`NavMenu`) now pops in with `<Presence
   show={notifCount > 0} appear variant="scale">` instead of a plain conditional
   `<span>`. **`NavMenu` is an ACCOUNT menu, all widths** (M1 follow-up F1):
-  `Mi semana` (`/me`), `Ajustes` (`/me/ajustes`), a separator, `Cerrar sesión` — Frank's
-  look at R3 F3 (2026-09-13) found «Mi perfil» pointing only at `/me/ajustes`,
-  leaving `/me` («Mi semana») unreachable except by URL since the tab bars
-  dropped «Yo» at F2; the menu is `/me`'s one home, so it now names both
-  halves, and Tema folds into Ajustes rather than getting its own item. It no
+  `Mi semana` (`/me`), `Disponibilidad` (`/me/disponibilidad`), `Ajustes` (`/me/ajustes`),
+  a separator, `Cerrar sesión` — Frank's look at R3 F3 (2026-09-13) found «Mi perfil»
+  pointing only at `/me/ajustes`, leaving `/me` («Mi semana») unreachable except by URL
+  since the tab bars dropped «Yo» at F2; the menu is `/me`'s one home, so it now names all
+  three halves, and Tema folds into Ajustes rather than getting its own item. It no
   longer repeats Calendario, #Tags, Oasis Kids, Planear Kids or Admin, which
   already have a home in `NavLinks` (desktop) or `BottomNav`'s tabs/«Más» sheet
   (phone). The `showSchedule`/`showTags` props and their ministry/role

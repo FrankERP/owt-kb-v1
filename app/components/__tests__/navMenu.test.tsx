@@ -34,17 +34,19 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("NavMenu — account menu", () => {
-  it("once opened, shows Mi semana, Ajustes, Cerrar sesión and none of the retired destinations", async () => {
+  it("once opened, shows Mi semana, Disponibilidad, Ajustes, Cerrar sesión and none of the retired destinations", async () => {
     mount();
     await act(async () => {});
     fireEvent.click(screen.getByRole("button", { name: /Menú de usuario/ }));
     const menu = screen.getByRole("menu", { name: "Menú de cuenta" });
     const items = Array.from(menu.querySelectorAll('[role="menuitem"]')).map((n) => n.textContent?.trim());
-    expect(items).toEqual(["Mi semana", "Ajustes", "Cerrar sesión"]);
+    expect(items).toEqual(["Mi semana", "Disponibilidad", "Ajustes", "Cerrar sesión"]);
     // F3 fix (Frank's look, 2026-09-13): the menu is /me's only entry point, so
-    // it must name both halves — Mi semana at `/me`, Ajustes at `/me/ajustes`.
+    // it must name all three halves — Mi semana at `/me`, Disponibilidad at
+    // `/me/disponibilidad`, Ajustes at `/me/ajustes`.
     // Tema folded into Ajustes; it is no longer a menu item.
     expect(screen.getByRole("menuitem", { name: "Mi semana" }).getAttribute("href")).toBe("/me");
+    expect(screen.getByRole("menuitem", { name: "Disponibilidad" }).getAttribute("href")).toBe("/me/disponibilidad");
     expect(screen.getByRole("menuitem", { name: "Ajustes" }).getAttribute("href")).toBe("/me/ajustes");
     expect(screen.queryByRole("menuitem", { name: "Tema" })).toBeNull();
 

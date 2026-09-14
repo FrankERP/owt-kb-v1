@@ -418,7 +418,7 @@ Legend: **[C]** client, **[S]** server.
 | `ImpersonationBanner` [C] | Banner + "stop impersonating" when `session.user.isImpersonating`. |
 | `ActivityPing` [C] | "Last seen" ping, ≤ once / 30 min. |
 | `Navbar` [S] | Top navbar shell; deliberately **non-async** (session resolved client-side) so pages stay ISR-renderable. |
-| `NavMenu` [C] | Account menu (Mi semana, Ajustes, Cerrar sesión) + notification badge (the badge pops in on `Presence appear variant="scale"`). |
+| `NavMenu` [C] | Account menu (Mi semana, Disponibilidad, Ajustes, Cerrar sesión) + notification badge (the badge pops in on `Presence appear variant="scale"`). |
 | `BottomNav` [C] | Mobile bottom tab bar — three worship tabs (Inicio · Calendario · Biblioteca) or the kids set; «Más» only when Kids / Planear Kids / Admin apply; hidden when fewer than two items; «Más» is a `CueDialog` sheet. Publishes its measured height as `--bottom-nav-h` + a `has-bottom-nav` class on `<html>` while on screen; hidden ≥ `lg` and on `/auth*`/`/studio*`. |
 | `NavLinks` [C] | Desktop nav link row, rendered in the navbar's centred title block at `lg`+ (the title itself goes `lg:hidden` there); one shared `SlidingIndicator` underline. |
 | `SectionNav` [C] | In-page section anchors. |

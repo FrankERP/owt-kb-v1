@@ -1513,8 +1513,10 @@ churn cap (two rounds before Frank's explicit go-ahead) was not reached.
 ("Mi semana") with no entry point at all — the tab bars already dropped «Yo» at M1 F2, so
 the avatar menu was the only door, and F3 had just pointed that door somewhere else.
 Ruling: the avatar menu is `/me`'s one home, so it must name it — `Mi semana` (`/me`),
-`Ajustes` (`/me/ajustes`), a separator, `Cerrar sesión`. «Tema» is folded into Ajustes
-rather than kept as its own item; `ThemeAnnouncement`'s `#tema` anchor on `/me` is
-unaffected.
+`Disponibilidad` (`/me/disponibilidad`), `Ajustes` (`/me/ajustes`), a separator, `Cerrar sesión`.
+«Tema» is folded into Ajustes rather than kept as its own item; `ThemeAnnouncement`'s `#tema`
+anchor on `/me` is unaffected. «Disponibilidad» joined the avatar menu (2026-09-13) so the
+calendar is one tap from everywhere; the row on Mi semana stays for its count; a link from
+`/schedule` deliberately not added (team schedule vs personal editing).
 
 **Release:** pending.
