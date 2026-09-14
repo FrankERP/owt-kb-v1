@@ -188,36 +188,87 @@ export default function CueDialog({
     // locked scroll, no dialog. Clearing it here costs one comparison per close.
     else if (!portalNode && exiting) setExiting(false);
   }, [exiting, open, portalNode]);
+  // ── LAYER REGISTRATION. Its dependencies are the PRESENCE EDGE, and no more. ──
+  //
+  // This effect's CLEANUP is the unregister, and the unregister MOVES FOCUS: the
+  // provider schedules a frame that walks parent fallback → `restoreFocusRef` →
+  // opener → `main[data-route-main]`. So a re-run here is not a re-registration,
+  // it is focus leaving the open dialog for the page behind it — strictly worse
+  // than the keystroke-focus-theft fixed below it.
+  //
+  // The two ref PROPS used to sit in the array. They are stable in all four
+  // consumers today (every one passes a real `useRef`), but the prop type is
+  // `RefObject<HTMLElement | null>`, which accepts an inline `{ current: null }`
+  // just as happily — and nothing would have caught it, which is precisely how
+  // the entry-focus bug reached the team. They are read through a ref instead,
+  // so the effect cannot be re-run by a consumer's render at all.
+  //
+  // The mirror is seeded by `useRef`'s initialiser (so the mount registration
+  // already has the right refs) and refreshed in an effect of its own — never
+  // during render, which `react-hooks/refs` rejects as an error.
+  const layerRefs = useRef({ restoreFocusRef, fallbackFocusRef });
+  useEffect(() => {
+    layerRefs.current = { restoreFocusRef, fallbackFocusRef };
+  }, [restoreFocusRef, fallbackFocusRef]);
   useEffect(() => {
     if (!mounted) return;
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     return registerLayer({
       id,
       opener: openerRef.current,
-      restoreFocusRef,
-      fallbackRef: fallbackFocusRef,
+      restoreFocusRef: layerRefs.current.restoreFocusRef,
+      fallbackRef: layerRefs.current.fallbackFocusRef,
       shellRef,
     });
-  }, [fallbackFocusRef, id, mounted, registerLayer, restoreFocusRef]);
+  }, [id, mounted, registerLayer]);
 
   const top = isTopLayer(id);
   const layerIndex = layers.indexOf(id);
   const isLowerLayer = layerIndex >= 0 && layerIndex < layers.length - 1;
 
+  // ── ENTRY FOCUS. Its own effect, and that is the whole point. ──────────────
+  //
+  // This used to share an effect with the keydown listener below, which needs
+  // `onDismiss` in its dependencies — and every consumer passes an inline arrow
+  // (`onDismiss={() => setOpen(false)}`), a new identity on every render. So the
+  // focus call re-ran on EVERY RENDER OF THE CONSUMER, not on the open edge: a
+  // member typing in `ProfilePanel`'s Alias field lost the caret after one
+  // character, and iOS closes the soft keyboard the moment focus leaves a text
+  // field. Reported by the team 2026-09-13; they could not edit their profile at
+  // all. Two guards now, because either alone would have prevented it and the
+  // hazard recurs:
+  //
+  //   1. The dependencies are the EDGE ONLY — `open` and `top`. No handler
+  //      identity, nothing that changes per keystroke.
+  //   2. Focus is never taken from inside the shell. Entry focus means "the page
+  //      had focus, bring it in"; if focus already sits on a field in this
+  //      dialog, there is nothing to enter. This also improves the nested case:
+  //      when a child dialog closes and `top` flips back, the provider has
+  //      already restored focus to the control that opened it, and re-running
+  //      this would have yanked it to the close button.
+  //
+  // `focusables(shell)[0]` is SHELL-ONLY on purpose. A satellite is registered
+  // by a child's ref callback, so it is already in the set by the time this
+  // effect runs — using the full ring here would compile fine and, for the rail
+  // specifically, land on the same element (the shell precedes the rail in
+  // document order). But nothing guarantees that for a satellite portalled
+  // somewhere earlier in the body, and a dialog that opens with focus on a
+  // chart's view toggle instead of on its own close button is not the behaviour
+  // any consumer asked for. The ring is for Tab; the entry point is the dialog.
   useEffect(() => {
     if (!open || !top) return;
     const shell = shellRef.current;
     if (!shell) return;
-    // Initial focus stays SHELL-ONLY, on purpose. A satellite is registered by
-    // a child's ref callback, so it is already in the set by the time this
-    // parent effect runs — using the full ring here would compile fine and, for
-    // the rail specifically, land on the same element (the shell precedes the
-    // rail in document order). But nothing guarantees that for a satellite
-    // portalled somewhere earlier in the body, and a dialog that opens with
-    // focus on a chart's view toggle instead of on its own close button is not
-    // the behaviour any consumer asked for. The ring is for Tab; the entry
-    // point is the dialog.
+    if (shell.contains(document.activeElement)) return;
     (focusables(shell)[0] ?? shell).focus({ preventScroll: true });
+  }, [open, top]);
+
+  // The Tab/Escape trap. Re-binding this listener is free — it has no side
+  // effect of its own — so unstable handler identities may stay in its deps.
+  useEffect(() => {
+    if (!open || !top) return;
+    const shell = shellRef.current;
+    if (!shell) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isTopLayer(id)) return;
