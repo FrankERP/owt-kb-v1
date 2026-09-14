@@ -29,12 +29,31 @@
 // the only way to see this class of bug in a Chromium devtools session is to
 // multiply every computed font-size by hand. The next change to these files
 // should go back to the simulator.
+//
+// «Chromium» there means DESKTOP Chromium. `text-size-adjust` is a mobile-only
+// feature in Blink, so the pending Android build may well honour it. Nothing here
+// depends on which way that falls: if font-relative units do not follow the
+// adjustment on some engine, the grid simply stays three columns and `break-words`
+// plus `min-w-0` still keep the names inside their own tracks. The fix fails safe;
+// only the reflow is the bonus.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+// The colour scanner's stripper, shared rather than re-implemented.
+import { stripComments } from "../../../scripts/lib/strip-comments.mjs";
 
-const read = (rel: string) => readFileSync(path.join(process.cwd(), rel), "utf8");
+/**
+ * Source WITHOUT comments.
+ *
+ * Every one of these assertions names the class it is pinning, and every fix
+ * carries a comment explaining that same class — so a naive `readFileSync` made
+ * two of them satisfiable by the PROSE. Verified by deleting `break-words` and
+ * `size={1}` from the code and watching the guard stay green. `stripComments`
+ * blanks comments while preserving offsets, so the slices below still line up.
+ */
+const read = (rel: string): string =>
+  stripComments(readFileSync(path.join(process.cwd(), rel), "utf8"), { syntax: "js" }) as string;
 
 describe("the voices grid reflows instead of overlapping", () => {
   const src = read("app/components/DayCard.tsx");
@@ -50,16 +69,36 @@ describe("the voices grid reflows instead of overlapping", () => {
   it("lets a name break when that one name cannot fit its column", () => {
     // Every name span carried `whitespace-nowrap`, so a name wider than its column
     // painted into the next one and was then clipped by the card's overflow-hidden.
-    const vocalCol = src.slice(src.indexOf("function VocalCol"));
+    // Bounded at BOTH ends: `Row` below it also has a `min-w-0`, and an
+    // open-ended slice let the min-w-0 assertion pass on a VocalCol that had lost
+    // its own (caught by mutation-testing this file).
+    const vocalCol = src.slice(src.indexOf("function VocalCol"), src.indexOf("function Row"));
     expect(vocalCol).not.toMatch(/whitespace-nowrap/);
-    expect(vocalCol).toMatch(/break-words/);
+    expect(vocalCol, "the names paragraph must be able to break a name").toMatch(
+      /className="[^"]*\bbreak-words\b[^"]*"/,
+    );
+    // `break-words` does NOT lower min-content, so without `min-w-0` the column's
+    // automatic minimum still pushes the track past its `1fr` share — the original
+    // overflow, reproduced. The two are one fix.
+    expect(vocalCol, "a grid item needs min-w-0 to honour its track").toMatch(/<div className="min-w-0">/);
   });
 
-  it("keeps the hero header's title and its actions on separate lines rather than on top of each other", () => {
-    // `min-w-0` without `truncate` shrank the title's BOX while the text kept
-    // painting over the countdown and «Ensayar».
-    const header = src.slice(src.indexOf("Header — day · date"), src.indexOf("function VocalCol"));
+  it("wraps the hero ROW, with the actions still right-aligned", () => {
+    // Both cheaper options were tried in the simulator and are worse at one end:
+    // no wrap at all painted the title over the controls (the shipped bug), and
+    // `break-words` without a wrap collapsed the title to one letter per line at
+    // «Máximo», where the right-hand block is ~220px that cannot shrink.
+    const header = src.slice(src.indexOf("t.headerBg"), src.indexOf("function VocalCol"));
     expect(header).toMatch(/flex flex-wrap items-center justify-between/);
+    expect(header, "a lone item on a wrapped justify-between line goes LEFT").toMatch(
+      /className="ml-auto flex flex-wrap items-center justify-end gap-2"/,
+    );
+    // `shrink-0` here pinned the block at pill + «Ensayar» ≈ 350px, wider than the
+    // card, and the panel's `overflow-hidden` cut the button in half.
+    expect(header, "the actions block must be able to shrink and stack").not.toMatch(
+      /ml-auto flex shrink-0/,
+    );
+    expect(header).toMatch(/<div className="min-w-0">/);
   });
 });
 
@@ -68,10 +107,16 @@ describe("rows of unbreakable Spanish words wrap instead of running off the phon
     // Measured both failures: `flex-1` + `min-w-0` overflowed the page by 56px;
     // a plain `grow` wrapped «Siguiente» onto a second line at NORMAL size.
     const src = read("app/components/availability/AvailabilityGrid.tsx");
-    const nav = src.slice(src.indexOf("{/* Navigation"));
-    expect(nav).toMatch(/flex flex-wrap items-center justify-between/);
-    expect(nav).toMatch(/min-w-min flex-1 text-center/);
-    expect(nav, "the arrows must not be shrunk into their chevrons").toMatch(/flex shrink-0 items-center/);
+    // No slicing: the anchors that used to bound this block lived in comments,
+    // which `read` now blanks. Each class is pinned directly instead.
+    expect(src).toMatch(/flex flex-wrap items-center justify-between gap-y-2/);
+    // `gap-y-2`, not `gap-2`: a gap on BOTH axes raises the row's horizontal floor
+    // by 16px, which is budget spent against the very wrap this is avoiding.
+    expect(src, "the wrap gap must not cost horizontal room").not.toMatch(/justify-between gap-2\b/);
+    expect(src).toMatch(/min-w-min flex-1 text-center/);
+    expect(src, "the arrows must not be shrunk into their chevrons").toMatch(
+      /flex shrink-0 items-center gap-1\.5/,
+    );
   });
 
   it("the /me availability row wraps its count", () => {
@@ -79,6 +124,7 @@ describe("rows of unbreakable Spanish words wrap instead of running off the phon
     // floor wider than a 375pt phone.
     const src = read("app/(client)/me/page.tsx");
     expect(src).toMatch(/flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl/);
+    expect(src, "the count stays right-aligned when it wraps").toMatch(/className="ml-auto flex min-w-0 items-center/);
   });
 
   it("the library search box can shrink under its own placeholder", () => {
@@ -88,7 +134,7 @@ describe("rows of unbreakable Spanish words wrap instead of running off the phon
     // against.
     const src = read("app/components/LibraryIndex.tsx");
     expect(src).toMatch(/brand-search-console relative min-w-0 flex-1/);
-    expect(src).toMatch(/size=\{1\}/);
+    expect(src).toMatch(/\n\s+size=\{1\}\n/);
   });
 });
 

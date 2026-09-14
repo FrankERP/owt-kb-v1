@@ -563,7 +563,7 @@ export default async function MePage() {
             {...revealProps(3)}
           >
             <span className="font-display text-base uppercase tracking-wide">Disponibilidad</span>
-            <span className="flex min-w-0 items-center gap-2">
+            <span className="ml-auto flex min-w-0 items-center gap-2">
               <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
                 {upcomingUnavailable === 0
                   ? "Sin fechas marcadas"

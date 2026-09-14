@@ -417,7 +417,7 @@ export default function AvailabilityGrid({ state, serviceDates = [], openNote, c
           words: at «Máximo» text size they floor at ~450px on a 375pt phone, and
           the member reported «Siguiente» sitting off the right edge. Wrapping
           stacks them instead of pushing them off. */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-y-2">
         <button
           type="button"
           onClick={() => goTo(page - 1)}

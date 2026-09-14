@@ -128,9 +128,10 @@ export default function LibraryIndex(props: LibraryIndexProps) {
       {/* `min-w-0` on the search box, `size={1}` on the input: a text input's
           intrinsic minimum is ~20 characters WIDE IN ITS OWN FONT, so at «Máximo»
           text size the field alone floors at ~320px and shoves «Filtros» off a
-          375pt screen — taking the page into sideways scroll. Both halves are
-          needed: `min-w-0` lets the flex item shrink, `size={1}` lowers what it
-          is shrinking against. */}
+          375pt screen — taking the page into sideways scroll. `min-w-0` is what
+          lets the flex item shrink at all; `size={1}` lowers the intrinsic floor it
+          would otherwise carry, and is belt-and-braces next to the `w-full` on the
+          input rather than a second necessary half. */}
       <div className="mb-6 flex items-center gap-2">
         <div className="brand-search-console relative min-w-0 flex-1">
           <svg

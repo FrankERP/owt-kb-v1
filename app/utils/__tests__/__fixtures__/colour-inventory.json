@@ -3223,7 +3223,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 426,
+      "line": 443,
       "disposition": "B",
       "reason": null
     },
@@ -3367,7 +3367,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 158,
+      "line": 159,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3379,7 +3379,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 142,
+      "line": 143,
       "disposition": "B",
       "reason": null
     },
