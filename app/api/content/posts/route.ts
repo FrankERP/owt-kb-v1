@@ -10,7 +10,7 @@ function rng() { return Math.random().toString(36).slice(2, 9); }
 
 export async function GET() {
   if (!await requireActiveManager()) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para editar canciones." }, { status: 403 });
   }
 
   const posts = await serverClient.fetch(
@@ -30,7 +30,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   if (!await requireActiveManager()) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para editar canciones." }, { status: 403 });
   }
 
   const body = await req.json() as {
@@ -74,7 +74,13 @@ export async function POST(req: NextRequest) {
 
   const chords = normalizeChordCharts(body.chords ?? [], rng);
   if (!chords.ok) {
-    return NextResponse.json({ error: chords.error }, { status: 400 });
+    return NextResponse.json(
+      // `chords.error` is developer-shaped («chords[0] has a duplicate _key») and
+      // the editor now shows what this route says, so it is summarised for the
+      // person reading it. The precise text stays in the server log.
+      { error: "No se pudieron guardar los acordes.", detail: chords.error },
+      { status: 400 },
+    );
   }
 
   // Drops the blank «Agregar» row instead of 400ing the whole save over it —

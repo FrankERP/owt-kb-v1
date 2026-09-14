@@ -79,10 +79,16 @@ export function normalizeLinkRows(
     if (label === "" && url === "") continue;
 
     if (!isSafeHttpUrl(url)) {
+      // The label is quoted so the admin can find the row among six — but it is
+      // THEIR text, and the most likely way to reach this branch is pasting a
+      // tracking-laden URL into the Etiqueta field. Unbounded, the message would
+      // sail past the client's own length gate and degrade back to the generic
+      // line, in exactly the case this exists for. Bounded here, at the source.
+      const shown = label.length > 60 ? `${label.slice(0, 60)}…` : label;
       return {
         ok: false,
-        error: label
-          ? `«${label}» necesita una URL que empiece con http:// o https://`
+        error: shown
+          ? `«${shown}» necesita una URL que empiece con http:// o https://`
           : `${humanName}: hay una URL que no empieza con http:// o https://`,
       };
     }

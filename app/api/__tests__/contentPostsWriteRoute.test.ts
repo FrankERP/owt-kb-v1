@@ -97,7 +97,11 @@ describe("PATCH /api/content/posts/[id] chords", () => {
     expect(h.patchedIds).toEqual([]);
     expect(h.revalidateSongViews).not.toHaveBeenCalled();
     const body = await res.json();
-    expect(body.error).toMatch(/_key/i);
+    // `error` is what the editor now PRINTS, so it is a sentence; the developer
+    // text this test has always protected moved to `detail`, where it still
+    // reaches the server log and a network tab.
+    expect(body.error).toBe("No se pudieron guardar los acordes.");
+    expect(body.detail).toMatch(/_key/i);
   });
 
   it("rejects a chart missing content with 4xx and does not commit", async () => {

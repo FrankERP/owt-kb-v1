@@ -13,7 +13,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   if (!await requireActiveManager()) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para editar canciones." }, { status: 403 });
   }
 
   const { id } = await params;
@@ -87,7 +87,13 @@ export async function PATCH(
   if (body.chords  != null) {
     const normalized = normalizeChordCharts(body.chords, rng);
     if (!normalized.ok) {
-      return NextResponse.json({ error: normalized.error }, { status: 400 });
+      return NextResponse.json(
+      // `normalized.error` is developer-shaped («chords[0] has a duplicate _key») and
+      // the editor now shows what this route says, so it is summarised for the
+      // person reading it. The precise text stays in the server log.
+      { error: "No se pudieron guardar los acordes.", detail: normalized.error },
+      { status: 400 },
+    );
     }
     patch.chords = normalized.charts;
   }
@@ -112,11 +118,11 @@ export async function DELETE(
 ) {
   const session = await requireActiveManager();
   if (!session) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para editar canciones." }, { status: 403 });
   }
   // DELETE requires admin or super-admin (not content-editor)
   if (session.user.role === "content-editor") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "No tienes permiso para editar canciones." }, { status: 403 });
   }
 
   const { id } = await params;

@@ -160,6 +160,12 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 
 ### Content conversion
 - **`textToBody(text)`**, **`bodyToLyrics(body)`**, **`groupBySections(blocks)`**
+  ([lyrics.ts](../app/utils/lyrics.ts)) — plain-text ⇄ Portable Text (`# ` → h3, `**bold**`,
+  `*italic*`, blank line → stanza break). Used by the song form and SongSheet.
+- **`pickPracticeVideoUrl(song, mode)`**, **`extractYouTubeId(url)`** ([practiceVideo.ts](../app/utils/practiceVideo.ts))
+  — practice-playlist video selection; robust 11-char YouTube id extraction.
+
+### Write normalisation
 - **`linkRowWrite.ts`** — server-side normalisation for the song editors' link rows
   (`referenceLinks` on both write routes, `tutorials2` on PATCH). A row with neither
   label nor URL is DROPPED, following `normalizeChordCharts`'s precedent for a blank
@@ -174,10 +180,6 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   page can never reach a toast. The three song-editor save handlers use it — before, they
   discarded the body and printed «Error al actualizar.» over a 400 that knew exactly which
   link was wrong.
-  ([lyrics.ts](../app/utils/lyrics.ts)) — plain-text ⇄ Portable Text (`# ` → h3, `**bold**`,
-  `*italic*`, blank line → stanza break). Used by the song form and SongSheet.
-- **`pickPracticeVideoUrl(song, mode)`**, **`extractYouTubeId(url)`** ([practiceVideo.ts](../app/utils/practiceVideo.ts))
-  — practice-playlist video selection; robust 11-char YouTube id extraction.
 
 ### Proposals
 - **`mergeContributor(existing, editorId, newKey)`**, **`describeContributors(contributors, myId)`**
