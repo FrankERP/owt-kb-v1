@@ -2,7 +2,11 @@
 
 Artifact: `2026-09-10-solver-fill-empty-only-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
-**Status: open — eleven rounds, no approval yet.** The mechanism was rewritten twice: once
+**Status: CLOSED 2026-09-15 — the artifact was split; review continues on the solver half.**
+Eleven rounds, no approval. Every finding is applied, and the content now lives in
+`2026-09-15-solver-pinned-assignments-design.md` (critical, two approvals required, ships
+first) and `2026-09-15-fill-empty-only-client-design.md` (standard, diff review). This log
+stays with the superseded combined spec as the record of how the design got here. The mechanism was rewritten twice: once
 after round 2 (onto pins-as-fixed-variables) and once after round 6 (onto soft rules).
 **Round 7 verified the rewritten mechanism sound** and found its two blockers elsewhere.
 Current canonical digest `e054bb8e…`, commit `67c5f8f3`.
@@ -424,3 +428,45 @@ a client field and a CI gap; 8 found the last unexamined piece of the rejected d
 prose weaker than the build; 10 found that 9's own remedy did not hold; 11 found nothing in the
 solver at all and three things in the UI contract. The centre of gravity has moved off the
 mechanism entirely.
+
+## The split — 2026-09-15
+
+Eleven rounds, no approval, and the reason was legible in the last two:
+
+| Round | Where the blockers were |
+|---|---|
+| 6 | solver mechanism (exemption enumeration killed) |
+| 7 | mechanism cleared; one client field, one CI gap |
+| 8 | solver mechanism (the last piece carried over from the rejected design) |
+| 9 | prose describing something weaker than what was built |
+| 10 | round 9's own fix did not hold |
+| 11 | **nothing in the solver; three UI-contract blockers** |
+
+Rounds 10 and 11 each patched a copy of `owt_solver_v2.py` and executed it, and neither found
+anything in the mechanism. Round 11's three blockers were all the same shape — a promise the
+spec made that the client code would not keep — which is the class CLAUDE.md's retier note
+assigns to the **diff review**: *"Child E ran 19 plan-review rounds and the post-merge code
+review still found three control-flow bugs… the diff review is the layer that catches
+implementation bugs."* Round 10 had already produced the other signal CLAUDE.md names: a defect
+**introduced by the previous round's fix**, the churn signature of the 15- and 19-round loops
+whose real remedy was a restructure rather than another round.
+
+So the artifact was split on its own evidence, with Frank's approval:
+
+- **`2026-09-15-solver-pinned-assignments-design.md`** keeps the **critical** tier — a
+  production solver deployed by an irreversible remote release action, serving both
+  environments from one Cloud Function, never reaching `preview` first. Two sequential fresh
+  approvals on byte-identical text. It ships first.
+- **`2026-09-15-fill-empty-only-client-design.md`** is **standard** — a client consumer of that
+  contract, owning no writer, serializer, auth boundary, migration, concurrency protocol or
+  remote action, and reaching no stored document by construction (E7). Spec → Frank's review →
+  implement → gates → fresh code review of the diff.
+
+Both carry all eleven rounds' findings already applied. Review of the solver half restarts cold
+against the smaller artifact; its round numbering starts again at 1, with this log cited as
+prior art but never shown to a reviewer.
+
+**Cost of the eleven rounds, recorded so the next loop is budgeted honestly:** roughly 2M
+tokens across eleven reviewer dispatches. Blockers per round over the last six were 1, 2, 1, 1,
+1 and 3 — not converging toward zero, but moving from the mechanism into the UI. That movement,
+not the count, is what justified the split.
