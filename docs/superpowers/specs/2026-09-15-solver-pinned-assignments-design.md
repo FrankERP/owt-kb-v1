@@ -1,66 +1,68 @@
-# «Solo llenar vacíos» — pinned assignments in CP-SAT — design spec
+# Pinned assignments in the CP-SAT solver — design spec (solver half)
 
-> ## ⚠ SUPERSEDED 2026-09-15 — split in two
->
-> This file is kept as the **historical artifact of eleven adversarial review rounds**, and its
-> review log (`…-review-log.md`) still belongs to it. Do not implement from it, and do not
-> review it: the two files below carry every finding those rounds produced, and they are what
-> a reviewer or implementer should read.
->
-> - **`2026-09-15-solver-pinned-assignments-design.md`** — the solver contract. **Critical
->   risk**, two sequential fresh approvals required. Ships first.
-> - **`2026-09-15-fill-empty-only-client-design.md`** — the switch, the «Borrar» menu, the
->   notices, the toasts. **Standard risk**: spec → Frank's review → implement → gates → fresh
->   code review of the diff.
->
-> **Why the split.** Rounds 10 and 11 found nothing in the solver mechanism — both reviewers
-> patched a copy of `owt_solver_v2.py` and executed it — while round 11's three blockers were
-> all UI contract, which CLAUDE.md's retier note assigns to the diff review rather than to plan
-> review. Round 10 had also found a defect introduced by round 9's own fix, the churn signature
-> CLAUDE.md records for the 15- and 19-round loops whose real remedy was a restructure. Frank
-> approved the split on 2026-09-15.
+**Date:** 2026-09-15 · **Status:** split out of `2026-09-10-solver-fill-empty-only-design.md`
+after eleven adversarial review rounds; **carries the critical contract** · **Risk tier:**
+**critical**
 
-**Date:** 2026-09-10 · **Status:** Decisions E1–E8 approved in chat by Frank 2026-09-10; adversarial review in progress · **Risk tier:** **critical**
+Critical, derived from the ladder and not adjusted: this changes the request contract and the
+hard constraints of a **production solver** that is deployed by an irreversible remote release
+action (a Cloud Build trigger on `main` filtered to `gcf/**`) and that serves **both**
+environments from one Cloud Function — the solver half never reaches `preview` first.
+Requirement: **two sequential fresh `APPROVED` verdicts on byte-identical text.**
 
-Critical, derived from the ladder: the request contract and the hard constraints of a
-production solver change. Requirement: **two sequential fresh `APPROVED` verdicts on
-byte-identical text**.
+## 0. Why this file exists
 
-Delivery 1 (declared instruments and automatic instrument fill) shipped 2026-09-10 in
-PR #57 and is independent; nothing here changes it.
+The original spec covered the solver contract **and** the whole admin UI — the switch, the
+«Borrar» menu, the conflict notices, the toasts — in one critical-tier artifact. Eleven review
+rounds later the split was forced by the evidence rather than chosen for tidiness:
 
-**Two scope notes, both recorded during review rather than written up front.**
+- **Rounds 10 and 11 found nothing in the solver mechanism.** Both reviewers patched a copy of
+  `owt_solver_v2.py` and executed it; both confirmed pins are honoured, fairness does not
+  collapse, a pinned-only person is safe, and a full-board pin set reproduces the un-pinned
+  roster exactly.
+- **Round 11's three blockers were all UI contract**: a label promising a guarantee the default
+  configuration breaks, a clear with no undo behind a false mitigation, and an ambiguous
+  marker-dropping pass. CLAUDE.md's own retier note says that class belongs to the **diff
+  review**, not to plan review — "Child E ran 19 plan-review rounds and the post-merge *code*
+  review still found three control-flow bugs."
+- **Round 10 found a defect introduced by round 9's fix**, which is the churn signature
+  CLAUDE.md records for the 15- and 19-round loops whose real remedy was a restructure.
 
-*The scope split (2026-09-10).* Frank asked that this also work on already-created draft
-services. That half turned out to be a second design problem rather than a missing
-paragraph — stored columns are keyed by Sanity `_id` while unfilled markers are emitted with
-a `create:` prefix, and the calendar state the request is built from belongs to create mode
-— so it would have arrived undesigned behind a half that had been reviewed. Frank chose to
-split it (§14). This spec is create mode only.
+So the critical contract is reviewed here, alone, at a fraction of the surface. The client half
+moves to `2026-09-15-fill-empty-only-client-design.md` as **standard-risk** work — spec, Frank's
+review, implementation, and a fresh code review of the diff.
 
-*The mechanism rewrite (2026-09-10).* Two review rounds rejected an earlier design in which
-a pinned seat was **removed** from the solver's slot list and the pinned person re-entered
-as a constant. That made every interaction with the model a manual offset: round 1 found
-four that had been missed, and round 2 found two more plus a reproduced regression — a
-pinned person with no candidacies forced `total_vars` to zero, which pinned `gmin` to zero
-and capped every other member at one or two services for the whole month. The mechanism
-below fixes the variable to 1 instead, which makes those interactions automatic. §5 records
-what that buys and what it still costs.
-
-> **Review state.** This spec has been through ten adversarial review rounds; the ledger,
-> including the two mechanism rewrites and Frank's explicit per-round go-ahead for every round
-> past the churn cap, is in `2026-09-10-solver-fill-empty-only-design-review-log.md` beside
-> this file. A reviewer who wants to know whether the cap was respected should read it there —
-> it is deliberately not summarised here, so that no round sees a prior verdict.
+**Ordering:** this half ships first and must be live before the client half sends a single pin.
+See §9.
 
 ## 1. The brief
 
-Frank, during delivery 1's brainstorm: «me gustaría tener una opción para que el solver
-llene únicamente los espacios vacíos, en vez de sobre escribir todo». Today «Generar mes»
-rewrites every solvable voice row on every weekend column, so a manual correction survives
-exactly until the next Auto. He also asked for a delete control with a menu offering every
-level of granularity, and for it to work on already-created draft services; that last half
-is deferred to its own delivery for the reason recorded above.
+Frank, during delivery 1's brainstorm: «me gustaría tener una opción para que el solver llene
+únicamente los espacios vacíos, en vez de sobre escribir todo». Today «Generar mes» rewrites
+every solvable voice row on every weekend column, so a manual correction survives exactly until
+the next Auto.
+
+**This file's job is the part of that the solver owns**: accept a set of already-decided seats,
+honour every one of them, fill the rest as well as it can, and say what it had to give up to do
+it. What the admin sees and clicks is the client half's problem.
+
+Delivery 1 (declared instruments and automatic instrument fill) shipped 2026-09-10 in PR #57
+and is independent; nothing here changes it.
+
+**The mechanism rewrite (2026-09-10).** Two review rounds rejected an earlier design in which a
+pinned seat was **removed** from the solver's slot list and the pinned person re-entered as a
+constant. That made every interaction with the model a manual offset: round 1 found four that
+had been missed, and round 2 found two more plus a reproduced regression — a pinned person with
+no candidacies forced `total_vars` to zero, which pinned `gmin` to zero and capped every other
+member at one or two services for the whole month. The mechanism below fixes the variable to 1
+instead, which makes those interactions automatic. §3 records what that buys and what it still
+costs.
+
+> **Review state.** The ledger for all eleven rounds on the combined spec — including the two
+> mechanism rewrites and Frank's explicit per-round go-ahead for every round past the churn cap
+> — is in `2026-09-10-solver-fill-empty-only-design-review-log.md`. A reviewer who wants to know
+> whether the cap was respected should read it there; it is deliberately not summarised here, so
+> that no round sees a prior verdict.
 
 ## 2. What the repo says today
 
@@ -83,57 +85,29 @@ Every row verified against the tree at `ae792034`, which is unchanged in `gcf/` 
 | The DSL cannot express a pin: week-scoped ABSENCE, month-scoped counts, group weekly presence, and nothing that says "must serve" | `docs/SOLVER_AND_INFRA.md:37-44`, `parse_dsl_rules:227` |
 | `solve_from_dict` reads every field with `data.get(...)`, so an **unknown key is silently ignored** | `:1194-1213` |
 | Member unavailability is compiled into hard `!in week n Sun.*` / `Sat.*` DSL rules inside the same request | `plannerModel.ts:796-806` |
-| Availability is **not** a block in the picker — it is a `+10` sort penalty, so an admin can and does seat an unavailable member | `candidateRanking.ts:211`, `:246` |
-| The picker DOES block the same person twice in one service, same category | `candidateRanking.ts:196-204` |
-| `applySolveResponse` REPLACES a solvable cell — it rebuilds `occupants` with no merge and stamps `origin: "auto"` | `plannerModel.ts:925-936` |
-| `mapUnfilledSeats` maps an unfilled entry by role and week, never by slot index | `:958-986` |
-| Auto is create-mode only | `PlannerGrid.tsx:1997` |
-| The Auto confirmation says it will replace every voice assignment the solver can resolve | `PlannerGrid.tsx:2035-2040` |
-| Member-declared availability is **not** rendered on a cell — `blockingReasons` reads admin-authored `weekExclusions`, a different thing; the only availability signal is a transient drag toast | `ruleEnforcement.ts:372-383`, `PlannerGrid.tsx:2861-2891`, `:1177-1186` |
-| The rules panel cannot author a `!consecutive` clause — `restrictionToDs` never emits one | `plannerModel.ts:572-599` |
-| Create mode derives `drafts` inside `handleCellsChange`; a cell change that bypasses it renders one thing and posts another | `MonthGenerator.tsx:2467-2487` |
 | Local development runs the repo's own solver directly, bypassing the deployed one | `app/api/admin/solve/route.ts:69-108` |
-| `Menu`, `CueDialog`, `Button`, `Switch` exist as house primitives | `app/components/ui/` |
-| `weekForColumn` maps a weekend column to the solver's 1-based week; a special returns `null` | `plannerModel.ts:845-858` |
 | Cloud Build deploys `gcf/**` on `main`; Vercel deploys the app from the same branch | `cloudbuild.yaml:3` |
+
 
 ## 3. Decisions
 
-- **E1 — What the switch preserves: everything on the board, instruments included.** With
-  «Solo llenar vacíos» on, every occupied voice cell on a weekend column is pinned regardless
-  of how it got there — a human pick or a previous Auto — and the instrument filler is told
-  to keep its own previous picks as well. Frank chose this over "preserve only manual picks",
-  and confirmed the instrument half on 2026-09-12. The consequence is deliberate: re-running
-  Auto on a full month does nothing until something is cleared. Clearing is the re-roll.
+Of the eight decisions Frank approved on 2026-09-10, these four bind the solver. The other four
+(E1, E2, E6, E7 — what the switch preserves, its default, the «Borrar» menu, and create-mode
+scope) are the client half's and are recorded there.
 
-  The instrument half is not free, and an earlier draft of this spec left it out while
-  claiming it was already handled. `fillInstruments` runs at **every** exit of `handleAuto`,
-  inside `applySpecialFill` (`MonthGenerator.tsx:2984-2986`), and it opens by calling
-  `vacateAutoInstrumentCells` (`instrumentFill.ts:119`), which empties every weekend
-  instrument cell whose `origin === "auto"` (`:85-90`). Only `origin: "manual"` picks survive
-  it. So without this decision, pressing Auto twice with the switch on would leave the voices
-  untouched and re-roll the drums and the keys — and §7's dialog would be promising to fill
-  only the empty seats while doing exactly that. `fillInstruments` therefore takes the switch
-  as an input and skips the vacate when it is on, which is the one-line version of "preserve
-  everything on the board".
-- **E2 — The switch is OFF by default.** Auto behaves exactly as it does today until the
-  admin turns it on.
 - **E3 — When a pin contradicts a rule, the pin wins, and the conflict is shown.** A
   non-blocking amber notice, never a refusal. Frank: «gana el pin, pero sigue mostrando el
   aviso acerca del conflicto, no es algo que bloquea». One collision is *guaranteed*, not
   hypothetical: availability compiles to a hard `!in week n` rule while the picker lets an
   admin seat that same person anyway.
+
 - **E4 — A pin is a fixed variable, not a removed seat.** See §5.
+
 - **E5 — Conflicts are computed on the client**, so the notice appears when the person is
   seated rather than when Auto runs. The solver is not asked to explain conflicts.
-- **E6 — One «Borrar» button with a menu**, at two scopes across the categories Auto and the
-  instrument filler can rebuild. FOH is never cleared in bulk: nothing refills it, so
-  clearing it is guaranteed rework.
-- **E7 — Auto and the clears stay where Auto already lives: create mode.** This delivery
-  does not move that gate, and nothing in it reads or writes a stored role document, so no
-  published service can be touched by construction rather than by a check.
+
 - **E8 — The response must prove the pins were honored.** A silently-ignoring old solver is
-  a real deployment state. See §9.
+  a real deployment state. The refusal itself is client behaviour — see the client spec's §7.
 
 ## 4. The request contract
 
@@ -156,9 +130,9 @@ Every row verified against the tree at `ae792034`, which is unchanged in `gcf/` 
 a second source for the same fact is a second thing to keep in step.
 
 `SolveResponse` gains two fields, both absent-means-nothing so an old client is unaffected:
-`pinned_honored?: number` (§9's handshake) and **`pin_violations?: string[]`** — the rules
+`pinned_honored?: number` (the handshake, the client spec §7) and **`pin_violations?: string[]`** — the rules
 the solver had to relax to honour the pins, each as that rule's own `source` string, the same
-text the rules panel shows. §6 renders them; §5.2 explains why they exist.
+text the rules panel shows. the client spec's §4 renders them; §5.2 explains why they exist.
 
 **Why a top-level field and not a DSL clause.** The DSL lives in a solver-config document
 shared across admins and rendered in the rules panel; pins are per-run state derived from
@@ -184,8 +158,9 @@ Instead the pin itself grants candidacy, and only where it points. See §5.1.
 unsatisfiable together (one slot per service per week per person, `:754-765`). The picker
 already blocks that arrangement (`candidateRanking.ts:196-204`), so it cannot arise from
 normal use, but `buildSolveRequest` deduplicates by person-and-service anyway, keeps the
-first, and reports the rest as a conflict (§6). Pins are also deduplicated outright before
-the count of §9 is taken.
+first, and reports the rest as a conflict (the client spec §4). Pins are also deduplicated outright before
+the handshake count is taken.
+
 
 ## 5. The solver: a pin is a fixed variable
 
@@ -258,7 +233,7 @@ three-pin action collapsed a whole month in review:
 The **Where** column names the per-person loops, not the `<= limit` lines: the limit lines are
 where the spread is *bounded*, the loops are where each person is tied to `gmax`/`gmin`. The
 second global loop (`:791-793`) is the one a reader skips — it handles exactly the people who
-already carry absence slack, so missing it mis-bounds the population §11's heavy-pin-load
+already carry absence slack, so missing it mis-bounds the population §7's heavy-pin-load
 test exists to check. The slack **adds** to theirs; it does not replace it.
 
 The **soft** terms are deliberately left alone and keep seeing the totals: `ov_total`
@@ -286,7 +261,7 @@ Measured, twelve-person month, seed-fixed, no rules — the baseline spread is 4
 Subtraction means: the admin seats Rachel to lead three Sundays, turns the switch on, and Auto
 hands her the fourth Sunday **plus three more services**. That is not a trade, it is the
 opposite of what «llenar solo los vacíos» means — what is already on the board is service the
-person has performed. §12's ADR records subtraction as the rejected alternative with these
+person has performed. §8's ADR records subtraction as the rejected alternative with these
 numbers, because it is the form a reader will re-derive.
 
 **The semantics this settles, stated plainly:** a pinned service counts toward that person's
@@ -297,9 +272,9 @@ column shows.
 Reproduced in review before the two per-role guards were named: pinning one person into
 `Sun.Lead` for three weeks drove every Stage B tier infeasible, `solve_schedule:1137` returned
 the fairness-free `stage_a`, and the resulting board gave one member zero services while
-another took half the Sunday leads — with the pins honoured, so §9's handshake passed and the
+another took half the Sunday leads — with the pins honoured, so the handshake passed and the
 client applied it. The fingerprint of that failure is a reported limit of `len(slots) + 1`
-(`big`, `:1094`), which §11 asserts against.
+(`big`, `:1094`), which §7 asserts against.
 
 **Not fairness slack, which looks right and is not.** Routing pins through `combined_slack`
 (`:1065-1066`) is the obvious move and it fails: giving most people slack empties the
@@ -308,14 +283,14 @@ client applied it. The fingerprint of that failure is a reported limit of `len(s
 `fairness_slack N` rule**. A reviewer reproduced exactly that on a 12-person month (34, 30
 and 26 pins all collapse `strict` to zero), including the Stage-A fairness-free fallback
 this paragraph exists to prevent, and it regresses shipped absence behaviour on every pinned
-run. §11 carries a guard that reaches that branch.
+run. §7 carries a guard that reaches that branch.
 
 **The `strict` collapse branch must exclude pinned-only people too.** `:1072-1074` rebuilds
 `strict` from `all_people` when it falls below two — and `all_people` now contains the
 pinned-only names this section removed from the fairness groups. A literal implementation
 would let a person the solver has no power over set `gmin`, on exactly the thin-roster months
 where the fallback fires. The rebuild is therefore over `all_people` minus the pinned-only
-set, and §11 asserts it on a month that reaches the branch.
+set, and §7 asserts it on a month that reaches the branch.
 
 ### 5.2 How a pin beats a rule: the rules go soft, nobody enumerates
 
@@ -358,7 +333,7 @@ authored rule for the whole month would break it in services the admin never pin
 **Each entry must identify its instance, not just its rule.** A pair rule produces one boolean
 per week **per service**, so `W3: A !with B on *.Lead` alone is ambiguous between the Sunday
 and the Saturday of that week — two different waivers collapsing into one line the admin
-cannot act on. The entry carries the service too (`W3 Sun: …`), and §11 asserts that two
+cannot act on. The entry carries the service too (`W3 Sun: …`), and §7 asserts that two
 relaxed instances of one rule produce two distinct entries.
 
 **Why the count rules are the exception, and it is not an inconsistency.** A DSL count rule is
@@ -379,7 +354,7 @@ restrictions and pair conflicts only and never presence (`ruleEnforcement.ts:217
 so the grid renders nothing for a broken presence rule.
 
 So a `pin_violations` entry for a per-week family **carries its week** — `W3: any_of(Hugo,
-Jakey) on Sun.BGV each_week` — which is also what lets §6 say «en la semana 3» instead of
+Jakey) on Sun.BGV each_week` — which is also what lets the client spec's §4 say «en la semana 3» instead of
 implying the whole month. A count rule's entry carries no week, correctly, because it has
 none.
 
@@ -394,9 +369,9 @@ otherwise assume it was missed.
 Weekly presence filters its terms through `excluded_pwr` (`:728-731`, `:739`), which is derived
 from the week-exclusion rules **unconditionally**. So pinning an unavailable member who is also
 in an `any_of(…) each_week` group drops them from the presence terms even though their pin
-satisfies the rule — the constraint then relaxes and §6 shows «Se dejó de aplicar una regla…»
+satisfies the rule — the constraint then relaxes and the client spec's §4 shows «Se dejó de aplicar una regla…»
 on the one path the feature exists for. The filter therefore reads
-`(p, week, role) not in excluded_pwr or (p, role, week) in pin_set`, and §11 asserts the pinned
+`(p, week, role) not in excluded_pwr or (p, role, week) in pin_set`, and §7 asserts the pinned
 unavailable group member produces an **empty** `pin_violations`. The Saturday anchor's
 `available_dedicated` (`:701-704`) derives from the same rules and takes the same scoping.
 
@@ -422,7 +397,7 @@ Stage A and of the optimising passes, and on the rest only the ceiling holds. `m
 **`violation_target` bounds the count, not the identity.** When more than one
 minimum-cardinality set of violations exists, Stage B may spend its budget on a different
 instance than Stage A did — possibly one in a week with no pin — because the optimising branch
-carries no violation term. The month is equally good by every measure the model has, but §6's
+carries no violation term. The month is equally good by every measure the model has, but the client spec's §4's
 notice would then name a rule that was, in another equally-optimal solution, applicable. The
 honest reading of "the fairness ladder can never buy a tighter spread by breaking one more
 rule" is that it cannot break *more*; which ones it breaks is not pinned. Stated rather than
@@ -443,10 +418,10 @@ further to narrow. For a count rule the instance is the month, and the bound gen
 binding — but the ordinary objective still holds the result there, because per-role counts are
 in it: measured, `Gaby Sun.BGV <= 1` with Gaby pinned into `Sun.BGV` twice relaxes the cap and
 gives her exactly her two pinned weeks, not more, on four seeds. That is the objective's doing
-and the spec claims no guarantee; §11 asserts the observed behaviour rather than a bound.
+and the spec claims no guarantee; §7 asserts the observed behaviour rather than a bound.
 
 **With no pins, none of this is built.** `soft = bool(pin_set)`; every constraint above is
-emitted exactly as it is today and no boolean exists. That is what keeps §13's byte-identity
+emitted exactly as it is today and no boolean exists. That is what keeps §9's byte-identity
 property true, and it was verified on three seeds.
 
 **Yes, the mandatory lead is in the table.** It is the one constraint the solver is otherwise
@@ -456,9 +431,9 @@ seat is left empty and reported through `unfilled_seats` like any other shortfal
 the signal the planner already renders — instead of failing the whole month over a roster
 the admin built on purpose.
 
-**What this buys §6 and §10.** The solver returns `pin_violations`, the rules it actually
+**What this buys the notice and §6.** The solver returns `pin_violations`, the rules it actually
 relaxed, each as the rule's own `source` string. So the conflict notice stops being a client
-guess about what *might* clash and becomes a report of what *did* — and §10's claim that a
+guess about what *might* clash and becomes a report of what *did* — and §6's claim that a
 pin cannot make the model infeasible stops being an argument about a predicate's completeness
 and becomes a property of the model's shape.
 
@@ -501,7 +476,7 @@ exactly as `withUpdatedCell` already prunes them (`PlannerGrid.tsx:452-465`; reu
 rather than restating it). This is E1 read honestly: «preserves EVERYTHING already on the
 board» includes the decisions the admin recorded about the board, not only the names on it.
 
-**The clears must drop them.** The same field cuts the other way in §7: a cleared cell keeps
+**The clears must drop them.** The same field cuts the other way in the client spec's §5: a cleared cell keeps
 no occupants, so a surviving waiver would silently pre-sanction whoever lands there next —
 the precise failure `overrideReasons` was added to prevent. Clearing a cell clears its
 `overrides` and `overrideReasons` with it.
@@ -510,7 +485,7 @@ the precise failure `overrideReasons` was added to prevent. Clearing a cell clea
 cell it touches (`plannerModel.ts:930-935`). `origin` is per **cell**, so a cell holding one
 pinned person and one solver pick is a real and common case, and there is no origin that
 describes it. The rule is therefore: a cell that contains **any** pinned occupant keeps the
-`origin` it had. This is what keeps §7's count of hand-placed seats honest. It does not
+`origin` it had. This is what keeps the client spec's hand-placed count honest. It does not
 affect the instrument filler, whose ownership test is scoped to `instrumento:` rows
 (`instrumentFill.ts:87`) which `applySolveResponse` never writes — a claim an earlier draft
 of this spec got wrong in the other direction.
@@ -529,281 +504,14 @@ two role maps that can drift apart.
 and `applySolveResponse` rebuilds `occupants` from that list, so a pinned cell's occupants
 come back alphabetised. The cell is therefore not byte-identical across a run even when its
 membership is unchanged. That is acceptable — nothing downstream reads occupant order — but
-it is why §11 asserts the occupant **set** and the `origin`, never the array.
+it is why §7 asserts the occupant **set** and the `origin`, never the array.
 
 **`unfilled_seats` renumbering.** Rows that grew have more slots, so `slot_index` shifts.
 The client maps an unfilled entry by role and week, never by index (`:958-986`), so the
 shift is invisible — but the count per row changes, and the tests pin that.
 
-## 6. Conflicts: named on the board, never blocking
 
-Computed on the client when the person is seated, except the last, which the solver reports.
-Five cases; a sixth was dropped in review and is kept in the table struck through, so nobody
-re-adds it:
-
-| Case | Copy | Who renders it |
-|---|---|---|
-| The person marked that date unavailable | ⚠ Nombre: marcó que no puede este día — **+ «se va a respetar tu decisión» only while the switch is on** | **New.** Nothing renders this today — see below. |
-| A hard rule separates them from someone else in that service | ⚠ Nombre y Otro: una regla los separa — same conditional clause | The existing violation marker, `ruleViolationsForColumn` |
-| They are not in the pool that role draws from | ⚠ Nombre: no está en el pool de Lead — same conditional clause | **New** |
-| ~~More people are pinned in the row than it has seats~~ | — | **Dropped.** §5.1 grows the row, so nothing is lost and there is no conflict to name; the grid already paints the over-target `+N` amber for that cell (`hasTarget`, `plannerModel.ts:391-395`). Two ambers for one fact is worse than one. |
-| The same person is pinned twice in one service | ⚠ Nombre está fijado dos veces en este servicio — solo se respeta el primero | **New**, and §4 says why it should be unreachable |
-| A rule had to be set aside to honour the pins | ⚠ Se dejó de aplicar una regla en la semana 3 para respetar lo que fijaste: «any_of(Hugo, Jakey) on Sun.BGV each_week» — the week phrase is omitted for a month-scoped count rule | **New**, and it is **reported by the solver**, not guessed by the client — one line per entry in `pin_violations` (§5.2) |
-
-**The guarantee clause is conditional, and getting that wrong would be the worst bug in this
-delivery.** «Se va a respetar tu decisión» is only true while «Solo llenar vacíos» is on — and
-E2 makes the switch **off by default**. With it off, `applySolveResponse` replaces the cell
-wholesale (`plannerModel.ts:929-936`) and the Auto dialog says so itself («Esto reemplazará
-toda asignación de voz…», `PlannerGrid.tsx:2035-2040`). A notice that promises otherwise would
-let an admin seat an unavailable member, read that their decision is safe, press Auto, and
-watch the person vanish — **on the default path, from a signal this delivery invents.** §7's
-own words: "A label that promised more than it does is a defect this repo keeps recording."
-
-So each notice splits in two. The **fact** renders unconditionally — «marcó que no puede este
-día», «una regla los separa», «no está en el pool de Lead» — because it is true either way and
-it is what the requirement asked for. The **guarantee clause** is appended only when the switch
-is on. §11 asserts both renderings of the same cell.
-
-That makes the conflict notices a **fourth consumer of the switch state**, alongside the three
-§7 names. The switch is therefore owned by `MonthGenerator` and threaded to `PlannerGrid` as a
-prop, not held locally — §7 says the same thing for the other reason.
-
-**The availability notice is genuinely new, and it is the one the requirement named.** It
-does not exist today in any form: `blockingReasons` reads `PersonRestriction.weekExclusions`,
-which are admin-authored rules (`ruleEnforcement.ts:372-383`), while member-declared
-availability lives in `member.unavailableDates` and only becomes a DSL string inside
-`buildSolveRequest` (`plannerModel.ts:796-806`). The two never meet, and the cell card
-renders no availability line at all (`PlannerGrid.tsx:2861-2891`). Assuming the existing
-amber covered it would have shipped E3's *guaranteed* collision silent.
-
-**The notice names the week when there is one.** Per-week families (presence, pair,
-consecutive, and the two builtins) carry it in the entry; a DSL count rule is month-scoped and
-carries none, so its copy omits the phrase rather than inventing a week. «En la semana 3» is
-what stops an admin reading a one-week waiver as a month-long repeal — the distinction §5.2
-exists to preserve.
-
-**A second form, for when no pin caused it.** `soft = bool(pin_set)` is model-wide, so with
-one pin anywhere a month that today fails on an unsatisfiable authored rule instead comes back
-with that rule in `pin_violations` — and «para respetar lo que fijaste» would blame a pin that
-caused nothing. When the relaxed constraint's instance contains **no pin at all**, the copy is
-«No se pudo aplicar esta regla en la semana 3», with no mention of pinning. The client can tell
-the two apart: it sent the pins, and the entry carries its week.
-
-**The rule-set-aside notice is the solver's, and that is the point.** An earlier draft had
-the client predict which rule a pin would clash with, from the rules it could see. It cannot
-see enough — a pair rule and a count cap are model constraints, and three review rounds each
-found another case the prediction missed (§5.2). Now the solver reports what it actually
-relaxed and the client renders that list verbatim. A rule form added later needs no client
-change to be named correctly — **provided it is built on a violation boolean**, and that
-qualifier is the completeness boundary. A pin also sets aside `!in <pattern>` forbidden-role
-rules and pool membership by *granting candidacy* (§5.1), and scopes off `!in week N` for its
-own row (§5.2); none of those produce a `pin_violations` entry. Nothing is lost today — the
-existing `blockingReasons` markers cover both (`ruleEnforcement.ts:346-412`) — but a future
-rule enforced by filtering candidates rather than by a constraint stays silent unless it is
-given a boolean too.
-
-**No notice for the two built-in requirements.** The dedicated-Saturday-lead anchor and the
-mandatory lead are built into the solver rather than authored, so there is no rule to name in
-the copy. **And the solver cannot name them the way an authored rule names itself:** it works
-in 1-based week indices and has no calendar at all (`build_slots:547-562`), so it can produce
-no «13 sep». They therefore reach `pin_violations` as machine markers — `builtin:mandatory_lead:W3:Sun`,
-`builtin:sat_anchor:W3` — which the client is the only thing that can turn into a date, and
-which §6 renders as «Se dejó abierto el lugar de líder del 13 sep» rather than as a rule name.
-
-**That is a new date-formatting site, so it takes the house rule.** Week index → the Sunday (or
-Saturday) date from `sundayDatesFull` → a label parsed at local noon,
-`new Date(iso.slice(0,10) + "T12:00:00")`, never a bare `new Date(iso)`. CLAUDE.md's timezone
-invariant, and it is named here because the marker format invites a fresh parse.
-**A marker whose week has no column on screen** — the admin deselected that Sunday — renders
-with the week number instead of a date («la semana 3»), because there is no column to name and
-inventing a date the admin cannot see is worse than the ordinal.
-
-An authored rule's entry is its `source` string and the client renders it verbatim; a builtin's
-is a marker the client localises. That split is the whole reason `pin_violations` carries
-strings with a prefix rather than free text, and §11 asserts a client that meets an
-**unknown** `builtin:` marker renders a generic line instead of the raw token. Setting either aside is silent — with one exception that carries the signal anyway:
-a lead seat skipped under §5.2 is reported through `unfilled_seats` and renders as «Sin
-cubrir» on the cell, which is the planner's existing language for a seat nobody filled.
-Inventing a name for a rule the admin cannot see or edit would be worse than the silence.
-
-**No consecutive-rule notice.** The rules panel cannot author a `!consecutive` clause
-(`restrictionToDs`, `plannerModel.ts:572-599`), so a notice for it would be unreachable code
-describing a rule no admin can create. §5.2 still makes the constraint soft, because the DSL
-parser accepts the form and a hand-edited document could carry one — and if one ever does,
-the solver names it in `pin_violations` without any client change.
-
-Where an existing marker already renders the fact, these notices **are** that marker; only
-the four marked "New" add a line of their own.
-
-## 7. The switch and the «Borrar» menu
-
-**The switch.** A `Switch` labelled «Solo llenar vacíos» beside the Auto button, off by
-default, explained in one line: «Auto respeta lo que ya está puesto y solo llena los lugares
-vacíos.» Component state, not persisted — a per-run choice.
-
-**The menu.** One `Button` labelled «Borrar» opening a `Menu`, with a live count on every
-item so the admin sees what they are about to lose:
-
-- **Este servicio** — Voces · Instrumentos · Voces e instrumentos
-- **Todo el mes** — Voces del mes · **Instrumentos del mes** · Voces e instrumentos del mes
-
-The month scope mirrors the service scope item for item. An earlier draft dropped
-«Instrumentos del mes» for no reason anyone could state, which is exactly the asymmetry «cada
-nivel de granularidad» rules out. **FOH is the one thing no item clears, at either scope** —
-E6, and the menu says so rather than leaving a reader to find the gap.
-
-The same menu appears in each column's header with the scope fixed to that service. Only the
-month-level items confirm, through `CueDialog`, naming the count, saying FOH is preserved,
-saying nothing is written until «Crear N borradores», and separately counting how many of
-the discarded seats were placed by hand — a figure that is **approximate in both directions,
-and the dialog's wording must not promise otherwise**. It over-reports because §5.3 keeps a
-cell's `origin` when it holds any pinned occupant, so the solver's own picks inside a cell the
-admin started count as hand-placed. It also **under-reports**: `withAutoCell` stamps
-`origin: "auto"` on a cell a human partly filled (`localFill.ts:211-221`, and its own comment
-says so), so a special's Lead seat the admin seeded and the filler then topped up reads as
-zero hand-placed. The count is a hint about scale, not a guarantee, and the copy says
-«aproximadamente» rather than asserting a number. **A service-level clear is immediate, and «volver a correr Auto» is NOT the undo.** An earlier
-draft said it was. It is not: `applySolveResponse` rebuilds `occupants` from the solver's answer
-with no memory of what the cell held (`plannerModel.ts:929-936`), and with the switch on a
-cleared cell contributes no pins, so it comes back filled with whoever the solver picks — not
-with the people the admin had placed. There is no undo stack anywhere in the planner. One menu
-click would therefore destroy a whole service's hand-placed voice **and instrument** picks
-irrecoverably, which is the exact loss E1 exists to prevent.
-
-So the service scope gets a real affordance rather than a dialog: the clear raises a `useToast`
-with its documented `action` («Deshacer») holding the previous `cells` array, which restores it
-verbatim. That array is already in hand at the call site — `handleAuto` passes the same value
-as `previousCells` (`MonthGenerator.tsx:3072`) — so this is a closure, not new bookkeeping. A
-toast is the right weight here: a confirmation dialog on every single-service clear would make
-the common action tedious, and the month scope already confirms because it cannot be shrugged
-off. §11 asserts the restore returns the exact prior array.
-
-**Specials are in «Todo el mes», and their un-refillable rows are not.** E6's principle is
-that clearing what nothing refills is guaranteed rework, and two rows on a special column meet
-that description: its **Coro**, which `fillColumn` never touches (`AUTO_FILL_ROW_IDS = ["lead",
-"bgv"]`, `localFill.ts:79`), and **every instrument cell**, since `fillInstruments` iterates
-weekend columns only (`instrumentFill.ts:117`). So a month-level clear empties a special's Lead
-and BGV — which the local filler does rebuild — and leaves its Coro, instruments and FOH alone.
-Stated rather than left to the reader, because «Todo el mes» reads like "everything" and E6
-already committed to not clearing what will not come back.
-
-No item is called «Todo», because none of them clears everything: FOH always survives (E6).
-A label that promised more than it does is a defect this repo keeps recording.
-
-**A clear routes through `handleCellsChange`.** Create mode derives `drafts` there
-(`MonthGenerator.tsx:2467-2487`); a clear that called `setCells` directly would empty the
-grid while «Crear N borradores» still posted the people just removed. The same pass drops any `unfilled` marker on a cell that **just went from occupied to empty** —
-which would otherwise outlive the seat it described —
-and that is **new behaviour in a shared handler**: `handleCellsChange` does not touch
-`unfilled` today, and every manual edit routes through it. Dropping a marker whose cell was
-just emptied is right for every caller, not only for the clears, so it ships here rather
-than in a separate delivery — but it is called out because the blast radius is wider than
-the feature that motivates it, and §11 covers the manual-edit path as well as the clear.
-
-**Keyed on the TRANSITION, never on the state, and the difference is the whole signal.**
-`handleCellsChange` receives the entire `next` array (`MonthGenerator.tsx:2466`), so the
-natural-looking implementation — "drop the markers of every empty cell in `next`" — is wrong in
-a way nothing would catch: a seat that was **never** filled because nobody was available also
-reads as empty, so the first unrelated manual edit anywhere in the grid would wipe every
-short-staffing marker and zero «Lugares sin cubrir (faltó gente)» (`PlannerGrid.tsx:2096`). The
-pass therefore diffs `next` against `cells`, which the handler already holds, and drops a marker
-only where a cell **had** occupants and now has none. §11 carries the discriminating assertion:
-a legitimately unfilled cell keeps its markers across an unrelated manual edit in another
-column.
-
-**And it makes the displayed count fall as empty seats rise, which is intended.** `unfilled`
-is one entry per missing SLOT, so a Coro cell holding one of three carries two markers.
-Emptying that cell by hand drops both, and «Lugares sin cubrir (faltó gente)»
-(`PlannerGrid.tsx:2096`) counts down while three seats are now empty. That is correct for
-what the label says — those seats are empty because a human emptied them, not because
-nobody was available — but it looks like a bug to anyone reading the number alone, so §11
-asserts it deliberately rather than leaving it to be "fixed" later.
-
-**Skipped columns are pinned like any other.** Auto deliberately ignores `skippedColumnIds`
-(`MonthGenerator.tsx:2940-2945`); cells sitting on a skipped column are still occupied, so
-the switch pins them. Intended, and stated because the alternative reading is just as
-plausible.
-
-**The switch state lives in `MonthGenerator`, not in `PlannerGrid`.** The control renders
-beside the Auto button (`PlannerGrid.tsx:1996-2000`), but all three consumers are in the
-parent — `buildSolveRequest`, §9's handshake, and the `fillInstruments` call inside
-`applySpecialFill`. So the state is owned by `MonthGenerator` and passed down with its setter,
-rather than held locally and threaded back. Stated because the natural place to put a `Switch`
-is next to the button it modifies, and one consumer left reading a stale local copy silently
-unfreezes the instruments — the E1 half with no visible symptom until someone diffs two Autos.
-
-**Both sentences of the Auto confirmation change, not just the voice one.** The dialog also
-says «Las asignaciones manuales de instrumentos y FOH no se tocan» (`PlannerGrid.tsx:2033-2038`),
-which under the switch understates the guarantee: no instrument assignment is touched, manual
-or not (E1). With the switch off that sentence stays exactly as it is.
-
-**The Auto confirmation copy changes with the switch.** Today it reads «Esto reemplazará
-toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes»
-(`PlannerGrid.tsx:2035-2040`), which becomes false the moment the switch is on. With it on
-the dialog says Auto will fill only the empty seats, and names how many.
-
-**Naming.** Not «Limpiar mes», which already means deleting stored services from Sanity
-(`clearMonthModel.ts`). «Borrar» here empties seats on the board and writes nothing by
-itself.
-
-## 8. Where Auto and the clears are available
-
-Create mode only, which is where Auto already lives (`PlannerGrid.tsx:1997`). Both act on grid
-state alone: a create-mode column has no stored document behind it, so nothing in this delivery
-can reach a service the team has already seen. Nothing reaches Sanity until the existing «Crear
-N borradores» runs, unchanged.
-
-**That safety rests on a RENDER GATE, and it could be got wrong.** `handleCellsChange` runs
-`setTouchedStoredRoleIds(...)` *and* `setCells(next)` **before** its stored-mode early return
-(`MonthGenerator.tsx:2467-2483`). So a «Borrar» control rendered without a `mode === "create"`
-guard would not be inert in stored mode — it would stage emptied seats on real service
-documents and mark their roles touched for the next Save. The switch is the same shape. §11
-therefore asserts that neither the switch nor the «Borrar» menu renders in stored mode, rather
-than trusting a property that is only true because of where the controls are placed.
-
-## 9. The version handshake
-
-`solve_from_dict` reads with `data.get(...)`, so a solver that predates this change accepts
-a request carrying `pinned` and **ignores it silently**, returning a full roster that
-overwrites the very seats the switch promised to keep. The solver and the app deploy through
-different pipelines from the same merge — Cloud Build for `gcf/`, Vercel for the app — so
-this state exists in the window between them, and again on any rollback of one but not the
-other.
-
-`SolveResponse` gains `pinned_honored?: number`, the count of pin constraints the solver
-added — **counted after the solver's own dedup and refusals**, so the client's post-dedup pin
-count (§4) and this number are the same by definition rather than by two independent dedup
-implementations happening to agree. When the switch is on and pins were sent, the client **refuses to apply the voice
-roster** unless both hold:
-
-1. `pinned_honored` equals the number of pins sent, and
-2. every pin appears in the returned roster for its own week and role.
-
-The second check is free — the client already holds the response — and is strictly stronger
-than the count, which cannot distinguish "honoured mine" from "honoured that many".
-
-**With the switch on and ZERO pins sent** — an empty board — there is nothing to honour and
-the handshake does not run. An old solver's response has no `pinned_honored` at all, and
-`undefined === 0` is false, so a naive equality check would refuse the first Auto of every
-month. The condition is "pins were sent AND a check fails"; §11 asserts the empty-board case
-explicitly.
-
-On failure it reports «El solver no respetó los lugares fijados; no se aplicó nada». Refusing is
-correct here even though §6 never blocks: §6 is about the admin's own contradictions, this is
-about a solver that did not do what it was asked.
-
-**The refusal is an exit of `handleAuto` and obeys that function's contract.** Every exit
-calls `applySpecialFill` exactly once, which owns `setCells`/`setUnfilled`/`setDrafts` and
-runs the specials and instrument fillers (`MonthGenerator.tsx:2954-2999`). The refusal exit
-does the same: the solver's voice roster is discarded, the local fillers still run, the error
-line carries the message. "Nothing is applied" means the voice roster, not the setters.
-
-**Local development cannot exercise this.** `callLocalSolver` spawns the repo's own
-`gcf/owt_solver_v2.py` (`app/api/admin/solve/route.ts:69-108`), which always understands
-`pinned`. The refusal path is provable only by the unit test in §11, and that is where it is
-required.
-
-## 10. Error handling
+## 6. Error handling
 
 - **The pin path needs its own refusal — there is nothing to reuse.** An earlier draft said
   `buildSolveRequest` "already refuses a request naming an unresolvable person"; it does not.
@@ -837,7 +545,7 @@ required.
   route answers `422` (`app/api/admin/solve/route.ts:138`) and `handleAuto` parses the body
   only when `res.ok` (`MonthGenerator.tsx:3058-3065`), so `response` is `null` and the admin
   already sees the generic «El solver no encontró solución.» The diagnostic is dead text in
-  the app today. §6's copy for the marker carries the remedy, which is the first time that
+  the app today. the client spec's copy for the marker carries the remedy, which is the first time that
   advice reaches anyone.
 - **A `Sat.*` pin on a week with no Saturday service** is refused with a `ValueError` naming the
   week. Unreachable from this client (`weekendWeekIndexes` and `weekForColumn` use the same
@@ -851,20 +559,21 @@ required.
   the bullet above establishes that no solver error text reaches the admin today, so this
   `ValueError` lands as the same «El solver no encontró solución.» Worth having anyway; the
   benefit is stated honestly rather than as an admin-facing improvement. The client already
-  prevents the arrangement (§4) and the picker prevents it upstream; this is the cheap
+  prevents the arrangement (the client spec's request builder) and the picker prevents it upstream; this is the cheap
   backstop that turns a month-wide failure into a message.
 - **A timed-out pinned month looks like a fairness-free month, not like an error.**
   `solver_total_budget_seconds` is 40 on a ~0.33-vCPU container, and Stage B's exhaustion path
   returns the fairness-free `stage_a` silently (`:1124-1125`, `:1137`). The violation booleans
   and the extra objective tier move that budget, and CI runs on a faster machine than
-  production, so §11's `len(slots) + 1` fingerprint can pass in CI and fire in the field. The
+  production, so §7's `len(slots) + 1` fingerprint can pass in CI and fire in the field. The
   admin sees a legal, pin-honouring month with a wide spread and the existing degraded-fairness
   notice — which is the right outcome, and is stated here so it is not read as a new bug.
 - The client-mutation invariant is unchanged: the Auto fetch keeps its try/catch/finally, its
   `res.ok` check and its loading-flag reset.
 - A clear never fails: it is local state.
 
-## 11. Testing
+
+## 7. Testing, the gate, and the rollout
 
 **Solver (`gcf/test_owt_solver_v2.py`).** These are the claims §5 makes, each as an
 executable test, because the rejected design's failures were all claims that read correctly
@@ -960,7 +669,7 @@ and behaved otherwise:
      lists and the `rand_w` draw sequence. All of it is built before any solve and depends only
      on `config.seed` (`:571`, `:633`, `:946`), so it is machine-independent by construction:
      measured identical at a 10 s and a 3 s budget on all four seeds, **including seed 7**,
-     while distinct between seeds. It also catches §13's actual named hazard — `build_slots`
+     while distinct between seeds. It also catches §9's actual named hazard — `build_slots`
      losing its interleaved `Sun.BGV`/`Sun.Choir` emission — **directly** rather than through
      the board it happens to perturb. Frozen literal, committed with the CI step, three seeds.
   2. **An output golden, on fixtures whose time limit provably never binds.** The precondition
@@ -970,46 +679,6 @@ and behaved otherwise:
      fixture that returns `FEASIBLE` is disqualified as a golden, and the test says so with an
      assertion rather than a comment. (The `INFEASIBLE` statuses in between are the fairness
      ladder probing tiers — normal, and not the returning solve.)
-
-**Client.** `buildSolveRequest` gains the grid inputs it needs — `cells`, `columns` and
-`rows` — and derives each pin's week from `weekForColumn(column, sundayDatesFull)`, the
-**full** month spine and never the admin's selection, which is the E21 hazard
-`applySolveResponse` and `mapUnfilledSeats` both document at length. **A weekend column whose
-`weekForColumn` returns `null` contributes no pins** — an unaddressable Saturday
-(`computeUnaddressableDates`, `MonthGenerator.tsx:2183`) is a weekend column, so the
-special-column filter does not catch it, and a pin with a null week would reach the solver's
-range check as a `ValueError` that fails the whole month over a column nobody can fill anyway.
-Asserted, because the filter that looks sufficient is not. It emits one pin **per occupant**
-of each voice cell on a weekend column when the switch is on — a Coro cell holding three
-people emits three pins, matching §4's one-per-person-per-role-per-week contract — none when
-the switch is off, and none from a special column; it deduplicates by person-and-service and
-reports the duplicate. The four new conflict notices render — the
-availability one especially, since nothing renders it today — and none disables Auto or save.
-The §9 refusal discards the voice roster, still runs the local fillers, and shows the
-message. **A cell holding a pinned occupant keeps its `origin`, its `overrides` and its
-`overrideReasons`** — the discriminating case is a waived pair rule: waive «Frank !with Gaby»
-on a weekend Lead cell, run Auto with the switch on, and assert the marker still reads «regla
-anulada» (`overridden: true`) rather than turning red, and that the partner does not flag
-either. Assert too that a waiver for someone the solver did NOT return is pruned, and that a
-cleared cell keeps no waivers at all. The clears route through
-`handleCellsChange`, empty exactly the rows their item names, never FOH, and drop the stale
-`unfilled` markers — asserted for a manual edit too, not only for a clear, since the handler
-is shared, **and keyed on the transition**: a cell with markers that was already empty keeps
-them across an unrelated manual edit in another column — the assertion that separates the
-transition reading from the state reading, and the only thing standing between «Lugares sin
-cubrir» and being silently zeroed. The service-level clear raises a toast whose «Deshacer»
-restores the exact prior `cells` array. Each conflict notice renders its **fact** with the
-switch off and its fact **plus** «se va a respetar tu decisión» with the switch on — asserted
-on the same cell, both ways, since the default is off. The new marker-dropping pass sits
-**after** `handleCellsChange`'s stored-mode early
-return (`MonthGenerator.tsx:2480-2483`) — create mode only, matching D-scope — and a test
-covers a stored-mode call to prove the handler is untouched there. «Todo el mes» counts every
-column of the preview, specials included, per §7.
-
-**Instruments are frozen by the switch (E1).** With the switch on, two consecutive Autos
-leave every `origin: "auto"` instrument cell byte-identical; with it off, the second Auto
-re-rolls them exactly as it does today. This is the guard for the one-line vacate gate, and
-it is the assertion that would have caught the claim §14 used to make.
 
 **Gates, and one of them does not exist yet.** `npx tsc --noEmit`, `npm test`, `npx eslint .`
 with 0 errors — and **`pytest gcf/`, which no CI job runs today.**
@@ -1022,10 +691,10 @@ test before it. So
 CLAUDE.md makes the merge condition for `main` proves **nothing whatsoever** about a
 `gcf/**`-only PR. A code review of the diff cannot execute it either.
 
-Everything §13 leans on lives in that unrun file: the byte-identity assertion, the
-fairness-collapse guards, the rules-stay-hard control, the pinned-only `KeyError` guard. §13
+Everything §9 leans on lives in that unrun file: the byte-identity assertion, the
+fairness-collapse guards, the rules-stay-hard control, the pinned-only `KeyError` guard. §9
 says the solver ships to production first, without preview, and that "what makes it safe is
-the guard §11 requires" — and the rollback story is the same property. An unenforced guard is
+the guard §7 requires" — and the rollback story is the same property. An unenforced guard is
 an intention, and CLAUDE.md draws that exact line: *"that property is what makes it a control
 rather than an intention."*
 
@@ -1042,38 +711,39 @@ imports `owt_solver_v2` bare, which resolves today only because `gcf/` has no `_
 pytest prepends the test file's directory to `sys.path`. That is import-mode behaviour, not a
 guarantee; the CI step sets it explicitly (`pythonpath = gcf` in the config, or an equivalent
 `rootdir`) so a future pytest default cannot break the gate that everything else rests on. The
-byte-identity and inertness assertions are the ones that must be inside it; §13's rollout
+byte-identity and inertness assertions are the ones that must be inside it; §9's rollout
 order starts *after* it is green on `main`.
 
-## 12. Documentation in the same delivery
+## 8. Documentation in the same delivery
 
 `docs/SOLVER_AND_INFRA.md` — the `pinned` field, the fixed-variable mechanism, the enabling
-changes, the soft-relaxation objective, `pin_violations`, the handshake.
-`docs/MONTH_GRID_EDITING.md` — the switch, the menu, the confirmation copy, and the rule that
-a pinned cell keeps its waivers. `docs/CI.md` — the new python step in `gates`, what it runs
-and why a `gcf/**`-only PR needs it. One ADR: **pins
-are fixed variables with scoped candidacy, **per-person pin slack on the hard spreads**, and every
-contradictable rule made soft under a violation-minimising objective** — recording the
-rejected remove-the-seat design and the reproduced fairness collapse that ended it, the
-rejected fairness-slack answer routed through `combined_slack` and the `strict`-collapse
-branch that killed it, **the rejected pin-count SUBTRACTION on the hard spreads with the
+changes, the soft-relaxation objective, `pin_violations`, and the `pinned_honored` contract.
+`docs/CI.md` — the new python step in `gates`, what it runs and why a `gcf/**`-only PR needs it.
+
+One ADR: **pins are fixed variables with scoped candidacy, per-person pin slack on the hard
+spreads, and every contradictable rule made soft under a violation-minimising objective** —
+recording the rejected remove-the-seat design and the reproduced fairness collapse that ended
+it; the rejected fairness-slack answer routed through `combined_slack` and the `strict`-collapse
+branch that killed it; the rejected pin-count **subtraction** on the hard spreads with the
 measured numbers that killed it (a member pinned three times took 7 services against a 4–5
-baseline, and 4 of 8 Sunday leads),** **and the two
-rejected enumerations of exemptions — keyed on row saturation, then on a four-case
-satisfiability predicate — with the one-pin and two-pin reproductions that killed them.**
+baseline, and 4 of 8 Sunday leads); and **the two rejected enumerations of exemptions** — keyed
+on row saturation, then on a four-case satisfiability predicate — with the one-pin and two-pin
+reproductions that killed them.
+
 That last entry is the ADR's real payload: the enumeration is the design a reader will
 re-derive, because it looks cheaper than making six constraints soft, and it failed three
 times. Five rejected designs, each with the execution that disproved it. Record the bounded
-compensation §5.1 measures alongside them. No new secret or env var, so `docs/SECRETS.md` is untouched.
+compensation §5.1 measures alongside them. No new secret or env var, so `docs/SECRETS.md` is
+untouched.
 
-## 13. Rollout
+## 9. Rollout
 
-**Step zero: the python gate lands first.** §11's byte-identity and inertness assertions are
-what make a production-first solver merge safe, and nothing runs them today (see §11's Gates).
+**Step zero: the python gate lands first.** §7's byte-identity and inertness assertions are
+what make a production-first solver merge safe, and nothing runs them today (see §7's Gates).
 So the CI step ships and is green on `main` **before** the solver change is merged — otherwise
 the rollout's own safety argument rests on a file no gate reads.
 
-The solver must then be able to honor pins **before** the app can send them, or §9's refusal is
+The solver must then be able to honor pins **before** the app can send them, or the client spec's §7 refusal is
 the only thing standing between an admin and a silent overwrite. Therefore: merge the solver
 change and confirm Cloud Build deployed it, then merge the app change. The
 `preview`-first push order applies to the app half as usual, and the dev alias is verified by
@@ -1083,13 +753,13 @@ change and confirm Cloud Build deployed it, then merge the app change. The
 `Sun.BGV` and `Sun.Choir` interleaved** (`:554-555`). Rewriting that loop per role — the
 obvious tidy-up when adding the `max(default, pins)` count — changes the insertion order of
 `x`, hence the seeded `rand_w` tie-break at `:946`, hence the board, for every un-pinned
-month. §11's byte-identity test catches it, and it is named here so that nobody "fixes" the
+month. §7's byte-identity test catches it, and it is named here so that nobody "fixes" the
 loop later without understanding why it is shaped that way.
 
 **Said out loud: one Cloud Function serves both environments.** The solver half never reaches
 `preview` first, so "merge the solver first" means it is live in production before any human
 has watched it work. That is inherent to the existing architecture, not introduced here, and
-what makes it safe is the guard §11 requires: a request with no `pinned` key must produce
+what makes it safe is the guard §7 requires: a request with no `pinned` key must produce
 byte-identical output to today on a fixed seed. Until the app starts sending pins, the
 deployed change is inert for everyone.
 
@@ -1101,27 +771,20 @@ builds **the same model and runs the same search** as today.
 output across machines — its time limit is wall clock (`:963-966`), so where the search stops
 depends on the box. What the change buys is that a pinless request constructs an identical
 model and an identical search order; the schedule that comes back is then as reproducible as
-it ever was, which on a fixture whose limit binds is not very. §11's two guards are shaped to
+it ever was, which on a fixture whose limit binds is not very. §7's two guards are shaped to
 prove exactly that property and no more, which is why the fingerprint is the primary one. The solver half needs no revert and must not be reverted in
 a hurry — a rollback of the app alone is complete, and rolling back the Cloud Function while
-a pinned app is still live would make §9's refusal fire on every Auto instead.
+a pinned app is still live would make the client spec's refusal fire on every Auto instead.
 
-## 14. Out of scope
+## 10. Out of scope
 
-**Auto and the clears on already-created draft services — deferred to its own spec.** It
-needs a stored-mode request builder (the weeks and Saturdays a stored month actually has,
-not the create-mode calendar state), a column mapping in both directions (stored columns are
-keyed by the Sanity `_id` at `storedRoleReadModel.ts:113` while `mapUnfilledSeats` emits a
-`create:` prefixed id at `plannerModel.ts:1023`, so today every unfilled marker would address
-a column that does not exist and vanish silently), an explicit treatment of published
-services sitting inside the same month, and an answer for the fairness history, which a
-stored-mode save does not record today — only `handleConfirm` does
-(`MonthGenerator.tsx:3262`). That list is the starting point for its brainstorm.
+**Everything the admin sees and clicks** — the «Solo llenar vacíos» switch, the «Borrar» menu,
+the conflict notices, the undo toast, the waiver-preservation rule in `applySolveResponse`, the
+`unfilled`-marker pass, and the instrument freeze — lives in
+`2026-09-15-fill-empty-only-client-design.md`. That half consumes this contract and cannot ship
+before it.
 
-Also out: **solver** pins for instrument or FOH seats. The solver knows five voice roles and
-nothing else, and instruments are filled client-side; E1 keeps the instrument filler's own
-picks by switching off its vacate, which needs no pin and no solver change. FOH is untouched
-either way, as nothing fills it automatically.
-
-Also out: any change to publication, to «Limpiar mes», or to the participation sidebar. Persisting the switch across sessions. Auto on published services, in
-any form or delivery.
+**Auto and the clears on already-created draft services** remain deferred to their own delivery,
+for the reasons the combined spec recorded: stored columns are keyed by the Sanity `_id` while
+unfilled markers carry a `create:` prefix, and the calendar state a request is built from belongs
+to create mode.
