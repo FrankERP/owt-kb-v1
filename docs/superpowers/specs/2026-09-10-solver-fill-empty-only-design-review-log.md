@@ -2,10 +2,10 @@
 
 Artifact: `2026-09-10-solver-fill-empty-only-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
-**Status: open — ten rounds, no approval yet.** The mechanism was rewritten twice: once
+**Status: open — eleven rounds, no approval yet.** The mechanism was rewritten twice: once
 after round 2 (onto pins-as-fixed-variables) and once after round 6 (onto soft rules).
 **Round 7 verified the rewritten mechanism sound** and found its two blockers elsewhere.
-Current canonical digest `77f8f6f4…`, commit `b8626336`.
+Current canonical digest `e054bb8e…`, commit `67c5f8f3`.
 
 Approval is not authorization to implement. Implementation still requires the plan, the three
 gates, and a fresh code review of the diff.
@@ -32,6 +32,7 @@ byte-identical text.
 | 8 | `3f8490496bc16f37…` | `6bbc15dd` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
 | 9 | `774c27754f3f79ea…` | `3a206274` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
 | 10 | `71d9f0c7e86b6b4f…` | `64ee73b2` | CHANGES_REQUIRED | yes (1 blocker, reproduced) |
+| 11 | `77f8f6f4f29ec277…` | `cf193fe2` | CHANGES_REQUIRED | yes (3 blockers, all client-side) |
 
 Commit hashes for rounds 1–10 are the pre-rewrite ones. The branch was rewritten on
 2026-09-14 to strip `Co-Authored-By` trailers that CLAUDE.md forbids; file contents are
@@ -364,3 +365,62 @@ found prose describing something weaker than what was built; 10 found that round
 did not hold. That last one is the signal worth watching: for the first time the defect was
 introduced by the previous round's fix — the failure mode CLAUDE.md records for the 15- and
 19-round loops.
+
+## Round 11 — the solver is settled; every blocker was on the client
+
+The reviewer patched a scratch copy of the solver and re-derived §5's headline claims
+independently: baseline totals 3–4 with no tier relaxed; Rachel pinned three times ends at 4
+total with a `Sun.Lead` count equal to her pin count exactly; a pinned-only person seated only
+at the pin with no `KeyError`; a 42-pin full board byte-identical to the un-pinned solve. They
+also walked every `model.Add` and confirmed §5.2's table is complete. **Two consecutive rounds
+have now found nothing in the solver mechanism.**
+
+All three blockers were client-side, and the first two were promises the spec made that the
+code would not keep.
+
+1. **The conflict notices promised a guarantee the default configuration breaks.** Cases 1–3
+   ended «— se va a respetar tu decisión», unconditionally. But E2 makes the switch **off by
+   default**, and §7 had enumerated the switch's consumers exhaustively without including the
+   notices. With the switch off `applySolveResponse` replaces the cell wholesale
+   (`plannerModel.ts:929-936`) and the Auto dialog says so itself
+   (`PlannerGrid.tsx:2035-2040`). So on the **default** path an admin would seat an unavailable
+   member, read a brand-new signal telling them their decision is safe, press Auto, and lose
+   the person. §7's own sentence convicts it: "A label that promised more than it does is a
+   defect this repo keeps recording." **Fixed:** the fact renders unconditionally, the
+   guarantee clause only with the switch on; the notices become the fourth consumer of the
+   switch state, which is why it is owned by `MonthGenerator`. §11 asserts both renderings of
+   the same cell.
+
+2. **«Re-running Auto is the undo» was false, and it was the entire safety argument for an
+   immediate, unconfirmed clear.** `applySolveResponse` has no memory of what a cell held, a
+   cleared cell contributes no pins, and there is no undo stack anywhere in the planner
+   (grepped). One menu click destroyed a whole service's hand-placed voice **and instrument**
+   picks irrecoverably — the exact loss E1 exists to prevent. **Fixed:** the clear raises a
+   `useToast` with its documented `action` («Deshacer») holding the previous `cells` array,
+   which `handleAuto` already has in hand as `previousCells` (`MonthGenerator.tsx:3072`), so it
+   is a closure rather than new bookkeeping. A toast rather than a dialog, because confirming
+   every single-service clear would make the common action tedious.
+
+3. **The `unfilled`-marker pass admitted a reading that destroys the short-staffing signal.**
+   "Drops any marker on a cleared cell", in a handler that receives the whole `next` array
+   (`MonthGenerator.tsx:2466`) — so the natural implementation keys on **state**, and a seat
+   that was never filled because nobody was available also reads as empty. The first unrelated
+   manual edit anywhere in the grid would wipe every legitimate marker and zero «Lugares sin
+   cubrir (faltó gente)». **Fixed:** keyed on the **transition** (had occupants, now has none),
+   diffing against `cells`, with the discriminating assertion added to §11 — the old assertions
+   passed under both readings.
+
+Six non-blocking items adopted. Two were the spec catching itself out: §10's two-pin
+`ValueError` rationale claimed a better message, which contradicts §10's own finding three
+bullets earlier that no solver error text reaches the admin; and `violation_target` bounds the
+**count** of relaxed instances, not which ones, so §6 can name a rule that another
+equally-optimal solution would have kept. Also: the int64 argument is about the objective's max
+value rather than the tier weight; `compute_absence_slack` is a fourth week-exclusion-derived
+site, left unscoped deliberately; a `builtin:` marker for a deselected Sunday renders the week
+ordinal; and the CI step pins `pythonpath` rather than relying on pytest's import-mode default.
+
+**Pattern across 6–11.** 6 killed the exemption enumeration; 7 cleared the mechanism and found
+a client field and a CI gap; 8 found the last unexamined piece of the rejected design; 9 found
+prose weaker than the build; 10 found that 9's own remedy did not hold; 11 found nothing in the
+solver at all and three things in the UI contract. The centre of gravity has moved off the
+mechanism entirely.
