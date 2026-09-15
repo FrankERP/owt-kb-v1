@@ -363,6 +363,13 @@ Jakey) on Sun.BGV each_week` — which is also what lets §6 say «en la semana 
 implying the whole month. A count rule's entry carries no week, correctly, because it has
 none.
 
+**Four things are derived from the week-exclusion rules; three are scoped for pins and one is
+deliberately not.** `compute_absence_slack` (`:538-541`) still grants a pinned-but-unavailable
+person a service of absence slack for a service they are now serving, so their fairness slack
+becomes pin-slack + 1. Left alone on purpose — slack only ever loosens a bound, so the effect
+is invisible — but named here because it is the fourth site and a reader who finds it will
+otherwise assume it was missed.
+
 **`excluded_pwr` is scoped for a pin too, and missing it would make E3's headline case lie.**
 Weekly presence filters its terms through `excluded_pwr` (`:728-731`, `:739`), which is derived
 from the week-exclusion rules **unconditionally**. So pinning an unavailable member who is also
@@ -392,11 +399,22 @@ Stage A and of the optimising passes, and on the rest only the ceiling holds. `m
 <= violation_target)` is therefore emitted unconditionally at model-build time, exactly where
 `empty_target` already is (`:677-678`), never inside an objective branch.
 
+**`violation_target` bounds the count, not the identity.** When more than one
+minimum-cardinality set of violations exists, Stage B may spend its budget on a different
+instance than Stage A did — possibly one in a week with no pin — because the optimising branch
+carries no violation term. The month is equally good by every measure the model has, but §6's
+notice would then name a rule that was, in another equally-optimal solution, applicable. The
+honest reading of "the fairness ladder can never buy a tighter spread by breaking one more
+rule" is that it cannot break *more*; which ones it breaks is not pinned. Stated rather than
+fixed: pinning identity would need a second ceiling per instance and buys nothing the admin
+can act on.
+
 **And the optimise branch gains no violation term.** The ceiling is a constraint, which is the
 whole reason it works on the objective-less passes; adding a priority tier above `Sun.Lead`
 instead would multiply `compute_priority_weights`' top weight — measured ~9.6e16 on a realistic
-four-week month — by `overall_limit + 1` again, reaching ~5.1e18 against an int64 ceiling of
-9.2e18. The prose above invites that tidy-up; this
+four-week month — by `overall_limit + 1` again, reaching ~5.1e18. The relevant bound is not that
+weight but the objective's maximum **value**: at `n_viol > 1` a tier that size overflows int64
+(9.2e18) rather than merely approaching it. The ceiling-only design avoids the question. The prose above invites that tidy-up; this
 sentence forecloses it.
 
 **Within its instance, a relaxed constraint is off rather than loosened by the minimum
@@ -505,12 +523,30 @@ re-adds it:
 
 | Case | Copy | Who renders it |
 |---|---|---|
-| The person marked that date unavailable | ⚠ Nombre: marcó que no puede este día — se va a respetar tu decisión | **New.** Nothing renders this today — see below. |
-| A hard rule separates them from someone else in that service | ⚠ Nombre y Otro: una regla los separa — se va a respetar tu decisión | The existing violation marker, `ruleViolationsForColumn` |
-| They are not in the pool that role draws from | ⚠ Nombre: no está en el pool de Lead — se va a respetar tu decisión | **New** |
+| The person marked that date unavailable | ⚠ Nombre: marcó que no puede este día — **+ «se va a respetar tu decisión» only while the switch is on** | **New.** Nothing renders this today — see below. |
+| A hard rule separates them from someone else in that service | ⚠ Nombre y Otro: una regla los separa — same conditional clause | The existing violation marker, `ruleViolationsForColumn` |
+| They are not in the pool that role draws from | ⚠ Nombre: no está en el pool de Lead — same conditional clause | **New** |
 | ~~More people are pinned in the row than it has seats~~ | — | **Dropped.** §5.1 grows the row, so nothing is lost and there is no conflict to name; the grid already paints the over-target `+N` amber for that cell (`hasTarget`, `plannerModel.ts:391-395`). Two ambers for one fact is worse than one. |
 | The same person is pinned twice in one service | ⚠ Nombre está fijado dos veces en este servicio — solo se respeta el primero | **New**, and §4 says why it should be unreachable |
 | A rule had to be set aside to honour the pins | ⚠ Se dejó de aplicar una regla en la semana 3 para respetar lo que fijaste: «any_of(Hugo, Jakey) on Sun.BGV each_week» — the week phrase is omitted for a month-scoped count rule | **New**, and it is **reported by the solver**, not guessed by the client — one line per entry in `pin_violations` (§5.2) |
+
+**The guarantee clause is conditional, and getting that wrong would be the worst bug in this
+delivery.** «Se va a respetar tu decisión» is only true while «Solo llenar vacíos» is on — and
+E2 makes the switch **off by default**. With it off, `applySolveResponse` replaces the cell
+wholesale (`plannerModel.ts:929-936`) and the Auto dialog says so itself («Esto reemplazará
+toda asignación de voz…», `PlannerGrid.tsx:2035-2040`). A notice that promises otherwise would
+let an admin seat an unavailable member, read that their decision is safe, press Auto, and
+watch the person vanish — **on the default path, from a signal this delivery invents.** §7's
+own words: "A label that promised more than it does is a defect this repo keeps recording."
+
+So each notice splits in two. The **fact** renders unconditionally — «marcó que no puede este
+día», «una regla los separa», «no está en el pool de Lead» — because it is true either way and
+it is what the requirement asked for. The **guarantee clause** is appended only when the switch
+is on. §11 asserts both renderings of the same cell.
+
+That makes the conflict notices a **fourth consumer of the switch state**, alongside the three
+§7 names. The switch is therefore owned by `MonthGenerator` and threaded to `PlannerGrid` as a
+prop, not held locally — §7 says the same thing for the other reason.
 
 **The availability notice is genuinely new, and it is the one the requirement named.** It
 does not exist today in any form: `blockingReasons` reads `PersonRestriction.weekExclusions`,
@@ -558,6 +594,9 @@ which §6 renders as «Se dejó abierto el lugar de líder del 13 sep» rather t
 Saturday) date from `sundayDatesFull` → a label parsed at local noon,
 `new Date(iso.slice(0,10) + "T12:00:00")`, never a bare `new Date(iso)`. CLAUDE.md's timezone
 invariant, and it is named here because the marker format invites a fresh parse.
+**A marker whose week has no column on screen** — the admin deselected that Sunday — renders
+with the week number instead of a date («la semana 3»), because there is no column to name and
+inventing a date the admin cannot see is worse than the ordinal.
 
 An authored rule's entry is its `source` string and the client renders it verbatim; a builtin's
 is a marker the client localises. That split is the whole reason `pin_violations` carries
@@ -603,8 +642,21 @@ admin started count as hand-placed. It also **under-reports**: `withAutoCell` st
 `origin: "auto"` on a cell a human partly filled (`localFill.ts:211-221`, and its own comment
 says so), so a special's Lead seat the admin seeded and the filler then topped up reads as
 zero hand-placed. The count is a hint about scale, not a guarantee, and the copy says
-«aproximadamente» rather than asserting a number. A service-level clear is immediate; re-running Auto
-is the undo.
+«aproximadamente» rather than asserting a number. **A service-level clear is immediate, and «volver a correr Auto» is NOT the undo.** An earlier
+draft said it was. It is not: `applySolveResponse` rebuilds `occupants` from the solver's answer
+with no memory of what the cell held (`plannerModel.ts:929-936`), and with the switch on a
+cleared cell contributes no pins, so it comes back filled with whoever the solver picks — not
+with the people the admin had placed. There is no undo stack anywhere in the planner. One menu
+click would therefore destroy a whole service's hand-placed voice **and instrument** picks
+irrecoverably, which is the exact loss E1 exists to prevent.
+
+So the service scope gets a real affordance rather than a dialog: the clear raises a `useToast`
+with its documented `action` («Deshacer») holding the previous `cells` array, which restores it
+verbatim. That array is already in hand at the call site — `handleAuto` passes the same value
+as `previousCells` (`MonthGenerator.tsx:3072`) — so this is a closure, not new bookkeeping. A
+toast is the right weight here: a confirmation dialog on every single-service clear would make
+the common action tedious, and the month scope already confirms because it cannot be shrugged
+off. §11 asserts the restore returns the exact prior array.
 
 **Specials are in «Todo el mes», and their un-refillable rows are not.** E6's principle is
 that clearing what nothing refills is guaranteed rework, and two rows on a special column meet
@@ -620,13 +672,24 @@ A label that promised more than it does is a defect this repo keeps recording.
 
 **A clear routes through `handleCellsChange`.** Create mode derives `drafts` there
 (`MonthGenerator.tsx:2467-2487`); a clear that called `setCells` directly would empty the
-grid while «Crear N borradores» still posted the people just removed. The same pass drops
-any `unfilled` marker on a cleared cell, which would otherwise outlive the seat it described —
+grid while «Crear N borradores» still posted the people just removed. The same pass drops any `unfilled` marker on a cell that **just went from occupied to empty** —
+which would otherwise outlive the seat it described —
 and that is **new behaviour in a shared handler**: `handleCellsChange` does not touch
 `unfilled` today, and every manual edit routes through it. Dropping a marker whose cell was
 just emptied is right for every caller, not only for the clears, so it ships here rather
 than in a separate delivery — but it is called out because the blast radius is wider than
 the feature that motivates it, and §11 covers the manual-edit path as well as the clear.
+
+**Keyed on the TRANSITION, never on the state, and the difference is the whole signal.**
+`handleCellsChange` receives the entire `next` array (`MonthGenerator.tsx:2466`), so the
+natural-looking implementation — "drop the markers of every empty cell in `next`" — is wrong in
+a way nothing would catch: a seat that was **never** filled because nobody was available also
+reads as empty, so the first unrelated manual edit anywhere in the grid would wipe every
+short-staffing marker and zero «Lugares sin cubrir (faltó gente)» (`PlannerGrid.tsx:2096`). The
+pass therefore diffs `next` against `cells`, which the handler already holds, and drops a marker
+only where a cell **had** occupants and now has none. §11 carries the discriminating assertion:
+a legitimately unfilled cell keeps its markers across an unrelated manual edit in another
+column.
 
 **And it makes the displayed count fall as empty seats rise, which is intended.** `unfilled`
 is one entry per missing SLOT, so a Coro cell holding one of three carries two markers.
@@ -764,7 +827,10 @@ required.
   Saturday and `build_schedule_view` raises a `KeyError` at `:1147-1148`. Cheaper to reject.
 - **Two pins for one person in one service** are refused by the solver with a `ValueError`
   naming the person and the service, not left to produce two `== 1` constraints against the
-  `<= 1` occupancy limit and kill the month with a generic diagnostic. The client already
+  `<= 1` occupancy limit. **What that buys is a fast, cheap failure, not a better message** —
+  the bullet above establishes that no solver error text reaches the admin today, so this
+  `ValueError` lands as the same «El solver no encontró solución.» Worth having anyway; the
+  benefit is stated honestly rather than as an admin-facing improvement. The client already
   prevents the arrangement (§4) and the picker prevents it upstream; this is the cheap
   backstop that turns a month-wide failure into a message.
 - **A timed-out pinned month looks like a fairness-free month, not like an error.**
@@ -908,7 +974,14 @@ either. Assert too that a waiver for someone the solver did NOT return is pruned
 cleared cell keeps no waivers at all. The clears route through
 `handleCellsChange`, empty exactly the rows their item names, never FOH, and drop the stale
 `unfilled` markers — asserted for a manual edit too, not only for a clear, since the handler
-is shared. The new marker-dropping pass sits **after** `handleCellsChange`'s stored-mode early
+is shared, **and keyed on the transition**: a cell with markers that was already empty keeps
+them across an unrelated manual edit in another column — the assertion that separates the
+transition reading from the state reading, and the only thing standing between «Lugares sin
+cubrir» and being silently zeroed. The service-level clear raises a toast whose «Deshacer»
+restores the exact prior `cells` array. Each conflict notice renders its **fact** with the
+switch off and its fact **plus** «se va a respetar tu decisión» with the switch on — asserted
+on the same cell, both ways, since the default is off. The new marker-dropping pass sits
+**after** `handleCellsChange`'s stored-mode early
 return (`MonthGenerator.tsx:2480-2483`) — create mode only, matching D-scope — and a test
 covers a stored-mode call to prove the handler is untouched there. «Todo el mes» counts every
 column of the preview, specials included, per §7.
@@ -942,7 +1015,13 @@ and `pytest gcf/` — rather than a second workflow, so one required check still
 "everything passed" and a `gcf/**`-only PR cannot go green on a job that never looked at it.
 Budget: the existing solver suite runs ~17 s and the new pin cases add to it, against the
 job's `timeout-minutes: 15`, with pip cached the way `npm ci` already is. If it ever crowds
-the job the answer is to split the workflow, never to drop the step. The
+the job the answer is to split the workflow, never to drop the step.
+
+**Pin the import path rather than relying on pytest's defaults.** `gcf/test_owt_solver_v2.py`
+imports `owt_solver_v2` bare, which resolves today only because `gcf/` has no `__init__.py` and
+pytest prepends the test file's directory to `sys.path`. That is import-mode behaviour, not a
+guarantee; the CI step sets it explicitly (`pythonpath = gcf` in the config, or an equivalent
+`rootdir`) so a future pytest default cannot break the gate that everything else rests on. The
 byte-identity and inertness assertions are the ones that must be inside it; §13's rollout
 order starts *after* it is green on `main`.
 
