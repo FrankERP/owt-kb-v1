@@ -133,6 +133,7 @@ import {
   notifyRolePublished,
   notifySetlistSaved,
   proposalReviewRecipients,
+  PUBLISH_WINDOWS,
   queueLeadNotesNotice,
   queuePublishedSetlistNotices,
   queueRoleNotices,
@@ -144,7 +145,7 @@ import {
   roleCreateNotice,
   roleUpdateNotice,
 } from "@/app/utils/serviceMutationSideEffects";
-import { outboxId } from "@/app/utils/outboxNotice";
+import { DEBOUNCE_MS, isDue, outboxId, type NoticeLifecycle } from "@/app/utils/outboxNotice";
 import { SEND_CONCURRENCY, SEND_TIMEOUT_MS } from "@/app/utils/email";
 import { EMAIL_LIMIT, SEND_BUDGET_MS, SWEEP_DEADLINE_MS } from "@/app/utils/outboxSweep";
 import type { NormalizedSeats } from "@/app/utils/roleWriteRequest";
@@ -666,6 +667,152 @@ describe("setlist notice serviceDate guard", () => {
     await flushAfter();
     expect(upserted()).toHaveLength(1);
     expect(upserted()[0].createIfNotExists._id).toBe(outboxId("setlist", "role-3"));
+  });
+});
+
+/* ── The publish notice is NOT debounced (ADR-0036) ──────────────────────────
+ *
+ * The requirement these guard: a published setlist reaches the team within five
+ * minutes of the click, and in practice within seconds. Before this, publishing
+ * queued the notice with the ordinary 5-minute debounce, so the earliest it
+ * could go out was 5 minutes plus however long until the next Cloud Scheduler
+ * tick — 5 to 10 minutes, and up to the 60-minute ceiling if anyone kept
+ * editing inside the window.
+ *
+ * These assert on `isDue` — the sweep's OWN predicate — rather than on a raw
+ * timestamp, so they keep testing the thing that decides whether an email is
+ * sent even if the window arithmetic is refactored underneath them.
+ */
+describe("the publish transition sends immediately, not on the debounce", () => {
+  const publishSubject = {
+    roleId: "role-pub",
+    roleType: "special_role" as const,
+    serviceDate: "2026-08-09",
+    role: { songs: [{ song: { _ref: "song-1" }, play_key: "C" } ] },
+    knownRecipients: [],
+  };
+
+  const upserted = () => outboxTransactions.flat();
+
+  /** The lifecycle the sweep would read back for the notice just committed. */
+  function lifecycleOf(row: RecordedUpsert): NoticeLifecycle {
+    const created = row.createIfNotExists;
+    return {
+      status: "pending",
+      notifyAfter: String(row.patchSet.notifyAfter ?? created.notifyAfter),
+      deadline: String(created.deadline),
+      claimedAt: null,
+    };
+  }
+
+  /* The clock is sampled AFTER the flush, never before it.
+   *
+   * The queueing code takes its own `new Date()` inside the `after()` block, so
+   * a timestamp taken before the flush is <= the notice's `notifyAfter` and
+   * these assertions would hold only when both calls land in the same
+   * millisecond. That first version passed 15/15 runs idle and failed under
+   * parallel load — a flaky guard on a protected branch, which invites someone
+   * to weaken the very assertion this change exists for.
+   *
+   * Sampling after is also the more faithful model: the real sweep reads its
+   * `now` strictly after the commit it is sweeping. */
+  it("is DUE the moment it is committed, so layer 2 sends it in the same request", async () => {
+    queuePublishedSetlistNotices([publishSubject]);
+    await flushAfter();
+    const sweptAt = new Date();
+
+    const [row] = upserted();
+    expect(row).toBeDefined();
+    // The assertion the whole change exists for. With the 5-minute debounce this
+    // is false for another five minutes, layer 2's sweep skips the notice, and
+    // the team waits for a Scheduler tick on top of that.
+    expect(
+      isDue(lifecycleOf(row), sweptAt),
+      "a published setlist was not due at commit — the team waits for a Scheduler tick",
+    ).toBe(true);
+  });
+
+  it("writes the same immediate window on BOTH halves of the upsert", async () => {
+    // `createIfNotExists` covers the first publish; `patchSet` covers a
+    // republish, where the document already exists and only the patch applies.
+    queuePublishedSetlistNotices([publishSubject]);
+    await flushAfter();
+    const sweptAt = new Date();
+
+    const [row] = upserted();
+    expect(Date.parse(String(row.createIfNotExists.notifyAfter))).toBeLessThanOrEqual(
+      sweptAt.getTime(),
+    );
+    expect(Date.parse(String(row.patchSet.notifyAfter))).toBeLessThanOrEqual(sweptAt.getTime());
+  });
+
+  it("orders the sweep after the commit, so the due notice is actually swept", async () => {
+    // Composed with the two above, this is the end-to-end property: the notice
+    // is due, and the sweep that could send it runs after it exists. Either half
+    // alone would let a publish sit in the outbox.
+    queuePublishedSetlistNotices([publishSubject]);
+    await flushAfter();
+    expect(eventLog).toEqual(["upsert commit", "sweep"]);
+    expect(sweepOutboxMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("pins the override itself — no debounce, and the ceiling left alone", () => {
+    expect(PUBLISH_WINDOWS.debounceMs).toBe(0);
+    expect(PUBLISH_WINDOWS.maxWindowMs).toBeUndefined();
+  });
+
+  /* The scope guards. Setting `debounceMs: 0` inside `buildUpsert`, or passing
+   * `PUBLISH_WINDOWS` at a sibling call site, would satisfy every assertion
+   * above while silently un-debouncing notices that must keep their window.
+   *
+   * Sampling the clock BEFORE the flush is correct HERE and not above: the code
+   * under test takes its `now` at or after `committedAt`, so a debounced
+   * `notifyAfter` is `>= committedAt + DEBOUNCE_MS` whatever the drift. The
+   * inequality only tightens as the clock advances. */
+  it("does NOT widen to ordinary setlist edits, which still debounce", async () => {
+    const committedAt = new Date();
+    queueSetlistNotice({
+      roleId: "role-edit",
+      roleType: "sunday_role",
+      serviceDate: "2026-08-09",
+      published: true,
+      beforeSongs: [],
+      hasSongs: true,
+      knownRecipients: [],
+    });
+    await flushAfter();
+
+    const [row] = upserted();
+    expect(isDue(lifecycleOf(row), committedAt)).toBe(false);
+    expect(Date.parse(String(row.createIfNotExists.notifyAfter))).toBeGreaterThanOrEqual(
+      committedAt.getTime() + DEBOUNCE_MS,
+    );
+  });
+
+  it("does NOT widen to role notices either", async () => {
+    // The sibling call site nothing else in the repo asserts on: the role
+    // notice's own patch is checked for its KEYS elsewhere, never for
+    // `notifyAfter`'s value, so `PUBLISH_WINDOWS` applied here would have shipped
+    // green.
+    const committedAt = new Date();
+    queueRoleNotices({
+      roleId: "role-seats",
+      roleType: "sunday_role",
+      serviceDate: "2026-08-09",
+      published: true,
+      beforeSeats: seats({ leads: ["m1"] }),
+      afterSeats: seats({ leads: ["m1", "m2"] }),
+    });
+    await flushAfter();
+
+    const rows = upserted();
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(isDue(lifecycleOf(row), committedAt)).toBe(false);
+      expect(Date.parse(String(row.createIfNotExists.notifyAfter))).toBeGreaterThanOrEqual(
+        committedAt.getTime() + DEBOUNCE_MS,
+      );
+    }
   });
 });
 
