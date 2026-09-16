@@ -133,7 +133,11 @@ a second source for the same fact is a second thing to keep in step.
 `pinned_honored?: number` — the handshake (the client spec §7), **derived from the solved
 assignment and never echoed from `len(pin_set)`**: a pin counts only if that person actually
 holds a slot of that role in that week in the returned solution. An echo would satisfy E8's
-letter and prove nothing, which is the entire point of the field — and **`pin_violations?: string[]`** — the rules
+letter and prove nothing. **Even derived it is weaker than the name suggests:** a pin is a hard
+`== 1`, so any solution the solver returns at all satisfies every pin and the derived count can
+never come back short. Its real signal is the field's **presence**, which is how the client
+detects a solver predating this change that ignored `pinned` (E8); the per-pin roster check the
+client also runs is what catches a solver honouring *a* pin count rather than *these* pins — and **`pin_violations?: string[]`** — the rules
 the solver had to relax to honour the pins. the client spec's §4 renders them; §5.2 explains why they exist.
 
 **`pin_violations` grammar, specified rather than exemplified.** This half ships first and
@@ -166,7 +170,7 @@ crosses this boundary already uses the short form — the `pinned.role` field, `
 shipped parser:
 
 ```
-'Gaby !in Sat.* & !in Sun.Choir & fairness_slack 1 & Sun.BGV <= 2'
+'Gaby !in Sat.* & !in Sun.Choir & Sun.BGV <= 2 & fairness_slack 1'
     -> DslCountRule(person='Gaby', source='Sun.BGV <= 2')     # name GONE
 'Hugo Sun.BGV <= 2'
     -> DslCountRule(person='Hugo', source='Hugo Sun.BGV <= 2')
@@ -174,8 +178,9 @@ shipped parser:
     -> DslConsecutiveRule(person='Gaby', source='!consecutive on *.Lead')  # name GONE
 ```
 
-The shipped Gaby seed is the first shape (`solverConfigDefaults.ts:64-71` puts
-`excludedPatterns` before the cap), so without the explicit person the production notice would
+The shipped Gaby seed is the first shape — `restrictionToDs` emits `excludedPatterns`, then
+caps, then fairness (`plannerModel.ts:572-585`), so the production line is exactly the one
+quoted above, and §7's literal must be authored in that order, so without the explicit person the production notice would
 read «Se dejó de aplicar una regla … «Sun.BGV <= 2»» — whose cap, nobody can say — and two
 members capped on the same pattern would produce byte-identical entries. Count rules are the
 only family with no week, so this would strip the last discriminator from the weakest entry.
@@ -210,8 +215,14 @@ option — leave the solver alone and merge in the client — is rejected outrig
 would not know about the pins, could seat the same person twice in one service, and would
 compute fairness over a roster nobody will use.
 
-**Identity, and pools.** Pins name people by resolved `member_name`, as the rest of the
-request does. A pinned person **is not added to any pool**. `all_people` is derived from the
+**Identity, and pools.** Pins name people by resolved `member_name`, as the rest of the request
+does. **Two members sharing a `member_name` would silently swap a pinned occupant for their
+namesake** — `applySolveResponse` maps returned names back to ids through `nameToId`
+(`plannerModel.ts:924-928`) and nothing solver-side can see the collision. Pre-existing for the
+solver's own picks and unchanged here, but its consequence is new: a hand-placed seat the admin
+asked to preserve would come back as a different person. Fixing it needs a stable identifier in
+the request contract and is deliberately out of this scope; named because this delivery is what
+makes it matter. A pinned person **is not added to any pool**. `all_people` is derived from the
 three pools behind a mutual-exclusivity guard (`:452-454`), so injecting a name there would
 both trip that guard and — because `pools["Sun.BGV"]`, `["Sat.BGV"]` and `["Sun.Choir"]` are
 `set(all_people)` — make the person a candidate for BGV and Coro in every service of the
@@ -500,7 +511,7 @@ from the week-exclusion rules **unconditionally**. So pinning an unavailable mem
 in an `any_of(…) each_week` group drops them from the presence terms even though their pin
 satisfies the rule — the constraint then relaxes and the client spec's §4 shows «Se dejó de aplicar una regla…»
 on the one path the feature exists for. The filter therefore reads
-`(p, week, role) not in excluded_pwr or (p, role, week) in pin_set`, and §7 asserts the pinned
+`(p, week, role) not in excluded_pwr or (p, role, week) in pin_set` — the two tuple orders are deliberate and different: `excluded_pwr` is keyed `(person, week, role_type)` (`:728-731`), `pin_set` `(person, role, week)`, and §7 asserts the pinned
 unavailable group member produces an **empty** `pin_violations`. The Saturday anchor's
 `available_dedicated` (`:701-704`) derives from the same rules and takes the same scoping.
 
@@ -1039,6 +1050,11 @@ than assumed: `implement → gates green → FRESH CODE REVIEW on the merge rang
 RE-VERIFY the fix (scoped review of the fix range + gates re-run) → merge to main`. Plan
 approval is not authorization to implement, and the last worklog entry before the merge must be
 a verification, not a fix.
+
+**How the first golden is captured**, since step zero adds the CI step and the golden in one PR:
+land the step with the golden assertions **skipped**, read the fingerprint and the schedule out
+of that first green run's log, commit them as the literals, and un-skip in the same PR. The
+golden is captured by the runner that will enforce it, never by a laptop.
 
 **Step zero: the python gate lands first.** §7's byte-identity and inertness assertions are
 what make a production-first solver merge safe, and nothing runs them today (see §7's Gates).
