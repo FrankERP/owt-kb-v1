@@ -198,6 +198,7 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `redirects.test.ts` | R1 (spec §12.2, decision H): `next.config.mjs`'s `redirects()` folds `/tag`, `/tag/:slug`, `/author`, `/author/:slug` into `/biblioteca` (`?tag=:slug`/`?author=:slug`), all `permanent: true` (308). |
 | `litCard.test.ts` | The home hero card's one-shot light pass (R1, decision Q — see "The beam" above). Cannot see geometry (jsdom), so it pins the CSS contract instead. |
 | `bottomNavOffsetSync.test.ts` | Names `BottomNav`'s `NAV_H_VAR`/`NAV_CLASS` exports, the `setProperty`/`removeProperty`/`classList` publish-and-clear shapes, `brand.css`'s `--bottom-nav-h` declaration and `html.has-bottom-nav [data-route-main]` padding rule, that every fixed-bottom consumer (`Toast.tsx`, `AudioPlayer.tsx`, `EditSongButton.tsx`) offsets by the variable, and that the client layout mounts `<BottomNav />` inside `<Provider>`. A new fixed-bottom element joins the `it.each` list. |
+| `navbarHeightSync.test.ts` | R4 Task 6 (spec §5.3): `Navbar` and `NavbarSkeleton` must publish the top bar's height from the ONE spelling, `NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts`, `"h-20 lg:h-24"`), so a `loading.tsx` never hard-codes a height that can drift from the real navbar. Reads both sources and asserts each imports the constant from `@/app/utils/navbarHeight` and neither contains the literal string. |
 
 ## Bundle
 

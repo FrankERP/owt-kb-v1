@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 319,
-    "filesScanned": 322,
+    "filesScanned": 323,
     "filesWithColour": 55,
     "byCategory": {
       "2": 2,
@@ -22,13 +22,13 @@
     "byDisposition": {
       "B": 122,
       "exempt": 46,
-      "keep": 247,
+      "keep": 248,
       "C": 5,
       "D": 16
     },
     "compositingClasses": 23,
     "compositingSelectorOccurrences": 49,
-    "compositingClassNameOccurrences": 65,
+    "compositingClassNameOccurrences": 66,
     "compositingRuleBodies": 48,
     "lightCounterpartClasses": 16,
     "pairs": 11,
@@ -439,7 +439,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 263,
+      "line": 265,
       "disposition": "B",
       "reason": null
     },
@@ -451,7 +451,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 331,
+      "line": 334,
       "disposition": "B",
       "reason": null
     },
@@ -463,7 +463,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 344,
+      "line": 347,
       "disposition": "B",
       "reason": null
     },
@@ -4125,6 +4125,14 @@
       "file": "app/(client)/page.tsx",
       "kind": "className",
       "class": "section-heading",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/(client)/posts/[slug]/loading.tsx",
+      "kind": "className",
+      "class": "song-hero",
       "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"

@@ -14,6 +14,7 @@
 // below can never disagree.
 
 import { useId, useState } from "react";
+import { revealProps } from "@/app/utils/reveal";
 import Collapse from "../ui/Collapse";
 import SegmentedControl from "../ui/SegmentedControl";
 import { DISPLAY_NOTES, noteAt, rootIndex, semitonesBetween } from "@/app/utils/transpose";
@@ -32,6 +33,7 @@ export default function SongHeroPills({
   bpmText,
   timeSig,
   transposable,
+  revealIndex,
 }: {
   keyLabel: string | null;
   bpm: number | null;
@@ -40,6 +42,10 @@ export default function SongHeroPills({
   timeSig: string | null;
   /** true only when the song carries a ChordPro chart — otherwise the key is a static badge. */
   transposable: boolean;
+  /** Route-reveal stagger index for this row (spec §2.1) — the hero page passes it since
+   * `revealProps` is neutral and legal to call from a client module too, but the wrapper it
+   * spreads onto is this component's own root. */
+  revealIndex?: number;
 }) {
   const [open, setOpen] = useState(false);
   // Per INSTANCE, not a module constant: the gallery fixture and any future page
@@ -59,7 +65,7 @@ export default function SongHeroPills({
 
   return (
     <>
-      <div className="flex flex-wrap justify-center gap-2.5">
+      <div {...(revealIndex !== undefined ? revealProps(revealIndex) : {})} className="flex flex-wrap justify-center gap-2.5">
         {keyLabel &&
           (canTranspose ? (
             <KeyDial

@@ -229,7 +229,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           ref={triggerRef}
           type="button"
           onClick={(e) => { e.stopPropagation(); handleOpen(); }}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-mono-500 transition-colors hover:bg-accent/10 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-mono-500 transition-[color,background-color,transform] duration-fast ease-out-brand hover:bg-accent/10 hover:text-accent active:translate-y-px active:scale-[0.985] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           aria-label={`Editar canción ${post.title}`}
           title="Editar canción"
         >

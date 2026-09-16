@@ -4,6 +4,7 @@ import Image from "next/image";
 import NavMenu from "./NavMenu";
 import NavLinks from "./NavLinks";
 import CueStrip from "./ui/CueStrip";
+import { NAVBAR_H_CLASS } from "@/app/utils/navbarHeight";
 
 interface Props {
   title: string;
@@ -25,7 +26,7 @@ interface Props {
 const Navbar = ({ title = "", author = "", tags = false, schedule = false, cue = true }: Props) => {
   return (
     <nav aria-label="Navegación superior" className="brand-navbar sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
-      <div className="relative z-[1] mx-auto max-w-7xl h-20 lg:h-24 flex items-center gap-3 sm:gap-5 ps-[max(1.25rem,env(safe-area-inset-left))] pe-[max(1.25rem,env(safe-area-inset-right))]">
+      <div className={`relative z-[1] mx-auto max-w-7xl ${NAVBAR_H_CLASS} flex items-center gap-3 sm:gap-5 ps-[max(1.25rem,env(safe-area-inset-left))] pe-[max(1.25rem,env(safe-area-inset-right))]`}>
 
         {/* Backstage brand lockup */}
         <Link

@@ -24,6 +24,7 @@ import SongHeroPills from "@/app/components/song/SongHeroPills";
 import { TransposeProvider } from "@/app/components/song/TransposeProvider";
 import { isChordPro } from "@/app/utils/transpose";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
+import { revealProps } from "@/app/utils/reveal";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -205,10 +206,10 @@ const Page = async ({ params }: Params) => {
         <div className="relative mx-auto flex max-w-7xl flex-col items-center px-6 pb-14 pt-12 text-center sm:pb-16 sm:pt-16">
 
           {post?.tags && post.tags.length > 0 && (
-            <div className="mb-6 flex flex-wrap justify-center gap-2">
+            <div {...revealProps(0)} className="mb-6 flex flex-wrap justify-center gap-2">
               {post.tags.map((tag) => (
                 <Link key={tag._id} href={`/biblioteca?tag=${encodeURIComponent(tag.slug.current)}`}>
-                  <span className="rounded-md border border-accent/15 bg-accent/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-accent/70 transition-colors hover:border-accent/35 hover:text-accent">
+                  <span className="rounded-md border border-accent/15 bg-accent/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-accent/70 transition-[color,border-color,transform] duration-fast ease-out-brand hover:border-accent/35 hover:text-accent active:scale-[0.985]">
                     #{tag.name}
                   </span>
                 </Link>
@@ -216,12 +217,12 @@ const Page = async ({ params }: Params) => {
             </div>
           )}
 
-          <h1 className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-ink sm:text-5xl lg:text-6xl">
+          <h1 {...revealProps(1)} className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-ink sm:text-5xl lg:text-6xl">
             {post?.title}
           </h1>
 
           {post?.authors && post.authors.length > 0 ? (
-            <div className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
+            <div {...revealProps(2)} className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
               {post.authors.map((a, i) => (
                 <span key={a._id} className="font-body text-lg text-ink-muted/70">
                   <Link href={`/biblioteca?author=${encodeURIComponent(a.slug.current)}`} className="hover:text-accent transition-colors">
@@ -232,7 +233,7 @@ const Page = async ({ params }: Params) => {
               ))}
             </div>
           ) : post?.author ? (
-            <p className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
+            <p {...revealProps(2)} className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
           ) : null}
 
           <SongHeroPills
@@ -241,6 +242,7 @@ const Page = async ({ params }: Params) => {
             bpmText={bpmText}
             timeSig={post?.timeSig ?? null}
             transposable={transposable}
+            revealIndex={3}
           />
         </div>
       </div>
@@ -291,6 +293,7 @@ const Page = async ({ params }: Params) => {
               {post.tutorials2!.map((tutorial, i) => (
                 <div
                   key={i}
+                  {...revealProps(i)}
                   className="brand-surface overflow-hidden rounded-2xl"
                 >
                   <div className="aspect-video">
@@ -326,7 +329,7 @@ const Page = async ({ params }: Params) => {
               {(post.musicalReferenceUrl || (post.referenceLinks?.[0]?.url)) && (
                 <a href={post.musicalReferenceUrl || post.referenceLinks![0].url}
                   target="_blank" rel="noopener noreferrer"
-                  className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4">
+                  className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4 active:scale-[0.985] active:translate-y-px transition-[color,transform,box-shadow] duration-fast ease-out-brand">
                   <span className="flex items-center justify-center w-11 h-11 rounded-full bg-accent/[0.12] text-accent shrink-0">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
                   </span>
@@ -339,7 +342,7 @@ const Page = async ({ params }: Params) => {
               {post.lyricsVideoUrl && (
                 <a href={post.lyricsVideoUrl}
                   target="_blank" rel="noopener noreferrer"
-                  className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4">
+                  className="brand-library-module brand-surface-interactive group flex items-center gap-4 p-4 active:scale-[0.985] active:translate-y-px transition-[color,transform,box-shadow] duration-fast ease-out-brand">
                   <span className="flex items-center justify-center w-11 h-11 rounded-full bg-accent/[0.12] text-accent shrink-0">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" /></svg>
                   </span>
@@ -381,6 +384,7 @@ const Page = async ({ params }: Params) => {
               {history.map((entry, i) => (
                 <div
                   key={i}
+                  {...revealProps(i)}
                   className="brand-surface overflow-hidden rounded-2xl"
                 >
                   {/* Header row: day + date + key */}
