@@ -53,4 +53,22 @@ describe("SongAudioSection", () => {
 
     expect(getByRole("button", { name: "Pausar Guía 2" })).toBeTruthy();
   });
+
+  it("carries an equaliser on the playing card only", () => {
+    player = { track: { url: "https://cdn.test/two.mp3" }, isPlaying: true };
+
+    const { container } = render(
+      <SongAudioSection
+        songTitle="Sólo en Jesús"
+        songSlug="solo-en-jesus"
+        tracks={[
+          { title: "Guía", tone: "D", audioFileURL: "https://cdn.test/one.mp3" },
+          { title: "Guía", tone: "C", audioFileURL: "https://cdn.test/two.mp3" },
+        ]}
+      />,
+    );
+
+    const equalisers = Array.from(container.querySelectorAll("[data-playing]"));
+    expect(equalisers.map((el) => el.getAttribute("data-playing"))).toEqual(["false", "true"]);
+  });
 });

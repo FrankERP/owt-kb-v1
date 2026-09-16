@@ -874,6 +874,21 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
   100% { opacity: 0;    transform: scale(1.28); }
 }
 
+.brand-eq-bar {
+  height: 100%;
+  transform-origin: bottom;
+  transform: scaleY(0.3);
+}
+
+[data-playing="true"] .brand-eq-bar {
+  animation: brand-eq 900ms var(--ease-in-out) infinite alternate;
+}
+
+@keyframes brand-eq {
+  from { transform: scaleY(0.25); }
+  to   { transform: scaleY(1); }
+}
+
 .brand-song-hero {
   position: relative;
   isolation: isolate;

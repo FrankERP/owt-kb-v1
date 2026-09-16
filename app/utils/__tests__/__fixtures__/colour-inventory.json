@@ -8,28 +8,28 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 323,
-    "filesScanned": 320,
-    "filesWithColour": 56,
+    "literalRows": 319,
+    "filesScanned": 322,
+    "filesWithColour": 55,
     "byCategory": {
       "2": 2,
       "4": 76,
-      "8": 92,
+      "8": 88,
       "9": 10,
       "11": 9,
       "12": 134
     },
     "byDisposition": {
-      "B": 126,
-      "exempt": 43,
-      "keep": 246,
+      "B": 122,
+      "exempt": 46,
+      "keep": 247,
       "C": 5,
       "D": 16
     },
-    "compositingClasses": 22,
-    "compositingSelectorOccurrences": 47,
-    "compositingClassNameOccurrences": 62,
-    "compositingRuleBodies": 46,
+    "compositingClasses": 23,
+    "compositingSelectorOccurrences": 49,
+    "compositingClassNameOccurrences": 65,
+    "compositingRuleBodies": 48,
     "lightCounterpartClasses": 16,
     "pairs": 11,
     "pairsDifferingInAlpha": 0
@@ -2299,7 +2299,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 883,
+      "line": 898,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2311,7 +2311,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 895,
+      "line": 910,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2323,19 +2323,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 895,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/brand.css",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "transparent",
-      "alpha": null,
-      "utility": null,
-      "carrier": null,
-      "line": 907,
+      "line": 910,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2359,7 +2347,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1040,
+      "line": 937,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2371,7 +2359,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1040,
+      "line": 1055,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2383,7 +2371,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1067,
+      "line": 1055,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2395,7 +2383,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1067,
+      "line": 1082,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2407,7 +2395,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1195,
+      "line": 1082,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2419,7 +2407,19 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1195,
+      "line": 1210,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/brand.css",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 1210,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2967,35 +2967,11 @@
       "file": "app/components/AudioTransport.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
-      "line": 116,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/AudioTransport.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
-      "line": 124,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/AudioTransport.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
       "value": "stroke=\"currentColor\"",
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 133,
+      "line": 117,
       "disposition": "B",
       "reason": null
     },
@@ -3576,54 +3552,6 @@
       "reason": null
     },
     {
-      "file": "app/components/song/PracticeCluster.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
-      "line": 63,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/song/PracticeCluster.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
-      "line": 69,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/SongAudioSection.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
-      "line": 78,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/SongAudioSection.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "fill=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "fill",
-      "line": 84,
-      "disposition": "B",
-      "reason": null
-    },
-    {
       "file": "app/components/SongSheet.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -3766,6 +3694,30 @@
       "line": 36,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/ui/PlayPauseGlyph.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
+      "line": 25,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/ui/PlayPauseGlyph.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
+      "line": 33,
+      "disposition": "B",
+      "reason": null
     },
     {
       "file": "app/components/ui/Select.tsx",
@@ -3958,6 +3910,14 @@
       "kind": "selector",
       "class": "btn-sheen",
       "count": 3,
+      "disposition": "exempt",
+      "reason": "No colour in any rule body — needs no light counterpart"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "selector",
+      "class": "eq-bar",
+      "count": 2,
       "disposition": "exempt",
       "reason": "No colour in any rule body — needs no light counterpart"
     },
@@ -4442,6 +4402,14 @@
       "reason": "Usage site of a compositing class"
     },
     {
+      "file": "app/components/ui/Equalizer.tsx",
+      "kind": "className",
+      "class": "eq-bar",
+      "count": 3,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
       "file": "app/components/ui/Skeleton.tsx",
       "kind": "className",
       "class": "skeleton",
@@ -4693,27 +4661,27 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "song-hero"
+        "eq-bar"
       ],
       "ordinal": 24,
-      "disposition": "B",
-      "reason": null
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "eq-bar"
+      ],
+      "ordinal": 25,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
     },
     {
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
         "song-hero"
-      ],
-      "ordinal": 25,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/brand.css",
-      "kind": "rule-body",
-      "classes": [
-        "admin-shell"
       ],
       "ordinal": 26,
       "disposition": "B",
@@ -4723,7 +4691,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "admin-shell"
+        "song-hero"
       ],
       "ordinal": 27,
       "disposition": "B",
@@ -4733,9 +4701,29 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "admin-frame"
+        "admin-shell"
       ],
       "ordinal": 28,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "admin-shell"
+      ],
+      "ordinal": 29,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "admin-frame"
+      ],
+      "ordinal": 30,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
     },
@@ -4745,7 +4733,7 @@
       "classes": [
         "admin-shell"
       ],
-      "ordinal": 29,
+      "ordinal": 31,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
     },
@@ -4755,7 +4743,7 @@
       "classes": [
         "admin-tabs"
       ],
-      "ordinal": 30,
+      "ordinal": 32,
       "disposition": "B",
       "reason": null
     },
@@ -4765,7 +4753,7 @@
       "classes": [
         "admin-workspace"
       ],
-      "ordinal": 31,
+      "ordinal": 33,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
     },
@@ -4774,40 +4762,20 @@
       "kind": "rule-body",
       "classes": [
         "member-row"
-      ],
-      "ordinal": 32,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/brand.css",
-      "kind": "rule-body",
-      "classes": [
-        "member-row"
-      ],
-      "ordinal": 33,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/brand.css",
-      "kind": "rule-body",
-      "classes": [
-        "btn-sheen"
       ],
       "ordinal": 34,
-      "disposition": "exempt",
-      "reason": "Rule body declares no colour"
+      "disposition": "B",
+      "reason": null
     },
     {
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "btn-sheen"
+        "member-row"
       ],
       "ordinal": 35,
-      "disposition": "exempt",
-      "reason": "Rule body declares no colour"
+      "disposition": "B",
+      "reason": null
     },
     {
       "file": "app/brand.css",
@@ -4823,7 +4791,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "skeleton"
+        "btn-sheen"
       ],
       "ordinal": 37,
       "disposition": "exempt",
@@ -4833,7 +4801,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "skeleton"
+        "btn-sheen"
       ],
       "ordinal": 38,
       "disposition": "exempt",
@@ -4843,7 +4811,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "stage-hero"
+        "skeleton"
       ],
       "ordinal": 39,
       "disposition": "exempt",
@@ -4853,7 +4821,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "stage-hero"
+        "skeleton"
       ],
       "ordinal": 40,
       "disposition": "exempt",
@@ -4863,7 +4831,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "lit-card"
+        "stage-hero"
       ],
       "ordinal": 41,
       "disposition": "exempt",
@@ -4873,7 +4841,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "lit-card"
+        "stage-hero"
       ],
       "ordinal": 42,
       "disposition": "exempt",
@@ -4903,9 +4871,29 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "today-pulse"
+        "lit-card"
       ],
       "ordinal": 45,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "lit-card"
+      ],
+      "ordinal": 46,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "today-pulse"
+      ],
+      "ordinal": 47,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
     }

@@ -12,6 +12,7 @@
 import { usePlayer, type AudioTrack } from "@/app/context/PlayerContext";
 import Button from "@/app/components/ui/Button";
 import NumberRoll from "@/app/components/ui/NumberRoll";
+import PlayPauseGlyph from "@/app/components/ui/PlayPauseGlyph";
 import { useTransposeOptional } from "./TransposeProvider";
 
 export interface PracticeInfo {
@@ -48,26 +49,9 @@ export default function PracticeCluster({ title, bpm, track }: PracticeInfo) {
           aria-label={`${playing ? "Pausar" : "Reproducir"} ${track.title}`}
           onClick={() => (isCurrent ? togglePlay() : playTrack(track))}
         >
-          <PlayIcon playing={playing} />
+          <PlayPauseGlyph playing={playing} />
         </Button>
       )}
     </>
-  );
-}
-
-// Task 5 swaps this for the morphing play/pause primitive; until then it is the
-// same pair of glyphs `SongAudioSection` draws.
-function PlayIcon({ playing }: { playing: boolean }) {
-  if (playing) {
-    return (
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <polygon points="5 3 19 12 5 21 5 3" />
-    </svg>
   );
 }
