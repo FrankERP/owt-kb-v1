@@ -351,7 +351,8 @@ other.
 
 `SolveResponse` gains `pinned_honored?: number` and `violation_ceiling_proven?: boolean` (plus
 `pin_violations?: string[]`, §4). **When `violation_ceiling_proven` is `false`**, the solver could
-not prove its relaxation set was minimal, so the notices may list more rules than the pins
+not prove its relaxation set was minimal (either Stage A or the violation-only solve stopped
+short of optimality — the solver spec §4 is canonical), so the notices may list more rules than the pins
 strictly forced: render the ordinary notices **plus** one line saying so. Never block, never
 discard the month. Absent means a solver that predates the field, which the handshake below
 already treats as no pin support at all. **The solver spec §4 is canonical for what it

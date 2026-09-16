@@ -144,8 +144,19 @@ detects a solver predating this change that ignored `pinned` (E8); the per-pin r
 client also runs is what catches a solver honouring *a* pin count rather than *these* pins — and **`pin_violations?: string[]`** — the rules
 the solver had to relax to honour the pins. the client spec's §4 renders them; §5.2 explains why they exist.
 
-**`violation_ceiling_proven?: boolean`** — `true` when the violation-only solve (§5.2) proved
-its minimum, `false` when it timed out and `violation_target` fell back to Stage A's count.
+**`violation_ceiling_proven?: boolean`** — `true` only when **both** Stage A and the
+violation-only solve returned `OPTIMAL`; `false` otherwise. Gating on the third solve alone is
+not enough, and the reason is exact: it minimises `n_viol` **subject to `weighted_empty <=
+empty_target`**, and `empty_target` comes from Stage A. If Stage A stopped at `FEASIBLE`, its
+`empty_target` can exclude the true optimum — Stage A returns `n_viol=1, weighted_empty=0` while
+`n_viol=0, weighted_empty=5` was available — and the third solve then proves a minimum *inside a
+box that was itself suboptimal*, reporting `OPTIMAL` for a ceiling of 1 when zero rules needed
+relaxing. The client would suppress its caveat and the admin would be told a relaxation was
+forced that was not.
+
+Dropping `weighted_empty <= empty_target` from the third solve is **not** the fix: a lower
+`violation_target` unreachable at that fill level makes every Stage B tier infeasible and drops
+the month onto the fairness-free `stage_a`, which is worse than the defect.
 Absent means the solver predates this field, which an old client already treats as "no pin
 support at all". **The client shows the ordinary `pin_violations` notices either way and adds
 one line when it is `false`**: the relaxations listed may be more than the pins strictly forced.
@@ -328,16 +339,36 @@ three-pin action collapsed a whole month in review:
 | Hard guard | Where the change lands | With pins |
 |---|---|---|
 | Global, `gmax - gmin <= fairness_limit` (`:794`) | the per-person loops at `:788-790` **and `:791-793`** | `total_vars[p] <= gmax + n[p]`, `>= gmin - n[p]` |
-| `cur_sun_lead_spread <= sun_lead_limit` (`:865`) | `:861-863` | same, with their `Sun.Lead` pin count |
-| `cur_sun_bgv_spread <= sun_bgv_limit` (`:882`) | `:878-880` | same, with their `Sun.BGV` pin count |
+| `cur_sun_lead_spread <= sun_lead_limit` (`:865`) | `:861-863` | same, with their **Sunday-service** pin count |
+| `cur_sun_bgv_spread <= sun_bgv_limit` (`:882`) | `:878-880` | same, with their **Sunday-service** pin count |
 
-**A third mechanism the table does not name: cross-role displacement.** A pin in role R forces
-the person to zero in every *other* role of that service (`:754-765`), while the per-role slack
-is keyed on R alone. So twelve `Sun.Choir` pins move `sun_bgv_fairness_relaxed` for a reason
-that has nothing to do with loosening anything. It is notice quality rather than collapse — tier
-2 absorbed it in every case built, including pins owning a whole role — and §4's decision to
-leave the flags alone is what contains it. Named so a reader does not read the table as
-exhaustive.
+**The per-role slack is keyed on the SERVICE a pin occupies, not on the role it names — and
+keying it on the role is what an earlier draft got wrong.** The per-service occupancy limit
+(`:754-765`) gives each person one seat per service per week, so a pin in *any* Sunday role
+zeroes them in *every other* Sunday role that week. Counting only `Sun.Lead` pins toward the
+`Sun.Lead` spread therefore gives a lead-pool member pinned into Choir **zero** slack on the very
+spread their pins tighten.
+
+Measured on the fixture below, four pins in a Sunday row, every week:
+
+| Pinned person | Role-keyed slack (rejected) | Service-keyed slack |
+|---|---|---|
+| A Sunday-lead-pool member (Hugo, Rachel) | **collapse on all four seeds** — fairness-free `stage_a`, a member on zero services | `ok`, everyone 4–5 |
+| A support member (Vale, Gaby) | `ok` | `ok` |
+
+So the discriminator was never the row's seat count — it was **whether the pinned person is in
+the Sunday-lead pool**, and the role-keyed form is the bug. Byte-identity on three seeds, the
+52-pin round-trip, the relaxation reproductions and the pinned-only guard were all re-run on the
+service-keyed form and are unchanged.
+
+**Cross-role displacement is WHY the slack is service-keyed, and an earlier draft ruled it
+benign.** A pin in role R forces the person to zero in every *other* role of that service
+(`:754-765`). That draft kept the per-role slack keyed on R and called the effect "notice quality
+rather than collapse — tier 2 absorbed it in every case built". Executed, it was neither: for a
+Sunday-lead-pool member it collapsed the ladder to the fairness-free `stage_a` on every seed,
+leaving a member on zero services. §5.1's table now keys the slack on the **service**, which
+removes it. What remains is genuinely notice quality — a pin can still move a flag for a reason
+unrelated to loosening — and §4's decision to leave the flags alone contains that.
 
 The **Where** column names the per-person loops, not the `<= limit` lines: the limit lines are
 where the spread is *bounded*, the loops are where each person is tied to `gmax`/`gmin`. The
@@ -416,9 +447,15 @@ watching. Not adopted; recorded so the next reader does not spend the same after
 
 | Pinned row | 1 pin | 2 pins | 3 pins | 4 pins (every week) |
 |---|---|---|---|---|
-| `Sun.Lead` (2 seats) | others 4–5 | others 4–5 | others 4–5 | others 4–5 |
-| `Sun.BGV` (3 seats) | others 4–5 | others 4–5 | others 4–5 | **collapse**, others 1–7 |
-| `Sun.Choir` (3 seats) | others 4–5 | others 4–5 | others 4–5 | **collapse**, others 1–8 |
+| `Sun.Lead` | others 4–5 | others 4–5 | others 4–5 | others 4–5 |
+| `Sun.BGV` | others 4–5 | others 4–5 | others 4–5 | others 4–5 |
+| `Sun.Choir` | others 4–5 | others 4–5 | others 4–5 | others 4–5 |
+
+**With the service-keyed slack there is no saturation threshold on this fixture** — lead-pool and
+support members alike, all three rows, all four seeds. An earlier draft tabulated a collapse at
+four pins on the three-seat rows and built a §7 guard on "row width"; that collapse was the
+role-keyed bug above, and it fired only for lead-pool members, which is why the table and the
+`Vale → Sun.Choir W1–4` row three paragraphs up contradicted each other on the same scenario.
 
 **The invariant worth asserting is about everyone else — inside the fairness groups.** Up to the
 saturation threshold, the un-pinned members **who are in the global fairness groups** stay inside
@@ -476,8 +513,10 @@ run. §7 carries a guard that reaches that branch.
 `strict` from `all_people` when it falls below two — and `all_people` now contains the
 pinned-only names this section removed from the fairness groups. A literal implementation
 would let a person the solver has no power over set `gmin`, on exactly the thin-roster months
-where the fallback fires. The rebuild is therefore over `all_people` minus the pinned-only
-set, and §7 asserts it on a month that reaches the branch.
+where the fallback fires. **`relaxed` needs the same exclusion** (`:1070-1071`, feeding
+`global_fairness_slack` at `:791-793`): a pinned-only person carrying an absence exclusion lands
+there, and `total_vars[p] >= gmin - slack` against their pin-count total would pull `gmin` down
+and cap the whole group. The rebuild is therefore over `all_people` minus the pinned-only set, and §7 asserts it on a month that reaches the branch.
 
 ### 5.2 How a pin beats a rule: the rules go soft, nobody enumerates
 
@@ -591,8 +630,11 @@ to make the model feasible; they are not the report.
 `(max_weighted_empty + 1) · n_viol + weighted_empty`, and if it times out its violation count is
 an upper bound with slack. So between Stage A and Stage B there is a third, cheap solve:
 minimise `n_viol` alone, subject to `weighted_empty <= empty_target`. It is the **full assignment model** — every `x`, `filled`, occupancy and `weighted_empty <=
-empty_target` constraint is still there — with a far simpler objective: no fairness terms, no
-per-role spreads, no seeded tie-break weights, just `sum(violations)`. **The expectation is that
+empty_target` constraint is still there — with a far simpler objective: no seeded tie-break weights and no
+fairness *objective*, just `sum(violations)` — **and it passes `big` for `fairness_limit`,
+`sun_lead_limit` and `sun_bgv_limit`, as Stage A does**, since `create_model_and_solve` builds
+the three hard spreads unconditionally from those parameters. Anything tighter silently inflates
+`violation_target` or makes the solve infeasible. **The expectation is that
 it proves optimality where the full objective does not, and that expectation is NOT yet
 measured.** It is the one claim in this section with no number behind it, and it decides how
 often the sole containment is actually proven on a 5 s / 0.33-vCPU pass. §7 measures it as a
@@ -941,17 +983,19 @@ and behaved otherwise:
     other — §4 is normative on that, and §5.1's cross-role displacement paragraph shows pins move
     them for reasons unrelated to any loosening.
   - *Saturation is row-dependent, and the test names the row AND the fixture.* Use §5.1's
-    fixture verbatim — the threshold does not reproduce on the repo's `make_config`, whose
-    Saturdays fall on weeks 2 and 4 and which carries `BASE_RULES`. Pinning one person into a
-    **three-seat** Sunday row in every week collapses the ladder to `stage_a`; the **two-seat**
-    `Sun.Lead` row at the same pin count does not. Assert both halves. This is the case an
-    earlier draft described without naming the row, which made it irreproducible for anyone who
-    tested `Sun.Lead`.
+    fixture verbatim. Four pins in each Sunday row, every week, run **twice: once for a
+    Sunday-lead-pool member and once for a support member.** Both must come back with the
+    fairness group inside the baseline spread and no reported limit equal to `len(slots) + 1`.
+
+    **The lead-pool half is the whole test.** An earlier draft asserted a *collapse* keyed on the
+    row's seat count. The real discriminator was **pool membership**: the support half passed
+    even under the broken role-keyed slack, so a suite written from that draft would have been
+    green on a design that put a member on zero services. Run the lead-pool case against the
+    **role-keyed** slack as a control — it must fail there, or the guard proves nothing.
 
     **Do NOT assert equivalence with the corresponding DSL rule.** `<person> Sun.Choir >= 4`
-    also collapses, but short of collapse the two diverge on tiers, spread and totals on every
-    seed — by design, since §5.1 gives a pin per-person slack a rule never gets. An equality
-    guard here asserts the opposite of the mechanism.
+    collapses on this fixture with no pins at all, and short of that the two diverge on tiers,
+    spread and totals on every seed — by design, since a pin carries slack a rule never gets.
   - *Heavy pin load.* Twenty-six or more pins on a twelve-person month, the threshold at which
     routing pins through `combined_slack` would empty the `strict` group
     (`solve_schedule:1072-1074`) — note this is the **rejected** design's failure, not the
@@ -1180,7 +1224,9 @@ a verification, not a fix.
 
 **How the first golden is captured**, since step zero adds the CI step and the golden in one PR:
 land the step with the golden assertions **skipped**, read the fingerprint and the schedule out
-of that first green run's log, commit them as the literals, and un-skip in the same PR. The
+of that first green run's log — **pytest captures stdout on passing tests, so the capture run
+needs `-s` or a deliberate report file**, which is worth stating because the entire preview-less
+safety argument routes through this one procedure — commit them as the literals, and un-skip in the same PR. The
 golden is captured by the runner that will enforce it, never by a laptop.
 
 **Step zero: the python gate lands first.** §7's byte-identity and inertness assertions are
@@ -1220,6 +1266,13 @@ change and confirm Cloud Build deployed it, then merge the app change. The
 because this is the change that will feel the pressure. A red fingerprint on the solver PR means
 the pinless path moved — the one thing the preview-less release is betting did not happen — and
 it is investigated, never cleared by updating the literal.
+
+**Row growth must keep the interleave, and the spec says how.** When `max(default, pins_for(R,W))`
+makes `Sun.BGV` and `Sun.Choir` unequal, emit them in one loop up to the larger count, appending
+each row's slot only while its own count allows — so the two stay interleaved exactly as
+`:554-555` does today. The pinless path is unaffected either way, so no guard covers this; two
+implementations of a looser wording would produce different boards from the same seed, which is
+why it is pinned here rather than left to taste.
 
 **The byte-identity property has a hidden dependency: `build_slots` must keep emitting
 `Sun.BGV` and `Sun.Choir` interleaved** (`:554-555`). Rewriting that loop per role — the
