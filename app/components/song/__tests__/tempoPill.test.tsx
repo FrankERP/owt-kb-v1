@@ -111,6 +111,41 @@ describe("TempoPill", () => {
     expect(pill.style.getPropertyValue("--tempo-period")).toBe(`${60000 / 140}ms`);
   });
 
+  it("goes quiet when its surface is dismissed under it", () => {
+    // `SongSheet` passes `enabled={isOpen}`: a pill kept mounted behind a closed
+    // sheet must not keep clicking (F2, ruling 16).
+    const { getByRole, rerender } = render(<TempoPill bpm={120} timeSig="4/4" enabled />);
+    const pill = getByRole("button");
+
+    fireEvent.click(pill);
+    expect(pill.getAttribute("aria-pressed")).toBe("true");
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    rerender(<TempoPill bpm={120} timeSig="4/4" enabled={false} />);
+    expect(pill.getAttribute("aria-pressed")).toBe("false");
+    expect(pill.dataset.active).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("renders the sheet's chrome at size sm, the hero's at md", () => {
+    const { getByRole, rerender } = render(<TempoPill bpm={120} timeSig="4/4" size="sm" />);
+    const pill = getByRole("button");
+
+    // Same ring, same 44px target, different skin.
+    expect(pill.className).toContain("brand-tempo-pill");
+    expect(pill.className).toContain("min-h-[44px]");
+    expect(pill.className).toContain("rounded-full");
+    expect(pill.className).toContain("border-ink-muted/15");
+    expect(pill.className).toContain("text-ink-muted/70");
+    expect(pill.className).toContain("aria-pressed:border-accent/60");
+    expect(pill.className).not.toContain("brand-search-console");
+
+    rerender(<TempoPill bpm={120} timeSig="4/4" />);
+    expect(pill.className).toContain("brand-search-console");
+    expect(pill.className).toContain("uppercase");
+    expect(pill.className).not.toContain("rounded-full");
+  });
+
   it("still rings where the Web Audio API does not exist", () => {
     vi.stubGlobal("AudioContext", undefined);
     const { getByRole } = render(<TempoPill bpm={120} timeSig="4/4" />);

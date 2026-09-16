@@ -9,7 +9,7 @@
 // only thing that matters is `currentTime`, which the test advances in lockstep
 // with the fake timers.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { CLICK, createMetronome } from "../metronome";
+import { CLICK, createMetronome, stopCurrentMetronome } from "../metronome";
 
 type FakeOsc = {
   type: string;
@@ -84,6 +84,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // The "current" metronome is module state: a test that left one holding the
+  // floor would silence the next test's first start().
+  stopCurrentMetronome();
   vi.useRealTimers();
 });
 
@@ -255,6 +258,92 @@ describe("createMetronome", () => {
     document.dispatchEvent(new Event("visibilitychange"));
     expect(onStop).toHaveBeenCalledTimes(1);
     Object.defineProperty(document, "hidden", { configurable: true, value: false });
+  });
+
+  // ── One at a time (F2, ruling 15) ──────────────────────────────────────────
+  // Two pills can be on screen together — the song hero under a `SongSheet`
+  // opened over it — and two tempos at once is noise. The module owns the rule.
+
+  it("takes the floor from the metronome that was already sounding", () => {
+    const onStopA = vi.fn();
+    const ctxB = new FakeAudioContext();
+    const a = createMetronome({ bpm: 120, beatsPerBar: 4, onStop: onStopA, audioContext: factory });
+    const b = createMetronome({
+      bpm: 90,
+      beatsPerBar: 4,
+      audioContext: () => ctxB as unknown as AudioContext,
+    });
+
+    a.start();
+    advance(100);
+    const bookedByA = ctx.oscillators.length;
+    expect(bookedByA).toBeGreaterThan(0);
+
+    b.start();
+    // A is silent and its pill hears about it — otherwise it would keep ringing
+    // over a beat that is no longer sounding.
+    expect(a.running).toBe(false);
+    expect(onStopA).toHaveBeenCalledTimes(1);
+    expect(ctx.suspend).toHaveBeenCalledTimes(1);
+    expect(b.running).toBe(true);
+
+    // A's loop is gone with it: only B's timer is left, and A books nothing more.
+    expect(vi.getTimerCount()).toBe(1);
+    ctxB.currentTime = 0.5;
+    ctx.currentTime = 0.5;
+    vi.advanceTimersByTime(CLICK.lookaheadMs * 4);
+    expect(ctx.oscillators).toHaveLength(bookedByA);
+    expect(ctxB.oscillators.length).toBeGreaterThan(0);
+
+    b.stop();
+  });
+
+  it("leaves the running one alone when the other cannot sound at all", () => {
+    const onStopA = vi.fn();
+    const a = createMetronome({ bpm: 120, beatsPerBar: 4, onStop: onStopA, audioContext: factory });
+    // No context, no sound — and therefore no right to silence what is playing.
+    const b = createMetronome({ bpm: 90, beatsPerBar: 4 });
+
+    a.start();
+    advance(100);
+    b.start();
+
+    expect(a.running).toBe(true);
+    expect(onStopA).not.toHaveBeenCalled();
+    a.stop();
+  });
+
+  it("does not release the floor when a stale stop arrives after a hand-over", () => {
+    const onStopB = vi.fn();
+    const b = createMetronome({ bpm: 90, beatsPerBar: 4, onStop: onStopB, audioContext: factory });
+    const a = createMetronome({ bpm: 120, beatsPerBar: 4, audioContext: factory });
+
+    a.start();
+    b.start();
+    // A was already stopped by B — the pill's own unmount/close cleanup still
+    // calls stop() afterwards, and that late stop must not blank out B.
+    a.stop();
+
+    expect(b.running).toBe(true);
+    stopCurrentMetronome();
+    expect(b.running).toBe(false);
+    expect(onStopB).toHaveBeenCalledTimes(1);
+  });
+
+  it("stopCurrentMetronome() silences whatever is sounding and reports it", () => {
+    const onStop = vi.fn();
+    const m = createMetronome({ bpm: 120, beatsPerBar: 4, onStop, audioContext: factory });
+    m.start();
+    advance(100);
+
+    stopCurrentMetronome();
+    expect(m.running).toBe(false);
+    expect(onStop).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
+
+    // Nothing holds the floor now, so a second call is a no-op rather than a throw.
+    expect(() => stopCurrentMetronome()).not.toThrow();
+    expect(onStop).toHaveBeenCalledTimes(1);
   });
 
   it("is a silent no-op where the Web Audio API does not exist", () => {

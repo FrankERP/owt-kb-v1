@@ -1932,3 +1932,48 @@ hand, the list is pruned on each tick so it holds at most one window, and the mo
 longer claims that suspension silences them. Three tests added, both fixes mutation-checked
 (removing either makes exactly its own test fail). Two LOWs (a rewinding fake clock in the
 tests, this 6/8 note) and one nit (the doc bullet's home) taken with them.
+
+### F2 — the sheet clicks too (2026-09-16)
+
+Frank, still on the R4 branch: *"Can you also enable the metronome on the small card that
+pops when you click the name of a song either on day cards or on the Biblioteca"* — that card
+is `SongSheet`, the `CueDialog mode="sheet"` the player context opens from `DayCard` rows and
+`LibraryRow`. One task on the same branch, after F1.
+
+**Rulings.**
+- **Ruling 14.** The sheet's BPM span becomes the same `TempoPill` — one component, one look,
+  no second metronome implementation. The sheet's chrome survives as a `size="sm"` skin
+  (outlined pill, `text-sm`) over the same ring, click and 44px target; `size="md"` stays the
+  hero's console pill. Cost if wrong: two pills that drift apart visually, which is what the
+  single component prevents.
+- **Ruling 15.** ONE metronome sounds at a time, app-wide. The sheet opens OVER the song page,
+  so both pills can exist at once and two tempos together is noise, not a feature. The module
+  owns the rule rather than the pills: `metronome.ts` keeps a module-level "current" and a
+  `start()` takes the floor from whoever held it, stopping that instance through its own path
+  so it reports to its pill through `onStop` and un-presses. A ringing pill therefore always
+  means a sounding click. Two edges fall out of it and are tested: an instance that cannot
+  sound at all (no Web Audio) never silences the one that can, and a late `stop()` from the
+  loser's own unmount cleanup must not release the new holder's floor.
+- **Ruling 16.** Closing the sheet stops the click. `TempoPill` gains `enabled?: boolean`
+  (default true) and `SongSheet` passes `enabled={isOpen}`; the pill stops and un-presses on
+  the falling edge rather than waiting for an unmount. `SongSheet` happens to return `null`
+  while closed today, so the unmount cleanup already covers it — the prop costs one effect and
+  is what keeps the rule true for a sheet that later stays mounted.
+
+**Shipped.** `app/components/song/metronome.ts` — the module-level `current`, taken in
+`start()` (after the no-Web-Audio bail) and released in `stop()` only when this instance still
+holds it, plus a private `handOver()` (stop + `onStop`) that the hidden-tab path now shares,
+and an exported `stopCurrentMetronome()`. `app/components/song/TempoPill.tsx` — `enabled` and
+`size`, the chrome split into a two-entry `CHROME` map. `app/components/SongSheet.tsx` — the
+meta row's BPM is a `TempoPill` (`size="sm"`, `enabled={isOpen}`) when `Number(sheet.bpm)` is
+finite and positive, the same guard the song page uses, and the old static span otherwise
+("libre", "70-80"). Tests: `metronome.test.ts` +4 (the hand-over stopping A's loop and firing
+its `onStop` while B books on; the silent instance leaving the sounding one alone; the stale
+stop that must not release B's floor; `stopCurrentMetronome()`), `tempoPill.test.tsx` +2 (the
+`enabled` falling edge leaving `aria-pressed="false"` and zero timers; each size's chrome),
+`songSheet.test.tsx` +3 (the sheet's pill, its label and its `--tempo-period`; the unparsable
+BPM keeping the static span; the close giving the loop back and suspending the context).
+
+**Verification.** Both singleton lines were mutation-checked: removing the hand-over in
+`start()` fails the hand-over test, removing the `current === self` guard in `stop()` fails the
+stale-stop test. Gates green on the whole tree.

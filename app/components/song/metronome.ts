@@ -19,6 +19,12 @@
 // freezes the clock they are pinned to, so they would sound off-phase the moment
 // the next tap resumes it. Every booked oscillator is therefore stopped by hand.
 //
+// ONE AT A TIME. The module keeps a "current" and a `start()` takes the floor
+// from it (F2, ruling 15) — two pills can be on screen at once, the song page's
+// hero under the `SongSheet` opened over it, and two tempos sounding together is
+// noise. The instance that loses the floor is stopped through its own path and
+// reports it through `onStop`, so its pill un-presses rather than ringing silently.
+//
 // The SOUND is the master clock; the RING is not. The ring stays CSS-clocked on
 // `--tempo-period` (see `TempoPill`), which keeps the reduced-motion story
 // unchanged — the ring collapses with every other animation and the click keeps
@@ -29,6 +35,24 @@ export interface Metronome {
   start(): void;
   stop(): void;
   readonly running: boolean;
+}
+
+/** A metronome plus the private hand-over path only this module may call. */
+interface OwnedMetronome extends Metronome {
+  /** Stop because something else took the floor, and tell the owner so its pill un-presses. */
+  handOver(): void;
+}
+
+// ONE metronome sounds at a time, app-wide (F2, ruling 15). Two pills can exist
+// at once — the song page's hero and the `SongSheet` opened over it — and two
+// tempos at once is noise, not a feature. The module, not the pills, owns that
+// rule: a `start()` hands the floor over from whoever held it, and the loser
+// hears about it through its own `onStop`.
+let current: OwnedMetronome | null = null;
+
+/** Stop whatever is currently sounding, from outside any instance. The owning pill un-presses. */
+export function stopCurrentMetronome(): void {
+  current?.handOver();
 }
 
 export const CLICK = {
@@ -132,11 +156,15 @@ export function createMetronome(opts: {
     timer = setTimeout(tick, CLICK.lookaheadMs);
   }
 
+  // A stop nobody in the UI asked for: the tab went hidden, or another pill took
+  // the floor. Same shape either way — silence, then tell the owner.
+  function handOver() {
+    stop();
+    opts.onStop?.();
+  }
+
   function onVisibility() {
-    if (typeof document !== "undefined" && document.hidden) {
-      stop();
-      opts.onStop?.();
-    }
+    if (typeof document !== "undefined" && document.hidden) handOver();
   }
 
   function stop() {
@@ -158,6 +186,9 @@ export function createMetronome(opts: {
       }
     }
     booked = [];
+    // Only ever release the floor if this instance still holds it: a stop that
+    // arrives after another pill took over must not blank out the new holder.
+    if (current === self) current = null;
     if (!running) return;
     running = false;
     // Suspended, never closed: a closed context cannot be resumed, and the next
@@ -165,13 +196,18 @@ export function createMetronome(opts: {
     void ctx?.suspend();
   }
 
-  return {
+  const self: OwnedMetronome = {
     start() {
       if (running) return;
       const audio = context();
       // No Web Audio API (an old WebView, a server-rendered probe): the pill
-      // still rings, it simply never sounds.
+      // still rings, it simply never sounds. Checked BEFORE the hand-over, so a
+      // pill that cannot sound never silences the one that can.
       if (!audio) return;
+      // Ruling 15: take the floor from whoever had it, through its own stop, so
+      // its pill drops the pressed state instead of showing a beat nobody hears.
+      if (current && current !== self) current.handOver();
+      current = self;
       running = true;
       // Returns a promise; a rejected resume just means no sound, never a throw.
       void audio.resume();
@@ -183,8 +219,11 @@ export function createMetronome(opts: {
       tick();
     },
     stop,
+    handOver,
     get running() {
       return running;
     },
   };
+
+  return self;
 }
