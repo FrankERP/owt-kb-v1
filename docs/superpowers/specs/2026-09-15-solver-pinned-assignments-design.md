@@ -146,8 +146,18 @@ client also runs is what catches a solver honouring *a* pin count rather than *t
 **`pin_violations?: string[]`** — the rules the solver had to relax to honour the pins. The
 client spec's §4 renders them; §5.2 explains why they exist and how an entry is derived.
 
-**`violation_ceiling_proven?: boolean`** — `true` only when **both** Stage A and the
-violation-only solve returned `OPTIMAL`; `false` otherwise. Gating on the third solve alone is
+**`violation_ceiling_proven?: boolean`** — `true` **iff all three hold**: Stage A returned
+`OPTIMAL`, the violation-only solve returned `OPTIMAL`, **and the returned month came from Stage
+B rather than the `stage_a` fall-through**. `false` otherwise.
+
+The third condition is not redundant and an earlier draft omitted it. The ladder can exhaust or
+run out of the 40 s budget and return `stage_a` itself (`:1124-1125`, `:1137`) — which was built
+before `violation_target` existed and carries no `n_viol <= violation_target` constraint — so its
+assignment-derived `pin_violations` can exceed the proven minimum even when both solves proved
+theirs. Reporting `true` there would suppress the client's caveat and tell the admin the
+relaxation set is known minimal when it is not, which is precisely the false assurance this field
+exists to prevent. §6 notes the fall-through is a field-mostly case because CI runs on faster
+hardware, so the suite must force it deliberately (§7). Gating on the third solve alone is
 not enough, and the reason is exact: it minimises `n_viol` **subject to `weighted_empty <=
 empty_target`**, and `empty_target` comes from Stage A. If Stage A stopped at `FEASIBLE`, its
 `empty_target` can exclude the true optimum — Stage A returns `n_viol=1, weighted_empty=0` while
@@ -355,7 +365,8 @@ Measured on the fixture below, four pins in a Sunday row, every week:
 
 | Pinned person | Role-keyed slack (rejected) | Service-keyed slack |
 |---|---|---|
-| A Sunday-lead-pool member (Hugo, Rachel) | **collapse on all four seeds** — fairness-free `stage_a`, a member on zero services | `ok`, everyone 4–5 |
+| A Sunday-lead-pool member (Hugo, Rachel), **three-seat row** (`Sun.BGV`, `Sun.Choir`) | **collapse on all four seeds** — fairness-free `stage_a`, a member on zero services | `ok`, everyone 4–5 |
+| The same member in the **two-seat** `Sun.Lead` row | `ok` — measured **not** to discriminate | `ok`, everyone 4–5 |
 | A support member (Vale, Gaby) | `ok` | `ok` |
 
 So the discriminator was never the row's seat count — it was **whether the pinned person is in
@@ -662,9 +673,9 @@ carries no `n_viol <= violation_target` constraint. Its assignment-derived `pin_
 therefore exceed the violation-only solve's minimum. Narrow, and CI is faster than production so
 it is a field-mostly case, but it means "Stage B never returns more violations than the
 violation-only solve found" is true of Stage B and **not** of the fall-through. A returned
-`stage_a` therefore reports `violation_ceiling_proven: false` regardless of what the
-violation-only solve achieved — the field answers "is this month's relaxation set known
-minimal?", not "did one particular solve prove optimality".
+`stage_a` therefore reports `violation_ceiling_proven: false` regardless of what either solve
+achieved — which is §4's third condition, and the reason it has one. The field answers "is this
+month's relaxation set known minimal?", not "did some solve prove optimality".
 
 **If the violation-only solve itself times out**, `violation_target` stays Stage A's value and
 the month is still returned — but the response says so, so the honest report of §5.2's
@@ -712,8 +723,10 @@ directions on a fixture where the solve is capped short enough to leave the ceil
 guard that a fast CI machine would otherwise pass vacuously.
 
 **Two plumbing facts the prose implied without stating.** `SolveResult` gains the Stage A
-violation count **and each solve's status** (Stage A's and the violation-only solve's, which is
-what `violation_ceiling_proven` is computed from), so `violation_target` can travel into Stage B the way `weighted_empty_used`
+violation count **and each solve's status** (Stage A's and the violation-only solve's) —
+and `solve_schedule` must additionally record **whether the returned result is the `stage_a`
+fall-through**, which is §4's third input and lives in `solve_schedule` rather than in any single
+solve, so `violation_target` can travel into Stage B the way `weighted_empty_used`
 already carries `empty_target`; and `solve_from_dict`'s response dict (`:1222-1232`) gains
 `pinned_honored`, `pin_violations` **and `violation_ceiling_proven`** — all three, since that
 dict is the only place any of them can reach the client.
@@ -920,8 +933,11 @@ shift is invisible — but the count per row changes, and the tests pin that.
   `TypeError`/`KeyError`, which escapes `solve_from_dict`'s `except (ValueError, RuntimeError)`
   (`:1216`) and reaches the admin as «Solver service returned HTTP 500». `pinned` is validated
   for shape before it is used, and every rejection below is a `ValueError`.
-- **`pinned` is length-capped** the way the other budget knobs already are (`_SOLVER_MAX_TIME_CEIL`
-  and friends, `:1178-1184`). `build_slots` emits `max(default, pins_for(R, W))`, so slots — and
+- **`pinned` longer than the cap is REJECTED with a `ValueError`, never truncated.** The other
+  budget knobs clamp (`_clamp`, `:1183-1184`), and an earlier draft described this cap "the way
+  the other budget knobs already are" — which would silently drop pins past the limit. Those are
+  seats the admin asked to keep; dropping them surfaces as a refused Auto through the client's
+  per-pin roster check, a confusing failure for a request the solver could have refused by name. `build_slots` emits `max(default, pins_for(R, W))`, so slots — and
   with them `x` — grow linearly with the array, on what §6 itself calls a public HTTP endpoint
   behind an API key. **The cap is 100**, and the reasoning an earlier draft gave for a larger one was measured false.
   That draft claimed 200 kept `compute_priority_weights` — degree-8 in `overall_limit`
@@ -929,10 +945,15 @@ shift is invisible — but the count per row changes, and the tests pin that.
   weight crosses 2⁶³ at about **70 slots**, and at 200 pins `total_slots` reaches ~275 for a top
   weight around 4.4e23.
 
-  **And the real binding limit is already reached today, with no pins at all.** Measured on the
-  shipped solver: a **five-week month with a Saturday every week (65 slots) returns
-  `MODEL_INVALID` on its optimising pass**, and the ladder falls through to the objective-less
-  passes without saying so — statuses `['OPTIMAL', 'MODEL_INVALID', 'OPTIMAL']`. That is a
+  **And the real binding limit is already reached today, with no pins at all — but the trigger is
+  NOT the slot count.** Measured on the shipped solver: a **five-week month with a Saturday every
+  week (65 slots) returns `MODEL_INVALID` on its optimising pass**, and the ladder falls through
+  to the objective-less passes without saying so — statuses `['OPTIMAL', 'MODEL_INVALID',
+  'OPTIMAL']`. So does a **five-week / three-Saturday month at 55 slots**, while a **six-week /
+  six-Saturday month at 78 slots does not**. It is not monotone in `total_slots`, so the ~70-slot
+  figure above is where the top *weight* crosses 2⁶³ and is **not** the trigger — the binding
+  check is ortools' objective-domain overflow, which depends on the whole coefficient set.
+  Whoever writes the fix PR should start there, not from a slot threshold. That is a
   **pre-existing defect, not introduced here** (four- and six-week fixtures did not reproduce
   it). **Frank approved fixing it, 2026-09-16, as its own change** — and the ordering is
   load-bearing: any fix touches `compute_priority_weights`, which changes the Stage A model, which
@@ -1019,11 +1040,15 @@ and behaved otherwise:
     Sunday-lead-pool member and once for a support member.** Both must come back with the
     fairness group inside the baseline spread and no reported limit equal to `len(slots) + 1`.
 
-    **The lead-pool half is the whole test.** An earlier draft asserted a *collapse* keyed on the
-    row's seat count. The real discriminator was **pool membership**: the support half passed
-    even under the broken role-keyed slack, so a suite written from that draft would have been
-    green on a design that put a member on zero services. Run the lead-pool case against the
-    **role-keyed** slack as a control — it must fail there, or the guard proves nothing.
+    **The lead-pool half is the whole test, and the control runs only on the three-seat rows.**
+    An earlier draft asserted a *collapse* keyed on the row's seat count. The real discriminator
+    is **pool membership** — the support half passes even under the broken role-keyed slack, so a
+    suite written from that draft would have been green on a design that put a member on zero
+    services. Run the lead-pool case against the **role-keyed** slack as a control on `Sun.BGV`
+    and `Sun.Choir`, where it must fail. **Do not run the control on `Sun.Lead`:** measured, the
+    two-seat row does not collapse under either form, so a control there fails to fail — and the
+    pressure at that moment is to weaken the control, which is the exact failure §7 exists to
+    prevent.
 
     **Do NOT assert equivalence with the corresponding DSL rule.** `<person> Sun.Choir >= 4`
     collapses on this fixture with no pins at all, and short of that the two diverge on tiers,
@@ -1072,9 +1097,12 @@ and behaved otherwise:
   Assert that a month needing one rule relaxed relaxes exactly one — `len(pin_violations) == 1`
   — and that Stage B never returns more violations than the **violation-only solve** found,
   which is what `violation_target` now carries (not Stage A's count). Assert
-  `violation_ceiling_proven: true` on that fixture, and on a second fixture capped short enough
-  that the violation-only solve cannot prove its minimum, assert it comes back `false` with the
-  month still returned. Separately assert the measured amount case: `Gaby Sun.BGV <= 1`
+  `violation_ceiling_proven: true` on that fixture; on a second, capped short enough that the
+  violation-only solve cannot prove its minimum, assert `false` with the month still returned;
+  and on a **third**, force the `stage_a` fall-through — a tiny `solver_total_budget_seconds`, or
+  a month whose every Stage B tier is infeasible — and assert `false` **even though both solves
+  proved their minima**. That third case is §4's third condition; it is the one production
+  reaches and CI does not by accident, and without it the suite passes on a response that lies. Separately assert the measured amount case: `Gaby Sun.BGV <= 1`
   with two pins on that row gives her exactly two, not more. That last one is an observation,
   not a bound, and the test says so in its name.
 - **A rules-stay-hard control.** The same three reproductions with the violation booleans
