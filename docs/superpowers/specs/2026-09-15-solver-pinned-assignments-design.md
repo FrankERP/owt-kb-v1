@@ -141,8 +141,10 @@ not a pinless request. **Even derived it is weaker than the name suggests:** a p
 `== 1`, so any solution the solver returns at all satisfies every pin and the derived count can
 never come back short. Its real signal is the field's **presence**, which is how the client
 detects a solver predating this change that ignored `pinned` (E8); the per-pin roster check the
-client also runs is what catches a solver honouring *a* pin count rather than *these* pins — and **`pin_violations?: string[]`** — the rules
-the solver had to relax to honour the pins. the client spec's §4 renders them; §5.2 explains why they exist.
+client also runs is what catches a solver honouring *a* pin count rather than *these* pins.
+
+**`pin_violations?: string[]`** — the rules the solver had to relax to honour the pins. The
+client spec's §4 renders them; §5.2 explains why they exist and how an entry is derived.
 
 **`violation_ceiling_proven?: boolean`** — `true` only when **both** Stage A and the
 violation-only solve returned `OPTIMAL`; `false` otherwise. Gating on the third solve alone is
@@ -457,9 +459,10 @@ four pins on the three-seat rows and built a §7 guard on "row width"; that coll
 role-keyed bug above, and it fired only for lead-pool members, which is why the table and the
 `Vale → Sun.Choir W1–4` row three paragraphs up contradicted each other on the same scenario.
 
-**The invariant worth asserting is about everyone else — inside the fairness groups.** Up to the
-saturation threshold, the un-pinned members **who are in the global fairness groups** stay inside
-the un-pinned baseline spread.
+**The invariant worth asserting is about everyone else — inside the fairness groups.** The
+un-pinned members **who are in the global fairness groups** stay inside the un-pinned baseline
+spread. Stated unconditionally: with the service-keyed slack there is no threshold on this
+fixture to scope it by.
 
 **An un-pinned `fairness_exempt` member is NOT protected, and the shipped seed has two.** The
 model bounds `gmax - gmin` over the fairness *group*; an exempt member is outside it and carries
@@ -474,16 +477,17 @@ service, and that is the same displacement an ordinary hard rule would cause.**
 
 **Nothing is claimed about the pinned person's own total** — the paragraphs above explain why the model does not bound
 it, and review measured the counterexample: on the repo's own fixture with `BASE_RULES`, a member
-whose baseline is 6, pinned into `Sun.Lead` for three weeks, came back at **8**. That is the
-promise a pin should keep — pinning someone does
+whose baseline is 6, pinned into `Sun.Lead` for three weeks, came back at **8** — which is why
+§7 asserts nothing about it. The group invariant above is the promise a pin should keep — pinning someone does
 not wreck the rest of the month — and it is what §7 asserts.
 
-**Above that threshold the ladder gives up.** Pinning one person into a three-seat Sunday row in
-every week of the month drives every Stage B tier infeasible and returns the fairness-free
-`stage_a` (reported limit `len(slots) + 1`), spreading the month 1–8. The threshold is sharp and
-**row-dependent**: the two-seat `Sun.Lead` row does not collapse at four pins, the three-seat
-rows do. An earlier draft asserted the collapse without naming the row, which is why a reviewer
-testing `Sun.Lead` could not reproduce it.
+**What the rejected role-keyed form did, kept because §7 uses it as a control.** Under it, a
+**Sunday-lead-pool** member pinned four times into a three-seat Sunday row drove every Stage B
+tier infeasible and returned the fairness-free `stage_a` (reported limit `len(slots) + 1`),
+spreading the month 1–8 with a member on zero services — on all four seeds. A support member in
+the same rows was fine, which is why two earlier drafts misread the discriminator as the row's
+seat count. **The service-keyed form removes it entirely**, and §7 runs the role-keyed version as
+a failing control precisely so the guard cannot go green on the broken design.
 
 **A pin is NOT equivalent to the corresponding hard DSL rule, and an earlier draft claimed it
 was.** `Rachel Sun.Choir >= 4` with no pins also collapses, which is where that claim came from
@@ -698,7 +702,8 @@ directions on a fixture where the solve is capped short enough to leave the ceil
 guard that a fast CI machine would otherwise pass vacuously.
 
 **Two plumbing facts the prose implied without stating.** `SolveResult` gains the Stage A
-violation count, so `violation_target` can travel into Stage B the way `weighted_empty_used`
+violation count **and each solve's status** (Stage A's and the violation-only solve's, which is
+what `violation_ceiling_proven` is computed from), so `violation_target` can travel into Stage B the way `weighted_empty_used`
 already carries `empty_target`; and `solve_from_dict`'s response dict (`:1222-1232`) gains
 `pinned_honored`, `pin_violations` **and `violation_ceiling_proven`** — all three, since that
 dict is the only place any of them can reach the client.
@@ -759,7 +764,18 @@ less likely still, so an assertion on a value the model does not bound would dri
 ortools bump. §7 asserts only what the model guarantees: the pins are honoured and the rule
 appears in `pin_violations`.
 
-**With no pins, none of this is built.** `soft = bool(pin_set)`; every constraint above is
+**With no pins, none of this is built — `n_viol` included, and that one is the trap.** The
+natural implementation defines `n_viol = NewIntVar(...)` plus its `_eq` unconditionally, since
+`violations` is simply empty when `soft` is false. That adds **a variable and a constraint to the
+pinless Stage A model**, which reddens §7's byte-identity fingerprint on every seed — and §7 and
+§9 both forbid re-capturing a red fingerprint inside the solver PR, so the delivery stalls until
+someone diagnoses it. `n_viol` is not a boolean, so "no boolean exists" does not cover it, and
+"emitted unconditionally at model-build time" is said of the *ceiling*, not of this. **`n_viol`
+and its `_eq` are built only when `soft`.** This is the benign-looking cause that actually fires;
+the two §9 names (`gmax + 0`, the interleave) do not — `model.Add(t <= g + 0)` was verified to
+serialise byte-identically to `model.Add(t <= g)`.
+
+`soft = bool(pin_set)`; every constraint above is
 emitted exactly as it is today and no boolean exists. That is what keeps §9's byte-identity
 property true, and it was verified on three seeds.
 
@@ -1266,6 +1282,11 @@ change and confirm Cloud Build deployed it, then merge the app change. The
 because this is the change that will feel the pressure. A red fingerprint on the solver PR means
 the pinless path moved — the one thing the preview-less release is betting did not happen — and
 it is investigated, never cleared by updating the literal.
+
+**The pin-granted candidate is APPENDED to the slot's candidate list**, after the shuffled
+eligible names, never inserted into the shuffle. Like the interleave below, this cannot affect
+the pinless path, so no guard covers it — and two implementations of a looser wording would
+produce different boards from the same seed on pinned months.
 
 **Row growth must keep the interleave, and the spec says how.** When `max(default, pins_for(R,W))`
 makes `Sun.BGV` and `Sun.Choir` unequal, emit them in one loop up to the larger count, appending
