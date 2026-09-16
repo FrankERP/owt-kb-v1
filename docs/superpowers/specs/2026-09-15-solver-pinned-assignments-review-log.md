@@ -3,7 +3,7 @@
 Artifact: `2026-09-15-solver-pinned-assignments-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
 **Status: open — TEN rounds done, no approval yet. Frank's cap of 10 is reached.** Current
-canonical digest `980bf729…`, commit `f3e0f8d5`. Critical tier needs **two sequential fresh
+canonical digest `980bf729…`, commit `2baf458c`. Critical tier needs **two sequential fresh
 `APPROVED` verdicts on byte-identical text**, so the earliest possible completion from here is
 rounds 11 and 12 with no changes between them.
 
@@ -36,7 +36,7 @@ log.
 | 7 | `0a5b4700ba4072db…` | (r7 fixes) | CHANGES_REQUIRED | yes — the golden re-capture rule defeated itself |
 | 8 | `23aa1650db99d178…` | (r8 fixes) | CHANGES_REQUIRED | yes — the fairness promise had an undisclosed `fairness_exempt` carve-out |
 | 9 | `5c90b6cc0bd623fe…` | `7ade9b56` | CHANGES_REQUIRED | yes — **the per-role slack was keyed on the wrong axis** |
-| 10 | `9988cfda0c913a86…` | `f3e0f8d5` | CHANGES_REQUIRED | yes, but **editorial only** — stale prose from the round-9 rewrite |
+| 10 | `9988cfda0c913a86…` | `2baf458c` | CHANGES_REQUIRED | yes, but **editorial only** — stale prose from the round-9 rewrite |
 
 ## Round 1 — the share guarantee was a tendency
 
