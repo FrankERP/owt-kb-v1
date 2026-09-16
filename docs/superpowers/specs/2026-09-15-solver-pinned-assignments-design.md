@@ -671,17 +671,27 @@ the month is still returned — but the response says so, so the honest report o
 assignment-side derivation is not quietly doing double duty as a correctness claim. §7 asserts
 the minimal ceiling on a fixture capped short enough that Stage A alone would leave slack.
 
-> **A decision for Frank, not one this spec should make silently.** ADR-0010 records his
+> **RULED by Frank, 2026-09-16: keep the soft relaxation as designed.** ADR-0010 records his
 > requirement in his own words, for the pair-exclusion family this design relaxes: *"it has to
 > be hard because if it's soft in fairness it will always choose people like Frank, Mkz or Gaby
-> who tend to have 1 or 2 participations a month."* That ADR is about specials, which never
-> reach the solver — but the principle is about softness, and this design makes six rule
-> families soft for the whole month whenever a single pin exists. The minimal ceiling above
-> confines the breakage to what the pins genuinely force, which is the narrowest reading of E3.
-> **§8's ADR must cite ADR-0010 and record Frank's ruling on it rather than inheriting one —
-> and the ruling is needed BEFORE implementation, not at ADR-writing time.** If it goes the
-> other way, §5.2's "stop predicting" mechanism needs a pair-rule carve-out, which is a
-> different design rather than an edit.
+> who tend to have 1 or 2 participations a month."* He asked for whichever design **preserves
+> the behaviour he expects**, and the two reconcile exactly — on the word ADR-0010 itself
+> emphasises:
+>
+> **Nothing here is ever relaxed for fairness.** ADR-0010's fear is a rule traded away to
+> flatten participation counts, which is what "soft in fairness" means: the rule enters an
+> objective and loses to a cheaper assignment. In this design a rule can be set aside for
+> **one reason only** — a pin has made it unsatisfiable — and three properties enforce that:
+> the violation count is minimised **strictly above** every fairness term (§5.2's objective);
+> the ceiling is **proven minimal** by its own solve before Stage B may use it, and says so
+> through `violation_ceiling_proven`; and the fairness ladder **cannot buy a tighter spread by
+> breaking one more rule**, because the ceiling is a constraint rather than an objective term.
+> A rule the pins do not force stays as hard as it is today.
+>
+> The rejected alternative — a pair-rule carve-out that keeps `!with` hard — was considered and
+> refused on E3: it would make the month **fail** rather than honour a pin the admin placed,
+> which is the opposite of «gana el pin, no es algo que bloquea». §8's ADR records this ruling,
+> cites ADR-0010, and states the reconciliation above so nobody re-derives the carve-out.
 
 **And the ceiling bounds the model, never the report.** An earlier draft implied `n_viol <=
 violation_target` makes the boolean reading safe, on the argument that Stage B's feasible set is
@@ -924,7 +934,13 @@ shift is invisible — but the count per row changes, and the tests pin that.
   `MODEL_INVALID` on its optimising pass**, and the ladder falls through to the objective-less
   passes without saying so — statuses `['OPTIMAL', 'MODEL_INVALID', 'OPTIMAL']`. That is a
   **pre-existing defect, not introduced here** (four- and six-week fixtures did not reproduce
-  it), and it is out of this delivery's scope — but this delivery adds a new lever on
+  it). **Frank approved fixing it, 2026-09-16, as its own change** — and the ordering is
+  load-bearing: any fix touches `compute_priority_weights`, which changes the Stage A model, which
+  **changes §7's byte-identity golden**. So the overflow fix ships **first**, on its own, with the
+  golden re-captured in that PR under §7's rule (its diff is `gcf/**`-only and it is not this
+  delivery); this delivery then rebaselines on it. Landing them together would put a real
+  behaviour change and a golden re-capture in the same PR, which is precisely what §7 forbids.
+  Out of *this file's* scope — but this delivery adds a new lever on
   `total_slots` through row growth. **What the cap buys is a bounded array, and nothing more** —
   it does *not* keep a month out of the overflow regime, since 100 pins in one (role, week) take
   a four-week month from 42 to ~139 slots, well past the ~70 where the top weight crosses 2⁶³.
