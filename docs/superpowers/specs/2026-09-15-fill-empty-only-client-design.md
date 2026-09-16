@@ -349,7 +349,12 @@ different pipelines from the same merge — Cloud Build for `gcf/`, Vercel for t
 this state exists in the window between them, and again on any rollback of one but not the
 other.
 
-`SolveResponse` gains `pinned_honored?: number`. **The solver spec §4 is canonical for what it
+`SolveResponse` gains `pinned_honored?: number` and `violation_ceiling_proven?: boolean` (plus
+`pin_violations?: string[]`, §4). **When `violation_ceiling_proven` is `false`**, the solver could
+not prove its relaxation set was minimal, so the notices may list more rules than the pins
+strictly forced: render the ordinary notices **plus** one line saying so. Never block, never
+discard the month. Absent means a solver that predates the field, which the handshake below
+already treats as no pin support at all. **The solver spec §4 is canonical for what it
 means**: it is derived from the solved assignment — a pin counts only if that person actually
 holds a slot of that role in that week in the returned solution — never echoed from the number
 of pins received. An echo would satisfy E8's letter and prove nothing. When the switch is on and pins were sent, the client **refuses to apply the voice
