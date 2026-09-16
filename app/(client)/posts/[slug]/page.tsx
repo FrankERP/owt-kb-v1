@@ -20,6 +20,9 @@ import SectionNav from "@/app/components/SectionNav";
 import ChordChart from "@/app/components/ChordChart";
 import EditSongButton from "@/app/components/EditSongButton";
 import SongAudioSection from "@/app/components/SongAudioSection";
+import SongHeroPills from "@/app/components/song/SongHeroPills";
+import { TransposeProvider } from "@/app/components/song/TransposeProvider";
+import { isChordPro } from "@/app/utils/transpose";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 
 interface Params {
@@ -156,6 +159,10 @@ const Page = async ({ params }: Params) => {
   const shows = (id: SongSection["id"]) => sections.some((s) => s.id === id);
   const hasAudio        = shows("audio");
   const hasInlineChords = (post?.chords?.length ?? 0) > 0;
+  // The hero key is a TRANSPOSER only for a ChordPro chart: a plain-text chart
+  // carries no bracketed chords to move, so the drawer would shift the readout
+  // and nothing else.
+  const transposable    = (post?.chords ?? []).some((c) => isChordPro(c.content));
   const hasTutorials    = shows("tutoriales");
   const hasLyrics       = shows("letra");
   const hasHistory      = shows("historial");
@@ -165,8 +172,13 @@ const Page = async ({ params }: Params) => {
     <div>
       <Navbar title={post?.title} author={post?.author} tags schedule />
 
+      {/* ONE transposition seat for the whole page (R4 ruling 2): the hero's key
+          picker and ChordChart's ± pair write the same value, so the key shown
+          above the chart can never disagree with the chart. */}
+      <TransposeProvider nativeKey={post?.key ?? null}>
+
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <div className="brand-song-hero">
+      <div id="song-hero" className="brand-song-hero">
         {/* Edit control — inline, top-right (self-gates to editors); avoids a floating FAB over the lyrics */}
         <div className="absolute top-4 right-4 z-10">
           <EditSongButton post={post} inline />
@@ -204,23 +216,12 @@ const Page = async ({ params }: Params) => {
             <p className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
           ) : null}
 
-          <div className="flex flex-wrap justify-center gap-2.5">
-            {post?.key && (
-              <span className="brand-key-dial px-3 font-display text-sm">
-                {post.key}
-              </span>
-            )}
-            {post?.bpm && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim">
-                {post.bpm} BPM
-              </span>
-            )}
-            {post?.timeSig && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim">
-                {post.timeSig}
-              </span>
-            )}
-          </div>
+          <SongHeroPills
+            keyLabel={post?.key ?? null}
+            bpm={post?.bpm ? Number(post.bpm) : null}
+            timeSig={post?.timeSig ?? null}
+            transposable={transposable}
+          />
         </div>
       </div>
 
@@ -409,6 +410,7 @@ const Page = async ({ params }: Params) => {
 
       </div>
 
+      </TransposeProvider>
     </div>
   );
 };
