@@ -786,6 +786,10 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
   transform: translateY(-2px);
 }
 
+.brand-surface-interactive:active {
+  transform: translateY(1px) scale(0.985);
+}
+
 .brand-library-module {
   position: relative;
   isolation: isolate;

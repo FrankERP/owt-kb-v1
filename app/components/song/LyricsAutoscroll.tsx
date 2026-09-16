@@ -26,6 +26,11 @@ const MAX_FRAME_MS = 50;
 /** Frames after a resume that re-seed from `window.scrollY` — iOS momentum keeps
  *  moving the page after the finger is gone, and `scrollend` is not everywhere. */
 const RESEED_FRAMES = 3;
+/** A lift that waits on `scrollend` arms this as a backstop: some browsers expose
+ *  `onscrollend` but never fire it for a given gesture (observed on momentum
+ *  scrolls cut short), which would otherwise strand the run paused with the pill
+ *  still reading «Detener». Cleared the moment `scrollend` actually arrives. */
+const SCROLLEND_FALLBACK_MS = 400;
 
 export default function LyricsAutoscroll({
   targetId,
@@ -56,6 +61,14 @@ export default function LyricsAutoscroll({
     let reseed = 0;
     let touching = false;
     let userScrolled = false;
+    let scrollEndFallback: number | null = null;
+
+    const clearScrollEndFallback = () => {
+      if (scrollEndFallback !== null) {
+        window.clearTimeout(scrollEndFallback);
+        scrollEndFallback = null;
+      }
+    };
 
     const step = (now: number) => {
       // Momentum outlives the finger, so the first frames after a resume take
@@ -88,6 +101,7 @@ export default function LyricsAutoscroll({
       last = null;
     };
     const resume = () => {
+      clearScrollEndFallback();
       if (finished || frame !== null) return;
       // Re-seed from where the finger actually left the page, never from the
       // internal offset the pause froze.
@@ -109,7 +123,9 @@ export default function LyricsAutoscroll({
     // A flick promotes to a scroll and the page keeps moving after the lift, so
     // where the browser reports the end of a scroll we wait for THAT rather
     // than resuming into the momentum. A lift that scrolled nothing (a tap)
-    // gets no `scrollend`, so it resumes immediately.
+    // gets no `scrollend`, so it resumes immediately. `scrollend` is not
+    // guaranteed for every gesture even where `onscrollend` exists, so the wait
+    // also arms a `SCROLLEND_FALLBACK_MS` backstop (see `up`).
     const hasScrollEnd = "onscrollend" in window;
 
     const down = () => {
@@ -122,7 +138,13 @@ export default function LyricsAutoscroll({
     // on «Detener» over a page that stopped moving.
     const up = () => {
       touching = false;
-      if (!hasScrollEnd || !userScrolled) resume();
+      if (!hasScrollEnd || !userScrolled) {
+        resume();
+        return;
+      }
+      // Waiting on `scrollend`, which is not guaranteed to arrive for every
+      // gesture — arm the backstop so the run cannot strand itself paused.
+      scrollEndFallback = window.setTimeout(resume, SCROLLEND_FALLBACK_MS);
     };
     // Mouse input hands the page back only through `wheel`: a scrollbar drag or
     // a keyboard scroll is not intercepted at all. Phone-first by design — the
@@ -157,6 +179,7 @@ export default function LyricsAutoscroll({
     return () => {
       if (frame !== null) cancelAnimationFrame(frame);
       frame = null;
+      clearScrollEndFallback();
       window.removeEventListener("touchstart", down);
       window.removeEventListener("touchend", up);
       window.removeEventListener("touchcancel", up);

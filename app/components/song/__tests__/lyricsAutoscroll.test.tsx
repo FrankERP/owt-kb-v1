@@ -210,6 +210,34 @@ describe("LyricsAutoscroll", () => {
     expect(scrollSpy.mock.calls.length).toBeGreaterThan(beforeEnd);
   });
 
+  it("resumes on its own if scrollend never arrives", () => {
+    // Some browsers expose `onscrollend` but never fire it for every gesture —
+    // the fallback timer is the only thing standing between that and a run
+    // stranded paused with the pill still reading «Detener».
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      start(120);
+      flush(0);
+
+      act(() => {
+        fireEvent.touchStart(window);
+        fireEvent.scroll(window);
+        fireEvent.touchEnd(window);
+      });
+      const beforeFallback = scrollSpy.mock.calls.length;
+      flush(40);
+      expect(scrollSpy.mock.calls.length).toBe(beforeFallback);
+
+      act(() => {
+        vi.advanceTimersByTime(400);
+      });
+      flush(80);
+      expect(scrollSpy.mock.calls.length).toBeGreaterThan(beforeFallback);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("a wheel ends the run rather than leaving the pill reading «Detener»", () => {
     const { button } = start(120);
     flush(0);
@@ -225,24 +253,39 @@ describe("LyricsAutoscroll", () => {
     expect(scrollSpy.mock.calls.length).toBe(calls);
   });
 
-  it("removes every listener when it is toggled off", () => {
-    const removeSpy = vi.spyOn(window, "removeEventListener");
-    const { button } = start(120);
-    flush(0);
-    removeSpy.mockClear();
+  it("removes every listener when it is toggled off, including a pending scrollend fallback", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const removeSpy = vi.spyOn(window, "removeEventListener");
+      const { button } = start(120);
+      flush(0);
+      removeSpy.mockClear();
 
-    act(() => {
-      fireEvent.click(button);
-    });
+      // Arm the fallback timer by waiting on a `scrollend` that never comes,
+      // then toggle off before it fires — the timer must not outlive the run.
+      act(() => {
+        fireEvent.touchStart(window);
+        fireEvent.scroll(window);
+        fireEvent.touchEnd(window);
+      });
+      expect(vi.getTimerCount()).toBe(1);
 
-    expect(button.getAttribute("aria-pressed")).toBe("false");
-    const removed = removeSpy.mock.calls.map(([type]) => type);
-    for (const type of ["touchstart", "touchend", "touchcancel", "pointerdown", "pointerup", "pointercancel", "wheel"]) {
-      expect(removed).toContain(type);
+      act(() => {
+        fireEvent.click(button);
+      });
+
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+      const removed = removeSpy.mock.calls.map(([type]) => type);
+      for (const type of ["touchstart", "touchend", "touchcancel", "pointerdown", "pointerup", "pointercancel", "wheel"]) {
+        expect(removed).toContain(type);
+      }
+      expect(cancelSpy).toHaveBeenCalled();
+      expect(queue.size).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+      removeSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
     }
-    expect(cancelSpy).toHaveBeenCalled();
-    expect(queue.size).toBe(0);
-    removeSpy.mockRestore();
   });
 
   it("carries a 44 px touch target", () => {
