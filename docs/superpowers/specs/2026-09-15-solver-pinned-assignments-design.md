@@ -130,7 +130,10 @@ scope) are the client half's and are recorded there.
 a second source for the same fact is a second thing to keep in step.
 
 `SolveResponse` gains two fields, both absent-means-nothing so an old client is unaffected:
-`pinned_honored?: number` (the handshake, the client spec §7) and **`pin_violations?: string[]`** — the rules
+`pinned_honored?: number` — the handshake (the client spec §7), **derived from the solved
+assignment and never echoed from `len(pin_set)`**: a pin counts only if that person actually
+holds a slot of that role in that week in the returned solution. An echo would satisfy E8's
+letter and prove nothing, which is the entire point of the field — and **`pin_violations?: string[]`** — the rules
 the solver had to relax to honour the pins. the client spec's §4 renders them; §5.2 explains why they exist.
 
 **`pin_violations` grammar, specified rather than exemplified.** This half ships first and
@@ -574,7 +577,10 @@ under this one, each solves and names the rule it relaxed.
 `build_schedule_view` needs no change — pinned people are in `assignments` because they have
 variables. `total_counts` / `role_counts` likewise include them.
 
-**A pinned cell keeps its waivers, and this is a data-loss bug the switch creates.**
+**A pinned cell keeps its waivers — stated here for the reason it exists, with the client spec
+canonical.** The hazard is a consequence of this half's mechanism, so the reasoning belongs
+below; the normative rule, the copy and the tests live in the client spec. A duplicated
+normative rule across two files is the drift shape this repo keeps paying for.
 `applySolveResponse` rebuilds each cell as `{columnId, rowId, occupants, origin}`
 (`plannerModel.ts:929-936`), dropping `overrides` and `overrideReasons` — the record of which
 rule the admin waived for which member, whose own doc-comment says it lives on the cell
@@ -671,6 +677,12 @@ shift is invisible — but the count per row changes, and the tests pin that.
   already sees the generic «El solver no encontró solución.» The diagnostic is dead text in
   the app today. the client spec's copy for the marker carries the remedy, which is the first time that
   advice reaches anyone.
+- **A `pinned` entry naming an unknown `role`** is refused with a `ValueError` naming it. The
+  typed client cannot produce one, but the route validates only `sunday_leads?.length`
+  (`app/api/admin/solve/route.ts:129-131`) and the function is a public HTTP endpoint behind an
+  API key — and an unknown role reaches the same `model.Add(0 == 1)` as the case below, by the
+  same route, since `slots if s.role_type == R` is simply empty. The three rejections are one
+  guard.
 - **A `Sat.*` pin on a week with no Saturday service** is refused with a `ValueError` naming the
   week. Unreachable from this client (`weekendWeekIndexes` and `weekForColumn` use the same
   adjacency test, `plannerModel.ts:488-494`, `:845-858`), but the two obvious readings of
@@ -756,6 +768,11 @@ and behaved otherwise:
     reproductions because the gap was in the *mechanisms that block a group member*. So the
     cases below are one per mechanism, and each asserts `ok: true`, every pin honoured, and
     that `pin_violations` names **exactly** the rule that had to give.
+
+  **Every such case must be one where the violated instance is FORCED**, as the
+  Jakey-unavailable-in-W3 case is. §4 discloses that `violation_target` bounds the count and
+  not the identity, so a case with two equally-minimal violation sets would flake on the seed.
+  A test author adding a case must check that the named instance is the only one that can give.
 
   | Blocking mechanism | Case |
   |---|---|
@@ -877,6 +894,13 @@ compensation §5.1 measures alongside them. No new secret or env var, so `docs/S
 untouched.
 
 ## 9. Rollout
+
+**The release order is CLAUDE.md's, and the code review is part of it.** This half reaches
+production with no preview rehearsal, so it is the half that most needs the step stated rather
+than assumed: `implement → gates green → FRESH CODE REVIEW on the merge range → fix →
+RE-VERIFY the fix (scoped review of the fix range + gates re-run) → merge to main`. Plan
+approval is not authorization to implement, and the last worklog entry before the merge must be
+a verification, not a fix.
 
 **Step zero: the python gate lands first.** §7's byte-identity and inertness assertions are
 what make a production-first solver merge safe, and nothing runs them today (see §7's Gates).
