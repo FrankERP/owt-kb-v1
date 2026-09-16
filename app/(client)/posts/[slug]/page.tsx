@@ -175,12 +175,12 @@ const Page = async ({ params }: Params) => {
   const bpmText         = post?.bpm && bpm === null ? String(post.bpm) : null;
   const hasTutorials    = shows("tutoriales");
   const hasLyrics       = shows("letra");
-  // How long the autoscroll should take: the chart's own lines when there is
-  // one, otherwise one PortableText BLOCK per line — an approximation (a long
+  // How long the autoscroll should take: every chart's lines when there are
+  // charts (the section renders them all), otherwise one PortableText BLOCK per line — an approximation (a long
   // paragraph wraps to several), accepted because the speed is clamped to a
   // readable band either way.
   const lyricLines      = hasInlineChords
-    ? countLyricLines(post.chords![0].content)
+    ? (post.chords ?? []).reduce((n, c) => n + countLyricLines(c.content), 0)
     : (post?.body?.length ?? 0);
   const hasHistory      = shows("historial");
   const hasRefLinks     = shows("referencia");

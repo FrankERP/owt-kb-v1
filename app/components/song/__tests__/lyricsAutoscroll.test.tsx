@@ -103,7 +103,6 @@ describe("LyricsAutoscroll", () => {
     flush(0);
     flush(40);
     expect(scrollSpy.mock.calls.at(-1)![1]).toBeCloseTo((SPEED_DEFAULT * 40) / 1000, 6);
-    expect(SPEED_DEFAULT).not.toBe(SPEED_120);
   });
 
   it("stops scrolling on touchstart and resumes from the new position on touchend", () => {
@@ -144,6 +143,111 @@ describe("LyricsAutoscroll", () => {
     const calls = scrollSpy.mock.calls.length;
     flush(80);
     expect(scrollSpy.mock.calls.length).toBe(calls);
+  });
+
+  it("resumes after a cancelled touch, which is what a promoted drag fires", () => {
+    const { button } = start(120);
+    flush(0);
+
+    act(() => {
+      fireEvent.touchStart(window);
+    });
+    const beforeCancel = scrollSpy.mock.calls.length;
+    flush(40);
+    expect(scrollSpy.mock.calls.length).toBe(beforeCancel);
+
+    // The gesture was taken over by the scroller: `touchcancel`, never
+    // `touchend`. Without it the pill would sit on «Detener» for good.
+    act(() => {
+      fireEvent.touchCancel(window);
+    });
+    flush(80);
+    expect(scrollSpy.mock.calls.length).toBeGreaterThan(beforeCancel);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("follows momentum for the first frames after a resume", () => {
+    start(120);
+    flush(0);
+    act(() => {
+      fireEvent.touchStart(window);
+    });
+    act(() => {
+      fireEvent.touchEnd(window);
+    });
+
+    // iOS keeps moving the page after the lift; the loop must take the page's
+    // own position rather than drag it back to where the pause froze.
+    Object.defineProperty(window, "scrollY", { value: 1200, writable: true, configurable: true });
+    flush(40);
+    expect(scrollSpy).toHaveBeenLastCalledWith(0, 1200);
+
+    Object.defineProperty(window, "scrollY", { value: 1500, writable: true, configurable: true });
+    flush(80);
+    expect(scrollSpy.mock.calls.at(-1)![1]).toBeCloseTo(1500 + (SPEED_120 * 40) / 1000, 6);
+  });
+
+  it("waits for scrollend when the touch actually scrolled the page", () => {
+    // jsdom reports `onscrollend`, so this is the path a modern browser takes:
+    // the lift alone must NOT resume into the momentum.
+    expect("onscrollend" in window).toBe(true);
+    start(120);
+    flush(0);
+
+    act(() => {
+      fireEvent.touchStart(window);
+      fireEvent.scroll(window);
+      fireEvent.touchEnd(window);
+    });
+    const beforeEnd = scrollSpy.mock.calls.length;
+    flush(40);
+    expect(scrollSpy.mock.calls.length).toBe(beforeEnd);
+
+    act(() => {
+      fireEvent(window, new Event("scrollend"));
+    });
+    flush(80);
+    expect(scrollSpy.mock.calls.length).toBeGreaterThan(beforeEnd);
+  });
+
+  it("a wheel ends the run rather than leaving the pill reading «Detener»", () => {
+    const { button } = start(120);
+    flush(0);
+
+    act(() => {
+      fireEvent.wheel(window);
+    });
+
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    expect(queue.size).toBe(0);
+    const calls = scrollSpy.mock.calls.length;
+    flush(40);
+    expect(scrollSpy.mock.calls.length).toBe(calls);
+  });
+
+  it("removes every listener when it is toggled off", () => {
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    const { button } = start(120);
+    flush(0);
+    removeSpy.mockClear();
+
+    act(() => {
+      fireEvent.click(button);
+    });
+
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    const removed = removeSpy.mock.calls.map(([type]) => type);
+    for (const type of ["touchstart", "touchend", "touchcancel", "pointerdown", "pointerup", "pointercancel", "wheel"]) {
+      expect(removed).toContain(type);
+    }
+    expect(cancelSpy).toHaveBeenCalled();
+    expect(queue.size).toBe(0);
+    removeSpy.mockRestore();
+  });
+
+  it("carries a 44 px touch target", () => {
+    const { button } = start(120);
+    expect(button.className).toContain("min-h-[44px]");
   });
 
   it("cancels the pending frame on unmount", () => {
