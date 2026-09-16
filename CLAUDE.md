@@ -293,11 +293,14 @@ state only when rendered WITHOUT a provider, never as a second live copy),
 `transpose.ts` (`app/utils/transpose.ts` — `rootIndex`/`noteAt`/`semitonesBetween`/
 `transposeKey`/`transposeChord`/`capoSuggestion`/`isChordPro`; neutral, so a Server
 Component may call them), `practice.ts` (`app/utils/practice.ts` —
-`tempoPeriodMs`/`autoscrollPxPerSecond`/`countLyricLines`; neutral too),
+`tempoPeriodMs`/`beatsPerBar`/`autoscrollPxPerSecond`/`countLyricLines`; neutral too),
 `SongHeroPills` (`app/components/song/` — the ONE 12-key picker on the song page;
 never add a second strip, `ChordChart` keeps only its ± pair), `TempoPill`
-(`app/components/song/` — a CSS animation clocked by `--tempo-period`, never a
-`setInterval`), `LyricsAutoscroll` (`app/components/song/` — rAF +
+(`app/components/song/` — two clocks: the RING is a CSS animation clocked by
+`--tempo-period`, never a `setInterval`, and the CLICK is `createMetronome`
+(`app/components/song/metronome.ts` — the ONLY metronome, a Web Audio lookahead
+scheduler built on the first tap and stopped on the second, on a hidden tab and on
+unmount; on iOS it obeys the silent switch)), `LyricsAutoscroll` (`app/components/song/` — rAF +
 `window.scrollTo`, NEVER a transform; pauses on touch, stops on the wheel),
 `Equalizer`/`PlayPauseGlyph` (`app/components/ui/` — the one playing indicator and the
 one play/pause morph, shared by the audio cards, the transport and `PracticeCluster`),

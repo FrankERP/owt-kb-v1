@@ -78,7 +78,7 @@ export default function SongHeroPills({
             <span className="brand-key-dial min-h-[44px] px-3 font-display text-sm">{keyLabel}</span>
           ))}
         {bpm ? (
-          <TempoPill bpm={bpm} />
+          <TempoPill bpm={bpm} timeSig={timeSig} />
         ) : bpmText ? (
           <span className={STATIC_PILL}>{bpmText} BPM</span>
         ) : null}
