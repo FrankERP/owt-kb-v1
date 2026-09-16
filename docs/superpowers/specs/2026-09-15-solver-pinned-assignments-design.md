@@ -129,7 +129,7 @@ scope) are the client half's and are recorded there.
 `service` is deliberately not a field: the role already encodes it (`Sun.*` / `Sat.*`), and
 a second source for the same fact is a second thing to keep in step.
 
-`SolveResponse` gains two fields, both absent-means-nothing so an old client is unaffected:
+`SolveResponse` gains **three** fields, all absent-means-nothing so an old client is unaffected:
 `pinned_honored?: number` — the handshake (the client spec §7), **derived from the solved
 assignment and never echoed from `len(pin_set)`**: a pin counts only if that person actually
 holds a slot of that role in that week in the returned solution. An echo would satisfy E8's
@@ -139,6 +139,21 @@ never come back short. Its real signal is the field's **presence**, which is how
 detects a solver predating this change that ignored `pinned` (E8); the per-pin roster check the
 client also runs is what catches a solver honouring *a* pin count rather than *these* pins — and **`pin_violations?: string[]`** — the rules
 the solver had to relax to honour the pins. the client spec's §4 renders them; §5.2 explains why they exist.
+
+**`violation_ceiling_proven?: boolean`** — `true` when the violation-only solve (§5.2) proved
+its minimum, `false` when it timed out and `violation_target` fell back to Stage A's count.
+Absent means the solver predates this field, which an old client already treats as "no pin
+support at all". **The client shows the ordinary `pin_violations` notices either way and adds
+one line when it is `false`**: the relaxations listed may be more than the pins strictly forced.
+It never blocks and never discards the month.
+
+This field exists because the minimal ceiling is the **sole** containment for making six rule
+families soft month-wide on the strength of one pin — the decision the ADR-0010 box below says
+Frank has not ruled on. Without the field, a slack ceiling is invisible and §5.2's
+assignment-side reporting would quietly do double duty as a correctness claim. And it must ship
+**now**: the Cloud Function is the one artifact with no `preview` rehearsal and an irreversible
+release (§9), so adding it later costs a second production-first solver release plus a second
+client release.
 
 **`pin_violations` grammar, specified rather than exemplified.** This half ships first and
 irreversibly, the client renders an unknown marker with a generic fallback, and a mismatch
@@ -390,8 +405,11 @@ week, baseline spread 4–5:
 | `Sun.Choir` (3 seats) | others 4–5 | others 4–5 | others 4–5 | **collapse**, others 1–8 |
 
 **The invariant worth asserting is about everyone else**: up to the saturation threshold, the
-people the admin did *not* pin stay inside the un-pinned baseline spread, and the pinned person
-stays at her baseline total too. That is the promise a pin should keep — pinning someone does
+people the admin did *not* pin stay inside the un-pinned baseline spread. **Nothing is claimed
+about the pinned person's own total** — the paragraphs above explain why the model does not bound
+it, and review measured the counterexample: on the repo's own fixture with `BASE_RULES`, a member
+whose baseline is 6, pinned into `Sun.Lead` for three weeks, came back at **8**. That is the
+promise a pin should keep — pinning someone does
 not wreck the rest of the month — and it is what §7 asserts.
 
 **Above that threshold the ladder gives up.** Pinning one person into a three-seat Sunday row in
@@ -466,8 +484,8 @@ authored rule for the whole month would break it in services the admin never pin
 | At least one Lead per service | `:655-660` | week × service | `sum(filled) >= 1 - v` |
 | Dedicated Saturday lead anchor | `:705-709` | week | `sum(dedicated_terms) >= 1 - v` |
 | Weekly presence, `any_of(…) each_week` | `:732-742` | rule × week | `sum(terms) >= 1 - v` |
-| Pair exclusion | `:711-722` | rule × week × service | `sum(lt) + sum(rt) <= 1 + v·n` |
-| Consecutive | `:744-752` | rule × week pair | `sum(w1) + sum(w2) <= 1 + v·n` |
+| Pair exclusion | `:711-722` | rule × week × service | `sum(lt) + sum(rt) <= 1 + v·n`, **`n = len(lt) + len(rt) - 1`** |
+| Consecutive | `:744-752` | rule × week pair | `sum(w1) + sum(w2) <= 1 + v·n`, same `n` |
 | DSL count rules, all three operators | `:886-897` | **rule** — see below | `expr >= value - v·B` and/or `expr <= value + v·B`, one `v` per rule so an `==` reports as one relaxed rule rather than two halves. **`B = max(rule.value, total_slots)`** — the slot count alone suffices for `<=` but not for `>=`, whose bound can exceed it |
 
 **Each entry must identify its instance, not just its rule.** A pair rule produces one boolean
@@ -532,7 +550,7 @@ available for Saturday. That is exact rather than a guess, which is why it needs
 
 **How a `pin_violations` entry is determined — from the ASSIGNMENT, never from the boolean.**
 This is normative and it is not an implementation detail. Every formula in the table above is
-one-directional: `sum(terms) >= 1 - v` and `sum(lt) + sum(rt) <= 1 + v·n` each permit `v = 1`
+one-directional: `sum(terms) >= 1 - v` and `sum(lt) + sum(rt) <= 1 + v·n`, **`n = len(lt) + len(rt) - 1`** each permit `v = 1`
 on a constraint that holds. Reading the report off `solver.Value(v)` would therefore name rules
 that were never broken.
 
@@ -572,9 +590,11 @@ the minimal ceiling on a fixture capped short enough that Stage A alone would le
 
 **And the ceiling bounds the model, never the report.** An earlier draft implied `n_viol <=
 violation_target` makes the boolean reading safe, on the argument that Stage B's feasible set is
-a subset of Stage A's, so its minimum violation count is at least Stage A's `k` and the ceiling
-forces equality. **That argument holds only while Stage A proves optimality**, and §6 argues
-production is exactly where it will not: a 5 s cap on a ~0.33-vCPU container, with the violation
+a subset of Stage A's, so its minimum violation count is at least Stage A's count and the ceiling
+forces equality. **That argument held only while Stage A proved optimality** — which is why the
+violation-only solve above now sets `violation_target` instead, and why
+`violation_ceiling_proven` reports whether it succeeded. The rest of this paragraph describes
+the regime that remains when it does not: a 5 s cap on a ~0.33-vCPU container, with the violation
 booleans added. When Stage A returns `FEASIBLE`, `k` is an upper bound with slack, no Stage B
 pass minimises `n_viol` (the optimise branch deliberately carries no violation term), and the
 returning pass may spend that slack breaking constraints that did not need breaking — including
@@ -785,8 +805,10 @@ shift is invisible — but the count per row changes, and the tests pin that.
 - **`pinned` is length-capped** the way the other budget knobs already are (`_SOLVER_MAX_TIME_CEIL`
   and friends, `:1178-1184`). `build_slots` emits `max(default, pins_for(R, W))`, so slots — and
   with them `x` — grow linearly with the array, on what §6 itself calls a public HTTP endpoint
-  behind an API key. The cap is generous (no real month approaches it) and exists so the growth
-  is bounded rather than attacker-chosen. The pools are unbounded today for the same reason and
+  behind an API key. **The cap is 200** — a six-week month with every weekend row saturated is about 90, so no real
+  month approaches it, while `total_slots` stays small enough that `compute_priority_weights`,
+  which is degree-8 in `overall_limit` (`:585-593`), keeps its headroom under the int64 ceiling
+  §5.2 worries about. The point is that the growth is bounded rather than attacker-chosen. The pools are unbounded today for the same reason and
   that is pre-existing; this spec does not widen it further.
 - **A `pinned` entry naming an unknown `role`** is refused with a `ValueError` naming it. The
   typed client cannot produce one, but the route validates only `sunday_leads?.length`
@@ -810,8 +832,9 @@ shift is invisible — but the count per row changes, and the tests pin that.
   backstop that turns a month-wide failure into a message.
 - **A timed-out pinned month looks like a fairness-free month, not like an error.**
   `solver_total_budget_seconds` is 40 on a ~0.33-vCPU container, and Stage B's exhaustion path
-  returns the fairness-free `stage_a` silently (`:1124-1125`, `:1137`). The violation booleans
-  and the extra objective tier move that budget, and CI runs on a faster machine than
+  returns the fairness-free `stage_a` silently (`:1124-1125`, `:1137`). The violation booleans,
+  the extra objective tier **and the violation-only solve's own draw on the same 40 s** move
+  that budget — the third solve is small, but it is a third solve, and CI runs on a faster machine than
   production, so §7's `len(slots) + 1` fingerprint can pass in CI and fire in the field. The
   admin sees a legal, pin-honouring month with a wide spread and the existing degraded-fairness
   notice — which is the right outcome, and is stated here so it is not read as a new bug.
@@ -902,8 +925,11 @@ and behaved otherwise:
   service) and for consecutive.
 - **The relaxation is minimal in count, and the objective is what keeps the amount small.**
   Assert that a month needing one rule relaxed relaxes exactly one — `len(pin_violations) == 1`
-  — and that Stage B never returns more violations than Stage A found, which is the
-  `violation_target` ceiling. Separately assert the measured amount case: `Gaby Sun.BGV <= 1`
+  — and that Stage B never returns more violations than the **violation-only solve** found,
+  which is what `violation_target` now carries (not Stage A's count). Assert
+  `violation_ceiling_proven: true` on that fixture, and on a second fixture capped short enough
+  that the violation-only solve cannot prove its minimum, assert it comes back `false` with the
+  month still returned. Separately assert the measured amount case: `Gaby Sun.BGV <= 1`
   with two pins on that row gives her exactly two, not more. That last one is an observation,
   not a bound, and the test says so in its name.
 - **A rules-stay-hard control.** The same three reproductions with the violation booleans
@@ -975,13 +1001,21 @@ and behaved otherwise:
      at `num_search_workers=1` can trip the assertion for reasons unrelated to any change. The
      documented answer is to **raise the fixture's budget** — the assertion exists to keep the
      golden meaningful, not to measure the runner — and never to drop the assertion or the
-     golden. (The `INFEASIBLE` statuses in between are the fairness
+     golden.
+
+     **Who re-captures, and when.** Both goldens live in `gates`, the required check for every
+     PR in the repo, so a runner-image or ortools bump could red-gate unrelated work. The rule:
+     a golden is re-captured **only** in a PR whose diff is the bump itself or `gcf/**`, by the
+     same skipped-then-un-skipped procedure §9 uses for the first capture, and the commit
+     message says which of the two caused it. A golden re-captured inside an unrelated PR is the
+     failure mode — it launders a real behaviour change through a green check — and reviewers
+     reject it on sight. (The `INFEASIBLE` statuses in between are the fairness
      ladder probing tiers — normal, and not the returning solve.)
 
 **Gates, and one of them does not exist yet.** `npx tsc --noEmit`, `npm test`, `npx eslint .`
 with 0 errors — and **`pytest gcf/`, which no CI job runs today.**
 
-That is a blocker for this delivery rather than a nicety. `.github/workflows/ci.yml:36-52`
+That is a blocker for this delivery rather than a nicety. `.github/workflows/ci.yml:42-55`
 runs types, vitest and eslint and nothing else; `package.json` has no python script; and
 `cloudbuild.yaml` (repo root, not `gcf/`) is a single `gcloud functions deploy` step with no
 test before it. So
@@ -1060,6 +1094,28 @@ golden is captured by the runner that will enforce it, never by a laptop.
 what make a production-first solver merge safe, and nothing runs them today (see §7's Gates).
 So the CI step ships and is green on `main` **before** the solver change is merged — otherwise
 the rollout's own safety argument rests on a file no gate reads.
+
+**Verifying the Cloud Build deploy, concretely — the repo has no procedure to inherit.**
+CLAUDE.md's verification rule is Vercel-specific (alias + `githubCommitSha`), and
+`docs/SOLVER_AND_INFRA.md:108-121` documents how the function deploys, not how to check that it
+did. So the check is stated here and added to that doc in §8:
+
+1. `gcloud functions describe owt-solver --gen2 --region=us-central1` and confirm the active
+   revision's `updateTime` is after the merge — the analogue of reading the alias, not the build.
+2. One **pinless** smoke request, asserting `ok: true` and the **presence** of
+   `pinned_honored` in the response. Presence is the discriminator: an old revision answers the
+   same request successfully and without the field, which is precisely the state §7's handshake
+   exists to detect.
+
+Never a bare HTTP reachability check, and never a `grep` loop over build logs — CLAUDE.md
+records what those cost here.
+
+**And the one condition under which the function IS reverted:** the smoke request fails or comes
+back without `pinned_honored`, i.e. the deploy did not land. That is a broken deploy, not a bad
+feature, and re-deploying the previous revision is the fix. A *behavioural* problem found later
+is **not** a revert trigger — the app half is what gets reverted then (see the rollback
+paragraph below), because reverting the function while a pinned app is live makes every Auto
+fail the handshake.
 
 The solver must then be able to honor pins **before** the app can send them, or the client spec's §7 refusal is
 the only thing standing between an admin and a silent overwrite. Therefore: merge the solver
