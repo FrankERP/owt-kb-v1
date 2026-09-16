@@ -369,24 +369,34 @@ ladder behaviour below, and it adds an `AddMaxEquality` per pinned person to the
 constraint in the model for a guarantee the objective already delivers wherever anyone is
 watching. Not adopted; recorded so the next reader does not spend the same afternoon.
 
-**A heavy pin load can still collapse the fairness ladder, and that is PRE-EXISTING
-behaviour rather than something pins introduce.** Pinning one person into all four Sundays of a
-four-week month drives every Stage B tier infeasible and returns the fairness-free `stage_a`
-(reported limit `len(slots) + 1`), with the month spreading 1–8 instead of 4–5. The threshold
-is sharp: three pins solve at tier 1, four collapse.
+**What the slack DOES deliver, measured across pin loads.** Twelve-person month, Saturdays every
+week, baseline spread 4–5:
 
-Before treating that as a defect of this design, it was checked against the shipped solver with
-**no pins at all**: `Rachel Sun.Choir >= 4`, an ordinary DSL floor expressing the same
-occupancy, produces the identical collapse — limit `len(slots) + 1`, spread 0–8. So a pin
-behaves exactly like the equivalent hard rule, which is the property this design wants; the
-ladder's inability to hold a tier when one person occupies every Sunday is older than this
-delivery and out of its scope.
+| Pinned row | 1 pin | 2 pins | 3 pins | 4 pins (every week) |
+|---|---|---|---|---|
+| `Sun.Lead` (2 seats) | others 4–5 | others 4–5 | others 4–5 | others 4–5 |
+| `Sun.BGV` (3 seats) | others 4–5 | others 4–5 | others 4–5 | **collapse**, others 1–7 |
+| `Sun.Choir` (3 seats) | others 4–5 | others 4–5 | others 4–5 | **collapse**, others 1–8 |
 
-**The consequence for §7 is the part that matters:** "no reported limit equals `len(slots) + 1`"
-is **not** a valid pass condition for a heavy-pin fairness guard, because the shipped solver
-already fails it on the equivalent rule. §7's guard is therefore **differential** — the pinned
-month must match the month the equivalent DSL rule produces — which tests the property this
-design actually owns instead of a bound neither version has.
+**The invariant worth asserting is about everyone else**: up to the saturation threshold, the
+people the admin did *not* pin stay inside the un-pinned baseline spread, and the pinned person
+stays at her baseline total too. That is the promise a pin should keep — pinning someone does
+not wreck the rest of the month — and it is what §7 asserts.
+
+**Above that threshold the ladder gives up.** Pinning one person into a three-seat Sunday row in
+every week of the month drives every Stage B tier infeasible and returns the fairness-free
+`stage_a` (reported limit `len(slots) + 1`), spreading the month 1–8. The threshold is sharp and
+**row-dependent**: the two-seat `Sun.Lead` row does not collapse at four pins, the three-seat
+rows do. An earlier draft asserted the collapse without naming the row, which is why a reviewer
+testing `Sun.Lead` could not reproduce it.
+
+**A pin is NOT equivalent to the corresponding hard DSL rule, and an earlier draft claimed it
+was.** `Rachel Sun.Choir >= 4` with no pins also collapses, which is where that claim came from
+— but the two differ everywhere short of collapse, and they differ *by design*: §5.1 gives a
+pinned person per-person slack on all three hard spreads, and a DSL rule gets none. Measured
+side by side, the reported tiers, the realized spread and the person's total all diverge on
+every seed tried. **A pin buys fairness treatment an ordinary rule does not — that is what the
+slack is for**, and §7 must not assert an equality the mechanism is built to break.
 
 Reproduced in review before the two per-role guards were named: pinning one person into
 `Sun.Lead` for three weeks drove every Stage B tier infeasible, `solve_schedule:1137` returned
@@ -421,7 +431,7 @@ The last two, both reproduced:
 
 - **A DSL `<=` cap whose budget the pins consume.** `Hugo Sun.BGV <= {weeks-2}` (the cap
   shape the seed already uses for Gaby, `solverConfigDefaults.ts:70`) plus
-  `any_of(Hugo, Jakey) on Sun.BGV each_week` and Jakey unavailable weeks 3–4. Pin Hugo into
+  `any_of(Hugo,Jakey) on Sun.BGV each_week` and Jakey unavailable weeks 3–4. Pin Hugo into
   `Sun.BGV` for weeks 1 and 2 — an admin saying "Hugo sings BGV the first two Sundays" — and
   the bound is spent, so he cannot cover the weeks Jakey is out. `max(rule.value, pinned_count)`
   leaves the bound at 2 and changes nothing.
@@ -447,7 +457,7 @@ authored rule for the whole month would break it in services the admin never pin
 | Weekly presence, `any_of(…) each_week` | `:732-742` | rule × week | `sum(terms) >= 1 - v` |
 | Pair exclusion | `:711-722` | rule × week × service | `sum(lt) + sum(rt) <= 1 + v·n` |
 | Consecutive | `:744-752` | rule × week pair | `sum(w1) + sum(w2) <= 1 + v·n` |
-| DSL count rules, all three operators | `:886-897` | **rule** — see below | `expr >= value - v·B` and/or `expr <= value + v·B`, one `v` per rule so an `==` reports as one relaxed rule rather than two halves |
+| DSL count rules, all three operators | `:886-897` | **rule** — see below | `expr >= value - v·B` and/or `expr <= value + v·B`, one `v` per rule so an `==` reports as one relaxed rule rather than two halves. **`B = max(rule.value, total_slots)`** — the slot count alone suffices for `<=` but not for `>=`, whose bound can exceed it |
 
 **Each entry must identify its instance, not just its rule.** A pair rule produces one boolean
 per week **per service**, so `W3: A !with B on *.Lead` alone is ambiguous between the Sunday
@@ -465,7 +475,7 @@ wrong.** An earlier draft said "relaxing a rule switches it off for the month" a
 with a measurement taken on a **count** rule — the only family the objective pulls back on its
 own, because `role_spread_vars` puts per-role counts in the objective (`:812-843`, `:956`).
 Nothing in the objective mentions pairings or group presence, so a month-wide boolean on those
-leaves the solver free to break them anywhere. Reproduced: `any_of(Hugo, Jakey) on Sun.BGV
+leaves the solver free to break them anywhere. Reproduced: `any_of(Hugo,Jakey) on Sun.BGV
 each_week` with Jakey out in week 3 and a pin occupying Hugo that week — under month-wide
 scope the rule also fails in weeks the admin never touched; under instance scope the gap is in
 week 3 alone, on four seeds. And it would have been **invisible**: `blockingReasons` evaluates
@@ -493,6 +503,14 @@ on the one path the feature exists for. The filter therefore reads
 `(p, week, role) not in excluded_pwr or (p, role, week) in pin_set`, and §7 asserts the pinned
 unavailable group member produces an **empty** `pin_violations`. The Saturday anchor's
 `available_dedicated` (`:701-704`) derives from the same rules and takes the same scoping.
+
+**A family that is NOT in the table, and a reader will look for it.** `!in <pattern>`
+exclusions and pool membership are not constraints at all — they are enforced structurally by
+`is_eligible` inside `build_candidate_map` (`:221-222`), so a variable is never created. §5.1's
+"the pin grants candidacy, and only where it points" therefore overrides them by construction,
+with no boolean and no `pin_violations` entry. Nothing is lost on the board: `blockingReasons`
+already renders `excludedPatterns` (`ruleEnforcement.ts:363-368`) and the client spec preserves
+the waiver. Named here so the absence reads as a decision rather than an omission.
 
 Two constraints stay hard, and neither can be contradicted by a pin. The **per-service
 occupancy limit** (`:754-765`) is what a pin means — one seat per service — and §4 rejects
@@ -526,6 +544,11 @@ Evaluating against the assignment does not prevent that; it makes it **honest**.
 a notice for every rule that actually gave, and never one for a rule that held. §7 asserts both
 directions on a fixture where the solve is capped short enough to leave the ceiling slack — a
 guard that a fast CI machine would otherwise pass vacuously.
+
+**Two plumbing facts the prose implied without stating.** `SolveResult` gains the Stage A
+violation count, so `violation_target` can travel into Stage B the way `weighted_empty_used`
+already carries `empty_target`; and `solve_from_dict`'s response dict (`:1222-1232`) gains
+`pinned_honored` and `pin_violations`, which is the only place they can reach the client.
 
 **The objective.** Stage A minimises `(max_weighted_empty + 1) · n_viol + weighted_empty`,
 so breaking one fewer rule always beats filling any number of seats. Stage A's violation
@@ -772,47 +795,36 @@ and behaved otherwise:
 - **Fairness does not collapse, on cases that DISCRIMINATE.** Two guards, because a guard
   that passes under a broken design proves nothing, and the first version of this section
   shipped exactly such a guard:
-  - *Skewed partial pin.* One person pinned into `Sun.Lead` for three weeks and nothing else
-    — the reproduced collapse. **Assert the realized distribution, never the flag** — and as a
-    *comparison*, not as a bound the model carries. §5.1 is explicit that `t[p] <= gmax + n[p]`
-    permits more, and §5.2 refuses to assert a count-rule containment number for exactly that
-    reason; a guard reading "their total lands within the baseline spread" would contradict
-    both. The assertion is **differential**: the pinned person's total and `Sun.Lead` count
-    equal what the same month produces under the equivalent hard rule. That the model carries. The three `*_fairness_relaxed` fields are not a
-    pass condition (§4 says why their meaning shifts under pins), and neither is the
-    `len(slots) + 1` fingerprint — the shipped solver already reports it for an equivalent hard
-    rule with no pins.
-    Repeat for `Sun.BGV`. A version of the mechanism that gives slack only on the global
-    spread fails this and passes a whole-month guard.
-    **Assert the distribution too, not only that nothing was relaxed:** the pinned person's
-    total must land within the un-pinned baseline's spread rather than above it, and their
-    `Sun.Lead` count must equal their pin count. Measured on the fixture, the rejected
-    subtraction form gives 7 total and 4 of 8 Sunday leads where the baseline is 4–5 and 2 —
-    it passes a relaxation-only guard and fails this one, which is the whole point.
-  - *A pin behaves like the equivalent hard rule — the DIFFERENTIAL guard, comparing
-    PROPERTIES and not rosters.* Pin one person into every Sunday of a four-week month, and
-    separately solve the same month with `<person> Sun.Choir >= 4` and no pins at all. **The two
-    rosters will not match and must not be asserted to.** A pin is four per-week `== 1`
-    constraints; the rule is one month-total `>= 4`. Different models, different searches,
-    different boards — measured on the repo's `make_config` at seeds 42, 1 and 7 they never
-    matched, and on that fixture neither month collapsed.
+  - *Skewed partial pin — assert what happens to EVERYONE ELSE.* One person pinned into
+    `Sun.Lead` for three weeks and nothing else. **Assert that the un-pinned members' totals stay
+    inside the un-pinned baseline's spread.** That is the property §5.1's slack delivers and the
+    one an admin cares about: pinning someone does not wreck the rest of the month. Measured, it
+    holds at one, two and three pins on every row.
 
-    Assert the three properties that carry the meaning, which did agree on every seed measured:
-    the **reported fairness tiers** are equal, the **realized global spread** is equal, and the
-    pinned person's **role count** is equal. The point is that a pin buys no fairness treatment
-    an ordinary rule would not. Whether the ladder holds a tier under that load varies by
-    fixture, predates this delivery, and is asserted neither way.
-  - *The share guarantee has a limit, and the test states it.* Two runs on the same month: the
-    pinned person inside the fairness groups (the objective pulls them back toward their share)
-    and the same person `fairness_exempt` (nothing pulls). Assert the second takes **more** than
-    the first and that this is expected — it is what stops a later reader "fixing" the exempt
-    case into a bound the model does not carry.
+    **Assert nothing about the pinned person's own total.** §5.1 is explicit that
+    `t[p] <= gmax + n[p]` permits more and that `fairness_exempt` removes the only thing holding
+    them down; §5.2 refuses to assert a count-rule containment number for the same reason. A
+    guard on that number contradicts both and would drift on an ortools bump.
+
+    **Assert nothing about the three `*_fairness_relaxed` flags either**, in this guard or any
+    other — §4 is normative on that, and §5.1's cross-role displacement paragraph shows pins move
+    them for reasons unrelated to any loosening.
+  - *Saturation is row-dependent, and the test names the row.* Pinning one person into a
+    **three-seat** Sunday row in every week collapses the ladder to `stage_a`; the **two-seat**
+    `Sun.Lead` row at the same pin count does not. Assert both halves. This is the case an
+    earlier draft described without naming the row, which made it irreproducible for anyone who
+    tested `Sun.Lead`.
+
+    **Do NOT assert equivalence with the corresponding DSL rule.** `<person> Sun.Choir >= 4`
+    also collapses, but short of collapse the two diverge on tiers, spread and totals on every
+    seed — by design, since §5.1 gives a pin per-person slack a rule never gets. An equality
+    guard here asserts the opposite of the mechanism.
   - *Heavy pin load.* Twenty-six or more pins on a twelve-person month, the threshold at which
     routing pins through `combined_slack` would empty the `strict` group
     (`solve_schedule:1072-1074`) — note this is the **rejected** design's failure, not the
-    per-person slack on the hard guards, which never touches `combined_slack`: assert
-    `fairness_relaxed: false`, a global spread over the solver's own choices matching the
-    un-pinned baseline, and that an unavailable member's absence slack still applies.
+    per-person slack on the hard guards, which never touches `combined_slack`. Assert that an
+    unavailable member's absence slack still applies and that the run returns `ok: true`; assert
+    no flag and no tier, for the reason above.
 - **No rule fails the month, and the cases are keyed on the BLOCKING MECHANISM, not on a
   list of requirements.** Two test-design points, each earned by a round that passed over a
   real defect:
@@ -832,7 +844,7 @@ and behaved otherwise:
 
   | Blocking mechanism | Case |
   |---|---|
-  | Per-service occupancy | One of `any_of(Hugo, Jakey)` pinned into `Sun.Lead` that week, the other unavailable — the round-5 one-pin reproduction |
+  | Per-service occupancy | One of `any_of(Hugo,Jakey)` pinned into `Sun.Lead` that week, the other unavailable — the round-5 one-pin reproduction |
   | A count cap whose budget the pins spend | `Hugo Sun.BGV <= {weeks-2}` with Hugo pinned into `Sun.BGV` twice and Jakey out the other weeks — the round-6 two-pin reproduction |
   | A pair rule with a pinned counterpart | `A !with P on *.Choir`, P pinned, B week-excluded — the round-6 one-pin reproduction |
   | Week exclusion on the partner | The Saturday anchor with the only dedicated Saturday lead pinned into `Sat.BGV` |
@@ -841,9 +853,9 @@ and behaved otherwise:
   | Nothing left to lead with | Every lead-pool member pinned into other roles of one service; assert `ok: true`, the lead seat in `unfilled_seats`, and no exception |
 
 - **A relaxation stays inside its own week.** The discriminating case, and the one the
-  existing assertions miss: `any_of(Hugo, Jakey) on Sun.BGV each_week` with Jakey unavailable
+  existing assertions miss: `any_of(Hugo,Jakey) on Sun.BGV each_week` with Jakey unavailable
   in week 3 and a pin occupying Hugo that week. Assert `pin_violations` is exactly
-  `["W3: any_of(Hugo, Jakey) on Sun.BGV each_week"]` **and that the rule still holds in weeks
+  `["W3: any_of(Hugo,Jakey) on Sun.BGV each_week"]` **and that the rule still holds in weeks
   1, 2 and 4**. A month-wide boolean passes `len(pin_violations) == 1` and fails this — which
   is why the count assertion alone is not enough. Repeat for a pair rule (same week, same
   service) and for consecutive.
@@ -877,9 +889,13 @@ and behaved otherwise:
   obvious escape under that pressure is the tautology `assert solve(cfg) == solve(cfg)`, which
   passes against the new solver and proves nothing. So:
 
-  1. **A structural fingerprint, and this is the primary guard.** A SHA-256 over the ordered
-     `x` keys — every `(person, slot.key)` in insertion order — plus the per-slot candidate
-     lists and the `rand_w` draw sequence. All of it is built before any solve and depends only
+  1. **A structural fingerprint, and this is the primary guard.** A SHA-256 over
+     `model.Proto().SerializeToString()` for the Stage A model and for the first
+     `optimize=True` Stage B model — **constraints included, not only variables**. An earlier
+     draft hashed the ordered `x` keys, the per-slot candidate lists and the `rand_w` draws,
+     which is variables only: a violation boolean or a soft-form constraint leaking into the
+     pinless path would be invisible to it, and caught only by the weaker output golden. The
+     proto covers both for the same cost, and is built from the same inputs — All of it is built before any solve and depends only
      on `config.seed` (`:571`, `:633`, `:946`), so it is machine-independent by construction:
      measured identical at a 10 s and a 3 s budget on all four seeds, **including seed 7**,
      while distinct between seeds. It also catches §9's actual named hazard — `build_slots`
@@ -896,7 +912,14 @@ and behaved otherwise:
      value and a different CPU or ortools build can return the other, so this guard is weaker
      than the fingerprint above and is the second one for a reason. Its golden is captured **on
      the CI runner**, not on a developer's machine — so that the first cross-machine flake is
-     resolved by re-capturing rather than by deleting the guard §9's rollout rests on. (The `INFEASIBLE` statuses in between are the fairness
+     resolved by re-capturing rather than by deleting the guard §9's rollout rests on.
+
+     **The precondition itself can redden the gate on a slow runner.** Seeds 1 and 2024 return
+     `OPTIMAL` at the fixture's 10 s budget and `FEASIBLE` at 3 s, so a loaded `ubuntu-latest`
+     at `num_search_workers=1` can trip the assertion for reasons unrelated to any change. The
+     documented answer is to **raise the fixture's budget** — the assertion exists to keep the
+     golden meaningful, not to measure the runner — and never to drop the assertion or the
+     golden. (The `INFEASIBLE` statuses in between are the fairness
      ladder probing tiers — normal, and not the returning solve.)
 
 **Gates, and one of them does not exist yet.** `npx tsc --noEmit`, `npm test`, `npx eslint .`
