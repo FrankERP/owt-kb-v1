@@ -501,6 +501,32 @@ soft but scoped: it is simply not applied to the pinned (P, R, W)'s own row that
 other slot that week stays excluded, so pinning someone into Sunday does not make them
 available for Saturday. That is exact rather than a guess, which is why it needs no boolean.
 
+**How a `pin_violations` entry is determined — from the ASSIGNMENT, never from the boolean.**
+This is normative and it is not an implementation detail. Every formula in the table above is
+one-directional: `sum(terms) >= 1 - v` and `sum(lt) + sum(rt) <= 1 + v·n` each permit `v = 1`
+on a constraint that holds. Reading the report off `solver.Value(v)` would therefore name rules
+that were never broken.
+
+So after the solve, each relaxable instance is **re-evaluated against the returned
+assignment**, and an entry is emitted only for instances that actually fail. The booleans exist
+to make the model feasible; they are not the report.
+
+**And the ceiling bounds the model, never the report.** An earlier draft implied `n_viol <=
+violation_target` makes the boolean reading safe, on the argument that Stage B's feasible set is
+a subset of Stage A's, so its minimum violation count is at least Stage A's `k` and the ceiling
+forces equality. **That argument holds only while Stage A proves optimality**, and §6 argues
+production is exactly where it will not: a 5 s cap on a ~0.33-vCPU container, with the violation
+booleans added. When Stage A returns `FEASIBLE`, `k` is an upper bound with slack, no Stage B
+pass minimises `n_viol` (the optimise branch deliberately carries no violation term), and the
+returning pass may spend that slack breaking constraints that did not need breaking — including
+an authored rule in a week with no pin, the precise failure the instance-scoping paragraph
+exists to prevent.
+
+Evaluating against the assignment does not prevent that; it makes it **honest**. The admin sees
+a notice for every rule that actually gave, and never one for a rule that held. §7 asserts both
+directions on a fixture where the solve is capped short enough to leave the ceiling slack — a
+guard that a fast CI machine would otherwise pass vacuously.
+
 **The objective.** Stage A minimises `(max_weighted_empty + 1) · n_viol + weighted_empty`,
 so breaking one fewer rule always beats filling any number of seats. Stage A's violation
 count then travels into Stage B as a ceiling (`violation_target`), so the fairness ladder can
@@ -508,8 +534,9 @@ never buy a tighter spread by breaking one more rule.
 
 **The ceiling is a constraint, not an objective term, and that is load-bearing.** Half of
 Stage B's passes run with `optimize=False`, where `create_model_and_solve` sets no objective
-at all (`:899-903`) — so "the solver minimises violations above everything else" is true of
-Stage A and of the optimising passes, and on the rest only the ceiling holds. `model.Add(n_viol
+at all (`:899-903`) — and the optimising half carries **no violation term either** (below). So
+"the solver minimises violations above everything else" is true of **Stage A alone**; on every
+Stage B pass only the ceiling holds. `model.Add(n_viol
 <= violation_target)` is therefore emitted unconditionally at model-build time, exactly where
 `empty_target` already is (`:677-678`), never inside an objective branch.
 
@@ -530,6 +557,15 @@ four-week month — by `overall_limit + 1` again, reaching ~5.1e18. The relevant
 weight but the objective's maximum **value**: at `n_viol > 1` a tier that size overflows int64
 (9.2e18) rather than merely approaching it. The ceiling-only design avoids the question. The prose above invites that tidy-up; this
 sentence forecloses it.
+
+**The violation count is unweighted, so a leaderless service costs the same as one relaxed
+cap.** `(max_weighted_empty + 1) · n_viol` dominates, so breaking `builtin:mandatory_lead` once
+beats breaking two count rules — even though the first leaves a service with no leader and the
+second merely loosens two bounds. Contrived to reach (it needs a month where those are the only
+two ways out), visible when it happens (the marker plus a «Sin cubrir» seat), and strictly
+better than today's hard `RuntimeError`. Left unweighted, because any weighting is a judgement
+about which of the admin's rules matters more and the spec has no basis for one. Stated rather
+than hidden.
 
 **Within its instance, a relaxed constraint is off rather than loosened by the minimum
 amount.** For the per-week families the instance *is* the minimum scope, so there is nothing
@@ -677,6 +713,17 @@ shift is invisible — but the count per row changes, and the tests pin that.
   already sees the generic «El solver no encontró solución.» The diagnostic is dead text in
   the app today. the client spec's copy for the marker carries the remedy, which is the first time that
   advice reaches anyone.
+- **A malformed `pinned` entry is refused as a `ValueError`, not left to become a 500.** A
+  non-dict entry, a missing key, a non-integer `week` or a non-string `person` raises
+  `TypeError`/`KeyError`, which escapes `solve_from_dict`'s `except (ValueError, RuntimeError)`
+  (`:1216`) and reaches the admin as «Solver service returned HTTP 500». `pinned` is validated
+  for shape before it is used, and every rejection below is a `ValueError`.
+- **`pinned` is length-capped** the way the other budget knobs already are (`_SOLVER_MAX_TIME_CEIL`
+  and friends, `:1178-1184`). `build_slots` emits `max(default, pins_for(R, W))`, so slots — and
+  with them `x` — grow linearly with the array, on what §6 itself calls a public HTTP endpoint
+  behind an API key. The cap is generous (no real month approaches it) and exists so the growth
+  is bounded rather than attacker-chosen. The pools are unbounded today for the same reason and
+  that is pre-existing; this spec does not widen it further.
 - **A `pinned` entry naming an unknown `role`** is refused with a `ValueError` naming it. The
   typed client cannot produce one, but the route validates only `sunday_leads?.length`
   (`app/api/admin/solve/route.ts:129-131`) and the function is a public HTTP endpoint behind an
@@ -726,9 +773,12 @@ and behaved otherwise:
   that passes under a broken design proves nothing, and the first version of this section
   shipped exactly such a guard:
   - *Skewed partial pin.* One person pinned into `Sun.Lead` for three weeks and nothing else
-    — the reproduced collapse. **Assert the realized distribution, never the flag**: the pinned
-    person's total lands within the un-pinned baseline's spread rather than above it, and their
-    `Sun.Lead` count equals their pin count. The three `*_fairness_relaxed` fields are not a
+    — the reproduced collapse. **Assert the realized distribution, never the flag** — and as a
+    *comparison*, not as a bound the model carries. §5.1 is explicit that `t[p] <= gmax + n[p]`
+    permits more, and §5.2 refuses to assert a count-rule containment number for exactly that
+    reason; a guard reading "their total lands within the baseline spread" would contradict
+    both. The assertion is **differential**: the pinned person's total and `Sun.Lead` count
+    equal what the same month produces under the equivalent hard rule. That the model carries. The three `*_fairness_relaxed` fields are not a
     pass condition (§4 says why their meaning shifts under pins), and neither is the
     `len(slots) + 1` fingerprint — the shipped solver already reports it for an equivalent hard
     rule with no pins.
@@ -739,13 +789,19 @@ and behaved otherwise:
     `Sun.Lead` count must equal their pin count. Measured on the fixture, the rejected
     subtraction form gives 7 total and 4 of 8 Sunday leads where the baseline is 4–5 and 2 —
     it passes a relaxation-only guard and fails this one, which is the whole point.
-  - *A pin behaves like the equivalent hard rule — the DIFFERENTIAL guard.* Pin one person
-    into every Sunday of a four-week month, and separately solve the same month with
-    `<person> Sun.Choir >= 4` and no pins at all. **Assert the two months match.** Both collapse
-    the fairness ladder to `stage_a`, and that is the point: the ladder's behaviour when one
-    person occupies every Sunday predates this delivery, so the property worth testing is
-    equivalence, not balance. A guard written as "the pinned month keeps its fairness tier"
-    fails on correct behaviour; this one fails only if pins and rules diverge.
+  - *A pin behaves like the equivalent hard rule — the DIFFERENTIAL guard, comparing
+    PROPERTIES and not rosters.* Pin one person into every Sunday of a four-week month, and
+    separately solve the same month with `<person> Sun.Choir >= 4` and no pins at all. **The two
+    rosters will not match and must not be asserted to.** A pin is four per-week `== 1`
+    constraints; the rule is one month-total `>= 4`. Different models, different searches,
+    different boards — measured on the repo's `make_config` at seeds 42, 1 and 7 they never
+    matched, and on that fixture neither month collapsed.
+
+    Assert the three properties that carry the meaning, which did agree on every seed measured:
+    the **reported fairness tiers** are equal, the **realized global spread** is equal, and the
+    pinned person's **role count** is equal. The point is that a pin buys no fairness treatment
+    an ordinary rule would not. Whether the ladder holds a tier under that load varies by
+    fixture, predates this delivery, and is asserted neither way.
   - *The share guarantee has a limit, and the test states it.* Two runs on the same month: the
     pinned person inside the fairness groups (the objective pulls them back toward their share)
     and the same person `fairness_exempt` (nothing pulls). Assert the second takes **more** than
@@ -834,7 +890,13 @@ and behaved otherwise:
      solve reports `OPTIMAL`. Measured on the repo fixture — seeds 1, 42 and 2024 return
      `OPTIMAL`; seed 7 returns `FEASIBLE`, and seed 7 is exactly the budget-dependent one. A
      fixture that returns `FEASIBLE` is disqualified as a golden, and the test says so with an
-     assertion rather than a comment. (The `INFEASIBLE` statuses in between are the fairness
+     assertion rather than a comment.
+
+     **`OPTIMAL` removes the wall clock, not every tie.** Two solutions can share an objective
+     value and a different CPU or ortools build can return the other, so this guard is weaker
+     than the fingerprint above and is the second one for a reason. Its golden is captured **on
+     the CI runner**, not on a developer's machine — so that the first cross-machine flake is
+     resolved by re-capturing rather than by deleting the guard §9's rollout rests on. (The `INFEASIBLE` statuses in between are the fairness
      ladder probing tiers — normal, and not the returning solve.)
 
 **Gates, and one of them does not exist yet.** `npx tsc --noEmit`, `npm test`, `npx eslint .`
@@ -894,6 +956,14 @@ compensation §5.1 measures alongside them. No new secret or env var, so `docs/S
 untouched.
 
 ## 9. Rollout
+
+**This half touches an app file too, so `preview` still goes first.** `app/api/admin/solve/route.ts`
+gains the `pinned` and response fields. Both are `export interface` and erased by `tsc`, so the
+emitted route is byte-identical and the risk is nil — but CLAUDE.md's rule is "PUSH ORDER IS
+`preview` FIRST, THEN `main`. Always", and narrowing it silently is how a rule stops being one.
+The branch goes to `preview` and the dev alias is verified before the PR to `main`, which costs
+nothing here. The **Cloud Function** is the part that genuinely cannot rehearse on `preview`;
+that exemption is architectural and is what the rest of this section is about.
 
 **The release order is CLAUDE.md's, and the code review is part of it.** This half reaches
 production with no preview rehearsal, so it is the half that most needs the step stated rather

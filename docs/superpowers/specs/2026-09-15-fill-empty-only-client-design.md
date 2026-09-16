@@ -349,10 +349,10 @@ different pipelines from the same merge — Cloud Build for `gcf/`, Vercel for t
 this state exists in the window between them, and again on any rollback of one but not the
 other.
 
-`SolveResponse` gains `pinned_honored?: number`, the count of pin constraints the solver
-added — **counted after the solver's own dedup and refusals**, so the client's post-dedup pin
-count (the solver spec §4) and this number are the same by definition rather than by two independent dedup
-implementations happening to agree. When the switch is on and pins were sent, the client **refuses to apply the voice
+`SolveResponse` gains `pinned_honored?: number`. **The solver spec §4 is canonical for what it
+means**: it is derived from the solved assignment — a pin counts only if that person actually
+holds a slot of that role in that week in the returned solution — never echoed from the number
+of pins received. An echo would satisfy E8's letter and prove nothing. When the switch is on and pins were sent, the client **refuses to apply the voice
 roster** unless both hold:
 
 1. `pinned_honored` equals the number of pins sent, and
