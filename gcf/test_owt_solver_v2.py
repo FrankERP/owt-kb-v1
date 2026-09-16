@@ -383,18 +383,91 @@ class ObjectiveWeightLadder(unittest.TestCase):
 
     def test_tier_maxima_cover_every_tier(self):
         """
-        A tier missing from `tier_maxima` silently falls back to `max_spread`, which is
-        NOT an upper bound for the rotation tiers (measured: 52 against a real 72), so
-        the ordering above it would break with no error. The solver must supply all of
-        them — assert the key sets match.
+        A tier missing from `tier_maxima` is a programming error that would silently
+        break the ordering above it — `max_spread` is not a valid bound for the
+        rotation tiers (measured 52 against a real 72). Capture the map the solver
+        ACTUALLY builds during a real solve, rather than comparing two literals: a
+        literal comparison passes while every month in production fails.
         """
-        from owt_solver_v2 import PRIORITY_ORDER, ROLE_ORDER
+        import owt_solver_v2 as mod
+        from owt_solver_v2 import PRIORITY_ORDER
 
-        supplied = set(ROLE_ORDER) | {
-            "global", "sun_lead_rotation", "sun_lead_weekly_rotation"}
-        self.assertEqual(
-            supplied, set(PRIORITY_ORDER),
-            "create_model_and_solve's tier_maxima keys must cover PRIORITY_ORDER")
+        captured = []
+        original = mod.compute_priority_weights
+
+        def record(max_spread, max_consec, max_rand, tier_maxima=None):
+            captured.append(tier_maxima)
+            return original(max_spread, max_consec, max_rand, tier_maxima)
+
+        mod.compute_priority_weights = record
+        try:
+            solve_from_dict(self._shape(4, [2, 4], []))
+        finally:
+            mod.compute_priority_weights = original
+
+        self.assertTrue(captured, "no optimising pass ran; the guard saw nothing")
+        for supplied in captured:
+            self.assertIsNotNone(supplied)
+            self.assertEqual(set(supplied), set(PRIORITY_ORDER))
+
+    def test_a_partial_tier_map_degrades_rather_than_failing_the_month(self):
+        """
+        The failure class this whole change removed: a programming error must not turn
+        into "no month at all". A partial map raises ObjectiveTooLarge, which
+        create_model_and_solve catches like an overflow.
+        """
+        import owt_solver_v2 as mod
+
+        original = mod.compute_priority_weights
+
+        def drop_a_tier(max_spread, max_consec, max_rand, tier_maxima=None):
+            if tier_maxima:
+                tier_maxima = {k: v for k, v in tier_maxima.items() if k != "Sun.Choir"}
+            return original(max_spread, max_consec, max_rand, tier_maxima)
+
+        mod.compute_priority_weights = drop_a_tier
+        try:
+            res = solve_from_dict(self._shape(4, [2, 4], []))
+        finally:
+            mod.compute_priority_weights = original
+
+        self.assertTrue(res.get("ok"), res.get("error"))
+        self.assertTrue(res["objective_skipped"])
+
+    def test_objective_skipped_covers_every_objective_less_return(self):
+        """
+        The flag means "no lexicographic objective ran", not "the int64 ladder
+        overflowed". Stage A and the ladder's optimize=False passes build no objective
+        either, and solve_schedule can return from any of them — a flag scoped to the
+        overflow would say "the objective ran" for months where it did not.
+        """
+        from owt_solver_v2 import create_model_and_solve
+
+        seen = []
+        import owt_solver_v2 as mod
+        original = create_model_and_solve
+
+        def record(**kwargs):
+            result = original(**kwargs)
+            if result is not None:
+                seen.append((kwargs.get("empty_objective_only", False),
+                             kwargs.get("optimize", False),
+                             result.objective_skipped))
+            return result
+
+        mod.create_model_and_solve = record
+        try:
+            solve_from_dict(self._shape(4, [2, 4], []))
+        finally:
+            mod.create_model_and_solve = original
+
+        self.assertTrue(seen)
+        for empty_only, optimize, skipped in seen:
+            expected_objective = optimize and not empty_only
+            if not expected_objective:
+                self.assertTrue(
+                    skipped,
+                    "a pass that builds no objective must report objective_skipped")
 
     def test_an_absurd_ladder_raises_its_own_exception(self):
         """

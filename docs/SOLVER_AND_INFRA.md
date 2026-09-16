@@ -27,7 +27,8 @@ below), `history` (prior months, oldest first), `seed`, and solver knobs
 `discourage_consecutive`).
 
 Output: `{ ok, schedule: {"<week>": {Sunday:{Lead[],BGV[],Choir[]}, Saturday?:{...}}},
-fairness_relaxed, sun_lead_fairness_relaxed, sun_bgv_fairness_relaxed, history_runs_used,
+fairness_relaxed, sun_lead_fairness_relaxed, sun_bgv_fairness_relaxed,
+objective_skipped, history_runs_used,
 total_counts, role_counts, unfilled_seats[] }`. On error: `{ ok: false, error }`.
 
 Also a **CLI mode**: `echo '<json>' | python3 owt_solver_v2.py --json-mode` (stdin→stdout);
