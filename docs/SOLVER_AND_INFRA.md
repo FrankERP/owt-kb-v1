@@ -333,6 +333,12 @@ Strategy: **wrap the existing Next.js app** (not a React Native rewrite). Full r
     (`python3 -m unittest test_owt_solver_v2 -v`).
   - `test_main.py` — HTTP handler auth (fail-closed 503/401), 405, valid 200.
 
+**This suite is a BLOCKING gate.** `gates` runs `python -m unittest discover -s gcf -t gcf`
+on Python 3.12 (`.github/workflows/ci.yml`); before that a `gcf/**`-only PR went green on a
+job that never opened the file, on code that deploys to the Cloud Function from `main` with
+no `preview` rehearsal. Run it locally the same way from the repo root before claiming done —
+the three Node gates are no longer the whole set.
+
   These are excluded from the deployed function via `.gcloudignore`.
 
 ---

@@ -171,8 +171,10 @@ class SolveResult:
     role_counts: Dict[str, Dict[str, int]]
     weighted_empty_used: int = 0          # tiered penalty value for unfilled seats
     unfilled: List[str] = None            # human-readable list of empty seats
-    # True when the lexicographic objective could not be expressed in int64 and the
-    # pass ran unoptimised. Reported so a fairness-free month is never silent.
+    # True when this pass ran WITHOUT the lexicographic objective — because the
+    # weight ladder could not be expressed in int64, or because the pass builds no
+    # objective at all (Stage A, or the ladder's optimize=False passes). Reported so
+    # a fairness-free month is never silent.
     objective_skipped: bool = False
 
 
@@ -1328,10 +1330,11 @@ def solve_from_dict(data: Dict) -> Dict:
         "ok": True,
         "schedule": {str(w): v for w, v in schedule_view.items()},
         "fairness_relaxed": result.fairness_limit_used > 1,
-        # True when the month was solved without the lexicographic objective because
-        # it could not be expressed in int64 (large history offsets). The schedule is
-        # legal and fully constrained; it is simply not fairness-optimised. Before
-        # this field the same situation was silent — see ADR-0035.
+        # True when the month was solved WITHOUT the lexicographic objective — either
+        # it could not be expressed in int64 (large history offsets), or the returning
+        # pass was one that builds no objective. The schedule is legal and fully
+        # constrained; it is simply not fairness-optimised. Before this field the same
+        # situation was silent — see ADR-0035.
         "objective_skipped": bool(result.objective_skipped),
         "sun_lead_fairness_relaxed": result.sun_lead_fairness_limit_used > 1,
         "sun_bgv_fairness_relaxed": result.sun_bgv_fairness_limit_used > 1,

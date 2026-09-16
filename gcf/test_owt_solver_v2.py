@@ -338,27 +338,38 @@ class ObjectiveWeightLadder(unittest.TestCase):
     def test_degradation_is_reported_not_silent(self):
         """
         `objective_skipped` is the whole point: a fairness-free month is legal, but it
-        must say so. Assert both directions on the same shape — false without history,
-        true once the offsets are large enough to break the ladder.
+        must say so. Assert both directions on the same shape.
+
+        The history here is HAND-WRITTEN and sized well past the ceiling, deliberately.
+        An earlier version chained the solver's own output forward, which put the
+        objective bound 4% over int64 — so whether the assertion held depended on which
+        person happened to take which seat two months earlier. One Sat.BGV seat moves
+        that cap by up to 10, several times the flip threshold. In a blocking CI gate
+        that is a red check on an unrelated PR, and the pressure then is to disable the
+        gate rather than debug it. The bound must be a property of the fixture, not of
+        the search.
         """
-        cfg = self._shape(4, [2, 4], [])
-        first = solve_from_dict(cfg)
-        self.assertTrue(first.get("ok"))
-        self.assertFalse(first["objective_skipped"])
+        clean = solve_from_dict(self._shape(4, [2, 4], []))
+        self.assertTrue(clean.get("ok"), clean.get("error"))
+        self.assertFalse(
+            clean["objective_skipped"],
+            "a history-free month is exactly what per-tier maxima fix; if this is "
+            "True the ladder is no longer fitting where it should")
 
-        history = [{"total_counts": first["total_counts"],
-                    "role_counts": first["role_counts"]}]
-        second = solve_from_dict(self._shape(4, [2, 4], history))
-        self.assertTrue(second.get("ok"))
-        history.append({"total_counts": second["total_counts"],
-                        "role_counts": second["role_counts"]})
+        # Every member maxed out for three months running — far past any real roster,
+        # and far past the ceiling, so the flip cannot depend on the search.
+        heavy = [{
+            "total_counts": {p: 40 for p in ROSTER},
+            "role_counts": {p: {r: 8 for r in
+                                ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"]}
+                            for p in ROSTER},
+        } for _ in range(3)]
 
-        third = solve_from_dict(self._shape(4, [2, 4], history))
-        self.assertTrue(third.get("ok"))
+        loaded = solve_from_dict(self._shape(4, [2, 4], heavy))
+        self.assertTrue(loaded.get("ok"), loaded.get("error"))
         self.assertTrue(
-            third["objective_skipped"],
-            "two history entries should exceed the ladder on the default shape; "
-            "if this stops holding, the assertion has stopped discriminating")
+            loaded["objective_skipped"],
+            "history this large cannot fit the ladder; the flag must report it")
 
     def test_per_tier_maxima_keep_the_ladder_lexicographic(self):
         """
