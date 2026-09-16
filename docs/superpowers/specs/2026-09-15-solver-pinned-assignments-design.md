@@ -146,42 +146,21 @@ client also runs is what catches a solver honouring *a* pin count rather than *t
 **`pin_violations?: string[]`** — the rules the solver had to relax to honour the pins. The
 client spec's §4 renders them; §5.2 explains why they exist and how an entry is derived.
 
-**`violation_ceiling_proven?: boolean`** — `true` **iff both hold**: the violation-only solve
-(§5.2, which runs **first**) returned `OPTIMAL`, **and the returned month came from Stage B
-rather than the `stage_a` fall-through**. `false` otherwise. Stage A's status is not an input:
-once the ceiling is solved for first, Stage A runs *inside* it and cannot widen it.
+**`violation_ceiling_proven?: boolean`** — `true` **iff the violation-only solve (§5.2's solve 0,
+which runs first) returned `OPTIMAL`**; `false` otherwise, including when it returned `FEASIBLE`
+or no solution at all. Nothing else is an input. **On a pinless request the field is absent**, not `false`: solve 0
+never runs, there is nothing to prove, and `false` would invite the client's caveat line on a
+month with no pins at all. That matches `pin_violations`, which §7 accepts as absent or empty
+there, and differs from `pinned_honored`, which is always emitted (`0`) because §9's deploy check
+reads its presence.
 
-The second condition is not redundant and an earlier draft omitted it. The ladder can exhaust or
-run out of the 40 s budget and return `stage_a` itself (`:1124-1125`, `:1137`) — which was built
-before `violation_target` existed and carries no `n_viol <= violation_target` constraint — so its
-assignment-derived `pin_violations` can exceed the proven minimum even when both solves proved
-theirs. Reporting `true` there would suppress the client's caveat and tell the admin the
-relaxation set is known minimal when it is not, which is precisely the false assurance this field
-exists to prevent. §6 notes the fall-through is a field-mostly case because CI runs on faster
-hardware, so the suite must force it deliberately (§7). Gating on the third solve alone is
-not enough, and the reason is exact: it minimises `n_viol` **subject to `weighted_empty <=
-empty_target`**, and `empty_target` comes from Stage A. If Stage A stopped at `FEASIBLE`, its
-`empty_target` can exclude the true optimum — Stage A returns `n_viol=1, weighted_empty=0` while
-`n_viol=0, weighted_empty=5` was available — and the third solve then proves a minimum *inside a
-box that was itself suboptimal*, reporting `OPTIMAL` for a ceiling of 1 when zero rules needed
-relaxing. The client would suppress its caveat and the admin would be told a relaxation was
-forced that was not.
-
-Dropping `weighted_empty <= empty_target` from the third solve is **not** the fix: a lower
-`violation_target` unreachable at that fill level makes every Stage B tier infeasible and drops
-the month onto the fairness-free `stage_a`, which is worse than the defect.
-Absent means the solver predates this field, which an old client already treats as "no pin
-support at all". **The client shows the ordinary `pin_violations` notices either way and adds
-one line when it is `false`**: the relaxations listed may be more than the pins strictly forced.
-It never blocks and never discards the month.
-
-This field exists because the minimal ceiling is the **sole** containment for making six rule
-families soft month-wide on the strength of one pin — the decision the ADR-0010 box below says
-Frank has not ruled on. Without the field, a slack ceiling is invisible and §5.2's
-assignment-side reporting would quietly do double duty as a correctness claim. And it must ship
-**now**: the Cloud Function is the one artifact with no `preview` rehearsal and an irreversible
-release (§9), so adding it later costs a second production-first solver release plus a second
-client release.
+Neither Stage A's status nor where the month came from belongs here. Solve 0 runs first and
+every later stage — **Stage A and the `stage_a` fall-through included** — is built with
+`n_viol <= violation_target`, so no stage can widen the ceiling and a fall-through month is as
+minimal as a Stage B one. Earlier drafts added both conditions on the belief that `stage_a`
+escaped the ceiling; under §5.2's ordering it does not, and keeping them would report "the
+relaxations may be more than the pins forced" about months where they provably are not —
+precisely on the slow months where the ADR-0010 containment matters most.
 
 **`pin_violations` grammar, specified rather than exemplified.** This half ships first and
 irreversibly, the client renders an unknown marker with a generic fallback, and a mismatch
@@ -248,7 +227,7 @@ unknown `builtin:` marker, so the two suites together pin both sides of the boun
 
 **The three existing `*_fairness_relaxed` fields are NOT additive, and their meaning shifts.**
 `fairness_relaxed`, `sun_lead_fairness_relaxed` and `sun_bgv_fairness_relaxed` are derived from
-the tier the ladder reached (`:1224-1226`) and drive a visible chip («Equidad relajada»,
+the tier the ladder reached (`:1225-1227`) and drive a visible chip («Equidad relajada»,
 `PlannerGrid.tsx:2073-2075`). Under pins the spread those tiers bound is over **slack-adjusted**
 counts, so the flags keep their literal meaning — "the ladder had to loosen a limit" — while no
 longer implying the *realized* distribution is balanced.
@@ -320,7 +299,7 @@ or service, so a pinned person who is in no pool — or whose Tipo was cleared �
 exactly where the admin seated them and nowhere else.
 
 The union **re-sorts**: `all_people` is `sorted(...)` at `:452`, and every downstream
-variable-creation loop plus `build_candidate_map`'s `rng.shuffle(people)` (`:571`) reads it in
+variable-creation loop plus `build_candidate_map`'s `rng.shuffle(people)` (`:573`) reads it in
 order. Appending without re-sorting would shift the board for reasons unrelated to the pins.
 
 **Rows grow to fit their pins.** `build_slots` emits `max(default_seats, pins_for(R, W))`
@@ -683,6 +662,34 @@ Solving for the ceiling first fixes both: `violation_target` is minimal whenever
 optimality, regardless of what Stage A then does, and `empty_target` is computed **inside** the
 minimal-violation box, so the pair Stage B inherits is jointly feasible by construction.
 
+> **Normative, stated once: `n_viol <= violation_target` is on EVERY solve after solve 0 —
+> Stage A included.** The table above is the contract; any sentence elsewhere implying Stage A
+> is built without it is stale and wrong. Two consequences follow and are load-bearing:
+>
+> 1. **The `stage_a` fall-through cannot escape the ceiling.** It is built with the constraint
+>    like every other stage, so `n_viol <= violation_target` holds for it too — and since the
+>    assignment-derived count is by definition at least the global minimum, it **equals**
+>    `violation_target`. A returned `stage_a` is therefore just as minimal as a Stage B month.
+> 2. **`violation_ceiling_proven` needs no condition about where the month came from.** An
+>    earlier draft added one, on the belief that `stage_a` was built before `violation_target`
+>    existed. Under this ordering it is not, so the field is simply "did solve 0 prove its
+>    minimum".
+>
+> **And joint feasibility is why the ordering is not optional.** If Stage A were built *without*
+> the ceiling, it could time out at `FEASIBLE` holding an incumbent that breaks one more rule in
+> exchange for filling more seats — a lower `weighted_empty` than the ceiling permits. Stage B's
+> box `{weighted_empty <= empty_target, n_viol <= violation_target}` would then be **empty**,
+> every tier infeasible, and the month would drop onto the fairness-free `stage_a`. That is the
+> outcome this section elsewhere calls worse than the defect, and it is reachable exactly in the
+> production regime: 0.33 vCPU, a 5 s cap, and now one more solve on the same 40 s.
+
+**When solve 0 returns no solution at all** — `create_model_and_solve` returns `None` on any
+status that is not `OPTIMAL` or `FEASIBLE` (`:976-977`), and `solve_time()` floors each solve at
+1.0 s against the shared deadline, so `UNKNOWN` is reachable on the production container — then
+**`violation_target` is `None` and no stage carries a ceiling**, the month is still returned, and
+`violation_ceiling_proven` is `false`. Written out because it is the path that decides whether
+the ADR-0010 guarantee holds for that month, and an implementer must not have to invent it.
+
 **Solve 0 does not run when there are no pins** — `soft` is false, there are no violation
 booleans, and a stray extra solve on the pinless path would consume budget invisibly to both of
 §7's guards (the fingerprint is captured before any solve; the output golden runs only on
@@ -705,21 +712,11 @@ pin**. E3 authorises *the pin* to beat a rule. It does not authorise the solver 
 aside in a service the admin never touched, and the client's copy («… para respetar lo que
 fijaste») would assert a cause that is false in exactly that case.
 
-**The `stage_a` fall-through escapes the ceiling, and the field is what makes that visible.**
-When the ladder exhausts or the 40 s budget runs out, `solve_schedule` returns `stage_a` itself
-(`:1124-1125`, `:1137`) — and `stage_a` was built before `violation_target` existed, so it
-carries no `n_viol <= violation_target` constraint. Its assignment-derived `pin_violations` can
-therefore exceed the violation-only solve's minimum. Narrow, and CI is faster than production so
-it is a field-mostly case, but it means "Stage B never returns more violations than the
-violation-only solve found" is true of Stage B and **not** of the fall-through. A returned
-`stage_a` therefore reports `violation_ceiling_proven: false` regardless of what either solve
-achieved — which is §4's third condition, and the reason it has one. The field answers "is this
-month's relaxation set known minimal?", not "did some solve prove optimality".
-
-**If the violation-only solve itself times out**, `violation_target` stays Stage A's value and
-the month is still returned — but the response says so, so the honest report of §5.2's
-assignment-side derivation is not quietly doing double duty as a correctness claim. §7 asserts
-the minimal ceiling on a fixture capped short enough that Stage A alone would leave slack.
+**The `stage_a` fall-through carries the ceiling like every other stage**, because solve 0 runs
+before it — so when the ladder exhausts or the 40 s budget runs out and `solve_schedule` returns
+`stage_a` (`:1124-1125`, `:1137`), its relaxation set is still exactly `violation_target`. "No
+stage returns more violations than solve 0 found" is true of the fall-through too. Earlier drafts
+said the opposite, from an ordering that no longer exists.
 
 > **RULED by Frank, 2026-09-16: keep the soft relaxation as designed.** ADR-0010 records his
 > requirement in his own words, for the pair-exclusion family this design relaxes: *"it has to
@@ -779,10 +776,11 @@ already carries `empty_target`; and `solve_from_dict`'s response dict (`:1222-12
 `pinned_honored`, `pin_violations` **and `violation_ceiling_proven`** — all three, since that
 dict is the only place any of them can reach the client.
 
-**The objective.** Stage A minimises `(max_weighted_empty + 1) · n_viol + weighted_empty`,
-so breaking one fewer rule always beats filling any number of seats. Stage A's violation
-count then travels into Stage B as a ceiling (`violation_target`), so the fairness ladder can
-never buy a tighter spread by breaking one more rule.
+**The objective.** Stage A minimises `(max_weighted_empty + 1) · n_viol + weighted_empty`, so
+breaking one fewer rule always beats filling any number of seats — a belt-and-braces ordering
+inside the box solve 0 already fixed. **Solve 0's** minimum is the ceiling (`violation_target`)
+that Stage A and every Stage B pass carry as a constraint, so the fairness ladder can never buy a
+tighter spread by breaking one more rule.
 
 **The ceiling is a constraint, not an objective term, and that is load-bearing.** Half of
 Stage B's passes run with `optimize=False`, where `create_model_and_solve` sets no objective
@@ -858,7 +856,8 @@ the signal the planner already renders — instead of failing the whole month ov
 the admin built on purpose.
 
 **What this buys the notice and §6.** The solver returns `pin_violations`, the rules it actually
-relaxed, each as the rule's own `source` string. So the conflict notice stops being a client
+relaxed, each in §4's normative grammar — the `source` string with its scope prefix, or a
+`builtin:` marker. So the conflict notice stops being a client
 guess about what *might* clash and becomes a report of what *did* — and §6's claim that a
 pin cannot make the model infeasible stops being an argument about a predicate's completeness
 and becomes a property of the model's shape.
@@ -994,7 +993,7 @@ shift is invisible — but the count per row changes, and the tests pin that.
   with them `x` — grow linearly with the array, on what §6 itself calls a public HTTP endpoint
   behind an API key. **The cap is 100**, and the reasoning an earlier draft gave for a larger one was measured false.
   That draft claimed 200 kept `compute_priority_weights` — degree-8 in `overall_limit`
-  (`:585-593`) — under the int64 ceiling. It does not: on the shipped 12-person roster the top
+  (`:590-600`) — under the int64 ceiling. It does not: on the shipped 12-person roster the top
   weight crosses 2⁶³ at about **70 slots**, and at 200 pins `total_slots` reaches ~275 for a top
   weight around 4.4e23.
 
@@ -1007,8 +1006,8 @@ shift is invisible — but the count per row changes, and the tests pin that.
   figure above is where the top *weight* crosses 2⁶³ and is **not** the trigger — the binding
   check is ortools' objective-domain overflow, which depends on the whole coefficient set.
   Whoever writes the fix PR should start there, not from a slot threshold. That is a
-  **pre-existing defect, not introduced here** (four- and six-week fixtures did not reproduce
-  it). **Frank approved fixing it, 2026-09-16, as its own change** — and the ordering is
+  **pre-existing defect, not introduced here** (a six-week / six-Saturday month at 78 slots does not reproduce it, but a six-week /
+  **two**-Saturday month at 58 slots does — another reason the trigger is not the slot count). **Frank approved fixing it, 2026-09-16, as its own change** — and the ordering is
   load-bearing, though not for the reason an earlier draft gave. A fix touches
   `compute_priority_weights`, which lives inside the `elif optimize:` branch Stage A never enters
   (`:903`, `:948`), so it moves **§7's output golden and NOT the Stage A fingerprint** — verified
@@ -1158,9 +1157,11 @@ and behaved otherwise:
   `violation_ceiling_proven: true` on that fixture; on a second, capped short enough that the
   violation-only solve cannot prove its minimum, assert `false` with the month still returned;
   and on a **third**, force the `stage_a` fall-through — a tiny `solver_total_budget_seconds`, or
-  a month whose every Stage B tier is infeasible — and assert `false` **even though both solves
-  proved their minima**. That third case is §4's third condition; it is the one production
-  reaches and CI does not by accident, and without it the suite passes on a response that lies. Separately assert the measured amount case: `Gaby Sun.BGV <= 1`
+  a month whose every Stage B tier is infeasible — and assert **`true`**, with the returned
+  month's assignment-derived `pin_violations` **equal in length to `violation_target`**. Earlier
+  drafts asserted `false` there, on the belief that `stage_a` escaped the ceiling; under §5.2's
+  ordering it does not, and this case is what pins that. It is the one path production reaches
+  and CI does not by accident. Separately assert the measured amount case: `Gaby Sun.BGV <= 1`
   with two pins on that row gives her exactly two, not more. That last one is an observation,
   not a bound, and the test says so in its name.
 - **A rules-stay-hard control.** The same three reproductions with the violation booleans
@@ -1216,8 +1217,11 @@ and behaved otherwise:
      **The residual gap, named:** with `pin_set` empty the violation booleans do not exist, so a
      violation term leaking into Stage B's optimise branch on the pinless path would add a zero
      coefficient that neither this fingerprint nor the output golden would notice. §7 closes it
-     cheaply — on a pinless fixture, assert the returning pass's objective coefficient count
-     against a frozen number, and assert `pin_violations` comes back absent or empty. Verified on ortools 9.15.6755:
+     cheaply — on a pinless fixture, assert the objective coefficient count of an **instrumented
+     `optimize=True` pass** against a frozen number, and assert `pin_violations` comes back absent
+     or empty. **Not "the returning pass":** half the Stage B ladder runs `optimize=False`, where
+     `create_model_and_solve` sets no objective at all (`:899-903`), so that count is 0 or N
+     depending on which pass returns — a flake inside the required `gates` check. Verified on ortools 9.15.6755:
      the Stage A hash is identical at 10 s, 5 s and 3 s budgets on seeds 1, 42, 2024 and 7, and
      distinct between seeds — All of it is built before any solve and depends only
      on `config.seed` (`:571`, `:633`, `:946`), so it is machine-independent by construction:
