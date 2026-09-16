@@ -1857,6 +1857,9 @@ Made during execution, on top of the plan:
   which this delivery deliberately does not ship.
 - **The click's voice and level** — a 1000/800 Hz sine at gain 0.5, under a band. Loud
   enough on a phone speaker in a rehearsal room, or does it need a sharper (square) click?
+- **6/8 accents beat 1 of SIX quarter-note clicks** (`beatsPerBar` is the numerator), not the
+  two dotted-quarter pulses a band actually feels. No 6/8 song has been heard against it —
+  decide on one.
 
 **Bundle:** `main 7fbbb105` → `R4 tip 5a899be0` (git-archive cold builds, gzip −9; the
 three later commits move classes and handlers, not chunks): shared 172.5 → 172.5; `/`
@@ -1917,3 +1920,15 @@ zero after the second tap and after unmount.
 
 **Verification.** The scheduling test was mutation-checked: removing the `tick()` call from
 `start()` fails 4 of the 7. Gates green on the whole tree.
+
+**Review (opus, F1 diff): APPROVED with two MEDIUMs, both fixed in round 1.** (1) A tick that
+ran late — a stall or a throttled tab longer than the 100 ms window — booked beats already
+behind the context clock, and `osc.start(pastTime)` fires immediately: a flam of stacked clicks
+catching up. The scheduler now skips the missed beats (`Math.ceil` of the gap in beats) and
+keeps the bar's accent phase. (2) `stop()` suspended the context over up to a window of already
+booked oscillators; suspension FREEZES the clock they are pinned to instead of cancelling them,
+so they would have sounded off-phase on the next tap. Every booked oscillator is now stopped by
+hand, the list is pruned on each tick so it holds at most one window, and the module header no
+longer claims that suspension silences them. Three tests added, both fixes mutation-checked
+(removing either makes exactly its own test fail). Two LOWs (a rewinding fake clock in the
+tests, this 6/8 note) and one nit (the doc bullet's home) taken with them.

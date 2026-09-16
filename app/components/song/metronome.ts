@@ -7,10 +7,17 @@
 // AudioContext clock is sample-accurate but cannot call code. So the loop is
 // coarse and the booking is precise: every `lookaheadMs` a self-rescheduling
 // timeout books every click whose time falls inside the next `scheduleAheadMs`
-// on `ctx.currentTime`. A stop between two ticks therefore cancels at most the
-// clicks already booked inside that one window, and `stop()` suspending the
-// context silences even those. It is a `setTimeout` and never a `setInterval`
-// precisely so a stop can never race a queued tick.
+// on `ctx.currentTime`. It is a `setTimeout` and never a `setInterval` precisely
+// so a stop can never race a queued tick.
+//
+// Two consequences of booking ahead, both handled explicitly. A tick that ran
+// LATE (a stall longer than the window, a phone that throttled the tab) would
+// otherwise book beats already in the past, and `osc.start(pastTime)` fires at
+// once — a flam of stacked clicks catching up. So the loop skips the missed
+// beats and keeps the bar's accent phase. And a `stop()` leaves up to one window
+// of clicks already booked: SUSPENDING THE CONTEXT DOES NOT SILENCE THEM, it
+// freezes the clock they are pinned to, so they would sound off-phase the moment
+// the next tap resumes it. Every booked oscillator is therefore stopped by hand.
 //
 // The SOUND is the master clock; the RING is not. The ring stays CSS-clocked on
 // `--tempo-period` (see `TempoPill`), which keeps the reduced-motion story
@@ -68,6 +75,9 @@ export function createMetronome(opts: {
   let running = false;
   let nextBeatTime = 0;
   let beat = 0;
+  // Everything booked and not yet finished, so `stop()` can silence it. Pruned
+  // on every tick, so a rehearsal-long run holds at most one window of nodes.
+  let booked: { osc: OscillatorNode; end: number }[] = [];
 
   // Lazy and cached: an AudioContext may only be created from a user gesture, and
   // a second start must reuse the one the first tap earned.
@@ -99,11 +109,21 @@ export function createMetronome(opts: {
     osc.start(time);
     // The extra 10 ms lets the ramp finish before the node is torn down.
     osc.stop(end + 0.01);
+    booked.push({ osc, end });
   }
 
   function tick() {
     if (!ctx || !running) return;
-    const horizon = ctx.currentTime + CLICK.scheduleAheadMs / 1000;
+    const now = ctx.currentTime;
+    booked = booked.filter((b) => b.end >= now);
+    // Late tick: skip the beats that are already behind us rather than booking
+    // them in the past, where they would all fire at once.
+    if (nextBeatTime < now) {
+      const missed = Math.ceil((now - nextBeatTime) / secondsPerBeat);
+      beat = (beat + missed) % bar;
+      nextBeatTime += missed * secondsPerBeat;
+    }
+    const horizon = now + CLICK.scheduleAheadMs / 1000;
     while (nextBeatTime < horizon) {
       book(nextBeatTime, beat === 0);
       beat = (beat + 1) % bar;
@@ -127,6 +147,17 @@ export function createMetronome(opts: {
     if (typeof document !== "undefined") {
       document.removeEventListener("visibilitychange", onVisibility);
     }
+    // Silence what is already booked, ALWAYS — a suspended context freezes its
+    // clock instead of cancelling them, so they would sound on the next resume.
+    for (const { osc } of booked) {
+      // A node already finished throws on a second stop(); that is not a failure.
+      try {
+        osc.stop();
+      } catch {
+        /* already done */
+      }
+    }
+    booked = [];
     if (!running) return;
     running = false;
     // Suspended, never closed: a closed context cannot be resumed, and the next
