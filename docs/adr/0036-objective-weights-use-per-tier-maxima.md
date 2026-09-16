@@ -20,7 +20,9 @@ production-shaped roster, the objective's upper bound was:
 | 5 weeks, Saturday every week | 65 | 3.0e20 | " |
 | 6 weeks, Saturday every week | 78 | 1.9e21 | " |
 
-**Every shape was over, including the ordinary four-week month.** Whether ortools actually
+**Every shape in that table was over.** The repo fixture's own default (4 weeks, 2
+Saturdays, 42 slots) bounds at 3.7e18 and stays under — it is the history that takes it
+over, which is the second half of this record. Whether ortools actually
 rejected the model depended on the *reachable* domain rather than this bound, so it fired
 irregularly — `MODEL_INVALID` on the 55-, 58- and 65-slot shapes, not on 52 or 78 — which
 is why it went unnoticed.
@@ -62,6 +64,11 @@ because `solve_from_dict` turns those into `ok: false` — and `create_model_and
 catches it, builds that pass with **no objective**, and sets `objective_skipped`. The
 response carries `objective_skipped: true`.
 
+**The flag means "no lexicographic objective ran", not "the ladder overflowed."** Stage A
+and the relaxation ladder's `optimize=False` passes build no objective either, and
+`solve_schedule` can return from any of them. A flag scoped to the overflow would report
+"the objective ran" for months where it did not — the same silence, one path over.
+
 The schedule is legal and fully constrained; it is simply not fairness-optimised. That is
 the same outcome as before this change — and that is the point: **the outcome was never
 the bug, the silence was.**
@@ -88,8 +95,15 @@ the bug, the silence was.**
   different mechanism — splitting the ladder across two sequential solves, so no single
   weighted sum has to hold all eight tiers — which is scoped as follow-on work rather than
   smuggled into a bug fix.
-- `gcf/test_owt_solver_v2.py::ObjectiveFitsInt64` guards all five shapes, asserts the
-  ladder stays lexicographic under the smaller caps, and asserts the loud failure.
+- `gcf/test_owt_solver_v2.py::ObjectiveWeightLadder` guards all six shapes, chains three
+  months of history forward on four of them, asserts both directions of
+  `objective_skipped`, asserts the ladder stays lexicographic under the smaller caps,
+  captures the tier map the solver actually builds, and checks that a partial map degrades
+  rather than failing the month. Verified discriminating: the class fails against the
+  pre-fix solver and passes on this one.
+- **CI now runs it.** `gates` gained a `python -m unittest discover -s gcf` step (~80 s);
+  before this change a `gcf/**`-only PR went green on a job that never opened the file, on
+  code that deploys to the Cloud Function from `main` with no `preview` rehearsal.
 - Anything that froze a solver output as a golden must re-capture it; the model
   construction is unchanged, so a Stage A model fingerprint is not affected.
 - `objective_skipped` is a new response field. No client reads it yet; surfacing it in the

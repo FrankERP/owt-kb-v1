@@ -636,13 +636,17 @@ def compute_priority_weights(
     When `tier_maxima` is supplied it must cover every tier: `max_spread` is NOT a
     valid fallback for the rotation tiers (measured 52 against a real 72 on a
     four-week month), so a partial map would silently break the ordering above the
-    missing tier rather than fail. Omitting the argument entirely keeps the old
+    missing tier. A partial map therefore raises `ObjectiveTooLarge` — handled the
+    same way as an overflow, because a programming error must not cost the month. Omitting the argument entirely keeps the old
     uniform behaviour, which is what the no-argument callers in the tests use.
     """
     if tier_maxima is not None:
         missing = [n for n in PRIORITY_ORDER if n not in tier_maxima]
         if missing:
-            raise ValueError(f"tier_maxima is missing tiers: {missing}")
+            # ObjectiveTooLarge, not ValueError: a partial map is a programming
+            # error, but failing the whole month over one is the exact failure class
+            # this change removed. The caller drops the objective and reports it.
+            raise ObjectiveTooLarge(f"tier_maxima is missing tiers: {missing}")
     w: Dict[str, int] = {"tie_break": 1}
     w["consecutive"] = max_rand + 1
     remaining = max_consec_penalty * w["consecutive"] + max_rand
@@ -692,7 +696,13 @@ def create_model_and_solve(
     model = cp_model.CpModel()
     slot_by_key = {s.key: s for s in slots}
     rng = random.Random(config.seed)
-    objective_skipped = False
+    # True whenever this pass runs WITHOUT the lexicographic objective — for any
+    # reason, not only the int64 one. Stage A (`empty_objective_only`) and the
+    # ladder's `optimize=False` passes never build it either, and `solve_schedule`
+    # can return from any of them, so scoping the flag to the overflow case would
+    # leave the response saying "the objective ran" for months where it did not.
+    # That is the same silence ADR-0035 exists to remove, in a narrower path.
+    objective_skipped = not optimize or empty_objective_only
     dedicated_sat_leads = set(config.saturday_leads_pool)
     sat_weeks = set(normalize_weekend_indexes(config.weeks, config.weekends_w_sat))
 
