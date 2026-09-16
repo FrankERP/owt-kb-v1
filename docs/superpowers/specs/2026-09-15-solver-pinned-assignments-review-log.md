@@ -2,8 +2,10 @@
 
 Artifact: `2026-09-15-solver-pinned-assignments-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
-**Status: open — round 1 done, no approval yet.** Current canonical digest `648c766f…`,
-commit `05b5159c`.
+**Status: open — TEN rounds done, no approval yet. Frank's cap of 10 is reached.** Current
+canonical digest `980bf729…`, commit `f3e0f8d5`. Critical tier needs **two sequential fresh
+`APPROVED` verdicts on byte-identical text**, so the earliest possible completion from here is
+rounds 11 and 12 with no changes between them.
 
 ## Risk tier
 
@@ -25,7 +27,16 @@ log.
 
 | Round | Reviewed digest (SHA-256, prefix) | Commit | Verdict | Substantive? |
 |---|---|---|---|---|
-| 1 | `0fbf5e90307991c6…` | `9c997722` | CHANGES_REQUIRED | yes (1 blocker, reproduced and extended) |
+| 1 | `0fbf5e90307991c6…` | `9c997722` | CHANGES_REQUIRED | yes — the share guarantee was a tendency, not a property |
+| 2 | `648c766f28bd6b9c…` | `b13372af` | CHANGES_REQUIRED | yes — `pin_violations` grammar: subject elision + three marker spellings |
+| 3 | `d61125336892dbde…` | `bce56492` | CHANGES_REQUIRED | yes — entries must be derived from the assignment, not the booleans |
+| 4 | `9c1fb2f46c85380f…` | `fcac6999` | CHANGES_REQUIRED | yes — §7 asserted an equality the mechanism is built to break |
+| 5 | `4190ceb3eb5e48ed…` | `c274f894` | CHANGES_REQUIRED | yes — non-minimal ceiling; a fingerprint API that does not exist |
+| 6 | `02b25fc367fcad81…` | `200f5ec6` | CHANGES_REQUIRED | yes — the response was a field short of what §5.2 required |
+| 7 | `0a5b4700ba4072db…` | (r7 fixes) | CHANGES_REQUIRED | yes — the golden re-capture rule defeated itself |
+| 8 | `23aa1650db99d178…` | (r8 fixes) | CHANGES_REQUIRED | yes — the fairness promise had an undisclosed `fairness_exempt` carve-out |
+| 9 | `5c90b6cc0bd623fe…` | `7ade9b56` | CHANGES_REQUIRED | yes — **the per-role slack was keyed on the wrong axis** |
+| 10 | `9988cfda0c913a86…` | `f3e0f8d5` | CHANGES_REQUIRED | yes, but **editorial only** — stale prose from the round-9 rewrite |
 
 ## Round 1 — the share guarantee was a tendency
 
@@ -92,3 +103,79 @@ The split is paying for itself: on a spec 40% smaller, round 1 reached the mecha
 enough to execute it and to surface a false guarantee that eleven rounds on the combined
 artifact had not. Two of the three findings above were produced by the author following the
 reviewer's thread rather than by the report itself — which is what a review is for.
+
+## Rounds 2–10
+
+**Every round from 3 onward patched a copy of `owt_solver_v2.py` and executed it**, and from
+round 8 onward reviewers were implementing the full §5.1 + §5.2 mechanism rather than sampling it.
+
+### The one that mattered most: round 9
+
+The per-role hard-spread slack counted pins **by role**. The per-service occupancy limit
+(`:754-765`) gives each person one seat per service per week, so a pin in *any* Sunday role
+zeroes them in *every other* Sunday role that week — and counting only `Sun.Lead` pins toward the
+`Sun.Lead` spread left a lead-pool member pinned into Choir with **zero** slack on the very
+spread their pins tighten.
+
+Measured on the spec's own fixture, four pins in a Sunday row every week: **every**
+Sunday-lead-pool member collapsed the fairness ladder to the fairness-free `stage_a` on all four
+seeds, leaving a member on **zero services**. Every support member was fine.
+
+Two earlier drafts had misread the discriminator as the row's seat count, and the support half
+passed under the broken mechanism — so a suite written from either draft would have been green on
+a design that dropped someone out of the month. The reviewer proposed keying the slack on the
+**service** a pin occupies, implemented it, and executed it; the author reproduced it
+independently, confirmed the collapse vanishes on every seed and row, and re-ran byte-identity,
+the 52-pin round trip, both relaxation reproductions and the pinned-only guard on the new form.
+
+### What the rounds fixed, in one line each
+
+- **1** — "a pinned service counts toward that person's share" was a tendency of the soft
+  objective, not a property; `fairness_exempt` (which the seed uses for two people) removes it.
+- **2** — `pin_violations` declared a contract and failed it twice: a count rule's `source` is
+  subject-elided for exactly the shipped seed shape, and the `builtin:` literal was spelled three
+  ways in one file with the client implementing the one §4 forbade.
+- **3** — the one-directional booleans permit `v = 1` on a satisfied constraint; entries are now
+  re-evaluated against the returned assignment.
+- **4** — §7 asserted that a pin matches the equivalent DSL rule, which the slack exists to break.
+- **5** — the ceiling was not provably minimal (a third, violation-only solve now sets it), and
+  the fingerprint named `model.Proto().SerializeToString()`, which does not exist on the pinned
+  ortools — with a measurement attributed to it that could not have been taken.
+- **6** — the response was a field short: `violation_ceiling_proven`.
+- **7** — the golden re-capture rule permitted re-capture inside `gcf/**` PRs, i.e. inside the
+  very PR whose preview-less safety rests on the golden.
+- **8** — the fairness promise did not hold for an un-pinned `fairness_exempt` member (measured:
+  3→2 from a *single* pin), and the saturation table shipped with no fixture.
+- **9** — the slack axis, above.
+- **10** — three paragraphs describing the rejected design survived the round-9 rewrite as if they
+  described the adopted one, which would have turned §7's failing control into specified
+  behaviour. Plus: `n_viol` must be built only when `soft`, or the pinless fingerprint reddens on
+  every seed and the delivery stalls under §7's own no-re-capture rule.
+
+### Verified sound, by execution, in round 10
+
+Service-keyed slack; the ceiling (0/40 randomised pin loads collapse with it, 25 violation
+booleans set without it); Stage A byte-identity across budgets and seeds; the 52-pin full-board
+round trip; pinned-only isolation (ADR-0029); all five blocking-mechanism reproductions naming
+exactly the forced rule; the parser elision table; the 65-slot `MODEL_INVALID` finding; the CI gap.
+
+## Two things that need Frank, not another round
+
+1. **ADR-0010.** It records his requirement in his own words — *"it has to be hard because if
+   it's soft in fairness it will always choose people like Frank, Mkz or Gaby"* — for the
+   pair-exclusion family this design makes soft. The minimal ceiling confines breakage to what
+   the pins force, which is the narrowest reading of E3, but the hard-vs-soft call is his, and it
+   is needed **before** implementation: if it goes the other way, the mechanism needs a pair-rule
+   carve-out, which is a different design rather than an edit.
+2. **A pre-existing defect found along the way, out of this scope.** A five-week month with a
+   Saturday every week (65 slots) returns `MODEL_INVALID` on its optimising pass **today, with no
+   pins**, and the ladder falls through to the objective-less passes without saying so. Reproduced
+   on the shipped solver; four- and six-week fixtures do not. Worth its own issue.
+
+## Churn cap
+
+Frank set the cap at 10 for this loop and it is reached. Ten substantive rounds, no approval.
+**The character of the findings changed decisively at the end:** rounds 1–9 each found a
+mechanism or contract defect; round 10 found none — its sole blocker was prose left behind by the
+round-9 rewrite, and every executable claim it checked passed. That is the first round whose
+findings were entirely editorial, and it is the signal that the design has stopped moving.
