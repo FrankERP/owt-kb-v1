@@ -36,6 +36,17 @@ from ortools.sat.python import cp_model
 
 _INT64_MAX = 2 ** 63 - 1
 
+
+class ObjectiveTooLarge(Exception):
+    """
+    The lexicographic weight ladder would exceed int64.
+
+    Raised by compute_priority_weights and handled inside create_model_and_solve,
+    which drops the fairness objective for that pass rather than failing the month.
+    Deliberately NOT a ValueError: solve_from_dict turns those into `ok: false`, and
+    a month the solver can still fill must never come back as no month at all.
+    """
+
 ROLE_ORDER = ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"]
 SATURDAY_ROLES = {"Sat.Lead", "Sat.BGV"}
 LEAD_BGV_ROLES = {"Sun.Lead", "Sun.BGV", "Sat.Lead", "Sat.BGV"}
@@ -160,6 +171,9 @@ class SolveResult:
     role_counts: Dict[str, Dict[str, int]]
     weighted_empty_used: int = 0          # tiered penalty value for unfilled seats
     unfilled: List[str] = None            # human-readable list of empty seats
+    # True when the lexicographic objective could not be expressed in int64 and the
+    # pass ran unoptimised. Reported so a fairness-free month is never silent.
+    objective_skipped: bool = False
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -619,9 +633,16 @@ def compute_priority_weights(
     losing fairness optimisation with no signal to the caller. With real per-tier
     maxima the same months bound at 2.6e16 and 1.4e18.
 
-    `max_spread` remains the fallback for any tier `tier_maxima` omits, so the
-    signature stays backward-compatible.
+    When `tier_maxima` is supplied it must cover every tier: `max_spread` is NOT a
+    valid fallback for the rotation tiers (measured 52 against a real 72 on a
+    four-week month), so a partial map would silently break the ordering above the
+    missing tier rather than fail. Omitting the argument entirely keeps the old
+    uniform behaviour, which is what the no-argument callers in the tests use.
     """
+    if tier_maxima is not None:
+        missing = [n for n in PRIORITY_ORDER if n not in tier_maxima]
+        if missing:
+            raise ValueError(f"tier_maxima is missing tiers: {missing}")
     w: Dict[str, int] = {"tie_break": 1}
     w["consecutive"] = max_rand + 1
     remaining = max_consec_penalty * w["consecutive"] + max_rand
@@ -630,10 +651,12 @@ def compute_priority_weights(
         cap = max_spread if tier_maxima is None else tier_maxima.get(name, max_spread)
         remaining += cap * w[name]
     if remaining > _INT64_MAX:
-        raise ValueError(
-            f"Objective bound {remaining} exceeds int64; the month is too large for "
-            f"the lexicographic weighting (max_spread={max_spread}, "
-            f"max_consec_penalty={max_consec_penalty}, max_rand={max_rand})."
+        # The caller decides what to do; raising here would abort a month the solver
+        # can still fill. See create_model_and_solve, which degrades and reports.
+        raise ObjectiveTooLarge(
+            f"Objective bound {remaining} exceeds int64 "
+            f"(max_spread={max_spread}, max_consec_penalty={max_consec_penalty}, "
+            f"max_rand={max_rand})."
         )
     return w
 
@@ -669,6 +692,7 @@ def create_model_and_solve(
     model = cp_model.CpModel()
     slot_by_key = {s.key: s for s in slots}
     rng = random.Random(config.seed)
+    objective_skipped = False
     dedicated_sat_leads = set(config.saturday_leads_pool)
     sat_weeks = set(normalize_weekend_indexes(config.weeks, config.weekends_w_sat))
 
@@ -997,20 +1021,37 @@ def create_model_and_solve(
         tier_maxima["sun_lead_rotation"] = pw_max * n_sun_lead
         tier_maxima["sun_lead_weekly_rotation"] = pw_max * n_sun_lead
 
-        weights = compute_priority_weights(
-            overall_limit, len(consec_penalties), max_rand, tier_maxima)
+        try:
+            weights = compute_priority_weights(
+                overall_limit, len(consec_penalties), max_rand, tier_maxima)
+        except ObjectiveTooLarge:
+            # Eight tiers multiplied together do not fit in int64 once history
+            # offsets are large — `build_history_offsets` weights the last three
+            # months by [10, 6, 3], so `overall_limit` and every `ov_r_limit` grow
+            # with them, and two months of history is enough on an ordinary shape.
+            #
+            # Before this branch existed the same situation reached ortools as a
+            # MODEL_INVALID, `create_model_and_solve` returned None, and the ladder
+            # read that as "this fairness tier is infeasible" and moved on —
+            # returning a fairness-free month with nothing in the response to say
+            # so. That silence is the bug. Skipping the objective here reaches the
+            # same schedule, but `objective_skipped` records it and the response
+            # carries it out to the caller.
+            objective_skipped = True
+            weights = None
 
-        obj = [weights["global"] * overall_spread]
-        if sun_lead_rotation:
-            obj.append(weights["sun_lead_rotation"] * sum(sun_lead_rotation))
-        if sun_lead_weekly_rotation:
-            obj.append(weights["sun_lead_weekly_rotation"] * sum(sun_lead_weekly_rotation))
-        for rt in ROLE_ORDER:
-            obj.append(weights[rt] * role_spread_vars[rt])
-        if consec_penalties:
-            obj.append(weights["consecutive"] * sum(consec_penalties))
-        obj.append(weights["tie_break"] * sum(rand_w[k] * var for k, var in x.items()))
-        model.Minimize(sum(obj))
+        if weights is not None:
+            obj = [weights["global"] * overall_spread]
+            if sun_lead_rotation:
+                obj.append(weights["sun_lead_rotation"] * sum(sun_lead_rotation))
+            if sun_lead_weekly_rotation:
+                obj.append(weights["sun_lead_weekly_rotation"] * sum(sun_lead_weekly_rotation))
+            for rt in ROLE_ORDER:
+                obj.append(weights[rt] * role_spread_vars[rt])
+            if consec_penalties:
+                obj.append(weights["consecutive"] * sum(consec_penalties))
+            obj.append(weights["tie_break"] * sum(rand_w[k] * var for k, var in x.items()))
+            model.Minimize(sum(obj))
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = (
@@ -1051,6 +1092,7 @@ def create_model_and_solve(
         total_counts=total_counts,
         role_counts=rc,
         weighted_empty_used=int(solver.Value(weighted_empty)),
+        objective_skipped=objective_skipped,
         unfilled=unfilled,
     )
 
@@ -1276,6 +1318,11 @@ def solve_from_dict(data: Dict) -> Dict:
         "ok": True,
         "schedule": {str(w): v for w, v in schedule_view.items()},
         "fairness_relaxed": result.fairness_limit_used > 1,
+        # True when the month was solved without the lexicographic objective because
+        # it could not be expressed in int64 (large history offsets). The schedule is
+        # legal and fully constrained; it is simply not fairness-optimised. Before
+        # this field the same situation was silent — see ADR-0036.
+        "objective_skipped": bool(result.objective_skipped),
         "sun_lead_fairness_relaxed": result.sun_lead_fairness_limit_used > 1,
         "sun_bgv_fairness_relaxed": result.sun_bgv_fairness_limit_used > 1,
         "history_runs_used": result.history_runs_used,
