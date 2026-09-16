@@ -3559,7 +3559,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 458,
+      "line": 467,
       "disposition": "B",
       "reason": null
     },
@@ -3571,7 +3571,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 466,
+      "line": 475,
       "disposition": "B",
       "reason": null
     },
@@ -3583,7 +3583,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 345,
+      "line": 354,
       "disposition": "B",
       "reason": null
     },
@@ -3595,19 +3595,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 474,
-      "disposition": "B",
-      "reason": null
-    },
-    {
-      "file": "app/components/SongSheet.tsx",
-      "category": 8,
-      "categoryName": "svg-attribute",
-      "value": "stroke=\"currentColor\"",
-      "alpha": null,
-      "utility": null,
-      "carrier": "stroke",
-      "line": 482,
+      "line": 483,
       "disposition": "B",
       "reason": null
     },
@@ -3620,6 +3608,18 @@
       "utility": null,
       "carrier": "stroke",
       "line": 491,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/SongSheet.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 500,
       "disposition": "B",
       "reason": null
     },

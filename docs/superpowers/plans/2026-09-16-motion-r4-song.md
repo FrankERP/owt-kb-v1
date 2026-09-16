@@ -363,3 +363,24 @@ export function createMetronome(opts: { bpm: number; beatsPerBar: number; onStop
 - [ ] **Step 2: Run, watch them fail.** **Step 3: Implement.** No `setInterval`; the loop is a self-rescheduling `setTimeout` so a stop between ticks never fires a stray click. Guard `typeof window.AudioContext === "undefined"` (webkit prefix too) → the pill still rings, silently.
 - [ ] **Step 4: Docs** per the file list; Part XIV gains "### F1 — the pill clicks (2026-09-16)" with rulings 11–13 and the silent-switch caveat in the open notes.
 - [ ] **Step 5: Gates; commit** — `feat(song): the BPM pill clicks — a Web Audio metronome under the ring`
+
+---
+
+## F2 — the song sheet clicks too (2026-09-16)
+
+Frank: "Can you also enable the metronome on the small card that pops when you click the name of a song either on day cards or on the Biblioteca" — that card is `SongSheet` (`app/components/SongSheet.tsx`, the `CueDialog mode="sheet"` the player context opens from `DayCard` rows and `LibraryRow`).
+
+**Ruling 14.** `SongSheet`'s BPM span becomes the same `TempoPill` (ring + click) — one component, one look, no second metronome implementation. **Ruling 15.** ONE metronome sounds at a time, app-wide: `metronome.ts` keeps a module-level "current" and `start()` stops whichever other instance is running (the sheet's pill over a song page whose own pill is clicking, or the reverse). The pill whose metronome was stopped drops its pressed state through `onStop`. **Ruling 16.** Closing the sheet stops the click: `TempoPill` gains `enabled?: boolean` (default true); `SongSheet` passes `enabled={isOpen}` and the pill stops (and un-presses) when it flips false — `CueDialog` keeps children mounted while closed, so unmount alone is not enough.
+
+### Task F2-1: `TempoPill` in `SongSheet`, one metronome at a time
+
+**Files:**
+- Modify: `app/components/song/metronome.ts` (singleton), `app/components/song/__tests__/metronome.test.ts`, `app/components/song/TempoPill.tsx` (`enabled`, `size?: "sm" | "md"`), `app/components/song/__tests__/tempoPill.test.tsx`, `app/components/SongSheet.tsx`, `app/components/__tests__/songSheet.test.tsx`, `docs/UTILITIES_AND_COMPONENTS.md` (`SongSheet`, `TempoPill`, `metronome.ts` rows), `docs/MOTION.md` (Song (R4) paragraph), `CLAUDE.md` + `AGENTS.md` (`TempoPill` entry: "the ONE tempo control — song hero and `SongSheet`; one metronome sounds app-wide"), spec Part XIV ("### F2 — the sheet clicks too")
+
+**Interfaces:**
+- `metronome.ts`: `let current: Metronome | null`; `start()` → `if (current && current !== this) current.stop()` (which fires that instance's `onStop`), then `current = this`; `stop()` → `if (current === this) current = null`. Export `stopCurrentMetronome()` for tests/cleanup.
+- `TempoPill({ bpm, timeSig, enabled = true, size = "md" })`: `size="sm"` renders the sheet's pill chrome (`font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70`, plus `min-h-[44px]`, `brand-tempo-pill` ring, `aria-pressed:text-accent aria-pressed:border-accent/60`); `useEffect(() => { if (!enabled && active) stop(); }, [enabled])`.
+- `SongSheet`: `{sheet.bpm && <TempoPill bpm={Number(sheet.bpm)} timeSig={sheet.timeSig ?? null} enabled={isOpen} size="sm" />}` with the same `Number.isFinite && > 0` guard the page uses (unparsable → the old static span).
+
+- [ ] **Step 1: Failing tests.** `metronome.test.ts`: starting B while A runs stops A and fires A's `onStop`; A's timer is gone; `stopCurrentMetronome()` stops the running one. `tempoPill.test.tsx`: `enabled` flipping false while active → `aria-pressed` false, timers 0; `size="sm"` renders the sheet chrome classes. `songSheet.test.tsx`: an open sheet with `bpm: "120"` renders a button named «Marcar tempo con clic, 120 BPM»; an unparsable bpm renders the static span; closing the sheet (re-render with the sheet closed) leaves 0 timers.
+- [ ] **Step 2: Run, watch them fail. Step 3: Implement. Step 4: Docs. Step 5: Gates; commit** — `feat(song): the song sheet's BPM pill clicks too; one metronome at a time`

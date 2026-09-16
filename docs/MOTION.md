@@ -1146,6 +1146,15 @@ a practice surface. See spec Part XIV for the full ledger; the motion-relevant p
   control. **Caveat (ruling 12): on iOS the click obeys the SILENT SWITCH**, because Web
   Audio does and the `<audio>` guide track does not; a muted phone rings without clicking,
   and no native audio-session plugin ships in this delivery.
+- **The song SHEET clicks too, and only one metronome sounds** (F2, rulings 14–16). The
+  `SongSheet` opened from a day card or `/biblioteca` renders the same `TempoPill` in its
+  meta row (`size="sm"` — the outlined pill that row already drew as static text), not a
+  second implementation; an unparsable BPM keeps the static span. Because the hero pill and
+  the sheet's pill can be on screen together, `metronome.ts` holds a module-level "current"
+  and a `start()` takes the floor from whoever had it — the loser is stopped through its own
+  path and un-presses through its `onStop`, so a ringing pill always means a sounding click.
+  And a dismissed surface goes quiet without waiting for an unmount: `enabled={false}` stops
+  the click, which is what `SongSheet` passes while closed.
 - **`LyricsAutoscroll` moves the PAGE, never a transform.** rAF + `window.scrollTo`, at
   `autoscrollPxPerSecond(sectionHeight, lines, bpm)` (a lyric line is 8 beats; clamped to
   8–160 px/s; no BPM means 80). A transform on the section would make its ancestor the
