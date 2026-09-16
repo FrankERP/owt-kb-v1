@@ -485,7 +485,7 @@ authored rule for the whole month would break it in services the admin never pin
 | Dedicated Saturday lead anchor | `:705-709` | week | `sum(dedicated_terms) >= 1 - v` |
 | Weekly presence, `any_of(…) each_week` | `:732-742` | rule × week | `sum(terms) >= 1 - v` |
 | Pair exclusion | `:711-722` | rule × week × service | `sum(lt) + sum(rt) <= 1 + v·n`, **`n = len(lt) + len(rt) - 1`** |
-| Consecutive | `:744-752` | rule × week pair | `sum(w1) + sum(w2) <= 1 + v·n`, same `n` |
+| Consecutive | `:744-752` | rule × week pair | `sum(w1) + sum(w2) <= 1 + v·n` with **`n = len(w1) + len(w2) - 1`** — its own lists, not the pair rule's; too small a big-M here is a silent infeasibility on a pinned month, the one failure §6 promises cannot happen |
 | DSL count rules, all three operators | `:886-897` | **rule** — see below | `expr >= value - v·B` and/or `expr <= value + v·B`, one `v` per rule so an `==` reports as one relaxed rule rather than two halves. **`B = max(rule.value, total_slots)`** — the slot count alone suffices for `<=` but not for `>=`, whose bound can exceed it |
 
 **Each entry must identify its instance, not just its rule.** A pair rule produces one boolean
@@ -574,6 +574,17 @@ pin**. E3 authorises *the pin* to beat a rule. It does not authorise the solver 
 aside in a service the admin never touched, and the client's copy («… para respetar lo que
 fijaste») would assert a cause that is false in exactly that case.
 
+**The `stage_a` fall-through escapes the ceiling, and the field is what makes that visible.**
+When the ladder exhausts or the 40 s budget runs out, `solve_schedule` returns `stage_a` itself
+(`:1124-1125`, `:1137`) — and `stage_a` was built before `violation_target` existed, so it
+carries no `n_viol <= violation_target` constraint. Its assignment-derived `pin_violations` can
+therefore exceed the violation-only solve's minimum. Narrow, and CI is faster than production so
+it is a field-mostly case, but it means "Stage B never returns more violations than the
+violation-only solve found" is true of Stage B and **not** of the fall-through. A returned
+`stage_a` therefore reports `violation_ceiling_proven: false` regardless of what the
+violation-only solve achieved — the field answers "is this month's relaxation set known
+minimal?", not "did one particular solve prove optimality".
+
 **If the violation-only solve itself times out**, `violation_target` stays Stage A's value and
 the month is still returned — but the response says so, so the honest report of §5.2's
 assignment-side derivation is not quietly doing double duty as a correctness claim. §7 asserts
@@ -609,7 +620,8 @@ guard that a fast CI machine would otherwise pass vacuously.
 **Two plumbing facts the prose implied without stating.** `SolveResult` gains the Stage A
 violation count, so `violation_target` can travel into Stage B the way `weighted_empty_used`
 already carries `empty_target`; and `solve_from_dict`'s response dict (`:1222-1232`) gains
-`pinned_honored` and `pin_violations`, which is the only place they can reach the client.
+`pinned_honored`, `pin_violations` **and `violation_ceiling_proven`** — all three, since that
+dict is the only place any of them can reach the client.
 
 **The objective.** Stage A minimises `(max_weighted_empty + 1) · n_viol + weighted_empty`,
 so breaking one fewer rule always beats filling any number of seats. Stage A's violation
@@ -805,10 +817,21 @@ shift is invisible — but the count per row changes, and the tests pin that.
 - **`pinned` is length-capped** the way the other budget knobs already are (`_SOLVER_MAX_TIME_CEIL`
   and friends, `:1178-1184`). `build_slots` emits `max(default, pins_for(R, W))`, so slots — and
   with them `x` — grow linearly with the array, on what §6 itself calls a public HTTP endpoint
-  behind an API key. **The cap is 200** — a six-week month with every weekend row saturated is about 90, so no real
-  month approaches it, while `total_slots` stays small enough that `compute_priority_weights`,
-  which is degree-8 in `overall_limit` (`:585-593`), keeps its headroom under the int64 ceiling
-  §5.2 worries about. The point is that the growth is bounded rather than attacker-chosen. The pools are unbounded today for the same reason and
+  behind an API key. **The cap is 100**, and the reasoning an earlier draft gave for a larger one was measured false.
+  That draft claimed 200 kept `compute_priority_weights` — degree-8 in `overall_limit`
+  (`:585-593`) — under the int64 ceiling. It does not: on the shipped 12-person roster the top
+  weight crosses 2⁶³ at about **70 slots**, and at 200 pins `total_slots` reaches ~275 for a top
+  weight around 4.4e23.
+
+  **And the real binding limit is already reached today, with no pins at all.** Measured on the
+  shipped solver: a **five-week month with a Saturday every week (65 slots) returns
+  `MODEL_INVALID` on its optimising pass**, and the ladder falls through to the objective-less
+  passes without saying so — statuses `['OPTIMAL', 'MODEL_INVALID', 'OPTIMAL']`. That is a
+  **pre-existing defect, not introduced here** (four- and six-week fixtures did not reproduce
+  it), and it is out of this delivery's scope — but this delivery adds a new lever on
+  `total_slots` through row growth, so the cap is set to keep pins from pushing a month into
+  that regime rather than on a headroom claim that was never true. Recorded here so the next
+  person to see an unexplained fairness result on a five-week month has the thread. The pools are unbounded today for the same reason and
   that is pre-existing; this spec does not widen it further.
 - **A `pinned` entry naming an unknown `role`** is refused with a `ValueError` naming it. The
   typed client cannot produce one, but the route validates only `sunday_leads?.length`
@@ -975,7 +998,13 @@ and behaved otherwise:
      `empty_target = stage_a.weighted_empty_used` enters it (`:1116`, `:677-678`), and under pins
      `violation_target` adds a second such input. Both are machine-independent only while Stage A
      proves optimality — a precondition, not a construction. Stage A's model has neither
-     dependency, so fingerprinting it alone is the honest guard. Verified on ortools 9.15.6755:
+     dependency, so fingerprinting it alone is the honest guard.
+
+     **The residual gap, named:** with `pin_set` empty the violation booleans do not exist, so a
+     violation term leaking into Stage B's optimise branch on the pinless path would add a zero
+     coefficient that neither this fingerprint nor the output golden would notice. §7 closes it
+     cheaply — on a pinless fixture, assert the returning pass's objective coefficient count
+     against a frozen number, and assert `pin_violations` comes back absent or empty. Verified on ortools 9.15.6755:
      the Stage A hash is identical at 10 s, 5 s and 3 s budgets on seeds 1, 42, 2024 and 7, and
      distinct between seeds — All of it is built before any solve and depends only
      on `config.seed` (`:571`, `:633`, `:946`), so it is machine-independent by construction:
@@ -1003,13 +1032,24 @@ and behaved otherwise:
      golden meaningful, not to measure the runner — and never to drop the assertion or the
      golden.
 
-     **Who re-captures, and when.** Both goldens live in `gates`, the required check for every
-     PR in the repo, so a runner-image or ortools bump could red-gate unrelated work. The rule:
-     a golden is re-captured **only** in a PR whose diff is the bump itself or `gcf/**`, by the
-     same skipped-then-un-skipped procedure §9 uses for the first capture, and the commit
-     message says which of the two caused it. A golden re-captured inside an unrelated PR is the
-     failure mode — it launders a real behaviour change through a green check — and reviewers
-     reject it on sight. (The `INFEASIBLE` statuses in between are the fairness
+     **Who re-captures, and when — and NEVER in a PR that changes solver logic.** Both goldens
+     live in `gates`, the required check for every PR in the repo, so a runner-image or ortools
+     bump could red-gate unrelated work. The rule has exactly two legitimate causes: **a runner
+     image bump, or an ortools pin bump**, each in a PR that changes **nothing else**, using the
+     skipped-then-un-skipped procedure §9 uses for the first capture, with the commit message
+     naming which.
+
+     **A red fingerprint inside the solver PR is a FINDING, never a literal to update.** An
+     earlier draft of this rule said "only in a PR whose diff is the bump itself or `gcf/**`" —
+     and the solver PR *is* a `gcf/**` PR, so it authorised re-capturing the byte-identity guard
+     inside the one change whose entire preview-less safety argument is that guard. The pressure
+     is not hypothetical: this delivery restructures `build_slots`, `build_candidate_map`,
+     `validate_config`'s `all_people`/`known`, and all three hard-spread loops, and several have
+     benign-looking ways to perturb the Stage A proto — whether `gmax + n[p]` with `n[p] == 0`
+     serialises identically to `gmax`, or the interleaved `Sun.BGV`/`Sun.Choir` emission §9 names
+     below. A red fingerprint there means the pinless path changed, which is exactly what the
+     guard is for; it gets explained, not re-captured. §9 repeats this, because §9 is what leans
+     on it. (The `INFEASIBLE` statuses in between are the fairness
      ladder probing tiers — normal, and not the returning solve.)
 
 **Gates, and one of them does not exist yet.** `npx tsc --noEmit`, `npm test`, `npx eslint .`
@@ -1049,7 +1089,9 @@ order starts *after* it is green on `main`.
 ## 8. Documentation in the same delivery
 
 `docs/SOLVER_AND_INFRA.md` — the `pinned` field, the fixed-variable mechanism, the enabling
-changes, the soft-relaxation objective, `pin_violations`, and the `pinned_honored` contract.
+changes, the soft-relaxation objective, the violation-only solve, and all three response fields
+— `pinned_honored`, `pin_violations` and `violation_ceiling_proven`, the last of which would
+otherwise ship undocumented.
 `docs/CI.md` — the new python step in `gates`, what it runs and why a `gcf/**`-only PR needs it.
 
 One ADR: **pins are fixed variables with scoped candidacy, per-person pin slack on the hard
@@ -1122,6 +1164,11 @@ the only thing standing between an admin and a silent overwrite. Therefore: merg
 change and confirm Cloud Build deployed it, then merge the app change. The
 `preview`-first push order applies to the app half as usual, and the dev alias is verified by
 `alias` + `githubCommitSha` before the PR to `main`.
+
+**And the goldens are not re-captured in this PR.** §7 states the rule; it is repeated here
+because this is the change that will feel the pressure. A red fingerprint on the solver PR means
+the pinless path moved — the one thing the preview-less release is betting did not happen — and
+it is investigated, never cleared by updating the literal.
 
 **The byte-identity property has a hidden dependency: `build_slots` must keep emitting
 `Sun.BGV` and `Sun.Choir` interleaved** (`:554-555`). Rewriting that loop per role — the
