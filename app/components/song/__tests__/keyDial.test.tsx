@@ -99,4 +99,19 @@ describe("SongHeroPills", () => {
     fireEvent.click(getByRole("radio", { name: "A" }));
     expect(getByTestId("semitones").textContent).toBe("2");
   });
+
+  it("keeps a flat's spelling — the group's uppercase would read «EB»", () => {
+    const { getByRole } = render(
+      <MotionProvider>
+        <TransposeProvider nativeKey="G">
+          <SongHeroPills keyLabel="G" bpm={null} timeSig={null} transposable />
+        </TransposeProvider>
+      </MotionProvider>,
+    );
+
+    fireEvent.click(getByRole("button", { name: /Transponer/ }));
+    const flat = getByRole("radio", { name: "Eb" });
+    expect(flat.textContent).toBe("Eb");
+    expect(flat.querySelector("span.normal-case")?.textContent).toBe("Eb");
+  });
 });
