@@ -118,7 +118,9 @@ export default function LyricsAutoscroll({
     };
     const resume = () => {
       clearScrollEndFallback();
-      if (finished || frame !== null) return;
+      // `touching` is checked here and not only at the call sites: the backstop
+      // is a timer, and a finger that comes back down before it fires must win.
+      if (finished || touching || frame !== null) return;
       measureBottomInset();
       // Re-seed from where the finger actually left the page, never from the
       // internal offset the pause froze.
@@ -148,6 +150,9 @@ export default function LyricsAutoscroll({
     const down = () => {
       touching = true;
       userScrolled = false;
+      // A re-touch inside the 400 ms backstop window would otherwise fire it
+      // under the new finger and scroll the page out from under the drag.
+      clearScrollEndFallback();
       pause();
     };
     // A cancelled touch resumes like a lift: `touchcancel` fires instead of
