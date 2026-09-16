@@ -4,6 +4,7 @@ import { useState } from "react";
 import SegmentedControl from "./ui/SegmentedControl";
 import Switch from "./ui/Switch";
 import NumberRoll from "./ui/NumberRoll";
+import { DISPLAY_NOTES, rootIndex, transposeChord, capoSuggestion, CHORD_RE } from "@/app/utils/transpose";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,67 +16,6 @@ interface Chart {
 interface Segment {
   chord?: string;
   lyric: string;
-}
-
-// ─── Transposition ────────────────────────────────────────────────────────────
-
-const DISPLAY_NOTES = [
-  "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
-] as const;
-
-const NOTE_INDEX: Record<string, number> = {
-  C: 0, "B#": 0,
-  "C#": 1, Db: 1,
-  D: 2,
-  "D#": 3, Eb: 3,
-  E: 4, Fb: 4,
-  F: 5, "E#": 5,
-  "F#": 6, Gb: 6,
-  G: 7,
-  "G#": 8, Ab: 8,
-  A: 9,
-  "A#": 10, Bb: 10,
-  B: 11, Cb: 11,
-};
-
-// Transpose a single note token (root + trailing quality/extensions).
-function transposeToken(token: string, semitones: number): string {
-  const m = token.match(/^([A-G][b#]?)(.*)/);
-  if (!m) return token;
-  const [, root, quality] = m;
-  const idx = NOTE_INDEX[root];
-  if (idx === undefined) return token;
-  const newIdx = ((idx + semitones) % 12 + 12) % 12;
-  return DISPLAY_NOTES[newIdx] + quality;
-}
-
-export function transposeChord(chord: string, semitones: number): string {
-  if (semitones === 0) return chord;
-  // Transpose each side of a slash chord independently (e.g. "G/B" -> "A/C#")
-  // so the bass note moves with the root instead of being left behind.
-  return chord
-    .split("/")
-    .map((part) => transposeToken(part, semitones))
-    .join("/");
-}
-
-function rootIndex(key: string): number {
-  const m = key.match(/^([A-G][b#]?)/);
-  if (!m) return -1;
-  return NOTE_INDEX[m[1]] ?? -1;
-}
-
-// Open-chord-friendly keys (CAGED): C, A, G, E, D.
-const OPEN_KEY_IDX = [0, 9, 7, 4, 2];
-
-// Smallest capo position that lets you play the sounding key with open shapes.
-function capoSuggestion(soundingIdx: number): { fret: number; shapeKey: string } | null {
-  if (soundingIdx < 0) return null;
-  for (let fret = 0; fret <= 11; fret++) {
-    const shapeIdx = ((soundingIdx - fret) % 12 + 12) % 12;
-    if (OPEN_KEY_IDX.includes(shapeIdx)) return { fret, shapeKey: DISPLAY_NOTES[shapeIdx] };
-  }
-  return null;
 }
 
 // ─── ChordPro parser ─────────────────────────────────────────────────────────
@@ -100,8 +40,6 @@ function parseLine(line: string): Segment[] {
 
   return segments;
 }
-
-const CHORD_RE = /\[[^\]]+\]/;
 
 function stripChords(line: string): string {
   return line.replace(/\[[^\]]+\]/g, "");

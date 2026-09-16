@@ -78,6 +78,18 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   (more than one), which `<section>`s render, and whether the "aún no tiene contenido" state
   does (none). **Count lengths, never truthiness** — `post.body` is an array, so `!![]` is
   true, and `[]` is exactly what clearing the "Letra" field stores.
+- **`rootIndex`, `noteAt`, `semitonesBetween`, `transposeKey`, `transposeChord`,
+  `capoSuggestion`, `isChordPro`** ([transpose.ts](../app/utils/transpose.ts)) — the chord/key
+  transposition maths, in a neutral module with no imports so any future server reader can call
+  it too. `transposeChord` moves both sides of a slash chord (e.g. `G/B` → `A/C#`) so the bass
+  note doesn't get left behind. `ChordChart` imports these rather than owning local copies; it
+  no longer exports `transposeChord` itself. Tested in `app/utils/__tests__/transpose.test.ts`.
+- **`tempoPeriodMs(bpm)`, `autoscrollPxPerSecond(heightPx, lines, bpm)`,
+  `countLyricLines(text)`** ([practice.ts](../app/utils/practice.ts)) — practice-mode maths for
+  the song page's tempo pill and autoscroll: `tempoPeriodMs` is the CSS `--tempo-period` for one
+  beat, falling back to `DEFAULT_BPM` (80) on a falsy/non-positive bpm; `autoscrollPxPerSecond`
+  clamps to `[AUTOSCROLL_MIN, AUTOSCROLL_MAX]` (8–160 px/s); `countLyricLines` counts non-blank,
+  non-heading (`# `) lines. Tested in `app/utils/__tests__/practice.test.ts`.
 
 ### Dates & schedule
 - **`daysUntil(dateStr, now?)`**, **`formatCountdown(days)`** ([daysUntil.ts](../app/utils/daysUntil.ts))
@@ -404,7 +416,7 @@ Legend: **[C]** client, **[S]** server.
 | Component | Purpose |
 |-----------|---------|
 | `SongSheet` [C] | Full lyrics + chords overlay (PortableText, focus-trapped, play-history) — driven by `PlayerContext`. |
-| `ChordChart` [C] | ChordPro parser/renderer. Exports **`transposeChord(chord, semitones)`** + capo suggestions. Tested. |
+| `ChordChart` [C] | ChordPro parser/renderer. Transposition and capo maths live in `app/utils/transpose.ts`, not here. Tested. |
 | `SongAudioSection` [C] | A song's audio tracks, wired to the player. |
 | `AudioPlayer` [C] | Global bottom audio bar (scrub/time). |
 | `PracticePlaylistButton` [C] | Opens a YouTube playlist for a setlist (`musica`/`letras`). `variant?: "inline" \| "hero"` is chrome only — the menu, popup reservation and failure states are shared; `inline` is the accent pill on the Setlist rail, `hero` is the run sheet's one primary action (the house `Button`, label "Ensayar"). |
@@ -538,6 +550,6 @@ verification deployment and are **not** part of `npm test` — see
 `app/**/*.test.{ts,tsx,mjs}` and `scripts/**`. Highlights: `notifyTargets` (all five seats), `medley`, `computeParticipation`,
 `unfilledSeats`, `assignmentEmail`, `push`, `memberAccess` (TTL), `googleIdToken`, `draftGating`,
 `publishTransitions`, `lyrics` round-trip, `ics`, `scheduleMonths`, `routeMatcher` (login-gate
-bypass), `focusTrap`/`useFocusTrap` (jsdom), plus `daysUntil` and `transposeChord` in
-`app/components/__tests__/`. A `.test.tsx` needing a DOM sets up jsdom itself (the default env is
-`node`). Run with `npm test`.
+bypass), `focusTrap`/`useFocusTrap` (jsdom), plus `daysUntil` in `app/components/__tests__/` and
+`transpose`/`practice` in `app/utils/__tests__/`. A `.test.tsx` needing a DOM sets up jsdom itself
+(the default env is `node`). Run with `npm test`.
