@@ -133,7 +133,11 @@ a second source for the same fact is a second thing to keep in step.
 `pinned_honored?: number` — the handshake (the client spec §7), **derived from the solved
 assignment and never echoed from `len(pin_set)`**: a pin counts only if that person actually
 holds a slot of that role in that week in the returned solution. An echo would satisfy E8's
-letter and prove nothing. **Even derived it is weaker than the name suggests:** a pin is a hard
+letter and prove nothing. **It is emitted on EVERY response of the new solver, `0` when there
+are no pins** — never conditionally. §9's only deploy check asserts its *presence* on a pinless
+smoke request and makes absence the revert trigger, so conditional emission would fail every
+healthy deploy and instruct reverting it. "Absent means nothing" describes an **old** solver,
+not a pinless request. **Even derived it is weaker than the name suggests:** a pin is a hard
 `== 1`, so any solution the solver returns at all satisfies every pin and the derived count can
 never come back short. Its real signal is the field's **presence**, which is how the client
 detects a solver predating this change that ignored `pinned` (E8); the per-pin roster check the
@@ -172,9 +176,13 @@ nothing in the client spec, may spell a marker differently; both cite here.
 | Mandatory lead | `builtin:mandatory_lead:W<n>:<Sun\|Sat>` |
 | Saturday anchor | `builtin:sat_anchor:W<n>` |
 
-**The service token is `Sun` / `Sat`, not `Sunday` / `Saturday`.** Every other identifier that
-crosses this boundary already uses the short form — the `pinned.role` field, `Sun.Lead`,
-`Sat.BGV`, `mapUnfilledSeats`' keys — so one vocabulary rather than two. The solver's internal
+**The service token is `Sun` / `Sat`, not `Sunday` / `Saturday`** — because it must match the
+`pinned.role` field this same contract defines (`Sun.Lead`, `Sat.BGV`), which is the identifier a
+reader of a `pin_violations` entry will compare it against. **The response is not uniform and
+this spec does not make it so:** `unfilled_seats` already emits `Sunday` / `Saturday`
+(`owt_solver_v2.py:987-990`), so both vocabularies cross the boundary today. An earlier draft
+justified the choice by claiming uniformity, which was simply false; the real reason is
+role-field agreement, and changing `unfilled_seats` is out of scope. The solver's internal
 `SUNDAY_SERVICE` / `SATURDAY_SERVICE` constants are `"Sunday"` / `"Saturday"`
 (`owt_solver_v2.py:66-67`) and must be **mapped**, not interpolated.
 
@@ -193,8 +201,7 @@ shipped parser:
     -> DslConsecutiveRule(person='Gaby', source='!consecutive on *.Lead')  # name GONE
 ```
 
-The shipped Gaby seed is the first shape — `restrictionToDs` emits `excludedPatterns`, then
-caps, then fairness (`plannerModel.ts:572-585`), so the production line is exactly the one
+The shipped Gaby seed is the first shape — `restrictionToDs` emits `excludedPatterns`, then **`weekExclusions`**, then caps, then fairness (`plannerModel.ts:572-585`), so the production line is exactly the one
 quoted above, and §7's literal must be authored in that order, so without the explicit person the production notice would
 read «Se dejó de aplicar una regla … «Sun.BGV <= 2»» — whose cap, nobody can say — and two
 members capped on the same pattern would produce byte-identical entries. Count rules are the
@@ -395,8 +402,17 @@ ladder behaviour below, and it adds an `AddMaxEquality` per pinned person to the
 constraint in the model for a guarantee the objective already delivers wherever anyone is
 watching. Not adopted; recorded so the next reader does not spend the same afternoon.
 
-**What the slack DOES deliver, measured across pin loads.** Twelve-person month, Saturdays every
-week, baseline spread 4–5:
+**What the slack DOES deliver, measured across pin loads.**
+
+> **The fixture, stated so the numbers are reproducible** — an earlier draft gave the table with
+> none, and a reviewer running the repo's `make_config` (Saturdays on weeks 2 and 4, `BASE_RULES`)
+> could not reproduce it even though its baseline spread coincidentally matches. Every row below
+> is: `sunday_leads=[Hugo, Niza, Lucia, Rachel]`, `saturday_leads=[Tono]`,
+> `support=[Jakey, Gaby, Liu, Marianne, Vale, Dani, Pau]`, `weeks=4`,
+> `weekends_with_saturday=[1,2,3,4]`, **`dsl_restrictions=[]`**, `solver_max_time_seconds=5`,
+> seeds 1 / 7 / 42 / 2024 — 52 slots, baseline totals
+> `[4,4,4,4,4,4,4,4,5,5,5,5]`, limits `(1,1,1)`. The rows below held identically on all four
+> seeds.
 
 | Pinned row | 1 pin | 2 pins | 3 pins | 4 pins (every week) |
 |---|---|---|---|---|
@@ -404,9 +420,22 @@ week, baseline spread 4–5:
 | `Sun.BGV` (3 seats) | others 4–5 | others 4–5 | others 4–5 | **collapse**, others 1–7 |
 | `Sun.Choir` (3 seats) | others 4–5 | others 4–5 | others 4–5 | **collapse**, others 1–8 |
 
-**The invariant worth asserting is about everyone else**: up to the saturation threshold, the
-people the admin did *not* pin stay inside the un-pinned baseline spread. **Nothing is claimed
-about the pinned person's own total** — the paragraphs above explain why the model does not bound
+**The invariant worth asserting is about everyone else — inside the fairness groups.** Up to the
+saturation threshold, the un-pinned members **who are in the global fairness groups** stay inside
+the un-pinned baseline spread.
+
+**An un-pinned `fairness_exempt` member is NOT protected, and the shipped seed has two.** The
+model bounds `gmax - gmin` over the fairness *group*; an exempt member is outside it and carries
+no bound at all, so displacement lands on them first. Measured on the fixture above with one
+exempt member and a **single** pin on someone else: they went 3→2 and 4→3 on two of four seeds,
+while every fairness-group member stayed 4–5. `solverConfigDefaults.ts` marks **Frank and Mkz**
+exempt in production, so this is the real roster, not a constructed case. An earlier draft
+promised "pinning someone does not wreck the rest of the month" without this carve-out; the
+promise holds for the group and not for the exempt. §7 asserts it over the group and asserts
+nothing about exempt members, and the honest summary is: **a pin can cost an exempt member a
+service, and that is the same displacement an ordinary hard rule would cause.**
+
+**Nothing is claimed about the pinned person's own total** — the paragraphs above explain why the model does not bound
 it, and review measured the counterexample: on the repo's own fixture with `BASE_RULES`, a member
 whose baseline is 6, pinned into `Sun.Lead` for three weeks, came back at **8**. That is the
 promise a pin should keep — pinning someone does
@@ -561,9 +590,15 @@ to make the model feasible; they are not the report.
 **The ceiling is made PROVABLY MINIMAL before it is used, by its own solve.** Stage A minimises
 `(max_weighted_empty + 1) · n_viol + weighted_empty`, and if it times out its violation count is
 an upper bound with slack. So between Stage A and Stage B there is a third, cheap solve:
-minimise `n_viol` alone, subject to `weighted_empty <= empty_target`. It carries no fairness
-terms and no tie-break weights — it is a small integer minimisation over the violation booleans
-— so it proves optimality where the full objective does not. Its value becomes
+minimise `n_viol` alone, subject to `weighted_empty <= empty_target`. It is the **full assignment model** — every `x`, `filled`, occupancy and `weighted_empty <=
+empty_target` constraint is still there — with a far simpler objective: no fairness terms, no
+per-role spreads, no seeded tie-break weights, just `sum(violations)`. **The expectation is that
+it proves optimality where the full objective does not, and that expectation is NOT yet
+measured.** It is the one claim in this section with no number behind it, and it decides how
+often the sole containment is actually proven on a 5 s / 0.33-vCPU pass. §7 measures it as a
+required case before implementation is called done; if it turns out to time out routinely, the
+containment is `violation_ceiling_proven: false` most of the time and that is a design signal,
+not a detail. Its value becomes
 `violation_target`, and its solver status is recorded.
 
 **Why that matters more than it looks.** Without it the ceiling has slack, and **no Stage B
@@ -597,7 +632,10 @@ the minimal ceiling on a fixture capped short enough that Stage A alone would le
 > reach the solver — but the principle is about softness, and this design makes six rule
 > families soft for the whole month whenever a single pin exists. The minimal ceiling above
 > confines the breakage to what the pins genuinely force, which is the narrowest reading of E3.
-> **§8's ADR must cite ADR-0010 and record Frank's ruling on it rather than inheriting one.**
+> **§8's ADR must cite ADR-0010 and record Frank's ruling on it rather than inheriting one —
+> and the ruling is needed BEFORE implementation, not at ADR-writing time.** If it goes the
+> other way, §5.2's "stop predicting" mechanism needs a pair-rule carve-out, which is a
+> different design rather than an edit.
 
 **And the ceiling bounds the model, never the report.** An earlier draft implied `n_viol <=
 violation_target` makes the boolean reading safe, on the argument that Stage B's feasible set is
@@ -829,8 +867,11 @@ shift is invisible — but the count per row changes, and the tests pin that.
   passes without saying so — statuses `['OPTIMAL', 'MODEL_INVALID', 'OPTIMAL']`. That is a
   **pre-existing defect, not introduced here** (four- and six-week fixtures did not reproduce
   it), and it is out of this delivery's scope — but this delivery adds a new lever on
-  `total_slots` through row growth, so the cap is set to keep pins from pushing a month into
-  that regime rather than on a headroom claim that was never true. Recorded here so the next
+  `total_slots` through row growth. **What the cap buys is a bounded array, and nothing more** —
+  it does *not* keep a month out of the overflow regime, since 100 pins in one (role, week) take
+  a four-week month from 42 to ~139 slots, well past the ~70 where the top weight crosses 2⁶³.
+  Two separate problems: the overflow is reachable today with no pins, and the cap bounds what a
+  caller can allocate. Recorded here so the next
   person to see an unexplained fairness result on a five-week month has the thread. The pools are unbounded today for the same reason and
   that is pre-existing; this spec does not widen it further.
 - **A `pinned` entry naming an unknown `role`** is refused with a `ValueError` naming it. The
@@ -883,8 +924,11 @@ and behaved otherwise:
   that passes under a broken design proves nothing, and the first version of this section
   shipped exactly such a guard:
   - *Skewed partial pin — assert what happens to EVERYONE ELSE.* One person pinned into
-    `Sun.Lead` for three weeks and nothing else. **Assert that the un-pinned members' totals stay
-    inside the un-pinned baseline's spread.** That is the property §5.1's slack delivers and the
+    `Sun.Lead` for three weeks and nothing else. **Assert that the un-pinned members who are in
+    the global fairness groups keep their totals inside the un-pinned baseline's spread** — the
+    population matters: an un-pinned `fairness_exempt` member is outside every bound, and review
+    measured one losing a service to a **single** pin. Assert nothing about exempt members. Use
+    §5.1's stated fixture, which the table there now names in full. That is the property §5.1's slack delivers and the
     one an admin cares about: pinning someone does not wreck the rest of the month. Measured, it
     holds at one, two and three pins on every row.
 
@@ -896,7 +940,9 @@ and behaved otherwise:
     **Assert nothing about the three `*_fairness_relaxed` flags either**, in this guard or any
     other — §4 is normative on that, and §5.1's cross-role displacement paragraph shows pins move
     them for reasons unrelated to any loosening.
-  - *Saturation is row-dependent, and the test names the row.* Pinning one person into a
+  - *Saturation is row-dependent, and the test names the row AND the fixture.* Use §5.1's
+    fixture verbatim — the threshold does not reproduce on the repo's `make_config`, whose
+    Saturdays fall on weeks 2 and 4 and which carries `BASE_RULES`. Pinning one person into a
     **three-seat** Sunday row in every week collapses the ladder to `stage_a`; the **two-seat**
     `Sun.Lead` row at the same pin count does not. Assert both halves. This is the case an
     earlier draft described without naming the row, which made it irreproducible for anyone who
@@ -999,6 +1045,11 @@ and behaved otherwise:
      `violation_target` adds a second such input. Both are machine-independent only while Stage A
      proves optimality — a precondition, not a construction. Stage A's model has neither
      dependency, so fingerprinting it alone is the honest guard.
+
+     **How the test gets the model, since `create_model_and_solve` neither returns nor exposes
+     it:** a five-line `CpSolver.Solve` monkeypatch in the test captures the model of the first
+     solve (Stage A's), hashes it, and restores. Said here because §9's safety argument rests on
+     this guard and "hash the Stage A model" is not actionable without it.
 
      **The residual gap, named:** with `pin_set` empty the violation booleans do not exist, so a
      violation term leaking into Stage B's optimise branch on the pinless path would add a zero
@@ -1180,8 +1231,10 @@ loop later without understanding why it is shaped that way.
 **Said out loud: one Cloud Function serves both environments.** The solver half never reaches
 `preview` first, so "merge the solver first" means it is live in production before any human
 has watched it work. That is inherent to the existing architecture, not introduced here, and
-what makes it safe is the guard §7 requires: a request with no `pinned` key must produce
-byte-identical output to today on a fixed seed. Until the app starts sending pins, the
+what makes it safe is the guard §7 requires: a request with no `pinned` key must build a
+byte-identical **model** to today on a fixed seed. Not identical *output* — the response dict
+gains three fields, so the phrasing an earlier draft used here was definitionally false; the
+rollback paragraph below states the property correctly. Until the app starts sending pins, the
 deployed change is inert for everyone.
 
 **Rollback is one-sided, and that is the point.** Reverting the app commit is sufficient: the
