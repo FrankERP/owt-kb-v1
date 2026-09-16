@@ -138,17 +138,54 @@ irreversibly, the client renders an unknown marker with a generic fallback, and 
 between the two would show that generic line forever with both suites green — so the strings
 are a contract, not illustrations:
 
+**This table is the single normative statement of the grammar.** Nowhere else in this file, and
+nothing in the client spec, may spell a marker differently; both cite here.
+
 | Family | Entry |
 |---|---|
-| DSL count rule | the rule's own `source`, verbatim, no prefix and no week — it is month-scoped |
+| DSL count rule | `<person>: <source>` |
 | Weekly presence | `W<n>: <source>` |
-| Pair exclusion | `W<n> <Sunday\|Saturday>: <source>` — the service token is the solver's own `SUNDAY_SERVICE` / `SATURDAY_SERVICE` constant, not an abbreviation |
-| Consecutive | `W<n>-<n+1>: <source>` — `n` is the earlier week of the pair |
-| Mandatory lead | `builtin:mandatory_lead:W<n>:<Sunday\|Saturday>` |
+| Pair exclusion | `W<n> <Sun\|Sat>: <source>` |
+| Consecutive | `W<n>-<n+1> <person>: <source>` — `n` is the earlier week of the pair |
+| Mandatory lead | `builtin:mandatory_lead:W<n>:<Sun\|Sat>` |
 | Saturday anchor | `builtin:sat_anchor:W<n>` |
 
-§7 asserts each form against a literal. The client's own spec asserts its generic fallback for
-an unknown `builtin:` marker, so the two suites together pin both sides of the boundary.
+**The service token is `Sun` / `Sat`, not `Sunday` / `Saturday`.** Every other identifier that
+crosses this boundary already uses the short form — the `pinned.role` field, `Sun.Lead`,
+`Sat.BGV`, `mapUnfilledSeats`' keys — so one vocabulary rather than two. The solver's internal
+`SUNDAY_SERVICE` / `SATURDAY_SERVICE` constants are `"Sunday"` / `"Saturday"`
+(`owt_solver_v2.py:66-67`) and must be **mapped**, not interpolated.
+
+**`<person>` comes from the parsed rule object, never from `source`, because `source` drops it.**
+`restrictionToDs` emits one line per member with the name prefixed **once**
+(`plannerModel.ts:572-585`) and `parse_dsl_rules` splits on `&` storing `source=clause`
+(`:312`, `:409`), so every clause after the first is subject-elided. Executed against the
+shipped parser:
+
+```
+'Gaby !in Sat.* & !in Sun.Choir & fairness_slack 1 & Sun.BGV <= 2'
+    -> DslCountRule(person='Gaby', source='Sun.BGV <= 2')     # name GONE
+'Hugo Sun.BGV <= 2'
+    -> DslCountRule(person='Hugo', source='Hugo Sun.BGV <= 2')
+'Gaby !in Sat.* & !consecutive on *.Lead'
+    -> DslConsecutiveRule(person='Gaby', source='!consecutive on *.Lead')  # name GONE
+```
+
+The shipped Gaby seed is the first shape (`solverConfigDefaults.ts:64-71` puts
+`excludedPatterns` before the cap), so without the explicit person the production notice would
+read «Se dejó de aplicar una regla … «Sun.BGV <= 2»» — whose cap, nobody can say — and two
+members capped on the same pattern would produce byte-identical entries. Count rules are the
+only family with no week, so this would strip the last discriminator from the weakest entry.
+Pair rules are exempt: the parser rejects an elided `!with` outright, so both names are always
+in `source`. Presence rules carry their names inside `any_of(…)`.
+
+**`resolve_dsl_templates` runs before parsing** (`:197-218`), so a `{weeks-2}` template never
+reaches `source` — an entry shows the resolved number. §7's literals assert the resolved form.
+
+§7 asserts each form against a literal, **and against a rule authored in the seed's merged
+shape**, not a standalone one — a standalone rule keeps its name by accident and would pass
+while production's entry is nameless. The client's own spec asserts its generic fallback for an
+unknown `builtin:` marker, so the two suites together pin both sides of the boundary.
 
 **The three existing `*_fairness_relaxed` fields are NOT additive, and their meaning shifts.**
 `fairness_relaxed`, `sun_lead_fairness_relaxed` and `sun_bgv_fairness_relaxed` are derived from
@@ -412,7 +449,7 @@ authored rule for the whole month would break it in services the admin never pin
 **Each entry must identify its instance, not just its rule.** A pair rule produces one boolean
 per week **per service**, so `W3: A !with B on *.Lead` alone is ambiguous between the Sunday
 and the Saturday of that week — two different waivers collapsing into one line the admin
-cannot act on. The entry carries the service too (`W3 Sun: …`), and §7 asserts that two
+cannot act on. The entry carries the service too, in §4's grammar and only there, and §7 asserts that two
 relaxed instances of one rule produce two distinct entries.
 
 **Why the count rules are the exception, and it is not an inconsistency.** A DSL count rule is
@@ -626,7 +663,7 @@ shift is invisible — but the count per row changes, and the tests pin that.
 - **Once ANY pin exists, the mandatory-lead constraint is soft for the whole month**, not only
   where the pins are — `soft = bool(pin_set)` is model-wide. So a lead shortfall in week 4,
   caused by nothing but absences, no longer raises: it comes back as
-  `builtin:mandatory_lead:W4:Sun` and a «Sin cubrir» seat — strictly better than today's
+  the `builtin:mandatory_lead` marker §4 specifies and a «Sin cubrir» seat — strictly better than today's
   failure. **And nothing is lost, because `diagnose_infeasibility`'s actionable half never
   reached the admin in the first place.** An earlier draft implied it did. It does not: the
   route answers `422` (`app/api/admin/solve/route.ts:138`) and `handleAuto` parses the body
