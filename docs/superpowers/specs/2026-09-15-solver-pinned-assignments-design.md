@@ -146,11 +146,12 @@ client also runs is what catches a solver honouring *a* pin count rather than *t
 **`pin_violations?: string[]`** — the rules the solver had to relax to honour the pins. The
 client spec's §4 renders them; §5.2 explains why they exist and how an entry is derived.
 
-**`violation_ceiling_proven?: boolean`** — `true` **iff all three hold**: Stage A returned
-`OPTIMAL`, the violation-only solve returned `OPTIMAL`, **and the returned month came from Stage
-B rather than the `stage_a` fall-through**. `false` otherwise.
+**`violation_ceiling_proven?: boolean`** — `true` **iff both hold**: the violation-only solve
+(§5.2, which runs **first**) returned `OPTIMAL`, **and the returned month came from Stage B
+rather than the `stage_a` fall-through**. `false` otherwise. Stage A's status is not an input:
+once the ceiling is solved for first, Stage A runs *inside* it and cannot widen it.
 
-The third condition is not redundant and an earlier draft omitted it. The ladder can exhaust or
+The second condition is not redundant and an earlier draft omitted it. The ladder can exhaust or
 run out of the 40 s budget and return `stage_a` itself (`:1124-1125`, `:1137`) — which was built
 before `violation_target` existed and carries no `n_viol <= violation_target` constraint — so its
 assignment-derived `pin_violations` can exceed the proven minimum even when both solves proved
@@ -234,6 +235,11 @@ in `source`. Presence rules carry their names inside `any_of(…)`.
 
 **`resolve_dsl_templates` runs before parsing** (`:197-218`), so a `{weeks-2}` template never
 reaches `source` — an entry shows the resolved number. §7's literals assert the resolved form.
+
+**One collision the person prefix does not resolve:** if a member carries two
+`PersonRestriction` rows with the same cap pattern, `restrictionToDs` emits one line per row and
+both parse to the same `person` and the same `source`, so the two entries are identical. Rare,
+cosmetic, and named so the paragraph above is not read as promising more than it delivers.
 
 §7 asserts each form against a literal, **and against a rule authored in the seed's merged
 shape**, not a standalone one — a standalone rule keeps its name by accident and would pass
@@ -479,8 +485,12 @@ fixture to scope it by.
 model bounds `gmax - gmin` over the fairness *group*; an exempt member is outside it and carries
 no bound at all, so displacement lands on them first. Measured on the fixture above with one
 exempt member and a **single** pin on someone else: they went 3→2 and 4→3 on two of four seeds,
-while every fairness-group member stayed 4–5. `solverConfigDefaults.ts` marks **Frank and Mkz**
-exempt in production, so this is the real roster, not a constructed case. An earlier draft
+while every fairness-group member stayed 4–5. `solverConfigDefaults.ts` marks **Frank and Mkz** exempt in the
+first-run seed — and that file is in-memory only (`:44-47`), so it is **evidence of the rule's
+shape, not of production's contents**: the live rules are the `solverConfig` Sanity singleton
+(ADR-0010, decision 2), seeded 2026-08-02 from a capture that differed from the constant in two
+material ways. Confirm the exemption against that document before quoting it as the production
+roster; the carve-out below holds regardless of who carries it. An earlier draft
 promised "pinning someone does not wreck the rest of the month" without this carve-out; the
 promise holds for the group and not for the exempt. §7 asserts it over the group and asserts
 nothing about exempt members, and the honest summary is: **a pin can cost an exempt member a
@@ -641,15 +651,44 @@ So after the solve, each relaxable instance is **re-evaluated against the return
 assignment**, and an entry is emitted only for instances that actually fail. The booleans exist
 to make the model feasible; they are not the report.
 
-**The ceiling is made PROVABLY MINIMAL before it is used, by its own solve.** Stage A minimises
-`(max_weighted_empty + 1) · n_viol + weighted_empty`, and if it times out its violation count is
-an upper bound with slack. So between Stage A and Stage B there is a third, cheap solve:
-minimise `n_viol` alone, subject to `weighted_empty <= empty_target`. It is the **full assignment model** — every `x`, `filled`, occupancy and `weighted_empty <=
-empty_target` constraint is still there — with a far simpler objective: no seeded tie-break weights and no
-fairness *objective*, just `sum(violations)` — **and it passes `big` for `fairness_limit`,
-`sun_lead_limit` and `sun_bgv_limit`, as Stage A does**, since `create_model_and_solve` builds
-the three hard spreads unconditionally from those parameters. Anything tighter silently inflates
-`violation_target` or makes the solve infeasible. **The expectation is that
+**The ceiling is made PROVABLY MINIMAL by solving for it FIRST — the order is the mechanism.**
+The violation-only solve runs **before Stage A**, not between Stage A and Stage B:
+
+| | Solve | Objective | Constrained by |
+|---|---|---|---|
+| 0 | **violation-only** | `min sum(violations)` | nothing inherited |
+| A | fill | `min (max_weighted_empty + 1)·n_viol + weighted_empty` | `n_viol <= violation_target` |
+| B | fairness ladder | the existing objective | `weighted_empty <= empty_target`, `n_viol <= violation_target` |
+
+Solve 0 is the full pinned model — every `x`, `filled` and occupancy constraint — with `big` for
+`fairness_limit`, `sun_lead_limit` and `sun_bgv_limit` (`create_model_and_solve` builds the three
+hard spreads unconditionally from those parameters; anything tighter inflates the ceiling or makes
+the solve infeasible), no seeded tie-break weights, and **no `empty_target`**: there is no earlier
+stage to inherit one from. Its value is `violation_target`.
+
+**Why the order, and why an earlier draft's placement was worthless.** That draft ran the
+violation-only solve *after* Stage A, subject to `weighted_empty <= empty_target`. Both branches
+were dead:
+
+- Stage A's objective is **strictly lexicographic** — `weighted_empty` is bounded by
+  `max_weighted_empty`, so any solution with `n_viol = k−1` scores below every solution with
+  `n_viol = k`. So **Stage A `OPTIMAL` already proves the minimum**, and its own solution sits
+  inside the third solve's box. The extra solve was a no-op that could only fail: when it timed
+  out on a 0.33-vCPU pass it reported `violation_ceiling_proven: false` about a ceiling that
+  *was* minimal — a false alarm, charged against the same 40 s budget.
+- Stage A `FEASIBLE` — the case it was added for — handed it an `empty_target` that may itself
+  exclude the true optimum, so it proved a minimum inside a suboptimal box.
+
+Solving for the ceiling first fixes both: `violation_target` is minimal whenever solve 0 proves
+optimality, regardless of what Stage A then does, and `empty_target` is computed **inside** the
+minimal-violation box, so the pair Stage B inherits is jointly feasible by construction.
+
+**Solve 0 does not run when there are no pins** — `soft` is false, there are no violation
+booleans, and a stray extra solve on the pinless path would consume budget invisibly to both of
+§7's guards (the fingerprint is captured before any solve; the output golden runs only on
+fixtures whose limit provably never binds).
+
+**The expectation is that
 it proves optimality where the full objective does not, and that expectation is NOT yet
 measured.** It is the one claim in this section with no number behind it, and it decides how
 often the sole containment is actually proven on a 5 s / 0.33-vCPU pass. §7 measures it as a
@@ -689,21 +728,24 @@ the minimal ceiling on a fixture capped short enough that Stage A alone would le
 > the behaviour he expects**, and the two reconcile exactly — on the word ADR-0010 itself
 > emphasises:
 >
-> **Nothing here is ever relaxed for fairness.** ADR-0010's fear is a rule traded away to
-> flatten participation counts, which is what "soft in fairness" means: the rule enters an
-> objective and loses to a cheaper assignment. In this design a rule can be set aside for
-> **one reason only** — a pin has made it unsatisfiable — and three properties enforce that:
-> the violation count is minimised **strictly above** every fairness term (§5.2's objective);
-> the ceiling is **proven minimal** by its own solve before Stage B may use it, and says so
-> through `violation_ceiling_proven`; and the fairness ladder **cannot buy a tighter spread by
-> breaking one more rule**, because the ceiling is a constraint rather than an objective term.
+> **The NUMBER of rules set aside is never increased for fairness.** ADR-0010's fear is a rule
+> traded away to flatten participation counts — the rule enters an objective and loses to a
+> cheaper assignment. Here the count is fixed before any fairness term is ever evaluated: §5.2's
+> **solve 0 runs first**, minimising violations alone with no fairness objective and nothing
+> inherited, and every later stage carries `n_viol <= violation_target` as a **constraint**. So
+> the fairness ladder cannot buy a tighter spread by breaking one more rule, and when solve 0
+> proves its minimum — reported through `violation_ceiling_proven` — the count is exactly what
+> the pins force and no more.
+>
+> **What fairness DOES still decide, stated plainly because the ruling rests on it:** among
+> violation sets of the *same minimal size*, which instance gives. Stage B's objective is
+> entirely fairness and rotation, so it picks — and the instance it picks can sit in a week with
+> no pin. The cardinality is pin-forced; the selection is not. An earlier draft claimed "nothing
+> here is ever relaxed for fairness", which was too strong: nothing is relaxed **additionally**
+> for fairness, and that is the guarantee.
 > A rule the pins do not force stays as hard as it is today.
 >
-> **One caveat the ruling was given with, stated here rather than 250 lines away:** the ceiling
-> bounds the **number** of relaxed instances, not **which** ones. Among equal-cardinality sets
-> the ladder picks, so the instance that gives may sit in a week with no pin — the cardinality is
-> pin-forced, the selection is not. §4 discloses it; it belongs in the ruling too, because the
-> reconciliation above is what the ruling rests on.
+> §4 discloses the same caveat where the field is defined.
 >
 > The rejected alternative — a pair-rule carve-out that keeps `!with` hard — was considered and
 > refused on E3: it would make the month **fail** rather than honour a pin the admin placed,
@@ -943,7 +985,12 @@ shift is invisible — but the count per row changes, and the tests pin that.
   budget knobs clamp (`_clamp`, `:1183-1184`), and an earlier draft described this cap "the way
   the other budget knobs already are" — which would silently drop pins past the limit. Those are
   seats the admin asked to keep; dropping them surfaces as a refused Auto through the client's
-  per-pin roster check, a confusing failure for a request the solver could have refused by name. `build_slots` emits `max(default, pins_for(R, W))`, so slots — and
+  per-pin roster check, a confusing failure for a request the solver could have refused by name.
+  **The rejection is not actionable to the admin either**, because no solver error text reaches
+  them (the route 422s and `handleAuto` parses only on `res.ok`), so a board with more than 100
+  occupants across solvable rows fails Auto with the generic «El solver no encontró solución.».
+  Default capacity is 78 and nothing in `app/components/admin/**` caps occupants per cell, so it
+  is reachable only by deliberate over-filling; named rather than designed around. `build_slots` emits `max(default, pins_for(R, W))`, so slots — and
   with them `x` — grow linearly with the array, on what §6 itself calls a public HTTP endpoint
   behind an API key. **The cap is 100**, and the reasoning an earlier draft gave for a larger one was measured false.
   That draft claimed 200 kept `compute_priority_weights` — degree-8 in `overall_limit`
@@ -962,11 +1009,15 @@ shift is invisible — but the count per row changes, and the tests pin that.
   Whoever writes the fix PR should start there, not from a slot threshold. That is a
   **pre-existing defect, not introduced here** (four- and six-week fixtures did not reproduce
   it). **Frank approved fixing it, 2026-09-16, as its own change** — and the ordering is
-  load-bearing: any fix touches `compute_priority_weights`, which changes the Stage A model, which
-  **changes §7's byte-identity golden**. So the overflow fix ships **first**, on its own, with the
-  golden re-captured in that PR under §7's rule (its diff is `gcf/**`-only and it is not this
-  delivery); this delivery then rebaselines on it. Landing them together would put a real
-  behaviour change and a golden re-capture in the same PR, which is precisely what §7 forbids.
+  load-bearing, though not for the reason an earlier draft gave. A fix touches
+  `compute_priority_weights`, which lives inside the `elif optimize:` branch Stage A never enters
+  (`:903`, `:948`), so it moves **§7's output golden and NOT the Stage A fingerprint** — verified
+  by perturbing the function: Stage A hash unchanged, schedule changed. So the overflow fix ships
+  **first**, on its own, re-capturing the **output golden only** under §7's third cause (a
+  deliberate, reviewed objective change), and the **fingerprint must come back green in that PR**
+  — if it reddens there, the fix touched model construction and that is a finding. This delivery
+  then rebaselines on it. Landing them together would put a real behaviour change and a golden
+  re-capture in one PR, which §7 forbids.
   Out of *this file's* scope — but this delivery adds a new lever on
   `total_slots` through row growth. **What the cap buys is a bounded array, and nothing more** —
   it does *not* keep a month out of the overflow regime, since 100 pins in one (role, week) take
@@ -997,9 +1048,10 @@ shift is invisible — but the count per row changes, and the tests pin that.
   backstop that turns a month-wide failure into a message.
 - **A timed-out pinned month looks like a fairness-free month, not like an error.**
   `solver_total_budget_seconds` is 40 on a ~0.33-vCPU container, and Stage B's exhaustion path
-  returns the fairness-free `stage_a` silently (`:1124-1125`, `:1137`). The violation booleans,
-  the extra objective tier **and the violation-only solve's own draw on the same 40 s** move
-  that budget — the third solve is small, but it is a third solve, and CI runs on a faster machine than
+  returns the fairness-free `stage_a` silently (`:1124-1125`, `:1137`). The violation booleans
+  **and solve 0's own draw on the same 40 s** move that budget — there is no extra objective
+  *tier*, which an earlier draft claimed: §5.2 is explicit that the optimise branch gains no
+  violation term and that the ceiling is a constraint — the third solve is small, but it is a third solve, and CI runs on a faster machine than
   production, so §7's `len(slots) + 1` fingerprint can pass in CI and fire in the field. The
   admin sees a legal, pin-honouring month with a wide spread and the existing degraded-fairness
   notice — which is the right outcome, and is stated here so it is not read as a new bug.
@@ -1187,9 +1239,10 @@ and behaved otherwise:
      resolved by re-capturing rather than by deleting the guard §9's rollout rests on.
 
      **The precondition itself can redden the gate on a slow runner.** Seeds 1 and 2024 return
-     `OPTIMAL` at the fixture's 10 s budget and `FEASIBLE` at 3 s — and review measured seed 2024
-     already `FEASIBLE` at **5 s** on hardware likely faster than `ubuntu-latest` at
-     `num_search_workers=1`, so the margin is thinner than the 10 s figure suggests. **Pick the
+     `OPTIMAL` at the fixture's 10 s budget and `FEASIBLE` at 3 s — and review measured **seeds 1 and 2024 both already `FEASIBLE` at 5 s** on
+     hardware likely faster than `ubuntu-latest` at `num_search_workers=1`, so the margin is much
+     thinner than the 10 s figure suggests. **Seed 42 was `OPTIMAL` and schedule-stable at 10 s,
+     5 s and 3 s**, and is the golden candidate on the evidence so far. **Pick the
      golden's seed and budget from the runner's own first green run, with headroom**, not from a
      laptop's 10 s number, or a loaded runner trips the assertion for reasons unrelated to any
      change. The
@@ -1197,14 +1250,27 @@ and behaved otherwise:
      golden meaningful, not to measure the runner — and never to drop the assertion or the
      golden.
 
-     **Who re-captures, and when — and NEVER in a PR that changes solver logic.** Both goldens
-     live in `gates`, the required check for every PR in the repo, so a runner-image or ortools
-     bump could red-gate unrelated work. The rule has exactly two legitimate causes: **a runner
-     image bump, or an ortools pin bump**, each in a PR that changes **nothing else**, using the
-     skipped-then-un-skipped procedure §9 uses for the first capture, with the commit message
-     naming which.
+     **Who re-captures, and when — and the two goldens are governed SEPARATELY.** Both live in
+     `gates`, the required check for every PR in the repo. They move for different reasons, and
+     an earlier draft governed them with one rule that was both too strict and, read from §6, a
+     licence to re-capture the wrong one:
 
-     **A red fingerprint inside the solver PR is a FINDING, never a literal to update.** An
+     | | Moves when | Legitimate re-capture causes |
+     |---|---|---|
+     | **Stage A fingerprint** (guard 1) | the **model construction** changes | a runner-image bump, or an ortools pin bump — each in a PR that changes nothing else |
+     | **Output golden** (guard 2) | the model **or the objective** changes | the two above, **plus** a deliberate, reviewed change to the objective whose own PR code review accounted for it |
+
+     `compute_priority_weights` is reached only inside the `elif optimize:` branch (`:903`,
+     `:948`), which Stage A (`empty_objective_only=True`) never enters — verified by perturbing
+     the function and re-hashing: **Stage A hash unchanged, output schedule changed.** So an
+     objective change moves the output golden and **not** the fingerprint, and a rule that says
+     otherwise is a standing invitation to re-capture the one literal that must never be
+     re-captured casually.
+
+     Every re-capture uses the skipped-then-un-skipped procedure §9 uses for the first capture,
+     with the commit message naming the cause.
+
+     **A red FINGERPRINT inside the solver PR is a FINDING, never a literal to update.** An
      earlier draft of this rule said "only in a PR whose diff is the bump itself or `gcf/**`" —
      and the solver PR *is* a `gcf/**` PR, so it authorised re-capturing the byte-identity guard
      inside the one change whose entire preview-less safety argument is that guard. The pressure
