@@ -173,6 +173,19 @@ const Page = async ({ params }: Params) => {
   const hasLyrics       = shows("letra");
   const hasHistory      = shows("historial");
   const hasRefLinks     = shows("referencia");
+  // The sticky bar's practice cluster takes over the hero's play control, so it
+  // offers what the audio section offers first: the first track that actually
+  // has a file. Plain data — the page is a Server Component (ADR-0028).
+  const firstAudio      = (post?.audioTracks ?? []).find((t) => t.audioFileURL);
+  const firstTrack      = firstAudio
+    ? {
+        url: firstAudio.audioFileURL,
+        title: firstAudio.title,
+        tone: firstAudio.tone,
+        songTitle: post.title,
+        songSlug: post.slug.current,
+      }
+    : null;
 
   return (
     <div>
@@ -233,7 +246,9 @@ const Page = async ({ params }: Params) => {
       </div>
 
       {/* ── Section nav ──────────────────────────────────────────────────── */}
-      {sections.length > 1 && <SectionNav sections={sections} />}
+      {sections.length > 1 && (
+        <SectionNav sections={sections} practice={{ title: post.title, bpm, track: firstTrack }} />
+      )}
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 py-12 space-y-20">

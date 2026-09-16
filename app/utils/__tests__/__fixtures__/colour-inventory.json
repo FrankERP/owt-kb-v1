@@ -8,27 +8,27 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 321,
-    "filesScanned": 319,
-    "filesWithColour": 55,
+    "literalRows": 323,
+    "filesScanned": 320,
+    "filesWithColour": 56,
     "byCategory": {
       "2": 2,
       "4": 76,
-      "8": 90,
+      "8": 92,
       "9": 10,
       "11": 9,
       "12": 134
     },
     "byDisposition": {
-      "B": 124,
+      "B": 126,
       "exempt": 43,
-      "keep": 245,
+      "keep": 246,
       "C": 5,
       "D": 16
     },
     "compositingClasses": 22,
     "compositingSelectorOccurrences": 47,
-    "compositingClassNameOccurrences": 61,
+    "compositingClassNameOccurrences": 62,
     "compositingRuleBodies": 46,
     "lightCounterpartClasses": 16,
     "pairs": 11,
@@ -439,7 +439,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 248,
+      "line": 263,
       "disposition": "B",
       "reason": null
     },
@@ -451,7 +451,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 316,
+      "line": 331,
       "disposition": "B",
       "reason": null
     },
@@ -463,7 +463,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 329,
+      "line": 344,
       "disposition": "B",
       "reason": null
     },
@@ -3576,6 +3576,30 @@
       "reason": null
     },
     {
+      "file": "app/components/song/PracticeCluster.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
+      "line": 63,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/song/PracticeCluster.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "fill=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "fill",
+      "line": 69,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/components/SongAudioSection.tsx",
       "category": 8,
       "categoryName": "svg-attribute",
@@ -4347,6 +4371,14 @@
     },
     {
       "file": "app/components/song/KeyDial.tsx",
+      "kind": "className",
+      "class": "key-dial",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/song/PracticeCluster.tsx",
       "kind": "className",
       "class": "key-dial",
       "count": 1,
