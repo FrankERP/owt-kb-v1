@@ -1138,7 +1138,10 @@ a practice surface. See spec Part XIV for the full ledger; the motion-relevant p
   clocks whose drift over a rehearsal is inaudible, and reduced motion keeps its story —
   the ring collapses, the click keeps playing, because sound is not motion. The loop is a
   timeout and never an interval, and it belongs to the active state: `stop()` clears it on
-  the second tap, on a hidden tab and on unmount, and suspends (never closes) the context.
+  the second tap, on a hidden tab and on unmount, stops every oscillator it had already booked
+  (suspending only freezes the clock they are pinned to), and suspends — never closes — the
+  context. A tick that ran late skips the beats already behind the clock instead of booking
+  them in the past, where they would all fire at once.
   Tap = ring + click with no separate silent mode (ruling 13) — the phone's volume is the
   control. **Caveat (ruling 12): on iOS the click obeys the SILENT SWITCH**, because Web
   Audio does and the `<audio>` guide track does not; a muted phone rings without clicking,

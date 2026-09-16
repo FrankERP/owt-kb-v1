@@ -59,11 +59,15 @@ class FakeAudioContext {
 let ctx: FakeAudioContext;
 let factory: ReturnType<typeof vi.fn<() => AudioContext>>;
 
-/** Advance wall time and the context clock together, in sub-lookahead steps. */
+/** Advance wall time and the context clock together, in sub-lookahead steps.
+ *  From wherever the clock already is: an AudioContext clock never rewinds, and
+ *  a test whose second `advance()` started from zero again would be testing a
+ *  machine that does not exist. */
 function advance(ms: number) {
   const step = 5;
+  const base = ctx.currentTime;
   for (let elapsed = step; elapsed <= ms; elapsed += step) {
-    ctx.currentTime = elapsed / 1000;
+    ctx.currentTime = base + elapsed / 1000;
     vi.advanceTimersByTime(step);
   }
 }
@@ -141,6 +145,66 @@ describe("createMetronome", () => {
     const hz = ctx.oscillators.map((o) => o.frequency.value);
     expect(hz.slice(0, 4)).toEqual([CLICK.accentHz, CLICK.beatHz, CLICK.beatHz, CLICK.accentHz]);
     m.stop();
+  });
+
+  it("skips the beats a stalled main thread missed, keeping the bar's phase", () => {
+    const m = createMetronome({ bpm: 120, beatsPerBar: 4, audioContext: factory });
+    m.start();
+    advance(20);
+    expect(clickTimes()).toHaveLength(1); // the seed at 0.05, beat 1 of the bar
+
+    // The tab was throttled: the context clock ran on while no timer fired, and
+    // the next beat (0.55) plus the one after are now in the PAST. Booking them
+    // would fire them all at once — `osc.start(t)` with t < currentTime plays
+    // immediately.
+    ctx.currentTime = 1.2;
+    vi.advanceTimersByTime(CLICK.lookaheadMs);
+    advance(900);
+
+    const times = clickTimes();
+    expect(times.every((t, i) => i === 0 || t >= 1.2)).toBe(true);
+    expect(times[1]).toBeCloseTo(1.55, 5);
+    expect(times[2]).toBeCloseTo(2.05, 5);
+    // Phase kept: 0.05 was beat 1 of the bar, so 2.05 (four beats later) is too,
+    // and 1.55 — beat 4 — is not.
+    const hz = ctx.oscillators.map((o) => o.frequency.value);
+    expect(hz.slice(0, 3)).toEqual([CLICK.accentHz, CLICK.beatHz, CLICK.accentHz]);
+    m.stop();
+  });
+
+  it("silences the clicks it had already booked when it stops", () => {
+    const m = createMetronome({ bpm: 120, beatsPerBar: 4, audioContext: factory });
+    m.start();
+    advance(20);
+
+    const osc = ctx.oscillators[0];
+    // Only the scheduled tail so far — the click is still ahead of the clock.
+    expect(osc.stop).toHaveBeenCalledTimes(1);
+
+    m.stop();
+    // Suspending would only FREEZE it: the context clock stops where it is and
+    // the booked click sounds off-phase the moment the next tap resumes it.
+    expect(osc.stop).toHaveBeenCalledTimes(2);
+    expect(osc.stop).toHaveBeenLastCalledWith();
+
+    // The list was cleared with it, so a second stop silences nothing twice —
+    // and nothing accumulates across a long run.
+    m.stop();
+    expect(osc.stop).toHaveBeenCalledTimes(2);
+  });
+
+  it("prunes finished clicks rather than holding a rehearsal's worth", () => {
+    const m = createMetronome({ bpm: 120, beatsPerBar: 4, audioContext: factory });
+    m.start();
+    advance(3000);
+    expect(ctx.oscillators.length).toBeGreaterThan(4);
+
+    m.stop();
+    // Everything already over was dropped on a tick; only what is still live (at
+    // most one scheduling window of clicks) is stopped by hand.
+    const silenced = ctx.oscillators.filter((o) => o.stop.mock.calls.some((c) => c.length === 0));
+    expect(silenced.length).toBeLessThanOrEqual(2);
+    expect(silenced.length).toBeGreaterThan(0);
   });
 
   it("stop() clears the loop, suspends the context", () => {
