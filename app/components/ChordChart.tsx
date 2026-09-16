@@ -4,6 +4,10 @@ import { useState } from "react";
 import SegmentedControl from "./ui/SegmentedControl";
 import Switch from "./ui/Switch";
 import NumberRoll from "./ui/NumberRoll";
+import Presence from "./ui/Presence";
+import Button from "./ui/Button";
+import { useTransposeOptional } from "./song/TransposeProvider";
+import { rootIndex, transposeChord, transposeKey, capoSuggestion, CHORD_RE } from "@/app/utils/transpose";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -15,67 +19,6 @@ interface Chart {
 interface Segment {
   chord?: string;
   lyric: string;
-}
-
-// ─── Transposition ────────────────────────────────────────────────────────────
-
-const DISPLAY_NOTES = [
-  "C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
-] as const;
-
-const NOTE_INDEX: Record<string, number> = {
-  C: 0, "B#": 0,
-  "C#": 1, Db: 1,
-  D: 2,
-  "D#": 3, Eb: 3,
-  E: 4, Fb: 4,
-  F: 5, "E#": 5,
-  "F#": 6, Gb: 6,
-  G: 7,
-  "G#": 8, Ab: 8,
-  A: 9,
-  "A#": 10, Bb: 10,
-  B: 11, Cb: 11,
-};
-
-// Transpose a single note token (root + trailing quality/extensions).
-function transposeToken(token: string, semitones: number): string {
-  const m = token.match(/^([A-G][b#]?)(.*)/);
-  if (!m) return token;
-  const [, root, quality] = m;
-  const idx = NOTE_INDEX[root];
-  if (idx === undefined) return token;
-  const newIdx = ((idx + semitones) % 12 + 12) % 12;
-  return DISPLAY_NOTES[newIdx] + quality;
-}
-
-export function transposeChord(chord: string, semitones: number): string {
-  if (semitones === 0) return chord;
-  // Transpose each side of a slash chord independently (e.g. "G/B" -> "A/C#")
-  // so the bass note moves with the root instead of being left behind.
-  return chord
-    .split("/")
-    .map((part) => transposeToken(part, semitones))
-    .join("/");
-}
-
-function rootIndex(key: string): number {
-  const m = key.match(/^([A-G][b#]?)/);
-  if (!m) return -1;
-  return NOTE_INDEX[m[1]] ?? -1;
-}
-
-// Open-chord-friendly keys (CAGED): C, A, G, E, D.
-const OPEN_KEY_IDX = [0, 9, 7, 4, 2];
-
-// Smallest capo position that lets you play the sounding key with open shapes.
-function capoSuggestion(soundingIdx: number): { fret: number; shapeKey: string } | null {
-  if (soundingIdx < 0) return null;
-  for (let fret = 0; fret <= 11; fret++) {
-    const shapeIdx = ((soundingIdx - fret) % 12 + 12) % 12;
-    if (OPEN_KEY_IDX.includes(shapeIdx)) return { fret, shapeKey: DISPLAY_NOTES[shapeIdx] };
-  }
-  return null;
 }
 
 // ─── ChordPro parser ─────────────────────────────────────────────────────────
@@ -101,8 +44,6 @@ function parseLine(line: string): Segment[] {
   return segments;
 }
 
-const CHORD_RE = /\[[^\]]+\]/;
-
 function stripChords(line: string): string {
   return line.replace(/\[[^\]]+\]/g, "");
 }
@@ -112,13 +53,24 @@ function stripChords(line: string): string {
 export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; defaultKey?: string }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [showChords, setShowChords] = useState(true);
-  const [semitones, setSemitones] = useState(() => {
+  // One seat per page when a provider is present (R4 ruling 2): the hero owns the
+  // key picker, this component only steps it. Without a provider — the practice
+  // sheet, the admin preview — the chart keeps its own state and the `defaultKey`
+  // seed, which a provider-fed page expresses through the picker instead.
+  const shared = useTransposeOptional();
+  const [localSemitones, setLocalSemitones] = useState(() => {
     if (!defaultKey || !charts[0]) return 0;
     const native = rootIndex(charts[0].key);
     const target = rootIndex(defaultKey);
     if (native < 0 || target < 0) return 0;
     return ((target - native) % 12 + 12) % 12;
   });
+
+  const semitones = shared ? shared.semitones : localSemitones;
+  const setSemitones = (n: number) => {
+    if (shared) shared.setSemitones(n);
+    else setLocalSemitones(((n % 12) + 12) % 12);
+  };
 
   if (!charts.length) return null;
 
@@ -127,15 +79,11 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
   const nativeIdx = rootIndex(current.key);
   const activeKeyIdx = nativeIdx >= 0 ? ((nativeIdx + semitones) % 12 + 12) % 12 : -1;
   const capo = capoSuggestion(activeKeyIdx);
+  const soundingChartKey = transposeKey(current.key, semitones);
 
   const handleTabChange = (i: number) => {
     setActiveIdx(i);
     setSemitones(0);
-  };
-
-  const handleKeyBtn = (btnIdx: number) => {
-    if (nativeIdx < 0) return;
-    setSemitones(((btnIdx - nativeIdx) % 12 + 12) % 12);
   };
 
   return (
@@ -159,35 +107,23 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
       {isChordPro && (
         <div className="flex flex-col gap-3">
 
-          {/* Transposition keys */}
+          {/* Transposition: one step at a time, reading out the sounding key */}
           {nativeIdx >= 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {DISPLAY_NOTES.map((note, i) => {
-                const isActive = i === activeKeyIdx;
-                const isNative = i === nativeIdx && !isActive;
-                const isNativeNote = i === nativeIdx;
-                return (
-                  <button
-                    key={note}
-                    type="button"
-                    onClick={() => handleKeyBtn(i)}
-                    aria-label={`Tonalidad ${note}${isNativeNote ? " (original)" : ""}`}
-                    aria-pressed={isActive}
-                    className={`relative font-label text-xs uppercase tracking-wide px-2.5 py-1 rounded border transition-colors min-w-[2rem] text-center ${
-                      isActive
-                        ? "border-accent bg-accent text-surface-sunken font-bold"
-                        : isNative
-                        ? "border-accent/60 text-accent"
-                        : "border-surface-accent-l25-d15 text-mono-500 dark:text-mono-500 hover:border-accent/50 dark:hover:border-surface-accent-l25-d15 hover:text-accent"
-                    }`}
-                  >
-                    {note}
-                    {isNativeNote && !isActive && (
-                      <span aria-hidden className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent" />
-                    )}
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-2">
+              <Button variant="icon" size="lg" aria-label="Bajar medio tono" onClick={() => setSemitones(semitones - 1)}>
+                <MinusIcon />
+              </Button>
+              <span className="brand-key-dial px-3 font-display text-sm" aria-live="polite">
+                <NumberRoll value={soundingChartKey} />
+              </span>
+              <Button variant="icon" size="lg" aria-label="Subir medio tono" onClick={() => setSemitones(semitones + 1)}>
+                <PlusIcon />
+              </Button>
+              <Presence show={semitones !== 0} variant="fade" as="div">
+                <Button variant="pill" size="sm" onClick={() => setSemitones(0)}>
+                  Original
+                </Button>
+              </Presence>
             </div>
           )}
 
@@ -226,9 +162,14 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
         </span>
       )}
 
-      {/* Content */}
+      {/* Content. The key remounts the chart on every transposition so the CSS fade
+          replays — a plain animation, not `motion`, keeps this file outside the
+          motion import boundary. */}
       {isChordPro ? (
-        <div className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-5 py-5 overflow-x-auto">
+        <div
+          key={`${activeIdx}-${semitones}`}
+          className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-5 py-5 overflow-x-auto animate-fade-in"
+        >
           {current.content.split("\n").map((line, li) => {
             // Section header: # Estribillo
             if (line.startsWith("# ")) {
@@ -289,6 +230,22 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
         </pre>
       )}
     </div>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden>
+      <line x1="1" y1="6" x2="11" y2="6" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden>
+      <line x1="1" y1="6" x2="11" y2="6" /><line x1="6" y1="1" x2="6" y2="11" />
+    </svg>
   );
 }
 

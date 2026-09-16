@@ -199,6 +199,10 @@ const config: Config = {
 					// host forever and becomes a containing block for a fixed descendant.
 					to: { opacity: "1", transform: "none" },
 				},
+				"fade-in": {
+					from: { opacity: "0" },
+					to: { opacity: "1" },
+				},
 				"scale-in": {
 					from: { opacity: "0", transform: "scale(0.96)" },
 					to: { opacity: "1", transform: "none" },
@@ -210,6 +214,7 @@ const config: Config = {
 			},
 			animation: {
 				rise: "rise var(--motion-base) var(--ease-out) both",
+				"fade-in": "fade-in var(--motion-fast) var(--ease-out) both",
 				"scale-in": "scale-in var(--motion-slow) var(--ease-out) both",
 				shimmer: "shimmer var(--motion-shimmer) linear infinite",
 			},

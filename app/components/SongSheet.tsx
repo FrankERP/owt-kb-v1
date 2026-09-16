@@ -8,6 +8,7 @@ import type { PortableTextComponents } from "@portabletext/react";
 import { usePlayer, AudioTrack, SongHistoryEntry } from "@/app/context/PlayerContext";
 import AudioTransport from "./AudioTransport";
 import ChordChart from "./ChordChart";
+import TempoPill from "./song/TempoPill";
 import CueDialog from "./ui/CueDialog";
 import { groupBySections } from "@/app/utils/lyrics";
 
@@ -103,6 +104,10 @@ export default function SongSheet() {
 
   if (!isOpen) return null;
 
+  // Same guard the song page uses: anything unparsable ("libre", "70-80") keeps
+  // the static span rather than clicking a tempo nobody wrote down.
+  const bpmNumber   = Number(sheet?.bpm);
+  const bpm         = Number.isFinite(bpmNumber) && bpmNumber > 0 ? bpmNumber : null;
   const hasChords   = (sheet?.chords?.length ?? 0) > 0;
   const hasBody     = (sheet?.body?.length ?? 0) > 0;
   const hasAudio    = (sheet?.audioTracks?.filter(t => t.audioFileURL).length ?? 0) > 0;
@@ -135,13 +140,19 @@ export default function SongSheet() {
                 {sheet.key}
               </span>
             )}
-            {sheet.bpm && (
-              <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
+            {/* The sheet's tempo clicks too (F2, ruling 14) — the same pill as the
+                song hero, kept quiet by `enabled` when the sheet is dismissed. */}
+            {bpm !== null ? (
+              <TempoPill bpm={bpm} timeSig={sheet.timeSig ?? null} enabled={isOpen} size="sm" />
+            ) : sheet.bpm ? (
+              <span className="inline-flex min-h-[44px] items-center font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
                 {sheet.bpm} BPM
               </span>
-            )}
+            ) : null}
+            {/* Same 44px height as the pill beside them: a row that mixes a tap
+                target with 30px chips reads as two rows of chrome. */}
             {sheet.timeSig && (
-              <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
+              <span className="inline-flex min-h-[44px] items-center font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
                 {sheet.timeSig}
               </span>
             )}

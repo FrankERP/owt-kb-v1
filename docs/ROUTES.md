@@ -41,11 +41,11 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 
 | URL | File | Type | Access | Rendering | Description |
 |-----|------|------|--------|-----------|-------------|
-| `/theme-gallery/[theme]/[fixture]` | `(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` | S | **Public** (ADR-0017) | SSG (6 static) | Theme gallery. `[theme]` ∈ `dark\|light`, `[fixture]` ∈ `swatches\|dialog\|planner`; `dynamicParams=false` 404s anything else. Renders real components from hardcoded fixtures — no session read, no fetch. Review surface for the light-mode migration. |
+| `/theme-gallery/[theme]/[fixture]` | `(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` | S | **Public** (ADR-0017) | SSG (12 static) | Theme gallery. `[theme]` ∈ `dark\|light`, `[fixture]` ∈ `swatches\|dialog\|planner\|kids-planner\|controls\|song`; `dynamicParams=false` 404s anything else. Renders real components from hardcoded fixtures — no session read, no fetch. Review surface for the light-mode migration. |
 | `/` | `(client)/page.tsx` | S | Worship | ISR 60s | Home "Esta semana." This weekend's Sat/Sun/special services. |
 | `/schedule` | `(client)/schedule/page.tsx` | S | Worship | ISR 60s | Upcoming services. Agenda (one row per service) is the default view, `Mes` the month grid; `?m=YYYY-MM` browses one month per header-arrow press, still fetching a `WINDOW_MONTHS`-wide window (default: rolling today → +95 days). |
 | `/biblioteca` | `(client)/biblioteca/page.tsx` | S | Worship | ISR 60s fetch, dynamic by `searchParams` | The song library (R1): one fetch (catalogue + tags + authors), A–Z index with a search console, letter rail and a filter drawer (Tipo, tema, artista, tonalidad). `?q=`/`?tag=`/`?author=` seed initial state; the index mirrors its own state back into the URL without a round-trip. |
-| `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song detail: lyrics/chords, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
+| `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song practice surface: lyrics/chords with a transposer, tap tempo, lyrics autoscroll, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
 | `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi semana" (R3 F3): the identity header (next service + seat + countdown, or the next Kids Sunday), upcoming assignments and proposal CTAs, the Kids block, and ONE link line to `/me/disponibilidad` carrying the count of upcoming marked dates. No calendar and no settings — both are their own pages now. |
 | `/me/disponibilidad` | `(client)/me/disponibilidad/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | The availability calendar, alone (R3 F3): `MyAvailabilityPanel` with the month grid always open, «Seleccionar fechas», «Repetir…» and the per-day note. A kids-only volunteer reaches it. |
 | `/me/ajustes` | `(client)/me/ajustes/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | Ajustes, alone (R3 F3): the one `SettingsCard` — Tema, Tamaño de texto, Perfil. Reached from the avatar menu («Ajustes») and from `ThemeAnnouncement` on `/me` (`#tema`). |
@@ -137,8 +137,10 @@ because their own headers already show the countdown.
 - **`/me/ajustes`** — `Navbar`, `SettingsCard` (one card holding `ThemeControl`,
   `TextSizeControl` and `ProfilePanel` `bare` — no longer three separate cards).
 - **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
-- **`/posts/[slug]`** — `Navbar`, `SectionNav`, `ChordChart`, `SongAudioSection`,
-  `EditSongButton`, `PortableText`.
+- **`/posts/[slug]`** — `Navbar`, `TransposeProvider` (the page's one transposition seat),
+  `SongHeroPills` (`KeyDial` + the 12-key drawer, `TempoPill`), `SectionNav` (whose
+  `practice` prop renders `PracticeCluster` once the hero scrolls away), `LyricsAutoscroll`,
+  `ChordChart`, `SongAudioSection`, `EditSongButton`, `PortableText`.
 - **`/admin`** — `Navbar`, `AdminPanel` composing the `app/components/admin/*` panels.
 - **Always mounted (client layout)** — `ImpersonationBanner`, `ActivityPing`, `AudioPlayer`,
   `SongSheet`, `NativeAuthBootstrap`, `TextScaleBootstrap`, `BottomNav`.

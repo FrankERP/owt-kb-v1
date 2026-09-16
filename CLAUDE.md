@@ -286,7 +286,32 @@ that triggered it; `cancel()` covers a `signOut` that throws), `PullToRefresh`
 (`app/components/ui/PullToRefresh.tsx` — mounted once in the client layout,
 never per route; opt a gesture-owning surface out with `data-pull-ignore`),
 `CueStrip` (`app/components/ui/CueStrip.tsx` — the navbar's next-service cue,
-fetched client-side so `Navbar` stays sync). Motion tokens are `--motion-*` /
+fetched client-side so `Navbar` stays sync),
+`TransposeProvider`/`useTransposeOptional` (`app/components/song/TransposeProvider.tsx`
+— the ONLY transposition seat on the song page; `ChordChart` falls back to its own
+state only when rendered WITHOUT a provider, never as a second live copy),
+`transpose.ts` (`app/utils/transpose.ts` — `rootIndex`/`noteAt`/`semitonesBetween`/
+`transposeKey`/`transposeChord`/`capoSuggestion`/`isChordPro`; neutral, so a Server
+Component may call them), `practice.ts` (`app/utils/practice.ts` —
+`tempoPeriodMs`/`beatsPerBar`/`autoscrollPxPerSecond`/`countLyricLines`; neutral too),
+`SongHeroPills` (`app/components/song/` — the ONE 12-key picker on the song page;
+never add a second strip, `ChordChart` keeps only its ± pair), `TempoPill`
+(`app/components/song/` — the ONE tempo control, on the song hero (`size="md"`) and in
+`SongSheet`'s meta row (`size="sm"`); two clocks: the RING is a CSS animation clocked by
+`--tempo-period`, never a `setInterval`, and the CLICK is `createMetronome`
+(`app/components/song/metronome.ts` — the ONLY metronome, a Web Audio lookahead
+scheduler built on the first tap and stopped on the second, on a hidden tab, on an
+`enabled={false}` surface and on unmount; on iOS it obeys the silent switch). ONE
+metronome sounds app-wide: a `start()` takes the floor from whichever instance held it
+and that pill un-presses through its `onStop`), `LyricsAutoscroll` (`app/components/song/` — rAF +
+`window.scrollTo`, NEVER a transform; pauses on touch, stops on the wheel),
+`Equalizer`/`PlayPauseGlyph` (`app/components/ui/` — the one playing indicator and the
+one play/pause morph, shared by the audio cards, the transport and `PracticeCluster`),
+`NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts` — the navbar height's one spelling, for
+`Navbar` and `NavbarSkeleton` ONLY; other offsets still hard-code theirs),
+`SectionNav practice` → `PracticeCluster` (`app/components/song/` — the song page's
+sticky title·key·BPM·play cluster; it lives in the page's own bar, never in `Navbar`).
+Motion tokens are `--motion-*` /
 `--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and
 ADR-0031.

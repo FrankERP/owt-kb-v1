@@ -1678,3 +1678,311 @@ sheet) and `app/components/DayCardDisclosure.tsx`.
 **Bundle:** `main 61d5330f` → `R7 tip 6fcfb22c` (git-archive cold builds, gzip −9; the two later fix commits move classes and one sheet, not chunks): shared 172.5 → 172.5; `/` 118.0 → 122.1 (+4.1); `/schedule` 121.7 → 124.1 (+2.4); `/biblioteca` 111.9 → 116.9 (+5.0, the long-press hook and the page's one sheet); `/me` 119.5 → 123.1 (+3.6); `/admin` 354.4 → 357.0 (+2.6). Within the accepted absolute cap measured in this environment.
 
 **Release:** merged to `main` as `2fae55b8` (PR #72, 2026-09-13 21:2x CST, after PR #71 landed); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`, 21:22 CST). Preview last verified at `7f5c52c7`.
+
+# Part XIV — R4 (2026-09-16)
+
+Branch `claude/motion-r4-song`. Seven implementation tasks plus this documentation
+task, turning `/posts/[slug]` into a practice surface — §12.7 (decision K) plus Part I
+§5.3 and §19.5's song hero row: the hero key becomes a transposer, the BPM pill taps a
+visual tempo, the Letra section scrolls itself, a practice cluster appears in the page's
+sticky bar once the hero leaves, the audio cards morph and the playing one carries an
+equaliser, and the page joins the route reveal.
+
+**Data reality (measured on the production dataset, read-only, 2026-09-16).** 142 songs
+carry `key` and `bpm`, 127 carry lyrics (`body`), 120 carry a reference link, 6 carry
+tutorials — and **0 carry an inline chart (`chords`), 0 carry `audioTracks`.** So the
+tempo pill, the autoscroll, the practice cluster and the reveal apply to nearly the whole
+catalogue, while **the transposer and the equaliser are capabilities, not production
+paths**: the song form writes both fields and no song exercises either one today. That is
+why Task 3 added the `song` theme-gallery fixture (a sample ChordPro chart and a sample
+track) — it is the only surface on which the drawer and the equaliser can be seen without
+writing to the dataset, and it is where the flats defect below was found.
+
+**Shipped.** `app/utils/transpose.ts` + `app/utils/practice.ts` — the neutral maths
+(`rootIndex`/`noteAt`/`semitonesBetween`/`transposeKey`/`transposeChord`/`capoSuggestion`/
+`isChordPro`; `tempoPeriodMs`/`autoscrollPxPerSecond`/`countLyricLines`), lifted out of
+`ChordChart` so the Server Component and the tests may call them (ADR-0028).
+`app/components/song/TransposeProvider.tsx` — the page's ONE transposition seat.
+`app/components/song/SongHeroPills.tsx` (+ `KeyDial.tsx`, `TempoPill.tsx`) — the hero row
+and the 12-key drawer it discloses. `app/components/song/PracticeCluster.tsx`, rendered
+by `app/components/SectionNav.tsx` into a right-hand slot of the page's own sticky bar.
+`app/components/song/LyricsAutoscroll.tsx` — the «Autoscroll» pill in the Letra header.
+`app/components/ui/PlayPauseGlyph.tsx` + `app/components/ui/Equalizer.tsx`, wired into
+`SongAudioSection`, `AudioTransport` and `PracticeCluster`. `app/utils/navbarHeight.ts`
+(`NAVBAR_H_CLASS`) — one spelling of the navbar's height for `Navbar` and
+`NavbarSkeleton`. `app/components/ChordChart.tsx` — the 12-key strip is now a ± pair with
+a `NumberRoll` readout, reading the provider when there is one. `app/brand.css` —
+`.brand-tempo-pill::after` + `@keyframes brand-tempo-pulse`, `.brand-eq-bar` +
+`@keyframes brand-eq`, and `.brand-surface-interactive:active` (the press twin, for every
+consumer of that class app-wide). `app/(client)/posts/[slug]/page.tsx` and its
+`loading.tsx` carry the wiring and the reveal;
+`app/(gallery)/theme-gallery/[theme]/[fixture]/fixtures/SongPracticeFixture.tsx` is the
+sixth gallery fixture.
+
+**Rulings, with reasons.**
+- **The practice cluster lives in the page's own sticky section bar, not in `Navbar`**
+  (plan ruling 1). §12.7 says "replacing the navbar title slot", but on the phone that
+  slot already holds the song title and the cue strip, and on desktop it holds the app's
+  navigation links — taking either would remove or repeat something. The bar that already
+  belongs to the song page gains the cluster. Cost if wrong: it sits ~5 rem lower than
+  the spec pictured.
+- **One 12-key picker on the page, not two** (ruling 2). The hero drawer is the picker;
+  `ChordChart`'s old 12-button strip became a ± pair with a `NumberRoll` readout and an
+  «Original» reset. Two 12-key strips on one page is the "too many buttons" smell R3 F3
+  removed, and §12.7's "buttons remain for keyboard users" is satisfied by both controls.
+- **The reveal stagger uses the house 40 ms step** (ruling 3), not §5.3's 30 ms — one
+  clock for every route. **No FAB** (ruling 4): `EditSongButton` stays inline, top-right,
+  for the reason its own comment already gave (nothing floats over the lyrics).
+- **The chart's transpose crossfade is a CSS `fade-in` on a keyed remount** (ruling 5) —
+  `ChordChart` stays outside the `motion` import boundary, and no exiting copy of the
+  chart overlaps the entering one anyway.
+- **Autoscroll model** (ruling 6): a lyric line is 8 beats, so `L` lines at `bpm` last
+  `L × 8 × 60 / bpm` seconds and the speed is `sectionHeight / thatDuration` px/s, clamped
+  to [8, 160]; no BPM means 80. **The page's own scroll is what moves** — rAF +
+  `window.scrollTo`, never a transform: a transformed ancestor would become the containing
+  block for every `fixed` descendant (ADR-0031).
+- **Tap tempo is a CSS animation clocked by a custom property** (ruling 7) —
+  `--tempo-period: ${60000 / bpm}ms` published inline, read by
+  `.brand-tempo-pill[data-active="true"]::after`. No `setInterval`, no frame loop, and one
+  `haptic("light")` on the toggle only: a haptic per beat is a metronome app, not a pill.
+  `brand.css` carries a `:root` default of 750 ms, the same pattern `--impersonation-h`
+  and `--bottom-nav-h` already use for a JS-published value, so `brandCss.test.ts` sees no
+  dangling reference and no exemption list grew.
+- **The key dial is a `<button className="brand-key-dial …">`** (ruling 8), the chrome the
+  hero already painted for the static badge — `Button` has no dial variant and adding one
+  for a single site is the wrong trade.
+- **Deferred on purpose** (ruling 9): §19.5's "history row press opens the day sheet"
+  (there is no day sheet — R5/R6 decide) and §20's lyric-section rail eyebrows and tutorial
+  poster facade (assigned to R6). **The bar still renders only when `sections.length > 1`**
+  (ruling 10), so a one-section song has no cluster.
+
+Made during execution, on top of the plan:
+- **The drawer's radiogroup value is the sounding ROOT, not the sounding key.** The plan
+  wrote `value={soundingKey}`; for a song with a quality in its name ("Gm") that is "Am",
+  which matches no option, so the drawer would show nothing checked while transposing
+  correctly. The root always matches, and the «(original)» hint is enharmonic
+  (`rootIndex(n) === rootIndex(nativeKey)`), not textual — a song written in `Db` is in
+  `C#` and the hint belongs on the pill that sounds the same, not the one spelled the same.
+- **`data-active` is absent when idle**, not `"false"` — the CSS selector is
+  `[data-active="true"]` either way, and the attribute's absence is what the test reads.
+- **`Number(bpm)` coercion, with the raw text kept.** `Post.bpm` is typed `string` in
+  `app/utils/interface.tsx` while the Sanity field is a number; the page parses once
+  (`Number.isFinite(n) && n > 0`) and passes an unusable value through as `bpmText`, which
+  renders as the static pill it always was. A tapable tempo needs a number; legacy text
+  still deserves to be shown. The mis-typing predates R4 and was left alone.
+- **`wheel` STOPS the autoscroll, it does not pause it.** A mouse has no lift event, so a
+  literal pause would strand the control reading «Detener» over a page that no longer
+  moves. Same hand-over, honest label.
+- **The provider is seated on the first ChordPro chart's key, not on `post.key`**, and
+  `transposable` requires chart[0] to be ChordPro — `ChordChart` opens on index 0 and only
+  the chart on screen transposes. Dial, «(original)» hint and chart readout then name the
+  same key. `transposeKey` also returns its input unchanged at 0 semitones (mirroring
+  `transposeChord`), because `DISPLAY_NOTES` carries one enharmonic per pitch and the badge
+  was otherwise re-spelling a `Db` song as `C#` at rest.
+- **The press twin lives in `.brand-surface-interactive:active`**, in `brand.css` right
+  after the `:hover` rule, instead of `active:` utilities on the two referencia cards.
+  Tailwind v3 compiles `@layer` away, so the two were a same-specificity source-order tie;
+  the class rule wins cleanly and every consumer of the class gets the press for free.
+- **A 400 ms backstop behind `scrollend`.** The autoscroll waits for `scrollend` after a
+  touch that actually scrolled — on a UA that never fires it the run would never resume,
+  so a timer resumes it. Every lift clears the timer FIRST (one gesture lifts twice), a
+  new touch clears it, and `resume()` returns early while a finger is down: a backstop is
+  a timer and must always lose to a finger.
+- **The hero observer's inset is the bar's STICKY top plus its height**
+  (`parseFloat(getComputedStyle(bar).top) + rect.height`), never the rect's `bottom`: read
+  at mount, at scroll 0, the bar has not stuck yet and sits in flow below the hero, so
+  `-bottom` shrank the observer root past the hero entirely and the cluster latched visible
+  from load.
+
+**Review trail.**
+- **Task 1 (maths utils, sonnet):** APPROVED, 0 findings. **Task 2 (`TransposeProvider`,
+  `ChordChart` ± pair, opus):** APPROVED, 0 findings.
+- **Task 3 (hero pills, page wiring, gallery fixture, opus):** spec conformance ✅, quality
+  CHANGES_REQUIRED — 1 MEDIUM (the static key/compás pills sat at 38.4 px beside a 44 px
+  dial; both now carry `min-h-[44px]` through one shared constant) + 4 LOW (the `bpmText`
+  fallback; the enharmonic «(original)» hint; `DRAWER_ID` → `useId()`, since the gallery is
+  already a second render path; haptics asserted rather than assumed). Fixed in one round;
+  re-review closed all five, 0 new.
+- **Task 4 (practice cluster, opus):** APPROVED, 0 findings. **Task 5 (play/pause morph +
+  equaliser, sonnet):** APPROVED, 0 findings. **Task 6 (reveal, press twins,
+  `NAVBAR_H_CLASS`, sonnet):** APPROVED, 1 MEDIUM parked for the final wave — the
+  referencia cards' `active:` utilities versus `.brand-surface-interactive:hover`, closed
+  by moving the press twin into the class.
+- **Task 7 (autoscroll, opus):** CHANGES_REQUIRED — 1 HIGH (`touchcancel` stranded the
+  run paused forever), 2 MEDIUM (44 px target; resuming through iOS momentum, solved with
+  a `scrollend` wait plus a 3-frame re-seed), 3 LOW. Fixed in one round; the re-review
+  closed all six and parked "`scrollend` may never fire" for the final wave.
+- **Whole-branch review (fable):** CHANGES_REQUIRED — 1 HIGH (`pointercancel` fires when a
+  touch is promoted to a pan, finger still down, and the lift handler resumed the scroll
+  under it; the binding is gone, `touchcancel` still covers a genuine cancel), 2 MEDIUM
+  (`transposeKey` re-spelling at 0; end detection ignoring the tab bar and the audio
+  transport — it now subtracts `--bottom-nav-h` plus the measured `.audio-player` height,
+  re-measured at every resume since the transport appears on play), 3 LOW.
+- **Scoped re-verify of that fix wave:** CHANGES_REQUIRED again — 2 HIGH, both introduced
+  by the fix (the flow-rect observer inset above; a re-touch inside the 400 ms backstop
+  resuming under the finger). Round 2 fixed both, and the tests were tightened to fail on
+  the round-1 code (the margin assertion had been satisfied by a no-op `-0px`). The second
+  re-verify returned **VERIFIED FOR MERGE** at `bcdd511c`.
+- **Parked residuals, all known and none blocking.** `getComputedStyle(bar).top` is read
+  once at mount: a rotation that crosses the `lg:` navbar breakpoint leaves the observer
+  inset stale until the page remounts, and a resize observer is more machinery than the
+  failure justifies. A song whose chart[1] is written in another key will disagree with the
+  hero readout by that interval — only the chart on screen transposes, and the answer is an
+  editors' data rule, not more code. The `pointercancel` and bottom-inset behaviours are
+  pinned by unit tests against the component's contract, not against a real UA.
+
+**Open notes for Frank's look.**
+- **The autoscroll under a real finger.** Pause on touch, the hand-over through iOS
+  momentum, and whether the 400 ms backstop is invisible or feels like a lurch on a browser
+  that does fire `scrollend`.
+- **Where the run stops** with the phone tab bar and the audio transport both up — the last
+  lines should clear both, and the measurement has only been exercised in jsdom.
+- **The cluster's arrival timing** — it now hands off exactly as the hero's controls pass
+  under the sticky bar; whether that reads as a replacement or as a second thing appearing.
+- **On a 390 px phone the cluster's key + BPM slot takes ~110 px** and squeezes the section
+  links to roughly three visible before they scroll. Acceptable or not is a look, not a test.
+- **The idle equaliser** reads a little like a `⋯` ellipsis at `scaleY(0.3)`; it only
+  animates on the playing card, by design (the row must not change height when playback
+  starts).
+- **The tempo ring's legibility on the light theme**, at 60 BPM and at 160 — a slow pulse
+  and a fast one are very different objects.
+- **Is «Autoscroll» the word?** It is the one English label on the page; «Desplazar» and
+  «Seguir la letra» were the alternatives.
+- **«C# (original)» for a song written in `Db`.** The hint is enharmonic on purpose, but a
+  member who knows the song as `Db` will read it on the `C#` pill.
+- **The click with the phone's silent switch on** (F1, ruling 12). Web Audio obeys the
+  switch, so a muted iPhone rings the pill and plays nothing; the guide-track `<audio>`
+  player on the same page does NOT obey it, so the two behave differently on one screen.
+  Whether that reads as broken is Frank's call — the fix is a native audio-session plugin,
+  which this delivery deliberately does not ship.
+- **The click's voice and level** — a 1000/800 Hz sine at gain 0.5, under a band. Loud
+  enough on a phone speaker in a rehearsal room, or does it need a sharper (square) click?
+- **6/8 accents beat 1 of SIX quarter-note clicks** (`beatsPerBar` is the numerator), not the
+  two dotted-quarter pulses a band actually feels. No 6/8 song has been heard against it —
+  decide on one.
+
+**Bundle:** `main 7fbbb105` → `R4 tip 5a899be0` (git-archive cold builds, gzip −9; the
+three later commits move classes and handlers, not chunks): shared 172.5 → 172.5; `/`
+122.6 → 121.2; **`/posts/[slug]` 110.7 → 111.7 (+1.0)**; `/schedule` 124.6 → 123.3;
+`/biblioteca` 117.0 → 115.7; `/me` 123.6 → 122.3; `/admin` 357.6 → 356.2. The one route
+that gained is the one that gained a feature; the rest drift down with the shared graph.
+Within the accepted absolute cap measured in this environment.
+
+**Shots** (`docs/superpowers/specs/2026-09-08-premium-motion-shots/`): `song-before.png` /
+`song-after.png` (phone), `song-after-1440.png` (desktop), plus
+`r4-gallery-song-transposer-light.png` (the gallery `song` fixture on light, drawer open —
+the only surface where the transposer exists today) and
+`r4-song-practice-cluster-phone.png` (scrolled past the hero).
+
+**Release:** merged to `main` as `<pending>` (PR #`<pending>`); production alias
+`owt-backstage.vercel.app` verified `<pending>`. Preview verified at `d6b3ba56`.
+
+### F1 — the pill clicks (2026-09-16)
+
+Frank, after his look at the R4 branch on dev: *"can the bpm pill play the sound of the
+metronome?"* → *"go, tap = ring + click"*. One task on the same branch, after Task 8's docs.
+
+**Rulings.**
+- **Ruling 11.** The click is the master clock for SOUND — Web Audio, sample-accurate,
+  lookahead-scheduled — and the ring stays CSS-clocked exactly as shipped. Both start on
+  the same tap. Two monotonic clocks drift against each other by nothing audible over a
+  rehearsal, and keeping the ring in CSS keeps the reduced-motion story unchanged: the ring
+  collapses, the click keeps playing, because sound is not motion. Cost if wrong: a visible
+  phase offset between ring and click after many minutes, whose fix would be a WAAPI pulse
+  per beat.
+- **Ruling 12.** iOS silent switch: Web Audio obeys it, the `<audio>` guide track does not.
+  Ship the web click anyway; no native audio-session plugin in this delivery. Recorded in
+  the open notes above for Frank's device look.
+- **Ruling 13.** Tap = ring + click, with no separate silent mode (Frank's call). The
+  phone's volume is the control.
+
+**Shipped.** `app/components/song/metronome.ts` — `createMetronome({ bpm, beatsPerBar,
+onStop?, audioContext? })` plus the `CLICK` constants (accent 1000 Hz on beat 1, 800 Hz
+otherwise, 30 ms, gain 0.5, 25 ms lookahead, 100 ms scheduling window). A self-rescheduling
+`setTimeout` — never a `setInterval`, so a stop cannot race a queued tick — books every beat
+inside the window as a sine `OscillatorNode` through a `GainNode` ramp. The `AudioContext` is
+created lazily on the first `start()` (which must therefore run inside a user gesture) and
+reused; `stop()` clears the loop and suspends the context, never closes it; a
+`visibilitychange` to hidden stops and reports through `onStop`; with no `AudioContext` at all
+(prefixed or not) `start()` is a silent no-op and the pill still rings.
+`app/utils/practice.ts` — `beatsPerBar(timeSig)`, the numerator of the written compás, 4 on
+anything unparsable. `app/components/song/TempoPill.tsx` — one metronome per pill, built on the
+first tap from `bpm` + `beatsPerBar(timeSig)`, stopped on the second tap, on `onStop`, on
+unmount and whenever `bpm`/`timeSig` change under a running beat; labels are now «Marcar tempo
+con clic, N BPM» / «Detener el clic, N BPM». `app/components/song/SongHeroPills.tsx` passes
+`timeSig` through. Tests: `metronome.test.ts` (7, jsdom + fake timers against a hand-rolled
+`AudioContext` whose clock the test advances — beats booked at 0.05 s and 0.55 s inside the
+first second at 120 BPM with 1.05 s already looked ahead, the accent pattern at 4/4 and 3/4,
+`stop()` leaving zero timers and one `suspend()`, one context across two starts, the hidden-tab
+stop, and the no-Web-Audio no-op), plus the rewritten `tempoPill.test.tsx` — where the old
+"zero timers while active" assertion becomes zero BEFORE the first tap, present while active,
+zero after the second tap and after unmount.
+
+**Verification.** The scheduling test was mutation-checked: removing the `tick()` call from
+`start()` fails 4 of the 7. Gates green on the whole tree.
+
+**Review (opus, F1 diff): APPROVED with two MEDIUMs, both fixed in round 1.** (1) A tick that
+ran late — a stall or a throttled tab longer than the 100 ms window — booked beats already
+behind the context clock, and `osc.start(pastTime)` fires immediately: a flam of stacked clicks
+catching up. The scheduler now skips the missed beats (`Math.ceil` of the gap in beats) and
+keeps the bar's accent phase. (2) `stop()` suspended the context over up to a window of already
+booked oscillators; suspension FREEZES the clock they are pinned to instead of cancelling them,
+so they would have sounded off-phase on the next tap. Every booked oscillator is now stopped by
+hand, the list is pruned on each tick so it holds at most one window, and the module header no
+longer claims that suspension silences them. Three tests added, both fixes mutation-checked
+(removing either makes exactly its own test fail). Two LOWs (a rewinding fake clock in the
+tests, this 6/8 note) and one nit (the doc bullet's home) taken with them.
+
+### F2 — the sheet clicks too (2026-09-16)
+
+Frank, still on the R4 branch: *"Can you also enable the metronome on the small card that
+pops when you click the name of a song either on day cards or on the Biblioteca"* — that card
+is `SongSheet`, the `CueDialog mode="sheet"` the player context opens from `DayCard` rows and
+`LibraryRow`. One task on the same branch, after F1.
+
+**Rulings.**
+- **Ruling 14.** The sheet's BPM span becomes the same `TempoPill` — one component, one look,
+  no second metronome implementation. The sheet's chrome survives as a `size="sm"` skin
+  (outlined pill, `text-sm`) over the same ring, click and 44px target; `size="md"` stays the
+  hero's console pill. Cost if wrong: two pills that drift apart visually, which is what the
+  single component prevents.
+- **Ruling 15.** ONE metronome sounds at a time, app-wide. The sheet opens OVER the song page,
+  so both pills can exist at once and two tempos together is noise, not a feature. The module
+  owns the rule rather than the pills: `metronome.ts` keeps a module-level "current" and a
+  `start()` takes the floor from whoever held it, stopping that instance through its own path
+  so it reports to its pill through `onStop` and un-presses. A ringing pill therefore always
+  means a sounding click. Two edges fall out of it and are tested: an instance that cannot
+  sound at all (no Web Audio) never silences the one that can, and a late `stop()` from the
+  loser's own unmount cleanup must not release the new holder's floor.
+- **Ruling 16.** Closing the sheet stops the click. `TempoPill` gains `enabled?: boolean`
+  (default true) and `SongSheet` passes `enabled={isOpen}`; the pill stops and un-presses on
+  the falling edge rather than waiting for an unmount. `SongSheet` happens to return `null`
+  while closed today, so the unmount cleanup already covers it — the prop costs one effect and
+  is what keeps the rule true for a sheet that later stays mounted.
+
+**Shipped.** `app/components/song/metronome.ts` — the module-level `current`, taken in
+`start()` (after the no-Web-Audio bail) and released in `stop()` only when this instance still
+holds it, plus a private `handOver()` (stop + `onStop`) that the hidden-tab path now shares,
+and an exported `stopCurrentMetronome()`. `app/components/song/TempoPill.tsx` — `enabled` and
+`size`, the chrome split into a two-entry `CHROME` map. `app/components/SongSheet.tsx` — the
+meta row's BPM is a `TempoPill` (`size="sm"`, `enabled={isOpen}`) when `Number(sheet.bpm)` is
+finite and positive, the same guard the song page uses, and the old static span otherwise
+("libre", "70-80"). Tests: `metronome.test.ts` +4 (the hand-over stopping A's loop and firing
+its `onStop` while B books on; the silent instance leaving the sounding one alone; the stale
+stop that must not release B's floor; `stopCurrentMetronome()`), `tempoPill.test.tsx` +2 (the
+`enabled` falling edge leaving `aria-pressed="false"` and zero timers; each size's chrome),
+`songSheet.test.tsx` +3 (the sheet's pill, its label and its `--tempo-period`; the unparsable
+BPM keeping the static span; the close giving the loop back and suspending the context).
+
+**Verification.** Both singleton lines were mutation-checked: removing the hand-over in
+`start()` fails the hand-over test, removing the `current === self` guard in `stop()` fails the
+stale-stop test. Gates green on the whole tree.
+
+**Review (opus, F2 diff): APPROVED, VERIFIED FOR MERGE, with two LOWs and a nit, all taken in
+one fix commit.** (1) A click on a pill rendered `enabled={false}` would still have started the
+metronome — the effect only fires on the prop edge — so the handler now returns early while
+disabled; not `disabled`, which would change the chrome and the focus behaviour. (2) The sheet's
+meta row mixed the 44px pill with ~30px chips, so both static spans (`timeSig` and the
+unparsable-BPM one) got `inline-flex min-h-[44px] items-center`, the treatment Task 3 gave the
+hero's neighbours. (3) An article typo in the `TempoPill` entry of `CLAUDE.md`/`AGENTS.md`. The
+early return is mutation-checked: removing it fails the new disabled-tap test.
