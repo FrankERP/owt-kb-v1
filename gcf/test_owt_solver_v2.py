@@ -257,30 +257,36 @@ class TestSolverBudgetClamping(unittest.TestCase):
         self.assertTrue(res.get("ok"))  # still solves fine with clamped budgets
 
 
-class ObjectiveFitsInt64(unittest.TestCase):
+class ObjectiveWeightLadder(unittest.TestCase):
     """
     The lexicographic objective is a product over eight priority tiers. Charging every
     tier the same global `max_spread` made that product exponential in an over-estimate,
-    so the objective's upper bound crossed int64 on ORDINARY months: ortools answered
-    MODEL_INVALID on the optimising passes and `solve_schedule` fell through to the
-    objective-less ones silently, losing fairness optimisation with no signal.
+    so the objective's upper bound crossed int64: ortools answered MODEL_INVALID on the
+    optimising passes and `solve_schedule` fell through to the objective-less ones
+    **silently**, losing fairness optimisation with no signal to the caller.
 
-    These guard the fix — per-tier maxima — on the month shapes that reproduced it.
+    Two things are guarded here: per-tier maxima (which fix the history-free months
+    outright), and graceful, REPORTED degradation for the months they cannot fix.
     """
 
     SHAPES = [
-        (4, [1, 2, 3, 4]),        # 52 slots: the ordinary case, bound was 3.2e19
+        (4, [2, 4]),              # 42 slots: make_config's own default shape
+        (4, [1, 2, 3, 4]),        # 52 slots: bound was 3.2e19
         (5, [1, 2, 3]),           # 55 slots: reproduced MODEL_INVALID
         (5, [1, 2, 3, 4, 5]),     # 65 slots: reproduced MODEL_INVALID
         (6, [1, 2]),              # 58 slots: reproduced MODEL_INVALID
         (6, [1, 2, 3, 4, 5, 6]),  # 78 slots: worst bound, 1.9e21
     ]
 
-    def test_no_month_shape_overflows_or_is_rejected(self):
-        """
-        The regression itself. One solve per shape, asserting both halves: the month
-        solves, and no optimising pass was rejected by ortools.
-        """
+    @staticmethod
+    def _shape(weeks, sats, history):
+        cfg = make_config(weeks=weeks, sat_weeks=tuple(sats), history=history)
+        cfg["solver_max_time_seconds"] = 3      # the guards are about the model,
+        cfg["solver_total_budget_seconds"] = 20  # not about search quality
+        return cfg
+
+    def test_no_optimising_pass_is_rejected_by_ortools(self):
+        """The original regression: MODEL_INVALID must never be reached."""
         from ortools.sat.python import cp_model
 
         seen = []
@@ -296,46 +302,111 @@ class ObjectiveFitsInt64(unittest.TestCase):
             for weeks, sats in self.SHAPES:
                 with self.subTest(weeks=weeks, saturdays=len(sats)):
                     seen.clear()
-                    cfg = make_config(weeks=weeks, sat_weeks=tuple(sats))
-                    cfg["solver_max_time_seconds"] = 3  # the guard is about the
-                    cfg["solver_total_budget_seconds"] = 20  # model, not the search
-                    res = solve_from_dict(cfg)
+                    res = solve_from_dict(self._shape(weeks, sats, []))
                     self.assertTrue(res.get("ok"), res.get("error"))
                     self.assertNotIn(
                         "MODEL_INVALID", seen,
                         f"{weeks}wk/{len(sats)}sat: ortools rejected the objective")
+
         finally:
             cp_model.CpSolver.Solve = original
 
+    def test_history_bearing_months_still_return_a_schedule(self):
+        """
+        Production always sends history — `historyForRequest` ships the last three
+        months and `build_history_offsets` weights them [10, 6, 3], so `overall_limit`
+        and every `ov_r_limit` grow with it. Two entries is enough to push the ladder
+        past int64 on an ordinary month.
+
+        The month must still come back. An earlier draft of this fix raised instead,
+        which turned "a lopsided month" into "no month at all" — strictly worse for the
+        admin than the bug being fixed, and reachable in the steady state the fairness
+        feature exists to create.
+        """
+        for weeks, sats in self.SHAPES[:4]:
+            with self.subTest(weeks=weeks, saturdays=len(sats)):
+                history = []
+                for month in range(3):
+                    res = solve_from_dict(self._shape(weeks, sats, history))
+                    self.assertTrue(
+                        res.get("ok"),
+                        f"{weeks}wk/{len(sats)}sat failed with {len(history)} "
+                        f"history entries: {res.get('error')}")
+                    history.append({"total_counts": res["total_counts"],
+                                    "role_counts": res["role_counts"]})
+
+    def test_degradation_is_reported_not_silent(self):
+        """
+        `objective_skipped` is the whole point: a fairness-free month is legal, but it
+        must say so. Assert both directions on the same shape — false without history,
+        true once the offsets are large enough to break the ladder.
+        """
+        cfg = self._shape(4, [2, 4], [])
+        first = solve_from_dict(cfg)
+        self.assertTrue(first.get("ok"))
+        self.assertFalse(first["objective_skipped"])
+
+        history = [{"total_counts": first["total_counts"],
+                    "role_counts": first["role_counts"]}]
+        second = solve_from_dict(self._shape(4, [2, 4], history))
+        self.assertTrue(second.get("ok"))
+        history.append({"total_counts": second["total_counts"],
+                        "role_counts": second["role_counts"]})
+
+        third = solve_from_dict(self._shape(4, [2, 4], history))
+        self.assertTrue(third.get("ok"))
+        self.assertTrue(
+            third["objective_skipped"],
+            "two history entries should exceed the ladder on the default shape; "
+            "if this stops holding, the assertion has stopped discriminating")
+
     def test_per_tier_maxima_keep_the_ladder_lexicographic(self):
         """
-        The point of the ladder is that each tier outranks everything below it. Shrinking
-        the caps must not break that — assert the invariant directly.
+        The ladder's point is that each tier outranks everything below it. Shrinking the
+        caps must not break that — assert the invariant directly, against the caps the
+        solver actually computes for a real month rather than hand-written ones.
         """
         from owt_solver_v2 import compute_priority_weights, PRIORITY_ORDER
 
         maxima = {"Sun.Choir": 12, "Sat.BGV": 12, "Sun.BGV": 12, "global": 52,
                   "sun_lead_rotation": 72, "sun_lead_weekly_rotation": 72,
                   "Sat.Lead": 8, "Sun.Lead": 8}
-        w = compute_priority_weights(52, 180, 2263, maxima)
+        max_consec, max_rand = 180, 2263
+        w = compute_priority_weights(52, max_consec, max_rand, maxima)
 
-        below = 180 * w["consecutive"] + 2263   # consecutive + tie_break ceilings
+        below = max_consec * w["consecutive"] + max_rand
         for name in PRIORITY_ORDER:
             self.assertGreater(
-                w[name], below,
-                f"{name} does not outrank the tiers below it")
+                w[name], below, f"{name} does not outrank the tiers below it")
             below += maxima[name] * w[name]
         self.assertLess(below, 2 ** 63 - 1)
 
-    def test_an_absurd_month_raises_instead_of_silently_degrading(self):
+    def test_tier_maxima_cover_every_tier(self):
         """
-        A ladder that would still overflow must fail loudly. Silent degradation is the
-        behaviour this whole change exists to remove.
+        A tier missing from `tier_maxima` silently falls back to `max_spread`, which is
+        NOT an upper bound for the rotation tiers (measured: 52 against a real 72), so
+        the ordering above it would break with no error. The solver must supply all of
+        them — assert the key sets match.
         """
-        from owt_solver_v2 import compute_priority_weights
+        from owt_solver_v2 import PRIORITY_ORDER, ROLE_ORDER
 
-        with self.assertRaises(ValueError):
+        supplied = set(ROLE_ORDER) | {
+            "global", "sun_lead_rotation", "sun_lead_weekly_rotation"}
+        self.assertEqual(
+            supplied, set(PRIORITY_ORDER),
+            "create_model_and_solve's tier_maxima keys must cover PRIORITY_ORDER")
+
+    def test_an_absurd_ladder_raises_its_own_exception(self):
+        """
+        `ObjectiveTooLarge` is deliberately not a ValueError: `solve_from_dict` turns
+        those into `ok: false`, and a month the solver can still fill must never come
+        back as no month at all.
+        """
+        from owt_solver_v2 import compute_priority_weights, ObjectiveTooLarge
+
+        with self.assertRaises(ObjectiveTooLarge):
             compute_priority_weights(10 ** 6, 10 ** 6, 10 ** 6)
+        self.assertNotIsInstance(ObjectiveTooLarge("x"), ValueError)
 
 
 if __name__ == "__main__":

@@ -43,12 +43,28 @@ an optional `tier_maxima` map; `create_model_and_solve` supplies it:
   slot count;
 - only the global spread keeps `overall_limit`.
 
-The same five months then bound at 2.6e16 … 1.4e18 — three orders of magnitude of
-headroom — and no shape reaches `MODEL_INVALID`.
+On a **history-free** month the same five shapes then bound at 2.6e16 … 1.4e18, three
+orders of magnitude below the old figures, and none reaches `MODEL_INVALID`.
 
-**And the ladder now refuses to return an overflowing set of weights**, raising a
-`ValueError` naming the inputs. A month too large for this weighting fails loudly rather
-than degrading in silence, which is the half of the bug that actually cost anything.
+**History-bearing months are a different story, and per-tier maxima do not save them.**
+`build_history_offsets` weights the last three months by `[10, 6, 3]`, so `overall_limit`
+and every `ov_r_limit` grow with the history — and production always sends it. Measured by
+chaining a month's own counts forward: **two history entries are enough** to push the
+default shape back over int64 (1.0e19). Eight tiers multiplied together simply do not fit
+once the offsets are that large; no choice of caps rescues it, and a first draft of this
+change that *raised* on the condition turned "a lopsided month" into "no month at all" —
+strictly worse for the admin than the bug, and reachable in exactly the steady state the
+fairness feature exists to create.
+
+**So the second half of the decision is graceful, REPORTED degradation.**
+`compute_priority_weights` raises `ObjectiveTooLarge` — deliberately not a `ValueError`,
+because `solve_from_dict` turns those into `ok: false` — and `create_model_and_solve`
+catches it, builds that pass with **no objective**, and sets `objective_skipped`. The
+response carries `objective_skipped: true`.
+
+The schedule is legal and fully constrained; it is simply not fairness-optimised. That is
+the same outcome as before this change — and that is the point: **the outcome was never
+the bug, the silence was.**
 
 ## Alternatives rejected
 
@@ -64,10 +80,17 @@ than degrading in silence, which is the half of the bug that actually cost anyth
 
 ## Consequences
 
-- **Boards change.** Months that were falling through now optimise, so their rosters
-  differ — better distributed, but different. The 55-, 58- and 65-slot fixtures went from a
-  fairness-free fall-through to solving at the tightest tier.
+- **Boards change on history-free months.** Those that were falling through now optimise,
+  so their rosters differ — better distributed, but different. The 55-, 58- and 65-slot
+  fixtures went from a fairness-free fall-through to solving at the tightest tier.
+- **Months with two or more history entries still run unoptimised**, now with
+  `objective_skipped: true` in the response instead of nothing. Fixing *those* needs a
+  different mechanism — splitting the ladder across two sequential solves, so no single
+  weighted sum has to hold all eight tiers — which is scoped as follow-on work rather than
+  smuggled into a bug fix.
 - `gcf/test_owt_solver_v2.py::ObjectiveFitsInt64` guards all five shapes, asserts the
   ladder stays lexicographic under the smaller caps, and asserts the loud failure.
 - Anything that froze a solver output as a golden must re-capture it; the model
   construction is unchanged, so a Stage A model fingerprint is not affected.
+- `objective_skipped` is a new response field. No client reads it yet; surfacing it in the
+  planner is worth doing and is not in this change.
