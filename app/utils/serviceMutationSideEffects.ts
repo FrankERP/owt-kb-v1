@@ -26,7 +26,7 @@
 //    snapshot so publishing INTRODUCES the setlist, and a lead-notes edit on an
 //    already-reviewable proposal queues one `leadNotes` notice for admins.
 //    THE PUBLISH ONE IS NOT ACTUALLY DEBOUNCED: it is queued with `debounceMs: 0`
-//    so layer 2 sends it in the same `after()` block (ADR-0035). It sits in this
+//    so layer 2 sends it in the same `after()` block (ADR-0036). It sits in this
 //    list because it travels through the outbox — the classify/group/preference
 //    pipeline is the outbox's — not because it waits.
 //  - LAYER 2 of the flush triggers (spec §3): the same `after()` block that
@@ -662,9 +662,9 @@ const WEEKEND_SETLIST_TYPE: Record<string, string> = {
  * tick. Exported so a guard can assert the value rather than infer it from a
  * timing test. `maxWindowMs` is deliberately left at its default: the starvation
  * ceiling is already satisfied by `notifyAfter`, and pinning it here would only
- * be a second way to say the same thing. See ADR-0035.
+ * be a second way to say the same thing. See ADR-0036.
  */
-export const PUBLISH_WINDOWS: UpsertWindowOverrides = { debounceMs: 0 };
+export const PUBLISH_WINDOWS: Readonly<UpsertWindowOverrides> = Object.freeze({ debounceMs: 0 });
 
 /**
  * Publishing must ANNOUNCE the setlist (§2). The dominant workflow is *create as
@@ -697,7 +697,7 @@ export const PUBLISH_WINDOWS: UpsertWindowOverrides = { debounceMs: 0 };
  * (ADR-0032), so «Setlist listo» reached the team 5–10 minutes after a publish
  * the admin experienced as instant — and longer if anyone touched the setlist
  * inside the window, since an edit slides `notifyAfter` forward up to the 60
- * minute ceiling. See ADR-0035.
+ * minute ceiling. See ADR-0036.
  *
  * The trade is real and was accepted deliberately: publishing and THEN editing
  * within a few minutes now sends «Setlist listo» and a second «El setlist
@@ -753,7 +753,7 @@ export function queuePublishedSetlistNotices(subjects: PublishedSetlistSubject[]
                 knownRecipients: subject.knownRecipients,
               },
               now,
-              // Due immediately — see this function's doc comment and ADR-0035.
+              // Due immediately — see this function's doc comment and ADR-0036.
               PUBLISH_WINDOWS,
             ),
           )

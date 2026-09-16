@@ -1,4 +1,4 @@
-# ADR-0035: The publish transition's setlist notice is not debounced
+# ADR-0036: The publish transition's setlist notice is not debounced
 
 **Date:** 2026-09-16 · **Status:** Accepted
 
@@ -28,7 +28,16 @@ in the quiet case.
 `queuePublishedSetlistNotices` passes `PUBLISH_WINDOWS` (`{ debounceMs: 0 }`)
 into `setlistUpsert` → `buildUpsert`, so the publish notice is due the instant it
 is committed and layer 2's sweep — already ordered after the commit — sends it in
-the same `after()` block. Delivery is seconds, not minutes.
+the same `after()` block.
+
+**For a single-service publish that is seconds, with no Scheduler tick involved.**
+For a whole-month «Publicar todos» it is seconds for the first 20 distinct
+recipients and up to one tick for the rest: layer 2 runs at `EMAIL_LIMIT / 2` =
+20 against layer 1's 40, and stage 2 stops selecting once the recipient union
+passes it, deferring the remainder. August 2026 was 7 services over ~20 people,
+so a month publish sits right on that ceiling. The requirement is still met —
+a deferred notice is already due, so the next tick takes it, which is at most 5
+minutes — but "instant for everyone" would be the wrong thing to promise.
 
 This uses the override seam `buildUpsert` already had (`UpsertWindowOverrides`),
 so the arithmetic is not duplicated and the default path is untouched. Only the
@@ -40,7 +49,7 @@ already-published service still debounces exactly as before.
 ceiling, and pinning it here would be a second way to say the same thing.
 
 Carried by `app/utils/serviceMutationSideEffects.ts` (`PUBLISH_WINDOWS`,
-`setlistUpsert`, `queuePublishedSetlistNotices`) and guarded by the five cases in
+`setlistUpsert`, `queuePublishedSetlistNotices`) and guarded by the six cases in
 `describe("the publish transition sends immediately, not on the debounce")` in
 `app/utils/__tests__/serviceMutationSideEffects.test.ts`.
 
@@ -79,14 +88,44 @@ Carried by `app/utils/serviceMutationSideEffects.ts` (`PUBLISH_WINDOWS`,
   nothing the way an edit that is undone inside the window does. There was
   nothing for the debounce to collapse except the publish against a subsequent
   edit.
-- **No new failure mode when the sweep is slow.** Layer 2 is derated (half the
-  email limit and budget) and both publish routes are `maxDuration = 60`, so
-  there is room; anything the sweep cannot finish is RE-PENDED, not lost, and the
-  next Scheduler tick takes it. The worst case degrades to exactly the old
-  behaviour and never below it.
+- **Budget exhaustion is safe; a transport failure is not, and never was.**
+  Recipients the sweep runs out of clock for move to `unserved` and are RE-PENDED
+  (`partitionClaimed`), so that path degrades to the old behaviour and no worse.
+  An ATTEMPTED-BUT-FAILED send is a different path: it is consumed, never retried
+  (ADR-0026), so a transport refusal or a `SEND_TIMEOUT_MS` expiry destroys the
+  «Setlist listo» notice. That was already true at layer 1 — this change moves
+  *where* the attempt happens, not whether a failure destroys it. An earlier
+  draft of this ADR claimed "no new failure mode … never below the old
+  behaviour"; that was too strong and a pre-release review retracted it.
+- **The two `after()` blocks now run concurrently.** Next's after-queue is a
+  `p-queue` at the default `concurrency: Infinity`, and a publish registers two
+  callbacks: `notifyRolePublished` (push fan-out plus `sendAssignmentEmailsBatch`,
+  which has no clock of its own) and `queuePublishedSetlistNotices` (the upsert
+  plus layer 2's sweep). They now overlap, feeding one module-level nodemailer
+  pool — `maxConnections: 8`, `rateLimit: 8` per second — and one Gmail account
+  that throttles per account. A month publish therefore doubles the burst from a
+  single invocation. This is accepted, not measured: `measure-send-budget.mjs`
+  has never probed two senders from one invocation, and a throttled wave is
+  destroyed mail (spec hole #1). If «Setlist listo» starts going missing on batch
+  publishes, this is the first place to look.
+- **An invocation killed mid-sweep leaves claims, where before it left none.**
+  The derated deadline plus the admission reserve bounds the sweep at ≈35 s and
+  both routes allow 60, so this is not the normal case; if it happens, the claims
+  sit at `status: "sending"` for the 5-minute lease and are re-sent — duplicates
+  for anyone already served, which is the enumerated duplicate path in spec §1
+  rather than a new one.
 - **Undoing this looks harmless and is not.** Dropping `PUBLISH_WINDOWS` at the
-  call site restores a silent 5-to-10-minute delay that no gate would notice, so
-  two of the guards assert on `isDue` — the sweep's own predicate — and die
-  against the pre-fix code. A third asserts that ordinary edits STILL debounce,
-  which is what fails if someone "simplifies" this by zeroing `DEBOUNCE_MS`
-  inside `buildUpsert` instead.
+  call site restores a silent 5-to-10-minute delay that no gate would otherwise
+  notice. Six guards cover it, mutation-tested against four mutants: reverting
+  the call site to `{}` kills 2 (one on `isDue`, the sweep's own predicate, one
+  on the raw window); re-debouncing `PUBLISH_WINDOWS` itself kills 3; zeroing
+  `DEBOUNCE_MS` inside `buildUpsert` kills the two scope guards; and leaking
+  `PUBLISH_WINDOWS` onto the role notices kills the role arm — which existed
+  nowhere in the repo until a pre-release review found that mutant surviving the
+  whole suite.
+- **The guards sample the clock AFTER the flush, deliberately.** Taking it before
+  makes the assertion depend on two `new Date()` calls landing in the same
+  millisecond: green 15/15 idle, red under parallel load. A flaky guard on a
+  protected branch invites someone to weaken the assertion this change exists
+  for. The scope guards sample before, which is correct for them — a debounced
+  `notifyAfter` only moves further away as the clock advances.
