@@ -22,7 +22,9 @@ import EditSongButton from "@/app/components/EditSongButton";
 import SongAudioSection from "@/app/components/SongAudioSection";
 import SongHeroPills from "@/app/components/song/SongHeroPills";
 import { TransposeProvider } from "@/app/components/song/TransposeProvider";
+import LyricsAutoscroll from "@/app/components/song/LyricsAutoscroll";
 import { isChordPro } from "@/app/utils/transpose";
+import { countLyricLines } from "@/app/utils/practice";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { revealProps } from "@/app/utils/reveal";
 
@@ -133,12 +135,13 @@ export async function generateStaticParams() {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function SectionHeader({ children }: { children: React.ReactNode }) {
+function SectionHeader({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div className="brand-section-heading mb-8 border-b border-ink-dim/10 pb-4">
+    <div className="brand-section-heading mb-8 flex items-end justify-between gap-4 border-b border-ink-dim/10 pb-4">
       <h2 className="font-display text-2xl font-semibold text-ink md:text-3xl">
         {children}
       </h2>
+      {action}
     </div>
   );
 }
@@ -172,6 +175,13 @@ const Page = async ({ params }: Params) => {
   const bpmText         = post?.bpm && bpm === null ? String(post.bpm) : null;
   const hasTutorials    = shows("tutoriales");
   const hasLyrics       = shows("letra");
+  // How long the autoscroll should take: the chart's own lines when there is
+  // one, otherwise one PortableText BLOCK per line — an approximation (a long
+  // paragraph wraps to several), accepted because the speed is clamped to a
+  // readable band either way.
+  const lyricLines      = hasInlineChords
+    ? countLyricLines(post.chords![0].content)
+    : (post?.body?.length ?? 0);
   const hasHistory      = shows("historial");
   const hasRefLinks     = shows("referencia");
   // The sticky bar's practice cluster takes over the hero's play control, so it
@@ -359,7 +369,7 @@ const Page = async ({ params }: Params) => {
         {/* Letra / Body */}
         {hasLyrics && (
           <section id="letra" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
-            <SectionHeader>Letra</SectionHeader>
+            <SectionHeader action={<LyricsAutoscroll targetId="letra" bpm={bpm} lines={lyricLines} />}>Letra</SectionHeader>
             <div className="brand-facet-panel">
               {hasInlineChords ? (
                 <ChordChart charts={post.chords!} />
