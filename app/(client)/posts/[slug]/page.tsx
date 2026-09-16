@@ -163,6 +163,12 @@ const Page = async ({ params }: Params) => {
   // carries no bracketed chords to move, so the drawer would shift the readout
   // and nothing else.
   const transposable    = (post?.chords ?? []).some((c) => isChordPro(c.content));
+  // The schema field is a number, but the interface types it `string` and the
+  // catalogue predates both — so parse, and keep an unparsable value VISIBLE as
+  // the static pill it has always been rather than dropping the row silently.
+  const bpmNumber       = Number(post?.bpm);
+  const bpm             = Number.isFinite(bpmNumber) && bpmNumber > 0 ? bpmNumber : null;
+  const bpmText         = post?.bpm && bpm === null ? String(post.bpm) : null;
   const hasTutorials    = shows("tutoriales");
   const hasLyrics       = shows("letra");
   const hasHistory      = shows("historial");
@@ -218,7 +224,8 @@ const Page = async ({ params }: Params) => {
 
           <SongHeroPills
             keyLabel={post?.key ?? null}
-            bpm={post?.bpm ? Number(post.bpm) : null}
+            bpm={bpm}
+            bpmText={bpmText}
             timeSig={post?.timeSig ?? null}
             transposable={transposable}
           />

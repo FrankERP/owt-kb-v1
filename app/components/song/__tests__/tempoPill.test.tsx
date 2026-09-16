@@ -6,13 +6,22 @@
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TempoPill from "../TempoPill";
+import { haptic } from "@/app/utils/haptics";
+
+// The tap is a tap: one light haptic per TOGGLE. Mocked rather than left to the
+// real module's `isNativeApp()` no-op, so "fires on every render" — the failure
+// an inline `void haptic()` outside the handler would produce — is visible here.
+vi.mock("@/app/utils/haptics", () => ({ haptic: vi.fn(() => Promise.resolve()) }));
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
 });
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.mocked(haptic).mockClear();
+});
 
 describe("TempoPill", () => {
   it("toggles the beat and carries its period as a custom property", () => {
@@ -27,14 +36,19 @@ describe("TempoPill", () => {
     expect(pill.style.getPropertyValue("--tempo-period")).toBe("500ms");
     expect(pill.getAttribute("aria-label")).toBe("Marcar tempo, 120 BPM");
 
+    expect(haptic).not.toHaveBeenCalled();
+
     fireEvent.click(pill);
     expect(pill.getAttribute("aria-pressed")).toBe("true");
     expect(pill.dataset.active).toBe("true");
     expect(pill.getAttribute("aria-label")).toBe("Detener tempo, 120 BPM");
+    expect(haptic).toHaveBeenCalledTimes(1);
+    expect(haptic).toHaveBeenLastCalledWith("light");
 
     fireEvent.click(pill);
     expect(pill.getAttribute("aria-pressed")).toBe("false");
     expect(pill.dataset.active).toBeUndefined();
+    expect(haptic).toHaveBeenCalledTimes(2);
   });
 
   it("schedules no timer, beating or not, and unmounts clean", () => {
