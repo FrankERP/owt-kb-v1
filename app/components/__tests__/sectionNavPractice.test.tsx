@@ -146,13 +146,33 @@ describe("SectionNav practice cluster", () => {
     expect(playTrack).toHaveBeenCalledTimes(1);
   });
 
-  it("insets the hero observer by the chrome that covers the top of the page", () => {
+  it("insets the hero observer by the bar's STUCK position, not its rect at mount", () => {
     // The hand-off must happen when the hero passes under the navbar + this bar,
     // not under the viewport's top edge — otherwise the hero's controls are
-    // already hidden behind the chrome while the bar still shows nothing.
-    const { hero } = mount(<SectionNav sections={sections} practice={practice} />);
-    const obs = observers.find((o) => o.targets.includes(hero))!;
-    expect(obs.init?.rootMargin).toMatch(/^-\d+px /);
+    // already hidden behind the chrome while the bar still shows nothing. The
+    // inset is the bar's sticky `top` plus its own height: at mount the page is
+    // at scrollY 0 and the bar is still in flow BELOW the hero, so its rect's
+    // `bottom` is most of the hero's height — using it would shrink the root
+    // past the hero entirely and latch the cluster on from load.
+    const realGetComputedStyle = window.getComputedStyle.bind(window);
+    vi.stubGlobal("getComputedStyle", (el: Element, pseudo?: string | null) =>
+      el instanceof HTMLElement && el.classList.contains("sticky")
+        ? ({ top: "96px" } as CSSStyleDeclaration)
+        : realGetComputedStyle(el, pseudo ?? undefined),
+    );
+    const realRect = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      return this instanceof HTMLElement && this.classList.contains("sticky")
+        ? ({ top: 900, bottom: 944, height: 44 } as DOMRect)
+        : realRect.call(this);
+    };
+    try {
+      const { hero } = mount(<SectionNav sections={sections} practice={practice} />);
+      const obs = observers.find((o) => o.targets.includes(hero))!;
+      expect(obs.init?.rootMargin).toBe("-140px 0px 0px 0px");
+    } finally {
+      Element.prototype.getBoundingClientRect = realRect;
+    }
   });
 
   it("reserves the slot even with no practice info, and keeps the section links", () => {

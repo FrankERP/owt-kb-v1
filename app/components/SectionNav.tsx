@@ -42,10 +42,17 @@ export default function SectionNav({ sections, practice }: { sections: Section[]
     // The hand-off happens when the hero passes under the CHROME, not under the
     // viewport's top edge: the navbar and this sticky bar cover that edge, so
     // without the inset the hero's controls are already hidden behind them while
-    // the observer still reports it visible and the bar still shows nothing. The
-    // bar is sticky directly under the navbar, so its own bottom edge measures
-    // both at once.
-    const barBottom = barRef.current?.getBoundingClientRect().bottom ?? 0;
+    // the observer still reports it visible and the bar still shows nothing.
+    //
+    // The inset is the bar's STUCK position — its `top` (which resolves the
+    // navbar's height plus the safe-area inset) plus its own height — never its
+    // rect's `bottom` at mount. At mount the page is at scrollY 0 and the bar is
+    // still in flow BELOW the hero, so that bottom is most of the hero's height:
+    // the root would shrink past the hero entirely and `heroGone` would latch
+    // true from load, showing the cluster over a hero that is still on screen.
+    const bar = barRef.current;
+    const stickyTop = bar ? parseFloat(getComputedStyle(bar).top) || 0 : 0;
+    const barBottom = stickyTop + (bar?.getBoundingClientRect().height ?? 0);
     const obs = new IntersectionObserver(
       ([entry]) => setHeroGone(!entry.isIntersecting),
       { threshold: 0, rootMargin: `-${Math.round(barBottom)}px 0px 0px 0px` }

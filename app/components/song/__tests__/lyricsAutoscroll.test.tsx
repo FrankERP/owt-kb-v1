@@ -348,6 +348,38 @@ describe("LyricsAutoscroll", () => {
     }
   });
 
+  it("a finger back down inside the backstop window beats the timer", () => {
+    // The 400 ms backstop is armed by a lift. If the reader touches again before
+    // it fires, the timer must not resume the loop under the new finger.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      start(120);
+      flush(0);
+
+      act(() => {
+        fireEvent.touchStart(window);
+        fireEvent.scroll(window);
+        fireEvent.touchEnd(window);
+      });
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+
+      const beforeRetouch = scrollSpy.mock.calls.length;
+      act(() => {
+        fireEvent.touchStart(window);
+      });
+      act(() => {
+        vi.advanceTimersByTime(400);
+      });
+      flush(200);
+      flush(240);
+      expect(scrollSpy.mock.calls.length).toBe(beforeRetouch);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("stops above the phone tab bar rather than at the viewport edge", () => {
     document.documentElement.style.setProperty("--bottom-nav-h", "80px");
     try {
