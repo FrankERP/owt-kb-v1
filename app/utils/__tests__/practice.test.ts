@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { tempoPeriodMs, autoscrollPxPerSecond, countLyricLines } from "../practice";
+import { beatsPerBar, tempoPeriodMs, autoscrollPxPerSecond, countLyricLines } from "../practice";
 
 describe("tempoPeriodMs", () => {
   it("computes the beat period from bpm", () => {
@@ -9,6 +9,22 @@ describe("tempoPeriodMs", () => {
   it("falls back to the default bpm when falsy", () => {
     expect(tempoPeriodMs(0)).toBe(750);
     expect(tempoPeriodMs(undefined)).toBe(750);
+  });
+});
+
+describe("beatsPerBar", () => {
+  it("reads the numerator of a time signature", () => {
+    expect(beatsPerBar("4/4")).toBe(4);
+    expect(beatsPerBar("6/8")).toBe(6);
+    expect(beatsPerBar("3/4")).toBe(3);
+  });
+
+  it("falls back to four on anything it cannot parse", () => {
+    expect(beatsPerBar("x")).toBe(4);
+    expect(beatsPerBar("")).toBe(4);
+    expect(beatsPerBar("0/4")).toBe(4);
+    expect(beatsPerBar(null)).toBe(4);
+    expect(beatsPerBar(undefined)).toBe(4);
   });
 });
 

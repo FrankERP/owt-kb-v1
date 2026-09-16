@@ -1850,6 +1850,13 @@ Made during execution, on top of the plan:
   «Seguir la letra» were the alternatives.
 - **«C# (original)» for a song written in `Db`.** The hint is enharmonic on purpose, but a
   member who knows the song as `Db` will read it on the `C#` pill.
+- **The click with the phone's silent switch on** (F1, ruling 12). Web Audio obeys the
+  switch, so a muted iPhone rings the pill and plays nothing; the guide-track `<audio>`
+  player on the same page does NOT obey it, so the two behave differently on one screen.
+  Whether that reads as broken is Frank's call — the fix is a native audio-session plugin,
+  which this delivery deliberately does not ship.
+- **The click's voice and level** — a 1000/800 Hz sine at gain 0.5, under a band. Loud
+  enough on a phone speaker in a rehearsal room, or does it need a sharper (square) click?
 
 **Bundle:** `main 7fbbb105` → `R4 tip 5a899be0` (git-archive cold builds, gzip −9; the
 three later commits move classes and handlers, not chunks): shared 172.5 → 172.5; `/`
@@ -1866,3 +1873,47 @@ the only surface where the transposer exists today) and
 
 **Release:** merged to `main` as `<pending>` (PR #`<pending>`); production alias
 `owt-backstage.vercel.app` verified `<pending>`. Preview verified at `d6b3ba56`.
+
+### F1 — the pill clicks (2026-09-16)
+
+Frank, after his look at the R4 branch on dev: *"can the bpm pill play the sound of the
+metronome?"* → *"go, tap = ring + click"*. One task on the same branch, after Task 8's docs.
+
+**Rulings.**
+- **Ruling 11.** The click is the master clock for SOUND — Web Audio, sample-accurate,
+  lookahead-scheduled — and the ring stays CSS-clocked exactly as shipped. Both start on
+  the same tap. Two monotonic clocks drift against each other by nothing audible over a
+  rehearsal, and keeping the ring in CSS keeps the reduced-motion story unchanged: the ring
+  collapses, the click keeps playing, because sound is not motion. Cost if wrong: a visible
+  phase offset between ring and click after many minutes, whose fix would be a WAAPI pulse
+  per beat.
+- **Ruling 12.** iOS silent switch: Web Audio obeys it, the `<audio>` guide track does not.
+  Ship the web click anyway; no native audio-session plugin in this delivery. Recorded in
+  the open notes above for Frank's device look.
+- **Ruling 13.** Tap = ring + click, with no separate silent mode (Frank's call). The
+  phone's volume is the control.
+
+**Shipped.** `app/components/song/metronome.ts` — `createMetronome({ bpm, beatsPerBar,
+onStop?, audioContext? })` plus the `CLICK` constants (accent 1000 Hz on beat 1, 800 Hz
+otherwise, 30 ms, gain 0.5, 25 ms lookahead, 100 ms scheduling window). A self-rescheduling
+`setTimeout` — never a `setInterval`, so a stop cannot race a queued tick — books every beat
+inside the window as a sine `OscillatorNode` through a `GainNode` ramp. The `AudioContext` is
+created lazily on the first `start()` (which must therefore run inside a user gesture) and
+reused; `stop()` clears the loop and suspends the context, never closes it; a
+`visibilitychange` to hidden stops and reports through `onStop`; with no `AudioContext` at all
+(prefixed or not) `start()` is a silent no-op and the pill still rings.
+`app/utils/practice.ts` — `beatsPerBar(timeSig)`, the numerator of the written compás, 4 on
+anything unparsable. `app/components/song/TempoPill.tsx` — one metronome per pill, built on the
+first tap from `bpm` + `beatsPerBar(timeSig)`, stopped on the second tap, on `onStop`, on
+unmount and whenever `bpm`/`timeSig` change under a running beat; labels are now «Marcar tempo
+con clic, N BPM» / «Detener el clic, N BPM». `app/components/song/SongHeroPills.tsx` passes
+`timeSig` through. Tests: `metronome.test.ts` (7, jsdom + fake timers against a hand-rolled
+`AudioContext` whose clock the test advances — beats booked at 0.05 s and 0.55 s inside the
+first second at 120 BPM with 1.05 s already looked ahead, the accent pattern at 4/4 and 3/4,
+`stop()` leaving zero timers and one `suspend()`, one context across two starts, the hidden-tab
+stop, and the no-Web-Audio no-op), plus the rewritten `tempoPill.test.tsx` — where the old
+"zero timers while active" assertion becomes zero BEFORE the first tap, present while active,
+zero after the second tap and after unmount.
+
+**Verification.** The scheduling test was mutation-checked: removing the `tick()` call from
+`start()` fails 4 of the 7. Gates green on the whole tree.

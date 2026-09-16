@@ -12,6 +12,12 @@ export function tempoPeriodMs(bpm: number | null | undefined): number {
   return 60000 / effective;
 }
 
+/** Beats in one bar — the numerator of "4/4" | "6/8" | "3/4". Anything unparsable → 4. */
+export function beatsPerBar(timeSig: string | null | undefined): number {
+  const numerator = Number((timeSig ?? "").split("/")[0]);
+  return Number.isFinite(numerator) && numerator > 0 ? Math.round(numerator) : 4;
+}
+
 /** Autoscroll speed in px/s for a section `heightPx` tall with `lines` lyric lines at `bpm`. */
 export function autoscrollPxPerSecond(heightPx: number, lines: number, bpm: number | null | undefined): number {
   const effective = bpm && bpm > 0 ? bpm : DEFAULT_BPM;

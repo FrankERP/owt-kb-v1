@@ -320,3 +320,46 @@ export default function LyricsAutoscroll({ targetId, bpm, lines }: { targetId: s
 - **Spec coverage.** §12.7: mini-header → Task 4 (ruling 1); key dial transposer → Tasks 2–3; tap tempo → Task 3; autoscroll → Task 7. §5.3: hero reveal + chip press → Task 6; EditSongButton press → Task 6 (FAB: ruling 4); SectionNav → already `SlidingIndicator` (M1); audio morph + equaliser → Task 5; tutoriales reveal → Task 6; referencia press → Task 6; ChordChart tabs/Switch → already; ± with NumberRoll + crossfade → Task 2; historial reveal → Task 6; loading navbar height → Task 6. §19.5 song hero row → Tasks 3 and 6. Deferred items are named in ruling 9.
 - **Placeholders.** None: every component has its markup shape, every test its assertions, every util its signature and cases.
 - **Type consistency.** `TransposeState` (Task 2) is what `KeyDial`, `SongHeroPills`, `PracticeCluster` and `ChordChart` read; `AudioTrack` comes from `PlayerContext` and is what Task 4's `PracticeInfo.track` carries and `PracticeCluster` hands to `playTrack`; `autoscrollPxPerSecond`/`countLyricLines`/`tempoPeriodMs` (Task 1) are the names Tasks 3 and 7 call; `NAVBAR_H_CLASS` (Task 6) is used by both importers the guard names.
+
+---
+
+## F1 — the BPM pill clicks (after Frank's look, 2026-09-16)
+
+Frank: "can the bpm pill play the sound of the metronome?" → "go, tap = ring + click".
+
+**Ruling 11.** The click is the master clock for SOUND (Web Audio, sample-accurate, lookahead-scheduled); the ring stays CSS-clocked exactly as shipped. Both start on the same tap; the two clocks are monotonic and their drift over a rehearsal is inaudible, and keeping the ring in CSS keeps the reduced-motion story unchanged (the ring collapses, the click keeps playing — sound is not motion). Cost if wrong: a visible phase offset between ring and click after many minutes; the fix would be a WAAPI pulse per beat.
+**Ruling 12.** iOS silent switch: Web Audio obeys it (the `<audio>` guide track does not). Ship the web click; no native audio-session plugin in this delivery. Recorded in Part XIV as a known caveat for Frank's device look.
+**Ruling 13.** Tap = ring + click, no separate silent mode (Frank's call). The phone's volume is the control.
+
+### Task F1-1: `metronome.ts` + `TempoPill` plays it
+
+**Files:**
+- Create: `app/components/song/metronome.ts`, `app/components/song/__tests__/metronome.test.ts`
+- Modify: `app/utils/practice.ts` (`beatsPerBar`), `app/utils/__tests__/practice.test.ts`, `app/components/song/TempoPill.tsx`, `app/components/song/SongHeroPills.tsx` (pass `timeSig`), `app/components/song/__tests__/tempoPill.test.tsx`, `docs/UTILITIES_AND_COMPONENTS.md`, `docs/MOTION.md`, `CLAUDE.md` + `AGENTS.md` (`TempoPill` entry), spec Part XIV (an "F1" subsection)
+
+**Interfaces:**
+
+```ts
+// app/utils/practice.ts (neutral) — numerator of "4/4" | "6/8" | "3/4"; anything unparsable → 4.
+export function beatsPerBar(timeSig: string | null | undefined): number;
+
+// app/components/song/metronome.ts ("use client"-free module but browser-only; imported by TempoPill only)
+export interface Metronome { start(): void; stop(): void; readonly running: boolean }
+export const CLICK = { accentHz: 1000, beatHz: 800, lengthMs: 30, gain: 0.5, lookaheadMs: 25, scheduleAheadMs: 100 } as const;
+/**
+ * Lookahead scheduler ("a tale of two clocks"): a 25 ms setTimeout loop schedules every click that falls
+ * inside the next 100 ms on the AudioContext clock, as an OscillatorNode (accentHz on beat 1 of the bar,
+ * beatHz otherwise) through a GainNode envelope (gain → 0 over lengthMs). `start()` creates the context
+ * lazily (it MUST be called from a user gesture), resumes it, and seeds the first beat at ctx.currentTime + 0.05.
+ * `stop()` clears the loop and suspends the context (never closes it — a second start reuses it).
+ * A `visibilitychange` to hidden calls stop() and reports through `onStop` so the pill can drop its state.
+ */
+export function createMetronome(opts: { bpm: number; beatsPerBar: number; onStop?: () => void; audioContext?: () => AudioContext }): Metronome;
+```
+
+`TempoPill({ bpm, timeSig })`: holds one `Metronome` in a ref (created on first tap); tap on → `haptic("light")`, `setActive(true)`, `metronome.start()`; tap off / `onStop` / unmount → `stop()` and `setActive(false)`. `aria-label` becomes `Marcar tempo con clic, N BPM` / `Detener el clic, N BPM`. The ring CSS is untouched.
+
+- [ ] **Step 1: Failing tests.** `practice.test.ts`: `beatsPerBar("4/4") === 4`, `("6/8") === 6`, `("x") === 4`, `(null) === 4`. `metronome.test.ts` (fake timers; a hand-rolled fake `AudioContext` with `currentTime` you advance, `createOscillator`/`createGain` returning spies with `connect`/`start`/`stop`/`frequency`/`gain.setValueAtTime`/`gain.exponentialRampToValueAtTime`, `resume`/`suspend` spies): at 120 BPM / 4 beats, advancing 1 s schedules 2 clicks at 0.05 and 0.55 s on the context clock; beat 1 of each bar uses `accentHz`, others `beatHz`; `stop()` clears the timer (`vi.getTimerCount() === 0`) and calls `suspend()`; a second `start()` reuses the same context (factory called once); `document` `visibilitychange` with `hidden` stops and fires `onStop`. `tempoPill.test.tsx`: replace the "zero timers while active" assertion with: zero timers BEFORE the first tap, timers present while active, zero after the second tap and after unmount; `haptic` once per toggle; the label text; `aria-pressed`. Mock `metronome.ts`' AudioContext through the `audioContext` factory prop path (TempoPill passes none in prod; in the test stub `window.AudioContext`).
+- [ ] **Step 2: Run, watch them fail.** **Step 3: Implement.** No `setInterval`; the loop is a self-rescheduling `setTimeout` so a stop between ticks never fires a stray click. Guard `typeof window.AudioContext === "undefined"` (webkit prefix too) → the pill still rings, silently.
+- [ ] **Step 4: Docs** per the file list; Part XIV gains "### F1 — the pill clicks (2026-09-16)" with rulings 11–13 and the silent-switch caveat in the open notes.
+- [ ] **Step 5: Gates; commit** — `feat(song): the BPM pill clicks — a Web Audio metronome under the ring`

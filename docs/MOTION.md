@@ -1130,6 +1130,19 @@ a practice surface. See spec Part XIV for the full ledger; the motion-relevant p
   default of 750 ms, the pattern `--impersonation-h` and `--bottom-nav-h` already use for
   a JS-published value, so no guard needed an exemption. One `haptic("light")` on the
   toggle, never per beat.
+- **The pill also CLICKS, and the click is the master clock for SOUND** (F1, ruling 11).
+  `app/components/song/metronome.ts` is a Web Audio lookahead scheduler — a 25 ms
+  self-rescheduling `setTimeout` books every beat falling inside the next 100 ms on
+  `ctx.currentTime` as a sine `OscillatorNode` through a gain envelope, accented on beat 1
+  of `beatsPerBar(timeSig)`. The RING stays CSS-clocked exactly as shipped: two monotonic
+  clocks whose drift over a rehearsal is inaudible, and reduced motion keeps its story —
+  the ring collapses, the click keeps playing, because sound is not motion. The loop is a
+  timeout and never an interval, and it belongs to the active state: `stop()` clears it on
+  the second tap, on a hidden tab and on unmount, and suspends (never closes) the context.
+  Tap = ring + click with no separate silent mode (ruling 13) — the phone's volume is the
+  control. **Caveat (ruling 12): on iOS the click obeys the SILENT SWITCH**, because Web
+  Audio does and the `<audio>` guide track does not; a muted phone rings without clicking,
+  and no native audio-session plugin ships in this delivery.
 - **`LyricsAutoscroll` moves the PAGE, never a transform.** rAF + `window.scrollTo`, at
   `autoscrollPxPerSecond(sectionHeight, lines, bpm)` (a lyric line is 8 beats; clamped to
   8–160 px/s; no BPM means 80). A transform on the section would make its ancestor the
