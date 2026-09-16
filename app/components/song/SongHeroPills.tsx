@@ -96,7 +96,11 @@ export default function SongHeroPills({
             onChange={(k) => shared?.setSemitones(semitonesBetween(nativeKey!, k))}
             options={DISPLAY_NOTES.map((n) => ({
               value: n,
-              label: n,
+              // `normal-case` on the label, not on the group: `SegmentedControl`
+              // uppercases its options (CALENDARIO / LISTA) and a flat then reads
+              // "EB", which is not a note. The accessible name is `ariaLabel`, so
+              // wrapping the visible text costs nothing.
+              label: <span className="normal-case">{n}</span>,
               // Enharmonic, not textual: a song written in Db is in C#, and the
               // hint belongs on the pill that sounds the same, not the one spelled
               // the same.

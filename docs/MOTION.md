@@ -242,6 +242,8 @@ Before was measured on the primary checkout at the merge-base commit
 | **R3 tip `4b3e18ad`** (the header, weekend list, `SettingsCard`; the pill `tone` on `Button` touches every route by ~0.4–0.5 kB) | 172.5 kB | 132.2 kB (`/me`, +2.4) | 356.9 kB (+0.4) | 120.4 kB (`/`, +0.5); `/schedule` 124.1 kB (+0.5), `/biblioteca` 114.3 kB (+0.1) |
 | **`main 61d5330f`, R7 release-day rebuild** (git-archive cold build, same environment as the R3 rows) | 172.5 kB | 118.0 kB | 354.4 kB | 121.7 kB (`/schedule`) · 111.9 kB (`/biblioteca`) · 119.5 kB (`/me`) |
 | **R7 tip `6fcfb22c`** (the cue strip, blackout, pull-to-refresh rail, long-press hook + sheet; the two later commits move classes and one sheet, not chunks) | 172.5 kB | 122.1 kB (+4.1) | 357.0 kB (+2.6) | 124.1 kB (`/schedule`, +2.4) · 116.9 kB (`/biblioteca`, +5.0) · 123.1 kB (`/me`, +3.6) |
+| **`main 7fbbb105`, R4 release-day rebuild** (git-archive cold build, same environment as the R7 rows) | 172.5 kB | 122.6 kB | 357.6 kB | 110.7 kB (`/posts/[slug]`) · 124.6 kB (`/schedule`) · 117.0 kB (`/biblioteca`) · 123.6 kB (`/me`) |
+| **R4 tip `5a899be0`** (the transposer seat, hero pills, practice cluster, autoscroll, equaliser; the three later commits move classes and handlers, not chunks) | 172.5 kB | 121.2 kB (−1.4) | 356.2 kB (−1.4) | 111.7 kB (`/posts/[slug]`, **+1.0**) · 123.3 kB (`/schedule`, −1.3) · 115.7 kB (`/biblioteca`, −1.3) · 122.3 kB (`/me`, −1.3) |
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -1099,3 +1101,106 @@ LOW parked for the final fix wave).
 
 - **Bundle:** `main 61d5330f` → `R7 tip 6fcfb22c`: shared 172.5 → 172.5; `/` +4.1; `/schedule` +2.4; `/biblioteca` +5.0 (the long-press hook and the page's one sheet); `/me` +3.6; `/admin` +2.6 — see the Bundle table.
 - **Release:** merged to `main` as `2fae55b8` (PR #72, 2026-09-13 21:2x CST, after PR #71 landed); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`, 21:22 CST). Preview last verified at `7f5c52c7`.
+
+### Song (R4)
+
+Spec §12.7 / decision K, plus Part I §5.3 and §19.5's hero row: `/posts/[slug]` becomes
+a practice surface. See spec Part XIV for the full ledger; the motion-relevant pieces:
+
+- **One transposition seat.** `TransposeProvider` (`app/components/song/`) owns the
+  page's single `semitones` value; `KeyDial`, the hero drawer, `PracticeCluster` and
+  `ChordChart` all read it through `useTransposeOptional()`. `ChordChart` keeps its own
+  `useState` ONLY as the fallback for a chart rendered without a provider (its tests, a
+  future consumer) — never as a second live copy beside the hero, which is how the badge
+  and the chart would come to disagree. The provider is seated on the FIRST chart's key,
+  not on `post.key`: `ChordChart` opens on index 0 and only the chart on screen
+  transposes, so the dial, the «(original)» hint and the chart readout name one key.
+- **The hero drawer is the page's ONE 12-key picker.** `SongHeroPills` discloses a
+  `SegmentedControl` of the twelve notes inside a `Collapse`; `ChordChart`'s old 12-button
+  strip is now a ± pair with a `NumberRoll` readout and an «Original» reset. Two 12-key
+  strips on one page is the "too many buttons" smell R3 F3 removed. The radiogroup's value
+  is the sounding ROOT (a "Gm" song sounds "Am", which matches no option), and each option's
+  visible label carries `normal-case` — the control uppercases its options for
+  CALENDARIO / LISTA, and a flat left alone reads "EB", which is not a note.
+- **The tempo pill is CSS-clocked by a custom property.** `TempoPill` publishes
+  `--tempo-period: ${60000 / bpm}ms` inline and `.brand-tempo-pill[data-active="true"]::after`
+  runs `@keyframes brand-tempo-pulse` on it — **no `setInterval`, no rAF loop**, so a
+  backgrounded tab costs nothing and the beat cannot drift against a React render.
+  `data-active` is ABSENT when idle rather than `"false"`. `brand.css` declares a `:root`
+  default of 750 ms, the pattern `--impersonation-h` and `--bottom-nav-h` already use for
+  a JS-published value, so no guard needed an exemption. One `haptic("light")` on the
+  toggle, never per beat.
+- **`LyricsAutoscroll` moves the PAGE, never a transform.** rAF + `window.scrollTo`, at
+  `autoscrollPxPerSecond(sectionHeight, lines, bpm)` (a lyric line is 8 beats; clamped to
+  8–160 px/s; no BPM means 80). A transform on the section would make its ancestor the
+  containing block for every `fixed` descendant — the FAB, the audio transport, the
+  toasts — the ADR-0031 trap `reveal.test.ts` exists to keep shut.
+  - **Touch pauses, the wheel stops.** `touchstart` / a non-mouse `pointerdown` pauses;
+    the lift resumes, waiting for `scrollend` when the touch actually scrolled so the
+    loop does not fight iOS momentum, with a **400 ms backstop** for the UAs that never
+    fire it. Every lift clears that timer first (one gesture lifts twice), a new touch
+    clears it, and `resume()` returns early while a finger is down — a backstop is a timer
+    and must always lose to a finger. `pointercancel` is deliberately NOT bound: Chrome
+    Android and iOS Safari fire it the moment a touch is promoted to a pan, finger still
+    down, and treating it as a lift scrolled the page out from under the drag. A genuine
+    cancel still arrives as `touchcancel`, which is handled. The wheel **stops** the run
+    rather than pausing it, because a mouse has no lift event and a paused run would sit
+    there reading «Detener» over a page that no longer moves.
+  - **The end is the section's bottom above the furniture** — `window.innerHeight` minus
+    `--bottom-nav-h` (the tab bar's published measured height) minus the measured
+    `.audio-player` height, re-measured at every resume since the transport appears the
+    moment someone taps play. Without it the last lines stop behind both.
+- **The practice cluster lives in the page's own sticky bar, not in `Navbar`.**
+  `SectionNav` gains a right-hand slot holding `PracticeCluster` (title on `lg`, sounding
+  key, BPM, 44 px play/pause), faded in by `Presence` when one `IntersectionObserver` on
+  `#song-hero` reports the hero gone. The observer's `rootMargin` is the bar's **sticky
+  top** (`parseFloat(getComputedStyle(bar).top)`, which resolves the `calc()` with the
+  safe area) plus the bar's own rect HEIGHT — never the rect's `bottom`, which at mount
+  (scroll 0, not yet stuck) is most of the hero's height and latched the cluster visible
+  from load. The navbar's centre already holds the title and the cue strip on the phone
+  and the navigation links on desktop; taking it would repeat or remove something.
+- **The press twin is a class rule, not a utility.**
+  `.brand-surface-interactive:active { transform: translateY(1px) scale(.985) }` sits right
+  after that class's `:hover` rule in `brand.css`. Tailwind v3 compiles `@layer` away, so
+  `active:` utilities on a consumer were a same-specificity source-order tie against the
+  hover transform; the class rule wins cleanly and every consumer app-wide gets the press
+  for free.
+- **`PlayPauseGlyph` and `Equalizer`** (`app/components/ui/`) are the one play/pause morph
+  and the one playing indicator, used by `SongAudioSection`, `AudioTransport` and
+  `PracticeCluster`. The equaliser renders unconditionally on the card's title row and only
+  animates (`scaleY`, `@keyframes brand-eq`) under `[data-playing="true"]`, so the row's
+  height never shifts when playback starts.
+- **The page joins the route reveal** on the house 40 ms step (not §5.3's 30 ms — one clock
+  for every route), and `NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts`) gives the navbar's
+  height one spelling across `Navbar` and `NavbarSkeleton`, so the loading shell cannot
+  drift from the real bar.
+
+**Deviations from the plan, accepted.** The radiogroup's value is the sounding root rather
+than the sounding key; `data-active` is absent when idle; the page coerces `post.bpm` with
+`Number()` and passes an unusable value through as `bpmText` (a static pill — the field is
+typed `string` in `interface.tsx` while the schema writes a number, which predates R4); the
+wheel stops the autoscroll instead of pausing it.
+
+**Review trail.** Tasks 1, 2, 4 and 5 drew APPROVED with 0 findings. Task 3 (hero pills)
+drew CHANGES_REQUIRED (1 MEDIUM uneven pill row — the static pills sat at 38.4 px beside a
+44 px dial; 4 LOW) — fixed in one round, re-review CLEAN. Task 6 (reveal, press twins)
+drew APPROVED with 1 MEDIUM parked (the referencia press twin, closed by the `brand.css`
+rule above). Task 7 (autoscroll) drew CHANGES_REQUIRED (1 HIGH `touchcancel` stranding the
+run; 2 MEDIUM 44 px target and momentum resume; 3 LOW) — fixed in one round. The
+whole-branch review then found 1 HIGH (`pointercancel` resuming under the finger), 2 MEDIUM
+(`transposeKey` re-spelling at 0 semitones; the end ignoring the tab bar and transport) and
+3 LOW; the scoped re-verify of THAT fix found 2 more HIGHs the fix had introduced (the flow-
+rect observer inset; a re-touch inside the backstop), and the second re-verify returned
+VERIFIED FOR MERGE. Parked, knowingly: the observer inset is read once at mount and goes
+stale across an `lg:` rotation; a chart[1] in another key disagrees with the hero readout by
+that interval (an editors' data rule, not more code).
+
+**Data reality.** 0 songs in the catalogue carry an inline chart or an audio track today, so
+the transposer and the equaliser are capabilities the editors can light up rather than paths
+production exercises; the `song` theme-gallery fixture is where both are visually verified.
+
+- **Bundle:** `main 7fbbb105` → `R4 tip 5a899be0`: shared 172.5 → 172.5; `/posts/[slug]`
+  110.7 → 111.7 (+1.0, the only route that gained a feature); `/` −1.4; `/schedule` −1.3;
+  `/biblioteca` −1.3; `/me` −1.3; `/admin` −1.4 — see the Bundle table.
+- **Release:** merged to `main` as `<pending>` (PR #`<pending>`); production alias
+  `owt-backstage.vercel.app` verified `<pending>`. Preview verified at `d6b3ba56`.
