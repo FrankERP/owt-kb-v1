@@ -53,3 +53,18 @@ jobs:
       # the gate, matching what CLAUDE.md asks of a local run.
       - name: Lint
         run: npx eslint .
+
+      # The CP-SAT solver has its own suite and nothing ran it: a `gcf/**`-only PR
+      # went green on a job that never looked at the file, on code that deploys to
+      # the Cloud Function from `main` with no `preview` rehearsal. 3.12 matches the
+      # function's own `--runtime=python312` (cloudbuild.yaml).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Solver deps
+        run: pip install -r gcf/requirements.txt
+
+      - name: Solver tests
+        run: python -m unittest discover -s gcf -t gcf -v

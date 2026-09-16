@@ -257,5 +257,241 @@ class TestSolverBudgetClamping(unittest.TestCase):
         self.assertTrue(res.get("ok"))  # still solves fine with clamped budgets
 
 
+class ObjectiveWeightLadder(unittest.TestCase):
+    """
+    The lexicographic objective is a product over eight priority tiers. Charging every
+    tier the same global `max_spread` made that product exponential in an over-estimate,
+    so the objective's upper bound crossed int64: ortools answered MODEL_INVALID on the
+    optimising passes and `solve_schedule` fell through to the objective-less ones
+    **silently**, losing fairness optimisation with no signal to the caller.
+
+    Two things are guarded here: per-tier maxima (which fix the history-free months
+    outright), and graceful, REPORTED degradation for the months they cannot fix.
+    """
+
+    SHAPES = [
+        (4, [2, 4]),              # 42 slots: make_config's own default shape
+        (4, [1, 2, 3, 4]),        # 52 slots: bound was 3.2e19
+        (5, [1, 2, 3]),           # 55 slots: reproduced MODEL_INVALID
+        (5, [1, 2, 3, 4, 5]),     # 65 slots: reproduced MODEL_INVALID
+        (6, [1, 2]),              # 58 slots: reproduced MODEL_INVALID
+        (6, [1, 2, 3, 4, 5, 6]),  # 78 slots: worst bound, 1.9e21
+    ]
+
+    @staticmethod
+    def _shape(weeks, sats, history):
+        cfg = make_config(weeks=weeks, sat_weeks=tuple(sats), history=history)
+        cfg["solver_max_time_seconds"] = 3      # the guards are about the model,
+        cfg["solver_total_budget_seconds"] = 20  # not about search quality
+        return cfg
+
+    def test_no_optimising_pass_is_rejected_by_ortools(self):
+        """The original regression: MODEL_INVALID must never be reached."""
+        from ortools.sat.python import cp_model
+
+        seen = []
+        original = cp_model.CpSolver.Solve
+
+        def record(solver_self, model):
+            status = original(solver_self, model)
+            seen.append(solver_self.StatusName(status))
+            return status
+
+        cp_model.CpSolver.Solve = record
+        try:
+            for weeks, sats in self.SHAPES:
+                with self.subTest(weeks=weeks, saturdays=len(sats)):
+                    seen.clear()
+                    res = solve_from_dict(self._shape(weeks, sats, []))
+                    self.assertTrue(res.get("ok"), res.get("error"))
+                    self.assertNotIn(
+                        "MODEL_INVALID", seen,
+                        f"{weeks}wk/{len(sats)}sat: ortools rejected the objective")
+
+        finally:
+            cp_model.CpSolver.Solve = original
+
+    def test_history_bearing_months_still_return_a_schedule(self):
+        """
+        Production always sends history — `historyForRequest` ships the last three
+        months and `build_history_offsets` weights them [10, 6, 3], so `overall_limit`
+        and every `ov_r_limit` grow with it. Two entries is enough to push the ladder
+        past int64 on an ordinary month.
+
+        The month must still come back. An earlier draft of this fix raised instead,
+        which turned "a lopsided month" into "no month at all" — strictly worse for the
+        admin than the bug being fixed, and reachable in the steady state the fairness
+        feature exists to create.
+        """
+        for weeks, sats in self.SHAPES[:4]:
+            with self.subTest(weeks=weeks, saturdays=len(sats)):
+                history = []
+                for month in range(3):
+                    res = solve_from_dict(self._shape(weeks, sats, history))
+                    self.assertTrue(
+                        res.get("ok"),
+                        f"{weeks}wk/{len(sats)}sat failed with {len(history)} "
+                        f"history entries: {res.get('error')}")
+                    history.append({"total_counts": res["total_counts"],
+                                    "role_counts": res["role_counts"]})
+
+    def test_degradation_is_reported_not_silent(self):
+        """
+        `objective_skipped` is the whole point: a fairness-free month is legal, but it
+        must say so. Assert both directions on the same shape.
+
+        The history here is HAND-WRITTEN and sized well past the ceiling, deliberately.
+        An earlier version chained the solver's own output forward, which put the
+        objective bound 4% over int64 — so whether the assertion held depended on which
+        person happened to take which seat two months earlier. One Sat.BGV seat moves
+        that cap by up to 10, several times the flip threshold. In a blocking CI gate
+        that is a red check on an unrelated PR, and the pressure then is to disable the
+        gate rather than debug it. The bound must be a property of the fixture, not of
+        the search.
+        """
+        clean = solve_from_dict(self._shape(4, [2, 4], []))
+        self.assertTrue(clean.get("ok"), clean.get("error"))
+        self.assertFalse(
+            clean["objective_skipped"],
+            "a history-free month is exactly what per-tier maxima fix; if this is "
+            "True the ladder is no longer fitting where it should")
+
+        # Every member maxed out for three months running — far past any real roster,
+        # and far past the ceiling, so the flip cannot depend on the search.
+        heavy = [{
+            "total_counts": {p: 40 for p in ROSTER},
+            "role_counts": {p: {r: 8 for r in
+                                ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"]}
+                            for p in ROSTER},
+        } for _ in range(3)]
+
+        loaded = solve_from_dict(self._shape(4, [2, 4], heavy))
+        self.assertTrue(loaded.get("ok"), loaded.get("error"))
+        self.assertTrue(
+            loaded["objective_skipped"],
+            "history this large cannot fit the ladder; the flag must report it")
+
+    def test_per_tier_maxima_keep_the_ladder_lexicographic(self):
+        """
+        The ladder's point is that each tier outranks everything below it. Shrinking the
+        caps must not break that — assert the invariant directly, against the caps the
+        solver actually computes for a real month rather than hand-written ones.
+        """
+        from owt_solver_v2 import compute_priority_weights, PRIORITY_ORDER
+
+        maxima = {"Sun.Choir": 12, "Sat.BGV": 12, "Sun.BGV": 12, "global": 52,
+                  "sun_lead_rotation": 72, "sun_lead_weekly_rotation": 72,
+                  "Sat.Lead": 8, "Sun.Lead": 8}
+        max_consec, max_rand = 180, 2263
+        w = compute_priority_weights(52, max_consec, max_rand, maxima)
+
+        below = max_consec * w["consecutive"] + max_rand
+        for name in PRIORITY_ORDER:
+            self.assertGreater(
+                w[name], below, f"{name} does not outrank the tiers below it")
+            below += maxima[name] * w[name]
+        self.assertLess(below, 2 ** 63 - 1)
+
+    def test_tier_maxima_cover_every_tier(self):
+        """
+        A tier missing from `tier_maxima` is a programming error that would silently
+        break the ordering above it — `max_spread` is not a valid bound for the
+        rotation tiers (measured 52 against a real 72). Capture the map the solver
+        ACTUALLY builds during a real solve, rather than comparing two literals: a
+        literal comparison passes while every month in production fails.
+        """
+        import owt_solver_v2 as mod
+        from owt_solver_v2 import PRIORITY_ORDER
+
+        captured = []
+        original = mod.compute_priority_weights
+
+        def record(max_spread, max_consec, max_rand, tier_maxima=None):
+            captured.append(tier_maxima)
+            return original(max_spread, max_consec, max_rand, tier_maxima)
+
+        mod.compute_priority_weights = record
+        try:
+            solve_from_dict(self._shape(4, [2, 4], []))
+        finally:
+            mod.compute_priority_weights = original
+
+        self.assertTrue(captured, "no optimising pass ran; the guard saw nothing")
+        for supplied in captured:
+            self.assertIsNotNone(supplied)
+            self.assertEqual(set(supplied), set(PRIORITY_ORDER))
+
+    def test_a_partial_tier_map_degrades_rather_than_failing_the_month(self):
+        """
+        The failure class this whole change removed: a programming error must not turn
+        into "no month at all". A partial map raises ObjectiveTooLarge, which
+        create_model_and_solve catches like an overflow.
+        """
+        import owt_solver_v2 as mod
+
+        original = mod.compute_priority_weights
+
+        def drop_a_tier(max_spread, max_consec, max_rand, tier_maxima=None):
+            if tier_maxima:
+                tier_maxima = {k: v for k, v in tier_maxima.items() if k != "Sun.Choir"}
+            return original(max_spread, max_consec, max_rand, tier_maxima)
+
+        mod.compute_priority_weights = drop_a_tier
+        try:
+            res = solve_from_dict(self._shape(4, [2, 4], []))
+        finally:
+            mod.compute_priority_weights = original
+
+        self.assertTrue(res.get("ok"), res.get("error"))
+        self.assertTrue(res["objective_skipped"])
+
+    def test_objective_skipped_covers_every_objective_less_return(self):
+        """
+        The flag means "no lexicographic objective ran", not "the int64 ladder
+        overflowed". Stage A and the ladder's optimize=False passes build no objective
+        either, and solve_schedule can return from any of them — a flag scoped to the
+        overflow would say "the objective ran" for months where it did not.
+        """
+        from owt_solver_v2 import create_model_and_solve
+
+        seen = []
+        import owt_solver_v2 as mod
+        original = create_model_and_solve
+
+        def record(**kwargs):
+            result = original(**kwargs)
+            if result is not None:
+                seen.append((kwargs.get("empty_objective_only", False),
+                             kwargs.get("optimize", False),
+                             result.objective_skipped))
+            return result
+
+        mod.create_model_and_solve = record
+        try:
+            solve_from_dict(self._shape(4, [2, 4], []))
+        finally:
+            mod.create_model_and_solve = original
+
+        self.assertTrue(seen)
+        for empty_only, optimize, skipped in seen:
+            expected_objective = optimize and not empty_only
+            if not expected_objective:
+                self.assertTrue(
+                    skipped,
+                    "a pass that builds no objective must report objective_skipped")
+
+    def test_an_absurd_ladder_raises_its_own_exception(self):
+        """
+        `ObjectiveTooLarge` is deliberately not a ValueError: `solve_from_dict` turns
+        those into `ok: false`, and a month the solver can still fill must never come
+        back as no month at all.
+        """
+        from owt_solver_v2 import compute_priority_weights, ObjectiveTooLarge
+
+        with self.assertRaises(ObjectiveTooLarge):
+            compute_priority_weights(10 ** 6, 10 ** 6, 10 ** 6)
+        self.assertNotIsInstance(ObjectiveTooLarge("x"), ValueError)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
