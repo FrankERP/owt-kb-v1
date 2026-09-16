@@ -40,6 +40,10 @@ export function semitonesBetween(fromKey: string, toKey: string): number {
 }
 
 export function transposeKey(key: string, semitones: number): string {
+  // At rest the key keeps the spelling the song was written in: `DISPLAY_NOTES`
+  // is one enharmonic choice per pitch, so round-tripping a `Db` through it
+  // would re-spell an untransposed song as `C#`. Mirrors `transposeChord`.
+  if (semitones === 0) return key;
   const m = key.match(/^([A-G][b#]?)(.*)/);
   if (!m) return key;
   const [, root, quality] = m;

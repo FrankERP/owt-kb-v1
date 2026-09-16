@@ -47,6 +47,13 @@ describe("transposeKey", () => {
   it("returns the key unchanged when unparsable", () => {
     expect(transposeKey("", 3)).toBe("");
   });
+
+  it("keeps the written spelling at rest", () => {
+    // `DISPLAY_NOTES` picks one enharmonic per pitch, so a round trip through it
+    // would re-spell an untransposed song's key. At rest nothing moves.
+    expect(transposeKey("Db", 0)).toBe("Db");
+    expect(transposeKey("Gb", 0)).toBe("Gb");
+  });
 });
 
 describe("capoSuggestion", () => {

@@ -24,6 +24,7 @@ vi.mock("@/app/context/PlayerContext", () => ({
 interface FakeObserver {
   callback: IntersectionObserverCallback;
   targets: Element[];
+  init?: IntersectionObserverInit;
 }
 let observers: FakeObserver[] = [];
 
@@ -32,8 +33,8 @@ class MockIntersectionObserver implements IntersectionObserver {
   rootMargin = "";
   thresholds: ReadonlyArray<number> = [];
   private entry: FakeObserver;
-  constructor(cb: IntersectionObserverCallback) {
-    this.entry = { callback: cb, targets: [] };
+  constructor(cb: IntersectionObserverCallback, init?: IntersectionObserverInit) {
+    this.entry = { callback: cb, targets: [], init };
     observers.push(this.entry);
   }
   observe(el: Element) {
@@ -143,6 +144,15 @@ describe("SectionNav practice cluster", () => {
     fireEvent.click(second.getByRole("button", { name: "Pausar Guía" }));
     expect(togglePlay).toHaveBeenCalledTimes(1);
     expect(playTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it("insets the hero observer by the chrome that covers the top of the page", () => {
+    // The hand-off must happen when the hero passes under the navbar + this bar,
+    // not under the viewport's top edge — otherwise the hero's controls are
+    // already hidden behind the chrome while the bar still shows nothing.
+    const { hero } = mount(<SectionNav sections={sections} practice={practice} />);
+    const obs = observers.find((o) => o.targets.includes(hero))!;
+    expect(obs.init?.rootMargin).toMatch(/^-\d+px /);
   });
 
   it("reserves the slot even with no practice info, and keeps the section links", () => {

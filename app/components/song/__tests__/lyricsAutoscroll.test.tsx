@@ -276,7 +276,7 @@ describe("LyricsAutoscroll", () => {
 
       expect(button.getAttribute("aria-pressed")).toBe("false");
       const removed = removeSpy.mock.calls.map(([type]) => type);
-      for (const type of ["touchstart", "touchend", "touchcancel", "pointerdown", "pointerup", "pointercancel", "wheel"]) {
+      for (const type of ["touchstart", "touchend", "touchcancel", "pointerdown", "pointerup", "wheel"]) {
         expect(removed).toContain(type);
       }
       expect(cancelSpy).toHaveBeenCalled();
@@ -285,6 +285,87 @@ describe("LyricsAutoscroll", () => {
       removeSpy.mockRestore();
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it("ignores pointercancel, which a promoted pan fires with the finger still down", () => {
+    // Chrome Android and iOS Safari fire `pointercancel` the moment a touch
+    // becomes a pan — mid-gesture. Treating it as a lift would resume the loop
+    // under the dragging finger and scroll the page out from under it.
+    start(120);
+    flush(0);
+
+    act(() => {
+      fireEvent.touchStart(window);
+    });
+    const beforeCancel = scrollSpy.mock.calls.length;
+
+    act(() => {
+      fireEvent.pointerCancel(window, { pointerType: "touch" });
+    });
+    flush(40);
+    flush(80);
+    expect(scrollSpy.mock.calls.length).toBe(beforeCancel);
+
+    // The real end of the gesture still resumes it.
+    act(() => {
+      fireEvent.touchEnd(window);
+    });
+    flush(120);
+    expect(scrollSpy.mock.calls.length).toBeGreaterThan(beforeCancel);
+  });
+
+  it("arms ONE fallback timer for a gesture that lifts twice, and clears it on toggle-off", () => {
+    // A touch reports its lift as both `pointerup` and `touchend`. Arming a
+    // second timeout over the first orphans it: it survives toggle-off and
+    // resumes a run with no listeners left to stop it.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const { button } = start(120);
+      flush(0);
+
+      act(() => {
+        fireEvent.touchStart(window);
+        fireEvent.scroll(window);
+        fireEvent.pointerUp(window, { pointerType: "touch" });
+        fireEvent.touchEnd(window);
+      });
+      expect(vi.getTimerCount()).toBe(1);
+
+      act(() => {
+        fireEvent.click(button);
+      });
+      expect(vi.getTimerCount()).toBe(0);
+
+      const calls = scrollSpy.mock.calls.length;
+      act(() => {
+        vi.advanceTimersByTime(400);
+      });
+      flush(200);
+      expect(scrollSpy.mock.calls.length).toBe(calls);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops above the phone tab bar rather than at the viewport edge", () => {
+    document.documentElement.style.setProperty("--bottom-nav-h", "80px");
+    try {
+      const { button } = start(120);
+      flush(0);
+
+      // Without the bar this bottom would already be "the end" by 40 px; with
+      // it, those 40 px are behind the tab bar and the run continues.
+      rect = { bottom: 760 } as DOMRect;
+      flush(40);
+      expect(button.getAttribute("aria-pressed")).toBe("true");
+
+      rect = { bottom: 710 } as DOMRect; // <= 800 - 80
+      flush(80);
+      expect(button.getAttribute("aria-pressed")).toBe("false");
+      expect(queue.size).toBe(0);
+    } finally {
+      document.documentElement.style.removeProperty("--bottom-nav-h");
     }
   });
 

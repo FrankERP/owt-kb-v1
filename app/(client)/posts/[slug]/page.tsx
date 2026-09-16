@@ -165,8 +165,17 @@ const Page = async ({ params }: Params) => {
   const hasInlineChords = (post?.chords?.length ?? 0) > 0;
   // The hero key is a TRANSPOSER only for a ChordPro chart: a plain-text chart
   // carries no bracketed chords to move, so the drawer would shift the readout
-  // and nothing else.
-  const transposable    = (post?.chords ?? []).some((c) => isChordPro(c.content));
+  // and nothing else. It has to be the FIRST chart: `ChordChart` opens on index
+  // 0 and only the chart on screen transposes, so a ChordPro chart further down
+  // the list would arm a dial over a chart that cannot move.
+  const firstChart      = post?.chords?.[0] ?? null;
+  const transposable    = !!firstChart && isChordPro(firstChart.content);
+  // The dial transposes the CHART, and a chart may be written in a key other
+  // than the song's (`post.key`) — a guitar sheet in G for a song sung in Ab.
+  // Seat the provider on the chart's key so the dial, the drawer's «(original)»
+  // hint and the chart's own readout agree; with no transposable chart the
+  // song's own key is what the badge shows.
+  const heroKey         = (transposable ? firstChart?.key : null) ?? post?.key ?? null;
   // The schema field is a number, but the interface types it `string` and the
   // catalogue predates both — so parse, and keep an unparsable value VISIBLE as
   // the static pill it has always been rather than dropping the row silently.
@@ -205,7 +214,7 @@ const Page = async ({ params }: Params) => {
       {/* ONE transposition seat for the whole page (R4 ruling 2): the hero's key
           picker and ChordChart's ± pair write the same value, so the key shown
           above the chart can never disagree with the chart. */}
-      <TransposeProvider nativeKey={post?.key ?? null}>
+      <TransposeProvider nativeKey={heroKey}>
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <div id="song-hero" className="brand-song-hero">
@@ -247,7 +256,7 @@ const Page = async ({ params }: Params) => {
           ) : null}
 
           <SongHeroPills
-            keyLabel={post?.key ?? null}
+            keyLabel={heroKey}
             bpm={bpm}
             bpmText={bpmText}
             timeSig={post?.timeSig ?? null}

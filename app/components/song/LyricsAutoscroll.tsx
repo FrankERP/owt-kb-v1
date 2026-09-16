@@ -54,6 +54,22 @@ export default function LyricsAutoscroll({
     // Measured once, at start: the section's height does not change while it
     // scrolls, and re-measuring per frame would be a layout read per frame.
     const speed = autoscrollPxPerSecond(el.offsetHeight, lines, bpm);
+    // The last line has to clear the furniture that covers the bottom of the
+    // viewport, not the viewport's own edge: the phone tab bar publishes its
+    // MEASURED height as `--bottom-nav-h`, and the audio transport sits on top
+    // of it. Re-read at every resume — the transport appears the moment someone
+    // taps play, mid-run.
+    let bottomInset = 0;
+    const measureBottomInset = () => {
+      const navH =
+        parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue("--bottom-nav-h"),
+        ) || 0;
+      const transportH =
+        document.querySelector(".audio-player")?.getBoundingClientRect().height ?? 0;
+      bottomInset = navH + transportH;
+    };
+    measureBottomInset();
     let y = window.scrollY;
     let last: number | null = null;
     let frame: number | null = null;
@@ -86,7 +102,7 @@ export default function LyricsAutoscroll({
       y += (speed * dt) / 1000;
       window.scrollTo(0, y);
 
-      if (el.getBoundingClientRect().bottom <= window.innerHeight) {
+      if (el.getBoundingClientRect().bottom <= window.innerHeight - bottomInset) {
         frame = null;
         finished = true;
         setRunning(false);
@@ -103,6 +119,7 @@ export default function LyricsAutoscroll({
     const resume = () => {
       clearScrollEndFallback();
       if (finished || frame !== null) return;
+      measureBottomInset();
       // Re-seed from where the finger actually left the page, never from the
       // internal offset the pause froze.
       y = window.scrollY;
@@ -138,6 +155,11 @@ export default function LyricsAutoscroll({
     // on «Detener» over a page that stopped moving.
     const up = () => {
       touching = false;
+      // One gesture reports its lift twice (`pointerup` AND `touchend`), so
+      // clear any armed backstop first: overwriting the handle would orphan the
+      // first timer, which then survives toggle-off and resumes a run whose
+      // listeners are gone — a page that scrolls itself with nothing to stop it.
+      clearScrollEndFallback();
       if (!hasScrollEnd || !userScrolled) {
         resume();
         return;
@@ -152,6 +174,12 @@ export default function LyricsAutoscroll({
     const onPointerDown = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") down();
     };
+    // NOT bound to `pointercancel`. Chrome Android and iOS Safari fire it the
+    // moment a touch is promoted to a pan — mid-gesture, with the finger still
+    // down — so treating it as a lift resumes the loop under the dragging finger
+    // and fights it through the momentum, and the real `touchend` afterwards is
+    // a no-op. A touch that is genuinely cancelled still reports `touchcancel`,
+    // which IS handled.
     const onPointerUp = (e: PointerEvent) => {
       if (e.pointerType !== "mouse") up();
     };
@@ -169,7 +197,6 @@ export default function LyricsAutoscroll({
     window.addEventListener("touchcancel", up, { passive: true });
     window.addEventListener("pointerdown", onPointerDown, { passive: true });
     window.addEventListener("pointerup", onPointerUp, { passive: true });
-    window.addEventListener("pointercancel", onPointerUp, { passive: true });
     window.addEventListener("wheel", stop, { passive: true });
     if (hasScrollEnd) {
       window.addEventListener("scroll", onScroll, { passive: true });
@@ -179,13 +206,16 @@ export default function LyricsAutoscroll({
     return () => {
       if (frame !== null) cancelAnimationFrame(frame);
       frame = null;
+      // Nothing may resume after the teardown: a callback already queued (a
+      // timer that fired between the clear and the removal, a listener mid-call)
+      // reads this and stops.
+      finished = true;
       clearScrollEndFallback();
       window.removeEventListener("touchstart", down);
       window.removeEventListener("touchend", up);
       window.removeEventListener("touchcancel", up);
       window.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerUp);
       window.removeEventListener("wheel", stop);
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("scrollend", onScrollEnd);
