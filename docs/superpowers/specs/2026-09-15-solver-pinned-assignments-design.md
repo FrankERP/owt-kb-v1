@@ -699,6 +699,12 @@ the minimal ceiling on a fixture capped short enough that Stage A alone would le
 > breaking one more rule**, because the ceiling is a constraint rather than an objective term.
 > A rule the pins do not force stays as hard as it is today.
 >
+> **One caveat the ruling was given with, stated here rather than 250 lines away:** the ceiling
+> bounds the **number** of relaxed instances, not **which** ones. Among equal-cardinality sets
+> the ladder picks, so the instance that gives may sit in a week with no pin — the cardinality is
+> pin-forced, the selection is not. §4 discloses it; it belongs in the ruling too, because the
+> reconciliation above is what the ruling rests on.
+>
 > The rejected alternative — a pair-rule carve-out that keeps `!with` hard — was considered and
 > refused on E3: it would make the month **fail** rather than honour a pin the admin placed,
 > which is the opposite of «gana el pin, no es algo que bloquea». §8's ADR records this ruling,
@@ -1181,8 +1187,12 @@ and behaved otherwise:
      resolved by re-capturing rather than by deleting the guard §9's rollout rests on.
 
      **The precondition itself can redden the gate on a slow runner.** Seeds 1 and 2024 return
-     `OPTIMAL` at the fixture's 10 s budget and `FEASIBLE` at 3 s, so a loaded `ubuntu-latest`
-     at `num_search_workers=1` can trip the assertion for reasons unrelated to any change. The
+     `OPTIMAL` at the fixture's 10 s budget and `FEASIBLE` at 3 s — and review measured seed 2024
+     already `FEASIBLE` at **5 s** on hardware likely faster than `ubuntu-latest` at
+     `num_search_workers=1`, so the margin is thinner than the 10 s figure suggests. **Pick the
+     golden's seed and budget from the runner's own first green run, with headroom**, not from a
+     laptop's 10 s number, or a loaded runner trips the assertion for reasons unrelated to any
+     change. The
      documented answer is to **raise the fixture's budget** — the assertion exists to keep the
      golden meaningful, not to measure the runner — and never to drop the assertion or the
      golden.
@@ -1367,6 +1377,12 @@ it ever was, which on a fixture whose limit binds is not very. §7's two guards 
 prove exactly that property and no more, which is why the fingerprint is the primary one. The solver half needs no revert and must not be reverted in
 a hurry — a rollback of the app alone is complete, and rolling back the Cloud Function while
 a pinned app is still live would make the client spec's refusal fire on every Auto instead.
+
+**The one case that needs both reverts, in order.** If the byte-identity bet loses — a pinless
+path regression reaches production, the single risk this whole preview-less argument is about —
+reverting the app alone does nothing, because the solver is already serving everyone. Then:
+**revert the app first** (so no client is sending pins), **then** re-deploy the previous Cloud
+Function revision. The other order makes every Auto fail the handshake in the window between.
 
 ## 10. Out of scope
 
