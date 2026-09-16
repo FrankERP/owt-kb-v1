@@ -150,7 +150,8 @@ describe("SongSheet tempo", () => {
     );
 
     expect(screen.queryByRole("button", { name: /tempo/i })).toBeNull();
-    expect(screen.getByText("libre BPM")).toBeTruthy();
+    const span = screen.getByText("libre BPM");
+    expect(span.className).toContain("min-h-[44px]");
   });
 
   it("stops the click when the sheet closes", () => {

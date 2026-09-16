@@ -145,12 +145,14 @@ export default function SongSheet() {
             {bpm !== null ? (
               <TempoPill bpm={bpm} timeSig={sheet.timeSig ?? null} enabled={isOpen} size="sm" />
             ) : sheet.bpm ? (
-              <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
+              <span className="inline-flex min-h-[44px] items-center font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
                 {sheet.bpm} BPM
               </span>
             ) : null}
+            {/* Same 44px height as the pill beside them: a row that mixes a tap
+                target with 30px chips reads as two rows of chrome. */}
             {sheet.timeSig && (
-              <span className="font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
+              <span className="inline-flex min-h-[44px] items-center font-label text-sm px-3 py-1 rounded-full border border-ink-muted/15 text-ink-muted/70">
                 {sheet.timeSig}
               </span>
             )}

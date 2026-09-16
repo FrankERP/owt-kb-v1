@@ -127,6 +127,19 @@ describe("TempoPill", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it("takes no tap at all while disabled", () => {
+    // The pressed state is the only signal a click is running; a pill on a
+    // dismissed surface could start one nobody can see — or stop.
+    const { getByRole } = render(<TempoPill bpm={120} timeSig="4/4" enabled={false} />);
+    const pill = getByRole("button");
+
+    fireEvent.click(pill);
+    expect(pill.getAttribute("aria-pressed")).toBe("false");
+    expect(pill.dataset.active).toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(haptic).not.toHaveBeenCalled();
+  });
+
   it("renders the sheet's chrome at size sm, the hero's at md", () => {
     const { getByRole, rerender } = render(<TempoPill bpm={120} timeSig="4/4" size="sm" />);
     const pill = getByRole("button");

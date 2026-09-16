@@ -88,6 +88,10 @@ export default function TempoPill({
     <button
       type="button"
       onClick={() => {
+        // A dismissed surface takes no taps. Not `disabled`: the pill keeps its
+        // chrome and its focus behaviour, it simply cannot start a click nobody
+        // can see stop.
+        if (!enabled) return;
         void haptic("light");
         if (active) {
           metronome.current?.stop();
