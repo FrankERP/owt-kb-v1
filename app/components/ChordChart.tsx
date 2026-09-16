@@ -4,7 +4,10 @@ import { useState } from "react";
 import SegmentedControl from "./ui/SegmentedControl";
 import Switch from "./ui/Switch";
 import NumberRoll from "./ui/NumberRoll";
-import { DISPLAY_NOTES, rootIndex, transposeChord, capoSuggestion, CHORD_RE } from "@/app/utils/transpose";
+import Presence from "./ui/Presence";
+import Button from "./ui/Button";
+import { useTransposeOptional } from "./song/TransposeProvider";
+import { rootIndex, transposeChord, transposeKey, capoSuggestion, CHORD_RE } from "@/app/utils/transpose";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,13 +53,24 @@ function stripChords(line: string): string {
 export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; defaultKey?: string }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [showChords, setShowChords] = useState(true);
-  const [semitones, setSemitones] = useState(() => {
+  // One seat per page when a provider is present (R4 ruling 2): the hero owns the
+  // key picker, this component only steps it. Without a provider — the practice
+  // sheet, the admin preview — the chart keeps its own state and the `defaultKey`
+  // seed, which a provider-fed page expresses through the picker instead.
+  const shared = useTransposeOptional();
+  const [localSemitones, setLocalSemitones] = useState(() => {
     if (!defaultKey || !charts[0]) return 0;
     const native = rootIndex(charts[0].key);
     const target = rootIndex(defaultKey);
     if (native < 0 || target < 0) return 0;
     return ((target - native) % 12 + 12) % 12;
   });
+
+  const semitones = shared ? shared.semitones : localSemitones;
+  const setSemitones = (n: number) => {
+    if (shared) shared.setSemitones(n);
+    else setLocalSemitones(((n % 12) + 12) % 12);
+  };
 
   if (!charts.length) return null;
 
@@ -65,15 +79,11 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
   const nativeIdx = rootIndex(current.key);
   const activeKeyIdx = nativeIdx >= 0 ? ((nativeIdx + semitones) % 12 + 12) % 12 : -1;
   const capo = capoSuggestion(activeKeyIdx);
+  const soundingChartKey = transposeKey(current.key, semitones);
 
   const handleTabChange = (i: number) => {
     setActiveIdx(i);
     setSemitones(0);
-  };
-
-  const handleKeyBtn = (btnIdx: number) => {
-    if (nativeIdx < 0) return;
-    setSemitones(((btnIdx - nativeIdx) % 12 + 12) % 12);
   };
 
   return (
@@ -97,35 +107,23 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
       {isChordPro && (
         <div className="flex flex-col gap-3">
 
-          {/* Transposition keys */}
+          {/* Transposition: one step at a time, reading out the sounding key */}
           {nativeIdx >= 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {DISPLAY_NOTES.map((note, i) => {
-                const isActive = i === activeKeyIdx;
-                const isNative = i === nativeIdx && !isActive;
-                const isNativeNote = i === nativeIdx;
-                return (
-                  <button
-                    key={note}
-                    type="button"
-                    onClick={() => handleKeyBtn(i)}
-                    aria-label={`Tonalidad ${note}${isNativeNote ? " (original)" : ""}`}
-                    aria-pressed={isActive}
-                    className={`relative font-label text-xs uppercase tracking-wide px-2.5 py-1 rounded border transition-colors min-w-[2rem] text-center ${
-                      isActive
-                        ? "border-accent bg-accent text-surface-sunken font-bold"
-                        : isNative
-                        ? "border-accent/60 text-accent"
-                        : "border-surface-accent-l25-d15 text-mono-500 dark:text-mono-500 hover:border-accent/50 dark:hover:border-surface-accent-l25-d15 hover:text-accent"
-                    }`}
-                  >
-                    {note}
-                    {isNativeNote && !isActive && (
-                      <span aria-hidden className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-accent" />
-                    )}
-                  </button>
-                );
-              })}
+            <div className="flex items-center gap-2">
+              <Button variant="icon" size="lg" aria-label="Bajar medio tono" onClick={() => setSemitones(semitones - 1)}>
+                <MinusIcon />
+              </Button>
+              <span className="brand-key-dial px-3 font-display text-sm" aria-live="polite">
+                <NumberRoll value={soundingChartKey} />
+              </span>
+              <Button variant="icon" size="lg" aria-label="Subir medio tono" onClick={() => setSemitones(semitones + 1)}>
+                <PlusIcon />
+              </Button>
+              <Presence show={semitones !== 0} variant="fade" as="div">
+                <Button variant="pill" size="sm" onClick={() => setSemitones(0)}>
+                  Original
+                </Button>
+              </Presence>
             </div>
           )}
 
@@ -164,9 +162,14 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
         </span>
       )}
 
-      {/* Content */}
+      {/* Content. The key remounts the chart on every transposition so the CSS fade
+          replays — a plain animation, not `motion`, keeps this file outside the
+          motion import boundary. */}
       {isChordPro ? (
-        <div className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-5 py-5 overflow-x-auto">
+        <div
+          key={`${activeIdx}-${semitones}`}
+          className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-5 py-5 overflow-x-auto animate-fade-in"
+        >
           {current.content.split("\n").map((line, li) => {
             // Section header: # Estribillo
             if (line.startsWith("# ")) {
@@ -227,6 +230,22 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
         </pre>
       )}
     </div>
+  );
+}
+
+function MinusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden>
+      <line x1="1" y1="6" x2="11" y2="6" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden>
+      <line x1="1" y1="6" x2="11" y2="6" /><line x1="6" y1="1" x2="6" y2="11" />
+    </svg>
   );
 }
 

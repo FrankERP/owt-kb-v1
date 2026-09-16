@@ -416,7 +416,8 @@ Legend: **[C]** client, **[S]** server.
 | Component | Purpose |
 |-----------|---------|
 | `SongSheet` [C] | Full lyrics + chords overlay (PortableText, focus-trapped, play-history) — driven by `PlayerContext`. |
-| `ChordChart` [C] | ChordPro parser/renderer. Transposition and capo maths live in `app/utils/transpose.ts`, not here. Tested. |
+| `ChordChart` [C] | ChordPro parser/renderer. Transposition and capo maths live in `app/utils/transpose.ts`, not here. Transposition is a ± half-tone pair with a `NumberRoll` readout of the sounding key and an «Original» reset — never a 12-key strip — and it reads `useTransposeOptional()` first, so on a page wrapped in `TransposeProvider` the hero's picker and the chart are ONE value; without a provider it keeps local state and the `defaultKey` seed. Each transposition remounts the chart under a `key` so the CSS `animate-fade-in` replays — a plain animation, not `motion`, which this file may not import. Tested. |
+| `TransposeProvider` / `useTransposeOptional` [C] | `app/components/song/` — the ONE transposition seat for a song page: `nativeKey`, `semitones` (always wrapped into 0..11 by `setSemitones`), `soundingKey` (null when the song has no key). `useTransposeOptional()` returns null outside a provider, which is how `ChordChart` falls back to its own state on the practice sheet and the admin preview. Tested. |
 | `SongAudioSection` [C] | A song's audio tracks, wired to the player. |
 | `AudioPlayer` [C] | Global bottom audio bar (scrub/time). |
 | `PracticePlaylistButton` [C] | Opens a YouTube playlist for a setlist (`musica`/`letras`). `variant?: "inline" \| "hero"` is chrome only — the menu, popup reservation and failure states are shared; `inline` is the accent pill on the Setlist rail, `hero` is the run sheet's one primary action (the house `Button`, label "Ensayar"). |

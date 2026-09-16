@@ -8,30 +8,30 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 318,
-    "filesScanned": 315,
+    "literalRows": 320,
+    "filesScanned": 316,
     "filesWithColour": 54,
     "byCategory": {
       "2": 2,
       "4": 76,
-      "8": 87,
+      "8": 89,
       "9": 10,
       "11": 9,
       "12": 134
     },
     "byDisposition": {
-      "B": 120,
+      "B": 122,
       "exempt": 42,
-      "keep": 241,
+      "keep": 242,
       "C": 5,
       "D": 15
     },
     "compositingClasses": 21,
     "compositingSelectorOccurrences": 45,
-    "compositingClassNameOccurrences": 58,
+    "compositingClassNameOccurrences": 59,
     "compositingRuleBodies": 44,
     "lightCounterpartClasses": 15,
-    "pairs": 12,
+    "pairs": 11,
     "pairsDifferingInAlpha": 0
   },
   "literalRows": [
@@ -3211,7 +3211,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 237,
+      "line": 256,
       "disposition": "B",
       "reason": null
     },
@@ -3223,7 +3223,31 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 235,
+      "line": 238,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 246,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/ChordChart.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 254,
       "disposition": "B",
       "reason": null
     },
@@ -4166,6 +4190,14 @@
       "reason": "Usage site of a compositing class"
     },
     {
+      "file": "app/components/ChordChart.tsx",
+      "kind": "className",
+      "class": "key-dial",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
       "file": "app/components/CmsNavbar.tsx",
       "kind": "className",
       "class": "lockup-mark",
@@ -4816,15 +4848,6 @@
       "light": "mono-500",
       "lightAlpha": null,
       "dark": "mono-400",
-      "darkAlpha": null,
-      "alphaDiffers": false
-    },
-    {
-      "file": "app/components/ChordChart.tsx",
-      "utility": "text",
-      "light": "mono-500",
-      "lightAlpha": null,
-      "dark": "mono-500",
       "darkAlpha": null,
       "alphaDiffers": false
     },

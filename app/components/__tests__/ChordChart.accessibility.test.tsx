@@ -26,6 +26,13 @@ describe("ChordChart accessibility", () => {
     expect(second.getAttribute("aria-checked")).toBe("true");
   });
 
+  it("names the half-step buttons", () => {
+    const { getByRole } = render(<ChordChart charts={[{ key: "C", content: "[C]Gloria" }]} />);
+
+    expect(getByRole("button", { name: "Bajar medio tono" })).toBeTruthy();
+    expect(getByRole("button", { name: "Subir medio tono" })).toBeTruthy();
+  });
+
   it("names the chord visibility switch while preserving checked state", () => {
     const { getByRole } = render(<ChordChart charts={[{ key: "C", content: "[C]Gloria" }]} />);
 
