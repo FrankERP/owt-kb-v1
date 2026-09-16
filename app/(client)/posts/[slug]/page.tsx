@@ -20,7 +20,13 @@ import SectionNav from "@/app/components/SectionNav";
 import ChordChart from "@/app/components/ChordChart";
 import EditSongButton from "@/app/components/EditSongButton";
 import SongAudioSection from "@/app/components/SongAudioSection";
+import SongHeroPills from "@/app/components/song/SongHeroPills";
+import { TransposeProvider } from "@/app/components/song/TransposeProvider";
+import LyricsAutoscroll from "@/app/components/song/LyricsAutoscroll";
+import { isChordPro } from "@/app/utils/transpose";
+import { countLyricLines } from "@/app/utils/practice";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
+import { revealProps } from "@/app/utils/reveal";
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -129,12 +135,13 @@ export async function generateStaticParams() {
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function SectionHeader({ children }: { children: React.ReactNode }) {
+function SectionHeader({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div className="brand-section-heading mb-8 border-b border-ink-dim/10 pb-4">
+    <div className="brand-section-heading mb-8 flex items-end justify-between gap-4 border-b border-ink-dim/10 pb-4">
       <h2 className="font-display text-2xl font-semibold text-ink md:text-3xl">
         {children}
       </h2>
+      {action}
     </div>
   );
 }
@@ -156,17 +163,61 @@ const Page = async ({ params }: Params) => {
   const shows = (id: SongSection["id"]) => sections.some((s) => s.id === id);
   const hasAudio        = shows("audio");
   const hasInlineChords = (post?.chords?.length ?? 0) > 0;
+  // The hero key is a TRANSPOSER only for a ChordPro chart: a plain-text chart
+  // carries no bracketed chords to move, so the drawer would shift the readout
+  // and nothing else. It has to be the FIRST chart: `ChordChart` opens on index
+  // 0 and only the chart on screen transposes, so a ChordPro chart further down
+  // the list would arm a dial over a chart that cannot move.
+  const firstChart      = post?.chords?.[0] ?? null;
+  const transposable    = !!firstChart && isChordPro(firstChart.content);
+  // The dial transposes the CHART, and a chart may be written in a key other
+  // than the song's (`post.key`) — a guitar sheet in G for a song sung in Ab.
+  // Seat the provider on the chart's key so the dial, the drawer's «(original)»
+  // hint and the chart's own readout agree; with no transposable chart the
+  // song's own key is what the badge shows.
+  const heroKey         = (transposable ? firstChart?.key : null) ?? post?.key ?? null;
+  // The schema field is a number, but the interface types it `string` and the
+  // catalogue predates both — so parse, and keep an unparsable value VISIBLE as
+  // the static pill it has always been rather than dropping the row silently.
+  const bpmNumber       = Number(post?.bpm);
+  const bpm             = Number.isFinite(bpmNumber) && bpmNumber > 0 ? bpmNumber : null;
+  const bpmText         = post?.bpm && bpm === null ? String(post.bpm) : null;
   const hasTutorials    = shows("tutoriales");
   const hasLyrics       = shows("letra");
+  // How long the autoscroll should take: every chart's lines when there are
+  // charts (the section renders them all), otherwise one PortableText BLOCK per line — an approximation (a long
+  // paragraph wraps to several), accepted because the speed is clamped to a
+  // readable band either way.
+  const lyricLines      = hasInlineChords
+    ? (post.chords ?? []).reduce((n, c) => n + countLyricLines(c.content), 0)
+    : (post?.body?.length ?? 0);
   const hasHistory      = shows("historial");
   const hasRefLinks     = shows("referencia");
+  // The sticky bar's practice cluster takes over the hero's play control, so it
+  // offers what the audio section offers first: the first track that actually
+  // has a file. Plain data — the page is a Server Component (ADR-0028).
+  const firstAudio      = (post?.audioTracks ?? []).find((t) => t.audioFileURL);
+  const firstTrack      = firstAudio
+    ? {
+        url: firstAudio.audioFileURL,
+        title: firstAudio.title,
+        tone: firstAudio.tone,
+        songTitle: post.title,
+        songSlug: post.slug.current,
+      }
+    : null;
 
   return (
     <div>
       <Navbar title={post?.title} author={post?.author} tags schedule />
 
+      {/* ONE transposition seat for the whole page (R4 ruling 2): the hero's key
+          picker and ChordChart's ± pair write the same value, so the key shown
+          above the chart can never disagree with the chart. */}
+      <TransposeProvider nativeKey={heroKey}>
+
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <div className="brand-song-hero">
+      <div id="song-hero" className="brand-song-hero">
         {/* Edit control — inline, top-right (self-gates to editors); avoids a floating FAB over the lyrics */}
         <div className="absolute top-4 right-4 z-10">
           <EditSongButton post={post} inline />
@@ -174,10 +225,10 @@ const Page = async ({ params }: Params) => {
         <div className="relative mx-auto flex max-w-7xl flex-col items-center px-6 pb-14 pt-12 text-center sm:pb-16 sm:pt-16">
 
           {post?.tags && post.tags.length > 0 && (
-            <div className="mb-6 flex flex-wrap justify-center gap-2">
+            <div {...revealProps(0)} className="mb-6 flex flex-wrap justify-center gap-2">
               {post.tags.map((tag) => (
                 <Link key={tag._id} href={`/biblioteca?tag=${encodeURIComponent(tag.slug.current)}`}>
-                  <span className="rounded-md border border-accent/15 bg-accent/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-accent/70 transition-colors hover:border-accent/35 hover:text-accent">
+                  <span className="rounded-md border border-accent/15 bg-accent/[0.055] px-2.5 py-1.5 font-label text-[10px] lowercase tracking-wider text-accent/70 transition-[color,border-color,transform] duration-fast ease-out-brand hover:border-accent/35 hover:text-accent active:scale-[0.985]">
                     #{tag.name}
                   </span>
                 </Link>
@@ -185,12 +236,12 @@ const Page = async ({ params }: Params) => {
             </div>
           )}
 
-          <h1 className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-ink sm:text-5xl lg:text-6xl">
+          <h1 {...revealProps(1)} className="max-w-4xl text-balance break-words font-display text-3xl font-semibold leading-[0.98] text-ink sm:text-5xl lg:text-6xl">
             {post?.title}
           </h1>
 
           {post?.authors && post.authors.length > 0 ? (
-            <div className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
+            <div {...revealProps(2)} className="mb-9 mt-4 flex flex-wrap justify-center gap-x-2 gap-y-1">
               {post.authors.map((a, i) => (
                 <span key={a._id} className="font-body text-lg text-ink-muted/70">
                   <Link href={`/biblioteca?author=${encodeURIComponent(a.slug.current)}`} className="hover:text-accent transition-colors">
@@ -201,31 +252,24 @@ const Page = async ({ params }: Params) => {
               ))}
             </div>
           ) : post?.author ? (
-            <p className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
+            <p {...revealProps(2)} className="mb-9 mt-4 font-body text-lg text-ink-dim">{post.author}</p>
           ) : null}
 
-          <div className="flex flex-wrap justify-center gap-2.5">
-            {post?.key && (
-              <span className="brand-key-dial px-3 font-display text-sm">
-                {post.key}
-              </span>
-            )}
-            {post?.bpm && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim">
-                {post.bpm} BPM
-              </span>
-            )}
-            {post?.timeSig && (
-              <span className="brand-search-console flex h-[2.4rem] items-center px-3 font-label text-[11px] uppercase tracking-widest text-ink-dim">
-                {post.timeSig}
-              </span>
-            )}
-          </div>
+          <SongHeroPills
+            keyLabel={heroKey}
+            bpm={bpm}
+            bpmText={bpmText}
+            timeSig={post?.timeSig ?? null}
+            transposable={transposable}
+            revealIndex={3}
+          />
         </div>
       </div>
 
       {/* ── Section nav ──────────────────────────────────────────────────── */}
-      {sections.length > 1 && <SectionNav sections={sections} />}
+      {sections.length > 1 && (
+        <SectionNav sections={sections} practice={{ title: post.title, bpm, track: firstTrack }} />
+      )}
 
       {/* ── Content ──────────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-6 py-12 space-y-20">
@@ -268,6 +312,7 @@ const Page = async ({ params }: Params) => {
               {post.tutorials2!.map((tutorial, i) => (
                 <div
                   key={i}
+                  {...revealProps(i)}
                   className="brand-surface overflow-hidden rounded-2xl"
                 >
                   <div className="aspect-video">
@@ -333,7 +378,7 @@ const Page = async ({ params }: Params) => {
         {/* Letra / Body */}
         {hasLyrics && (
           <section id="letra" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
-            <SectionHeader>Letra</SectionHeader>
+            <SectionHeader action={<LyricsAutoscroll targetId="letra" bpm={bpm} lines={lyricLines} />}>Letra</SectionHeader>
             <div className="brand-facet-panel">
               {hasInlineChords ? (
                 <ChordChart charts={post.chords!} />
@@ -358,6 +403,7 @@ const Page = async ({ params }: Params) => {
               {history.map((entry, i) => (
                 <div
                   key={i}
+                  {...revealProps(i)}
                   className="brand-surface overflow-hidden rounded-2xl"
                 >
                   {/* Header row: day + date + key */}
@@ -409,6 +455,7 @@ const Page = async ({ params }: Params) => {
 
       </div>
 
+      </TransposeProvider>
     </div>
   );
 };

@@ -1,7 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import SlidingIndicator, { useActiveIntoView } from "./ui/SlidingIndicator";
+import Presence from "./ui/Presence";
+import PracticeCluster, { type PracticeInfo } from "./song/PracticeCluster";
+
+export type { PracticeInfo };
 
 interface Section {
   id: string;
@@ -25,8 +29,30 @@ function Item({ id, label, active }: { id: string; label: string; active: boolea
   );
 }
 
-export default function SectionNav({ sections }: { sections: Section[] }) {
+export default function SectionNav({ sections, practice }: { sections: Section[]; practice?: PracticeInfo }) {
   const [active, setActive] = useState(sections[0]?.id ?? "");
+  // The bar picks up the hero's practice controls exactly when the hero stops
+  // carrying them (R4, ruling 1) — one observer on `#song-hero`, threshold 0.
+  const [heroGone, setHeroGone] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const hero = document.getElementById("song-hero");
+    if (!hero) return;
+    // The hand-off happens when the hero passes under the CHROME, not under the
+    // viewport's top edge: the navbar and this sticky bar cover that edge, so
+    // without the inset the hero's controls are already hidden behind them while
+    // the observer still reports it visible and the bar still shows nothing. The
+    // bar is sticky directly under the navbar, so its own bottom edge measures
+    // both at once.
+    const barBottom = barRef.current?.getBoundingClientRect().bottom ?? 0;
+    const obs = new IntersectionObserver(
+      ([entry]) => setHeroGone(!entry.isIntersecting),
+      { threshold: 0, rootMargin: `-${Math.round(barBottom)}px 0px 0px 0px` }
+    );
+    obs.observe(hero);
+    return () => obs.disconnect();
+  }, []);
 
   useEffect(() => {
     const observers: IntersectionObserver[] = [];
@@ -44,11 +70,20 @@ export default function SectionNav({ sections }: { sections: Section[] }) {
   }, [sections]);
 
   return (
-    <div className="sticky top-[calc(5rem+env(safe-area-inset-top))] lg:top-[calc(6rem+env(safe-area-inset-top))] z-40 bg-surface-base/90 backdrop-blur-sm border-b border-edge-accent-subtle">
-      <div className="max-w-7xl mx-auto px-6 flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        {sections.map((s) => (
-          <Item key={s.id} id={s.id} label={s.label} active={active === s.id} />
-        ))}
+    <div ref={barRef} className="sticky top-[calc(5rem+env(safe-area-inset-top))] lg:top-[calc(6rem+env(safe-area-inset-top))] z-40 bg-surface-base/90 backdrop-blur-sm border-b border-edge-accent-subtle">
+      <div className="max-w-7xl mx-auto px-6 flex items-center">
+        <div className="flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+          {sections.map((s) => (
+            <Item key={s.id} id={s.id} label={s.label} active={active === s.id} />
+          ))}
+        </div>
+        {/* Always rendered, so the bar's height never changes when the cluster
+            fades in — motion must not shift the layout under a reader's thumb. */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 pl-3 min-h-[44px]">
+          <Presence show={heroGone && !!practice} variant="fade" as="div" className="flex items-center gap-2">
+            {practice && <PracticeCluster {...practice} />}
+          </Presence>
+        </div>
       </div>
     </div>
   );

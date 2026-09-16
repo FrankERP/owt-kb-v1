@@ -1,6 +1,7 @@
 "use client";
 
 import { AudioTrack } from "@/app/context/PlayerContext";
+import PlayPauseGlyph from "@/app/components/ui/PlayPauseGlyph";
 
 function fmtTime(s: number) {
   if (!s || isNaN(s)) return "0:00";
@@ -35,7 +36,7 @@ export default function AudioTransport({
         className="w-11 h-11 rounded-full bg-accent/15 border border-accent/40 flex items-center justify-center text-accent shrink-0 hover:bg-accent/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised-alt active:scale-95 transition-[background-color,transform] duration-fast ease-out-brand"
         aria-label={isPlaying ? `Pausar ${track.songTitle} — ${track.title}` : `Reproducir ${track.songTitle} — ${track.title}`}
       >
-        {isPlaying ? <PauseIcon /> : <PlayIcon />}
+        <PlayPauseGlyph playing={isPlaying} size={18} />
       </button>
 
       <div className="min-w-0 flex-1">
@@ -108,23 +109,6 @@ export default function AudioTransport({
         <CloseIcon />
       </button>
     </div>
-  );
-}
-
-function PlayIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <polygon points="5 3 19 12 5 21 5 3" />
-    </svg>
-  );
-}
-
-function PauseIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <rect x="6" y="4" width="4" height="16" />
-      <rect x="14" y="4" width="4" height="16" />
-    </svg>
   );
 }
 

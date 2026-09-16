@@ -4,7 +4,7 @@ export default function PostLoading() {
   return (
     <SkeletonGroup label="Cargando la canción">
       <NavbarSkeleton />
-      <div className="bg-surface-overlay border-b border-surface-accent-l100-d15">
+      <div className="brand-song-hero">
         <div className="max-w-7xl mx-auto px-6 pt-10 pb-12 flex flex-col items-center text-center space-y-4">
           <Skeleton className="h-3 w-40" />
           <Skeleton className="h-10 w-2/3 max-w-xl" />

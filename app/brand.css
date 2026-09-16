@@ -41,6 +41,11 @@
      it (same pattern as --impersonation-h above). Not a colour. */
   --bottom-nav-h: 0px;
 
+  /* One beat of the song hero's tempo pill. TempoPill publishes the song's own
+     period inline (60000/bpm ms) over this default, which stands in for a song
+     with no BPM — 750ms is 80 BPM, the practice default. Not a colour. */
+  --tempo-period: 750ms;
+
   /* ---- Child B, Layer 1: the 18 base roles -------------------------------
      Stored as bare RGB triplets so Tailwind can apply <alpha-value>. The seven
      --brand-* above stay until B-final; this slice REMOVES NOTHING, so both
@@ -781,6 +786,10 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
   transform: translateY(-2px);
 }
 
+.brand-surface-interactive:active {
+  transform: translateY(1px) scale(0.985);
+}
+
 .brand-library-module {
   position: relative;
   isolation: isolate;
@@ -842,6 +851,46 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
   box-shadow:
     inset 0 0 12px rgb(var(--accent-rgb) / 0.07),
     0 0 18px rgb(var(--accent-rgb) / 0.055);
+}
+
+/* The tempo pill's beat ring (R4, spec §12.7). A pseudo-element that scales and
+   fades ONCE PER BEAT, clocked by the pill's own `--tempo-period` — no timer in
+   JS, so nothing drifts and nothing leaks. Only transform/opacity animate, and
+   the global reduced-motion rule collapses it with everything else. */
+.brand-tempo-pill::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  pointer-events: none;
+  border: 1px solid rgb(var(--accent-rgb) / 0.6);
+  opacity: 0;
+  transform: scale(1);
+}
+
+.brand-tempo-pill[data-active="true"]::after {
+  animation: brand-tempo-pulse var(--tempo-period, 750ms) var(--ease-out) infinite;
+}
+
+@keyframes brand-tempo-pulse {
+  0%   { opacity: 0.85; transform: scale(1); }
+  60%  { opacity: 0;    transform: scale(1.28); }
+  100% { opacity: 0;    transform: scale(1.28); }
+}
+
+.brand-eq-bar {
+  height: 100%;
+  transform-origin: bottom;
+  transform: scaleY(0.3);
+}
+
+[data-playing="true"] .brand-eq-bar {
+  animation: brand-eq 900ms var(--ease-in-out) infinite alternate;
+}
+
+@keyframes brand-eq {
+  from { transform: scaleY(0.25); }
+  to   { transform: scaleY(1); }
 }
 
 .brand-song-hero {

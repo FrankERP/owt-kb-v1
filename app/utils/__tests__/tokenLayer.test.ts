@@ -334,7 +334,8 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     // not `rgb(var(--role-rgb) / a)` — the same shape as --warning-glow. The
     // OCCURRENCE regex only matches the latter, so the pin stays put.
     const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative)/.test(o.name));
-    expect(all.length).toBe(69);
+    // 69 → 70 (R4 Task 3: .brand-tempo-pill's beat ring borrows --accent-rgb).
+    expect(all.length).toBe(70);
     expect(all.filter((o) => o.alpha === "none").length).toBe(4);
   });
 
