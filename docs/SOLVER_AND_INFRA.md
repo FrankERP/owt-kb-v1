@@ -62,7 +62,10 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   under-served. History uses weighted decay (3 recent months weighted `[10, 6, 3]`).
 - **Lexicographic objective:** exponentially-separated weights encode strict priority
   (fill > lead fairness > per-role spread > sun-lead rotation > consecutive-repeat
-  penalty > random tie-break). Lead rotation uses seeded random weights on Sun.Lead
+  penalty > random tie-break). **Each tier's weight is computed against that tier's own
+  maximum**, not against a single month-wide bound — the ladder is a product over eight
+  tiers, so a uniform over-estimate is exponential in it and the objective's upper bound
+  crossed int64 on ordinary months. See ADR-0035. Lead rotation uses seeded random weights on Sun.Lead
   assignments (monthly and per-week terms). The planner UI surfaces, separately for
   Sunday and Saturday, which lead-pool members did not hold that lead role in the
   calendar month before the month being planned (`LeadPoolHistoryPanel`); that is
