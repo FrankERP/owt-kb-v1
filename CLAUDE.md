@@ -300,7 +300,7 @@ never add a second strip, `ChordChart` keeps only its ± pair), `TempoPill`
 `SongSheet`'s meta row (`size="sm"`); two clocks: the RING is a CSS animation clocked by
 `--tempo-period`, never a `setInterval`, and the CLICK is `createMetronome`
 (`app/components/song/metronome.ts` — the ONLY metronome, a Web Audio lookahead
-scheduler built on the first tap and stopped on the second, on a hidden tab, on a
+scheduler built on the first tap and stopped on the second, on a hidden tab, on an
 `enabled={false}` surface and on unmount; on iOS it obeys the silent switch). ONE
 metronome sounds app-wide: a `start()` takes the floor from whichever instance held it
 and that pill un-presses through its `onStop`), `LyricsAutoscroll` (`app/components/song/` — rAF +

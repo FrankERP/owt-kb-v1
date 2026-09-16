@@ -1977,3 +1977,12 @@ BPM keeping the static span; the close giving the loop back and suspending the c
 **Verification.** Both singleton lines were mutation-checked: removing the hand-over in
 `start()` fails the hand-over test, removing the `current === self` guard in `stop()` fails the
 stale-stop test. Gates green on the whole tree.
+
+**Review (opus, F2 diff): APPROVED, VERIFIED FOR MERGE, with two LOWs and a nit, all taken in
+one fix commit.** (1) A click on a pill rendered `enabled={false}` would still have started the
+metronome — the effect only fires on the prop edge — so the handler now returns early while
+disabled; not `disabled`, which would change the chrome and the focus behaviour. (2) The sheet's
+meta row mixed the 44px pill with ~30px chips, so both static spans (`timeSig` and the
+unparsable-BPM one) got `inline-flex min-h-[44px] items-center`, the treatment Task 3 gave the
+hero's neighbours. (3) An article typo in the `TempoPill` entry of `CLAUDE.md`/`AGENTS.md`. The
+early return is mutation-checked: removing it fails the new disabled-tap test.
