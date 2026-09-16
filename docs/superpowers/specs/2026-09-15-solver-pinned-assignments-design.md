@@ -529,6 +529,36 @@ So after the solve, each relaxable instance is **re-evaluated against the return
 assignment**, and an entry is emitted only for instances that actually fail. The booleans exist
 to make the model feasible; they are not the report.
 
+**The ceiling is made PROVABLY MINIMAL before it is used, by its own solve.** Stage A minimises
+`(max_weighted_empty + 1) · n_viol + weighted_empty`, and if it times out its violation count is
+an upper bound with slack. So between Stage A and Stage B there is a third, cheap solve:
+minimise `n_viol` alone, subject to `weighted_empty <= empty_target`. It carries no fairness
+terms and no tie-break weights — it is a small integer minimisation over the violation booleans
+— so it proves optimality where the full objective does not. Its value becomes
+`violation_target`, and its solver status is recorded.
+
+**Why that matters more than it looks.** Without it the ceiling has slack, and **no Stage B
+pass pulls `n_viol` down**: half the ladder runs `optimize=False` with no objective at all
+(`:899-903`), and the optimising half carries no violation term by design. Any feasible solution
+up to the ceiling is returned — including one that breaks an authored rule **in a week with no
+pin**. E3 authorises *the pin* to beat a rule. It does not authorise the solver to set a rule
+aside in a service the admin never touched, and the client's copy («… para respetar lo que
+fijaste») would assert a cause that is false in exactly that case.
+
+**If the violation-only solve itself times out**, `violation_target` stays Stage A's value and
+the month is still returned — but the response says so, so the honest report of §5.2's
+assignment-side derivation is not quietly doing double duty as a correctness claim. §7 asserts
+the minimal ceiling on a fixture capped short enough that Stage A alone would leave slack.
+
+> **A decision for Frank, not one this spec should make silently.** ADR-0010 records his
+> requirement in his own words, for the pair-exclusion family this design relaxes: *"it has to
+> be hard because if it's soft in fairness it will always choose people like Frank, Mkz or Gaby
+> who tend to have 1 or 2 participations a month."* That ADR is about specials, which never
+> reach the solver — but the principle is about softness, and this design makes six rule
+> families soft for the whole month whenever a single pin exists. The minimal ceiling above
+> confines the breakage to what the pins genuinely force, which is the narrowest reading of E3.
+> **§8's ADR must cite ADR-0010 and record Frank's ruling on it rather than inheriting one.**
+
 **And the ceiling bounds the model, never the report.** An earlier draft implied `n_viol <=
 violation_target` makes the boolean reading safe, on the argument that Stage B's feasible set is
 a subset of Stage A's, so its minimum violation count is at least Stage A's `k` and the ceiling
@@ -890,12 +920,27 @@ and behaved otherwise:
   passes against the new solver and proves nothing. So:
 
   1. **A structural fingerprint, and this is the primary guard.** A SHA-256 over
-     `model.Proto().SerializeToString()` for the Stage A model and for the first
-     `optimize=True` Stage B model — **constraints included, not only variables**. An earlier
-     draft hashed the ordered `x` keys, the per-slot candidate lists and the `rand_w` draws,
-     which is variables only: a violation boolean or a soft-form constraint leaking into the
-     pinless path would be invisible to it, and caught only by the weaker output golden. The
-     proto covers both for the same cost, and is built from the same inputs — All of it is built before any solve and depends only
+     **`str(model.Proto())`** — the protobuf's text format — for the **Stage A model**,
+     constraints included and not only variables. An earlier draft hashed the ordered `x` keys,
+     the per-slot candidate lists and the `rand_w` draws, which is variables only: a violation
+     boolean or a soft-form constraint leaking into the pinless path would be invisible to it,
+     and caught only by the weaker output golden.
+
+     **The API matters and a previous draft named one that does not exist.** That draft said
+     `model.Proto().SerializeToString()`. On ortools 9.15.6755 — the version
+     `gcf/requirements.txt:4` pins, and the one the CI step installs — `CpModel.Proto()` returns
+     a pybind `CpModelProto` with **no** `SerializeToString`; calling it raises `AttributeError`.
+     The text format works and is what the guard uses. Recorded because the draft also attached
+     a measurement to the non-existent call, in a section that closes with "Executed, not
+     reasoned" — the failure this spec exists to prevent, committed by its own author.
+
+     **Stage A only, deliberately.** The Stage B model is not a pure function of the seed:
+     `empty_target = stage_a.weighted_empty_used` enters it (`:1116`, `:677-678`), and under pins
+     `violation_target` adds a second such input. Both are machine-independent only while Stage A
+     proves optimality — a precondition, not a construction. Stage A's model has neither
+     dependency, so fingerprinting it alone is the honest guard. Verified on ortools 9.15.6755:
+     the Stage A hash is identical at 10 s, 5 s and 3 s budgets on seeds 1, 42, 2024 and 7, and
+     distinct between seeds — All of it is built before any solve and depends only
      on `config.seed` (`:571`, `:633`, `:946`), so it is machine-independent by construction:
      measured identical at a 10 s and a 3 s budget on all four seeds, **including seed 7**,
      while distinct between seeds. It also catches §9's actual named hazard — `build_slots`
