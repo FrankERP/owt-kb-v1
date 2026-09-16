@@ -34,6 +34,8 @@ from ortools.sat.python import cp_model
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
+_INT64_MAX = 2 ** 63 - 1
+
 ROLE_ORDER = ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"]
 SATURDAY_ROLES = {"Sat.Lead", "Sat.BGV"}
 LEAD_BGV_ROLES = {"Sun.Lead", "Sun.BGV", "Sat.Lead", "Sat.BGV"}
@@ -587,16 +589,52 @@ def _eq(model: cp_model.CpModel, var: cp_model.IntVar, terms: Sequence) -> None:
     model.Add(var == (sum(terms) if terms else 0))
 
 
+# Priority order, lowest first. Each tier's weight exceeds the largest total the
+# tiers below it can contribute, which is what makes the single weighted sum behave
+# lexicographically.
+PRIORITY_ORDER = ["Sun.Choir", "Sat.BGV", "Sun.BGV", "global",
+                  "sun_lead_rotation", "sun_lead_weekly_rotation", "Sat.Lead", "Sun.Lead"]
+
+
 def compute_priority_weights(
-    max_spread: int, max_consec_penalty: int, max_rand: int
+    max_spread: int,
+    max_consec_penalty: int,
+    max_rand: int,
+    tier_maxima: Dict[str, int] | None = None,
 ) -> Dict[str, int]:
+    """
+    Weights for the lexicographic objective.
+
+    `tier_maxima` gives each tier's OWN maximum contribution. Supplying it is what
+    keeps the objective inside int64: the ladder is a product over eight tiers, so
+    charging every tier the same global `max_spread` is exponential in an
+    over-estimate. A `Sun.Choir` spread cannot exceed the number of Choir slots, a
+    rotation term cannot exceed its own weighted slot count, and using those real
+    bounds costs three orders of magnitude of headroom.
+
+    Measured on a 12-person roster before this changed: the objective's upper bound
+    was 3.2e19 on an ordinary four-week month and 1.9e21 on a six-week one, against
+    an int64 ceiling of 9.2e18 — so ortools rejected the model with MODEL_INVALID
+    and `solve_schedule` fell through to the objective-less passes **silently**,
+    losing fairness optimisation with no signal to the caller. With real per-tier
+    maxima the same months bound at 2.6e16 and 1.4e18.
+
+    `max_spread` remains the fallback for any tier `tier_maxima` omits, so the
+    signature stays backward-compatible.
+    """
     w: Dict[str, int] = {"tie_break": 1}
     w["consecutive"] = max_rand + 1
     remaining = max_consec_penalty * w["consecutive"] + max_rand
-    for name in ["Sun.Choir", "Sat.BGV", "Sun.BGV", "global",
-                 "sun_lead_rotation", "sun_lead_weekly_rotation", "Sat.Lead", "Sun.Lead"]:
+    for name in PRIORITY_ORDER:
         w[name] = remaining + 1
-        remaining += max_spread * w[name]
+        cap = max_spread if tier_maxima is None else tier_maxima.get(name, max_spread)
+        remaining += cap * w[name]
+    if remaining > _INT64_MAX:
+        raise ValueError(
+            f"Objective bound {remaining} exceeds int64; the month is too large for "
+            f"the lexicographic weighting (max_spread={max_spread}, "
+            f"max_consec_penalty={max_consec_penalty}, max_rand={max_rand})."
+        )
     return w
 
 
@@ -945,7 +983,22 @@ def create_model_and_solve(
 
         rand_w = {k: rng.randint(0, max(1, config.random_tie_break_weight_max)) for k in x}
         max_rand = sum(rand_w.values())
-        weights = compute_priority_weights(overall_limit, len(consec_penalties), max_rand)
+
+        # Each tier's own upper bound. A per-role spread is bounded by that role's
+        # slot count plus its history, not by the whole month; a rotation term by the
+        # largest tie-break weight times its own slots. See compute_priority_weights.
+        tier_maxima: Dict[str, int] = {}
+        for rt in ROLE_ORDER:
+            n_rt = sum(1 for s in slots if s.role_type == rt)
+            tier_maxima[rt] = n_rt + max((hist_role[(p, rt)] for p in all_people), default=0)
+        tier_maxima["global"] = overall_limit
+        pw_max = max(1, config.random_tie_break_weight_max)
+        n_sun_lead = sum(1 for s in slots if s.role_type == "Sun.Lead")
+        tier_maxima["sun_lead_rotation"] = pw_max * n_sun_lead
+        tier_maxima["sun_lead_weekly_rotation"] = pw_max * n_sun_lead
+
+        weights = compute_priority_weights(
+            overall_limit, len(consec_penalties), max_rand, tier_maxima)
 
         obj = [weights["global"] * overall_spread]
         if sun_lead_rotation:

@@ -257,5 +257,86 @@ class TestSolverBudgetClamping(unittest.TestCase):
         self.assertTrue(res.get("ok"))  # still solves fine with clamped budgets
 
 
+class ObjectiveFitsInt64(unittest.TestCase):
+    """
+    The lexicographic objective is a product over eight priority tiers. Charging every
+    tier the same global `max_spread` made that product exponential in an over-estimate,
+    so the objective's upper bound crossed int64 on ORDINARY months: ortools answered
+    MODEL_INVALID on the optimising passes and `solve_schedule` fell through to the
+    objective-less ones silently, losing fairness optimisation with no signal.
+
+    These guard the fix — per-tier maxima — on the month shapes that reproduced it.
+    """
+
+    SHAPES = [
+        (4, [1, 2, 3, 4]),        # 52 slots: the ordinary case, bound was 3.2e19
+        (5, [1, 2, 3]),           # 55 slots: reproduced MODEL_INVALID
+        (5, [1, 2, 3, 4, 5]),     # 65 slots: reproduced MODEL_INVALID
+        (6, [1, 2]),              # 58 slots: reproduced MODEL_INVALID
+        (6, [1, 2, 3, 4, 5, 6]),  # 78 slots: worst bound, 1.9e21
+    ]
+
+    def test_no_month_shape_overflows_or_is_rejected(self):
+        """
+        The regression itself. One solve per shape, asserting both halves: the month
+        solves, and no optimising pass was rejected by ortools.
+        """
+        from ortools.sat.python import cp_model
+
+        seen = []
+        original = cp_model.CpSolver.Solve
+
+        def record(solver_self, model):
+            status = original(solver_self, model)
+            seen.append(solver_self.StatusName(status))
+            return status
+
+        cp_model.CpSolver.Solve = record
+        try:
+            for weeks, sats in self.SHAPES:
+                with self.subTest(weeks=weeks, saturdays=len(sats)):
+                    seen.clear()
+                    cfg = make_config(weeks=weeks, sat_weeks=tuple(sats))
+                    cfg["solver_max_time_seconds"] = 3  # the guard is about the
+                    cfg["solver_total_budget_seconds"] = 20  # model, not the search
+                    res = solve_from_dict(cfg)
+                    self.assertTrue(res.get("ok"), res.get("error"))
+                    self.assertNotIn(
+                        "MODEL_INVALID", seen,
+                        f"{weeks}wk/{len(sats)}sat: ortools rejected the objective")
+        finally:
+            cp_model.CpSolver.Solve = original
+
+    def test_per_tier_maxima_keep_the_ladder_lexicographic(self):
+        """
+        The point of the ladder is that each tier outranks everything below it. Shrinking
+        the caps must not break that — assert the invariant directly.
+        """
+        from owt_solver_v2 import compute_priority_weights, PRIORITY_ORDER
+
+        maxima = {"Sun.Choir": 12, "Sat.BGV": 12, "Sun.BGV": 12, "global": 52,
+                  "sun_lead_rotation": 72, "sun_lead_weekly_rotation": 72,
+                  "Sat.Lead": 8, "Sun.Lead": 8}
+        w = compute_priority_weights(52, 180, 2263, maxima)
+
+        below = 180 * w["consecutive"] + 2263   # consecutive + tie_break ceilings
+        for name in PRIORITY_ORDER:
+            self.assertGreater(
+                w[name], below,
+                f"{name} does not outrank the tiers below it")
+            below += maxima[name] * w[name]
+        self.assertLess(below, 2 ** 63 - 1)
+
+    def test_an_absurd_month_raises_instead_of_silently_degrading(self):
+        """
+        A ladder that would still overflow must fail loudly. Silent degradation is the
+        behaviour this whole change exists to remove.
+        """
+        from owt_solver_v2 import compute_priority_weights
+
+        with self.assertRaises(ValueError):
+            compute_priority_weights(10 ** 6, 10 ** 6, 10 ** 6)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
