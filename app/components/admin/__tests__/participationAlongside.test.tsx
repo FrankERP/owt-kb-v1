@@ -948,8 +948,9 @@ describe("the picker's load figure is labelled, so it cannot pose as the rail's 
 /**
  * The three column widths, prose versus code.
  *
- * `PlannerGrid.tsx`'s header derives the fit at 1512 (216 + 12 + 1008 + 12 + 240
- * = 1488 usable), `app/brand.css` repeats the same sum as the justification for
+ * `PlannerGrid.tsx`'s header derives the fit at 1512 (216 + 12 + 920 + 12 + 240
+ * = 1400 workspace, inside 1488 usable once the collapsed rail and its gap are
+ * paid), `app/brand.css` repeats the same sum as the justification for
  * lifting the admin frame's 1280px cap, and the component renders two Tailwind
  * literals that cannot be built from either. Three copies of one arithmetic is
  * exactly the drift the retired threshold guard existed to catch, so it is
@@ -1042,9 +1043,37 @@ describe("the planner's three column widths agree wherever they are written", ()
     );
     expect(1512 - Number(derived![1])).toBe(Number(derived![2]));
 
-    // …and that usable width is what the three columns are budgeted against.
+    // …and that usable width is what the RAIL and the three columns are budgeted
+    // against together. The rail (R5 ruling 3) sits in the same 1488: it spends
+    // 56 collapsed plus the grid's 32px gap, and what is left is the workspace
+    // the planner's own three columns are budgeted inside. Two lines, one sum —
+    // and the CSS rule that actually applies the 56 is checked below, so the
+    // prose cannot state a rail the stylesheet does not collapse.
+    const rail = cssSrc.match(/(\d+) \(rail, collapsed\) \+ (\d+) \(gap-8\) \+ (\d+) \(workspace\)\s+= (\d+)/);
+    expect(rail, "could not read the rail derivation from brand.css").toBeTruthy();
+    expect(Number(rail![1]) + Number(rail![2]) + Number(rail![3])).toBe(Number(rail![4]));
+    expect(rail![4]).toBe(derived![2]);
+
     const columns = cssSrc.match(/\(chart\) \+ 12 \+ \d+ \(grid\) \+ 12 \+ \d+ \(picker\)\s+= (\d+)/);
-    expect(columns![1]).toBe(derived![2]);
+    expect(columns![1]).toBe(rail![3]);
+
+    // The collapsed width is declared ONCE, as the custom property the layout
+    // class reads — a second literal in `AdminPanel` is exactly the drift this
+    // whole describe block exists to catch.
+    const railVar = cssSrc.match(
+      /\.brand-admin-frame:has\(\.planner-wide\)\s*\{[^}]*--admin-rail-w:\s*(\d+)px;/,
+    );
+    expect(railVar, "could not find the --admin-rail-w override in brand.css").toBeTruthy();
+    expect(railVar![1]).toBe(rail![1]);
+    expect(cssSrc).toMatch(
+      /\.brand-admin-frame:has\(\.planner-wide\)\s+\.brand-admin-rail\s*\{\s*width:\s*(\d+)px;/,
+    );
+    expect(
+      cssSrc.match(/\.brand-admin-frame:has\(\.planner-wide\)\s+\.brand-admin-rail\s*\{\s*width:\s*(\d+)px;/)![1],
+    ).toBe(rail![1]);
+    expect(read("app/components/admin/AdminPanel.tsx")).toContain(
+      "lg:grid-cols-[var(--admin-rail-w,200px)_1fr]",
+    );
 
     // And the retired shell stays retired — as a RULE, not as a word: the
     // comment above still names the class it is explaining the absence of.

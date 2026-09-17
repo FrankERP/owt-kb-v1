@@ -52,10 +52,13 @@
 // `.brand-admin-frame` in `app/brand.css`, which the `planner-wide` marker on
 // this component's root widens through `:has()`:
 //   1512 viewport − 24 frame padding = 1488 usable
-//   216 (Participaciones) + 12 + 1008 (grid) + 12 + 240 (picker) = 1488
+//   1488 − 56 (the collapsed section rail) − 32 (its gap) = 1400 workspace
+//   216 (Participaciones) + 12 + 920 (grid) + 12 + 240 (picker) = 1400
 // The picker's 240px is only spent while a cell is ACTIVE; with none open the
-// grid gets it back and runs at 1260. (The bordered `.brand-admin-shell` this
-// sum used to pay a border and 24px of padding to is gone — ADR-0035.)
+// grid gets it back and runs at 1172. (The bordered `.brand-admin-shell` this
+// sum used to pay a border and 24px of padding to is gone — ADR-0035; what
+// spends width now is `AdminRail`, which collapses to icons while this grid is
+// open precisely so the sum still leaves the grid four figures.)
 //
 // **216 is a FLOOR, not a preference** — `CHART_COLUMN_WIDTH` below, now the
 // only place it is declared. It shipped at

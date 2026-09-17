@@ -1262,6 +1262,31 @@ the comments that used to name the shell now name `[data-route-main]`: see
 [ADR-0035](adr/0035-the-admin-shell-is-gone.md). `NavLinks` lost its `schedule`/`tags`
 props in the same task (ruling 9) — Calendario and Biblioteca show for every worship
 member on every page, so the row no longer changes shape between routes. Guards:
-`adminShell.test.tsx` (one tab bar, no box between it and the panel, the keyed remount)
-and `participationAlongside.test.tsx` (the re-derived `:has(.planner-wide)` arithmetic:
-`1512 − 24 = 1488`, `216 + 12 + 1008 + 12 + 240 = 1488`).
+`adminShell.test.tsx` (one rail + one strip, no box between the nav and the panel, the
+keyed remount) and `participationAlongside.test.tsx` (the re-derived `:has(.planner-wide)`
+arithmetic — see Task 2, which put the rail into that sum).
+
+**Task 2 (the rail, and the integrity dot).** The tab bar is `AdminRail` now (ruling 3):
+ONE component rendering two layouts, a vertical rail at `lg+` in the grid's 200 px column
+(icon + label, `aria-current="page"`, `SlidingIndicator id="admin-rail" variant="pill"`
+inside the active item, so the pill slides VERTICALLY between stacked siblings) and below
+`lg` the horizontal underline strip the page always had (`id="admin-strip"`,
+`useActiveIntoView`, the `md:hidden` scroll fade). Both are always in the DOM and CSS picks
+one (`hidden lg:flex` / `lg:hidden`) — a JS media query would paint the wrong one first —
+and the two indicator ids are deliberately different, or the shared `layoutId` would fly
+the marker across the page at the breakpoint. While the planner is open the rail collapses
+to icons: `app/brand.css` sets `--admin-rail-w: 56px` on `.brand-admin-frame:has(.planner-wide)`
+(the grid reads it as `lg:grid-cols-[var(--admin-rail-w,200px)_1fr]`, so 56 is written
+once) and hides `[data-rail-label]`, which is why every item carries its own `aria-label`
+— a `display: none` label is out of the accessibility tree too. The widened-frame
+arithmetic was re-derived WITH the rail: `1512 − 24 = 1488`,
+`56 + 32 + 1400 = 1488`, `216 + 12 + 920 + 12 + 240 = 1400`.
+
+The integrity state is lifted with it (ruling 4): `useIntegrityQueue` owns the three
+service-integrity fetches `IntegrityQueuePanel` used to run itself, `AdminPanel` calls it
+ONCE at the top level, and the same queue feeds the panel and the rail's Servicios dot —
+nothing when the inventory is proven clean, a dim `?` when a domain failed or is still
+loading, the count in `negative-fg` when there are issues. Three states, never two: an
+unknown queue must not read clean, in the dot or in the item's accessible name. The panel's
+`Collapse` follows the tone (open until proven clean) and a member can still toggle it.
+Guards: `adminRail.test.tsx`, `useIntegrityQueue.test.tsx`.

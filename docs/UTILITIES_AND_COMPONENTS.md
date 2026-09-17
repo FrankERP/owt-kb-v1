@@ -515,7 +515,9 @@ behaviour of each, and the guards that pin them.
 ### Admin panels (`app/components/admin/`, all [C])
 | Component | Purpose |
 |-----------|---------|
-| `AdminPanel` | The Control Room's one tree: ONE `TabBar` plus one body `key={tab}`/`animate-fade-in` (a tab change remounts the incoming panel), and member management inline (Fuse.js search, add/edit modal, role-gated). No `brand-surface` box around a panel and no `.brand-admin-shell` around the panel — the page is the workspace ([ADR-0035](adr/0035-the-admin-shell-is-gone.md)); `adminShell.test.tsx` is the guard. `?tab=` behaviour is unchanged (`adminTabUrl.test.tsx`). |
+| `AdminPanel` | The Control Room's one tree: ONE `AdminRail` plus one body `key={tab}`/`animate-fade-in` (a tab change remounts the incoming panel), and member management inline (Fuse.js search, add/edit modal, role-gated). No `brand-surface` box around a panel and no `.brand-admin-shell` around the panel — the page is the workspace ([ADR-0035](adr/0035-the-admin-shell-is-gone.md)); `adminShell.test.tsx` is the guard. `?tab=` behaviour is unchanged (`adminTabUrl.test.tsx`, whose queries are scoped to the strip because both nav layouts are in the DOM). Calls `useIntegrityQueue()` once, at the top level, and feeds the queue to `IntegrityQueuePanel` and the tone/count to `AdminRail`. |
+| `AdminRail` | The Control Room's section nav — the ONLY one. Two layouts of one control: a sticky vertical rail at `lg+` (icon + label, `SlidingIndicator id="admin-rail" variant="pill"`) and the horizontal underline strip below it (`id="admin-strip"`, `useActiveIntoView`), both in the DOM with CSS picking one. `ADMIN_TAB_ICON` is the one glyph-per-tab map. The Servicios item carries the integrity dot (`data-integrity`), and every item carries an explicit `aria-label` because `brand.css` hides the labels while the planner is open. `adminRail.test.tsx` is the guard. |
+| `useIntegrityQueue` | The ONLY place the three `/api/admin/service-integrity/*` inventories are fetched. Returns `{ queue, tone, sources, loading, reload, resolve }`; the three domains load independently and a failed or in-flight one reads `unknown`, never `clean`. `resolve` has a stable identity (it is the panel's focus-effect dependency). `useIntegrityQueue.test.tsx` is the guard — and where the fetch mocks live. |
 | `ServicesPanel` | Service-readiness cards plus card-owned delete/copy/publish/setlist/proposal flows. Owns the canonical roles/integrity source bundle and opens `MonthGenerator` for **Editar mes**, card roster edits, and **Nuevo**. The editor replaces the tab with a full-width panel rather than a dialog. |
 | `seatModel` | Canonical seat names and categories; one spelling per seat. Pure. |
 | `candidateRanking` | Seat candidates ordered by availability, existing assignment and recent load. Pure; never calls the solver. |
@@ -542,7 +544,7 @@ modules beside them. See [`SERVICE_READINESS_UI.md`](SERVICE_READINESS_UI.md).
 | `ReadinessBadge` | One icon + text + tone chip. Colour is never the only carrier of meaning. |
 | `ServiceIssueList` | Blocking-issue lines, truncated to 4 + "y N problema(s) más". |
 | `ServicePrimaryAction` | The single primary-action button; emits `data-action-kind`/`-rule`. |
-| `IntegrityQueuePanel` | Standalone "Integridad de datos" panel; fetches the three service-integrity routes itself. |
+| `IntegrityQueuePanel` | The "Integridad de datos" panel. Fetches NOTHING since R5: props in (`queue`, `tone`, `sources`, `reload`, `target`, `onResolved`) from `useIntegrityQueue`, which `AdminPanel` owns. Its `Collapse` follows the tone — open until the inventory is proven clean — and a member can still toggle it. |
 
 Their pure counterparts, also in `app/components/admin/`: `serviceReadiness.ts` (the dimensions,
 the 15-rule ladder, per-control gating), `serviceCardModel.ts` (card assembly + Spanish copy),

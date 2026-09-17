@@ -932,16 +932,21 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
  * and nothing moves at all below 1280px, where the workspace stacks anyway:
  *
  *   1512 − 24 (frame padding-inline: 0.75rem a side) = 1488
- *   216 (chart) + 12 + 1008 (grid) + 12 + 240 (picker) = 1488
+ *   56 (rail, collapsed) + 32 (gap-8) + 1400 (workspace) = 1488
+ *   216 (chart) + 12 + 920 (grid) + 12 + 240 (picker) = 1400
  *
  * The 24px is the `padding-inline: 0.75rem` in the frame rule below, replacing
  * the page's own `px-6`; it looks like a cosmetic tidy-up and is load-bearing
  * arithmetic. `participationAlongside.test.tsx` pins it against this comment.
  *
  * The bordered `.brand-admin-shell` this derivation used to spend a border and
- * 24px of padding on is GONE (ADR-0035) — the page is the workspace now — which
- * is why the sum reads 1488 rather than the 1462 the shell left. The rail Task 2
- * puts beside the tabs will spend width here again and re-pin the numbers.
+ * 24px of padding on is GONE (ADR-0035) — the page is the workspace now. What
+ * spends width instead is the section RAIL (`AdminRail`, R5 ruling 3), which is
+ * why there are three lines above and not two: the rail and the grid's `gap-8`
+ * take 88px off the usable width before the planner's own three columns are
+ * budgeted. The rail COLLAPSES to 56px (icons only) while the planner is open —
+ * that is what the `--admin-rail-w` override in the frame rule below is for, and
+ * 56 is written once, there, not repeated in the layout class.
  *
  * Full-bleed (a `100vw` block with a negative margin) is still rejected, and the
  * reason is no longer the shell's `overflow: hidden`: it over-runs by the
@@ -977,9 +982,29 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
    * the stated `= 1488` simply stops being true, silently.
    */
   .brand-admin-frame:has(.planner-wide) {
+    /*
+     * The ONE declaration of the collapsed rail width; `AdminPanel`'s grid
+     * reads it as `lg:grid-cols-[var(--admin-rail-w,200px)_1fr]`, so the column
+     * and the rail can never state two different numbers.
+     */
+    --admin-rail-w: 56px;
     max-width: none;
     padding-right: 0.75rem;
     padding-left: 0.75rem;
+  }
+
+  /*
+   * Icons only while the planner is open. `display: none` takes the labels out
+   * of the accessibility tree as well as off the screen, which is exactly why
+   * every rail item carries its own `aria-label` (see `AdminRail.tsx`) — the
+   * collapsed rail is still named, item by item.
+   */
+  .brand-admin-frame:has(.planner-wide) .brand-admin-rail {
+    width: 56px;
+  }
+
+  .brand-admin-frame:has(.planner-wide) .brand-admin-rail [data-rail-label] {
+    display: none;
   }
 
 }

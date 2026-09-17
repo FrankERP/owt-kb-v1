@@ -10,6 +10,8 @@ import ContentPanel from "./ContentPanel";
 import AvailabilityPanel from "./AvailabilityPanel";
 import ProposalsPanel from "./ProposalsPanel";
 import IntegrityQueuePanel from "./IntegrityQueuePanel";
+import AdminRail, { ADMIN_TAB_ICON } from "./AdminRail";
+import { useIntegrityQueue } from "./useIntegrityQueue";
 import { ServiceHandoffProvider, type ServiceHandoffApi } from "./serviceHandoffContext";
 import {
   reduceReviewTarget,
@@ -26,8 +28,6 @@ import Select from "@/app/components/ui/Select";
 import EmailPrefToggles, { resolveEmailPrefs, type EmailPrefValues } from "../ui/EmailPrefToggles";
 import { useToast } from "../ui/Toast";
 import SegmentedControl from "../ui/SegmentedControl";
-import SlidingIndicator, { useActiveIntoView } from "../ui/SlidingIndicator";
-import { haptic } from "@/app/utils/haptics";
 import {
   ALL_MINISTRY_IDS,
   MANAGEABLE_MINISTRY_IDS,
@@ -618,46 +618,9 @@ function PasswordForm({
 // ─── Tab nav ──────────────────────────────────────────────────────────────────
 // The tab union lives beside the transient handoff target (`proposalHandoff`), so
 // one reducer owns both and a manual tab change cannot leave a stale target.
+// The bar itself is `AdminRail` now: a vertical rail at `lg`, the underline strip
+// below it (R5 ruling 3).
 type Tab = AdminTabId;
-
-function TabItem({ id, label, active, onChange }: { id: Tab; label: string; active: boolean; onChange: (t: Tab) => void }) {
-  const ref = useActiveIntoView(active);
-  return (
-    <button
-      ref={ref}
-      type="button"
-      aria-current={active ? "page" : undefined}
-      onClick={() => { void haptic("selection"); onChange(id); }}
-      className={`relative font-label text-xs uppercase tracking-widest px-4 py-2 rounded-lg transition-colors whitespace-nowrap ${
-        active ? "text-accent" : "text-ink-dim hover:bg-accent/[0.04] hover:text-ink"
-      }`}
-    >
-      {active && <SlidingIndicator id="admin-tabs" />}
-      <span className="relative">{label}</span>
-    </button>
-  );
-}
-
-function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) => void; role: OWTRole }) {
-  const visible = visibleAdminTabs(role);
-  return (
-    // No bordered pill around the tabs (ADR-0035): the sliding underline IS the
-    // affordance, and the box was the third frame on a page whose content is
-    // already made of cards. `data-admin-tabs` is the hook the shell guard
-    // counts — exactly ONE of these renders, whichever tab is open.
-    <div className="relative" data-admin-tabs="bar">
-      <div className="overflow-x-auto -mx-2 px-2 pb-1">
-        <div className="flex min-w-full w-max gap-1">
-          {visible.map(({ id, label }) => (
-            <TabItem key={id} id={id} label={label} active={active === id} onChange={onChange} />
-          ))}
-        </div>
-      </div>
-      {/* Scroll-fade hint (mobile, where tabs overflow) */}
-      <div className="md:hidden pointer-events-none absolute top-0 right-0 bottom-1 w-8 bg-gradient-to-l from-surface-base to-transparent" />
-    </div>
-  );
-}
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 export default function AdminPanel({
@@ -787,6 +750,15 @@ export default function AdminPanel({
   );
   const proposalTarget = review.target?.kind === "proposal_review" ? review.target : null;
   const integrityTarget = review.target?.kind === "integrity_issue" ? review.target : null;
+  // ONE integrity load for the page (R5 ruling 4), at the top level rather than
+  // inside the Servicios branch: the rail's dot has to be live on every tab, and
+  // two callers fetching their own copy could disagree about whether the
+  // inventory is clean.
+  const integrity = useIntegrityQueue(onReviewResolved);
+  const railTabs = useMemo(
+    () => visibleAdminTabs(role).map((t) => ({ ...t, icon: ADMIN_TAB_ICON[t.id] })),
+    [role],
+  );
   const [members, setMembers]   = useState<Member[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
@@ -1044,6 +1016,14 @@ export default function AdminPanel({
   // `brand-surface` panel box. One tab bar renders now, the body is keyed by
   // tab, and the boxes are gone (ADR-0035) — the cards inside a panel are the
   // only frames left on this page.
+  // A VALUE, not a function, and deliberately so for now: building this subtree
+  // on the five tabs that never render it is work thrown away, but wrapping it
+  // in `() => (…)` makes `react-hooks/refs` an ERROR — from inside a plain
+  // function the rule can no longer prove that `handlePhotoClick`'s
+  // `photoInputRef.current` is read in an event handler rather than during
+  // render, and the lint gate is 0 errors. The real fix is R5 Task 7's
+  // extraction into `MembersPanel.tsx` behind `next/dynamic`, which makes the
+  // subtree lazy for real instead of only deferring its construction.
   const membersBody = (
     <div className="space-y-6">
       {/* Header */}
@@ -1345,7 +1325,14 @@ export default function AdminPanel({
           <ServiceHandoffProvider value={handoff}>
             <div className="min-w-0 space-y-4">
               {/* Read-only global integrity queue: issues no validated card owns. */}
-              <IntegrityQueuePanel target={integrityTarget} onResolved={onReviewResolved} />
+              <IntegrityQueuePanel
+                queue={integrity.queue}
+                tone={integrity.tone}
+                sources={integrity.sources}
+                reload={integrity.reload}
+                target={integrityTarget}
+                onResolved={integrity.resolve}
+              />
               <ServicesPanel />
             </div>
           </ServiceHandoffProvider>
@@ -1368,8 +1355,19 @@ export default function AdminPanel({
   })();
 
   return (
-    <div className="mt-6 lg:grid lg:grid-cols-[200px_1fr] lg:gap-8">
-      <TabBar active={tab} onChange={setTab} role={role} />
+    // `--admin-rail-w` (200px by default) is the rail's column: `app/brand.css`
+    // drops it to 56px while the planner is open, so the widened frame's
+    // arithmetic has ONE number for the rail rather than two that can drift.
+    // `space-y-6` is the phone's gap between the strip and the body — below `lg`
+    // this is a plain block and the grid's `gap` does not apply.
+    <div className="mt-6 space-y-6 lg:grid lg:grid-cols-[var(--admin-rail-w,200px)_1fr] lg:gap-8 lg:space-y-0">
+      <AdminRail
+        tabs={railTabs}
+        active={tab}
+        onChange={setTab}
+        integrityTone={integrity.tone}
+        integrityCount={integrity.queue.count}
+      />
       {/* `key={tab}`: the incoming panel MOUNTS and fades in rather than the
           outgoing one being held alive beside it. These panels are thousands of
           lines each and only the active one is ever mounted. */}
