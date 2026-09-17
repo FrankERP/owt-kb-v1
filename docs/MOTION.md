@@ -126,7 +126,7 @@ exclusive to the sign-in lockup, where it already lived before this list existed
 | `SlidingIndicator` / `useActiveIntoView` | client | the active marker for tab bars (admin `TabBar`, `SectionNav`, `BottomNav`, `NavLinks`): render ONE inside the active item; variants `pill`/`underline`/`dot`. Semantics stay on the items (`aria-current`). The hook scrolls the active item to the centre of an overflowing bar. |
 | `Switch` | client | the ONE switch — `role="switch"`, `aria-checked`, a `<button>`; knob springs (`SPRINGS.pop`) with `initial={false}` so the first paint is the real state; haptic on flip. Sizes `sm`/`md`. |
 | `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` is the destructive tone — the kill switch, its former consumer, became a `Menu` item behind a confirm in R5 Task 3. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop rather than a `className` because a same-property utility passed through `className` cannot beat one the primitive already sets — two classes for the same property land at equal specificity in the compiled stylesheet, and the one emitted LATER wins regardless of call-site order, so an `items-center` baked into the component always beats an `items-start` passed in from outside. Name it with `children` or `aria-label`. |
-| `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
+| `Select` | client | the ONE select — TWO renders of ONE control (R5 ruling 8). On a coarse pointer, the native `<select>` under tokenised chrome and a drawn chevron. On `(hover: hover) and (pointer: fine)` the native element stays mounted but `sr-only` — still the form value, still what the `<label>` points at, still the control a keyboard `Tab` reaches — and a `Button variant="secondary"` trigger shows the selected label + chevron and opens a `Menu align="start"` with one `MenuItem` per `<option>` (roving focus, Escape, plus a first-letter jump matched accent-insensitively through `normalizeText`). Choosing sets the native element's `value` and dispatches a real bubbling `change` on it, so the consumer's `onChange` fires with a genuine event and reads `e.target.value` unchanged — no synthetic event shapes, no consumer edits. Detection is `useState(false)` + a `useEffect` `matchMedia` read, so SSR, the first client render and any environment without `matchMedia` (jsdom) are the native path; `popover={false}` opts out permanently. The trigger is named «campo: elección» and the panel «Opciones de campo», never the bare field name — that would leave three elements answering to one `getByLabelText`. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. |
 | `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws an optional prev/next icon-button pair around the input, the parent's job to interpret. `ScheduleHeader` does NOT pass `onStep` (R2 Task 4 ruling — its own header arrows already page the month, under the same accessible names a second stepper pair would duplicate); the one live consumer is the theme gallery's `ControlsFixture`. |
 | `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
 | `AnimatedList` | client | list reflow: `mode="popLayout"` pops leavers out of flow so the survivors slide at once (`layout="position"` per row, leavers fade `fast`); the host renders `relative` because a popped item positions against it — `/biblioteca` index. |
@@ -192,7 +192,7 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `reveal.test.ts` | `revealProps()`'s shape, and that `app/(client)/template.tsx` never wraps the page in a transformed element. |
 | `loadingSkeletons.test.ts` | The four `loading.tsx` files compose `Skeleton` instead of a hand-copied pulse block. |
 | `shellPolish.test.ts` | Spec Part III findings 3 (brand mark loads with `priority`) and 5 (initials avatar contrast in light). |
-| `rawMotionLiterals.test.ts` | Pins `transition-all` (7) and raw `duration-N` (0) counts outside `ui/` at the audited baseline (13/12 pre-M1 → 9/8 after M1 → 7/0 after R1 deleted the tag/author lists — M1's four migrated sites: `BottomNav`'s sheet becoming a `CueDialog`, `NavMenu`'s avatar-ring transitions, the audio transport's progress fill and play/pause button) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. |
+| `rawMotionLiterals.test.ts` | Pins `transition-all` (5) and raw `duration-N` (0) counts outside `ui/` at the audited baseline (13/12 pre-M1 → 9/8 after M1 → 7/0 after R1 deleted the tag/author lists → 6 after R5 Task 3's member row → 5 after Task 4's member chip) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. **Scans `.ts` as well as `.tsx` since R5 Task 5**: a class string is a class string wherever it is written, and `serviceCardModel.ts`'s `CARD_STYLE.container` had been hiding one in a model module for exactly that reason. |
 | `cueDialogMount.test.ts` | Counts every LITERAL `open` attribute on a `<CueDialog` source element — not `open={…}` — across `app/**/*.tsx` excluding `__tests__` and `ui/`; per element, not per caller, so a wrapper mounted by several callers still counts once. Pins the count at 10 (re-measured 2026-09-09, M1 Task 7 — `SongSheet`'s `SetlistPopover` migrated to `open={x}`, down from 11; the original 2026-09-08 measurement of 7 only caught the direct `{x && <CueDialog open>}` shape and missed wrapper components). `AdminPanel`'s and `ServicesPanel`'s local `Modal`s and `KidsPlanner`'s `SeatPicker` remain and migrate in their own route phases. Lower the count in the same commit that migrates a site to `open={…}`; never raise it. |
 | `inputFontSize.test.ts` | F3: no `<input>`/`<textarea>`/`<select>` under `app/**` carries a sub-16 px text utility that applies at PHONE width — WebKit zooms into any smaller focused control and never zooms back. The house pattern is `text-[16px] sm:text-<size>`; a breakpoint variant anywhere in the chain is fine, `focus:`/`dark:`/`hover:` are NOT (focus is when the zoom fires). `admin/` and `kids/` are excluded BY PATH, not by a baseline count — there is no number to ratchet, so a new violation cannot be absorbed. className expressions are read whole (brace-aware) with bare identifiers resolved one level to a `const` string; a size inside an object map (`ui/Select`/`ui/DateField`'s `SIZE`) is compliant today but outside the scan. Never fix this by putting `maximum-scale=1` on the viewport. |
 | `dialogSemantics.test.ts` | Every file that draws a dismissable full-bleed scrim (`bg-scrim` + `inset-0` + `onClick`) carries `role="dialog"`/`aria-modal`/an accessible name/focus management, or is named in an exemption list with a reason. Floor is 1 (`CueDialog` itself) as of M1 Task 1 — `BottomNav`'s hand-rolled scrim was replaced by a `CueDialog` sheet, so its `NOT_A_DIALOG` entry was deleted along with the overlay it exempted; the exemption list is now empty. A stale exemption (naming a file the scan no longer finds) fails its own check. |
@@ -1346,3 +1346,62 @@ ease-out-brand` (`rawMotionLiterals` `transitionAll` 6 → 5). One label left in
 pass: the panel repeated «Integridad de datos · sin problemas de integridad» under its
 heading while `IntegrityQueuePanel` and the rail's dot already said it. Guard:
 `servicesBoard.test.tsx`.
+
+**Task 5 (the remaining five panels).** `ActivityPanel`, `AvailabilityPanel`,
+`ContentPanel`, `ProposalsPanel` and `IntegrityQueuePanel` adopt the primitives, and each
+one pays a debt rather than adding an effect. Every loading surface is a `SkeletonGroup`
+of `Skeleton`s — the last four `animate-pulse` blocks in `app/**` outside `ui/`.
+Actividad's three summary stats are `NumberRoll`s (they change in place as the list
+resolves) and its error state gained a `Button variant="ghost" size="sm"` «Reintentar»
+wired to the same loader the mount effect calls — a dead end is not a state. Contenido's
+row actions were `opacity-0 group-hover:opacity-100`, which is not a subtle affordance on
+a phone but a missing one: there is no hover state to enter, so Editar and Eliminar were
+permanently invisible to every touch admin and unreachable by keyboard at every width.
+They are `opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100`
+now, as `Button variant="icon" size="lg"` (44 px), and Contenido's two dialogs joined the
+house pattern — mounted always, opened by `modalOpen` + `modalKind`, payload outliving the
+close, bodies keyed on an open counter (`cueDialogMount.test.ts` 8 → 6). Disponibilidad's
+matrix gets the one genuinely new piece: its sticky first column takes an edge only once it
+has DETACHED from the scroller's left edge, driven by a 1 px `aria-hidden` sentinel observed
+by an `IntersectionObserver` **rooted on the scroll box** — no scroll listener, disconnected
+on unmount — which sets `data-scrolled` and lets `brand.css`'s
+`.availability-matrix[data-scrolled] .sticky-col` animate a box-shadow over `--motion-fast`.
+Integridad's entries render through `AnimatedList`, so a RESOLVED entry fades out and the
+survivors slide up; the queue derivation is untouched (it lives in `useIntegrityQueue`) and
+each entry keeps its own `Collapse`.
+
+Three Task 4 follow-ups ride along. The `past` month pill dims with `opacity-60` instead of
+a `border-accent/10 text-mono-600` override that lost to the pill variant's own border on
+emission order. The Servicios toolbar states a closed gate's reason as a LINE under the
+buttons instead of a `title`: `Button` carries `disabled:pointer-events-none`, so a disabled
+control receives no pointer events and its native tooltip can never be summoned — the reason
+the admin needs most was the one the markup guaranteed they would never see. And
+`CARD_STYLE.container` in `serviceCardModel.ts` was still carrying the catch-all
+every-property transition, invisible to `rawMotionLiterals.test.ts` because that scan only
+read `.tsx` while the class string lives in a `.ts` module; it is now
+`transition-[border-color,box-shadow,opacity] duration-base ease-out-brand` — exactly what
+the card's tones change — and **the scan reads `.ts` as well as `.tsx`**. Widening it found
+that one site and no other, so the baseline stays 5/0 rather than being raised. Guards:
+`adminPanelsPolish.test.tsx`, plus the existing per-panel failure suites.
+
+**Task 6 (load on demand).** `ActivityPanel`, `ContentPanel`, `AvailabilityPanel`,
+`ProposalsPanel` and `MembersPanel` become `next/dynamic(() => import("./X"), { ssr:
+false, loading: PanelSkeleton })` in `AdminPanel.tsx`; `MonthGenerator` becomes the same
+in `ServicesPanel.tsx`. `ServicesPanel` and `IntegrityQueuePanel` stay eager on purpose:
+Servicios is the default tab for most roles, and the integrity fetch that feeds the
+rail's dot lives at `AdminPanel`'s top level regardless of which tab is open, so gating
+either behind a chunk boundary would delay the one signal every tab needs. `MonthGenerator`
+was already gated at the STATE level — it replaces the whole Servicios view via an early
+`return` when `showGenerator`/`monthEditor` goes true (D10), never inside an
+always-mounted `CueDialog` — so `dynamic` here converts an existing on-open mount into an
+on-open FETCH too: the planner/solver code it pulls in no longer reaches the initial
+Servicios chunk at all. **Method note on the Bundle table below:** because five of six
+tabs and the month generator now live in their own async chunks, `/admin`'s first-load
+number in the table from this task forward measures Servicios + the shell only — it is
+not comparable, chunk-for-chunk, to an earlier row that measured all six tabs eagerly
+bundled together; the drop it should show is the sum of everything that left the
+first-load graph. Guard: `adminDynamic.test.ts` (source scan — each of the six is
+imported through `next/dynamic` in exactly the file gating it, and nowhere else under
+`app/**` imports one statically). `adminShell.test.tsx`'s tab-change assertion now
+`await waitFor`s the incoming panel's content, since even a mocked dynamic import
+resolves through a microtask rather than synchronously.

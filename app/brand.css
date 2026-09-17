@@ -1250,3 +1250,21 @@ html[data-motion="off"] .brand-stage-hero::before {
   45%  { opacity: 1; transform: scale(2.4); }
   100% { opacity: 0.6; transform: none; }
 }
+
+/* ── The availability matrix's sticky first column (R5 Task 5) — a member column
+   that has DETACHED from the scroller's left edge needs an edge of its own, or the
+   service dates simply slide under a name with nothing between them. The edge is a
+   box-shadow toggled by `[data-scrolled]`, which `AvailabilityPanel` sets from a
+   1 px sentinel observed against the scroll box (never a scroll listener): it stops
+   intersecting exactly when the column starts overlapping content.
+   Only box-shadow animates (rule 1), over `--motion-fast`. The rule lives here
+   rather than as an arbitrary `[&[data-scrolled]_.sticky]:shadow-[…]` variant
+   because the token-bearing shadow and its transition read as one thing in CSS and
+   as line noise in a class string. ── */
+.availability-matrix .sticky-col {
+  box-shadow: 0 0 0 rgb(var(--elevation-rgb) / 0);
+  transition: box-shadow var(--motion-fast) var(--ease-out);
+}
+.availability-matrix[data-scrolled] .sticky-col {
+  box-shadow: 8px 0 12px -8px rgb(var(--elevation-rgb) / 0.35);
+}

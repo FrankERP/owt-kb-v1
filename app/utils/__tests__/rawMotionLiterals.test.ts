@@ -28,23 +28,30 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // for the properties its source state actually changes —
 // `transition-[color,background-color,border-color,transform,box-shadow]` on
 // `duration-base`/`ease-out-brand` (−1 transition-all).
+// 2026-09-17 R5 Task 5: the scan reads `.ts` as well as `.tsx`. A class string is
+// a class string wherever it is written, and `serviceCardModel.ts`'s
+// `CARD_STYLE.container` had been carrying `transition-all` invisibly for exactly
+// that reason. Widening the scan found that ONE site and no other; it was retired
+// in the same commit for the properties the card's tones actually change, so the
+// baseline is unchanged rather than raised.
 const BASELINE = { transitionAll: 5, rawDuration: 0 };
 
-function tsxFiles(): string[] {
+/** Every `.tsx` AND `.ts` under `app/**`, minus `__tests__` and the ui primitives. */
+function sourceFiles(): string[] {
   const out: string[] = [];
   const walk = (dir: string) => {
     for (const e of readdirSync(path.join(REPO_ROOT, dir), { withFileTypes: true })) {
       const rel = path.join(dir, e.name);
       if (rel.includes("__tests__") || rel.startsWith(path.join("app", "components", "ui") + path.sep)) continue;
       if (e.isDirectory()) walk(rel);
-      else if (rel.endsWith(".tsx")) out.push(rel);
+      else if (rel.endsWith(".tsx") || rel.endsWith(".ts")) out.push(rel);
     }
   };
   walk("app");
   return out;
 }
 
-export function countRawMotion(files = tsxFiles()) {
+export function countRawMotion(files = sourceFiles()) {
   let transitionAll = 0;
   let rawDuration = 0;
   const sites: string[] = [];
@@ -61,6 +68,10 @@ export function countRawMotion(files = tsxFiles()) {
 
 describe("raw motion literals outside app/components/ui", () => {
   const found = countRawMotion();
+
+  it("reads .ts as well as .tsx — a class string in a model module is still a class string", () => {
+    expect(sourceFiles().some((f) => f.endsWith(".ts"))).toBe(true);
+  });
 
   it("transition-all does not grow past the audited baseline", () => {
     expect(found.transitionAll, found.sites.join("\n")).toBeLessThanOrEqual(BASELINE.transitionAll);

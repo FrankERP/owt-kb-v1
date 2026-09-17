@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 319,
-    "filesScanned": 328,
+    "filesScanned": 329,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
@@ -2419,7 +2419,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 202,
+      "line": 217,
       "disposition": "B",
       "reason": null
     },
@@ -2467,7 +2467,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 195,
+      "line": 219,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2479,7 +2479,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 229,
+      "line": 253,
       "disposition": "B",
       "reason": null
     },
@@ -2491,7 +2491,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 336,
+      "line": 365,
       "disposition": "B",
       "reason": null
     },
@@ -2503,7 +2503,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 345,
+      "line": 374,
       "disposition": "B",
       "reason": null
     },
@@ -2755,7 +2755,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 181,
+      "line": 182,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2767,7 +2767,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 334,
+      "line": 335,
       "disposition": "B",
       "reason": null
     },
@@ -2779,7 +2779,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 670,
+      "line": 681,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2887,7 +2887,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 1290,
+      "line": 1318,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3727,7 +3727,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 50,
+      "line": 91,
       "disposition": "B",
       "reason": null
     },

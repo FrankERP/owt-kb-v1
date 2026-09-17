@@ -43,14 +43,18 @@ export default function ServicePrimaryAction({
   action: PrimaryActionProps;
   onAction: () => void;
 }) {
+  const tone = toneVariant(action);
   return (
     <div className="min-w-0 space-y-1">
       <Button
-        variant={toneVariant(action)}
+        variant={tone}
         size="md"
         onClick={onAction}
         disabled={action.disabled}
         title={action.reason ?? undefined}
+        // The variant, in the DOM: the tone is otherwise only readable by
+        // matching a class string against `Button`'s internal VARIANT table.
+        data-tone={tone}
         data-action-kind={action.kind}
         data-action-rule={action.rule}
         data-action-route={action.route}

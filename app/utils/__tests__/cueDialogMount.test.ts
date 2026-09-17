@@ -46,7 +46,12 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // todos modos / ocultar / setlist) are mounted always, opened by their own
 // boolean, and their bodies are drawn from payload state that outlives the close
 // and keyed on `dialogSeq` so a reopen starts fresh.
-const BASELINE = 8;
+// 8→6 (2026-09-17, motion R5 Task 5): `ContentPanel`'s two dialogs (the song
+// form — add and edit share one — and the delete confirm) are mounted always and
+// opened by `modalOpen` plus a `modalKind`; the song and the kind are payload
+// state that outlives the close so the sheet keeps its body through the exit, and
+// each body is keyed on `modalSeq` so a reopen starts from a fresh form.
+const BASELINE = 6;
 
 // Every literal `open` boolean attribute on a `<CueDialog` element — bare
 // `open`, never `open={…}`. Matches regardless of what (if anything)
