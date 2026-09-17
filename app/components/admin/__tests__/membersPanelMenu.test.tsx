@@ -141,6 +141,38 @@ describe("Miembros — the kill switch asks first (decision O)", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 
+  it("HOLDS the dialog open and says so when the PATCH fails", async () => {
+    // The failure this case exists for: the confirm used to close on every
+    // outcome, because `handleDisableAccess` swallowed the error into a toast
+    // and returned nothing. A sheet that closes on a refused write reads as
+    // success — the row is unchanged, so the admin concludes the LIST is stale
+    // and walks away leaving the member signed in.
+    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+      String(url).includes("/disable")
+        ? { ok: false, json: async () => ({ error: "No permitido." }) }
+        : { ok: true, json: async () => [ANA] },
+    ));
+    render(
+      <ToastProvider><CueDialogProvider><MembersPanel role="super-admin" /></CueDialogProvider></ToastProvider>,
+    );
+    await waitFor(() => expect(screen.queryByText(/miembros?$/)).not.toBeNull());
+    const listReads = () => calls().filter((c) => String(c[0]) === "/api/admin/members").length;
+    const before = listReads();
+
+    openMenu("Ana").getByRole("menuitem", { name: "Deshabilitar acceso" }).click();
+    const dialog = within(await screen.findByRole("dialog"));
+    await act(async () => {
+      fireEvent.click(dialog.getByRole("button", { name: "Deshabilitar" }));
+    });
+
+    await waitFor(() => expect(disableCalls()).toHaveLength(1));
+    // Still on screen, and it says why.
+    expect(screen.queryByRole("dialog")).not.toBeNull();
+    expect(screen.queryByText(/No se pudo deshabilitar el acceso/)).not.toBeNull();
+    // And nothing refetched the list, which is what a success does.
+    expect(listReads()).toBe(before);
+  });
+
   it("restores access with no confirm — giving it back is not destructive", async () => {
     await mount([BETO]);
     const item = openMenu("Beto Ruiz").getByRole("menuitem", { name: "Habilitar acceso" });

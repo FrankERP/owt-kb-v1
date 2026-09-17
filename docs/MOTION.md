@@ -1305,12 +1305,18 @@ asks first (decision O): a `CueDialog mode="modal" size="sm"` that names the mem
 what it does and what it does NOT change («No podrá iniciar sesión. No cambia su Tipo, sus
 asignaciones ni su historial.»), and commits through the same
 `PATCH /api/admin/members/:id/disable`; GIVING access back needs no confirm. The `Sin acceso`
-chip stays — it is the row's own statement about access. Primitives in the same pass: the
-four member dialogs are mounted ALWAYS and opened by `open={modal?.type === …}`
-(`cueDialogMount.test.ts` 10 → 9), loading is six `Skeleton` rows in a `SkeletonGroup`, the
-delete modal's two raw buttons are `Button variant="danger"`/`"ghost"`, the row's
-`transition-all` is now `transition-[background-color,box-shadow] duration-base
-ease-out-brand` (`rawMotionLiterals` `transitionAll` 7 → 6) and the search input is
+chip stays — it is the row's own statement about access. A refused PATCH does NOT close the
+confirm: `handleDisableAccess` returns `res.ok`, and on `false` the dialog stays up with a
+`CueDialogStatus` saying the member still has access — a sheet that closes on a failed write
+reads as success against an unchanged row. Primitives in the same pass: all five dialogs are
+mounted ALWAYS and opened by a boolean (`cueDialogMount.test.ts` 10 → 9), and each keeps its
+PAYLOAD in state while only an `open` flag flips, so nothing blanks during the exit animation
+(the bodies are keyed on an open counter, so a reopen still starts from a fresh form).
+Loading is six `Skeleton` rows in a `SkeletonGroup`, the delete modal's two raw buttons are
+`Button variant="danger"`/`"ghost"`, the row's `transition-all` is now
+`transition-[box-shadow,border-color] duration-base ease-out-brand` — the two properties
+`.brand-member-row:hover` can actually animate, since its `background` is a non-interpolable
+gradient (`rawMotionLiterals` `transitionAll` 7 → 6) — and the search input is
 `text-[16px] sm:text-sm`. Guard: `membersPanelMenu.test.tsx` (the items per role, the
 confirm, one PATCH on confirm and none on cancel, no hover-only strip, no kill-switch
 checkbox).

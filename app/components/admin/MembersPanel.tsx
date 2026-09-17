@@ -176,12 +176,15 @@ export function MinistryScopeBar({
   );
 }
 
-type ModalState =
-  | { type: "add" }
-  | { type: "edit"; member: Member }
-  | { type: "password"; member: Member }
-  | { type: "delete"; member: Member }
-  | null;
+/**
+ * Which member dialog the panel is showing. The KIND and its member are held
+ * apart from the open flag on purpose: `CueDialog` stays mounted for the whole
+ * exit animation, so a body read out of a state that closing sets to `null`
+ * blanks itself on the way out — the admin watches the member's name vanish
+ * before the sheet does. Closing flips `modalOpen` only; the next open
+ * overwrites the payload.
+ */
+type ModalKind = "add" | "edit" | "password" | "delete";
 
 const ROLES: { value: OWTRole; label: string }[] = [
   { value: "super-admin", label: "Super Admin" },
@@ -280,8 +283,9 @@ function Avatar({
 // attribute behind a conditional, which gets no enter/exit and which
 // `cueDialogMount.test.ts` counts (in source, so that guard reads comments too:
 // do not spell the anti-pattern out here). Each of the four member dialogs
-// passes its own `modal?.type === …`; the BODY stays conditional, so a form is
-// seeded fresh from the member it was opened for.
+// passes its own `modalOpen && modalKind === …`; the BODY is drawn from state
+// that OUTLIVES the close, so nothing blanks during the exit, and it is keyed on
+// `modalSeq` so a reopen still starts from a fresh form.
 function Modal({
   open,
   title,
@@ -629,12 +633,21 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
   const [members, setMembers]   = useState<Member[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
-  const [modal, setModal]       = useState<ModalState>(null);
-  const [modalError, setModalError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [modalKind, setModalKind]     = useState<ModalKind | null>(null);
+  const [modalMember, setModalMember] = useState<Member | null>(null);
+  const [modalOpen, setModalOpen]     = useState(false);
+  // Bumped on every open, and part of each body's `key`: the payload survives
+  // the exit (so nothing blanks mid-animation) but a REOPEN still gets a fresh
+  // form rather than the text — or the password — left in the last one.
+  const [modalSeq, setModalSeq]       = useState(0);
+  const [modalError, setModalError]   = useState<string | null>(null);
+  const [submitting, setSubmitting]   = useState(false);
   // Decision O: the kill switch asks first. One dialog for the panel, driven by
-  // the member it was opened for — never one dialog per row.
-  const [confirmDisable, setConfirmDisable] = useState<Member | null>(null);
+  // the member it was opened for — never one dialog per row. Same split as the
+  // modals above: the member outlives the close so the exit keeps its body.
+  const [confirmMember, setConfirmMember] = useState<Member | null>(null);
+  const [confirmOpen, setConfirmOpen]     = useState(false);
+  const [confirmError, setConfirmError]   = useState<string | null>(null);
   const { toast } = useToast();
   const showToast = useCallback((msg: string) => toast({ message: msg }), [toast]);
   const [query, setQuery]           = useState("");
@@ -706,14 +719,19 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
     });
   }, [categoryFiltered, fuse, query, sortDir]);
 
-  const openModal = (next: Exclude<ModalState, null>) => {
+  const openModal = (kind: ModalKind, member?: Member) => {
     setModalError(null);
-    setModal(next);
+    setModalKind(kind);
+    setModalMember(member ?? null);
+    setModalSeq((n) => n + 1);
+    setModalOpen(true);
   };
 
+  // The kind and the member stay put — `open` is what closes the dialog, and the
+  // body must still have something to draw while it animates out.
   const closeModal = () => {
     setModalError(null);
-    setModal(null);
+    setModalOpen(false);
   };
 
   const fetchMembers = useCallback(async () => {
@@ -749,7 +767,7 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
           ...(instruments !== undefined ? { instruments } : {}),
         }),
       });
-      if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Miembro agregado."); }
+      if (res.ok) { setModalOpen(false); setModalError(null); fetchMembers(); showToast("Miembro agregado."); }
       else setModalError("Error al agregar miembro.");
     } catch {
       setModalError("Error de conexión.");
@@ -759,19 +777,19 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
   };
 
   const handleEdit = async (data: MemberFormData) => {
-    if (modal?.type !== "edit") return;
+    if (modalKind !== "edit" || !modalMember) return;
     setSubmitting(true);
     try {
       // Only the touched toggles go flat: `emailAssigned`, `emailRemoved`, …
       // `emailPrefs` is already filtered to the fields the admin changed this
       // session (see MemberForm) — an untouched form sends none of them.
       const { emailPrefs, ...rest } = data;
-      const res = await fetch(`/api/admin/members/${modal.member._id}`, {
+      const res = await fetch(`/api/admin/members/${modalMember._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...rest, ...(emailPrefs ?? {}) }),
       });
-      if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Miembro actualizado."); }
+      if (res.ok) { setModalOpen(false); setModalError(null); fetchMembers(); showToast("Miembro actualizado."); }
       else setModalError("Error al actualizar.");
     } catch {
       setModalError("Error de conexión.");
@@ -781,15 +799,15 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
   };
 
   const handlePassword = async (password: string) => {
-    if (modal?.type !== "password") return;
+    if (modalKind !== "password" || !modalMember) return;
     setSubmitting(true);
     try {
       const res = await fetch("/api/admin/set-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sanityMemberId: modal.member._id, password }),
+        body: JSON.stringify({ sanityMemberId: modalMember._id, password }),
       });
-      if (res.ok) { setModal(null); setModalError(null); fetchMembers(); showToast("Contraseña establecida."); }
+      if (res.ok) { setModalOpen(false); setModalError(null); fetchMembers(); showToast("Contraseña establecida."); }
       else setModalError("Error al establecer contraseña.");
     } catch {
       setModalError("Error de conexión.");
@@ -798,7 +816,15 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
     }
   };
 
-  const handleDisableAccess = async (memberId: string, disabled: boolean) => {
+  /**
+   * Returns whether the write LANDED. The caller needs that: the confirm dialog
+   * must stay open on a failure, and it used to close on every outcome because
+   * this swallowed the error into a toast and returned `undefined` — the admin
+   * saw the sheet close and the row unchanged, which reads as "it worked, the
+   * list is stale". The toast still carries the server's own reason; the dialog
+   * says why it is still on screen.
+   */
+  const handleDisableAccess = async (memberId: string, disabled: boolean): Promise<boolean> => {
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/members/${memberId}/disable`, {
@@ -809,12 +835,14 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       if (res.ok) {
         fetchMembers();
         showToast(disabled ? "Acceso deshabilitado." : "Acceso restaurado.");
-      } else {
-        const body = await res.json().catch(() => ({})) as { error?: string };
-        showToast(body.error ?? "Error al cambiar acceso.");
+        return true;
       }
+      const body = await res.json().catch(() => ({})) as { error?: string };
+      showToast(body.error ?? "Error al cambiar acceso.");
+      return false;
     } catch {
       showToast("Error de conexión.");
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -824,10 +852,23 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
   // GIVING it back does not — it restores what the member already had, and a
   // confirm on a reversible, non-destructive action only teaches admins to
   // click through confirms.
+  const openConfirm = (member: Member) => {
+    setConfirmError(null);
+    setConfirmMember(member);
+    setConfirmOpen(true);
+  };
+
+  // The member stays: `CueDialog` is still on screen for its exit.
+  const closeConfirm = () => {
+    setConfirmError(null);
+    setConfirmOpen(false);
+  };
+
   const confirmDisableAccess = async () => {
-    if (!confirmDisable) return;
-    await handleDisableAccess(confirmDisable._id, true);
-    setConfirmDisable(null);
+    if (!confirmMember) return;
+    const ok = await handleDisableAccess(confirmMember._id, true);
+    if (ok) closeConfirm();
+    else setConfirmError("No se pudo deshabilitar el acceso. El miembro sigue teniéndolo.");
   };
 
   const handlePhotoClick = (memberId: string) => {
@@ -859,10 +900,10 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
   };
 
   const handleDelete = async () => {
-    if (modal?.type !== "delete") return;
+    if (modalKind !== "delete" || !modalMember) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/admin/members/${modal.member._id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/members/${modalMember._id}`, { method: "DELETE" });
       const body = await res.json().catch(() => ({})) as {
         error?: string;
         message?: string;
@@ -870,7 +911,7 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
       };
       const outcome = interpretMemberDeleteResponse(res.ok, body);
       if (outcome.kind === "success") {
-        setModal(null);
+        setModalOpen(false);
         setModalError(null);
         fetchMembers();
         showToast("Miembro eliminado.");
@@ -909,7 +950,7 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
           )}
         </div>
         <button
-          onClick={() => openModal({ type: "add" })}
+          onClick={() => openModal("add")}
           className="flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/15 px-4 py-2.5 font-label text-xs uppercase tracking-widest text-accent transition-colors hover:bg-accent/25"
         >
           <span className="text-base leading-none">+</span>
@@ -1039,7 +1080,10 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
           {filteredMembers.map((m) => (
             <div
               key={m._id}
-              className="brand-member-row group flex items-center gap-4 rounded-xl px-4 py-3 transition-[background-color,box-shadow] duration-base ease-out-brand"
+              // `:hover` moves the border colour and the shadow; its `background` is a
+              // GRADIENT (background-image), which does not interpolate, so listing
+              // background-color would animate nothing and say otherwise.
+              className="brand-member-row group flex items-center gap-4 rounded-xl px-4 py-3 transition-[box-shadow,border-color] duration-base ease-out-brand"
             >
               <Avatar
                 name={displayName(m)}
@@ -1104,10 +1148,10 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
                   </Button>
                 }
               >
-                <MenuItem icon={<PencilIcon />} onSelect={() => openModal({ type: "edit", member: m })}>
+                <MenuItem icon={<PencilIcon />} onSelect={() => openModal("edit", m)}>
                   Editar
                 </MenuItem>
-                <MenuItem icon={<KeyIcon />} onSelect={() => openModal({ type: "password", member: m })}>
+                <MenuItem icon={<KeyIcon />} onSelect={() => openModal("password", m)}>
                   Contraseña
                 </MenuItem>
                 {role === "super-admin" && (
@@ -1119,13 +1163,17 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
                     <MenuItem
                       icon={<BanIcon />}
                       danger={m.disabled !== true}
+                      // `submitting` covers a second pick while the previous
+                      // access write is still in flight — the confirm's own
+                      // button is `busy`, and this is the path that has none.
+                      disabled={submitting}
                       onSelect={() =>
-                        m.disabled === true ? handleDisableAccess(m._id, false) : setConfirmDisable(m)
+                        m.disabled === true ? handleDisableAccess(m._id, false) : openConfirm(m)
                       }
                     >
                       {m.disabled === true ? "Habilitar acceso" : "Deshabilitar acceso"}
                     </MenuItem>
-                    <MenuItem icon={<TrashIcon />} danger onSelect={() => openModal({ type: "delete", member: m })}>
+                    <MenuItem icon={<TrashIcon />} danger disabled={submitting} onSelect={() => openModal("delete", m)}>
                       Eliminar
                     </MenuItem>
                   </>
@@ -1153,30 +1201,32 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
         onChange={handlePhotoChange}
       />
 
-      {/* ── Modals: mounted always, opened by the prop ── */}
-      <Modal open={modal?.type === "add"} title="Agregar miembro" onClose={closeModal} status={modalError}>
-        {modal?.type === "add" && (
-          <MemberForm onSubmit={handleAdd} onClose={closeModal} loading={submitting} />
+      {/* ── Modals: mounted always, opened by the prop, and their bodies keyed on
+             the OPEN rather than on the member — so a close keeps drawing what it
+             is animating away, and a reopen still starts clean. ── */}
+      <Modal open={modalOpen && modalKind === "add"} title="Agregar miembro" onClose={closeModal} status={modalError}>
+        {modalKind === "add" && (
+          <MemberForm key={`add-${modalSeq}`} onSubmit={handleAdd} onClose={closeModal} loading={submitting} />
         )}
       </Modal>
 
-      <Modal open={modal?.type === "edit"} title="Editar miembro" onClose={closeModal} status={modalError}>
-        {modal?.type === "edit" && (
-          <MemberForm key={modal.member._id} initial={modal.member} onSubmit={handleEdit} onClose={closeModal} loading={submitting} />
+      <Modal open={modalOpen && modalKind === "edit"} title="Editar miembro" onClose={closeModal} status={modalError}>
+        {modalKind === "edit" && modalMember && (
+          <MemberForm key={`edit-${modalSeq}`} initial={modalMember} onSubmit={handleEdit} onClose={closeModal} loading={submitting} />
         )}
       </Modal>
 
-      <Modal open={modal?.type === "password"} title="Establecer contraseña" onClose={closeModal} status={modalError}>
-        {modal?.type === "password" && (
-          <PasswordForm key={modal.member._id} member={modal.member} onSubmit={handlePassword} onClose={closeModal} loading={submitting} />
+      <Modal open={modalOpen && modalKind === "password"} title="Establecer contraseña" onClose={closeModal} status={modalError}>
+        {modalKind === "password" && modalMember && (
+          <PasswordForm key={`password-${modalSeq}`} member={modalMember} onSubmit={handlePassword} onClose={closeModal} loading={submitting} />
         )}
       </Modal>
 
-      <Modal open={modal?.type === "delete"} title="Eliminar miembro" onClose={closeModal} status={modalError}>
-        {modal?.type === "delete" && (
+      <Modal open={modalOpen && modalKind === "delete"} title="Eliminar miembro" onClose={closeModal} status={modalError}>
+        {modalKind === "delete" && modalMember && (
           <>
             <p className="font-body text-sm text-mono-400">
-              ¿Eliminar a <span className="text-negative-fg font-semibold">{modal.member.member_name}</span>? Esta acción no se puede deshacer.
+              ¿Eliminar a <span className="text-negative-fg font-semibold">{modalMember.member_name}</span>? Esta acción no se puede deshacer.
             </p>
             <div className="flex gap-3 pt-1">
               <Button variant="ghost" className="flex-1" onClick={closeModal}>Cancelar</Button>
@@ -1190,23 +1240,24 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
 
       {/* ── The kill switch asks first (decision O) ── */}
       <CueDialog
-        open={confirmDisable !== null}
+        open={confirmOpen}
         title="Deshabilitar acceso"
         label="Deshabilitar acceso"
         mode="modal"
         size="sm"
-        onDismiss={() => setConfirmDisable(null)}
+        onDismiss={closeConfirm}
       >
         <div className="space-y-4 p-6">
+          {confirmError && <CueDialogStatus tone="error">{confirmError}</CueDialogStatus>}
           <p className="font-body text-sm text-mono-400">
             ¿Deshabilitar el acceso de{" "}
-            <span className="text-negative-fg font-semibold">{confirmDisable ? displayName(confirmDisable) : ""}</span>?
+            <span className="text-negative-fg font-semibold">{confirmMember ? displayName(confirmMember) : ""}</span>?
           </p>
           <p className="font-body text-sm text-mono-500">
             No podrá iniciar sesión. No cambia su Tipo, sus asignaciones ni su historial.
           </p>
           <div className="flex gap-3 pt-1">
-            <Button variant="ghost" className="flex-1" onClick={() => setConfirmDisable(null)}>Cancelar</Button>
+            <Button variant="ghost" className="flex-1" onClick={closeConfirm}>Cancelar</Button>
             <Button variant="danger" className="flex-1" busy={submitting} busyLabel="Deshabilitando..." onClick={confirmDisableAccess}>
               Deshabilitar
             </Button>
