@@ -1320,3 +1320,29 @@ gradient (`rawMotionLiterals` `transitionAll` 7 → 6) — and the search input 
 `text-[16px] sm:text-sm`. Guard: `membersPanelMenu.test.tsx` (the items per role, the
 confirm, one PATCH on confirm and none on cancel, no hover-only strip, no kill-switch
 checkbox).
+
+**Task 4 (Servicios is a board).** From `lg` the cards are a horizontal snap track —
+`lg:flex lg:snap-x lg:snap-mandatory lg:overflow-x-auto lg:scroll-px-6` on the container,
+`lg:w-[380px] lg:shrink-0 lg:snap-start` on each card — instead of a 2/3-column grid that
+squeezed a card to ~260 px on a month with a full roster (ruling 5). The phone keeps the
+vertical list, the `lg:grid-cols-[320px_1fr]` split with `ParticipationSidebar` stays, and
+the track scrolls ITSELF inside a `min-w-0` column, so the page never grows wider
+(ADR-0035); a `lg:` gradient at its right edge hints the overflow, the same pattern the
+rail's strip uses. Cards arrive with `{...revealProps(i)}` (capped stagger, CSS-only).
+Every control in the panel is a primitive now: the toolbar's four buttons, the three
+retries, the banners' dismiss/reload and the delete modal's three buttons are `Button`;
+the month pills are `Button variant="pill" size="sm"` whose `aria-pressed` states the
+MULTI-select nobody should turn into a `SegmentedControl`; «Roles previos» is a
+`Button variant="ghost"` still driving its `Collapse`; loading is six `Skeleton`s in a
+`SkeletonGroup`; and the local `Modal` took an `open` prop, so its five dialogs (delete ·
+publicar listos · publicar de todos modos · ocultar · setlist) are mounted always with
+their payload outliving the close and their bodies keyed on an open counter
+(`cueDialogMount.test.ts` 9 → 8). `ServicePrimaryAction` is a `Button` that still carries
+`data-action-kind`/`-rule`/`-route`, with the tone in the VARIANT rather than in a colour
+override on `className` (danger for an integrity/conflict blocker, secondary for a retry,
+primary otherwise). The member chip's `transition-all` became
+`transition-[color,background-color,border-color,transform,box-shadow] duration-base
+ease-out-brand` (`rawMotionLiterals` `transitionAll` 6 → 5). One label left in the same
+pass: the panel repeated «Integridad de datos · sin problemas de integridad» under its
+heading while `IntegrityQueuePanel` and the rail's dot already said it. Guard:
+`servicesBoard.test.tsx`.

@@ -48,8 +48,8 @@ publishing a service computed over data nobody proved.
 | `ServiceReadinessCard.tsx` | component | One service card. |
 | `ReadinessBadge.tsx` | component | One icon + text + tone chip. |
 | `ServiceIssueList.tsx` | component | Blocking-issue lines, truncated with a count. |
-| `ServicePrimaryAction.tsx` | component | The single primary-action button. |
-| `IntegrityQueuePanel.tsx` | component | The "Integridad de datos" panel — renders the queue `useIntegrityQueue` hands it (R5). |
+| `ServicePrimaryAction.tsx` | component | The single primary-action button — a house `Button` still emitting `data-action-kind`/`-rule`/`-route`; its tone is the variant. |
+| `IntegrityQueuePanel.tsx` | component | The "Integridad de datos" panel — renders the queue `useIntegrityQueue` hands it (R5). It is the ONLY place that state is written out: `ServicesPanel` used to repeat the title and summary under its own heading, and the rail's dot says it a second time already. |
 | `useIntegrityQueue.ts` | hook | The ONE loader for the three service-integrity routes; `AdminPanel` calls it once and shares the queue with the rail's dot. `enabled` gates it on the role having a Servicios tab. |
 
 Mounting hierarchy:

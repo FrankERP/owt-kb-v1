@@ -41,8 +41,12 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // `MembersPanel.tsx` and its local `Modal` wrapper took an `open` prop — the
 // four member dialogs (add/edit/password/delete) are mounted always and opened
 // by `modal?.type === …`, so the wrapper's `<CueDialog open` literal is gone.
-// `ServicesPanel`'s own local `Modal` is still one of the remaining sites.
-const BASELINE = 9;
+// 9→8 (2026-09-17, motion R5 Task 4): `ServicesPanel`'s local `Modal` took the
+// same `open` prop — its five dialogs (delete / publicar listos / publicar de
+// todos modos / ocultar / setlist) are mounted always, opened by their own
+// boolean, and their bodies are drawn from payload state that outlives the close
+// and keyed on `dialogSeq` so a reopen starts fresh.
+const BASELINE = 8;
 
 // Every literal `open` boolean attribute on a `<CueDialog` element — bare
 // `open`, never `open={…}`. Matches regardless of what (if anything)

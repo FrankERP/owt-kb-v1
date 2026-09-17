@@ -2784,18 +2784,6 @@
       "reason": "Already theme-agnostic"
     },
     {
-      "file": "app/components/admin/ServicePrimaryAction.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 16,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
       "file": "app/components/admin/ServiceReadinessCard.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -2803,7 +2791,7 @@
       "alpha": null,
       "utility": "border",
       "carrier": null,
-      "line": 181,
+      "line": 190,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2815,7 +2803,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 779,
+      "line": 792,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2827,7 +2815,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "fill",
-      "line": 798,
+      "line": 811,
       "disposition": "B",
       "reason": null
     },
@@ -2839,7 +2827,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 788,
+      "line": 801,
       "disposition": "B",
       "reason": null
     },
@@ -2851,7 +2839,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 808,
+      "line": 821,
       "disposition": "B",
       "reason": null
     },
@@ -2863,7 +2851,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 818,
+      "line": 831,
       "disposition": "B",
       "reason": null
     },
@@ -2875,7 +2863,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 829,
+      "line": 842,
       "disposition": "B",
       "reason": null
     },
@@ -2887,9 +2875,21 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 838,
+      "line": 851,
       "disposition": "B",
       "reason": null
+    },
+    {
+      "file": "app/components/admin/ServicesPanel.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "to-transparent",
+      "alpha": null,
+      "utility": "to",
+      "carrier": null,
+      "line": 1290,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
     },
     {
       "file": "app/components/admin/SetlistEditor.tsx",
