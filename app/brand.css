@@ -940,7 +940,7 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
  * arithmetic. `participationAlongside.test.tsx` pins it against this comment.
  *
  * The bordered `.brand-admin-shell` this derivation used to spend a border and
- * 24px of padding on is GONE (ADR-0037) — the page is the workspace now. What
+ * 24px of padding on is GONE (ADR-0035) — the page is the workspace now. What
  * spends width instead is the section RAIL (`AdminRail`, R5 ruling 3), which is
  * why there are three lines above and not two: the rail and the grid's `gap-8`
  * take 88px off the usable width before the planner's own three columns are
@@ -953,7 +953,7 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
  * scrollbar width on any platform that reserves one, and `/admin` must have no
  * page-level horizontal scroll — the planner grid, the Servicios board and the
  * availability matrix are the only horizontal scrollers, each in its own
- * `overflow-x-auto` box (ADR-0037 again).
+ * `overflow-x-auto` box (ADR-0035 again).
  *
  * `max-width: none` rather than a larger fixed cap: on a wider monitor the extra
  * width all goes to the grid, which is the only thing here that can use it.

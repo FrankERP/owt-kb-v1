@@ -56,7 +56,7 @@
 //   216 (Participaciones) + 12 + 920 (grid) + 12 + 240 (picker) = 1400
 // The picker's 240px is only spent while a cell is ACTIVE; with none open the
 // grid gets it back and runs at 1172. (The bordered `.brand-admin-shell` this
-// sum used to pay a border and 24px of padding to is gone — ADR-0037; what
+// sum used to pay a border and 24px of padding to is gone — ADR-0035; what
 // spends width now is `AdminRail`, which collapses to icons while this grid is
 // open precisely so the sum still leaves the grid four figures.)
 //
@@ -2226,7 +2226,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // The admin page used to wrap this in `.brand-admin-shell`, which carried
   // `position: relative` + `isolation: isolate` + `overflow: hidden` — and in
   // real Safari a `position: fixed` descendant of that trio lays out and
-  // hit-tests correctly and paints NOTHING. That shell is gone (ADR-0037) and
+  // hit-tests correctly and paints NOTHING. That shell is gone (ADR-0035) and
   // the nearest scrolling ancestor is now the route's own `[data-route-main]`,
   // but the portal STAYS: the trap is any transformed/isolated/clipping
   // ancestor, and this subtree acquires new ones easily — `PullToRefresh`, a

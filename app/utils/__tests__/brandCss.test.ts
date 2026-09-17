@@ -4,7 +4,7 @@
 // so `npx eslint app/brand.css` reports 0 errors and `tsc` never reads it. It is
 // NOT ungated: `app/components/admin/__tests__/participationAlongside.test.tsx`
 // reads it and pins `.brand-admin-frame` and `[data-route-main]:has(.planner-wide)`
-// (`.brand-admin-shell` was pinned there too until R5 deleted it — ADR-0037). What has NO enforcement is its
+// (`.brand-admin-shell` was pinned there too until R5 deleted it — ADR-0035). What has NO enforcement is its
 // TOKEN/THEME STRUCTURE, and that is what this file adds.
 //
 // The failure being closed is silent. An undeclared `var()` is invalid at
@@ -125,7 +125,7 @@ describe("brand.css — (a) every colour var() referenced is declared", () => {
     //
     // The second site was `/admin`'s «Acceso autorizado» pill, whose dot glowed
     // in `--positive-fg-rgb`. R5 deleted the pill with the rest of the page's
-    // chrome (ADR-0037), so the same property is read from `DayCard`'s
+    // chrome (ADR-0035), so the same property is read from `DayCard`'s
     // "this is you" ring — a member-facing surface, and no more likely to be
     // the last of its kind than the pill was.
     const admin = read("app/components/ui/SlidingIndicator.tsx");

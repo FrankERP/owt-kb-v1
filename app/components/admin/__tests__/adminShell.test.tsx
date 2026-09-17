@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 //
-// The Control Room is the page (R5 Task 1, ADR-0037).
+// The Control Room is the page (R5 Task 1, ADR-0035).
 //
 // `/admin` used to render a bordered `.brand-admin-shell` card, and each tab
 // rendered its OWN tab bar plus its own `brand-surface` panel box inside it —
