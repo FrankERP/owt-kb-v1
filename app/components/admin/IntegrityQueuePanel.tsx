@@ -154,11 +154,16 @@ export default function IntegrityQueuePanel({
           onClick={() => setOpenOverride(!open)}
           aria-expanded={open}
           aria-controls="integrity-queue-body"
-          className="min-w-0 flex-1 justify-start text-left"
+          // `!justify-start`: `Button`'s BASE centres its content and a bare
+          // `justify-start` in `className` loses to it on emission order. The
+          // spans below restore their own case and tracking for the same reason
+          // — this header is PROSE inside a control, so only the chrome (focus
+          // ring, press, hit area) comes from `Button`.
+          className="min-w-0 flex-1 !justify-start text-left"
         >
           <span
             aria-hidden="true"
-            className={`font-label text-xs transition-transform duration-base ${open ? "rotate-90" : ""}`}
+            className={`font-label text-xs tracking-normal transition-transform duration-base ${open ? "rotate-90" : ""}`}
           >
             ▸
           </span>
@@ -169,7 +174,10 @@ export default function IntegrityQueuePanel({
             >
               {INTEGRITY_QUEUE_TITLE}
             </span>
-            <span className="block font-body text-xs text-mono-400">
+            <span
+              data-integrity-summary=""
+              className="block font-body text-xs normal-case tracking-normal text-mono-400"
+            >
               {integrityQueueSummary(queue)}
             </span>
           </span>

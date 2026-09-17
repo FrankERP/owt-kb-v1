@@ -277,7 +277,9 @@ export default function AdminPanel({
         active={tab}
         onChange={setTab}
         integrityTone={integrity.tone}
-        integrityCount={integrity.queue.count}
+        // The hook's HELD count, not `queue.count`: the live one is 0 while a
+        // reload is in flight, so the dot would read «0 problemas» in red.
+        integrityCount={integrity.count}
       />
       {/* `key={tab}`: the incoming panel MOUNTS and fades in rather than the
           outgoing one being held alive beside it. These panels are thousands of

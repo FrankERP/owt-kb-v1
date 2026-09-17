@@ -57,7 +57,7 @@ describe("PanelBoundary", () => {
     function Host() {
       const [attempt, setAttempt] = useState(0);
       return (
-        <PanelBoundary key={attempt} onRetry={() => setAttempt((n) => n + 1)}>
+        <PanelBoundary onRetry={() => setAttempt((n) => n + 1)}>
           {attempt === 0 ? <Boom /> : <p>Contenido del panel</p>}
         </PanelBoundary>
       );
