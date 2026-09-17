@@ -13,6 +13,7 @@ Spec: `docs/superpowers/specs/2026-09-01-dev-verify-runner-design.md`. Decision 
 |---|---|
 | `--route <path>` | Required. |
 | `--base-url <origin>` | Default `https://dev-owt-backstage.vercel.app`. Only dev and this project's preview hosts are accepted; production is refused by name. |
+| `--settle <ms>` | Idle this long after `--wait` and before any capture — a screenshot taken right after a `--click` lands mid-enter-animation (a `Menu`, a sheet, a `Collapse`); 400 clears the house 320 ms. 0–10000. |
 | `--screenshot <file>` / `--full-page` | PNG into `test-results/dev-verify/` (or `$DEV_VERIFY_OUT_DIR`, or an absolute path). |
 | `--text` / `--a11y` | Page text / accessibility tree, written next to the screenshot. |
 | `--console` | Include console errors and warnings, plus failed requests, in the report. |
