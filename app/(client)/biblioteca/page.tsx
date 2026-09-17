@@ -41,7 +41,7 @@ export default async function BibliotecaPage({
   const initial = parseLibraryParams(sp);
   return (
     <div>
-      <Navbar title="Biblioteca" tags schedule />
+      <Navbar title="Biblioteca" />
       {/* `key` forces a fresh MOUNT on a real navigation to a new `?q=`/`?tag=`
           (the /tag*, /author* redirects land here with params set). The index
           now mirrors ITS OWN state into the URL with `history.replaceState`,

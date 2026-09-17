@@ -145,7 +145,7 @@ describe("colour inventory — the traps that produced wrong counts before", () 
   const live = build() as unknown as {
     summary: { pairs: number; pairsDifferingInAlpha: number; byCategory: Record<string, number> };
     literalRows: Row[];
-    compositing: { kind: string; class?: string; count?: number }[];
+    compositing: { file: string; kind: string; class?: string; count?: number }[];
   };
 
   it("captures `serviceCardModel.ts`, which a .tsx-only glob would miss entirely", () => {
@@ -159,9 +159,15 @@ describe("colour inventory — the traps that produced wrong counts before", () 
   });
 
   it("counts every occurrence, so deleting a non-final one cannot pass unnoticed", () => {
-    // `.brand-admin-workspace` has several byte-identical className uses. Without a
-    // count they collapse to one key and a deletion is invisible.
-    const ws = live.compositing.find((r) => r.class === "admin-workspace" && r.kind === "className");
+    // `.brand-search-console` has several byte-identical className uses in one
+    // file. Without a count they collapse to one key and a deletion is invisible.
+    // This used to read `.brand-admin-workspace`, which had one use per admin
+    // tab until R5 folded the six early returns into one tree (ADR-0037) and
+    // left it with exactly one — a pin that can only be satisfied by a shape the
+    // code no longer has is not a guard.
+    const ws = live.compositing.find(
+      (r) => r.class === "search-console" && r.kind === "className" && r.file.endsWith("AdminPanel.tsx"),
+    );
     expect(ws?.count).toBeGreaterThan(1);
   });
 

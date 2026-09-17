@@ -3,8 +3,8 @@
 // `app/brand.css` is outside LINT — `eslint.config.mjs` loads no CSS processor,
 // so `npx eslint app/brand.css` reports 0 errors and `tsc` never reads it. It is
 // NOT ungated: `app/components/admin/__tests__/participationAlongside.test.tsx`
-// reads it and pins `.brand-admin-frame`, `.brand-admin-shell` and
-// `[data-route-main]:has(.planner-wide)`. What has NO enforcement is its
+// reads it and pins `.brand-admin-frame` and `[data-route-main]:has(.planner-wide)`
+// (`.brand-admin-shell` was pinned there too until R5 deleted it — ADR-0037). What has NO enforcement is its
 // TOKEN/THEME STRUCTURE, and that is what this file adds.
 //
 // The failure being closed is silent. An undeclared `var()` is invalid at
@@ -122,10 +122,16 @@ describe("brand.css — (a) every colour var() referenced is declared", () => {
     // shadow used to live inline on AdminPanel's button and now lives in the
     // shared `SlidingIndicator` primitive it renders, so the `--accent-rgb`
     // reference moved with it.
+    //
+    // The second site was `/admin`'s «Acceso autorizado» pill, whose dot glowed
+    // in `--positive-fg-rgb`. R5 deleted the pill with the rest of the page's
+    // chrome (ADR-0037), so the same property is read from `DayCard`'s
+    // "this is you" ring — a member-facing surface, and no more likely to be
+    // the last of its kind than the pill was.
     const admin = read("app/components/ui/SlidingIndicator.tsx");
-    const adminPage = read("app/(client)/admin/page.tsx");
+    const dayCard = read("app/components/DayCard.tsx");
     expect(referencedProperties(admin)).toContain("--accent-rgb");
-    expect(referencedProperties(adminPage)).toContain("--positive-fg-rgb");
+    expect(referencedProperties(dayCard)).toContain("--positive-fg-rgb");
   });
 
   it("FIRES on an undeclared colour reference (synthetic — the fire-proof)", () => {

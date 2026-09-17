@@ -49,14 +49,15 @@ publishing a service computed over data nobody proved.
 | `ReadinessBadge.tsx` | component | One icon + text + tone chip. |
 | `ServiceIssueList.tsx` | component | Blocking-issue lines, truncated with a count. |
 | `ServicePrimaryAction.tsx` | component | The single primary-action button. |
-| `IntegrityQueuePanel.tsx` | component | The standalone "Integridad de datos" panel. |
+| `IntegrityQueuePanel.tsx` | component | The "Integridad de datos" panel — renders the queue `useIntegrityQueue` hands it (R5). |
+| `useIntegrityQueue.ts` | hook | The ONE loader for the three service-integrity routes; `AdminPanel` calls it once and shares the queue with the rail's dot. |
 
 Mounting hierarchy:
 
 ```
 AdminPanel.tsx  (services tab)
 └─ ServiceHandoffProvider
-   ├─ IntegrityQueuePanel        ← fetches the three service-integrity routes itself
+   ├─ IntegrityQueuePanel        ← renders the queue; `useIntegrityQueue` (in AdminPanel) does the fetching
    └─ ServicesPanel
       └─ ServiceReadinessCard    ← one per visible card
          ├─ ReadinessBadge       (publication badge)

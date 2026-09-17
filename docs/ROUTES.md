@@ -50,7 +50,7 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 | `/me/disponibilidad` | `(client)/me/disponibilidad/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | The availability calendar, alone (R3 F3): `MyAvailabilityPanel` with the month grid always open, «Seleccionar fechas», «Repetir…» and the per-day note. A kids-only volunteer reaches it. |
 | `/me/ajustes` | `(client)/me/ajustes/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | Ajustes, alone (R3 F3): the one `SettingsCard` — Tema, Tamaño de texto, Perfil. Reached from the avatar menu («Ajustes») and from `ThemeAnnouncement` on `/me` (`#tema`). |
 | `/me/propose/[roleId]` | `(client)/me/propose/[roleId]/page.tsx` | S | **Lead-only** | dynamic (`revalidate=0`) | Setlist proposal editor for a service the user Leads. |
-| `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Admin dashboard shell; data fetched client-side from `/api/admin/*`. `?tab=` opens a specific tab, filtered by role. |
+| `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Control Room; data fetched client-side from `/api/admin/*`. `?tab=` opens a specific tab, filtered by role. **No shell — the page is the workspace** ([ADR-0037](adr/0037-the-admin-shell-is-gone.md)): one tab bar, one keyed body, no panel boxes, and no page-level horizontal scroll. |
 | `/auth/signin` | `(client)/auth/signin/page.tsx` | C | Public | — | Google SSO (web + native) + email/password. |
 | `/auth/not-a-member` | `(client)/auth/not-a-member/page.tsx` | C | Public | — | For authenticated Google users not in `teamMembers`. |
 | `/studio`, `/studio/*` | `(admin)/studio/[[...tool]]/page.tsx` | S | **admin+** | `force-static` | Embedded Sanity Studio (`NextStudio`). |
@@ -141,7 +141,7 @@ because their own headers already show the countdown.
   `SongHeroPills` (`KeyDial` + the 12-key drawer, `TempoPill`), `SectionNav` (whose
   `practice` prop renders `PracticeCluster` once the hero scrolls away), `LyricsAutoscroll`,
   `ChordChart`, `SongAudioSection`, `EditSongButton`, `PortableText`.
-- **`/admin`** — `Navbar`, `AdminPanel` composing the `app/components/admin/*` panels.
+- **`/admin`** — `Navbar`, an `h1`, `AdminPanel` composing the `app/components/admin/*` panels inside `brand-admin-frame` (the planner's `:has(.planner-wide)` hook).
 - **Always mounted (client layout)** — `ImpersonationBanner`, `ActivityPing`, `AudioPlayer`,
   `SongSheet`, `NativeAuthBootstrap`, `TextScaleBootstrap`, `BottomNav`.
 
