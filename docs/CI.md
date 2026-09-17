@@ -139,13 +139,22 @@ production branch cannot silently stop production from deploying. A broken
 policy module exits non-zero, which also builds. Wasting one build is
 recoverable; being unable to ship during a rollback is not.
 
-**To build a skipped ref on purpose**, redeploy from the dashboard with
-**«Use project's Ignore Build Step» unchecked**. Do not expect the other
-escape hatches to work: a *plain* redeploy re-runs this step and carries the
+**To build a skipped ref on purpose**, the hatch the mechanism itself
+guarantees is that the deployment reads `vercel.json` *from the branch being
+built*: merge into `preview`, or drop `ignoreCommand` on that branch and push.
+That cannot fail, because nothing outside the branch decides it.
+
+Vercel also documents a **«Use project's Ignore Build Step»** checkbox on the
+Redeploy modal, and unchecking it runs the build. Treat it as a maybe, not a
+plan: it is documented for an ignore step configured in *Project Settings*, and
+this repo's comes from `vercel.json`, which overrides that setting — whether the
+checkbox is even rendered, let alone whether it suppresses a `vercel.json`
+command, is unverified against this project's dashboard. Do not expect the
+remaining hatches at all: a *plain* redeploy re-runs this step and carries the
 original deployment's git metadata, so it is skipped again, and a **deploy
 hook** is bound to a project/repo/branch, so its deployment carries that ref
 and is skipped too. Whether a CLI `vercel deploy` attaches git metadata is
-unverified — do not plan an incident around it.
+likewise unverified — do not plan an incident around any of these.
 
 `scripts/__tests__/deployBranchPolicy.test.ts` is the guard. It asserts the
 wiring as well as the policy, and it *executes the runner as a process* rather

@@ -10,10 +10,16 @@ const runner = resolve(repoRoot, "scripts/vercel-ignore-build.mjs");
 
 /** Exit code of the Ignored Build Step as Vercel would observe it. */
 function runPolicy(env: Record<string, string>): number | null {
-  return spawnSync(process.execPath, [runner], {
+  const result = spawnSync(process.execPath, [runner], {
     env: { ...process.env, VERCEL_GIT_COMMIT_REF: "", VERCEL_ENV: "", ...env },
     encoding: "utf8",
-  }).status;
+  });
+  // Five forked processes inside an already-parallel suite: a spawn that never
+  // ran returns status null, which would otherwise read as "the policy chose
+  // wrong" instead of "the machine was busy".
+  expect(result.error, `spawning the Ignored Build Step failed: ${result.error?.message}`)
+    .toBeUndefined();
+  return result.status;
 }
 
 describe("evaluateDeployPolicy", () => {

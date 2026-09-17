@@ -113,10 +113,12 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   still counts against the per-day deployment quota. To build a skipped ref ON
   PURPOSE, redeploy from the dashboard with «Use project's Ignore Build Step»
   unchecked — a plain redeploy and a deploy hook both carry the branch's ref and are
-  skipped again. It fails open: no git ref, `VERCEL_ENV=production`, or a broken
-  policy module all build. `deployBranchPolicy.test.ts` guards the policy AND the
-  wiring, and runs the script as a process so swapped exit codes cannot pass. See
-  `docs/CI.md`.
+  skipped again — and that checkbox is documented for a Project Settings ignore
+  step, not for a `vercel.json` one, so the hatch that CANNOT fail is changing what
+  the branch carries: merge into `preview`, or drop `ignoreCommand` and push. It
+  fails open: no git ref, `VERCEL_ENV=production`, or a broken policy module all
+  build. `deployBranchPolicy.test.ts` guards the policy AND the wiring, and runs the
+  script as a process so swapped exit codes cannot pass. See `docs/CI.md`.
 - The stable dev domain is owned **exclusively** by the `preview` branch. Never
   point it at or deploy it directly from a feature/development branch. To update
   dev: merge the intended development branch into `preview`, push `preview`,
