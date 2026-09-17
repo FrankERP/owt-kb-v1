@@ -2049,4 +2049,4 @@ itself; and the guard grew teeth — it reads the whole `className` expression r
 stopping at the first `}` (a `${inputCls} resize-none` tail was invisible), resolves
 template-literal consts, and counts `focus:`/`dark:` small sizes as violations.
 
-**Release:** merged to `main` as `<pending>` (PR #`<pending>`).
+**Release:** merged to `main` as `baf9cbfe` (PR #78, 2026-09-16 22:19 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`, 22:23 CST). Preview last verified at `ef57eff9`.
