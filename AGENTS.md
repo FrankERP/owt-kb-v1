@@ -226,6 +226,9 @@ several exist precisely to stop a plausible-looking change.
 - **`app/(client)/template.tsx` renders a fragment, never a wrapper.** A transformed
   ancestor is a containing block for every `position: fixed` descendant (FAB, audio
   transport, toasts). `reveal.test.ts` is the guard.
+- **`/admin` has no shell and no page-level horizontal scroll** — the planner grid, the
+  Servicios board and the availability matrix are the only horizontal scrollers, each in
+  its own `overflow-x-auto` box (ADR-0035).
 - **Form controls are 16 px on a phone.** WebKit zooms into any focused `<input>`/`<textarea>`/`<select>` under 16 px and never zooms back, so every member-reachable control is `text-[16px] sm:text-<size>` (`ui/Select`/`ui/DateField` carry it in their `SIZE` maps). Never `maximum-scale=1` on the viewport. `inputFontSize.test.ts` is the guard (`admin/`, `kids/` excluded by path).
 
 ## Reusable utils (don't reinvent)
@@ -249,7 +252,13 @@ not be verified. Never hand-roll the timer. For a FIXED, stacked notification us
 (`app/components/ui/Toast.tsx` — the ONLY fixed toast stack; `toast({ message, tone?,
 duration?, hold?, action? })`, portalled, `z-[95]` above `CueDialog`), `Menu`
 (`app/components/ui/Menu.tsx` — every anchored dropdown; real `role="menu"` semantics,
-roving focus, merges the trigger's own ref), `Collapse` (`app/components/ui/Collapse.tsx`
+roving focus, merges the trigger's own ref. Since R5 the panel is PORTALLED to
+`document.body` and positioned `fixed` from the trigger's rect: an `absolute` panel was
+clipped by any scrolling or `overflow-hidden` ancestor, and a `fixed` one inside the
+transformed reveal host would be trapped anyway. It flips and sizes itself to the room it
+has, clamps to the viewport, is opaque (`bg-surface-raised`) because it can now sit over a
+dialog, and CLOSES on any ancestor scroll — a fixed panel cannot honestly travel with its
+trigger), `Collapse` (`app/components/ui/Collapse.tsx`
 — every disclosure; the one place height animates, on user-triggered opens only),
 `SegmentedControl` (`app/components/ui/SegmentedControl.tsx` — every one-of-N choice;
 never `aria-pressed` toggles), `SlidingIndicator` (tab bars), `Switch`, `Checkbox`,
@@ -312,7 +321,24 @@ one play/pause morph, shared by the audio cards, the transport and `PracticeClus
 `NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts` — the navbar height's one spelling, for
 `Navbar` and `NavbarSkeleton` ONLY; other offsets still hard-code theirs),
 `SectionNav practice` → `PracticeCluster` (`app/components/song/` — the song page's
-sticky title·key·BPM·play cluster; it lives in the page's own bar, never in `Navbar`).
+sticky title·key·BPM·play cluster; it lives in the page's own bar, never in `Navbar`),
+`AdminRail` (`app/components/admin/AdminRail.tsx` — the Control Room's ONLY section nav:
+one component, two layouts (a sticky vertical rail at `lg+`, the underline strip below),
+both in the DOM with CSS picking one and a DIFFERENT `SlidingIndicator` id each, or the
+marker would fly across the page at the breakpoint; `ADMIN_TAB_ICON` is the one
+glyph-per-tab map and every item carries an explicit `aria-label`, because the labels are
+`display: none` — and so out of the a11y tree — while the planner is open),
+`useIntegrityQueue` (`app/components/admin/useIntegrityQueue.ts` — the ONLY integrity
+fetch; `AdminPanel` calls it once and the panel AND the rail dot read that one state.
+Gated on the role actually having a Servicios tab (`enabled`), re-read on ENTERING
+Servicios, and a failed, in-flight or disabled domain reads `unknown`, never `clean`),
+`PanelSkeleton` (`app/components/admin/PanelSkeleton.tsx` — the `loading` component for
+every admin panel behind `next/dynamic`, and the one place a chunk-load failure surfaces
+on `/admin`: on `error` it renders a «Reintentar» wired to `retry()`), `MembersPanel`
+(`app/components/admin/MembersPanel.tsx` — the Miembros tab; row actions are ONE `Menu`
+per row behind a ⋯ `Button variant="icon"`, never hover-only buttons, and taking access
+away asks first through a confirm `CueDialog` that stays open on a refused PATCH
+(decision O). Giving access back needs no confirm).
 Motion tokens are `--motion-*` /
 `--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and

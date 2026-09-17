@@ -245,6 +245,16 @@ Before was measured on the primary checkout at the merge-base commit
 | **R7 tip `6fcfb22c`** (the cue strip, blackout, pull-to-refresh rail, long-press hook + sheet; the two later commits move classes and one sheet, not chunks) | 172.5 kB | 122.1 kB (+4.1) | 357.0 kB (+2.6) | 124.1 kB (`/schedule`, +2.4) · 116.9 kB (`/biblioteca`, +5.0) · 123.1 kB (`/me`, +3.6) |
 | **`main 7fbbb105`, R4 release-day rebuild** (git-archive cold build, same environment as the R7 rows) | 172.5 kB | 122.6 kB | 357.6 kB | 110.7 kB (`/posts/[slug]`) · 124.6 kB (`/schedule`) · 117.0 kB (`/biblioteca`) · 123.6 kB (`/me`) |
 | **R4 tip `5a899be0`** (the transposer seat, hero pills, practice cluster, autoscroll, equaliser; the three later commits move classes and handlers, not chunks) | 172.5 kB | 121.2 kB (−1.4) | 356.2 kB (−1.4) | 111.7 kB (`/posts/[slug]`, **+1.0**) · 123.3 kB (`/schedule`, −1.3) · 115.7 kB (`/biblioteca`, −1.3) · 122.3 kB (`/me`, −1.3) |
+| **`main 856f3e87`, R5 release-day rebuild** (git-archive cold build, same environment as the R4 rows. `measure-bundle.mjs` now EXCLUDES the `server/chunks/ssr` entries newer builds list in the client reference manifest — the +27 kB-per-route jump an earlier reading showed was that artefact, not code) | 172.5 kB | 122.8 kB | 358.6 kB | 113.0 kB (`/posts/[slug]`) · 125.6 kB (`/schedule`) · 116.9 kB (`/biblioteca`) · 123.8 kB (`/me`) |
+| **R5 Task 6 tip `efa3af61`** (the flatten, the rail, the members menu, the board, the panel polish, and the load-on-demand split) | 172.5 kB | 122.9 kB (+0.1) | **150.2 kB (−208.4)** | 112.7 kB (`/posts/[slug]`, −0.3) · 125.3 kB (`/schedule`, −0.3) · 116.7 kB (`/biblioteca`, −0.2) · 123.7 kB (`/me`, −0.1) |
+
+`/admin`'s −208.4 kB is the whole point of Task 6 and **not** a like-for-like row: from that
+build forward the number measures Servicios + the shell, because the five secondary tabs,
+`MembersPanel` and `MonthGenerator`/`PlannerGrid`/`SetlistEditor` are async chunks a member
+pays for only on the tab that needs them. The commits after `efa3af61` (the `Select`
+popover and its two `Menu` fix rounds) change primitives rather than chunk boundaries, so
+the coordinator re-measures the final tip before the merge and the row above is the R5
+figure of record until then.
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -1405,3 +1415,35 @@ imported through `next/dynamic` in exactly the file gating it, and nowhere else 
 `app/**` imports one statically). `adminShell.test.tsx`'s tab-change assertion now
 `await waitFor`s the incoming panel's content, since even a mocked dynamic import
 resolves through a microtask rather than synchronously.
+
+**Task 7 (the desktop `Select`, and what it did to `Menu`).** The Part VIII deferral landed
+here because the Control Room is where a select is used most (ruling 8): `Select` is now TWO
+renders of ONE control — the native picker on a coarse pointer, and on
+`(hover: hover) and (pointer: fine)` a `Button` trigger opening a `Menu` of the `<option>`s
+while the native element stays mounted `sr-only`, still the form value and still what the
+`<label>` names. Nothing about a consumer changed: choosing sets the native `value` and
+dispatches a real bubbling `change`, so every `e.target.value` handler in the app is
+untouched, and re-picking the option that is already selected dispatches NOTHING, because a
+native select does not either (the spurious event was sending a `PairRoster` PATCH).
+Detection is `useSyncExternalStore` over the media query with a server snapshot of `false`,
+so SSR, hydration and jsdom are all the native path and a device that gains a mouse switches
+without a remount.
+
+The popover then found the house's own trap, on dev rather than in a test: inside
+`/biblioteca`'s filter dialog, Tonalidad's ten rows were cut to two by `CueDialog`'s
+`overflow-y-auto` body. An `absolute` panel is clipped by any scrolling ancestor, and a
+bare `fixed` one would still be trapped by the transformed route-reveal host (ADR-0031), so
+**`Menu`'s panel is portalled to `document.body` and positioned `fixed` from the trigger's
+rect** — the same answer `Toast` and `NotePopover` already take. Everything else in those two
+fix rounds follows from that one move: the panel flips when the room below is short and is
+SIZED to the room it has (the 240 px flip threshold is shorter than the 320 px cap, so a
+trigger with 260 px under it used to hang off the edge), it clamps back from the right edge
+once its width is known, it measures with `documentElement.clientWidth/clientHeight` rather
+than `innerWidth/innerHeight` (which include a scrollbar gutter), Tab from an item closes
+with `close(true)` because a portalled panel of `tabIndex={-1}` items otherwise drops focus
+out of the document, item focus is `preventScroll`, and the surface became the OPAQUE
+`bg-surface-raised` — over a dialog the translucent one let «Limpiar filtros» read through
+its first row. One behaviour is deliberately new and worth knowing: **every menu in the app
+now closes on an ancestor scroll.** A panel pinned to a rect cannot honestly travel with its
+trigger, and closing is the honest answer. Guards: `selectPopover.test.tsx`, `Menu.test.tsx`'s
+portal block.

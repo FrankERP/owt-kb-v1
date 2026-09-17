@@ -412,7 +412,7 @@ rows don't all re-render on every provider render. Consumers: `AudioPlayer`, `Da
 
 ---
 
-## `app/components/` — inventory (99 `.tsx` files: 36 top-level + 20 admin + 7 kids + 27 ui + 6 song + 3 availability; counted 2026-09-16)
+## `app/components/` — inventory (102 `.tsx` files: 36 top-level + 23 admin + 7 kids + 27 ui + 6 song + 3 availability; counted 2026-09-17)
 
 Legend: **[C]** client, **[S]** server.
 
@@ -533,7 +533,7 @@ behaviour of each, and the guards that pin them.
 | `ProposalThread` | The private lead ↔ admin conversation on a proposal, shared by the lead editor and the admin card. **Renders unconditionally** — it replaced blocks gated on `lead_notes` being present and on `changes_requested`, and inheriting either condition would hide the thread on a `pending` proposal, which is where the conversation happens. Four rules that look cosmetic and are not: the author label is keyed on `author_role`, never on a missing name (two migrated messages have no author, and falling back to "Admin" would misattribute an author-less lead note); timestamps convert the ISO datetime to a local calendar day *first* and compare day strings, never elapsed hours; the composer closes when the **service** passes, not on approval, and both routes enforce that server-side because a hidden composer is not a guard; and the composer clears **only on success**, since the channel's whole promise is that nothing written is lost. Posting patches one record in place — never `load()`, which unmounts every card and wipes in-progress change-request notes. |
 | `AvailabilityPanel` | Team availability vs. scheduled services (admin; not the `/me` panel above). Loading draws `Skeleton`, the failure retry is a `Button`. The matrix view's sticky first column gains an edge once it DETACHES from the scroller's left edge: a 1 px `aria-hidden` sentinel at `left: 0` is observed by an `IntersectionObserver` **rooted on the scroll box**, and when it stops intersecting the box takes `data-scrolled`, which `brand.css`'s `.availability-matrix[data-scrolled] .sticky-col` turns into a box-shadow over `--motion-fast`. No scroll listener, and the observer disconnects on unmount. Guard: `adminPanelsPolish.test.tsx` (mocked observer), `availabilityPanelFailure.test.tsx`. |
 | `ActivityPanel` | Member activity / last-login ("Hoy"/"Ayer" calendar-day labels). The three summary stats are `NumberRoll`s — they change in place as the list loads rather than swapping digits. Loading draws `Skeleton`; the failure state carries a `Button variant="ghost" size="sm"` «Reintentar» wired to the same loader the mount effect calls. Guards: `adminPanelsPolish.test.tsx`, `activityPanelFailure.test.tsx`. |
-| `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle. Header is a stacked block with a `w-full` select — beside the title the select's longest option ("Instrumentos") overflowed the 216px chart column onto the grid. |
+| `ParticipationSidebar` | Participation bar chart (`computeParticipation`); Voces/Instrumentos toggle — a `SegmentedControl size="sm" tone="filled"` since M0b-2, never a `<select>`, and the counts are `NumberRoll`s. The header is a STACKED block, and that is load-bearing rather than styling: side by side it demanded the title's ~131 px PLUS the control's intrinsic width, which printed the control 47 px past the 216 px chart column and over the planner grid. Stacked, each row asks for the wider of the two, and the control's own `max-w-full` caps it at the header's content box so a longer future option cannot reopen the same overflow. `size="sm"` is deliberately under the 44 px target — this rail is narrow. `participationAlongside.test.tsx` pins the structure, because `CHART_COLUMN_WIDTH` in `PlannerGrid.tsx` derives its floor from this file's rows and no arithmetic can see the header half. |
 
 #### Service-readiness card layer
 
@@ -561,12 +561,12 @@ Shares `songToForm` / chart helpers with `SongFormModal`. Lyrics and charts are 
 
 ## Tests
 
-**300 test files / 5,341 tests** (265 under `app/` + 26 under `scripts/` + 9 harness unit
-tests under `e2e/service-readiness/__tests__/`), counted 2026-09-16.
+**310 test files / 5,462 tests** (275 under `app/` + 26 under `scripts/` + 9 harness unit
+tests under `e2e/service-readiness/__tests__/`), counted 2026-09-17 (R5 tip).
 Separately, **11 Playwright specs** under `e2e/service-readiness/` run only against the isolated
 verification deployment and are **not** part of `npm test` — see
 [`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md). Vitest (`environment: "node"`) covers
-`app/**/*.test.{ts,tsx,mjs}` and `scripts/**`. Highlights: `notifyTargets` (all five seats), `medley`, `computeParticipation`,
+`app/**/*.test.{ts,tsx,mjs}`, `scripts/**` and those `e2e/**/*.test.ts` harness units. Highlights: `notifyTargets` (all five seats), `medley`, `computeParticipation`,
 `unfilledSeats`, `assignmentEmail`, `push`, `memberAccess` (TTL), `googleIdToken`, `draftGating`,
 `publishTransitions`, `lyrics` round-trip, `ics`, `scheduleMonths`, `routeMatcher` (login-gate
 bypass), `focusTrap`/`useFocusTrap` (jsdom), plus `daysUntil` in `app/components/__tests__/` and
