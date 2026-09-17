@@ -4,28 +4,16 @@
 // several list rows on first paint, so six shapes never over-promises less
 // content than a slow chunk is about to deliver.
 //
-// `next/dynamic`'s `loading` also receives `DynamicOptionsLoadingProps`
-// (`error`, `isLoading`, `retry`, …) on a genuine chunk-load failure — this is
-// the one branch a bad network/CDN path can actually hit. `Button` for the
-// retry, never a bare `<button>`.
+// A SUSPENSE FALLBACK AND NOTHING ELSE. In the App Router `next/dynamic` renders
+// this with `{ isLoading: true, pastDelay: true, error: null }` and never passes
+// an `error` or a `retry` (`next/dist/shared/lib/lazy-dynamic/loadable.js`), so
+// a failure branch here would be dead code that reads like a safety net. A
+// rejected chunk throws through `React.lazy` instead, and `PanelBoundary` is
+// what catches it and offers «Reintentar».
 
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
-import Button from "@/app/components/ui/Button";
-import type { DynamicOptionsLoadingProps } from "next/dynamic";
 
-export default function PanelSkeleton({ error, retry }: DynamicOptionsLoadingProps) {
-  if (error) {
-    return (
-      <div className="space-y-3 py-10 text-center">
-        <p className="font-body text-sm text-mono-400">No se pudo cargar esta sección.</p>
-        {retry && (
-          <Button variant="ghost" onClick={retry}>
-            Reintentar
-          </Button>
-        )}
-      </div>
-    );
-  }
+export default function PanelSkeleton() {
   return (
     <SkeletonGroup label="Cargando…" className="space-y-3">
       {[...Array(6)].map((_, i) => (

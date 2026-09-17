@@ -14,6 +14,14 @@
 // animate from the strip's position to the rail's across the page. Two ids, two
 // independent markers, each confined to the layout that can see it.
 //
+// Its items are RAW `<button>`s on purpose, not the house `Button`: they are
+// navigation, not actions — each one owns `aria-current="page"`, a
+// `SlidingIndicator` positioned inside it and a tone that reads as a selected
+// section rather than as a control. `Button`'s six variants carry none of that,
+// and the nav's own `ITEM`/`ITEM_TONE` pair is the one spelling both layouts
+// share. This is the documented exception; a new ACTION on this page still uses
+// `Button`.
+//
 // The rail COLLAPSES to icons while the planner is open (`app/brand.css`,
 // `.brand-admin-frame:has(.planner-wide)`): the labels go `display: none`, which
 // takes them out of the accessibility tree too — so every item carries an

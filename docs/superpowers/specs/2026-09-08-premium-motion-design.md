@@ -2050,3 +2050,240 @@ stopping at the first `}` (a `${inputCls} resize-none` tail was invisible), reso
 template-literal consts, and counts `focus:`/`dark:` small sizes as violations.
 
 **Release:** merged to `main` as `baf9cbfe` (PR #78, 2026-09-16 22:19 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`, 22:23 CST). Preview last verified at `ef57eff9`.
+
+# Part XV — R5 (2026-09-16/17)
+
+Branch `claude/motion-r5-admin`. Seven implementation tasks plus this documentation task,
+turning `/admin` from a box in a box in a box into the Control Room — §12.5, §17's correction
+to Part III finding 4, Part I §5.8 (M7a) and decisions J, N and O, plus the desktop `Select`
+popover deferred in Part VIII and the `NavLinks` flag unification deferred in Part IX. The
+outer frame, the shell, the tab-bar box and the per-tab panel surfaces are gone; the page is
+the workspace and cards are the only boxes left. Desktop gets a left rail carrying the
+integrity state as a lit dot, Servicios becomes a horizontal snap board, the kill switch moves
+into a confirmed row menu, every panel adopts the primitives, and five of six tabs plus the
+month generator leave the first load.
+
+**Shipped.** `app/(client)/admin/page.tsx` — navbar, an `h1` and `AdminPanel` inside
+`brand-admin-frame`; no eyebrow, no subtitle, no «Acceso autorizado» pill, no shell div.
+`app/components/admin/AdminPanel.tsx` — 1 451 → ~265 lines: one tree (six mutually exclusive
+early returns are gone), the tab reducer, the `?tab=` contract, one `AdminRail` and one body
+`key={tab} … animate-fade-in`, plus the integrity hook at the top level and the five
+`next/dynamic` panels. `app/components/admin/AdminRail.tsx` — the section nav, one component
+in two layouts, exporting `ADMIN_TAB_ICON`. `app/components/admin/useIntegrityQueue.ts` — the
+three service-integrity fetches lifted out of `IntegrityQueuePanel`, returning
+`{ queue, tone, sources, loading, reload, resolve }`. `app/components/admin/MembersPanel.tsx`
+— the Miembros body extracted whole (list, filters, Fuse search, every member write, the five
+dialogs) with the row `Menu` and the confirmed kill switch. `app/components/admin/PanelSkeleton.tsx`
+— the `loading` component for every dynamically imported panel, a Suspense fallback only.
+`app/components/admin/PanelBoundary.tsx` — the error boundary those panels render inside, and
+the one place a chunk-load failure surfaces («Reintentar», which reloads the page). `app/components/admin/ServicesPanel.tsx` —
+the snap board, every control a primitive, `MonthGenerator` behind `next/dynamic`.
+`app/components/admin/ServicePrimaryAction.tsx` — a house `Button` whose TONE is the variant.
+`app/components/admin/ServiceReadinessCard.tsx` — `className` (layout only) + `revealAttrs`.
+`ActivityPanel`, `AvailabilityPanel`, `ContentPanel`, `ProposalsPanel`, `IntegrityQueuePanel`
+— `Skeleton`, `NumberRoll`, `AnimatedList`, touch-visible row actions and the matrix's
+sentinel-driven sticky edge. `app/components/ui/Select.tsx` — the desktop popover.
+`app/components/ui/Menu.tsx` — the panel portalled to `document.body`, `fixed`, flipped,
+clamped, opaque, closing on ancestor scroll. `app/brand.css` — `.brand-admin-shell`, its
+`::before` and `.brand-admin-tabs` deleted; `--admin-rail-w`, the collapsed-rail rules and
+`.availability-matrix[data-scrolled] .sticky-col` added; the `:has(.planner-wide)` comment
+re-derived with the rail in the arithmetic. `docs/adr/0035-the-admin-shell-is-gone.md` records
+why the shell is gone and why explicit scrollers are now the rule. **The ADR is numbered 0035
+on this branch, and it renumbers to 0037 before the PR if #76/#77 land on `main` first** — the
+renumber was attempted mid-branch, broke `adrIndex`, and was reverted (`df2db9b2`); it is a
+pre-PR step, not a mid-branch one.
+
+**Rulings, with reasons.**
+- **The shell goes, the frame stays as a hook** (plan ruling 1). `.brand-admin-shell` was
+  `overflow: hidden` on BOTH axes and was named as a premise in three places; deleting it
+  removes the clipping ancestor, so the `brand-admin-frame` div survives only because the
+  `:has(.planner-wide)` widening hangs on it. The planner's full-screen portal and
+  `MonthGenerator`'s hand-centring STAY — they are correct regardless of the shell — and
+  their comments now name `[data-route-main]` as the nearest clipping ancestor.
+- **A tab change fades the INCOMING body in, on a keyed remount** (ruling 2), rather than
+  §5.8's crossfade of two absolutely positioned panels. Only the active panel is mounted
+  today and these panels are thousands of lines each; doubling the DOM for 200 ms buys
+  nothing a member notices. The same ruling R4 made for the chart.
+- **Rail at `lg+`, underline strip below** (ruling 3), both always in the DOM with CSS
+  picking one — a JS media query paints the wrong one first — and a DIFFERENT
+  `SlidingIndicator` id per layout, or the shared `layoutId` would fly the marker across the
+  page at the breakpoint. While the planner is open the rail collapses to 56 px of icons,
+  written once as `--admin-rail-w` and read by the grid template, and the widened-frame
+  arithmetic was re-derived with it (`1512 − 24 = 1488`; `56 + 32 + 1400 = 1488`;
+  `216 + 12 + 920 + 12 + 240 = 1400`).
+- **The integrity dot has THREE states, never two** (ruling 4): nothing when the inventory is
+  proven clean, a dim `?` when a domain failed, is loading or was never asked, the count when
+  there are issues. An unknown queue must not read clean, in the dot or in the accessible name.
+  The panel's `Collapse` follows the tone — open until proven clean.
+- **Servicios is a board from `lg`** (ruling 5): a snap track of 380 px cards inside its own
+  `min-w-0` column, instead of a grid that squeezed a card to ~260 px on a full month. The
+  phone keeps the vertical list, the `ParticipationSidebar` split stays, and the track scrolls
+  ITSELF so the page never widens.
+- **One `Menu` per member row** (ruling 6, decision O widened) and a confirm before access is
+  taken away. Nothing depends on hover, so a phone reaches every action a desktop does.
+- **Load on demand** (ruling 7): the five secondary tabs, `MembersPanel` and `MonthGenerator`
+  through `next/dynamic`; `ServicesPanel` and `IntegrityQueuePanel` stay eager, because
+  Servicios is the default tab for most roles and the integrity fetch feeds a dot every tab
+  shows.
+- **The desktop `Select` popover** (ruling 8) keeps the native element as the form value and
+  the label target; the popover is chrome, not a reimplementation. **`NavLinks` flags
+  unified** (ruling 9): Calendario and Biblioteca show for every worship member on every page,
+  so the row stops changing shape between routes. **M7b stays out** (ruling 10) except
+  comments and the dynamic-import boundary. **Label budget** (ruling 11): «Backstage
+  operations» and «Acceso autorizado» pinned at 0 (decision N). **Deferred on purpose**
+  (ruling 12): a `control-room` gallery fixture, the `AvailabilityPanel` date-chip menu (the
+  panel is read-only today) and planner-cell motion.
+
+Made during execution, on top of the plan:
+- **The eager `membersBody` value stayed a value.** Turning it into a function makes
+  `react-hooks/refs` an ERROR at `onClick={() => handlePhotoClick(m._id)}` — the ref can no
+  longer be proven to be read outside render — and the gate is 0 errors. The real fix was
+  Task 3's extraction plus Task 6's `next/dynamic`, which is lazy for real rather than merely
+  deferring construction.
+- **The ADR keeps its 0035 number until the pre-PR renumber.** Renumbering mid-branch to 0037
+  broke `adrIndex` and the failure was hidden by a gate chain that piped `vitest` through
+  `tail` — the exact anti-pattern this repo has a rule about. Reverted; the branch carries
+  0035 and the renumber happens once, at the end.
+- **The integrity fetch is gated on the tab existing, and re-read on ENTERING Servicios.**
+  `useIntegrityQueue({ enabled })` takes the same predicate that builds the rail, so the fetch
+  and the surface can never disagree about who may ask; a `content-editor` made three 403s
+  before. Disabled reads `tone: "unknown"` explicitly — "we never asked" must never come to
+  look like "we asked and it was fine". The re-read is on entering, deliberately not on first
+  mount, which would double every load's requests.
+- **Impersonation stayed as a fifth menu item.** Ruling 6 enumerates four; «Ver como este
+  miembro» is the app's ONLY entry point to impersonation, so dropping it would have deleted
+  the feature. Accepted at review.
+- **«Eliminar» is UI-gated to super-admin.** It sat ungated beside gated siblings; Miembros is
+  super-admin-only by tab, so no role loses anything real. Accepted at review.
+- **Every dialog keeps its PAYLOAD through the exit.** `open={state !== null}` with the body
+  read from the same state blanks the dialog for the ~180 ms it spends closing. The house
+  shape is now payload + `open` boolean + an open counter in the body's `key`: the text
+  survives the exit, and a REOPEN still mounts a fresh form rather than the last one's
+  contents — or its password.
+- **`ServicePrimaryAction`'s tone is the Button VARIANT, not an additive `className`.**
+  Keeping the old tone string beside `variant="primary"` puts two `bg-`/`text-`/`hover:` sets
+  on one element and the winner is Tailwind's emission order, not the tone asked for — the
+  card could silently lose its red «Revisar datos» / amber «Reintentar» distinction.
+- **Contenido's row actions are `size="lg"`, not `size="sm"`.** On the `icon` variant `sm`
+  resolves to 36 px; these controls became reachable by touch in the same change, so shrinking
+  them at that exact moment was the wrong trade.
+- **The board reveals with `revealProps(i)`, not `AnimatedList`.** The month filter SWAPS the
+  card set, it does not reflow a list in place.
+- **`Menu` portals to `document.body`.** Found on dev, not in a test: a ten-row Tonalidad
+  panel cut to two by `CueDialog`'s scrolling body. `absolute` is clipped by any scrolling
+  ancestor and a bare `fixed` is trapped by the transformed reveal host (ADR-0031), so the
+  panel is portalled, `fixed`, flipped when the room below is short, SIZED to the room it has,
+  clamped from the right edge, opaque, and it closes on any ancestor scroll — a panel pinned
+  to a rect cannot honestly travel with its trigger.
+- **The `Select` popover's names are composed** — «campo: elección» on the trigger, «Opciones
+  de campo» on the panel. The obvious `aria-labelledby` spelling made `getByLabelText("Mes")`
+  match three elements, because dom-testing-library resolves each reference individually.
+- **Detection is `useSyncExternalStore`**, not `useEffect` + `setState`: it has a server
+  snapshot, it drops the "setState synchronously in an effect" warning, and it follows a mouse
+  attached mid-session.
+
+**Review trail.**
+- **Task 1 (flatten, opus):** APPROVED, 3 LOW — the eager `membersBody` (folded into Task 2
+  and then reverted, above), sub-`lg` spacing (the rail replaced the bar in Task 2), and the
+  unmeasured "no horizontal scroll" claim, which the coordinator then measured on dev at 390
+  and 1440.
+- **Task 2 (rail + integrity dot, opus):** CHANGES_REQUIRED — 1 HIGH (the mid-branch ADR
+  renumber broke `adrIndex`, hidden by a piped gate chain; reverted), 1 MEDIUM (the integrity
+  fetch ran for roles with no Servicios tab — three 403s), 3 LOW (the dot overflowed the
+  collapsed rail; wrong task numbers in a comment; the load cadence was undocumented). One fix
+  round; the sonnet re-review closed all four with 0 new.
+- **Task 3 (members menu + confirmed kill switch, opus):** CHANGES_REQUIRED — 1 MEDIUM (the
+  confirm closed on a REFUSED PATCH, which reads as success against an unchanged row), 3 LOW
+  (no in-flight guard on the no-confirm «Habilitar»; a transition list that named a property
+  the hover cannot animate; every dialog blanking during its exit). The two deviations —
+  impersonation kept, «Eliminar» narrowed — were accepted. One fix round; sonnet re-review
+  closed all four, 0 new.
+- **Task 4 (snap board, opus):** APPROVED with five findings folded into Task 5 — a dead pill
+  border class that lost to the variant on emission order, the toolbar's `title` reasons made
+  unreachable by `disabled:pointer-events-none`, an unguarded tone mapping, `adminShell`'s
+  unscoped queries (the flake vector below), and `serviceCardModel.ts`'s `transition-all`,
+  invisible to a guard that only read `.tsx`.
+- **Task 5 (the five panels, sonnet):** APPROVED, 0 findings. **Task 6 (load on demand,
+  sonnet):** APPROVED, 0 findings; `/admin` 358.6 → 150.2 kB.
+- **Task 7 (`Select` popover, opus):** CHANGES_REQUIRED — 4 MEDIUM (an `inline-block` `Menu`
+  root against a `w-full` trigger; a re-pick firing `change` and sending a PATCH; the
+  `sr-only` native select as an invisible tab stop; no panel max-height) + 4 LOW + the
+  `useSyncExternalStore` recommendation, plus the clipped panel Frank found on dev. Fix round
+  1 introduced the portal, and the scoped re-verify came back NOT VERIFIED: the portal itself
+  brought 2 MEDIUM (Tab dropping focus out of the document; a flip threshold shorter than the
+  panel) and 6 LOW, with one more from a second dev screenshot (the translucent panel over the
+  filter dialog). Fix round 2 closed all nine and the sonnet re-review returned VERIFIED.
+- **Whole-branch review (`856f3e87..649c905e`, opus):** CHANGES_REQUIRED — 1 MEDIUM
+  (a failed chunk load took the WHOLE of `/admin` down: App Router `next/dynamic` renders
+  `loading` only as a Suspense fallback and never passes `error`/`retry`, so the «Reintentar»
+  branch in `PanelSkeleton` was unreachable and the rejection threw through `React.lazy` to
+  `app/(client)/error.tsx`, whose `reset` cannot recover a CACHED lazy rejection either) and
+  3 LOW (the integrity dot and disclosure twitching on every clean entry into Servicios, the
+  reload having reset the tone to `unknown` mid-flight; two admin inputs under 16 px on a
+  phone; four raw controls left on rewritten surfaces).
+- **Fix wave (this commit).** `PanelBoundary` — a client error boundary around every dynamic
+  panel, so a bad chunk stays in its own column; its «Reintentar» RELOADS the page and the
+  copy says so, because `React.lazy` caches the rejection and rebuilding the `dynamic()`
+  instance per render is an eslint ERROR here (`react-hooks/static-components`). The dead
+  `error`/`retry` branch left `PanelSkeleton` with it. `useIntegrityQueue` holds the last
+  SETTLED tone while a reload is in flight (`loading` is exposed separately; a first load
+  still reads `unknown`). `MembersPanel`'s shared `inputCls` and `ContentPanel`'s song search
+  are `text-[16px] sm:text-sm`. `IntegrityQueuePanel`'s disclosure toggle and «Recargar»,
+  and `MembersPanel`'s clear-search ×, are `Button`s; `ContentPanel`'s «Eliminar» dropped its
+  hover colour overrides. `AdminRail`'s items stay raw — navigation, documented in its header.
+- **Parked residuals, all known and none blocking.** `ui/Select`'s and `ui/DateField`'s
+  `size="sm"` are still 11 px, which is under the 16 px phone rule — every consumer of that
+  size is under `admin/`, which `inputFontSize.test.ts` excludes by path, so it is a
+  deliberate gap rather than an unseen one. `AvailabilityPanel`'s Conflictos/Matriz toggle is
+  still two raw `<button>`s in a one-of-N arrangement where the constraints want
+  `SegmentedControl`; it is load-bearing for two existing tests and was out of Task 5's
+  bounds. R4's day-card sheet × nit is unchanged. The `adminShell.test.tsx` flake — a case
+  seeing the previous test's tree, sighted twice — had its query scope closed to the rendered
+  container, which is the likeliest vector; it has not recurred since.
+
+**Open notes for Frank's look.**
+- **Rail versus strip, as a feel.** The rail is the biggest visual change on the page and it
+  has never been seen outside jsdom and two full-page screenshots. Does the vertical pill
+  read as the same control the underline strip is on a phone?
+- **The collapsed 56 px rail with the planner open.** The collapse is ARITHMETIC, not a
+  measurement: the planner grid now budgets 920 px where it had 1008, and the integrity
+  badge's 4 px offsets are reasoned from the 56 px box rather than measured in a browser.
+- **The snap board on a laptop.** 380 px cards with `snap-mandatory` on a 1440 screen show
+  three and a bit; the right-edge gradient is the only hint there are more. On a 1280 laptop
+  with the sidebar it is closer to two.
+- **The members ⋯ menu and its confirm at 390 px.** The dev-verify bot is not a super-admin,
+  so `?tab=members` falls back to Servicios for it — this one can only be seen by Frank or in
+  the simulator.
+- **Every menu is now an opaque raised panel that closes on scroll.** That is `NavMenu`,
+  `PracticePlaylistButton`, `ServiceReadinessCard` and the members rows, not just the one
+  over the dialog that prompted it. The opacity is a change in every theme; the scroll-close
+  is a change in every gesture.
+- **The `Select` popover's typography.** The trigger inherits the house `Button` chrome —
+  uppercase, `tracking-widest` — where the native select was `font-body`. That is visible on
+  `/biblioteca`'s Tonalidad and on the admin Rol/Persona selects, and it is a taste call, not
+  a bug.
+- **The `Select` popover near the bottom and the right of the viewport.** The flip threshold,
+  the room-aware `maxHeight` and the right-edge clamp are layout decisions jsdom cannot
+  measure; the clamp's real branch is exercised by no test.
+- **The integrity panel collapsing when it is clean.** "Expands only when it has something to
+  say" is the ruling; whether a collapsed panel reads as "nothing wrong" or as "missing" is a
+  look.
+
+**Bundle:** `main 856f3e87` → `R5 final tip 07ed88a9` (git-archive cold builds, gzip −9;
+`measure-bundle.mjs` now excludes the `server/chunks/ssr` entries newer builds list in the
+client reference manifest — an earlier reading's +27 kB per route was that artefact): shared
+172.5 → 172.5; `/` 122.8 → 123.5; `/posts/[slug]` 113.0 → 113.3; `/schedule` 125.6 → 125.9;
+`/biblioteca` 116.9 → 118.3 (+1.4 — the `Select` popover and the portalled `Menu` on the
+filters); `/me` 123.8 → 124.3; **`/admin` 358.6 → 150.8 (−207.8)** — the five secondary tabs
+plus `MonthGenerator`/`PlannerGrid`/`SetlistEditor` are async chunks now, so that row measures
+Servicios + the shell and is not like-for-like with an earlier one.
+
+**Shots** (`docs/superpowers/specs/2026-09-08-premium-motion-shots/`):
+`admin-before-1440.png` / `admin-after-1440.png` (Servicios at 1440 — the frame, the tab box
+and the panel surfaces against the rail and the board), `admin-before-phone.png` /
+`admin-after-phone.png`, plus `r5-select-popover-1440.png` (the popover open on a fine
+pointer) and `r5-admin-board-1440.png` (the snap track mid-scroll).
+
+**Release:** merged to `main` as `<pending>` (PR `<pending>`); production alias
+`owt-backstage.vercel.app` verified on that SHA `<pending>`. Preview last verified at
+`c1f89b95`.

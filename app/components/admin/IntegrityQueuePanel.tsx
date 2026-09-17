@@ -36,6 +36,7 @@ import {
 import type { IntegrityIssueTarget } from "./proposalHandoff";
 import type { IntegrityTone } from "./AdminRail";
 import AnimatedList from "@/app/components/ui/AnimatedList";
+import Button from "@/app/components/ui/Button";
 import Collapse from "@/app/components/ui/Collapse";
 
 const DOMAIN_LABEL: Record<IntegrityDomain, string> = {
@@ -147,12 +148,13 @@ export default function IntegrityQueuePanel({
       className="min-w-0 rounded-xl border border-edge-accent-subtle"
     >
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="lg"
           onClick={() => setOpenOverride(!open)}
           aria-expanded={open}
           aria-controls="integrity-queue-body"
-          className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-lg px-1 text-left transition-colors hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          className="min-w-0 flex-1 justify-start text-left"
         >
           <span
             aria-hidden="true"
@@ -171,19 +173,15 @@ export default function IntegrityQueuePanel({
               {integrityQueueSummary(queue)}
             </span>
           </span>
-        </button>
+        </Button>
         <span
           className={`shrink-0 rounded-full border px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${toneStyle}`}
         >
           {tone === "clean" ? "OK" : tone === "unknown" ? "?" : queue.count}
         </span>
-        <button
-          type="button"
-          onClick={reload}
-          className="min-h-[44px] shrink-0 rounded-lg border border-surface-accent-30 px-3 font-label text-[11px] uppercase tracking-widest text-mono-400 transition-colors hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
+        <Button variant="secondary" size="lg" onClick={reload} className="shrink-0">
           Recargar
-        </button>
+        </Button>
       </div>
 
       {/* Honest partial-source state: never a clean zero. */}

@@ -157,13 +157,19 @@ describe("the admin page is the workspace", () => {
     // Not the Servicios tab: the mount's own load, and no second pass.
     await waitFor(() => expect(integrityCalls()).toHaveLength(3));
 
-    fireEvent.click(rail(container).getByRole("button", { name: "Servicios" }));
+    // `/^Servicios/`, not the exact string: the item STATES its integrity in its
+    // accessible name, so an inventory that has been asked for but has not
+    // answered yet makes it «Servicios, integridad desconocida». This case is
+    // about the reload cadence, not about the dot — matching the exact name made
+    // it fail under full-suite load whenever the three fetches were called but
+    // not yet resolved.
+    fireEvent.click(rail(container).getByRole("button", { name: /^Servicios/ }));
     await waitFor(() => expect(integrityCalls()).toHaveLength(6));
 
     // Leaving and coming back re-reads; staying does not.
     fireEvent.click(rail(container).getByRole("button", { name: "Actividad" }));
     await waitFor(() => expect(integrityCalls()).toHaveLength(6));
-    fireEvent.click(rail(container).getByRole("button", { name: "Servicios" }));
+    fireEvent.click(rail(container).getByRole("button", { name: /^Servicios/ }));
     await waitFor(() => expect(integrityCalls()).toHaveLength(9));
   });
 
