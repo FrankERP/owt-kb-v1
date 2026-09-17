@@ -1832,13 +1832,14 @@ Made during execution, on top of the plan:
   pinned by unit tests against the component's contract, not against a real UA.
 
 **Open notes for Frank's look.**
-- **The autoscroll under a real finger.** Pause on touch, the hand-over through iOS
-  momentum, and whether the 400 ms backstop is invisible or feels like a lurch on a browser
-  that does fire `scrollend`.
-- **Where the run stops** with the phone tab bar and the audio transport both up — the last
-  lines should clear both, and the measurement has only been exercised in jsdom.
-- **The cluster's arrival timing** — it now hands off exactly as the hero's controls pass
-  under the sticky bar; whether that reads as a replacement or as a second thing appearing.
+- ~~**The autoscroll under a real finger.**~~ **CLOSED** by the 2026-09-16 simulator look
+  (iPhone 17 Pro, production build): pause on touch and the resume through iOS momentum both
+  behave, and the 400 ms backstop is invisible. The look opened a different one instead — see
+  F3, the pill on a lyric that already fits.
+- ~~**Where the run stops**~~ **CLOSED**, same look: the last lines clear the tab bar and the
+  audio transport, so the jsdom-only measurement holds on the device.
+- ~~**The cluster's arrival timing**~~ **CLOSED**, same look: the hand-off reads as a
+  replacement, not as a second thing appearing.
 - **On a 390 px phone the cluster's key + BPM slot takes ~110 px** and squeezes the section
   links to roughly three visible before they scroll. Acceptable or not is a look, not a test.
 - **The idle equaliser** reads a little like a `⋯` ellipsis at `scaleY(0.3)`; it only
@@ -1874,8 +1875,9 @@ Within the accepted absolute cap measured in this environment.
 the only surface where the transposer exists today) and
 `r4-song-practice-cluster-phone.png` (scrolled past the hero).
 
-**Release:** merged to `main` as `<pending>` (PR #`<pending>`); production alias
-`owt-backstage.vercel.app` verified `<pending>`. Preview verified at `d6b3ba56`.
+**Release:** merged to `main` as `9c9ec881` (PR #75, 2026-09-16 16:52 CST); production alias
+`owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`, 16:57 CST).
+Preview last verified at `88c3e8d0`.
 
 ### F1 — the pill clicks (2026-09-16)
 
@@ -1986,3 +1988,65 @@ meta row mixed the 44px pill with ~30px chips, so both static spans (`timeSig` a
 unparsable-BPM one) got `inline-flex min-h-[44px] items-center`, the treatment Task 3 gave the
 hero's neighbours. (3) An article typo in the `TempoPill` entry of `CLAUDE.md`/`AGENTS.md`. The
 early return is mutation-checked: removing it fails the new disabled-tap test.
+
+### F3 — after the simulator look (2026-09-16)
+
+R4 shipped, and the first long look at it was on the iPhone 17 Pro simulator against the
+production build. Three things came back, all of them invisible to the three gates and to a
+1440 px browser; one commit on `claude/motion-r4-f3-followups`.
+
+**Autoscroll was dead on any lyric that already fits the screen.** Tapping «Autoscroll» on a
+short song un-pressed the pill instantly and moved nothing: the run's end check
+(`bottom <= innerHeight - bottomInset`) is already true on the FIRST frame when the whole
+section is on screen, so the run ended correctly and the control read as broken. The honest
+fix is not to offer it — `LyricsAutoscroll` now measures on mount and on `resize`
+(`offsetHeight` against `innerHeight` minus the same bottom inset the run uses and the
+section's resolved `scroll-margin-top`, the line the sticky bar parks it at) and renders
+`null` when there is nothing to scroll. It starts hidden and appears once measured, never the
+reverse: a pill offered and then withdrawn is the same broken control in a different order.
+The run-time end check is untouched. Two tests pin it — 400 px of lyrics in an 800 px viewport
+renders no button, 2 400 px still does.
+
+**iOS zoomed into the Biblioteca search field and stayed zoomed.** WebKit scales the page into
+any focused form control whose computed font size is under 16 px and does not scale back on
+blur, so one tap on the filter drawer's search (`font-label text-xs`, 12 px) left the app
+magnified with the phone tab bar off screen and only a pinch to get back. The viewport meta is
+deliberately NOT touched — `maximum-scale=1` / `user-scalable=no` would fix it by taking pinch
+zoom away from everyone. Instead the house pattern is `text-[16px] sm:text-<size>`: phones get
+16 px, `sm` and up keep the design's own size, since a pointer never triggers the zoom. Applied
+to every member-reachable control: `LibraryFilters`' chip search, `LibraryIndex`' page search,
+`ProfilePanel`'s and `EditSongButton`'s shared `inputCls` (plus its lyrics textarea and the two
+reference-row inputs), `ProposalEditor`'s `inputCls` (input + both textareas), `ProposalThread`'s
+reply textarea, the availability `NotePopover` and the sign-in form. `admin/` and `kids/` are
+dense desk surfaces and were deliberately left: `app/utils/__tests__/inputFontSize.test.ts`
+excludes them BY PATH, not by a baseline count, and fails on any other `<input>`/`<textarea>`/
+`<select>` under `app/**` carrying a sub-16 px text utility that applies at phone width — a
+breakpoint variant is fine, `focus:` and `dark:` are not, since focus is exactly when the zoom
+fires. It reads the whole `className={…}` expression brace-aware and resolves an identifier one
+level to a `const` string or template literal in the same file. `ui/Select` and `ui/DateField`
+carry their size in a `SIZE` map the scan cannot resolve, so their `md`/`lg` entries were
+changed by hand to the same pattern (the `sm` entries are the admin-density skin and keep their
+11 px); both maps carry a comment saying so.
+
+**A long press on a day-card setlist row selected text.** R7 gave `LibraryRow` the gesture and
+`LibraryIndex` the one sheet per page; the run sheet's own rows — the most looked-at list in the
+app — had neither, so a hold did what a hold does to plain text on iOS. `SongRow` now spreads
+`useLongPress(() => onQuickActions?.(song))` and carries `select-none`; `DayCard` owns ONE
+`QuickActions` (`open={actionsOpen}`, never a literal `open`) with the same two actions the
+library offers — «Abrir» → `openSheet(song._id, song.play_key)`, «Copiar enlace» over
+`/posts/<slug>` with an `ok`/`error` toast, offered only when the row carries a slug (the home
+page's setlist projection does). The sheet is on the card, not on the row, for the reason
+`LibraryIndex` records: a mounted `QuickActions` subscribes to the CueDialog layer context.
+Tests: a long press opens the sheet with «Abrir» and opens no song; a plain tap still calls
+`openSheet("s1", "G")` and opens no sheet.
+
+**Fix round 1** (whole-branch review, CHANGES_REQUIRED). One MEDIUM: `ui/Select`'s `md`/`lg`
+and `ui/DateField`'s `md` still zoomed — they reach a phone at `/biblioteca` (Tonalidad),
+`/me/disponibilidad` and `/schedule` — so the `SIZE` maps take the house pattern too. Two LOWs:
+`LyricsAutoscroll` now keeps the pill while `running`, so a resize mid-run (the transport
+appearing, a rotation) can never take «Detener» away from a page that is still scrolling
+itself; and the guard grew teeth — it reads the whole `className` expression rather than
+stopping at the first `}` (a `${inputCls} resize-none` tail was invisible), resolves
+template-literal consts, and counts `focus:`/`dark:` small sizes as violations.
+
+**Release:** merged to `main` as `<pending>` (PR #`<pending>`).

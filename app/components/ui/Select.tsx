@@ -10,10 +10,13 @@
 
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
+// 16 px on a phone, the design's size from `sm` up: WebKit zooms into any focused
+// control under 16 px and never zooms back (F3). `sm` is the admin-density skin and
+// keeps its 11 px — those tables are not a phone surface. `inputFontSize.test.ts`.
 const SIZE = {
   sm: "px-2 py-1 pr-8 text-[11px]",
-  md: "px-3 py-2 pr-9 text-sm",
-  lg: "min-h-[44px] px-3 py-2 pr-9 text-sm",
+  md: "px-3 py-2 pr-9 text-[16px] sm:text-sm",
+  lg: "min-h-[44px] px-3 py-2 pr-9 text-[16px] sm:text-sm",
 } as const;
 
 type Base = Omit<ComponentPropsWithoutRef<"select">, "className" | "children" | "size"> & {

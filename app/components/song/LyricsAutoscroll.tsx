@@ -15,6 +15,13 @@
 // Speed comes from `autoscrollPxPerSecond` (neutral, shared with the tempo
 // pill): the section's measured height divided by how long the lyrics take at
 // `BEATS_PER_LINE` per line, clamped to a readable band.
+//
+// The pill is NOT OFFERED when the Letra section already fits the viewport (F3,
+// after the simulator look): the run's own end check is true on its first frame
+// for a short lyric, so the control toggled itself off the instant it was tapped
+// and read as broken. Measured on mount and on `resize` against the same bottom
+// inset the run uses, plus the section's `scroll-margin-top` — the line the
+// sticky bar parks it at, which is where an autoscroll would actually start.
 
 import { useEffect, useState } from "react";
 import Button from "@/app/components/ui/Button";
@@ -32,6 +39,17 @@ const RESEED_FRAMES = 3;
  *  still reading «Detener». Cleared the moment `scrollend` actually arrives. */
 const SCROLLEND_FALLBACK_MS = 400;
 
+/** Furniture covering the bottom of the viewport: the phone tab bar publishes its
+ *  MEASURED height as `--bottom-nav-h`, and the audio transport sits on top of it.
+ *  Shared by the run loop and by the "is there anything to scroll?" measurement so
+ *  the two can never disagree about where the page ends. */
+function bottomInsetPx(): number {
+  const navH =
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--bottom-nav-h")) || 0;
+  const transportH = document.querySelector(".audio-player")?.getBoundingClientRect().height ?? 0;
+  return navH + transportH;
+}
+
 export default function LyricsAutoscroll({
   targetId,
   bpm,
@@ -42,6 +60,31 @@ export default function LyricsAutoscroll({
   lines: number;
 }) {
   const [running, setRunning] = useState(false);
+  // Starts hidden and appears once the section has been measured, never the other
+  // way round: a pill that is offered and then withdrawn is the same "broken
+  // control" this fix exists to remove, and there is nothing to measure before
+  // hydration anyway.
+  const [scrollable, setScrollable] = useState(false);
+
+  useEffect(() => {
+    const measure = () => {
+      const el = document.getElementById(targetId);
+      if (!el) {
+        setScrollable(false);
+        return;
+      }
+      // The section's top lands at the sticky-bar line, which is exactly what its
+      // `scroll-margin-top` encodes — so the room a run actually has is the
+      // viewport minus that line and minus the bottom furniture.
+      const stickyTop = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+      setScrollable(el.offsetHeight > window.innerHeight - bottomInsetPx() - stickyTop);
+    };
+    measure();
+    // Cheap enough to re-run on every resize: one layout read, and a rotation or
+    // a text-size change genuinely moves the answer.
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [targetId]);
 
   useEffect(() => {
     if (!running) return;
@@ -61,13 +104,7 @@ export default function LyricsAutoscroll({
     // taps play, mid-run.
     let bottomInset = 0;
     const measureBottomInset = () => {
-      const navH =
-        parseFloat(
-          getComputedStyle(document.documentElement).getPropertyValue("--bottom-nav-h"),
-        ) || 0;
-      const transportH =
-        document.querySelector(".audio-player")?.getBoundingClientRect().height ?? 0;
-      bottomInset = navH + transportH;
+      bottomInset = bottomInsetPx();
     };
     measureBottomInset();
     let y = window.scrollY;
@@ -226,6 +263,19 @@ export default function LyricsAutoscroll({
       window.removeEventListener("scrollend", onScrollEnd);
     };
   }, [running, targetId, bpm, lines]);
+
+  // Nothing to scroll ⇒ no control. `running` keeps it on screen regardless: a
+  // resize mid-run (the transport appearing, a rotation, a text-size change) must
+  // never take «Detener» away from a page that is still scrolling itself. The
+  // run-time end check above is unchanged — it still stops a run that reaches the
+  // bottom, and stopping is what clears `running`.
+  //
+  // Mount ordering, deliberately not defended against: the tab bar publishes
+  // `--bottom-nav-h` from its own measurement, so the first measure here can read
+  // 0 for it and offer the pill on a section that is within a tab bar's height of
+  // fitting. That errs toward OFFERING a control, which the run then ends
+  // honestly on its first frame — the failure this fix removes was the opposite.
+  if (!scrollable && !running) return null;
 
   return (
     <Button

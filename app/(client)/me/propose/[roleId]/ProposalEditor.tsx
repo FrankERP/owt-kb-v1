@@ -497,7 +497,10 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
     roleDoc.service_type === "saturday" ? "Sábado"  :
     (roleDoc.service_name ?? "Servicio Especial");
 
-  const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-placeholder";
+  // 16 px on a phone, the design's size from `sm` up (F3): WebKit auto-zooms any
+  // focused control under 16 px and never zooms back, which pushed the tab bar off
+  // screen on the simulator. `inputFontSize.test.ts` is the guard.
+  const inputCls = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-[16px] sm:text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-placeholder";
 
   return (
     <div className="space-y-8">

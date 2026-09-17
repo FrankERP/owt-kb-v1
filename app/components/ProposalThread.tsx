@@ -174,7 +174,7 @@ export default function ProposalThread({
       {open ? (
         <div className="space-y-2">
           <textarea
-            className="w-full resize-none rounded-lg border border-edge-control bg-transparent px-3 py-2 font-body text-sm transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none"
+            className="w-full resize-none rounded-lg border border-edge-control bg-transparent px-3 py-2 font-body text-[16px] sm:text-sm transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none"
             rows={2}
             maxLength={PROPOSAL_NOTES_MAX}
             placeholder="Escribe un mensaje…"

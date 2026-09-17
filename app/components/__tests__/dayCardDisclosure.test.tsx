@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, within } from "@testing-librar
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
+import { ToastProvider } from "@/app/components/ui/Toast";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
 import type { SetlistSong } from "@/app/utils/interface";
 
@@ -27,12 +28,16 @@ const song: SetlistSong = {
   _id: "s1", title: "Canción s1", author: "Oasis", slug: { current: "s1" }, timeSig: "4/4", bpm: "", key: "G", play_key: "G",
 } as SetlistSong;
 
+// `DayCard` raises a toast from its quick-actions sheet (F3), so it needs the stack
+// its real host mounts app-wide in `app/utils/Provider.tsx`.
 function mount() {
   return render(
     <MotionProvider>
-      <CueDialogProvider>
-        <DayCardDisclosure day="Sábado" date="2026-09-19" setlist={{ week: "2026-09-19", songs: [song] }} leads={["Ana"]} />
-      </CueDialogProvider>
+      <ToastProvider>
+        <CueDialogProvider>
+          <DayCardDisclosure day="Sábado" date="2026-09-19" setlist={{ week: "2026-09-19", songs: [song] }} leads={["Ana"]} />
+        </CueDialogProvider>
+      </ToastProvider>
     </MotionProvider>,
   );
 }
@@ -140,15 +145,17 @@ describe("DayCardDisclosure quick actions", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     render(
       <MotionProvider>
-        <CueDialogProvider>
-          <DayCardDisclosure
-            day="Sábado"
-            date="2026-09-19"
-            serviceId="Abc123"
-            setlist={{ week: "2026-09-19", songs: [song] }}
-            leads={["Ana"]}
-          />
-        </CueDialogProvider>
+        <ToastProvider>
+          <CueDialogProvider>
+            <DayCardDisclosure
+              day="Sábado"
+              date="2026-09-19"
+              serviceId="Abc123"
+              setlist={{ week: "2026-09-19", songs: [song] }}
+              leads={["Ana"]}
+            />
+          </CueDialogProvider>
+        </ToastProvider>
       </MotionProvider>,
     );
     longPress(screen.getByRole("button", { name: /Sábado/ }));

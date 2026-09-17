@@ -406,6 +406,37 @@ describe("LyricsAutoscroll", () => {
     expect(button.className).toContain("min-h-[44px]");
   });
 
+  it("F3 — offers no pill at all when the Letra section already fits the viewport", () => {
+    // The run's own end check is true on the first frame for a short lyric, so a
+    // pill offered here toggles itself off the instant it is tapped and reads as
+    // broken. 400 px of lyrics in an 800 px viewport: nothing to scroll.
+    mountTarget(400);
+    const view = render(<LyricsAutoscroll targetId="letra" bpm={120} lines={6} />);
+    expect(view.queryByRole("button")).toBeNull();
+  });
+
+  it("F3 — still offers the pill when the section is taller than the viewport", () => {
+    mountTarget(2400);
+    const view = render(<LyricsAutoscroll targetId="letra" bpm={120} lines={40} />);
+    expect(view.getByRole("button")).toBeTruthy();
+  });
+
+  it("F3 — a resize mid-run never takes «Detener» away from a page that is scrolling", () => {
+    // The transport appearing, a rotation, a text-size change: the measurement can
+    // flip to "fits" while a run is live. Unmounting the control there would leave
+    // the page scrolling itself with nothing to stop it.
+    const el = mountTarget(2400);
+    const view = render(<LyricsAutoscroll targetId="letra" bpm={120} lines={40} />);
+    act(() => {
+      fireEvent.click(view.getByRole("button"));
+    });
+    Object.defineProperty(el, "offsetHeight", { value: 400, configurable: true });
+    act(() => {
+      fireEvent(window, new Event("resize"));
+    });
+    expect(view.getByRole("button").getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("cancels the pending frame on unmount", () => {
     const { unmount } = start(120);
     flush(0);
