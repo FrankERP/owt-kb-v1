@@ -245,6 +245,8 @@ async function main(): Promise<void> {
     // a dialog that fetches, its loading state. That cost a session to
     // "diagnose" a hang the app never had.
     if (args.waitFor) await page.getByText(args.waitFor).first().waitFor({ timeout: 30_000 }).catch(() => report.pageErrors.push(`wait:${args.waitFor} not visible`));
+    // A capture right after a click lands mid-enter-animation (menus, sheets, Collapse) — `--settle` idles past it.
+    if (args.settleMs > 0) await page.waitForTimeout(args.settleMs);
 
     const stem = args.route.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "") || "root";
     if (args.screenshot) {

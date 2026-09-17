@@ -115,18 +115,18 @@ exclusive to the sign-in lockup, where it already lived before this list existed
 | `MotionProvider` | client | mounted once in `app/utils/Provider.tsx`; `LazyMotion features={() => import("./motionFeatures").then(…)} strict` (async chunk, not the synchronous `domAnimation` value) + `MotionConfig reducedMotion="user"`. An `m.*` element renders its `initial` values until the chunk resolves; the vendor loader has no rejection handling, so if the chunk fails to fetch an `m` element stays at its pre-feature state and a `Presence` exit never completes — see "Load-failure behaviour" below for what each M0b overlay primitive does about it. |
 | `Presence` | client | `<Presence show={open} variant="rise">` — exit before unmount. Hosts `div` \| `section` \| `aside` \| `li` only (block-level — a transform is dropped on a non-replaced inline element). `appear` defaults to **false**: a `Presence` mounted already-shown does not animate in unless `appear` is passed; for the common case — a mounted `Presence` that toggles `show` — do nothing, the enter animation runs on every `show→true` transition regardless. Pass `appear` only for an instance that mounts already-shown and must still animate in (an on-demand toast, a newly appended list row). `onEntered` fires after the enter animation completes; a mount that is already shown without `appear` runs no enter animation, so the callback never fires there. The `sheet` variant enters on `SPRINGS.sheet` (exit stays `EXIT_MS`). |
 | `Skeleton`, `SkeletonGroup` | neutral | loading placeholders with the shimmer; one `aria-busy` status region per loading surface |
-| `Button` | neutral | `variant` primary/secondary/ghost/danger/icon/pill · `size` sm/md/lg · `busy`/`busyLabel` · `href`. Defaults to `md`; the spec's phone-width `lg` default is applied per call site, not by the primitive. `busy`/`busyLabel` are rejected by the types on the `href` branch — a link has no loading state to represent. `className` is additive only (appended after the variant/size classes, never a padding/radius/colour override). The `primary` variant sets `overflow: hidden` for the hover sheen, so an absolutely positioned badge nested inside a primary button is clipped — anchor badges outside the button instead. The `pill` variant also takes a `tone` (R3): `"accent"` (default) or `"availability"` — `AvailabilityGrid`'s «Seleccionar fechas» pill since F3 retired the tone's original consumer, `WeekendList`'s weekend toggles; pressed text is `soft` rather than `strong` to clear 4.5:1 contrast in light. |
+| `Button` | neutral | `variant` primary/secondary/ghost/danger/icon/pill · `size` sm/md/lg · `busy`/`busyLabel` · `href`. Defaults to `md`; the spec's phone-width `lg` default is applied per call site, not by the primitive. `busy`/`busyLabel` are rejected by the types on the `href` branch — a link has no loading state to represent. `className` is additive only (appended after the variant/size classes, never a padding/radius/colour override). The `primary` variant sets `overflow: hidden` for the hover sheen, so an absolutely positioned badge nested inside a primary button is clipped — anchor badges outside the button instead. The `pill` variant also takes a `tone` (R3): `"accent"` (default) or `"availability"` — `AvailabilityGrid`'s «Seleccionar fechas» pill since F3 retired the tone's original consumer, `WeekendList`'s weekend toggles; pressed text is `soft` rather than `strong` to clear 4.5:1 contrast in light. The `icon` variant takes the same prop with ONE value, `"danger"` (R5 fix round 2): `hover:text-negative-fg hover:bg-negative-surface/40` for a destructive row action («Eliminar» in Contenido). It lives in the primitive for the same reason the pill's tone does — a `hover:` pair passed as an additive `className` sits beside the variant's own and Tailwind's emission order picks the winner. |
 | `revealProps(i)` (`app/utils/reveal.ts`) | neutral | spread on a block a page reveals; `template.tsx` replays it per navigation |
 | `CueDialog` | client | the ONE dialog shell — never a hand-rolled `fixed inset-0` scrim. `mode="modal"` \| `"sheet"`; a `"sheet"` dialog is only a sheet below 640px — at ≥640px it renders the same centred-card motion as a modal, decided when the dialog opens (`useMemo` on the `open` edge) and held until it closes. Drag-to-dismiss lives on the sheet's HEAD — the handle and the title bar as one grip, never the body (hand-rolled pointer events, not the `drag` prop — the gesture is one-axis and the sheet body still needs to scroll; on the phone sheet the × is `sr-only` (the grip is the close control; the button stays for VoiceOver and keyboard focus, and the ≥640px card keeps it visible); every sheet passes a `title` (`SongSheet` since M1), so the head is the grip everywhere; it closes past `SHEET_DISMISS.distance` = 150 px of travel OR above 0.5 px/ms, and springs back otherwise); a sheet's exit slides fully out (`y: "100%"`), it does not recoil partway like a modal's scale-fade. `onDismiss(reason: DismissReason)` where `DismissReason` is `"escape" \| "backdrop" \| "drag"`. Layers register with the provider so Escape and inert-ing only ever affect the top one. Its focus effects depend on the presence EDGE ONLY (`[open, top]` for entry focus, which also skips when focus is already inside the shell; `[id, mounted, registerLayer]` for layer registration) — never on `onDismiss` or on a ref prop, which re-run on every consumer render (the layer record is handed live views of the ref mirror, so narrowing the deps costs it no freshness) and pull the caret out of whatever the member is typing ([ADR-0034](adr/0034-dialog-focus-effects-depend-on-edges-only.md)); the Tab/Escape listener may keep them, since re-binding a listener moves no focus. Traps focus via `trapTabTarget`, and can extend its Tab ring to a portalled "satellite" node via `useCueDialogFocusSatellite()` (no production consumer registers one today; see the in-file comment). **Render `<CueDialog open={x}>`, never a literal `open` behind a conditional** — whether that conditional is `{x && <CueDialog open>}` directly, or a wrapper component (a local `Modal`, a `SetlistPopover`, a `SeatPicker`) whose only JSX output is `<CueDialog open …>` and which its caller mounts conditionally. Either way the dialog element is created and destroyed by React instead of opened and closed by the `open` prop, so it never runs CueDialog's own enter/exit — `cueDialogMount.test.ts` pins the current backlog and ratchets it down. A `Menu` inside a `CueDialog` owns Escape: the dialog's capture-phase listener yields when the key's target is inside an open menu or on its expanded trigger, so the first Escape closes the menu and the second the dialog (M0b-2). The sheet/card decision is taken when the dialog OPENS and held until it closes. |
 | `Toast` / `useToast` | client | the ONE toast stack — `useTransientValue` stays for an inline "Guardado ✓" flash next to the control that produced it, `useToast` is for anything that needs a FIXED, stacked notification. `toast({ message, tone?, duration?, hold?, action? })`: `tone` is `"ok" \| "error" \| "info"`; `hold` persists until something calls `dismiss(id)` (never a bare `setTimeout`); `action` renders a button inside the toast that both fires and dismisses. Portals to its own viewport node, `z-[95]` (above `CueDialog`'s `z-[90]`, so a save confirmation is visible over a dialog), bottom-anchored at `calc(1.5rem + max(env(safe-area-inset-bottom), var(--bottom-nav-h, 0px)))` so it clears the mobile tab bar. |
-| `Menu` / `MenuItem` / `MenuSeparator` / `MenuHeader` | client | the ONE anchored dropdown. Real `role="menu"` semantics: roving focus with arrow keys, Home/End, Escape closes and refocuses the trigger, Tab closes without refocusing. Positioned `absolute` in a `relative` wrapper (never a portal — a portal would escape a dialog's inert boundary). Merges the trigger's own `ref` with its internal one, so a consumer that also needs the trigger node (to refocus it after an async action) still can. |
+| `Menu` / `MenuItem` / `MenuSeparator` / `MenuHeader` | client | the ONE anchored dropdown. Real `role="menu"` semantics: roving focus with arrow keys, Home/End, Escape closes and refocuses the trigger, Tab closes without refocusing. **PORTALLED to `document.body`, `position: fixed`, measured from the trigger's `getBoundingClientRect()` on open** (R5 Task 7 fix round 1 — it was `absolute` in the `relative` wrapper until dev showed a ten-row Tonalidad panel cut to two rows by `CueDialog`'s `overflow-y-auto` body; the fixed-inside-a-transformed-ancestor trap means a bare `fixed` would not have been enough either, so the portal is the same answer `Toast` and `NotePopover` take). It flips above the trigger when the room below is short, repositions on `resize` and closes on any ancestor `scroll` (capture phase — the panel's own scroll is exempt, or a long list would shut itself; item focus is `preventScroll` + `scrollIntoView({ block: "nearest" })` for the same reason). `z-[92]`: above a dialog (`z-[90]`), below the toast stack (`z-[95]`), `data-pull-ignore` so R7's pull-to-refresh bails inside it, and an OPAQUE `bg-surface-raised` + `backdrop-blur-sm` surface (round 2 — over `/biblioteca`'s filter dialog the old one let «Limpiar filtros» read through the first row). It is sized to the room it has, not just capped: the inline `maxHeight` is `min(320, room - gap)` and the CSS `max-h` stays the ceiling, because the flip threshold (240) is SHORTER than the height (320) and a panel with 260 px below it would otherwise hang off the bottom edge. Measurement is `documentElement.clientWidth/clientHeight` — `innerWidth/innerHeight` include a classic scrollbar's gutter and push a right-aligned panel that far off screen — with a window fallback for an environment that lays nothing out; a start-aligned panel near the right edge is clamped back once its width is known. Tab from an item closes with `close(true)`: every item is `tabIndex={-1}` and the panel is the last child of `<body>`, so a bare close dropped focus out of the document. The portal does NOT break the dialog contract — `CueDialog`'s Escape yield reads `event.target.closest('[role="menu"]')`, which still matches — but the panel is no longer a DOM descendant of the root, so outside-click tests root OR panel. The panel is `max-h-[min(20rem,60vh)] overflow-y-auto` (a 30-option `Select`); a rounded box still clips its own corners while scrolling. `className` replaces the root wrapper's `inline-block` (kept on top of `relative`). `MenuItem selected` marks the current row with `aria-current="true"` + the accent tone and takes keyboard entry focus ahead of item 0. Merges the trigger's own `ref` with its internal one. |
 | `Collapse` | client | the ONE disclosure — expand/collapse with real height animation (the one place `height` animates outside `transform`/`opacity`, on user-triggered disclosures only). Renders an UNSTYLED animated OUTER `m.div` (owns `id`/`aria-hidden`/`inert`/`height`/`opacity`/`overflow`) with `className` applied to a plain INNER `div` — under `border-box` a padded/bordered box floors its height at padding+border, so a closed `Collapse` that owned the padding itself reserved blank space forever; height 0 only means 0 when the animated box has no padding of its own. Children stay mounted while closed; opening clears `inert`/`aria-hidden` in the same commit as `open` (so a parent's own effect can reach a child node right away), while closing waits for the animation to finish before setting them. Because jsdom (as of this writing) does not wire the `inert` IDL property from the reflected attribute, `Collapse` also sets `el.inert` imperatively in an effect — a harmless duplicate of the JSX prop in a real browser, and what `Collapse.test.tsx` actually observes. |
 
 | `SegmentedControl` | client | the ONE segmented control — `role="radiogroup"`, arrows move the selection with wrap and focus follows, the checked option is the sole tab stop; `value={null}` means nothing chosen yet (no thumb). The thumb is one `layoutId` span (what `domMax` is for). Sizes `sm`/`md`; tones `outline` (bordered pills) / `filled` (joined bar, solid thumb). `badge` and `busy` per option. Never `aria-pressed` toggles for a one-of-N choice. |
 | `SlidingIndicator` / `useActiveIntoView` | client | the active marker for tab bars (admin `TabBar`, `SectionNav`, `BottomNav`, `NavLinks`): render ONE inside the active item; variants `pill`/`underline`/`dot`. Semantics stay on the items (`aria-current`). The hook scrolls the active item to the centre of an overflowing bar. |
 | `Switch` | client | the ONE switch — `role="switch"`, `aria-checked`, a `<button>`; knob springs (`SPRINGS.pop`) with `initial={false}` so the first paint is the real state; haptic on flip. Sizes `sm`/`md`. |
-| `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` for the kill switch. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop rather than a `className` because a same-property utility passed through `className` cannot beat one the primitive already sets — two classes for the same property land at equal specificity in the compiled stylesheet, and the one emitted LATER wins regardless of call-site order, so an `items-center` baked into the component always beats an `items-start` passed in from outside. Name it with `children` or `aria-label`. |
-| `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
+| `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` is the destructive tone — the kill switch, its former consumer, became a `Menu` item behind a confirm in R5 Task 3. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop rather than a `className` because a same-property utility passed through `className` cannot beat one the primitive already sets — two classes for the same property land at equal specificity in the compiled stylesheet, and the one emitted LATER wins regardless of call-site order, so an `items-center` baked into the component always beats an `items-start` passed in from outside. Name it with `children` or `aria-label`. |
+| `Select` | client | the ONE select — TWO renders of ONE control (R5 ruling 8). On a coarse pointer, the native `<select>` under tokenised chrome and a drawn chevron. On `(hover: hover) and (pointer: fine)` the native element stays mounted but `sr-only` — still the form value, still what the `<label>` points at, still the control a keyboard `Tab` reaches — and a `Button variant="secondary"` trigger shows the selected label + chevron and opens a `Menu align="start"` with one `MenuItem` per `<option>` (roving focus, Escape, plus a first-letter jump matched accent-insensitively through `normalizeText`). Choosing sets the native element's `value` and dispatches a real bubbling `change` on it, so the consumer's `onChange` fires with a genuine event and reads `e.target.value` unchanged — no synthetic event shapes, no consumer edits. Detection is `useSyncExternalStore` over that media query with a SERVER snapshot of `false`, so SSR, hydration and any environment without `matchMedia` (jsdom) are the native path, and a hybrid device that gains a mouse switches without a remount; `popover={false}` opts out permanently. Fix round 1 (dev review): the trigger fills its box (`Menu className="block w-full"` + `min-w-0 truncate` on the label, so `MonthGenerator`'s `w-24 max-w-[96px]` truncates instead of spilling); re-picking the CURRENT option dispatches no `change` (a native select fires none, and the spurious one sent a `PairRoster` PATCH) though the menu still closes; the `sr-only` native element is `tabIndex={-1}` (it was an invisible tab stop before the trigger — `htmlFor` stays, so it is still what the label and AT name); the current option is a `MenuItem selected` (`aria-current`, accent tone, keyboard entry focus); a controlled value matching no option leaves the trigger blank instead of naming the first; the first-letter jump is bound on the control's own wrapper so it works from the trigger after a click-open; and the panel scrolls at `max-h-[min(20rem,60vh)]`. The trigger is named «campo: elección» and the panel «Opciones de campo», never the bare field name — that would leave three elements answering to one `getByLabelText`. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. |
 | `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws an optional prev/next icon-button pair around the input, the parent's job to interpret. `ScheduleHeader` does NOT pass `onStep` (R2 Task 4 ruling — its own header arrows already page the month, under the same accessible names a second stepper pair would duplicate); the one live consumer is the theme gallery's `ControlsFixture`. |
 | `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
 | `AnimatedList` | client | list reflow: `mode="popLayout"` pops leavers out of flow so the survivors slide at once (`layout="position"` per row, leavers fade `fast`); the host renders `relative` because a popped item positions against it — `/biblioteca` index. |
@@ -192,14 +192,17 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `reveal.test.ts` | `revealProps()`'s shape, and that `app/(client)/template.tsx` never wraps the page in a transformed element. |
 | `loadingSkeletons.test.ts` | The four `loading.tsx` files compose `Skeleton` instead of a hand-copied pulse block. |
 | `shellPolish.test.ts` | Spec Part III findings 3 (brand mark loads with `priority`) and 5 (initials avatar contrast in light). |
-| `rawMotionLiterals.test.ts` | Pins `transition-all` (7) and raw `duration-N` (0) counts outside `ui/` at the audited baseline (13/12 pre-M1 → 9/8 after M1 → 7/0 after R1 deleted the tag/author lists — M1's four migrated sites: `BottomNav`'s sheet becoming a `CueDialog`, `NavMenu`'s avatar-ring transitions, the audio transport's progress fill and play/pause button) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. |
+| `rawMotionLiterals.test.ts` | Pins `transition-all` (5) and raw `duration-N` (0) counts outside `ui/` at the audited baseline (13/12 pre-M1 → 9/8 after M1 → 7/0 after R1 deleted the tag/author lists → 6 after R5 Task 3's member row → 5 after Task 4's member chip) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. **Scans `.ts` as well as `.tsx` since R5 Task 5**: a class string is a class string wherever it is written, and `serviceCardModel.ts`'s `CARD_STYLE.container` had been hiding one in a model module for exactly that reason. |
 | `cueDialogMount.test.ts` | Counts every LITERAL `open` attribute on a `<CueDialog` source element — not `open={…}` — across `app/**/*.tsx` excluding `__tests__` and `ui/`; per element, not per caller, so a wrapper mounted by several callers still counts once. Pins the count at 10 (re-measured 2026-09-09, M1 Task 7 — `SongSheet`'s `SetlistPopover` migrated to `open={x}`, down from 11; the original 2026-09-08 measurement of 7 only caught the direct `{x && <CueDialog open>}` shape and missed wrapper components). `AdminPanel`'s and `ServicesPanel`'s local `Modal`s and `KidsPlanner`'s `SeatPicker` remain and migrate in their own route phases. Lower the count in the same commit that migrates a site to `open={…}`; never raise it. |
 | `inputFontSize.test.ts` | F3: no `<input>`/`<textarea>`/`<select>` under `app/**` carries a sub-16 px text utility that applies at PHONE width — WebKit zooms into any smaller focused control and never zooms back. The house pattern is `text-[16px] sm:text-<size>`; a breakpoint variant anywhere in the chain is fine, `focus:`/`dark:`/`hover:` are NOT (focus is when the zoom fires). `admin/` and `kids/` are excluded BY PATH, not by a baseline count — there is no number to ratchet, so a new violation cannot be absorbed. className expressions are read whole (brace-aware) with bare identifiers resolved one level to a `const` string; a size inside an object map (`ui/Select`/`ui/DateField`'s `SIZE`) is compliant today but outside the scan. Never fix this by putting `maximum-scale=1` on the viewport. |
 | `dialogSemantics.test.ts` | Every file that draws a dismissable full-bleed scrim (`bg-scrim` + `inset-0` + `onClick`) carries `role="dialog"`/`aria-modal`/an accessible name/focus management, or is named in an exemption list with a reason. Floor is 1 (`CueDialog` itself) as of M1 Task 1 — `BottomNav`'s hand-rolled scrim was replaced by a `CueDialog` sheet, so its `NOT_A_DIALOG` entry was deleted along with the overlay it exempted; the exemption list is now empty. A stale exemption (naming a file the scan no longer finds) fails its own check. |
-| `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins seven named labels at their audited counts, by equality — a phase that removes one lowers its number in the same commit. `>Cue<` (0, M0b-1), `>Servicio<` (0, R1 — `DayCard`'s day · date header carries it now), "Índice musical" (0, R1 — `SongSearchList` removed), "títulos" (0, R1 — the home library count removed), "Repertorio" (0, R1 — `PostComponent`'s song-card eyebrow removed), "Backstage operations" (1) and "Acceso autorizado" (1) still open, both due in R5. |
+| `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins seven named labels at their audited counts, by equality — a phase that removes one lowers its number in the same commit. `>Cue<` (0, M0b-1), `>Servicio<` (0, R1 — `DayCard`'s day · date header carries it now), "Índice musical" (0, R1 — `SongSearchList` removed), "títulos" (0, R1 — the home library count removed), "Repertorio" (0, R1 — `PostComponent`'s song-card eyebrow removed), "Backstage operations" (0, R5 Task 1 — `/admin`'s eyebrow removed) and "Acceso autorizado" (0, R5 Task 1 — the status pill removed). All seven are at 0; the file stays as the ratchet a new eyebrow has to argue with. |
 | `redirects.test.ts` | R1 (spec §12.2, decision H): `next.config.mjs`'s `redirects()` folds `/tag`, `/tag/:slug`, `/author`, `/author/:slug` into `/biblioteca` (`?tag=:slug`/`?author=:slug`), all `permanent: true` (308). |
 | `litCard.test.ts` | The home hero card's one-shot light pass (R1, decision Q — see "The beam" above). Cannot see geometry (jsdom), so it pins the CSS contract instead. |
 | `bottomNavOffsetSync.test.ts` | Names `BottomNav`'s `NAV_H_VAR`/`NAV_CLASS` exports, the `setProperty`/`removeProperty`/`classList` publish-and-clear shapes, `brand.css`'s `--bottom-nav-h` declaration and `html.has-bottom-nav [data-route-main]` padding rule, that every fixed-bottom consumer (`Toast.tsx`, `AudioPlayer.tsx`, `EditSongButton.tsx`) offsets by the variable, and that the client layout mounts `<BottomNav />` inside `<Provider>`. A new fixed-bottom element joins the `it.each` list. |
+| `adminShell.test.tsx` | R5 (spec §12.5, [ADR-0035](adr/0035-the-admin-shell-is-gone.md)): `/admin` has no shell and no panel boxes — no `.brand-admin-shell`/`.brand-admin-tabs`, no `brand-surface` wrapper around a panel body and no second tab bar. A structural ratchet: a new box fails the suite rather than shipping. Its queries are scoped to the rendered container after a flake that saw the previous test's tree. |
+| `adminDynamic.test.ts` | R5 Task 6: a source scan proving each of `ActivityPanel`, `ContentPanel`, `AvailabilityPanel`, `ProposalsPanel`, `MembersPanel` (in `AdminPanel.tsx`) and `MonthGenerator` (in `ServicesPanel.tsx`) is imported through `next/dynamic` in exactly the file allowed to gate it, and statically NOWHERE else under `app/**` — one static import elsewhere pulls the chunk back into the eager graph and silently undoes the −207.8 kB split. |
+| `panelBoundary.test.tsx` | A failed panel chunk stays inside its own column: a throwing child renders «No se pudo cargar esta sección» + «Reintentar» instead of reaching `app/(client)/error.tsx`, and an `onRetry` recovers in place. The rule it encodes: App Router `next/dynamic` renders `loading` only as a Suspense fallback and never passes `error`/`retry`, so the recovery belongs to an error boundary, never to the skeleton. |
 | `navbarHeightSync.test.ts` | R4 Task 6 (spec §5.3): `Navbar` and `NavbarSkeleton` must publish the top bar's height from the ONE spelling, `NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts`, `"h-20 lg:h-24"`), so a `loading.tsx` never hard-codes a height that can drift from the real navbar. Reads both sources and asserts each imports the constant from `@/app/utils/navbarHeight` and neither contains the literal string. Scope is exactly those two files — `SectionNav`'s sticky offset, `LibraryIndex` and the song page's `scroll-mt-*` still hard-code their own values and the guard does not see them. |
 
 ## Bundle
@@ -245,6 +248,17 @@ Before was measured on the primary checkout at the merge-base commit
 | **R7 tip `6fcfb22c`** (the cue strip, blackout, pull-to-refresh rail, long-press hook + sheet; the two later commits move classes and one sheet, not chunks) | 172.5 kB | 122.1 kB (+4.1) | 357.0 kB (+2.6) | 124.1 kB (`/schedule`, +2.4) · 116.9 kB (`/biblioteca`, +5.0) · 123.1 kB (`/me`, +3.6) |
 | **`main 7fbbb105`, R4 release-day rebuild** (git-archive cold build, same environment as the R7 rows) | 172.5 kB | 122.6 kB | 357.6 kB | 110.7 kB (`/posts/[slug]`) · 124.6 kB (`/schedule`) · 117.0 kB (`/biblioteca`) · 123.6 kB (`/me`) |
 | **R4 tip `5a899be0`** (the transposer seat, hero pills, practice cluster, autoscroll, equaliser; the three later commits move classes and handlers, not chunks) | 172.5 kB | 121.2 kB (−1.4) | 356.2 kB (−1.4) | 111.7 kB (`/posts/[slug]`, **+1.0**) · 123.3 kB (`/schedule`, −1.3) · 115.7 kB (`/biblioteca`, −1.3) · 122.3 kB (`/me`, −1.3) |
+| **`main 856f3e87`, R5 release-day rebuild** (git-archive cold build, same environment as the R4 rows. `measure-bundle.mjs` now EXCLUDES the `server/chunks/ssr` entries newer builds list in the client reference manifest — the +27 kB-per-route jump an earlier reading showed was that artefact, not code) | 172.5 kB | 122.8 kB | 358.6 kB | 113.0 kB (`/posts/[slug]`) · 125.6 kB (`/schedule`) · 116.9 kB (`/biblioteca`) · 123.8 kB (`/me`) |
+| **R5 Task 6 tip `efa3af61`** (the flatten, the rail, the members menu, the board, the panel polish, and the load-on-demand split) | 172.5 kB | 122.9 kB (+0.1) | **150.2 kB (−208.4)** | 112.7 kB (`/posts/[slug]`, −0.3) · 125.3 kB (`/schedule`, −0.3) · 116.7 kB (`/biblioteca`, −0.2) · 123.7 kB (`/me`, −0.1) |
+| **R5 final tip `07ed88a9`** (the `Select` popover and its two `Menu` fix rounds on top of Task 6 — primitives, not chunk boundaries) | 172.5 kB | 123.5 kB (+0.7) | **150.8 kB (−207.8)** | 113.3 kB (`/posts/[slug]`, +0.3) · 125.9 kB (`/schedule`, +0.3) · 118.3 kB (`/biblioteca`, **+1.4** — the popover plus the portalled `Menu` on the filters) · 124.3 kB (`/me`, +0.5) |
+
+`/admin`'s fall is the whole point of Task 6 and **not** a like-for-like row: from that
+build forward the number measures Servicios + the shell, because the five secondary tabs,
+`MembersPanel` and `MonthGenerator`/`PlannerGrid`/`SetlistEditor` are async chunks a member
+pays for only on the tab that needs them. **The `07ed88a9` row is R5's figure of record** —
+the final tip, measured after the `Select` popover and both `Menu` fix rounds, which move
+primitives rather than chunk boundaries and cost every route a few tenths (`/biblioteca`
++1.4, where the popover and the portalled `Menu` both land on the filters).
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -1241,3 +1255,209 @@ production exercises; the `song` theme-gallery fixture is where both are visuall
   so a hold no longer selects the row's text. The simulator look also CLOSED three R4 open
   notes: the autoscroll's pause/resume under a real finger, where the run stops with the tab
   bar and transport up, and the practice cluster's hand-off.
+
+### Control Room (R5)
+
+Spec §5.8 / Part III finding 4, plus decision N: `/admin` stops being a card inside a
+card inside a card. **Task 1 (flatten).** The page renders the navbar, an `h1` and
+`AdminPanel` inside `brand-admin-frame` — the bordered `.brand-admin-shell`, the
+«Backstage operations» eyebrow, the subtitle and the «Acceso autorizado» pill are gone
+(label budget: both labels pinned at 0). `AdminPanel` renders ONE tree instead of six
+mutually exclusive early returns: one `TabBar` (its bordered `.brand-admin-tabs` pill
+dropped — the `SlidingIndicator` underline is the affordance) and one body
+`key={tab} … animate-fade-in`, so a tab change MOUNTS the incoming panel and fades it in
+rather than keeping the outgoing one alive beside it (ruling 2 — these panels are
+thousands of lines each). No per-tab `brand-surface` box: the cards inside a panel are
+the only frames left. `/admin` now has no page-level horizontal scroll — the planner
+grid, the Servicios board and the availability matrix are the only horizontal scrollers,
+each in its own `overflow-x-auto` box, which is what closes finding 4's silent 128 px
+shift. The planner's full-screen portal and `MonthGenerator`'s hand-centring STAY, and
+the comments that used to name the shell now name `[data-route-main]`: see
+[ADR-0035](adr/0035-the-admin-shell-is-gone.md). `NavLinks` lost its `schedule`/`tags`
+props in the same task (ruling 9) — Calendario and Biblioteca show for every worship
+member on every page, so the row no longer changes shape between routes. Guards:
+`adminShell.test.tsx` (one rail + one strip, no box between the nav and the panel, the
+keyed remount) and `participationAlongside.test.tsx` (the re-derived `:has(.planner-wide)`
+arithmetic — see Task 2, which put the rail into that sum).
+
+**Task 2 (the rail, and the integrity dot).** The tab bar is `AdminRail` now (ruling 3):
+ONE component rendering two layouts, a vertical rail at `lg+` in the grid's 200 px column
+(icon + label, `aria-current="page"`, `SlidingIndicator id="admin-rail" variant="pill"`
+inside the active item, so the pill slides VERTICALLY between stacked siblings) and below
+`lg` the horizontal underline strip the page always had (`id="admin-strip"`,
+`useActiveIntoView`, the `md:hidden` scroll fade). Both are always in the DOM and CSS picks
+one (`hidden lg:flex` / `lg:hidden`) — a JS media query would paint the wrong one first —
+and the two indicator ids are deliberately different, or the shared `layoutId` would fly
+the marker across the page at the breakpoint. While the planner is open the rail collapses
+to icons: `app/brand.css` sets `--admin-rail-w: 56px` on `.brand-admin-frame:has(.planner-wide)`
+(the grid reads it as `lg:grid-cols-[var(--admin-rail-w,200px)_1fr]`, so 56 is written
+once) and hides `[data-rail-label]`, which is why every item carries its own `aria-label`
+— a `display: none` label is out of the accessibility tree too. The widened-frame
+arithmetic was re-derived WITH the rail: `1512 − 24 = 1488`,
+`56 + 32 + 1400 = 1488`, `216 + 12 + 920 + 12 + 240 = 1400`.
+
+The integrity state is lifted with it (ruling 4): `useIntegrityQueue` owns the three
+service-integrity fetches `IntegrityQueuePanel` used to run itself, `AdminPanel` calls it
+ONCE at the top level (gated on the role actually having a Servicios tab, and re-read on
+entering it), and the same queue feeds the panel and the rail's Servicios dot —
+nothing when the inventory is proven clean, a dim `?` when a domain failed or is still
+loading, the count in `negative-fg` when there are issues. Three states, never two: an
+unknown queue must not read clean, in the dot or in the item's accessible name. The panel's
+`Collapse` follows the tone (open until proven clean) and a member can still toggle it.
+A RELOAD holds the last settled tone (whole-branch review, LOW): every domain goes
+`loading` again when Servicios is entered, and deriving the tone from that flashed a `?`
+in the rail and re-opened the disclosure on an entirely clean entry. The held value was
+actually proven, `loading` is exposed beside it, and a FIRST load still reads `unknown`
+because there is no earlier answer to hold.
+Guards: `adminRail.test.tsx`, `useIntegrityQueue.test.tsx`.
+
+**Task 3 (Miembros: one menu per row, and a confirmed kill switch).** The Miembros body
+left `AdminPanel` for its own `MembersPanel.tsx` — it holds the list, the filters, every
+member write and the four dialogs, and it renders only on its own tab (Task 6 mounts it
+behind `next/dynamic`). The row's four hover-only icon buttons and the
+`Deshabilitar acceso (kill switch)` `Checkbox` that sat in the row body are replaced by ONE
+`Menu` (ruling 6): a `Button variant="icon" size="lg"` ⋯ trigger with `aria-label`
+«Acciones de {alias}», items Editar · Contraseña and, for a `super-admin`, Ver como este
+miembro · separator · Deshabilitar/Habilitar acceso · Eliminar. Nothing depends on hover,
+so a phone reaches every action a desktop does, at one 44 px target. Taking access away now
+asks first (decision O): a `CueDialog mode="modal" size="sm"` that names the member, says
+what it does and what it does NOT change («No podrá iniciar sesión. No cambia su Tipo, sus
+asignaciones ni su historial.»), and commits through the same
+`PATCH /api/admin/members/:id/disable`; GIVING access back needs no confirm. The `Sin acceso`
+chip stays — it is the row's own statement about access. A refused PATCH does NOT close the
+confirm: `handleDisableAccess` returns `res.ok`, and on `false` the dialog stays up with a
+`CueDialogStatus` saying the member still has access — a sheet that closes on a failed write
+reads as success against an unchanged row. Primitives in the same pass: all five dialogs are
+mounted ALWAYS and opened by a boolean (`cueDialogMount.test.ts` 10 → 9), and each keeps its
+PAYLOAD in state while only an `open` flag flips, so nothing blanks during the exit animation
+(the bodies are keyed on an open counter, so a reopen still starts from a fresh form).
+Loading is six `Skeleton` rows in a `SkeletonGroup`, the delete modal's two raw buttons are
+`Button variant="danger"`/`"ghost"`, the row's `transition-all` is now
+`transition-[box-shadow,border-color] duration-base ease-out-brand` — the two properties
+`.brand-member-row:hover` can actually animate, since its `background` is a non-interpolable
+gradient (`rawMotionLiterals` `transitionAll` 7 → 6) — and the search input is
+`text-[16px] sm:text-sm`. Guard: `membersPanelMenu.test.tsx` (the items per role, the
+confirm, one PATCH on confirm and none on cancel, no hover-only strip, no kill-switch
+checkbox).
+
+**Task 4 (Servicios is a board).** From `lg` the cards are a horizontal snap track —
+`lg:flex lg:snap-x lg:snap-mandatory lg:overflow-x-auto lg:scroll-px-6` on the container,
+`lg:w-[380px] lg:shrink-0 lg:snap-start` on each card — instead of a 2/3-column grid that
+squeezed a card to ~260 px on a month with a full roster (ruling 5). The phone keeps the
+vertical list, the `lg:grid-cols-[320px_1fr]` split with `ParticipationSidebar` stays, and
+the track scrolls ITSELF inside a `min-w-0` column, so the page never grows wider
+(ADR-0035); a `lg:` gradient at its right edge hints the overflow, the same pattern the
+rail's strip uses. Cards arrive with `{...revealProps(i)}` (capped stagger, CSS-only).
+Every control in the panel is a primitive now: the toolbar's four buttons, the three
+retries, the banners' dismiss/reload and the delete modal's three buttons are `Button`;
+the month pills are `Button variant="pill" size="sm"` whose `aria-pressed` states the
+MULTI-select nobody should turn into a `SegmentedControl`; «Roles previos» is a
+`Button variant="ghost"` still driving its `Collapse`; loading is six `Skeleton`s in a
+`SkeletonGroup`; and the local `Modal` took an `open` prop, so its five dialogs (delete ·
+publicar listos · publicar de todos modos · ocultar · setlist) are mounted always with
+their payload outliving the close and their bodies keyed on an open counter
+(`cueDialogMount.test.ts` 9 → 8). `ServicePrimaryAction` is a `Button` that still carries
+`data-action-kind`/`-rule`/`-route`, with the tone in the VARIANT rather than in a colour
+override on `className` (danger for an integrity/conflict blocker, secondary for a retry,
+primary otherwise). The member chip's `transition-all` became
+`transition-[color,background-color,border-color,transform,box-shadow] duration-base
+ease-out-brand` (`rawMotionLiterals` `transitionAll` 6 → 5). One label left in the same
+pass: the panel repeated «Integridad de datos · sin problemas de integridad» under its
+heading while `IntegrityQueuePanel` and the rail's dot already said it. Guard:
+`servicesBoard.test.tsx`.
+
+**Task 5 (the remaining five panels).** `ActivityPanel`, `AvailabilityPanel`,
+`ContentPanel`, `ProposalsPanel` and `IntegrityQueuePanel` adopt the primitives, and each
+one pays a debt rather than adding an effect. Every loading surface is a `SkeletonGroup`
+of `Skeleton`s — the last four `animate-pulse` blocks in `app/**` outside `ui/`.
+Actividad's three summary stats are `NumberRoll`s (they change in place as the list
+resolves) and its error state gained a `Button variant="ghost" size="sm"` «Reintentar»
+wired to the same loader the mount effect calls — a dead end is not a state. Contenido's
+row actions were `opacity-0 group-hover:opacity-100`, which is not a subtle affordance on
+a phone but a missing one: there is no hover state to enter, so Editar and Eliminar were
+permanently invisible to every touch admin and unreachable by keyboard at every width.
+They are `opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100`
+now, as `Button variant="icon" size="lg"` (44 px), and Contenido's two dialogs joined the
+house pattern — mounted always, opened by `modalOpen` + `modalKind`, payload outliving the
+close, bodies keyed on an open counter (`cueDialogMount.test.ts` 8 → 6). Disponibilidad's
+matrix gets the one genuinely new piece: its sticky first column takes an edge only once it
+has DETACHED from the scroller's left edge, driven by a 1 px `aria-hidden` sentinel observed
+by an `IntersectionObserver` **rooted on the scroll box** — no scroll listener, disconnected
+on unmount — which sets `data-scrolled` and lets `brand.css`'s
+`.availability-matrix[data-scrolled] .sticky-col` animate a box-shadow over `--motion-fast`.
+Integridad's entries render through `AnimatedList`, so a RESOLVED entry fades out and the
+survivors slide up; the queue derivation is untouched (it lives in `useIntegrityQueue`) and
+each entry keeps its own `Collapse`.
+
+Three Task 4 follow-ups ride along. The `past` month pill dims with `opacity-60` instead of
+a `border-accent/10 text-mono-600` override that lost to the pill variant's own border on
+emission order. The Servicios toolbar states a closed gate's reason as a LINE under the
+buttons instead of a `title`: `Button` carries `disabled:pointer-events-none`, so a disabled
+control receives no pointer events and its native tooltip can never be summoned — the reason
+the admin needs most was the one the markup guaranteed they would never see. And
+`CARD_STYLE.container` in `serviceCardModel.ts` was still carrying the catch-all
+every-property transition, invisible to `rawMotionLiterals.test.ts` because that scan only
+read `.tsx` while the class string lives in a `.ts` module; it is now
+`transition-[border-color,box-shadow,opacity] duration-base ease-out-brand` — exactly what
+the card's tones change — and **the scan reads `.ts` as well as `.tsx`**. Widening it found
+that one site and no other, so the baseline stays 5/0 rather than being raised. Guards:
+`adminPanelsPolish.test.tsx`, plus the existing per-panel failure suites.
+
+**Task 6 (load on demand).** `ActivityPanel`, `ContentPanel`, `AvailabilityPanel`,
+`ProposalsPanel` and `MembersPanel` become `next/dynamic(() => import("./X"), { ssr:
+false, loading: PanelSkeleton })` in `AdminPanel.tsx`; `MonthGenerator` becomes the same
+in `ServicesPanel.tsx`. `ServicesPanel` and `IntegrityQueuePanel` stay eager on purpose:
+Servicios is the default tab for most roles, and the integrity fetch that feeds the
+rail's dot lives at `AdminPanel`'s top level regardless of which tab is open, so gating
+either behind a chunk boundary would delay the one signal every tab needs. `MonthGenerator`
+was already gated at the STATE level — it replaces the whole Servicios view via an early
+`return` when `showGenerator`/`monthEditor` goes true (D10), never inside an
+always-mounted `CueDialog` — so `dynamic` here converts an existing on-open mount into an
+on-open FETCH too: the planner/solver code it pulls in no longer reaches the initial
+Servicios chunk at all. **Method note on the Bundle table below:** because five of six
+tabs and the month generator now live in their own async chunks, `/admin`'s first-load
+number in the table from this task forward measures Servicios + the shell only — it is
+not comparable, chunk-for-chunk, to an earlier row that measured all six tabs eagerly
+bundled together; the drop it should show is the sum of everything that left the
+first-load graph. **A FAILED chunk is an error boundary's job, not the skeleton's** (whole-branch review,
+MEDIUM): App Router `next/dynamic` renders `loading` only as a Suspense fallback and never
+passes it `error`/`retry`, so a rejected `import()` threw through `React.lazy` and took the
+whole page to `app/(client)/error.tsx` — whose `reset` cannot recover a CACHED lazy
+rejection. `PanelBoundary` wraps every dynamic panel now and keeps the failure in its own
+column; «Reintentar» reloads the page, and says so. Guards: `adminDynamic.test.ts` (source
+scan — each of the six is imported through `next/dynamic` in exactly the file gating it, and
+nowhere else under `app/**` imports one statically) and `panelBoundary.test.tsx`. `adminShell.test.tsx`'s tab-change assertion now
+`await waitFor`s the incoming panel's content, since even a mocked dynamic import
+resolves through a microtask rather than synchronously.
+
+**Task 7 (the desktop `Select`, and what it did to `Menu`).** The Part VIII deferral landed
+here because the Control Room is where a select is used most (ruling 8): `Select` is now TWO
+renders of ONE control — the native picker on a coarse pointer, and on
+`(hover: hover) and (pointer: fine)` a `Button` trigger opening a `Menu` of the `<option>`s
+while the native element stays mounted `sr-only`, still the form value and still what the
+`<label>` names. Nothing about a consumer changed: choosing sets the native `value` and
+dispatches a real bubbling `change`, so every `e.target.value` handler in the app is
+untouched, and re-picking the option that is already selected dispatches NOTHING, because a
+native select does not either (the spurious event was sending a `PairRoster` PATCH).
+Detection is `useSyncExternalStore` over the media query with a server snapshot of `false`,
+so SSR, hydration and jsdom are all the native path and a device that gains a mouse switches
+without a remount.
+
+The popover then found the house's own trap, on dev rather than in a test: inside
+`/biblioteca`'s filter dialog, Tonalidad's ten rows were cut to two by `CueDialog`'s
+`overflow-y-auto` body. An `absolute` panel is clipped by any scrolling ancestor, and a
+bare `fixed` one would still be trapped by the transformed route-reveal host (ADR-0031), so
+**`Menu`'s panel is portalled to `document.body` and positioned `fixed` from the trigger's
+rect** — the same answer `Toast` and `NotePopover` already take. Everything else in those two
+fix rounds follows from that one move: the panel flips when the room below is short and is
+SIZED to the room it has (the 240 px flip threshold is shorter than the 320 px cap, so a
+trigger with 260 px under it used to hang off the edge), it clamps back from the right edge
+once its width is known, it measures with `documentElement.clientWidth/clientHeight` rather
+than `innerWidth/innerHeight` (which include a scrollbar gutter), Tab from an item closes
+with `close(true)` because a portalled panel of `tabIndex={-1}` items otherwise drops focus
+out of the document, item focus is `preventScroll`, and the surface became the OPAQUE
+`bg-surface-raised` — over a dialog the translucent one let «Limpiar filtros» read through
+its first row. One behaviour is deliberately new and worth knowing: **every menu in the app
+now closes on an ancestor scroll.** A panel pinned to a rect cannot honestly travel with its
+trigger, and closing is the honest answer. Guards: `selectPopover.test.tsx`, `Menu.test.tsx`'s
+portal block.

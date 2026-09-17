@@ -111,6 +111,12 @@ instead of persisting for the 7-day token lifetime.
 CDN-stale), caches for 30s, and returns `{ active, role }`. `isMemberActive` is the boolean
 wrapper. A member is active iff their doc exists and `disabled !== true`.
 
+**Where it is flipped:** `/admin` → Miembros → the row's ⋯ menu → «Deshabilitar acceso»,
+which asks for confirmation first and then `PATCH`es `/api/admin/members/:id/disable`
+(`MembersPanel`, super-admin only); «Habilitar acceso» restores it with no confirm. It was a
+checkbox sitting in the row body until 2026-09-16. It removes app ACCESS only — never
+schedulability, which is `memberType` alone.
+
 ---
 
 ## The middleware gate (`proxy.ts`)

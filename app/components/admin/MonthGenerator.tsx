@@ -2022,9 +2022,14 @@ export default function MonthGenerator({
       // `scrollIntoView({ inline: "center" })` scrolls EVERY scrollable
       // ancestor, not just the grid's own horizontal scroller — when that
       // scroller alone cannot centre the column, the browser keeps climbing
-      // and reaches `.brand-admin-shell` (`overflow: hidden`, which is still
-      // scrollable by script). The shell shifts left and clips its own
-      // content. Centre the known horizontal scroller by hand instead, then
+      // until something can, and the nearest scrolling ancestor above this
+      // surface is the route's own `[data-route-main]`, i.e. the page. That is
+      // the whole page sliding sideways under the admin. (It used to reach
+      // `.brand-admin-shell`, `overflow: hidden` and still scrollable by
+      // script, which clipped its own content instead; the shell is gone —
+      // ADR-0035 — and the hand-centring below stays either way, because a
+      // page that scrolls itself horizontally is the very thing /admin must
+      // not do.) Centre the known horizontal scroller by hand instead, then
       // let `scrollIntoView` handle only the vertical axis with `inline:
       // "nearest"` — the column is already inside the scroller's visible box
       // by then, so no ancestor needs a horizontal scroll.

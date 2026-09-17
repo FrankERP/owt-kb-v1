@@ -949,10 +949,11 @@ describe("MonthGenerator — stored mode", () => {
 
   it("centers a focusRoleId column in its own horizontal scroller and never asks scrollIntoView to center inline", async () => {
     // Regression: `scrollIntoView({ inline: "center" })` climbs every
-    // scrollable ancestor, including `.brand-admin-shell` (`overflow:
-    // hidden`, still scrollable by script) — the shell shifted and clipped
-    // its own content. The fix centers the known `[data-planner-scroller]`
-    // by hand and asks `scrollIntoView` only for the vertical axis.
+    // scrollable ancestor until one can centre the column — which since R5
+    // means the route's own `[data-route-main]`, i.e. the page sliding
+    // sideways under the admin (before it, the clipped `.brand-admin-shell`).
+    // The fix centers the known `[data-planner-scroller]` by hand and asks
+    // `scrollIntoView` only for the vertical axis.
     const originalScrollIntoView = Element.prototype.scrollIntoView;
     const scrollIntoViewSpy = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoViewSpy;

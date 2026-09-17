@@ -13,8 +13,8 @@ const BUDGET: Record<string, number> = {
   "Índice musical": 0,        // SongSearchList — removed in R1
   "títulos": 0,               // home library count — removed in R1
   "Repertorio": 0,            // PostComponent's song-card eyebrow — removed in R1 (spec §18)
-  "Backstage operations": 1,  // /admin eyebrow — goes in R5
-  "Acceso autorizado": 1,     // /admin pill — goes in R5
+  "Backstage operations": 0,  // /admin eyebrow — removed in R5 (the h1 stands alone)
+  "Acceso autorizado": 0,     // /admin pill — removed in R5 (a manager on /admin is authorised by definition)
 };
 
 function tsx(): string[] {

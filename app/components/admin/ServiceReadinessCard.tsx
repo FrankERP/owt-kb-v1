@@ -54,6 +54,7 @@ import {
   type SwapSource,
 } from "./serviceCardModel";
 import type { ServiceSourceStates } from "./serviceReadiness";
+import type { RevealProps } from "@/app/utils/reveal";
 import { themeColour } from "@/app/utils/themeColour";
 
 /**
@@ -99,6 +100,14 @@ export interface ServiceReadinessCardProps {
   isCopySource: boolean;
   onCopyStart: () => void;
   onCopyPick: () => void;
+  /**
+   * Additive layout utilities for the card ROOT, supplied by whoever lays the
+   * cards out (the Servicios board sizes and snaps them). Never colour: the
+   * root's border/ring/shadow are decided here, from the card's own state.
+   */
+  className?: string;
+  /** Route-reveal attributes (`{...revealProps(i)}`), spread on the root. */
+  revealAttrs?: RevealProps;
 }
 
 export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
@@ -582,7 +591,8 @@ export default function ServiceReadinessCard(props: ServiceReadinessCardProps) {
   return (
     <div
       data-card-id={card.cardId}
-      className={`${CARD_STYLE.container} flex flex-col gap-3.5 pb-4 ${
+      {...props.revealAttrs}
+      className={`${CARD_STYLE.container} flex flex-col gap-3.5 pb-4 ${props.className ?? ""} ${
         card.isPast && !modeActive
           ? `${CARD_BORDER[role._type]} opacity-50 shadow-md`
           : isCardSelected || (copyMode && isCopySource)
@@ -735,10 +745,13 @@ function MemberChip({
   onClick?: () => void;
 }) {
   return (
+    // The transition names the properties the source state actually changes:
+    // border-colour, background, text colour, the `scale-105` transform and the
+    // ring (box-shadow). Nothing else on this chip animates.
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-full border px-2 py-0.5 font-label text-[11px] uppercase tracking-widest transition-all ${
+      className={`rounded-full border px-2 py-0.5 font-label text-[11px] uppercase tracking-widest transition-[color,background-color,border-color,transform,box-shadow] duration-base ease-out-brand ${
         isSource
           ? "scale-105 border-accent bg-accent/30 text-accent ring-1 ring-accent/50"
           : onClick

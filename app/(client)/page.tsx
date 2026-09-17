@@ -213,7 +213,7 @@ export default async function Home() {
   return (
     <div>
       {/* `cue={false}`: the hero card below is the countdown. */}
-      <Navbar title="OWT" tags schedule cue={false} />
+      <Navbar title="OWT" cue={false} />
 
       <div className="mx-auto mb-16 max-w-7xl px-6 pt-12">
         <div className="brand-section-heading mb-7" {...revealProps(0)}>

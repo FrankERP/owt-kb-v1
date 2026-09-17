@@ -49,13 +49,16 @@
 // is side by side and the layout is the stacked one that shipped.
 //
 // The widths at 1512, measured rather than budgeted — see
-// `.brand-admin-frame` / `.brand-admin-shell` in `app/brand.css`, which the
-// `planner-wide` marker on this component's root widens through `:has()`:
-//   1512 viewport − 24 frame padding − 2 shell border − 24 shell padding
-//     = 1462 usable
-//   216 (Participaciones) + 12 + 982 (grid) + 12 + 240 (picker) = 1462
+// `.brand-admin-frame` in `app/brand.css`, which the `planner-wide` marker on
+// this component's root widens through `:has()`:
+//   1512 viewport − 24 frame padding = 1488 usable
+//   1488 − 56 (the collapsed section rail) − 32 (its gap) = 1400 workspace
+//   216 (Participaciones) + 12 + 920 (grid) + 12 + 240 (picker) = 1400
 // The picker's 240px is only spent while a cell is ACTIVE; with none open the
-// grid gets it back and runs at 1234.
+// grid gets it back and runs at 1172. (The bordered `.brand-admin-shell` this
+// sum used to pay a border and 24px of padding to is gone — ADR-0035; what
+// spends width now is `AdminRail`, which collapses to icons while this grid is
+// open precisely so the sum still leaves the grid four figures.)
 //
 // **216 is a FLOOR, not a preference** — `CHART_COLUMN_WIDTH` below, now the
 // only place it is declared. It shipped at
@@ -66,7 +69,7 @@
 // scroller the rows actually live in — 212px before the count starts
 // overlapping the bar, and the `flex-1 min-w-0` name block shrinks around the
 // bar rather than clipping it, so nothing overflows the box to give it away.
-// Measured in Chromium at 1512 inside the real shell: at 190 the bar's right
+// Measured in Chromium at 1512 inside the real frame: at 190 the bar's right
 // edge is x=163 and the count column starts at x=151 (a 12px overlap, on every
 // member row); at 216 the count starts at x=177 and clears by 14px.
 // `participationAlongside.test.tsx` re-derives that floor from
@@ -2220,10 +2223,15 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // Full screen leaves the page entirely, and the portal is not decoration.
   // ── The WebKit compositing failure, and why this portal is NOT removable ──
   //
-  // `.brand-admin-shell` carries `position: relative` + `isolation: isolate` +
-  // `overflow: hidden`, and in real Safari a `position: fixed` descendant of
-  // that trio lays out and hit-tests correctly and paints NOTHING. A full-screen
-  // overlay is exactly such a descendant, so it goes on `document.body`.
+  // The admin page used to wrap this in `.brand-admin-shell`, which carried
+  // `position: relative` + `isolation: isolate` + `overflow: hidden` — and in
+  // real Safari a `position: fixed` descendant of that trio lays out and
+  // hit-tests correctly and paints NOTHING. That shell is gone (ADR-0035) and
+  // the nearest scrolling ancestor is now the route's own `[data-route-main]`,
+  // but the portal STAYS: the trap is any transformed/isolated/clipping
+  // ancestor, and this subtree acquires new ones easily — `PullToRefresh`, a
+  // route reveal, a future rail. `document.body` is outside all of them by
+  // construction, which is the only durable guarantee available here.
   //
   // This paragraph used to live in `ParticipationRail.tsx`, which was retired
   // with the Tablero. It is reproduced here because it is the ONLY remaining
