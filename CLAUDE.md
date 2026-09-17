@@ -333,8 +333,12 @@ fetch; `AdminPanel` calls it once and the panel AND the rail dot read that one s
 Gated on the role actually having a Servicios tab (`enabled`), re-read on ENTERING
 Servicios, and a failed, in-flight or disabled domain reads `unknown`, never `clean`),
 `PanelSkeleton` (`app/components/admin/PanelSkeleton.tsx` — the `loading` component for
-every admin panel behind `next/dynamic`, and the one place a chunk-load failure surfaces
-on `/admin`: on `error` it renders a «Reintentar» wired to `retry()`), `MembersPanel`
+every admin panel behind `next/dynamic`, and a Suspense fallback ONLY: App Router
+`next/dynamic` never hands it an `error`/`retry` pair), `PanelBoundary`
+(`app/components/admin/PanelBoundary.tsx` — the error boundary those panels render inside,
+and the one place a chunk-load failure surfaces on `/admin`; without it a rejected
+`import()` throws through `React.lazy` to the route's error page. «Reintentar» reloads the
+page, because `React.lazy` caches the rejection), `MembersPanel`
 (`app/components/admin/MembersPanel.tsx` — the Miembros tab; row actions are ONE `Menu`
 per row behind a ⋯ `Button variant="icon"`, never hover-only buttons, and taking access
 away asks first through a confirm `CueDialog` that stays open on a refused PATCH

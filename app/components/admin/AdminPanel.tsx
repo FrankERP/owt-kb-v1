@@ -6,6 +6,7 @@ import { useSession } from "next-auth/react";
 import ServicesPanel from "./ServicesPanel";
 import IntegrityQueuePanel from "./IntegrityQueuePanel";
 import PanelSkeleton from "./PanelSkeleton";
+import PanelBoundary from "./PanelBoundary";
 import AdminRail, { ADMIN_TAB_ICON } from "./AdminRail";
 import { useIntegrityQueue } from "./useIntegrityQueue";
 import { ServiceHandoffProvider, type ServiceHandoffApi } from "./serviceHandoffContext";
@@ -23,8 +24,15 @@ import { visibleAdminTabs } from "./adminTabs";
 // integrity fetch feeds the rail's dot on EVERY tab. `ssr: false` because these
 // are all behind an auth-gated client panel that never renders on the server
 // anyway (the page above resolves the initial tab, but the body itself only
-// ever mounts client-side); `loading: PanelSkeleton` covers the chunk fetch and
-// its own (rare) failure.
+// ever mounts client-side); `loading: PanelSkeleton` covers the chunk fetch.
+//
+// A FAILED fetch is `PanelBoundary`'s job, not `PanelSkeleton`'s: App Router
+// `next/dynamic` renders `loading` only as a Suspense fallback and never hands
+// it an `error`/`retry` pair, so a rejected chunk throws through `React.lazy`
+// and would otherwise take the whole page to `app/(client)/error.tsx`. These
+// stay at MODULE scope — building them per render is what
+// `react-hooks/static-components` forbids, and the caching that makes a retry
+// need a page reload lives inside `React.lazy` either way.
 const ActivityPanel = dynamic(() => import("./ActivityPanel"), { ssr: false, loading: PanelSkeleton });
 const ContentPanel = dynamic(() => import("./ContentPanel"), { ssr: false, loading: PanelSkeleton });
 const AvailabilityPanel = dynamic(() => import("./AvailabilityPanel"), { ssr: false, loading: PanelSkeleton });
@@ -222,20 +230,38 @@ export default function AdminPanel({
       case "proposals":
         return (
           <ServiceHandoffProvider value={handoff}>
-            <ProposalsPanel target={proposalTarget} onResolved={onReviewResolved} viewerId={viewerId} />
+            <PanelBoundary>
+              <ProposalsPanel target={proposalTarget} onResolved={onReviewResolved} viewerId={viewerId} />
+            </PanelBoundary>
           </ServiceHandoffProvider>
         );
       case "availability":
-        return <AvailabilityPanel />;
+        return (
+          <PanelBoundary>
+            <AvailabilityPanel />
+          </PanelBoundary>
+        );
       case "activity":
-        return <ActivityPanel />;
+        return (
+          <PanelBoundary>
+            <ActivityPanel />
+          </PanelBoundary>
+        );
       case "content":
-        return <ContentPanel canDelete={role === "super-admin" || role === "admin"} />;
+        return (
+          <PanelBoundary>
+            <ContentPanel canDelete={role === "super-admin" || role === "admin"} />
+          </PanelBoundary>
+        );
       default:
         // The Miembros body is its OWN component since R5 Task 3 — it holds the
         // member list, every member write and four dialogs, and it renders only
         // on this tab (Task 6 mounts it behind `next/dynamic`).
-        return <MembersPanel role={role} />;
+        return (
+          <PanelBoundary>
+            <MembersPanel role={role} />
+          </PanelBoundary>
+        );
     }
   })();
 

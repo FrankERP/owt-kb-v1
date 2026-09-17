@@ -208,8 +208,11 @@ const ROLE_LABEL: Record<OWTRole, string> = {
 };
 
 // ─── Shared input style ────────────────────────────────────────────────────────
+// 16px on the phone: anything smaller makes iOS Safari zoom the page on focus.
+// `inputFontSize.test.ts` excludes `admin/` by path, so this is the convention
+// holding rather than the guard.
 const inputCls =
-  "brand-search-console w-full px-3 py-2.5 bg-transparent font-body text-sm focus:outline-none transition-colors";
+  "brand-search-console w-full px-3 py-2.5 bg-transparent font-body text-[16px] sm:text-sm focus:outline-none transition-colors";
 
 // ─── Avatar ───────────────────────────────────────────────────────────────────
 function Avatar({
@@ -1041,14 +1044,15 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
             onChange={(e) => setQuery(e.target.value)}
           />
           {query && (
-            <button
-              type="button"
+            <Button
+              variant="icon"
+              size="sm"
               aria-label="Limpiar búsqueda"
               onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-mono-500 hover:text-accent transition-colors text-lg leading-none"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-lg leading-none"
             >
               ×
-            </button>
+            </Button>
           )}
         </div>
       </div>

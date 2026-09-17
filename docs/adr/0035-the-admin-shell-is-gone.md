@@ -59,9 +59,10 @@ the fix that makes the surface right also makes the bug unreachable.
 ## Consequences
 
 - The `:has(.planner-wide)` arithmetic changed with the shell's border and
-  padding: `1512 − 24 = 1488` and `216 + 12 + 1008 + 12 + 240 = 1488`, restated
-  in `app/brand.css` and `PlannerGrid.tsx`'s header and pinned against each
-  other. R5 Task 2's rail spends width here again and re-pins it.
+  padding, and R5 Task 2's rail then spent width in it again. The lines as
+  finally pinned: `1512 − 24 = 1488`, `56 + 32 + 1400 = 1488` and
+  `216 + 12 + 920 + 12 + 240 = 1400` — restated in `app/brand.css` and
+  `PlannerGrid.tsx`'s header and pinned against each other.
 - **The full-screen portal and `MonthGenerator`'s hand-centring stay.** Neither
   was a workaround for THIS shell specifically: the portal survives whatever
   transformed, isolated or clipping ancestor arrives next (`PullToRefresh`, a

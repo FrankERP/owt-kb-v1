@@ -481,7 +481,8 @@ Legend: **[C]** client, **[S]** server.
 | `MotionProvider` [C] | Loads `motion`'s DOM features (`domMax`) as an async chunk after hydration (not inline); `reducedMotion="user"`. |
 | `Presence` [C] | Mount/unmount with an exit animation; variants `fade` `rise` `scale` `sheet` `drop`. `sheet` enters on `SPRINGS.sheet` (every other variant, and every exit, stays on the ordinary duration/ease). `onEntered?: () => void` fires once the enter animation completes — never on an already-shown mount without `appear`. |
 | `Skeleton` / `SkeletonGroup` [N] | Shimmer placeholders; one `aria-busy` status region per loading surface. |
-| `PanelSkeleton` (`app/components/admin/PanelSkeleton.tsx`) [N] | The `loading` component for every admin panel gated behind `next/dynamic` (R5 Task 6): a `SkeletonGroup` of six `Skeleton` rows. Also the ONE place a chunk-load failure surfaces on `/admin` — it reads `next/dynamic`'s `DynamicOptionsLoadingProps` and, on `error`, renders a `Button variant="ghost"` «Reintentar» wired to the supplied `retry()` instead of the shimmer. |
+| `PanelSkeleton` (`app/components/admin/PanelSkeleton.tsx`) [N] | The `loading` component for every admin panel gated behind `next/dynamic` (R5 Task 6): a `SkeletonGroup` of six `Skeleton` rows, and NOTHING else. In the App Router `next/dynamic` renders `loading` only as a Suspense fallback — it passes `{ isLoading: true, pastDelay: true, error: null }` and never an `error` or a `retry` (`next/dist/shared/lib/lazy-dynamic/loadable.js`), so a failure branch here is unreachable. A failed chunk is `PanelBoundary`'s. |
+| `PanelBoundary` (`app/components/admin/PanelBoundary.tsx`) | The error boundary every dynamically imported admin panel renders inside — the ONE place a chunk-load failure surfaces on `/admin`. A rejected `import()` throws through `React.lazy`, and without this it reaches `app/(client)/error.tsx` and takes the whole page down for one bad chunk; here it stays in the panel's own column as «No se pudo cargar esta sección» + a `Button variant="ghost"` «Reintentar». That button RELOADS the page (the copy says so): `React.lazy` caches the rejection, so re-rendering the same dynamic component re-throws without re-running the import, and rebuilding the `dynamic()` instance per render is what `react-hooks/static-components` forbids as an eslint error. An optional `onRetry` replaces the reload for a caller that can recover in place. Guard: `panelBoundary.test.tsx`. |
 | `Button` [N] | The house button: six variants, three sizes, press physics, primary sheen, `busy`, `href`. The `pill` variant takes a `tone` (`"accent"` default, `"availability"` — `AvailabilityGrid`'s «Seleccionar fechas» pill since F3 retired its original consumer, `WeekendList`'s weekend toggles; pressed text is `soft`, not `strong`, to clear 4.5:1 in light). |
 | `revealProps()` (`app/utils/reveal.ts`) [N] | CSS route reveal; `app/(client)/template.tsx` replays it per navigation. |
 | `NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts`) [N] | The ONE spelling of the top bar's height (`"h-20 lg:h-24"`) — `Navbar` and `Skeleton.tsx`'s `NavbarSkeleton` both import it so a `loading.tsx` placeholder can never drift from the real navbar's height; `navbarHeightSync.test.ts` is the guard (see [MOTION.md](MOTION.md)). It pins **those two files only**: `SectionNav`'s sticky `top-[calc(5rem…)]`, `LibraryIndex` and the song page's `scroll-mt-*` still hard-code their own offsets in Tailwind arbitrary values. |
@@ -561,8 +562,9 @@ Shares `songToForm` / chart helpers with `SongFormModal`. Lyrics and charts are 
 
 ## Tests
 
-**310 test files / 5,462 tests** (275 under `app/` + 26 under `scripts/` + 9 harness unit
-tests under `e2e/service-readiness/__tests__/`), counted 2026-09-17 (R5 tip).
+**311 test files / 5,469 tests** (276 under `app/` + 26 under `scripts/` + 9 harness unit
+tests under `e2e/service-readiness/__tests__/`), counted 2026-09-17 (R5 tip, after the
+whole-branch review fix wave).
 Separately, **11 Playwright specs** under `e2e/service-readiness/` run only against the isolated
 verification deployment and are **not** part of `npm test` — see
 [`VERIFICATION_HARNESS.md`](VERIFICATION_HARNESS.md). Vitest (`environment: "node"`) covers

@@ -214,9 +214,10 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         </Button>
       </div>
 
-      {/* Search */}
+      {/* Search — 16px on the phone, or iOS Safari zooms the page on focus and
+          never zooms back (`inputFontSize.test.ts` excludes `admin/` by path). */}
       <input
-        className="w-full px-4 py-2.5 rounded-xl border border-surface-accent-20 bg-transparent font-body text-sm focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 transition-colors"
+        className="w-full px-4 py-2.5 rounded-xl border border-surface-accent-20 bg-transparent font-body text-[16px] sm:text-sm focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 transition-colors"
         placeholder="Buscar canción o artista..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -297,7 +298,6 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                     size="lg"
                     title="Eliminar"
                     aria-label="Eliminar"
-                    className="hover:bg-negative-strong/20 hover:text-negative-fg"
                     onClick={() => openModal("delete", song)}
                   >
                     <TrashIcon />

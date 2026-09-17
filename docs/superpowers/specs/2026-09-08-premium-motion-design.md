@@ -2065,7 +2065,7 @@ month generator leave the first load.
 
 **Shipped.** `app/(client)/admin/page.tsx` — navbar, an `h1` and `AdminPanel` inside
 `brand-admin-frame`; no eyebrow, no subtitle, no «Acceso autorizado» pill, no shell div.
-`app/components/admin/AdminPanel.tsx` — 1 451 → ~256 lines: one tree (six mutually exclusive
+`app/components/admin/AdminPanel.tsx` — 1 451 → ~265 lines: one tree (six mutually exclusive
 early returns are gone), the tab reducer, the `?tab=` contract, one `AdminRail` and one body
 `key={tab} … animate-fade-in`, plus the integrity hook at the top level and the five
 `next/dynamic` panels. `app/components/admin/AdminRail.tsx` — the section nav, one component
@@ -2074,8 +2074,9 @@ three service-integrity fetches lifted out of `IntegrityQueuePanel`, returning
 `{ queue, tone, sources, loading, reload, resolve }`. `app/components/admin/MembersPanel.tsx`
 — the Miembros body extracted whole (list, filters, Fuse search, every member write, the five
 dialogs) with the row `Menu` and the confirmed kill switch. `app/components/admin/PanelSkeleton.tsx`
-— the `loading` component for every dynamically imported panel, and the one place a chunk-load
-failure surfaces («Reintentar» wired to `retry()`). `app/components/admin/ServicesPanel.tsx` —
+— the `loading` component for every dynamically imported panel, a Suspense fallback only.
+`app/components/admin/PanelBoundary.tsx` — the error boundary those panels render inside, and
+the one place a chunk-load failure surfaces («Reintentar», which reloads the page). `app/components/admin/ServicesPanel.tsx` —
 the snap board, every control a primitive, `MonthGenerator` behind `next/dynamic`.
 `app/components/admin/ServicePrimaryAction.tsx` — a house `Button` whose TONE is the variant.
 `app/components/admin/ServiceReadinessCard.tsx` — `className` (layout only) + `revealAttrs`.
@@ -2212,6 +2213,24 @@ Made during execution, on top of the plan:
   brought 2 MEDIUM (Tab dropping focus out of the document; a flip threshold shorter than the
   panel) and 6 LOW, with one more from a second dev screenshot (the translucent panel over the
   filter dialog). Fix round 2 closed all nine and the sonnet re-review returned VERIFIED.
+- **Whole-branch review (`856f3e87..649c905e`, opus):** CHANGES_REQUIRED — 1 MEDIUM
+  (a failed chunk load took the WHOLE of `/admin` down: App Router `next/dynamic` renders
+  `loading` only as a Suspense fallback and never passes `error`/`retry`, so the «Reintentar»
+  branch in `PanelSkeleton` was unreachable and the rejection threw through `React.lazy` to
+  `app/(client)/error.tsx`, whose `reset` cannot recover a CACHED lazy rejection either) and
+  3 LOW (the integrity dot and disclosure twitching on every clean entry into Servicios, the
+  reload having reset the tone to `unknown` mid-flight; two admin inputs under 16 px on a
+  phone; four raw controls left on rewritten surfaces).
+- **Fix wave (this commit).** `PanelBoundary` — a client error boundary around every dynamic
+  panel, so a bad chunk stays in its own column; its «Reintentar» RELOADS the page and the
+  copy says so, because `React.lazy` caches the rejection and rebuilding the `dynamic()`
+  instance per render is an eslint ERROR here (`react-hooks/static-components`). The dead
+  `error`/`retry` branch left `PanelSkeleton` with it. `useIntegrityQueue` holds the last
+  SETTLED tone while a reload is in flight (`loading` is exposed separately; a first load
+  still reads `unknown`). `MembersPanel`'s shared `inputCls` and `ContentPanel`'s song search
+  are `text-[16px] sm:text-sm`. `IntegrityQueuePanel`'s disclosure toggle and «Recargar»,
+  and `MembersPanel`'s clear-search ×, are `Button`s; `ContentPanel`'s «Eliminar» dropped its
+  hover colour overrides. `AdminRail`'s items stay raw — navigation, documented in its header.
 - **Parked residuals, all known and none blocking.** `ui/Select`'s and `ui/DateField`'s
   `size="sm"` are still 11 px, which is under the 16 px phone rule — every consumer of that
   size is under `admin/`, which `inputFontSize.test.ts` excludes by path, so it is a
@@ -2250,16 +2269,14 @@ Made during execution, on top of the plan:
   say" is the ruling; whether a collapsed panel reads as "nothing wrong" or as "missing" is a
   look.
 
-**Bundle:** `main 856f3e87` → `R5 Task 6 tip efa3af61` (git-archive cold builds, gzip −9;
+**Bundle:** `main 856f3e87` → `R5 final tip 07ed88a9` (git-archive cold builds, gzip −9;
 `measure-bundle.mjs` now excludes the `server/chunks/ssr` entries newer builds list in the
 client reference manifest — an earlier reading's +27 kB per route was that artefact): shared
-172.5 → 172.5; `/` 122.8 → 122.9; `/posts/[slug]` 113.0 → 112.7; `/schedule` 125.6 → 125.3;
-`/biblioteca` 116.9 → 116.7; `/me` 123.8 → 123.7; **`/admin` 358.6 → 150.2 (−208.4)** — the
-five secondary tabs plus `MonthGenerator`/`PlannerGrid`/`SetlistEditor` are async chunks now,
-so that row measures Servicios + the shell and is not like-for-like with an earlier one. The
-commits after `efa3af61` (the `Select` popover and its two `Menu` fix rounds) change
-primitives rather than chunk boundaries; the coordinator re-measures the final tip before the
-merge.
+172.5 → 172.5; `/` 122.8 → 123.5; `/posts/[slug]` 113.0 → 113.3; `/schedule` 125.6 → 125.9;
+`/biblioteca` 116.9 → 118.3 (+1.4 — the `Select` popover and the portalled `Menu` on the
+filters); `/me` 123.8 → 124.3; **`/admin` 358.6 → 150.8 (−207.8)** — the five secondary tabs
+plus `MonthGenerator`/`PlannerGrid`/`SetlistEditor` are async chunks now, so that row measures
+Servicios + the shell and is not like-for-like with an earlier one.
 
 **Shots** (`docs/superpowers/specs/2026-09-08-premium-motion-shots/`):
 `admin-before-1440.png` / `admin-after-1440.png` (Servicios at 1440 — the frame, the tab box

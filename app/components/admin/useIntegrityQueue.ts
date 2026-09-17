@@ -62,7 +62,11 @@ interface DomainData {
 
 export interface IntegrityQueueState {
   queue: IntegrityQueue;
-  /** The three display states — `issues_incomplete` reads as `issues`. */
+  /**
+   * The three display states — `issues_incomplete` reads as `issues`. It is the
+   * last SETTLED tone while a reload is in flight (see below); read `loading`
+   * for "is something in flight", never the tone.
+   */
   tone: IntegrityTone;
   /** The per-domain load states, for explicit-id focus resolution. */
   sources: IntegritySourceStates;
@@ -153,7 +157,7 @@ export function useIntegrityQueue({
   // the same — a future initial state must not be able to make "we never asked"
   // look like "we asked and it was fine".
   const raw = integrityQueueTone(queue);
-  const tone: IntegrityTone = !enabled
+  const settling: IntegrityTone = !enabled
     ? "unknown"
     : raw === "clean"
       ? "clean"
@@ -176,6 +180,20 @@ export function useIntegrityQueue({
 
   // Nothing is in flight when the hook is off, whatever `sources` still says.
   const loading = enabled && Object.values(sources).some((state) => state === "loading");
+
+  // A RELOAD holds the last settled tone instead of dropping back to `unknown`.
+  // Every domain goes `loading` again the moment `reload` runs, so the derived
+  // tone would say `unknown` for the length of three requests — and entering
+  // Servicios reloads on every clean visit, which made the rail's dot and the
+  // panel's disclosure flash a `?` and re-open for no reason. Holding is not a
+  // lie: the tone shown is one that was actually proven, `loading` is exposed
+  // beside it, and the FIRST load still reads `unknown` until something settles,
+  // because there is no earlier answer to hold.
+  const [settled, setSettled] = useState<IntegrityTone | null>(null);
+  useEffect(() => {
+    if (!loading) setSettled(settling);
+  }, [loading, settling]);
+  const tone: IntegrityTone = loading && settled ? settled : settling;
 
   return { queue, tone, sources, loading, reload, resolve };
 }

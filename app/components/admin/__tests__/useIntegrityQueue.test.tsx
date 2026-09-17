@@ -171,6 +171,66 @@ describe("useIntegrityQueue loads the three inventories", () => {
   });
 });
 
+describe("a reload holds the last settled tone", () => {
+  // Entering Servicios re-reads the inventory on every clean visit, and every
+  // domain goes `loading` again the moment it does. Deriving the tone from that
+  // made the rail's dot flash a `?` and the panel's disclosure re-open on a
+  // perfectly clean entry. The held tone was actually proven; `loading` is what
+  // says something is in flight.
+  it("never reports `unknown` mid-flight after a clean settle", async () => {
+    mockRoutes();
+    const seen: string[] = [];
+    const { result } = renderHook(() => {
+      const state = useIntegrityQueue();
+      seen.push(state.tone);
+      return state;
+    });
+    await waitFor(() => expect(result.current.tone).toBe("clean"));
+
+    seen.length = 0;
+    await act(async () => {
+      result.current.reload();
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen).not.toContain("unknown");
+    expect(result.current.tone).toBe("clean");
+  });
+
+  it("still reports `unknown` on a FIRST load, until something settles", async () => {
+    mockRoutes();
+    const seen: string[] = [];
+    const { result } = renderHook(() => {
+      const state = useIntegrityQueue();
+      seen.push(state.tone);
+      return state;
+    });
+    // Nothing has ever settled, so there is no earlier answer to hold.
+    expect(seen[0]).toBe("unknown");
+    expect(result.current.loading).toBe(true);
+    await waitFor(() => expect(result.current.tone).toBe("clean"));
+  });
+
+  it("holds `issues` across a reload too, not just `clean`", async () => {
+    mockRoutes({ roles: DRAFT_ONLY_ROLES });
+    const seen: string[] = [];
+    const { result } = renderHook(() => {
+      const state = useIntegrityQueue();
+      seen.push(state.tone);
+      return state;
+    });
+    await waitFor(() => expect(result.current.tone).toBe("issues"));
+
+    seen.length = 0;
+    await act(async () => {
+      result.current.reload();
+    });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(seen).not.toContain("unknown");
+  });
+});
+
 describe("resolve is the caller's handler, with a stable identity", () => {
   it("forwards the outcome and never changes between renders", async () => {
     mockRoutes();

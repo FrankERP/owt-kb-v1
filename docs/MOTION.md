@@ -200,6 +200,9 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `redirects.test.ts` | R1 (spec §12.2, decision H): `next.config.mjs`'s `redirects()` folds `/tag`, `/tag/:slug`, `/author`, `/author/:slug` into `/biblioteca` (`?tag=:slug`/`?author=:slug`), all `permanent: true` (308). |
 | `litCard.test.ts` | The home hero card's one-shot light pass (R1, decision Q — see "The beam" above). Cannot see geometry (jsdom), so it pins the CSS contract instead. |
 | `bottomNavOffsetSync.test.ts` | Names `BottomNav`'s `NAV_H_VAR`/`NAV_CLASS` exports, the `setProperty`/`removeProperty`/`classList` publish-and-clear shapes, `brand.css`'s `--bottom-nav-h` declaration and `html.has-bottom-nav [data-route-main]` padding rule, that every fixed-bottom consumer (`Toast.tsx`, `AudioPlayer.tsx`, `EditSongButton.tsx`) offsets by the variable, and that the client layout mounts `<BottomNav />` inside `<Provider>`. A new fixed-bottom element joins the `it.each` list. |
+| `adminShell.test.tsx` | R5 (spec §12.5, [ADR-0035](adr/0035-the-admin-shell-is-gone.md)): `/admin` has no shell and no panel boxes — no `.brand-admin-shell`/`.brand-admin-tabs`, no `brand-surface` wrapper around a panel body and no second tab bar. A structural ratchet: a new box fails the suite rather than shipping. Its queries are scoped to the rendered container after a flake that saw the previous test's tree. |
+| `adminDynamic.test.ts` | R5 Task 6: a source scan proving each of `ActivityPanel`, `ContentPanel`, `AvailabilityPanel`, `ProposalsPanel`, `MembersPanel` (in `AdminPanel.tsx`) and `MonthGenerator` (in `ServicesPanel.tsx`) is imported through `next/dynamic` in exactly the file allowed to gate it, and statically NOWHERE else under `app/**` — one static import elsewhere pulls the chunk back into the eager graph and silently undoes the −207.8 kB split. |
+| `panelBoundary.test.tsx` | A failed panel chunk stays inside its own column: a throwing child renders «No se pudo cargar esta sección» + «Reintentar» instead of reaching `app/(client)/error.tsx`, and an `onRetry` recovers in place. The rule it encodes: App Router `next/dynamic` renders `loading` only as a Suspense fallback and never passes `error`/`retry`, so the recovery belongs to an error boundary, never to the skeleton. |
 | `navbarHeightSync.test.ts` | R4 Task 6 (spec §5.3): `Navbar` and `NavbarSkeleton` must publish the top bar's height from the ONE spelling, `NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts`, `"h-20 lg:h-24"`), so a `loading.tsx` never hard-codes a height that can drift from the real navbar. Reads both sources and asserts each imports the constant from `@/app/utils/navbarHeight` and neither contains the literal string. Scope is exactly those two files — `SectionNav`'s sticky offset, `LibraryIndex` and the song page's `scroll-mt-*` still hard-code their own values and the guard does not see them. |
 
 ## Bundle
@@ -247,14 +250,15 @@ Before was measured on the primary checkout at the merge-base commit
 | **R4 tip `5a899be0`** (the transposer seat, hero pills, practice cluster, autoscroll, equaliser; the three later commits move classes and handlers, not chunks) | 172.5 kB | 121.2 kB (−1.4) | 356.2 kB (−1.4) | 111.7 kB (`/posts/[slug]`, **+1.0**) · 123.3 kB (`/schedule`, −1.3) · 115.7 kB (`/biblioteca`, −1.3) · 122.3 kB (`/me`, −1.3) |
 | **`main 856f3e87`, R5 release-day rebuild** (git-archive cold build, same environment as the R4 rows. `measure-bundle.mjs` now EXCLUDES the `server/chunks/ssr` entries newer builds list in the client reference manifest — the +27 kB-per-route jump an earlier reading showed was that artefact, not code) | 172.5 kB | 122.8 kB | 358.6 kB | 113.0 kB (`/posts/[slug]`) · 125.6 kB (`/schedule`) · 116.9 kB (`/biblioteca`) · 123.8 kB (`/me`) |
 | **R5 Task 6 tip `efa3af61`** (the flatten, the rail, the members menu, the board, the panel polish, and the load-on-demand split) | 172.5 kB | 122.9 kB (+0.1) | **150.2 kB (−208.4)** | 112.7 kB (`/posts/[slug]`, −0.3) · 125.3 kB (`/schedule`, −0.3) · 116.7 kB (`/biblioteca`, −0.2) · 123.7 kB (`/me`, −0.1) |
+| **R5 final tip `07ed88a9`** (the `Select` popover and its two `Menu` fix rounds on top of Task 6 — primitives, not chunk boundaries) | 172.5 kB | 123.5 kB (+0.7) | **150.8 kB (−207.8)** | 113.3 kB (`/posts/[slug]`, +0.3) · 125.9 kB (`/schedule`, +0.3) · 118.3 kB (`/biblioteca`, **+1.4** — the popover plus the portalled `Menu` on the filters) · 124.3 kB (`/me`, +0.5) |
 
-`/admin`'s −208.4 kB is the whole point of Task 6 and **not** a like-for-like row: from that
+`/admin`'s fall is the whole point of Task 6 and **not** a like-for-like row: from that
 build forward the number measures Servicios + the shell, because the five secondary tabs,
 `MembersPanel` and `MonthGenerator`/`PlannerGrid`/`SetlistEditor` are async chunks a member
-pays for only on the tab that needs them. The commits after `efa3af61` (the `Select`
-popover and its two `Menu` fix rounds) change primitives rather than chunk boundaries, so
-the coordinator re-measures the final tip before the merge and the row above is the R5
-figure of record until then.
+pays for only on the tab that needs them. **The `07ed88a9` row is R5's figure of record** —
+the final tip, measured after the `Select` popover and both `Menu` fix rounds, which move
+primitives rather than chunk boundaries and cost every route a few tenths (`/biblioteca`
++1.4, where the popover and the portalled `Menu` both land on the filters).
 
 Commit e9d90327's body says first-load does not move; the A/B above is the
 evidence for that claim, measured after the fact.
@@ -1300,6 +1304,11 @@ nothing when the inventory is proven clean, a dim `?` when a domain failed or is
 loading, the count in `negative-fg` when there are issues. Three states, never two: an
 unknown queue must not read clean, in the dot or in the item's accessible name. The panel's
 `Collapse` follows the tone (open until proven clean) and a member can still toggle it.
+A RELOAD holds the last settled tone (whole-branch review, LOW): every domain goes
+`loading` again when Servicios is entered, and deriving the tone from that flashed a `?`
+in the rail and re-opened the disclosure on an entirely clean entry. The held value was
+actually proven, `loading` is exposed beside it, and a FIRST load still reads `unknown`
+because there is no earlier answer to hold.
 Guards: `adminRail.test.tsx`, `useIntegrityQueue.test.tsx`.
 
 **Task 3 (Miembros: one menu per row, and a confirmed kill switch).** The Miembros body
@@ -1410,9 +1419,14 @@ tabs and the month generator now live in their own async chunks, `/admin`'s firs
 number in the table from this task forward measures Servicios + the shell only — it is
 not comparable, chunk-for-chunk, to an earlier row that measured all six tabs eagerly
 bundled together; the drop it should show is the sum of everything that left the
-first-load graph. Guard: `adminDynamic.test.ts` (source scan — each of the six is
-imported through `next/dynamic` in exactly the file gating it, and nowhere else under
-`app/**` imports one statically). `adminShell.test.tsx`'s tab-change assertion now
+first-load graph. **A FAILED chunk is an error boundary's job, not the skeleton's** (whole-branch review,
+MEDIUM): App Router `next/dynamic` renders `loading` only as a Suspense fallback and never
+passes it `error`/`retry`, so a rejected `import()` threw through `React.lazy` and took the
+whole page to `app/(client)/error.tsx` — whose `reset` cannot recover a CACHED lazy
+rejection. `PanelBoundary` wraps every dynamic panel now and keeps the failure in its own
+column; «Reintentar» reloads the page, and says so. Guards: `adminDynamic.test.ts` (source
+scan — each of the six is imported through `next/dynamic` in exactly the file gating it, and
+nowhere else under `app/**` imports one statically) and `panelBoundary.test.tsx`. `adminShell.test.tsx`'s tab-change assertion now
 `await waitFor`s the incoming panel's content, since even a mocked dynamic import
 resolves through a microtask rather than synchronously.
 

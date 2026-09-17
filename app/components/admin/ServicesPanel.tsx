@@ -6,11 +6,17 @@ import Collapse from "@/app/components/ui/Collapse";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import PanelSkeleton from "./PanelSkeleton";
+import PanelBoundary from "./PanelBoundary";
 // «Generar mes»/«Editar mes» replace this whole panel via an early `return`
 // below (D10 — a full-width panel, never an overlay), so this chunk was
 // already never fetched until one of those two states goes true. `dynamic`
 // makes that deferral pay off in bytes too: the planner/solver code this pulls
 // in never reaches the initial Servicios bundle at all.
+//
+// A failed chunk throws through `React.lazy` (App Router `next/dynamic` never
+// hands its `loading` component an `error`/`retry` pair), so `PanelBoundary`
+// wraps both call sites below and keeps the failure out of the route's error
+// page.
 const MonthGenerator = dynamic(() => import("./MonthGenerator"), { ssr: false, loading: PanelSkeleton });
 import type { ClearMonthSummary } from "./clearMonthModel";
 import { mutationErrorMessage, mutationSignal } from "./serviceMutationErrors";
@@ -958,50 +964,52 @@ export default function ServicesPanel() {
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl uppercase tracking-wide">Editar mes</h1>
         </div>
-        <MonthGenerator
-          key={`stored:${monthEditor.month}:${monthEditor.focusRoleId ?? "month"}`}
-          mode="stored"
-          initialMonth={monthEditor.month}
-          focusRoleId={monthEditor.focusRoleId}
-          openComposerInitially={monthEditor.openComposerInitially}
-          members={members}
-          existingRoles={roles}
-          allRoles={roles}
-          rules={rules}
-          capability={monthEditor.openComposerInitially
-            ? { enabled: createGate.enabled, reason: createGate.reason }
-            : { enabled: editTeamGate.enabled, reason: editTeamGate.reason }}
-          storedCapabilities={{
-            edit: { enabled: editTeamGate.enabled, reason: editTeamGate.reason },
-            create: { enabled: createGate.enabled, reason: createGate.reason },
-            swap: { enabled: swapGate.enabled, reason: swapGate.reason },
-            changeDate: { enabled: changeDateGate.enabled, reason: changeDateGate.reason },
-            clear: { enabled: cardGates.deleteService.enabled, reason: cardGates.deleteService.reason },
-          }}
-          onCleared={async (summary) => {
-            // The editor has already closed. Reload FIRST so the list never shows
-            // the deleted services next to a message saying they are gone.
-            const failed = await loadSources();
-            if (summary.failures.length === 0) {
-              showToast(mutationOutcomeMessage(summary.message, failed, "Eliminados, pero no se pudo actualizar"));
-            } else {
-              setClearReport(summary);
-              if (failed.length > 0) showToast(mutationOutcomeMessage("", failed, "No se pudo actualizar la lista"));
-            }
-          }}
-          storedSource={{
-            roles,
-            integrity: summaries.roles,
-            rolesStatus: sourceRecords.roles.status,
-            integrityStatus: sourceRecords.roleTargets.status,
-            rolesGeneration: sourceRecords.roles.generation,
-            integrityGeneration: sourceRecords.roleTargets.generation,
-            reload: async () =>
-              (await loadSources(["roles", "roleTargets"])).length === 0,
-          }}
-          onClose={() => setMonthEditor(null)}
-          onCreated={() => showToast("Servicio creado y verificado.")}
-        />
+        <PanelBoundary>
+          <MonthGenerator
+            key={`stored:${monthEditor.month}:${monthEditor.focusRoleId ?? "month"}`}
+            mode="stored"
+            initialMonth={monthEditor.month}
+            focusRoleId={monthEditor.focusRoleId}
+            openComposerInitially={monthEditor.openComposerInitially}
+            members={members}
+            existingRoles={roles}
+            allRoles={roles}
+            rules={rules}
+            capability={monthEditor.openComposerInitially
+              ? { enabled: createGate.enabled, reason: createGate.reason }
+              : { enabled: editTeamGate.enabled, reason: editTeamGate.reason }}
+            storedCapabilities={{
+              edit: { enabled: editTeamGate.enabled, reason: editTeamGate.reason },
+              create: { enabled: createGate.enabled, reason: createGate.reason },
+              swap: { enabled: swapGate.enabled, reason: swapGate.reason },
+              changeDate: { enabled: changeDateGate.enabled, reason: changeDateGate.reason },
+              clear: { enabled: cardGates.deleteService.enabled, reason: cardGates.deleteService.reason },
+            }}
+            onCleared={async (summary) => {
+              // The editor has already closed. Reload FIRST so the list never shows
+              // the deleted services next to a message saying they are gone.
+              const failed = await loadSources();
+              if (summary.failures.length === 0) {
+                showToast(mutationOutcomeMessage(summary.message, failed, "Eliminados, pero no se pudo actualizar"));
+              } else {
+                setClearReport(summary);
+                if (failed.length > 0) showToast(mutationOutcomeMessage("", failed, "No se pudo actualizar la lista"));
+              }
+            }}
+            storedSource={{
+              roles,
+              integrity: summaries.roles,
+              rolesStatus: sourceRecords.roles.status,
+              integrityStatus: sourceRecords.roleTargets.status,
+              rolesGeneration: sourceRecords.roles.generation,
+              integrityGeneration: sourceRecords.roleTargets.generation,
+              reload: async () =>
+                (await loadSources(["roles", "roleTargets"])).length === 0,
+            }}
+            onClose={() => setMonthEditor(null)}
+            onCreated={() => showToast("Servicio creado y verificado.")}
+          />
+        </PanelBoundary>
       </div>
     );
   }
@@ -1012,29 +1020,31 @@ export default function ServicesPanel() {
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl uppercase tracking-wide">Generar mes</h1>
         </div>
-        <MonthGenerator
-          members={members}
-          existingRoles={roles}
-          // `ServiceRole` is a structural superset of `ParticipantRole` (richer
-          // `leads`/`bgvs`/`chorus`/`instruments`/`foh` member shape, same
-          // `_type`/`date`), so no cast is needed — and none should be added
-          // back: if `ServiceRole` ever drifts out of that superset relationship,
-          // this is meant to be a `tsc` error, not a silent narrowing that lets
-          // `savedWindow` (D12, inside `MonthGenerator`) degrade to a blank
-          // "sin historial reciente" strip.
-          allRoles={roles}
-          // The same controller used by the stored month editor. One object, so
-          // neither planner surface can drift onto its own rules copy.
-          rules={rules}
-          // Re-checked at preview and at confirmation, not just at open.
-          capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
-          // Per-target A1/A2 preflight: only proven-`creatable` targets are posted.
-          preflight={preflightTarget}
-          onClose={() => setShowGenerator(false)}
-          onCreated={async () => {
-            showToast(mutationOutcomeMessage("Servicios generados.", await loadSources()));
-          }}
-        />
+        <PanelBoundary>
+          <MonthGenerator
+            members={members}
+            existingRoles={roles}
+            // `ServiceRole` is a structural superset of `ParticipantRole` (richer
+            // `leads`/`bgvs`/`chorus`/`instruments`/`foh` member shape, same
+            // `_type`/`date`), so no cast is needed — and none should be added
+            // back: if `ServiceRole` ever drifts out of that superset relationship,
+            // this is meant to be a `tsc` error, not a silent narrowing that lets
+            // `savedWindow` (D12, inside `MonthGenerator`) degrade to a blank
+            // "sin historial reciente" strip.
+            allRoles={roles}
+            // The same controller used by the stored month editor. One object, so
+            // neither planner surface can drift onto its own rules copy.
+            rules={rules}
+            // Re-checked at preview and at confirmation, not just at open.
+            capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
+            // Per-target A1/A2 preflight: only proven-`creatable` targets are posted.
+            preflight={preflightTarget}
+            onClose={() => setShowGenerator(false)}
+            onCreated={async () => {
+              showToast(mutationOutcomeMessage("Servicios generados.", await loadSources()));
+            }}
+          />
+        </PanelBoundary>
       </div>
     );
   }
