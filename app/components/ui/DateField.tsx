@@ -9,9 +9,11 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import Button from "./Button";
 
+// 16 px on a phone, the design's size from `sm` up — see `ui/Select`'s SIZE map and
+// `inputFontSize.test.ts`. `sm` is the admin-density skin and keeps its 11 px.
 const SIZE = {
   sm: "px-1.5 py-1 text-[11px]",
-  md: "px-3 py-1.5 text-xs",
+  md: "px-3 py-1.5 text-[16px] sm:text-xs",
 } as const;
 
 export default function DateField({

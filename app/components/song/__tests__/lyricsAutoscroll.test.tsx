@@ -421,6 +421,22 @@ describe("LyricsAutoscroll", () => {
     expect(view.getByRole("button")).toBeTruthy();
   });
 
+  it("F3 — a resize mid-run never takes «Detener» away from a page that is scrolling", () => {
+    // The transport appearing, a rotation, a text-size change: the measurement can
+    // flip to "fits" while a run is live. Unmounting the control there would leave
+    // the page scrolling itself with nothing to stop it.
+    const el = mountTarget(2400);
+    const view = render(<LyricsAutoscroll targetId="letra" bpm={120} lines={40} />);
+    act(() => {
+      fireEvent.click(view.getByRole("button"));
+    });
+    Object.defineProperty(el, "offsetHeight", { value: 400, configurable: true });
+    act(() => {
+      fireEvent(window, new Event("resize"));
+    });
+    expect(view.getByRole("button").getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("cancels the pending frame on unmount", () => {
     const { unmount } = start(120);
     flush(0);
