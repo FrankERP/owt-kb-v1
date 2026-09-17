@@ -204,7 +204,7 @@ export default function NotePopover({
           value={notes.get(days[0]) ?? ""}
           onChange={e => days.forEach(d => setNote(d, e.target.value))}
           onKeyDown={e => { if (e.key === "Enter") close(); }}
-          className="w-full rounded-lg border border-surface-accent-l50-d15 bg-surface-lift/5 px-3 py-2 font-body text-sm text-mono-200 placeholder:text-placeholder focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"
+          className="w-full rounded-lg border border-surface-accent-l50-d15 bg-surface-lift/5 px-3 py-2 font-body text-[16px] sm:text-sm text-mono-200 placeholder:text-placeholder focus:outline-none focus:border-accent/40 dark:focus:border-surface-accent-l50-d15"
         />
 
         {/* Remove date(s) */}

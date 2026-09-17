@@ -206,7 +206,7 @@ export default function LibraryIndex(props: LibraryIndexProps) {
             // The ONE count on this surface (spec §18) lives in the placeholder.
             placeholder={`Buscar entre ${posts.length} canciones`}
             aria-label="Buscar canciones por título, artista o tonalidad"
-            className="w-full bg-transparent py-3 pl-10 pr-3 font-label text-sm text-ink placeholder:text-placeholder focus:outline-none"
+            className="w-full bg-transparent py-3 pl-10 pr-3 font-label text-[16px] sm:text-sm text-ink placeholder:text-placeholder focus:outline-none"
           />
         </div>
         <LibraryFilters filters={filters} onChange={set} tags={tags} authors={authors} keys={keys} />

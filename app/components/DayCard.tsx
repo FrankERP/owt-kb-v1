@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Setlist, SetlistSong } from "../utils/interface";
 import { buildRuns } from "../utils/medley";
 import { ChainLinkIcon } from "./ChainLinkIcon";
@@ -14,6 +14,9 @@ import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { findDuplicates, myNameFromSession } from "@/app/utils/agenda";
 import NumberRoll from "./ui/NumberRoll";
+import QuickActions, { type QuickAction } from "./ui/QuickActions";
+import useLongPress from "./ui/useLongPress";
+import { useToast } from "./ui/Toast";
 
 export interface DayCardProps {
   day: string;
@@ -80,8 +83,24 @@ const SPECIAL_THEME = {
 export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
+  const { toast } = useToast();
   const [editSetlist, setEditSetlist] = useState(false);
   const [setlistSaving, setSetlistSaving] = useState(false);
+
+  // ONE quick-actions sheet for the whole card, never one per row — the same rule
+  // `LibraryIndex` follows (R7): a mounted `QuickActions` subscribes to the
+  // CueDialog layer context, so a sheet per setlist row would re-render every row
+  // each time any dialog anywhere opened or closed. The rows only report the press.
+  //
+  // Song and OPEN flag are separate state on purpose: `CueDialog` keeps its
+  // children mounted through the exit animation, so clearing the song on close
+  // would blank the sheet's title while it slides away.
+  const [actionsFor, setActionsFor] = useState<SetlistSong | null>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const onQuickActions = useCallback((song: SetlistSong) => {
+    setActionsFor(song);
+    setActionsOpen(true);
+  }, []);
 
   const hasRole     = !!(leads?.length || instruments?.length || fohTeam?.length || bgvs?.length || chorus?.length);
   const hasSetlist  = !!(setlist?.songs?.length);
@@ -118,6 +137,34 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
 
   // Group songs into medley runs
   const runs = hasSetlist ? buildRuns(setlist!.songs) : [];
+
+  // «Abrir» is the row's own tap, named; «Practicar» is deliberately absent because
+  // the player exposes ONE song entry point and «Abrir» already calls it. The link
+  // action only appears when the row carries a slug — the home page's setlist
+  // projection does, but `DayCard` is also handed rows from elsewhere.
+  const actionSlug = actionsFor?.slug?.current;
+  const quickActions: QuickAction[] = actionsFor
+    ? [
+        { label: "Abrir", onSelect: () => openSheet(actionsFor._id, actionsFor.play_key || undefined) },
+        ...(actionSlug
+          ? [
+              {
+                label: "Copiar enlace",
+                onSelect: async () => {
+                  try {
+                    await navigator.clipboard.writeText(`${window.location.origin}/posts/${actionSlug}`);
+                    toast({ message: "Enlace copiado", tone: "ok", duration: 2000 });
+                  } catch {
+                    // Denied permission, an insecure origin, or no clipboard at all —
+                    // never close as success (the client-handler invariant).
+                    toast({ message: "No se pudo copiar", tone: "error" });
+                  }
+                },
+              } satisfies QuickAction,
+            ]
+          : []),
+      ]
+    : [];
 
   return (
     <>
@@ -209,7 +256,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                       const { song, n } = run.kind === "single" ? run : run.songs[0];
                       return (
                         <li key={song._id}>
-                          <SongRow song={song} n={n} accent={t.accent} onOpen={openSheet} />
+                          <SongRow song={song} n={n} accent={t.accent} onOpen={openSheet} onQuickActions={onQuickActions} />
                         </li>
                       );
                     }
@@ -236,7 +283,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
                             {si > 0 && (
                               <span className="block w-4 text-center font-label text-[11px] leading-none -my-0.5" style={{ color: `${themeColour(t.accentVar, 0.4392)}` }}>+</span>
                             )}
-                            <SongRow song={song} n={n} accent={t.accent} onOpen={openSheet} dense />
+                            <SongRow song={song} n={n} accent={t.accent} onOpen={openSheet} onQuickActions={onQuickActions} dense />
                           </div>
                         ))}
                       </li>
@@ -288,6 +335,14 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
         </div>
       </div>
 
+      <QuickActions
+        open={actionsOpen}
+        onClose={() => setActionsOpen(false)}
+        title={actionsFor?.title ?? ""}
+        subtitle={actionsFor?.author || undefined}
+        actions={quickActions}
+      />
+
       {/* Setlist editor modal */}
       {editSetlist && date && (
         <CueDialog
@@ -328,18 +383,28 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
  *
  * The row is a `<button>` rather than the house `Button`: the ROW is the
  * affordance, edge to edge, the same exemption `LibraryRow` takes.
+ *
+ * A long press (F3) REPORTS the row through `onQuickActions` and opens nothing
+ * itself — the card owns the one sheet. Before this a hold on a phone selected the
+ * row's text instead of doing anything, which is what `select-none` (and the
+ * hook's own `user-select` style) now prevents.
  */
-function SongRow({ song, n, accent, onOpen, dense = false }: {
+function SongRow({ song, n, accent, onOpen, onQuickActions, dense = false }: {
   song: SetlistSong;
   n: number;
   accent: string;
   onOpen: (songId: string, playKey?: string) => void;
+  // Stable (the card's `useCallback`) — a new identity per render would re-arm
+  // the hook's timer mid-press.
+  onQuickActions?: (song: SetlistSong) => void;
   dense?: boolean;
 }) {
+  const longPress = useLongPress(() => onQuickActions?.(song));
   return (
     <button
+      {...longPress}
       onClick={() => onOpen(song._id, song.play_key || undefined)}
-      className={`group -mx-2 flex w-full cursor-pointer items-center gap-3 rounded-lg px-2 ${dense ? "py-2" : "py-2.5"} text-left transition-colors hover:bg-accent/[0.055]`}
+      className={`group -mx-2 flex w-full cursor-pointer select-none items-center gap-3 rounded-lg px-2 ${dense ? "py-2" : "py-2.5"} text-left transition-colors hover:bg-accent/[0.055]`}
     >
       <span className="font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
       <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
