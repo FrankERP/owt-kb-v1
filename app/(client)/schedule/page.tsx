@@ -168,7 +168,7 @@ export default async function SchedulePage({
 
   return (
     <div>
-      <Navbar title="Calendario" tags schedule />
+      <Navbar title="Calendario" />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
         {/* No page heading: `ScheduleHeader`'s month IS the route's heading (R2
             Task 4). `todayStr` is the same `today` the fetch above computed —

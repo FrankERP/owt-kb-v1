@@ -196,7 +196,7 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `cueDialogMount.test.ts` | Counts every LITERAL `open` attribute on a `<CueDialog` source element — not `open={…}` — across `app/**/*.tsx` excluding `__tests__` and `ui/`; per element, not per caller, so a wrapper mounted by several callers still counts once. Pins the count at 10 (re-measured 2026-09-09, M1 Task 7 — `SongSheet`'s `SetlistPopover` migrated to `open={x}`, down from 11; the original 2026-09-08 measurement of 7 only caught the direct `{x && <CueDialog open>}` shape and missed wrapper components). `AdminPanel`'s and `ServicesPanel`'s local `Modal`s and `KidsPlanner`'s `SeatPicker` remain and migrate in their own route phases. Lower the count in the same commit that migrates a site to `open={…}`; never raise it. |
 | `inputFontSize.test.ts` | F3: no `<input>`/`<textarea>`/`<select>` under `app/**` carries a sub-16 px text utility that applies at PHONE width — WebKit zooms into any smaller focused control and never zooms back. The house pattern is `text-[16px] sm:text-<size>`; a breakpoint variant anywhere in the chain is fine, `focus:`/`dark:`/`hover:` are NOT (focus is when the zoom fires). `admin/` and `kids/` are excluded BY PATH, not by a baseline count — there is no number to ratchet, so a new violation cannot be absorbed. className expressions are read whole (brace-aware) with bare identifiers resolved one level to a `const` string; a size inside an object map (`ui/Select`/`ui/DateField`'s `SIZE`) is compliant today but outside the scan. Never fix this by putting `maximum-scale=1` on the viewport. |
 | `dialogSemantics.test.ts` | Every file that draws a dismissable full-bleed scrim (`bg-scrim` + `inset-0` + `onClick`) carries `role="dialog"`/`aria-modal`/an accessible name/focus management, or is named in an exemption list with a reason. Floor is 1 (`CueDialog` itself) as of M1 Task 1 — `BottomNav`'s hand-rolled scrim was replaced by a `CueDialog` sheet, so its `NOT_A_DIALOG` entry was deleted along with the overlay it exempted; the exemption list is now empty. A stale exemption (naming a file the scan no longer finds) fails its own check. |
-| `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins seven named labels at their audited counts, by equality — a phase that removes one lowers its number in the same commit. `>Cue<` (0, M0b-1), `>Servicio<` (0, R1 — `DayCard`'s day · date header carries it now), "Índice musical" (0, R1 — `SongSearchList` removed), "títulos" (0, R1 — the home library count removed), "Repertorio" (0, R1 — `PostComponent`'s song-card eyebrow removed), "Backstage operations" (1) and "Acceso autorizado" (1) still open, both due in R5. |
+| `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins seven named labels at their audited counts, by equality — a phase that removes one lowers its number in the same commit. `>Cue<` (0, M0b-1), `>Servicio<` (0, R1 — `DayCard`'s day · date header carries it now), "Índice musical" (0, R1 — `SongSearchList` removed), "títulos" (0, R1 — the home library count removed), "Repertorio" (0, R1 — `PostComponent`'s song-card eyebrow removed), "Backstage operations" (0, R5 Task 1 — `/admin`'s eyebrow removed) and "Acceso autorizado" (0, R5 Task 1 — the status pill removed). All seven are at 0; the file stays as the ratchet a new eyebrow has to argue with. |
 | `redirects.test.ts` | R1 (spec §12.2, decision H): `next.config.mjs`'s `redirects()` folds `/tag`, `/tag/:slug`, `/author`, `/author/:slug` into `/biblioteca` (`?tag=:slug`/`?author=:slug`), all `permanent: true` (308). |
 | `litCard.test.ts` | The home hero card's one-shot light pass (R1, decision Q — see "The beam" above). Cannot see geometry (jsdom), so it pins the CSS contract instead. |
 | `bottomNavOffsetSync.test.ts` | Names `BottomNav`'s `NAV_H_VAR`/`NAV_CLASS` exports, the `setProperty`/`removeProperty`/`classList` publish-and-clear shapes, `brand.css`'s `--bottom-nav-h` declaration and `html.has-bottom-nav [data-route-main]` padding rule, that every fixed-bottom consumer (`Toast.tsx`, `AudioPlayer.tsx`, `EditSongButton.tsx`) offsets by the variable, and that the client layout mounts `<BottomNav />` inside `<Provider>`. A new fixed-bottom element joins the `it.each` list. |
@@ -1241,3 +1241,27 @@ production exercises; the `song` theme-gallery fixture is where both are visuall
   so a hold no longer selects the row's text. The simulator look also CLOSED three R4 open
   notes: the autoscroll's pause/resume under a real finger, where the run stops with the tab
   bar and transport up, and the practice cluster's hand-off.
+
+### Control Room (R5)
+
+Spec §5.8 / Part III finding 4, plus decision N: `/admin` stops being a card inside a
+card inside a card. **Task 1 (flatten).** The page renders the navbar, an `h1` and
+`AdminPanel` inside `brand-admin-frame` — the bordered `.brand-admin-shell`, the
+«Backstage operations» eyebrow, the subtitle and the «Acceso autorizado» pill are gone
+(label budget: both labels pinned at 0). `AdminPanel` renders ONE tree instead of six
+mutually exclusive early returns: one `TabBar` (its bordered `.brand-admin-tabs` pill
+dropped — the `SlidingIndicator` underline is the affordance) and one body
+`key={tab} … animate-fade-in`, so a tab change MOUNTS the incoming panel and fades it in
+rather than keeping the outgoing one alive beside it (ruling 2 — these panels are
+thousands of lines each). No per-tab `brand-surface` box: the cards inside a panel are
+the only frames left. `/admin` now has no page-level horizontal scroll — the planner
+grid, the Servicios board and the availability matrix are the only horizontal scrollers,
+each in its own `overflow-x-auto` box, which is what closes finding 4's silent 128 px
+shift. The planner's full-screen portal and `MonthGenerator`'s hand-centring STAY, and
+the comments that used to name the shell now name `[data-route-main]`: see
+[ADR-0035](adr/0035-the-admin-shell-is-gone.md). `NavLinks` lost its `schedule`/`tags`
+props in the same task (ruling 9) — Calendario and Biblioteca show for every worship
+member on every page, so the row no longer changes shape between routes. Guards:
+`adminShell.test.tsx` (one tab bar, no box between it and the panel, the keyed remount)
+and `participationAlongside.test.tsx` (the re-derived `:has(.planner-wide)` arithmetic:
+`1512 − 24 = 1488`, `216 + 12 + 1008 + 12 + 240 = 1488`).

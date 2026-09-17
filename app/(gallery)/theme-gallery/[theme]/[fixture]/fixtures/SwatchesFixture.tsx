@@ -1,6 +1,6 @@
 // Swatches fixture — the compositing layer and the prose block (Child A2 step 2).
 //
-// Renders the 15 `.brand-*` classes that CARRY COLOUR. The set comes from A1's
+// Renders the 13 `.brand-*` classes that CARRY COLOUR. The set comes from A1's
 // generated inventory (`compositing` rows of kind `selector` dispositioned `D`), NOT
 // from a figure in any planning document — the parent said 17 in four places and was
 // wrong: `.brand-admin-frame` and `.brand-admin-workspace` declare no colour in any
@@ -19,10 +19,8 @@ import SectionNav from "@/app/components/SectionNav";
 import TextSizeControl from "@/app/components/TextSizeControl";
 import CueDialogStatus from "@/app/components/ui/CueDialogStatus";
 
-/** The 14 tile-able classes. `atmosphere` is the page wash and is demonstrated as such. */
+/** The 12 tile-able classes. `atmosphere` is the page wash and is demonstrated as such. */
 const COMPOSITING_CLASSES = [
-  "brand-admin-shell",
-  "brand-admin-tabs",
   "brand-facet-panel",
   "brand-key-dial",
   "brand-library-module",
@@ -54,7 +52,7 @@ export function SwatchesFixture() {
       <header>
         <h1 className="brand-section-heading font-display text-2xl">Paleta — clases de composición</h1>
         <p className="mt-2 text-sm opacity-80">
-          Las 15 clases <code>.brand-*</code> que llevan color. <code>.brand-atmosphere</code> es el
+          Las 13 clases <code>.brand-*</code> que llevan color. <code>.brand-atmosphere</code> es el
           fondo de esta página, no una muestra recortada.
         </p>
       </header>

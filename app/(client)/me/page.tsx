@@ -429,7 +429,7 @@ export default async function MePage() {
   return (
     <div>
       {/* `cue={false}`: `MeHeader` already carries the next-service countdown. */}
-      <Navbar title={navbarTitle} schedule tags cue={false} />
+      <Navbar title={navbarTitle} cue={false} />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-12">
         {/* The theme-rollout announcement used to sit here. It was retired on
             2026-09-13 — see ADR-0033. Do not reintroduce it with a client-side

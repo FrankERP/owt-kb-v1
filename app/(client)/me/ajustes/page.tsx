@@ -48,7 +48,7 @@ export default async function AjustesPage() {
 
   return (
     <div>
-      <Navbar title={member?.alias?.trim() || "Ajustes"} schedule tags />
+      <Navbar title={member?.alias?.trim() || "Ajustes"} />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-8">
         <div {...revealProps(0)}>
           {/* Back to the page this hangs off, not to wherever history points. */}

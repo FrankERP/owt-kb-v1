@@ -64,7 +64,7 @@ export default async function DisponibilidadPage() {
 
   return (
     <div>
-      <Navbar title={navbarTitle} schedule tags />
+      <Navbar title={navbarTitle} />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16 space-y-8">
         <div {...revealProps(0)}>
           {/* Back to the page this came from, not to wherever history points:

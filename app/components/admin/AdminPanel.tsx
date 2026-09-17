@@ -641,9 +641,13 @@ function TabItem({ id, label, active, onChange }: { id: Tab; label: string; acti
 function TabBar({ active, onChange, role }: { active: Tab; onChange: (t: Tab) => void; role: OWTRole }) {
   const visible = visibleAdminTabs(role);
   return (
-    <div className="relative">
+    // No bordered pill around the tabs (ADR-0035): the sliding underline IS the
+    // affordance, and the box was the third frame on a page whose content is
+    // already made of cards. `data-admin-tabs` is the hook the shell guard
+    // counts — exactly ONE of these renders, whichever tab is open.
+    <div className="relative" data-admin-tabs="bar">
       <div className="overflow-x-auto -mx-2 px-2 pb-1">
-        <div className="brand-admin-tabs flex min-w-full w-max gap-1 rounded-xl p-1.5">
+        <div className="flex min-w-full w-max gap-1">
           {visible.map(({ id, label }) => (
             <TabItem key={id} id={id} label={label} active={active === id} onChange={onChange} />
           ))}
@@ -1035,57 +1039,13 @@ export default function AdminPanel({
     }
   };
 
-  if (tab === "services") return (
-    <ServiceHandoffProvider value={handoff}>
-      <div className="brand-admin-workspace space-y-6">
-        <TabBar active={tab} onChange={setTab} role={role} />
-        <div className="brand-surface min-w-0 space-y-4 rounded-2xl p-4 sm:p-6">
-          {/* Read-only global integrity queue: issues no validated card owns. */}
-          <IntegrityQueuePanel target={integrityTarget} onResolved={onReviewResolved} />
-          <ServicesPanel />
-        </div>
-      </div>
-    </ServiceHandoffProvider>
-  );
-
-  if (tab === "proposals") return (
-    <ServiceHandoffProvider value={handoff}>
-      <div className="brand-admin-workspace space-y-6">
-        <TabBar active={tab} onChange={setTab} role={role} />
-        <div className="brand-surface rounded-2xl p-4 sm:p-6">
-          <ProposalsPanel target={proposalTarget} onResolved={onReviewResolved} viewerId={viewerId} />
-        </div>
-      </div>
-    </ServiceHandoffProvider>
-  );
-
-  if (tab === "availability") return (
-    <div className="brand-admin-workspace space-y-6">
-      <TabBar active={tab} onChange={setTab} role={role} />
-      <div className="brand-surface rounded-2xl p-4 sm:p-6"><AvailabilityPanel /></div>
-    </div>
-  );
-
-  if (tab === "activity") return (
-    <div className="brand-admin-workspace space-y-6">
-      <TabBar active={tab} onChange={setTab} role={role} />
-      <div className="brand-surface rounded-2xl p-4 sm:p-6"><ActivityPanel /></div>
-    </div>
-  );
-
-  if (tab === "content") return (
-    <div className="brand-admin-workspace space-y-6">
-      <TabBar active={tab} onChange={setTab} role={role} />
-      <div className="brand-surface rounded-2xl p-4 sm:p-6">
-        <ContentPanel canDelete={role === "super-admin" || role === "admin"} />
-      </div>
-    </div>
-  );
-
-  return (
-    <div className="brand-admin-workspace space-y-6">
-      <TabBar active={tab} onChange={setTab} role={role} />
-
+  // ── One tree, not six ────────────────────────────────────────────────────
+  // Every tab used to `return` early with its OWN <TabBar> and its own
+  // `brand-surface` panel box. One tab bar renders now, the body is keyed by
+  // tab, and the boxes are gone (ADR-0035) — the cards inside a panel are the
+  // only frames left on this page.
+  const membersBody = (
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -1375,6 +1335,47 @@ export default function AdminPanel({
         </Modal>
       )}
 
+    </div>
+  );
+
+  const body = (() => {
+    switch (tab) {
+      case "services":
+        return (
+          <ServiceHandoffProvider value={handoff}>
+            <div className="min-w-0 space-y-4">
+              {/* Read-only global integrity queue: issues no validated card owns. */}
+              <IntegrityQueuePanel target={integrityTarget} onResolved={onReviewResolved} />
+              <ServicesPanel />
+            </div>
+          </ServiceHandoffProvider>
+        );
+      case "proposals":
+        return (
+          <ServiceHandoffProvider value={handoff}>
+            <ProposalsPanel target={proposalTarget} onResolved={onReviewResolved} viewerId={viewerId} />
+          </ServiceHandoffProvider>
+        );
+      case "availability":
+        return <AvailabilityPanel />;
+      case "activity":
+        return <ActivityPanel />;
+      case "content":
+        return <ContentPanel canDelete={role === "super-admin" || role === "admin"} />;
+      default:
+        return membersBody;
+    }
+  })();
+
+  return (
+    <div className="mt-6 lg:grid lg:grid-cols-[200px_1fr] lg:gap-8">
+      <TabBar active={tab} onChange={setTab} role={role} />
+      {/* `key={tab}`: the incoming panel MOUNTS and fades in rather than the
+          outgoing one being held alive beside it. These panels are thousands of
+          lines each and only the active one is ever mounted. */}
+      <div key={tab} className="brand-admin-workspace min-w-0 animate-fade-in">
+        {body}
+      </div>
     </div>
   );
 }
