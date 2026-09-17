@@ -1014,7 +1014,7 @@ export default function AdminPanel({
   // ── One tree, not six ────────────────────────────────────────────────────
   // Every tab used to `return` early with its OWN <TabBar> and its own
   // `brand-surface` panel box. One tab bar renders now, the body is keyed by
-  // tab, and the boxes are gone (ADR-0035) — the cards inside a panel are the
+  // tab, and the boxes are gone (ADR-0037) — the cards inside a panel are the
   // only frames left on this page.
   // A VALUE, not a function, and deliberately so for now: building this subtree
   // on the five tabs that never render it is work thrown away, but wrapping it

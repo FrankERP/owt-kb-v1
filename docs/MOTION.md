@@ -1259,7 +1259,7 @@ grid, the Servicios board and the availability matrix are the only horizontal sc
 each in its own `overflow-x-auto` box, which is what closes finding 4's silent 128 px
 shift. The planner's full-screen portal and `MonthGenerator`'s hand-centring STAY, and
 the comments that used to name the shell now name `[data-route-main]`: see
-[ADR-0035](adr/0035-the-admin-shell-is-gone.md). `NavLinks` lost its `schedule`/`tags`
+[ADR-0037](adr/0037-the-admin-shell-is-gone.md). `NavLinks` lost its `schedule`/`tags`
 props in the same task (ruling 9) — Calendario and Biblioteca show for every worship
 member on every page, so the row no longer changes shape between routes. Guards:
 `adminShell.test.tsx` (one rail + one strip, no box between the nav and the panel, the

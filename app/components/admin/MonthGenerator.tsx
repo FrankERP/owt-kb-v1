@@ -2027,7 +2027,7 @@ export default function MonthGenerator({
       // the whole page sliding sideways under the admin. (It used to reach
       // `.brand-admin-shell`, `overflow: hidden` and still scrollable by
       // script, which clipped its own content instead; the shell is gone —
-      // ADR-0035 — and the hand-centring below stays either way, because a
+      // ADR-0037 — and the hand-centring below stays either way, because a
       // page that scrolls itself horizontally is the very thing /admin must
       // not do.) Centre the known horizontal scroller by hand instead, then
       // let `scrollIntoView` handle only the vertical axis with `inline:

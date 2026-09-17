@@ -1,4 +1,4 @@
-# ADR-0035: The Control Room is the page — the admin shell is gone, and horizontal scroll is explicit
+# ADR-0037: The Control Room is the page — the admin shell is gone, and horizontal scroll is explicit
 
 **Date:** 2026-09-17 · **Status:** Accepted
 
