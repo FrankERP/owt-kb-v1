@@ -253,7 +253,8 @@ roving focus, merges the trigger's own ref), `Collapse` (`app/components/ui/Coll
 — every disclosure; the one place height animates, on user-triggered opens only),
 `SegmentedControl` (`app/components/ui/SegmentedControl.tsx` — every one-of-N choice;
 never `aria-pressed` toggles), `SlidingIndicator` (tab bars), `Switch`, `Checkbox`,
-`Select`, `DateField` (native controls under house chrome — never a bare
+`Select` (desktop: a `Menu` popover; touch: the native picker), `DateField`
+(native controls under house chrome — never a bare
 `<select>`/`<input type="checkbox|date|month">` in `app/**`), `NumberRoll`,
 `AnimatedList` (`app/components/ui/AnimatedList.tsx` — every list that reflows on filter),
 `SwipeStrip` (`app/components/ui/SwipeStrip.tsx` — the one drag-with-snap host, `onSwipe(dir)`
