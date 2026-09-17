@@ -1383,3 +1383,25 @@ read `.tsx` while the class string lives in a `.ts` module; it is now
 the card's tones change — and **the scan reads `.ts` as well as `.tsx`**. Widening it found
 that one site and no other, so the baseline stays 5/0 rather than being raised. Guards:
 `adminPanelsPolish.test.tsx`, plus the existing per-panel failure suites.
+
+**Task 6 (load on demand).** `ActivityPanel`, `ContentPanel`, `AvailabilityPanel`,
+`ProposalsPanel` and `MembersPanel` become `next/dynamic(() => import("./X"), { ssr:
+false, loading: PanelSkeleton })` in `AdminPanel.tsx`; `MonthGenerator` becomes the same
+in `ServicesPanel.tsx`. `ServicesPanel` and `IntegrityQueuePanel` stay eager on purpose:
+Servicios is the default tab for most roles, and the integrity fetch that feeds the
+rail's dot lives at `AdminPanel`'s top level regardless of which tab is open, so gating
+either behind a chunk boundary would delay the one signal every tab needs. `MonthGenerator`
+was already gated at the STATE level — it replaces the whole Servicios view via an early
+`return` when `showGenerator`/`monthEditor` goes true (D10), never inside an
+always-mounted `CueDialog` — so `dynamic` here converts an existing on-open mount into an
+on-open FETCH too: the planner/solver code it pulls in no longer reaches the initial
+Servicios chunk at all. **Method note on the Bundle table below:** because five of six
+tabs and the month generator now live in their own async chunks, `/admin`'s first-load
+number in the table from this task forward measures Servicios + the shell only — it is
+not comparable, chunk-for-chunk, to an earlier row that measured all six tabs eagerly
+bundled together; the drop it should show is the sum of everything that left the
+first-load graph. Guard: `adminDynamic.test.ts` (source scan — each of the six is
+imported through `next/dynamic` in exactly the file gating it, and nowhere else under
+`app/**` imports one statically). `adminShell.test.tsx`'s tab-change assertion now
+`await waitFor`s the incoming panel's content, since even a mocked dynamic import
+resolves through a microtask rather than synchronously.

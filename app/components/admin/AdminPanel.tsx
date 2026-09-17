@@ -1,13 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useReducer, useRef, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import ServicesPanel from "./ServicesPanel";
-import ActivityPanel from "./ActivityPanel";
-import ContentPanel from "./ContentPanel";
-import AvailabilityPanel from "./AvailabilityPanel";
-import ProposalsPanel from "./ProposalsPanel";
 import IntegrityQueuePanel from "./IntegrityQueuePanel";
+import PanelSkeleton from "./PanelSkeleton";
 import AdminRail, { ADMIN_TAB_ICON } from "./AdminRail";
 import { useIntegrityQueue } from "./useIntegrityQueue";
 import { ServiceHandoffProvider, type ServiceHandoffApi } from "./serviceHandoffContext";
@@ -19,7 +17,19 @@ import {
   type ProposalReviewTarget,
 } from "./proposalHandoff";
 import { visibleAdminTabs } from "./adminTabs";
-import MembersPanel from "./MembersPanel";
+
+// Five secondary tabs load on demand (Task 6): Servicios + IntegrityQueuePanel
+// stay static above, since Servicios is the default tab for most roles and the
+// integrity fetch feeds the rail's dot on EVERY tab. `ssr: false` because these
+// are all behind an auth-gated client panel that never renders on the server
+// anyway (the page above resolves the initial tab, but the body itself only
+// ever mounts client-side); `loading: PanelSkeleton` covers the chunk fetch and
+// its own (rare) failure.
+const ActivityPanel = dynamic(() => import("./ActivityPanel"), { ssr: false, loading: PanelSkeleton });
+const ContentPanel = dynamic(() => import("./ContentPanel"), { ssr: false, loading: PanelSkeleton });
+const AvailabilityPanel = dynamic(() => import("./AvailabilityPanel"), { ssr: false, loading: PanelSkeleton });
+const ProposalsPanel = dynamic(() => import("./ProposalsPanel"), { ssr: false, loading: PanelSkeleton });
+const MembersPanel = dynamic(() => import("./MembersPanel"), { ssr: false, loading: PanelSkeleton });
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 

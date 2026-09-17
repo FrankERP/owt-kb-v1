@@ -4,7 +4,14 @@ import { useToast } from "@/app/components/ui/Toast";
 import Collapse from "@/app/components/ui/Collapse";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import MonthGenerator from "./MonthGenerator";
+import dynamic from "next/dynamic";
+import PanelSkeleton from "./PanelSkeleton";
+// «Generar mes»/«Editar mes» replace this whole panel via an early `return`
+// below (D10 — a full-width panel, never an overlay), so this chunk was
+// already never fetched until one of those two states goes true. `dynamic`
+// makes that deferral pay off in bytes too: the planner/solver code this pulls
+// in never reaches the initial Servicios bundle at all.
+const MonthGenerator = dynamic(() => import("./MonthGenerator"), { ssr: false, loading: PanelSkeleton });
 import type { ClearMonthSummary } from "./clearMonthModel";
 import { mutationErrorMessage, mutationSignal } from "./serviceMutationErrors";
 import { useSolverConfig } from "./useSolverConfig";

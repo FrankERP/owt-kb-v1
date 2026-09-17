@@ -98,7 +98,7 @@ describe("the admin page is the workspace", () => {
     expect(body.contains(nav)).toBe(false);
   });
 
-  it("fades the incoming body in by remounting it on a tab change", () => {
+  it("fades the incoming body in by remounting it on a tab change", async () => {
     const { container } = mount("services");
     const body = container.querySelector(".brand-admin-workspace") as HTMLElement;
     expect(body.className.split(/\s+/)).toContain("animate-fade-in");
@@ -109,7 +109,10 @@ describe("the admin page is the workspace", () => {
     expect(body.isConnected).toBe(false);
     const next = container.querySelector(".brand-admin-workspace") as HTMLElement;
     expect(next).not.toBe(body);
-    expect(next.querySelector('[data-panel="activity"]')).not.toBeNull();
+    // `ActivityPanel` now loads through `next/dynamic` (Task 6): the mocked
+    // module still resolves via a microtask, so the panel appears one tick
+    // after the click rather than in the same render.
+    await waitFor(() => expect(next.querySelector('[data-panel="activity"]')).not.toBeNull());
   });
 
   // ── Who the integrity routes are asked for, and when ──────────────────────
