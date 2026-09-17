@@ -103,6 +103,14 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   member — screenshots, text, a11y tree, console. Use it for the human-eyes step of the push
   order when the change is visual; it never writes, and it still is not a substitute for
   Frank's own look at a release.
+- **Only `main`, `preview` and `verify/service-readiness` spend a Vercel build.**
+  `vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore-build.mjs` and skips
+  every other ref, so a `claude/*` branch has NO deployment URL — pushing it proves
+  nothing and you still verify on `dev-owt-backstage` by merging into `preview`.
+  Function Storage counts every RETAINED deployment (the embedded Studio makes each
+  ~75 MB), which is how the free tier hit 100% on 2026-09-17 with 136 of them. It
+  fails open: no git ref, or `VERCEL_ENV=production`, always builds.
+  `deployBranchPolicy.test.ts` guards both the policy and the wiring. See `docs/CI.md`.
 - The stable dev domain is owned **exclusively** by the `preview` branch. Never
   point it at or deploy it directly from a feature/development branch. To update
   dev: merge the intended development branch into `preview`, push `preview`,

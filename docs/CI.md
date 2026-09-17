@@ -96,6 +96,52 @@ feature branch (local gates green)
 pass; it says nothing about whether the change looks right to a human on dev.
 Those are different questions and the gate only answers one of them.
 
+## Which branches Vercel builds
+
+Only three refs spend a Vercel build: **`main`** (production), **`preview`**
+(the stable dev alias) and **`verify/service-readiness`** (the isolated
+verification dataset that `scripts/lib/deployment-coherence.mjs` asserts at
+build time). Everything else — every `claude/*`, `docs/*`, `fix/*` working
+branch — is skipped.
+
+`vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore-build.mjs`, a thin
+runner over the pure `evaluateDeployPolicy` in
+`scripts/lib/deploy-branch-policy.mjs`. Vercel inverts the usual exit contract:
+**0 ignores the build, 1 continues it.** The step runs *before* `npm install`,
+so that module may use Node builtins only.
+
+**Why, and why not `git.deploymentEnabled`.** Vercel's Function Storage quota
+counts the function bundle of every *retained* deployment, not just the current
+one. On 2026-09-17 this project hit 100% of the 10 GB Hobby allowance with 136
+retained deployments at roughly 75 MB each — the embedded Sanity Studio at
+`/studio` is traced into the lambda, so each one is expensive. Half of them were
+never read by anybody: every fix round pushes the feature branch *and* merges to
+`preview`, so Vercel built twice, and 20 deployments landed in 4.5 hours that
+day. The release flow above verifies on `dev-owt-backstage` and `main`'s only
+required check is the `gates` job — Vercel contributes no status check, so a
+feature-branch deployment gates nothing. `git.deploymentEnabled` cannot express
+this: as an object it is a *blacklist* (unspecified branches default to `true`),
+and as `false` it disables production too.
+
+**It fails open.** No `VERCEL_GIT_COMMIT_REF` (a CLI `vercel deploy`, a deploy
+hook, a dashboard redeploy) builds, and so does anything with
+`VERCEL_ENV=production` whatever ref it names — a belt so that renaming the
+production branch cannot silently stop production from deploying. Wasting one
+build is recoverable; being unable to ship during a rollback is not.
+
+`scripts/__tests__/deployBranchPolicy.test.ts` is the guard, and it asserts the
+wiring as well as the policy — deleting `ignoreCommand` from `vercel.json` fails
+the suite rather than quietly re-enabling every branch.
+
+**Sweeping what has accumulated** (irreversible; it also destroys the previous
+production deployment, so one-step rollback goes with it):
+
+```bash
+npx vercel remove owt-backstage --safe --scope frank-rochas-projects
+```
+
+`--safe` keeps everything that holds an alias.
+
 ## Re-applying protection
 
 `scripts/apply-branch-protection.sh` is idempotent and prints the resulting
