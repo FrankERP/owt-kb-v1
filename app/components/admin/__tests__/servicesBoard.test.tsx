@@ -157,6 +157,31 @@ describe("the Servicios board", () => {
     expect(container.querySelectorAll("[data-card-id]").length).toBe(2);
   });
 
+  // `Button` carries `disabled:pointer-events-none`, so a `title` on a disabled
+  // control can never be summoned: the tooltip the admin needs most was the one
+  // the markup guaranteed they would never see. The reason is a LINE now.
+  it("says why the toolbar is closed, in the layout rather than in a title", async () => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        url === SOURCE_ENDPOINTS.members
+          ? { ok: false, status: 500, json: async () => ({}) }
+          : { ok: true, json: async () => PAYLOAD[url] ?? {} },
+      ),
+    );
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+
+    const closed = screen.getByRole("button", { name: /Editar mes/ }) as HTMLButtonElement;
+    expect(closed.disabled).toBe(true);
+    expect(closed.getAttribute("title")).toBeNull();
+    // Exactly one line, the first closed gate's reason.
+    const reasons = [...container.querySelectorAll("p.text-ink-dim")].map((p) => p.textContent ?? "");
+    expect(reasons).toHaveLength(1);
+    expect(reasons[0].length).toBeGreaterThan(0);
+  });
+
   it("draws skeletons while the sources load, never a bare pulsing block", () => {
     vi.unstubAllGlobals();
     stubPendingFetch();
@@ -189,6 +214,41 @@ describe("the card's one primary action", () => {
     expect(button.className).toContain("ease-out-brand");
     expect(button.className).toContain("min-h-[44px]");
     expect(button.className).toContain("w-full");
+  });
+
+  // The tone is the whole point of the variant swap: an integrity/conflict
+  // blocker must not look like the cyan "go" control beside it. `data-tone`
+  // exists so this is readable in the DOM rather than by matching a class string
+  // against `Button`'s private VARIANT table.
+  it("wears the danger tone for a review/conflict kind", () => {
+    const { rerender } = render(
+      <ServicePrimaryAction
+        action={{ ...ACTION, kind: "review_data", label: "Revisar datos" }}
+        onAction={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Revisar datos" }).getAttribute("data-tone")).toBe("danger");
+
+    rerender(
+      <ServicePrimaryAction
+        action={{ ...ACTION, kind: "resolve_conflict", label: "Resolver conflicto" }}
+        onAction={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Resolver conflicto" }).getAttribute("data-tone")).toBe("danger");
+  });
+
+  it("wears the primary tone for a publish kind", () => {
+    render(
+      <ServicePrimaryAction
+        action={{ ...ACTION, kind: "publish", label: "Publicar" }}
+        onAction={vi.fn()}
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Publicar" });
+    expect(button.getAttribute("data-tone")).toBe("primary");
+    // And it is the primary variant's own spelling, not a colour override.
+    expect(button.className).toContain("brand-btn-sheen");
   });
 
   it("stays disabled with its reason when a source is missing", () => {

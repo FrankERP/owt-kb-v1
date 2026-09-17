@@ -192,7 +192,7 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `reveal.test.ts` | `revealProps()`'s shape, and that `app/(client)/template.tsx` never wraps the page in a transformed element. |
 | `loadingSkeletons.test.ts` | The four `loading.tsx` files compose `Skeleton` instead of a hand-copied pulse block. |
 | `shellPolish.test.ts` | Spec Part III findings 3 (brand mark loads with `priority`) and 5 (initials avatar contrast in light). |
-| `rawMotionLiterals.test.ts` | Pins `transition-all` (7) and raw `duration-N` (0) counts outside `ui/` at the audited baseline (13/12 pre-M1 → 9/8 after M1 → 7/0 after R1 deleted the tag/author lists — M1's four migrated sites: `BottomNav`'s sheet becoming a `CueDialog`, `NavMenu`'s avatar-ring transitions, the audio transport's progress fill and play/pause button) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. |
+| `rawMotionLiterals.test.ts` | Pins `transition-all` (5) and raw `duration-N` (0) counts outside `ui/` at the audited baseline (13/12 pre-M1 → 9/8 after M1 → 7/0 after R1 deleted the tag/author lists → 6 after R5 Task 3's member row → 5 after Task 4's member chip) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. **Scans `.ts` as well as `.tsx` since R5 Task 5**: a class string is a class string wherever it is written, and `serviceCardModel.ts`'s `CARD_STYLE.container` had been hiding one in a model module for exactly that reason. |
 | `cueDialogMount.test.ts` | Counts every LITERAL `open` attribute on a `<CueDialog` source element — not `open={…}` — across `app/**/*.tsx` excluding `__tests__` and `ui/`; per element, not per caller, so a wrapper mounted by several callers still counts once. Pins the count at 10 (re-measured 2026-09-09, M1 Task 7 — `SongSheet`'s `SetlistPopover` migrated to `open={x}`, down from 11; the original 2026-09-08 measurement of 7 only caught the direct `{x && <CueDialog open>}` shape and missed wrapper components). `AdminPanel`'s and `ServicesPanel`'s local `Modal`s and `KidsPlanner`'s `SeatPicker` remain and migrate in their own route phases. Lower the count in the same commit that migrates a site to `open={…}`; never raise it. |
 | `inputFontSize.test.ts` | F3: no `<input>`/`<textarea>`/`<select>` under `app/**` carries a sub-16 px text utility that applies at PHONE width — WebKit zooms into any smaller focused control and never zooms back. The house pattern is `text-[16px] sm:text-<size>`; a breakpoint variant anywhere in the chain is fine, `focus:`/`dark:`/`hover:` are NOT (focus is when the zoom fires). `admin/` and `kids/` are excluded BY PATH, not by a baseline count — there is no number to ratchet, so a new violation cannot be absorbed. className expressions are read whole (brace-aware) with bare identifiers resolved one level to a `const` string; a size inside an object map (`ui/Select`/`ui/DateField`'s `SIZE`) is compliant today but outside the scan. Never fix this by putting `maximum-scale=1` on the viewport. |
 | `dialogSemantics.test.ts` | Every file that draws a dismissable full-bleed scrim (`bg-scrim` + `inset-0` + `onClick`) carries `role="dialog"`/`aria-modal`/an accessible name/focus management, or is named in an exemption list with a reason. Floor is 1 (`CueDialog` itself) as of M1 Task 1 — `BottomNav`'s hand-rolled scrim was replaced by a `CueDialog` sheet, so its `NOT_A_DIALOG` entry was deleted along with the overlay it exempted; the exemption list is now empty. A stale exemption (naming a file the scan no longer finds) fails its own check. |
@@ -1346,3 +1346,40 @@ ease-out-brand` (`rawMotionLiterals` `transitionAll` 6 → 5). One label left in
 pass: the panel repeated «Integridad de datos · sin problemas de integridad» under its
 heading while `IntegrityQueuePanel` and the rail's dot already said it. Guard:
 `servicesBoard.test.tsx`.
+
+**Task 5 (the remaining five panels).** `ActivityPanel`, `AvailabilityPanel`,
+`ContentPanel`, `ProposalsPanel` and `IntegrityQueuePanel` adopt the primitives, and each
+one pays a debt rather than adding an effect. Every loading surface is a `SkeletonGroup`
+of `Skeleton`s — the last four `animate-pulse` blocks in `app/**` outside `ui/`.
+Actividad's three summary stats are `NumberRoll`s (they change in place as the list
+resolves) and its error state gained a `Button variant="ghost" size="sm"` «Reintentar»
+wired to the same loader the mount effect calls — a dead end is not a state. Contenido's
+row actions were `opacity-0 group-hover:opacity-100`, which is not a subtle affordance on
+a phone but a missing one: there is no hover state to enter, so Editar and Eliminar were
+permanently invisible to every touch admin and unreachable by keyboard at every width.
+They are `opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100`
+now, as `Button variant="icon" size="lg"` (44 px), and Contenido's two dialogs joined the
+house pattern — mounted always, opened by `modalOpen` + `modalKind`, payload outliving the
+close, bodies keyed on an open counter (`cueDialogMount.test.ts` 8 → 6). Disponibilidad's
+matrix gets the one genuinely new piece: its sticky first column takes an edge only once it
+has DETACHED from the scroller's left edge, driven by a 1 px `aria-hidden` sentinel observed
+by an `IntersectionObserver` **rooted on the scroll box** — no scroll listener, disconnected
+on unmount — which sets `data-scrolled` and lets `brand.css`'s
+`.availability-matrix[data-scrolled] .sticky-col` animate a box-shadow over `--motion-fast`.
+Integridad's entries render through `AnimatedList`, so a RESOLVED entry fades out and the
+survivors slide up; the queue derivation is untouched (it lives in `useIntegrityQueue`) and
+each entry keeps its own `Collapse`.
+
+Three Task 4 follow-ups ride along. The `past` month pill dims with `opacity-60` instead of
+a `border-accent/10 text-mono-600` override that lost to the pill variant's own border on
+emission order. The Servicios toolbar states a closed gate's reason as a LINE under the
+buttons instead of a `title`: `Button` carries `disabled:pointer-events-none`, so a disabled
+control receives no pointer events and its native tooltip can never be summoned — the reason
+the admin needs most was the one the markup guaranteed they would never see. And
+`CARD_STYLE.container` in `serviceCardModel.ts` was still carrying the catch-all
+every-property transition, invisible to `rawMotionLiterals.test.ts` because that scan only
+read `.tsx` while the class string lives in a `.ts` module; it is now
+`transition-[border-color,box-shadow,opacity] duration-base ease-out-brand` — exactly what
+the card's tones change — and **the scan reads `.ts` as well as `.tsx`**. Widening it found
+that one site and no other, so the baseline stays 5/0 rather than being raised. Guards:
+`adminPanelsPolish.test.tsx`, plus the existing per-panel failure suites.

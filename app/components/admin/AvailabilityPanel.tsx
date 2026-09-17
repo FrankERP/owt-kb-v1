@@ -1,6 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+
+import Button from "@/app/components/ui/Button";
+import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +67,15 @@ export default function AvailabilityPanel() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"matrix" | "conflicts">("conflicts");
+  // The matrix's first column is `position: sticky`, and a sticky column that has
+  // detached from the left edge is indistinguishable from one that has not — the
+  // dates simply slide under a name with nothing between them. A 1px sentinel
+  // pinned at the scroller's left edge, observed against the scroller itself, is
+  // the only honest signal: it stops intersecting exactly when the column starts
+  // overlapping content, at any zoom and with no scroll listener.
+  const [scrolled, setScrolled] = useState(false);
+  const scrollRef   = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   // This panel answers "is anyone assigned on a day they said they cannot
   // serve?", and the answer it gives on an empty list is the reassuring one.
@@ -136,13 +148,30 @@ export default function AvailabilityPanel() {
     return "empty";
   }
 
+  // Rooted on the scroll box, so it fires on the BOX's scroll rather than the
+  // page's. Re-runs when the matrix mounts (`viewMode`); disconnects on unmount.
+  useEffect(() => {
+    if (viewMode !== "matrix") { setScrolled(false); return; }
+    const root = scrollRef.current;
+    const sentinel = sentinelRef.current;
+    if (!root || !sentinel || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) setScrolled(!entry.isIntersecting);
+      },
+      { root, threshold: 0 },
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [viewMode]);
+
   if (loading) {
     return (
-      <div className="space-y-3">
+      <SkeletonGroup label="Cargando disponibilidad" className="space-y-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-16 rounded-xl bg-surface-accent-wash animate-pulse" />
+          <Skeleton key={i} className="h-16 w-full" rounded="lg" />
         ))}
-      </div>
+      </SkeletonGroup>
     );
   }
 
@@ -158,13 +187,9 @@ export default function AvailabilityPanel() {
         <div role="alert" className="rounded-xl border border-negative-strong/30 bg-negative-surface-deepest/35 px-5 py-8 text-center">
           <p className="font-display text-lg uppercase text-negative-fg">Sin datos</p>
           <p className="font-body text-sm text-mono-500 mt-1">{error}</p>
-          <button
-            type="button"
-            onClick={() => { void fetchData(); }}
-            className="mt-4 min-h-11 rounded-lg bg-surface-accent-solid px-4 py-2 font-label text-xs uppercase tracking-widest text-on-fill transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
-          >
+          <Button variant="primary" size="lg" onClick={() => { void fetchData(); }} className="mt-4">
             Reintentar
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -307,14 +332,20 @@ export default function AvailabilityPanel() {
 
       {/* ── Matrix view ── */}
       {viewMode === "matrix" && (
-        <div className="overflow-x-auto -mx-1 px-1">
+        <div
+          ref={scrollRef}
+          data-scrolled={scrolled ? "" : undefined}
+          className="availability-matrix relative overflow-x-auto -mx-1 px-1"
+        >
+          {/* The sentinel, not a scroll handler: 1px at the scroller's left edge. */}
+          <div ref={sentinelRef} aria-hidden="true" className="absolute left-0 top-0 h-px w-px" />
           {matrixMembers.length === 0 ? (
             <p className="font-body text-sm text-mono-500 text-center py-12">Sin datos para mostrar.</p>
           ) : (
             <table className="w-full text-left border-separate border-spacing-0">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-surface-base pr-3 pb-2 font-label text-[11px] uppercase tracking-widest text-mono-500 min-w-[100px]">
+                  <th className="sticky-col sticky left-0 z-10 bg-surface-base pr-3 pb-2 font-label text-[11px] uppercase tracking-widest text-mono-500 min-w-[100px]">
                     Miembro
                   </th>
                   {upcoming.map(role => (
@@ -332,7 +363,7 @@ export default function AvailabilityPanel() {
               <tbody>
                 {matrixMembers.map(member => (
                   <tr key={member._id} className="border-t border-accent/10">
-                    <td className="sticky left-0 z-10 bg-surface-base pr-3 py-1.5 font-body text-sm">
+                    <td className="sticky-col sticky left-0 z-10 bg-surface-base pr-3 py-1.5 font-body text-sm">
                       {dn(member)}
                     </td>
                     {upcoming.map(role => {

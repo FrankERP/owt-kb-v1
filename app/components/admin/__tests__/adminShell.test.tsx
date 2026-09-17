@@ -147,17 +147,20 @@ describe("the admin page is the workspace", () => {
   });
 
   it("re-reads the inventory when the admin ENTERS Servicios, and not on arrival", async () => {
-    mount("members");
+    // Scoped to THIS render's container, never `document.body`: the body holds
+    // every tree the file has mounted plus the dialog portals, so a rail query
+    // against it is one stray leftover away from resolving to another test's nav.
+    const { container } = mount("members");
     // Not the Servicios tab: the mount's own load, and no second pass.
     await waitFor(() => expect(integrityCalls()).toHaveLength(3));
 
-    fireEvent.click(rail(document.body).getByRole("button", { name: "Servicios" }));
+    fireEvent.click(rail(container).getByRole("button", { name: "Servicios" }));
     await waitFor(() => expect(integrityCalls()).toHaveLength(6));
 
     // Leaving and coming back re-reads; staying does not.
-    fireEvent.click(rail(document.body).getByRole("button", { name: "Actividad" }));
+    fireEvent.click(rail(container).getByRole("button", { name: "Actividad" }));
     await waitFor(() => expect(integrityCalls()).toHaveLength(6));
-    fireEvent.click(rail(document.body).getByRole("button", { name: "Servicios" }));
+    fireEvent.click(rail(container).getByRole("button", { name: "Servicios" }));
     await waitFor(() => expect(integrityCalls()).toHaveLength(9));
   });
 

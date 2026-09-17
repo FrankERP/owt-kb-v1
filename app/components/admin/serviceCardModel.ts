@@ -250,8 +250,19 @@ export const SECTION_LABEL: Record<string, string> = {
 // manual/deployed check.
 
 export const CARD_STYLE = {
-  /** Card root: a grid/flex child must be `min-w-0` or its content sets the width. */
-  container: "min-w-0 rounded-xl border transition-all",
+  /**
+   * Card root: a grid/flex child must be `min-w-0` or its content sets the width.
+   *
+   * The transition names the properties the card's own tones change and nothing
+   * else — border colour (per `_type`, or the conflict red), the shadow/ring
+   * stack, and the `opacity-50` a past card carries. It used to be the catch-all
+   * every-property shorthand, which this FILE hid from
+   * `rawMotionLiterals.test.ts`: the scan only read `.tsx` and the class string
+   * lives in a `.ts` module. The scan reads `.ts` too now (R5 Task 5), which is
+   * also why the retired spelling is described here rather than quoted.
+   */
+  container:
+    "min-w-0 rounded-xl border transition-[border-color,box-shadow,opacity] duration-base ease-out-brand",
   /** Any admin-supplied or id-bearing string. */
   longText: "min-w-0 [overflow-wrap:anywhere]",
   /** The kebab menu: never wider than the viewport. */

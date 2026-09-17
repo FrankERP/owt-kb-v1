@@ -35,6 +35,7 @@ import {
 } from "./serviceIntegrityQueue";
 import type { IntegrityIssueTarget } from "./proposalHandoff";
 import type { IntegrityTone } from "./AdminRail";
+import AnimatedList from "@/app/components/ui/AnimatedList";
 import Collapse from "@/app/components/ui/Collapse";
 
 const DOMAIN_LABEL: Record<IntegrityDomain, string> = {
@@ -81,7 +82,7 @@ export default function IntegrityQueuePanel({
   // every mount would latch open and stay there. A toggle pins it either way.
   const [openOverride, setOpenOverride] = useState<boolean | null>(null);
   const open = openOverride ?? tone !== "clean";
-  const entryRefs = useRef(new Map<string, HTMLLIElement | null>());
+  const entryRefs = useRef(new Map<string, HTMLDivElement | null>());
   const scrollTargetRef = useRef<string | null>(null);
 
   // ── Explicit-id focus for a transient integrity target ────────────────────
@@ -219,20 +220,31 @@ export default function IntegrityQueuePanel({
               : "Ningún documento quedó fuera de un servicio válido."}
           </p>
         ) : (
-          <ul className="space-y-2 px-3 pb-3 sm:px-4">
-            {queue.entries.map((entry) => (
-              <QueueEntry
-                key={entry.key}
-                entry={entry}
-                expanded={!!expanded[entry.key]}
-                focused={focusKeys.includes(entry.key)}
-                onToggle={() =>
-                  setExpanded((prev) => ({ ...prev, [entry.key]: !prev[entry.key] }))
-                }
-                register={(el) => entryRefs.current.set(entry.key, el)}
-              />
-            ))}
-          </ul>
+          /*
+            An entry that has been RESOLVED leaves the queue between two renders,
+            and a row that simply disappears reads as a glitch rather than as
+            progress. `AnimatedList` fades the leaver out and slides the survivors
+            up; the derivation is untouched (it lives in `useIntegrityQueue`), so
+            this is presentation only. Each entry keeps its own `Collapse`.
+          */
+          <AnimatedList
+            as="ul"
+            className="space-y-2 px-3 pb-3 sm:px-4"
+            items={queue.entries.map((entry) => ({
+              key: entry.key,
+              node: (
+                <QueueEntry
+                  entry={entry}
+                  expanded={!!expanded[entry.key]}
+                  focused={focusKeys.includes(entry.key)}
+                  onToggle={() =>
+                    setExpanded((prev) => ({ ...prev, [entry.key]: !prev[entry.key] }))
+                  }
+                  register={(el) => entryRefs.current.set(entry.key, el)}
+                />
+              ),
+            }))}
+          />
         )}
       </Collapse>
     </section>
@@ -250,11 +262,14 @@ function QueueEntry({
   expanded: boolean;
   focused: boolean;
   onToggle: () => void;
-  register: (el: HTMLLIElement | null) => void;
+  register: (el: HTMLDivElement | null) => void;
 }) {
   const bodyId = `integrity-entry-${entry.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  // A DIV, not an `<li>`: `AnimatedList` owns the list item so an exiting entry
+  // can be popped out of flow. This element is still the focus target the
+  // explicit-id reveal scrolls to and focuses.
   return (
-    <li
+    <div
       ref={register}
       tabIndex={-1}
       className={`min-w-0 rounded-lg border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
@@ -293,7 +308,7 @@ function QueueEntry({
           {INTEGRITY_ACTION_COPY[entry.action]}
         </p>
       </Collapse>
-    </li>
+    </div>
   );
 }
 

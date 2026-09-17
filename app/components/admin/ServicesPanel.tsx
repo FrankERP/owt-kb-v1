@@ -903,6 +903,16 @@ export default function ServicesPanel() {
   const createGate        = gate("createService");
   const editTeamGate      = gate("editTeam");
   const swapGate          = gate("swap");
+  // The one reason the toolbar shows, in the buttons' own order. A `title` on a
+  // `disabled` house Button is unreachable (`disabled:pointer-events-none`), so
+  // the closed gate has to say why in the layout rather than on hover.
+  const toolbarGateReason =
+    [
+      visibleCards.some(c => c.readiness.publishState === "draft") ? publishGate : null,
+      generateGate,
+      editTeamGate,
+      copyMode ? null : createGate,
+    ].find((g): g is NonNullable<typeof g> => !!g && !g.enabled && !!g.reason)?.reason ?? null;
   const changeDateGate    = gate("changeServiceDate");
   const participationGate = gate("participationSidebar");
   const cardGates: CardGates = {
@@ -1043,49 +1053,60 @@ export default function ServicesPanel() {
             </>
           )}
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {visibleCards.some(c => c.readiness.publishState === "draft") && (
+        {/*
+          The gate reason is a LINE, not a `title`. `Button` carries
+          `disabled:pointer-events-none`, so a disabled control receives no
+          pointer events at all and its native tooltip can never be summoned —
+          the reason the admin needs most was the one the markup guaranteed they
+          would never see. One line, the first closed gate's reason, in the
+          toolbar's own column.
+        */}
+        <div className="flex min-w-0 flex-col items-end gap-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {visibleCards.some(c => c.readiness.publishState === "draft") && (
+              <Button
+                variant="secondary"
+                size="lg"
+                disabled={!publishGate.enabled}
+                onClick={() => openPublishPlan(visibleCards)}
+              >
+                Publicar listos ({counters.readyToPublish})
+              </Button>
+            )}
             <Button
+              ref={generatorTriggerRef}
               variant="secondary"
               size="lg"
-              disabled={!publishGate.enabled}
-              title={publishGate.reason ?? undefined}
-              onClick={() => openPublishPlan(visibleCards)}
+              onClick={openGenerator}
+              disabled={!generateGate.enabled}
             >
-              Publicar listos ({counters.readyToPublish})
+              📅 Generar mes
             </Button>
-          )}
-          <Button
-            ref={generatorTriggerRef}
-            variant="secondary"
-            size="lg"
-            onClick={openGenerator}
-            disabled={!generateGate.enabled}
-            title={generateGate.reason ?? undefined}
-          >
-            📅 Generar mes
-          </Button>
-          <Button
-            ref={monthEditorTriggerRef}
-            variant="secondary"
-            size="lg"
-            onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" })}
-            disabled={!editTeamGate.enabled}
-            title={editTeamGate.reason ?? undefined}
-          >
-            Editar mes
-          </Button>
-          {!copyMode && (
             <Button
-              ref={newServiceTriggerRef}
-              variant="primary"
+              ref={monthEditorTriggerRef}
+              variant="secondary"
               size="lg"
-              onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, true, { kind: "new" })}
-              disabled={!createGate.enabled}
-              title={createGate.reason ?? undefined}
+              onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" })}
+              disabled={!editTeamGate.enabled}
             >
-              <span className="text-base leading-none">+</span> Nuevo
+              Editar mes
             </Button>
+            {!copyMode && (
+              <Button
+                ref={newServiceTriggerRef}
+                variant="primary"
+                size="lg"
+                onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, true, { kind: "new" })}
+                disabled={!createGate.enabled}
+              >
+                <span className="text-base leading-none">+</span> Nuevo
+              </Button>
+            )}
+          </div>
+          {toolbarGateReason && (
+            <p className={`font-label text-[11px] text-ink-dim text-right ${CARD_STYLE.longText}`}>
+              {toolbarGateReason}
+            </p>
           )}
         </div>
       </div>
@@ -1631,7 +1652,12 @@ function fmtYM(ym: string) {
 /**
  * One month filter. The selection is MULTI-select: `aria-pressed` per pill (the
  * `pill` variant styles the pressed state), never a one-of-N `SegmentedControl`.
- * `past` only dims an unpressed pill — the pressed tone is the variant's.
+ * `past` only dims an unpressed pill, and it dims it with OPACITY rather than a
+ * second `border-…`/`text-…`: `Button` documents `className` as additive
+ * utilities only, and a colour override beside the variant's own left the winner
+ * to Tailwind's emission order — the pill variant's `border-surface-accent-30`
+ * outranked `border-accent/10` and the "past" treatment was invisible. Opacity
+ * touches nothing the variant sets, so it always lands.
  */
 function MonthPill({ label, selected, onClick, past }: { label: string; selected: boolean; onClick: () => void; past?: boolean }) {
   return (
@@ -1640,7 +1666,7 @@ function MonthPill({ label, selected, onClick, past }: { label: string; selected
       size="sm"
       active={selected}
       onClick={onClick}
-      className={!selected && past ? "border-accent/10 text-mono-600" : ""}
+      className={!selected && past ? "opacity-60" : ""}
     >
       {label}
     </Button>
