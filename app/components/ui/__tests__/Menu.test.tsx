@@ -251,6 +251,60 @@ describe("Menu — portalled panel (R5 Task 7 fix round 1)", () => {
     expect(menu.style.minWidth).toBe("100px");
   });
 
+  it("Tab from a menuitem closes AND returns focus to the trigger (the portalled panel is the last child of body)", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    const t = screen.getByRole("button", { name: "Más acciones" });
+    fireEvent.click(t);
+    const item = screen.getByRole("menuitem", { name: "Copiar" });
+    item.focus();
+    fireEvent.keyDown(item, { key: "Tab" });
+    expect(document.activeElement).toBe(t);
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  });
+
+  it("sizes the panel to the room it actually has, so it cannot hang off the viewport bottom", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    const t = screen.getByRole("button", { name: "Más acciones" });
+    // 260px of room below: more than the 240 flip threshold, less than the 320 cap.
+    const vh = document.documentElement.clientHeight || window.innerHeight;
+    t.getBoundingClientRect = () =>
+      ({ top: vh - 290, bottom: vh - 260, left: 200, right: 300, width: 100, height: 30, x: 200, y: vh - 290, toJSON: () => ({}) }) as DOMRect;
+    fireEvent.click(t);
+    const menu = screen.getByRole("menu") as HTMLElement;
+    expect(menu.style.position).toBe("fixed");
+    expect(Number.parseInt(menu.style.maxHeight, 10)).toBeLessThanOrEqual(260);
+    // The panel's box never reaches past the bottom edge.
+    expect(Number.parseInt(menu.style.top, 10) + Number.parseInt(menu.style.maxHeight, 10)).toBeLessThanOrEqual(vh);
+  });
+
+  it("flips above the trigger when there is no room below, and caps itself at the room above", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    const t = screen.getByRole("button", { name: "Más acciones" });
+    const vh = document.documentElement.clientHeight || window.innerHeight;
+    t.getBoundingClientRect = () =>
+      ({ top: vh - 40, bottom: vh - 10, left: 200, right: 300, width: 100, height: 30, x: 200, y: vh - 40, toJSON: () => ({}) }) as DOMRect;
+    fireEvent.click(t);
+    const menu = screen.getByRole("menu") as HTMLElement;
+    expect(menu.style.top).toBe("");
+    // The panel's bottom edge sits GAP above the trigger's top.
+    expect(menu.style.bottom).toBe("48px");
+    expect(menu.style.transformOrigin).toContain("bottom");
+    // `flipped` is a positioning decision, never a CSS declaration.
+    expect(menu.getAttribute("style")).not.toContain("flipped");
+  });
+
+  it("is opaque, blurred behind, and opted out of pull-to-refresh", async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Más acciones" }));
+    const menu = screen.getByRole("menu");
+    expect(menu.className).toContain("bg-surface-raised ");
+    expect(menu.className).toContain("backdrop-blur-sm");
+    expect(menu.hasAttribute("data-pull-ignore")).toBe(true);
+  });
+
   it("a pointerdown INSIDE the portalled panel does not close it (it is no longer a DOM descendant of the root)", async () => {
     render(<Harness />);
     await act(async () => {});

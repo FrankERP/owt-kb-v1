@@ -50,15 +50,28 @@ type TriggerProps = {
 };
 
 /** Where the portalled panel sits, in viewport coordinates. */
-type Anchor = { top?: number; bottom?: number; left?: number; right?: number; minWidth: number; flipped: boolean };
+type Anchor = { top?: number; bottom?: number; left?: number; right?: number; minWidth: number; maxHeight: number; flipped: boolean };
 
 const GAP = 8;
 /** The room a panel wants below the trigger before it prefers to flip above it. */
 const WANTED = 240;
+/** The tallest a panel may be; the CSS `max-h` caps the same number. */
+const PANEL_MAX = 320;
+
+/**
+ * The VIEWPORT, not the window: `innerWidth`/`innerHeight` include a classic
+ * scrollbar's gutter, which pushes a right-aligned panel that far off screen.
+ */
+function viewport() {
+  const el = typeof document === "undefined" ? null : document.documentElement;
+  const win = typeof window === "undefined" ? null : window;
+  // The `||` fallback is for an environment that lays nothing out and answers 0
+  // (jsdom): there, the window's own numbers are the only ones there are.
+  return { vw: el?.clientWidth || win?.innerWidth || 0, vh: el?.clientHeight || win?.innerHeight || 0 };
+}
 
 function anchorFrom(rect: DOMRect, align: "start" | "end"): Anchor {
-  const vw = typeof window === "undefined" ? 0 : window.innerWidth;
-  const vh = typeof window === "undefined" ? 0 : window.innerHeight;
+  const { vw, vh } = viewport();
   const below = vh - rect.bottom - GAP;
   const above = rect.top - GAP;
   const flipped = below < WANTED && above > below;
@@ -67,8 +80,24 @@ function anchorFrom(rect: DOMRect, align: "start" | "end"): Anchor {
     ...side,
     ...(flipped ? { bottom: Math.max(0, vh - rect.top + GAP) } : { top: rect.bottom + GAP }),
     minWidth: rect.width,
+    // Sized to the room it actually has, not just capped at `PANEL_MAX`: flipping
+    // only fires when the space below is under `WANTED` (240) and the space above is
+    // larger, so a panel with 260px below it stays put and would otherwise render 320
+    // tall and hang off the bottom edge — where the first scroll to reach it closes it.
+    maxHeight: Math.min(PANEL_MAX, Math.max(0, (flipped ? above : below) - GAP)),
     flipped,
   };
+}
+
+/**
+ * Move focus to a menu item without scrolling the DOCUMENT: a focus-driven scroll
+ * would reach the capture-phase `scroll` watcher and close the menu that just moved
+ * its own focus. The panel scrolls itself instead, and its own scroll is exempt.
+ */
+function focusItem(el: HTMLElement | undefined) {
+  if (!el) return;
+  el.focus({ preventScroll: true });
+  el.scrollIntoView?.({ block: "nearest" });
 }
 
 export default function Menu({
@@ -144,6 +173,21 @@ export default function Menu({
     };
   }, [open, close, measure]);
 
+  // The panel's WIDTH is only known once it has rendered (`min-w-[13rem]` or the
+  // trigger's width, whichever is wider), so a start-aligned panel near the right
+  // edge is clamped back afterwards — which is right alignment, arrived at by
+  // measurement. Returning `prev` unchanged when nothing moves is what keeps this
+  // from looping on its own `anchor` dependency.
+  useEffect(() => {
+    if (!open || !panelRef.current) return;
+    const width = panelRef.current.getBoundingClientRect().width;
+    setAnchor((prev) => {
+      if (!prev || prev.left === undefined) return prev;
+      const left = Math.min(prev.left, Math.max(GAP, viewport().vw - GAP - width));
+      return left === prev.left ? prev : { ...prev, left };
+    });
+  }, [open, anchor]);
+
   const items = () => Array.from(panelRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])') ?? []);
   /** Keyboard entry lands on the current option when there is one (`Select`), else the first. */
   const entry = () => { const list = items(); return list.find((el) => el.getAttribute("aria-current") === "true") ?? list[0]; };
@@ -151,7 +195,7 @@ export default function Menu({
   useEffect(() => {
     if (!open || !focusFirst.current) return;
     const list = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])') ?? []);
-    (list.find((el) => el.getAttribute("aria-current") === "true") ?? list[0])?.focus();
+    focusItem(list.find((el) => el.getAttribute("aria-current") === "true") ?? list[0]);
     focusFirst.current = false;
   }, [open]);
 
@@ -162,12 +206,17 @@ export default function Menu({
     // element itself (focusable via its own `tabIndex={-1}` below) — and both
     // arrows treat that as "one before the first item", so ArrowDown lands on
     // item 0 and ArrowUp wraps to the LAST item rather than nothing.
-    if (e.key === "ArrowDown") { e.preventDefault(); list[(i + 1) % list.length]?.focus(); }
-    else if (e.key === "ArrowUp") { e.preventDefault(); const prev = i < 0 ? list.length - 1 : (i - 1 + list.length) % list.length; list[prev]?.focus(); }
-    else if (e.key === "Home") { e.preventDefault(); list[0]?.focus(); }
-    else if (e.key === "End") { e.preventDefault(); list[list.length - 1]?.focus(); }
+    if (e.key === "ArrowDown") { e.preventDefault(); focusItem(list[(i + 1) % list.length]); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); const prev = i < 0 ? list.length - 1 : (i - 1 + list.length) % list.length; focusItem(list[prev]); }
+    else if (e.key === "Home") { e.preventDefault(); focusItem(list[0]); }
+    else if (e.key === "End") { e.preventDefault(); focusItem(list[list.length - 1]); }
     else if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(true); }
-    else if (e.key === "Tab") { close(false); }
+    // `close(true)`, not `false`: the panel is the last child of <body> and every
+    // item is `tabIndex={-1}`, so closing without refocusing drops focus onto the
+    // document and the Tab that caused it starts from nowhere. Focusing the trigger
+    // synchronously, before the default action runs, makes Tab continue from the
+    // control the member was on — inside a dialog or out of one.
+    else if (e.key === "Tab") { close(true); }
   };
 
   const triggerProps = trigger.props as {
@@ -200,8 +249,8 @@ export default function Menu({
         // Move focus into the panel directly instead of relying on it.
         if (open) {
           const list = items();
-          if (e.key === "ArrowDown") entry()?.focus();
-          else list[list.length - 1]?.focus();
+          if (e.key === "ArrowDown") focusItem(entry());
+          else focusItem(list[list.length - 1]);
         } else {
           focusFirst.current = true;
           setOpen(true);
@@ -211,6 +260,8 @@ export default function Menu({
       if (e.key === "Escape" && open) { e.preventDefault(); e.stopPropagation(); close(true); }
     },
   } satisfies Partial<TriggerProps>);
+
+  const { flipped = false, ...box } = anchor ?? {};
 
   const panel = (
     <AnimatePresence>
@@ -226,15 +277,18 @@ export default function Menu({
           initial={{ opacity: 0, scale: 0.96 }}
           animate={{ opacity: 1, scale: 1, transition: { duration: MS.base / 1000, ease: EASE_OUT } }}
           exit={{ opacity: 0, scale: 0.98, transition: { duration: EXIT_MS / 1000, ease: EASE_IN } }}
-          style={{
-            position: "fixed",
-            ...(anchor ?? {}),
-            transformOrigin: `${anchor?.flipped ? "bottom" : "top"} ${align === "end" ? "right" : "left"}`,
-          }}
-          // `max-h` + `overflow-y-auto` replaces the old `overflow-hidden`: a 30-option
-          // `Select` (Persona, the pair roster) used to render a panel taller than the
-          // viewport. A rounded box still clips its own corners while scrolling.
-          className="z-[92] max-h-[min(20rem,60vh)] min-w-[13rem] overflow-y-auto rounded-xl border border-surface-accent-20 bg-surface-raised-alt py-1 shadow-2xl"
+          // `flipped` is destructured OUT: it decides the transform origin, it is not
+          // a CSS property and React would warn on it.
+          style={{ position: "fixed", ...box, transformOrigin: `${flipped ? "bottom" : "top"} ${align === "end" ? "right" : "left"}` }}
+          // R7's pull-to-refresh bails on a gesture that starts inside this panel.
+          data-pull-ignore=""
+          // `bg-surface-raised` (opaque, no alpha) + a backdrop blur: over a dialog the
+          // old surface let «Limpiar filtros» read through the panel's first row.
+          // `max-h` + `overflow-y-auto` replaces the old `overflow-hidden` — a 30-option
+          // `Select` used to render a panel taller than the viewport; the inline
+          // `maxHeight` narrows this cap to the room the panel actually has. A rounded
+          // box still clips its own corners while scrolling.
+          className="z-[92] max-h-[min(20rem,60vh)] min-w-[13rem] overflow-y-auto rounded-xl border border-surface-accent-20 bg-surface-raised py-1 shadow-2xl backdrop-blur-sm"
         >
           <MenuCtx.Provider value={{ close }}>{children}</MenuCtx.Provider>
         </m.div>
