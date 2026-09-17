@@ -406,6 +406,21 @@ describe("LyricsAutoscroll", () => {
     expect(button.className).toContain("min-h-[44px]");
   });
 
+  it("F3 — offers no pill at all when the Letra section already fits the viewport", () => {
+    // The run's own end check is true on the first frame for a short lyric, so a
+    // pill offered here toggles itself off the instant it is tapped and reads as
+    // broken. 400 px of lyrics in an 800 px viewport: nothing to scroll.
+    mountTarget(400);
+    const view = render(<LyricsAutoscroll targetId="letra" bpm={120} lines={6} />);
+    expect(view.queryByRole("button")).toBeNull();
+  });
+
+  it("F3 — still offers the pill when the section is taller than the viewport", () => {
+    mountTarget(2400);
+    const view = render(<LyricsAutoscroll targetId="letra" bpm={120} lines={40} />);
+    expect(view.getByRole("button")).toBeTruthy();
+  });
+
   it("cancels the pending frame on unmount", () => {
     const { unmount } = start(120);
     flush(0);

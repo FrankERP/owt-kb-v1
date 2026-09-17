@@ -3,16 +3,20 @@
 // the contract Task 7 composes against: the header reads `DÍA · fecha` with no
 // eyebrow, the countdown replaces the `Próximo` pill, `hero` carries the one
 // Ensayar, rows show BPM, and `wide` puts the two sections side by side.
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
+import { ToastProvider } from "@/app/components/ui/Toast";
 import { MotionProvider } from "@/app/components/ui/MotionProvider";
 import { installMotionTestEnv } from "@/app/components/ui/__tests__/motionTestSetup";
 import type { SetlistSong } from "@/app/utils/interface";
 
 installMotionTestEnv();
 
-vi.mock("@/app/context/PlayerContext", () => ({ usePlayer: () => ({ openSheet: vi.fn() }) }));
+// A STABLE spy: the long-press cases assert that a press opens no sheet, which a
+// fresh `vi.fn()` per render could never show.
+const openSheet = vi.fn();
+vi.mock("@/app/context/PlayerContext", () => ({ usePlayer: () => ({ openSheet }) }));
 // Mutable so a test can seat a different session alias — the F1 refactor's guard
 // needs one seated on an instrument, same pattern as `agendaView.test.tsx`.
 let mockUser: { name?: string; alias?: string; role?: string } = { name: "Ana", alias: "Ani", role: "member" };
@@ -28,15 +32,18 @@ const song = (id: string, extra: Partial<SetlistSong> = {}): SetlistSong =>
 function mount(props: Partial<DayCardProps> = {}) {
   return render(
     <MotionProvider>
-      <CueDialogProvider>
-        <DayCard day="Domingo" date="2026-09-13" setlist={{ week: "2026-09-13", songs: [song("s1")] }} leads={["Ana"]} {...props} />
-      </CueDialogProvider>
+      <ToastProvider>
+        <CueDialogProvider>
+          <DayCard day="Domingo" date="2026-09-13" setlist={{ week: "2026-09-13", songs: [song("s1")] }} leads={["Ana"]} {...props} />
+        </CueDialogProvider>
+      </ToastProvider>
     </MotionProvider>,
   );
 }
 
 afterEach(() => {
   cleanup();
+  openSheet.mockClear();
   vi.useRealTimers();
   mockUser = { name: "Ana", alias: "Ani", role: "member" };
 });
@@ -100,6 +107,33 @@ describe("DayCard", () => {
   it("stacks a `wide` card with a setlist but no team, instead of reserving an empty rail", () => {
     const { container } = mount({ layout: "wide", leads: [] });
     expect(container.querySelector(".lg\\:grid")).toBeNull();
+  });
+
+  it("F3 — a long press on a setlist row opens the card's one quick-actions sheet", () => {
+    // 450 ms / 8 px / scroll-cancel live in `useLongPress`; what matters here is
+    // that the ROW reports the press and the CARD owns the sheet.
+    vi.useFakeTimers();
+    mount();
+    const row = screen.getByRole("button", { name: /Canción s1/ });
+    act(() => {
+      fireEvent.pointerDown(row, { isPrimary: true, button: 0, clientX: 10, clientY: 10 });
+      vi.advanceTimersByTime(450);
+      fireEvent.pointerUp(row, { isPrimary: true });
+    });
+    // The press swallows the click it produced — it must not also open the song.
+    act(() => {
+      fireEvent.click(row);
+    });
+    const sheet = screen.getByRole("dialog");
+    expect(within(sheet).getByRole("button", { name: "Abrir" })).toBeTruthy();
+    expect(openSheet).not.toHaveBeenCalled();
+  });
+
+  it("F3 — a plain tap still opens the song sheet and no quick-actions sheet", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: /Canción s1/ }));
+    expect(openSheet).toHaveBeenCalledWith("s1", "G");
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("F1 — highlights the positive `isMe` glow for a session alias seated on an instrument", () => {

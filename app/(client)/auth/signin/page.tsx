@@ -115,7 +115,7 @@ function SignInForm() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-edge-control bg-surface-base/35 font-body text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
+              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-edge-control bg-surface-base/35 font-body text-[16px] sm:text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
             />
             <input
               type="password"
@@ -125,7 +125,7 @@ function SignInForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-edge-control bg-surface-base/35 font-body text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
+              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-edge-control bg-surface-base/35 font-body text-[16px] sm:text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
             />
             <button
               type="submit"
