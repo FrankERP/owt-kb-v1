@@ -29,6 +29,8 @@
 // Servicios item states its integrity count for a screen reader. The visible
 // dot is decoration (`aria-hidden`).
 
+import { useEffect, useRef, useState } from "react";
+
 import type { AdminTabId } from "./proposalHandoff";
 import SlidingIndicator, { useActiveIntoView } from "../ui/SlidingIndicator";
 import { haptic } from "@/app/utils/haptics";
@@ -48,6 +50,26 @@ const ITEM =
   "active:translate-y-px active:scale-[0.985] " +
   "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base";
 
+/**
+ * The phone strip's scroll-fade hint. It MASKS the scroller instead of painting
+ * a colour over it, and that is the fix for what shipped: the page is
+ * `.brand-atmosphere` — `surface-base` PLUS accent radials — so an opaque
+ * `from-surface-base` overlay could never match what is behind it and read on a
+ * 390px light-theme phone as a flat grey block with hard edges rather than as a
+ * fade. A mask fades the CONTENT and leaves the page painting whatever it
+ * paints, in both themes, with no token to keep in sync. Unprefixed and
+ * `-webkit-` both, because this repo's PostCSS runs Tailwind alone — there is no
+ * autoprefixer to add the second one.
+ *
+ * Only below `md`, where the tabs actually overflow, and only while the strip
+ * can still scroll further right (`more`) — otherwise the mask would eat the
+ * last tab, which is exactly where the active one lands when it is last.
+ */
+const FADE =
+  "[-webkit-mask-image:linear-gradient(to_left,transparent,black_2rem)] " +
+  "[mask-image:linear-gradient(to_left,transparent,black_2rem)] " +
+  "md:[-webkit-mask-image:none] md:[mask-image:none]";
+
 const ITEM_TONE = (active: boolean) =>
   active ? "text-accent" : "text-ink-dim hover:bg-accent/[0.04] hover:text-ink";
 
@@ -64,6 +86,9 @@ export default function AdminRail({
   integrityTone: IntegrityTone;
   integrityCount?: number;
 }) {
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+  const more = useScrollableRight(scrollerRef, tabs.length);
+
   const select = (id: AdminTabId) => {
     void haptic("selection");
     onChange(id);
@@ -111,7 +136,11 @@ export default function AdminRail({
 
       {/* < lg: today's underline strip, unchanged in behaviour. */}
       <div className="relative lg:hidden" data-admin-tabs="bar">
-        <div className="-mx-2 overflow-x-auto px-2 pb-1">
+        <div
+          ref={scrollerRef}
+          data-admin-tabs-scroller=""
+          className={`-mx-2 overflow-x-auto px-2 pb-1 ${more ? FADE : ""}`}
+        >
           <div className="flex w-max min-w-full gap-1">
             {tabs.map((tab) => (
               <StripItem
@@ -125,11 +154,32 @@ export default function AdminRail({
             ))}
           </div>
         </div>
-        {/* Scroll-fade hint (phone, where the tabs overflow) */}
-        <div className="pointer-events-none absolute bottom-1 right-0 top-0 w-8 bg-gradient-to-l from-surface-base to-transparent md:hidden" />
       </div>
     </>
   );
+}
+
+/**
+ * Whether the strip has anything left to the right — the one input the fade
+ * needs to stay honest. Read on mount, on every scroll (passive) and on resize;
+ * the active item's own mount scroll fires a scroll event, so the first honest
+ * answer arrives without a second observer.
+ */
+function useScrollableRight(ref: React.RefObject<HTMLDivElement | null>, count: number): boolean {
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => setMore(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    read();
+    el.addEventListener("scroll", read, { passive: true });
+    window.addEventListener("resize", read);
+    return () => {
+      el.removeEventListener("scroll", read);
+      window.removeEventListener("resize", read);
+    };
+  }, [ref, count]);
+  return more;
 }
 
 function StripItem({
@@ -145,7 +195,10 @@ function StripItem({
   dot: React.ReactNode;
   onSelect: () => void;
 }) {
-  const ref = useActiveIntoView(active);
+  // `onMount`: `/admin?tab=x` seeds the active tab before the first paint, so
+  // this item never sees a false→true edge and the strip used to open with it
+  // off-screen.
+  const ref = useActiveIntoView(active, true);
   return (
     <button
       ref={ref}
