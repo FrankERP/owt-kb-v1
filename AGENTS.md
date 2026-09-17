@@ -228,6 +228,7 @@ several exist precisely to stop a plausible-looking change.
 - **`app/(client)/template.tsx` renders a fragment, never a wrapper.** A transformed
   ancestor is a containing block for every `position: fixed` descendant (FAB, audio
   transport, toasts). `reveal.test.ts` is the guard.
+- **Form controls are 16 px on a phone.** WebKit zooms into any focused `<input>`/`<textarea>`/`<select>` under 16 px and never zooms back, so every member-reachable control is `text-[16px] sm:text-<size>` (`ui/Select`/`ui/DateField` carry it in their `SIZE` maps). Never `maximum-scale=1` on the viewport. `inputFontSize.test.ts` is the guard (`admin/`, `kids/` excluded by path).
 
 ## Reusable utils (don't reinvent)
 `normalizeText` (accent-insensitive search), `assignedMemberRefsQuery`,

@@ -264,9 +264,18 @@ export default function LyricsAutoscroll({
     };
   }, [running, targetId, bpm, lines]);
 
-  // Nothing to scroll ⇒ no control. The run-time end check above is unchanged:
-  // it still stops a run that reaches the bottom.
-  if (!scrollable) return null;
+  // Nothing to scroll ⇒ no control. `running` keeps it on screen regardless: a
+  // resize mid-run (the transport appearing, a rotation, a text-size change) must
+  // never take «Detener» away from a page that is still scrolling itself. The
+  // run-time end check above is unchanged — it still stops a run that reaches the
+  // bottom, and stopping is what clears `running`.
+  //
+  // Mount ordering, deliberately not defended against: the tab bar publishes
+  // `--bottom-nav-h` from its own measurement, so the first measure here can read
+  // 0 for it and offer the pill on a section that is within a tab bar's height of
+  // fitting. That errs toward OFFERING a control, which the run then ends
+  // honestly on its first frame — the failure this fix removes was the opposite.
+  if (!scrollable && !running) return null;
 
   return (
     <Button

@@ -2020,10 +2020,13 @@ reference-row inputs), `ProposalEditor`'s `inputCls` (input + both textareas), `
 reply textarea, the availability `NotePopover` and the sign-in form. `admin/` and `kids/` are
 dense desk surfaces and were deliberately left: `app/utils/__tests__/inputFontSize.test.ts`
 excludes them BY PATH, not by a baseline count, and fails on any other `<input>`/`<textarea>`/
-`<select>` under `app/**` carrying an unprefixed sub-16 px text utility (it resolves a
-`className={inputCls}` identifier one level, to a `const` string in the same file). Known gap,
-stated rather than hidden: `ui/Select` and `ui/DateField` carry their size in an object map the
-scan cannot resolve, and still render at `text-sm` / `text-[11px]`.
+`<select>` under `app/**` carrying a sub-16 px text utility that applies at phone width — a
+breakpoint variant is fine, `focus:` and `dark:` are not, since focus is exactly when the zoom
+fires. It reads the whole `className={…}` expression brace-aware and resolves an identifier one
+level to a `const` string or template literal in the same file. `ui/Select` and `ui/DateField`
+carry their size in a `SIZE` map the scan cannot resolve, so their `md`/`lg` entries were
+changed by hand to the same pattern (the `sm` entries are the admin-density skin and keep their
+11 px); both maps carry a comment saying so.
 
 **A long press on a day-card setlist row selected text.** R7 gave `LibraryRow` the gesture and
 `LibraryIndex` the one sheet per page; the run sheet's own rows — the most looked-at list in the
@@ -2036,5 +2039,14 @@ page's setlist projection does). The sheet is on the card, not on the row, for t
 `LibraryIndex` records: a mounted `QuickActions` subscribes to the CueDialog layer context.
 Tests: a long press opens the sheet with «Abrir» and opens no song; a plain tap still calls
 `openSheet("s1", "G")` and opens no sheet.
+
+**Fix round 1** (whole-branch review, CHANGES_REQUIRED). One MEDIUM: `ui/Select`'s `md`/`lg`
+and `ui/DateField`'s `md` still zoomed — they reach a phone at `/biblioteca` (Tonalidad),
+`/me/disponibilidad` and `/schedule` — so the `SIZE` maps take the house pattern too. Two LOWs:
+`LyricsAutoscroll` now keeps the pill while `running`, so a resize mid-run (the transport
+appearing, a rotation) can never take «Detener» away from a page that is still scrolling
+itself; and the guard grew teeth — it reads the whole `className` expression rather than
+stopping at the first `}` (a `${inputCls} resize-none` tail was invisible), resolves
+template-literal consts, and counts `focus:`/`dark:` small sizes as violations.
 
 **Release:** merged to `main` as `<pending>` (PR #`<pending>`).
