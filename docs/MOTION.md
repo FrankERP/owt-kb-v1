@@ -1461,3 +1461,13 @@ its first row. One behaviour is deliberately new and worth knowing: **every menu
 now closes on an ancestor scroll.** A panel pinned to a rect cannot honestly travel with its
 trigger, and closing is the honest answer. Guards: `selectPopover.test.tsx`, `Menu.test.tsx`'s
 portal block.
+
+- **F1 (after Frank's phone look, `a8f3c181`):** the phone strip's right-edge fade was an
+  opaque overlay that could never match `.brand-atmosphere`, so it read as a block in light;
+  it is now a scroll-aware CSS mask (`mask-image` + the `-webkit-` twin, only while there is
+  more strip to the right). And `useActiveIntoView(active, onMount)` gained an opt-in so the
+  strip centres the URL-seeded tab on first paint (`auto`, never smooth, on that pass); the
+  navbar and `SectionNav` keep the default and still scroll only on a change.
+- **Release:** merged to `main` as `a2a7b9c3` (PR #80, 2026-09-17 13:58 CST); production alias
+  `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview
+  last verified at `26a8f749`.
