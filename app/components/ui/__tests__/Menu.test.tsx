@@ -217,3 +217,84 @@ describe("Menu", () => {
     expect(screen.getByRole("menuitem", { name: "Eliminar" }).className).toContain("text-negative-fg");
   });
 });
+
+describe("Menu — portalled panel (R5 Task 7 fix round 1)", () => {
+  /** Give the trigger a real box; jsdom measures everything as zero. */
+  function stubRect(el: HTMLElement) {
+    el.getBoundingClientRect = () =>
+      ({ top: 100, bottom: 130, left: 200, right: 300, width: 100, height: 30, x: 200, y: 100, toJSON: () => ({}) }) as DOMRect;
+  }
+
+  it("renders the open panel as a child of document.body, not inside the trigger's wrapper", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    const t = screen.getByRole("button", { name: "Más acciones" });
+    fireEvent.click(t);
+    const menu = screen.getByRole("menu");
+    expect(menu.parentElement).toBe(document.body);
+    expect(t.parentElement?.contains(menu)).toBe(false);
+    // The id wiring survives the portal, so `aria-controls` still resolves.
+    expect(document.getElementById(t.getAttribute("aria-controls")!)).toBe(menu);
+  });
+
+  it("positions the panel from the trigger's rect, below it, as a fixed box", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    const t = screen.getByRole("button", { name: "Más acciones" });
+    stubRect(t);
+    fireEvent.click(t);
+    const menu = screen.getByRole("menu") as HTMLElement;
+    expect(menu.style.position).toBe("fixed");
+    expect(menu.style.top).toBe("138px");
+    // align="end" pins the right edge to the trigger's.
+    expect(menu.style.right).toBe(`${window.innerWidth - 300}px`);
+    expect(menu.style.minWidth).toBe("100px");
+  });
+
+  it("a pointerdown INSIDE the portalled panel does not close it (it is no longer a DOM descendant of the root)", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "Más acciones" }));
+    fireEvent.pointerDown(screen.getByRole("menuitem", { name: "Copiar" }));
+    await act(async () => {});
+    expect(screen.queryByRole("menu")).toBeTruthy();
+  });
+
+  it("closes when an ancestor scrolls, but not when the panel itself scrolls", async () => {
+    render(<Harness />);
+    await act(async () => {});
+    fireEvent.click(screen.getByRole("button", { name: "Más acciones" }));
+    const menu = screen.getByRole("menu");
+    fireEvent.scroll(menu);
+    await act(async () => {});
+    expect(screen.queryByRole("menu")).toBeTruthy();
+    fireEvent.scroll(document);
+    await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+  });
+
+  it("the panel scrolls long lists instead of clipping them", async () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Más acciones" }));
+    const cls = screen.getByRole("menu").className;
+    expect(cls).toContain("overflow-y-auto");
+    expect(cls).not.toContain("overflow-hidden");
+  });
+
+  it("takes a root className, and a selected item is marked and takes keyboard entry focus", async () => {
+    render(
+      <MotionProvider>
+        <Menu label="Mes" align="start" className="block w-full" trigger={<Button aria-label="Mes">Mes</Button>}>
+          <MenuItem onSelect={() => {}}>Enero</MenuItem>
+          <MenuItem selected onSelect={() => {}}>Febrero</MenuItem>
+        </Menu>
+      </MotionProvider>,
+    );
+    await act(async () => {});
+    const t = screen.getByRole("button", { name: "Mes" });
+    expect(t.parentElement?.className).toBe("relative block w-full");
+    fireEvent.keyDown(t, { key: "ArrowDown" });
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Febrero" })));
+    expect(screen.getByRole("menuitem", { name: "Febrero" }).getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("menuitem", { name: "Enero" }).getAttribute("aria-current")).toBeNull();
+  });
+});

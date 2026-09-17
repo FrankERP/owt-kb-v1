@@ -17,13 +17,15 @@
 // consumer's `onChange` fires with a genuine event and reads `e.target.value`
 // exactly as it always has. No consumer changes.
 //
-// Detection is a `useState(false)` + `useEffect` read, so SSR and the first client
-// render are the native path and hydration never disagrees. `popover={false}` opts
-// any consumer out; a test environment without `matchMedia` stays native.
+// Detection is `useSyncExternalStore` over the media query, whose SERVER snapshot is
+// `false`: SSR and hydration are the native path and never disagree, and a hybrid
+// device that gains a mouse mid-session switches without a remount.
+// `popover={false}` opts any consumer out; a test environment without `matchMedia`
+// stays native.
 //
 // CLIENT (it owns pointer state). Server Components may still render it as JSX.
 
-import React, { useCallback, useEffect, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import React, { useCallback, useRef, useState, useSyncExternalStore, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { normalizeText } from "@/app/utils/normalizeText";
 import Button from "./Button";
 import Menu, { MenuItem } from "./Menu";
@@ -43,6 +45,19 @@ const CHROME =
   "focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-50";
 
 const FINE_POINTER = "(hover: hover) and (pointer: fine)";
+
+/** `matchMedia` is absent in jsdom and on the server; both answer the COARSE path. */
+function mql() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return null;
+  return window.matchMedia(FINE_POINTER);
+}
+function subscribeFine(onChange: () => void) {
+  const q = mql();
+  q?.addEventListener?.("change", onChange);
+  return () => q?.removeEventListener?.("change", onChange);
+}
+const fineSnapshot = () => mql()?.matches ?? false;
+const fineServerSnapshot = () => false;
 
 // `popover` is Omitted, not just shadowed: React's own `popover` attribute is
 // `"" | "auto" | "manual"`, and an intersection with `boolean` collapses to
@@ -95,42 +110,45 @@ function Chevron({ className }: { className: string }) {
 
 export default function Select({ label, size = "md", className = "", popover = true, children, ...select }: Props) {
   const nativeRef = useRef<HTMLSelectElement | null>(null);
-  const [fine, setFine] = useState(false);
+  const fine = useSyncExternalStore(subscribeFine, fineSnapshot, fineServerSnapshot) && popover;
   // The value the native element actually carries, for the UNCONTROLLED case; a
   // controlled consumer's `value` prop wins over it below.
   const [live, setLive] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!popover) return;
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    setFine(window.matchMedia(FINE_POINTER).matches);
-  }, [popover]);
-
   const onChange = select.onChange;
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
-      setLive(e.target.value);
+      // Only the popover path reads `live`; the native path must not re-render for it.
+      if (fine) setLive(e.target.value);
       onChange?.(e);
     },
-    [onChange],
+    [fine, onChange],
   );
 
   /** Select `value` on the native element and let React hear a real `change`. */
   const pick = useCallback((value: string) => {
     const el = nativeRef.current;
     if (!el) return;
+    // Re-picking the current option is a no-op on a native <select>, which fires no
+    // `change`. Dispatching one anyway sent a spurious PATCH from `PairRoster`.
+    if (el.value === value) return;
     el.value = value;
     el.dispatchEvent(new Event("change", { bubbles: true }));
   }, []);
 
   // First-letter jump: move focus to the next item whose label starts with the key,
-  // accent- and case-insensitively. Bound on a presentation wrapper inside the panel
-  // (`MenuHeader` sets the precedent) — `Menu` owns the arrows, Home/End and Escape.
+  // accent- and case-insensitively. Bound on the control's OWN wrapper, which holds
+  // both the trigger and (until the panel was portalled) the menu — so it also works
+  // from the trigger, where focus stays after a click-open. `Menu` owns the arrows,
+  // Home/End and Escape. With the menu closed there are no items and it does nothing.
   const onTypeAhead = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
     const key = normalizeText(e.key);
     if (!key.trim()) return;
-    const panel = e.currentTarget.closest('[role="menu"]');
+    // The panel is portalled to `document.body`, so it is found through the trigger's
+    // `aria-controls` id rather than by walking the DOM.
+    const panelId = e.currentTarget.querySelector("[aria-controls]")?.getAttribute("aria-controls");
+    const panel = panelId ? document.getElementById(panelId) : null;
     const items = Array.from(panel?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([aria-disabled="true"])') ?? []);
     if (items.length === 0) return;
     const from = items.indexOf(document.activeElement as HTMLElement);
@@ -172,7 +190,10 @@ export default function Select({ label, size = "md", className = "", popover = t
     select.value !== undefined
       ? String(select.value)
       : live ?? (select.defaultValue !== undefined ? String(select.defaultValue) : options[0]?.value ?? "");
-  const selected = options.find((o) => o.value === current) ?? options[0];
+  // No `?? options[0]`: a controlled value matching no option leaves the native
+  // element blank, and the trigger must say the same thing rather than name a
+  // choice nobody made.
+  const chosen = options.find((o) => o.value === current);
   const ariaLabel = typeof select["aria-label"] === "string" ? select["aria-label"] : undefined;
   const named = ariaLabel ?? (typeof label === "string" ? label : undefined);
   // The trigger is named "<field>: <choice>" — never the bare field name, which
@@ -180,37 +201,44 @@ export default function Select({ label, size = "md", className = "", popover = t
   // at the <label> for the same reason (a labelledby reference is matched on its
   // own, not as part of the composed name). A non-string `label` gives no field
   // text to compose with, so the trigger falls back to its own content.
-  const triggerNaming = named ? { "aria-label": `${named}: ${selected?.text ?? ""}` } : {};
+  const triggerNaming = named ? { "aria-label": `${named}: ${chosen?.text ?? ""}` } : {};
 
   return (
-    <div className={`block ${className}`.trim()}>
+    <div className={`block ${className}`.trim()} onKeyDown={onTypeAhead}>
       {Label}
-      <select {...select} ref={nativeRef} onChange={handleChange} className={`${nativeClass} sr-only`}>
+      {/*
+        `tabIndex={-1}` AFTER the spread: `sr-only` is visually hidden but still
+        focusable, so the native element was an invisible tab stop in front of the
+        trigger. It keeps `htmlFor`, so it is still what the <label> and AT name.
+      */}
+      <select {...select} ref={nativeRef} tabIndex={-1} onChange={handleChange} className={`${nativeClass} sr-only`}>
         {children}
       </select>
       <Menu
         label={named ? `Opciones de ${named}` : "Opciones"}
         align="start"
+        // `Menu`'s root defaults to `inline-block`, which collapses the trigger's
+        // `w-full` to content width and spills out of a capped wrapper
+        // (`MonthGenerator`'s `w-24 max-w-[96px]` week select).
+        className="block w-full"
         trigger={
           <Button
             variant="secondary"
             size={size}
             disabled={select.disabled}
-            className="w-full justify-between"
+            className="w-full min-w-0 justify-between"
             {...triggerNaming}
           >
-            <span data-select-value="">{selected?.label ?? ""}</span>
+            <span data-select-value="" className="min-w-0 truncate">{chosen?.label ?? ""}</span>
             <Chevron className="h-4 w-4 shrink-0 text-mono-500" />
           </Button>
         }
       >
-        <div role="presentation" onKeyDown={onTypeAhead}>
-          {options.map((o) => (
-            <MenuItem key={o.value} disabled={o.disabled} onSelect={() => pick(o.value)}>
-              {o.label}
-            </MenuItem>
-          ))}
-        </div>
+        {options.map((o) => (
+          <MenuItem key={o.value} disabled={o.disabled} selected={o.value === current} onSelect={() => pick(o.value)}>
+            {o.label}
+          </MenuItem>
+        ))}
       </Menu>
     </div>
   );
