@@ -124,6 +124,56 @@ describe("Select — desktop popover", () => {
       expect(screen.getByRole("button").getAttribute("aria-label")).toBe("Persona: Enero");
     });
 
+
+    it("fills its box: the Menu root is block w-full, and the trigger truncates rather than spilling", async () => {
+      render(<Harness id="mes" label="Mes" value="1" onChange={() => {}}>{MESES}</Harness>);
+      await act(async () => {});
+      const trigger = screen.getByRole("button");
+      expect(trigger.parentElement!.className).toContain("block w-full");
+      expect(trigger.className).toContain("w-full");
+      expect(trigger.querySelector("[data-select-value]")!.className).toContain("truncate");
+    });
+
+    it("fires NO onChange when the already-selected option is picked again (a native select would not), and still closes", async () => {
+      const onChange = vi.fn();
+      render(<Harness id="mes" label="Mes" value="1" onChange={onChange}>{MESES}</Harness>);
+      await act(async () => {});
+      fireEvent.click(screen.getByRole("button"));
+      fireEvent.click(screen.getByRole("menuitem", { name: "Enero" }));
+      expect(onChange).not.toHaveBeenCalled();
+      await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
+    });
+
+    it("takes the sr-only native select out of the tab order (it was an invisible stop before the trigger)", async () => {
+      render(<Harness id="mes" label="Mes" value="1" onChange={() => {}}>{MESES}</Harness>);
+      await act(async () => {});
+      expect(screen.getByLabelText("Mes").getAttribute("tabindex")).toBe("-1");
+    });
+
+    it("marks the current option with aria-current", async () => {
+      render(<Harness id="mes" label="Mes" value="2" onChange={() => {}}>{MESES}</Harness>);
+      await act(async () => {});
+      fireEvent.click(screen.getByRole("button"));
+      expect(screen.getByRole("menuitem", { name: "Febrero" }).getAttribute("aria-current")).toBe("true");
+      expect(screen.getByRole("menuitem", { name: "Enero" }).getAttribute("aria-current")).toBeNull();
+    });
+
+    it("type-ahead works from the TRIGGER after a click-open, where focus stays", async () => {
+      render(<Harness id="mes" label="Mes" value="1" onChange={() => {}}>{MESES}</Harness>);
+      await act(async () => {});
+      const trigger = screen.getByRole("button");
+      fireEvent.click(trigger);
+      fireEvent.keyDown(trigger, { key: "m" });
+      expect(document.activeElement).toBe(screen.getByRole("menuitem", { name: "Marzo" }));
+    });
+
+    it("a controlled value matching no option leaves the trigger blank rather than naming the first option", async () => {
+      render(<Harness aria-label="Mes" value="99" onChange={() => {}}>{MESES}</Harness>);
+      await act(async () => {});
+      expect(screen.getByRole("button").textContent).not.toContain("Enero");
+      expect(screen.getByRole("button").getAttribute("aria-label")).toBe("Mes: ");
+    });
+
     it("honours popover={false} — the native path, untouched", async () => {
       render(<Harness id="mes" label="Mes" value="1" popover={false} onChange={() => {}}>{MESES}</Harness>);
       await act(async () => {});
@@ -141,6 +191,8 @@ describe("Select — desktop popover", () => {
     const native = screen.getByLabelText("Mes") as HTMLSelectElement;
     expect(native.tagName).toBe("SELECT");
     expect(native.className).not.toContain("sr-only");
+    // The native path must not gain the fine path's `tabIndex={-1}`.
+    expect(native.getAttribute("tabindex")).toBeNull();
   });
 
   it("stays native when the environment answers no media query at all (SSR, first render)", async () => {
