@@ -14,7 +14,7 @@
 // inventory) must never look like `clean`, in the dot or in the accessible name.
 
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AdminRail, { ADMIN_TAB_ICON, type IntegrityTone } from "../AdminRail";
 import type { AdminTabId } from "../proposalHandoff";
@@ -23,13 +23,18 @@ import { visibleAdminTabs } from "../adminTabs";
 const TABS = visibleAdminTabs("super-admin").map((t) => ({ ...t, icon: ADMIN_TAB_ICON[t.id] }));
 
 function mount(
-  overrides: Partial<{ tone: IntegrityTone; count: number; onChange: (id: AdminTabId) => void }> = {},
+  overrides: Partial<{
+    tone: IntegrityTone;
+    count: number;
+    onChange: (id: AdminTabId) => void;
+    active: AdminTabId;
+  }> = {},
 ) {
   const onChange = overrides.onChange ?? vi.fn();
   const utils = render(
     <AdminRail
       tabs={TABS}
-      active="services"
+      active={overrides.active ?? "services"}
       onChange={onChange}
       integrityTone={overrides.tone ?? "clean"}
       integrityCount={overrides.count ?? 0}
@@ -140,5 +145,44 @@ describe("the collapsed rail stays named", () => {
       // …and an icon, which is what is left when the label goes.
       expect(item.querySelector("svg")).not.toBeNull();
     }
+  });
+});
+
+describe("the phone strip scrolls its active tab into view", () => {
+  // `/admin?tab=x` seeds the panel's tab from the URL, so the active item is
+  // already active at the strip's FIRST render and never flips. Before F1 the
+  // shared `useActiveIntoView` refused to scroll on mount (SectionNav's rule),
+  // and a 390px phone opened `?tab=content` with «Contenido» — and its
+  // underline — off-screen to the right.
+  let original: typeof HTMLElement.prototype.scrollIntoView;
+  let spy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    original = HTMLElement.prototype.scrollIntoView;
+    spy = vi.fn();
+    HTMLElement.prototype.scrollIntoView = spy as unknown as typeof original;
+  });
+
+  afterEach(() => {
+    HTMLElement.prototype.scrollIntoView = original;
+  });
+
+  it("centres the last tab on MOUNT, on the strip's item", () => {
+    const last = TABS[TABS.length - 1];
+    const { strip } = mount({ active: last.id });
+    const item = within(strip).getByRole("button", { name: last.label });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.instances[0]).toBe(item);
+    expect(spy.mock.calls[0][0]).toMatchObject({ inline: "center", block: "nearest" });
+  });
+
+  it("centres the newly active item on a tab change too", () => {
+    const { strip, rerender } = mount({ active: "services" });
+    spy.mockClear();
+    rerender(
+      <AdminRail tabs={TABS} active="content" onChange={vi.fn()} integrityTone="clean" integrityCount={0} />,
+    );
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.instances[0]).toBe(within(strip).getByRole("button", { name: "Contenido" }));
   });
 });

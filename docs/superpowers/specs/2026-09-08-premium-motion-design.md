@@ -1823,6 +1823,15 @@ Made during execution, on top of the plan:
   resuming under the finger). Round 2 fixed both, and the tests were tightened to fail on
   the round-1 code (the margin assertion had been satisfied by a no-op `-0px`). The second
   re-verify returned **VERIFIED FOR MERGE** at `bcdd511c`.
+- **F1 (after Frank's phone look).** Strip fade tokenised for light; active item scrolls into
+  view. The phone strip's right-edge fade painted an opaque `from-surface-base` rectangle over
+  `.brand-atmosphere` (surface-base PLUS accent radials), so it could never match the page and
+  read at 390 px as a grey block; it is now a `mask-image` fade of the CONTENT, prefixed and
+  unprefixed (no autoprefixer in this repo's PostCSS), only below `md` and only while the
+  strip can still scroll right — otherwise the mask would eat the last tab. And
+  `useActiveIntoView` took an opt-in `onMount`: `/admin?tab=x` seeds the tab before the first
+  paint, so the strip's active item never saw a false→true edge and «Contenido» opened
+  off-screen with its underline invisible.
 - **Parked residuals, all known and none blocking.** `getComputedStyle(bar).top` is read
   once at mount: a rotation that crosses the `lg:` navbar breakpoint leaves the observer
   inset stale until the page remounts, and a resize observer is more machinery than the

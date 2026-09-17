@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 319,
+    "literalRows": 320,
     "filesScanned": 330,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
-      "4": 75,
+      "4": 76,
       "8": 89,
       "9": 10,
       "11": 9,
@@ -22,7 +22,7 @@
     "byDisposition": {
       "B": 120,
       "exempt": 50,
-      "keep": 244,
+      "keep": 245,
       "C": 5,
       "D": 14
     },
@@ -2431,7 +2431,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 193,
+      "line": 246,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2439,11 +2439,23 @@
       "file": "app/components/admin/AdminRail.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
-      "value": "to-transparent",
+      "value": "transparent",
       "alpha": null,
-      "utility": "to",
+      "utility": null,
       "carrier": null,
-      "line": 129,
+      "line": 69,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/AdminRail.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "transparent",
+      "alpha": null,
+      "utility": null,
+      "carrier": null,
+      "line": 70,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

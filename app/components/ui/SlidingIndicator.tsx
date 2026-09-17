@@ -41,23 +41,38 @@ export default function SlidingIndicator({
 
 /**
  * Ref callback for a tab-bar item: scrolls itself to the centre of a
- * horizontally scrolling bar, but only on the false→true ACTIVATION edge,
- * never on mount. `SectionNav` seeds `active` with `sections[0]?.id` before
- * its IntersectionObserver has fired, so the first section is already
- * "active" at first render; scrolling on that render would jump the page on
- * load whenever the nav sits below a hero taller than the viewport (block:
- * "nearest" is not a no-op there). `behavior` honours reduced motion.
+ * horizontally scrolling bar on the false→true ACTIVATION edge, and — only
+ * when the caller opts in with `onMount` — on the first render too.
+ *
+ * The default is NOT to scroll on mount, and that is the older of the two
+ * behaviours: `SectionNav` seeds `active` with `sections[0]?.id` before its
+ * IntersectionObserver has fired, so the first section is already "active" at
+ * first render; scrolling on that render would jump the page on load whenever
+ * the nav sits below a hero taller than the viewport (block: "nearest" is not
+ * a no-op there).
+ *
+ * `AdminRail`'s strip is the opposite case and needs `onMount`: `/admin?tab=x`
+ * seeds the panel's tab from the URL, so the active item is active at first
+ * render and NEVER flips — without this the strip opened scrolled to the left
+ * with the active tab (and its underline) off-screen to the right. The mount
+ * pass is deliberately instant: an animated scroll on load would read as the
+ * page moving under the reader. `behavior` honours reduced motion otherwise.
  */
-export function useActiveIntoView(active: boolean): (node: HTMLElement | null) => void {
+export function useActiveIntoView(active: boolean, onMount = false): (node: HTMLElement | null) => void {
   const nodeRef = useRef<HTMLElement | null>(null);
   const wasActiveRef = useRef(active);
+  const mountedRef = useRef(false);
   useEffect(() => {
     const wasActive = wasActiveRef.current;
     wasActiveRef.current = active;
-    if (!active || wasActive || !nodeRef.current) return;
+    const first = !mountedRef.current;
+    mountedRef.current = true;
+    if (!active || !nodeRef.current) return;
+    if (wasActive && !(first && onMount)) return;
     const reduced =
-      typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      first ||
+      (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
     nodeRef.current.scrollIntoView?.({ inline: "center", block: "nearest", behavior: reduced ? "auto" : "smooth" });
-  }, [active]);
+  }, [active, onMount]);
   return useCallback((node: HTMLElement | null) => { nodeRef.current = node; }, []);
 }
