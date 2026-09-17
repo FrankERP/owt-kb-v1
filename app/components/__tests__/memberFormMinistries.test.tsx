@@ -12,7 +12,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemberForm } from "../admin/AdminPanel";
+import { MemberForm } from "../admin/MembersPanel";
 
 afterEach(cleanup);
 

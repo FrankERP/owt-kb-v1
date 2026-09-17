@@ -125,7 +125,7 @@ exclusive to the sign-in lockup, where it already lived before this list existed
 | `SegmentedControl` | client | the ONE segmented control — `role="radiogroup"`, arrows move the selection with wrap and focus follows, the checked option is the sole tab stop; `value={null}` means nothing chosen yet (no thumb). The thumb is one `layoutId` span (what `domMax` is for). Sizes `sm`/`md`; tones `outline` (bordered pills) / `filled` (joined bar, solid thumb). `badge` and `busy` per option. Never `aria-pressed` toggles for a one-of-N choice. |
 | `SlidingIndicator` / `useActiveIntoView` | client | the active marker for tab bars (admin `TabBar`, `SectionNav`, `BottomNav`, `NavLinks`): render ONE inside the active item; variants `pill`/`underline`/`dot`. Semantics stay on the items (`aria-current`). The hook scrolls the active item to the centre of an overflowing bar. |
 | `Switch` | client | the ONE switch — `role="switch"`, `aria-checked`, a `<button>`; knob springs (`SPRINGS.pop`) with `initial={false}` so the first paint is the real state; haptic on flip. Sizes `sm`/`md`. |
-| `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` for the kill switch. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop rather than a `className` because a same-property utility passed through `className` cannot beat one the primitive already sets — two classes for the same property land at equal specificity in the compiled stylesheet, and the one emitted LATER wins regardless of call-site order, so an `items-center` baked into the component always beats an `items-start` passed in from outside. Name it with `children` or `aria-label`. |
+| `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` is the destructive tone — the kill switch, its former consumer, became a `Menu` item behind a confirm in R5 Task 3. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop rather than a `className` because a same-property utility passed through `className` cannot beat one the primitive already sets — two classes for the same property land at equal specificity in the compiled stylesheet, and the one emitted LATER wins regardless of call-site order, so an `items-center` baked into the component always beats an `items-start` passed in from outside. Name it with `children` or `aria-label`. |
 | `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
 | `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws an optional prev/next icon-button pair around the input, the parent's job to interpret. `ScheduleHeader` does NOT pass `onStep` (R2 Task 4 ruling — its own header arrows already page the month, under the same accessible names a second stepper pair would duplicate); the one live consumer is the theme gallery's `ControlsFixture`. |
 | `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
@@ -1291,3 +1291,26 @@ loading, the count in `negative-fg` when there are issues. Three states, never t
 unknown queue must not read clean, in the dot or in the item's accessible name. The panel's
 `Collapse` follows the tone (open until proven clean) and a member can still toggle it.
 Guards: `adminRail.test.tsx`, `useIntegrityQueue.test.tsx`.
+
+**Task 3 (Miembros: one menu per row, and a confirmed kill switch).** The Miembros body
+left `AdminPanel` for its own `MembersPanel.tsx` — it holds the list, the filters, every
+member write and the four dialogs, and it renders only on its own tab (Task 6 mounts it
+behind `next/dynamic`). The row's four hover-only icon buttons and the
+`Deshabilitar acceso (kill switch)` `Checkbox` that sat in the row body are replaced by ONE
+`Menu` (ruling 6): a `Button variant="icon" size="lg"` ⋯ trigger with `aria-label`
+«Acciones de {alias}», items Editar · Contraseña and, for a `super-admin`, Ver como este
+miembro · separator · Deshabilitar/Habilitar acceso · Eliminar. Nothing depends on hover,
+so a phone reaches every action a desktop does, at one 44 px target. Taking access away now
+asks first (decision O): a `CueDialog mode="modal" size="sm"` that names the member, says
+what it does and what it does NOT change («No podrá iniciar sesión. No cambia su Tipo, sus
+asignaciones ni su historial.»), and commits through the same
+`PATCH /api/admin/members/:id/disable`; GIVING access back needs no confirm. The `Sin acceso`
+chip stays — it is the row's own statement about access. Primitives in the same pass: the
+four member dialogs are mounted ALWAYS and opened by `open={modal?.type === …}`
+(`cueDialogMount.test.ts` 10 → 9), loading is six `Skeleton` rows in a `SkeletonGroup`, the
+delete modal's two raw buttons are `Button variant="danger"`/`"ghost"`, the row's
+`transition-all` is now `transition-[background-color,box-shadow] duration-base
+ease-out-brand` (`rawMotionLiterals` `transitionAll` 7 → 6) and the search input is
+`text-[16px] sm:text-sm`. Guard: `membersPanelMenu.test.tsx` (the items per role, the
+confirm, one PATCH on confirm and none on cancel, no hover-only strip, no kill-switch
+checkbox).

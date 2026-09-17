@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-auth/react", () => ({ useSession: () => ({ update: vi.fn() }) }));
@@ -37,6 +37,7 @@ vi.mock("../IntegrityQueuePanel", () => ({ default: () => <div data-panel="integ
 
 import AdminPanel from "../AdminPanel";
 import { ToastProvider } from "../../ui/Toast";
+import { CueDialogProvider } from "../../ui/CueDialogProvider";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const read = (rel: string) => readFileSync(path.join(REPO_ROOT, rel), "utf8");
@@ -46,9 +47,14 @@ const rail = (container: HTMLElement) =>
   within(container.querySelector("nav[aria-label='Secciones']") as HTMLElement);
 
 function mount(initialTab: "members" | "services" | "activity" = "services") {
+  // `CueDialogProvider` because Miembros (`MembersPanel`) keeps its four member
+  // dialogs MOUNTED and drives them with `open={…}` — a CueDialog throws without
+  // the provider whether or not it is open.
   return render(
     <ToastProvider>
-      <AdminPanel role="super-admin" initialTab={initialTab} />
+      <CueDialogProvider>
+        <AdminPanel role="super-admin" initialTab={initialTab} />
+      </CueDialogProvider>
     </ToastProvider>,
   );
 }
@@ -125,13 +131,19 @@ describe("the admin page is the workspace", () => {
   it("never asks for it for a role with no Servicios tab", async () => {
     render(
       <ToastProvider>
-        <AdminPanel role="content-editor" initialTab="content" />
+        <CueDialogProvider>
+          <AdminPanel role="content-editor" initialTab="content" />
+        </CueDialogProvider>
       </ToastProvider>,
     );
     // Content-editors see one tab. Three 403s per load for a dot they are never
-    // shown is what the `enabled` gate exists to prevent.
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    // shown is what the `enabled` gate exists to prevent. Since R5 Task 3 they
+    // make no request AT ALL from this panel: the member list left with
+    // `MembersPanel`, which never mounts for them — so flush the effects and
+    // assert on `fetch` itself rather than waiting for a call that never comes.
+    await act(async () => { await Promise.resolve(); });
     expect(integrityCalls()).toEqual([]);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it("re-reads the inventory when the admin ENTERS Servicios, and not on arrival", async () => {

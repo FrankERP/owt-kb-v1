@@ -4,7 +4,7 @@
 // prop, and it gets no enter/exit animation from CueDialog's own internal
 // `AnimatePresence`. This is the same anti-pattern whether the literal sits
 // directly behind a `{cond && (<CueDialog open …>}` conditional or inside a
-// wrapper component (e.g. a local `Modal` in `AdminPanel`/`ServicesPanel`, or
+// wrapper component (e.g. a local `Modal` in `ServicesPanel`, or
 // `SongSheet`'s `SetlistPopover`, or `KidsPlanner`'s `SeatPicker`) whose only
 // JSX output is a literal `<CueDialog open …>` and which the CALLER mounts
 // conditionally — the dialog element itself never observes an `open` prop
@@ -37,7 +37,12 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // migrated to `<CueDialog open={open} …>` — the caller now keeps it mounted
 // and drives visibility with the boolean instead of mounting it
 // conditionally.
-const BASELINE = 10;
+// 10→9 (2026-09-16, motion R5 Task 3): the Miembros body moved to
+// `MembersPanel.tsx` and its local `Modal` wrapper took an `open` prop — the
+// four member dialogs (add/edit/password/delete) are mounted always and opened
+// by `modal?.type === …`, so the wrapper's `<CueDialog open` literal is gone.
+// `ServicesPanel`'s own local `Modal` is still one of the remaining sites.
+const BASELINE = 9;
 
 // Every literal `open` boolean attribute on a `<CueDialog` element — bare
 // `open`, never `open={…}`. Matches regardless of what (if anything)

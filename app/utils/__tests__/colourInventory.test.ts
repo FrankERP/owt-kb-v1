@@ -164,9 +164,11 @@ describe("colour inventory — the traps that produced wrong counts before", () 
     // This used to read `.brand-admin-workspace`, which had one use per admin
     // tab until R5 folded the six early returns into one tree (ADR-0035) and
     // left it with exactly one — a pin that can only be satisfied by a shape the
-    // code no longer has is not a guard.
+    // code no longer has is not a guard. The four uses (ministry scope, filter
+    // key, sort, search box) moved to `MembersPanel.tsx` with the Miembros body
+    // in R5 Task 3; `AdminPanel.tsx` has none left.
     const ws = live.compositing.find(
-      (r) => r.class === "search-console" && r.kind === "className" && r.file.endsWith("AdminPanel.tsx"),
+      (r) => r.class === "search-console" && r.kind === "className" && r.file.endsWith("MembersPanel.tsx"),
     );
     expect(ws?.count).toBeGreaterThan(1);
   });
