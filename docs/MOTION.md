@@ -1284,7 +1284,8 @@ arithmetic was re-derived WITH the rail: `1512 − 24 = 1488`,
 
 The integrity state is lifted with it (ruling 4): `useIntegrityQueue` owns the three
 service-integrity fetches `IntegrityQueuePanel` used to run itself, `AdminPanel` calls it
-ONCE at the top level, and the same queue feeds the panel and the rail's Servicios dot —
+ONCE at the top level (gated on the role actually having a Servicios tab, and re-read on
+entering it), and the same queue feeds the panel and the rail's Servicios dot —
 nothing when the inventory is proven clean, a dim `?` when a domain failed or is still
 loading, the count in `negative-fg` when there are issues. Three states, never two: an
 unknown queue must not read clean, in the dot or in the item's accessible name. The panel's

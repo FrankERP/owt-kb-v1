@@ -21,15 +21,15 @@
     },
     "byDisposition": {
       "B": 119,
-      "exempt": 49,
+      "exempt": 50,
       "keep": 244,
       "C": 5,
       "D": 14
     },
     "compositingClasses": 22,
-    "compositingSelectorOccurrences": 50,
+    "compositingSelectorOccurrences": 52,
     "compositingClassNameOccurrences": 54,
-    "compositingRuleBodies": 47,
+    "compositingRuleBodies": 48,
     "lightCounterpartClasses": 14,
     "pairs": 11,
     "pairsDifferingInAlpha": 0
@@ -2335,7 +2335,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1055,
+      "line": 1069,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2347,7 +2347,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1055,
+      "line": 1069,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2359,7 +2359,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1082,
+      "line": 1096,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2371,7 +2371,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1082,
+      "line": 1096,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2383,7 +2383,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1210,
+      "line": 1224,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2395,7 +2395,7 @@
       "alpha": null,
       "utility": null,
       "carrier": null,
-      "line": 1210,
+      "line": 1224,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2443,7 +2443,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1128,
+      "line": 1146,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2479,7 +2479,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1123,
+      "line": 1141,
       "disposition": "B",
       "reason": null
     },
@@ -2491,7 +2491,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1396,
+      "line": 1414,
       "disposition": "B",
       "reason": null
     },
@@ -2503,7 +2503,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1405,
+      "line": 1423,
       "disposition": "B",
       "reason": null
     },
@@ -2515,7 +2515,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1415,
+      "line": 1433,
       "disposition": "B",
       "reason": null
     },
@@ -2527,7 +2527,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 1426,
+      "line": 1444,
       "disposition": "B",
       "reason": null
     },
@@ -3857,7 +3857,7 @@
       "file": "app/brand.css",
       "kind": "selector",
       "class": "admin-frame",
-      "count": 3,
+      "count": 4,
       "disposition": "exempt",
       "reason": "No colour in any rule body — needs no light counterpart"
     },
@@ -3865,7 +3865,7 @@
       "file": "app/brand.css",
       "kind": "selector",
       "class": "admin-rail",
-      "count": 2,
+      "count": 3,
       "disposition": "exempt",
       "reason": "No colour in any rule body — needs no light counterpart"
     },
@@ -4707,7 +4707,8 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "admin-workspace"
+        "admin-frame",
+        "admin-rail"
       ],
       "ordinal": 32,
       "disposition": "exempt",
@@ -4717,11 +4718,11 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "member-row"
+        "admin-workspace"
       ],
       "ordinal": 33,
-      "disposition": "B",
-      "reason": null
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
     },
     {
       "file": "app/brand.css",
@@ -4737,11 +4738,11 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "btn-sheen"
+        "member-row"
       ],
       "ordinal": 35,
-      "disposition": "exempt",
-      "reason": "Rule body declares no colour"
+      "disposition": "B",
+      "reason": null
     },
     {
       "file": "app/brand.css",
@@ -4767,7 +4768,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "skeleton"
+        "btn-sheen"
       ],
       "ordinal": 38,
       "disposition": "exempt",
@@ -4787,7 +4788,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "stage-hero"
+        "skeleton"
       ],
       "ordinal": 40,
       "disposition": "exempt",
@@ -4807,7 +4808,7 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "lit-card"
+        "stage-hero"
       ],
       "ordinal": 42,
       "disposition": "exempt",
@@ -4847,9 +4848,19 @@
       "file": "app/brand.css",
       "kind": "rule-body",
       "classes": [
-        "today-pulse"
+        "lit-card"
       ],
       "ordinal": 46,
+      "disposition": "exempt",
+      "reason": "Rule body declares no colour"
+    },
+    {
+      "file": "app/brand.css",
+      "kind": "rule-body",
+      "classes": [
+        "today-pulse"
+      ],
+      "ordinal": 47,
       "disposition": "exempt",
       "reason": "Rule body declares no colour"
     }

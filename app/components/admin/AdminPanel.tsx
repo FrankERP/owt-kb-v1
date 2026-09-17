@@ -750,15 +750,33 @@ export default function AdminPanel({
   );
   const proposalTarget = review.target?.kind === "proposal_review" ? review.target : null;
   const integrityTarget = review.target?.kind === "integrity_issue" ? review.target : null;
-  // ONE integrity load for the page (R5 ruling 4), at the top level rather than
-  // inside the Servicios branch: the rail's dot has to be live on every tab, and
-  // two callers fetching their own copy could disagree about whether the
-  // inventory is clean.
-  const integrity = useIntegrityQueue(onReviewResolved);
   const railTabs = useMemo(
     () => visibleAdminTabs(role).map((t) => ({ ...t, icon: ADMIN_TAB_ICON[t.id] })),
     [role],
   );
+  // ONE integrity load for the page (R5 ruling 4), at the top level rather than
+  // inside the Servicios branch: the rail's dot has to be live on every tab, and
+  // two callers fetching their own copy could disagree about whether the
+  // inventory is clean.
+  //
+  // Gated on the TAB, not on a role list: the three routes are Servicios' own,
+  // so a `content-editor`, who has no Servicios tab, would otherwise take three
+  // 403s on every /admin load for a dot that is never rendered for them. One
+  // predicate decides both, and it is the same one that builds the rail.
+  const showsServices = useMemo(() => railTabs.some((t) => t.id === "services"), [railTabs]);
+  const integrity = useIntegrityQueue({ enabled: showsServices, onResolved: onReviewResolved });
+  // Entering Servicios re-reads the inventory. The queue is loaded once per
+  // mount otherwise (`docs/SERVICE_READINESS_UI.md`), and a manager who fixes a
+  // document in Studio and comes back to the tab should not have to find
+  // «Recargar» to see it. Deliberately NOT on first mount — `reload` already ran
+  // there, and a second pass would be three duplicate requests on every load.
+  const reloadIntegrity = integrity.reload;
+  const prevTabRef = useRef(tab);
+  useEffect(() => {
+    const previous = prevTabRef.current;
+    prevTabRef.current = tab;
+    if (tab === "services" && previous !== "services") reloadIntegrity();
+  }, [tab, reloadIntegrity]);
   const [members, setMembers]   = useState<Member[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState<string | null>(null);
@@ -1021,9 +1039,9 @@ export default function AdminPanel({
   // in `() => (…)` makes `react-hooks/refs` an ERROR — from inside a plain
   // function the rule can no longer prove that `handlePhotoClick`'s
   // `photoInputRef.current` is read in an event handler rather than during
-  // render, and the lint gate is 0 errors. The real fix is R5 Task 7's
-  // extraction into `MembersPanel.tsx` behind `next/dynamic`, which makes the
-  // subtree lazy for real instead of only deferring its construction.
+  // render, and the lint gate is 0 errors. The real fix is R5 Task 3's
+  // extraction into `MembersPanel.tsx`, which Task 6 then mounts behind
+  // `next/dynamic` — lazy for real, instead of only deferring its construction.
   const membersBody = (
     <div className="space-y-6">
       {/* Header */}

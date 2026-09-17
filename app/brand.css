@@ -1007,6 +1007,20 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
     display: none;
   }
 
+  /*
+   * …and the integrity dot becomes a BADGE on the icon. In flow it is a third
+   * item on a 44px row that is now 56px wide with 16px of padding a side: the
+   * icon plus a gap plus a two-digit count measures ~72px and pushes the icon
+   * off its own button. Out of flow it costs nothing. The item is positioned
+   * already (it hosts the sliding pill), so this needs no new stacking context.
+   */
+  .brand-admin-frame:has(.planner-wide) .brand-admin-rail [data-integrity] {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    margin: 0;
+  }
+
 }
 
 .brand-admin-workspace {

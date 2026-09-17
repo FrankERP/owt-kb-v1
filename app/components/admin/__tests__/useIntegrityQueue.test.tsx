@@ -138,6 +138,26 @@ describe("useIntegrityQueue loads the three inventories", () => {
     expect(result.current.queue.incomplete).toBe(true);
   });
 
+  it("asks for nothing at all when it is disabled", async () => {
+    const fetchMock = mockRoutes();
+    const { result } = renderHook(() => useIntegrityQueue({ enabled: false }));
+    // Nothing in flight, nothing proven: `unknown`, never a clean zero.
+    expect(result.current.loading).toBe(false);
+    expect(result.current.tone).toBe("unknown");
+    // `reload` is a no-op too — a disabled caller cannot be talked into the
+    // three requests by a button it should not be rendering either.
+    await act(async () => {
+      result.current.reload();
+    });
+    await waitFor(() => expect(result.current.tone).toBe("unknown"));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.sources).toEqual({
+      roleTargets: "loading",
+      setlistTargets: "loading",
+      proposals: "loading",
+    });
+  });
+
   it("re-runs all three domains on reload", async () => {
     const fetchMock = mockRoutes();
     const { result } = renderHook(() => useIntegrityQueue());
@@ -155,7 +175,7 @@ describe("resolve is the caller's handler, with a stable identity", () => {
   it("forwards the outcome and never changes between renders", async () => {
     mockRoutes();
     const first = vi.fn();
-    const { result, rerender } = renderHook(({ cb }) => useIntegrityQueue(cb), {
+    const { result, rerender } = renderHook(({ cb }) => useIntegrityQueue({ onResolved: cb }), {
       initialProps: { cb: first },
     });
     await waitFor(() => expect(result.current.loading).toBe(false));

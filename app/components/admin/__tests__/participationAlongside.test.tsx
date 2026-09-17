@@ -1075,6 +1075,15 @@ describe("the planner's three column widths agree wherever they are written", ()
       "lg:grid-cols-[var(--admin-rail-w,200px)_1fr]",
     );
 
+    // The third rail rule: inside 56px there is no room for the integrity dot in
+    // flow (icon + gap + a two-digit count is ~72px and shoves the icon off the
+    // button), so the collapsed rail pins it to the icon as a badge. It relies
+    // on the item being positioned, which `AdminRail`'s `relative` provides.
+    expect(cssSrc).toMatch(
+      /\.brand-admin-frame:has\(\.planner-wide\)\s+\.brand-admin-rail\s+\[data-integrity\]\s*\{\s*position:\s*absolute;/,
+    );
+    expect(read("app/components/admin/AdminRail.tsx")).toMatch(/"relative flex select-none/);
+
     // And the retired shell stays retired — as a RULE, not as a word: the
     // comment above still names the class it is explaining the absence of.
     // `adminShell.test.tsx` owns the page-side half.

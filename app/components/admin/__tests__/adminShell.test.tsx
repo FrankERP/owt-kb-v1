@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-auth/react", () => ({ useSession: () => ({ update: vi.fn() }) }));
@@ -104,6 +104,49 @@ describe("the admin page is the workspace", () => {
     const next = container.querySelector(".brand-admin-workspace") as HTMLElement;
     expect(next).not.toBe(body);
     expect(next.querySelector('[data-panel="activity"]')).not.toBeNull();
+  });
+
+  // ── Who the integrity routes are asked for, and when ──────────────────────
+  //
+  // The three `/api/admin/service-integrity/*` routes belong to Servicios. The
+  // hook lives in `AdminPanel` (one load feeds the panel AND the rail's dot), so
+  // it is `AdminPanel` — not the panel that renders them — that must not ask for
+  // them on behalf of a role that cannot open the tab.
+  const integrityCalls = () =>
+    (globalThis.fetch as unknown as { mock: { calls: [string][] } }).mock.calls
+      .map((c) => c[0])
+      .filter((url) => String(url).includes("/service-integrity/"));
+
+  it("asks for the integrity inventory once, for a role that has Servicios", async () => {
+    mount("services");
+    await waitFor(() => expect(integrityCalls()).toHaveLength(3));
+  });
+
+  it("never asks for it for a role with no Servicios tab", async () => {
+    render(
+      <ToastProvider>
+        <AdminPanel role="content-editor" initialTab="content" />
+      </ToastProvider>,
+    );
+    // Content-editors see one tab. Three 403s per load for a dot they are never
+    // shown is what the `enabled` gate exists to prevent.
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    expect(integrityCalls()).toEqual([]);
+  });
+
+  it("re-reads the inventory when the admin ENTERS Servicios, and not on arrival", async () => {
+    mount("members");
+    // Not the Servicios tab: the mount's own load, and no second pass.
+    await waitFor(() => expect(integrityCalls()).toHaveLength(3));
+
+    fireEvent.click(rail(document.body).getByRole("button", { name: "Servicios" }));
+    await waitFor(() => expect(integrityCalls()).toHaveLength(6));
+
+    // Leaving and coming back re-reads; staying does not.
+    fireEvent.click(rail(document.body).getByRole("button", { name: "Actividad" }));
+    await waitFor(() => expect(integrityCalls()).toHaveLength(6));
+    fireEvent.click(rail(document.body).getByRole("button", { name: "Servicios" }));
+    await waitFor(() => expect(integrityCalls()).toHaveLength(9));
   });
 
   it("leaves no .brand-admin-shell in brand.css for anyone to re-render", () => {
