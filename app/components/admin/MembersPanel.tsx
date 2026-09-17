@@ -1046,10 +1046,10 @@ export default function MembersPanel({ role }: { role: OWTRole }) {
           {query && (
             <Button
               variant="icon"
-              size="sm"
+              size="lg"
               aria-label="Limpiar búsqueda"
               onClick={() => setQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-lg leading-none"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-lg normal-case leading-none tracking-normal"
             >
               ×
             </Button>

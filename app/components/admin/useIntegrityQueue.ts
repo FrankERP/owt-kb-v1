@@ -68,6 +68,12 @@ export interface IntegrityQueueState {
    * for "is something in flight", never the tone.
    */
   tone: IntegrityTone;
+  /**
+   * The issue count that goes WITH `tone`, held across a reload for the same
+   * reason. `queue.count` is the live one and drops to 0 the moment a reload
+   * starts, which paints «0 problemas» in red beside a red dot.
+   */
+  count: number;
   /** The per-domain load states, for explicit-id focus resolution. */
   sources: IntegritySourceStates;
   /** True while any domain is still in flight. */
@@ -181,19 +187,26 @@ export function useIntegrityQueue({
   // Nothing is in flight when the hook is off, whatever `sources` still says.
   const loading = enabled && Object.values(sources).some((state) => state === "loading");
 
-  // A RELOAD holds the last settled tone instead of dropping back to `unknown`.
-  // Every domain goes `loading` again the moment `reload` runs, so the derived
-  // tone would say `unknown` for the length of three requests — and entering
-  // Servicios reloads on every clean visit, which made the rail's dot and the
-  // panel's disclosure flash a `?` and re-open for no reason. Holding is not a
-  // lie: the tone shown is one that was actually proven, `loading` is exposed
-  // beside it, and the FIRST load still reads `unknown` until something settles,
+  // A RELOAD holds the last settled reading instead of dropping back to
+  // `unknown`/0. Every domain goes `loading` again the moment `reload` runs, so
+  // the derived tone would say `unknown` for the length of three requests — and
+  // entering Servicios reloads on every clean visit, which made the rail's dot
+  // and the panel's disclosure flash a `?` and re-open for no reason. Holding is
+  // not a lie: the values shown were actually proven, `loading` is exposed
+  // beside them, and a FIRST load still reads `unknown` until something settles,
   // because there is no earlier answer to hold.
-  const [settled, setSettled] = useState<IntegrityTone | null>(null);
+  //
+  // The COUNT is held with the tone, never separately: `queue.count` is 0 while
+  // the inventories are in flight, so a held `issues` tone beside a live count
+  // renders «0 problemas» in red — a worse reading than the twitch it replaced.
+  const [settled, setSettled] = useState<{ tone: IntegrityTone; count: number } | null>(null);
+  const liveCount = queue.count;
   useEffect(() => {
-    if (!loading) setSettled(settling);
-  }, [loading, settling]);
-  const tone: IntegrityTone = loading && settled ? settled : settling;
+    if (!loading) setSettled({ tone: settling, count: liveCount });
+  }, [loading, settling, liveCount]);
+  const held = loading ? settled : null;
+  const tone: IntegrityTone = held ? held.tone : settling;
+  const count = held ? held.count : liveCount;
 
-  return { queue, tone, sources, loading, reload, resolve };
+  return { queue, tone, count, sources, loading, reload, resolve };
 }

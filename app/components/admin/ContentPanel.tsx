@@ -296,6 +296,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                   <Button
                     variant="icon"
                     size="lg"
+                    tone="danger"
                     title="Eliminar"
                     aria-label="Eliminar"
                     onClick={() => openModal("delete", song)}

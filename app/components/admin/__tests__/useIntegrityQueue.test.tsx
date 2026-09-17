@@ -212,6 +212,27 @@ describe("a reload holds the last settled tone", () => {
     await waitFor(() => expect(result.current.tone).toBe("clean"));
   });
 
+  it("holds the COUNT with the tone — a live 0 beside a red dot reads «0 problemas»", async () => {
+    mockRoutes({ roles: DRAFT_ONLY_ROLES });
+    const seen: Array<{ tone: string; count: number }> = [];
+    const { result } = renderHook(() => {
+      const state = useIntegrityQueue();
+      seen.push({ tone: state.tone, count: state.count });
+      return state;
+    });
+    await waitFor(() => expect(result.current.tone).toBe("issues"));
+    expect(result.current.count).toBe(1);
+
+    seen.length = 0;
+    await act(async () => {
+      result.current.reload();
+    });
+    // Mid-flight the derived queue is empty again; the held reading is not.
+    expect(seen.every((s) => s.tone === "issues" && s.count === 1)).toBe(true);
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.count).toBe(1);
+  });
+
   it("holds `issues` across a reload too, not just `clean`", async () => {
     mockRoutes({ roles: DRAFT_ONLY_ROLES });
     const seen: string[] = [];
@@ -325,6 +346,19 @@ describe("IntegrityQueuePanel renders the queue it is handed", () => {
     expect(screen.getByRole("button", { name: /Integridad de datos/ }).getAttribute("aria-expanded")).toBe(
       "true",
     );
+  });
+
+  it("keeps the header as PROSE inside the Button's chrome", () => {
+    // `Button`'s BASE is `justify-center` + `uppercase tracking-widest`: without
+    // the `!` and the two spans' own case/tracking, adopting the house control
+    // centred the title and shouted the summary sentence.
+    const { container } = panel("clean");
+    const summary = container.querySelector("[data-integrity-summary]");
+    expect(summary?.className).toContain("normal-case");
+    expect(summary?.className).toContain("tracking-normal");
+    expect(
+      screen.getByRole("button", { name: /Integridad de datos/ }).className,
+    ).toContain("!justify-start");
   });
 
   it("hands the reload button straight back to the hook", () => {

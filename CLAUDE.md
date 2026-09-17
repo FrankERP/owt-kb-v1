@@ -278,7 +278,9 @@ conditional — directly or inside a wrapper component (a local `Modal`, a
 `SetlistPopover`, a `SeatPicker`) whose only JSX output is `<CueDialog open …>` — a
 dialog element with a literal `open` gets no enter/exit either way;
 `cueDialogMount.test.ts` is the guard), `Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never
-an inline class string), `Presence` (every animated conditional), `Skeleton`/
+an inline class string. `tone` is the one colour prop: the `pill`'s pressed colour
+(`accent`/`availability`) and the `icon`'s destructive hover (`danger`) — never a
+`hover:` pair in `className`, which races the variant's own), `Presence` (every animated conditional), `Skeleton`/
 `SkeletonGroup` (every loading placeholder), `revealProps` (route reveal),
 `useAvailability` (`app/components/availability/useAvailability.ts` — the ONLY
 client-side availability writer; `MyAvailabilityPanel` (on `/me/disponibilidad`)

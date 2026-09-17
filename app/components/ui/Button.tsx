@@ -6,6 +6,10 @@
 // `active:translate-y-px active:scale-[0.985]` over --motion-fast; the primary sheen
 // is a brand.css class gated on (hover: hover); focus is always visible.
 //
+// `tone` is the one exception to "pick a variant": the pill's pressed colour and the
+// icon variant's destructive hover both live in this file, never in a caller's
+// `className`, so two `hover:`/`aria-pressed:` sets can never race on one element.
+//
 // `busy` is the ONLY loading affordance: aria-busy + disabled + a label swap. Never
 // a spinner beside a label that says nothing.
 //
@@ -19,6 +23,8 @@ export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "icon
 export type ButtonSize = "sm" | "md" | "lg";
 /** The pill's pressed colour — `accent` (the default) or the availability tone. */
 export type PillTone = "accent" | "availability";
+/** The icon variant's destructive hover. `tone="danger"` on any other variant is ignored. */
+export type IconTone = "danger";
 
 const BASE =
   "inline-flex items-center justify-center gap-2 select-none font-label uppercase tracking-widest " +
@@ -50,15 +56,34 @@ const PILL_TONE: Record<PillTone, string> = {
     "aria-pressed:border-availability-strong aria-pressed:text-availability-soft aria-pressed:bg-availability-fg/20",
 };
 
+// The `icon` variant's ONE alternative hover, for a destructive row action
+// («Eliminar»). It lives here rather than in a caller's `className` for the same
+// reason `PILL_TONE` does: a `hover:bg-`/`hover:text-` pair passed as an
+// additive class sits beside the variant's own pair and Tailwind's emission
+// order, not the tone asked for, decides which one paints.
+const ICON_TONE: Record<IconTone, string> = {
+  danger: "hover:text-negative-fg hover:bg-negative-surface/40",
+};
+
 const SIZE: Record<ButtonSize, string> = {
   sm: "text-[11px] px-3 py-1",
   md: "text-xs px-4 py-2",
   lg: "text-xs px-4 min-h-[44px]",
 };
 
-export function buttonClass(variant: ButtonVariant, size: ButtonSize, extra = "", tone: PillTone = "accent"): string {
+export function buttonClass(
+  variant: ButtonVariant,
+  size: ButtonSize,
+  extra = "",
+  tone: PillTone | IconTone = "accent",
+): string {
   const s = variant === "icon" ? (size === "lg" ? "min-h-[44px] min-w-[44px]" : "") : SIZE[size];
-  const t = variant === "pill" ? PILL_TONE[tone] : "";
+  const t =
+    variant === "pill" && tone !== "danger"
+      ? PILL_TONE[tone]
+      : variant === "icon" && tone === "danger"
+        ? ICON_TONE[tone]
+        : "";
   return `${BASE} ${VARIANT[variant]} ${t} ${s} ${extra}`.replace(/\s+/g, " ").trim();
 }
 
@@ -68,8 +93,8 @@ type Common = {
   busy?: boolean;
   busyLabel?: string;
   active?: boolean;
-  /** The pill's pressed colour. Ignored on every other variant. */
-  tone?: PillTone;
+  /** The pill's pressed colour, or `"danger"` for the icon variant's destructive hover. */
+  tone?: PillTone | IconTone;
   className?: string;
   children: ReactNode;
 };
