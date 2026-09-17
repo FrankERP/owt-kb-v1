@@ -2293,6 +2293,6 @@ and the panel surfaces against the rail and the board), `admin-before-phone.png`
 `admin-after-phone.png`, plus `r5-select-popover-1440.png` (the popover open on a fine
 pointer) and `r5-admin-board-1440.png` (the snap track mid-scroll).
 
-**Release:** merged to `main` as `<pending>` (PR `<pending>`); production alias
-`owt-backstage.vercel.app` verified on that SHA `<pending>`. Preview last verified at
-`c1f89b95`.
+**Release:** merged to `main` as `a2a7b9c3` (PR #80, 2026-09-17 13:58 CST); production alias
+`owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last
+verified at `26a8f749` (the F1 strip fix, phone shots in the ledger).
