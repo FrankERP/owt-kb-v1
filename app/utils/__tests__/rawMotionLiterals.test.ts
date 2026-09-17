@@ -21,7 +21,14 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // 2026-09-10 R1 Task 5: SongSearchList.tsx, PostComponent.tsx, TagSearchList.tsx and
 // AuthorSearchList.tsx deleted (the library left home for /biblioteca) — their two
 // transition-all sites and all eight raw duration-N sites went with them.
-const BASELINE = { transitionAll: 7, rawDuration: 0 };
+// 2026-09-16 R5 Task 3: the member row's `transition-all` became
+// `transition-[background-color,box-shadow] duration-base ease-out-brand` when the
+// Miembros body moved to `MembersPanel.tsx` (−1 transition-all).
+// 2026-09-17 R5 Task 4: `ServiceReadinessCard`'s member chip drops `transition-all`
+// for the properties its source state actually changes —
+// `transition-[color,background-color,border-color,transform,box-shadow]` on
+// `duration-base`/`ease-out-brand` (−1 transition-all).
+const BASELINE = { transitionAll: 5, rawDuration: 0 };
 
 function tsxFiles(): string[] {
   const out: string[] = [];

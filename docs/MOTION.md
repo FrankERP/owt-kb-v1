@@ -125,7 +125,7 @@ exclusive to the sign-in lockup, where it already lived before this list existed
 | `SegmentedControl` | client | the ONE segmented control — `role="radiogroup"`, arrows move the selection with wrap and focus follows, the checked option is the sole tab stop; `value={null}` means nothing chosen yet (no thumb). The thumb is one `layoutId` span (what `domMax` is for). Sizes `sm`/`md`; tones `outline` (bordered pills) / `filled` (joined bar, solid thumb). `badge` and `busy` per option. Never `aria-pressed` toggles for a one-of-N choice. |
 | `SlidingIndicator` / `useActiveIntoView` | client | the active marker for tab bars (admin `TabBar`, `SectionNav`, `BottomNav`, `NavLinks`): render ONE inside the active item; variants `pill`/`underline`/`dot`. Semantics stay on the items (`aria-current`). The hook scrolls the active item to the centre of an overflowing bar. |
 | `Switch` | client | the ONE switch — `role="switch"`, `aria-checked`, a `<button>`; knob springs (`SPRINGS.pop`) with `initial={false}` so the first paint is the real state; haptic on flip. Sizes `sm`/`md`. |
-| `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` for the kill switch. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop rather than a `className` because a same-property utility passed through `className` cannot beat one the primitive already sets — two classes for the same property land at equal specificity in the compiled stylesheet, and the one emitted LATER wins regardless of call-site order, so an `items-center` baked into the component always beats an `items-start` passed in from outside. Name it with `children` or `aria-label`. |
+| `Checkbox` | neutral | the ONE checkbox — the native input stays (`sr-only peer`) and does the work; the box is drawn, the mark scales in over `base`. `tone="negative"` is the destructive tone — the kill switch, its former consumer, became a `Menu` item behind a confirm in R5 Task 3. `align?: "center" \| "start"` (default `center`; `start` for a two-line label) is a prop rather than a `className` because a same-property utility passed through `className` cannot beat one the primitive already sets — two classes for the same property land at equal specificity in the compiled stylesheet, and the one emitted LATER wins regardless of call-site order, so an `items-center` baked into the component always beats an `items-start` passed in from outside. Name it with `children` or `aria-label`. |
 | `Select` | neutral | the ONE select — the native `<select>` under tokenised chrome and a drawn chevron. Sizes `sm`/`md`/`lg` (`lg` = `md`'s padding/text plus a 44 px `min-height` on the `<select>` element itself, for a touch target). `label` + `id` (wires `htmlFor`) or `aria-label`. The desktop `Menu` popover with type-ahead is Control Room work (spec Part VIII). |
 | `DateField` | neutral | the ONE date/month input — native under tokenised chrome; `kind="month"` with `onStep` draws an optional prev/next icon-button pair around the input, the parent's job to interpret. `ScheduleHeader` does NOT pass `onStep` (R2 Task 4 ruling — its own header arrows already page the month, under the same accessible names a second stepper pair would duplicate); the one live consumer is the theme gallery's `ControlsFixture`. |
 | `NumberRoll` | client | a value that changes in place: old rises out, new rises in, both in one grid cell. `initial={false}`. |
@@ -1259,7 +1259,7 @@ grid, the Servicios board and the availability matrix are the only horizontal sc
 each in its own `overflow-x-auto` box, which is what closes finding 4's silent 128 px
 shift. The planner's full-screen portal and `MonthGenerator`'s hand-centring STAY, and
 the comments that used to name the shell now name `[data-route-main]`: see
-[ADR-0037](adr/0037-the-admin-shell-is-gone.md). `NavLinks` lost its `schedule`/`tags`
+[ADR-0035](adr/0035-the-admin-shell-is-gone.md). `NavLinks` lost its `schedule`/`tags`
 props in the same task (ruling 9) — Calendario and Biblioteca show for every worship
 member on every page, so the row no longer changes shape between routes. Guards:
 `adminShell.test.tsx` (one rail + one strip, no box between the nav and the panel, the
@@ -1284,9 +1284,65 @@ arithmetic was re-derived WITH the rail: `1512 − 24 = 1488`,
 
 The integrity state is lifted with it (ruling 4): `useIntegrityQueue` owns the three
 service-integrity fetches `IntegrityQueuePanel` used to run itself, `AdminPanel` calls it
-ONCE at the top level, and the same queue feeds the panel and the rail's Servicios dot —
+ONCE at the top level (gated on the role actually having a Servicios tab, and re-read on
+entering it), and the same queue feeds the panel and the rail's Servicios dot —
 nothing when the inventory is proven clean, a dim `?` when a domain failed or is still
 loading, the count in `negative-fg` when there are issues. Three states, never two: an
 unknown queue must not read clean, in the dot or in the item's accessible name. The panel's
 `Collapse` follows the tone (open until proven clean) and a member can still toggle it.
 Guards: `adminRail.test.tsx`, `useIntegrityQueue.test.tsx`.
+
+**Task 3 (Miembros: one menu per row, and a confirmed kill switch).** The Miembros body
+left `AdminPanel` for its own `MembersPanel.tsx` — it holds the list, the filters, every
+member write and the four dialogs, and it renders only on its own tab (Task 6 mounts it
+behind `next/dynamic`). The row's four hover-only icon buttons and the
+`Deshabilitar acceso (kill switch)` `Checkbox` that sat in the row body are replaced by ONE
+`Menu` (ruling 6): a `Button variant="icon" size="lg"` ⋯ trigger with `aria-label`
+«Acciones de {alias}», items Editar · Contraseña and, for a `super-admin`, Ver como este
+miembro · separator · Deshabilitar/Habilitar acceso · Eliminar. Nothing depends on hover,
+so a phone reaches every action a desktop does, at one 44 px target. Taking access away now
+asks first (decision O): a `CueDialog mode="modal" size="sm"` that names the member, says
+what it does and what it does NOT change («No podrá iniciar sesión. No cambia su Tipo, sus
+asignaciones ni su historial.»), and commits through the same
+`PATCH /api/admin/members/:id/disable`; GIVING access back needs no confirm. The `Sin acceso`
+chip stays — it is the row's own statement about access. A refused PATCH does NOT close the
+confirm: `handleDisableAccess` returns `res.ok`, and on `false` the dialog stays up with a
+`CueDialogStatus` saying the member still has access — a sheet that closes on a failed write
+reads as success against an unchanged row. Primitives in the same pass: all five dialogs are
+mounted ALWAYS and opened by a boolean (`cueDialogMount.test.ts` 10 → 9), and each keeps its
+PAYLOAD in state while only an `open` flag flips, so nothing blanks during the exit animation
+(the bodies are keyed on an open counter, so a reopen still starts from a fresh form).
+Loading is six `Skeleton` rows in a `SkeletonGroup`, the delete modal's two raw buttons are
+`Button variant="danger"`/`"ghost"`, the row's `transition-all` is now
+`transition-[box-shadow,border-color] duration-base ease-out-brand` — the two properties
+`.brand-member-row:hover` can actually animate, since its `background` is a non-interpolable
+gradient (`rawMotionLiterals` `transitionAll` 7 → 6) — and the search input is
+`text-[16px] sm:text-sm`. Guard: `membersPanelMenu.test.tsx` (the items per role, the
+confirm, one PATCH on confirm and none on cancel, no hover-only strip, no kill-switch
+checkbox).
+
+**Task 4 (Servicios is a board).** From `lg` the cards are a horizontal snap track —
+`lg:flex lg:snap-x lg:snap-mandatory lg:overflow-x-auto lg:scroll-px-6` on the container,
+`lg:w-[380px] lg:shrink-0 lg:snap-start` on each card — instead of a 2/3-column grid that
+squeezed a card to ~260 px on a month with a full roster (ruling 5). The phone keeps the
+vertical list, the `lg:grid-cols-[320px_1fr]` split with `ParticipationSidebar` stays, and
+the track scrolls ITSELF inside a `min-w-0` column, so the page never grows wider
+(ADR-0035); a `lg:` gradient at its right edge hints the overflow, the same pattern the
+rail's strip uses. Cards arrive with `{...revealProps(i)}` (capped stagger, CSS-only).
+Every control in the panel is a primitive now: the toolbar's four buttons, the three
+retries, the banners' dismiss/reload and the delete modal's three buttons are `Button`;
+the month pills are `Button variant="pill" size="sm"` whose `aria-pressed` states the
+MULTI-select nobody should turn into a `SegmentedControl`; «Roles previos» is a
+`Button variant="ghost"` still driving its `Collapse`; loading is six `Skeleton`s in a
+`SkeletonGroup`; and the local `Modal` took an `open` prop, so its five dialogs (delete ·
+publicar listos · publicar de todos modos · ocultar · setlist) are mounted always with
+their payload outliving the close and their bodies keyed on an open counter
+(`cueDialogMount.test.ts` 9 → 8). `ServicePrimaryAction` is a `Button` that still carries
+`data-action-kind`/`-rule`/`-route`, with the tone in the VARIANT rather than in a colour
+override on `className` (danger for an integrity/conflict blocker, secondary for a retry,
+primary otherwise). The member chip's `transition-all` became
+`transition-[color,background-color,border-color,transform,box-shadow] duration-base
+ease-out-brand` (`rawMotionLiterals` `transitionAll` 6 → 5). One label left in the same
+pass: the panel repeated «Integridad de datos · sin problemas de integridad» under its
+heading while `IntegrityQueuePanel` and the rail's dot already said it. Guard:
+`servicesBoard.test.tsx`.

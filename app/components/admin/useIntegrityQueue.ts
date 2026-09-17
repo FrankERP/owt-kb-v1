@@ -21,6 +21,12 @@
 // `resolve` is the panel's `onResolved` plumbing with a STABLE identity: the
 // panel's focus effect lists it as a dependency, and an inline arrow from
 // `AdminPanel` would re-run that effect on every render.
+//
+// `enabled` is not a convenience. The three routes are Servicios' routes, and a
+// `content-editor` — who cannot see that tab at all — would take three 403s on
+// every single `/admin` load for a dot they are never shown. The caller passes
+// the same predicate that decides whether the tab exists, so the fetch and the
+// surface can never disagree about who is allowed to ask.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -68,14 +74,27 @@ export interface IntegrityQueueState {
   resolve: (outcome: string) => void;
 }
 
-export function useIntegrityQueue(
-  onResolved?: (outcome: string) => void,
+export interface IntegrityQueueOptions {
+  /**
+   * False = load nothing at all, and say `unknown` rather than a clean zero.
+   * The three routes belong to Servicios; a role that cannot open that tab must
+   * not call them.
+   */
+  enabled?: boolean;
+  /** The focus-outcome handler `resolve` forwards to. */
+  onResolved?: (outcome: string) => void;
   /**
    * The validated cards currently rendered, so associated issues leave the
    * queue. Omit (or pass `null`) to derive them from A1's own role inventory.
    */
-  cards: readonly IntegrityCardRef[] | null = null,
-): IntegrityQueueState {
+  cards?: readonly IntegrityCardRef[] | null;
+}
+
+export function useIntegrityQueue({
+  enabled = true,
+  onResolved,
+  cards = null,
+}: IntegrityQueueOptions = {}): IntegrityQueueState {
   const [sources, setSources] = useState<IntegritySourceStates>({
     roleTargets: "loading",
     setlistTargets: "loading",
@@ -104,8 +123,9 @@ export function useIntegrityQueue(
   }, []);
 
   const reload = useCallback(() => {
+    if (!enabled) return;
     for (const domain of INTEGRITY_DOMAINS) void loadDomain(domain);
-  }, [loadDomain]);
+  }, [enabled, loadDomain]);
 
   useEffect(() => {
     reload();
@@ -128,8 +148,18 @@ export function useIntegrityQueue(
     [sources, resolvedCards, data],
   );
 
+  // Disabled reads `unknown`, never `clean`: nothing was proven, and the three
+  // `loading` sources it is left holding say exactly that. Stated explicitly all
+  // the same — a future initial state must not be able to make "we never asked"
+  // look like "we asked and it was fine".
   const raw = integrityQueueTone(queue);
-  const tone: IntegrityTone = raw === "clean" ? "clean" : raw === "unknown" ? "unknown" : "issues";
+  const tone: IntegrityTone = !enabled
+    ? "unknown"
+    : raw === "clean"
+      ? "clean"
+      : raw === "unknown"
+        ? "unknown"
+        : "issues";
 
   // The latest handler behind a STABLE `resolve`. Written in an effect, not
   // during render (`react-hooks/refs` is an error here, and it is right: a ref
@@ -144,7 +174,8 @@ export function useIntegrityQueue(
   }, [onResolved]);
   const resolve = useCallback((outcome: string) => onResolvedRef.current?.(outcome), []);
 
-  const loading = Object.values(sources).some((state) => state === "loading");
+  // Nothing is in flight when the hook is off, whatever `sources` still says.
+  const loading = enabled && Object.values(sources).some((state) => state === "loading");
 
   return { queue, tone, sources, loading, reload, resolve };
 }

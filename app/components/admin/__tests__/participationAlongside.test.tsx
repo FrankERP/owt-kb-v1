@@ -853,7 +853,7 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
  * The gutter rail paints nothing in Safari while it is a descendant of an
  * ancestor carrying `position: relative` + `isolation: isolate` +
  * `overflow: hidden` (`.brand-facet-panel`; `.brand-admin-shell` was another
- * until R5 retired it — ADR-0037). The remedy
+ * until R5 retired it — ADR-0035). The remedy
  * is to render it somewhere else entirely, and "somewhere else" is now a design
  * decision rather than an implementation detail — so it is worth a test.
  *
@@ -905,7 +905,7 @@ describe("the gutter rail renders outside the surfaces that swallow it", () => {
     // Full screen IS `position: fixed`, and inside a `relative` +
     // `isolation: isolate` + `overflow: hidden` ancestor it inherits the bug the
     // rail's portal was written for, and the portal with it. The ancestor is
-    // synthetic here: `/admin`'s own shell is gone (ADR-0037), and the point of
+    // synthetic here: `/admin`'s own shell is gone (ADR-0035), and the point of
     // the portal is that it survives whatever ancestor arrives next.
     stubWideViewport();
     const shell = document.createElement("div");
@@ -1023,7 +1023,7 @@ describe("the planner's three column widths agree wherever they are written", ()
     // the frame fell back to the page's own `px-6` and the stated sum quietly
     // stopped being true. It looks like a cosmetic tidy-up; it is load-bearing.
     // Until R5 this was `.brand-admin-shell:has(.planner-wide) { padding: .75rem }`
-    // — the shell is gone (ADR-0037) and the frame now spends the same 24px.
+    // — the shell is gone (ADR-0035) and the frame now spends the same 24px.
     const rule = cssSrc.match(
       /\.brand-admin-frame:has\(\.planner-wide\)\s*\{[^}]*padding-right:\s*([\d.]+)rem;\s*padding-left:\s*([\d.]+)rem;/,
     );
@@ -1074,6 +1074,15 @@ describe("the planner's three column widths agree wherever they are written", ()
     expect(read("app/components/admin/AdminPanel.tsx")).toContain(
       "lg:grid-cols-[var(--admin-rail-w,200px)_1fr]",
     );
+
+    // The third rail rule: inside 56px there is no room for the integrity dot in
+    // flow (icon + gap + a two-digit count is ~72px and shoves the icon off the
+    // button), so the collapsed rail pins it to the icon as a badge. It relies
+    // on the item being positioned, which `AdminRail`'s `relative` provides.
+    expect(cssSrc).toMatch(
+      /\.brand-admin-frame:has\(\.planner-wide\)\s+\.brand-admin-rail\s+\[data-integrity\]\s*\{\s*position:\s*absolute;/,
+    );
+    expect(read("app/components/admin/AdminRail.tsx")).toMatch(/"relative flex select-none/);
 
     // And the retired shell stays retired — as a RULE, not as a word: the
     // comment above still names the class it is explaining the absence of.

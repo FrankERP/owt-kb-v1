@@ -34,7 +34,7 @@ export default async function AdminPage({
           It carries no styling of its own — the Tailwind classes beside it are
           still the default, and every other admin tab keeps the 1280px cap.
           The bordered `.brand-admin-shell` that used to sit inside it is gone
-          (ADR-0037): the page IS the workspace, and the panels' own cards are
+          (ADR-0035): the page IS the workspace, and the panels' own cards are
           the only boxes. */}
       <div className="brand-admin-frame mx-auto max-w-7xl px-6 pb-20 pt-8">
         {/* `mx-auto max-w-7xl` on the HEADING, not just on the frame: the frame

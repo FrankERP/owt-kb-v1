@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 //
-// The Control Room is the page (R5 Task 1, ADR-0037).
+// The Control Room is the page (R5 Task 1, ADR-0035).
 //
 // `/admin` used to render a bordered `.brand-admin-shell` card, and each tab
 // rendered its OWN tab bar plus its own `brand-surface` panel box inside it —
@@ -23,7 +23,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-auth/react", () => ({ useSession: () => ({ update: vi.fn() }) }));
@@ -37,6 +37,7 @@ vi.mock("../IntegrityQueuePanel", () => ({ default: () => <div data-panel="integ
 
 import AdminPanel from "../AdminPanel";
 import { ToastProvider } from "../../ui/Toast";
+import { CueDialogProvider } from "../../ui/CueDialogProvider";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const read = (rel: string) => readFileSync(path.join(REPO_ROOT, rel), "utf8");
@@ -46,9 +47,14 @@ const rail = (container: HTMLElement) =>
   within(container.querySelector("nav[aria-label='Secciones']") as HTMLElement);
 
 function mount(initialTab: "members" | "services" | "activity" = "services") {
+  // `CueDialogProvider` because Miembros (`MembersPanel`) keeps its four member
+  // dialogs MOUNTED and drives them with `open={…}` — a CueDialog throws without
+  // the provider whether or not it is open.
   return render(
     <ToastProvider>
-      <AdminPanel role="super-admin" initialTab={initialTab} />
+      <CueDialogProvider>
+        <AdminPanel role="super-admin" initialTab={initialTab} />
+      </CueDialogProvider>
     </ToastProvider>,
   );
 }
@@ -104,6 +110,55 @@ describe("the admin page is the workspace", () => {
     const next = container.querySelector(".brand-admin-workspace") as HTMLElement;
     expect(next).not.toBe(body);
     expect(next.querySelector('[data-panel="activity"]')).not.toBeNull();
+  });
+
+  // ── Who the integrity routes are asked for, and when ──────────────────────
+  //
+  // The three `/api/admin/service-integrity/*` routes belong to Servicios. The
+  // hook lives in `AdminPanel` (one load feeds the panel AND the rail's dot), so
+  // it is `AdminPanel` — not the panel that renders them — that must not ask for
+  // them on behalf of a role that cannot open the tab.
+  const integrityCalls = () =>
+    (globalThis.fetch as unknown as { mock: { calls: [string][] } }).mock.calls
+      .map((c) => c[0])
+      .filter((url) => String(url).includes("/service-integrity/"));
+
+  it("asks for the integrity inventory once, for a role that has Servicios", async () => {
+    mount("services");
+    await waitFor(() => expect(integrityCalls()).toHaveLength(3));
+  });
+
+  it("never asks for it for a role with no Servicios tab", async () => {
+    render(
+      <ToastProvider>
+        <CueDialogProvider>
+          <AdminPanel role="content-editor" initialTab="content" />
+        </CueDialogProvider>
+      </ToastProvider>,
+    );
+    // Content-editors see one tab. Three 403s per load for a dot they are never
+    // shown is what the `enabled` gate exists to prevent. Since R5 Task 3 they
+    // make no request AT ALL from this panel: the member list left with
+    // `MembersPanel`, which never mounts for them — so flush the effects and
+    // assert on `fetch` itself rather than waiting for a call that never comes.
+    await act(async () => { await Promise.resolve(); });
+    expect(integrityCalls()).toEqual([]);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("re-reads the inventory when the admin ENTERS Servicios, and not on arrival", async () => {
+    mount("members");
+    // Not the Servicios tab: the mount's own load, and no second pass.
+    await waitFor(() => expect(integrityCalls()).toHaveLength(3));
+
+    fireEvent.click(rail(document.body).getByRole("button", { name: "Servicios" }));
+    await waitFor(() => expect(integrityCalls()).toHaveLength(6));
+
+    // Leaving and coming back re-reads; staying does not.
+    fireEvent.click(rail(document.body).getByRole("button", { name: "Actividad" }));
+    await waitFor(() => expect(integrityCalls()).toHaveLength(6));
+    fireEvent.click(rail(document.body).getByRole("button", { name: "Servicios" }));
+    await waitFor(() => expect(integrityCalls()).toHaveLength(9));
   });
 
   it("leaves no .brand-admin-shell in brand.css for anyone to re-render", () => {
