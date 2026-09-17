@@ -110,6 +110,15 @@ runner over the pure `evaluateDeployPolicy` in
 **0 ignores the build, 1 continues it.** The step runs *before* `npm install`,
 so that module may use Node builtins only.
 
+**A skipped ref still gets a deployment**, in state `CANCELED`, with a URL that
+serves nothing. So the Function Storage saving is complete — no build output
+means no function bundle and no retained GB — but canceled builds still count
+against the deployments-per-day quota and can still take a concurrent build
+slot. "Feature branches are free now" is the wrong summary; "feature branches
+stop accumulating storage" is the right one. `git.deploymentEnabled` would
+prevent the deployment from being created at all, which is the one thing it
+does better; it still loses on the point below.
+
 **Why, and why not `git.deploymentEnabled`.** Vercel's Function Storage quota
 counts the function bundle of every *retained* deployment, not just the current
 one. On 2026-09-17 this project hit 100% of the 10 GB Hobby allowance with 136
@@ -120,27 +129,43 @@ never read by anybody: every fix round pushes the feature branch *and* merges to
 day. The release flow above verifies on `dev-owt-backstage` and `main`'s only
 required check is the `gates` job — Vercel contributes no status check, so a
 feature-branch deployment gates nothing. `git.deploymentEnabled` cannot express
-this: as an object it is a *blacklist* (unspecified branches default to `true`),
-and as `false` it disables production too.
+this rule: as an object it is a *blacklist* (unspecified branches default to
+`true`), and as `false` it disables production too.
 
-**It fails open.** No `VERCEL_GIT_COMMIT_REF` (a CLI `vercel deploy`, a deploy
-hook, a dashboard redeploy) builds, and so does anything with
+**It fails open where it can.** A deployment that reaches the step with no
+`VERCEL_GIT_COMMIT_REF` builds, and so does anything with
 `VERCEL_ENV=production` whatever ref it names — a belt so that renaming the
-production branch cannot silently stop production from deploying. Wasting one
-build is recoverable; being unable to ship during a rollback is not.
+production branch cannot silently stop production from deploying. A broken
+policy module exits non-zero, which also builds. Wasting one build is
+recoverable; being unable to ship during a rollback is not.
 
-`scripts/__tests__/deployBranchPolicy.test.ts` is the guard, and it asserts the
-wiring as well as the policy — deleting `ignoreCommand` from `vercel.json` fails
-the suite rather than quietly re-enabling every branch.
+**To build a skipped ref on purpose**, redeploy from the dashboard with
+**«Use project's Ignore Build Step» unchecked**. Do not expect the other
+escape hatches to work: a *plain* redeploy re-runs this step and carries the
+original deployment's git metadata, so it is skipped again, and a **deploy
+hook** is bound to a project/repo/branch, so its deployment carries that ref
+and is skipped too. Whether a CLI `vercel deploy` attaches git metadata is
+unverified — do not plan an incident around it.
 
-**Sweeping what has accumulated** (irreversible; it also destroys the previous
-production deployment, so one-step rollback goes with it):
+`scripts/__tests__/deployBranchPolicy.test.ts` is the guard. It asserts the
+wiring as well as the policy, and it *executes the runner as a process* rather
+than grepping it, because the one mistake that matters — the two exit codes
+swapped — cancels every build including `main` while leaving a text-matching
+test green.
+
+**Sweeping what has accumulated:**
 
 ```bash
 npx vercel remove owt-backstage --safe --scope frank-rochas-projects
 ```
 
-`--safe` keeps everything that holds an alias.
+**`--safe` is not optional.** Given a project name without it, `vercel remove`
+deletes **the entire project** — `owt-backstage`, the ID that the Vercel-safety
+section of `CLAUDE.md` exists to protect — rather than its deployments. With
+`--safe` it keeps everything holding an alias and removes the rest. Run it from
+the primary checkout, which has the `.vercel/` link; a worktree does not, and
+the CLI would try to link there. The sweep is irreversible and it also destroys
+the previous production deployment, so one-step rollback goes with it.
 
 ## Re-applying protection
 

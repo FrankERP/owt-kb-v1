@@ -105,12 +105,18 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   Frank's own look at a release.
 - **Only `main`, `preview` and `verify/service-readiness` spend a Vercel build.**
   `vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore-build.mjs` and skips
-  every other ref, so a `claude/*` branch has NO deployment URL — pushing it proves
-  nothing and you still verify on `dev-owt-backstage` by merging into `preview`.
-  Function Storage counts every RETAINED deployment (the embedded Studio makes each
-  ~75 MB), which is how the free tier hit 100% on 2026-09-17 with 136 of them. It
-  fails open: no git ref, or `VERCEL_ENV=production`, always builds.
-  `deployBranchPolicy.test.ts` guards both the policy and the wiring. See `docs/CI.md`.
+  every other ref — the deployment is still CREATED, as `CANCELED` with a URL that
+  serves nothing, so a `claude/*` push proves nothing and you still verify on
+  `dev-owt-backstage` by merging into `preview`. Function Storage counts every
+  RETAINED deployment (the embedded Studio makes each ~75 MB), which is how the free
+  tier hit 100% on 2026-09-17 with 136 of them; a canceled build stores nothing but
+  still counts against the per-day deployment quota. To build a skipped ref ON
+  PURPOSE, redeploy from the dashboard with «Use project's Ignore Build Step»
+  unchecked — a plain redeploy and a deploy hook both carry the branch's ref and are
+  skipped again. It fails open: no git ref, `VERCEL_ENV=production`, or a broken
+  policy module all build. `deployBranchPolicy.test.ts` guards the policy AND the
+  wiring, and runs the script as a process so swapped exit codes cannot pass. See
+  `docs/CI.md`.
 - The stable dev domain is owned **exclusively** by the `preview` branch. Never
   point it at or deploy it directly from a feature/development branch. To update
   dev: merge the intended development branch into `preview`, push `preview`,

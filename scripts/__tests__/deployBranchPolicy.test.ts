@@ -1,9 +1,20 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEPLOYING_REFS, evaluateDeployPolicy } from "../lib/deploy-branch-policy.mjs";
+import { VERIFICATION_REF } from "../lib/deployment-coherence.mjs";
 
 const repoRoot = resolve(__dirname, "../..");
+const runner = resolve(repoRoot, "scripts/vercel-ignore-build.mjs");
+
+/** Exit code of the Ignored Build Step as Vercel would observe it. */
+function runPolicy(env: Record<string, string>): number | null {
+  return spawnSync(process.execPath, [runner], {
+    env: { ...process.env, VERCEL_GIT_COMMIT_REF: "", VERCEL_ENV: "", ...env },
+    encoding: "utf8",
+  }).status;
+}
 
 describe("evaluateDeployPolicy", () => {
   it("builds the three refs that own a deployment target", () => {
@@ -55,18 +66,25 @@ describe("the policy is actually wired", () => {
     expect(cfg.ignoreCommand).toBe("node scripts/vercel-ignore-build.mjs");
   });
 
-  it("the runner it points at exists and imports the policy", () => {
-    const runner = readFileSync(resolve(repoRoot, "scripts/vercel-ignore-build.mjs"), "utf8");
-    expect(runner).toContain("./lib/deploy-branch-policy.mjs");
-    // Vercel inverts the usual contract: 0 ignores the build, 1 continues it.
-    expect(runner).toContain("process.exit(1)");
-    expect(runner).toContain("process.exit(0)");
+  // Asserting that the file CONTAINS both exit codes would pass with the two
+  // branches swapped — and that single inversion cancels every build, `main`
+  // included, discovered only at a release. So the runner is executed as a
+  // process and judged on the code Vercel actually reads. This is also the only
+  // place the runner runs end to end: tsc types `.mjs` loosely and the policy
+  // tests above never leave the module.
+  it("exits 1 (continue) for a deploying ref and 0 (ignore) for a working branch", () => {
+    for (const ref of DEPLOYING_REFS) {
+      expect(runPolicy({ VERCEL_GIT_COMMIT_REF: ref })).toBe(1);
+    }
+    expect(runPolicy({ VERCEL_GIT_COMMIT_REF: "claude/motion-r5-admin" })).toBe(0);
+    expect(runPolicy({})).toBe(1);
+    expect(runPolicy({ VERCEL_GIT_COMMIT_REF: "release", VERCEL_ENV: "production" })).toBe(1);
   });
 
   it("keeps the verification branch deploying, as deployment-coherence expects", () => {
-    const coherence = readFileSync(resolve(repoRoot, "scripts/lib/deployment-coherence.mjs"), "utf8");
-    const declared = /VERIFICATION_REF = "([^"]+)"/.exec(coherence)?.[1];
-    expect(declared).toBeDefined();
-    expect(DEPLOYING_REFS).toContain(declared);
+    // Imported, not regex-scraped out of the source: an unanchored match would
+    // read a stale `OLD_VERIFICATION_REF` during exactly the rename this guard
+    // exists to catch, and pass while the live constant drifted out of the list.
+    expect(DEPLOYING_REFS).toContain(VERIFICATION_REF);
   });
 });

@@ -19,6 +19,10 @@
 // wired as the Ignored Build Step, which skips the build before install —
 // meaning this module may use Node builtins ONLY, never a dependency.
 //
+// A skipped ref still gets a deployment, as CANCELED with a URL that serves
+// nothing. That ends the storage accumulation, which was the problem; it does
+// not make a feature-branch push free of the per-day deployment quota.
+//
 // Three refs deploy, and each is load-bearing:
 //   main                      → production, `owt-backstage.vercel.app`
 //   preview                   → the stable dev alias, `dev-owt-backstage.vercel.app`
@@ -32,10 +36,15 @@ export const DEPLOYING_REFS = Object.freeze(["main", "preview", "verify/service-
  * than exiting, so it can be exhaustively tested.
  *
  * FAILS OPEN on purpose. A missing ref means a source this policy was not
- * written about — a CLI `vercel deploy`, a deploy hook, a redeploy from the
- * dashboard — and refusing those would turn a storage economy into an outage
- * during a rollback. Wasting one build is recoverable; not being able to ship
- * is not.
+ * written about, and refusing those would turn a storage economy into an
+ * outage during a rollback. Wasting one build is recoverable; not being able
+ * to ship is not.
+ *
+ * Do NOT read that as a general escape hatch: a plain dashboard redeploy
+ * re-runs this step and carries the original deployment's ref, and a deploy
+ * hook is bound to a branch, so both are skipped again. Building a skipped ref
+ * on purpose means redeploying with «Use project's Ignore Build Step»
+ * unchecked. `docs/CI.md` says so where someone mid-incident will find it.
  *
  * @returns {{ build: boolean, reason: string }}
  */
