@@ -25,10 +25,11 @@ const IFRAME_ALLOW =
 // nothing, which is the same empty box without a self-embed waiting to happen.
 export default function TutorialPoster({ url, title }: { url?: string | null; title?: string | null }) {
   const [playing, setPlaying] = useState(false);
-  const id = extractYouTubeId(url);
-  const name = title?.trim() || "el tutorial";
 
   if (!url) return null;
+
+  const id = extractYouTubeId(url);
+  const name = title?.trim() || "el tutorial";
 
   if (!id) {
     return (

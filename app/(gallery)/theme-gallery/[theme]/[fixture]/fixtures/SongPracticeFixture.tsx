@@ -15,7 +15,7 @@ import SongHeroPills from "@/app/components/song/SongHeroPills";
 import { TransposeProvider } from "@/app/components/song/TransposeProvider";
 import TutorialPoster from "@/app/components/song/TutorialPoster";
 import { PlayerProvider } from "@/app/context/PlayerContext";
-import { dimRepeatMarkers, LYRIC_EYEBROW } from "@/app/utils/lyricMarkers";
+import { dimRepeatMarkers, LYRIC_EYEBROW_BLOCK } from "@/app/utils/lyricMarkers";
 
 /** 0.1 s of 8 kHz mono PCM silence. Inline because the gallery has no network. */
 const SILENT_WAV =
@@ -78,11 +78,13 @@ export function SongPracticeFixture() {
             </div>
           </div>
 
-          <div className="mx-auto max-w-[62ch]">
-            <p className={LYRIC_EYEBROW}>Coro</p>
-            <p className="font-body text-sm sm:text-base leading-snug">
-              {dimRepeatMarkers("Santo, santo // es el Señor //")}
-            </p>
+          {/* The wrapper class string is the song page's, character for character:
+              the eyebrow's margins only survive because they sit on a `div` rather
+              than a `p` the `prose-p:` variants would zero, and a fixture with a
+              different wrapper would not reproduce that cascade at all. */}
+          <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto">
+            <div className={LYRIC_EYEBROW_BLOCK}>Coro</div>
+            <p>{dimRepeatMarkers("Santo, santo // es el Señor //")}</p>
           </div>
         </div>
       </TransposeProvider>

@@ -17,6 +17,19 @@ import { Children, isValidElement, type ReactNode } from "react";
 
 export const LYRIC_EYEBROW = "font-label text-[11px] uppercase tracking-[0.24em] text-accent/80";
 
+/**
+ * The eyebrow as it appears INSIDE the lyric `prose` wrapper — the token plus its
+ * own vertical rhythm.
+ *
+ * The element that carries this must be a bare `div`, never a `p`: the wrapper
+ * sets `prose-p:!mt-0 prose-p:!mb-0`, which is the same specificity and equally
+ * `!important`, and Tailwind emits variant utilities AFTER plain ones — so a `p`
+ * loses the source-order tie and every section name ships with zero margin.
+ * `prose` styles no bare `div`, so there is no tie to lose. Do not try to
+ * out-specify `prose-p:`; use the right element.
+ */
+export const LYRIC_EYEBROW_BLOCK = `${LYRIC_EYEBROW} !mt-6 !mb-1 first:!mt-0`;
+
 // `text-ink-dim` at FULL alpha, not the 70% modifier the plan sketched: the
 // marker is text, and `lightContrast.test.ts` measured that modified pair at
 // 3.60:1 in dark, under the 4.5 floor. (Naming it here as a class string would

@@ -24,7 +24,7 @@ import SongHeroPills from "@/app/components/song/SongHeroPills";
 import { TransposeProvider } from "@/app/components/song/TransposeProvider";
 import LyricsAutoscroll from "@/app/components/song/LyricsAutoscroll";
 import TutorialPoster from "@/app/components/song/TutorialPoster";
-import { dimRepeatMarkers, LYRIC_EYEBROW } from "@/app/utils/lyricMarkers";
+import { dimRepeatMarkers, LYRIC_EYEBROW_BLOCK } from "@/app/utils/lyricMarkers";
 import { isChordPro } from "@/app/utils/transpose";
 import { countLyricLines } from "@/app/utils/practice";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
@@ -311,7 +311,7 @@ const Page = async ({ params }: Params) => {
           <section id="tutoriales" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
             <SectionHeader>Tutoriales</SectionHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {post.tutorials2!.map((tutorial, i) => (
+              {post.tutorials2!.filter((tutorial) => tutorial.url).map((tutorial, i) => (
                 <div
                   key={i}
                   {...revealProps(i)}
@@ -378,7 +378,7 @@ const Page = async ({ params }: Params) => {
               ) : (
                 <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto">
                   {groupBySections(post.body).map((group, i) => (
-                    <div key={i} className="break-inside-avoid">
+                    <div key={i}>
                       <PortableText value={group} components={myPortableTextComponents} />
                     </div>
                   ))}
@@ -455,17 +455,19 @@ const Page = async ({ params }: Params) => {
 
 export default Page;
 
-const EYEBROW = `${LYRIC_EYEBROW} !mt-6 !mb-1 first:!mt-0 break-after-avoid`;
-
 const myPortableTextComponents: PortableTextComponents = {
   block: {
     // Section names render as an EYEBROW, not a heading: this block is prose, and
     // `prose`'s own heading rules would re-style an <h2> out from under the token.
     // No label is added — these are the headings the lyric sheet already carries.
-    h1: ({ children }) => <p className={EYEBROW}>{children}</p>,
-    h2: ({ children }) => <p className={EYEBROW}>{children}</p>,
-    h3: ({ children }) => <p className={EYEBROW}>{children}</p>,
-    h4: ({ children }) => <p className={EYEBROW}>{children}</p>,
+    //
+    // A `div`, and that is load-bearing: a `p` here loses the source-order tie to
+    // the wrapper's `prose-p:!mt-0 prose-p:!mb-0` and renders with no margins at
+    // all. See LYRIC_EYEBROW_BLOCK.
+    h1: ({ children }) => <div className={LYRIC_EYEBROW_BLOCK}>{children}</div>,
+    h2: ({ children }) => <div className={LYRIC_EYEBROW_BLOCK}>{children}</div>,
+    h3: ({ children }) => <div className={LYRIC_EYEBROW_BLOCK}>{children}</div>,
+    h4: ({ children }) => <div className={LYRIC_EYEBROW_BLOCK}>{children}</div>,
     normal: ({ children }) => <p>{dimRepeatMarkers(children)}</p>,
   },
   types: {
