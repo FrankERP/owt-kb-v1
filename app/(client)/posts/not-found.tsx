@@ -1,10 +1,11 @@
-import Link from "next/link";
+import Button from "../../components/ui/Button";
+import { revealProps } from "../../utils/reveal";
 
 // Shown when a song slug doesn't resolve (posts/[slug] calls notFound()).
 // On-brand, Spanish fallback matching the client error boundary.
 export default function SongNotFound() {
   return (
-    <div className="min-h-[70svh] flex flex-col items-center justify-center gap-6 px-6 text-center">
+    <div className="min-h-[70svh] flex flex-col items-center justify-center gap-6 px-6 text-center" {...revealProps(0)}>
       <svg
         width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
@@ -22,12 +23,9 @@ export default function SongNotFound() {
         </p>
       </div>
 
-      <Link
-        href="/"
-        className="font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-      >
+      <Button variant="primary" size="lg" href="/">
         Ver todas las canciones
-      </Link>
+      </Button>
     </div>
   );
 }

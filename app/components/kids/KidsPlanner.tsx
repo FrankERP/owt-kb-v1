@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { buildPlannerView, type PlannerView } from "@/app/utils/kidsPlannerView";
+import { buildPlannerView, type PlannerView, type SeatView } from "@/app/utils/kidsPlannerView";
 import {
   KIDS_SEAT_LABELS,
   type KidsAssignment,
@@ -12,7 +12,10 @@ import {
   type RotationResult,
   type RotationWarning,
 } from "@/app/utils/kidsTypes";
-import { useTransientValue } from "@/app/utils/useTransientValue";
+import Button from "@/app/components/ui/Button";
+import DateField from "@/app/components/ui/DateField";
+import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
+import { useToast } from "@/app/components/ui/Toast";
 import { KidsRotationBoard, type DragSource } from "./KidsRotationBoard";
 import { KidsSundayCards } from "./KidsSundayCards";
 import { SeatPicker } from "./SeatPicker";
@@ -57,11 +60,6 @@ interface Props {
 
 // ─── Pure helpers (exported for the unit tests) ───────────────────────────────
 
-const MONTHS_ES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
-
 /**
  * The Sundays of a month, via the UTC-noon anchor the generate route and the home
  * page's weekend helpers use: a date pinned to 12:00 UTC has no local-midnight
@@ -88,11 +86,6 @@ export function shiftMonth(month: string, delta: number): string {
   return `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
 }
 
-export function monthLabel(month: string): string {
-  const [year, monthIndex] = month.split("-").map(Number);
-  return `${MONTHS_ES[monthIndex - 1]} ${year}`;
-}
-
 /** Local noon, per the repo's timezone invariant — never a bare `new Date(iso)`. */
 export function formatSunday(iso: string): string {
   const label = new Date(iso.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", {
@@ -110,7 +103,18 @@ export function historyMonthsFor(month: string): string[] {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-type Toast = { kind: "ok" | "error"; text: string } | null;
+/**
+ * The picker is MOUNTED ALWAYS now (controlled `open`), so it needs a seat to
+ * render even before the admin has touched one. Matches `SeatView` field for
+ * field — an empty pool, nothing assigned, nothing to explain.
+ */
+const EMPTY_SEAT_VIEW: SeatView = {
+  date: "",
+  seat: "ensenanza",
+  assignedPairId: null,
+  options: [],
+  unfillableReason: null,
+};
 
 const errText = (err: unknown) => (err instanceof Error ? err.message : "error desconocido");
 
@@ -173,9 +177,20 @@ export default function KidsPlanner({
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyDate, setBusyDate] = useState<string | null>(null);
+  // The picker is MOUNTED ALWAYS and `pickerOpen` drives it, so the seat it is
+  // drawing has to OUTLIVE the close — same shape as the admin panels' dialogs
+  // (R5): `picking` is payload state that is never cleared on dismiss, so the
+  // sheet still names its seat and Sunday all the way through the exit.
   const [picking, setPicking] = useState<{ date: string; seat: KidsSeat } | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  const [toast, showToast] = useTransientValue<Toast>(null, 5000);
+  const { toast } = useToast();
+  // `loadMonth` is memoised on it, so the stable identity `useToast` guarantees
+  // matters: a new function every render would rebuild the callback each time.
+  const showToast = useCallback(
+    ({ kind, text }: { kind: "ok" | "error"; text: string }) => toast({ message: text, tone: kind }),
+    [toast],
+  );
 
   const sundays = useMemo(() => sundaysOfMonth(month), [month]);
 
@@ -286,6 +301,11 @@ export default function KidsPlanner({
 
   const loadMonth = useCallback(
     async (next: string) => {
+      // A month change dismisses the picker: the Sunday it is showing may not
+      // exist in the month about to arrive, and `open` would otherwise go false
+      // with `pickerOpen` still true — the next seat tap would find it already
+      // "open" and skip the enter.
+      setPickerOpen(false);
       setLoadingMonth(true);
       try {
         // The three preceding months ride along on the SAME endpoint the month
@@ -566,72 +586,68 @@ export default function KidsPlanner({
     monthLoad: view.monthLoad,
     noteFor,
     busy,
-    onOpenSeat: (date: string, seat: KidsSeat) => setPicking({ date, seat }),
+    onOpenSeat: (date: string, seat: KidsSeat) => {
+      setPicking({ date, seat });
+      setPickerOpen(true);
+    },
     onTogglePublish: setPublished,
   };
 
-  const pickingView = picking ? seatOf(picking.date, picking.seat) : null;
+  // `seatIndex`, not `seatOf`: a month navigation can leave `picking` pointing at
+  // a Sunday the new month does not have, and `seatOf`'s `!` would hand the sheet
+  // an undefined seat rather than an empty one.
+  const pickingView = picking
+    ? seatIndex.get(`${picking.date}::${picking.seat}`) ?? null
+    : null;
 
   return (
     <div className="space-y-5">
       {/* Month picker + actions */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => loadMonth(shiftMonth(month, -1))}
+          <DateField
+            kind="month"
+            aria-label="Mes"
+            value={month}
             disabled={busy}
-            aria-label="Mes anterior"
-            className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-mono-500 transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
-          >
-            ←
-          </button>
-          <span className="min-w-[160px] text-center font-display text-lg uppercase tracking-wide text-ink">
-            {monthLabel(month)}
-          </span>
-          <button
-            type="button"
-            onClick={() => loadMonth(shiftMonth(month, 1))}
-            disabled={busy}
-            aria-label="Mes siguiente"
-            className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest text-mono-500 transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
-          >
-            →
-          </button>
+            onChange={(e) => {
+              if (e.target.value) void loadMonth(e.target.value);
+            }}
+            onStep={(delta) => void loadMonth(shiftMonth(month, delta))}
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="lg"
             onClick={() => generate("fresh")}
             disabled={busy}
-            className="min-h-[44px] rounded-lg border border-accent/30 px-4 font-label text-xs uppercase tracking-widest text-accent transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
+            busy={generating}
+            busyLabel="Generando…"
           >
-            {generating ? "Generando…" : "Generar mes"}
-          </button>
+            Generar mes
+          </Button>
           {option > 0 && (
-            <button
-              type="button"
-              onClick={() => generate("alternative")}
-              disabled={busy}
-              className="min-h-[44px] rounded-lg border border-mono-300 px-4 font-label text-xs uppercase tracking-widest text-ink-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
-            >
+            <Button variant="ghost" size="lg" onClick={() => generate("alternative")} disabled={busy}>
               Otra opción
-            </button>
+            </Button>
           )}
           {option > 0 && (
             <span className="font-label text-[11px] uppercase tracking-widest text-ink-muted">
               Opción {option}
             </span>
           )}
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            size="lg"
             onClick={saveDrafts}
             disabled={busy || !dirty}
-            className="min-h-[44px] rounded-lg bg-surface-accent-solid px-4 font-label text-xs uppercase tracking-widest text-on-fill transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
+            busy={saving}
+            busyLabel="Guardando…"
           >
-            {saving ? "Guardando…" : "Guardar borradores"}
-          </button>
+            Guardar borradores
+          </Button>
         </div>
       </div>
 
@@ -650,57 +666,45 @@ export default function KidsPlanner({
         </p>
       )}
 
-      {toast && (
-        <p
-          role="status"
-          className={`rounded-xl border px-4 py-2 font-body text-sm ${
-            toast.kind === "ok"
-              ? "border-positive-deep/25 bg-positive-deep/5 text-positive-strong"
-              : "border-negative-strong/25 bg-negative-strong/5 text-negative-fg"
-          }`}
-        >
-          {toast.text}
-        </p>
-      )}
-
       {loadingMonth ? (
-        <div className="space-y-3">
+        <SkeletonGroup label="Cargando el mes" className="space-y-3">
           {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-32 animate-pulse rounded-xl bg-surface-accent-wash motion-reduce:animate-none"
-            />
+            <Skeleton key={i} rounded="lg" className="h-32 w-full" />
           ))}
-        </div>
+        </SkeletonGroup>
       ) : sundays.length === 0 ? (
         <p className="py-10 text-center font-body text-sm text-mono-500">
           Este mes no tiene domingos que planear.
         </p>
       ) : (
-        <>
+        // Keyed on the month so a navigation REPLACES the body rather than
+        // mutating it in place — the entry animation is what tells the admin the
+        // board underneath them is a different month.
+        <div key={month} className="animate-rise space-y-5">
           <KidsRotationBoard
             {...boardProps}
             bench={view.bench}
             onMove={movePair}
           />
           <KidsSundayCards {...boardProps} />
-        </>
+        </div>
       )}
 
-      {picking && pickingView && (
-        <SeatPicker
-          seatView={pickingView}
-          seatLabel={KIDS_SEAT_LABELS[picking.seat]}
-          dateLabel={formatSunday(picking.date)}
-          monthLoad={view.monthLoad}
-          assignedName={pickingView.assignedPairId ? pairName(pickingView.assignedPairId) : null}
-          onChoose={(pairId) => {
-            chooseSeat(picking.date, picking.seat, pairId);
-            setPicking(null);
-          }}
-          onClose={() => setPicking(null)}
-        />
-      )}
+      <SeatPicker
+        open={pickerOpen && pickingView !== null}
+        seatView={pickingView ?? EMPTY_SEAT_VIEW}
+        seatLabel={KIDS_SEAT_LABELS[picking?.seat ?? "ensenanza"]}
+        dateLabel={picking ? formatSunday(picking.date) : "—"}
+        monthLoad={view.monthLoad}
+        assignedName={
+          pickingView?.assignedPairId ? pairName(pickingView.assignedPairId) : null
+        }
+        onChoose={(pairId) => {
+          if (picking) chooseSeat(picking.date, picking.seat, pairId);
+          setPickerOpen(false);
+        }}
+        onClose={() => setPickerOpen(false)}
+      />
     </div>
   );
 }

@@ -34,6 +34,11 @@ a local run — 0 errors, warnings tolerated.
 - **Playwright e2e** (`e2e/service-readiness/`) — needs live Sanity credentials
   and writes to the real dataset. Running it on every push would either leak
   credentials into CI or be flaky against production data.
+- **Theme-gallery visual regression** (`e2e/theme-gallery/`, `npm run test:vr`) — its
+  baselines are captured on darwin and committed per platform, and it needs a built
+  server (`next build && next start`) to shoot against. On `ubuntu-latest` it would
+  compare Linux font rasterisation against macOS PNGs and fail every fixture. See
+  `e2e/theme-gallery/README.md` and ADR-0014.
 - **`next build`** — Vercel already builds every push to both deploying
   branches. Repeating it here would roughly double CI wall time to re-prove
   something a deploy already proves, and a Vercel build failure is already

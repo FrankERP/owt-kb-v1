@@ -193,7 +193,7 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `loadingSkeletons.test.ts` | The four `loading.tsx` files compose `Skeleton` instead of a hand-copied pulse block. |
 | `shellPolish.test.ts` | Spec Part III findings 3 (brand mark loads with `priority`) and 5 (initials avatar contrast in light). |
 | `rawMotionLiterals.test.ts` | Pins `transition-all` (5) and raw `duration-N` (0) counts outside `ui/` at the audited baseline (13/12 pre-M1 → 9/8 after M1 → 7/0 after R1 deleted the tag/author lists → 6 after R5 Task 3's member row → 5 after Task 4's member chip) — lower it in the same commit a phase migrates a route; never raise it to make the guard pass. **Scans `.ts` as well as `.tsx` since R5 Task 5**: a class string is a class string wherever it is written, and `serviceCardModel.ts`'s `CARD_STYLE.container` had been hiding one in a model module for exactly that reason. |
-| `cueDialogMount.test.ts` | Counts every LITERAL `open` attribute on a `<CueDialog` source element — not `open={…}` — across `app/**/*.tsx` excluding `__tests__` and `ui/`; per element, not per caller, so a wrapper mounted by several callers still counts once. Pins the count at 10 (re-measured 2026-09-09, M1 Task 7 — `SongSheet`'s `SetlistPopover` migrated to `open={x}`, down from 11; the original 2026-09-08 measurement of 7 only caught the direct `{x && <CueDialog open>}` shape and missed wrapper components). `AdminPanel`'s and `ServicesPanel`'s local `Modal`s and `KidsPlanner`'s `SeatPicker` remain and migrate in their own route phases. Lower the count in the same commit that migrates a site to `open={…}`; never raise it. |
+| `cueDialogMount.test.ts` | Counts every LITERAL `open` attribute on a `<CueDialog` source element — not `open={…}` — across `app/**/*.tsx` excluding `__tests__` and `ui/`; per element, not per caller, so a wrapper mounted by several callers still counts once. Pins the count at 5 (10 when first re-measured 2026-09-09, M1 Task 7 — `SongSheet`'s `SetlistPopover` migrated to `open={x}`, down from 11; the original 2026-09-08 measurement of 7 only caught the direct `{x && <CueDialog open>}` shape and missed wrapper components; then 10 → 9 → 8 → 6 across R5 Tasks 3/4/5, and 6 → 5 in R6 Task 1 when `KidsPlanner`'s `SeatPicker` became controlled). The remaining sites are `AdminPanel`'s and `ServicesPanel`'s local `Modal`s and their siblings, and they migrate in their own route phases. Lower the count in the same commit that migrates a site to `open={…}`; never raise it. |
 | `inputFontSize.test.ts` | F3: no `<input>`/`<textarea>`/`<select>` under `app/**` carries a sub-16 px text utility that applies at PHONE width — WebKit zooms into any smaller focused control and never zooms back. The house pattern is `text-[16px] sm:text-<size>`; a breakpoint variant anywhere in the chain is fine, `focus:`/`dark:`/`hover:` are NOT (focus is when the zoom fires). `admin/` and `kids/` are excluded BY PATH, not by a baseline count — there is no number to ratchet, so a new violation cannot be absorbed. className expressions are read whole (brace-aware) with bare identifiers resolved one level to a `const` string; a size inside an object map (`ui/Select`/`ui/DateField`'s `SIZE`) is compliant today but outside the scan. Never fix this by putting `maximum-scale=1` on the viewport. |
 | `dialogSemantics.test.ts` | Every file that draws a dismissable full-bleed scrim (`bg-scrim` + `inset-0` + `onClick`) carries `role="dialog"`/`aria-modal`/an accessible name/focus management, or is named in an exemption list with a reason. Floor is 1 (`CueDialog` itself) as of M1 Task 1 — `BottomNav`'s hand-rolled scrim was replaced by a `CueDialog` sheet, so its `NOT_A_DIALOG` entry was deleted along with the overlay it exempted; the exemption list is now empty. A stale exemption (naming a file the scan no longer finds) fails its own check. |
 | `labelBudget.test.ts` | Spec §18 (decision N): one eyebrow per surface. Pins seven named labels at their audited counts, by equality — a phase that removes one lowers its number in the same commit. `>Cue<` (0, M0b-1), `>Servicio<` (0, R1 — `DayCard`'s day · date header carries it now), "Índice musical" (0, R1 — `SongSearchList` removed), "títulos" (0, R1 — the home library count removed), "Repertorio" (0, R1 — `PostComponent`'s song-card eyebrow removed), "Backstage operations" (0, R5 Task 1 — `/admin`'s eyebrow removed) and "Acceso autorizado" (0, R5 Task 1 — the status pill removed). All seven are at 0; the file stays as the ratchet a new eyebrow has to argue with. |
@@ -204,6 +204,10 @@ Assert final state, never timing. Wrap in `<MotionProvider>`.
 | `adminDynamic.test.ts` | R5 Task 6: a source scan proving each of `ActivityPanel`, `ContentPanel`, `AvailabilityPanel`, `ProposalsPanel`, `MembersPanel` (in `AdminPanel.tsx`) and `MonthGenerator` (in `ServicesPanel.tsx`) is imported through `next/dynamic` in exactly the file allowed to gate it, and statically NOWHERE else under `app/**` — one static import elsewhere pulls the chunk back into the eager graph and silently undoes the −207.8 kB split. |
 | `panelBoundary.test.tsx` | A failed panel chunk stays inside its own column: a throwing child renders «No se pudo cargar esta sección» + «Reintentar» instead of reaching `app/(client)/error.tsx`, and an `onRetry` recovers in place. The rule it encodes: App Router `next/dynamic` renders `loading` only as a Suspense fallback and never passes `error`/`retry`, so the recovery belongs to an error boundary, never to the skeleton. |
 | `navbarHeightSync.test.ts` | R4 Task 6 (spec §5.3): `Navbar` and `NavbarSkeleton` must publish the top bar's height from the ONE spelling, `NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts`, `"h-20 lg:h-24"`), so a `loading.tsx` never hard-codes a height that can drift from the real navbar. Reads both sources and asserts each imports the constant from `@/app/utils/navbarHeight` and neither contains the literal string. Scope is exactly those two files — `SectionNav`'s sticky offset, `LibraryIndex` and the song page's `scroll-mt-*` still hard-code their own values and the guard does not see them. |
+| `tailwindMotion.test.ts` | R6 Task 2: the `pop` keyframe exists in `tailwind.config.ts` with its three frames (`scale(0.92)` → `scale(1.04)` at 60% → `transform: none`) and `animation.pop` spells `pop var(--motion-slow) var(--ease-out) both`. `animate-pop` is the only overshoot outside `ui/**`, where `motion` may not be imported, so the keyframe IS the primitive and a silent edit to it changes two product surfaces at once. |
+| `lyricMarkers.test.tsx` | R6 Task 6 (spec §19.5, decision P): `dimRepeatMarkers`'s behaviour, plus three SOURCE facts a DOM test cannot see, because each is a cascade tie an emission order decides — the eyebrow element is a bare `div` and never a `p` (which would lose the `!important` tie to the prose wrapper's `prose-p:!mt-0`), `LYRIC_EYEBROW_BLOCK` carries no `first:` variant (which matched every group wrapper and zeroed the whole rhythm), and the song page's prose wrapper and the gallery fixture's are byte-identical, so the fixture renders the real cascade. |
+| `vrConfig.test.ts` | R6 Task 8: `playwright.vr.config.ts`'s snapshot contract — the `{projectName}/{platform}` path template (a linux run must have NO baselines rather than compare against macOS rasterisation), `maxDiffPixelRatio: 0.01`, `animations: "disabled"`, and the `desktop`/`phone` project pair. Raising the diff ratio to make a failing baseline pass is the forbidden move; recapture instead. |
+| `themeGallery.test.ts` | The gallery's seven-fixture tuple and, for every fixture, HERMETICITY — no `useSession`, no `next-auth`, no `fetch`, no Sanity client, no env read — because the route is public and prerendered (ADR-0017). Since R6 it also pins `GalleryMotion`'s `#motion` branch and that the `nav` fixture hosts `BottomNavBar`, the presentational half, rather than `BottomNav`, which reads the session. A gallery fixture hosts a presentational half; the song fixture's tutorial poster is the single documented exception, and the VR spec stubs its image route. |
 
 ## Bundle
 
@@ -251,6 +255,8 @@ Before was measured on the primary checkout at the merge-base commit
 | **`main 856f3e87`, R5 release-day rebuild** (git-archive cold build, same environment as the R4 rows. `measure-bundle.mjs` now EXCLUDES the `server/chunks/ssr` entries newer builds list in the client reference manifest — the +27 kB-per-route jump an earlier reading showed was that artefact, not code) | 172.5 kB | 122.8 kB | 358.6 kB | 113.0 kB (`/posts/[slug]`) · 125.6 kB (`/schedule`) · 116.9 kB (`/biblioteca`) · 123.8 kB (`/me`) |
 | **R5 Task 6 tip `efa3af61`** (the flatten, the rail, the members menu, the board, the panel polish, and the load-on-demand split) | 172.5 kB | 122.9 kB (+0.1) | **150.2 kB (−208.4)** | 112.7 kB (`/posts/[slug]`, −0.3) · 125.3 kB (`/schedule`, −0.3) · 116.7 kB (`/biblioteca`, −0.2) · 123.7 kB (`/me`, −0.1) |
 | **R5 final tip `07ed88a9`** (the `Select` popover and its two `Menu` fix rounds on top of Task 6 — primitives, not chunk boundaries) | 172.5 kB | 123.5 kB (+0.7) | **150.8 kB (−207.8)** | 113.3 kB (`/posts/[slug]`, +0.3) · 125.9 kB (`/schedule`, +0.3) · 118.3 kB (`/biblioteca`, **+1.4** — the popover plus the portalled `Menu` on the filters) · 124.3 kB (`/me`, +0.5) |
+| **`main 6e69fed0`, R6 release-day rebuild** (git-archive cold build, same environment as the R5 rows; `static/chunks/*` only) | 172.5 kB | 123.5 kB | 151.2 kB | 113.3 kB (`/posts/[slug]`) · 126.0 kB (`/schedule`) · 118.3 kB (`/biblioteca`) · 124.4 kB (`/me`) |
+| **R6 tip `66cb7192`** (kids, auth, the fallback pages, the lyric block and tutorial facade, the `BottomNavBar` split and the VR gallery. Measured at `ada76ed8`; `66cb7192` on top of it moves a comment, a `Promise.race` and a README — no chunk changes) | 172.0 kB (−0.5) | 122.8 kB (−0.7) | 150.5 kB (−0.7) | 113.1 kB (`/posts/[slug]`, −0.2) · 125.2 kB (`/schedule`, −0.8) · 117.5 kB (`/biblioteca`, −0.8) · 123.6 kB (`/me`, −0.8) |
 
 `/admin`'s fall is the whole point of Task 6 and **not** a like-for-like row: from that
 build forward the number measures Servicios + the shell, because the five secondary tabs,
@@ -512,7 +518,13 @@ the impersonation banner, the audio transport, and the song sheet's head.
   alone, with its own inset padding zeroed under `html.has-bottom-nav
   .audio-player`; the **song FAB** (`EditSongButton`) offsets by `calc(1.5rem +
   var(--bottom-nav-h, 0px))`. A new fixed-bottom element joins that guard's list
-  in the same commit that adds it.
+  in the same commit that adds it. Since R6 the bar is **two components**:
+  `BottomNav` reads the session and the pathname and owns the measurement
+  effect, and the presentational `BottomNavBar`
+  (`app/components/BottomNavBar.tsx`) draws the `<nav>` and the «Más» sheet from
+  props alone, which is what lets the theme gallery's `nav` fixture host it — a
+  public, prerendered route cannot call `useSession` (ADR-0017). The rendered
+  DOM is unchanged; `BottomNav` forwards its `barRef` through `barRef`.
 - **`NavLinks`** (`app/components/NavLinks.tsx`) — the desktop link row, rendered
   inside the navbar's centred title block at `lg` and above; the page title that
   block otherwise shows is `lg:hidden` there (the page's own heading carries it
@@ -1471,3 +1483,153 @@ portal block.
 - **Release:** merged to `main` as `a2a7b9c3` (PR #80, 2026-09-17 13:58 CST); production alias
   `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview
   last verified at `26a8f749`.
+
+### Kids, auth, fallbacks and the VR gallery (R6)
+
+Spec §5.9–§5.11 plus §19.5's two song-page rows and decision P. The surfaces that had never
+adopted a primitive do it here, and the theme gallery stops being a place to look and becomes
+a baseline that fails.
+
+**`animate-pop` — the "this one CHANGED" gesture.** A new keyframe beside `rise`/`fade-in`/
+`scale-in` in `tailwind.config.ts`: `scale(0.92)` → `scale(1.04)` at 60% → `transform: none`,
+opacity 0 → 1, on `--motion-slow` with `--ease-out`, `both`. It ends on `none` for the same
+containing-block reason `rise` and `scale-in` do (ADR-0031). It is CSS, not `SPRINGS.pop`,
+because both consumers are outside `ui/**` where `motion` may not be imported — a 320 ms CSS
+overshoot reads the same at pill and chip size. Two consumers: the «Te toca» pill on `/kids`,
+and a Kids board/card chip that just landed. `tailwindMotion.test.ts` pins the frames and the
+animation string.
+
+**The shared valid-drop-target pattern (Kids board).** Drag stays HTML5 (ADR-0012); the
+motion is three states on the same cell, and any future drop surface copies them rather than
+inventing a fourth. While a drag is live and THIS cell can take it: `border-accent/40
+border-dashed bg-surface-accent-faint`. While it is also hovered: `border-accent bg-accent/10`,
+solid. Everything else keeps its resting border. The source chip lifts with `opacity-30
+scale-95` (`PairChip dragging`). There is no landing beam — a beam on a 20 px chip is noise.
+
+**A landing pops, and it is armed by the CHANGE.** `PairChip` takes an optional `landed`, which
+adds `animate-pop`; `KidsRotationBoard` clears it on the wrapper's `animationend`. The arming
+is ONE effect comparing a per-cell snapshot of `assignedPairId` against the previous render's,
+and it fires only when `key in prev && prev[key] !== next && next !== null`. That shape is the
+whole rule and each clause paid for itself in review: arming on the cell CLICK instead popped
+the chip already sitting in the seat the moment a picker opened, and popped it again when the
+pick was cancelled; and without `key in prev` a month navigation — which swaps in an entirely
+new set of cell keys — read every pre-filled seat as a landing and fireworked the board. One
+path covers drag and picker identically; mount and a month load SEED the snapshot and arm
+nothing. On the phone cards the equivalent is quieter: a seat whose name changed crossfades
+through a `key={assignedId}` span on `animate-fade-in`, because a card seat is a line of text,
+not a chip that travelled.
+
+**Kids primitives.** The planner's toolbar is `Button`s (`Generar mes` · `Otra opción` ·
+`Guardar borradores`, with `busy`/`busyLabel`) and a `DateField kind="month"` with `onStep`;
+its month body is a `key={month}` `animate-rise` remount; loading is a `SkeletonGroup` of
+`Skeleton`s. `SeatPicker` is CONTROLLED — mounted always, opened by `open`, with the last
+`picking` payload retained so the sheet still has content while it exits, and `loadMonth`
+closes it (`cueDialogMount` 6 → 5). `PairRoster`'s rows reflow through `AnimatedList` and its
+retire confirm rises inside `Presence` — retiring is reversible and says so, so it needs no
+`CueDialog` (decision O's confirm is for taking access away). The three inline
+`useTransientValue` flashes across `KidsPlanner`, `PairRoster` and `KidsAvailabilityPanel` are
+`useToast` calls now; the «Cambios sin guardar» banners stay inline, because they are STATE,
+not a flash. One toast is held: the availability panel's 409 conflict persists until something
+replaces it, and it keeps its own id so the next save and unmount can dismiss it — `Toast`
+auto-replaces only a toast carrying the same message text, so without the id a resolved
+conflict sat beside the success toast that resolved it. **Rows stayed rows:** seat rows,
+picker options, the «Quitar» row and the board cells are still semantic `<button>`s with
+`transition-colors` and their 44/56 px floors. `Button` has no row variant and a full-width
+multi-line list row is not a button.
+
+**`DateField disabled` reaches the arrows.** A composite field is ONE control. `disabled`
+now forwards to both stepper buttons as well as the native input — the kids month arrows were
+live mid-generate and mid-save, so a press started a second month load underneath the first.
+
+**Sign-in and the three fallback pages.** `/auth/signin` staggers through `revealProps`:
+lockup 0, panel 3 (= 120 ms), Google 4, email 5, password 6, submit 7 — the
+`.brand-stage-hero::before` beam is untouched and the panel arrives behind it. The error is
+inside `Presence variant="rise"`, so the live region is ABSENT until there is something to
+announce rather than an empty landmark a screen reader walks past every visit. Submit is
+`Button variant="primary" size="lg" busy` with «Entrando…»; the inputs keep
+`text-[16px] sm:text-sm`. `auth/not-a-member`, `app/(client)/not-found.tsx`,
+`posts/not-found.tsx` and `app/(client)/error.tsx` each take `revealProps(0)` and a house
+`Button` — the four pages a member only ever meets on a bad day were the last hand-rolled
+link-as-button in the app.
+
+**The lyric block (spec §19.5, decision P).** `app/utils/lyricMarkers.tsx` is NEUTRAL — no
+`"use client"`, no hooks — so the song page, a Server Component, may CALL it (ADR-0028).
+`LYRIC_EYEBROW` restyles the section headings a lyric sheet ALREADY carries (and
+`ChordChart`'s `# ` labels) as rail eyebrows; it never adds a label, because decision N's
+budget would be spent here in one page. `dimRepeatMarkers` walks strings and wraps `//` in a
+`text-ink-dim` span with `aria-label="repetir"` — full alpha, not the `/70` the plan sketched,
+which measures 3.60:1 in dark and fails `lightContrast`'s 4.5 floor on text. Two cascade
+rules that only a real Tailwind build can see, both found in review:
+- **The eyebrow element is a `<div>`, never a `<p>`.** The lyric prose wrapper sets
+  `prose-p:!mt-0 prose-p:!mb-0` — same specificity, equally `!important` — and Tailwind emits
+  variant utilities AFTER plain ones, so a `p` loses the source-order tie and every section
+  name ships flush. `prose` styles no bare `div`, so there is no tie to lose. Do not try to
+  out-specify `prose-p:`.
+- **`LYRIC_EYEBROW_BLOCK` carries no `first:`.** `first:!mt-0` compiles to `:first-child`, and
+  `groupBySections` starts EVERY group with its heading inside that group's own wrapper — so
+  every eyebrow in the document is a first child and the variant zeroed the whole rhythm it
+  was meant to trim once. An eyebrow cannot know whether it is the page's first; only the page
+  can. The page's prose wrapper (and the gallery fixture's, byte-identically) carries
+  `[&>div:first-child>div:first-child]:!mt-0`.
+`lyricMarkers.test.tsx` guards the behaviour AND those two shapes in the source, plus the
+wrapper's byte-identity between page and fixture.
+
+**Tutorial embeds load on press.** `app/components/song/TutorialPoster.tsx` replaces three
+iframes that used to boot on every song page load with YouTube's own still
+(`i.ytimg.com/vi/<id>/hqdefault.jpg` through `next/image`, allow-listed in `next.config.mjs`)
+under a centred `Button` «Reproducir»; the player mounts inside `Presence variant="fade"` on
+press. A url with no extractable id (a Vimeo link, a bare embed URL) renders today's raw
+iframe unchanged — the poster is an enhancement for YouTube, never a gate. A row with NO url
+renders nothing; the Sanity `tutorial` object requires neither field, and the old code put an
+iframe with no `src` on the page.
+
+**`BottomNav` is two components now.** See the tab-bar entry above: `BottomNav` keeps the
+session, the pathname and the measurement effect; `BottomNavBar` (`app/components/BottomNavBar.tsx`)
+draws the `<nav>` and the «Más» sheet from props alone. The rendered DOM is unchanged. The
+split exists so the gallery can host the bar — a public, prerendered route cannot call
+`useSession` (ADR-0017) — and it is the general shape for any future fixture: **a gallery
+fixture hosts the PRESENTATIONAL half, never the component that reads a session.**
+
+**The theme gallery is a visual-regression baseline.** Seven fixtures now (`swatches` ·
+`dialog` · `planner` · `kids-planner` · `controls` · `song` · `nav`, 14 prerendered pages) and
+two Playwright specs under `e2e/theme-gallery/`, run by `npm run test:vr`
+(`playwright test -c playwright.vr.config.ts`), opt-in through
+`THEME_GALLERY_VR_ENABLED`/`THEME_GALLERY_VR_BASE_URL` and **never in CI** (ADR-0014) — the
+baselines are macOS PNGs and a linux run would report every fixture as a regression.
+- `playwright.vr.config.ts`: `snapshotPathTemplate: "{testDir}/__screenshots__/{projectName}/{platform}/{arg}{ext}"`
+  (the `{platform}` segment is what makes a linux run simply have no baselines rather than
+  fail), `maxDiffPixelRatio: 0.01`, `animations: "disabled"`, `caret: "hide"`, and two
+  projects — `desktop` (1280×900) and `phone` (iPhone 13 VIEWPORT and DPR, forced to
+  chromium: a second engine's rasterisation would join the baselines for no extra signal).
+  `vrConfig.test.ts` pins all of it. **Raising `maxDiffPixelRatio` to make a failing baseline
+  pass is the forbidden move — recapture instead.**
+- `gallery.spec.ts` captures every theme × fixture on both projects (`fullPage` for
+  `swatches`/`controls`/`song`/`kids-planner`/`nav`, viewport for `dialog`/`planner`) and
+  asserts the README's three paint facts. It probes the planner through the PORTALLED overlay
+  (`[role="dialog"][aria-label="Cuadrícula del mes en pantalla completa"]` plus
+  `data-planner-fullscreen-activated` — `data-planner-fullscreen` is on the toggle) and the
+  dialog at TWO points, because `CueDialog` is `items-start` below `sm`. It fulfils
+  `/_next/image` and `i.ytimg.com` in `beforeEach`: the song fixture's tutorial poster is the
+  one non-hermetic thing in the gallery, and the URL lives inside the production component.
+  28 PNGs, 8.5 MB, committed under `__screenshots__/{desktop,phone}/darwin/`.
+- `motion-on.spec.ts` is the exception that proves the baselines. `GalleryMotion` strips
+  `data-motion` in a LAYOUT effect when the hash is `#motion` — before the children's enter
+  animations paint, which a passive `useEffect` would miss — and leaves `skipAnimations`
+  false. The spec loads `/theme-gallery/dark/dialog#motion`, attaches t=0 and t=end frames
+  (attachments, never compared) and ASSERTS what a picture cannot: that no ancestor of
+  `[role="dialog"]` has a computed `transform` other than `none`, and that the panel's rect
+  sits inside the viewport. That is ADR-0031's trap — a transformed ancestor becomes the
+  containing block for every `position: fixed` descendant — caught in a real browser, mid
+  animation, which is the one place it is visible. The end-state wait is a `Promise.race`
+  against 400 ms so an animation that never settles cannot hang the spec. `#motion` is
+  one-shot per HARD load: the hash is read on mount.
+- `themeGallery.test.ts` still asserts every fixture is hermetic (no `useSession`, no
+  `next-auth`, no `fetch`, no Sanity, no env) — `NavFixture` included — plus the seven-fixture
+  tuple, the `#motion` source and that `nav` hosts `BottomNavBar` rather than `BottomNav`.
+
+**Deferred on purpose:** the kids `loading.tsx` files (the admin page is one round trip and the
+member page is fast; `loadingSkeletons`'s list is untouched), planner-cell motion (M7b), a
+`kids` hover state in VR (a still frame cannot show hover), and R4's "a history row press opens
+the day sheet" — there is still no day sheet.
+
+**Release:** <pending>

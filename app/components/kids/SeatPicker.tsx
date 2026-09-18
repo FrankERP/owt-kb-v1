@@ -20,6 +20,7 @@ import { blockLabel, loadLabel, overlapLabel } from "./kidsPlannerLabels";
  * pair for this seat — which is what "le toca" marks. No fact is re-derived here.
  */
 export function SeatPicker({
+  open,
   seatView,
   seatLabel,
   dateLabel,
@@ -28,6 +29,8 @@ export function SeatPicker({
   onChoose,
   onClose,
 }: {
+  /** Controlled: the picker stays MOUNTED and this drives its enter/exit. */
+  open: boolean;
   seatView: SeatView;
   seatLabel: string;
   dateLabel: string;
@@ -41,7 +44,7 @@ export function SeatPicker({
 
   return (
     <CueDialog
-      open
+      open={open}
       mode="sheet"
       size="sm"
       label={`${seatLabel} — ${dateLabel}`}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   KIDS_ROOMS,
   KIDS_SEATS,
@@ -12,6 +12,7 @@ import type { BenchEntry, RoomBench } from "@/app/utils/kidsPlannerView";
 import type { KidsBoardProps } from "./kidsBoardProps";
 import { PairChip } from "./PairChip";
 import { absenceLabel, blockLabel, canPlace, monthSeatsLabel } from "./kidsPlannerLabels";
+import Button from "@/app/components/ui/Button";
 
 /** Where a drag started: a bench chip (`from === null`) or a filled cell. */
 export interface DragSource {
@@ -68,8 +69,48 @@ export function KidsRotationBoard({
 }) {
   const [drag, setDrag] = useState<DragSource | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  /**
+   * The cell whose chip should pop — armed on the CHANGE, never on the intent to
+   * change. Cleared on the wrapper's `animationend`, which bubbles up from the
+   * chip's own animated span.
+   */
+  const [landed, setLanded] = useState<string | null>(null);
+  /**
+   * The previous render's `assignedPairId` per cell, so the effect below can see
+   * a change rather than an open. `null` until the first effect run seeds it —
+   * a page load is not a landing, so nothing arms on mount.
+   */
+  const prevAssigned = useRef<Record<string, string | null> | null>(null);
 
   const cellKey = (date: string, seat: KidsSeat) => `${date}::${seat}`;
+
+  // ONE arming path for `landed`, covering drag-drop and the picker identically:
+  // both end the same way, with a cell's `assignedPairId` becoming a NEW
+  // non-null value. Opening a picker on an already-assigned seat and cancelling,
+  // or picking the same pair back, changes nothing here, so nothing pops.
+  //
+  // A key ABSENT from the previous snapshot is SEEDED, never armed — that is
+  // what keeps a month navigation quiet. `sundays`/`seatOf` swap in a whole new
+  // set of cell keys on every load, so without this guard `prev[key]` reads
+  // `undefined` for every cell in the freshly loaded month and each pre-filled
+  // seat reads as "just landed". The snapshot is replaced wholesale each run,
+  // so a month that scrolled out of view carries no stale keys forward.
+  useEffect(() => {
+    const current: Record<string, string | null> = {};
+    for (const sunday of sundays) {
+      for (const seat of KIDS_SEATS) {
+        current[cellKey(sunday.date, seat)] = seatOf(sunday.date, seat).assignedPairId ?? null;
+      }
+    }
+    const prev = prevAssigned.current;
+    if (prev !== null) {
+      for (const key of Object.keys(current)) {
+        const next = current[key];
+        if (key in prev && prev[key] !== next && next !== null) setLanded(key);
+      }
+    }
+    prevAssigned.current = current;
+  }, [sundays, seatOf]);
 
   const allowed = (date: string, seat: KidsSeat): boolean =>
     drag !== null && canPlace(seatOf(date, seat), drag.pairId, drag.from).ok;
@@ -142,8 +183,9 @@ export function KidsRotationBoard({
                       >
                         {sunday.published ? "Publicado" : "Borrador"}
                       </span>
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => onTogglePublish(sunday.date, !sunday.published)}
                         disabled={busy || (!sunday.published && sunday.filled === 0)}
                         title={
@@ -151,10 +193,11 @@ export function KidsRotationBoard({
                             ? "Asigna al menos una pareja antes de publicar"
                             : undefined
                         }
-                        className="min-h-[36px] rounded-lg border border-accent/25 px-2 font-label text-[11px] uppercase tracking-widest text-accent transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
+                        busy={sunday.publishing}
+                        busyLabel="…"
                       >
-                        {sunday.publishing ? "…" : sunday.published ? "Despublicar" : "Publicar"}
-                      </button>
+                        {sunday.published ? "Despublicar" : "Publicar"}
+                      </Button>
                     </div>
                   </div>
                 </th>
@@ -192,28 +235,42 @@ export function KidsRotationBoard({
                           isOver && dropOk
                             ? "border-accent bg-accent/10"
                             : drag !== null && dropOk
-                              ? "border-accent/40 border-dashed bg-surface-accent-faint"
+                              ? // The shared valid-drop-target pattern (MOTION.md → Kids): dashed
+                                // accent/40 while a drag is live and this cell can take it; solid
+                                // + bg-accent/10 while hovered.
+                                "border-accent/40 border-dashed bg-surface-accent-faint"
                               : "border-edge-accent-subtle bg-surface-accent-faint hover:border-accent/40"
                         }`}
                       >
                         {assignedId ? (
-                          <PairChip
-                            name={option?.name ?? pairName(assignedId)}
-                            weeksSinceLabel={option?.weeksSinceLabel}
-                            overlap={option?.worshipOverlap ?? []}
-                            note={option ? null : "Fuera de la rotación"}
-                            draggable
-                            dragging={
-                              drag?.pairId === assignedId &&
-                              drag.from?.date === sunday.date &&
-                              drag.from?.seat === seat
+                          <span
+                            key={assignedId}
+                            className="block animate-fade-in"
+                            onAnimationEnd={() =>
+                              setLanded((current) =>
+                                current === cellKey(sunday.date, seat) ? null : current,
+                              )
                             }
-                            onDragStart={startDrag({
-                              pairId: assignedId,
-                              from: { date: sunday.date, seat },
-                            })}
-                            onDragEnd={endDrag}
-                          />
+                          >
+                            <PairChip
+                              name={option?.name ?? pairName(assignedId)}
+                              weeksSinceLabel={option?.weeksSinceLabel}
+                              overlap={option?.worshipOverlap ?? []}
+                              note={option ? null : "Fuera de la rotación"}
+                              draggable
+                              dragging={
+                                drag?.pairId === assignedId &&
+                                drag.from?.date === sunday.date &&
+                                drag.from?.seat === seat
+                              }
+                              landed={landed === cellKey(sunday.date, seat)}
+                              onDragStart={startDrag({
+                                pairId: assignedId,
+                                from: { date: sunday.date, seat },
+                              })}
+                              onDragEnd={endDrag}
+                            />
+                          </span>
                         ) : (
                           <span className="font-label text-[11px] uppercase tracking-widest text-ink-dim">
                             + Asignar

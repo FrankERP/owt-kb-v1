@@ -46,12 +46,16 @@ export default function DateField({
         </label>
       )}
       {onStep ? (
+        // `disabled` reaches the ARROWS too, not just the input. The field is one
+        // composite control and a stepper is the input's other half: a caller that
+        // disables it while a month is loading (KidsPlanner does) would otherwise
+        // leave two live buttons that page the month out from under the request.
         <div className="inline-flex items-center gap-1">
-          <Button variant="icon" aria-label="Mes anterior" onClick={() => onStep(-1)}>
+          <Button variant="icon" aria-label="Mes anterior" disabled={input.disabled} onClick={() => onStep(-1)}>
             <span aria-hidden>‹</span>
           </Button>
           {field}
-          <Button variant="icon" aria-label="Mes siguiente" onClick={() => onStep(1)}>
+          <Button variant="icon" aria-label="Mes siguiente" disabled={input.disabled} onClick={() => onStep(1)}>
             <span aria-hidden>›</span>
           </Button>
         </div>

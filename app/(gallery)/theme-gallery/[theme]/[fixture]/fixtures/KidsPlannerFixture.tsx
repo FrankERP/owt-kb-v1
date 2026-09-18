@@ -193,6 +193,7 @@ export function KidsPlannerFixture() {
 
       {picking && pickingView && (
         <SeatPicker
+          open={true}
           seatView={pickingView}
           seatLabel={KIDS_SEAT_LABELS[picking.seat]}
           dateLabel={label(picking.date)}
