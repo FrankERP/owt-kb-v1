@@ -285,4 +285,17 @@ describe("theme gallery — the fixtures are hermetic", () => {
     expect(codes[1]).toContain("CueDialogProvider");
     expect(codes[1]).not.toMatch(/utils\/Provider/);
   });
+
+  // The gallery is a BASELINE surface, so `data-motion="off"` is the default and every
+  // capture is a final frame. `#motion` is the single documented escape hatch: one page,
+  // opted in by URL, so `motion-on.spec.ts` can watch the dialog's enter actually run and
+  // prove no ancestor is transformed while it does (the containing-block trap). If this
+  // branch disappears, that spec silently captures two identical final frames and passes.
+  it("GalleryMotion keeps animations only under the #motion hash", () => {
+    const src = code(`${GALLERY}/GalleryMotion.tsx`);
+    expect(src).toMatch(/location\.hash === "#motion"/);
+    expect(src).toMatch(/removeAttribute\("data-motion"\)/);
+    // The removal must beat the first paint, or the t=0 capture is already the end state.
+    expect(src).toContain("useLayoutEffect");
+  });
 });
