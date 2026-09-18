@@ -48,21 +48,30 @@ publishing a service computed over data nobody proved.
 | `ServiceReadinessCard.tsx` | component | One service card. |
 | `ReadinessBadge.tsx` | component | One icon + text + tone chip. |
 | `ServiceIssueList.tsx` | component | Blocking-issue lines, truncated with a count. |
-| `ServicePrimaryAction.tsx` | component | The single primary-action button. |
-| `IntegrityQueuePanel.tsx` | component | The standalone "Integridad de datos" panel. |
+| `ServicePrimaryAction.tsx` | component | The single primary-action button — a house `Button` still emitting `data-action-kind`/`-rule`/`-route`; its tone is the variant. |
+| `IntegrityQueuePanel.tsx` | component | The "Integridad de datos" panel — renders the queue `useIntegrityQueue` hands it (R5). It is the ONLY place that state is written out: `ServicesPanel` used to repeat the title and summary under its own heading, and the rail's dot says it a second time already. |
+| `useIntegrityQueue.ts` | hook | The ONE loader for the three service-integrity routes; `AdminPanel` calls it once and shares the queue with the rail's dot. `enabled` gates it on the role having a Servicios tab. |
 
 Mounting hierarchy:
 
 ```
 AdminPanel.tsx  (services tab)
 └─ ServiceHandoffProvider
-   ├─ IntegrityQueuePanel        ← fetches the three service-integrity routes itself
+   ├─ IntegrityQueuePanel        ← renders the queue; `useIntegrityQueue` (in AdminPanel) does the fetching
    └─ ServicesPanel
       └─ ServiceReadinessCard    ← one per visible card
          ├─ ReadinessBadge       (publication badge)
          ├─ ServiceIssueList
          └─ ServicePrimaryAction
 ```
+
+**When the inventory is read.** Once per `/admin` mount, and again each time the admin
+ENTERS Servicios from another tab (never twice on arrival — the mount's own load already
+ran). It is not polled and it does not follow a write: «Recargar» in the panel header is
+the manual refresh, and it re-runs all three domains. A role with no Servicios tab
+(`content-editor`) never calls the routes at all — the hook is `enabled` on the same
+predicate that builds the rail, so the three 403s it would otherwise take on every load
+never happen.
 
 `AdminPanel`'s `proposals` tab is wrapped in the *same* provider, which is how a card's
 "Revisar propuesta" can switch tabs and hand a target to a sibling panel.

@@ -209,7 +209,7 @@ const Page = async ({ params }: Params) => {
 
   return (
     <div>
-      <Navbar title={post?.title} author={post?.author} tags schedule />
+      <Navbar title={post?.title} author={post?.author} />
 
       {/* ONE transposition seat for the whole page (R4 ruling 2): the hero's key
           picker and ChordChart's ± pair write the same value, so the key shown

@@ -915,67 +915,54 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
   transform: rotate(12deg);
 }
 
-.brand-admin-shell {
-  position: relative;
-  isolation: isolate;
-  overflow: hidden;
-  border: 1px solid rgb(var(--accent-rgb) / 0.14);
-  border-radius: 18px;
-  padding: clamp(1rem, 2.5vw, 1.75rem);
-  background:
-    linear-gradient(160deg, rgb(var(--surface-raised-rgb) / 0.52), transparent 38%),
-    rgb(var(--surface-base-rgb) / 0.56);
-  box-shadow:
-    inset 0 1px 0 rgb(var(--ink-rgb) / 0.035),
-    0 24px 70px rgb(var(--elevation-rgb) / 0.24);
-}
-
-.brand-admin-shell::before {
-  position: absolute;
-  z-index: -1;
-  inset: -12rem -8rem auto auto;
-  width: 28rem;
-  height: 22rem;
-  content: "";
-  pointer-events: none;
-  background: radial-gradient(circle, rgb(var(--accent-rgb) / 0.09), transparent 68%);
-}
-
 /*
  * The planner grid's three-column workspace, and the ONE place the admin page's
  * 1280px cap is lifted.
  *
  * `app/(client)/admin/page.tsx` caps its content at `max-w-7xl` (1280px) inside
- * `px-6`, and `.brand-admin-shell` adds up to 1.75rem of its own padding — so a
- * 1512px 14" MacBook Pro reaches the grid with ~1174px. Participaciones (216) +
- * the candidate picker (240) + two gaps leaves that grid 694px, i.e. four date
- * columns of the six the admin is looking at. The full-bleed trick cannot help:
- * `.brand-admin-shell` is `overflow: hidden`, so a child that breaks out of the
- * frame is clipped back to it.
+ * `px-6` — so a 1512px 14" MacBook Pro reaches the grid with 1232px.
+ * Participaciones (216) + the candidate picker (240) + two 12px gaps leaves the
+ * grid itself 752px, i.e. four or five date columns of the six the admin is
+ * looking at. Widening the CONTENT is the only remedy: the grid's columns have
+ * a floor, and the chart's 216 is a measured content floor too
+ * (`participationAlongside.test.tsx`).
  *
  * So the FRAME widens, scoped by `:has()` to the one surface that needs it —
  * `PlannerGrid` marks its root `planner-wide`. Nothing else on `/admin` moves,
  * and nothing moves at all below 1280px, where the workspace stacks anyway:
  *
- *   1512 − 24 (frame px) − 2 (shell border) − 24 (shell padding) = 1462
- *   216 (chart) + 12 + 982 (grid) + 12 + 240 (picker)             = 1462
+ *   1512 − 24 (frame padding-inline: 0.75rem a side) = 1488
+ *   56 (rail, collapsed) + 32 (gap-8) + 1400 (workspace) = 1488
+ *   216 (chart) + 12 + 920 (grid) + 12 + 240 (picker) = 1400
  *
- * The 24px of shell padding in that first line is the `padding: .75rem` rule
- * below, NOT the `clamp(1rem, 2.5vw, 1.75rem)` the shell carries by default
- * (28px a side at 1512, which would make the sum wrong by 32px). It looks like a
- * cosmetic tidy-up and is load-bearing arithmetic; `participationAlongside.
- * test.tsx` pins it against this comment.
+ * The 24px is the `padding-inline: 0.75rem` in the frame rule below, replacing
+ * the page's own `px-6`; it looks like a cosmetic tidy-up and is load-bearing
+ * arithmetic. `participationAlongside.test.tsx` pins it against this comment.
+ *
+ * The bordered `.brand-admin-shell` this derivation used to spend a border and
+ * 24px of padding on is GONE (ADR-0035) — the page is the workspace now. What
+ * spends width instead is the section RAIL (`AdminRail`, R5 ruling 3), which is
+ * why there are three lines above and not two: the rail and the grid's `gap-8`
+ * take 88px off the usable width before the planner's own three columns are
+ * budgeted. The rail COLLAPSES to 56px (icons only) while the planner is open —
+ * that is what the `--admin-rail-w` override in the frame rule below is for, and
+ * 56 is written once, there, not repeated in the layout class.
+ *
+ * Full-bleed (a `100vw` block with a negative margin) is still rejected, and the
+ * reason is no longer the shell's `overflow: hidden`: it over-runs by the
+ * scrollbar width on any platform that reserves one, and `/admin` must have no
+ * page-level horizontal scroll — the planner grid, the Servicios board and the
+ * availability matrix are the only horizontal scrollers, each in its own
+ * `overflow-x-auto` box (ADR-0035 again).
  *
  * `max-width: none` rather than a larger fixed cap: on a wider monitor the extra
  * width all goes to the grid, which is the only thing here that can use it.
  *
- * The page HEADER above the shell does not widen with the frame — it carries its
- * own `mx-auto max-w-7xl` (`app/(client)/admin/page.tsx`) so it stays centred on
- * the navbar's content while the shell below it goes wide. Widening it too was
+ * The page HEADING does not widen with the frame — it carries its own
+ * `mx-auto max-w-7xl` (`app/(client)/admin/page.tsx`) so it stays centred on the
+ * navbar's content while the workspace below it goes wide. Widening it too was
  * the first version, and it left the title visibly off the navbar's centre line
- * whenever the planner was open. The alternative for the shell (a `100vw` shell
- * with a negative margin) is still rejected: it over-runs by the scrollbar width
- * on any platform that reserves one.
+ * whenever the planner was open.
  */
 @media (min-width: 1280px) {
   /*
@@ -989,28 +976,51 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
     max-width: none;
   }
 
+  /*
+   * NOT cosmetic: the 24px this spends (0.75rem a side, replacing the page's
+   * `px-6`) is exactly the 24px the derivation above subtracts. Change it and
+   * the stated `= 1488` simply stops being true, silently.
+   */
   .brand-admin-frame:has(.planner-wide) {
+    /*
+     * The ONE declaration of the collapsed rail width; `AdminPanel`'s grid
+     * reads it as `lg:grid-cols-[var(--admin-rail-w,200px)_1fr]`, so the column
+     * and the rail can never state two different numbers.
+     */
+    --admin-rail-w: 56px;
     max-width: none;
     padding-right: 0.75rem;
     padding-left: 0.75rem;
   }
 
   /*
-   * NOT cosmetic. The default is `clamp(1rem, 2.5vw, 1.75rem)` — 28px a side at
-   * 1512 — and the width derivation above spends exactly 24px here. Delete this
-   * rule and the three columns lose 32px between them with nothing to say so:
-   * the stated `= 1462` simply stops being true. Pinned in
-   * `participationAlongside.test.tsx` alongside the two rules above it.
+   * Icons only while the planner is open. `display: none` takes the labels out
+   * of the accessibility tree as well as off the screen, which is exactly why
+   * every rail item carries its own `aria-label` (see `AdminRail.tsx`) — the
+   * collapsed rail is still named, item by item.
    */
-  .brand-admin-shell:has(.planner-wide) {
-    padding: 0.75rem;
+  .brand-admin-frame:has(.planner-wide) .brand-admin-rail {
+    width: 56px;
   }
-}
 
-.brand-admin-tabs {
-  border: 1px solid rgb(var(--ink-dim-rgb) / 0.14);
-  background: rgb(var(--surface-console-rgb) / 0.5);
-  box-shadow: inset 0 1px 0 rgb(var(--ink-rgb) / 0.035);
+  .brand-admin-frame:has(.planner-wide) .brand-admin-rail [data-rail-label] {
+    display: none;
+  }
+
+  /*
+   * …and the integrity dot becomes a BADGE on the icon. In flow it is a third
+   * item on a 44px row that is now 56px wide with 16px of padding a side: the
+   * icon plus a gap plus a two-digit count measures ~72px and pushes the icon
+   * off its own button. Out of flow it costs nothing. The item is positioned
+   * already (it hosts the sliding pill), so this needs no new stacking context.
+   */
+  .brand-admin-frame:has(.planner-wide) .brand-admin-rail [data-integrity] {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    margin: 0;
+  }
+
 }
 
 .brand-admin-workspace {
@@ -1239,4 +1249,22 @@ html[data-motion="off"] .brand-stage-hero::before {
   0%   { opacity: 0.6; transform: scale(1); }
   45%  { opacity: 1; transform: scale(2.4); }
   100% { opacity: 0.6; transform: none; }
+}
+
+/* ── The availability matrix's sticky first column (R5 Task 5) — a member column
+   that has DETACHED from the scroller's left edge needs an edge of its own, or the
+   service dates simply slide under a name with nothing between them. The edge is a
+   box-shadow toggled by `[data-scrolled]`, which `AvailabilityPanel` sets from a
+   1 px sentinel observed against the scroll box (never a scroll listener): it stops
+   intersecting exactly when the column starts overlapping content.
+   Only box-shadow animates (rule 1), over `--motion-fast`. The rule lives here
+   rather than as an arbitrary `[&[data-scrolled]_.sticky]:shadow-[…]` variant
+   because the token-bearing shadow and its transition read as one thing in CSS and
+   as line noise in a class string. ── */
+.availability-matrix .sticky-col {
+  box-shadow: 0 0 0 rgb(var(--elevation-rgb) / 0);
+  transition: box-shadow var(--motion-fast) var(--ease-out);
+}
+.availability-matrix[data-scrolled] .sticky-col {
+  box-shadow: 8px 0 12px -8px rgb(var(--elevation-rgb) / 0.35);
 }

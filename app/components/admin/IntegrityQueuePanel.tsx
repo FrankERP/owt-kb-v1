@@ -3,11 +3,12 @@
 // Read-only `Integridad de datos` queue (Plan B item 6, plan §"Global integrity
 // queue").
 //
-// Every decision lives in the pure `serviceIntegrityQueue` module; this file only
-// loads the three A1 integrity routes independently and renders the result. It
-// therefore:
-//  - never queries Sanity directly (it consumes `/api/admin/service-integrity/*`,
-//    so `protectedReadAudit` needs no new entry);
+// Every decision lives in the pure `serviceIntegrityQueue` module, and the three
+// A1 integrity loads live in `useIntegrityQueue` — `AdminPanel` calls that hook
+// once and hands the SAME queue to this panel and to the rail's Servicios dot
+// (R5 ruling 4). This file only renders what it is given. It therefore:
+//  - never fetches and never queries Sanity (the hook consumes
+//    `/api/admin/service-integrity/*`, so `protectedReadAudit` needs no entry);
 //  - never mutates anything: entries name the guarded cleanup/support action and
 //    hand over the exact ids. There is no free-form Studio mutation here;
 //  - never shows zero/clean when an inventory failed — the header says the queue
@@ -15,13 +16,8 @@
 //  - is keyed by explicit document/draft ids, so an `IntegrityIssueTarget` can
 //    focus an entry by id (load failure and not-found are distinct outcomes).
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import type {
-  ProposalDomainSummary,
-  RoleDomainSummary,
-  SetlistDomainSummary,
-} from "@/app/utils/serviceReadSummary";
 import {
   INTEGRITY_ACTION_COPY,
   INTEGRITY_DOMAINS,
@@ -29,25 +25,19 @@ import {
   INTEGRITY_INCOMPLETE_NOTE,
   INTEGRITY_KIND_LABEL,
   INTEGRITY_QUEUE_TITLE,
-  buildIntegrityQueue,
-  cardsFromRoleTargets,
   describeIntegrityReason,
   integrityQueueSummary,
-  integrityQueueTone,
   resolveIntegrityFocus,
-  type IntegrityCardRef,
   type IntegrityDomain,
+  type IntegrityQueue,
   type IntegrityQueueEntry,
   type IntegritySourceStates,
 } from "./serviceIntegrityQueue";
 import type { IntegrityIssueTarget } from "./proposalHandoff";
+import type { IntegrityTone } from "./AdminRail";
+import AnimatedList from "@/app/components/ui/AnimatedList";
+import Button from "@/app/components/ui/Button";
 import Collapse from "@/app/components/ui/Collapse";
-
-const DOMAIN_ROUTE: Record<IntegrityDomain, string> = {
-  roles: "/api/admin/service-integrity/roles",
-  setlists: "/api/admin/service-integrity/setlists",
-  proposals: "/api/admin/service-integrity/proposals",
-};
 
 const DOMAIN_LABEL: Record<IntegrityDomain, string> = {
   roles: "servicios",
@@ -55,24 +45,20 @@ const DOMAIN_LABEL: Record<IntegrityDomain, string> = {
   proposals: "propuestas",
 };
 
-interface DomainData {
-  roles: RoleDomainSummary | null;
-  setlists: SetlistDomainSummary | null;
-  proposals: ProposalDomainSummary | null;
-}
-
 const prefersReducedMotion = () =>
   typeof window !== "undefined" &&
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export interface IntegrityQueuePanelProps {
-  /**
-   * The validated cards currently rendered, so associated issues leave the queue.
-   * Omit (or pass `null`) to derive them from A1's own role inventory; pass an
-   * explicit array — including `[]` — to override that.
-   */
-  cards?: readonly IntegrityCardRef[] | null;
+  /** The derived queue — `useIntegrityQueue`'s, never one this panel fetched. */
+  queue: IntegrityQueue;
+  /** The queue's display tone; it decides whether the disclosure starts open. */
+  tone: IntegrityTone;
+  /** The per-domain load states, for explicit-id focus resolution. */
+  sources: IntegritySourceStates;
+  /** Re-runs the three inventories. */
+  reload: () => void;
   /** A transient integrity target to reveal by explicit id. */
   target?: IntegrityIssueTarget | null;
   /** Called with the focus outcome; a successful `focus` consumes the target. */
@@ -80,69 +66,25 @@ export interface IntegrityQueuePanelProps {
 }
 
 export default function IntegrityQueuePanel({
-  cards = null,
+  queue,
+  tone,
+  sources,
+  reload,
   target = null,
   onResolved,
 }: IntegrityQueuePanelProps) {
-  const [sources, setSources] = useState<IntegritySourceStates>({
-    roleTargets: "loading",
-    setlistTargets: "loading",
-    proposals: "loading",
-  });
-  const [data, setData] = useState<DomainData>({ roles: null, setlists: null, proposals: null });
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [focusKeys, setFocusKeys] = useState<string[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-  const entryRefs = useRef(new Map<string, HTMLLIElement | null>());
+  // `null` = the member has not touched the disclosure, so it follows the tone:
+  // open while the queue has something to say, closed once it is proven clean
+  // (R5 ruling 4). It cannot simply be the INITIAL value of a boolean state —
+  // at mount the inventories are still loading, so the tone is `unknown` and
+  // every mount would latch open and stay there. A toggle pins it either way.
+  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
+  const open = openOverride ?? tone !== "clean";
+  const entryRefs = useRef(new Map<string, HTMLDivElement | null>());
   const scrollTargetRef = useRef<string | null>(null);
-
-  const loadDomain = useCallback(async (domain: IntegrityDomain) => {
-    const sourceKey = INTEGRITY_DOMAIN_SOURCE[domain];
-    setSources((prev) => ({ ...prev, [sourceKey]: "loading" }));
-    try {
-      const res = await fetch(DOMAIN_ROUTE[domain]);
-      if (!res.ok) {
-        setData((prev) => ({ ...prev, [domain]: null }));
-        setSources((prev) => ({ ...prev, [sourceKey]: "error" }));
-        return;
-      }
-      const body = await res.json();
-      setData((prev) => ({ ...prev, [domain]: body }));
-      setSources((prev) => ({ ...prev, [sourceKey]: "ready" }));
-    } catch {
-      // A failed inventory is never rendered as an empty one.
-      setData((prev) => ({ ...prev, [domain]: null }));
-      setSources((prev) => ({ ...prev, [sourceKey]: "error" }));
-    }
-  }, []);
-
-  const loadAll = useCallback(() => {
-    for (const domain of INTEGRITY_DOMAINS) void loadDomain(domain);
-  }, [loadDomain]);
-
-  useEffect(() => {
-    loadAll();
-  }, [loadAll]);
-
-  const resolvedCards = useMemo(
-    () => cards ?? cardsFromRoleTargets(data.roles),
-    [cards, data.roles],
-  );
-
-  const queue = useMemo(
-    () =>
-      buildIntegrityQueue({
-        sources,
-        cards: resolvedCards,
-        roles: data.roles,
-        setlists: data.setlists,
-        proposals: data.proposals,
-      }),
-    [sources, resolvedCards, data],
-  );
-
-  const tone = integrityQueueTone(queue);
 
   // ── Explicit-id focus for a transient integrity target ────────────────────
   useEffect(() => {
@@ -163,7 +105,7 @@ export default function IntegrityQueuePanel({
       onResolved?.(result.outcome);
       return;
     }
-    setOpen(true);
+    setOpenOverride(true);
     setFocusKeys(result.keys);
     setExpanded((prev) => {
       const next = { ...prev };
@@ -179,7 +121,8 @@ export default function IntegrityQueuePanel({
     // element cannot take focus.
     scrollTargetRef.current = result.keys[0];
     onResolved?.(result.outcome);
-    // `queue`/`sources` are the resolution inputs; `onResolved` is stable enough.
+    // `queue`/`sources` are the resolution inputs; `onResolved` is the hook's
+    // `resolve`, whose identity is stable by construction.
   }, [target, queue, sources, onResolved]);
 
   useEffect(() => {
@@ -205,16 +148,22 @@ export default function IntegrityQueuePanel({
       className="min-w-0 rounded-xl border border-edge-accent-subtle"
     >
       <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 sm:px-4">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
+        <Button
+          variant="ghost"
+          size="lg"
+          onClick={() => setOpenOverride(!open)}
           aria-expanded={open}
           aria-controls="integrity-queue-body"
-          className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 rounded-lg px-1 text-left transition-colors hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          // `!justify-start`: `Button`'s BASE centres its content and a bare
+          // `justify-start` in `className` loses to it on emission order. The
+          // spans below restore their own case and tracking for the same reason
+          // — this header is PROSE inside a control, so only the chrome (focus
+          // ring, press, hit area) comes from `Button`.
+          className="min-w-0 flex-1 !justify-start text-left"
         >
           <span
             aria-hidden="true"
-            className={`font-label text-xs transition-transform duration-base ${open ? "rotate-90" : ""}`}
+            className={`font-label text-xs tracking-normal transition-transform duration-base ${open ? "rotate-90" : ""}`}
           >
             ▸
           </span>
@@ -225,23 +174,22 @@ export default function IntegrityQueuePanel({
             >
               {INTEGRITY_QUEUE_TITLE}
             </span>
-            <span className="block font-body text-xs text-mono-400">
+            <span
+              data-integrity-summary=""
+              className="block font-body text-xs normal-case tracking-normal text-mono-400"
+            >
               {integrityQueueSummary(queue)}
             </span>
           </span>
-        </button>
+        </Button>
         <span
           className={`shrink-0 rounded-full border px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${toneStyle}`}
         >
           {tone === "clean" ? "OK" : tone === "unknown" ? "?" : queue.count}
         </span>
-        <button
-          type="button"
-          onClick={loadAll}
-          className="min-h-[44px] shrink-0 rounded-lg border border-surface-accent-30 px-3 font-label text-[11px] uppercase tracking-widest text-mono-400 transition-colors hover:border-accent dark:hover:border-surface-accent-30 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
+        <Button variant="secondary" size="lg" onClick={reload} className="shrink-0">
           Recargar
-        </button>
+        </Button>
       </div>
 
       {/* Honest partial-source state: never a clean zero. */}
@@ -278,20 +226,31 @@ export default function IntegrityQueuePanel({
               : "Ningún documento quedó fuera de un servicio válido."}
           </p>
         ) : (
-          <ul className="space-y-2 px-3 pb-3 sm:px-4">
-            {queue.entries.map((entry) => (
-              <QueueEntry
-                key={entry.key}
-                entry={entry}
-                expanded={!!expanded[entry.key]}
-                focused={focusKeys.includes(entry.key)}
-                onToggle={() =>
-                  setExpanded((prev) => ({ ...prev, [entry.key]: !prev[entry.key] }))
-                }
-                register={(el) => entryRefs.current.set(entry.key, el)}
-              />
-            ))}
-          </ul>
+          /*
+            An entry that has been RESOLVED leaves the queue between two renders,
+            and a row that simply disappears reads as a glitch rather than as
+            progress. `AnimatedList` fades the leaver out and slides the survivors
+            up; the derivation is untouched (it lives in `useIntegrityQueue`), so
+            this is presentation only. Each entry keeps its own `Collapse`.
+          */
+          <AnimatedList
+            as="ul"
+            className="space-y-2 px-3 pb-3 sm:px-4"
+            items={queue.entries.map((entry) => ({
+              key: entry.key,
+              node: (
+                <QueueEntry
+                  entry={entry}
+                  expanded={!!expanded[entry.key]}
+                  focused={focusKeys.includes(entry.key)}
+                  onToggle={() =>
+                    setExpanded((prev) => ({ ...prev, [entry.key]: !prev[entry.key] }))
+                  }
+                  register={(el) => entryRefs.current.set(entry.key, el)}
+                />
+              ),
+            }))}
+          />
         )}
       </Collapse>
     </section>
@@ -309,11 +268,14 @@ function QueueEntry({
   expanded: boolean;
   focused: boolean;
   onToggle: () => void;
-  register: (el: HTMLLIElement | null) => void;
+  register: (el: HTMLDivElement | null) => void;
 }) {
   const bodyId = `integrity-entry-${entry.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  // A DIV, not an `<li>`: `AnimatedList` owns the list item so an exiting entry
+  // can be popped out of flow. This element is still the focus target the
+  // explicit-id reveal scrolls to and focuses.
   return (
-    <li
+    <div
       ref={register}
       tabIndex={-1}
       className={`min-w-0 rounded-lg border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
@@ -352,7 +314,7 @@ function QueueEntry({
           {INTEGRITY_ACTION_COPY[entry.action]}
         </p>
       </Collapse>
-    </li>
+    </div>
   );
 }
 

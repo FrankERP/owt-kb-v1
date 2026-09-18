@@ -15,10 +15,10 @@ vi.mock("next-auth/react", () => ({
 
 import NavLinks from "../NavLinks";
 
-function mount(props: { schedule?: boolean; tags?: boolean } = {}) {
+function mount() {
   return render(
     <MotionProvider>
-      <NavLinks {...props} />
+      <NavLinks />
     </MotionProvider>,
   );
 }
@@ -31,10 +31,10 @@ beforeEach(() => { pathname = "/"; session = null; });
 afterEach(() => { cleanup(); });
 
 describe("NavLinks", () => {
-  it("renders the four worship links for an admin at /schedule with aria-current on Calendario", () => {
+  it("renders the worship links for an admin at /schedule with aria-current on Calendario", () => {
     pathname = "/schedule";
     session = { user: adminUser };
-    mount({ schedule: true, tags: true });
+    mount();
     const nav = screen.getByLabelText("Secciones");
     const links = Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim());
     expect(links).toEqual(["Calendario", "Biblioteca", "Admin"]);
@@ -43,15 +43,28 @@ describe("NavLinks", () => {
     expect(nav.querySelectorAll("[data-sliding-indicator]")).toHaveLength(1);
   });
 
+  it("shows Calendario and Biblioteca to every worship member, on every page", () => {
+    // R5 ruling 9: the `schedule`/`tags` props are gone. They were passed
+    // inconsistently — the row changed shape between pages, and dropped both
+    // links entirely on /kids — for a pair of links whose real gate is
+    // ministry membership, which `inWorship` already carries.
+    pathname = "/kids";
+    session = { user: { name: "Bea", email: "bea@x", role: "member", ministries: ["worship"] } };
+    mount();
+    const nav = screen.getByLabelText("Secciones");
+    const links = Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim());
+    expect(links).toEqual(["Calendario", "Biblioteca"]);
+  });
+
   it("renders nothing signed out", () => {
     session = null;
-    mount({ schedule: true, tags: true });
+    mount();
     expect(screen.queryByLabelText("Secciones")).toBeNull();
   });
 
   it("hides Calendario/Biblioteca for a kids-only member and shows Kids", () => {
     session = { user: kidsUser };
-    mount({ schedule: true, tags: true });
+    mount();
     const nav = screen.getByLabelText("Secciones");
     const links = Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim());
     expect(links).toEqual(["Kids"]);
@@ -59,14 +72,14 @@ describe("NavLinks", () => {
 
   it("shows Planear Kids for a kids manager but not for a plain kids member", () => {
     session = { user: kidsManagerUser };
-    mount({ schedule: true, tags: true });
+    mount();
     const nav = screen.getByLabelText("Secciones");
     const links = Array.from(nav.querySelectorAll("a")).map((n) => n.textContent?.trim());
     expect(links).toEqual(["Kids", "Planear Kids"]);
 
     cleanup();
     session = { user: kidsUser };
-    mount({ schedule: true, tags: true });
+    mount();
     const nav2 = screen.getByLabelText("Secciones");
     const links2 = Array.from(nav2.querySelectorAll("a")).map((n) => n.textContent?.trim());
     expect(links2).not.toContain("Planear Kids");

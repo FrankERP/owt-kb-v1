@@ -26,7 +26,7 @@ function NavLink({ href, label, active }: { href: string; label: string; active:
   );
 }
 
-export default function NavLinks({ schedule = false, tags = false }: { schedule?: boolean; tags?: boolean }) {
+export default function NavLinks() {
   const { data: session, status } = useSession();
   const pathname = usePathname() ?? "/";
   const user = session?.user;
@@ -38,8 +38,12 @@ export default function NavLinks({ schedule = false, tags = false }: { schedule?
   const inKids = isSuper || ministries.includes("kids");
   const managesKids = isSuper || (user.managesMinistries ?? []).includes("kids");
   const links = [
-    ...(schedule && inWorship ? [{ href: "/schedule", label: "Calendario", active: pathname.startsWith("/schedule") }] : []),
-    ...(tags && inWorship ? [{ href: "/biblioteca", label: "Biblioteca", active: /^\/(biblioteca|posts)/.test(pathname) }] : []),
+    // Worship membership is the whole gate (R5 ruling 9). The `schedule`/`tags`
+    // props that used to gate these two as well were passed inconsistently —
+    // the row changed shape from page to page, and on /kids both links vanished
+    // for a worship member who was simply looking at Kids.
+    ...(inWorship ? [{ href: "/schedule", label: "Calendario", active: pathname.startsWith("/schedule") }] : []),
+    ...(inWorship ? [{ href: "/biblioteca", label: "Biblioteca", active: /^\/(biblioteca|posts)/.test(pathname) }] : []),
     ...(inKids ? [{ href: "/kids", label: "Kids", active: pathname.startsWith("/kids") && !pathname.startsWith("/kids/admin") }] : []),
     ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", active: pathname.startsWith("/kids/admin") }] : []),
     ...(isAdmin ? [{ href: "/admin", label: "Admin", active: pathname.startsWith("/admin") }] : []),
