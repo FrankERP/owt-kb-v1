@@ -68,10 +68,19 @@ export function SongPracticeFixture() {
 
           <SongAudioSection tracks={TRACKS} songTitle="Canción de muestra" songSlug="cancion-de-muestra" />
 
-          {/* R6: the tutorial poster (nothing loads until the button is pressed) and
+          {/* R6: the tutorial poster (no PLAYER loads until the button is pressed) and
               the lyric block's two typographic rules — the eyebrow and the dimmed
-              repeat marker — are verified here in both themes. The poster is a
-              static image URL, which is not a fetch: the fixture stays hermetic. */}
+              repeat marker — are verified here in both themes.
+
+              THE POSTER IS THE ONE NON-HERMETIC THING IN THE WHOLE GALLERY, and it is
+              worth knowing about: `TutorialPoster` renders YouTube's own still through
+              `next/image`, so the SERVER fetches `i.ytimg.com` on render. Measured, that
+              made the `dark/song` baseline differ from itself by 15% of all pixels
+              between two consecutive runs — the poster had arrived in one and not the
+              other. It cannot be fixed here: the poster URL is built inside the
+              production component from the video id. So `e2e/theme-gallery/gallery.spec.ts`
+              fulfils `/_next/image` and `i.ytimg.com` with a fixed tile, and the baseline
+              stops being a race against a CDN. */}
           <div className="brand-surface overflow-hidden rounded-2xl">
             <div className="aspect-video">
               <TutorialPoster url="https://www.youtube.com/embed/dQw4w9WgXcQ" title="Tutorial de ejemplo" />

@@ -61,6 +61,11 @@ transformed ancestor is the containing block for every `position: fixed` descend
 animating wrapper silently un-anchors the dialog mid-enter. It attaches a t=0 and a t=end
 screenshot as evidence and asserts on computed style and geometry, which are not flaky.
 
+`#motion` applies to a **hard load**: the attribute is read once on mount and never
+restored, so a client-side navigation away from `…#motion` would keep animating. The specs
+never client-navigate — every test does its own `page.goto` — so this is a property of the
+hash, not a bug to work around.
+
 The attribute is removed in a **`useLayoutEffect`**, not an inline `<script>` in
 `layout.tsx`. That was the fallback and it was not needed: measured, `#motion` runs the
 enter across ~10 frames while the default page reaches its final frame in one.

@@ -22,7 +22,16 @@ test("the sheet's enter never runs under a transformed ancestor", async ({ page 
   // inherently timing-dependent and would be a flaky baseline. The assertions below are
   // on computed style and geometry, which are not.
   await testInfo.attach("t0", { body: await page.screenshot(), contentType: "image/png" });
-  await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished)));
+  // Raced against 400 ms (`--motion-slow` is 320 ms, plus slack). An infinite animation —
+  // a spinner, a looping shimmer — never resolves `finished`, and an unraced wait would
+  // then burn the 30 s test timeout. Nothing asserted below depends on this wait; only
+  // the honesty of the `tEnd` attachment does.
+  await page.evaluate(() =>
+    Promise.race([
+      Promise.all(document.getAnimations().map((a) => a.finished)),
+      new Promise((resolve) => setTimeout(resolve, 400)),
+    ]),
+  );
   await testInfo.attach("tEnd", { body: await page.screenshot(), contentType: "image/png" });
 
   const facts = await page.evaluate(() => {
