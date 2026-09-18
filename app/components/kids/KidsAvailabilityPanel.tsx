@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useTransientValue } from "@/app/utils/useTransientValue";
 import Select from "@/app/components/ui/Select";
+import Button from "@/app/components/ui/Button";
+import DateField from "@/app/components/ui/DateField";
+import { useToast } from "@/app/components/ui/Toast";
 
 export interface AvailabilityMember {
   _id: string;
@@ -18,13 +20,7 @@ interface Props {
   initialMembers: AvailabilityMember[];
 }
 
-const MONTHS_ES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
 const DAYS_ES = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
-
-type Toast = { kind: "ok" | "error"; text: string } | null;
 
 /** What the PATCH reports as the member's stored state — on 200 and on 409 alike. */
 interface ServerState {
@@ -86,7 +82,7 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [toast, showToast, , holdToast] = useTransientValue<Toast>(null, 5000);
+  const { toast } = useToast();
 
   // "Today" is Mexico City's day, not the device's — the calendar opens on the
   // month the team is living in even from a browser an ocean away.
@@ -152,19 +148,20 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
       if (res.status === 409) {
         const current = (await res.json()) as ServerState;
         adopt(selected._id, current);
-        holdToast({
-          kind: "error",
-          text: `La disponibilidad de ${displayName(selected)} cambió mientras editabas — tus cambios NO se guardaron. La lista ya muestra las fechas actuales: vuelve a marcarlas y guarda otra vez.`,
+        toast({
+          message: `La disponibilidad de ${displayName(selected)} cambió mientras editabas — tus cambios NO se guardaron. La lista ya muestra las fechas actuales: vuelve a marcarlas y guarda otra vez.`,
+          tone: "error",
+          hold: true,
         });
         return;
       }
       if (!res.ok) throw new Error(`respuesta ${res.status}`);
       adopt(selected._id, (await res.json()) as ServerState);
-      showToast({ kind: "ok", text: `Disponibilidad de ${displayName(selected)} guardada.` });
+      toast({ message: `Disponibilidad de ${displayName(selected)} guardada.`, tone: "ok" });
     } catch (err) {
       // `dirty` stays true on failure: the edits are still unsaved and the
       // button must keep saying so.
-      showToast({ kind: "error", text: `No se pudo guardar — ${errText(err)}` });
+      toast({ message: `No se pudo guardar — ${errText(err)}`, tone: "error" });
     } finally {
       setSaving(false);
     }
@@ -201,28 +198,17 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
             ))}
           </Select>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="lg"
           onClick={save}
           disabled={saving || !dirty}
-          className="min-h-[44px] rounded-lg bg-surface-accent-solid px-4 font-label text-xs uppercase tracking-widest text-on-fill transition-colors disabled:opacity-40"
+          busy={saving}
+          busyLabel="Guardando…"
         >
-          {saving ? "Guardando…" : dirty ? "Guardar •" : "Guardar"}
-        </button>
+          {dirty ? "Guardar •" : "Guardar"}
+        </Button>
       </div>
-
-      {toast && (
-        <p
-          role="status"
-          className={`rounded-xl border px-4 py-2 font-body text-sm ${
-            toast.kind === "ok"
-              ? "border-positive-deep/25 bg-positive-deep/5 text-positive-strong"
-              : "border-negative-strong/25 bg-negative-strong/5 text-negative-fg"
-          }`}
-        >
-          {toast.text}
-        </p>
-      )}
 
       {dirty && !saving && (
         <p className="font-label text-[11px] uppercase tracking-widest text-warning-strong">
@@ -231,26 +217,18 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
       )}
 
       <div className="rounded-xl border border-accent/15 bg-surface-accent-wash p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setCursor((c) => shiftYearMonth(c.year, c.month, -1))}
-            aria-label="Mes anterior"
-            className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-[11px] uppercase tracking-widest text-mono-500 transition-colors hover:text-accent"
-          >
-            ←
-          </button>
-          <span className="font-label text-[11px] uppercase tracking-widest text-accent">
-            {MONTHS_ES[cursor.month - 1]} {cursor.year}
-          </span>
-          <button
-            type="button"
-            onClick={() => setCursor((c) => shiftYearMonth(c.year, c.month, 1))}
-            aria-label="Mes siguiente"
-            className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-[11px] uppercase tracking-widest text-mono-500 transition-colors hover:text-accent"
-          >
-            →
-          </button>
+        <div className="mb-3 flex items-center justify-center">
+          <DateField
+            kind="month"
+            aria-label="Mes"
+            disabled={saving}
+            value={`${cursor.year}-${String(cursor.month).padStart(2, "0")}`}
+            onChange={(e) => {
+              const [y, m] = e.target.value.split("-").map(Number);
+              if (y && m) setCursor({ year: y, month: m });
+            }}
+            onStep={(d) => setCursor((c) => shiftYearMonth(c.year, c.month, d))}
+          />
         </div>
 
         <div className="mb-1 grid grid-cols-7 gap-0.5">
@@ -269,20 +247,18 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
             const marked = dates.has(date);
             const dayNumber = Number(date.slice(8, 10));
             return (
-              <button
+              <Button
                 key={date}
-                type="button"
-                onClick={() => toggleDate(date)}
+                variant="pill"
+                tone="availability"
+                size="sm"
+                active={marked}
                 disabled={saving}
-                aria-pressed={marked}
-                className={`min-h-[44px] rounded text-center font-body text-xs transition-colors sm:min-h-0 sm:py-1 ${
-                  marked
-                    ? "border border-availability-fg/50 bg-availability-fg/30 text-availability-soft"
-                    : "text-mono-300 hover:bg-accent/10 hover:text-accent"
-                }`}
+                onClick={() => toggleDate(date)}
+                className="min-h-[44px] w-full justify-center sm:min-h-0"
               >
                 {dayNumber}
-              </button>
+              </Button>
             );
           })}
         </div>
