@@ -60,11 +60,6 @@ interface Props {
 
 // ─── Pure helpers (exported for the unit tests) ───────────────────────────────
 
-const MONTHS_ES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
-
 /**
  * The Sundays of a month, via the UTC-noon anchor the generate route and the home
  * page's weekend helpers use: a date pinned to 12:00 UTC has no local-midnight
@@ -89,11 +84,6 @@ export function shiftMonth(month: string, delta: number): string {
   const nextYear = Math.floor(zeroBased / 12);
   const nextMonth = zeroBased - nextYear * 12 + 1;
   return `${nextYear}-${String(nextMonth).padStart(2, "0")}`;
-}
-
-export function monthLabel(month: string): string {
-  const [year, monthIndex] = month.split("-").map(Number);
-  return `${MONTHS_ES[monthIndex - 1]} ${year}`;
 }
 
 /** Local noon, per the repo's timezone invariant — never a bare `new Date(iso)`. */
@@ -311,6 +301,11 @@ export default function KidsPlanner({
 
   const loadMonth = useCallback(
     async (next: string) => {
+      // A month change dismisses the picker: the Sunday it is showing may not
+      // exist in the month about to arrive, and `open` would otherwise go false
+      // with `pickerOpen` still true — the next seat tap would find it already
+      // "open" and skip the enter.
+      setPickerOpen(false);
       setLoadingMonth(true);
       try {
         // The three preceding months ride along on the SAME endpoint the month

@@ -19,7 +19,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import KidsPlanner, {
   formatSunday,
   historyMonthsFor,
-  monthLabel,
   shiftMonth,
   sundaysOfMonth,
   type PlannerPair,
@@ -102,10 +101,6 @@ describe("month + date helpers", () => {
     expect(shiftMonth("2026-01", -1)).toBe("2025-12");
     expect(shiftMonth("2026-12", 1)).toBe("2027-01");
     expect(shiftMonth("2026-09", 0)).toBe("2026-09");
-  });
-
-  it("labels a month in Spanish", () => {
-    expect(monthLabel("2026-09")).toBe("Septiembre 2026");
   });
 
   it("renders a date at LOCAL NOON — never a UTC day-flip", () => {
@@ -596,6 +591,25 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     // …and with the provider it renders, showing no dialog until a seat is tapped.
     renderPlanner();
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("makes the month arrows inert while the planner is busy", async () => {
+    // `busy` covers load/generate/save/publish. The arrows are the one control
+    // that can change WHICH month the answer in flight belongs to, so a live
+    // arrow mid-generate lands the old proposal on the new board.
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    renderPlanner();
+
+    fireEvent.click(screen.getByLabelText("Mes siguiente"));
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "Mes siguiente" }) as HTMLButtonElement).disabled,
+      ).toBe(true),
+    );
+    expect(
+      (screen.getByRole("button", { name: "Mes anterior" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect((screen.getByLabelText("Mes") as HTMLInputElement).disabled).toBe(true);
   });
 
   it("shows Skeleton placeholders while a month loads — never animate-pulse", async () => {
