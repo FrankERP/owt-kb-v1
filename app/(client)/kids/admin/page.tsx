@@ -6,6 +6,7 @@ import KidsAvailabilityPanel from "@/app/components/kids/KidsAvailabilityPanel";
 import { HISTORY_MONTHS } from "@/app/components/kids/kidsPlannerLabels";
 import { requireMinistryManager } from "@/app/utils/authGuards";
 import { serverClient } from "@/sanity/lib/serverClient";
+import { revealProps } from "@/app/utils/reveal";
 import { KIDS_SEATS, type KidsRoom, type KidsSeat } from "@/app/utils/kidsTypes";
 
 export const metadata = { title: "Oasis Kids — Planeación" };
@@ -149,7 +150,7 @@ export default async function KidsAdminPage() {
         </header>
 
         <div className="space-y-12">
-          <section aria-labelledby="kids-planner-heading">
+          <section aria-labelledby="kids-planner-heading" {...revealProps(0)}>
             <h2
               id="kids-planner-heading"
               className="mb-4 font-display text-2xl uppercase tracking-wide text-ink"
@@ -165,7 +166,7 @@ export default async function KidsAdminPage() {
             />
           </section>
 
-          <section aria-labelledby="kids-roster-heading">
+          <section aria-labelledby="kids-roster-heading" {...revealProps(1)}>
             <h2
               id="kids-roster-heading"
               className="mb-4 font-display text-2xl uppercase tracking-wide text-ink"
@@ -175,7 +176,7 @@ export default async function KidsAdminPage() {
             <PairRoster initialPairs={pairs} initialMembers={members} />
           </section>
 
-          <section aria-labelledby="kids-availability-heading">
+          <section aria-labelledby="kids-availability-heading" {...revealProps(2)}>
             <h2
               id="kids-availability-heading"
               className="mb-4 font-display text-2xl uppercase tracking-wide text-ink"
