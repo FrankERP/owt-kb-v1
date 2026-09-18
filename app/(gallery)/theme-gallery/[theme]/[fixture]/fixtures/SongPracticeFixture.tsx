@@ -13,7 +13,9 @@ import ChordChart from "@/app/components/ChordChart";
 import SongAudioSection from "@/app/components/SongAudioSection";
 import SongHeroPills from "@/app/components/song/SongHeroPills";
 import { TransposeProvider } from "@/app/components/song/TransposeProvider";
+import TutorialPoster from "@/app/components/song/TutorialPoster";
 import { PlayerProvider } from "@/app/context/PlayerContext";
+import { dimRepeatMarkers, LYRIC_EYEBROW } from "@/app/utils/lyricMarkers";
 
 /** 0.1 s of 8 kHz mono PCM silence. Inline because the gallery has no network. */
 const SILENT_WAV =
@@ -65,6 +67,23 @@ export function SongPracticeFixture() {
           <ChordChart charts={[{ key: "G", content: CHART }]} />
 
           <SongAudioSection tracks={TRACKS} songTitle="Canción de muestra" songSlug="cancion-de-muestra" />
+
+          {/* R6: the tutorial poster (nothing loads until the button is pressed) and
+              the lyric block's two typographic rules — the eyebrow and the dimmed
+              repeat marker — are verified here in both themes. The poster is a
+              static image URL, which is not a fetch: the fixture stays hermetic. */}
+          <div className="brand-surface overflow-hidden rounded-2xl">
+            <div className="aspect-video">
+              <TutorialPoster url="https://www.youtube.com/embed/dQw4w9WgXcQ" title="Tutorial de ejemplo" />
+            </div>
+          </div>
+
+          <div className="mx-auto max-w-[62ch]">
+            <p className={LYRIC_EYEBROW}>Coro</p>
+            <p className="font-body text-sm sm:text-base leading-snug">
+              {dimRepeatMarkers("Santo, santo // es el Señor //")}
+            </p>
+          </div>
         </div>
       </TransposeProvider>
     </PlayerProvider>

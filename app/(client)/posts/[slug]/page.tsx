@@ -23,6 +23,8 @@ import SongAudioSection from "@/app/components/SongAudioSection";
 import SongHeroPills from "@/app/components/song/SongHeroPills";
 import { TransposeProvider } from "@/app/components/song/TransposeProvider";
 import LyricsAutoscroll from "@/app/components/song/LyricsAutoscroll";
+import TutorialPoster from "@/app/components/song/TutorialPoster";
+import { dimRepeatMarkers, LYRIC_EYEBROW } from "@/app/utils/lyricMarkers";
 import { isChordPro } from "@/app/utils/transpose";
 import { countLyricLines } from "@/app/utils/practice";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
@@ -316,16 +318,7 @@ const Page = async ({ params }: Params) => {
                   className="brand-surface overflow-hidden rounded-2xl"
                 >
                   <div className="aspect-video">
-                    <iframe
-                      src={tutorial.url}
-                      width="100%"
-                      height="100%"
-                      className="border-0"
-                      title={tutorial.title}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture web-share"
-                      referrerPolicy="strict-origin-when-cross-origin"
-                      allowFullScreen
-                    />
+                    <TutorialPoster url={tutorial.url} title={tutorial.title} />
                   </div>
                   {tutorial.title && (
                     <div className="px-4 py-3 border-t border-edge-accent-subtle">
@@ -383,7 +376,7 @@ const Page = async ({ params }: Params) => {
               {hasInlineChords ? (
                 <ChordChart charts={post.chords!} />
               ) : (
-                <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 prose-headings:font-display prose-headings:uppercase prose-headings:!mt-6 prose-headings:!mb-1 columns-1 sm:columns-2 gap-10 max-w-4xl mx-auto">
+                <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto">
                   {groupBySections(post.body).map((group, i) => (
                     <div key={i} className="break-inside-avoid">
                       <PortableText value={group} components={myPortableTextComponents} />
@@ -462,11 +455,18 @@ const Page = async ({ params }: Params) => {
 
 export default Page;
 
+const EYEBROW = `${LYRIC_EYEBROW} !mt-6 !mb-1 first:!mt-0 break-after-avoid`;
+
 const myPortableTextComponents: PortableTextComponents = {
   block: {
-    h1: ({ children }) => <h1 className="break-after-avoid">{children}</h1>,
-    h2: ({ children }) => <h2 className="break-after-avoid">{children}</h2>,
-    h3: ({ children }) => <h3 className="break-after-avoid">{children}</h3>,
+    // Section names render as an EYEBROW, not a heading: this block is prose, and
+    // `prose`'s own heading rules would re-style an <h2> out from under the token.
+    // No label is added — these are the headings the lyric sheet already carries.
+    h1: ({ children }) => <p className={EYEBROW}>{children}</p>,
+    h2: ({ children }) => <p className={EYEBROW}>{children}</p>,
+    h3: ({ children }) => <p className={EYEBROW}>{children}</p>,
+    h4: ({ children }) => <p className={EYEBROW}>{children}</p>,
+    normal: ({ children }) => <p>{dimRepeatMarkers(children)}</p>,
   },
   types: {
     image: ({ value }) => (
