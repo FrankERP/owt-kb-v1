@@ -149,6 +149,20 @@ describe("theme gallery — segment validation", () => {
     expect(src).toMatch(/from "@\/app\/components\/BottomNavBar"/);
     expect(src).not.toMatch(/BottomNav"/);
   });
+
+  // A `CueDialog` throws without `CueDialogProvider`, and it throws at PRERENDER
+  // time — which is how a permanently mounted (controlled) `SeatPicker` took the
+  // `kids-planner` route down on Vercel with tsc, vitest and eslint all green
+  // (2026-09-18). Every fixture that renders a CueDialog-bearing component mounts
+  // the provider itself, the way `DialogFixture` and `NavFixture` do.
+  it.each(["DialogFixture", "NavFixture", "KidsPlannerFixture"])(
+    "%s mounts CueDialogProvider because it renders a CueDialog",
+    (name) => {
+      const src = read(`${GALLERY}/[fixture]/fixtures/${name}.tsx`);
+      expect(src).toMatch(/CueDialogProvider/);
+      expect(src).toMatch(/<CueDialogProvider>/);
+    },
+  );
 });
 
 describe("theme gallery — the fixtures are hermetic", () => {
