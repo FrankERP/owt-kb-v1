@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   KIDS_ROOMS,
   KIDS_SEATS,
@@ -70,16 +70,40 @@ export function KidsRotationBoard({
   const [drag, setDrag] = useState<DragSource | null>(null);
   const [over, setOver] = useState<string | null>(null);
   /**
-   * The cell whose chip should pop next render — a drop that just landed, or a
-   * cell opened through the picker (the click precedes the actual choice, but
-   * the picker is this board's other entry point alongside drag, so the same
-   * cell popping when its pair comes back assigned reads as one mechanism, not
-   * two). Cleared on the wrapper's `animationend`, which bubbles up from the
+   * The cell whose chip should pop — armed on the CHANGE, never on the intent to
+   * change. Cleared on the wrapper's `animationend`, which bubbles up from the
    * chip's own animated span.
    */
   const [landed, setLanded] = useState<string | null>(null);
+  /**
+   * The previous render's `assignedPairId` per cell, so the effect below can see
+   * a change rather than an open. `null` until the first effect run seeds it —
+   * a page load is not a landing, so nothing arms on mount.
+   */
+  const prevAssigned = useRef<Record<string, string | null> | null>(null);
 
   const cellKey = (date: string, seat: KidsSeat) => `${date}::${seat}`;
+
+  // ONE arming path for `landed`, covering drag-drop and the picker identically:
+  // both end the same way, with a cell's `assignedPairId` becoming a NEW
+  // non-null value. Opening a picker on an already-assigned seat and cancelling,
+  // or picking the same pair back, changes nothing here, so nothing pops.
+  useEffect(() => {
+    const current: Record<string, string | null> = {};
+    for (const sunday of sundays) {
+      for (const seat of KIDS_SEATS) {
+        current[cellKey(sunday.date, seat)] = seatOf(sunday.date, seat).assignedPairId ?? null;
+      }
+    }
+    const prev = prevAssigned.current;
+    if (prev !== null) {
+      for (const key of Object.keys(current)) {
+        const next = current[key];
+        if (next !== null && prev[key] !== next) setLanded(key);
+      }
+    }
+    prevAssigned.current = current;
+  }, [sundays, seatOf]);
 
   const allowed = (date: string, seat: KidsSeat): boolean =>
     drag !== null && canPlace(seatOf(date, seat), drag.pairId, drag.from).ok;
@@ -117,7 +141,6 @@ export function KidsRotationBoard({
       const source = drag;
       endDrag();
       if (!source) return;
-      setLanded(cellKey(date, seat));
       onMove(source, { date, seat });
     },
   });
@@ -196,10 +219,7 @@ export function KidsRotationBoard({
                     <td key={sunday.date} className="align-top" {...dropHandlers(sunday.date, seat)}>
                       <button
                         type="button"
-                        onClick={() => {
-                          setLanded(cellKey(sunday.date, seat));
-                          onOpenSeat(sunday.date, seat);
-                        }}
+                        onClick={() => onOpenSeat(sunday.date, seat)}
                         disabled={busy}
                         aria-label={`${KIDS_SEAT_LABELS[seat]}, ${sunday.label}: ${
                           assignedId ? pairName(assignedId) : "sin asignar"

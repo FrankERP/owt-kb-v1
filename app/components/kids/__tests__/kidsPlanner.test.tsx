@@ -675,6 +675,53 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     expect(screen.getByText("C1", { selector: ".animate-pop *" })).toBeTruthy();
   });
 
+  /**
+   * The bug the fresh review caught: `landed` used to arm on the CLICK that
+   * opens the picker, so an already-assigned seat popped its own chip the
+   * moment the picker was opened — nothing had landed yet, and cancelling
+   * proved it. It is armed on the assignment actually CHANGING now, so opening
+   * and dismissing a picker with Escape is a no-op.
+   */
+  it("does not pop an already-assigned cell's chip when its picker is opened and cancelled", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+      ],
+    });
+    fireEvent.click(
+      screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/),
+    );
+    expect(screen.getByRole("dialog", { name: /RG Chiquitos/ })).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    expect(screen.queryByText("C1", { selector: ".animate-pop *" })).toBeNull();
+  });
+
+  /** The negative control for a genuine no-op: picking the SAME pair back
+   *  leaves `assignedPairId` unchanged, so nothing pops either. */
+  it("does not pop when the picker re-confirms the same pair already in the seat", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+      ],
+    });
+    fireEvent.click(
+      screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/),
+    );
+    // With C1 already in the seat, the dialog also has a "Quitar C1 — dejar sin
+    // asignar" row, so `/C1/` alone matches two buttons — `current: true` picks
+    // the one marked ✓, which is the option row, not the removal row.
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: /RG Chiquitos/ })).getByRole("button", {
+        name: /C1/,
+        current: true,
+      }),
+    );
+
+    expect(screen.queryByText("C1", { selector: ".animate-pop *" })).toBeNull();
+  });
+
   it("wraps the phone card's chip in the crossfade span whether or not it just changed", () => {
     renderPlanner({
       initialSchedules: [
