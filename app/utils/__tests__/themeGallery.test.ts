@@ -131,13 +131,23 @@ describe("theme gallery — segment validation", () => {
     expect(page).toContain("generateStaticParams");
   });
 
-  it("enumerates exactly two themes and six fixtures", () => {
+  it("enumerates exactly two themes and seven fixtures", () => {
     expect(read(`${GALLERY}/layout.tsx`)).toContain('["dark", "light"] as const');
-    expect(page).toContain('["swatches", "dialog", "planner", "kids-planner", "controls", "song"] as const');
+    expect(page).toContain('["swatches", "dialog", "planner", "kids-planner", "controls", "song", "nav"] as const');
   });
 
   it("also calls notFound() for an unknown value reaching the component", () => {
     expect(page).toContain("notFound()");
+  });
+
+  // The bar's presentational half is the only one that can be hosted here:
+  // BottomNav itself reads useSession and usePathname, which the hermetic sweep
+  // below forbids — and which would break the prerender the route's public
+  // safety argument rests on (ADR-0017).
+  it("the nav fixture hosts the presentational bar, never BottomNav itself", () => {
+    const src = read(`${GALLERY}/[fixture]/fixtures/NavFixture.tsx`);
+    expect(src).toMatch(/from "@\/app\/components\/BottomNavBar"/);
+    expect(src).not.toMatch(/BottomNav"/);
   });
 });
 
@@ -149,6 +159,7 @@ describe("theme gallery — the fixtures are hermetic", () => {
     "KidsPlannerFixture",
     "ControlsFixture",
     "SongPracticeFixture",
+    "NavFixture",
   ] as const;
   const files = names.map((f) => read(`${GALLERY}/[fixture]/fixtures/${f}.tsx`));
   const codes = names.map((f) => code(`${GALLERY}/[fixture]/fixtures/${f}.tsx`));

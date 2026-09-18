@@ -512,7 +512,13 @@ the impersonation banner, the audio transport, and the song sheet's head.
   alone, with its own inset padding zeroed under `html.has-bottom-nav
   .audio-player`; the **song FAB** (`EditSongButton`) offsets by `calc(1.5rem +
   var(--bottom-nav-h, 0px))`. A new fixed-bottom element joins that guard's list
-  in the same commit that adds it.
+  in the same commit that adds it. Since R6 the bar is **two components**:
+  `BottomNav` reads the session and the pathname and owns the measurement
+  effect, and the presentational `BottomNavBar`
+  (`app/components/BottomNavBar.tsx`) draws the `<nav>` and the «Más» sheet from
+  props alone, which is what lets the theme gallery's `nav` fixture host it — a
+  public, prerendered route cannot call `useSession` (ADR-0017). The rendered
+  DOM is unchanged; `BottomNav` forwards its `barRef` through `barRef`.
 - **`NavLinks`** (`app/components/NavLinks.tsx`) — the desktop link row, rendered
   inside the navbar's centred title block at `lg` and above; the page title that
   block otherwise shows is `lg:hidden` there (the page's own heading carries it
