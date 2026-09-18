@@ -641,6 +641,49 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     ).toContain("C2");
     expect(screen.getByText("Cambios sin guardar")).toBeTruthy();
   });
+
+  // ─── R6 Task 2: landing pop + crossfade ────────────────────────────────────
+
+  it("pops the chip that just landed in a board cell, via a drop", () => {
+    renderPlanner();
+    // The bench is the only place an unassigned pair's name appears.
+    const chip = screen.getByText("C2");
+    const cell = screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/);
+
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    fireEvent.dragStart(chip, { dataTransfer });
+    fireEvent.dragOver(cell, { dataTransfer });
+    fireEvent.drop(cell, { dataTransfer });
+
+    // The board's chip alone carries `animate-pop` — the phone card's copy of
+    // "C2" only crossfades (`animate-fade-in`), so the selector picks out
+    // exactly the wrapper the drop landed in.
+    expect(screen.getByText("C2", { selector: ".animate-pop *" })).toBeTruthy();
+  });
+
+  it("pops the chip picked from a board cell's own seat picker", () => {
+    renderPlanner();
+    fireEvent.click(
+      screen.getByLabelText("RG Chiquitos, Domingo, 13 de septiembre: sin asignar"),
+    );
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: /RG Chiquitos/ })).getByRole("button", {
+        name: /C1/,
+      }),
+    );
+
+    expect(screen.getByText("C1", { selector: ".animate-pop *" })).toBeTruthy();
+  });
+
+  it("wraps the phone card's chip in the crossfade span whether or not it just changed", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+      ],
+    });
+    const row = seatRow("RG Chiquitos", "Domingo, 13 de septiembre");
+    expect(within(row).getByText("C1").closest(".animate-fade-in")).not.toBeNull();
+  });
 });
 
 describe("KidsPlanner — a failed save never reads as success", () => {

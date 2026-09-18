@@ -12,6 +12,7 @@ import type { BenchEntry, RoomBench } from "@/app/utils/kidsPlannerView";
 import type { KidsBoardProps } from "./kidsBoardProps";
 import { PairChip } from "./PairChip";
 import { absenceLabel, blockLabel, canPlace, monthSeatsLabel } from "./kidsPlannerLabels";
+import Button from "@/app/components/ui/Button";
 
 /** Where a drag started: a bench chip (`from === null`) or a filled cell. */
 export interface DragSource {
@@ -68,6 +69,15 @@ export function KidsRotationBoard({
 }) {
   const [drag, setDrag] = useState<DragSource | null>(null);
   const [over, setOver] = useState<string | null>(null);
+  /**
+   * The cell whose chip should pop next render — a drop that just landed, or a
+   * cell opened through the picker (the click precedes the actual choice, but
+   * the picker is this board's other entry point alongside drag, so the same
+   * cell popping when its pair comes back assigned reads as one mechanism, not
+   * two). Cleared on the wrapper's `animationend`, which bubbles up from the
+   * chip's own animated span.
+   */
+  const [landed, setLanded] = useState<string | null>(null);
 
   const cellKey = (date: string, seat: KidsSeat) => `${date}::${seat}`;
 
@@ -107,6 +117,7 @@ export function KidsRotationBoard({
       const source = drag;
       endDrag();
       if (!source) return;
+      setLanded(cellKey(date, seat));
       onMove(source, { date, seat });
     },
   });
@@ -142,8 +153,9 @@ export function KidsRotationBoard({
                       >
                         {sunday.published ? "Publicado" : "Borrador"}
                       </span>
-                      <button
-                        type="button"
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => onTogglePublish(sunday.date, !sunday.published)}
                         disabled={busy || (!sunday.published && sunday.filled === 0)}
                         title={
@@ -151,10 +163,11 @@ export function KidsRotationBoard({
                             ? "Asigna al menos una pareja antes de publicar"
                             : undefined
                         }
-                        className="min-h-[36px] rounded-lg border border-accent/25 px-2 font-label text-[11px] uppercase tracking-widest text-accent transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
+                        busy={sunday.publishing}
+                        busyLabel="…"
                       >
-                        {sunday.publishing ? "…" : sunday.published ? "Despublicar" : "Publicar"}
-                      </button>
+                        {sunday.published ? "Despublicar" : "Publicar"}
+                      </Button>
                     </div>
                   </div>
                 </th>
@@ -183,7 +196,10 @@ export function KidsRotationBoard({
                     <td key={sunday.date} className="align-top" {...dropHandlers(sunday.date, seat)}>
                       <button
                         type="button"
-                        onClick={() => onOpenSeat(sunday.date, seat)}
+                        onClick={() => {
+                          setLanded(cellKey(sunday.date, seat));
+                          onOpenSeat(sunday.date, seat);
+                        }}
                         disabled={busy}
                         aria-label={`${KIDS_SEAT_LABELS[seat]}, ${sunday.label}: ${
                           assignedId ? pairName(assignedId) : "sin asignar"
@@ -192,28 +208,42 @@ export function KidsRotationBoard({
                           isOver && dropOk
                             ? "border-accent bg-accent/10"
                             : drag !== null && dropOk
-                              ? "border-accent/40 border-dashed bg-surface-accent-faint"
+                              ? // The shared valid-drop-target pattern (MOTION.md → Kids): dashed
+                                // accent/40 while a drag is live and this cell can take it; solid
+                                // + bg-accent/10 while hovered.
+                                "border-accent/40 border-dashed bg-surface-accent-faint"
                               : "border-edge-accent-subtle bg-surface-accent-faint hover:border-accent/40"
                         }`}
                       >
                         {assignedId ? (
-                          <PairChip
-                            name={option?.name ?? pairName(assignedId)}
-                            weeksSinceLabel={option?.weeksSinceLabel}
-                            overlap={option?.worshipOverlap ?? []}
-                            note={option ? null : "Fuera de la rotación"}
-                            draggable
-                            dragging={
-                              drag?.pairId === assignedId &&
-                              drag.from?.date === sunday.date &&
-                              drag.from?.seat === seat
+                          <span
+                            key={assignedId}
+                            className="block animate-fade-in"
+                            onAnimationEnd={() =>
+                              setLanded((current) =>
+                                current === cellKey(sunday.date, seat) ? null : current,
+                              )
                             }
-                            onDragStart={startDrag({
-                              pairId: assignedId,
-                              from: { date: sunday.date, seat },
-                            })}
-                            onDragEnd={endDrag}
-                          />
+                          >
+                            <PairChip
+                              name={option?.name ?? pairName(assignedId)}
+                              weeksSinceLabel={option?.weeksSinceLabel}
+                              overlap={option?.worshipOverlap ?? []}
+                              note={option ? null : "Fuera de la rotación"}
+                              draggable
+                              dragging={
+                                drag?.pairId === assignedId &&
+                                drag.from?.date === sunday.date &&
+                                drag.from?.seat === seat
+                              }
+                              landed={landed === cellKey(sunday.date, seat)}
+                              onDragStart={startDrag({
+                                pairId: assignedId,
+                                from: { date: sunday.date, seat },
+                              })}
+                              onDragEnd={endDrag}
+                            />
+                          </span>
                         ) : (
                           <span className="font-label text-[11px] uppercase tracking-widest text-ink-dim">
                             + Asignar
