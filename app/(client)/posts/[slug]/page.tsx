@@ -376,7 +376,7 @@ const Page = async ({ params }: Params) => {
               {hasInlineChords ? (
                 <ChordChart charts={post.chords!} />
               ) : (
-                <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto">
+                <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto [&>div:first-child>div:first-child]:!mt-0">
                   {groupBySections(post.body).map((group, i) => (
                     <div key={i}>
                       <PortableText value={group} components={myPortableTextComponents} />

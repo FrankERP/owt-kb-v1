@@ -82,9 +82,19 @@ export function SongPracticeFixture() {
               the eyebrow's margins only survive because they sit on a `div` rather
               than a `p` the `prose-p:` variants would zero, and a fixture with a
               different wrapper would not reproduce that cascade at all. */}
-          <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto">
-            <div className={LYRIC_EYEBROW_BLOCK}>Coro</div>
-            <p>{dimRepeatMarkers("Santo, santo // es el Señor //")}</p>
+          <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto [&>div:first-child>div:first-child]:!mt-0">
+            {/* Two GROUPS, because `groupBySections` produces one wrapper div per
+                section and that nesting is exactly what the wrapper's
+                `[&>div:first-child>div:first-child]` clause selects against: only
+                the first group's eyebrow sits flush, the second keeps its margin. */}
+            <div>
+              <div className={LYRIC_EYEBROW_BLOCK}>Coro</div>
+              <p>{dimRepeatMarkers("Santo, santo // es el Señor //")}</p>
+            </div>
+            <div>
+              <div className={LYRIC_EYEBROW_BLOCK}>Verso</div>
+              <p>{dimRepeatMarkers("Digno es el Cordero // amén //")}</p>
+            </div>
           </div>
         </div>
       </TransposeProvider>

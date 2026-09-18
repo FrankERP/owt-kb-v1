@@ -27,8 +27,16 @@ export const LYRIC_EYEBROW = "font-label text-[11px] uppercase tracking-[0.24em]
  * loses the source-order tie and every section name ships with zero margin.
  * `prose` styles no bare `div`, so there is no tie to lose. Do not try to
  * out-specify `prose-p:`; use the right element.
+ *
+ * NO `first:` HERE, deliberately. `first:!mt-0` compiles to `:first-child`, and
+ * `groupBySections` starts EVERY group with its heading inside its own wrapper
+ * div — so every eyebrow in the document is a first child and the variant zeroed
+ * the whole rhythm it was meant to trim once. The eyebrow cannot know whether it
+ * is the page's first; only the page can. The prose wrapper owns that, with a
+ * `[&>div:first-child>div:first-child]:!mt-0` clause that reaches the first group's
+ * first child and nothing else.
  */
-export const LYRIC_EYEBROW_BLOCK = `${LYRIC_EYEBROW} !mt-6 !mb-1 first:!mt-0`;
+export const LYRIC_EYEBROW_BLOCK = `${LYRIC_EYEBROW} !mt-6 !mb-1`;
 
 // `text-ink-dim` at FULL alpha, not the 70% modifier the plan sketched: the
 // marker is text, and `lightContrast.test.ts` measured that modified pair at
