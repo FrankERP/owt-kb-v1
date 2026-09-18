@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Select from "@/app/components/ui/Select";
 import Button from "@/app/components/ui/Button";
 import DateField from "@/app/components/ui/DateField";
@@ -82,7 +82,21 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const { toast } = useToast();
+  const { toast, dismiss } = useToast();
+  // The 409 conflict message is `hold: true` (see `save`'s doc comment below) —
+  // `Toast.tsx` only auto-replaces a toast carrying the SAME message text, so a
+  // held conflict from a previous attempt would otherwise sit on screen forever,
+  // including beside a later save's own success toast. Track its id and dismiss
+  // it explicitly: at the start of the next save (a fresh attempt supersedes the
+  // warning about the last one) and on unmount (a navigation away must not leave
+  // it parked in the stack).
+  const heldConflictId = useRef<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (heldConflictId.current) dismiss(heldConflictId.current);
+    };
+  }, [dismiss]);
 
   // "Today" is Mexico City's day, not the device's — the calendar opens on the
   // month the team is living in even from a browser an ocean away.
@@ -131,6 +145,10 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
 
   async function save() {
     if (!selected) return;
+    if (heldConflictId.current) {
+      dismiss(heldConflictId.current);
+      heldConflictId.current = null;
+    }
     setSaving(true);
     try {
       const kept = Array.from(dates).sort();
@@ -148,7 +166,7 @@ export default function KidsAvailabilityPanel({ initialMembers }: Props) {
       if (res.status === 409) {
         const current = (await res.json()) as ServerState;
         adopt(selected._id, current);
-        toast({
+        heldConflictId.current = toast({
           message: `La disponibilidad de ${displayName(selected)} cambió mientras editabas — tus cambios NO se guardaron. La lista ya muestra las fechas actuales: vuelve a marcarlas y guarda otra vez.`,
           tone: "error",
           hold: true,

@@ -59,6 +59,58 @@ describe("KidsAvailabilityPanel", () => {
     });
   });
 
+  it("a resolved conflict takes its held warning with it", async () => {
+    let call = 0;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === `/api/kids/members/${member._id}/availability` && init?.method === "PATCH") {
+        call += 1;
+        if (call === 1) {
+          return {
+            ok: false,
+            status: 409,
+            json: async () => ({
+              _rev: "rev-2",
+              unavailableDates: ["2026-09-05"],
+              unavailabilityNotes: [],
+            }),
+          } as Response;
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            _rev: "rev-3",
+            unavailableDates: ["2026-09-05", "2026-09-06"],
+            unavailabilityNotes: [],
+          }),
+        } as Response;
+      }
+      throw new Error(`unexpected fetch ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    withProviders(<KidsAvailabilityPanel initialMembers={[member]} />);
+
+    // First attempt: 409, the conflict warning is held.
+    fireEvent.click(screen.getAllByRole("button", { pressed: false })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /^Guardar/ }));
+    await waitFor(() => {
+      expect(
+        screen.getAllByText(/cambió mientras editabas — tus cambios NO se guardaron/).length,
+      ).toBeGreaterThan(0);
+    });
+
+    // Mark a fresh date against the now-current state (`adopt` set dirty back
+    // to false) and save again — this attempt succeeds.
+    fireEvent.click(screen.getAllByRole("button", { pressed: false })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /^Guardar/ }));
+
+    await waitFor(() => {
+      expect(screen.queryAllByText(/cambió mientras editabas/).length).toBe(0);
+    });
+    expect(await screen.findByText(/guardada\./)).toBeTruthy();
+  });
+
   it("steps the month with the DateField arrows", async () => {
     withProviders(<KidsAvailabilityPanel initialMembers={[member]} />);
 
