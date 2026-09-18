@@ -2493,8 +2493,11 @@ open) and `r6-gallery-kids-planner-1280.png` (the `kids-planner` fixture on dev)
 it to `/` by design (its gate is `requireMinistryMember("kids")`); the Sunday cards' stagger and
 the «Te toca» pop are covered by `kidsPage.test.tsx`'s reveal-index and class assertions.
 One data fact the song shot surfaced: 124 of the 127 songs with lyrics store their section
-names as heading blocks (the eyebrow path); three store them as plain lines, which render as
-lyrics — a catalogue fix, not a renderer one. Another: the catalogue writes some repeats as
+names as heading blocks (the eyebrow path). Of the other three, one («Amor Sin Condición»)
+stored its labels as plain lines and was converted to `h3` on 2026-09-18 by
+`scripts/fix-lyric-section-labels.mjs` (dry run, then `--apply`; idempotent); the other two
+(«En El Monte Calvario», «Gloriosa Cruz») carry no labels at all — stanzas separated by blank
+lines — and stay that way, because inventing labels is content authoring, not a fix. Another: the catalogue writes some repeats as
 `///`, which dims as `//` + `/` — a residual for the marker helper.
 
 **Release:** merged to `main` as `0d21f8ce` (PR #83, 2026-09-18 16:26 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last verified at `cd6d7176` (dev alias on `8b024c5e` carried the final code; `cd6d7176` added only the shots record).
