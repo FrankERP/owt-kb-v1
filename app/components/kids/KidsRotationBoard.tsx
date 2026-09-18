@@ -114,6 +114,7 @@ export function KidsRotationBoard({
         const next = current[key];
         if (key in prev && prev[key] !== next && next !== null) changed.push(key);
       }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- landing detection compares the committed board against the previous snapshot; the arming setState is the effect's whole job (R6 ruling 17)
       if (changed.length === 1) setLanded(changed[0]);
     }
     prevAssigned.current = current;
