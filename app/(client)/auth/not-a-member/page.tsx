@@ -4,11 +4,13 @@ import Image from "next/image";
 import { signOut } from "next-auth/react";
 import { clearThemeMirror } from "@/app/utils/themePref";
 import { blackout } from "@/app/components/ui/Blackout";
+import Button from "@/app/components/ui/Button";
+import { revealProps } from "@/app/utils/reveal";
 
 export default function NotAMemberPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm text-center space-y-6">
+      <div className="w-full max-w-sm text-center space-y-6" {...revealProps(0)}>
         <Image src="/LogoOasis.png" alt="Oasis Worship Team" width={56} height={56} className="mx-auto" />
         <h1 className="font-display text-xl uppercase tracking-wide">Acceso no autorizado</h1>
         <p className="font-body text-sm text-mono-400">
@@ -18,8 +20,9 @@ export default function NotAMemberPage() {
         </p>
         {/* Sign out first so the wrong account is cleared — a plain link back to
             sign-in would keep the current session and just loop back here. */}
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="lg"
           onClick={async () => {
             clearThemeMirror();
             const b = blackout();
@@ -30,10 +33,9 @@ export default function NotAMemberPage() {
               b.cancel();
             }
           }}
-          className="inline-block font-label text-xs uppercase tracking-widest px-4 py-2.5 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
         >
           Cerrar sesión e intentar con otra cuenta
-        </button>
+        </Button>
       </div>
     </div>
   );

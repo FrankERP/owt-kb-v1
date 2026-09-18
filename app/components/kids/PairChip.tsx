@@ -26,6 +26,7 @@ export function PairChip({
   blocked = false,
   draggable = false,
   dragging = false,
+  landed = false,
   onDragStart,
   onDragEnd,
 }: {
@@ -42,6 +43,9 @@ export function PairChip({
   blocked?: boolean;
   draggable?: boolean;
   dragging?: boolean;
+  /** This chip just landed here (a drop, or a seat picked). Plays `animate-pop`
+   *  once; the caller clears it on `animationend`. */
+  landed?: boolean;
   onDragStart?: (e: DragEvent<HTMLSpanElement>) => void;
   onDragEnd?: (e: DragEvent<HTMLSpanElement>) => void;
 }) {
@@ -65,8 +69,8 @@ export function PairChip({
               ? "border-warning-fg/40 bg-warning-fg/10 text-warning-fg"
               : "border-accent/25 bg-accent/10 text-ink-muted"
         } ${nextUp ? "ring-2 ring-accent" : ""} ${draggable ? "cursor-grab" : ""} ${
-          dragging ? "opacity-30" : ""
-        }`}
+          dragging ? "opacity-30 scale-95" : ""
+        } ${landed ? "animate-pop" : ""}`}
       >
         <span className="truncate">{name}</span>
         {overlapped && <span aria-hidden="true">♪</span>}

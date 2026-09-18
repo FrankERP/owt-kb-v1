@@ -8,6 +8,7 @@ import Presence from "./ui/Presence";
 import Button from "./ui/Button";
 import { useTransposeOptional } from "./song/TransposeProvider";
 import { rootIndex, transposeChord, transposeKey, capoSuggestion, CHORD_RE } from "@/app/utils/transpose";
+import { dimRepeatMarkers, LYRIC_EYEBROW } from "@/app/utils/lyricMarkers";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -176,7 +177,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
               return (
                 <p
                   key={li}
-                  className="font-label text-xs uppercase tracking-widest text-accent/70 mt-5 mb-1 first:mt-0"
+                  className={`${LYRIC_EYEBROW} mt-5 mb-1 first:mt-0`}
                 >
                   {line.slice(2)}
                 </p>
@@ -196,7 +197,7 @@ export default function ChordChart({ charts, defaultKey }: { charts: Chart[]; de
               if (!text.trim()) return null;
               return (
                 <p key={li} className="font-body text-sm sm:text-base leading-snug">
-                  {text}
+                  {dimRepeatMarkers(text)}
                 </p>
               );
             }

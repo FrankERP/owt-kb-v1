@@ -15,17 +15,12 @@
 // ADR-0020 say.
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { haptic } from "@/app/utils/haptics";
-import SlidingIndicator from "./ui/SlidingIndicator";
-import CueDialog from "./ui/CueDialog";
+import BottomNavBar, { type Tab, KidsIcon, PlanIcon, AdminIcon, HomeIcon, CalendarIcon, MusicIcon } from "./BottomNavBar";
 
 export const NAV_H_VAR = "--bottom-nav-h";
 export const NAV_CLASS = "has-bottom-nav";
-
-type Tab = { href: string; label: string; icon: React.ReactNode; match: (p: string) => boolean };
 
 export default function BottomNav() {
   const { data: session } = useSession();
@@ -54,12 +49,10 @@ export default function BottomNav() {
         ...(managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon />, match: (p: string) => p.startsWith("/kids/admin") }] : []),
       ];
 
-  const rowClass = "flex min-h-[44px] w-full items-center gap-3 px-5 py-3 font-label text-xs uppercase tracking-widest text-ink hover:bg-accent/5";
-
   // «Más» holds only what the tabs cannot fit — the avatar menu (NavMenu) now
   // owns Tema, Cerrar sesión and «Yo». When no row applies, there is nothing
   // to hold: the bar shows the tabs and the sheet never opens.
-  const moreRows: { href: string; label: string; icon: React.ReactNode }[] = [
+  const moreRows = [
     ...(inWorship && inKids ? [{ href: "/kids", label: "Kids", icon: <KidsIcon /> }] : []),
     ...(inWorship && managesKids ? [{ href: "/kids/admin", label: "Planear Kids", icon: <PlanIcon /> }] : []),
     ...(isAdmin ? [{ href: "/admin", label: "Admin", icon: <AdminIcon /> }] : []),
@@ -110,132 +103,13 @@ export default function BottomNav() {
   if (hidden) return null;
 
   return (
-    <>
-      <nav
-        ref={barRef}
-        aria-label="Navegación principal"
-        className="fixed bottom-0 inset-x-0 z-50 lg:hidden bg-surface-base/90 backdrop-blur-sm border-t border-accent/15"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        {/* `min-h-16`, not `h-16`. The measured height published as
-            `--bottom-nav-h` is only honest if the bar may actually grow: with a
-            fixed height a label that needs a second line at «Máximo» text size
-            would overflow a box still reporting 64px, and every consumer of the
-            variable (toasts, the audio player, the song FAB) would clear the
-            wrong amount. */}
-        <div className="flex items-stretch min-h-16 max-w-7xl mx-auto">
-          {tabs.map((tab) => {
-            const active = tab.match(pathname);
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                onClick={() => { void haptic("selection"); setMoreOpen(false); }}
-                aria-current={active ? "page" : undefined}
-                className={`relative flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-fast ease-out-brand ${
-                  active ? "text-accent" : "text-mono-500 hover:text-mono-300"
-                }`}
-              >
-                {active && <SlidingIndicator id="bottom-nav" variant="dot" />}
-                <span className={`transition-transform duration-fast ease-out-brand ${active ? "-translate-y-0.5" : ""}`}>{tab.icon}</span>
-                <span className="font-label text-[10px] uppercase tracking-widest">{tab.label}</span>
-              </Link>
-            );
-          })}
-          {moreRows.length > 0 && (
-            <button
-              type="button"
-              onClick={() => { void haptic("selection"); setMoreOpen(true); }}
-              aria-haspopup="dialog"
-              aria-expanded={moreOpen}
-              className={`relative flex-1 flex flex-col items-center justify-center gap-1 transition-colors duration-fast ease-out-brand ${
-                moreOpen ? "text-accent" : "text-mono-500 hover:text-mono-300"
-              }`}
-            >
-              <span><MoreIcon /></span>
-              <span className="font-label text-[10px] uppercase tracking-widest">Más</span>
-            </button>
-          )}
-        </div>
-      </nav>
-
-      <CueDialog open={moreOpen} mode="sheet" size="sm" title="Más" label="Más" onDismiss={() => setMoreOpen(false)}>
-        <div className="divide-y divide-accent/10">
-          {moreRows.map((row) => (
-            <Link key={row.href} href={row.href} onClick={() => setMoreOpen(false)} className={rowClass}>
-              {row.icon}{row.label}
-            </Link>
-          ))}
-        </div>
-      </CueDialog>
-    </>
-  );
-}
-
-function HomeIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
-      <path d="M3 11.5 12 4l9 7.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M5 10v10h14V10" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="4" width="18" height="18" rx="2" />
-      <line x1="16" y1="2" x2="16" y2="6" />
-      <line x1="8" y1="2" x2="8" y2="6" />
-      <line x1="3" y1="10" x2="21" y2="10" />
-    </svg>
-  );
-}
-
-function MusicIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 18V5l12-2v13" />
-      <circle cx="6" cy="18" r="3" />
-      <circle cx="18" cy="16" r="3" />
-    </svg>
-  );
-}
-
-function KidsIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <circle cx="12" cy="6" r="3" />
-      <path d="M5 21c0-4 3-6 7-6s7 2 7 6" />
-      <path d="M9 12v3M15 12v3" />
-    </svg>
-  );
-}
-
-function PlanIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <rect x="3" y="4" width="18" height="17" rx="2" />
-      <path d="M3 9h18" />
-      <path d="M8 13h3M8 17h6" />
-    </svg>
-  );
-}
-
-function AdminIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  );
-}
-
-function MoreIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="5" r="1" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="19" r="1" fill="currentColor" stroke="none" />
-    </svg>
+    <BottomNavBar
+      tabs={tabs}
+      activeHref={pathname}
+      moreRows={moreRows}
+      moreOpen={moreOpen}
+      onMore={setMoreOpen}
+      barRef={barRef}
+    />
   );
 }

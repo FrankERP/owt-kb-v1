@@ -42,10 +42,16 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
 }));
 
 // Navbar pulls in NavMenu → next-auth/react and next/image, none of which this
-// test is about. Link is stubbed for the same reason.
+// test is about. Link is stubbed as a plain anchor — real enough that a
+// consumer's className/href still show up in the rendered markup — for the
+// same reason.
 vi.mock("@/app/components/Navbar", () => ({ default: () => null }));
 vi.mock("next/link", () => ({
-  default: ({ children }: { href: string; children?: ReactNode }) => children,
+  default: ({ href, children, ...rest }: { href: string; children?: ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 import KidsPage from "../page";
@@ -188,6 +194,32 @@ describe("/kids page render", () => {
 
     getMemberAccess.mockResolvedValue(memberAccess);
     expect(await renderPage()).not.toContain("Planear Kids");
+  });
+
+  it("reveals the heading row and each Sunday in order, and pops the Te toca pill", async () => {
+    getMemberAccess.mockResolvedValue(memberAccess);
+    sanityFetch.mockResolvedValue([sunday]);
+    const html = await renderPage();
+
+    const revealIndices = [...html.matchAll(/data-reveal="" style="--reveal-i:(\d+)"/g)].map(
+      (m) => m[1],
+    );
+    expect(revealIndices.length).toBeGreaterThanOrEqual(2);
+    expect(revealIndices[0]).toBe("0"); // the heading row
+    expect(revealIndices[1]).toBe("1"); // the first (only) Sunday article
+
+    const teTocaMatch = html.match(/<span class="([^"]*)">Te toca/);
+    expect(teTocaMatch).not.toBeNull();
+    expect(teTocaMatch?.[1]).toContain("animate-pop");
+  });
+
+  it("links to the planner through a Button", async () => {
+    sanityFetch.mockResolvedValue([]);
+    getMemberAccess.mockResolvedValue({ ...memberAccess, managesMinistries: ["kids"] });
+    const html = await renderPage();
+    const linkMatch = html.match(/<a[^>]*href="\/kids\/admin"[^>]*class="([^"]*)"/);
+    expect(linkMatch).not.toBeNull();
+    expect(linkMatch?.[1]).toContain("rounded-");
   });
 });
 

@@ -7,6 +7,7 @@
 
 import { useEffect } from "react";
 import Button from "../components/ui/Button";
+import { revealProps } from "../utils/reveal";
 
 export default function Error({
   error,
@@ -20,7 +21,7 @@ export default function Error({
   }, [error]);
 
   return (
-    <div className="min-h-[70svh] flex flex-col items-center justify-center gap-6 px-6 text-center">
+    <div className="min-h-[70svh] flex flex-col items-center justify-center gap-6 px-6 text-center" {...revealProps(0)}>
       <svg
         width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"

@@ -245,6 +245,15 @@ several exist precisely to stop a plausible-looking change.
 - **`/admin` has no shell and no page-level horizontal scroll** — the planner grid, the
   Servicios board and the availability matrix are the only horizontal scrollers, each in
   its own `overflow-x-auto` box (ADR-0035).
+- **A theme-gallery fixture hosts PRESENTATIONAL halves only** — never a component that
+  reads a session, a cookie, the network or an env var. The gallery route is public and
+  prerendered (ADR-0017), so `useSession` there breaks both; that is why the `nav` fixture
+  hosts `BottomNavBar` and not `BottomNav`. `themeGallery.test.ts` sweeps every fixture for
+  `useSession`/`next-auth`/`fetch`/Sanity/env and fails a new one that reaches out. The
+  song fixture's `TutorialPoster` is the ONE documented exception — the `i.ytimg.com` URL
+  is hard-coded inside the production component — and `e2e/theme-gallery/gallery.spec.ts`
+  stubs that route so the baseline stays deterministic. Splitting a component is the
+  answer; loosening the guard is not.
 - **Form controls are 16 px on a phone.** WebKit zooms into any focused `<input>`/`<textarea>`/`<select>` under 16 px and never zooms back, so every member-reachable control is `text-[16px] sm:text-<size>` (`ui/Select`/`ui/DateField` carry it in their `SIZE` maps). Never `maximum-scale=1` on the viewport. `inputFontSize.test.ts` is the guard (`admin/`, `kids/` excluded by path).
 
 ## Reusable utils (don't reinvent)
@@ -280,7 +289,9 @@ trigger), `Collapse` (`app/components/ui/Collapse.tsx`
 never `aria-pressed` toggles), `SlidingIndicator` (tab bars), `Switch`, `Checkbox`,
 `Select` (desktop: a `Menu` popover; touch: the native picker), `DateField`
 (native controls under house chrome — never a bare
-`<select>`/`<input type="checkbox|date|month">` in `app/**`), `NumberRoll`,
+`<select>`/`<input type="checkbox|date|month">` in `app/**`; **`disabled` reaches the
+`kind="month"` stepper arrows too** — a composite field is ONE control, and arrows that
+stayed live mid-save started a second load underneath the first), `NumberRoll`,
 `AnimatedList` (`app/components/ui/AnimatedList.tsx` — every list that reflows on filter),
 `SwipeStrip` (`app/components/ui/SwipeStrip.tsx` — the one drag-with-snap host, `onSwipe(dir)`
 past a distance/velocity threshold; the schedule's week strip is its one consumer),
@@ -323,6 +334,19 @@ state only when rendered WITHOUT a provider, never as a second live copy),
 `transposeKey`/`transposeChord`/`capoSuggestion`/`isChordPro`; neutral, so a Server
 Component may call them), `practice.ts` (`app/utils/practice.ts` —
 `tempoPeriodMs`/`beatsPerBar`/`autoscrollPxPerSecond`/`countLyricLines`; neutral too),
+`lyricMarkers.tsx` (`app/utils/` — the lyric block's typography: `LYRIC_EYEBROW`/
+`LYRIC_EYEBROW_BLOCK` restyle the section headings a sheet ALREADY has (never ADD a label —
+decision N) and `dimRepeatMarkers` dims `//`. Neutral, so the song page may call it. The
+eyebrow element is a bare `div`, never a `p` (a `p` loses the `!important` tie to
+`prose-p:!mt-0` on emission order), and the block carries NO `first:` — only the page's
+prose wrapper knows which eyebrow is first, via
+`[&>div:first-child>div:first-child]:!mt-0`), `TutorialPoster`
+(`app/components/song/TutorialPoster.tsx` — the ONLY tutorial embed: a YouTube poster under
+a «Reproducir» `Button`, player on press; a url with no extractable id keeps the raw
+iframe, a url-less row renders nothing. Never boot an embed on page load),
+`BottomNavBar` (`app/components/BottomNavBar.tsx` — the phone tab bar's PRESENTATIONAL
+half, props only; `BottomNav` keeps the session, the pathname and the measurement. Anything
+that needs the bar without a session — a gallery fixture — hosts this one),
 `SongHeroPills` (`app/components/song/` — the ONE 12-key picker on the song page;
 never add a second strip, `ChordChart` keeps only its ± pair), `TempoPill`
 (`app/components/song/` — the ONE tempo control, on the song hero (`size="md"`) and in

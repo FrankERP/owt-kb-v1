@@ -2296,3 +2296,205 @@ pointer) and `r5-admin-board-1440.png` (the snap track mid-scroll).
 **Release:** merged to `main` as `a2a7b9c3` (PR #80, 2026-09-17 13:58 CST); production alias
 `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last
 verified at `26a8f749` (the F1 strip fix, phone shots in the ledger).
+
+# Part XVI — R6 (2026-09-18)
+
+Branch `claude/motion-r6-kids-auth-gallery`, forked from `main` at `67a75b9d` (the bundle
+baseline below was built from `6e69fed0`, one merge earlier). Eight implementation tasks plus
+this documentation task, covering Part I §5.9 (Kids), §5.10 (auth and the fallback pages),
+§5.11 (the theme gallery), §19.5's two song-page rows and decision P, and §20's R6 line. The
+last product surfaces that had never seen a primitive adopt them; the two song-page items R4
+deferred land; and the theme gallery stops being a place to look and becomes a baseline that
+fails a build.
+
+**Shipped.** `app/components/kids/KidsPlanner.tsx` — the toolbar is `Button`s and a
+`DateField kind="month"` with `onStep`, the three inline flashes are `useToast`, loading is a
+`SkeletonGroup` of `Skeleton`s, the month body is a keyed `animate-rise` remount and
+`SeatPicker` is controlled (`open`), mounted always. `app/components/kids/SeatPicker.tsx` —
+the `open` prop (`cueDialogMount` 6 → 5). `app/components/ui/DateField.tsx` — `disabled`
+forwards to BOTH stepper arrows. `app/components/kids/KidsRotationBoard.tsx` — the shared
+dashed drop-target pattern named in `MOTION.md`, the source chip's lift
+(`opacity-30 scale-95`), the landing `animate-pop` armed by a per-cell change effect, and
+`Button` publish toggles. `app/components/kids/KidsSundayCards.tsx` — the same chip, a keyed
+`animate-fade-in` crossfade when a seat's name changes, `Button` toggles.
+`app/components/kids/PairChip.tsx` — the optional `landed` prop.
+`app/components/kids/PairRoster.tsx` — rows through `AnimatedList`, the retire confirm inside
+`Presence variant="rise"`, `Button`s and `useToast`.
+`app/components/kids/KidsAvailabilityPanel.tsx` — `DateField` month stepping, `Button` marks,
+`useToast` with a HELD 409 conflict message that carries its own id.
+`app/(client)/kids/page.tsx` — `revealProps` stagger over the Sunday cards, the «Te toca» pill
+on `animate-pop`, «Planear Kids» as a `Button`. `app/(client)/kids/admin/page.tsx` — three
+`revealProps` sections. `app/(client)/auth/signin/page.tsx` — the ruling-8 stagger, the error
+alert inside `Presence variant="rise"`, `Button`s with a busy submit.
+`app/(client)/auth/not-a-member/page.tsx`, `app/(client)/not-found.tsx`,
+`app/(client)/posts/not-found.tsx`, `app/(client)/error.tsx` — `revealProps(0)` and a house
+`Button` each. `app/utils/lyricMarkers.tsx` — the NEUTRAL `LYRIC_EYEBROW`,
+`LYRIC_EYEBROW_BLOCK` and `dimRepeatMarkers`, called by the song page and `ChordChart`.
+`app/components/song/TutorialPoster.tsx` — the click-to-load YouTube facade.
+`next.config.mjs` — the `i.ytimg.com` remote pattern. `app/components/BottomNavBar.tsx` — the
+tab bar's presentational half, split out of `BottomNav`. The gallery's `NavFixture` (new) and
+`ControlsFixture` (Skeleton, an open `Menu`, `pill tone="availability"`, `icon tone="danger"`,
+`size="sm"` primary/secondary); `FIXTURES` is seven and the route prerenders 14 pages.
+`app/(gallery)/theme-gallery/[theme]/GalleryMotion.tsx` — the `#motion` escape hatch, in a
+LAYOUT effect. `tailwind.config.ts` — the `pop` keyframe and `animate-pop`.
+`playwright.vr.config.ts`, `e2e/theme-gallery/gallery.spec.ts`,
+`e2e/theme-gallery/motion-on.spec.ts` and 28 committed darwin PNGs (8.5 MB) under
+`e2e/theme-gallery/__screenshots__/{desktop,phone}/darwin/`; `npm run test:vr`.
+
+**Rulings 1–14 are in the plan** (`docs/superpowers/plans/2026-09-18-motion-r6-kids-auth-gallery.md`)
+and all of them stood. In short: `pop` is CSS, not a spring (1); the Kids board keeps HTML5
+drag and gains no landing beam (2); `useToast` replaces the three inline flashes while the
+«Cambios sin guardar» banners stay (3); a full-width multi-line LIST ROW is not a `Button` (4);
+month navigation is `DateField kind="month"` with `onStep` (5); `SeatPicker` is controlled (6);
+the roster reflows through `AnimatedList` and retiring needs no `CueDialog` because it is
+reversible (7); the sign-in stagger indices are 0/3/4/5/6/7 (8); one neutral
+`dimRepeatMarkers` serves both lyric renderers (9); the tutorial poster is a facade, and a
+non-YouTube url keeps today's iframe (10); the `nav` fixture hosts a presentational
+`BottomNavBar` (11); the `controls` fixture closes its gaps (12); the VR policy is
+darwin-only, committed, opt-in and out of CI (13); and the kids `loading.tsx`, planner-cell
+motion, a hover state in VR and R4's day sheet are deferred on purpose (14).
+
+**Made during execution, on top of the plan.**
+- **15. `DateField` forwards `disabled` to its stepper arrows.** A composite field is ONE
+  control: the month input went inert while the planner was busy and the arrows did not, so a
+  press mid-generate or mid-save started a second month load. `monthLabel` was deleted in the
+  same fix — the native month input IS the label now, exactly as `ScheduleHeader` has read
+  since R2. Whether that reads as a label at all is a look for Frank on dev.
+- **16. The controlled picker is a boolean plus a RETAINED payload,** not a ref written during
+  render: `pickerOpen` decides `open` and the last `picking` survives the exit so the sheet
+  still has content while it closes. The obvious `if (picking) lastPick.current = picking`
+  spelling the plan sketched is a write during render, which the React compiler rejects as an
+  error — and the gate is 0 errors. `loadMonth` closes the picker, so a month change can never
+  leave a sheet pointing at a seat that no longer exists.
+- **17. A landed chip is detected by CHANGE, never by intent.** The first implementation armed
+  `landed` on the cell CLICK, so opening a picker popped the chip already sitting there and
+  cancelling popped it again. It is now a per-cell snapshot of `assignedPairId` compared in an
+  effect, armed only when `key in prev && prev[key] !== next && next !== null`. The
+  `key in prev` half is the second fix: a month load swaps in a whole new set of cell keys, and
+  without it every pre-filled seat in the new month read as "just landed" and the board
+  fireworked. One arming path covers drag and picker identically; mount and a month load seed
+  the snapshot and arm nothing.
+- **18. A held (409) toast keeps its id.** `Toast` only auto-replaces a toast carrying the same
+  message text, so a conflict warning held until something replaces it would otherwise sit
+  beside a later save's success toast and contradict it. The panel tracks the id and dismisses
+  it at the next save and on unmount.
+- **19. The lyric eyebrow is a `<div>`, and only the PAGE's first one sits flush.** Two
+  defects, both found by building CSS rather than by the suite. A `<p>` loses the `!important`
+  tie to the prose wrapper's `prose-p:!mt-0` — same specificity, equally `!important`, and
+  Tailwind emits variant utilities last — so every section name shipped with zero margin; a
+  bare `div` has no tie to lose. Then `first:!mt-0` inside `LYRIC_EYEBROW_BLOCK` compiled to
+  `:first-child`, and `groupBySections` starts EVERY group with its heading in its own wrapper,
+  so the variant zeroed the whole rhythm it was meant to trim once. The block carries no
+  `first:`; the page (and the gallery fixture, byte-identically) carries
+  `[&>div:first-child>div:first-child]:!mt-0`. A source guard pins the element and the clause.
+- **20. The repeat marker is `text-ink-dim` at FULL alpha.** The plan's `/70` measures 3.60:1
+  in dark — under the 4.5 floor `lightContrast.test.ts` enforces on text. The role already
+  reads dimmer than the lyric body, which is the whole effect. `TutorialPoster.url` is optional
+  because the Sanity `tutorial` object requires neither field, and url-less rows are filtered
+  out on the page rather than rendering an iframe with no `src`.
+- **21. The gallery's paint assertions target what is actually painted.** The planner test
+  probes the PORTALLED overlay
+  (`[role="dialog"][aria-label="Cuadrícula del mes en pantalla completa"]` +
+  `data-planner-fullscreen-activated`) — `data-planner-fullscreen` is on the toggle, not the
+  overlay. The dialog test probes two points, because `CueDialog` is `items-start` below `sm`.
+  `gallery.spec.ts` fulfils `/_next/image` and `i.ytimg.com` in `beforeEach`: the song
+  fixture's tutorial poster is the ONE non-hermetic thing in the gallery, and the URL is
+  hard-coded inside the production component. `useLayoutEffect` sufficed for `#motion` (React
+  19 emits no SSR warning for it), and `#motion` applies to a HARD load only — `GalleryMotion`
+  reads the hash on mount.
+
+**Guards.** `cueDialogMount` 6 → 5 (ruling 6). New: `tailwindMotion.test.ts` (the `pop`
+keyframe's frames and its animation string), `lyricMarkers.test.tsx` (behaviour plus the three
+source guards of ruling 19 — the eyebrow is a `div`, the block carries no `first:`, and the
+page and fixture wrappers are byte-identical), `vrConfig.test.ts` (the snapshot path template,
+the diff ratio, `animations: "disabled"`, the two projects). `themeGallery.test.ts` grew to
+seven fixtures, swept `NavFixture` into the hermetic check, and asserts both the `#motion`
+source and that `nav` hosts `BottomNavBar` rather than `BottomNav`. `textZoomLayout.test.ts`
+reads `BottomNavBar.tsx` now. Unchanged and deliberately not raised: `rawMotionLiterals` 5/0,
+`tokenLayer` 62, `labelBudget` all 0, `inputFontSize` green (the sign-in inputs were already
+`text-[16px] sm:text-sm`).
+
+**Counts at the tip (`66cb7192`).** 320 test files / 5 526 tests, `npx eslint .` 0 errors and
+82 warnings (two `no-img-element` from `next/image` test mocks, the `meHeader.test` precedent).
+VR: 36 of 36 green with zero diffs (desktop 18 + phone 18), 28 committed PNGs, 8.5 MB.
+
+**Review trail.** Every task was reviewed on its diff; five of eight needed a fix round
+(Tasks 1, 2, 3, 6, 8), and two of those needed a second (2, 6) because the first fix was
+incomplete.
+- **Task 1 (planner controls, opus):** CHANGES_REQUESTED — MEDIUM, `DateField` did not forward
+  `disabled` to its steppers, so the month arrows stayed live mid-generate and mid-save; plus
+  a dead `monthLabel` and the `pickerOpen` second source of truth. One fix round; the sonnet
+  re-review closed all of it with 0 new.
+- **Task 2 (board chip, sonnet):** CHANGES_REQUESTED — HIGH, `landed` was armed on the cell
+  CLICK, so simply OPENING the picker popped the chip already in the seat, and the test could
+  not tell the two apart. Fix round 1 moved the arming onto the change; the re-review then
+  found a NEW MEDIUM — a month navigation popped every pre-filled seat, because the new keys
+  read as changes. Fix round 2 added the `key in prev` guard. VERIFIED on the third look.
+- **Task 3 (roster and availability, sonnet):** SPEC ✅; MEDIUM — the held 409 toast was never
+  dismissed by a later successful save, so a resolved conflict kept warning. One fix round
+  (ruling 18), VERIFIED.
+- **Task 4 (kids member page, sonnet):** APPROVED, 0 findings.
+- **Task 5 (sign-in and the fallbacks, opus):** APPROVED, 0 findings; the two new
+  `no-img-element` warnings were checked against the existing `meHeader.test` precedent.
+- **Task 6 (lyric eyebrows and the tutorial poster, opus):** CHANGES_REQUESTED — MEDIUM, the
+  `<p>` eyebrow loses the `!important` tie to `prose-p:!mt-0`, MEASURED in a real Tailwind
+  build rather than argued from the source. Fix round 1 made it a `div`; the re-review found a
+  NEW MEDIUM — `first:!mt-0` matched every group wrapper, so every eyebrow was still flush.
+  Fix round 2 moved the clause onto the page wrapper. VERIFIED on the third look. Both defects
+  were invisible to jsdom by construction: they are cascade ties, and only a real build has an
+  emission order.
+- **Task 7 (the `nav` and `controls` fixtures, opus):** APPROVED, 0 findings.
+- **Task 8 (the VR baseline, opus):** APPROVED with three findings — a stale "hermetic" comment
+  in `SongPracticeFixture` that the spec's own route stub had made untrue, an unbounded
+  `getAnimations()` await that could hang the motion-on spec, and the one-shot `#motion` hash.
+  One fix round closed all three (`Promise.race` at 400 ms, the comment corrected, a README
+  note); VR came back 36/36 again.
+- **Whole-branch review (post-tip):** CHANGES_REQUESTED — four findings. MEDIUM: the board
+  wrapper's own `fade-in` `onAnimationEnd` stripped `animate-pop` unconditionally, clearing the
+  landing pop at ~37% through it — fixed by checking `e.animationName === "pop"`. LOW: «Generar
+  mes» changes every cell in one pass, and the effect armed `landed` on whichever key it
+  reached last — fixed by collecting changed keys first and arming only when exactly one
+  changed. LOW: `KidsPlannerFixture` mounted `SeatPicker` conditionally instead of controlled —
+  fixed to mount always with an `EMPTY_SEAT_VIEW` fallback, mirroring `KidsPlanner`. Docs: this
+  Part's own review-trail count was wrong (six of eight / three of those, not five / two) —
+  corrected above. One fix round closed all four; re-verified with the full gate chain.
+
+**Parked residuals, all known and none blocking.** `posts/not-found.tsx`'s action reads «Ver
+todas las canciones» and links `/` — pre-existing, and a copy decision rather than a bug to
+fix mid-branch. The kids planner's month is the native `<input type="month">` chrome with no
+display-font label (ruling 15); Frank's look on dev decides whether it comes back. The kids
+name input stays `text-sm` — `kids/` is excluded from the 16 px guard by path, which makes
+this a deliberate gap rather than an unseen one, the same shape as R5's `admin/` exemption.
+`TutorialPoster` has no `poster` prop, so the gallery stubs the image route instead; a prop
+would make the fixture hermetic and is not worth a production seam today. `#motion` is one-shot
+per hard load. And R4's "history row press opens the day sheet" is parked again — there is
+still no day sheet.
+
+**Bundle:** `main 6e69fed0` → `R6 tip` (git-archive cold builds, `static/chunks/*` only;
+measured at `ada76ed8`, and `66cb7192` on top of it changes a comment, a `Promise.race` and a
+README, so no chunk moves): shared 172.5 → 172.0 (−0.5); `/` 123.5 → 122.8 (−0.7);
+`/posts/[slug]` 113.3 → 113.1 (−0.2); `/schedule` 126.0 → 125.2 (−0.8); `/biblioteca`
+118.3 → 117.5 (−0.8); `/me` 124.4 → 123.6 (−0.8); `/admin` 151.2 → 150.5 (−0.7). The kids and
+auth routes are not in the table. Every route falls slightly: the `BottomNavBar` split and the
+primitives adoption both remove hand-written class strings and one-off handlers from the
+shared graph, and nothing R6 added ships to a route that does not ask for it — the tutorial
+poster replaces three eagerly-booted iframes with a still.
+
+**Shots** (`docs/superpowers/specs/2026-09-08-premium-motion-shots/`, captured from dev at
+preview `8b024c5e` on 2026-09-18): `r6-kids-admin-1440.png` (the planner toolbar with its
+`DateField` month and Buttons, the board's cells and publish toggles), `r6-song-tutorials-1440.png`
+(the tutorial posters with their «Reproducir» buttons, the lyric eyebrows — VERSO 1 · PRE-CORO 1 ·
+CORO — at a 62 ch measure with their restored spacing, and the dimmed `//` in the Puente),
+`r6-signin-phone-light.png` (the stagger behind the beam, in light — captured from a local
+`next start`, because `dev-verify` signs in first and refuses `/auth/signin` as a session page),
+`r6-nav-sheet-phone-light.png` (the gallery's `nav` fixture: the phone bar with the «Más» sheet
+open) and `r6-gallery-kids-planner-1280.png` (the `kids-planner` fixture on dev). The member
+`/kids` page has no shot: the verification bot is a worship-only member and the page redirects
+it to `/` by design (its gate is `requireMinistryMember("kids")`); the Sunday cards' stagger and
+the «Te toca» pop are covered by `kidsPage.test.tsx`'s reveal-index and class assertions.
+One data fact the song shot surfaced: 124 of the 127 songs with lyrics store their section
+names as heading blocks (the eyebrow path); three store them as plain lines, which render as
+lyrics — a catalogue fix, not a renderer one. Another: the catalogue writes some repeats as
+`///`, which dims as `//` + `/` — a residual for the marker helper.
+
+**Release:** <pending>

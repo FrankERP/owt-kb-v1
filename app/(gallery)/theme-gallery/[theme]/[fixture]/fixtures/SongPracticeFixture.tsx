@@ -13,7 +13,9 @@ import ChordChart from "@/app/components/ChordChart";
 import SongAudioSection from "@/app/components/SongAudioSection";
 import SongHeroPills from "@/app/components/song/SongHeroPills";
 import { TransposeProvider } from "@/app/components/song/TransposeProvider";
+import TutorialPoster from "@/app/components/song/TutorialPoster";
 import { PlayerProvider } from "@/app/context/PlayerContext";
+import { dimRepeatMarkers, LYRIC_EYEBROW_BLOCK } from "@/app/utils/lyricMarkers";
 
 /** 0.1 s of 8 kHz mono PCM silence. Inline because the gallery has no network. */
 const SILENT_WAV =
@@ -65,6 +67,44 @@ export function SongPracticeFixture() {
           <ChordChart charts={[{ key: "G", content: CHART }]} />
 
           <SongAudioSection tracks={TRACKS} songTitle="Canción de muestra" songSlug="cancion-de-muestra" />
+
+          {/* R6: the tutorial poster (no PLAYER loads until the button is pressed) and
+              the lyric block's two typographic rules — the eyebrow and the dimmed
+              repeat marker — are verified here in both themes.
+
+              THE POSTER IS THE ONE NON-HERMETIC THING IN THE WHOLE GALLERY, and it is
+              worth knowing about: `TutorialPoster` renders YouTube's own still through
+              `next/image`, so the SERVER fetches `i.ytimg.com` on render. Measured, that
+              made the `dark/song` baseline differ from itself by 15% of all pixels
+              between two consecutive runs — the poster had arrived in one and not the
+              other. It cannot be fixed here: the poster URL is built inside the
+              production component from the video id. So `e2e/theme-gallery/gallery.spec.ts`
+              fulfils `/_next/image` and `i.ytimg.com` with a fixed tile, and the baseline
+              stops being a race against a CDN. */}
+          <div className="brand-surface overflow-hidden rounded-2xl">
+            <div className="aspect-video">
+              <TutorialPoster url="https://www.youtube.com/embed/dQw4w9WgXcQ" title="Tutorial de ejemplo" />
+            </div>
+          </div>
+
+          {/* The wrapper class string is the song page's, character for character:
+              the eyebrow's margins only survive because they sit on a `div` rather
+              than a `p` the `prose-p:` variants would zero, and a fixture with a
+              different wrapper would not reproduce that cascade at all. */}
+          <div className="prose prose-sm sm:prose dark:prose-invert prose-p:leading-relaxed prose-p:!mt-0 prose-p:!mb-0 max-w-[62ch] mx-auto [&>div:first-child>div:first-child]:!mt-0">
+            {/* Two GROUPS, because `groupBySections` produces one wrapper div per
+                section and that nesting is exactly what the wrapper's
+                `[&>div:first-child>div:first-child]` clause selects against: only
+                the first group's eyebrow sits flush, the second keeps its margin. */}
+            <div>
+              <div className={LYRIC_EYEBROW_BLOCK}>Coro</div>
+              <p>{dimRepeatMarkers("Santo, santo // es el Señor //")}</p>
+            </div>
+            <div>
+              <div className={LYRIC_EYEBROW_BLOCK}>Verso</div>
+              <p>{dimRepeatMarkers("Digno es el Cordero // amén //")}</p>
+            </div>
+          </div>
         </div>
       </TransposeProvider>
     </PlayerProvider>

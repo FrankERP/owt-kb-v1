@@ -51,7 +51,11 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // opened by `modalOpen` plus a `modalKind`; the song and the kind are payload
 // state that outlives the close so the sheet keeps its body through the exit, and
 // each body is keyed on `modalSeq` so a reopen starts from a fresh form.
-const BASELINE = 6;
+// 6 → 5 (2026-09-18, motion R6 Task 1): `KidsPlanner`'s `SeatPicker` took an
+// `open` prop — it is mounted always and opened by `pickerOpen`, while `picking`
+// (the seat and Sunday) is payload state that is NOT cleared on dismiss, so the
+// sheet keeps its body and its title through the exit.
+const BASELINE = 5;
 
 // Every literal `open` boolean attribute on a `<CueDialog` element — bare
 // `open`, never `open={…}`. Matches regardless of what (if anything)

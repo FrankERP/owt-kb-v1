@@ -211,12 +211,22 @@ const config: Config = {
 					from: { transform: "translate3d(-100%, 0, 0)" },
 					to: { transform: "translate3d(100%, 0, 0)" },
 				},
+				// The Kids board/cards "just landed" chip (R6 Task 2). An overshoot,
+				// not a plain fade-in — it says "this one changed", not "this one
+				// appeared" — and ends on `transform: "none"` for the same
+				// containing-block reason as `rise`/`scale-in` above.
+				pop: {
+					"0%": { opacity: "0", transform: "scale(0.92)" },
+					"60%": { opacity: "1", transform: "scale(1.04)" },
+					"100%": { opacity: "1", transform: "none" },
+				},
 			},
 			animation: {
 				rise: "rise var(--motion-base) var(--ease-out) both",
 				"fade-in": "fade-in var(--motion-fast) var(--ease-out) both",
 				"scale-in": "scale-in var(--motion-slow) var(--ease-out) both",
 				shimmer: "shimmer var(--motion-shimmer) linear infinite",
+				pop: "pop var(--motion-slow) var(--ease-out) both",
 			},
 			scrollSnapType: {
 				x: "x mandatory",

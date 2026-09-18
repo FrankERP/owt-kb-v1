@@ -24,6 +24,19 @@ describe("DateField", () => {
     expect((screen.getByLabelText("Ir al mes") as HTMLInputElement).type).toBe("month");
   });
 
+  it("disables the stepper arrows too — the field is ONE control, not an input plus two buttons", () => {
+    // A caller that disables the field while a month loads must not be left with
+    // two live arrows paging the month out from under the request in flight.
+    const onStep = vi.fn();
+    render(<DateField kind="month" aria-label="Mes" value="2026-09" disabled onChange={() => {}} onStep={onStep} />);
+    for (const name of ["Mes anterior", "Mes siguiente"]) {
+      const arrow = screen.getByRole("button", { name }) as HTMLButtonElement;
+      expect(arrow.disabled).toBe(true);
+      fireEvent.click(arrow);
+    }
+    expect(onStep).not.toHaveBeenCalled();
+  });
+
   it("forwards min, max and disabled to the input", () => {
     render(<DateField kind="date" aria-label="F" value="2026-09-01" min="2026-09-01" max="2026-09-30" disabled onChange={() => {}} />);
     const input = screen.getByLabelText("F") as HTMLInputElement;
