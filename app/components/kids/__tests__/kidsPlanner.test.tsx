@@ -41,6 +41,23 @@ import { ToastProvider } from "@/app/components/ui/Toast";
  * (controlled `open`), so it is needed even by a test that never opens one.
  * `ToastProvider` owns the one toast stack the planner now reports through.
  */
+/**
+ * jsdom has no `AnimationEvent` global, so React's own feature detection
+ * (`"AnimationEvent" in window`) falls back to listening for the
+ * WEBKIT-PREFIXED native event name (`webkitAnimationEnd`) instead of the
+ * standard `animationend` — confirmed against `react-dom-client.development.js`'s
+ * `getVendorPrefixedEventName`. `fireEvent.animationEnd` also can't carry
+ * `animationName` here (jsdom's plain `Event` fallback has no such
+ * property), so both are built and dispatched by hand.
+ */
+const animationEnd = (el: Element, animationName: string) => {
+  const event = new Event("webkitAnimationEnd", { bubbles: true, cancelable: false });
+  Object.defineProperty(event, "animationName", { value: animationName });
+  // `fireEvent`, not a bare `dispatchEvent` — it wraps the dispatch in `act()`
+  // so the resulting state update flushes before the next assertion runs.
+  fireEvent(el, event);
+};
+
 const withProviders = (ui: React.ReactNode) =>
   render(
     <ToastProvider>
@@ -770,6 +787,69 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
       }),
     );
     expect(screen.getByText("C2", { selector: ".animate-pop *" })).toBeTruthy();
+  });
+
+  /**
+   * The whole-branch review's finding: the wrapper span's OWN `fade-in`
+   * animation ends at 120ms, well before the chip's `pop` (320ms) finishes,
+   * and its `onAnimationEnd` used to strip `animate-pop` unconditionally —
+   * clearing the pop at ~37% through it. The handler now checks WHICH
+   * animation just ended.
+   */
+  it("keeps the pop through the wrapper's own fade-in, and clears it only on the chip's own pop", () => {
+    renderPlanner();
+    const chipText = screen.getByText("C2");
+    const cell = screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/);
+
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    fireEvent.dragStart(chipText, { dataTransfer });
+    fireEvent.dragOver(cell, { dataTransfer });
+    fireEvent.drop(cell, { dataTransfer });
+
+    const wrapper = screen
+      .getByText("C2", { selector: ".animate-pop *" })
+      .closest(".animate-fade-in")!;
+    expect(wrapper.querySelector(".animate-pop")).not.toBeNull();
+
+    // The wrapper's own crossfade ending first — the actual failure mode —
+    // must not strip the pop.
+    animationEnd(wrapper, "fade-in");
+    expect(wrapper.querySelector(".animate-pop")).not.toBeNull();
+
+    // The chip's own `pop` ending (it bubbles up to the wrapper's handler) is
+    // what clears it.
+    animationEnd(wrapper.querySelector(".animate-pop")!, "pop");
+    expect(wrapper.querySelector(".animate-pop")).toBeNull();
+  });
+
+  /**
+   * The whole-branch review's second finding: «Generar mes» rewrites every
+   * cell in one pass, and the effect used to arm `landed` on whichever key
+   * it reached last — one arbitrary chip popping out of a whole month that
+   * just changed. It now arms only when EXACTLY ONE cell changed.
+   */
+  it("stays quiet when «Generar mes» changes several cells at once", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        proposal: [
+          { date: "2026-09-06", seats: { chiquitos: "c1" } },
+          { date: "2026-09-13", seats: { chiquitos: "c2" } },
+        ],
+        warnings: [],
+        diagnostics: [],
+        seed: 0,
+        fingerprint: "fp-0",
+        exhausted: false,
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPlanner();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
+    await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
+
+    expect(document.querySelectorAll(".animate-pop")).toHaveLength(0);
   });
 
   it("wraps the phone card's chip in the crossfade span whether or not it just changed", () => {

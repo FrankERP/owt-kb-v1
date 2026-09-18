@@ -2418,8 +2418,9 @@ reads `BottomNavBar.tsx` now. Unchanged and deliberately not raised: `rawMotionL
 82 warnings (two `no-img-element` from `next/image` test mocks, the `meHeader.test` precedent).
 VR: 36 of 36 green with zero diffs (desktop 18 + phone 18), 28 committed PNGs, 8.5 MB.
 
-**Review trail.** Every task was reviewed on its diff; six of eight needed a fix round, and
-three of those needed a second because the first fix was incomplete.
+**Review trail.** Every task was reviewed on its diff; five of eight needed a fix round
+(Tasks 1, 2, 3, 6, 8), and two of those needed a second (2, 6) because the first fix was
+incomplete.
 - **Task 1 (planner controls, opus):** CHANGES_REQUESTED — MEDIUM, `DateField` did not forward
   `disabled` to its steppers, so the month arrows stayed live mid-generate and mid-save; plus
   a dead `monthLabel` and the `pickerOpen` second source of truth. One fix round; the sonnet
@@ -2448,6 +2449,15 @@ three of those needed a second because the first fix was incomplete.
   `getAnimations()` await that could hang the motion-on spec, and the one-shot `#motion` hash.
   One fix round closed all three (`Promise.race` at 400 ms, the comment corrected, a README
   note); VR came back 36/36 again.
+- **Whole-branch review (post-tip):** CHANGES_REQUESTED — four findings. MEDIUM: the board
+  wrapper's own `fade-in` `onAnimationEnd` stripped `animate-pop` unconditionally, clearing the
+  landing pop at ~37% through it — fixed by checking `e.animationName === "pop"`. LOW: «Generar
+  mes» changes every cell in one pass, and the effect armed `landed` on whichever key it
+  reached last — fixed by collecting changed keys first and arming only when exactly one
+  changed. LOW: `KidsPlannerFixture` mounted `SeatPicker` conditionally instead of controlled —
+  fixed to mount always with an `EMPTY_SEAT_VIEW` fallback, mirroring `KidsPlanner`. Docs: this
+  Part's own review-trail count was wrong (six of eight / three of those, not five / two) —
+  corrected above. One fix round closed all four; re-verified with the full gate chain.
 
 **Parked residuals, all known and none blocking.** `posts/not-found.tsx`'s action reads «Ver
 todas las canciones» and links `/` — pre-existing, and a copy decision rather than a bug to
