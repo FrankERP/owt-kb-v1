@@ -722,6 +722,56 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     expect(screen.queryByText("C1", { selector: ".animate-pop *" })).toBeNull();
   });
 
+  /**
+   * The regression the second review round caught: a month navigation hands
+   * the board a whole new set of cell keys, so the previous snapshot has no
+   * entry for any of them — reading `prev[key]` as `undefined` made every
+   * pre-filled seat in the freshly loaded month look like it "just changed"
+   * from `undefined` to a pair id, and it popped. A key absent from the
+   * previous snapshot must be SEEDED, never armed.
+   */
+  it("does not pop a freshly loaded month's pre-filled seats, but still pops a genuine pick afterward", async () => {
+    const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: async () => body });
+    const fetchMock = vi.fn((url: string) => {
+      if (url.startsWith("/api/kids/pairs")) return json(PAIRS);
+      if (url.startsWith("/api/kids/members")) return json(MEMBERS);
+      if (url === "/api/kids/schedules?month=2026-09") {
+        return json([{ date: "2026-09-06", seats: { chiquitos: "c1" }, published: true }]);
+      }
+      if (url.startsWith("/api/kids/schedules?month=")) return json([]);
+      throw new Error(`unstubbed fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    withProviders(
+      <KidsPlanner
+        initialMonth="2026-08"
+        initialPairs={PAIRS}
+        initialMembers={MEMBERS}
+        initialSchedules={[]}
+        initialHistory={[]}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Mes siguiente"));
+    await waitFor(() => expect(screen.getByLabelText("Domingo, 6 de septiembre")).toBeTruthy());
+
+    // The month arrived already carrying an assignment — nothing here just
+    // landed, so nothing should pop.
+    expect(document.querySelectorAll(".animate-pop")).toHaveLength(0);
+
+    // A genuine pick, in that SAME loaded month, still pops — the guard above
+    // must not have also silenced real landings after a load.
+    fireEvent.click(
+      screen.getByLabelText("RG Chiquitos, Domingo, 13 de septiembre: sin asignar"),
+    );
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: /RG Chiquitos/ })).getByRole("button", {
+        name: /C2/,
+      }),
+    );
+    expect(screen.getByText("C2", { selector: ".animate-pop *" })).toBeTruthy();
+  });
+
   it("wraps the phone card's chip in the crossfade span whether or not it just changed", () => {
     renderPlanner({
       initialSchedules: [

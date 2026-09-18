@@ -88,6 +88,13 @@ export function KidsRotationBoard({
   // both end the same way, with a cell's `assignedPairId` becoming a NEW
   // non-null value. Opening a picker on an already-assigned seat and cancelling,
   // or picking the same pair back, changes nothing here, so nothing pops.
+  //
+  // A key ABSENT from the previous snapshot is SEEDED, never armed — that is
+  // what keeps a month navigation quiet. `sundays`/`seatOf` swap in a whole new
+  // set of cell keys on every load, so without this guard `prev[key]` reads
+  // `undefined` for every cell in the freshly loaded month and each pre-filled
+  // seat reads as "just landed". The snapshot is replaced wholesale each run,
+  // so a month that scrolled out of view carries no stale keys forward.
   useEffect(() => {
     const current: Record<string, string | null> = {};
     for (const sunday of sundays) {
@@ -99,7 +106,7 @@ export function KidsRotationBoard({
     if (prev !== null) {
       for (const key of Object.keys(current)) {
         const next = current[key];
-        if (next !== null && prev[key] !== next) setLanded(key);
+        if (key in prev && prev[key] !== next && next !== null) setLanded(key);
       }
     }
     prevAssigned.current = current;
