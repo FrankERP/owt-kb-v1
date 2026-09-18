@@ -34,6 +34,20 @@ import {
 } from "../kidsPlannerLabels";
 import { buildPlannerView } from "@/app/utils/kidsPlannerView";
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
+import { ToastProvider } from "@/app/components/ui/Toast";
+
+/**
+ * Every render goes through both providers. `CueDialogProvider` owns the portal
+ * the seat picker draws into — and since R6 Task 1 the picker is MOUNTED ALWAYS
+ * (controlled `open`), so it is needed even by a test that never opens one.
+ * `ToastProvider` owns the one toast stack the planner now reports through.
+ */
+const withProviders = (ui: React.ReactNode) =>
+  render(
+    <ToastProvider>
+      <CueDialogProvider>{ui}</CueDialogProvider>
+    </ToastProvider>,
+  );
 
 afterEach(() => {
   cleanup();
@@ -203,17 +217,15 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
   // `CueDialogProvider` creates — mounted app-wide in production
   // (`app/utils/Provider.tsx`) but not here, so tests that open it need it too.
   const renderPlanner = (over: Partial<Parameters<typeof KidsPlanner>[0]> = {}) =>
-    render(
-      <CueDialogProvider>
-        <KidsPlanner
-          initialMonth="2026-09"
-          initialPairs={PAIRS}
-          initialMembers={MEMBERS}
-          initialSchedules={[]}
-          initialHistory={[]}
-          {...over}
-        />
-      </CueDialogProvider>,
+    withProviders(
+      <KidsPlanner
+        initialMonth="2026-09"
+        initialPairs={PAIRS}
+        initialMembers={MEMBERS}
+        initialSchedules={[]}
+        initialHistory={[]}
+        {...over}
+      />,
     );
 
   /** The phone layout's seat row — the primary target, opened by tap. */
@@ -306,16 +318,14 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(
-      <CueDialogProvider>
-        <KidsPlanner
-          initialMonth="2026-08"
-          initialPairs={PAIRS}
-          initialMembers={MEMBERS}
-          initialSchedules={[]}
-          initialHistory={[]}
-        />
-      </CueDialogProvider>,
+    withProviders(
+      <KidsPlanner
+        initialMonth="2026-08"
+        initialPairs={PAIRS}
+        initialMembers={MEMBERS}
+        initialSchedules={[]}
+        initialHistory={[]}
+      />,
     );
     fireEvent.click(screen.getByLabelText("Mes siguiente"));
     await waitFor(() => expect(screen.getByLabelText("Domingo, 6 de septiembre")).toBeTruthy());
@@ -534,6 +544,73 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     expect(benchRoom("RG Chiquitos").textContent).toContain("Todas colocadas este mes");
   });
 
+  // ─── R6 Task 1: the shared primitives ──────────────────────────────────────
+
+  it("reports a saved month through the toast stack, not an inline paragraph", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPlanner();
+
+    fireEvent.click(seatRow("RG Chiquitos", "Domingo, 13 de septiembre"));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: /RG Chiquitos/ })).getByRole("button", {
+        name: /C1/,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Guardar borradores" }));
+
+    // The message the planner has always said, now raised through `useToast` —
+    // so it lands in the ONE portalled stack rather than in a paragraph wedged
+    // between the board and the intro text.
+    const message = await screen.findByText("Borradores guardados (1 domingo(s)).");
+    expect(message.closest("[data-toast-root]")).not.toBeNull();
+  });
+
+  it("keeps the seat picker MOUNTED while nothing is being picked", () => {
+    // A CLOSED `CueDialog` renders nothing at all, so "still mounted" leaves no
+    // trace in the DOM to assert on. It does leave a behavioural one: `CueDialog`
+    // calls `useCueDialogContext()` on every render and that throws without the
+    // provider. While the picker was mounted conditionally, a planner with no
+    // seat selected rendered no `CueDialog` and needed no provider — this render
+    // succeeded. Now it does not, which is exactly the claim: the picker is in
+    // the tree, closed, ready to be OPENED rather than created.
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(() =>
+        render(
+          <ToastProvider>
+            <KidsPlanner
+              initialMonth="2026-09"
+              initialPairs={PAIRS}
+              initialMembers={MEMBERS}
+              initialSchedules={[]}
+            />
+          </ToastProvider>,
+        ),
+      ).toThrow(/CueDialogProvider/);
+    } finally {
+      quiet.mockRestore();
+      cleanup();
+    }
+
+    // …and with the provider it renders, showing no dialog until a seat is tapped.
+    renderPlanner();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows Skeleton placeholders while a month loads — never animate-pulse", async () => {
+    // A fetch that never settles: the loading state is the whole assertion.
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    renderPlanner();
+
+    fireEvent.click(screen.getByLabelText("Mes siguiente"));
+
+    const region = await screen.findByRole("status", { name: "Cargando el mes" });
+    expect(region.getAttribute("aria-busy")).toBe("true");
+    expect(document.querySelectorAll(".animate-pulse")).toHaveLength(0);
+    expect(region.querySelectorAll(".brand-skeleton")).toHaveLength(4);
+  });
+
   it("drops a bench pair into a board cell", () => {
     renderPlanner();
     // The bench is the only place an unassigned pair's name appears.
@@ -556,15 +633,13 @@ describe("KidsPlanner — a failed save never reads as success", () => {
   it("surfaces the failure, resets the loading flag and keeps the changes dirty", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 });
     vi.stubGlobal("fetch", fetchMock);
-    render(
-      <CueDialogProvider>
-        <KidsPlanner
-          initialMonth="2026-09"
-          initialPairs={PAIRS}
-          initialMembers={MEMBERS}
-          initialSchedules={[]}
-        />
-      </CueDialogProvider>,
+    withProviders(
+      <KidsPlanner
+        initialMonth="2026-09"
+        initialPairs={PAIRS}
+        initialMembers={MEMBERS}
+        initialSchedules={[]}
+      />,
     );
 
     fireEvent.click(
@@ -614,7 +689,7 @@ describe("KidsPlanner — «Otra opción»", () => {
   );
 
   it("is hidden until there is a proposal to be dissatisfied with", () => {
-    render(board());
+    withProviders(board());
     expect(screen.queryByRole("button", { name: "Otra opción" })).toBeNull();
   });
 
@@ -634,7 +709,7 @@ describe("KidsPlanner — «Otra opción»", () => {
       };
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(board());
+    withProviders(board());
 
     fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
     await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
@@ -690,7 +765,7 @@ describe("KidsPlanner — «Otra opción»", () => {
           };
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(board());
+    withProviders(board());
 
     fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
     await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
@@ -735,7 +810,7 @@ describe("KidsPlanner — «Otra opción»", () => {
       };
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(board());
+    withProviders(board());
 
     fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
     await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
