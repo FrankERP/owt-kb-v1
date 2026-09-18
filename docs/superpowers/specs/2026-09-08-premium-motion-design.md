@@ -2497,4 +2497,4 @@ names as heading blocks (the eyebrow path); three store them as plain lines, whi
 lyrics — a catalogue fix, not a renderer one. Another: the catalogue writes some repeats as
 `///`, which dims as `//` + `/` — a residual for the marker helper.
 
-**Release:** <pending>
+**Release:** merged to `main` as `0d21f8ce` (PR #83, 2026-09-18 16:26 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last verified at `cd6d7176` (dev alias on `8b024c5e` carried the final code; `cd6d7176` added only the shots record).
