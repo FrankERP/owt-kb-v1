@@ -104,10 +104,17 @@ export function KidsRotationBoard({
     }
     const prev = prevAssigned.current;
     if (prev !== null) {
+      // Collected first, armed only when EXACTLY ONE cell changed in this pass.
+      // «Generar mes» changes every cell in one render, and the loop used to arm
+      // whichever key it reached last — one arbitrary chip popping out of a whole
+      // month that just moved. A single pick (drag or picker) still changes
+      // exactly one cell, so it still pops.
+      const changed: string[] = [];
       for (const key of Object.keys(current)) {
         const next = current[key];
-        if (key in prev && prev[key] !== next && next !== null) setLanded(key);
+        if (key in prev && prev[key] !== next && next !== null) changed.push(key);
       }
+      if (changed.length === 1) setLanded(changed[0]);
     }
     prevAssigned.current = current;
   }, [sundays, seatOf]);
@@ -246,11 +253,17 @@ export function KidsRotationBoard({
                           <span
                             key={assignedId}
                             className="block animate-fade-in"
-                            onAnimationEnd={() =>
+                            // The wrapper's OWN `fade-in` fires an `animationend` too
+                            // (120ms), and it bubbles from whichever animation actually
+                            // finished — the chip's `pop` (320ms) included. Without this
+                            // guard the wrapper's own crossfade ending at ~37% of the pop
+                            // strips `animate-pop` early. Only react to `pop` itself.
+                            onAnimationEnd={(e) => {
+                              if (e.animationName !== "pop") return;
                               setLanded((current) =>
                                 current === cellKey(sunday.date, seat) ? null : current,
-                              )
-                            }
+                              );
+                            }}
                           >
                             <PairChip
                               name={option?.name ?? pairName(assignedId)}

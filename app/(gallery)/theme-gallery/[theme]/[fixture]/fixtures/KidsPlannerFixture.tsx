@@ -28,6 +28,20 @@ import { KidsRotationBoard } from "@/app/components/kids/KidsRotationBoard";
 import { KidsSundayCards } from "@/app/components/kids/KidsSundayCards";
 import { SeatPicker } from "@/app/components/kids/SeatPicker";
 import type { KidsSundayState } from "@/app/components/kids/kidsBoardProps";
+import type { SeatView } from "@/app/utils/kidsPlannerView";
+
+/**
+ * Mirrors `KidsPlanner`'s own `EMPTY_SEAT_VIEW`: the picker is mounted ALWAYS
+ * (controlled `open`), so it needs a seat to render even while closed — an
+ * empty pool, nothing assigned, nothing to explain.
+ */
+const EMPTY_SEAT_VIEW: SeatView = {
+  date: "",
+  seat: "ensenanza",
+  assignedPairId: null,
+  options: [],
+  unfillableReason: null,
+};
 
 // PLACEHOLDER NAMES, DELIBERATELY — do not "improve" these to the real roster.
 //
@@ -191,20 +205,23 @@ export function KidsPlannerFixture() {
       />
       <KidsSundayCards {...boardProps} />
 
-      {picking && pickingView && (
-        <SeatPicker
-          open={true}
-          seatView={pickingView}
-          seatLabel={KIDS_SEAT_LABELS[picking.seat]}
-          dateLabel={label(picking.date)}
-          monthLoad={view.monthLoad}
-          assignedName={
-            pickingView.assignedPairId ? boardProps.pairName(pickingView.assignedPairId) : null
-          }
-          onChoose={() => setPicking(null)}
-          onClose={() => setPicking(null)}
-        />
-      )}
+      {/* Mounted ALWAYS, controlled `open` — mirrors `KidsPlanner`'s own picker.
+          Conditional mounting made every gallery capture miss the sheet's
+          entrance transition, since a freshly-mounted `CueDialog` never
+          animates in. The seat/labels fall back to `EMPTY_SEAT_VIEW` and a
+          placeholder so the closed sheet still has content to render. */}
+      <SeatPicker
+        open={picking !== null && pickingView !== null}
+        seatView={pickingView ?? EMPTY_SEAT_VIEW}
+        seatLabel={picking ? KIDS_SEAT_LABELS[picking.seat] : "—"}
+        dateLabel={picking ? label(picking.date) : "—"}
+        monthLoad={view.monthLoad}
+        assignedName={
+          pickingView?.assignedPairId ? boardProps.pairName(pickingView.assignedPairId) : null
+        }
+        onChoose={() => setPicking(null)}
+        onClose={() => setPicking(null)}
+      />
     </div>
   );
 }
