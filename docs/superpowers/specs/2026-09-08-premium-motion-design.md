@@ -2480,12 +2480,21 @@ primitives adoption both remove hand-written class strings and one-off handlers 
 shared graph, and nothing R6 added ships to a route that does not ask for it — the tutorial
 poster replaces three eagerly-booted iframes with a still.
 
-**Shots** (`docs/superpowers/specs/2026-09-08-premium-motion-shots/`): `r6-kids-phone.png`
-(the Sunday cards' stagger and the «Te toca» pop) `<pending shot>`, `r6-kids-admin-1440.png`
-(the planner toolbar, the board's drop targets and the roster) `<pending shot>`,
-`r6-signin-phone-light.png` (the stagger behind the beam, in light) `<pending shot>`,
-`r6-song-tutorials-1440.png` (the lyric eyebrows at a 62 ch measure and the tutorial posters)
-`<pending shot>`. The coordinator captures all four from dev after the `preview` push and
-replaces the markers.
+**Shots** (`docs/superpowers/specs/2026-09-08-premium-motion-shots/`, captured from dev at
+preview `8b024c5e` on 2026-09-18): `r6-kids-admin-1440.png` (the planner toolbar with its
+`DateField` month and Buttons, the board's cells and publish toggles), `r6-song-tutorials-1440.png`
+(the tutorial posters with their «Reproducir» buttons, the lyric eyebrows — VERSO 1 · PRE-CORO 1 ·
+CORO — at a 62 ch measure with their restored spacing, and the dimmed `//` in the Puente),
+`r6-signin-phone-light.png` (the stagger behind the beam, in light — captured from a local
+`next start`, because `dev-verify` signs in first and refuses `/auth/signin` as a session page),
+`r6-nav-sheet-phone-light.png` (the gallery's `nav` fixture: the phone bar with the «Más» sheet
+open) and `r6-gallery-kids-planner-1280.png` (the `kids-planner` fixture on dev). The member
+`/kids` page has no shot: the verification bot is a worship-only member and the page redirects
+it to `/` by design (its gate is `requireMinistryMember("kids")`); the Sunday cards' stagger and
+the «Te toca» pop are covered by `kidsPage.test.tsx`'s reveal-index and class assertions.
+One data fact the song shot surfaced: 124 of the 127 songs with lyrics store their section
+names as heading blocks (the eyebrow path); three store them as plain lines, which render as
+lyrics — a catalogue fix, not a renderer one. Another: the catalogue writes some repeats as
+`///`, which dims as `//` + `/` — a residual for the marker helper.
 
 **Release:** <pending>
