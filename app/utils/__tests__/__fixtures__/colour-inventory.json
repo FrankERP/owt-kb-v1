@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 318,
-    "filesScanned": 336,
+    "filesScanned": 337,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
@@ -22,13 +22,13 @@
     "byDisposition": {
       "B": 118,
       "exempt": 50,
-      "keep": 245,
+      "keep": 246,
       "C": 5,
       "D": 14
     },
     "compositingClasses": 22,
     "compositingSelectorOccurrences": 52,
-    "compositingClassNameOccurrences": 54,
+    "compositingClassNameOccurrences": 55,
     "compositingRuleBodies": 48,
     "lightCounterpartClasses": 14,
     "pairs": 11,
@@ -4305,6 +4305,14 @@
       "file": "app/components/song/PracticeCluster.tsx",
       "kind": "className",
       "class": "key-dial",
+      "count": 1,
+      "disposition": "keep",
+      "reason": "Usage site of a compositing class"
+    },
+    {
+      "file": "app/components/song/RehearsalPlayer.tsx",
+      "kind": "className",
+      "class": "library-module",
       "count": 1,
       "disposition": "keep",
       "reason": "Usage site of a compositing class"
