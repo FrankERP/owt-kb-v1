@@ -1,6 +1,6 @@
 # Rehearsal mixes for the song catalog — design spec
 
-**Date:** 2026-09-20 · **Status:** design approved in chat by Frank 2026-09-20 (decisions D1–D6 below); spec awaiting Frank's review · **Risk tier:** standard
+**Date:** 2026-09-20 · **Status:** design approved in chat by Frank 2026-09-20 (decisions D1–D6 below); implemented on branch claude/storage-limits-sequences-audio-031c97 (this plan) · **Risk tier:** standard
 (a new array on `post`, a one-off `--apply` ingest script in the same shape as the existing
 backfills, a read-only API route that reuses the catalog's existing guard verbatim, and a
 client player; no production writer contract, serializer, auth boundary or concurrency
@@ -143,8 +143,8 @@ rehearsalMixes: [{
 recordings and guide tracks; folding rehearsal mixes into it would leave no query able to
 tell the two apart later. Delivery 2 adds `harmonyTracks[]` with the same shape.
 
-**Read discipline.** `peaks` and `active` are projected **only** by the single-song read
-(`/api/song/[id]`). The library list, the home page, setlists and every other `post` read
+**Read discipline.** `peaks` and `active` are projected **only** by the two single-song reads
+(`/api/song/[id]` and `posts/[slug]/page.tsx`). The library list, the home page, setlists and every other `post` read
 must never project `rehearsalMixes[]{peaks}` — 142 × 25 KB in a list response is 3.5 MB of
 numbers nobody renders. A test greps the repo's `post` GROQ for the projection (§9).
 

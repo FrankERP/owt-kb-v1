@@ -54,6 +54,12 @@ this is a **song**.
 | `tags` | array of reference → `tag` | Taxonomy. |
 | `authors` | array of reference → `author` | Structured authors (parallel to the `author` string). |
 
+- `rehearsalMixes[]` — rehearsal mixes written ONLY by `scripts/ingest-rehearsal-mixes.mjs`
+  (`docs/REHEARSAL_MIXES.md`): `{ _key, kind: "full"|"up", track?, family?, tone, bpm?, audioFile,
+  peaks?: uint8[600], active?: [[s,e]…], sourceHash }`. `_key = sha1(set.sha1 + file name)`.
+  Separate from `audioTracks` on purpose (spec 2026-09-20 §6). `peaks` is projected only by the
+  two single-song reads — `postPeaksProjection.test.ts` guards it.
+
 **Lyrics and charts are independent fields.** `body` is the lyrics textarea;
 `chords` is the repeatable chart editor. Do not classify one from the other with
 `CHORD_MARKER_RE`. See [ADR-0018](adr/0018-lyrics-and-charts-are-independent.md).
