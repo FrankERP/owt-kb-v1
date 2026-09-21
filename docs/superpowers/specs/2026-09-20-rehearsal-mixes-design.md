@@ -82,10 +82,11 @@ individual track of those kinds (`EG 1`, `EG 2`, `Keys 3`, `Órgano`…). Not is
 present in every bed: loops, FX, pads, strings, choir/BGV stems, click, guide. `Full` is
 always rendered.
 
-`abletonnl`'s `families.toml` must gain rules before the backfill: the 2026-09-05 set
-reported `Órgano` and `Cuerdas` as «unknown family», and `Pad`/`Synth`/`Cuerdas` need to land
-in a non-isolated family (`keys` today swallows pads). That change lives in the
-`abletonnl` repo — §11.
+`abletonnl`'s `families.toml` now distinguishes these (done 2026-09-20, §11): `organ`,
+`synth`, `pad` and `strings` are their own families, so the render step isolates
+`electric`, `acoustic`, `keys`, `organ`, `synth`, `bass`, `drums` and leaves `pad`,
+`strings`, `loop`, `fx`, `vocals` in the bed. The 2026-09-05 set's «unknown family»
+warnings for `Órgano`/`Cuerdas` are gone.
 
 ## 5. The contract between the two repos: `manifest.json`
 
