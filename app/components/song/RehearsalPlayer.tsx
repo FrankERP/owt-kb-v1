@@ -6,7 +6,7 @@
 // with inline data. ONE <audio>, the app's, through PlayerContext — the fixed
 // AudioTransport keeps working unchanged. Every URL on the page is the
 // session-gated route, never cdn.sanity.io (decision D2).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlayer, type AudioTrack } from "@/app/context/PlayerContext";
 import Equalizer from "@/app/components/ui/Equalizer";
 import PlayPauseGlyph from "@/app/components/ui/PlayPauseGlyph";
@@ -28,6 +28,11 @@ export default function RehearsalPlayer({
   const groups = useMemo(() => groupMixes(mixes), [mixes]);
   const highlighted = useMemo(() => preselectMix(mixes, preselect)?._key ?? null, [mixes, preselect]);
   const [time, setTime] = useState({ current: 0, duration: 0 });
+  // The one in-flight "restore the position on the next loadedmetadata" — a
+  // second switch before the first mix has loaded must cancel the first
+  // restore, or both once-listeners fire on the THIRD track's loadedmetadata
+  // and the stale (second) value wins over the real (first) position.
+  const pendingRestore = useRef<(() => void) | null>(null);
 
   // Playhead: follow the app's <audio> while one of OUR tracks is loaded.
   useEffect(() => {
@@ -36,7 +41,14 @@ export default function RehearsalPlayer({
     const tick = () => setTime({ current: el.currentTime || 0, duration: el.duration || 0 });
     el.addEventListener("timeupdate", tick);
     el.addEventListener("loadedmetadata", tick);
-    return () => { el.removeEventListener("timeupdate", tick); el.removeEventListener("loadedmetadata", tick); };
+    return () => {
+      el.removeEventListener("timeupdate", tick);
+      el.removeEventListener("loadedmetadata", tick);
+      if (pendingRestore.current) {
+        el.removeEventListener("loadedmetadata", pendingRestore.current);
+        pendingRestore.current = null;
+      }
+    };
   }, [getAudio]);
 
   if (mixes.length === 0) return null;
@@ -51,10 +63,19 @@ export default function RehearsalPlayer({
     // the new file knows its duration.
     const el = getAudio();
     const resumeAt = anyCurrent && el ? el.currentTime : 0;
+    // Cancel a still-pending restore from an earlier switch before starting
+    // this one — otherwise both once-listeners would fire on THIS track's
+    // loadedmetadata (in registration order) and the stale one wins.
+    if (el && pendingRestore.current) {
+      el.removeEventListener("loadedmetadata", pendingRestore.current);
+      pendingRestore.current = null;
+    }
     const track: AudioTrack = { url: urlFor(m), title: mixLabel(m), tone: m.tone, songTitle, songSlug };
     playTrack(track);
     if (el && resumeAt > 0) {
-      el.addEventListener("loadedmetadata", () => { el.currentTime = resumeAt; }, { once: true });
+      const restore = () => { el.currentTime = resumeAt; pendingRestore.current = null; };
+      pendingRestore.current = restore;
+      el.addEventListener("loadedmetadata", restore, { once: true });
     }
   };
 
@@ -95,6 +116,9 @@ export default function RehearsalPlayer({
                       </p>
                     </div>
                     <Equalizer playing={playing} />
+                    {/* `download` is best-effort across the CDN redirect (cross-origin, so
+                        the browser may ignore it); the route's `?download=1` → CDN `?dl=`
+                        is what actually forces content-disposition and a saved file. */}
                     <a
                       href={`${urlFor(m)}?download=1`}
                       download

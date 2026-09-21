@@ -67,6 +67,33 @@ describe("RehearsalPlayer", () => {
     expect(audio.currentTime).toBe(42);
   });
 
+  it("cancels a pending position restore before registering the next one", () => {
+    // A -> B -> C before B's loadedmetadata ever fires: the restore queued for
+    // A's position must be cancelled, or it would fire (stale) alongside C's
+    // restore on C's loadedmetadata.
+    player = { track: { url: "/api/audio/post-1/eg1" }, isPlaying: true };
+    audio.currentTime = 42;
+    const { getByRole } = render(<RehearsalPlayer {...props} />);
+
+    fireEvent.click(getByRole("button", { name: "Reproducir Bass" }));
+    const onceCallsAfterFirst = audio.addEventListener.mock.calls.filter((c) => c[2]?.once === true);
+    expect(onceCallsAfterFirst).toHaveLength(1);
+    const [, firstHandler] = onceCallsAfterFirst[0];
+
+    audio.currentTime = 3;
+    fireEvent.click(getByRole("button", { name: "Reproducir Banda completa" }));
+
+    expect(audio.removeEventListener).toHaveBeenCalledWith("loadedmetadata", firstHandler);
+
+    const onceCallsAfterSecond = audio.addEventListener.mock.calls.filter((c) => c[2]?.once === true);
+    expect(onceCallsAfterSecond).toHaveLength(2);
+    const [, secondHandler] = onceCallsAfterSecond[1];
+
+    audio.currentTime = 0;
+    (secondHandler as () => void)();
+    expect(audio.currentTime).toBe(3);
+  });
+
   it("pauses the current track instead of restarting it", () => {
     player = { track: { url: "/api/audio/post-1/eg1" }, isPlaying: true };
     const { getByRole } = render(<RehearsalPlayer {...props} />);
