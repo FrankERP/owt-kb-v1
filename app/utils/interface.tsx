@@ -26,6 +26,20 @@ export interface Tutorial {
   url?: string;
 }
 
+/** One rehearsal mix on `post.rehearsalMixes[]` — spec 2026-09-20-rehearsal-mixes §6. */
+export interface RehearsalMix {
+  _key: string;
+  kind: "full" | "up";
+  track?: string;
+  family?: string;
+  tone: string;
+  bpm?: number;
+  audioFileURL: string;
+  peaks?: number[];
+  active?: number[][];
+  sourceHash: string;
+}
+
 export interface Post {
   _createdAt?: string;
   title: string;
@@ -40,6 +54,7 @@ export interface Post {
   tutorials2: Array<Tutorial>;
   lyricsURL: string;
   audioTracks: Array<{ title: string; tone: string; audioFileURL: string }>;
+  rehearsalMixes?: Array<RehearsalMix>;
   chordsPDF: Array<{ title: string; key: string; chordsURL: string }>;
   chords?: Array<ChordChart>;
   referenceLinks?: Array<{ label: string; url: string }>;
