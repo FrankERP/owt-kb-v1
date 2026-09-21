@@ -41,4 +41,38 @@ project's Usage page after the first two batches.
 
 ## Verified runs
 
+### 2026-09-20/21 — first full catalog ingest (Frank's SSD `/Volumes/OWT-2TB`)
+
+Source: `ABLETON/Multitraks/<artist>/…/<Song>_<BPM>BPM_<Key>.als` (166 OWT-style sets among 285;
+273 with audio). Rendered with `abletonnl` `72c0694` into `/Volumes/OWT-2TB/Rehearsal-out/<stem>/`
+by a per-song driver (inspect → longest group track → tracks in the seven isolated families →
+`render_rehearsal_mixes` → move); `als-match.json` + `matches.json` there hold the folder → post
+mapping. **The abletonnl segment cache (`~/.cache/abletonnl`) grew to 87 GB and filled the Mac** —
+it is now a symlink to `/Volumes/OWT-2TB/abletonnl-cache`; keep it on the SSD.
+
+| Batch | Dry run | Apply |
+|---|---|---|
+| 5 songs (Praise, Gracias Dios, Como El Sol, Cristo Es El Centro, Nadie D) | sube 67 (447 MB) | escribió 5; re-run reused 67 |
+| 108 folders (103 new + the 5) | sube 1057 + 12 after a matches.json spelling fix | sube 1069 (8.9 GB), reusa 67, escribió 108 |
+| 113 folders (6 new) | sube 53 (435 MB), reusa 1136 | escribió 113 |
+
+Result on production (GROQ, 2026-09-21 01:50): **106 of 144 songs** carry `rehearsalMixes`
+(113 renders — 7 songs in two keys), **1,227 mixes**, 1,191 MP3 assets, **9.8 GB of the 100 GB
+quota**. Idempotence held on every re-run (reusa = all previous uploads, reemplaza 0).
+
+Still without mixes (38): 6 have no set on the SSD (En Tu Presencia, Generación Que Danza,
+Heme Aquí, Mi Sanador, Ojos De Amor, Sube Más Alto); ~24 are **Live 10 sets** abletonnl cannot
+read until they are opened and saved in Live 11 (10,000 Razones, Dios De Imposibles, Dios Está
+Aquí, Entre Las Llamas, Es Navidad, Esperándote, Gracia Sin Fin, Infinito Dios, Jesucristo Basta,
+Mi Deseo, Mi Roca, Más Grande, Más Grande Tu Amor, Nace El Rey, Nada Es Imposible, No Hay Otro
+Nombre, Océanos, Por Siempre Cantaré, Por Siempre Te Alabaré, Sendas Dios Hará, Solo Dios Puede
+Salvar, Te Amo Señor, Vida Tú Me Das, Vives En Mí, Vivo Estás); the rest need a fix in the set —
+duplicate track names (Resplandeció!, Orgullo De Un Padre), a truncated/2-frame drums file
+(Mirad/Te Canto Hoy, Jesús Hijo De Dios; also Way Maker's second key), missing samples (El
+Nombre), or no isolatable instrument track (Noche De Paz, Sopla Espíritu).
+
+Known wart: when an isolated track is silent in a song, its `UP` file is byte-identical to `Full`
+and Sanity dedupes the asset — the row still shows (e.g. «EG 4», «Keys 3» on El Que Resucitó).
+A cleanup that drops `up` items whose asset equals the `full` asset is the fix.
+
 _(paste the dry-run and apply summaries of each batch here, with the date)_
