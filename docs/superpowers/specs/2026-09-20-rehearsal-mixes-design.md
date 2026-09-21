@@ -89,43 +89,52 @@ in a non-isolated family (`keys` today swallows pads). That change lives in the
 
 ## 5. The contract between the two repos: `manifest.json`
 
-`abletonnl` already writes `manifest.json` per song folder. Two additions (in `abletonnl`,
-§11) make it the only input the app needs:
+`abletonnl` writes `manifest.json` per song folder. As of `abletonnl` commit `ef3004e`
+(2026-09-20, this cycle) it carries everything the app needs — the real shape, not an
+idealised one:
 
 ```jsonc
 {
-  "set_path": "…/Amor sin Condición_144BPM_G Project/….als",
-  "set_hash": "sha256:…",           // already present
-  "song": "Amor sin Condición",
-  "key": "G", "bpm": 144,           // from the set; tone + tempo of the render
-  "transpose": null,
+  "set":  { "path": "…/Amor sin Condición_144BPM_G Project/….als", "sha1": "b487…", "creator": "…" },
+  "song": { "name": "2. NADIE", "start_beat": 1600, "end_beat": 2341.8, "duration_s": 330.0,
+            "bpm_range": [83, 136], "sections": [ … ] },
+  "transpose": { "semitones": 0, "suffix": "" },
+  "families": { "EG 1": "electric", "Keys 1": "keys", … },
   "files": [
-    { "file": "… - Full.mp3",    "kind": "full" },
-    { "file": "… - EG 1 UP.mp3", "kind": "up", "track": "EG 1", "family": "electric",
-      "peaks":  [0, 3, 12, 40, …],   // NEW: uint8, 600 points, isolated stem, before mixing
-      "active": [[12.4, 58.0], [91.2, 140.5]] }  // NEW: seconds, from the active mask
-  ]
+    { "path": "… - Full.mp3",    "kind": "full", "target": null, "gains": { … } },
+    { "path": "… - EG 1 UP.mp3", "kind": "up",   "target": "EG 1", "family": "electric",
+      "peaks":  [0, 3, 12, 40, …],                    // uint8 × 600, ISOLATED stem, before mixing
+      "active": [[15.6, 16.8], [22.0, 24.8], …],      // seconds, from the renderer's active mask
+      "gains": { … }, "target_gain_db": …, "normalize_gain_db": … }
+  ],
+  "warnings": [ … ]
 }
 ```
 
-`peaks` is the isolated stem's RMS envelope, 600 points across the song, quantized to
-0–255 — ~2 KB per track as JSON, so a 12-track song adds ~25 KB to its document. `active`
-is the mask the renderer already computes to calibrate the boost.
+`peaks` is the isolated stem's **peak** envelope (max |sample| per slice), 600 points,
+quantised 0–255 against the stem's own loudest slice — gain-invariant, ~3–4 KB as indented
+JSON. `active` lists the runs of the renderer's 0.4 s / 25 dB active mask as
+`[start_s, end_s]`, the last clamped to the song. `Full` has neither. The MCP/CLI *result*
+of `render_rehearsal_mixes` omits `peaks`; the manifest is the channel for it.
+
+**There is no `key` in the manifest.** The set does not know the song's key; the render
+folder name carries it (`…_144BPM_G`), and the ingest parses `tone` from there, falling back
+to the `post`'s own `key` when the folder name has none. `bpm` comes from `song.bpm_range[0]`.
 
 ## 6. Model — a new array on `post`
 
 ```ts
 rehearsalMixes: [{
-  _key: string,          // deterministic: sha1(set_hash + file) — re-ingest updates, never duplicates
+  _key: string,          // deterministic: sha1(set.sha1 + basename(path)) — re-ingest updates, never duplicates
   kind: "full" | "up",
-  track?: string,        // "EG 1" — absent for "full"
+  track?: string,        // manifest `target`, "EG 1" — absent for "full"
   family?: string,       // "electric" — absent for "full"
-  tone: string,          // "G"
-  bpm?: number,
+  tone: string,          // "G" — from the folder name, else the post's `key`
+  bpm?: number,          // song.bpm_range[0]
   audioFile: file,       // .mp3
   peaks?: number[],      // uint8 × 600 — absent for "full"
   active?: number[][],   // [[start, end], …] seconds — absent for "full"
-  sourceHash: string,    // set_hash — which render produced it
+  sourceHash: string,    // manifest set.sha1 — which render produced it
 }]
 ```
 
@@ -151,8 +160,8 @@ existing `SANITY_WRITE_TOKEN`; **no new secret or env var** (nothing to add to
 
 Per song folder under `<root>` (the SSD's render output):
 
-1. Read `manifest.json`; skip with a warning if absent or missing `set_hash`.
-2. **Match** the folder to one `post`: `normalizeText(manifest.song)` against
+1. Read `manifest.json`; skip with a warning if absent or missing `set.sha1`.
+2. **Match** the folder to one `post`: `normalizeText(manifest.song.name)` (leading «N. » stripped) against
    `normalizeText(title)` over all posts, exact first, then the folder's leading name before
    `_<bpm>BPM_<key>`. Zero or several candidates → the folder goes to the **unmatched
    report** (`unmatched.json` beside the log, with the candidates) and nothing is written.
@@ -248,14 +257,14 @@ A `post` without `rehearsalMixes` renders no player and no heading — same rule
 (no `abletonnl`; a folder-per-song convention), rendered by the same `RehearsalPlayer`
 under a second heading. The route and the read discipline already cover it.
 
-## 11. Dependencies outside this repo
+## 11. Dependencies outside this repo — DONE 2026-09-20
 
-In `abletonnl` (Frank's project), before the first backfill:
-1. `families.toml`: rules for `órgano|organ|hammond` (isolated, family `organ`),
-   `synth|sinte` (isolated, `synth`), `pad|cuerdas|strings` (not isolated).
-2. `manifest.json`: per `UP` file, `peaks` (uint8 × 600 from the isolated stem) and
-   `active` (seconds) — both from data the renderer already computes.
-3. Encode at 192 kbps by default for this use.
+All three landed in `abletonnl` (`feat/manifest-peaks-active`, commits `8cc2a28` + `ef3004e`,
+171 tests under `-W error`, reviewed):
+1. `families.toml`: `organ`, `synth`, `pad`, `strings` split out of `keys`, ordered after
+   `bass` and before `keys`; `[oóÓā]rgano` covers the mojibake an `.als` carries for «Órgano».
+2. `manifest.json`: per file `kind`; per `UP` file `family`, `peaks`, `active` (§5).
+3. 192 kbps was already the encoder default — no change needed.
 
 The SSD must be connected for a render + ingest session; the app never sees it.
 
