@@ -274,6 +274,13 @@ two-way isolation rule (see `CLAUDE.md` § Auth). All mutating routes call
 | `/api/practice-playlist` | POST | `{ids[], mode?: "musica"\|"letras"}` → builds a `youtube.com/watch_videos` playlist URL (≤50). Uses CDN `client`. |
 | `/api/song/[id]` | GET | Full song detail + last-5 play history (Sun/Sat setlists referencing it, with play key + that week's leaders). 404 if missing. |
 
+### `GET /api/audio/[songId]/[key]`
+Worship members only (`requireMinistryMember("worship")`, same as `/api/song/[id]`). Answers
+`302` to the mix's `cdn.sanity.io` URL with `Cache-Control: private, no-store`; `?download=1`
+appends Sanity's `?dl=<original filename>`. `403` without membership, `404` for an unknown key or
+a non-CDN asset URL. Bytes never pass through Vercel — this is a discovery gate, not file
+protection (spec 2026-09-20 decision D2).
+
 ---
 
 ## Content editing — `requireActiveManager` (content-editor **allowed**)

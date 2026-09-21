@@ -42,6 +42,7 @@ describe("/api/song/[id]", () => {
       _id: "song-1",
       title: "Sólo en Jesús",
       history: [{ week: "2026-07-12", _type: "featuredSongs" }],
+      myInstruments: [],
     });
     const [historyQuery, historyParams] = opFetchMock.mock.calls[0];
     expect(historyQuery).toContain("week < $today");

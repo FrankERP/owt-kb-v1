@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Post } from "@/app/utils/interface";
 import { groupBySections } from "@/app/utils/lyrics";
 import { client } from "@/sanity/lib/client";
+import { serverClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
 import {
   canonicalizePlayHistory,
@@ -20,6 +21,7 @@ import SectionNav from "@/app/components/SectionNav";
 import ChordChart from "@/app/components/ChordChart";
 import EditSongButton from "@/app/components/EditSongButton";
 import SongAudioSection from "@/app/components/SongAudioSection";
+import RehearsalPlayer from "@/app/components/song/RehearsalPlayer";
 import SongHeroPills from "@/app/components/song/SongHeroPills";
 import { TransposeProvider } from "@/app/components/song/TransposeProvider";
 import LyricsAutoscroll from "@/app/components/song/LyricsAutoscroll";
@@ -74,6 +76,7 @@ async function getPost(slug: string) {
         tone,
         "audioFileURL": audioFile.asset->url,
       },
+      rehearsalMixes[] { _key, kind, track, family, tone, bpm, peaks, active, sourceHash },
       chordsPDF[] {
         title,
         key,
@@ -152,17 +155,27 @@ function SectionHeader({ children, action }: { children: React.ReactNode; action
 
 const Page = async ({ params }: Params) => {
   const { slug } = await params;
-  await requireWorshipPage(`/posts/${slug}`);
+  const session = await requireWorshipPage(`/posts/${slug}`);
   const post: Post = await getPost(slug);
 
   if (!post) notFound();
 
   const history = await getSongHistory(post._id);
 
+  // Preselection only (spec §8.2): the viewer's declared instruments pick which
+  // rehearsal row is highlighted. Plain data — this stays a Server Component.
+  const myInstruments = post.rehearsalMixes?.length
+    ? (await serverClient.fetch<string[] | null>(
+        `*[_type == "teamMembers" && _id == $me][0].instruments`,
+        { me: session.user.sanityId },
+      )) ?? []
+    : [];
+
   // `songSections` owns which of the five paint — see its header for why the
   // `body` flag in particular is worth a tested home.
   const sections = songSections(post, history.length);
   const shows = (id: SongSection["id"]) => sections.some((s) => s.id === id);
+  const hasRehearsal    = shows("ensayo");
   const hasAudio        = shows("audio");
   const hasInlineChords = (post?.chords?.length ?? 0) > 0;
   // The hero key is a TRANSPOSER only for a ChordPro chart: a plain-text chart
@@ -292,6 +305,20 @@ const Page = async ({ params }: Params) => {
               Todavía no hay audio, tutoriales, referencias, letra ni historial para mostrar.
             </p>
           </div>
+        )}
+
+        {/* Ensayo */}
+        {hasRehearsal && (
+          <section id="ensayo" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
+            <SectionHeader>Ensayo</SectionHeader>
+            <RehearsalPlayer
+              mixes={post.rehearsalMixes!}
+              songId={post._id}
+              songTitle={post.title}
+              songSlug={post.slug.current}
+              preselect={myInstruments}
+            />
+          </section>
         )}
 
         {/* Audio */}
