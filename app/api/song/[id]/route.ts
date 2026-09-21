@@ -13,7 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const today = new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 
-  const [song, historyRaw] = await Promise.all([
+  const [song, historyRaw, myInstruments] = await Promise.all([
     serverClient.fetch(
       `*[_type == "post" && _id == $id][0] {
         _id, _createdAt, title, author, key, bpm, timeSig,
@@ -22,6 +22,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         chords[]{ key, content },
         "lyricsURL": lyrics.asset->url,
         audioTracks[] { title, tone, "audioFileURL": audioFile.asset->url },
+        rehearsalMixes[] { _key, kind, track, family, tone, bpm, "audioFileURL": audioFile.asset->url, peaks, active, sourceHash },
         chordsPDF[] { title, key, "chordsURL": chordsPDF.asset->url },
       }`,
       { id }
@@ -53,9 +54,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       }`,
       { id, today }
     ),
+    serverClient.fetch<string[] | null>(
+      `*[_type == "teamMembers" && _id == $me][0].instruments`,
+      { me: worship.user.sanityId },
+    ),
   ]);
 
   if (!song) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const history = canonicalizePlayHistory(historyRaw, playHistoryTargetKey).slice(0, 5);
-  return NextResponse.json({ ...song, history });
+  return NextResponse.json({ ...song, history, myInstruments: myInstruments ?? [] });
 }
