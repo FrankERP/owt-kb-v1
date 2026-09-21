@@ -33,6 +33,10 @@ if (!root || !existsSync(root)) {
   process.exit(1);
 }
 const apply = argv.includes("--apply");
+if (apply && !process.env.SANITY_WRITE_TOKEN) {
+  console.error("SANITY_WRITE_TOKEN is not set — cannot --apply.");
+  process.exit(1);
+}
 
 const projectId = process.env.NEXT_PUBLIC_SANITY_PROJECT_ID;
 const dataset = process.env.NEXT_PUBLIC_SANITY_DATASET;
@@ -62,6 +66,7 @@ const folders = readdirSync(root, { withFileTypes: true })
 console.log(`  Carpetas con manifest.json: ${folders.length}`);
 
 const unmatched = {};
+const failures = [];
 let totalUploads = 0, totalBytes = 0, totalSkipped = 0, totalReplaced = 0, written = 0;
 
 for (const folderName of folders) {
@@ -87,40 +92,56 @@ for (const folderName of folders) {
     console.log(`  ! ${folderName}: faltan ${missing.length} archivo(s) — se omite: ${missing.map((f) => path.basename(f.path)).join(", ")}`);
     continue;
   }
-  const existing = await reader.fetch(
-    `*[_type == "post" && _id == $id][0].rehearsalMixes[]{ _key, sourceHash, "assetId": audioFile.asset._ref, "sha1": audioFile.asset->sha1hash }`,
-    { id: post._id },
-  ) ?? [];
-  const existingFull = await reader.fetch(`*[_type == "post" && _id == $id][0].rehearsalMixes`, { id: post._id }) ?? [];
-  const existingItems = Object.fromEntries(existingFull.map((i) => [i._key, i]));
-  const localSha1 = Object.fromEntries(manifest.files.map((f) => [f.path, sha1Of(f.path)]));
+  const uploadedThisFolder = [];
+  try {
+    const existingRaw = await reader.fetch(
+      `*[_type == "post" && _id == $id][0].rehearsalMixes[]{ ..., "assetId": audioFile.asset._ref, "sha1": audioFile.asset->sha1hash }`,
+      { id: post._id },
+    ) ?? [];
+    const existing = existingRaw.map(({ _key, sourceHash, assetId, sha1 }) => ({ _key, sourceHash, assetId, sha1 }));
+    const existingItems = Object.fromEntries(
+      existingRaw.map(({ assetId, sha1, ...item }) => [item._key, item]),
+    );
+    const localSha1 = Object.fromEntries(manifest.files.map((f) => [f.path, sha1Of(f.path)]));
 
-  const plan = planIngest({ manifest, folderName, post, existing, existingItems, localSha1 });
-  const bytes = plan.uploads.reduce((n, u) => n + readFileSync(u.path).length, 0);
-  totalUploads += plan.uploads.length; totalBytes += bytes; totalSkipped += plan.skipped.length; totalReplaced += plan.replaced.length;
-  console.log(`  ${apply ? "+" : "="} ${folderName} → ${post.title} (${post._id}): ${plan.items.length} items, sube ${plan.uploads.length} (${(bytes / 1e6).toFixed(1)} MB), reusa ${plan.skipped.length}, conserva ${plan.kept.length}, reemplaza ${plan.replaced.length}`);
+    const plan = planIngest({ manifest, folderName, post, existing, existingItems, localSha1 });
+    const bytes = plan.uploads.reduce((n, u) => n + readFileSync(u.path).length, 0);
+    totalUploads += plan.uploads.length; totalBytes += bytes; totalSkipped += plan.skipped.length; totalReplaced += plan.replaced.length;
+    console.log(`  ${apply ? "+" : "="} ${folderName} → ${post.title} (${post._id}): ${plan.items.length} items, sube ${plan.uploads.length} (${(bytes / 1e6).toFixed(1)} MB), reusa ${plan.skipped.length}, conserva ${plan.kept.length}, reemplaza ${plan.replaced.length}`);
 
-  if (!apply) continue;
-  const assetIds = [];
-  for (const u of plan.uploads) {
-    const asset = await writer.assets.upload("file", readFileSync(u.path), { filename: u.filename, contentType: "audio/mpeg" });
-    assetIds[u.uploadIndex] = asset._id;
-  }
-  const items = plan.items.map((i) =>
-    i.audioFile?.asset?.uploadIndex !== undefined
-      ? { ...i, audioFile: { _type: "file", asset: { _type: "reference", _ref: assetIds[i.audioFile.asset.uploadIndex] } } }
-      : i,
-  );
-  await writer.patch(post._id).set({ rehearsalMixes: items }).commit();
-  written += 1;
-  for (const id of plan.replaced) {
-    try { await writer.delete(id); } catch (e) { console.log(`    (no se pudo borrar ${id}: ${e.message})`); }
+    if (!apply) continue;
+    const assetIds = [];
+    for (const u of plan.uploads) {
+      const asset = await writer.assets.upload("file", readFileSync(u.path), { filename: u.filename, contentType: "audio/mpeg" });
+      assetIds[u.uploadIndex] = asset._id;
+      uploadedThisFolder.push(asset._id);
+    }
+    const items = plan.items.map((i) =>
+      i.audioFile?.asset?.uploadIndex !== undefined
+        ? { ...i, audioFile: { _type: "file", asset: { _type: "reference", _ref: assetIds[i.audioFile.asset.uploadIndex] } } }
+        : i,
+    );
+    await writer.patch(post._id).set({ rehearsalMixes: items }).commit();
+    written += 1;
+    for (const id of plan.replaced) {
+      try { await writer.delete(id); } catch (e) { console.log(`    (no se pudo borrar ${id}: ${e.message})`); }
+    }
+  } catch (e) {
+    console.log(`  ! ${folderName}: falló — ${e.message}`);
+    failures.push(folderName);
+    for (const id of uploadedThisFolder) {
+      try { await writer.delete(id); } catch (delErr) { console.log(`    (no se pudo borrar el asset huérfano ${id}: ${delErr.message})`); }
+    }
+    continue;
   }
 }
 
 if (Object.keys(unmatched).length) {
   writeFileSync(path.join(root, "unmatched.json"), JSON.stringify(unmatched, null, 2));
   console.log(`\n  Sin casar: ${Object.keys(unmatched).length} → ${path.join(root, "unmatched.json")} (añade matches.json para resolverlos)`);
+}
+if (failures.length) {
+  console.log(`\n  Fallaron: ${failures.length} → ${failures.join(", ")} (revisa el error arriba y vuelve a correr; es seguro)`);
 }
 console.log(`\n  Total: sube ${totalUploads} archivos (${(totalBytes / 1e6).toFixed(1)} MB), reusa ${totalSkipped}, reemplaza ${totalReplaced}${apply ? `, escribió ${written} canciones` : ""}`);
 console.log(apply
