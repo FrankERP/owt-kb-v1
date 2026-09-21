@@ -19,7 +19,7 @@ export default function Waveform({
   peaks, active, duration, progress, label, onSeek, className = "",
 }: {
   peaks: number[];
-  active?: number[][];
+  active?: { s: number; e: number }[];
   duration: number;
   progress: number;
   label: string;

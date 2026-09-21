@@ -34,9 +34,8 @@ export interface RehearsalMix {
   family?: string;
   tone: string;
   bpm?: number;
-  audioFileURL: string;
   peaks?: number[];
-  active?: number[][];
+  active?: { _key: string; s: number; e: number }[];
   sourceHash: string;
 }
 

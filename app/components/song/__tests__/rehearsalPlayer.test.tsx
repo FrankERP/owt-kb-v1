@@ -28,8 +28,8 @@ afterEach(() => {
 });
 
 const mix = (over: Partial<RehearsalMix>): RehearsalMix => ({
-  _key: "k", kind: "up", tone: "G", audioFileURL: "https://cdn.sanity.io/files/x.mp3", sourceHash: "s",
-  peaks: [0, 255], active: [[0, 1]], ...over,
+  _key: "k", kind: "up", tone: "G", sourceHash: "s",
+  peaks: [0, 255], active: [{ _key: "a0", s: 0, e: 1 }], ...over,
 });
 const mixes = [
   mix({ _key: "full", kind: "full", peaks: undefined, active: undefined }),

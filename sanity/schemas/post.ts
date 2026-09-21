@@ -121,7 +121,16 @@ export const post = {
 						{ name: 'bpm', type: 'number', title: 'BPM' },
 						{ name: 'audioFile', type: 'file', title: 'Audio File', options: { accept: '.mp3' } },
 						{ name: 'peaks', type: 'array', title: 'Peaks', of: [{ type: 'number' }], hidden: true },
-						{ name: 'active', type: 'array', title: 'Active spans', of: [{ type: 'array', of: [{ type: 'number' }] }], hidden: true },
+						// Array of OBJECTS, not array of arrays — Sanity does not support nested
+						// arrays ("multidimensional arrays are not currently supported").
+						// { s, e } is seconds, inclusive start / exclusive end (isActiveAt).
+						{
+							name: 'active',
+							type: 'array',
+							title: 'Active spans',
+							of: [{ type: 'object', name: 'activeSpan', fields: [{ name: 's', type: 'number' }, { name: 'e', type: 'number' }] }],
+							hidden: true,
+						},
 						{ name: 'sourceHash', type: 'string', title: 'Source set sha1' },
 					],
 					preview: {

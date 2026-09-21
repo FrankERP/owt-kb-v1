@@ -14,11 +14,23 @@ const peaks = Array.from({ length: 600 }, (_, i) => (i % 2 ? 255 : 0));
 describe("Waveform", () => {
   it("renders an accessible image and seeks by click fraction", () => {
     const onSeek = vi.fn();
-    const { getByRole } = render(<Waveform peaks={peaks} active={[[0, 10]]} duration={100} progress={0.25} label="Onda EG 1" onSeek={onSeek} />);
+    const { getByRole } = render(<Waveform peaks={peaks} active={[{ s: 0, e: 10 }]} duration={100} progress={0.25} label="Onda EG 1" onSeek={onSeek} />);
     const btn = getByRole("button", { name: "Onda EG 1" });
     Object.defineProperty(btn, "getBoundingClientRect", { value: () => ({ left: 0, width: 200, top: 0, height: 40, right: 200, bottom: 40 }) });
-    fireEvent.click(btn, { clientX: 50 });
+    // detail: 1 — a real mouse click. See the detail:0 (keyboard) test below.
+    fireEvent.click(btn, { clientX: 50, detail: 1 });
     expect(onSeek).toHaveBeenCalledWith(0.25);
+  });
+
+  it("ignores a keyboard-synthesised click (detail 0) instead of seeking to 0", () => {
+    const onSeek = vi.fn();
+    const { getByRole } = render(<Waveform peaks={peaks} duration={100} progress={0.25} label="Onda EG 1" onSeek={onSeek} />);
+    const btn = getByRole("button", { name: "Onda EG 1" });
+    Object.defineProperty(btn, "getBoundingClientRect", { value: () => ({ left: 0, width: 200, top: 0, height: 40, right: 200, bottom: 40 }) });
+    // Enter/Space on a <button> fires a synthetic click with clientX 0 and
+    // detail 0 — this must NOT be read as "seek to 0".
+    fireEvent.click(btn, { detail: 0 });
+    expect(onSeek).not.toHaveBeenCalled();
   });
 
   it("seeks 5 % with the arrow keys, clamped to 0..1", () => {

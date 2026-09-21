@@ -39,9 +39,12 @@ const TAGS = ["adoración", "santidad", "congregacional"];
 
 /** Two rehearsal rows with a synthetic envelope: no network, no session. */
 const PEAKS = Array.from({ length: 600 }, (_, i) => (i > 120 && i < 420 ? 40 + Math.round(200 * Math.abs(Math.sin(i / 9))) : 8));
+// The player's play/download controls resolve to `/api/audio/gallery/…`, which
+// answers 403 on the public gallery route (no session) — that's fine, this
+// block is for LOOKING, not for playing, and the fixture stays hermetic.
 const MIXES = [
-  { _key: "g-full", kind: "full" as const, tone: "Sol", audioFileURL: SILENT_WAV, sourceHash: "gallery" },
-  { _key: "g-eg1", kind: "up" as const, track: "EG 1", family: "electric", tone: "Sol", bpm: 120, audioFileURL: SILENT_WAV, peaks: PEAKS, active: [[12, 42]], sourceHash: "gallery" },
+  { _key: "g-full", kind: "full" as const, tone: "Sol", sourceHash: "gallery" },
+  { _key: "g-eg1", kind: "up" as const, track: "EG 1", family: "electric", tone: "Sol", bpm: 120, peaks: PEAKS, active: [{ _key: "a0", s: 12, e: 42 }], sourceHash: "gallery" },
 ];
 
 export function SongPracticeFixture() {

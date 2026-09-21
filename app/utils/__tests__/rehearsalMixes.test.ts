@@ -9,7 +9,7 @@ import {
 
 const mix = (over: Partial<RehearsalMix>): RehearsalMix => ({
   _key: over._key ?? Math.random().toString(36).slice(2),
-  kind: "up", tone: "G", audioFileURL: "https://cdn.test/x.mp3", sourceHash: "abc",
+  kind: "up", tone: "G", sourceHash: "abc",
   ...over,
 });
 
@@ -81,7 +81,7 @@ describe("waveformBars", () => {
 
 describe("isActiveAt", () => {
   it("is true inside a span, inclusive start, exclusive end", () => {
-    const a = [[10, 20], [30.5, 31]];
+    const a = [{ _key: "a0", s: 10, e: 20 }, { _key: "a1", s: 30.5, e: 31 }];
     expect(isActiveAt(a, 10)).toBe(true);
     expect(isActiveAt(a, 19.99)).toBe(true);
     expect(isActiveAt(a, 20)).toBe(false);

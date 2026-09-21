@@ -89,7 +89,7 @@ export function waveformBars(peaks: number[], bars: number): number[] {
   return out;
 }
 
-export function isActiveAt(active: number[][] | undefined, seconds: number): boolean {
+export function isActiveAt(active: { s: number; e: number }[] | undefined, seconds: number): boolean {
   if (!active) return false;
-  return active.some(([s, e]) => seconds >= s && seconds < e);
+  return active.some(({ s, e }) => seconds >= s && seconds < e);
 }

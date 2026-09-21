@@ -81,7 +81,9 @@ export function planIngest({ manifest, folderName, post, existing = [], existing
       item.track = f.target;
       item.family = f.family;
       item.peaks = f.peaks;
-      item.active = f.active;
+      // Sanity has no array-of-arrays; the manifest's [[s,e], …] becomes an
+      // array of { _key, s, e } objects (schema: sanity/schemas/post.ts).
+      item.active = (f.active ?? []).map(([s, e], i) => ({ _key: String(i), s, e }));
     }
     items.push(item);
   }

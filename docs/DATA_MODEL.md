@@ -56,9 +56,12 @@ this is a **song**.
 
 - `rehearsalMixes[]` — rehearsal mixes written ONLY by `scripts/ingest-rehearsal-mixes.mjs`
   (`docs/REHEARSAL_MIXES.md`): `{ _key, kind: "full"|"up", track?, family?, tone, bpm?, audioFile,
-  peaks?: uint8[600], active?: [[s,e]…], sourceHash }`. `_key = sha1(set.sha1 + file name)`.
-  Separate from `audioTracks` on purpose (spec 2026-09-20 §6). `peaks` is projected only by the
-  two single-song reads — `postPeaksProjection.test.ts` guards it.
+  peaks?: uint8[600], active?: [{ _key, s, e }…], sourceHash }`. `_key = sha1(set.sha1 + file name)`.
+  `active` is an array of OBJECTS, not an array of arrays — Sanity has no nested-array support;
+  `s`/`e` are seconds, inclusive start / exclusive end. Separate from `audioTracks` on purpose
+  (spec 2026-09-20 §6). `peaks` is projected only by the two single-song reads —
+  `postPeaksProjection.test.ts` guards it, and the same test asserts neither read ships the raw
+  CDN `asset->url` (decision D2 — every URL the client sees is `/api/audio/[songId]/[key]`).
 
 **Lyrics and charts are independent fields.** `body` is the lyrics textarea;
 `chords` is the repeatable chart editor. Do not classify one from the other with

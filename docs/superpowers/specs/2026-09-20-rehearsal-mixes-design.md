@@ -134,10 +134,17 @@ rehearsalMixes: [{
   bpm?: number,          // song.bpm_range[0]
   audioFile: file,       // .mp3
   peaks?: number[],      // uint8 × 600 — absent for "full"
-  active?: number[][],   // [[start, end], …] seconds — absent for "full"
+  active?: { _key: string, s: number, e: number }[],   // seconds, inclusive start / exclusive end — absent for "full"
   sourceHash: string,    // manifest set.sha1 — which render produced it
 }]
 ```
+
+**`active` is an array of objects, not an array of arrays.** Sanity does not support
+multidimensional arrays ("multidimensional arrays are not currently supported" —
+`npx sanity schema validate`). The manifest's `[[s, e], …]` (§5, still an array of arrays —
+that shape lives in `abletonnl`'s output, not in Sanity) is mapped to `[{ _key, s, e }, …]`
+by `scripts/lib/rehearsal-ingest.mjs`'s `planIngest` on the way into `post.rehearsalMixes[]`.
+`schemaNestedArrays.test.ts` guards every registered Sanity type against a regression.
 
 **Separate from `audioTracks`.** That field already exists (title/tone/file) for reference
 recordings and guide tracks; folding rehearsal mixes into it would leave no query able to

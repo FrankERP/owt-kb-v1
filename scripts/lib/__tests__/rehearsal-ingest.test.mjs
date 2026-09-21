@@ -74,7 +74,7 @@ describe("planIngest", () => {
     expect(plan.items).toHaveLength(3);
     expect(plan.uploads).toHaveLength(3);
     const eg = plan.items.find((i) => i.track === "EG 1");
-    expect(eg).toMatchObject({ _type: "rehearsalMix", kind: "up", family: "electric", tone: "G", bpm: 144, peaks: [0, 255], active: [[1, 2]], sourceHash: "aaaa1111" });
+    expect(eg).toMatchObject({ _type: "rehearsalMix", kind: "up", family: "electric", tone: "G", bpm: 144, peaks: [0, 255], active: [{ _key: "0", s: 1, e: 2 }], sourceHash: "aaaa1111" });
     expect(eg._key).toBe(mixKey("aaaa1111", "Amor - EG 1 UP.mp3"));
     expect(eg.audioFile).toEqual({ _type: "file", asset: { _type: "reference", uploadIndex: 1 } });
     const full = plan.items.find((i) => i.kind === "full");
