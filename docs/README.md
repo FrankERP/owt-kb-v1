@@ -38,6 +38,7 @@ Also in this repo root:
   security hole).
 - [`../CLAUDE.md`](../CLAUDE.md) / [`../AGENTS.md`](../AGENTS.md) — the terse "don't-break-these" briefing (the same invariants, condensed). **Read one of these before touching code.**
 - [`MOBILE.md`](MOBILE.md) — native iOS/Android setup & handoff runbook.
+- [`CLOUD_CLI.md`](CLOUD_CLI.md) — what a Claude Code on the web session can reach (GitHub, Vercel, Google Cloud), what the egress proxy blocks, and the SessionStart hook that sets it up.
 - [`superpowers/`](superpowers/) — dated design **specs** and **plans** for every shipped feature (the "why" behind each subsystem). Great for archaeology.
 
 ---

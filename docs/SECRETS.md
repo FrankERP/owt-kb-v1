@@ -415,3 +415,50 @@ npx vercel env rm NOTIFY_DEBOUNCE_MINUTES production --yes && printf '5' | npx v
 Same for `preview`. **Then redeploy** — the value binds at build time. To go back to the code default, remove it and redeploy.
 
 **Blast radius.** None mid-change: a notice already queued keeps its own `notifyAfter`; the new value applies to the next edit. A zero, empty or non-numeric value falls back to 15.
+
+---
+
+## `VERCEL_TOKEN`
+
+**NOT SET, on purpose (decided 2026-09-21).** The Vercel MCP server is already
+authenticated in a session and covers the alias + `githubCommitSha` verification
+the push-order rule requires, so a stored token buys only `vercel env pull`,
+`vercel build` and `vercel dev` — run those from a local machine instead. This
+entry is the record of what turning it on would cost, not an instruction to do
+it. See `docs/CLOUD_CLI.md`.
+
+**If ever enabled, needed in: the Claude Code environment only** (<https://claude.ai/code> → environment → Environment variables). Not in Vercel — the deployment does not call its own API. Not in GitHub Actions — `.github/workflows/ci.yml` runs gates, it never deploys. Not in `.env.local` unless you personally use the CLI outside a session.
+
+**Purpose.** Lets the Vercel CLI authenticate inside a Claude Code on the web container, where `vercel login`'s browser OAuth cannot run. **Only needed for what the Vercel MCP server does not cover** — `vercel env pull`, `vercel build`, `vercel dev`. Deployment reads, including the alias + `githubCommitSha` verification the push-order rule requires, go through the MCP with no token at all. See `docs/CLOUD_CLI.md`.
+
+**Where the value came from.** Vercel → Account Settings → Tokens → Create. Scope it to the **`frank-rochas-projects`** team and set the shortest expiry you can live with. It is shown **once**.
+
+**How to rotate.** Create the new token first, paste it into the Claude Code environment, start a session and confirm `npx vercel whoami` answers, then delete the old token in Vercel. Creating before deleting keeps the gap at zero; the reverse order leaves every session's CLI dead in between.
+
+**Blast radius.** A wrong or expired value makes `vercel` commands fail in sessions and nothing else — no deployment, no production traffic, no email is affected. The token's *scope* is the real exposure: an account-wide token can deploy and rewrite environment variables on every project the account can see, which is why it is team-scoped.
+
+---
+
+## `GCP_SA_KEY` (and optional `GCP_PROJECT`)
+
+**NOT SET, on purpose (decided 2026-09-21).** A session that needs `gcloud` gets
+a pasted `gcloud auth print-access-token` (~1 h) in `CLOUDSDK_AUTH_ACCESS_TOKEN`
+instead — nothing on disk, nothing standing, and the window closes by itself.
+A long-lived key would be readable by every session in the environment until
+someone deleted it, and the unattended case that would justify it does not exist
+today. Keep this entry; do not act on it without re-deciding. `GCP_PROJECT` is a
+project name, not a credential, and is safe to set.
+
+**If ever enabled, needed in: the Claude Code environment only.** Not in Vercel, not in GitHub Actions, not in `.env.local`. Nothing in the app or in CI reads it — `cloudbuild.yaml` deploys `owt-solver` with Cloud Build's own build service account and needs no key.
+
+**Purpose.** The only headless way to authenticate `gcloud` in a session. The environment exports `CLOUDSDK_AUTH_ACCESS_TOKEN=proxy-injected`, a placeholder with **no credential behind it** — and, worse, one that takes precedence over an activated service account, so a session that does not blank it fails with `ACCESS_TOKEN_TYPE_UNSUPPORTED` while looking like a bad key. `.claude/hooks/session-start.sh` blanks it. `GCP_PROJECT` is not a secret; setting it to `eloquent-figure-421401` saves a `--project` flag on every command.
+
+**Why a long-lived key at all.** Workload Identity Federation is the better mechanism and is not available — the environment publishes no OIDC token to federate. `gcloud auth login` is interactive. A service-account key is what is left. Treat it accordingly.
+
+**Where the value came from.** `gcloud iam service-accounts keys create` for a **purpose-built** service account (`owt-agent-readonly@eloquent-figure-421401.iam.gserviceaccount.com`), base64-encoded with `base64 -w0`. The hook accepts raw JSON too. **Never reuse the Cloud Build or Compute default service account for this** — those carry `roles/editor`, and this variable is readable by anything that runs in a session.
+
+**Grant `roles/viewer` and stop there unless you have decided otherwise.** It covers every read a session has a reason to make (`functions describe`, `logging read`, `scheduler jobs describe`) and deliberately does **not** include `secretmanager.versions.access`, so `owt-solver-api-key` stays out of reach. Adding `roles/cloudfunctions.developer` + `roles/iam.serviceAccountUser` enables manual deploys from a session and puts a credential that can replace production function code into an environment variable — a real trade, not a formality.
+
+**How to rotate.** Create a second key on the same service account, update the environment variable, start a session and confirm `gcloud auth list` shows the account, then delete the old key with `gcloud iam service-accounts keys delete`. Google keeps the key list, so unlike Vercel and GitHub Actions the *existence* of a key is auditable here — the value still is not. A key is never recoverable after creation.
+
+**Blast radius.** Rotation affects sessions only; the solver, Cloud Build and Cloud Scheduler authenticate as themselves and never see this key. A leaked key is the serious case: it grants its roles to anyone holding the file until it is deleted, which is the argument for viewer-only and for a short life.
