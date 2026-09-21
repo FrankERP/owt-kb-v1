@@ -33,6 +33,20 @@ no player at all: the section only renders once a batch has ingested that song.
 Re-running is safe: keys are `sha1(set.sha1 + file name)`, an asset whose sha1 already
 matches is reused, items from another render of the same song (a second key) are kept.
 
+## The mix rule (calibrated 2026-09-21)
+
+Every `UP` mix is rendered with, in abletonnl terms:
+`weighting="k", separation_db=7, utility_level_db=17, normalize="target", loudness_db=-16,
+target_leveler=True, skip_missing=True`. In words: levels are measured through the BS.1770
+K-weighting curve (a bass and a piano land equally loud to the ear); the boosted instrument is
+held at −16 dB and the band sits 7 dB under it; the click's **peak** sits 17 dB above the
+instrument; a slow leveler (1 s windows, ±8 dB, 0.5 s attack / 2 s release, frozen in silence)
+evens the instrument phrase by phrase before measuring. The numbers were read off the mix Frank
+picked as the reference (Como En El Cielo · Piano) and reproduce it within 0.3 dB. The earlier
+rule — instrument at −20 dBFS flat RMS, click following the band's gain, whole mix normalised —
+made the click land anywhere from 7 to 20 dB under the instrument depending on how the set was
+mixed, and pulled the instrument down whenever the click came up.
+
 ## Quotas to watch (Sanity Free)
 
 100 GB assets / 100 GB bandwidth per month. ~11 files per song at 192 kbps ≈ 7 MB each →
@@ -58,9 +72,10 @@ it is now a symlink to `/Volumes/OWT-2TB/abletonnl-cache`; keep it on the SSD.
 | 136 folders (23 Live 10 sets, after abletonnl `7998519` learned to read Live 10) | sube 207 (1.6 GB) → 191 after excluding two wrong-target folders | sube 191 (1.4 GB), reusa 1189, escribió 136 |
 | 142 folders (6 songs unblocked by abletonnl `5a61afa`: seek past EOF → silence, <64-frame warp segments copied, foreign absolute paths rebased) | sube 72 → 63 after excluding a second C-key Way Maker | sube 63 (670 MB), reusa 1380, escribió 142 |
 | 144 folders (Resplandeció! and Orgullo De Un Padre, after abletonnl renames duplicate track names to «Name (2)» and `skip_missing` lets a lost scratch track render as silence) | sube 16 (124 MB), reusa 1443 | escribió 144 |
+| **Recalibration** — all 144 folders re-rendered with the mix rule above (abletonnl `2f38a56`…`425650c`) | sube 1458 (12.0 GB), reusa 1, reemplaza 1458 | escribió 144; the ingest deleted every replaced asset; re-run reuses 1459 |
 
-Result on production (GROQ, 2026-09-21 10:40): **135 of 144 songs** carry `rehearsalMixes`
-(144 renders — 9 songs in two keys), **1,468 mixes**, **12.0 GB of the 100 GB quota**.
+Result on production (GROQ, 2026-09-21 15:20, after the recalibration): **135 of 144 songs** carry
+`rehearsalMixes` (144 renders — 9 songs in two keys), **1,468 mixes**, **12.0 GB of the 100 GB quota**.
 Idempotence held on every re-run (reusa = all previous uploads, reemplaza 0). Three rendered
 folders were deliberately excluded (`/Volumes/OWT-2TB/Rehearsal-out/_excluded/`): the vendor
 `Oceans_132BPM_D` (the OASIS arrangement in the same key is the one ingested),
