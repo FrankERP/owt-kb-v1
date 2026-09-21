@@ -76,7 +76,7 @@ async function getPost(slug: string) {
         tone,
         "audioFileURL": audioFile.asset->url,
       },
-      rehearsalMixes[] { _key, kind, track, family, tone, bpm, "audioFileURL": audioFile.asset->url, peaks, active, sourceHash },
+      rehearsalMixes[] { _key, kind, track, family, tone, bpm, peaks, active, sourceHash },
       chordsPDF[] {
         title,
         key,

@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         chords[]{ key, content },
         "lyricsURL": lyrics.asset->url,
         audioTracks[] { title, tone, "audioFileURL": audioFile.asset->url },
-        rehearsalMixes[] { _key, kind, track, family, tone, bpm, "audioFileURL": audioFile.asset->url, peaks, active, sourceHash },
+        rehearsalMixes[] { _key, kind, track, family, tone, bpm, peaks, active, sourceHash },
         chordsPDF[] { title, key, "chordsURL": chordsPDF.asset->url },
       }`,
       { id }

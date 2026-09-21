@@ -27,4 +27,13 @@ describe("post GROQ reads", () => {
       expect(src).toMatch(/rehearsalMixes\[\]\s*\{[^}]*peaks[^}]*active[^}]*\}/);
     }
   });
+
+  it("neither single-song read ships the raw CDN URL to the client (decision D2 — every URL is the session-gated /api/audio/… route)", () => {
+    for (const f of ALLOWED) {
+      const src = readFileSync(f, "utf8");
+      const match = src.match(/rehearsalMixes\[\]\s*\{[^}]*\}/);
+      expect(match).toBeTruthy();
+      expect(match![0]).not.toMatch(/asset->url/);
+    }
+  });
 });
