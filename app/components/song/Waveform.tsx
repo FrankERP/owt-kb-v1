@@ -35,6 +35,8 @@ export default function Waveform({
     const dpr = typeof window === "undefined" ? 1 : window.devicePixelRatio || 1;
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
+    // Assigning width/height resets the canvas's 2D transform, which is why
+    // ctx.scale(dpr, dpr) below never accumulates across redraws.
     canvas.width = w * dpr;
     canvas.height = h * dpr;
     const ctx = canvas.getContext("2d");
@@ -55,19 +57,32 @@ export default function Waveform({
       const bh = Math.max(2, values[i] * (h - 2));
       ctx.fillRect(x, (h - bh) / 2, BAR_W, bh);
     }
-    // playhead
-    ctx.fillStyle = themeColour("--accent-rgb");
-    ctx.fillRect(Math.min(w - 1, playedUntil), 0, 1, h);
+    // playhead — only once playback has started; an idle row at progress 0
+    // should show no line at x=0.
+    if (progress > 0) {
+      ctx.fillStyle = themeColour("--accent-rgb");
+      ctx.fillRect(Math.min(w - 1, playedUntil), 0, 1, h);
+    }
   }, [peaks, active, duration, progress]);
 
+  // `draw` changes on every progress tick (cheap: redraw the canvas), but the
+  // ResizeObserver itself must not be torn down and recreated that often —
+  // disconnecting/reobserving every tick is wasted work and can miss a resize
+  // that lands mid-cycle. So the observer is created ONCE ([] deps) and calls
+  // through a ref that always holds the latest `draw`.
+  const drawRef = useRef(draw);
   useEffect(() => {
+    drawRef.current = draw;
     draw();
+  }, [draw]);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(() => draw());
+    const ro = new ResizeObserver(() => drawRef.current());
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [draw]);
+  }, []);
 
   const seekFromEvent = (e: React.MouseEvent<HTMLElement>) => {
     if (!onSeek) return;
@@ -81,10 +96,16 @@ export default function Waveform({
     if (e.key === "ArrowLeft") { e.preventDefault(); onSeek(Math.max(0, +(progress - STEP).toFixed(2))); }
   };
 
-  const canvas = (
-    <canvas ref={canvasRef} role="img" aria-label={label} className="block h-10 w-full" />
-  );
-  if (!onSeek) return <div className={className}>{canvas}</div>;
+  if (!onSeek) {
+    return (
+      <div className={className}>
+        <canvas ref={canvasRef} role="img" aria-label={label} className="block h-10 w-full" />
+      </div>
+    );
+  }
+  // The button is the ONLY accessible node here — a nested role="img" with
+  // its own aria-label would give assistive tech two nodes announcing the
+  // same label. The canvas is purely decorative in this branch.
   return (
     <button
       type="button"
@@ -93,7 +114,7 @@ export default function Waveform({
       onKeyDown={seekFromKey}
       className={`block w-full cursor-pointer rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ${className}`}
     >
-      {canvas}
+      <canvas ref={canvasRef} aria-hidden="true" className="block h-10 w-full" />
     </button>
   );
 }
