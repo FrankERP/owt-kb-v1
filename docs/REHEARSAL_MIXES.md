@@ -18,7 +18,17 @@ Spec: `docs/superpowers/specs/2026-09-20-rehearsal-mixes-design.md`. Model: `pos
    (`{ "<folder>": "<post _id>" }`) and re-run until none remain.
 4. Apply (production dataset — needs Frank's explicit go on the dry-run output):
    `node --env-file=.env.local scripts/ingest-rehearsal-mixes.mjs ~/Rehearsal-out --apply`
+   Publish or discard any open Studio draft of a song **before** running a batch — the script
+   patches the *published* document, and publishing an older draft afterwards drops
+   `rehearsalMixes` from it (re-running the ingest restores it, but the team sees no mixes
+   until then).
 5. The song sheet shows the mixes at once; `/posts/[slug]` within its 1 h ISR window.
+
+## How members find it
+
+The «Ensayo» section is the first thing on the song page — before the chord chart — and in
+the song sheet's section nav. A song with no `rehearsalMixes` shows no «Ensayo» heading and
+no player at all: the section only renders once a batch has ingested that song.
 
 Re-running is safe: keys are `sha1(set.sha1 + file name)`, an asset whose sha1 already
 matches is reused, items from another render of the same song (a second key) are kept.

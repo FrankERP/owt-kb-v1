@@ -83,6 +83,11 @@ for (const folderName of folders) {
     continue;
   }
   const post = postById.get(m.postId);
+  if (!post) {
+    console.log(`  ! ${folderName}: matches.json apunta a ${m.postId}, que no existe`);
+    unmatched[folderName] = { reason: "override-not-found", candidates: [] };
+    continue;
+  }
   // Resolve file paths relative to the folder when the manifest's absolute path moved with the SSD.
   for (const f of manifest.files) {
     if (!existsSync(f.path)) f.path = path.join(dir, path.basename(f.path));
@@ -112,7 +117,8 @@ for (const folderName of folders) {
     if (!apply) continue;
     const assetIds = [];
     for (const u of plan.uploads) {
-      const asset = await writer.assets.upload("file", readFileSync(u.path), { filename: u.filename, contentType: "audio/mpeg" });
+      const contentType = path.extname(u.filename).toLowerCase() === ".mp3" ? "audio/mpeg" : "application/octet-stream";
+      const asset = await writer.assets.upload("file", readFileSync(u.path), { filename: u.filename, contentType });
       assetIds[u.uploadIndex] = asset._id;
       uploadedThisFolder.push(asset._id);
     }
