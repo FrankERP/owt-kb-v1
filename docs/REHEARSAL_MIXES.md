@@ -60,7 +60,7 @@ it is now a symlink to `/Volumes/OWT-2TB/abletonnl-cache`; keep it on the SSD.
 | 144 folders (Resplandeció! and Orgullo De Un Padre, after abletonnl renames duplicate track names to «Name (2)» and `skip_missing` lets a lost scratch track render as silence) | sube 16 (124 MB), reusa 1443 | escribió 144 |
 
 Result on production (GROQ, 2026-09-21 10:40): **135 of 144 songs** carry `rehearsalMixes`
-(144 renders — 9 songs in two keys), **1,470 mixes**, **12.0 GB of the 100 GB quota**.
+(144 renders — 9 songs in two keys), **1,468 mixes**, **12.0 GB of the 100 GB quota**.
 Idempotence held on every re-run (reusa = all previous uploads, reemplaza 0). Three rendered
 folders were deliberately excluded (`/Volumes/OWT-2TB/Rehearsal-out/_excluded/`): the vendor
 `Oceans_132BPM_D` (the OASIS arrangement in the same key is the one ingested),
