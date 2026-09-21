@@ -57,21 +57,22 @@ it is now a symlink to `/Volumes/OWT-2TB/abletonnl-cache`; keep it on the SSD.
 | 113 folders (6 new) | sube 53 (435 MB), reusa 1136 | escribió 113 |
 | 136 folders (23 Live 10 sets, after abletonnl `7998519` learned to read Live 10) | sube 207 (1.6 GB) → 191 after excluding two wrong-target folders | sube 191 (1.4 GB), reusa 1189, escribió 136 |
 | 142 folders (6 songs unblocked by abletonnl `5a61afa`: seek past EOF → silence, <64-frame warp segments copied, foreign absolute paths rebased) | sube 72 → 63 after excluding a second C-key Way Maker | sube 63 (670 MB), reusa 1380, escribió 142 |
+| 144 folders (Resplandeció! and Orgullo De Un Padre, after abletonnl renames duplicate track names to «Name (2)» and `skip_missing` lets a lost scratch track render as silence) | sube 16 (124 MB), reusa 1443 | escribió 144 |
 
-Result on production (GROQ, 2026-09-21 09:45): **133 of 144 songs** carry `rehearsalMixes`
-(142 renders — 9 songs in two keys), **1,454 mixes**, **11.9 GB of the 100 GB quota**.
+Result on production (GROQ, 2026-09-21 10:40): **135 of 144 songs** carry `rehearsalMixes`
+(144 renders — 9 songs in two keys), **1,470 mixes**, **12.0 GB of the 100 GB quota**.
 Idempotence held on every re-run (reusa = all previous uploads, reemplaza 0). Three rendered
 folders were deliberately excluded (`/Volumes/OWT-2TB/Rehearsal-out/_excluded/`): the vendor
 `Oceans_132BPM_D` (the OASIS arrangement in the same key is the one ingested),
 `Sólo en Jesús_68BPM_F` (Passion's *In Christ Alone*, which had title-matched the *In Jesus
 Name* post), and `Way Maker_68BPM_C` (a second C-key set; `Así eres Tú_68BPM_C` was already in).
+The render driver passes `skip_missing=True` and never asks for an `UP` of a track abletonnl
+renamed («Drums (2)») — the duplicate still plays in the bed, as in Live.
 
-Still without mixes (11): 6 have no set on the SSD (En Tu Presencia, Generación Que Danza,
-Heme Aquí, Mi Sanador, Ojos De Amor, Sube Más Alto); 2 have two tracks with the same name,
-which abletonnl refuses because renders are keyed by name (Resplandeció! «Drums», Orgullo De
-Un Padre «LEAD» — rename one in Live); 3 have no isolatable instrument track at all — only
-loops, pads or voices (Noche De Paz, Sopla Espíritu, Sendas Dios Hará), so a `Full` alone is the
-most they could carry.
+Still without mixes (9): 6 have no set on the SSD (En Tu Presencia, Generación Que Danza,
+Heme Aquí, Mi Sanador, Ojos De Amor, Sube Más Alto); 3 have no isolatable instrument track at
+all — only loops, pads or voices (Noche De Paz, Sopla Espíritu, Sendas Dios Hará), so a `Full`
+alone is the most they could carry.
 
 Known wart: when an isolated track is silent in a song, its `UP` file is byte-identical to `Full`
 and Sanity dedupes the asset — the row still shows (e.g. «EG 4», «Keys 3» on El Que Resucitó).
