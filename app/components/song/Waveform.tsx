@@ -86,6 +86,10 @@ export default function Waveform({
 
   const seekFromEvent = (e: React.MouseEvent<HTMLElement>) => {
     if (!onSeek) return;
+    // A synthetic click from Enter/Space (keyboard activation of the button)
+    // carries clientX 0 and detail 0 — a real mouse click always has detail
+    // >= 1. Without this guard, pressing Enter on the waveform seeks to 0.
+    if (e.detail === 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
     if (rect.width <= 0) return;
     onSeek(Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)));
