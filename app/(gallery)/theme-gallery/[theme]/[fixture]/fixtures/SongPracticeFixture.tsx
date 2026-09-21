@@ -10,6 +10,7 @@
 // which is ~0.1 s of digital silence and the only "asset" this route carries.
 
 import ChordChart from "@/app/components/ChordChart";
+import RehearsalPlayer from "@/app/components/song/RehearsalPlayer";
 import SongAudioSection from "@/app/components/SongAudioSection";
 import SongHeroPills from "@/app/components/song/SongHeroPills";
 import { TransposeProvider } from "@/app/components/song/TransposeProvider";
@@ -35,6 +36,16 @@ const TRACKS = [
 ];
 
 const TAGS = ["adoración", "santidad", "congregacional"];
+
+/** Two rehearsal rows with a synthetic envelope: no network, no session. */
+const PEAKS = Array.from({ length: 600 }, (_, i) => (i > 120 && i < 420 ? 40 + Math.round(200 * Math.abs(Math.sin(i / 9))) : 8));
+// The player's play/download controls resolve to `/api/audio/gallery/…`, which
+// answers 403 on the public gallery route (no session) — that's fine, this
+// block is for LOOKING, not for playing, and the fixture stays hermetic.
+const MIXES = [
+  { _key: "g-full", kind: "full" as const, tone: "Sol", sourceHash: "gallery" },
+  { _key: "g-eg1", kind: "up" as const, track: "EG 1", family: "electric", tone: "Sol", bpm: 120, peaks: PEAKS, active: [{ _key: "a0", s: 12, e: 42 }], sourceHash: "gallery" },
+];
 
 export function SongPracticeFixture() {
   return (
@@ -67,6 +78,11 @@ export function SongPracticeFixture() {
           <ChordChart charts={[{ key: "G", content: CHART }]} />
 
           <SongAudioSection tracks={TRACKS} songTitle="Canción de muestra" songSlug="cancion-de-muestra" />
+
+          <section className="space-y-4">
+            <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Ensayo</p>
+            <RehearsalPlayer mixes={MIXES} songId="gallery" songTitle="Santo" songSlug="santo" preselect={["EG"]} />
+          </section>
 
           {/* R6: the tutorial poster (no PLAYER loads until the button is pressed) and
               the lyric block's two typographic rules — the eyebrow and the dimmed

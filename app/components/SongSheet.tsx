@@ -8,6 +8,7 @@ import type { PortableTextComponents } from "@portabletext/react";
 import { usePlayer, AudioTrack, SongHistoryEntry } from "@/app/context/PlayerContext";
 import AudioTransport from "./AudioTransport";
 import ChordChart from "./ChordChart";
+import RehearsalPlayer from "./song/RehearsalPlayer";
 import TempoPill from "./song/TempoPill";
 import CueDialog from "./ui/CueDialog";
 import { groupBySections } from "@/app/utils/lyrics";
@@ -183,6 +184,19 @@ export default function SongSheet() {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+
+              {(sheet?.rehearsalMixes?.length ?? 0) > 0 && (
+                <div className="space-y-2 pt-1">
+                  <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">Ensayo</p>
+                  <RehearsalPlayer
+                    mixes={sheet!.rehearsalMixes!}
+                    songId={sheet!._id}
+                    songTitle={sheet!.title}
+                    songSlug={sheet!.slug}
+                    preselect={sheet!.myInstruments}
+                  />
                 </div>
               )}
 

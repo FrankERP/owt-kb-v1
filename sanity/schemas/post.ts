@@ -104,6 +104,46 @@ export const post = {
 			]
 		},
 		{
+			name: 'rehearsalMixes',
+			title: 'Mixes de ensayo',
+			description: 'Escritos por scripts/ingest-rehearsal-mixes.mjs desde el manifest de abletonnl. No editar a mano: peaks son 600 números.',
+			type: 'array',
+			readOnly: true,
+			of: [
+				{
+					type: 'object',
+					name: 'rehearsalMix',
+					fields: [
+						{ name: 'kind', type: 'string', title: 'Kind', options: { list: ['full', 'up'] } },
+						{ name: 'track', type: 'string', title: 'Track' },
+						{ name: 'family', type: 'string', title: 'Family' },
+						{ name: 'tone', type: 'string', title: 'Tone' },
+						{ name: 'bpm', type: 'number', title: 'BPM' },
+						{ name: 'audioFile', type: 'file', title: 'Audio File', options: { accept: '.mp3' } },
+						{ name: 'peaks', type: 'array', title: 'Peaks', of: [{ type: 'number' }], hidden: true },
+						// Array of OBJECTS, not array of arrays — Sanity does not support nested
+						// arrays ("multidimensional arrays are not currently supported").
+						// { s, e } is seconds, inclusive start / exclusive end (isActiveAt).
+						{
+							name: 'active',
+							type: 'array',
+							title: 'Active spans',
+							of: [{ type: 'object', name: 'activeSpan', fields: [{ name: 's', type: 'number' }, { name: 'e', type: 'number' }] }],
+							hidden: true,
+						},
+						{ name: 'sourceHash', type: 'string', title: 'Source set sha1' },
+					],
+					preview: {
+						select: { kind: 'kind', track: 'track', tone: 'tone' },
+						prepare: ({ kind, track, tone }: { kind?: string; track?: string; tone?: string }) => ({
+							title: kind === 'full' ? 'Banda completa' : `${track ?? '?'} UP`,
+							subtitle: tone,
+						}),
+					},
+				},
+			],
+		},
+		{
 			name: 'lyrics',
 			title: 'Lyrics pdf',
 			type: 'file',

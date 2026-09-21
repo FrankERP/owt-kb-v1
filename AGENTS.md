@@ -346,6 +346,10 @@ prose wrapper knows which eyebrow is first, via
 (`app/components/song/TutorialPoster.tsx` — the ONLY tutorial embed: a YouTube poster under
 a «Reproducir» `Button`, player on press; a url with no extractable id keeps the raw
 iframe, a url-less row renders nothing. Never boot an embed on page load),
+`RehearsalPlayer`/`Waveform` (`app/components/song/` — the ONLY rehearsal-mix player; one `<audio>`
+through `PlayerContext`, URLs are always `/api/audio/[song]/[key]`, never `cdn.sanity.io`; the
+canvas paints with `themeColour`), `rehearsalMixes.ts` (`app/utils/` — neutral `groupMixes`/
+`preselectMix`/`waveformBars`; `SEAT_TO_FAMILY` pins app seats to abletonnl families),
 `BottomNavBar` (`app/components/BottomNavBar.tsx` — the phone tab bar's PRESENTATIONAL
 half, props only; `BottomNav` keeps the session, the pathname and the measurement. Anything
 that needs the bar without a session — a gallery fixture — hosts this one),
