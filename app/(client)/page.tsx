@@ -143,6 +143,13 @@ export default async function Home() {
   ].filter((d): d is string => !!d && d >= today);
   const nextDate = allDates.sort()[0] ?? null;
 
+  // Only ONE card may carry the countdown pill, and five sets can share a day.
+  // `specials` arrives ordered `date asc, time asc`, so when several of them sit
+  // on `nextDate` the FIRST is the next service and the rest are later that day.
+  const nextSpecialId = nextDate
+    ? specials.find((sp) => sp.date === nextDate && paints({ songs: sp.songs }, sp))?._id ?? null
+    : null;
+
   // One list, in the order the page has always shown them: specials, Saturday,
   // Sunday. Splitting it into "the next service" and "the rest" is what makes
   // home a run sheet (spec §12.1) — the hero card in full, everything else one
@@ -164,7 +171,7 @@ export default async function Home() {
           fohTeam: sp.foh_team?.map((s) => ({ label: s.role, person: s.person })),
           bgvs: sp.BGVs,
           chorus: sp.Chorus,
-          isNext: sp.date === nextDate,
+          isNext: sp._id === nextSpecialId,
         } satisfies DayCardProps,
       })),
     ...(hasSaturdayCard

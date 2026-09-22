@@ -66,6 +66,24 @@ describe("DayCardDisclosure", () => {
     expect(trigger.textContent).toContain("en 11 días");
   });
 
+  it("carries a special's time when it has one, and nothing clock-shaped when it does not", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 8, 8, 9, 0, 0));
+    mount();
+    expect(screen.getByRole("button", { name: /Sábado/ }).textContent).not.toMatch(/\d\d:\d\d/);
+    cleanup();
+    render(
+      <MotionProvider>
+        <ToastProvider>
+          <CueDialogProvider>
+            <DayCardDisclosure day="Campamento" date="2026-09-19" time="18:45" setlist={{ week: "2026-09-19", songs: [song] }} leads={["Ana"]} />
+          </CueDialogProvider>
+        </ToastProvider>
+      </MotionProvider>,
+    );
+    expect(screen.getByRole("button", { name: /Campamento/ }).textContent).toMatch(/18:45/);
+  });
+
   it("opens onto the card, and the setlist lives inside the collapsed region", () => {
     mount();
     const trigger = screen.getByRole("button", { name: /Sábado/ });
