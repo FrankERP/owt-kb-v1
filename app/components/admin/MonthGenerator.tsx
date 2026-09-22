@@ -25,10 +25,12 @@ import { mutationErrorMessage } from "./serviceMutationErrors";
 import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import { fillColumn } from "./localFill";
 import { fillInstruments, isInstrumentRowId } from "./instrumentFill";
+import { fillSpecialGroup, orderGroup } from "./groupFill";
 import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
+import Button from "@/app/components/ui/Button";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
@@ -1766,6 +1768,17 @@ export default function MonthGenerator({
     if (!clearPending) return;
     (clearCancelRef.current ?? clearRegionRef.current)?.focus();
   }, [clearPending]);
+  // «Llenar especiales…» (stored mode): an inline picker, the same pattern as
+  // «Limpiar mes». The group is chosen per run and never persisted (spec
+  // 2026-09-22-camp-group-fill-design.md §3).
+  const [groupFillOpen, setGroupFillOpen] = useState(false);
+  const [groupFillPicked, setGroupFillPicked] = useState<Set<string>>(new Set());
+  const groupFillTriggerRef = useRef<HTMLButtonElement>(null);
+  const groupFillRegionRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!groupFillOpen) return;
+    groupFillRegionRef.current?.focus();
+  }, [groupFillOpen]);
   const [saveKnownFailures, setSaveKnownFailures] = useState(0);
   const [pendingSaveAttempts, setPendingSaveAttempts] = useState<Map<string, {
     attempt: FrozenSaveAttempt;
@@ -1960,6 +1973,14 @@ export default function MonthGenerator({
     || clearPending
     || clearing
   );
+  const storedSpecialColumns = storedMode
+    ? orderGroup(storedColumns.filter((c) => c.type === "special_role" && c.admission === "approved"))
+    : [];
+  const groupFillBlocked = storedMutationLocked
+    ? "Espera a que termine la operación en curso."
+    : storedEditBlocked
+      ?? (solverConfig === null ? "Las reglas compartidas no están cargadas." : null)
+      ?? (storedSpecialColumns.length === 0 ? "Este mes no tiene servicios especiales." : null);
   const storedGenerationKey = `${storedSource?.rolesGeneration ?? 0}:${storedSource?.integrityGeneration ?? 0}`;
   const storedSectionServiceOptions = storedMode
     ? storedColumns
@@ -2003,6 +2024,7 @@ export default function MonthGenerator({
       // An open «Limpiar mes» confirmation is the nearest thing to dismiss —
       // Escape must not leap past a destructive prompt to close the editor.
       if (clearPending) { setClearPending(false); clearTriggerRef.current?.focus(); return; }
+      if (groupFillOpen) { setGroupFillOpen(false); groupFillTriggerRef.current?.focus(); return; }
       if (closeWouldDiscard) {
         setPendingDiscard("close");
         return;
@@ -2011,7 +2033,7 @@ export default function MonthGenerator({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [clearPending, closeWouldDiscard, onClose, storedTransportActive]);
+  }, [clearPending, closeWouldDiscard, groupFillOpen, onClose, storedTransportActive]);
 
   useEffect(() => {
     if (!storedMode || !focusRoleId) return;
@@ -2492,6 +2514,39 @@ export default function MonthGenerator({
       return;
     }
     setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
+  }
+
+  function openGroupFill() {
+    if (groupFillBlocked) return;
+    setGroupFillPicked(new Set(storedSpecialColumns.map((c) => c.columnId)));
+    setGroupFillOpen(true);
+  }
+
+  function closeGroupFill() {
+    setGroupFillOpen(false);
+    groupFillTriggerRef.current?.focus();
+  }
+
+  /**
+   * The group fill: local, empty seats only, load scoped to the ticked group
+   * (`groupFill.ts`). Routed through `handleCellsChange` so touched-role
+   * tracking, dirtiness and «Guardar» behave exactly as for a hand edit —
+   * nothing is written until the admin saves.
+   */
+  function handleGroupFill() {
+    const config = solverConfig;
+    if (!config || groupFillBlocked) return;
+    const group = storedSpecialColumns.filter((c) => groupFillPicked.has(c.columnId));
+    if (group.length === 0) return;
+    const out = fillSpecialGroup({ group, rows, cells, members, config });
+    handleCellsChange(out.cells);
+    const groupIds = new Set(group.map((c) => c.columnId));
+    setUnfilled((prev) => [...prev.filter((u) => !groupIds.has(u.columnId)), ...out.unfilled]);
+    const n = out.unfilled.length;
+    setSaveNotice(n === 0
+      ? "Especiales llenados. Revisa y guarda."
+      : `Quedaron ${n} lugar${n !== 1 ? "es" : ""} sin cubrir en los especiales. Revisa y guarda.`);
+    closeGroupFill();
   }
 
   function handleStoredHeaderChange(columnId: string, patch: { date?: string; serviceName?: string; time?: string }) {
@@ -3504,6 +3559,7 @@ export default function MonthGenerator({
       {storedMode && storedInventory.coherent && (
         <div className="rounded-lg border border-accent/15 bg-accent/5 px-3 py-3">
           {!composerOpen ? (
+            <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setComposerOpen(true)}
@@ -3513,6 +3569,17 @@ export default function MonthGenerator({
             >
               + Nuevo servicio
             </button>
+              <Button
+                ref={groupFillTriggerRef}
+                variant="secondary"
+                size="lg"
+                onClick={openGroupFill}
+                disabled={!!groupFillBlocked}
+                title={groupFillBlocked ?? undefined}
+              >
+                Llenar especiales…
+              </Button>
+            </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
               <Select id="mg-create-type" label="Tipo" size="md" value={createType} disabled={storedMutationLocked} onChange={(event) => setCreateType(event.target.value as ServiceType)}>
@@ -3836,6 +3903,42 @@ export default function MonthGenerator({
         <p className="rounded-lg bg-negative-strong/10 px-3 py-2 font-body text-xs text-negative-muted">
           Corrige los datos inválidos antes de guardar: {invalidStoredColumns.map((column) => column.date).join(", ")}.
         </p>
+      )}
+
+      {storedMode && groupFillOpen && (
+        <div ref={groupFillRegionRef} tabIndex={-1} role="region" aria-label="Llenar especiales" className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2.5 space-y-2">
+          <p className="font-body text-xs text-mono-300">
+            Llena los lugares vacíos de Lead, BGV e instrumentos en los especiales marcados.
+            {" "}Solo cuenta la carga dentro de este grupo; los fines de semana no pesan.
+            {" "}Lo que ya está asignado no se mueve y nada se guarda hasta «Guardar».
+          </p>
+          {storedSpecialColumns.map((column) => (
+            <Checkbox
+              key={column.columnId}
+              align="start"
+              className="font-body text-xs text-mono-300"
+              checked={groupFillPicked.has(column.columnId)}
+              onChange={(event) => {
+                const checked = event.target.checked;
+                setGroupFillPicked((prev) => {
+                  const next = new Set(prev);
+                  if (checked) next.add(column.columnId); else next.delete(column.columnId);
+                  return next;
+                });
+              }}
+            >
+              <span>{fmtDate(column.date)} · {column.serviceName}{column.time ? ` · ${column.time}` : ""}</span>
+            </Checkbox>
+          ))}
+          <div className="flex gap-2">
+            <Button variant="primary" size="lg" onClick={handleGroupFill} disabled={groupFillPicked.size === 0}>
+              Llenar vacíos
+            </Button>
+            <Button variant="secondary" size="lg" onClick={closeGroupFill}>
+              Cancelar
+            </Button>
+          </div>
+        </div>
       )}
 
       {/*

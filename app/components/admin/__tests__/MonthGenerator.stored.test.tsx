@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -188,13 +188,14 @@ function renderStored(roles: ServiceRole[], options: {
   storedCapabilities?: ComponentProps<typeof MonthGenerator>["storedCapabilities"];
   onCleared?: ComponentProps<typeof MonthGenerator>["onCleared"];
   focusRoleId?: string;
+  members?: ComponentProps<typeof MonthGenerator>["members"];
 } = {}) {
   const storedSource = source(roles);
   const onClose = vi.fn();
   const result = render(
     <MonthGenerator
       mode="stored"
-      members={members}
+      members={options.members ?? members}
       existingRoles={roles}
       allRoles={roles}
       initialMonth={options.initialMonth ?? "2026-02"}
@@ -1190,5 +1191,55 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
     expect(url).toBe("/api/admin/roles/role-a");
     expect(init).toMatchObject({ method: "DELETE" });
     expect(JSON.parse(String(init?.body))).toEqual({ rev: "rev-a" });
+  });
+});
+
+describe("MonthGenerator — «Llenar especiales…»", () => {
+  const voz = ["v1", "v2", "v3", "v4", "v5"].map((id) => ({ _id: id, member_name: id, memberType: ["voz"] }));
+  const emptySet = (id: string, time: string) => role({
+    _id: id, _rev: `rev-${id}`, _type: "special_role", date: "2026-02-14",
+    service_name: `Campamento ${time}`, time,
+    leads: [], bgvs: [], chorus: [], instruments: [], foh: [],
+  });
+
+  it("is disabled with its reason when the month has no special", () => {
+    renderStored([role()], { members: voz });
+    const trigger = screen.getByRole("button", { name: "Llenar especiales…" }) as HTMLButtonElement;
+    expect(trigger.disabled).toBe(true);
+    expect(trigger.title).toBe("Este mes no tiene servicios especiales.");
+  });
+
+  it("lists the month's specials all ticked, fills their empty seats locally, and writes nothing until Guardar", () => {
+    const fetchMock = vi.fn(async () => response());
+    vi.stubGlobal("fetch", fetchMock);
+    renderStored([role(), emptySet("set-a", "09:00"), emptySet("set-b", "12:30")], { members: voz });
+
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    const panel = screen.getByRole("region", { name: "Llenar especiales" });
+    const boxes = within(panel).getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxes.map((b) => b.checked)).toEqual([true, true]);
+    expect(within(panel).queryByText(/Domingo/)).toBeNull();
+
+    fireEvent.click(within(panel).getByRole("button", { name: "Llenar vacíos" }));
+    expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
+    expect((screen.getByRole("button", { name: "Guardar 2 servicios" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves an unticked special untouched", () => {
+    renderStored([emptySet("set-a", "09:00"), emptySet("set-b", "12:30")], { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    const panel = screen.getByRole("region", { name: "Llenar especiales" });
+    fireEvent.click(within(panel).getAllByRole("checkbox")[1]!);
+    fireEvent.click(within(panel).getByRole("button", { name: "Llenar vacíos" }));
+    expect(screen.getByRole("button", { name: "Guardar 1 servicio" })).toBeTruthy();
+  });
+
+  it("Escape closes the panel before it could close the editor", () => {
+    const { onClose } = renderStored([emptySet("set-a", "09:00")], { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
