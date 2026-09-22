@@ -126,6 +126,8 @@ export interface SpecialRole {
   _id: string;
   date: string;
   service_name: string;
+  /** "HH:mm" (see `app/utils/serviceTime.ts`); absent on every special that predates it. */
+  time?: string | null;
   songs?: Array<SetlistSong>;
   team_notes?: string;
   Lead?: Array<TeamMember>;

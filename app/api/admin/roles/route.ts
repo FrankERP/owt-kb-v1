@@ -63,8 +63,8 @@ export async function GET() {
   // out exactly as the plain `->` projection did.
   const roles = await operationalClient.fetch(`
     *[_type in ["sunday_role", "saturday_role", "special_role"]]
-    | order(coalesce(week, date) asc) {
-      _id, _rev, _type, service_name,
+    | order(coalesce(week, date) asc, time asc) {
+      _id, _rev, _type, service_name, time,
       "published": coalesce(published, true),
       "date": coalesce(week, date),
       "leads": Lead[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
