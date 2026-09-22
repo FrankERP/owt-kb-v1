@@ -11,11 +11,16 @@ import { normalizeForMatch } from "./catalog-reconcile.mjs";
 import { matchSong } from "./setlist-match.mjs";
 
 const FOLDER_RE = /^(.*?)_(\d+(?:\.\d+)?)BPM_([A-G](?:#|b)?m?)(?:\s+Project)?$/i;
+// A few vendor sets carry no BPM in their name (`Increíble_C`); the transposed
+// renders inherit that shape (`Increíble_B`), and the key is still the suffix.
+const KEY_ONLY_RE = /^(.*?)_([A-G](?:#|b)?m?)(?:\s+Project)?$/;
 
 export function parseFolderName(name) {
   const m = name.match(FOLDER_RE);
-  if (!m) return { title: name.replace(/\s+Project$/i, "").trim(), bpm: null, tone: null };
-  return { title: m[1].trim(), bpm: Number(m[2]), tone: m[3] };
+  if (m) return { title: m[1].trim(), bpm: Number(m[2]), tone: m[3] };
+  const k = name.match(KEY_ONLY_RE);
+  if (k) return { title: k[1].trim(), bpm: null, tone: k[2] };
+  return { title: name.replace(/\s+Project$/i, "").trim(), bpm: null, tone: null };
 }
 
 export function songNameFromManifest(manifest) {
