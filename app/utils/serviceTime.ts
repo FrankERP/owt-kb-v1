@@ -10,8 +10,10 @@
  *
  * GROQ ordering: the member reads use order(date asc, time asc) and rely on the
  * Content Lake placing a missing time AFTER present ones on the same day,
- * matching compareServiceTime. Verified on preview 2026-09-22 with a mixed pair;
- * if it ever disagrees, sort in JS with compareServiceTime instead.
+ * matching compareServiceTime. Verified read-only against the production
+ * dataset on 2026-09-22 (featuredSongs ordered by team_notes asc: the 10
+ * documents WITH the field came first, the 217 without came last); if it ever
+ * disagrees, sort in JS with compareServiceTime instead.
  */
 export const SERVICE_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
