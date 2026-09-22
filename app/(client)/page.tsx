@@ -56,8 +56,8 @@ const WEEKEND_QUERY = `{
   "satSongs": *[_type == "saturdarSongs"  && week == $sat] { ${SETLIST_FIELDS} },
   "sunRole":  *[_type == "sunday_role"    && week == $sun && published != false] { ${ROLE_FIELDS} },
   "satRole":  *[_type == "saturday_role"  && week == $sat && published != false] { ${ROLE_FIELDS} },
-  "specials": *[_type == "special_role"   && date >= $today && date <= $sun && published != false] | order(date asc) {
-    _id, date, service_name, team_notes,
+  "specials": *[_type == "special_role"   && date >= $today && date <= $sun && published != false] | order(date asc, time asc) {
+    _id, date, time, service_name, team_notes,
     songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key },
     ${ROLE_FIELDS}
   }
@@ -155,6 +155,7 @@ export default async function Home() {
         props: {
           day: sp.service_name || "Servicio Especial",
           date: sp.date,
+          time: sp.time ?? null,
           roleId: sp._id,
           serviceId: sp._id,
           setlist: sp.songs?.length ? { songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } : undefined,
