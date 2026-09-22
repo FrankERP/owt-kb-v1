@@ -53,9 +53,13 @@ const NOTE_LABEL = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", 
 const noteRoot = (k) => NOTE_INDEX[String(k ?? "").match(/^([A-G][#b]?)/)?.[1]] ?? -1;
 
 export function renderSemitones(manifest) {
-  const semis = Number(manifest?.transpose?.semitones ?? 0);
-  if (!Number.isFinite(semis) || !Number.isInteger(semis)) throw new Error(`manifest.transpose.semitones is not an integer: ${manifest?.transpose?.semitones}`);
-  return semis;
+  // Absent means an untransposed render (manifests before 2026-09-21 had no
+  // `transpose`). Anything PRESENT must be an integer number — a null, "" or
+  // "x" would otherwise coerce to 0 and claim the untransposed render's rows.
+  const raw = manifest?.transpose?.semitones;
+  if (raw === undefined) return 0;
+  if (typeof raw !== "number" || !Number.isInteger(raw)) throw new Error(`manifest.transpose.semitones is not an integer: ${JSON.stringify(raw)}`);
+  return raw;
 }
 
 export function renderHash(manifest) {

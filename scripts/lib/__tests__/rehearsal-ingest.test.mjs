@@ -155,7 +155,10 @@ describe("planIngest", () => {
     it("refuses a malformed semitones value instead of hashing as the untransposed render", () => {
       expect(() => renderHash({ ...manifest, transpose: { semitones: "x" } })).toThrow(/not an integer/);
       expect(() => renderHash({ ...manifest, transpose: { semitones: 0.5 } })).toThrow(/not an integer/);
+      expect(() => renderHash({ ...manifest, transpose: { semitones: null } })).toThrow(/not an integer/);
+      expect(() => renderHash({ ...manifest, transpose: { semitones: "" } })).toThrow(/not an integer/);
       expect(renderHash({ ...manifest, transpose: {} })).toBe("aaaa1111");
+      expect(renderHash(manifest)).toBe("aaaa1111");
     });
 
     it("stores the sounding key on every row of a transposed render", () => {
