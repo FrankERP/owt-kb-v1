@@ -20,6 +20,7 @@
 
 import { createHash } from "node:crypto";
 import { normalizeLabel } from "@/app/utils/normalizeLabel";
+import { isServiceTime } from "./serviceTime";
 import { ROLE_TYPES, type RoleType } from "@/app/utils/serviceReadModel";
 import { serviceDayKey } from "@/app/utils/serviceReadSelect";
 
@@ -36,6 +37,7 @@ export interface RoleCreatePayload {
   _type?: unknown;
   date?: unknown;
   service_name?: unknown;
+  time?: unknown;
   published?: unknown;
   leads?: unknown;
   bgvs?: unknown;
@@ -55,6 +57,13 @@ export interface CanonicalCreatePayload {
   date: string | null;
   targetIdentity: string | null;
   serviceName: string | null;
+  /**
+   * Present ONLY when the request carried a valid time. Omitted otherwise so
+   * the fingerprint of every time-less payload is byte-identical to what it
+   * was before the field existed (an in-flight retry across the deploy still
+   * matches its receipt). Never `null` here — that would change every hash.
+   */
+  time?: string;
   published: boolean;
   leads: string[];
   bgvs: string[];
@@ -136,6 +145,15 @@ export function canonicalizeCreatePayload(payload: RoleCreatePayload): Canonical
   const serviceName = roleType === "special_role" ? normalizeLabel(doc.service_name) : null;
   if (roleType === "special_role" && !serviceName) issues.push("service_name");
 
+  // `time` is optional and specials-only. Absent/null/"" is "no time"; any
+  // other value must be HH:mm; a weekend role refuses one outright rather than
+  // dropping it — the fingerprint must describe what gets written.
+  const rawTime = doc.time;
+  const hasTime = rawTime !== undefined && rawTime !== null && rawTime !== "";
+  const time = hasTime && isServiceTime(rawTime) ? rawTime : null;
+  if (hasTime && !time) issues.push("time");
+  if (time && roleType !== "special_role") issues.push("time");
+
   let targetIdentity: string | null = null;
   if (roleType && date) {
     if (roleType === "special_role") {
@@ -154,6 +172,7 @@ export function canonicalizeCreatePayload(payload: RoleCreatePayload): Canonical
       date,
       targetIdentity,
       serviceName,
+      ...(time && roleType === "special_role" ? { time } : {}),
       // Effective publication default: only an exact boolean `true` publishes,
       // matching the writer's `published === true` (missing/false = draft).
       published: doc.published === true,

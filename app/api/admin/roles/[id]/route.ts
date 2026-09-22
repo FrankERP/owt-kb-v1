@@ -162,6 +162,12 @@ async function patchHandler(
       }),
     );
   }
+  // The parser validates the SHAPE of `time`; only the stored type decides
+  // whether one is allowed at all, and a weekend role refuses it outright
+  // rather than dropping it silently.
+  if (roleType !== "special_role" && request.time) {
+    return reject(serviceError("invalid_request", { details: { issues: ["time"] } }));
+  }
   const newDate = request.date;
   const isMove = newDate !== oldDate;
   const isSpecial = roleType === "special_role";
@@ -269,17 +275,21 @@ async function patchHandler(
   // block would return the POST-write state, so every notice would compare a
   // state against itself and say nothing.
   const beforeSeats = normalizeStoredSeats(role);
-  const setPayload = buildRoleEditPatch({
+  const editPatch = buildRoleEditPatch({
     roleType,
     date: newDate,
     serviceName: request.serviceName,
+    time: request.time,
     seats: request.seats,
     nextKey,
   });
 
   let tx = writeClient
     .transaction()
-    .patch(role._id, (p) => p.ifRevisionId(role._rev).set(setPayload));
+    .patch(role._id, (p) => {
+      const patched = p.ifRevisionId(role._rev).set(editPatch.set);
+      return editPatch.unset.length ? patched.unset(editPatch.unset) : patched;
+    });
 
   if (ownedLock) {
     const lockRev = ownedLock._rev;

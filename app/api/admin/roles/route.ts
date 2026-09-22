@@ -226,6 +226,7 @@ async function postHandler(req: NextRequest) {
     roleType: request.roleType,
     date: request.date,
     serviceName: request.serviceName,
+    time: request.time,
     published: request.published,
     seats: request.seats,
     receiptId: request.receiptId,
