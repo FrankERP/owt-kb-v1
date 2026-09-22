@@ -7,6 +7,11 @@
  *
  * Neutral module (no React, no client-only imports) so Server Components and
  * the write path share it.
+ *
+ * GROQ ordering: the member reads use order(date asc, time asc) and rely on the
+ * Content Lake placing a missing time AFTER present ones on the same day,
+ * matching compareServiceTime. Verified on preview 2026-09-22 with a mixed pair;
+ * if it ever disagrees, sort in JS with compareServiceTime instead.
  */
 export const SERVICE_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 

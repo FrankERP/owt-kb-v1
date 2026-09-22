@@ -52,6 +52,7 @@ export const specialRole = {
       title: 'Hora',
       type: 'string',
       description: 'HH:mm, hora local (America/Mexico_City). Opcional. Ordena los sets de un mismo día; nunca cambia la fecha.',
+      // Mirrors SERVICE_TIME_RE (app/utils/serviceTime.ts). sanity/ cannot import app/; serviceTimeSchemaSync.test.ts fails if the two drift.
       validation: (rule: { regex: (re: RegExp, opts: { name: string; invert: boolean }) => unknown }) =>
         rule.regex(/^([01]\d|2[0-3]):[0-5]\d$/, { name: 'HH:mm', invert: false }),
     },

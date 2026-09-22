@@ -668,6 +668,19 @@ describe("special-service time", () => {
     expect(payloadFingerprint({ ...base, time: "09:00" })).not.toBe(payloadFingerprint(base));
   });
 
+  // Pinned on 2026-09-22: a time-less payload's fingerprint must never move — every in-flight create receipt depends on it.
+  it("create: a time-less special payload keeps its exact historical fingerprint", () => {
+    const pinned = {
+      creationRequestId: "req-abc-0001",
+      _type: "special_role",
+      date: "2026-10-03",
+      service_name: "Campamento · Alabanza",
+      published: false,
+      leads: ["mem-1"],
+    };
+    expect(payloadFingerprint(pinned)).toBe("0dc48431d0dd77cfee752363fbc7c6d2697dc1b4e9499d260635bc90d6a978bd");
+  });
+
   it("edit: parses time like create and does not know the stored type", () => {
     const ok = parseEditRequest({ rev: "r1", date: "2026-10-03", _type: "special_role", service_name: "X", time: "12:30" });
     expect(ok.ok).toBe(true);

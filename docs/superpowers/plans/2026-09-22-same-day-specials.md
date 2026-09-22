@@ -1,6 +1,6 @@
 # Same-day special services with a time — Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Let several `special_role` documents share one date, each with an optional `HH:mm` time, so the camp's six worship sets each get their own ordered card and setlist.
 
@@ -34,7 +34,7 @@
 **Interfaces:**
 - Produces: `isServiceTime(v: unknown): v is string`, `compareServiceTime(a?: string | null, b?: string | null): number` (absent sorts last), `SERVICE_TIME_RE`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // app/utils/__tests__/serviceTime.test.ts
@@ -64,12 +64,12 @@ describe("compareServiceTime", () => {
 });
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `npx vitest run app/utils/__tests__/serviceTime.test.ts`
 Expected: FAIL — cannot resolve `@/app/utils/serviceTime`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 // app/utils/serviceTime.ts
@@ -100,12 +100,12 @@ export function compareServiceTime(a?: string | null, b?: string | null): number
 }
 ```
 
-- [ ] **Step 4: Run the test**
+- [x] **Step 4: Run the test**
 
 Run: `npx vitest run app/utils/__tests__/serviceTime.test.ts`
 Expected: PASS (4 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add app/utils/serviceTime.ts app/utils/__tests__/serviceTime.test.ts
@@ -127,7 +127,7 @@ git commit -m "feat(utils): serviceTime — the one HH:mm validator and comparat
 **Interfaces:**
 - Produces: `SpecialRole.time?: string | null`, `ServiceRole.time?: string | null`; `ROLE_PROJECTION` and the roles GET project `time`.
 
-- [ ] **Step 1: Extend the projection test**
+- [x] **Step 1: Extend the projection test**
 
 In `app/utils/__tests__/serviceReadQueries.test.ts`, change the fragment list in the test «role projection covers all five seat paths and identity/date fields» to include `"service_name"` and `"time"`:
 
@@ -135,12 +135,12 @@ In `app/utils/__tests__/serviceReadQueries.test.ts`, change the fragment list in
     for (const frag of ["_id", "_rev", "_type", "week", "date", "service_name", "time", "Lead[]", "BGVs[]", "Chorus[]", "instruments[]", "foh_team[]", "person"]) {
 ```
 
-- [ ] **Step 2: Run it to verify it fails**
+- [x] **Step 2: Run it to verify it fails**
 
 Run: `npx vitest run app/utils/__tests__/serviceReadQueries.test.ts`
 Expected: FAIL on `"time"`.
 
-- [ ] **Step 3: Schema field**
+- [x] **Step 3: Schema field**
 
 In `sanity/schemas/specialRole.ts`, directly after the `service_name` field object:
 
@@ -157,7 +157,7 @@ In `sanity/schemas/specialRole.ts`, directly after the `service_name` field obje
 
 (The document is `readOnly: true` in Studio; the validation is documentation for the Studio reader and a guard for any future write path.)
 
-- [ ] **Step 4: Projections**
+- [x] **Step 4: Projections**
 
 `app/utils/serviceReadQueries.ts:18` — change the first line of `ROLE_PROJECTION` to:
 
@@ -173,7 +173,7 @@ In `sanity/schemas/specialRole.ts`, directly after the `service_name` field obje
       _id, _rev, _type, service_name, time,
 ```
 
-- [ ] **Step 5: Types**
+- [x] **Step 5: Types**
 
 `app/utils/interface.tsx` — in `SpecialRole`, after `service_name: string;`:
 
@@ -189,12 +189,12 @@ In `sanity/schemas/specialRole.ts`, directly after the `service_name` field obje
   time?: string | null;
 ```
 
-- [ ] **Step 6: Run tests and typecheck**
+- [x] **Step 6: Run tests and typecheck**
 
 Run: `npx vitest run app/utils/__tests__/serviceReadQueries.test.ts && npx tsc --noEmit`
 Expected: PASS, no type errors.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add sanity/schemas/specialRole.ts app/utils/serviceReadQueries.ts app/api/admin/roles/route.ts app/utils/interface.tsx app/components/admin/serviceCardModel.ts app/utils/__tests__/serviceReadQueries.test.ts
@@ -215,7 +215,7 @@ git commit -m "feat(special): optional time on special_role — schema, projecti
 - Consumes: `isServiceTime` (Task 1).
 - Produces: `ParsedCreateRequest.time: string | null`, `ParsedEditRequest.time: string | null`, `buildRoleEditPatch(...)` now returns `{ set: Record<string, unknown>; unset: string[] }`, `CanonicalCreatePayload.time?: string`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `app/utils/__tests__/roleWriteRequest.test.ts`:
 
@@ -283,12 +283,12 @@ describe("special-service time", () => {
 
 Then fix every EXISTING call of `buildRoleEditPatch(...)` in that test file that reads the return as a flat object: they now read `.set` (grep `buildRoleEditPatch(` in the test; each `expect(patch.week)` / `expect(patch.service_name)` becomes `expect(patch.set.week)` etc.).
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npx vitest run app/utils/__tests__/roleWriteRequest.test.ts`
 Expected: FAIL — `time` undefined on parsed values, `buildRoleEditPatch` has no `set`.
 
-- [ ] **Step 3: Canonical payload**
+- [x] **Step 3: Canonical payload**
 
 `app/utils/roleCreationReceipt.ts`:
 
@@ -327,7 +327,7 @@ and in the returned `canonical` object, after `serviceName,`:
 
 Add `import { isServiceTime } from "./serviceTime";` at the top.
 
-- [ ] **Step 4: Parser and builders**
+- [x] **Step 4: Parser and builders**
 
 `app/utils/roleWriteRequest.ts`:
 
@@ -377,7 +377,7 @@ export function buildRoleEditPatch(input: {
 
 Add `import { isServiceTime } from "./serviceTime";`.
 
-- [ ] **Step 5: Routes**
+- [x] **Step 5: Routes**
 
 `app/api/admin/roles/route.ts`: find the `buildRoleDocument({` call and add `time: request.time,` next to `serviceName: request.serviceName,`.
 
@@ -411,12 +411,12 @@ Change lines 272–282 to:
 
 Grep the rest of that route for `setPayload` (it is referenced again for the notice/after block) and replace each with `editPatch.set`.
 
-- [ ] **Step 6: Run tests + typecheck**
+- [x] **Step 6: Run tests + typecheck**
 
 Run: `npx vitest run app/utils/__tests__/roleWriteRequest.test.ts app/utils/__tests__/roleCreationReceipt.test.ts app/utils/__tests__/monthDraftCreate.test.ts && npx tsc --noEmit`
 Expected: PASS; tsc clean (the `[id]` route and any other `buildRoleEditPatch` reader now use `.set`).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add app/utils/roleCreationReceipt.ts app/utils/roleWriteRequest.ts app/api/admin/roles/route.ts "app/api/admin/roles/[id]/route.ts" app/utils/__tests__/roleWriteRequest.test.ts
@@ -440,7 +440,7 @@ time only when present so every time-less fingerprint is unchanged."
 **Interfaces:**
 - Produces: `GridColumn.time?: string`, `StoredRolePatchBody.time?: string`, `RoleSemanticSnapshot.time: string | null`, serialization reason `"invalid_special_time"`.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 Append to `app/components/admin/__tests__/plannerSaveModel.test.ts` (reuse the file's `rows` and `cells` fixtures; build a special column from the existing `column`):
 
@@ -508,12 +508,12 @@ describe("special-service time", () => {
 
 If the `target`/`summary` shape for a special needs different fields (check the existing «special» cases in that test file with `grep -n special_role`), copy the shape those tests use.
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npx vitest run app/components/admin/__tests__/plannerSaveModel.test.ts app/components/admin/__tests__/storedRoleReadModel.test.ts`
 Expected: FAIL (no `time` on body/snapshot/column).
 
-- [ ] **Step 3: Model**
+- [x] **Step 3: Model**
 
 `app/components/admin/plannerModel.ts` — in `GridColumn`, after `serviceName?: string;`:
 
@@ -542,7 +542,7 @@ In `translateStoredRole`'s `column` literal, after the `serviceName` spread:
 
 Add `import { isServiceTime } from "@/app/utils/serviceTime";`.
 
-- [ ] **Step 4: Serializer**
+- [x] **Step 4: Serializer**
 
 `app/components/admin/plannerSaveModel.ts`:
 
@@ -571,12 +571,12 @@ In `semanticSnapshot`, after `serviceName: …,`:
 
 Add `import { isServiceTime } from "@/app/utils/serviceTime";`.
 
-- [ ] **Step 5: Run tests + typecheck**
+- [x] **Step 5: Run tests + typecheck**
 
 Run: `npx vitest run app/components/admin && npx tsc --noEmit`
 Expected: PASS. If any existing snapshot fixture in `plannerSaveModel.test.ts` is compared with `toEqual` against a literal `RoleSemanticSnapshot`, add `time: null` to that literal.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/components/admin/plannerModel.ts app/components/admin/storedRoleReadModel.ts app/components/admin/plannerSaveModel.ts app/components/admin/__tests__/plannerSaveModel.test.ts app/components/admin/__tests__/storedRoleReadModel.test.ts
@@ -599,7 +599,7 @@ git commit -m "feat(admin): stored grid carries a special's time through the col
 - Consumes: `GridColumn.time` (Task 4), `isServiceTime` (Task 1).
 - Produces: `onStoredHeaderChange(columnId, { date?, serviceName?, time? })`; `draftCreateBody` emits `time` for specials when present.
 
-- [ ] **Step 1: Failing tests**
+- [x] **Step 1: Failing tests**
 
 `app/components/ui/__tests__/DateField.test.tsx` — add:
 
@@ -656,16 +656,16 @@ git commit -m "feat(admin): stored grid carries a special's time through the col
   });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npx vitest run app/components/ui/__tests__/DateField.test.tsx app/components/admin/__tests__/PlannerGrid.test.tsx app/components/admin/__tests__/MonthCalendar.test.tsx app/utils/__tests__/monthDraftCreate.test.ts`
 Expected: FAIL on the four new/changed cases.
 
-- [ ] **Step 3: `DateField`**
+- [x] **Step 3: `DateField`**
 
 `app/components/ui/DateField.tsx:27` — `kind: "date" | "month" | "time";`. Update the header comment's first line to «The ONE date/month/time field». Nothing else changes (`type={kind}` already forwards it).
 
-- [ ] **Step 4: `draftCreateBody`**
+- [x] **Step 4: `draftCreateBody`**
 
 `app/utils/monthDraftCreate.ts` — in `CreatableDraft`, after `service_name?: string;`:
 
@@ -680,7 +680,7 @@ In `draftCreateBody`, after the `service_name` spread:
     ...(draft._type === "special_role" && draft.time ? { time: draft.time } : {}),
 ```
 
-- [ ] **Step 5: Stored header**
+- [x] **Step 5: Stored header**
 
 `app/components/admin/PlannerGrid.tsx` — both `onStoredHeaderChange` prop types (lines 231 and 2307) become:
 
@@ -704,7 +704,7 @@ At line 2373, directly after the «Nombre» `</label>` and still inside `{column
 
 Wrap the two in a `<>…</>` fragment if the conditional currently returns a single `<label>`.
 
-- [ ] **Step 6: `MonthGenerator`**
+- [x] **Step 6: `MonthGenerator`**
 
 - Line 1773: `useState<Map<string, { date?: string; serviceName?: string; time?: string }>>(new Map())`.
 - Line 2494 `handleStoredHeaderChange(columnId: string, patch: { date?: string; serviceName?: string; time?: string })`.
@@ -745,7 +745,7 @@ Wrap the two in a `<>…</>` fragment if the conditional currently returns a sin
 - Add `import { isServiceTime } from "@/app/utils/serviceTime";`.
 - Wherever the composer resets `createName` after a successful create (grep `setCreateName("")`), also `setCreateTime("")`.
 
-- [ ] **Step 7: `MonthCalendar` copy**
+- [x] **Step 7: `MonthCalendar` copy**
 
 `app/components/admin/MonthCalendar.tsx:166` becomes:
 
@@ -755,12 +755,12 @@ Wrap the two in a `<>…</>` fragment if the conditional currently returns a sin
 
 Update the doc comment above `refuseSpecialOn` (rule 4) with one sentence: «A second set on a stored date is created from stored mode's composer, which is name-aware; this flow drafts one special per date on purpose (E19).»
 
-- [ ] **Step 8: Run tests + gates**
+- [x] **Step 8: Run tests + gates**
 
 Run: `npx vitest run app/components/ui app/components/admin app/utils/__tests__/monthDraftCreate.test.ts && npx tsc --noEmit && npx eslint app/components/admin app/components/ui app/utils`
 Expected: PASS, tsc clean, 0 eslint errors. `inputFontSize.test.ts` must still pass (the composer's `DateField` uses the default `md` size, 16 px on a phone).
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add app/components/ui/DateField.tsx app/components/admin/PlannerGrid.tsx app/components/admin/MonthGenerator.tsx app/components/admin/MonthCalendar.tsx app/utils/monthDraftCreate.ts app/components/ui/__tests__/DateField.test.tsx app/components/admin/__tests__/PlannerGrid.test.tsx app/components/admin/__tests__/MonthCalendar.test.tsx app/utils/__tests__/monthDraftCreate.test.ts
@@ -783,7 +783,7 @@ git commit -m "feat(admin): set and edit a special's time in stored mode; calend
 - Consumes: `compareServiceTime` (Task 1), `SpecialRole.time` (Task 2).
 - Produces: `DayCardProps.time?: string | null`, `ActiveDay.time?: string | null`.
 
-- [ ] **Step 1: Failing test**
+- [x] **Step 1: Failing test**
 
 Add to `app/components/__tests__/dayCard.test.tsx`, inside `describe("DayCard")`:
 
@@ -797,12 +797,12 @@ Add to `app/components/__tests__/dayCard.test.tsx`, inside `describe("DayCard")`
   });
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `npx vitest run app/components/__tests__/dayCard.test.tsx`
 Expected: FAIL (no time in the heading).
 
-- [ ] **Step 3: `DayCard`**
+- [x] **Step 3: `DayCard`**
 
 In `DayCardProps`, after `date?: string;`:
 
@@ -817,7 +817,7 @@ Destructure `time` where `day`/`date` are destructured, then change line 198 to:
                 {day}{shortDate && <span className={`${t.accentMuted} font-normal`}> · {shortDate}</span>}{time && <span className={`${t.accentMuted} font-normal tabular-nums`}> · {time}</span>}
 ```
 
-- [ ] **Step 4: Queries and props**
+- [x] **Step 4: Queries and props**
 
 `app/(client)/page.tsx:59` — the specials query becomes `… && published != false] | order(date asc, time asc) {` and its projection adds `time,` next to `service_name`. In the specials `.map` (line ~156) add `time: sp.time ?? null,` after `date: sp.date,`.
 
@@ -831,12 +831,12 @@ Destructure `time` where `day`/`date` are destructured, then change line 198 to:
 
 and in `cardProps` add `time: doc.time ?? null,` after `date: dateKey,`. Import `compareServiceTime` from `@/app/utils/serviceTime`.
 
-- [ ] **Step 5: Run tests + gates**
+- [x] **Step 5: Run tests + gates**
 
 Run: `npx vitest run app/components/__tests__ app/utils/__tests__/draftGatingCoverage.test.ts && npx tsc --noEmit && npx eslint "app/(client)" app/components`
 Expected: PASS, tsc clean, 0 errors. `draftGatingCoverage.test.ts` still sees `published != false` on the three edited reads.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add app/components/DayCard.tsx app/components/CalendarView.tsx "app/(client)/page.tsx" "app/(client)/schedule/page.tsx" "app/(client)/me/page.tsx" app/components/__tests__/dayCard.test.tsx
@@ -852,7 +852,7 @@ git commit -m "feat(home,schedule,me): same-day specials ordered by time, with t
 - Modify: `docs/NOTIFICATIONS.md` («## Landmines», line ~645)
 - Modify: `docs/superpowers/specs/2026-09-22-same-day-specials-design.md` (status line)
 
-- [ ] **Step 1: `CLAUDE.md` invariant**
+- [x] **Step 1: `CLAUDE.md` invariant**
 
 Add after the five-seats bullet:
 
@@ -866,7 +866,7 @@ Add after the five-seats bullet:
   purpose (E19 in `plannerModel.ts`) — do not re-key it.
 ```
 
-- [ ] **Step 2: `docs/NOTIFICATIONS.md` landmine**
+- [x] **Step 2: `docs/NOTIFICATIONS.md` landmine**
 
 Add a bullet under «## Landmines»:
 
@@ -876,11 +876,11 @@ Add a bullet under «## Landmines»:
   (debounced per the outbox rules) and five reminders. Grouping them is not built.
 ```
 
-- [ ] **Step 3: Spec status**
+- [x] **Step 3: Spec status**
 
 Change the spec's `**Status:**` to «implemented on branch `claude/campamento-sets-app-d5466d`; not released».
 
-- [ ] **Step 4: Full gates**
+- [x] **Step 4: Full gates**
 
 Run:
 
@@ -890,7 +890,7 @@ npx tsc --noEmit && npm test && npx eslint .
 
 Expected: tsc clean, every test green, eslint 0 errors.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add CLAUDE.md docs/NOTIFICATIONS.md docs/superpowers/specs/2026-09-22-same-day-specials-design.md

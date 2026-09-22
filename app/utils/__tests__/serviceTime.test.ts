@@ -25,5 +25,7 @@ describe("compareServiceTime", () => {
   it("puts an absent value after any time", () => {
     expect(compareServiceTime(undefined, "23:59")).toBe(1);
     expect(compareServiceTime("00:00", null)).toBe(-1);
+    // A defined but malformed string is not a time, so it sorts as absent.
+    expect(compareServiceTime("9:00", "23:59")).toBe(1);
   });
 });
