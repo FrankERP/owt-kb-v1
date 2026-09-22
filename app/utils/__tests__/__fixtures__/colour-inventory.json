@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 318,
-    "filesScanned": 339,
+    "filesScanned": 340,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
@@ -2659,7 +2659,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 461,
+      "line": 463,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2671,7 +2671,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 567,
+      "line": 569,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2683,7 +2683,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1894,
+      "line": 1909,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2695,7 +2695,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1148,
+      "line": 1150,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2707,7 +2707,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1298,
+      "line": 1300,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2875,7 +2875,7 @@
       "alpha": null,
       "utility": "to",
       "carrier": null,
-      "line": 1328,
+      "line": 1334,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

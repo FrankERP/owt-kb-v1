@@ -1331,3 +1331,13 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+describe("MonthGenerator — an empty month", () => {
+  it("opens with zero services and a composer bounded to that month", () => {
+    renderStored([role()], { initialMonth: "2026-10", openComposerInitially: true });
+    expect(screen.getAllByText(/servicio/).length).toBeGreaterThan(0);
+    const date = screen.getByLabelText("Fecha") as HTMLInputElement;
+    expect(date.min).toBe("2026-10-01");
+    expect(date.max).toBe("2026-10-31");
+  });
+});
