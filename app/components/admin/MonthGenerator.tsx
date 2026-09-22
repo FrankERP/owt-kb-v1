@@ -10,6 +10,7 @@ import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
 import { draftCreateBody, newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
 import { normalizeServiceName } from "@/app/utils/normalizeLabel";
+import { isServiceTime } from "@/app/utils/serviceTime";
 import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
 import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
 import MonthCalendar from "./MonthCalendar";
@@ -1770,19 +1771,20 @@ export default function MonthGenerator({
     attempt: FrozenSaveAttempt;
     transport: PatchTransportOutcome;
   }>>(new Map());
-  const [storedHeaderEdits, setStoredHeaderEdits] = useState<Map<string, { date?: string; serviceName?: string }>>(new Map());
+  const [storedHeaderEdits, setStoredHeaderEdits] = useState<Map<string, { date?: string; serviceName?: string; time?: string }>>(new Map());
   const [touchedStoredRoleIds, setTouchedStoredRoleIds] = useState<Set<string>>(new Set());
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const [composerOpen, setComposerOpen] = useState(storedMode && openComposerInitially);
   const [createType, setCreateType] = useState<ServiceType>("sunday_role");
   const [createDate, setCreateDate] = useState(`${monthPrefix}-01`);
   const [createName, setCreateName] = useState("");
+  const [createTime, setCreateTime] = useState("");
   const [creatingOne, setCreatingOne] = useState(false);
   const [createAttemptStatus, setCreateAttemptStatus] = useState<"unknown" | "committedUnverified" | null>(null);
   const createAttempt = useRef<{
     id: string;
     payloadKey: string;
-    target: { type: ServiceType; date: string; name: string | null };
+    target: { type: ServiceType; date: string; name: string | null; time: string | null };
     roleId?: string;
   } | null>(null);
   const baselineByRole = useRef<Map<string, RoleSemanticSnapshot>>(new Map());
@@ -1964,7 +1966,7 @@ export default function MonthGenerator({
         .filter((column) => column.admission === "approved")
         .map((column) => ({
           column,
-          label: `${fmtDate(column.date)} · ${SERVICE_LABEL[column.type]}${column.type === "special_role" ? ` · ${column.serviceName}` : ""}`,
+          label: `${fmtDate(column.date)} · ${SERVICE_LABEL[column.type]}${column.type === "special_role" ? ` · ${column.serviceName}${column.time ? ` · ${column.time}` : ""}` : ""}`,
         }))
     : [];
   const sectionSwapFirstColumn = storedSectionServiceOptions.find(({ column }) => column.roleId === sectionSwapFirst)?.column;
@@ -2181,6 +2183,7 @@ export default function MonthGenerator({
     setCreateAttemptStatus(null);
     setComposerOpen(false);
     setCreateName("");
+    setCreateTime("");
     setSaveNotice("Servicio vacío creado y verificado. Ya puedes asignar el equipo.");
     onCreated();
   }, [onCreated, storedGenerationKey, storedInventory.coherent, storedMode, storedSource?.roles]);
@@ -2491,7 +2494,7 @@ export default function MonthGenerator({
     setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
   }
 
-  function handleStoredHeaderChange(columnId: string, patch: { date?: string; serviceName?: string }) {
+  function handleStoredHeaderChange(columnId: string, patch: { date?: string; serviceName?: string; time?: string }) {
     if (!storedMode || storedMutationLocked) return;
     if (patch.date !== undefined && storedDateBlocked) {
       setSaveNotice(storedDateBlocked);
@@ -2584,7 +2587,12 @@ export default function MonthGenerator({
       setSaveNotice("Escribe el nombre del servicio especial.");
       return;
     }
-    const target = { type: createType, date: createDate, name: normalizedName };
+    const createTimeValue = createType === "special_role" && createTime ? createTime : null;
+    if (createTimeValue && !isServiceTime(createTimeValue)) {
+      setSaveNotice("La hora debe ser HH:mm.");
+      return;
+    }
+    const target = { type: createType, date: createDate, name: normalizedName, time: createTimeValue };
     const payloadKey = JSON.stringify(target);
     if (!createAttempt.current || createAttempt.current.payloadKey !== payloadKey) {
       createAttempt.current = { id: newCreationRequestId(), payloadKey, target };
@@ -2595,6 +2603,7 @@ export default function MonthGenerator({
       _type: createType,
       date: createDate,
       ...(createType === "special_role" ? { service_name: normalizedName ?? "" } : {}),
+      ...(createTimeValue ? { time: createTimeValue } : {}),
       leads: [],
       bgvs: [],
       chorus: [],
@@ -3522,10 +3531,20 @@ export default function MonthGenerator({
                 onChange={(event) => setCreateDate(event.target.value)}
               />
               {createType === "special_role" ? (
-                <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
-                  Nombre
-                  <input value={createName} disabled={storedMutationLocked} onChange={(event) => setCreateName(event.target.value)} className={inCls} placeholder="Nombre del servicio" />
-                </label>
+                <div className="grid grid-cols-[1fr_auto] gap-2">
+                  <label className="space-y-1 font-label text-[10px] uppercase tracking-widest text-mono-500">
+                    Nombre
+                    <input value={createName} disabled={storedMutationLocked} onChange={(event) => setCreateName(event.target.value)} className={inCls} placeholder="Nombre del servicio" />
+                  </label>
+                  <DateField
+                    kind="time"
+                    id="mg-create-time"
+                    label="Hora"
+                    value={createTime}
+                    disabled={storedMutationLocked}
+                    onChange={(event) => setCreateTime(event.target.value)}
+                  />
+                </div>
               ) : <div />}
               <div className="flex gap-2">
                 <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-4 font-label text-xs uppercase tracking-widest disabled:opacity-50">

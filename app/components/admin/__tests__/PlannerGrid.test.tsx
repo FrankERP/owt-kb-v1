@@ -875,6 +875,25 @@ describe("PlannerGrid — row management", () => {
     expect(onStoredHeaderChange).not.toHaveBeenCalled();
   });
 
+  it("a stored special column edits its time through onStoredHeaderChange", () => {
+    const onStoredHeaderChange = vi.fn();
+    render(
+      <PlannerGrid
+        {...baseProps({
+          mode: "stored",
+          columns: [{ columnId: "special-1", date: "2026-10-03", type: "special_role", serviceName: "Campamento · Alabanza", time: "09:00" }],
+          cells: [],
+          onStoredHeaderChange,
+        })}
+      />,
+    );
+    const hora = screen.getByLabelText("Hora") as HTMLInputElement;
+    expect(hora.type).toBe("time");
+    expect(hora.value).toBe("09:00");
+    fireEvent.change(hora, { target: { value: "12:30" } });
+    expect(onStoredHeaderChange).toHaveBeenCalledWith("special-1", { time: "12:30" });
+  });
+
   it("adds an instrument row via onRowsChange", () => {
     const onRowsChange = vi.fn();
     render(<PlannerGrid {...baseProps({ onRowsChange })} />);

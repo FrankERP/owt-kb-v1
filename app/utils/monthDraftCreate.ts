@@ -34,6 +34,8 @@ export interface CreatableDraft {
    * weekend role never stores it.
    */
   service_name?: string;
+  /** SPECIALS ONLY, optional. "HH:mm" — emitted only when present (see `draftCreateBody`). */
+  time?: string;
   leads: string[];
   bgvs: string[];
   chorus: string[];
@@ -63,6 +65,7 @@ export function draftCreateBody(draft: CreatableDraft, published: boolean) {
     // but would still be a lie about what gets stored — the key is omitted
     // entirely instead.
     ...(draft._type === "special_role" ? { service_name: draft.service_name ?? "" } : {}),
+    ...(draft._type === "special_role" && draft.time ? { time: draft.time } : {}),
     leads: draft.leads,
     bgvs: draft.bgvs,
     chorus: draft.chorus,
