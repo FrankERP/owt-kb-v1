@@ -21,6 +21,8 @@ import { useToast } from "./ui/Toast";
 export interface DayCardProps {
   day: string;
   date?: string;
+  /** "HH:mm" for a same-day set; rendered after the date. Display only. */
+  time?: string | null;
   setlist?: Setlist | null;
   leads?: string[];
   instruments?: Array<{ label: string; person: string }>;
@@ -80,7 +82,7 @@ const SPECIAL_THEME = {
   accentVar:    "--info-fg-rgb",
 };
 
-export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, leads, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -195,7 +197,7 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
               <h3 className="font-display text-2xl font-bold uppercase leading-none text-ink md:text-3xl break-words">
-                {day}{shortDate && <span className={`${t.accentMuted} font-normal`}> · {shortDate}</span>}
+                {day}{shortDate && <span className={`${t.accentMuted} font-normal`}> · {shortDate}</span>}{time && <span className={`${t.accentMuted} font-normal tabular-nums`}> · {time}</span>}
               </h3>
             </div>
             {/* NO `shrink-0` here, and it wraps too. With `shrink-0` this block sat

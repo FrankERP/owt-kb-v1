@@ -686,6 +686,9 @@ all fall back). `CRON_SECRET` and `APP_BASE_URL` are covered in `SECRETS.md`.
 
 Things that are counter-intuitive and were each a real defect at some point.
 
+- **Same-day special sets notify per document.** Six camp sets are six `special_role`
+  documents; a member seated in five Saturday sets gets up to five assignment notices
+  (debounced per the outbox rules) and five reminders. Grouping them is not built.
 - **Outbox ids are HEX digests, and the alphabet is the point.** Sanity's id
   grammar is `a-zA-Z0-9._-` with no dot-separated segment starting in `-`.
   `outboxId` originally digested the subject to base64url, whose alphabet

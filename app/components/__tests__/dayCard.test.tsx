@@ -59,6 +59,14 @@ describe("DayCard", () => {
     expect(screen.queryByText("Próximo")).toBeNull();
   });
 
+  it("shows the set's time after the date, and nothing when there is none", () => {
+    mount({ day: "Campamento · Alabanza", time: "18:45" });
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toMatch(/Campamento · Alabanza\s*·\s*13\s*sep\s*·\s*18:45/i);
+    cleanup();
+    mount({ day: "Campamento · Alabanza" });
+    expect(screen.getByRole("heading", { level: 3 }).textContent).not.toMatch(/\d\d:\d\d/);
+  });
+
   it("counts down to the next service instead of labelling it", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0)); // 2026-09-11 local

@@ -123,6 +123,8 @@ export interface ServiceRole {
   _type: ServiceType;
   date: string;
   service_name?: string;
+  /** Specials only — "HH:mm" or absent. Display/sort only, never identity. */
+  time?: string | null;
   published?: boolean;
   leads: MemberOption[];
   bgvs: MemberOption[];

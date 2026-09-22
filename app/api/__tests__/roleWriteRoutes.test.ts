@@ -1077,6 +1077,60 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     ).toBe(false);
   });
 
+  // ── Optional special-service time ────────────────────────────────────────
+  // The parser validates the SHAPE of `time`; only the STORED type decides
+  // whether one is allowed, and clearing it must really clear the field — both
+  // of which are route control flow no unit test of the builders can reach.
+
+  it("writes a valid time onto the special role and unsets nothing", async () => {
+    store.roles.push(specialRole());
+    store.coordinators.push(coordinator());
+
+    const res = await rolePATCH(req(specialEditBody({ time: "09:00" })), ctx("role-sp"));
+
+    expect(res.status).toBe(200);
+    const committed = committedTransactions();
+    expect(committed).toHaveLength(1);
+    const rolePatch = committed[0].ops.find((op) => op.kind === "patch" && op.id === "role-sp");
+    expect(rolePatch).toBeDefined();
+    expect((rolePatch as PatchOp).set.time).toBe("09:00");
+    expect((rolePatch as PatchOp).unset).toEqual([]);
+  });
+
+  it("unsets the stored time when the edit carries none, touching nothing else", async () => {
+    store.roles.push(specialRole({ time: "09:00" }));
+    store.coordinators.push(coordinator());
+
+    const res = await rolePATCH(req(specialEditBody()), ctx("role-sp"));
+
+    expect(res.status).toBe(200);
+    const committed = committedTransactions();
+    expect(committed).toHaveLength(1);
+    // Exactly one op: the role patch. No lock, no coordinator — an unset of a
+    // cleared field must not widen the transaction.
+    expect(committed[0].ops).toHaveLength(1);
+    const rolePatch = committed[0].ops[0] as PatchOp;
+    expect(rolePatch.id).toBe("role-sp");
+    expect(rolePatch.unset).toEqual(["time"]);
+    expect("time" in rolePatch.set).toBe(false);
+  });
+
+  it("refuses a time on a weekend role instead of silently dropping it", async () => {
+    store.roles.push(role());
+    store.locks.push(lock());
+
+    const res = await rolePATCH(req(editBody({ time: "09:00" })), ctx("role-1"));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: "invalid_request",
+      details: { id: "role-1", storedType: "sunday_role", issues: ["time"] },
+    });
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+  });
+
   it("refuses normalized-identical canonical occupancy on a roster-only special PATCH", async () => {
     store.roles.push(
       specialRole(),

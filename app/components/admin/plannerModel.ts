@@ -146,6 +146,12 @@ export interface GridColumn {
    * where it feeds the collision key and nothing else.
    */
   serviceName?: string;
+  /**
+   * SPECIALS ONLY — the set's "HH:mm" (`app/utils/serviceTime.ts`). Display and
+   * order only: NOT identity (E19 — a special's identity is `date + name`), not
+   * part of any collision key, and never set on a weekend column.
+   */
+  time?: string;
 }
 
 /** Fail closed when a caller supplies ambiguous or detached grid identity. */
