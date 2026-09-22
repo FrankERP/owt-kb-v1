@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- **Spanish UI.** Copy verbatim: «Llenar especiales…», «Llenar especiales» (region label), «Llenar vacíos», «Cancelar», «Este mes no tiene servicios especiales.», «Espera a que termine la operación en curso.», «Las reglas compartidas no están cargadas.», «Especiales llenados. Revisa y guarda.», «Quedaron N lugar(es) sin cubrir en los especiales. Revisa y guarda.»
+- **Spanish UI.** Copy verbatim: «Llenar especiales…», «Llenar especiales» (region label), «Llenar vacíos», «Cancelar», «Este mes no tiene servicios especiales.», «Termina o cancela primero la acción en curso.», «Las reglas compartidas no están cargadas.», «Especiales llenados. Revisa y guarda.», «Quedaron N lugar(es) sin cubrir en los especiales. Revisa y guarda.»
 - **Only EMPTY seats are filled.** Never move an occupant. Never vacate anything in group mode.
 - **Inside the group fill, nothing outside the group counts:** `columns = group`, `savedWindow = []`, cells = the group's cells only.
 - **The solver is never called.** No change to `serializeStoredColumn`, `/api/admin/roles/**`, the Sanity schema, `draftTargetKey`/`buildColumns`/E3, or `fillInstruments`' behaviour when `fillColumns` is absent.
@@ -473,7 +473,7 @@ Derived values, placed AFTER `storedColumns`, `storedEditBlocked` and `storedMut
     ? orderGroup(storedColumns.filter((c) => c.type === "special_role" && c.admission === "approved"))
     : [];
   const groupFillBlocked = storedMutationLocked
-    ? "Espera a que termine la operación en curso."
+    ? "Termina o cancela primero la acción en curso."
     : storedEditBlocked
       ?? (solverConfig === null ? "Las reglas compartidas no están cargadas." : null)
       ?? (storedSpecialColumns.length === 0 ? "Este mes no tiene servicios especiales." : null);
