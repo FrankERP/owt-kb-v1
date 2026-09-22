@@ -1,7 +1,6 @@
 # Same-day special services with a time — design
 
-**Date:** 2026-09-22 · **Status:** approved in chat (option "a"); amended the same day after
-the code read for the plan (§4 — see «Amendment») · **Risk tier:** standard (no server
+**Date:** 2026-09-22 · **Status:** implemented on branch `claude/campamento-sets-app-d5466d`; not released · **Risk tier:** standard (no server
 writer concurrency, lock, auth or migration change; see §7) · **Motivating event:**
 Campamento 2–4 October 2026, six worship sets across three days, five of them on Saturday 3.
 
