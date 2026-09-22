@@ -114,4 +114,26 @@ describe("SongHeroPills", () => {
     expect(flat.textContent).toBe("Eb");
     expect(flat.querySelector("span.normal-case")?.textContent).toBe("Eb");
   });
+
+  it("arms the dial over a plain-text chart when mixes exist in more than one key, and marks those keys", () => {
+    const { getByRole, queryByRole, rerender } = render(
+      <MotionProvider>
+        <TransposeProvider nativeKey="G">
+          <SongHeroPills keyLabel="G" bpm={null} timeSig={null} transposable={false} mixTones={["G"]} />
+        </TransposeProvider>
+      </MotionProvider>,
+    );
+    expect(queryByRole("button", { name: /Transponer/ })).toBeNull();
+    rerender(
+      <MotionProvider>
+        <TransposeProvider nativeKey="G">
+          <SongHeroPills keyLabel="G" bpm={null} timeSig={null} transposable={false} mixTones={["Gb", "G", "Ab"]} />
+        </TransposeProvider>
+      </MotionProvider>,
+    );
+    fireEvent.click(getByRole("button", { name: /Transponer/ }));
+    expect(getByRole("radio", { name: "G (original), con mix de ensayo" })).toBeTruthy();
+    expect(getByRole("radio", { name: "F#, con mix de ensayo" })).toBeTruthy();
+    expect(getByRole("radio", { name: "A" })).toBeTruthy();
+  });
 });

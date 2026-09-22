@@ -7,6 +7,7 @@
 // 2026-09-20-rehearsal-mixes §4). App seats (`INSTRUMENT_SEAT_OPTIONS`) map onto
 // five of them; organ and synth have no seat of their own and sit with keys.
 import type { RehearsalMix } from "@/app/utils/interface";
+import { rootIndex } from "@/app/utils/transpose";
 
 export const FAMILY_ORDER = ["bass", "keys", "organ", "synth", "drums", "electric", "acoustic"] as const;
 
@@ -73,6 +74,48 @@ export function preselectMix(mixes: RehearsalMix[], instruments?: string[] | nul
     if (group) return group.mixes[0];
   }
   return mixes.find((m) => m.kind === "full") ?? mixes[0];
+}
+
+/**
+ * The keys a song has mixes in, one spelling per pitch (the first seen), in
+ * pitch order. Rows with a tone the maths cannot parse are left out.
+ */
+export function mixTones(mixes: RehearsalMix[]): string[] {
+  const byRoot = new Map<number, string>();
+  for (const m of mixes) {
+    const r = m.tone ? rootIndex(m.tone) : -1;
+    if (r >= 0 && !byRoot.has(r)) byRoot.set(r, m.tone!);
+  }
+  return [...byRoot.entries()].sort((a, b) => a[0] - b[0]).map(([, t]) => t);
+}
+
+/**
+ * The mixes to show for the key the member is looking at (the hero dial's
+ * sounding key). Enharmonic, never textual: a Db render answers a C# dial. With
+ * no mix in that key the NEAREST key's mixes stand in (`exact: false`, the row
+ * says so) — the tie between a semitone up and one down goes to the lower key.
+ * A null key, or one with no parseable tone anywhere, shows everything.
+ */
+export function mixesForKey(
+  mixes: RehearsalMix[],
+  key: string | null | undefined,
+): { tone: string | null; exact: boolean; mixes: RehearsalMix[] } {
+  const tones = mixTones(mixes);
+  const want = key ? rootIndex(key) : -1;
+  if (want < 0 || tones.length === 0) return { tone: tones[0] ?? null, exact: tones.length <= 1, mixes };
+  let best: { tone: string; dist: number } | null = null;
+  for (const t of tones) {
+    const r = rootIndex(t);
+    // Signed circular distance, -6..5: |d| ranks, and on a tie the negative
+    // (lower) key wins because it is compared first only when strictly closer
+    // — so prefer it explicitly.
+    const d = (((r - want) % 12) + 18) % 12 - 6;
+    const dist = Math.abs(d);
+    if (!best || dist < best.dist || (dist === best.dist && d < 0)) best = { tone: t, dist };
+  }
+  const chosen = best!.tone;
+  const root = rootIndex(chosen);
+  return { tone: chosen, exact: best!.dist === 0, mixes: mixes.filter((m) => m.tone && rootIndex(m.tone) === root) };
 }
 
 /** Collapse a 0–255 envelope to `bars` values in 0..1 (max per slice). */

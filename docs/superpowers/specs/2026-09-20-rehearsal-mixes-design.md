@@ -135,7 +135,8 @@ rehearsalMixes: [{
   audioFile: file,       // .mp3
   peaks?: number[],      // uint8 × 600 — absent for "full"
   active?: { _key: string, s: number, e: number }[],   // seconds, inclusive start / exclusive end — absent for "full"
-  sourceHash: string,    // manifest set.sha1 — which render produced it
+  sourceHash: string,    // manifest set.sha1 — which render produced it; a transposed
+                         // render appends the semitones ("<sha1>:-1"), see §7 step 4
 }]
 ```
 
@@ -181,8 +182,11 @@ Per song folder under `<root>` (the SSD's render output):
    item.
 4. Write the full `rehearsalMixes` array for that post in one patch (`set`), replacing
    items whose `sourceHash` matches this manifest and keeping items from other renders
-   (a song rendered in two keys keeps both). Orphaned assets from replaced items are
-   deleted in the same run.
+   (a song rendered in two keys keeps both). A transposed render of the SAME set is
+   another render: `renderHash(manifest)` is `set.sha1` plus `:±n` when
+   `transpose.semitones ≠ 0` (added 2026-09-21, when the ±1-semitone and history-key
+   renders began — with the bare sha1 the Gb render would have dropped the G rows).
+   Orphaned assets from replaced items are deleted in the same run.
 5. Log per folder: matched `_id`, files uploaded / skipped / replaced, bytes.
 
 Dry run prints exactly the plan and the unmatched report; nothing else differs. The script
@@ -223,6 +227,11 @@ single-song read (`SongSheetData` gains `rehearsalMixes?`).
 - **One `<audio>`**, through `PlayerContext.playTrack` — the fixed `AudioTransport` keeps
   working as is. **Switching tracks keeps the position**: read `getAudio().currentTime`
   before `playTrack`, seek after `canplay`. Clicking a waveform seeks (`seek(fraction)`).
+- **Key (added 2026-09-21)**: the rows are `mixesForKey(mixes, soundingKey)` — the mixes
+  in the hero dial's sounding key (enharmonic match), or the nearest key's with a caption
+  saying so. `SongHeroPills` stays the ONE key picker: it arms when `mixTones` has more
+  than one key and dots the keys that have a mix. A playing row follows the dial into the
+  new key at the same position; a paused one does not. No provider → every key's rows.
 - **Preselection**: `Full`; if the session member has `instruments`, the first track whose
   family maps from their first instrument (`Bass→bass`, `Keys→keys`, `Drums→drums`,
   `EG→electric`, `AG→acoustic`). Preselection only highlights — nothing auto-plays.

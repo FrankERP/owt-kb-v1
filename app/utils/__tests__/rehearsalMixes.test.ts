@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { INSTRUMENT_SEAT_OPTIONS } from "@/sanity/schemas/instrumentSeats";
 import type { RehearsalMix } from "@/app/utils/interface";
 import {
-  FAMILY_ORDER, SEAT_TO_FAMILY, groupMixes, isActiveAt, mixLabel, preselectMix, waveformBars,
+  FAMILY_ORDER, SEAT_TO_FAMILY, groupMixes, isActiveAt, mixLabel, mixTones, mixesForKey, preselectMix, waveformBars,
 } from "../rehearsalMixes";
 
 const mix = (over: Partial<RehearsalMix>): RehearsalMix => ({
@@ -93,5 +93,41 @@ describe("isActiveAt", () => {
 describe("FAMILY_ORDER", () => {
   it("covers the seven isolated families and nothing else", () => {
     expect(FAMILY_ORDER).toEqual(["bass", "keys", "organ", "synth", "drums", "electric", "acoustic"]);
+  });
+});
+
+describe("mixTones / mixesForKey", () => {
+  const g = [full, eg1, bass];
+  const gb = [mix({ _key: "f-gb", kind: "full", tone: "Gb" }), mix({ _key: "eg1-gb", track: "EG 1", family: "electric", tone: "Gb" })];
+  const ab = [mix({ _key: "f-ab", kind: "full", tone: "Ab" })];
+  const all = [...gb, ...g, ...ab, mix({ _key: "junk", kind: "full", tone: "Modal" })];
+
+  it("lists one spelling per pitch in pitch order and skips unparseable tones", () => {
+    expect(mixTones(all)).toEqual(["Gb", "G", "Ab"]);
+    expect(mixTones([mix({ tone: "C#" }), mix({ tone: "Db" })])).toEqual(["C#"]);
+    expect(mixTones([])).toEqual([]);
+  });
+
+  it("matches the dial's key enharmonically and reports exact", () => {
+    expect(mixesForKey(all, "F#")).toEqual({ tone: "Gb", exact: true, mixes: gb });
+    expect(mixesForKey(all, "G")).toEqual({ tone: "G", exact: true, mixes: g });
+  });
+
+  it("falls back to the nearest key, lower on a tie, and says it is not exact", () => {
+    expect(mixesForKey(all, "A")).toMatchObject({ tone: "Ab", exact: false });
+    expect(mixesForKey(all, "E")).toMatchObject({ tone: "Gb", exact: false });
+    // B: Ab is 3 below, G 4 below, Gb 5 below → Ab.
+    expect(mixesForKey(all, "B")).toMatchObject({ tone: "Ab", exact: false });
+    // C: Ab is 4 below, G 5 below, Gb 6 either way → Ab.
+    expect(mixesForKey(all, "C")).toMatchObject({ tone: "Ab", exact: false });
+    // Db: Gb is 5 ABOVE, Ab is 5 BELOW — a tie, and the lower key wins → Ab.
+    expect(mixesForKey(all, "Db")).toMatchObject({ tone: "Ab", exact: false });
+  });
+
+  it("shows everything with no key or no parseable tones", () => {
+    expect(mixesForKey(all, null)).toEqual({ tone: "Gb", exact: false, mixes: all });
+    expect(mixesForKey(g, null)).toEqual({ tone: "G", exact: true, mixes: g });
+    const modal = [mix({ tone: "Modal" })];
+    expect(mixesForKey(modal, "G")).toEqual({ tone: null, exact: true, mixes: modal });
   });
 });

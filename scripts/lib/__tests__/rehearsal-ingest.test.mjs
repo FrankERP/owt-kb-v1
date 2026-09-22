@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildCatalogIndex } from "../setlist-match.mjs";
-import { matchFolder, mixKey, parseFolderName, planIngest, songNameFromManifest } from "../rehearsal-ingest.mjs";
+import { matchFolder, mixKey, parseFolderName, planIngest, renderHash, songNameFromManifest } from "../rehearsal-ingest.mjs";
 
 const manifest = {
   set: { path: "/ssd/Amor sin Condición_144BPM_G Project/x.als", sha1: "aaaa1111" },
@@ -117,5 +117,22 @@ describe("planIngest", () => {
     expect(plan.items.some((i) => i._key === "otherkey")).toBe(true);
     expect(plan.items.some((i) => i._key === stale)).toBe(false);
     expect(plan.replaced).toEqual(["file-stale-mp3"]);
+  });
+
+  it("a transposed render of the same set is ANOTHER render: it keeps the untransposed items and hashes apart", () => {
+    const transposed = { ...manifest, transpose: { semitones: -1, suffix: "-1" },
+      files: manifest.files.map((f) => ({ ...f, path: f.path.replace("Amor -", "Amor -1 -") })) };
+    const original = mixKey("aaaa1111", "Amor - Full.mp3");
+    const existing = [{ _key: original, sourceHash: "aaaa1111", assetId: "file-orig-mp3", sha1: "O" }];
+    const plan = planIngest({ manifest: transposed, folderName: "Amor sin Condición_144BPM_Gb", post, existing,
+      existingItems: { [original]: { _key: original, kind: "full", tone: "G", sourceHash: "aaaa1111" } } });
+    expect(renderHash(transposed)).toBe("aaaa1111:-1");
+    expect(renderHash(manifest)).toBe("aaaa1111");
+    expect(plan.kept).toEqual([original]);
+    expect(plan.replaced).toEqual([]);
+    const mine = plan.items.filter((i) => i.sourceHash === "aaaa1111:-1");
+    expect(mine).toHaveLength(3);
+    expect(mine.every((i) => i.tone === "Gb")).toBe(true);
+    expect(new Set(plan.items.map((i) => i._key)).size).toBe(4);
   });
 });

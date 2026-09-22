@@ -43,12 +43,21 @@ export function matchFolder({ folderName, manifest, index, overrides }) {
 
 /**
  * The full `rehearsalMixes` array to `.set`, plus what to upload and delete.
- * Items from OTHER renders (different sourceHash) are kept verbatim from
+ * Items from OTHER renders (different sourceHash — another set, or the same
+ * set at another transposition) are kept verbatim from
  * `existingItems`; items of THIS render are rebuilt from the manifest, reusing
  * an asset when its sha1 equals the local file's.
  */
+export function renderHash(manifest) {
+  const semis = Number(manifest?.transpose?.semitones ?? 0);
+  return semis ? `${manifest.set.sha1}:${semis > 0 ? "+" : ""}${semis}` : manifest.set.sha1;
+}
+
 export function planIngest({ manifest, folderName, post, existing = [], existingItems = {}, localSha1 = {} }) {
-  const setSha1 = manifest.set.sha1;
+  // A transposed render of the SAME set is another render: it must not claim
+  // (and drop) the untransposed one's items, so the hash carries the semitones.
+  // Untransposed renders keep the bare set sha1 — every existing row matches.
+  const setSha1 = renderHash(manifest);
   const folder = parseFolderName(folderName);
   const tone = folder.tone ?? post.key ?? "";
   const bpm = Number.isFinite(manifest?.song?.bpm_range?.[0]) ? manifest.song.bpm_range[0] : folder.bpm ?? undefined;
