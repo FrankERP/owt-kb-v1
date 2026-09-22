@@ -674,6 +674,7 @@ describe("special-service time", () => {
     if (ok.ok) expect(ok.value.time).toBe("12:30");
     expect(parseEditRequest({ rev: "r1", date: "2026-10-03", time: "12:3" })).toMatchObject({ ok: false, issues: ["time"] });
     const none = parseEditRequest({ rev: "r1", date: "2026-10-03" });
+    expect(none.ok).toBe(true);
     if (none.ok) expect(none.value.time).toBeNull();
   });
 

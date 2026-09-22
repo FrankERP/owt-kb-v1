@@ -166,7 +166,11 @@ async function patchHandler(
   // whether one is allowed at all, and a weekend role refuses it outright
   // rather than dropping it silently.
   if (roleType !== "special_role" && request.time) {
-    return reject(serviceError("invalid_request", { details: { issues: ["time"] } }));
+    return reject(
+      serviceError("invalid_request", {
+        details: { id, storedType: roleType, issues: ["time"] },
+      }),
+    );
   }
   const newDate = request.date;
   const isMove = newDate !== oldDate;
