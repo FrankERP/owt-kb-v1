@@ -43,14 +43,60 @@ export function matchFolder({ folderName, manifest, index, overrides }) {
 
 /**
  * The full `rehearsalMixes` array to `.set`, plus what to upload and delete.
- * Items from OTHER renders (different sourceHash) are kept verbatim from
+ * Items from OTHER renders (different sourceHash — another set, or the same
+ * set at another transposition) are kept verbatim from
  * `existingItems`; items of THIS render are rebuilt from the manifest, reusing
  * an asset when its sha1 equals the local file's.
  */
+const NOTE_INDEX = { C: 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3, E: 4, F: 5, "F#": 6, Gb: 6, G: 7, "G#": 8, Ab: 8, A: 9, "A#": 10, Bb: 10, B: 11 };
+const NOTE_LABEL = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+const noteRoot = (k) => NOTE_INDEX[String(k ?? "").match(/^([A-G][#b]?)/)?.[1]] ?? -1;
+
+export function renderSemitones(manifest) {
+  // Absent means an untransposed render (manifests before 2026-09-21 had no
+  // `transpose`). Anything PRESENT must be an integer number — a null, "" or
+  // "x" would otherwise coerce to 0 and claim the untransposed render's rows.
+  const raw = manifest?.transpose?.semitones;
+  if (raw === undefined) return 0;
+  if (typeof raw !== "number" || !Number.isInteger(raw)) throw new Error(`manifest.transpose.semitones is not an integer: ${JSON.stringify(raw)}`);
+  return raw;
+}
+
+export function renderHash(manifest) {
+  const semis = renderSemitones(manifest);
+  return semis ? `${manifest.set.sha1}:${semis > 0 ? "+" : ""}${semis}` : manifest.set.sha1;
+}
+
+/**
+ * The key a transposed render SOUNDS in: the set's key (from the .als file
+ * name, `…_69BPM_Ab.als`) moved by the manifest's semitones. The render folder
+ * must be named for that key — a folder that still says the source key would
+ * store rows a semitone off, so the mismatch is an error, never a guess.
+ */
+export function transposedTone(manifest, folderTone) {
+  const semis = renderSemitones(manifest);
+  if (!semis) return folderTone ?? null;
+  const source = parseFolderName(path.basename(String(manifest.set.path ?? ""), ".als")).tone;
+  const sourceRoot = noteRoot(source);
+  if (sourceRoot < 0) {
+    if (folderTone) return folderTone;
+    throw new Error("transposed render: neither the set file name nor the folder carries a key");
+  }
+  const minor = /m$/.test(source);
+  const expected = NOTE_LABEL[(((sourceRoot + semis) % 12) + 12) % 12] + (minor ? "m" : "");
+  if (folderTone && noteRoot(folderTone) !== noteRoot(expected)) {
+    throw new Error(`transposed render: set is in ${source} ${semis > 0 ? "+" : ""}${semis} → ${expected}, but the folder says ${folderTone}`);
+  }
+  return folderTone ?? expected;
+}
+
 export function planIngest({ manifest, folderName, post, existing = [], existingItems = {}, localSha1 = {} }) {
-  const setSha1 = manifest.set.sha1;
+  // A transposed render of the SAME set is another render: it must not claim
+  // (and drop) the untransposed one's items, so the hash carries the semitones.
+  // Untransposed renders keep the bare set sha1 — every existing row matches.
+  const setSha1 = renderHash(manifest);
   const folder = parseFolderName(folderName);
-  const tone = folder.tone ?? post.key ?? "";
+  const tone = transposedTone(manifest, folder.tone) ?? post.key ?? "";
   const bpm = Number.isFinite(manifest?.song?.bpm_range?.[0]) ? manifest.song.bpm_range[0] : folder.bpm ?? undefined;
   const byKey = new Map(existing.map((e) => [e._key, e]));
 

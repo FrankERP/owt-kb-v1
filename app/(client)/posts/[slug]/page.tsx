@@ -28,6 +28,7 @@ import LyricsAutoscroll from "@/app/components/song/LyricsAutoscroll";
 import TutorialPoster from "@/app/components/song/TutorialPoster";
 import { dimRepeatMarkers, LYRIC_EYEBROW_BLOCK } from "@/app/utils/lyricMarkers";
 import { isChordPro } from "@/app/utils/transpose";
+import { mixTones } from "@/app/utils/rehearsalMixes";
 import { countLyricLines } from "@/app/utils/practice";
 import { requireWorshipPage } from "@/app/utils/worshipPageGate";
 import { revealProps } from "@/app/utils/reveal";
@@ -276,6 +277,7 @@ const Page = async ({ params }: Params) => {
             bpmText={bpmText}
             timeSig={post?.timeSig ?? null}
             transposable={transposable}
+            mixTones={mixTones(post?.rehearsalMixes ?? [])}
             revealIndex={3}
           />
         </div>
