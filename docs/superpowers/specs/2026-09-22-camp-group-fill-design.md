@@ -113,11 +113,15 @@ re-roll earlier picks. To re-roll, close the planner without saving («Cerrar de
 ## 5. UI
 
 - **Button** «Llenar especiales…» in the stored-mode toolbar beside «+ Nuevo servicio».
-  Disabled, with its reason as `title`, while `storedMutationLocked`, while the shared
-  rules are not loaded (`solverConfig === null`, the same condition `rulesBlocked`
-  uses), or when the month has no approved special column.
-- **Dialog** (`CueDialog`, one per page): the list of §3 as `Checkbox` rows,
-  «Llenar vacíos» (`Button`) and «Cancelar». «Llenar vacíos» is disabled with nothing
+  Disabled, with its reason as `title`, while `storedMutationLocked`, while stored editing
+  is blocked (`storedEditBlocked`, which already folds in the capability gate and
+  `rulesBlocked`), while `solverConfig` is `null`, or when the month has no approved
+  special column.
+- **Picker panel**, inline, the same pattern as «Limpiar mes»'s confirmation (the planner
+  is a full-width panel and uses no `CueDialog`): a `role="region"` labelled «Llenar
+  especiales», focus moved into it on open and back to the trigger on close, Escape closes
+  it before it could close the editor. It holds the list of §3 as `Checkbox` rows,
+  «Llenar vacíos» and «Cancelar» (`Button`). «Llenar vacíos» is disabled with nothing
   ticked.
 - **Result.** The grid updates in place; the filled columns become dirty, so the existing
   «Guardar» and close-without-saving paths apply unchanged. Seats left empty are merged into the
@@ -163,8 +167,9 @@ spec → plan → implement → gates → fresh code review of the diff → fix 
   - Two specials plus one Sunday column in the grid, the Sunday full of people: the group
     fill ignores the Sunday's load (a member who serves every Sunday is still picked
     first when they are the least-loaded inside the group).
-  - Five sets and four eligible leads: Lead appearances differ by at most one across the
-    group.
+  - Five sets and ten voice members: each member's voice appearances (Lead + BGV) differ
+    by at most one across the group. Lead and BGV share one Tipo (`voz`) and one load
+    (`computeParticipation`'s `total`), so the balance is per person, not per seat.
   - A pinned occupant is kept and still counts toward group load.
   - An unavailable member is never picked; a wrong-Tipo member is never picked.
   - A forbidden pair from `solverConfig` never shares a set.
@@ -174,8 +179,9 @@ spec → plan → implement → gates → fresh code review of the diff → fix 
   - Group order is date then time, whatever order the columns arrive in.
 - `instrumentFill`: `fillColumns` present fills a special column and vacates nothing;
   absent, every existing test passes unchanged.
-- `MonthGenerator` stored mode: the button's disabled states; the dialog lists only
-  approved specials; a fill marks the columns dirty and writes nothing until «Guardar».
+- `MonthGenerator` stored mode: the button's disabled states; the panel lists only
+  approved specials, all ticked; unticking one leaves it untouched; a fill marks the
+  columns dirty and writes nothing until «Guardar».
 - Gates: `npx tsc --noEmit`, `npm test`, `npx eslint .` with 0 errors.
 
 ## 10. Docs in the same delivery
