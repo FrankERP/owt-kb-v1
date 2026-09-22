@@ -1980,7 +1980,7 @@ export default function MonthGenerator({
     : [];
   const groupFillTicked = storedSpecialColumns.filter((c) => !groupFillSkipped.has(c.columnId));
   const groupFillBlocked = storedMutationLocked
-    ? "Espera a que termine la operación en curso."
+    ? "Termina o cancela primero la acción en curso."
     : storedEditBlocked
       ?? (solverConfig === null ? "Las reglas compartidas no están cargadas." : null)
       ?? (storedSpecialColumns.length === 0 ? "Este mes no tiene servicios especiales." : null);
@@ -2542,16 +2542,22 @@ export default function MonthGenerator({
     if (!config || groupFillBlocked) return;
     const group = groupFillTicked;
     if (group.length === 0) return;
+    const groupIds = new Set(group.map((c) => c.columnId));
+    const occupantsIn = (list: GridCell[]) =>
+      list.filter((c) => groupIds.has(c.columnId)).reduce((n, c) => n + c.occupants.length, 0);
+    const before = occupantsIn(cells);
     const out = fillSpecialGroup({ group, rows, cells, members, config });
     handleCellsChange(out.cells);
-    const groupIds = new Set(group.map((c) => c.columnId));
     setUnfilled((prev) => [...prev.filter((u) => !groupIds.has(u.columnId)), ...out.unfilled]);
     const n = out.unfilled.length;
-    setSaveNotice(n === 0
-      ? "Especiales llenados. Revisa y guarda."
-      : n === 1
-        ? "Quedó 1 lugar sin cubrir en los especiales. Revisa y guarda."
-        : `Quedaron ${n} lugares sin cubrir en los especiales. Revisa y guarda.`);
+    const placedNobody = n === 0 && occupantsIn(out.cells) === before;
+    setSaveNotice(placedNobody
+      ? "No había lugares vacíos en los especiales marcados."
+      : n === 0
+        ? "Especiales llenados. Revisa y guarda."
+        : n === 1
+          ? "Quedó 1 lugar sin cubrir en los especiales. Revisa y guarda."
+          : `Quedaron ${n} lugares sin cubrir en los especiales. Revisa y guarda.`);
     closeGroupFill();
   }
 
@@ -3569,7 +3575,7 @@ export default function MonthGenerator({
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setComposerOpen(true)}
+                  onClick={() => { setGroupFillOpen(false); setComposerOpen(true); }}
                   disabled={storedMutationLocked || storedHasUnresolvedWork || !!storedCreateBlocked}
                   title={storedCreateBlocked ?? undefined}
                   className="min-h-[44px] rounded-lg border border-accent/25 px-4 font-label text-xs uppercase tracking-widest text-accent disabled:opacity-50"
@@ -3671,7 +3677,7 @@ export default function MonthGenerator({
                 });
               }}
             >
-              <span>{fmtDate(column.date)} · {column.serviceName}{column.time ? ` · ${column.time}` : ""}</span>
+              <span>{fmtDate(column.date)} · {column.serviceName}{column.time ? ` · ${column.time}` : ""}{column.published ? " · publicado" : ""}</span>
             </Checkbox>
           ))}
           <div className="flex gap-2">

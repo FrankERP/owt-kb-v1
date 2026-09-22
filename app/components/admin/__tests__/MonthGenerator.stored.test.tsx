@@ -1266,6 +1266,33 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
     expect(labels[1]).toMatch(/· 12:30$/);
   });
 
+  it("marks a published special's row with « · publicado», leaving an unpublished row without it", () => {
+    const roles = [
+      emptySet("set-a", "09:00"),
+      role({
+        _id: "set-b", _rev: "rev-set-b", _type: "special_role", date: "2026-02-14",
+        service_name: "Campamento 12:30", time: "12:30", published: true,
+        leads: [], bgvs: [], chorus: [], instruments: [], foh: [],
+      }),
+    ];
+    renderStored(roles, { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    const panel = screen.getByRole("region", { name: "Llenar especiales" });
+    const labels = within(panel).getAllByRole("checkbox").map((box) => box.closest("label")!.textContent);
+    expect(labels).toHaveLength(2);
+    expect(labels[0]).not.toMatch(/publicado/);
+    expect(labels[1]).toMatch(/publicado$/);
+  });
+
+  it("closes the picker when «+ Nuevo servicio» opens the composer, so it never outlives its trigger", () => {
+    renderStored([emptySet("set-a", "09:00")], { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    expect(screen.getByRole("region", { name: "Llenar especiales" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Nuevo servicio" }));
+    expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
+  });
+
   it("moves focus into the panel on open and back to the trigger on Cancelar and on Escape", () => {
     renderStored([emptySet("set-a", "09:00")], { members: voz });
     const trigger = screen.getByRole("button", { name: "Llenar especiales…" });
@@ -1312,6 +1339,23 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
     fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
     fireEvent.click(within(screen.getByRole("region", { name: "Llenar especiales" })).getByRole("button", { name: "Llenar vacíos" }));
     expect(screen.getByText(notice)).toBeTruthy();
+  });
+
+  it("reports that nothing was empty when every ticked seat was already full", () => {
+    // Lead (target 2) and BGV (target 3) already hold all five voices as pins —
+    // the fill has nothing to place and nothing stays unfilled, so the notice
+    // must not claim it "filled" the special.
+    const fullSet = role({
+      _id: "set-full", _rev: "rev-set-full", _type: "special_role", date: "2026-02-14",
+      service_name: "Campamento lleno", time: "09:00",
+      leads: [member("v1", "lead-key-1"), member("v2", "lead-key-2")],
+      bgvs: [member("v3", "bgv-key-1"), member("v4", "bgv-key-2"), member("v5", "bgv-key-3")],
+      chorus: [], instruments: [], foh: [],
+    });
+    renderStored([fullSet], { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Llenar especiales" })).getByRole("button", { name: "Llenar vacíos" }));
+    expect(screen.getByText("No había lugares vacíos en los especiales marcados.")).toBeTruthy();
   });
 
   it("leaves an unticked special untouched", () => {

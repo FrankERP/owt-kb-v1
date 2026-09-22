@@ -20,8 +20,15 @@ import type { GridCell, GridColumn, GridRow, SolverConfig } from "./plannerModel
 
 type Seat = { columnId: string; rowId: string };
 
-/** Set order: date, then clock time (absent last), then id for determinism. */
-export function orderGroup(group: GridColumn[]): GridColumn[] {
+/**
+ * Set order: date, then clock time (absent last), then id for determinism.
+ *
+ * Generic over the column subtype rather than pinned to `GridColumn`, so a
+ * caller ordering `StoredGridColumn[]` (the picker panel, which reads
+ * `column.published`) keeps that type through the sort instead of widening to
+ * the base interface.
+ */
+export function orderGroup<T extends GridColumn>(group: T[]): T[] {
   return [...group].sort(
     (a, b) =>
       a.date.localeCompare(b.date) ||
