@@ -2,10 +2,17 @@
 // Behaviour the spec pins (§8.2): one <audio> through PlayerContext, switching
 // tracks keeps the position, preselection only highlights, and no URL on the
 // page is a cdn.sanity.io URL.
+import { StrictMode } from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { RehearsalMix } from "@/app/utils/interface";
 import RehearsalPlayer from "../RehearsalPlayer";
+import { TransposeProvider, useTransposeOptional } from "../TransposeProvider";
+
+function Dial({ to }: { to: number }) {
+  const t = useTransposeOptional();
+  return <button type="button" onClick={() => t?.setSemitones(to)}>dial {to}</button>;
+}
 
 const playTrack = vi.fn();
 const togglePlay = vi.fn();
@@ -111,5 +118,80 @@ describe("RehearsalPlayer", () => {
     btn.focus();
     fireEvent.click(btn);
     expect(document.activeElement).toBe(btn);
+  });
+
+  describe("the hero dial picks the key", () => {
+    const twoKeys = [
+      ...mixes,
+      mix({ _key: "full-ab", kind: "full", tone: "Ab", peaks: undefined, active: undefined }),
+      mix({ _key: "eg1-ab", track: "EG 1", family: "electric", tone: "Ab" }),
+    ];
+    const inKey = (semis: number) => render(
+      <TransposeProvider nativeKey="G">
+        <Dial to={semis} />
+        <RehearsalPlayer {...props} mixes={twoKeys} preselect={["EG"]} />
+      </TransposeProvider>,
+    );
+
+    it("shows the sounding key's rows only, says which keys exist, and preselects inside them", () => {
+      const { getByRole, queryByRole, getByText } = inKey(1);
+      expect(getByRole("listitem", { name: "EG 1" }).getAttribute("aria-current")).toBe("true");
+      expect(queryByRole("listitem", { name: "Bass" })).toBeTruthy();
+      expect(getByText(/Tono G · hay mixes en G, Ab/)).toBeTruthy();
+      fireEvent.click(getByRole("button", { name: "dial 1" }));
+      expect(queryByRole("listitem", { name: "Bass" })).toBeNull();
+      expect(getByRole("listitem", { name: "EG 1" }).getAttribute("aria-current")).toBe("true");
+      fireEvent.click(getByRole("button", { name: "Reproducir EG 1" }));
+      expect(playTrack).toHaveBeenCalledWith(expect.objectContaining({ url: "/api/audio/post-1/eg1-ab", tone: "Ab" }));
+    });
+
+    it("falls back to the nearest key and says so", () => {
+      const { getByRole, getByText } = inKey(4);
+      fireEvent.click(getByRole("button", { name: "dial 4" }));
+      expect(getByText(/No hay mix en B — se muestra Ab/)).toBeTruthy();
+      expect(getByRole("listitem", { name: "EG 1" })).toBeTruthy();
+    });
+
+    it("carries the PLAYING track into the new key at the same position, and leaves a paused one alone", () => {
+      player = { track: { url: "/api/audio/post-1/eg1" }, isPlaying: true };
+      audio.currentTime = 30;
+      const { getByRole } = inKey(1);
+      fireEvent.click(getByRole("button", { name: "dial 1" }));
+      expect(playTrack).toHaveBeenCalledWith(expect.objectContaining({ url: "/api/audio/post-1/eg1-ab" }));
+      const call = audio.addEventListener.mock.calls.find((c) => c[2]?.once === true);
+      expect(call?.[0]).toBe("loadedmetadata");
+      cleanup(); playTrack.mockReset();
+      player = { track: { url: "/api/audio/post-1/bass" }, isPlaying: false };
+      const paused = inKey(1);
+      fireEvent.click(paused.getByRole("button", { name: "dial 1" }));
+      expect(playTrack).not.toHaveBeenCalled();
+    });
+
+    it("does not hijack a track already playing in another key on mount (coming back to the song), even under StrictMode's double effect", () => {
+      player = { track: { url: "/api/audio/post-1/eg1-ab" }, isPlaying: true };
+      render(
+        <StrictMode>
+          <TransposeProvider nativeKey="G">
+            <RehearsalPlayer {...props} mixes={twoKeys} />
+          </TransposeProvider>
+        </StrictMode>,
+      );
+      expect(playTrack).not.toHaveBeenCalled();
+    });
+
+    it("captions nothing and shows every key when the song's own key is unparseable", () => {
+      const { queryByText, getAllByRole } = render(
+        <TransposeProvider nativeKey={null}>
+          <RehearsalPlayer {...props} mixes={twoKeys} />
+        </TransposeProvider>,
+      );
+      expect(queryByText(/No hay mix|Tono/)).toBeNull();
+      expect(getAllByRole("listitem", { name: "EG 1" })).toHaveLength(2);
+    });
+
+    it("shows every key's rows outside a provider (the gallery fixture)", () => {
+      const { getAllByRole } = render(<RehearsalPlayer {...props} mixes={twoKeys} />);
+      expect(getAllByRole("listitem", { name: "EG 1" })).toHaveLength(2);
+    });
   });
 });

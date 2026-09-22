@@ -12,7 +12,8 @@ import Equalizer from "@/app/components/ui/Equalizer";
 import PlayPauseGlyph from "@/app/components/ui/PlayPauseGlyph";
 import Button, { buttonClass } from "@/app/components/ui/Button";
 import type { RehearsalMix } from "@/app/utils/interface";
-import { groupMixes, mixLabel, preselectMix } from "@/app/utils/rehearsalMixes";
+import { groupMixes, mixLabel, mixTones, mixesForKey, preselectMix } from "@/app/utils/rehearsalMixes";
+import { useTransposeOptional } from "./TransposeProvider";
 import Waveform from "./Waveform";
 
 export default function RehearsalPlayer({
@@ -25,8 +26,19 @@ export default function RehearsalPlayer({
   preselect?: string[] | null;
 }) {
   const { player, playTrack, togglePlay, seek, getAudio } = usePlayer();
-  const groups = useMemo(() => groupMixes(mixes), [mixes]);
-  const highlighted = useMemo(() => preselectMix(mixes, preselect)?._key ?? null, [mixes, preselect]);
+  // The KEY is the hero dial's (`SongHeroPills` is the one 12-key picker): the
+  // rows are the mixes rendered in the sounding key, or the nearest key when
+  // that one was never rendered — the caption says which. Outside a provider
+  // (the gallery fixture) every key's rows show.
+  const shared = useTransposeOptional();
+  const tones = useMemo(() => mixTones(mixes), [mixes]);
+  const selection = useMemo(
+    () => (shared ? mixesForKey(mixes, shared.soundingKey) : { tone: null, exact: true, mixes }),
+    [mixes, shared],
+  );
+  const shown = selection.mixes;
+  const groups = useMemo(() => groupMixes(shown), [shown]);
+  const highlighted = useMemo(() => preselectMix(shown, preselect)?._key ?? null, [shown, preselect]);
   const [time, setTime] = useState({ current: 0, duration: 0 });
   // The one in-flight "restore the position on the next loadedmetadata" — a
   // second switch before the first mix has loaded must cancel the first
@@ -50,8 +62,6 @@ export default function RehearsalPlayer({
       }
     };
   }, [getAudio]);
-
-  if (mixes.length === 0) return null;
 
   const urlFor = (m: RehearsalMix) => `/api/audio/${encodeURIComponent(songId)}/${encodeURIComponent(m._key)}`;
   const isCurrent = (m: RehearsalMix) => player.track?.url === urlFor(m);
@@ -79,10 +89,40 @@ export default function RehearsalPlayer({
     }
   };
 
+  // Turning the dial while one of our rows plays carries THAT track into the
+  // new key at the same position — `play` already keeps the position across a
+  // switch. Nothing plays that was not playing: a paused row stays paused and
+  // simply drops out of the list. It fires on a CHANGE of the selected key only,
+  // never on mount: coming back to the song remounts the provider at 0
+  // semitones while an Ab row may still be playing, and that is the member's
+  // choice, not a dial turn. A ref of the last seen key (not a "mounted" flag)
+  // so StrictMode's second effect run in dev is a no-op too.
+  const currentKey = player.track?.url;
+  const lastTone = useRef(selection.tone);
+  useEffect(() => {
+    if (lastTone.current === selection.tone) return;
+    lastTone.current = selection.tone;
+    if (!currentKey || !player.isPlaying) return;
+    const current = mixes.find((m) => currentKey === urlFor(m));
+    if (!current || shown.includes(current)) return;
+    const twin = shown.find((m) => m.kind === current.kind && (m.kind === "full" || m.track === current.track));
+    if (twin) play(twin);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the selected tone only: a play-state change must not re-fire
+  }, [selection.tone]);
+
+  if (mixes.length === 0) return null;
+
   const progress = time.duration > 0 ? Math.min(1, time.current / time.duration) : 0;
 
   return (
     <div className="space-y-6">
+      {tones.length > 1 && shared?.soundingKey && selection.tone && (
+        <p className="font-label text-[11px] uppercase tracking-widest text-mono-500" aria-live="polite">
+          {selection.exact
+            ? <>Tono {selection.tone} · hay mixes en {tones.join(", ")}</>
+            : <>No hay mix en {shared?.soundingKey} — se muestra {selection.tone} · hay mixes en {tones.join(", ")}</>}
+        </p>
+      )}
       {groups.map((g) => (
         <div key={g.family} className="space-y-2">
           <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">{g.label}</p>

@@ -32,6 +32,36 @@ no player at all: the section only renders once a batch has ingested that song.
 
 Re-running is safe: keys are `sha1(set.sha1 + file name)`, an asset whose sha1 already
 matches is reused, items from another render of the same song (a second key) are kept.
+A **transposed** render of the same set (`manifest.transpose.semitones ≠ 0`) is another
+render too: its `sourceHash` is `set.sha1:+1` / `set.sha1:-1` (`renderHash`), so
+ingesting the Gb render does not drop the G one. Untransposed renders keep the bare sha1
+— every row written before this rule still matches.
+
+## Keys — which ones exist, and how a member picks one (2026-09-21)
+
+Every song is rendered in **its set's key ±1 semitone**, plus **every key the song has been
+played in** (`play_key` on `featuredSongs` / `saturdarSongs`), from the nearest set. The
+pitch shift is abletonnl's per-track Rubber Band; drums, percussion and the click are
+`unpitched` in `families.toml` and pass through untouched. All 12 keys was rejected (~144 GB
+against a 100 GB quota); this set is ~40 GB total.
+
+The member picks the key with the hero's key dial — `SongHeroPills` is the ONE 12-key
+picker, so the player grew no strip of its own. The dial now arms whenever the song has
+mixes in more than one key, ChordPro chart or not, and a key that has a mix carries a dot
+(`mixTones` prop; `aria-label` says «con mix de ensayo»). `RehearsalPlayer` reads the
+sounding key from `TransposeProvider` and shows `mixesForKey` — the rows in that key, or
+the NEAREST key's rows with a caption saying so («No hay mix en B — se muestra Ab»).
+Turning the dial while a row plays carries the same track into the new key at the same
+position; a paused row stays paused. Outside a provider (the gallery fixture) every key's
+rows show.
+
+Render driver: `render-keys.py` (session scratchpad of 2026-09-21; re-create from this
+shape) takes `[{als, stem, postId, semis}]` where `stem` is the base stem with the TARGET
+key (`Jesucristo Basta_69BPM_Ab` → `…_G`), passes `transpose=semis` to
+`render_rehearsal_mixes`, moves the folder to `<root>/<stem>/` and writes `matches.json`.
+The list comes from Sanity: per post, `mixTones` ± 1 ∪ `play_key` roots − keys already
+rendered; each target picks the closest base set. A transposed render is ~4.5 min per song
+(vs ~45 s plain) — run three shards in parallel.
 
 ## The mix rule (calibrated 2026-09-21)
 
@@ -50,8 +80,15 @@ mixed, and pulled the instrument down whenever the click came up.
 ## Quotas to watch (Sanity Free)
 
 100 GB assets / 100 GB bandwidth per month. ~11 files per song at 192 kbps ≈ 7 MB each →
-the whole catalog is ~11 GB. Bandwidth with offline download ≈ 7 GB/month. Check the
-project's Usage page after the first two batches.
+one key of the whole catalog is ~12 GB; with ±1 semitone and the history keys, ~40 GB.
+Bandwidth with offline download ≈ 7 GB/month. **The project's Usage widget lags the
+dataset by up to a day** (it showed 49.6 MB the evening 12 GB were ingested); the number
+that bills is `math::sum(*[_type=="sanity.fileAsset"].size)` in Vision.
+Alternatives were weighed on 2026-09-21 and parked: Google Drive is not an audio origin
+(download quotas, no dependable `Range`, virus-scan interstitials — and a proxy would push
+the bytes through Vercel Hobby); Cloudflare R2 (zero egress, signed URLs, ~$0.015/GB) is the
+fallback if the catalog ever nears the quota — the swap is `audioFile` → an object key, the
+ingest uploading over S3, and the route signing instead of redirecting.
 
 ## Verified runs
 
