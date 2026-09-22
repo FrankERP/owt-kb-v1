@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildCatalogIndex } from "../setlist-match.mjs";
-import { matchFolder, mixKey, parseFolderName, planIngest, renderHash, songNameFromManifest } from "../rehearsal-ingest.mjs";
+import { matchFolder, mixKey, parseFolderName, planIngest, renderHash, songNameFromManifest, transposedTone } from "../rehearsal-ingest.mjs";
 
 const manifest = {
   set: { path: "/ssd/Amor sin Condición_144BPM_G Project/x.als", sha1: "aaaa1111" },
@@ -134,5 +134,33 @@ describe("planIngest", () => {
     expect(mine).toHaveLength(3);
     expect(mine.every((i) => i.tone === "Gb")).toBe(true);
     expect(new Set(plan.items.map((i) => i._key)).size).toBe(4);
+  });
+
+  describe("transposed renders", () => {
+    const tp = (semitones, setPath = "/ssd/x/Amor sin Condición_144BPM_G.als") => ({ ...manifest, set: { ...manifest.set, path: setPath }, transpose: { semitones } });
+
+    it("derives the sounding key from the set file name and the semitones, and accepts a folder that agrees", () => {
+      expect(transposedTone(tp(-1), "Gb")).toBe("Gb");
+      expect(transposedTone(tp(-1), "F#")).toBe("F#");
+      expect(transposedTone(tp(2), null)).toBe("A");
+      expect(transposedTone(tp(0), "G")).toBe("G");
+      expect(transposedTone(tp(-1, "/ssd/x/Amor_144BPM_Gm.als"), null)).toBe("Gbm");
+    });
+
+    it("refuses a folder still named for the SOURCE key — rows would be a semitone off", () => {
+      expect(() => transposedTone(tp(-1), "G")).toThrow(/set is in G -1 → Gb, but the folder says G/);
+      expect(() => planIngest({ manifest: tp(1), folderName: "Amor sin Condición_144BPM_G", post })).toThrow(/folder says G/);
+    });
+
+    it("refuses a malformed semitones value instead of hashing as the untransposed render", () => {
+      expect(() => renderHash({ ...manifest, transpose: { semitones: "x" } })).toThrow(/not an integer/);
+      expect(() => renderHash({ ...manifest, transpose: { semitones: 0.5 } })).toThrow(/not an integer/);
+      expect(renderHash({ ...manifest, transpose: {} })).toBe("aaaa1111");
+    });
+
+    it("stores the sounding key on every row of a transposed render", () => {
+      const plan = planIngest({ manifest: tp(-1), folderName: "Amor sin Condición_144BPM_Gb", post });
+      expect(plan.items.every((i) => i.tone === "Gb" && i.sourceHash === "aaaa1111:-1")).toBe(true);
+    });
   });
 });

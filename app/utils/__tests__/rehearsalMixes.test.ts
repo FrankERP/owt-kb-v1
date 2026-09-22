@@ -125,8 +125,9 @@ describe("mixTones / mixesForKey", () => {
   });
 
   it("shows everything with no key or no parseable tones", () => {
-    expect(mixesForKey(all, null)).toEqual({ tone: "Gb", exact: false, mixes: all });
-    expect(mixesForKey(g, null)).toEqual({ tone: "G", exact: true, mixes: g });
+    expect(mixesForKey(all, null)).toEqual({ tone: null, exact: true, mixes: all });
+    expect(mixesForKey(all, "Modal")).toEqual({ tone: null, exact: true, mixes: all });
+    expect(mixesForKey(g, null)).toEqual({ tone: null, exact: true, mixes: g });
     const modal = [mix({ tone: "Modal" })];
     expect(mixesForKey(modal, "G")).toEqual({ tone: null, exact: true, mixes: modal });
   });

@@ -166,6 +166,22 @@ describe("RehearsalPlayer", () => {
       expect(playTrack).not.toHaveBeenCalled();
     });
 
+    it("does not hijack a track already playing in another key on mount (coming back to the song)", () => {
+      player = { track: { url: "/api/audio/post-1/eg1-ab" }, isPlaying: true };
+      inKey(1);
+      expect(playTrack).not.toHaveBeenCalled();
+    });
+
+    it("captions nothing and shows every key when the song's own key is unparseable", () => {
+      const { queryByText, getAllByRole } = render(
+        <TransposeProvider nativeKey={null}>
+          <RehearsalPlayer {...props} mixes={twoKeys} />
+        </TransposeProvider>,
+      );
+      expect(queryByText(/No hay mix|Tono/)).toBeNull();
+      expect(getAllByRole("listitem", { name: "EG 1" })).toHaveLength(2);
+    });
+
     it("shows every key's rows outside a provider (the gallery fixture)", () => {
       const { getAllByRole } = render(<RehearsalPlayer {...props} mixes={twoKeys} />);
       expect(getAllByRole("listitem", { name: "EG 1" })).toHaveLength(2);

@@ -94,7 +94,8 @@ export function mixTones(mixes: RehearsalMix[]): string[] {
  * sounding key). Enharmonic, never textual: a Db render answers a C# dial. With
  * no mix in that key the NEAREST key's mixes stand in (`exact: false`, the row
  * says so) — the tie between a semitone up and one down goes to the lower key.
- * A null key, or one with no parseable tone anywhere, shows everything.
+ * A null key, or no parseable tone anywhere, shows everything with `tone: null`
+ * — there is nothing to pick, so nothing to caption.
  */
 export function mixesForKey(
   mixes: RehearsalMix[],
@@ -102,7 +103,7 @@ export function mixesForKey(
 ): { tone: string | null; exact: boolean; mixes: RehearsalMix[] } {
   const tones = mixTones(mixes);
   const want = key ? rootIndex(key) : -1;
-  if (want < 0 || tones.length === 0) return { tone: tones[0] ?? null, exact: tones.length <= 1, mixes };
+  if (want < 0 || tones.length === 0) return { tone: null, exact: true, mixes };
   let best: { tone: string; dist: number } | null = null;
   for (const t of tones) {
     const r = rootIndex(t);

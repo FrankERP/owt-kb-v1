@@ -92,9 +92,13 @@ export default function RehearsalPlayer({
   // Turning the dial while one of our rows plays carries THAT track into the
   // new key at the same position — `play` already keeps the position across a
   // switch. Nothing plays that was not playing: a paused row stays paused and
-  // simply drops out of the list.
+  // simply drops out of the list. And never on MOUNT: coming back to the song
+  // remounts the provider at 0 semitones while an Ab row may still be playing
+  // from before — that is the member's choice, not a dial turn.
   const currentKey = player.track?.url;
+  const mounted = useRef(false);
   useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return; }
     if (!currentKey || !player.isPlaying) return;
     const current = mixes.find((m) => currentKey === urlFor(m));
     if (!current || shown.includes(current)) return;
@@ -109,7 +113,7 @@ export default function RehearsalPlayer({
 
   return (
     <div className="space-y-6">
-      {tones.length > 1 && selection.tone && (
+      {tones.length > 1 && shared?.soundingKey && selection.tone && (
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-500" aria-live="polite">
           {selection.exact
             ? <>Tono {selection.tone} · hay mixes en {tones.join(", ")}</>
