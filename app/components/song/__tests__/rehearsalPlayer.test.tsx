@@ -2,6 +2,7 @@
 // Behaviour the spec pins (§8.2): one <audio> through PlayerContext, switching
 // tracks keeps the position, preselection only highlights, and no URL on the
 // page is a cdn.sanity.io URL.
+import { StrictMode } from "react";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import type { RehearsalMix } from "@/app/utils/interface";
@@ -166,9 +167,15 @@ describe("RehearsalPlayer", () => {
       expect(playTrack).not.toHaveBeenCalled();
     });
 
-    it("does not hijack a track already playing in another key on mount (coming back to the song)", () => {
+    it("does not hijack a track already playing in another key on mount (coming back to the song), even under StrictMode's double effect", () => {
       player = { track: { url: "/api/audio/post-1/eg1-ab" }, isPlaying: true };
-      inKey(1);
+      render(
+        <StrictMode>
+          <TransposeProvider nativeKey="G">
+            <RehearsalPlayer {...props} mixes={twoKeys} />
+          </TransposeProvider>
+        </StrictMode>,
+      );
       expect(playTrack).not.toHaveBeenCalled();
     });
 

@@ -92,20 +92,23 @@ export default function RehearsalPlayer({
   // Turning the dial while one of our rows plays carries THAT track into the
   // new key at the same position — `play` already keeps the position across a
   // switch. Nothing plays that was not playing: a paused row stays paused and
-  // simply drops out of the list. And never on MOUNT: coming back to the song
-  // remounts the provider at 0 semitones while an Ab row may still be playing
-  // from before — that is the member's choice, not a dial turn.
+  // simply drops out of the list. It fires on a CHANGE of the selected key only,
+  // never on mount: coming back to the song remounts the provider at 0
+  // semitones while an Ab row may still be playing, and that is the member's
+  // choice, not a dial turn. A ref of the last seen key (not a "mounted" flag)
+  // so StrictMode's second effect run in dev is a no-op too.
   const currentKey = player.track?.url;
-  const mounted = useRef(false);
+  const lastTone = useRef(selection.tone);
   useEffect(() => {
-    if (!mounted.current) { mounted.current = true; return; }
+    if (lastTone.current === selection.tone) return;
+    lastTone.current = selection.tone;
     if (!currentKey || !player.isPlaying) return;
     const current = mixes.find((m) => currentKey === urlFor(m));
     if (!current || shown.includes(current)) return;
     const twin = shown.find((m) => m.kind === current.kind && (m.kind === "full" || m.track === current.track));
     if (twin) play(twin);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the shown rows only: a play-state change must not re-fire
-  }, [shown]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the selected tone only: a play-state change must not re-fire
+  }, [selection.tone]);
 
   if (mixes.length === 0) return null;
 
