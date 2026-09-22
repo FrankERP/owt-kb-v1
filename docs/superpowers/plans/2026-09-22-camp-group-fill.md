@@ -600,7 +600,123 @@ git commit -m "feat(admin): «Llenar especiales…» fills a ticked group of sto
 
 ---
 
-### Task 4: Docs and full gates
+### Task 4: Open an empty upcoming month
+
+**Files:**
+- Create: `app/components/admin/monthPills.ts`
+- Test: `app/components/admin/__tests__/monthPills.test.ts`
+- Modify: `app/components/admin/ServicesPanel.tsx` — `futureMonths` (~:796), the month-filter render condition (~:1164), the empty state in the card list (~:1294)
+- Test: `app/components/admin/__tests__/MonthGenerator.stored.test.tsx` (an empty month opens with a usable composer)
+
+**Interfaces:**
+- Produces: `addMonths(ym: string, n: number): string`, `upcomingMonthPills(roleMonths: string[], currentYM: string, ahead?: number): string[]`.
+
+- [ ] **Step 1: Write the failing tests**
+
+```ts
+// app/components/admin/__tests__/monthPills.test.ts
+import { describe, expect, it } from "vitest";
+import { addMonths, upcomingMonthPills } from "../monthPills";
+
+describe("addMonths", () => {
+  it("shifts across year boundaries", () => {
+    expect(addMonths("2026-09", 1)).toBe("2026-10");
+    expect(addMonths("2026-11", 2)).toBe("2027-01");
+    expect(addMonths("2026-12", 1)).toBe("2027-01");
+    expect(addMonths("2026-01", 0)).toBe("2026-01");
+  });
+});
+
+describe("upcomingMonthPills", () => {
+  it("always offers the current month and the next two, plus every later month with services", () => {
+    expect(upcomingMonthPills(["2026-08", "2026-09", "2027-02"], "2026-09")).toEqual([
+      "2026-09", "2026-10", "2026-11", "2027-02",
+    ]);
+  });
+  it("never offers a past month and never duplicates", () => {
+    expect(upcomingMonthPills(["2026-07", "2026-10", "2026-10"], "2026-09")).toEqual(["2026-09", "2026-10", "2026-11"]);
+  });
+  it("offers the window even when no month has services", () => {
+    expect(upcomingMonthPills([], "2026-12")).toEqual(["2026-12", "2027-01", "2027-02"]);
+  });
+});
+```
+
+Append to `MonthGenerator.stored.test.tsx`:
+
+```tsx
+describe("MonthGenerator — an empty month", () => {
+  it("opens with zero services and a composer bounded to that month", () => {
+    renderStored([role()], { initialMonth: "2026-10", openComposerInitially: true });
+    expect(screen.getAllByText(/servicio/).length).toBeGreaterThan(0);
+    const date = screen.getByLabelText("Fecha") as HTMLInputElement;
+    expect(date.min).toBe("2026-10-01");
+    expect(date.max).toBe("2026-10-31");
+  });
+});
+```
+
+(If `getByLabelText("Fecha")` is ambiguous in this harness, target the composer's field by its id, `#mg-create-date`, via `document.getElementById`.)
+
+- [ ] **Step 2: Run to verify it fails**
+
+Run: `npx vitest run app/components/admin/__tests__/monthPills.test.ts app/components/admin/__tests__/MonthGenerator.stored.test.tsx`
+Expected: `monthPills` FAILS (module missing). The stored case may already PASS — it pins that the editor works on an empty month, which this task relies on; if it fails, stop and report the failure instead of changing `MonthGenerator`.
+
+- [ ] **Step 3: Implement**
+
+```ts
+// app/components/admin/monthPills.ts
+//
+// The Servicios panel's upcoming month pills. Built from the months that hold a
+// service, PLUS the current month and the next `ahead` months even when empty —
+// so a month can be opened in the stored editor and given its first service
+// (the camp sets, spec 2026-09-22-camp-group-fill-design.md §12) without
+// generating the whole month with the solver first.
+
+/** "YYYY-MM" shifted by `n` months. */
+export function addMonths(ym: string, n: number): string {
+  const [y, m] = ym.split("-").map(Number);
+  const index = y * 12 + (m - 1) + n;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+}
+
+export function upcomingMonthPills(roleMonths: string[], currentYM: string, ahead = 2): string[] {
+  const out = new Set(roleMonths.filter((ym) => ym >= currentYM));
+  for (let i = 0; i <= ahead; i++) out.add(addMonths(currentYM, i));
+  return [...out].sort();
+}
+```
+
+In `ServicesPanel.tsx`:
+- import `{ upcomingMonthPills } from "./monthPills"`;
+- replace `const futureMonths = allMonths.filter(ym => ym >= currentYM);` with `const futureMonths = upcomingMonthPills(allMonths, currentYM);`;
+- change the month filter's condition `{canFilterMonths(sourceRecords) && allMonths.length > 0 && (` to `{canFilterMonths(sourceRecords) && (`;
+- directly after the `No hay servicios próximos.` paragraph, add:
+
+```tsx
+          {selectedMonths.size === 1 && visibleCards.length === 0 && (
+            <p className="font-body text-sm text-mono-500 text-center py-12">
+              No hay servicios en {monthLabel}. «+ Nuevo» crea el primero en este mes.
+            </p>
+          )}
+```
+
+- [ ] **Step 4: Run tests and gates**
+
+Run: `npx vitest run app/components/admin && npx tsc --noEmit && npx eslint app/components/admin`
+Expected: PASS, tsc clean, 0 eslint errors.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/components/admin/monthPills.ts app/components/admin/__tests__/monthPills.test.ts app/components/admin/ServicesPanel.tsx app/components/admin/__tests__/MonthGenerator.stored.test.tsx
+git commit -m "feat(admin): offer the next months as pills even when empty, so a month opens without generating it"
+```
+
+---
+
+### Task 5: Docs and full gates
 
 **Files:**
 - Modify: `docs/adr/0010-specials-fill-locally-not-in-the-solver.md` (the supersession note block at the top)

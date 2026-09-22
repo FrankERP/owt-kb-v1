@@ -200,3 +200,25 @@ Branch `claude/camp-group-fill`, stacked on `claude/campamento-sets-app-d5466d`
 (PR #90), so #90 can ship on its own. After release: mark who is NOT going unavailable for
 2–4 October, create the six sets, pin the fixed seats, «Llenar especiales…» with the six
 ticked, review, «Guardar», build the setlists, publish.
+
+## 12. Opening a month that has no services yet
+
+Added 2026-09-22 at Frank's request: he wants to create the camp sets in October without
+generating the month with the solver first.
+
+**Today:** «Editar mes» and «+ Nuevo» (`ServicesPanel`) open the stored editor on the one
+selected month pill, or on the current month when none or several are selected. The pills
+are built only from months that already hold a service (`allMonths` from `roles`), so an
+empty October has no pill and the editor falls back to September. The composer then
+bounds its date to September on purpose (`min`/`max` of the open month).
+
+**Change:** the upcoming pills always include the current month and the next two, empty or
+not — a pure `upcomingMonthPills(roleMonths, currentYM, ahead = 2)` in
+`app/components/admin/monthPills.ts`, with `addMonths(ym, n)` beside it. Selecting an
+empty month shows «No hay servicios en {mes}. «+ Nuevo» crea el primero en este mes.»,
+and «+ Nuevo» opens the stored editor on that month with the composer, exactly as for a
+month that already has services. Nothing is generated and the solver is not called.
+
+**Later, when October IS generated** with «📅 Generar mes»: the camp sets already hold
+Saturday 3, and the create flow does not see stored specials when it drafts weekends, so
+Saturday 3 must be left unticked there by hand. Sunday 4 generates normally.
