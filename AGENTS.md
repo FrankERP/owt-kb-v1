@@ -361,6 +361,15 @@ canvas paints with `themeColour`; the KEY is the hero dial's — `mixesForKey(mi
 never a picker of its own), `rehearsalMixes.ts` (`app/utils/` — neutral `groupMixes`/
 `preselectMix`/`waveformBars`/`mixTones`/`mixesForKey`; `SEAT_TO_FAMILY` pins app seats to
 abletonnl families),
+`fillSpecialGroup`/`orderGroup` (`app/components/admin/groupFill.ts` — the ONLY stored-mode
+filler: a ticked group of special services, Lead/BGV via `fillColumn` and instruments via
+`fillInstruments({ fillColumns })`, with `columns = group` and `savedWindow = []` so only
+load inside the group counts; empty seats only, nothing vacated, nothing written until
+«Guardar»),
+`upcomingMonthPills`/`addMonths` (`app/components/admin/monthPills.ts` — the Servicios panel's
+upcoming month pills: every month with services from the current one on, PLUS the current
+month and the next two even when empty, so a month opens in the stored editor without
+generating it),
 `BottomNavBar` (`app/components/BottomNavBar.tsx` — the phone tab bar's PRESENTATIONAL
 half, props only; `BottomNav` keeps the session, the pathname and the measurement. Anything
 that needs the bar without a session — a gallery fixture — hosts this one),

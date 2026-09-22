@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -188,13 +188,14 @@ function renderStored(roles: ServiceRole[], options: {
   storedCapabilities?: ComponentProps<typeof MonthGenerator>["storedCapabilities"];
   onCleared?: ComponentProps<typeof MonthGenerator>["onCleared"];
   focusRoleId?: string;
+  members?: ComponentProps<typeof MonthGenerator>["members"];
 } = {}) {
   const storedSource = source(roles);
   const onClose = vi.fn();
   const result = render(
     <MonthGenerator
       mode="stored"
-      members={members}
+      members={options.members ?? members}
       existingRoles={roles}
       allRoles={roles}
       initialMonth={options.initialMonth ?? "2026-02"}
@@ -1190,5 +1191,197 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
     expect(url).toBe("/api/admin/roles/role-a");
     expect(init).toMatchObject({ method: "DELETE" });
     expect(JSON.parse(String(init?.body))).toEqual({ rev: "rev-a" });
+  });
+});
+
+describe("MonthGenerator — «Llenar especiales…»", () => {
+  const voz = ["v1", "v2", "v3", "v4", "v5"].map((id) => ({ _id: id, member_name: id, memberType: ["voz"] }));
+  const emptySet = (id: string, time: string) => role({
+    _id: id, _rev: `rev-${id}`, _type: "special_role", date: "2026-02-14",
+    service_name: `Campamento ${time}`, time,
+    leads: [], bgvs: [], chorus: [], instruments: [], foh: [],
+  });
+
+  it("is disabled with its reason when the month has no special", () => {
+    renderStored([role()], { members: voz });
+    const trigger = screen.getByRole("button", { name: "Llenar especiales…" }) as HTMLButtonElement;
+    expect(trigger.disabled).toBe(true);
+    expect(trigger.title).toBe("Este mes no tiene servicios especiales.");
+    // A disabled house Button has `pointer-events: none`, so the title is never
+    // shown — the reason must also be a visible line.
+    expect(screen.getByText("Este mes no tiene servicios especiales.").tagName).toBe("P");
+  });
+
+  it("does not list a special whose admission is read-only", () => {
+    const roles = [emptySet("set-a", "09:00"), emptySet("set-ro", "12:30")];
+    const base = source(roles);
+    // A dangling reference on set-ro's integrity record yields
+    // `assignment_mismatch` for that role alone → `admission: "readOnly"`, while
+    // the inventory stays coherent (the knob `MonthGenerator.storedMove.test.tsx`
+    // turns for its read-only column).
+    const storedSource = {
+      ...base,
+      integrity: {
+        ...base.integrity,
+        targets: base.integrity.targets.map((target) => target.targetKey === "set-ro"
+          ? { ...target, records: target.records.map((record) => ({ ...record, danglingRefs: ["ghost"] })) }
+          : target),
+      },
+    };
+    render(
+      <MonthGenerator
+        mode="stored"
+        members={voz}
+        existingRoles={roles}
+        allRoles={roles}
+        initialMonth="2026-02"
+        storedSource={storedSource}
+        rules={readyRules()}
+        onClose={vi.fn()}
+        onCreated={vi.fn()}
+      />,
+    );
+    // The read-only set is still a column of the grid — it is excluded by
+    // admission, not by absence.
+    expect(screen.getAllByTestId("stored-column").map((node) => node.getAttribute("data-column-id")))
+      .toContain("set-ro");
+
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    const panel = screen.getByRole("region", { name: "Llenar especiales" });
+    const boxes = within(panel).getAllByRole("checkbox");
+    expect(boxes).toHaveLength(1);
+    expect(boxes[0]!.closest("label")!.textContent).toMatch(/· 09:00$/);
+    expect(within(panel).queryByText(/12:30/)).toBeNull();
+  });
+
+  it("lists the specials in set order — date, then time — whatever order they arrive in", () => {
+    // Id order (set-a, set-b) and arrival order both disagree with time order,
+    // so only the clock can put 09:00 first.
+    renderStored([emptySet("set-a", "12:30"), emptySet("set-b", "09:00")], { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    const panel = screen.getByRole("region", { name: "Llenar especiales" });
+    const labels = within(panel).getAllByRole("checkbox").map((box) => box.closest("label")!.textContent);
+    expect(labels).toHaveLength(2);
+    expect(labels[0]).toMatch(/· 09:00$/);
+    expect(labels[1]).toMatch(/· 12:30$/);
+  });
+
+  it("marks a published special's row with « · publicado», leaving an unpublished row without it", () => {
+    const roles = [
+      emptySet("set-a", "09:00"),
+      role({
+        _id: "set-b", _rev: "rev-set-b", _type: "special_role", date: "2026-02-14",
+        service_name: "Campamento 12:30", time: "12:30", published: true,
+        leads: [], bgvs: [], chorus: [], instruments: [], foh: [],
+      }),
+    ];
+    renderStored(roles, { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    const panel = screen.getByRole("region", { name: "Llenar especiales" });
+    const labels = within(panel).getAllByRole("checkbox").map((box) => box.closest("label")!.textContent);
+    expect(labels).toHaveLength(2);
+    expect(labels[0]).not.toMatch(/publicado/);
+    expect(labels[1]).toMatch(/publicado$/);
+  });
+
+  it("closes the picker when «+ Nuevo servicio» opens the composer, so it never outlives its trigger", () => {
+    renderStored([emptySet("set-a", "09:00")], { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    expect(screen.getByRole("region", { name: "Llenar especiales" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "+ Nuevo servicio" }));
+    expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
+  });
+
+  it("moves focus into the panel on open and back to the trigger on Cancelar and on Escape", () => {
+    renderStored([emptySet("set-a", "09:00")], { members: voz });
+    const trigger = screen.getByRole("button", { name: "Llenar especiales…" });
+    trigger.focus();
+
+    fireEvent.click(trigger);
+    const panel = screen.getByRole("region", { name: "Llenar especiales" });
+    expect(panel.contains(document.activeElement)).toBe(true);
+    fireEvent.click(within(panel).getByRole("button", { name: "Cancelar" }));
+    expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+
+    fireEvent.click(trigger);
+    expect(screen.getByRole("region", { name: "Llenar especiales" }).contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("lists the month's specials all ticked, fills their empty seats locally, and writes nothing until Guardar", () => {
+    const fetchMock = vi.fn(async () => response());
+    vi.stubGlobal("fetch", fetchMock);
+    renderStored([role(), emptySet("set-a", "09:00"), emptySet("set-b", "12:30")], { members: voz });
+
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    const panel = screen.getByRole("region", { name: "Llenar especiales" });
+    const boxes = within(panel).getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxes.map((b) => b.checked)).toEqual([true, true]);
+
+    fireEvent.click(within(panel).getByRole("button", { name: "Llenar vacíos" }));
+    expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
+    expect((screen.getByRole("button", { name: "Guardar 2 servicios" }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByText(/Revisa y guarda\./).textContent).toBe("Especiales llenados. Revisa y guarda.");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    // One set's Lead + BGV targets come to five voice seats (the five-member
+    // cast above fills them all — see the test before this one).
+    [4, "Quedó 1 lugar sin cubrir en los especiales. Revisa y guarda."],
+    [3, "Quedaron 2 lugares sin cubrir en los especiales. Revisa y guarda."],
+  ])("with %i voices, reports what stayed empty: %s", (count, notice) => {
+    renderStored([emptySet("set-a", "09:00")], { members: voz.slice(0, count) });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Llenar especiales" })).getByRole("button", { name: "Llenar vacíos" }));
+    expect(screen.getByText(notice)).toBeTruthy();
+  });
+
+  it("reports that nothing was empty when every ticked seat was already full", () => {
+    // Lead (target 2) and BGV (target 3) already hold all five voices as pins —
+    // the fill has nothing to place and nothing stays unfilled, so the notice
+    // must not claim it "filled" the special.
+    const fullSet = role({
+      _id: "set-full", _rev: "rev-set-full", _type: "special_role", date: "2026-02-14",
+      service_name: "Campamento lleno", time: "09:00",
+      leads: [member("v1", "lead-key-1"), member("v2", "lead-key-2")],
+      bgvs: [member("v3", "bgv-key-1"), member("v4", "bgv-key-2"), member("v5", "bgv-key-3")],
+      chorus: [], instruments: [], foh: [],
+    });
+    renderStored([fullSet], { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Llenar especiales" })).getByRole("button", { name: "Llenar vacíos" }));
+    expect(screen.getByText("No había lugares vacíos en los especiales marcados.")).toBeTruthy();
+  });
+
+  it("leaves an unticked special untouched", () => {
+    renderStored([emptySet("set-a", "09:00"), emptySet("set-b", "12:30")], { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    const panel = screen.getByRole("region", { name: "Llenar especiales" });
+    fireEvent.click(within(panel).getAllByRole("checkbox")[1]!);
+    fireEvent.click(within(panel).getByRole("button", { name: "Llenar vacíos" }));
+    expect(screen.getByRole("button", { name: "Guardar 1 servicio" })).toBeTruthy();
+  });
+
+  it("Escape closes the panel before it could close the editor", () => {
+    const { onClose } = renderStored([emptySet("set-a", "09:00")], { members: voz });
+    fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("region", { name: "Llenar especiales" })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe("MonthGenerator — an empty month", () => {
+  it("opens with zero services and a composer bounded to that month", () => {
+    renderStored([role()], { initialMonth: "2026-10", openComposerInitially: true });
+    expect(screen.getAllByText(/servicio/).length).toBeGreaterThan(0);
+    const date = screen.getByLabelText("Fecha") as HTMLInputElement;
+    expect(date.min).toBe("2026-10-01");
+    expect(date.max).toBe("2026-10-31");
   });
 });
