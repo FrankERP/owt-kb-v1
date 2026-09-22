@@ -113,7 +113,7 @@ re-roll earlier picks. To re-roll, close the planner without saving («Cerrar de
 ## 5. UI
 
 - **Button** «Llenar especiales…» in the stored-mode toolbar beside «+ Nuevo servicio».
-  Disabled, with its reason as `title`, while `storedMutationLocked`, while stored editing
+  Disabled, with its reason shown as a line under the toolbar (a disabled house `Button` shows no tooltip), while `storedMutationLocked`, while stored editing
   is blocked (`storedEditBlocked`, which already folds in the capability gate and
   `rulesBlocked`), while `solverConfig` is `null`, or when the month has no approved
   special column.

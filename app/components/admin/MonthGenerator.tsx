@@ -1770,9 +1770,11 @@ export default function MonthGenerator({
   }, [clearPending]);
   // «Llenar especiales…» (stored mode): an inline picker, the same pattern as
   // «Limpiar mes». The group is chosen per run and never persisted (spec
-  // 2026-09-22-camp-group-fill-design.md §3).
+  // 2026-09-22-camp-group-fill-design.md §3). The state holds the UNTICKED ids,
+  // so a special that appears while the panel is open arrives ticked like the
+  // rest and an id that disappears cannot linger as a phantom tick.
   const [groupFillOpen, setGroupFillOpen] = useState(false);
-  const [groupFillPicked, setGroupFillPicked] = useState<Set<string>>(new Set());
+  const [groupFillSkipped, setGroupFillSkipped] = useState<Set<string>>(new Set());
   const groupFillTriggerRef = useRef<HTMLButtonElement>(null);
   const groupFillRegionRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1976,6 +1978,7 @@ export default function MonthGenerator({
   const storedSpecialColumns = storedMode
     ? orderGroup(storedColumns.filter((c) => c.type === "special_role" && c.admission === "approved"))
     : [];
+  const groupFillTicked = storedSpecialColumns.filter((c) => !groupFillSkipped.has(c.columnId));
   const groupFillBlocked = storedMutationLocked
     ? "Espera a que termine la operación en curso."
     : storedEditBlocked
@@ -2517,8 +2520,9 @@ export default function MonthGenerator({
   }
 
   function openGroupFill() {
+    if (groupFillOpen) { groupFillRegionRef.current?.focus(); return; }
     if (groupFillBlocked) return;
-    setGroupFillPicked(new Set(storedSpecialColumns.map((c) => c.columnId)));
+    setGroupFillSkipped(new Set());
     setGroupFillOpen(true);
   }
 
@@ -2536,7 +2540,7 @@ export default function MonthGenerator({
   function handleGroupFill() {
     const config = solverConfig;
     if (!config || groupFillBlocked) return;
-    const group = storedSpecialColumns.filter((c) => groupFillPicked.has(c.columnId));
+    const group = groupFillTicked;
     if (group.length === 0) return;
     const out = fillSpecialGroup({ group, rows, cells, members, config });
     handleCellsChange(out.cells);
@@ -2545,7 +2549,9 @@ export default function MonthGenerator({
     const n = out.unfilled.length;
     setSaveNotice(n === 0
       ? "Especiales llenados. Revisa y guarda."
-      : `Quedaron ${n} lugar${n !== 1 ? "es" : ""} sin cubrir en los especiales. Revisa y guarda.`);
+      : n === 1
+        ? "Quedó 1 lugar sin cubrir en los especiales. Revisa y guarda."
+        : `Quedaron ${n} lugares sin cubrir en los especiales. Revisa y guarda.`);
     closeGroupFill();
   }
 
@@ -3559,26 +3565,38 @@ export default function MonthGenerator({
       {storedMode && storedInventory.coherent && (
         <div className="rounded-lg border border-accent/15 bg-accent/5 px-3 py-3">
           {!composerOpen ? (
-            <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setComposerOpen(true)}
-              disabled={storedMutationLocked || storedHasUnresolvedWork || !!storedCreateBlocked}
-              title={storedCreateBlocked ?? undefined}
-              className="min-h-[44px] rounded-lg border border-accent/25 px-4 font-label text-xs uppercase tracking-widest text-accent disabled:opacity-50"
-            >
-              + Nuevo servicio
-            </button>
-              <Button
-                ref={groupFillTriggerRef}
-                variant="secondary"
-                size="lg"
-                onClick={openGroupFill}
-                disabled={!!groupFillBlocked}
-                title={groupFillBlocked ?? undefined}
-              >
-                Llenar especiales…
-              </Button>
+            <div className="flex flex-col gap-1">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setComposerOpen(true)}
+                  disabled={storedMutationLocked || storedHasUnresolvedWork || !!storedCreateBlocked}
+                  title={storedCreateBlocked ?? undefined}
+                  className="min-h-[44px] rounded-lg border border-accent/25 px-4 font-label text-xs uppercase tracking-widest text-accent disabled:opacity-50"
+                >
+                  + Nuevo servicio
+                </button>
+                <Button
+                  ref={groupFillTriggerRef}
+                  variant="secondary"
+                  size="lg"
+                  onClick={openGroupFill}
+                  disabled={!!groupFillBlocked}
+                  title={groupFillBlocked ?? undefined}
+                >
+                  Llenar especiales…
+                </Button>
+              </div>
+              {/*
+                The reason is a LINE, not only a `title`: the house `Button`
+                carries `disabled:pointer-events-none`, so a disabled one never
+                shows its tooltip (the same trap `ServicesPanel`'s toolbar
+                documents). `storedEditBlocked` is skipped here because the page
+                already prints it just below this box.
+              */}
+              {groupFillBlocked && groupFillBlocked !== storedEditBlocked && (
+                <p className="font-label text-[11px] text-ink-dim">{groupFillBlocked}</p>
+              )}
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
@@ -3628,6 +3646,42 @@ export default function MonthGenerator({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {storedMode && groupFillOpen && (
+        <div ref={groupFillRegionRef} tabIndex={-1} role="region" aria-label="Llenar especiales" className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2.5 space-y-2">
+          <p className="font-body text-xs text-mono-300">
+            Llena los lugares vacíos de Lead, BGV e instrumentos en los especiales marcados.
+            {" "}Solo cuenta la carga dentro de este grupo; los fines de semana no pesan.
+            {" "}Lo que ya está asignado no se mueve y nada se guarda hasta «Guardar».
+          </p>
+          {storedSpecialColumns.map((column) => (
+            <Checkbox
+              key={column.columnId}
+              align="start"
+              className="w-full font-body text-xs text-mono-300"
+              checked={!groupFillSkipped.has(column.columnId)}
+              onChange={(event) => {
+                const checked = event.target.checked;
+                setGroupFillSkipped((prev) => {
+                  const next = new Set(prev);
+                  if (checked) next.delete(column.columnId); else next.add(column.columnId);
+                  return next;
+                });
+              }}
+            >
+              <span>{fmtDate(column.date)} · {column.serviceName}{column.time ? ` · ${column.time}` : ""}</span>
+            </Checkbox>
+          ))}
+          <div className="flex gap-2">
+            <Button variant="primary" size="lg" onClick={handleGroupFill} disabled={groupFillTicked.length === 0 || !!groupFillBlocked}>
+              Llenar vacíos
+            </Button>
+            <Button variant="secondary" size="lg" onClick={closeGroupFill}>
+              Cancelar
+            </Button>
+          </div>
         </div>
       )}
 
@@ -3903,42 +3957,6 @@ export default function MonthGenerator({
         <p className="rounded-lg bg-negative-strong/10 px-3 py-2 font-body text-xs text-negative-muted">
           Corrige los datos inválidos antes de guardar: {invalidStoredColumns.map((column) => column.date).join(", ")}.
         </p>
-      )}
-
-      {storedMode && groupFillOpen && (
-        <div ref={groupFillRegionRef} tabIndex={-1} role="region" aria-label="Llenar especiales" className="rounded-lg border border-accent/20 bg-accent/5 px-3 py-2.5 space-y-2">
-          <p className="font-body text-xs text-mono-300">
-            Llena los lugares vacíos de Lead, BGV e instrumentos en los especiales marcados.
-            {" "}Solo cuenta la carga dentro de este grupo; los fines de semana no pesan.
-            {" "}Lo que ya está asignado no se mueve y nada se guarda hasta «Guardar».
-          </p>
-          {storedSpecialColumns.map((column) => (
-            <Checkbox
-              key={column.columnId}
-              align="start"
-              className="font-body text-xs text-mono-300"
-              checked={groupFillPicked.has(column.columnId)}
-              onChange={(event) => {
-                const checked = event.target.checked;
-                setGroupFillPicked((prev) => {
-                  const next = new Set(prev);
-                  if (checked) next.add(column.columnId); else next.delete(column.columnId);
-                  return next;
-                });
-              }}
-            >
-              <span>{fmtDate(column.date)} · {column.serviceName}{column.time ? ` · ${column.time}` : ""}</span>
-            </Checkbox>
-          ))}
-          <div className="flex gap-2">
-            <Button variant="primary" size="lg" onClick={handleGroupFill} disabled={groupFillPicked.size === 0}>
-              Llenar vacíos
-            </Button>
-            <Button variant="secondary" size="lg" onClick={closeGroupFill}>
-              Cancelar
-            </Button>
-          </div>
-        </div>
       )}
 
       {/*
