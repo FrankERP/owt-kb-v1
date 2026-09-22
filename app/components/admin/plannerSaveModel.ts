@@ -1,4 +1,5 @@
 import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel";
+import { isServiceTime } from "@/app/utils/serviceTime";
 import type { GridCell } from "./plannerModel";
 import type { StoredGridColumn, StoredGridRow } from "./storedRoleReadModel";
 
@@ -6,6 +7,7 @@ export interface RoleSemanticSnapshot {
   type: StoredGridColumn["type"];
   date: string;
   serviceName: string | null;
+  time: string | null;
   leads: string[];
   bgvs: string[];
   chorus: string[];
@@ -19,6 +21,7 @@ export interface StoredRolePatchBody {
   _type: StoredGridColumn["type"];
   date: string;
   service_name?: string;
+  time?: string;
   leads: string[];
   bgvs: string[];
   chorus: string[];
@@ -78,6 +81,9 @@ export function serializeStoredColumn(
   if (column.type === "special_role" && !normalizeServiceName(column.serviceName)) {
     reasons.add("invalid_special_name");
   }
+  if (column.type === "special_role" && column.time != null && column.time !== "" && !isServiceTime(column.time)) {
+    reasons.add("invalid_special_time");
+  }
 
   const memberIds = (rowId: string): string[] => {
     const occupants = byRow.get(rowId)?.occupants ?? [];
@@ -119,6 +125,7 @@ export function serializeStoredColumn(
     _type: column.type,
     date: column.date,
     ...(column.type === "special_role" ? { service_name: normalizeServiceName(column.serviceName) } : {}),
+    ...(column.type === "special_role" && isServiceTime(column.time) ? { time: column.time } : {}),
     leads,
     bgvs,
     chorus,
@@ -133,6 +140,7 @@ export function semanticSnapshot(body: StoredRolePatchBody): RoleSemanticSnapsho
     type: body._type,
     date: body.date,
     serviceName: body._type === "special_role" ? normalizeServiceName(body.service_name) : null,
+    time: body._type === "special_role" && isServiceTime(body.time) ? body.time : null,
     leads: sortedStrings(body.leads),
     bgvs: sortedStrings(body.bgvs),
     chorus: sortedStrings(body.chorus),

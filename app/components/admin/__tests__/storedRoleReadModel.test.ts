@@ -230,3 +230,26 @@ describe("joinStoredRoleInventory", () => {
       .toBe("lead-2");
   });
 });
+
+describe("special-service time", () => {
+  const specialTarget = (): RoleTarget => target({
+    targetKey: "special_role:special-1",
+    type: "special_role",
+    canonicalIds: ["special-1"],
+    records: [{ ...target().records[0]!, id: "special-1", rev: "rev-1", type: "special_role" }],
+    expectsLock: false,
+    lock: null,
+  });
+
+  it("translateStoredRole carries a special's time onto its column", () => {
+    const special = role({ _id: "special-1", _type: "special_role", service_name: "Campamento · Alabanza", time: "18:45" });
+    const joined = joinStoredRoleInventory([special], summary([specialTarget()]));
+    expect(joined.coherent).toBe(true);
+    expect(translateStoredRole(joined.roles[0]!)?.column).toMatchObject({ serviceName: "Campamento · Alabanza", time: "18:45" });
+  });
+
+  it("parseRole refuses a malformed time on a special", () => {
+    const special = role({ _id: "special-1", _type: "special_role", service_name: "X", time: "9:00" });
+    expect(joinStoredRoleInventory([special], summary([specialTarget()])).coherent).toBe(false);
+  });
+});
