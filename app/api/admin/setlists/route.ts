@@ -39,7 +39,7 @@ import {
 } from "@/app/utils/serviceReadQueries";
 import { buildSetlistRead, type CanonicalSetlistRecord } from "@/app/utils/setlistReadContract";
 import { isWorshipNight } from "@/app/utils/serviceFormat";
-import { leadSeatIds, validateSongLeads } from "@/app/utils/songLeads";
+import { leadRosterOf, leadSeatIds, validateSongLeads } from "@/app/utils/songLeads";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
@@ -62,6 +62,8 @@ interface EditorSetlistDoc {
   date?: string;
   hasSongs?: boolean;
   songs?: unknown;
+  format?: string;
+  leadRoster?: unknown;
 }
 
 function draftIdsOf(rows: unknown): string[] {
@@ -222,7 +224,14 @@ async function getHandler(req: NextRequest) {
       }
     }
 
-    return NextResponse.json(buildSetlistRead(records, draftIds, recentSongs));
+    const read = buildSetlistRead(records, draftIds, recentSongs);
+    // A special also tells the editor whether it is a worship night and who is
+    // in its Lead — the only people a song may name as leader (spec §6).
+    return NextResponse.json(
+      type === "special" && specialRole
+        ? { ...read, format: specialRole.format ?? null, leadRoster: leadRosterOf(specialRole.leadRoster) }
+        : read,
+    );
   } catch (err) {
     console.error("[admin/setlists] canonical read failed:", err);
     return NextResponse.json({ error: "Setlist read failed" }, { status: 500 });

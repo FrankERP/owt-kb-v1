@@ -113,6 +113,7 @@ export const EDITOR_SETLIST_SONGS_PROJECTION = `"hasSongs": defined(songs), song
   _key,
   play_key,
   medley_tag,
+  "leadIds": leads[]._ref,
   "songRef": song._ref,
   "song": song-> ${EDITOR_SONG_PROJECTION}
 }`;
@@ -128,11 +129,12 @@ export function editorWeekendSetlistQuery(setlistType: string, week: string): Bo
 /**
  * Canonical `special_role` group for one role id. A special service stores its
  * songs on the role document itself, so this both validates the request identity
- * (type + `date`) and carries the setlist content.
+ * (type + `date`) and carries the setlist content — plus its `format` and the
+ * members in its `Lead`, the only people a worship night's song may name as leader.
  */
 export function editorSpecialRoleQuery(roleId: string): BoundQuery {
   return {
-    query: `*[_type == "special_role" && _id == $id] { _id, _rev, _type, date, ${EDITOR_SETLIST_SONGS_PROJECTION} }`,
+    query: `*[_type == "special_role" && _id == $id] { _id, _rev, _type, date, format, "leadRoster": Lead[]->{ _id, member_name, alias }, ${EDITOR_SETLIST_SONGS_PROJECTION} }`,
     params: { id: roleId },
   };
 }

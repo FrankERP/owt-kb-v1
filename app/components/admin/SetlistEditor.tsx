@@ -6,21 +6,43 @@ import { normalizeMedleyTags } from "../../utils/medley";
 import { ChainLinkIcon } from "../ChainLinkIcon";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import Select from "../ui/Select";
 import { canEditSetlistResponse, SETLIST_READ_ISSUE_COPY } from "../../utils/setlistReadContract";
 import { serviceDayOffset, serviceTodayIso } from "./serviceReadiness";
 import { MUTATION_TIMEOUT_MS } from "./serviceMutationErrors";
 import { writeErrorMessage } from "@/app/utils/writeError";
+import { WORSHIP_NIGHT_FORMAT } from "@/app/utils/serviceFormat";
+import { unassignedLeads } from "@/app/utils/songLeads";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface SongResult   { _id: string; title: string; author: string; key: string; slug: string; }
-export interface SetlistEntry { localId: string; play_key: string; medley_tag?: string; song: SongResult; }
+export interface SetlistEntry { localId: string; play_key: string; medley_tag?: string; song: SongResult; leadIds: string[]; }
 
 /** A1's observed state, carried UNCHANGED from the GET into the PUT (A2 §5). */
 type ObservedTarget = { state: "none" } | { state: "single"; id: string; rev: string };
 
 const SAVE_CONFLICT_COPY =
   "Alguien más cambió este setlist mientras lo editabas. Recarga para ver el estado actual antes de guardar.";
+
+const LEAD_CHANGED_COPY = "Cambió quién está en Lead mientras editabas. Recarga el setlist.";
+
+/**
+ * A 400 naming `songs[i].leadIds`: the PUT refused a leader who is not in the
+ * special's Lead as the server loaded it. On a set with saved songs a Lead change
+ * moves the role's `_rev` and arrives as the 409 instead; a worship night with no
+ * saved songs yet has no revision to go stale, so it arrives here. Either way the
+ * fix is the same fresh read. [post-approval, un-reviewed]
+ */
+async function refusesLeaders(res: Response): Promise<boolean> {
+  try {
+    const body = (await res.json()) as { details?: { issues?: unknown } } | null;
+    const issues = body?.details?.issues;
+    return Array.isArray(issues) && issues.some((i) => typeof i === "string" && /^songs\[\d+\]\.leadIds$/.test(i));
+  } catch {
+    return false;
+  }
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -131,6 +153,9 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
   const [createOpen, setCreateOpen]     = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
   const [createError, setCreateError]   = useState<string | null>(null);
+  // A worship night's songs name their leaders from the block's Lead (spec §6).
+  const [worshipNight, setWorshipNight] = useState(false);
+  const [roster, setRoster]             = useState<{ id: string; name: string }[]>([]);
   const dragSrc     = useRef<number | null>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -165,11 +190,21 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
           return;
         }
         const data = decision.read as unknown as {
-          songs: Array<{ play_key: string; medley_tag?: string; song: SongResult }>;
+          songs: Array<{ play_key: string; medley_tag?: string; song: SongResult; leadIds?: unknown }>;
           recentSongs: Record<string, string>;
           observed: ObservedTarget;
+          format?: unknown;
+          leadRoster?: unknown;
         };
-        setEntries(data.songs.map(s => ({ localId: uid2(), play_key: s.play_key, medley_tag: s.medley_tag, song: s.song })));
+        setWorshipNight(data.format === WORSHIP_NIGHT_FORMAT);
+        setRoster(Array.isArray(data.leadRoster) ? data.leadRoster : []);
+        setEntries(data.songs.map(s => ({
+          localId: uid2(),
+          play_key: s.play_key,
+          medley_tag: s.medley_tag,
+          song: s.song,
+          leadIds: Array.isArray(s.leadIds) ? s.leadIds.filter((id): id is string => typeof id === "string") : [],
+        })));
         setRecentSongs(data.recentSongs);
         setObserved(data.observed);
         if (tagsRes.ok) setAllTags(await tagsRes.json());
@@ -193,8 +228,18 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
   }, [searchQ]);
 
   function addSong(song: SongResult) {
-    setEntries(prev => [...prev, { localId: uid2(), play_key: addKey, song }]);
+    setEntries(prev => [...prev, { localId: uid2(), play_key: addKey, song, leadIds: [] }]);
     setSearchQ(""); setSearchResults([]); setAddKey("");
+  }
+
+  // «Dirige» (slot 0) and «y» (slot 1). Clearing the first clears both; a first
+  // pick drops the same person from the second, so a row never names one twice.
+  function setLead(localId: string, slot: 0 | 1, id: string) {
+    setEntries(prev => prev.map(x => {
+      if (x.localId !== localId) return x;
+      if (slot === 0) return { ...x, leadIds: id ? [id, ...x.leadIds.slice(1).filter(other => other !== id)] : [] };
+      return { ...x, leadIds: id ? [x.leadIds[0], id] : x.leadIds.slice(0, 1) };
+    }));
   }
 
   function remove(localId: string) {
@@ -348,7 +393,12 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
           // A1's observed state, unchanged: the server rejects the save unless the
           // target is still exactly what this editor loaded.
           observed,
-          songs: entries.map(e => ({ songId: e.song._id, play_key: e.play_key, medley_tag: e.medley_tag })),
+          songs: entries.map(e => ({
+            songId: e.song._id,
+            play_key: e.play_key,
+            medley_tag: e.medley_tag,
+            ...(worshipNight ? { leadIds: e.leadIds } : {}),
+          })),
         }),
       });
       // Only close on success — otherwise keep the editor open so the admin's
@@ -356,6 +406,11 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
       if (res.status === 409) {
         setSaveConflict(true);
         setSaveError(SAVE_CONFLICT_COPY);
+        return;
+      }
+      if (res.status === 400 && await refusesLeaders(res)) {
+        setSaveConflict(true);
+        setSaveError(LEAD_CHANGED_COPY);
         return;
       }
       if (!res.ok) { setSaveError("No se pudo guardar el setlist. Intenta de nuevo."); return; }
@@ -368,6 +423,14 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
       setSaving(false);
     }
   }
+
+  const rosterIds = new Set(roster.map(m => m.id));
+  const staleRows = worshipNight ? entries.filter(e => e.leadIds.some(id => !rosterIds.has(id))) : [];
+  // A stale leader keeps an option of its own. Without one React selects «—» for
+  // a value no option matches, so the picker would show nobody and choosing «—»
+  // would change nothing — the admin could not clear the mark.
+  const goneFromLead = (id: string | undefined): id is string => !!id && !rosterIds.has(id);
+  const waiting = worshipNight ? unassignedLeads(roster, entries) : [];
 
   if (loading) {
     return <div className="flex justify-center py-8"><span className="font-label text-xs uppercase tracking-widest text-mono-500 animate-pulse">Cargando...</span></div>;
@@ -447,6 +510,40 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
                       {e.song.key && <span className="font-label text-[10px] text-mono-600">· {e.song.key}</span>}
                       {lastUsed && <RepeatBadge lastUsed={lastUsed} />}
                     </div>
+                    {worshipNight && (
+                      <div className="mt-1.5 flex items-end gap-2">
+                        <Select
+                          id={`dirige-${e.localId}`}
+                          label="Dirige"
+                          aria-label={`Dirige ${e.song.title}`}
+                          size="sm"
+                          className="min-w-0 flex-1"
+                          value={e.leadIds[0] ?? ""}
+                          onChange={ev => setLead(e.localId, 0, ev.target.value)}
+                        >
+                          <option value="">—</option>
+                          {goneFromLead(e.leadIds[0]) && <option value={e.leadIds[0]} disabled>Ya no está en Lead</option>}
+                          {roster.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </Select>
+                        <Select
+                          id={`dirige-y-${e.localId}`}
+                          label="y"
+                          aria-label={`Y también dirige ${e.song.title}`}
+                          size="sm"
+                          className="min-w-0 flex-1"
+                          disabled={!e.leadIds[0]}
+                          value={e.leadIds[1] ?? ""}
+                          onChange={ev => setLead(e.localId, 1, ev.target.value)}
+                        >
+                          <option value="">—</option>
+                          {goneFromLead(e.leadIds[1]) && <option value={e.leadIds[1]} disabled>Ya no está en Lead</option>}
+                          {roster.filter(m => m.id !== e.leadIds[0]).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                        </Select>
+                      </div>
+                    )}
+                    {worshipNight && staleRows.includes(e) && (
+                      <p className="font-body text-[11px] text-warning-strong">Dirige alguien que ya no está en Lead</p>
+                    )}
                   </div>
                   <input
                     className="w-14 px-1.5 py-1 rounded border border-edge-control bg-transparent font-body text-xs text-center focus:outline-none focus:border-accent"
@@ -477,6 +574,9 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
             );
           })}
         </div>
+        {worshipNight && waiting.length > 0 && (
+          <p className="mt-2 font-body text-xs text-mono-400">Aún no dirigen: {waiting.map(m => m.name).join(", ")}.</p>
+        )}
       </div>
 
       {/* Search & add */}
@@ -539,6 +639,9 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
       </div>
 
       {/* Footer */}
+      {staleRows.length > 0 && (
+        <p className="font-body text-xs text-warning-strong">Corrige quién dirige las canciones marcadas.</p>
+      )}
       {saveError && (
         <p className="text-negative-fg font-label text-xs uppercase tracking-widest text-center -mb-1">{saveError}</p>
       )}
@@ -557,7 +660,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
         <button type="button" onClick={onClose} disabled={saving} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">
           Cancelar
         </button>
-        <button type="button" onClick={save} disabled={saving || saveConflict || !observed} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+        <button type="button" onClick={save} disabled={saving || saveConflict || !observed || staleRows.length > 0} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
           {saving ? "Guardando..." : "Guardar setlist"}
         </button>
       </div>
