@@ -231,6 +231,22 @@ describe("service-integrity route behavior", () => {
     expect(body.targets[0].contentState).toBe("ready");
   });
 
+  it("setlists route reports no target for a special whose songs projected as null", async () => {
+    // Regression 2026-09-22: five empty camp sets each showed «Setlist con datos
+    // inválidos», because GROQ projects an absent `songs` as `null` and the
+    // route kept every special whose `songs` was merely `!== undefined`.
+    requireActiveManagerMock.mockResolvedValue({ user: { role: "admin" } });
+    const emptySet = { _id: "camp-1", _rev: "c1", _type: "special_role", date: "2026-10-03", songs: null };
+    operationalFetch
+      .mockResolvedValueOnce([]) // canonicalSetlistsQuery
+      .mockResolvedValueOnce([emptySet]); // canonicalRolesQuery (special roles)
+    rawFetch.mockResolvedValueOnce([]);
+    const res = await setlistsGET();
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.targets).toEqual([]);
+  });
+
   it("proposals route resolves service_ref to a canonical role and validates", async () => {
     requireActiveManagerMock.mockResolvedValue({ user: { role: "admin" } });
     const role = {
