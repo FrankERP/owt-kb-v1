@@ -1,7 +1,7 @@
-# The three gates CLAUDE.md names, run by a machine instead of asserted by a
-# human. Before this existed, "gates green" was a claim in a chat log: `main`
-# auto-deploys to production, so nothing mechanical stood between a red test
-# suite and the team's app. This is that thing.
+# The four gates — the three CLAUDE.md names plus the solver's Python suite — run
+# by a machine instead of asserted by a human. Before this existed, "gates green"
+# was a claim in a chat log: `main` auto-deploys to production, so nothing
+# mechanical stood between a red test suite and the team's app. This is that thing.
 #
 # Deliberately NOT here: Playwright e2e (needs live Sanity credentials and the
 # real dataset — see e2e/service-readiness/) and `next build` (Vercel already
