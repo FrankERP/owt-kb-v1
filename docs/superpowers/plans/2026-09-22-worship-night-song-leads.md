@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-22-worship-night-song-leads-design.md` (read it first; §13 lists the amendments this plan makes).
 
+**Review:** the critical slice (Tasks 2, 3, 4, 8) was approved by two sequential fresh reviewers on SHA-256 `cca34f00…6094` — see `2026-09-22-worship-night-song-leads-review-log.md`. Every passage marked **[post-approval, un-reviewed]** was added after that approval and is covered only by the implementation's code review.
+
 ## Global Constraints
 
 - **Spanish UI**, copy verbatim: «Noche de alabanza», «Dirige», «y», «—», «Dirige: A» / «Dirige: A y B», «Aún no dirigen: A, B.», «Dirige alguien que ya no está en Lead», «Corrige quién dirige las canciones marcadas.», «Diriges: Canción A, Canción B», email «— dirige A y B».
@@ -231,7 +233,8 @@ git commit -m "feat(special): a create-time format marks a special as «Noche de
   - `carryOverSongLeads<T extends { songId: string }>(rows: readonly T[], liveSongs: unknown, leadIds: ReadonlySet<string>): (T & { leadIds: string[] })[]`
   - `unassignedLeads<M extends { id: string }>(roster: readonly M[], rows: readonly { leadIds: readonly string[] }[]): M[]`
   - `leadRosterOf(value: unknown): { id: string; name: string }[]` — from a projected `Lead[]->{ _id, member_name, alias }`, name = alias || member_name, unresolved entries dropped.
-  - `formatLeadNames(leads: readonly { member_name?: string; alias?: string }[] | null | undefined): string` — «A» or «A y B» (alias preferred), `""` when none.
+  - `formatLeadNames(leads: readonly ({ member_name?: string; alias?: string } | null)[] | null | undefined): string` — «A» or «A y B» (alias preferred), `""` when none; nullish entries (a dereference that did not resolve) are skipped. **[post-approval, un-reviewed]**
+  - `sortedLeadIds(value: unknown): string[]` — the ONE normalizer for snapshot leader ids: a list of non-empty strings, de-duplicated and sorted; anything else `[]`. Used by both `songRowsFrom` and `normalizeSnapshotRows` (Task 8). **[post-approval, un-reviewed]**
   - `SONGS_FRAGMENT` projects `leads[]{ _key, _type, _ref }` on every song item.
 
 - [ ] **Step 1: Write the failing tests**
@@ -246,6 +249,7 @@ import {
   leadRosterOf,
   leadSeatIds,
   songItemLeadIds,
+  sortedLeadIds,
   unassignedLeads,
   validateSongLeads,
 } from "@/app/utils/songLeads";
@@ -311,14 +315,21 @@ describe("editor and display helpers", () => {
     expect(unassignedLeads(roster, [{ leadIds: ["m2"] }, { leadIds: [] }])).toEqual([roster[0], roster[2]]);
   });
   it("builds the roster from a projected Lead, alias first, unresolved dropped", () => {
-    expect(leadRosterOf([{ _id: "m1", member_name: "Ana López", alias: "Ani" }, null, { _id: "m2", member_name: "Beto" }, { member_name: "sin id" }]))
-      .toEqual([{ id: "m1", name: "Ani" }, { id: "m2", name: "Beto" }]);
+    expect(leadRosterOf([{ _id: "m1", member_name: "Ana López", alias: "Ani" }, null, { _id: "m2", member_name: "Beto" }, { member_name: "sin id" }, { _id: "m3" }]))
+      .toEqual([{ id: "m1", name: "Ani" }, { id: "m2", name: "Beto" }, { id: "m3", name: "Sin nombre" }]);
     expect(leadRosterOf(undefined)).toEqual([]);
   });
   it("formats one or two names", () => {
     expect(formatLeadNames([{ member_name: "Ana", alias: "Ani" }])).toBe("Ani");
     expect(formatLeadNames([{ member_name: "Ana" }, { member_name: "Beto" }])).toBe("Ana y Beto");
     expect(formatLeadNames(null)).toBe("");
+    // [post-approval, un-reviewed] An unresolved dereference projects as null.
+    expect(formatLeadNames([null, { member_name: "Beto" }])).toBe("Beto");
+  });
+  it("normalizes snapshot leader ids in one place [post-approval, un-reviewed]", () => {
+    expect(sortedLeadIds(["m2", "m1", "m2", "", 3])).toEqual(["m1", "m2"]);
+    expect(sortedLeadIds(null)).toEqual([]);
+    expect(sortedLeadIds("m1")).toEqual([]);
   });
 });
 ```
@@ -421,21 +432,33 @@ export function leadRosterOf(value: unknown): { id: string; name: string }[] {
   const out: { id: string; name: string }[] = [];
   for (const entry of value) {
     if (!isObj(entry) || !nonEmptyString(entry._id)) continue;
-    const name = nonEmptyString(entry.alias) ? entry.alias : nonEmptyString(entry.member_name) ? entry.member_name : "";
-    if (name && !out.some((m) => m.id === entry._id)) out.push({ id: entry._id, name });
+    // A Lead member with neither alias nor name is still a valid leader — the
+    // server accepts them — so they stay pickable. [post-approval, un-reviewed]
+    const name = nonEmptyString(entry.alias) ? entry.alias : nonEmptyString(entry.member_name) ? entry.member_name : "Sin nombre";
+    if (!out.some((m) => m.id === entry._id)) out.push({ id: entry._id, name });
   }
   return out;
 }
 
 /** «A» or «A y B» for a song's leaders (alias preferred); "" when none. */
 export function formatLeadNames(
-  leads: readonly { member_name?: string; alias?: string }[] | null | undefined,
+  leads: readonly ({ member_name?: string; alias?: string } | null)[] | null | undefined,
 ): string {
   return (leads ?? [])
-    .map((m) => (m.alias || m.member_name || "").trim())
+    .map((m) => (m ? m.alias || m.member_name || "" : "").trim())
     .filter(Boolean)
     .slice(0, SONG_LEADS_MAX)
     .join(" y ");
+}
+
+/**
+ * The ONE normalizer for leader ids in a notification snapshot — queue side
+ * (`songRowsFrom`) and flush side (`normalizeSnapshotRows`) must agree byte for
+ * byte, so neither re-implements it. [post-approval, un-reviewed]
+ */
+export function sortedLeadIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((id): id is string => typeof id === "string" && id.length > 0))].sort();
 }
 ```
 
@@ -518,7 +541,7 @@ describe("song leaders on rows", () => {
 });
 ```
 
-Update every existing `toEqual` in this file and in `proposalWriteRequest.test.ts` that spells a parsed `NormalizedSongRow` literal (`{ songId, playKey, medleyTag }`) to include `leadIds: []`.
+Update every existing `toEqual` in this file and in `proposalWriteRequest.test.ts` that spells a parsed `NormalizedSongRow` literal (`{ songId, playKey, medleyTag }`) to include `leadIds: []`, and add `leadIds: []` to every existing row literal passed to `buildSetlistSongDocs`/`buildProposalSongDocs` in `setlistWriteRequest.test.ts` (three call sites today, in the «stored song documents» and «setlist target identity» blocks) — `tsc` flags them once the field is required. **[post-approval, un-reviewed]**
 
 Append to `app/utils/__tests__/proposalWriteRequest.test.ts`, inside `describe("parseProposalSaveRequest")`, a case that builds the file's valid base body with `songs: [{ songId: "song-1", play_key: "G", leadIds: ["mem-1"] }]` and asserts `{ ok: false, issues: ["songs[0].leadIds"] }`.
 
@@ -926,6 +949,7 @@ In `SetlistEditor.tsx`:
   - when the row is stale, a line `<p className="font-body text-[11px] text-warning-strong">Dirige alguien que ya no está en Lead</p>`.
 - Under the list, when `worshipNight && waiting.length`: `<p className="font-body text-xs text-mono-400">Aún no dirigen: {waiting.map((m) => m.name).join(", ")}.</p>`
 - Save: disabled when `staleRows.length > 0`, with `<p className="font-body text-xs text-warning-strong">Corrige quién dirige las canciones marcadas.</p>`; the body's `songs` map adds `...(worshipNight ? { leadIds: e.leadIds } : {})`.
+- **[post-approval, un-reviewed]** A 400 whose `details.issues` contains any `songs[…].leadIds` means Lead changed while the editor was open on a set with no saved songs yet (that case has no revision to go stale). Show «Cambió quién está en Lead mientras editabas. Recarga el setlist.» with the editor's existing reload action, instead of the generic save error. Test it in `SetlistEditor.test.tsx`.
 
 - [ ] **Step 5: Run tests + gates**
 
@@ -1050,7 +1074,7 @@ export interface OutboxSongRow {
 }
 ```
 
-In `songRowsFrom`, the item map adds `leads: songItemLeadIds(s).slice().sort()`, and both `rows.push(...)` calls add `...(song.leads.length ? { leads: song.leads } : {})`.
+In `songRowsFrom`, the item map adds `leads: sortedLeadIds(songItemLeadIds(s))`, and both `rows.push(...)` calls add `...(song.leads.length ? { leads: song.leads } : {})`. **[post-approval, un-reviewed: `sortedLeadIds` replaces the inline sort]**
 
 `outboxClassify.ts`:
 
@@ -1069,9 +1093,7 @@ function normalizeSnapshotRows(rows: unknown): OutboxSongRow[] {
   return rows.filter(isObj).map((r, i) => {
     // Sorted and de-duplicated exactly like `songRowsFrom`, and ABSENT when
     // empty, so a snapshot stored before leaders existed compares unchanged.
-    const leads = Array.isArray(r.leads)
-      ? [...new Set(r.leads.filter((id): id is string => typeof id === "string" && id.length > 0))].sort()
-      : [];
+    const leads = sortedLeadIds(r.leads); // [post-approval, un-reviewed: shared normalizer]
     return {
       _key: typeof r._key === "string" ? r._key : `s${i}`,
       ref: typeof r.ref === "string" ? r.ref : "",
@@ -1085,6 +1107,8 @@ function normalizeSnapshotRows(rows: unknown): OutboxSongRow[] {
 
 `notificationOutbox.ts` `outboxSongRow` fields gain `{ name: "leads", title: "Leads", type: "array", of: [{ type: "string" }], description: "Worship-night song leaders (member ids, sorted). Absent when none." }`.
 
+**[post-approval, un-reviewed]** `app/utils/__tests__/notificationOutboxSchema.test.ts` pins the row's fields as exactly `["group", "key", "ref"]`. Update that expectation deliberately to `["group", "key", "leads", "ref"]` and keep its comment's intent (a raw `medley_tag` field must still fail it).
+
 - [ ] **Step 4: Implement the email**
 
 - `setlistDiff.ts`: `TableRow` gains `leads?: string[];`; the `after.map` row adds `...(r.leads?.length ? { leads: r.leads } : {})`; departed (`gone`) rows carry none.
@@ -1093,13 +1117,13 @@ function normalizeSnapshotRows(rows: unknown): OutboxSongRow[] {
 
 - [ ] **Step 5: Run tests + gates**
 
-Run: `npx vitest run app/utils/__tests__/outboxNotice.test.ts app/utils/__tests__/notificationEmail.test.ts app/utils/__tests__/outboxClassify.test.ts app/utils/__tests__/outboxSweep.test.ts app/utils/__tests__/setlistDiff.test.ts && npx tsc --noEmit`
+Run: `npx vitest run app/utils/__tests__/outboxNotice.test.ts app/utils/__tests__/notificationEmail.test.ts app/utils/__tests__/outboxClassify.test.ts app/utils/__tests__/outboxSweep.test.ts app/utils/__tests__/notificationOutboxSchema.test.ts app/utils/__tests__/setlistDiff.test.ts && npx tsc --noEmit`
 Expected: PASS. (`setlistDiff.test.ts` may not exist; drop it from the command if so.)
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add app/utils/outboxNotice.ts app/utils/outboxClassify.ts sanity/schemas/notificationOutbox.ts app/utils/setlistDiff.ts app/utils/notificationEmail.ts app/utils/outboxSweep.ts app/utils/__tests__/outboxNotice.test.ts app/utils/__tests__/notificationEmail.test.ts app/utils/__tests__/outboxClassify.test.ts
+git add app/utils/outboxNotice.ts app/utils/outboxClassify.ts sanity/schemas/notificationOutbox.ts app/utils/setlistDiff.ts app/utils/notificationEmail.ts app/utils/outboxSweep.ts app/utils/__tests__/outboxNotice.test.ts app/utils/__tests__/notificationEmail.test.ts app/utils/__tests__/outboxClassify.test.ts app/utils/__tests__/outboxSweep.test.ts app/utils/__tests__/notificationOutboxSchema.test.ts
 git commit -m "feat(notify): a change of song leader is a setlist change, and the email names the leaders"
 ```
 
@@ -1116,7 +1140,7 @@ git commit -m "feat(notify): a change of song leader is a setlist change, and th
 
 - [ ] **Step 1: ADR**
 
-`docs/adr/0036-worship-night-is-a-special-format.md` following `docs/adr/TEMPLATE.md`: **Decision** — «Noche de alabanza» is `special_role.format = "worship_night"`, set once at creation, not a fourth role type. **Rejected** — a `worship_night` document type (every reader of the three role types would need a fourth branch, and specials' time, group fill, identity and notices would be lost); leaders on every special (UI noise on ordinary vigils). **Consequences** — per-song leaders live only on worship nights' own song items; the writers validate them against `Lead` under the role revision; the format cannot be changed after creation (delete and recreate an empty service). Link it from `app/utils/serviceFormat.ts`'s header comment and add its line to `docs/adr/README.md`.
+`docs/adr/0036-worship-night-is-a-special-format.md` following `docs/adr/TEMPLATE.md`: **Decision** — «Noche de alabanza» is `special_role.format = "worship_night"`, set once at creation, not a fourth role type. **Rejected** — a `worship_night` document type (every reader of the three role types would need a fourth branch, and specials' time, group fill, identity and notices would be lost); leaders on every special (UI noise on ordinary vigils). **Consequences** — per-song leaders live only on worship nights' own song items; the writers validate them against `Lead` under the role revision; the format cannot be changed after creation (delete and recreate an empty service); `leads` are strong references, so a member who still leads a song cannot be deleted in Studio (the same as a seat reference) — clear the song first. **[post-approval, un-reviewed: strong-reference note]** Link it from `app/utils/serviceFormat.ts`'s header comment and add its line to `docs/adr/README.md`.
 
 - [ ] **Step 2: CLAUDE.md + AGENTS.md**
 
