@@ -112,6 +112,9 @@ export function parseProposalSaveRequest(body: unknown): ParseResult<ParsedPropo
   if (!observed.ok) return observed;
   const songs = parseSongRows(body.songs);
   if (!songs.ok) return songs;
+  // Proposals never carry per-song leaders (spec §3.2): refuse rather than drop.
+  const withLeads = songs.value.findIndex((row) => row.leadIds.length > 0);
+  if (withLeads !== -1) return fail([`songs[${withLeads}].leadIds`]);
   if (body.leadNotes != null && typeof body.leadNotes !== "string") return fail(["leadNotes"]);
   if (body.teamNotes != null && typeof body.teamNotes !== "string") return fail(["teamNotes"]);
   const leadNotes = typeof body.leadNotes === "string" ? body.leadNotes : "";

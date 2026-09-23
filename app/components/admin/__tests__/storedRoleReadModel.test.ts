@@ -230,3 +230,54 @@ describe("joinStoredRoleInventory", () => {
       .toBe("lead-2");
   });
 });
+
+describe("special-service time", () => {
+  const specialTarget = (): RoleTarget => target({
+    targetKey: "special_role:special-1",
+    type: "special_role",
+    canonicalIds: ["special-1"],
+    records: [{ ...target().records[0]!, id: "special-1", rev: "rev-1", type: "special_role" }],
+    expectsLock: false,
+    lock: null,
+  });
+
+  it("translateStoredRole carries a special's time onto its column", () => {
+    const special = role({ _id: "special-1", _type: "special_role", service_name: "Campamento · Alabanza", time: "18:45" });
+    const joined = joinStoredRoleInventory([special], summary([specialTarget()]));
+    expect(joined.coherent).toBe(true);
+    expect(translateStoredRole(joined.roles[0]!)?.column).toMatchObject({ serviceName: "Campamento · Alabanza", time: "18:45" });
+  });
+
+  it("parseRole refuses a malformed time on a special", () => {
+    const special = role({ _id: "special-1", _type: "special_role", service_name: "X", time: "9:00" });
+    expect(joinStoredRoleInventory([special], summary([specialTarget()])).coherent).toBe(false);
+  });
+});
+
+describe("special-service format", () => {
+  const specialTarget = (): RoleTarget => target({
+    targetKey: "special_role:special-1",
+    type: "special_role",
+    canonicalIds: ["special-1"],
+    records: [{ ...target().records[0]!, id: "special-1", rev: "rev-1", type: "special_role" }],
+    expectsLock: false,
+    lock: null,
+  });
+  const columnFor = (format: string | null | undefined) => {
+    const special = role({ _id: "special-1", _type: "special_role", service_name: "Noche", format });
+    const joined = joinStoredRoleInventory([special], summary([specialTarget()]));
+    expect(joined.coherent).toBe(true);
+    return translateStoredRole(joined.roles[0]!)!.column;
+  };
+
+  it("translateStoredRole carries a worship night's format onto its column", () => {
+    expect(columnFor("worship_night")).toMatchObject({ format: "worship_night" });
+  });
+
+  it("drops any other format value, and an absent one, rather than copying it", () => {
+    // `in`, not `toBeUndefined()`: the key must be ABSENT, not present-and-undefined.
+    expect("format" in columnFor("concert")).toBe(false);
+    expect("format" in columnFor(null)).toBe(false);
+    expect("format" in columnFor(undefined)).toBe(false);
+  });
+});

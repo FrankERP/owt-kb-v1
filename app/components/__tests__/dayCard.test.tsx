@@ -59,6 +59,14 @@ describe("DayCard", () => {
     expect(screen.queryByText("Próximo")).toBeNull();
   });
 
+  it("shows the set's time after the date, and nothing when there is none", () => {
+    mount({ day: "Campamento · Alabanza", time: "18:45" });
+    expect(screen.getByRole("heading", { level: 3 }).textContent).toMatch(/Campamento · Alabanza\s*·\s*13\s*sep\s*·\s*18:45/i);
+    cleanup();
+    mount({ day: "Campamento · Alabanza" });
+    expect(screen.getByRole("heading", { level: 3 }).textContent).not.toMatch(/\d\d:\d\d/);
+  });
+
   it("counts down to the next service instead of labelling it", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 8, 11, 9, 0, 0)); // 2026-09-11 local
@@ -141,5 +149,22 @@ describe("DayCard", () => {
     mount({ leads: ["Ana"], instruments: [{ label: "Keys", person: "Sofi" }] });
     const row = screen.getByText("Sofi");
     expect(row.className).toContain("text-positive-fg");
+  });
+
+  it("shows who leads a song under its title, and nothing when nobody does", () => {
+    mount({ setlist: { week: "2026-09-13", songs: [
+      song("s1", { leads: [{ member_name: "Ana López", alias: "Ani" }, { member_name: "Beto" }] }),
+      song("s2"),
+    ] } });
+    expect(screen.getByText("Dirige: Ani y Beto")).toBeTruthy();
+    expect(screen.getAllByText(/^Dirige:/)).toHaveLength(1);
+  });
+
+  it("tells the member which songs they lead", () => {
+    mount({ myLeadSongs: ["Canción A", "Canción B"] });
+    expect(screen.getByText("Diriges: Canción A, Canción B")).toBeTruthy();
+    cleanup();
+    mount();
+    expect(screen.queryByText(/^Diriges:/)).toBeNull();
   });
 });

@@ -43,6 +43,8 @@ import {
   type TransitionIntent,
 } from "@/app/utils/proposalWriteRequest";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+import { isWorshipNight } from "@/app/utils/serviceFormat";
+import { carryOverSongLeads, leadSeatIds } from "@/app/utils/songLeads";
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
@@ -247,7 +249,7 @@ async function approve(args: ApproveArgs) {
   }
 
   // ── Resolve the live setlist target and the coordination token ────────────
-  const songs = buildSetlistSongDocs(songRows, nextKey);
+  let songs: Record<string, unknown>[];
   const special = target.serviceType === "special";
   let lock: StoredLock | null = null;
   let bootstrapped = false;
@@ -271,6 +273,16 @@ async function approve(args: ApproveArgs) {
     const specialRole = targetLoad.target.role;
     setlistId = specialRole._id;
     const roleRev = specialRole._rev;
+    // Approval rewrites the whole song list from the proposal, which carries no
+    // leaders. On a worship night, carry each song's leaders over from the live
+    // list by song reference, filtered to the Lead this request loaded — the
+    // patch below asserts that same revision (spec §4.2).
+    songs = buildSetlistSongDocs(
+      isWorshipNight(specialRole)
+        ? carryOverSongLeads(songRows, specialRole.songs, leadSeatIds(specialRole.Lead))
+        : songRows.map((row) => ({ ...row, leadIds: [] })),
+      nextKey,
+    );
     subject = {
       published: specialRole.published,
       // A special role carries its songs inline.
@@ -317,6 +329,7 @@ async function approve(args: ApproveArgs) {
       knownRecipients: serviceParticipants(owner),
     };
 
+    songs = buildSetlistSongDocs(songRows.map((row) => ({ ...row, leadIds: [] })), nextKey);
     if (observed.state === "single") {
       setlistId = observed.id;
       const rev = observed.rev;

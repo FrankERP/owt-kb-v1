@@ -21,6 +21,7 @@ import {
   type KeyFactory,
   type ParseResult,
 } from "./roleWriteRequest";
+import { SONG_LEADS_MAX } from "./songLeads";
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object";
@@ -136,12 +137,26 @@ export interface NormalizedSongRow {
   songId: string;
   playKey: string;
   medleyTag: string | null;
+  /** 0–2 distinct member ids; `[]` when none. Only a worship night's songs may carry any (route-checked). */
+  leadIds: string[];
 }
 
 function normalizeShortText(value: unknown, max: number): string | null {
   if (typeof value !== "string") return null;
   const out = value.normalize("NFC").trim().replace(/\s+/g, " ");
   if (!out.length || out.length > max) return null;
+  return out;
+}
+
+/** `null`/absent/[] → []; else 1–SONG_LEADS_MAX distinct canonical ids, or null (refused). */
+function parseLeadIds(value: unknown): string[] | null {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > SONG_LEADS_MAX) return null;
+  const out: string[] = [];
+  for (const id of value) {
+    if (!isCanonicalDocumentId(id) || out.includes(id)) return null;
+    out.push(id);
+  }
   return out;
 }
 
@@ -166,7 +181,9 @@ export function parseSongRows(value: unknown): ParseResult<NormalizedSongRow[]> 
     }
     const medleyTag = raw.medley_tag == null ? null : normalizeShortText(raw.medley_tag, 64);
     if (raw.medley_tag != null && !medleyTag) return fail([`songs[${index}].medley_tag`]);
-    out.push({ songId: raw.songId, playKey, medleyTag });
+    const leadIds = parseLeadIds(raw.leadIds);
+    if (!leadIds) return fail([`songs[${index}].leadIds`]);
+    out.push({ songId: raw.songId, playKey, medleyTag, leadIds });
   }
   return { ok: true, value: out };
 }
@@ -176,13 +193,21 @@ function songDocs(
   itemType: "setlist_song" | "proposal_song",
   nextKey: KeyFactory,
 ): Record<string, unknown>[] {
-  return rows.map((row) => ({
-    _type: itemType,
-    _key: nextKey(),
-    ...(row.playKey ? { play_key: row.playKey } : {}),
-    ...(row.medleyTag ? { medley_tag: row.medleyTag } : {}),
-    song: { _type: "reference", _ref: row.songId },
-  }));
+  return rows.map((row) => {
+    const itemKey = nextKey();
+    return {
+      _type: itemType,
+      _key: itemKey,
+      ...(row.playKey ? { play_key: row.playKey } : {}),
+      ...(row.medleyTag ? { medley_tag: row.medleyTag } : {}),
+      song: { _type: "reference", _ref: row.songId },
+      // Leaders exist only on a special's own setlist items, never on a
+      // proposal. Each reference item carries its own `_key` (Sanity rule).
+      ...(itemType === "setlist_song" && row.leadIds.length
+        ? { leads: row.leadIds.map((id) => ({ _key: nextKey(), _type: "reference", _ref: id })) }
+        : {}),
+    };
+  });
 }
 
 /** Stored `setlist_song` items, each with its own `_key`, in request order. */
@@ -240,7 +265,7 @@ export interface ParsedSetlistWriteRequest {
 
 /**
  * Parse the exact §5 PUT contract:
- * `{ week, type, roleId?, observed, songs: [{ songId, play_key?, medley_tag? }] }`
+ * `{ week, type, roleId?, observed, songs: [{ songId, play_key?, medley_tag?, leadIds? }] }`
  *
  * The unchanged `observed` state from A1's GET is REQUIRED: a save that cannot
  * say what it was editing is rejected before any read, so a blind overwrite is

@@ -344,6 +344,44 @@ describe("GET /api/admin/setlists special contract", () => {
     // song-1 keeps the most recent past use.
     expect(body.recentSongs["song-1"]).toBe("2026-07-18");
   });
+
+  it("tells the editor a worship night's format, its Lead roster and each row's leaders", async () => {
+    specialReads([
+      role({
+        format: "worship_night",
+        leadRoster: [{ _id: "mem-1", member_name: "Ana" }],
+        songs: [song({ leadIds: ["mem-1"] })],
+      }),
+    ]);
+    const res = await GET(req({ type: "special", week: "2026-07-26", roleId: "role-1" }));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.format).toBe("worship_night");
+    expect(body.leadRoster).toEqual([{ id: "mem-1", name: "Ana" }]);
+    expect(body.songs[0].leadIds).toEqual(["mem-1"]);
+    // The store returns what the projection asks for, so pin the projection too.
+    const [query] = operationalFetch.mock.calls[0];
+    expect(query).toContain('"leadRoster": Lead[]->{ _id, member_name, alias }');
+    expect(query).toContain('"leadIds": leads[]._ref');
+    expect(query).toMatch(/date, format,/);
+  });
+
+  it("answers an ordinary special with a null format and an empty roster", async () => {
+    specialReads([role()]);
+    const res = await GET(req({ type: "special", week: "2026-07-26", roleId: "role-1" }));
+    const body = await res.json();
+    expect(body.format).toBeNull();
+    expect(body.leadRoster).toEqual([]);
+  });
+
+  it("adds no format or leadRoster keys to a weekend read", async () => {
+    weekendReads([{ _id: "sl-1", _rev: "rev-1", _type: "featuredSongs", week: "2026-07-26", hasSongs: true, songs: [song()] }]);
+    const res = await GET(req({ type: "sunday", week: "2026-07-26" }));
+    const body = await res.json();
+    expect(body.targetState).toBe("single");
+    expect("format" in body).toBe(false);
+    expect("leadRoster" in body).toBe(false);
+  });
 });
 
 describe("GET /api/admin/setlists failure handling", () => {

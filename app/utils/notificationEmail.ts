@@ -67,9 +67,14 @@ function headRow(showMovement: boolean): string {
   );
 }
 
-function songCell(title: string, gone: boolean): string {
+// A worship night's leaders follow the title («— dirige Ani y Beto», spec §8).
+// Never on a departed song: its leaders are not news. `leaderText` is "" for
+// every leaderless setlist, which renders exactly what it rendered before.
+function songCell(title: string, gone: boolean, leaderText = ""): string {
   const text = escapeHtml(title);
-  return gone ? `<s style="color:${C.muted}">${text}</s>` : `<span style="color:${C.ink}">${text}</span>`;
+  if (gone) return `<s style="color:${C.muted}">${text}</s>`;
+  const leaders = leaderText ? ` <span style="color:${C.muted}">— dirige ${escapeHtml(leaderText)}</span>` : "";
+  return `<span style="color:${C.ink}">${text}</span>${leaders}`;
 }
 
 function keyCell(row: TableRow): string {
@@ -86,13 +91,24 @@ function movementCell(row: TableRow): string {
   return `<span style="color:${C.warning}">▼${row.movement.n}</span>`;
 }
 
-function songRow(row: TableRow, titles: Map<string, string>, showMovement: boolean, spine: boolean): string {
+function songRow(
+  row: TableRow,
+  titles: Map<string, string>,
+  showMovement: boolean,
+  spine: boolean,
+  leaders: Map<string, string>,
+): string {
   const title = titles.get(row.ref) ?? row.ref;
+  // An id with no name (deleted member, failed read) is left out, never shown raw.
+  const leaderText = (row.leads ?? [])
+    .map((id) => leaders.get(id))
+    .filter((n): n is string => !!n)
+    .join(" y ");
   const posText = row.position !== null ? String(row.position) : "&ndash;";
   const spineStyle = spine ? `border-left:2px solid ${C.accent};` : "";
   return tr(
     td(`<span style="color:${C.muted}">${posText}</span>`, { align: "right", style: `padding:6px 8px;${spineStyle}` }) +
-    td(songCell(title, row.status === "gone"), { style: "padding:6px 8px;font:14px system-ui,sans-serif" }) +
+    td(songCell(title, row.status === "gone", leaderText), { style: "padding:6px 8px;font:14px system-ui,sans-serif" }) +
     td(keyCell(row), { align: "right", style: "padding:6px 8px;font:13px monospace" }) +
     (showMovement ? td(movementCell(row), { align: "right", style: "padding:6px 8px;font:13px monospace" }) : ""),
   );
@@ -101,7 +117,12 @@ function songRow(row: TableRow, titles: Map<string, string>, showMovement: boole
 // Drawn the way DayCard.tsx already draws it: a `beam` spine down the left of
 // the group, an uppercase "Medley" label above it, "+" between songs. A
 // group of one (see groupRuns) never reaches here.
-function medleyGroup(run: TableRow[], titles: Map<string, string>, showMovement: boolean): string {
+function medleyGroup(
+  run: TableRow[],
+  titles: Map<string, string>,
+  showMovement: boolean,
+  leaders: Map<string, string>,
+): string {
   const cols = showMovement ? 4 : 3;
   const isNew = run.some((r) => r.groupIsNew);
   const label = tr(td(
@@ -113,13 +134,20 @@ function medleyGroup(run: TableRow[], titles: Map<string, string>, showMovement:
     `<span style="color:${C.accent};display:block;text-align:center">+</span>`,
     { colspan: cols, style: `padding:0 8px;border-left:2px solid ${C.accent}` },
   ));
-  return label + run.map((row, i) => (i > 0 ? plus : "") + songRow(row, titles, showMovement, true)).join("");
+  return label + run.map((row, i) => (i > 0 ? plus : "") + songRow(row, titles, showMovement, true, leaders)).join("");
 }
 
-export function renderSetlistTable(rows: TableRow[], titles: Map<string, string>, showMovement: boolean): string {
+export function renderSetlistTable(
+  rows: TableRow[],
+  titles: Map<string, string>,
+  showMovement: boolean,
+  leaders: Map<string, string> = new Map(),
+): string {
   const cols = showMovement ? 4 : 3;
   const body = groupRuns(rows)
-    .map((run) => (run.length >= 2 ? medleyGroup(run, titles, showMovement) : songRow(run[0], titles, showMovement, false)))
+    .map((run) => (run.length >= 2
+      ? medleyGroup(run, titles, showMovement, leaders)
+      : songRow(run[0], titles, showMovement, false, leaders)))
     .join("");
   const legend = showMovement
     ? tr(td(`<span style="color:${C.muted};font:11px system-ui,sans-serif">▲ suena antes en el servicio</span>`, { colspan: cols, style: "padding:8px 8px 2px" }))
@@ -169,13 +197,13 @@ function leadNotesSection(notes: string): string {
   ));
 }
 
-function setlistSection(line: Line, titles: Map<string, string>): string {
+function setlistSection(line: Line, titles: Map<string, string>, leaders: Map<string, string>): string {
   const showMovement = line.kind === "setlistChanged";
   const table = buildSetlistTable(line.beforeSongs ?? [], line.songs ?? []);
-  return tr(td(renderSetlistTable(table, titles, showMovement), { style: "padding:0 24px 18px" }));
+  return tr(td(renderSetlistTable(table, titles, showMovement, leaders), { style: "padding:0 24px 18px" }));
 }
 
-function renderLine(line: Line, titles: Map<string, string>): string {
+function renderLine(line: Line, titles: Map<string, string>, leaders: Map<string, string>): string {
   const header = tr(td(
     `<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">${escapeHtml(headerLine(line.kind, line.serviceDate))}</span>`,
     { style: "padding:18px 24px 8px" },
@@ -186,7 +214,7 @@ function renderLine(line: Line, titles: Map<string, string>): string {
     case "roleChanged": return header + roleChangedSection(line.before, line.after);
     case "leadNotes": return header + leadNotesSection(line.notes ?? "");
     case "setlistReady":
-    case "setlistChanged": return header + setlistSection(line, titles);
+    case "setlistChanged": return header + setlistSection(line, titles, leaders);
   }
 }
 
@@ -195,6 +223,8 @@ function renderLine(line: Line, titles: Map<string, string>): string {
 export function buildGroupedEmail(
   o: { name: string; lines: Line[] },
   titles: Map<string, string>,
+  /** Member id → display name, for a worship night's song leaders. Empty: no names shown. */
+  leaders: Map<string, string> = new Map(),
 ): { subject: string; html: string } {
   const subject = o.lines.length === 1
     ? headerLine(o.lines[0].kind, o.lines[0].serviceDate)
@@ -203,7 +233,7 @@ export function buildGroupedEmail(
     `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">Hola ${escapeHtml(o.name || "equipo")},</p>`,
     { style: "padding:0 24px 8px" },
   ));
-  const bodyRows = greeting + o.lines.map((l) => renderLine(l, titles)).join("");
+  const bodyRows = greeting + o.lines.map((l) => renderLine(l, titles, leaders)).join("");
   const link = `${appBaseUrl()}/me`;
   return { subject, html: shell(bodyRows, link) };
 }

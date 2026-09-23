@@ -27,7 +27,24 @@ for stored service rosters:
 - **Editar mes** opens the selected month against stored services.
 - A service card's roster edit action opens the same grid focused on that role.
 - **Nuevo** opens a one-service composer. It creates one empty unpublished
-  service and never invokes the solver or fills a roster automatically.
+  service and never invokes the solver or fills a roster automatically — that
+  holds for the one-service composer; the toolbar's **«Llenar especiales…»**
+  (below) is the explicit exception.
+- **«Llenar especiales…»** (stored mode toolbar, spec
+  `2026-09-22-camp-group-fill-design.md`) opens an inline picker listing every
+  approved special of the month — all ticked by default, published ones
+  marked **«· publicado»**. **«Llenar vacíos»** fills the ticked group's empty
+  Lead/BGV and instrument seats locally (`groupFill.ts`): load and fairness
+  count only appearances inside the ticked group — no weekends, no 56-day
+  window — pins (existing occupants) are kept, and only empty seats are
+  filled. Nothing is written until **«Guardar»**, and the solver is never
+  called. Known limitation: on an OLD special whose instrument row uses a
+  non-standard label (e.g. `Piano`), the fill can still seat the standard row
+  of the same instrument (`Keys`) — review before «Guardar».
+- The Servicios panel's month pills always offer the current month plus the
+  next two, even when a month has no service yet, so an empty upcoming month
+  (a camp weekend, say) can be opened and given its first service without
+  generating the whole month with the solver first (`monthPills.ts`).
 - Existing services support assignment changes, same- and cross-month date
   moves, and special-service name changes. Service type remains immutable.
 - The grid supports whole-team swaps and complete section swaps across two
