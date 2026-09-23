@@ -27,7 +27,8 @@ below), `history` (prior months, oldest first), `seed`, and solver knobs
 `discourage_consecutive`).
 
 Output: `{ ok, schedule: {"<week>": {Sunday:{Lead[],BGV[],Choir[]}, Saturday?:{...}}},
-fairness_relaxed, sun_lead_fairness_relaxed, sun_bgv_fairness_relaxed, history_runs_used,
+fairness_relaxed, sun_lead_fairness_relaxed, sun_bgv_fairness_relaxed,
+objective_skipped, history_runs_used,
 total_counts, role_counts, unfilled_seats[] }`. On error: `{ ok: false, error }`.
 
 Also a **CLI mode**: `echo '<json>' | python3 owt_solver_v2.py --json-mode` (stdin→stdout);
@@ -62,7 +63,12 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   under-served. History uses weighted decay (3 recent months weighted `[10, 6, 3]`).
 - **Lexicographic objective:** exponentially-separated weights encode strict priority
   (fill > lead fairness > per-role spread > sun-lead rotation > consecutive-repeat
-  penalty > random tie-break). Lead rotation uses seeded random weights on Sun.Lead
+  penalty > random tie-break). **Each tier's weight is computed against that tier's own
+  maximum**, not against a single month-wide bound — the ladder is a product over eight
+  tiers, so a uniform over-estimate is exponential in it and the objective's upper bound
+  crossed CP-SAT's integer-objective ceiling (INT64_MAX / 2) on ordinary months. Months
+  whose history still pushes it over run without the objective and say so with
+  `objective_skipped: true` — see ADR-0038 for that trade-off. Lead rotation uses seeded random weights on Sun.Lead
   assignments (monthly and per-week terms). The planner UI surfaces, separately for
   Sunday and Saturday, which lead-pool members did not hold that lead role in the
   calendar month before the month being planned (`LeadPoolHistoryPanel`); that is
@@ -333,6 +339,12 @@ Strategy: **wrap the existing Next.js app** (not a React Native rewrite). Full r
   - `test_main.py` — HTTP handler auth (fail-closed 503/401), 405, valid 200.
 
   These are excluded from the deployed function via `.gcloudignore`.
+
+**This suite is a BLOCKING gate.** `gates` runs `python -m unittest discover -s gcf -t gcf`
+on Python 3.12 (`.github/workflows/ci.yml`); before that a `gcf/**`-only PR went green on a
+job that never opened the file, on code that deploys to the Cloud Function from `main` with
+no `preview` rehearsal. Run it locally the same way from the repo root before claiming done —
+the three Node gates are no longer the whole set.
 
 ---
 

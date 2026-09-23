@@ -18,9 +18,9 @@ meant to do.
 | | |
 |---|---|
 | Triggers | `push` to `main` and `preview`; `pull_request` targeting `main` or `preview`; manual `workflow_dispatch` |
-| Runner | `ubuntu-latest`, Node from `.nvmrc` (22), npm cache on |
+| Runner | `ubuntu-latest`, Node from `.nvmrc` (22), npm cache on; Python 3.12 with pip cache, matching the solver function's own `--runtime=python312` |
 | Install | `npm ci` — fails on a lockfile that drifted from `package.json`, rather than silently resolving something new |
-| Steps | `npx tsc --noEmit` → `npm test` (vitest) → `npx eslint .` |
+| Steps | `npx tsc --noEmit` → `npm test` (vitest) → `npx eslint .` → `python -m unittest discover -s gcf -t gcf` |
 | Timeout | 15 minutes |
 | Concurrency | one run per branch (or per PR); a newer push cancels the in-flight run |
 | Permissions | `contents: read` only |
@@ -47,7 +47,7 @@ a local run — 0 errors, warnings tolerated.
 ### Secrets
 
 **This workflow needs no secrets and no environment variables**, on any
-platform. It installs from the lockfile and runs three local commands. Nothing
+platform. It installs from the lockfile and runs four local commands. Nothing
 to rotate, nothing to configure in GitHub → Settings → Secrets. If a future step
 needs one, it gets an entry in `docs/SECRETS.md` in the same change.
 
