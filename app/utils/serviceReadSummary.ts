@@ -429,8 +429,10 @@ function makeSetlistRecord(doc: Record<string, unknown>, type: SetlistDocType): 
  * empty camp set, and a hard block on «Publicar listos» (2026-09-22). `null` and
  * absent are the same thing here (GROQ's `defined()` agrees, and the setlist
  * editor's `hasSongs` and `serviceWriteTargets`' `Array.isArray` already read
- * it that way). A present value that is not a list still passes through, so a
- * genuinely corrupt `songs` is still reported invalid.
+ * it that way). A present value that is not a list still passes through, but
+ * only an UNPROJECTED document can carry one: through `ROLE_PROJECTION`,
+ * `songs[]{…}` already turns a non-list into `null`, which reads as no setlist —
+ * the same answer the write path gives for that document.
  * `embeddedSetlistPredicate.test.ts` fails if a reader hand-rolls the check again.
  */
 export function specialRolesWithEmbeddedSetlist(roles: unknown[]): Record<string, unknown>[] {

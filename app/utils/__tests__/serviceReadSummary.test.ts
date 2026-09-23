@@ -609,7 +609,7 @@ describe("specialRolesWithEmbeddedSetlist — absent vs null vs present", () => 
     expect(specialRolesWithEmbeddedSetlist([empty, full])).toEqual([empty, full]);
   });
 
-  it("keeps a present-but-corrupt value so it is still reported invalid", () => {
+  it("keeps a present non-list value from an unprojected document, which then reads invalid", () => {
     const corrupt = special("not-a-list");
     expect(specialRolesWithEmbeddedSetlist([corrupt])).toEqual([corrupt]);
     expect(buildSetlistTargets([], [], specialRolesWithEmbeddedSetlist([corrupt])).targets[0]?.contentState).toBe("invalid");

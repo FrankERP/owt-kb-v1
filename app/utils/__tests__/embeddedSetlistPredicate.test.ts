@@ -5,7 +5,9 @@
 // bundle) tested `songs !== undefined`, and GROQ projects an absent `songs` as
 // `null` — so every special without songs read as an invalid setlist, showed
 // «Setlist con datos inválidos» and hard-blocked «Publicar listos»
-// (2026-09-22, the camp sets). A third copy of that filter would bring it back.
+// (2026-09-22, the camp sets). `buildSetlistTargets` now drops a null `songs`
+// on its own as well; this guard is the second layer, keeping both readers on
+// the one predicate so their idea of "has a setlist" cannot drift apart.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
