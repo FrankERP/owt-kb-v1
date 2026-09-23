@@ -9,7 +9,7 @@
 // `Select` — 15 options is a list.
 import { useMemo, useState } from "react";
 import type { Tag, Author } from "@/app/utils/interface";
-import { TIPO_SLUGS, type LibraryFilters as F } from "@/app/utils/libraryIndex";
+import { TIPO_SLUGS, isTipoSlug, type LibraryFilters as F } from "@/app/utils/libraryIndex";
 import { normalizeText } from "@/app/utils/normalizeText";
 import CueDialog from "./ui/CueDialog";
 import SegmentedControl from "./ui/SegmentedControl";
@@ -55,7 +55,7 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
   const [themeQ, setThemeQ] = useState("");
   const [artistQ, setArtistQ] = useState("");
   const tipo = (TIPO_SLUGS.find((s) => filters.tags.includes(s)) ?? null) as Tipo | null;
-  const themes = useMemo(() => tags.filter((t) => !(TIPO_SLUGS as readonly string[]).includes(t.slug.current) && (t.postCount ?? 0) > 0), [tags]);
+  const themes = useMemo(() => tags.filter((t) => !isTipoSlug(t.slug.current) && (t.postCount ?? 0) > 0), [tags]);
   const max = Math.max(1, ...themes.map((t) => t.postCount ?? 0));
   const count = filters.tags.length + (filters.author ? 1 : 0) + (filters.key ? 1 : 0);
 
@@ -89,7 +89,7 @@ export default function LibraryFilters({ filters, onChange, tags, authors, keys 
   // (spec note b), so "tap it again to clear" cannot exist; a fourth tile,
   // «Todos», is the clear. `tipo ?? ""` maps "no Tipo" onto it.
   const setTipo = (next: Tipo | "") =>
-    onChange({ ...filters, tags: [...filters.tags.filter((s) => !(TIPO_SLUGS as readonly string[]).includes(s)), ...(next ? [next] : [])] });
+    onChange({ ...filters, tags: [...filters.tags.filter((s) => !isTipoSlug(s)), ...(next ? [next] : [])] });
 
   return (
     <>
