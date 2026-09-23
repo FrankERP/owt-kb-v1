@@ -128,6 +128,8 @@ export interface SpecialRole {
   service_name: string;
   /** "HH:mm" (see `app/utils/serviceTime.ts`); absent on every special that predates it. */
   time?: string | null;
+  /** Set once at creation (`app/utils/serviceFormat.ts`); absent means an ordinary special. */
+  format?: string | null;
   songs?: Array<SetlistSong>;
   team_notes?: string;
   Lead?: Array<TeamMember>;

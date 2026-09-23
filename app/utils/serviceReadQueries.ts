@@ -15,7 +15,7 @@ export interface BoundQuery {
 const SONGS_FRAGMENT = `songs[]{ _key, play_key, medley_tag, song{ _type, _ref } }`;
 
 export const ROLE_PROJECTION = `{
-  _id, _rev, _type, published, week, date, service_name, time,
+  _id, _rev, _type, published, week, date, service_name, time, format,
   creationReceiptId, creationFingerprint,
   Lead[]{ _key, _type, _ref },
   BGVs[]{ _key, _type, _ref },

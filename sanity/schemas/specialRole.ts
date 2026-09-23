@@ -57,6 +57,13 @@ export const specialRole = {
         rule.regex(/^([01]\d|2[0-3]):[0-5]\d$/, { name: 'HH:mm', invert: false }),
     },
     {
+      name: 'format',
+      title: 'Formato',
+      type: 'string',
+      description: 'worship_night = Noche de alabanza (dirige por canción). Se fija al crear el servicio; ausente = especial normal.',
+      options: { list: [{ title: 'Noche de alabanza', value: 'worship_night' }] },
+    },
+    {
       name: 'songs',
       title: 'Songs',
       type: 'array',
