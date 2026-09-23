@@ -39,7 +39,8 @@ _INT64_MAX = 2 ** 63 - 1
 
 class ObjectiveTooLarge(Exception):
     """
-    The lexicographic weight ladder would exceed int64.
+    The lexicographic weight ladder would exceed what CP-SAT accepts for an integer
+    objective: INT64_MAX // 2, not INT64_MAX (ADR-0038).
 
     Raised by compute_priority_weights and handled inside create_model_and_solve,
     which drops the fairness objective for that pass rather than failing the month.
@@ -622,18 +623,20 @@ def compute_priority_weights(
     Weights for the lexicographic objective.
 
     `tier_maxima` gives each tier's OWN maximum contribution. Supplying it is what
-    keeps the objective inside int64: the ladder is a product over eight tiers, so
-    charging every tier the same global `max_spread` is exponential in an
-    over-estimate. A `Sun.Choir` spread cannot exceed the number of Choir slots, a
-    rotation term cannot exceed its own weighted slot count, and using those real
-    bounds costs three orders of magnitude of headroom.
+    keeps a history-free objective inside what CP-SAT accepts: the ladder is a
+    product over eight tiers, so charging every tier the same global `max_spread` is
+    exponential in an over-estimate. A `Sun.Choir` spread cannot exceed the number of
+    Choir slots, a rotation term cannot exceed its own weighted slot count, and using
+    those real bounds recovers three orders of magnitude of headroom.
 
-    Measured on a 12-person roster before this changed: the objective's upper bound
-    was 3.2e19 on an ordinary four-week month and 1.9e21 on a six-week one, against
-    an int64 ceiling of 9.2e18 — so ortools rejected the model with MODEL_INVALID
-    and `solve_schedule` fell through to the objective-less passes **silently**,
-    losing fairness optimisation with no signal to the caller. With real per-tier
-    maxima the same months bound at 2.6e16 and 1.4e18.
+    Measured on the 12-person test roster (seed 42) before this changed, the ladder
+    bounded at 2.5e19 on a four-week month with a Saturday every week and 1.5e21 on a
+    six-week one, against CP-SAT's integer-objective ceiling of INT64_MAX // 2
+    (4.6e18). What ortools did about it varied by shape — some integer objectives
+    still validated, some came back MODEL_INVALID (which `solve_schedule` read as an
+    infeasible tier, silently), and once a single weight passed int64 ortools quietly
+    built a floating-point objective instead. ADR-0038 has the table. With real
+    per-tier maxima the same two months bound at 2.0e16 and 1.1e18.
 
     When `tier_maxima` is supplied it must cover every tier: `max_spread` is NOT a
     valid fallback for the rotation tiers (measured 52 against a real 72 on a
@@ -656,11 +659,16 @@ def compute_priority_weights(
         w[name] = remaining + 1
         cap = max_spread if tier_maxima is None else tier_maxima.get(name, max_spread)
         remaining += cap * w[name]
-    if remaining > _INT64_MAX:
-        # The caller decides what to do; raising here would abort a month the solver
-        # can still fill. See create_model_and_solve, which degrades and reports.
+    # CP-SAT rejects an integer objective whose bound passes INT64_MAX // 2 (it keeps
+    # headroom so max - min of the sum cannot overflow), so that — not INT64_MAX — is
+    # the ceiling. Checking INT64_MAX let a ladder between the two through, to come
+    # back MODEL_INVALID on every optimising pass.
+    #
+    # The caller decides what to do; raising here would abort a month the solver
+    # can still fill. See create_model_and_solve, which degrades and reports.
+    if remaining > _INT64_MAX // 2:
         raise ObjectiveTooLarge(
-            f"Objective bound {remaining} exceeds int64 "
+            f"Objective bound {remaining} exceeds CP-SAT's INT64_MAX // 2 "
             f"(max_spread={max_spread}, max_consec_penalty={max_consec_penalty}, "
             f"max_rand={max_rand})."
         )
@@ -693,7 +701,15 @@ def create_model_and_solve(
     empty_objective_only: bool = False,
     empty_target: int | None = None,
     max_time_override: float | None = None,
+    pass_info: Dict[str, object] | None = None,
 ) -> SolveResult | None:
+    """
+    Build and solve one pass. Returns None on any status but OPTIMAL/FEASIBLE.
+
+    `pass_info`, when given, is filled with `objective_skipped` and the solver
+    `status` — even when the pass returns None, which is when `solve_schedule` needs
+    them (it skips a sibling pass that could only repeat an infeasibility proof).
+    """
 
     model = cp_model.CpModel()
     slot_by_key = {s.key: s for s in slots}
@@ -703,7 +719,7 @@ def create_model_and_solve(
     # ladder's `optimize=False` passes never build it either, and `solve_schedule`
     # can return from any of them, so scoping the flag to the overflow case would
     # leave the response saying "the objective ran" for months where it did not.
-    # That is the same silence ADR-0035 exists to remove, in a narrower path.
+    # That is the same silence ADR-0038 exists to remove, in a narrower path.
     objective_skipped = not optimize or empty_objective_only
     dedicated_sat_leads = set(config.saturday_leads_pool)
     sat_weeks = set(normalize_weekend_indexes(config.weeks, config.weekends_w_sat))
@@ -1037,18 +1053,20 @@ def create_model_and_solve(
             weights = compute_priority_weights(
                 overall_limit, len(consec_penalties), max_rand, tier_maxima)
         except ObjectiveTooLarge:
-            # Eight tiers multiplied together do not fit in int64 once history
-            # offsets are large — `build_history_offsets` weights the last three
-            # months by [10, 6, 3], so `overall_limit` and every `ov_r_limit` grow
-            # with them, and two months of history is enough on an ordinary shape.
+            # Eight tiers multiplied together do not fit under CP-SAT's ceiling once
+            # history offsets are large — `build_history_offsets` weights the last
+            # three months by [10, 6, 3], so `overall_limit` and every `ov_r_limit`
+            # grow with them. One month of history is enough on a four-week month
+            # with a Saturday every week; two on the default shape.
             #
-            # Before this branch existed the same situation reached ortools as a
-            # MODEL_INVALID, `create_model_and_solve` returned None, and the ladder
-            # read that as "this fairness tier is infeasible" and moved on —
-            # returning a fairness-free month with nothing in the response to say
-            # so. That silence is the bug. Skipping the objective here reaches the
-            # same schedule, but `objective_skipped` records it and the response
-            # carries it out to the caller.
+            # Before this branch existed ortools did one of two things with such a
+            # ladder. Either it answered MODEL_INVALID, which the ladder read as "this
+            # fairness tier is infeasible" — a fairness-free month with nothing in the
+            # response to say so. Or, once a weight passed int64, it quietly built a
+            # floating-point objective and optimised some of those months anyway.
+            # Skipping the objective here gives up that second, implicit optimisation
+            # in exchange for reporting the first: `objective_skipped` records it and
+            # the response carries it out to the caller. ADR-0038 has the trade-off.
             objective_skipped = True
             weights = None
 
@@ -1064,6 +1082,15 @@ def create_model_and_solve(
                 obj.append(weights["consecutive"] * sum(consec_penalties))
             obj.append(weights["tie_break"] * sum(rand_w[k] * var for k, var in x.items()))
             model.Minimize(sum(obj))
+            # CP-SAT has the last word. The ladder bounds each tier by what it can
+            # REACH; CP-SAT's validator bounds the flattened objective by each
+            # variable's declared DOMAIN, and reads the two Sun.Lead rotation tiers per
+            # person — measured 0.5-10% above the ladder's own figure. A month in that
+            # sliver passes the guard above and would still come back MODEL_INVALID,
+            # which the ladder reads as an infeasible tier. Validation costs ~0.1 ms.
+            if model.Validate():
+                model.ClearObjective()
+                objective_skipped = True
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = (
@@ -1079,6 +1106,9 @@ def create_model_and_solve(
     )
 
     status = solver.Solve(model)
+    if pass_info is not None:
+        pass_info["objective_skipped"] = objective_skipped
+        pass_info["status"] = status
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None
 
@@ -1230,14 +1260,25 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
                 for opt in (True, False):
                     if deadline - time.monotonic() < 1.0:
                         return stage_a  # out of budget — return the max-fill solution
+                    pass_info: Dict[str, object] = {}
                     result = create_model_and_solve(
                         **common, fairness_limit=g_limit,
                         sun_lead_limit=sl_limit, sun_bgv_limit=sb_limit,
                         optimize=opt, empty_target=empty_target,
-                        max_time_override=solve_time(),
+                        max_time_override=solve_time(), pass_info=pass_info,
                     )
                     if result is not None:
                         return result
+                    if (opt and pass_info.get("objective_skipped")
+                            and pass_info.get("status") == cp_model.INFEASIBLE):
+                        # With its objective skipped, this pass admits exactly the
+                        # assignments its optimize=False sibling does and minimises
+                        # nothing: the same problem. It PROVED the tier infeasible,
+                        # so the sibling could only prove it again at the cost of a
+                        # pass. Only a proof is final — a pass that ran out of time
+                        # (UNKNOWN) still hands over, because the sibling searches
+                        # differently and may find what this one missed.
+                        break
 
     # Every fairness tier was infeasible even at max fill — return the max-fill
     # solution rather than failing. (Fairness simply couldn't be tightened.)

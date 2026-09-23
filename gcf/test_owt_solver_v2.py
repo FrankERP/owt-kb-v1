@@ -278,6 +278,20 @@ class ObjectiveWeightLadder(unittest.TestCase):
         (6, [1, 2, 3, 4, 5, 6]),  # 78 slots: worst bound, 1.9e21
     ]
 
+    # One month of history, HAND-WRITTEN for the reason test_degradation_is_reported_
+    # not_silent gives: the bound must be a property of the fixture, not of the search.
+    # The ladder reads only the MAXIMA of the offsets, so a uniform entry pins it. These
+    # are the maxima a real four-week, every-Saturday month produced (seed 42) — six
+    # services, Sat.Lead four times, two each of BGV and Choir — and on that shape they
+    # bound the ladder at 8.0e18: over CP-SAT's real limit, INT64_MAX // 2 (4.6e18), and
+    # under INT64_MAX (9.2e18). A guard at INT64_MAX let exactly this window through,
+    # built an integer objective and got MODEL_INVALID back on every optimising pass.
+    ONE_MONTH = [{
+        "total_counts": {p: 6 for p in ROSTER},
+        "role_counts": {p: {"Sun.Lead": 1, "Sat.Lead": 4, "Sun.BGV": 2,
+                            "Sat.BGV": 2, "Sun.Choir": 2} for p in ROSTER},
+    }]
+
     @staticmethod
     def _shape(weeks, sats, history):
         cfg = make_config(weeks=weeks, sat_weeks=tuple(sats), history=history)
@@ -297,19 +311,59 @@ class ObjectiveWeightLadder(unittest.TestCase):
             seen.append(solver_self.StatusName(status))
             return status
 
+        # Every history-free shape, plus one history-bearing shape whose ladder sits
+        # between INT64_MAX // 2 and INT64_MAX — see ONE_MONTH.
+        cases = [(weeks, sats, []) for weeks, sats in self.SHAPES]
+        cases.append((4, [1, 2, 3, 4], self.ONE_MONTH))
+
         cp_model.CpSolver.Solve = record
         try:
-            for weeks, sats in self.SHAPES:
-                with self.subTest(weeks=weeks, saturdays=len(sats)):
+            for weeks, sats, history in cases:
+                with self.subTest(weeks=weeks, saturdays=len(sats), history=len(history)):
                     seen.clear()
-                    res = solve_from_dict(self._shape(weeks, sats, []))
+                    res = solve_from_dict(self._shape(weeks, sats, history))
                     self.assertTrue(res.get("ok"), res.get("error"))
                     self.assertNotIn(
                         "MODEL_INVALID", seen,
-                        f"{weeks}wk/{len(sats)}sat: ortools rejected the objective")
+                        f"{weeks}wk/{len(sats)}sat, {len(history)} history: "
+                        f"ortools rejected the objective")
 
         finally:
             cp_model.CpSolver.Solve = original
+
+    def test_the_guard_is_cpsat_ceiling_not_int64(self):
+        """
+        ONE_MONTH's ladder sits between INT64_MAX // 2 and INT64_MAX, and the guard in
+        compute_priority_weights must catch it ITSELF. The validator check in
+        create_model_and_solve would catch it too, so the test above cannot tell a guard
+        at INT64_MAX from one at CP-SAT's real ceiling — this one can. The validator is
+        the backstop for the reachable-vs-domain sliver, not the gate.
+        """
+        import owt_solver_v2 as mod
+        from owt_solver_v2 import ObjectiveTooLarge
+
+        outcomes = []
+        original = mod.compute_priority_weights
+
+        def record(*args):
+            try:
+                weights = original(*args)
+            except ObjectiveTooLarge:
+                outcomes.append("raised")
+                raise
+            outcomes.append("fitted")
+            return weights
+
+        mod.compute_priority_weights = record
+        try:
+            res = solve_from_dict(self._shape(4, [1, 2, 3, 4], self.ONE_MONTH))
+        finally:
+            mod.compute_priority_weights = original
+
+        self.assertTrue(res.get("ok"), res.get("error"))
+        self.assertTrue(outcomes, "no optimising pass ran; the guard saw nothing")
+        self.assertEqual(set(outcomes), {"raised"})
+        self.assertTrue(res["objective_skipped"])
 
     def test_history_bearing_months_still_return_a_schedule(self):
         """
@@ -479,6 +533,185 @@ class ObjectiveWeightLadder(unittest.TestCase):
                 self.assertTrue(
                     skipped,
                     "a pass that builds no objective must report objective_skipped")
+
+    def test_an_optimize_false_return_reports_objective_skipped(self):
+        """
+        The other half of the flag. On a clean month the ladder returns from an
+        optimising pass, so the test above only ever sees Stage A as an objective-less
+        return — it passes whether or not an optimize=False pass reports anything.
+        Force the case it cannot reach: every optimising pass comes back empty-handed,
+        which is what a timeout looks like to the ladder, so the month lands on an
+        optimize=False sibling. That pass builds no objective and the RESPONSE must say
+        so, not just the SolveResult.
+        """
+        import owt_solver_v2 as mod
+
+        original = mod.create_model_and_solve
+        returned = []
+
+        def optimising_passes_time_out(**kwargs):
+            if kwargs.get("optimize", True) and not kwargs.get("empty_objective_only"):
+                return None
+            result = original(**kwargs)
+            if result is not None:
+                returned.append("stage_a" if kwargs.get("empty_objective_only") else "ladder")
+            return result
+
+        mod.create_model_and_solve = optimising_passes_time_out
+        try:
+            res = solve_from_dict(self._shape(4, [2, 4], []))
+        finally:
+            mod.create_model_and_solve = original
+
+        self.assertTrue(res.get("ok"), res.get("error"))
+        self.assertEqual(
+            returned[-1], "ladder",
+            "the month fell back to Stage A, so this never reached an optimize=False return")
+        self.assertTrue(
+            res["objective_skipped"],
+            "an optimize=False pass builds no objective; the response must report it")
+
+    def test_an_objective_less_tier_is_not_proved_infeasible_twice(self):
+        """
+        Once the objective is skipped, a tier's optimize=True pass admits exactly the
+        assignments its optimize=False sibling does and minimises nothing — it is the
+        same problem. When it PROVES the tier infeasible the sibling can only prove it
+        again, spending a pass of the 40 s budget on a month that is already degraded.
+
+        Only a proof is final. A pass that ran out of time (UNKNOWN) still hands over:
+        the sibling searches differently and may find what this one missed.
+
+        Observed independently of the code under test — the model's own objective and
+        the status ortools returned — rather than through the ladder's bookkeeping.
+        """
+        import owt_solver_v2 as mod
+        from ortools.sat.python import cp_model
+
+        heavy = [{
+            "total_counts": {p: 40 for p in ROSTER},
+            "role_counts": {p: {r: 8 for r in
+                                ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"]}
+                            for p in ROSTER},
+        } for _ in range(3)]
+
+        solves = []
+        passes = []
+        original_solve = cp_model.CpSolver.Solve
+        original_pass = mod.create_model_and_solve
+
+        def record_solve(solver_self, model):
+            status = original_solve(solver_self, model)
+            solves.append((model.HasObjective(), status))
+            return status
+
+        def record_pass(**kwargs):
+            result = original_pass(**kwargs)
+            if not kwargs.get("empty_objective_only"):
+                had_objective, status = solves[-1]
+                tier = (kwargs["sun_lead_limit"], kwargs["sun_bgv_limit"],
+                        kwargs["fairness_limit"])
+                passes.append((tier, kwargs["optimize"], had_objective, status))
+            return result
+
+        cp_model.CpSolver.Solve = record_solve
+        mod.create_model_and_solve = record_pass
+        try:
+            res = solve_from_dict(self._shape(4, [2, 4], heavy))
+        finally:
+            cp_model.CpSolver.Solve = original_solve
+            mod.create_model_and_solve = original_pass
+
+        proved = [tier for tier, optimize, had_objective, status in passes
+                  if optimize and not had_objective and status == cp_model.INFEASIBLE]
+        self.assertTrue(
+            proved, f"no objective-less pass proved a tier infeasible; saw {passes}")
+        for tier in proved:
+            siblings = [p for p in passes if p[0] == tier and not p[1]]
+            self.assertEqual(siblings, [], f"tier {tier} was proved infeasible twice")
+
+        # Nothing the caller reads moves: the month lands on the same tier it did
+        # when the sibling still ran, and still says the objective was skipped.
+        self.assertTrue(res.get("ok"), res.get("error"))
+        self.assertTrue(res["objective_skipped"])
+        self.assertTrue(res["fairness_relaxed"])
+        self.assertFalse(res["sun_lead_fairness_relaxed"])
+        self.assertFalse(res["sun_bgv_fairness_relaxed"])
+
+    def test_a_timed_out_objective_less_pass_still_hands_over(self):
+        """
+        The other side of that skip: only a PROOF is final. An objective-less pass that
+        ran out of time proved nothing, and its sibling searches differently (AUTOMATIC
+        rather than RANDOMIZED), so the ladder must still run it — skipping there could
+        change the month. Simulated, because a real timeout depends on the machine.
+        """
+        import owt_solver_v2 as mod
+        from ortools.sat.python import cp_model
+
+        original = mod.create_model_and_solve
+        ladder = []
+
+        def objective_less_timeout(**kwargs):
+            if kwargs.get("empty_objective_only"):
+                return original(**kwargs)
+            ladder.append(kwargs["optimize"])
+            if kwargs["optimize"]:
+                kwargs["pass_info"].update(objective_skipped=True, status=cp_model.UNKNOWN)
+                return None
+            return original(**kwargs)
+
+        mod.create_model_and_solve = objective_less_timeout
+        try:
+            res = solve_from_dict(self._shape(4, [2, 4], []))
+        finally:
+            mod.create_model_and_solve = original
+
+        self.assertTrue(res.get("ok"), res.get("error"))
+        self.assertEqual(
+            ladder[:2], [True, False],
+            "a tier whose objective-less pass timed out must still run its sibling")
+
+    def test_cpsat_validator_has_the_last_word(self):
+        """
+        compute_priority_weights bounds each tier by what it can REACH. CP-SAT validates
+        the flattened objective against each variable's declared DOMAIN, and it reads
+        the two Sun.Lead rotation tiers per person — measured 0.5-10% above the ladder's
+        own figure. A month in that sliver passes the arithmetic guard and is still
+        MODEL_INVALID, which the ladder reads as an infeasible tier.
+
+        Put a model there on purpose: scale the weights until the top tier alone is
+        past INT64_MAX // 2, behind the arithmetic guard's back. The pass must drop the
+        objective and report it, never hand ortools a model it rejects.
+        """
+        import owt_solver_v2 as mod
+        from ortools.sat.python import cp_model
+
+        original_weights = mod.compute_priority_weights
+
+        def past_the_guard(max_spread, max_consec, max_rand, tier_maxima=None):
+            w = original_weights(max_spread, max_consec, max_rand, tier_maxima)
+            top = w["Sun.Lead"] * tier_maxima["Sun.Lead"]
+            scale = (2 ** 63 - 1) // 2 // top + 1
+            return {k: v * scale for k, v in w.items()}
+
+        seen = []
+        original_solve = cp_model.CpSolver.Solve
+
+        def record(solver_self, model):
+            status = original_solve(solver_self, model)
+            seen.append(solver_self.StatusName(status))
+            return status
+
+        mod.compute_priority_weights = past_the_guard
+        cp_model.CpSolver.Solve = record
+        try:
+            res = solve_from_dict(self._shape(4, [2, 4], []))
+        finally:
+            mod.compute_priority_weights = original_weights
+            cp_model.CpSolver.Solve = original_solve
+
+        self.assertTrue(res.get("ok"), res.get("error"))
+        self.assertNotIn("MODEL_INVALID", seen)
+        self.assertTrue(res["objective_skipped"])
 
     def test_an_absurd_ladder_raises_its_own_exception(self):
         """
