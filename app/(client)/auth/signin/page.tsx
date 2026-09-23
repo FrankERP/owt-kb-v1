@@ -5,6 +5,9 @@ import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { isNativeApp, nativeGoogleIdToken } from "@/app/utils/native";
 import Image from "next/image";
+import Button from "@/app/components/ui/Button";
+import Presence from "@/app/components/ui/Presence";
+import { revealProps } from "@/app/utils/reveal";
 
 function SignInForm() {
   const searchParams = useSearchParams();
@@ -56,7 +59,7 @@ function SignInForm() {
       <div className="w-full max-w-md">
 
         {/* Backstage identity */}
-        <div className="brand-stage-hero mb-7 flex flex-col items-center text-center">
+        <div className="brand-stage-hero mb-7 flex flex-col items-center text-center" {...revealProps(0)}>
           <Image
             src="/icons/backstage-v2-192.png"
             alt=""
@@ -73,29 +76,29 @@ function SignInForm() {
           </p>
         </div>
 
-        <section className="brand-facet-panel rounded-[var(--brand-radius-panel)] border border-ink-dim/20 bg-surface-console/75 p-5 shadow-[0_24px_80px_rgb(var(--elevation-rgb)/0.28)] backdrop-blur-sm sm:p-6">
+        <section className="brand-facet-panel rounded-[var(--brand-radius-panel)] border border-ink-dim/20 bg-surface-console/75 p-5 shadow-[0_24px_80px_rgb(var(--elevation-rgb)/0.28)] backdrop-blur-sm sm:p-6" {...revealProps(3)}>
           <div className="mb-5">
             <h2 className="font-label text-[11px] uppercase tracking-[0.22em] text-accent">Acceso del equipo</h2>
             <p className="mt-1 font-body text-sm text-ink-dim">Inicia sesión para ver tus servicios y canciones.</p>
           </div>
 
-          {/* Error */}
-          {errorMsg && (
+          {/* Error — inside Presence so the region is ABSENT until there is
+              something to announce, rather than an empty live region sitting in
+              the tree for a screen reader to walk past. */}
+          <Presence show={!!errorMsg} variant="rise" as="div">
             <p role="alert" className="mb-4 text-sm text-negative-muted bg-negative-surface-deepest/35 border border-negative-strong/30 rounded-[var(--brand-radius-control)] px-4 py-3">
               {errorMsg}
             </p>
-          )}
+          </Presence>
 
           {/* SSO buttons */}
           <div className="space-y-3">
-            <button
-              onClick={handleGoogle}
-              disabled={loading}
-              className="w-full min-h-11 flex items-center justify-center gap-3 px-4 py-3 rounded-[var(--brand-radius-control)] border border-accent/35 bg-accent/[0.06] hover:bg-accent/10 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-            >
-              <GoogleIcon />
-              Continuar con Google
-            </button>
+            <div {...revealProps(4)}>
+              <Button variant="secondary" size="lg" className="w-full gap-3" onClick={handleGoogle} disabled={loading}>
+                <GoogleIcon />
+                Continuar con Google
+              </Button>
+            </div>
           </div>
 
           {/* Divider */}
@@ -107,33 +110,35 @@ function SignInForm() {
 
           {/* Credentials */}
           <form onSubmit={handleCredentials} className="space-y-3">
-            <input
-              type="email"
-              placeholder="Email"
-              aria-label="Correo electrónico"
-              autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-edge-control bg-surface-base/35 font-body text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
-            />
-            <input
-              type="password"
-              placeholder="Contraseña"
-              aria-label="Contraseña"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-edge-control bg-surface-base/35 font-body text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full min-h-11 py-3 rounded-[var(--brand-radius-control)] bg-accent/20 hover:bg-accent/30 border border-accent/30 transition-colors font-label text-xs uppercase tracking-widest disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/70"
-            >
-              {loading ? "Iniciando..." : "Iniciar sesión"}
-            </button>
+            <div {...revealProps(5)}>
+              <input
+                type="email"
+                placeholder="Email"
+                aria-label="Correo electrónico"
+                autoComplete="username"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-edge-control bg-surface-base/35 font-body text-[16px] sm:text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
+              />
+            </div>
+            <div {...revealProps(6)}>
+              <input
+                type="password"
+                placeholder="Contraseña"
+                aria-label="Contraseña"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full min-h-11 px-4 py-3 rounded-[var(--brand-radius-control)] border border-edge-control bg-surface-base/35 font-body text-[16px] sm:text-sm text-ink placeholder:text-placeholder focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/40 transition-colors"
+              />
+            </div>
+            <div {...revealProps(7)}>
+              <Button type="submit" variant="primary" size="lg" className="w-full" busy={loading} busyLabel="Entrando…" disabled={loading}>
+                Iniciar sesión
+              </Button>
+            </div>
             <p className="font-body text-xs text-ink-dim text-center pt-1">
               ¿Olvidaste tu contraseña? Pídele a un administrador que la restablezca.
             </p>

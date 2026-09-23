@@ -334,7 +334,11 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     // not `rgb(var(--role-rgb) / a)` — the same shape as --warning-glow. The
     // OCCURRENCE regex only matches the latter, so the pin stays put.
     const all = occurrences(bodies).filter((o) => /^--(accent|ink|surface|warning|info|positive|negative)/.test(o.name));
-    expect(all.length).toBe(69);
+    // 69 → 70 (R4 Task 3: .brand-tempo-pill's beat ring borrows --accent-rgb).
+    // 70 → 62 (R5 Task 1, ADR-0035: `.brand-admin-shell` spent five of these
+    // — border, two backgrounds, an inset highlight, and the `::before` wash —
+    // and `.brand-admin-tabs` the other three; both classes are deleted.)
+    expect(all.length).toBe(62);
     expect(all.filter((o) => o.alpha === "none").length).toBe(4);
   });
 

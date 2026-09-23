@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:vr": "playwright test -c playwright.vr.config.ts"
   },
   "dependencies": {
     "@capacitor/core": "^8.4.0",

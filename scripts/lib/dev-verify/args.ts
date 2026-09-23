@@ -14,6 +14,8 @@ export interface ParsedArgs {
   theme?: "light" | "dark";
   clicks: string[];
   waitFor?: string;
+  /** Milliseconds to idle after `--wait` and before the capture, so a screenshot lands after an enter animation (R5: menus and sheets capture mid-fade otherwise). 0–10000. */
+  settleMs: number;
   json: boolean;
 }
 
@@ -24,7 +26,7 @@ export function isArgsError(v: ParsedArgs | ArgsError): v is ArgsError {
 }
 
 const BOOLEAN_FLAGS = new Set(["--full-page", "--text", "--a11y", "--console", "--json", "--touch"]);
-const VALUE_FLAGS = new Set(["--route", "--base-url", "--screenshot", "--viewport", "--theme", "--click", "--wait"]);
+const VALUE_FLAGS = new Set(["--route", "--base-url", "--screenshot", "--viewport", "--theme", "--click", "--wait", "--settle"]);
 
 export function parseArgs(argv: string[]): ParsedArgs | ArgsError {
   const out: ParsedArgs = {
@@ -36,6 +38,7 @@ export function parseArgs(argv: string[]): ParsedArgs | ArgsError {
     console: false,
     viewport: { width: 1280, height: 800 },
     clicks: [],
+    settleMs: 0,
     json: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
@@ -60,6 +63,12 @@ export function parseArgs(argv: string[]): ParsedArgs | ArgsError {
       case "--base-url": out.baseUrl = value; break;
       case "--screenshot": out.screenshot = value; break;
       case "--wait": out.waitFor = value; break;
+      case "--settle": {
+        const n = Number(value);
+        if (!Number.isInteger(n) || n < 0 || n > 10_000) return { error: "--settle must be an integer 0–10000 (ms)" };
+        out.settleMs = n;
+        break;
+      }
       case "--click": out.clicks.push(value); break;
       case "--theme":
         if (value !== "light" && value !== "dark") return { error: "--theme must be light or dark" };

@@ -3,6 +3,7 @@
 import { KIDS_SEATS, KIDS_SEAT_LABELS } from "@/app/utils/kidsTypes";
 import type { KidsBoardProps } from "./kidsBoardProps";
 import { PairChip } from "./PairChip";
+import Button from "@/app/components/ui/Button";
 
 /**
  * The phone layout — one card per Sunday, four tappable seats each.
@@ -51,8 +52,9 @@ export function KidsSundayCards({
               >
                 {sunday.published ? "Publicado" : "Borrador"}
               </span>
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="lg"
                 onClick={() => onTogglePublish(sunday.date, !sunday.published)}
                 disabled={busy || (!sunday.published && sunday.filled === 0)}
                 title={
@@ -60,10 +62,11 @@ export function KidsSundayCards({
                     ? "Asigna al menos una pareja antes de publicar"
                     : undefined
                 }
-                className="min-h-[44px] rounded-lg border border-accent/25 px-3 font-label text-xs uppercase tracking-widest text-accent transition-colors hover:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
+                busy={sunday.publishing}
+                busyLabel="…"
               >
-                {sunday.publishing ? "…" : sunday.published ? "Despublicar" : "Publicar"}
-              </button>
+                {sunday.published ? "Despublicar" : "Publicar"}
+              </Button>
             </div>
           </div>
 
@@ -91,12 +94,14 @@ export function KidsSundayCards({
                         {KIDS_SEAT_LABELS[seat]}
                       </span>
                       {assignedId ? (
-                        <PairChip
-                          name={option?.name ?? pairName(assignedId)}
-                          weeksSinceLabel={option?.weeksSinceLabel}
-                          overlap={option?.worshipOverlap ?? []}
-                          note={option ? null : "Fuera de la rotación"}
-                        />
+                        <span key={assignedId} className="block animate-fade-in">
+                          <PairChip
+                            name={option?.name ?? pairName(assignedId)}
+                            weeksSinceLabel={option?.weeksSinceLabel}
+                            overlap={option?.worshipOverlap ?? []}
+                            note={option ? null : "Fuera de la rotación"}
+                          />
+                        </span>
                       ) : (
                         <span className="block font-body text-sm text-ink-dim">Sin asignar</span>
                       )}

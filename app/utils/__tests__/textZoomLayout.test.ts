@@ -156,8 +156,9 @@ describe("boxes sized for text at one scale are minimums, not caps", () => {
   it("the tab bar may actually reach the height it publishes", () => {
     // `--bottom-nav-h` is MEASURED, and toasts, the audio player and the song FAB
     // all clear themselves by it. A fixed `h-16` would have them clear 64px of a
-    // taller bar.
-    const src = read("app/components/BottomNav.tsx");
+    // taller bar. The markup lives in `BottomNavBar.tsx` since R6 Task 7 —
+    // `BottomNav` keeps the session, the pathname and the measurement.
+    const src = read("app/components/BottomNavBar.tsx");
     expect(src).toMatch(/flex items-stretch min-h-16/);
     expect(src).not.toMatch(/flex items-stretch h-16/);
   });

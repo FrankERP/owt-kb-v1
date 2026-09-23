@@ -101,7 +101,10 @@ member is balanced as a person, not per instrument (confirmed 2026-09-09). Its o
 Rows nobody declares are skipped with no marker; custom planner rows are outside the
 vocabulary and never filled. Rows whose stored label doesn't match the current seat vocabulary
 (`instrumentSeatDef(label).id !== row.id` — legacy-spelled rows) are likewise never filled and
-produce no marker. Spec: `docs/superpowers/specs/2026-09-09-member-instruments-auto-fill-design.md`.
+produce no marker. With `fillColumns` set (stored-mode group fill, `groupFill.ts`, spec
+`2026-09-22-camp-group-fill-design.md`) it fills exactly the given columns — specials
+included — in that order, and vacates nothing: the "vacate this run's own previous auto picks"
+step above only runs in the default (no `fillColumns`) weekend path. Spec: `docs/superpowers/specs/2026-09-09-member-instruments-auto-fill-design.md`.
 
 ---
 

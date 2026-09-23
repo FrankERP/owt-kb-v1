@@ -27,6 +27,7 @@ describe("dev-verify args", () => {
       console: false,
       viewport: { width: 1280, height: 800 },
       clicks: [],
+      settleMs: 0,
       json: false,
     });
   });
@@ -40,7 +41,7 @@ describe("dev-verify args", () => {
     expect(parsed).toEqual({
       route: "/admin", baseUrl: "https://x", screenshot: "out.png", fullPage: true,
       text: true, a11y: true, touch: false, console: true, viewport: { width: 375, height: 812 }, theme: "dark",
-      clicks: ["Editar mes", "Cerrar"], waitFor: "Servicios", json: true,
+      clicks: ["Editar mes", "Cerrar"], waitFor: "Servicios", settleMs: 0, json: true,
     });
   });
 
@@ -61,5 +62,14 @@ describe("dev-verify args", () => {
   it("isArgsError narrows", () => {
     expect(isArgsError({ error: "x" })).toBe(true);
     expect(isArgsError(parseArgs(["--route", "/"]))).toBe(false);
+  });
+  it("parses --settle as a bounded integer", () => {
+    const ok = parseArgs(["--route", "/", "--settle", "400"]);
+    expect(isArgsError(ok)).toBe(false);
+    if (!isArgsError(ok)) expect(ok.settleMs).toBe(400);
+    expect(isArgsError(parseArgs(["--route", "/", "--settle", "abc"]))).toBe(true);
+    expect(isArgsError(parseArgs(["--route", "/", "--settle", "20000"]))).toBe(true);
+    const def = parseArgs(["--route", "/"]);
+    if (!isArgsError(def)) expect(def.settleMs).toBe(0);
   });
 });

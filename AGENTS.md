@@ -103,6 +103,22 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   member — screenshots, text, a11y tree, console. Use it for the human-eyes step of the push
   order when the change is visual; it never writes, and it still is not a substitute for
   Frank's own look at a release.
+- **Only `main`, `preview` and `verify/service-readiness` spend a Vercel build.**
+  `vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore-build.mjs` and skips
+  every other ref — the deployment is still CREATED, as `CANCELED` with a URL that
+  serves nothing, so a `claude/*` push proves nothing and you still verify on
+  `dev-owt-backstage` by merging into `preview`. Function Storage counts every
+  RETAINED deployment (the embedded Studio makes each ~75 MB), which is how the free
+  tier hit 100% on 2026-09-17 with 136 of them; a canceled build stores nothing but
+  still counts against the per-day deployment quota. To build a skipped ref ON
+  PURPOSE, redeploy from the dashboard with «Use project's Ignore Build Step»
+  unchecked — a plain redeploy and a deploy hook both carry the branch's ref and are
+  skipped again — and that checkbox is documented for a Project Settings ignore
+  step, not for a `vercel.json` one, so the hatch that CANNOT fail is changing what
+  the branch carries: merge into `preview`, or drop `ignoreCommand` and push. It
+  fails open: no git ref, `VERCEL_ENV=production`, or a broken policy module all
+  build. `deployBranchPolicy.test.ts` guards the policy AND the wiring, and runs the
+  script as a process so swapped exit codes cannot pass. See `docs/CI.md`.
 - The stable dev domain is owned **exclusively** by the `preview` branch. Never
   point it at or deploy it directly from a feature/development branch. To update
   dev: merge the intended development branch into `preview`, push `preview`,
@@ -157,6 +173,21 @@ several exist precisely to stop a plausible-looking change.
   `special_role`): `Lead[]._ref`, `BGVs[]._ref`, `Chorus[]._ref`,
   `instruments[].person._ref`, `foh_team[].person._ref`. Any "who serves" query
   must cover all five — reuse `assignedMemberRefsQuery()` in `app/utils/notifyTargets.ts`.
+- **A special's `time` (`"HH:mm"`) is display and sort only — never identity.** Identity
+  stays `date + normalized service_name` (ADR-0011); two sets on one day need different
+  names. `isServiceTime`/`compareServiceTime` (`app/utils/serviceTime.ts`) are the ONLY
+  validator and comparator under `app/**`; the Studio schema mirrors the regex because
+  `sanity/` cannot import `app/`, and `serviceTimeSchemaSync.test.ts` fails if the two
+  drift. `time` is never combined with `date` into a `Date`.
+  **Same-day sets are created in `/admin` stored mode («+ Nuevo servicio»)**, which keys
+  specials by `_id`/`date|name`; the month CREATE flow drafts one special per date on
+  purpose (E19 in `plannerModel.ts`) — do not re-key it.
+- **A «Noche de alabanza» is `special_role.format = "worship_night"`, set once at creation** —
+  never a fourth role type (ADR-0036); the PATCH route never sets or unsets it. Its songs may
+  name one or two leaders (`songs[].leads`, keyed references) who must be in the set's Lead when
+  written: the setlist PUT refuses anything else under the role `_rev` it asserts, approval
+  carries leaders over by song reference, proposals and weekend setlists never carry them.
+  `serviceFormat.ts` and `songLeads.ts` are the ONLY definitions of these rules.
 - Member-facing reads must filter `published != false` (draft/publish gating) for the
   **worship** types, whose documents predate the field — an absent `published` there
   must mean "visible". **Kids reads use the stricter `published == true`** instead
@@ -226,6 +257,19 @@ several exist precisely to stop a plausible-looking change.
 - **`app/(client)/template.tsx` renders a fragment, never a wrapper.** A transformed
   ancestor is a containing block for every `position: fixed` descendant (FAB, audio
   transport, toasts). `reveal.test.ts` is the guard.
+- **`/admin` has no shell and no page-level horizontal scroll** — the planner grid, the
+  Servicios board and the availability matrix are the only horizontal scrollers, each in
+  its own `overflow-x-auto` box (ADR-0035).
+- **A theme-gallery fixture hosts PRESENTATIONAL halves only** — never a component that
+  reads a session, a cookie, the network or an env var. The gallery route is public and
+  prerendered (ADR-0017), so `useSession` there breaks both; that is why the `nav` fixture
+  hosts `BottomNavBar` and not `BottomNav`. `themeGallery.test.ts` sweeps every fixture for
+  `useSession`/`next-auth`/`fetch`/Sanity/env and fails a new one that reaches out. The
+  song fixture's `TutorialPoster` is the ONE documented exception — the `i.ytimg.com` URL
+  is hard-coded inside the production component — and `e2e/theme-gallery/gallery.spec.ts`
+  stubs that route so the baseline stays deterministic. Splitting a component is the
+  answer; loosening the guard is not.
+- **Form controls are 16 px on a phone.** WebKit zooms into any focused `<input>`/`<textarea>`/`<select>` under 16 px and never zooms back, so every member-reachable control is `text-[16px] sm:text-<size>` (`ui/Select`/`ui/DateField` carry it in their `SIZE` maps). Never `maximum-scale=1` on the viewport. `inputFontSize.test.ts` is the guard (`admin/`, `kids/` excluded by path).
 
 ## Reusable utils (don't reinvent)
 `normalizeText` (accent-insensitive search), `assignedMemberRefsQuery`,
@@ -248,12 +292,21 @@ not be verified. Never hand-roll the timer. For a FIXED, stacked notification us
 (`app/components/ui/Toast.tsx` — the ONLY fixed toast stack; `toast({ message, tone?,
 duration?, hold?, action? })`, portalled, `z-[95]` above `CueDialog`), `Menu`
 (`app/components/ui/Menu.tsx` — every anchored dropdown; real `role="menu"` semantics,
-roving focus, merges the trigger's own ref), `Collapse` (`app/components/ui/Collapse.tsx`
+roving focus, merges the trigger's own ref. Since R5 the panel is PORTALLED to
+`document.body` and positioned `fixed` from the trigger's rect: an `absolute` panel was
+clipped by any scrolling or `overflow-hidden` ancestor, and a `fixed` one inside the
+transformed reveal host would be trapped anyway. It flips and sizes itself to the room it
+has, clamps to the viewport, is opaque (`bg-surface-raised`) because it can now sit over a
+dialog, and CLOSES on any ancestor scroll — a fixed panel cannot honestly travel with its
+trigger), `Collapse` (`app/components/ui/Collapse.tsx`
 — every disclosure; the one place height animates, on user-triggered opens only),
 `SegmentedControl` (`app/components/ui/SegmentedControl.tsx` — every one-of-N choice;
 never `aria-pressed` toggles), `SlidingIndicator` (tab bars), `Switch`, `Checkbox`,
-`Select`, `DateField` (native controls under house chrome — never a bare
-`<select>`/`<input type="checkbox|date|month">` in `app/**`), `NumberRoll`,
+`Select` (desktop: a `Menu` popover; touch: the native picker), `DateField`
+(native controls under house chrome — never a bare
+`<select>`/`<input type="checkbox|date|month">` in `app/**`; **`disabled` reaches the
+`kind="month"` stepper arrows too** — a composite field is ONE control, and arrows that
+stayed live mid-save started a second load underneath the first), `NumberRoll`,
 `AnimatedList` (`app/components/ui/AnimatedList.tsx` — every list that reflows on filter),
 `SwipeStrip` (`app/components/ui/SwipeStrip.tsx` — the one drag-with-snap host, `onSwipe(dir)`
 past a distance/velocity threshold; the schedule's week strip is its one consumer),
@@ -267,7 +320,9 @@ conditional — directly or inside a wrapper component (a local `Modal`, a
 `SetlistPopover`, a `SeatPicker`) whose only JSX output is `<CueDialog open …>` — a
 dialog element with a literal `open` gets no enter/exit either way;
 `cueDialogMount.test.ts` is the guard), `Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never
-an inline class string), `Presence` (every animated conditional), `Skeleton`/
+an inline class string. `tone` is the one colour prop: the `pill`'s pressed colour
+(`accent`/`availability`) and the `icon`'s destructive hover (`danger`) — never a
+`hover:` pair in `className`, which races the variant's own), `Presence` (every animated conditional), `Skeleton`/
 `SkeletonGroup` (every loading placeholder), `revealProps` (route reveal),
 `useAvailability` (`app/components/availability/useAvailability.ts` — the ONLY
 client-side availability writer; `MyAvailabilityPanel` (on `/me/disponibilidad`)
@@ -286,7 +341,89 @@ that triggered it; `cancel()` covers a `signOut` that throws), `PullToRefresh`
 (`app/components/ui/PullToRefresh.tsx` — mounted once in the client layout,
 never per route; opt a gesture-owning surface out with `data-pull-ignore`),
 `CueStrip` (`app/components/ui/CueStrip.tsx` — the navbar's next-service cue,
-fetched client-side so `Navbar` stays sync). Motion tokens are `--motion-*` /
+fetched client-side so `Navbar` stays sync),
+`TransposeProvider`/`useTransposeOptional` (`app/components/song/TransposeProvider.tsx`
+— the ONLY transposition seat on the song page; `ChordChart` falls back to its own
+state only when rendered WITHOUT a provider, never as a second live copy),
+`transpose.ts` (`app/utils/transpose.ts` — `rootIndex`/`noteAt`/`semitonesBetween`/
+`transposeKey`/`transposeChord`/`capoSuggestion`/`isChordPro`; neutral, so a Server
+Component may call them), `practice.ts` (`app/utils/practice.ts` —
+`tempoPeriodMs`/`beatsPerBar`/`autoscrollPxPerSecond`/`countLyricLines`; neutral too),
+`lyricMarkers.tsx` (`app/utils/` — the lyric block's typography: `LYRIC_EYEBROW`/
+`LYRIC_EYEBROW_BLOCK` restyle the section headings a sheet ALREADY has (never ADD a label —
+decision N) and `dimRepeatMarkers` dims `//`. Neutral, so the song page may call it. The
+eyebrow element is a bare `div`, never a `p` (a `p` loses the `!important` tie to
+`prose-p:!mt-0` on emission order), and the block carries NO `first:` — only the page's
+prose wrapper knows which eyebrow is first, via
+`[&>div:first-child>div:first-child]:!mt-0`), `TutorialPoster`
+(`app/components/song/TutorialPoster.tsx` — the ONLY tutorial embed: a YouTube poster under
+a «Reproducir» `Button`, player on press; a url with no extractable id keeps the raw
+iframe, a url-less row renders nothing. Never boot an embed on page load),
+`RehearsalPlayer`/`Waveform` (`app/components/song/` — the ONLY rehearsal-mix player; one `<audio>`
+through `PlayerContext`, URLs are always `/api/audio/[song]/[key]`, never `cdn.sanity.io`; the
+canvas paints with `themeColour`; the KEY is the hero dial's — `mixesForKey(mixes, soundingKey)`,
+never a picker of its own), `rehearsalMixes.ts` (`app/utils/` — neutral `groupMixes`/
+`preselectMix`/`waveformBars`/`mixTones`/`mixesForKey`; `SEAT_TO_FAMILY` pins app seats to
+abletonnl families),
+`fillSpecialGroup`/`orderGroup` (`app/components/admin/groupFill.ts` — the ONLY stored-mode
+filler: a ticked group of special services, Lead/BGV via `fillColumn` and instruments via
+`fillInstruments({ fillColumns })`, with `columns = group` and `savedWindow = []` so only
+load inside the group counts; empty seats only, nothing vacated, nothing written until
+«Guardar»),
+`upcomingMonthPills`/`addMonths` (`app/components/admin/monthPills.ts` — the Servicios panel's
+upcoming month pills: every month with services from the current one on, PLUS the current
+month and the next two even when empty, so a month opens in the stored editor without
+generating it),
+`isWorshipNight`/`WORSHIP_NIGHT_FORMAT` (`app/utils/serviceFormat.ts` — the ONE format
+definition, neutral), `songLeads.ts` (`app/utils/` — `leadSeatIds`/`songItemLeadIds`/
+`validateSongLeads`/`carryOverSongLeads`/`unassignedLeads`/`leadRosterOf`/`formatLeadNames`/
+`sortedLeadIds`/`SONG_LEADS_MAX`; neutral, shared by the setlist and approval writers, the
+editor, the cards and the outbox snapshot. `sortedLeadIds` is the ONE normalizer for
+snapshot leader ids, used by both `songRowsFrom` (queue side) and `outboxSweep`'s
+`normalizeSnapshotRows` (flush side) — the two must agree byte for byte, or every save on
+a worship night emails, or clearing leaders never does),
+`BottomNavBar` (`app/components/BottomNavBar.tsx` — the phone tab bar's PRESENTATIONAL
+half, props only; `BottomNav` keeps the session, the pathname and the measurement. Anything
+that needs the bar without a session — a gallery fixture — hosts this one),
+`SongHeroPills` (`app/components/song/` — the ONE 12-key picker on the song page;
+never add a second strip, `ChordChart` keeps only its ± pair), `TempoPill`
+(`app/components/song/` — the ONE tempo control, on the song hero (`size="md"`) and in
+`SongSheet`'s meta row (`size="sm"`); two clocks: the RING is a CSS animation clocked by
+`--tempo-period`, never a `setInterval`, and the CLICK is `createMetronome`
+(`app/components/song/metronome.ts` — the ONLY metronome, a Web Audio lookahead
+scheduler built on the first tap and stopped on the second, on a hidden tab, on an
+`enabled={false}` surface and on unmount; on iOS it obeys the silent switch). ONE
+metronome sounds app-wide: a `start()` takes the floor from whichever instance held it
+and that pill un-presses through its `onStop`), `LyricsAutoscroll` (`app/components/song/` — rAF +
+`window.scrollTo`, NEVER a transform; pauses on touch, stops on the wheel),
+`Equalizer`/`PlayPauseGlyph` (`app/components/ui/` — the one playing indicator and the
+one play/pause morph, shared by the audio cards, the transport and `PracticeCluster`),
+`NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts` — the navbar height's one spelling, for
+`Navbar` and `NavbarSkeleton` ONLY; other offsets still hard-code theirs),
+`SectionNav practice` → `PracticeCluster` (`app/components/song/` — the song page's
+sticky title·key·BPM·play cluster; it lives in the page's own bar, never in `Navbar`),
+`AdminRail` (`app/components/admin/AdminRail.tsx` — the Control Room's ONLY section nav:
+one component, two layouts (a sticky vertical rail at `lg+`, the underline strip below),
+both in the DOM with CSS picking one and a DIFFERENT `SlidingIndicator` id each, or the
+marker would fly across the page at the breakpoint; `ADMIN_TAB_ICON` is the one
+glyph-per-tab map and every item carries an explicit `aria-label`, because the labels are
+`display: none` — and so out of the a11y tree — while the planner is open),
+`useIntegrityQueue` (`app/components/admin/useIntegrityQueue.ts` — the ONLY integrity
+fetch; `AdminPanel` calls it once and the panel AND the rail dot read that one state.
+Gated on the role actually having a Servicios tab (`enabled`), re-read on ENTERING
+Servicios, and a failed, in-flight or disabled domain reads `unknown`, never `clean`),
+`PanelSkeleton` (`app/components/admin/PanelSkeleton.tsx` — the `loading` component for
+every admin panel behind `next/dynamic`, and a Suspense fallback ONLY: App Router
+`next/dynamic` never hands it an `error`/`retry` pair), `PanelBoundary`
+(`app/components/admin/PanelBoundary.tsx` — the error boundary those panels render inside,
+and the one place a chunk-load failure surfaces on `/admin`; without it a rejected
+`import()` throws through `React.lazy` to the route's error page. «Reintentar» reloads the
+page, because `React.lazy` caches the rejection), `MembersPanel`
+(`app/components/admin/MembersPanel.tsx` — the Miembros tab; row actions are ONE `Menu`
+per row behind a ⋯ `Button variant="icon"`, never hover-only buttons, and taking access
+away asks first through a confirm `CueDialog` that stays open on a refused PATCH
+(decision O). Giving access back needs no confirm).
+Motion tokens are `--motion-*` /
 `--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and
 ADR-0031.

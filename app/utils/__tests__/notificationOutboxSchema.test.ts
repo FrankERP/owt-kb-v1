@@ -67,9 +67,10 @@ describe("notificationOutbox schema", () => {
     expect(beforeSongs?.type).toBe("array");
 
     // The `group`-not-`medley_tag` decision is load-bearing: a regression back
-    // to a raw medley_tag field must fail here.
+    // to a raw medley_tag field must fail here. `leads` (a worship night's song
+    // leaders, spec §8) is the one deliberate addition since.
     const songRow = beforeSongs?.of?.[0];
-    expect(songRow?.fields?.map((f) => f.name).sort()).toEqual(["group", "key", "ref"]);
+    expect(songRow?.fields?.map((f) => f.name).sort()).toEqual(["group", "key", "leads", "ref"]);
   });
 
   it("is registered in the studio schema", () => {

@@ -6,6 +6,7 @@
 
 import { createHash } from "node:crypto";
 import { buildRuns } from "./medley";
+import { songItemLeadIds, sortedLeadIds } from "./songLeads";
 
 export const NOTICE_KINDS = ["role", "setlist", "leadNotes"] as const;
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
@@ -16,6 +17,11 @@ export interface OutboxSongRow {
   key: string;
   /** Index of the contiguous medley run, or null for a standalone song. */
   group: number | null;
+  /**
+   * A worship night's leaders, sorted ids; ABSENT when none, so snapshots
+   * taken before leaders existed compare unchanged.
+   */
+  leads?: string[];
 }
 
 /**
@@ -56,6 +62,9 @@ export function songRowsFrom(songs: unknown): OutboxSongRow[] {
       ref: isObj(s.song) && typeof s.song._ref === "string" ? s.song._ref : "",
       key: typeof s.play_key === "string" ? s.play_key : "",
       medley_tag: typeof s.medley_tag === "string" ? s.medley_tag : undefined,
+      // `sortedLeadIds` is the one normalizer the flush side
+      // (`normalizeSnapshotRows`) also applies — the two must agree exactly.
+      leads: sortedLeadIds(songItemLeadIds(s)),
     }))
     .filter((s) => s.ref);
 
@@ -65,11 +74,17 @@ export function songRowsFrom(songs: unknown): OutboxSongRow[] {
     if (run.kind === "medley" && run.songs.length >= 2) {
       const g = groupIndex++;
       for (const { song } of run.songs) {
-        rows.push({ _key: `s${rows.length}`, ref: song.ref, key: song.key, group: g });
+        rows.push({
+          _key: `s${rows.length}`, ref: song.ref, key: song.key, group: g,
+          ...(song.leads.length ? { leads: song.leads } : {}),
+        });
       }
     } else {
       const song = run.kind === "single" ? run.song : run.songs[0].song;
-      rows.push({ _key: `s${rows.length}`, ref: song.ref, key: song.key, group: null });
+      rows.push({
+        _key: `s${rows.length}`, ref: song.ref, key: song.key, group: null,
+        ...(song.leads.length ? { leads: song.leads } : {}),
+      });
     }
   }
   return rows;

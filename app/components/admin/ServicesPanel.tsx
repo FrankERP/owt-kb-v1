@@ -4,7 +4,20 @@ import { useToast } from "@/app/components/ui/Toast";
 import Collapse from "@/app/components/ui/Collapse";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import MonthGenerator from "./MonthGenerator";
+import dynamic from "next/dynamic";
+import PanelSkeleton from "./PanelSkeleton";
+import PanelBoundary from "./PanelBoundary";
+// «Generar mes»/«Editar mes» replace this whole panel via an early `return`
+// below (D10 — a full-width panel, never an overlay), so this chunk was
+// already never fetched until one of those two states goes true. `dynamic`
+// makes that deferral pay off in bytes too: the planner/solver code this pulls
+// in never reaches the initial Servicios bundle at all.
+//
+// A failed chunk throws through `React.lazy` (App Router `next/dynamic` never
+// hands its `loading` component an `error`/`retry` pair), so `PanelBoundary`
+// wraps both call sites below and keeps the failure out of the route's error
+// page.
+const MonthGenerator = dynamic(() => import("./MonthGenerator"), { ssr: false, loading: PanelSkeleton });
 import type { ClearMonthSummary } from "./clearMonthModel";
 import { mutationErrorMessage, mutationSignal } from "./serviceMutationErrors";
 import { useSolverConfig } from "./useSolverConfig";
@@ -37,16 +50,10 @@ import {
   type ActiveModeSnapshot,
   type ServiceSourceRecords,
 } from "./serviceSourceState";
-import {
-  INTEGRITY_QUEUE_TITLE,
-  buildIntegrityQueue,
-  integrityQueueSummary,
-  integrityQueueTone,
-} from "./serviceIntegrityQueue";
+import { buildIntegrityQueue } from "./serviceIntegrityQueue";
 import {
   CARD_STYLE,
   SERVICE_LABEL,
-  TONE_CLASS,
   buildPublishConfirmation,
   buildServiceCards,
   commandSummaryCounters,
@@ -83,6 +90,10 @@ import { ParticipationSidebar } from "@/app/components/admin/ParticipationSideba
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import Button from "../ui/Button";
+import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
+import { revealProps } from "@/app/utils/reveal";
+import { upcomingMonthPills } from "./monthPills";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 //
@@ -117,7 +128,15 @@ async function describeMutationError(res: Response, fallback: string): Promise<s
 
 // ─── Modal wrapper ────────────────────────────────────────────────────────────
 
+// ALWAYS MOUNTED, visibility driven by the `open` prop — never a BARE `open`
+// attribute behind a conditional, which gets no enter/exit and which
+// `cueDialogMount.test.ts` counts (in source, so that guard reads comments too:
+// do not spell the anti-pattern out here). Each of the five dialogs below passes
+// its own open boolean; the BODY is drawn from payload state that OUTLIVES the
+// close, so nothing blanks during the exit, and it is keyed on `dialogSeq` so a
+// reopen starts fresh.
 function Modal({
+  open,
   title,
   onClose,
   wide,
@@ -125,6 +144,7 @@ function Modal({
   busy,
   children,
 }: {
+  open: boolean;
   title: string;
   onClose: () => void;
   wide?: boolean;
@@ -140,7 +160,7 @@ function Modal({
   children: React.ReactNode;
 }) {
   return (
-    <CueDialog open title={title} label={title} mode="sheet" size={wide ? "lg" : "sm"} onDismiss={() => { if (!busy) onClose(); }}>
+    <CueDialog open={open} title={title} label={title} mode="sheet" size={wide ? "lg" : "sm"} onDismiss={() => { if (!busy) onClose(); }}>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
         {status && (
           <div>
@@ -174,6 +194,12 @@ export default function ServicesPanel() {
   // Delete modal. Roster create/edit now lives in the stored month editor.
   type EditModal = { type: "delete"; role: ServiceRole } | null;
   const [editModal, setEditModal] = useState<EditModal>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  // Bumped on every dialog open and part of each body's `key`: the payload
+  // survives the close (so the exit animation still has something to draw) while
+  // a reopen still starts from a fresh body.
+  const [dialogSeq, setDialogSeq] = useState(0);
+  const openDialog = useCallback(() => setDialogSeq(n => n + 1), []);
   /**
    * THE rule set (P6) — one fetch, one object, both surfaces.
    *
@@ -232,6 +258,7 @@ export default function ServicesPanel() {
 
   // Setlist
   const [setlistRole, setSetlistRole] = useState<ServiceRole | null>(null);
+  const [setlistOpen, setSetlistOpen] = useState(false);
 
   // Copy-instruments mode: pick a source card, then a target day to repeat its lineup.
   const [copySource, setCopySource] = useState<string | null>(null);
@@ -252,8 +279,11 @@ export default function ServicesPanel() {
   // `Publicar listos` confirmation, the individual override, and safe unpublish —
   // three separate flows on purpose (a hide never routes through publish).
   const [publishPlan, setPublishPlan] = useState<PublishConfirmationPlan | null>(null);
+  const [publishPlanOpen, setPublishPlanOpen] = useState(false);
   const [overrideCard, setOverrideCard] = useState<ServiceCardModel | null>(null);
+  const [overrideOpen, setOverrideOpen] = useState(false);
   const [unpublishCard, setUnpublishCard] = useState<ServiceCardModel | null>(null);
+  const [unpublishOpen, setUnpublishOpen] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   /**
    * A lost/timed-out publish or unpublish response. Repeat submission is disabled
@@ -354,12 +384,14 @@ export default function ServicesPanel() {
     setEditError(null);
     openSnapshot("delete", control, [next.role]);
     setEditModal(next);
+    openDialog();
+    setEditModalOpen(true);
   };
 
   const closeEditModal = () => {
     setEditError(null);
     clearSnapshot("delete");
-    setEditModal(null);
+    setEditModalOpen(false);
   };
 
   /**
@@ -594,9 +626,9 @@ export default function ServicesPanel() {
       if (res.ok) {
         setPendingOutcome(null);
         setPublishError(null);
-        setPublishPlan(null);
-        setOverrideCard(null);
-        setUnpublishCard(null);
+        setPublishPlanOpen(false);
+        setOverrideOpen(false);
+        setUnpublishOpen(false);
         showToast(mutationOutcomeMessage("Cambio confirmado.", await loadSources()));
       } else {
         // Not in the requested state, or the refetch itself failed: stay unknown
@@ -631,7 +663,7 @@ export default function ServicesPanel() {
       outcome: { kind: "publish", ids: entries.map(e => e.id), published: true },
       success: entries.length === 1 ? "Servicio publicado." : `${entries.length} servicios publicados.`,
       fallback: "Error al publicar.",
-      onDone: () => { setPublishPlan(null); setOverrideCard(null); },
+      onDone: () => { setPublishPlanOpen(false); setOverrideOpen(false); },
     });
   }
 
@@ -658,7 +690,7 @@ export default function ServicesPanel() {
       outcome: { kind: "publish", ids: entries.map(e => e.id), published: true },
       success: entries.length === 1 ? "Servicio publicado." : `${entries.length} servicios publicados.`,
       fallback: "Error al publicar.",
-      onDone: () => { setPublishPlan(null); setOverrideCard(null); },
+      onDone: () => { setPublishPlanOpen(false); setOverrideOpen(false); },
     });
   }
 
@@ -675,7 +707,7 @@ export default function ServicesPanel() {
       outcome: { kind: "publish", ids: [card.role._id], published: true },
       success: "Servicio publicado.",
       fallback: "Error al publicar.",
-      onDone: () => { setOverrideCard(null); setPublishPlan(null); },
+      onDone: () => { setOverrideOpen(false); setPublishPlanOpen(false); },
     });
   }
 
@@ -693,7 +725,7 @@ export default function ServicesPanel() {
       outcome: { kind: "unpublish", ids: [card.role._id], published: false },
       success: "Servicio oculto.",
       fallback: "Error al ocultar.",
-      onDone: () => setUnpublishCard(null),
+      onDone: () => setUnpublishOpen(false),
     });
   }
 
@@ -702,6 +734,8 @@ export default function ServicesPanel() {
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setPublishError(null);
     setPublishPlan(buildPublishConfirmation(cards));
+    openDialog();
+    setPublishPlanOpen(true);
   }
 
   function openOverride(card: ServiceCardModel) {
@@ -709,6 +743,8 @@ export default function ServicesPanel() {
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setPublishError(null);
     setOverrideCard(card);
+    openDialog();
+    setOverrideOpen(true);
   }
 
   function openUnpublish(card: ServiceCardModel) {
@@ -717,6 +753,8 @@ export default function ServicesPanel() {
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setPublishError(null);
     setUnpublishCard(card);
+    openDialog();
+    setUnpublishOpen(true);
   }
 
   // ── Setlist editor ────────────────────────────────────────────────────────
@@ -725,6 +763,8 @@ export default function ServicesPanel() {
     const guard = guardControl(sources, "editSetlist");
     if (!guard.ok) { showToast(guard.message ?? "Datos incompletos."); return; }
     setSetlistRole(role);
+    openDialog();
+    setSetlistOpen(true);
   }
 
   function openGenerator() {
@@ -756,7 +796,7 @@ export default function ServicesPanel() {
   // Split months into current/future and past
   const currentYM   = today.slice(0, 7);
   const allMonths   = Array.from(new Set(roles.map(r => r.date.slice(0, 7)))).sort();
-  const futureMonths = allMonths.filter(ym => ym >= currentYM);
+  const futureMonths = upcomingMonthPills(allMonths, currentYM);
   const pastMonths   = allMonths.filter(ym => ym < currentYM).reverse(); // most-recent first
 
   const toggleMonth = (ym: string) =>
@@ -801,7 +841,6 @@ export default function ServicesPanel() {
 
   const counters = commandSummaryCounters({ all: cards, visible: visibleCards });
   const summaryLine = commandSummarySegments(counters).join(" · ");
-  const queueTone = integrityQueueTone(queue);
 
   // Availability conflicts across the visible, still-upcoming cards.
   const conflictNotices = visibleCards
@@ -878,6 +917,16 @@ export default function ServicesPanel() {
   const createGate        = gate("createService");
   const editTeamGate      = gate("editTeam");
   const swapGate          = gate("swap");
+  // The one reason the toolbar shows, in the buttons' own order. A `title` on a
+  // `disabled` house Button is unreachable (`disabled:pointer-events-none`), so
+  // the closed gate has to say why in the layout rather than on hover.
+  const toolbarGateReason =
+    [
+      visibleCards.some(c => c.readiness.publishState === "draft") ? publishGate : null,
+      generateGate,
+      editTeamGate,
+      copyMode ? null : createGate,
+    ].find((g): g is NonNullable<typeof g> => !!g && !g.enabled && !!g.reason)?.reason ?? null;
   const changeDateGate    = gate("changeServiceDate");
   const participationGate = gate("participationSidebar");
   const cardGates: CardGates = {
@@ -916,50 +965,52 @@ export default function ServicesPanel() {
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl uppercase tracking-wide">Editar mes</h1>
         </div>
-        <MonthGenerator
-          key={`stored:${monthEditor.month}:${monthEditor.focusRoleId ?? "month"}`}
-          mode="stored"
-          initialMonth={monthEditor.month}
-          focusRoleId={monthEditor.focusRoleId}
-          openComposerInitially={monthEditor.openComposerInitially}
-          members={members}
-          existingRoles={roles}
-          allRoles={roles}
-          rules={rules}
-          capability={monthEditor.openComposerInitially
-            ? { enabled: createGate.enabled, reason: createGate.reason }
-            : { enabled: editTeamGate.enabled, reason: editTeamGate.reason }}
-          storedCapabilities={{
-            edit: { enabled: editTeamGate.enabled, reason: editTeamGate.reason },
-            create: { enabled: createGate.enabled, reason: createGate.reason },
-            swap: { enabled: swapGate.enabled, reason: swapGate.reason },
-            changeDate: { enabled: changeDateGate.enabled, reason: changeDateGate.reason },
-            clear: { enabled: cardGates.deleteService.enabled, reason: cardGates.deleteService.reason },
-          }}
-          onCleared={async (summary) => {
-            // The editor has already closed. Reload FIRST so the list never shows
-            // the deleted services next to a message saying they are gone.
-            const failed = await loadSources();
-            if (summary.failures.length === 0) {
-              showToast(mutationOutcomeMessage(summary.message, failed, "Eliminados, pero no se pudo actualizar"));
-            } else {
-              setClearReport(summary);
-              if (failed.length > 0) showToast(mutationOutcomeMessage("", failed, "No se pudo actualizar la lista"));
-            }
-          }}
-          storedSource={{
-            roles,
-            integrity: summaries.roles,
-            rolesStatus: sourceRecords.roles.status,
-            integrityStatus: sourceRecords.roleTargets.status,
-            rolesGeneration: sourceRecords.roles.generation,
-            integrityGeneration: sourceRecords.roleTargets.generation,
-            reload: async () =>
-              (await loadSources(["roles", "roleTargets"])).length === 0,
-          }}
-          onClose={() => setMonthEditor(null)}
-          onCreated={() => showToast("Servicio creado y verificado.")}
-        />
+        <PanelBoundary>
+          <MonthGenerator
+            key={`stored:${monthEditor.month}:${monthEditor.focusRoleId ?? "month"}`}
+            mode="stored"
+            initialMonth={monthEditor.month}
+            focusRoleId={monthEditor.focusRoleId}
+            openComposerInitially={monthEditor.openComposerInitially}
+            members={members}
+            existingRoles={roles}
+            allRoles={roles}
+            rules={rules}
+            capability={monthEditor.openComposerInitially
+              ? { enabled: createGate.enabled, reason: createGate.reason }
+              : { enabled: editTeamGate.enabled, reason: editTeamGate.reason }}
+            storedCapabilities={{
+              edit: { enabled: editTeamGate.enabled, reason: editTeamGate.reason },
+              create: { enabled: createGate.enabled, reason: createGate.reason },
+              swap: { enabled: swapGate.enabled, reason: swapGate.reason },
+              changeDate: { enabled: changeDateGate.enabled, reason: changeDateGate.reason },
+              clear: { enabled: cardGates.deleteService.enabled, reason: cardGates.deleteService.reason },
+            }}
+            onCleared={async (summary) => {
+              // The editor has already closed. Reload FIRST so the list never shows
+              // the deleted services next to a message saying they are gone.
+              const failed = await loadSources();
+              if (summary.failures.length === 0) {
+                showToast(mutationOutcomeMessage(summary.message, failed, "Eliminados, pero no se pudo actualizar"));
+              } else {
+                setClearReport(summary);
+                if (failed.length > 0) showToast(mutationOutcomeMessage("", failed, "No se pudo actualizar la lista"));
+              }
+            }}
+            storedSource={{
+              roles,
+              integrity: summaries.roles,
+              rolesStatus: sourceRecords.roles.status,
+              integrityStatus: sourceRecords.roleTargets.status,
+              rolesGeneration: sourceRecords.roles.generation,
+              integrityGeneration: sourceRecords.roleTargets.generation,
+              reload: async () =>
+                (await loadSources(["roles", "roleTargets"])).length === 0,
+            }}
+            onClose={() => setMonthEditor(null)}
+            onCreated={() => showToast("Servicio creado y verificado.")}
+          />
+        </PanelBoundary>
       </div>
     );
   }
@@ -970,29 +1021,31 @@ export default function ServicesPanel() {
         <div className="flex items-center justify-between">
           <h1 className="font-display text-2xl uppercase tracking-wide">Generar mes</h1>
         </div>
-        <MonthGenerator
-          members={members}
-          existingRoles={roles}
-          // `ServiceRole` is a structural superset of `ParticipantRole` (richer
-          // `leads`/`bgvs`/`chorus`/`instruments`/`foh` member shape, same
-          // `_type`/`date`), so no cast is needed — and none should be added
-          // back: if `ServiceRole` ever drifts out of that superset relationship,
-          // this is meant to be a `tsc` error, not a silent narrowing that lets
-          // `savedWindow` (D12, inside `MonthGenerator`) degrade to a blank
-          // "sin historial reciente" strip.
-          allRoles={roles}
-          // The same controller used by the stored month editor. One object, so
-          // neither planner surface can drift onto its own rules copy.
-          rules={rules}
-          // Re-checked at preview and at confirmation, not just at open.
-          capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
-          // Per-target A1/A2 preflight: only proven-`creatable` targets are posted.
-          preflight={preflightTarget}
-          onClose={() => setShowGenerator(false)}
-          onCreated={async () => {
-            showToast(mutationOutcomeMessage("Servicios generados.", await loadSources()));
-          }}
-        />
+        <PanelBoundary>
+          <MonthGenerator
+            members={members}
+            existingRoles={roles}
+            // `ServiceRole` is a structural superset of `ParticipantRole` (richer
+            // `leads`/`bgvs`/`chorus`/`instruments`/`foh` member shape, same
+            // `_type`/`date`), so no cast is needed — and none should be added
+            // back: if `ServiceRole` ever drifts out of that superset relationship,
+            // this is meant to be a `tsc` error, not a silent narrowing that lets
+            // `savedWindow` (D12, inside `MonthGenerator`) degrade to a blank
+            // "sin historial reciente" strip.
+            allRoles={roles}
+            // The same controller used by the stored month editor. One object, so
+            // neither planner surface can drift onto its own rules copy.
+            rules={rules}
+            // Re-checked at preview and at confirmation, not just at open.
+            capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
+            // Per-target A1/A2 preflight: only proven-`creatable` targets are posted.
+            preflight={preflightTarget}
+            onClose={() => setShowGenerator(false)}
+            onCreated={async () => {
+              showToast(mutationOutcomeMessage("Servicios generados.", await loadSources()));
+            }}
+          />
+        </PanelBoundary>
       </div>
     );
   }
@@ -1009,57 +1062,69 @@ export default function ServicesPanel() {
               <p className={`mt-0.5 font-label text-xs uppercase tracking-widest text-mono-500 ${CARD_STYLE.longText}`}>
                 {summaryLine}
               </p>
-              {/* The global integrity entry: never a clean zero when an inventory failed. */}
-              <p className="mt-1 flex min-w-0 flex-wrap items-center gap-1.5">
-                <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-                  {INTEGRITY_QUEUE_TITLE}
-                </span>
-                <span
-                  className={`rounded-full border px-2 py-0.5 font-label text-[11px] uppercase tracking-widest ${
-                    TONE_CLASS[
-                      queueTone === "clean" ? "approved" : queueTone === "unknown" ? "unknown" : "error"
-                    ]
-                  }`}
-                >
-                  {integrityQueueSummary(queue)}
-                </span>
-              </p>
+              {/*
+                The global integrity state is NOT repeated here. `IntegrityQueuePanel`
+                states it above this panel and the rail's Servicios dot carries its
+                tone (R5 ruling 4) — a third copy under the heading said
+                "sin problemas de integridad" twice on one screen.
+              */}
             </>
           )}
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          {visibleCards.some(c => c.readiness.publishState === "draft") && (
-            <button type="button"
-              disabled={!publishGate.enabled}
-              title={publishGate.reason ?? undefined}
-              onClick={() => openPublishPlan(visibleCards)}
-              className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-3 font-label text-xs uppercase tracking-widest transition-colors hover:bg-accent-deep/80 dark:hover:bg-surface-accent-solid disabled:opacity-40">
-              Publicar listos ({counters.readyToPublish})
-            </button>
-          )}
-          <button ref={generatorTriggerRef} onClick={openGenerator}
-            disabled={!generateGate.enabled}
-            title={generateGate.reason ?? undefined}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent hover:border-accent/30 dark:hover:border-surface-accent-20 transition-colors disabled:opacity-40">
-            📅 Generar mes
-          </button>
-          <button
-            ref={monthEditorTriggerRef}
-            type="button"
-            onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" })}
-            disabled={!editTeamGate.enabled}
-            title={editTeamGate.reason ?? undefined}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-surface-accent-20 font-label text-xs uppercase tracking-widest text-mono-500 hover:text-accent hover:border-accent/30 dark:hover:border-surface-accent-20 transition-colors disabled:opacity-40"
-          >
-            Editar mes
-          </button>
-          {!copyMode && (
-            <button ref={newServiceTriggerRef} onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, true, { kind: "new" })}
-              disabled={!createGate.enabled}
-              title={createGate.reason ?? undefined}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-40">
-              <span className="text-base leading-none">+</span> Nuevo
-            </button>
+        {/*
+          The gate reason is a LINE, not a `title`. `Button` carries
+          `disabled:pointer-events-none`, so a disabled control receives no
+          pointer events at all and its native tooltip can never be summoned —
+          the reason the admin needs most was the one the markup guaranteed they
+          would never see. One line, the first closed gate's reason, in the
+          toolbar's own column.
+        */}
+        <div className="flex min-w-0 flex-col items-end gap-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {visibleCards.some(c => c.readiness.publishState === "draft") && (
+              <Button
+                variant="secondary"
+                size="lg"
+                disabled={!publishGate.enabled}
+                onClick={() => openPublishPlan(visibleCards)}
+              >
+                Publicar listos ({counters.readyToPublish})
+              </Button>
+            )}
+            <Button
+              ref={generatorTriggerRef}
+              variant="secondary"
+              size="lg"
+              onClick={openGenerator}
+              disabled={!generateGate.enabled}
+            >
+              📅 Generar mes
+            </Button>
+            <Button
+              ref={monthEditorTriggerRef}
+              variant="secondary"
+              size="lg"
+              onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, false, { kind: "toolbar" })}
+              disabled={!editTeamGate.enabled}
+            >
+              Editar mes
+            </Button>
+            {!copyMode && (
+              <Button
+                ref={newServiceTriggerRef}
+                variant="primary"
+                size="lg"
+                onClick={() => openMonthEditor(selectedMonths.size === 1 ? [...selectedMonths][0] : currentYM, undefined, true, { kind: "new" })}
+                disabled={!createGate.enabled}
+              >
+                <span className="text-base leading-none">+</span> Nuevo
+              </Button>
+            )}
+          </div>
+          {toolbarGateReason && (
+            <p className={`font-label text-[11px] text-ink-dim text-right ${CARD_STYLE.longText}`}>
+              {toolbarGateReason}
+            </p>
           )}
         </div>
       </div>
@@ -1076,10 +1141,9 @@ export default function ServicesPanel() {
               </p>
             )}
           </div>
-          <button type="button" onClick={retryLoad}
-            className="px-3 py-1.5 rounded-lg border border-warning-fg/40 font-label text-[11px] uppercase tracking-widest text-warning-soft hover:bg-warning-fg/15 transition-colors shrink-0">
+          <Button variant="secondary" size="sm" onClick={retryLoad} className="shrink-0">
             Reintentar carga
-          </button>
+          </Button>
         </div>
       )}
 
@@ -1092,15 +1156,14 @@ export default function ServicesPanel() {
               {clearReport.failures.map((line) => <li key={line}>{line}</li>)}
             </ul>
           </div>
-          <button type="button" onClick={() => setClearReport(null)}
-            className="px-3 py-1.5 rounded-lg border border-negative-border/50 font-label text-[11px] uppercase tracking-widest text-negative-fg hover:bg-negative-surface/30 transition-colors shrink-0">
+          <Button variant="secondary" size="sm" onClick={() => setClearReport(null)} className="shrink-0">
             Cerrar aviso
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Month filter */}
-      {canFilterMonths(sourceRecords) && allMonths.length > 0 && (
+      {canFilterMonths(sourceRecords) && (
         // Not `space-y-2`: a closed Collapse is still a child, so the gap would
         // be reserved. The Collapse's own content carries it (`mt-2`).
         <div>
@@ -1111,16 +1174,16 @@ export default function ServicesPanel() {
               <MonthPill key={ym} label={fmtYM(ym)} selected={selectedMonths.has(ym)} onClick={() => toggleMonth(ym)} />
             ))}
             {pastMonths.length > 0 && (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowPastMonths(v => !v)}
                 aria-expanded={showPastMonths}
                 aria-controls="services-past-months"
-                className="font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border border-accent/10 text-mono-600 hover:border-accent/25 hover:text-mono-400 transition-colors flex items-center gap-1"
               >
                 Roles previos
                 <span className={`transition-transform duration-base ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
-              </button>
+              </Button>
             )}
           </div>
           {pastMonths.length > 0 && (
@@ -1168,9 +1231,9 @@ export default function ServicesPanel() {
                 Copiando los instrumentos de <span className="text-mono-300 capitalize">{srcLabel}</span>. Haz clic en «Pegar aquí» en el día destino (reemplaza sus instrumentos).
               </p>
             </div>
-            <button onClick={exitCopyMode} className="font-label text-[11px] uppercase tracking-widest text-mono-500 hover:text-negative-fg transition-colors ml-4 shrink-0">
+            <Button variant="ghost" size="sm" onClick={exitCopyMode} className="ml-4 shrink-0">
               Cancelar
-            </button>
+            </Button>
           </div>
         );
       })()}
@@ -1179,15 +1242,18 @@ export default function ServicesPanel() {
       {copyMode && staleModes.copy && (
         <div className="rounded-lg border border-negative-strong/40 bg-negative-strong/10 px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
           <p className="font-body text-xs text-negative-muted">{staleModes.copy.message}</p>
-          <button type="button" onClick={() => { exitCopyMode(); retryLoad(); }}
-            className="px-3 py-1.5 rounded-lg border border-negative-fg/40 font-label text-[11px] uppercase tracking-widest text-negative-soft hover:bg-negative-strong/15 transition-colors shrink-0">
+          <Button variant="secondary" size="sm" onClick={() => { exitCopyMode(); retryLoad(); }} className="shrink-0">
             Recargar
-          </button>
+          </Button>
         </div>
       )}
 
       {/* Loading */}
-      {view === "loading" && <div className="space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-20 rounded-xl bg-surface-accent-wash animate-pulse" />)}</div>}
+      {view === "loading" && (
+        <SkeletonGroup label="Cargando servicios" className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-40 w-full" rounded="lg" />)}
+        </SkeletonGroup>
+      )}
 
       {/* A roles failure prevents card rendering and shows retry instead */}
       {view === "error" && (
@@ -1196,14 +1262,11 @@ export default function ServicesPanel() {
           <p className="font-body text-sm text-mono-300">
             No se pueden mostrar los servicios sin esa fuente. Reintenta la carga.
           </p>
-          <button type="button" onClick={retryLoad}
-            className="px-4 py-2 rounded-lg border border-negative-fg/40 font-label text-xs uppercase tracking-widest text-negative-soft hover:bg-negative-strong/15 transition-colors">
-            Reintentar carga
-          </button>
+          <Button variant="secondary" onClick={retryLoad}>Reintentar carga</Button>
         </div>
       )}
 
-      {/* Grid */}
+      {/* Board */}
       {view === "cards" && (
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
           {participationGate.enabled ? (
@@ -1216,19 +1279,32 @@ export default function ServicesPanel() {
             <aside className="rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 space-y-2">
               <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
               <p className="font-body text-xs text-mono-400">{participationGate.reason}</p>
-              <button type="button" onClick={retryLoad}
-                className="px-3 py-1.5 rounded-lg border border-accent/30 font-label text-[11px] uppercase tracking-widest text-accent hover:bg-accent/10 transition-colors">
-                Reintentar carga
-              </button>
+              <Button variant="secondary" size="sm" onClick={retryLoad}>Reintentar carga</Button>
             </aside>
           )}
-          <div className="grid min-w-0 grid-cols-1 items-start gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          {/*
+            The board (R5 ruling 5). Phone keeps the vertical list; from `lg` the
+            cards become a horizontal snap track — one fixed-width card per snap
+            stop, `scroll-px-6` so a stop lands clear of the rail. It is the ONLY
+            horizontal scroller this panel introduces and it scrolls ITSELF: the
+            `min-w-0` keeps the grid column from being sized by the track, so the
+            page never grows wider (ADR-0035).
+          */}
+          <div className="relative min-w-0">
+          <div className="grid min-w-0 grid-cols-1 gap-4 lg:flex lg:snap-x lg:snap-mandatory lg:items-start lg:overflow-x-auto lg:scroll-px-6 lg:pb-4">
           {counters.upcoming === 0 && selectedMonths.size === 0 && (
             <p className="font-body text-sm text-mono-500 text-center py-12">No hay servicios próximos.</p>
           )}
-          {visibleCards.map(card => (
+          {selectedMonths.size === 1 && visibleCards.length === 0 && (
+            <p className="font-body text-sm text-mono-500 text-center py-12">
+              No hay servicios en {monthLabel}. «+ Nuevo» crea el primero en este mes.
+            </p>
+          )}
+          {visibleCards.map((card, i) => (
             <ServiceReadinessCard
               key={card.cardId}
+              className="lg:w-[380px] lg:shrink-0 lg:snap-start"
+              revealAttrs={revealProps(i)}
               card={card}
               sources={sources}
               todayIso={today}
@@ -1254,38 +1330,53 @@ export default function ServicesPanel() {
             />
           ))}
           </div>
+          {/* Scroll-fade hint at the board's right edge (desktop, where it scrolls). */}
+          <div className="pointer-events-none absolute bottom-4 right-0 top-0 hidden w-8 bg-gradient-to-l from-surface-base to-transparent lg:block" />
+          </div>
         </div>
       )}
 
-      {/* ── Modals ── */}
-      {editModal?.type === "delete" && (() => {
+      {/* ── Modals: mounted always, opened by the prop, bodies keyed on the open
+             so a close keeps drawing what it is animating away. ── */}
+      {(() => {
         // Dependency inventory must be complete (all five) and the observed
         // record still current, or this destructive confirmation is disabled.
         const blocked = staleModes.delete?.message ?? cardGates.deleteService.reason;
         return (
-          <Modal title="Eliminar servicio" onClose={closeEditModal} status={editError ?? blocked} busy={submitting}>
-            <p className="font-body text-sm text-mono-400">¿Eliminar el servicio del <span className="text-negative-fg font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
-            <div className="flex gap-3">
-              <button onClick={closeEditModal} disabled={submitting} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors disabled:opacity-50">Cancelar</button>
-              {staleModes.delete ? (
-                <button onClick={() => { closeEditModal(); retryLoad(); }} className="flex-1 py-2 rounded-lg border border-accent/30 font-label text-xs uppercase tracking-widest text-accent hover:bg-accent/10 transition-colors">Recargar</button>
-              ) : (
-                <button onClick={handleDelete} disabled={submitting || !!blocked} title={blocked ?? undefined} className="flex-1 py-2 rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">{submitting ? "Eliminando..." : "Eliminar"}</button>
-              )}
-            </div>
+          <Modal
+            open={editModalOpen && editModal?.type === "delete"}
+            title="Eliminar servicio"
+            onClose={closeEditModal}
+            status={editError ?? blocked}
+            busy={submitting}
+          >
+            {editModal?.type === "delete" && (
+              <div key={`delete-${dialogSeq}`} className={CARD_STYLE.dialog}>
+                <p className="font-body text-sm text-mono-400">¿Eliminar el servicio del <span className="text-negative-fg font-semibold">{formatDate(editModal.role.date)}</span>? Esta acción no se puede deshacer.</p>
+                <div className="flex gap-3">
+                  <Button variant="secondary" size="lg" className="flex-1" onClick={closeEditModal} disabled={submitting}>Cancelar</Button>
+                  {staleModes.delete ? (
+                    <Button variant="secondary" size="lg" className="flex-1" onClick={() => { closeEditModal(); retryLoad(); }}>Recargar</Button>
+                  ) : (
+                    <Button variant="danger" size="lg" className="flex-1" onClick={handleDelete} disabled={submitting || !!blocked} title={blocked ?? undefined}>{submitting ? "Eliminando..." : "Eliminar"}</Button>
+                  )}
+                </div>
+              </div>
+            )}
           </Modal>
         );
       })()}
 
       {/* `Publicar listos` — the readiness-aware bulk confirmation */}
-      {publishPlan && (
-        <Modal
-          title="Publicar listos"
-          onClose={() => { setPublishPlan(null); setPublishError(null); }}
-          status={publishError}
-          busy={submitting}
-        >
-          <div className={CARD_STYLE.dialog}>
+      <Modal
+        open={publishPlanOpen && !!publishPlan}
+        title="Publicar listos"
+        onClose={() => { setPublishPlanOpen(false); setPublishError(null); }}
+        status={publishError}
+        busy={submitting}
+      >
+        {publishPlan && (
+          <div key={`publish-${dialogSeq}`} className={CARD_STYLE.dialog}>
             <p className="font-body text-sm text-mono-400">
               «Publicar {publishPlan.selected.length}» envía solo los servicios que pasaron toda
               la verificación. Los demás se muestran abajo con su motivo.
@@ -1341,7 +1432,7 @@ export default function ServicesPanel() {
               </section>
             )}
             <PublicationFooter
-              onClose={() => { setPublishPlan(null); setPublishError(null); }}
+              onClose={() => { setPublishPlanOpen(false); setPublishError(null); }}
               onConfirm={() => publishReady(publishPlan.selected.map(({ id, rev }) => ({ id, rev })))}
               onVerify={verifyPendingOutcome}
               confirmLabel={`Publicar ${publishPlan.selected.length}`}
@@ -1359,24 +1450,28 @@ export default function ServicesPanel() {
               }
             />
           </div>
-        </Modal>
-      )}
+        )}
+      </Modal>
 
       {/* Individual override: WORKFLOW blockers only, acknowledged explicitly */}
-      {overrideCard && (() => {
-        const acknowledgement = overrideAcknowledgement({
-          id: overrideCard.role._id,
-          rev: overrideCard.role._rev,
-          readiness: overrideCard.readiness,
-        });
+      {(() => {
+        const acknowledgement = overrideCard
+          ? overrideAcknowledgement({
+              id: overrideCard.role._id,
+              rev: overrideCard.role._rev,
+              readiness: overrideCard.readiness,
+            })
+          : null;
         return (
           <Modal
+            open={overrideOpen && !!overrideCard}
             title="Publicar de todos modos"
-            onClose={() => { setOverrideCard(null); setPublishError(null); }}
+            onClose={() => { setOverrideOpen(false); setPublishError(null); }}
             status={publishError}
             busy={submitting}
           >
-            <div className={CARD_STYLE.dialog}>
+            {overrideCard && (
+            <div key={`override-${dialogSeq}`} className={CARD_STYLE.dialog}>
               <p className={`font-body text-sm text-mono-400 ${CARD_STYLE.longText}`}>
                 {serviceCardLabel(overrideCard.role)}
               </p>
@@ -1402,7 +1497,7 @@ export default function ServicesPanel() {
                 </p>
               )}
               <PublicationFooter
-                onClose={() => { setOverrideCard(null); setPublishError(null); }}
+                onClose={() => { setOverrideOpen(false); setPublishError(null); }}
                 onConfirm={() =>
                   acknowledgement && publishOverride(overrideCard, acknowledgement.acknowledgedBlockers)
                 }
@@ -1414,19 +1509,21 @@ export default function ServicesPanel() {
                 danger
               />
             </div>
+            )}
           </Modal>
         );
       })()}
 
       {/* Safe unpublish — never routed through publish readiness or override */}
-      {unpublishCard && (
-        <Modal
-          title="Ocultar servicio"
-          onClose={() => { setUnpublishCard(null); setPublishError(null); }}
-          status={publishError ?? cardGates.unpublish.reason}
-          busy={submitting}
-        >
-          <div className={CARD_STYLE.dialog}>
+      <Modal
+        open={unpublishOpen && !!unpublishCard}
+        title="Ocultar servicio"
+        onClose={() => { setUnpublishOpen(false); setPublishError(null); }}
+        status={publishError ?? cardGates.unpublish.reason}
+        busy={submitting}
+      >
+        {unpublishCard && (
+          <div key={`unpublish-${dialogSeq}`} className={CARD_STYLE.dialog}>
             <p className={`font-body text-sm text-mono-400 ${CARD_STYLE.longText}`}>
               ¿Ocultar <span className="font-semibold text-mono-200">{serviceCardLabel(unpublishCard.role)}</span> del
               equipo? Deja de ser visible para los miembros; no se borra nada.
@@ -1436,7 +1533,7 @@ export default function ServicesPanel() {
               con datos incompletos o en conflicto.
             </p>
             <PublicationFooter
-              onClose={() => { setUnpublishCard(null); setPublishError(null); }}
+              onClose={() => { setUnpublishOpen(false); setPublishError(null); }}
               onConfirm={() => unpublishService(unpublishCard)}
               onVerify={verifyPendingOutcome}
               confirmLabel="Ocultar"
@@ -1446,29 +1543,34 @@ export default function ServicesPanel() {
               danger
             />
           </div>
-        </Modal>
-      )}
+        )}
+      </Modal>
 
       {/* `showGenerator` is handled by an early return above (D10: full-width
           panel, not a dialog) — this tab body never renders alongside it. */}
-      {setlistRole && (() => {
+      {(() => {
         const r = setlistRole;
-        const type = r._type === "sunday_role" ? "sunday" : r._type === "saturday_role" ? "saturday" : "special";
-        const week = r.date.slice(0, 10);
-        const title = `Setlist — ${SERVICE_LABEL[r._type]} ${new Date(week + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`;
+        const type = !r ? "sunday" : r._type === "sunday_role" ? "sunday" : r._type === "saturday_role" ? "saturday" : "special";
+        const week = r ? r.date.slice(0, 10) : "";
+        const title = r
+          ? `Setlist — ${SERVICE_LABEL[r._type]} ${new Date(week + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" })}`
+          : "Setlist";
         return (
-          <Modal title={title} onClose={() => setSetlistRole(null)} wide busy={setlistSaving}>
-            <SetlistEditor
-              week={week}
-              type={type}
-              roleId={type === "special" ? r._id : undefined}
-              onBusyChange={setSetlistSaving}
-              onClose={() => setSetlistRole(null)}
-              onSaved={async () => {
-                setSetlistRole(null);
-                showToast(mutationOutcomeMessage("Setlist guardado.", await loadSources()));
-              }}
-            />
+          <Modal open={setlistOpen && !!r} title={title} onClose={() => setSetlistOpen(false)} wide busy={setlistSaving}>
+            {r && (
+              <SetlistEditor
+                key={`setlist-${dialogSeq}`}
+                week={week}
+                type={type}
+                roleId={type === "special" ? r._id : undefined}
+                onBusyChange={setSetlistSaving}
+                onClose={() => setSetlistOpen(false)}
+                onSaved={async () => {
+                  setSetlistOpen(false);
+                  showToast(mutationOutcomeMessage("Setlist guardado.", await loadSources()));
+                }}
+              />
+            )}
           </Modal>
         );
       })()}
@@ -1570,20 +1672,26 @@ function fmtYM(ym: string) {
   return new Date(ym + "-01T12:00:00").toLocaleDateString("es-MX", { month: "short", year: "2-digit" });
 }
 
+/**
+ * One month filter. The selection is MULTI-select: `aria-pressed` per pill (the
+ * `pill` variant styles the pressed state), never a one-of-N `SegmentedControl`.
+ * `past` only dims an unpressed pill, and it dims it with OPACITY rather than a
+ * second `border-…`/`text-…`: `Button` documents `className` as additive
+ * utilities only, and a colour override beside the variant's own left the winner
+ * to Tailwind's emission order — the pill variant's `border-surface-accent-30`
+ * outranked `border-accent/10` and the "past" treatment was invisible. Opacity
+ * touches nothing the variant sets, so it always lands.
+ */
 function MonthPill({ label, selected, onClick, past }: { label: string; selected: boolean; onClick: () => void; past?: boolean }) {
   return (
-    <button
-      type="button"
+    <Button
+      variant="pill"
+      size="sm"
+      active={selected}
       onClick={onClick}
-      className={`font-label text-[11px] uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
-        selected
-          ? "border-accent/60 bg-accent/15 text-accent"
-          : past
-          ? "border-accent/10 text-mono-600 hover:border-accent/30 hover:text-mono-400"
-          : "border-accent/20 text-mono-400 hover:border-accent/40 hover:text-mono-200"
-      }`}
+      className={!selected && past ? "opacity-60" : ""}
     >
       {label}
-    </button>
+    </Button>
   );
 }

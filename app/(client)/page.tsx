@@ -56,9 +56,9 @@ const WEEKEND_QUERY = `{
   "satSongs": *[_type == "saturdarSongs"  && week == $sat] { ${SETLIST_FIELDS} },
   "sunRole":  *[_type == "sunday_role"    && week == $sun && published != false] { ${ROLE_FIELDS} },
   "satRole":  *[_type == "saturday_role"  && week == $sat && published != false] { ${ROLE_FIELDS} },
-  "specials": *[_type == "special_role"   && date >= $today && date <= $sun && published != false] | order(date asc) {
-    _id, date, service_name, team_notes,
-    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key },
+  "specials": *[_type == "special_role"   && date >= $today && date <= $sun && published != false] | order(date asc, time asc) {
+    _id, date, time, service_name, team_notes,
+    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "leads": leads[]->{ member_name, alias } },
     ${ROLE_FIELDS}
   }
 }`;
@@ -143,6 +143,13 @@ export default async function Home() {
   ].filter((d): d is string => !!d && d >= today);
   const nextDate = allDates.sort()[0] ?? null;
 
+  // Only ONE card may carry the countdown pill, and five sets can share a day.
+  // `specials` arrives ordered `date asc, time asc`, so when several of them sit
+  // on `nextDate` the FIRST is the next service and the rest are later that day.
+  const nextSpecialId = nextDate
+    ? specials.find((sp) => sp.date === nextDate && paints({ songs: sp.songs }, sp))?._id ?? null
+    : null;
+
   // One list, in the order the page has always shown them: specials, Saturday,
   // Sunday. Splitting it into "the next service" and "the rest" is what makes
   // home a run sheet (spec §12.1) — the hero card in full, everything else one
@@ -155,6 +162,7 @@ export default async function Home() {
         props: {
           day: sp.service_name || "Servicio Especial",
           date: sp.date,
+          time: sp.time ?? null,
           roleId: sp._id,
           serviceId: sp._id,
           setlist: sp.songs?.length ? { songs: sp.songs as SetlistSong[], week: sp.date, team_notes: sp.team_notes } : undefined,
@@ -163,7 +171,7 @@ export default async function Home() {
           fohTeam: sp.foh_team?.map((s) => ({ label: s.role, person: s.person })),
           bgvs: sp.BGVs,
           chorus: sp.Chorus,
-          isNext: sp.date === nextDate,
+          isNext: sp._id === nextSpecialId,
         } satisfies DayCardProps,
       })),
     ...(hasSaturdayCard
@@ -213,7 +221,7 @@ export default async function Home() {
   return (
     <div>
       {/* `cue={false}`: the hero card below is the countdown. */}
-      <Navbar title="OWT" tags schedule cue={false} />
+      <Navbar title="OWT" cue={false} />
 
       <div className="mx-auto mb-16 max-w-7xl px-6 pt-12">
         <div className="brand-section-heading mb-7" {...revealProps(0)}>

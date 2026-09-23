@@ -41,16 +41,16 @@ Legend: **S** = server component (async unless noted; e.g. the Studio page is sy
 
 | URL | File | Type | Access | Rendering | Description |
 |-----|------|------|--------|-----------|-------------|
-| `/theme-gallery/[theme]/[fixture]` | `(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` | S | **Public** (ADR-0017) | SSG (6 static) | Theme gallery. `[theme]` ∈ `dark\|light`, `[fixture]` ∈ `swatches\|dialog\|planner`; `dynamicParams=false` 404s anything else. Renders real components from hardcoded fixtures — no session read, no fetch. Review surface for the light-mode migration. |
+| `/theme-gallery/[theme]/[fixture]` | `(gallery)/theme-gallery/[theme]/[fixture]/page.tsx` | S | **Public** (ADR-0017) | SSG (14 static) | Theme gallery. `[theme]` ∈ `dark\|light`, `[fixture]` ∈ `swatches\|dialog\|planner\|kids-planner\|controls\|song\|nav`; `dynamicParams=false` 404s anything else. Renders real components from hardcoded fixtures — no session read, no fetch. Review surface for the light-mode migration, and since R6 the **visual-regression baseline** every fixture is captured from (`npm run test:vr`, `e2e/theme-gallery/`). The `nav` fixture hosts `BottomNavBar`, the tab bar's presentational half, with its «Más» sheet open — never `BottomNav`, which reads the session a public prerendered route cannot have (ADR-0017). `#motion` on any gallery URL strips `data-motion="off"` for that hard load, which is how `motion-on.spec.ts` watches a dialog actually enter. |
 | `/` | `(client)/page.tsx` | S | Worship | ISR 60s | Home "Esta semana." This weekend's Sat/Sun/special services. |
 | `/schedule` | `(client)/schedule/page.tsx` | S | Worship | ISR 60s | Upcoming services. Agenda (one row per service) is the default view, `Mes` the month grid; `?m=YYYY-MM` browses one month per header-arrow press, still fetching a `WINDOW_MONTHS`-wide window (default: rolling today → +95 days). |
 | `/biblioteca` | `(client)/biblioteca/page.tsx` | S | Worship | ISR 60s fetch, dynamic by `searchParams` | The song library (R1): one fetch (catalogue + tags + authors), A–Z index with a search console, letter rail and a filter drawer (Tipo, tema, artista, tonalidad). `?q=`/`?tag=`/`?author=` seed initial state; the index mirrors its own state back into the URL without a round-trip. |
-| `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song detail: lyrics/chords, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
+| `/posts/[slug]` | `(client)/posts/[slug]/page.tsx` | S | Worship | **SSG** 3600s + `generateStaticParams` | Song practice surface: lyrics/chords with a transposer, tap tempo, lyrics autoscroll, audio, tutorials, references, play history. `notFound()` for unknown slugs. |
 | `/me` | `(client)/me/page.tsx` | S | Member | ISR 60s | "Mi semana" (R3 F3): the identity header (next service + seat + countdown, or the next Kids Sunday), upcoming assignments and proposal CTAs, the Kids block, and ONE link line to `/me/disponibilidad` carrying the count of upcoming marked dates. No calendar and no settings — both are their own pages now. |
 | `/me/disponibilidad` | `(client)/me/disponibilidad/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | The availability calendar, alone (R3 F3): `MyAvailabilityPanel` with the month grid always open, «Seleccionar fechas», «Repetir…» and the per-day note. A kids-only volunteer reaches it. |
 | `/me/ajustes` | `(client)/me/ajustes/page.tsx` | S | Member (**ministry-neutral**) | ISR 60s | Ajustes, alone (R3 F3): the one `SettingsCard` — Tema, Tamaño de texto, Perfil. Reached from the avatar menu («Ajustes») and from `ThemeAnnouncement` on `/me` (`#tema`). |
 | `/me/propose/[roleId]` | `(client)/me/propose/[roleId]/page.tsx` | S | **Lead-only** | dynamic (`revalidate=0`) | Setlist proposal editor for a service the user Leads. |
-| `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Admin dashboard shell; data fetched client-side from `/api/admin/*`. `?tab=` opens a specific tab, filtered by role. |
+| `/admin` | `(client)/admin/page.tsx` | S | **Manager** | dynamic | Control Room; data fetched client-side from `/api/admin/*`. `?tab=` opens a specific tab, filtered by role. **No shell — the page is the workspace** (R5, [ADR-0035](adr/0035-the-admin-shell-is-gone.md)): one section nav (`AdminRail` — a vertical rail at `lg+`, the underline strip below, the Servicios item carrying the integrity dot), one keyed body that fades in on a tab change, no panel boxes, and **no page-level horizontal scroll** — the planner grid, the Servicios board and the availability matrix are the only horizontal scrollers, each in its own `overflow-x-auto` box. Servicios (a `lg:` snap board of 380 px cards) and the integrity queue load eagerly; the other five tabs and `MonthGenerator` load on demand as their own `next/dynamic` chunks, which is why `/admin`'s first load fell from 358.6 to 150.8 kB gz (R5 Task 6, see [MOTION.md](MOTION.md)). |
 | `/auth/signin` | `(client)/auth/signin/page.tsx` | C | Public | — | Google SSO (web + native) + email/password. |
 | `/auth/not-a-member` | `(client)/auth/not-a-member/page.tsx` | C | Public | — | For authenticated Google users not in `teamMembers`. |
 | `/studio`, `/studio/*` | `(admin)/studio/[[...tool]]/page.tsx` | S | **admin+** | `force-static` | Embedded Sanity Studio (`NextStudio`). |
@@ -137,9 +137,11 @@ because their own headers already show the countdown.
 - **`/me/ajustes`** — `Navbar`, `SettingsCard` (one card holding `ThemeControl`,
   `TextSizeControl` and `ProfilePanel` `bare` — no longer three separate cards).
 - **`/me/propose/[roleId]`** — `Navbar`, `ProposalEditor` (co-located client component).
-- **`/posts/[slug]`** — `Navbar`, `SectionNav`, `ChordChart`, `SongAudioSection`,
-  `EditSongButton`, `PortableText`.
-- **`/admin`** — `Navbar`, `AdminPanel` composing the `app/components/admin/*` panels.
+- **`/posts/[slug]`** — `Navbar`, `TransposeProvider` (the page's one transposition seat),
+  `SongHeroPills` (`KeyDial` + the 12-key drawer, `TempoPill`), `SectionNav` (whose
+  `practice` prop renders `PracticeCluster` once the hero scrolls away), `LyricsAutoscroll`,
+  `ChordChart`, `SongAudioSection`, `EditSongButton`, `PortableText`.
+- **`/admin`** — `Navbar`, an `h1`, `AdminPanel` composing the `app/components/admin/*` panels inside `brand-admin-frame` (kept only as the planner's `:has(.planner-wide)` hook — the bordered `.brand-admin-shell` is gone, ADR-0035).
 - **Always mounted (client layout)** — `ImpersonationBanner`, `ActivityPing`, `AudioPlayer`,
   `SongSheet`, `NativeAuthBootstrap`, `TextScaleBootstrap`, `BottomNav`.
 

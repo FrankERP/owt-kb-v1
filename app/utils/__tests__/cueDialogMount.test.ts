@@ -4,7 +4,7 @@
 // prop, and it gets no enter/exit animation from CueDialog's own internal
 // `AnimatePresence`. This is the same anti-pattern whether the literal sits
 // directly behind a `{cond && (<CueDialog open …>}` conditional or inside a
-// wrapper component (e.g. a local `Modal` in `AdminPanel`/`ServicesPanel`, or
+// wrapper component (e.g. a local `Modal` in `ServicesPanel`, or
 // `SongSheet`'s `SetlistPopover`, or `KidsPlanner`'s `SeatPicker`) whose only
 // JSX output is a literal `<CueDialog open …>` and which the CALLER mounts
 // conditionally — the dialog element itself never observes an `open` prop
@@ -37,7 +37,25 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 // migrated to `<CueDialog open={open} …>` — the caller now keeps it mounted
 // and drives visibility with the boolean instead of mounting it
 // conditionally.
-const BASELINE = 10;
+// 10→9 (2026-09-16, motion R5 Task 3): the Miembros body moved to
+// `MembersPanel.tsx` and its local `Modal` wrapper took an `open` prop — the
+// four member dialogs (add/edit/password/delete) are mounted always and opened
+// by `modal?.type === …`, so the wrapper's `<CueDialog open` literal is gone.
+// 9→8 (2026-09-17, motion R5 Task 4): `ServicesPanel`'s local `Modal` took the
+// same `open` prop — its five dialogs (delete / publicar listos / publicar de
+// todos modos / ocultar / setlist) are mounted always, opened by their own
+// boolean, and their bodies are drawn from payload state that outlives the close
+// and keyed on `dialogSeq` so a reopen starts fresh.
+// 8→6 (2026-09-17, motion R5 Task 5): `ContentPanel`'s two dialogs (the song
+// form — add and edit share one — and the delete confirm) are mounted always and
+// opened by `modalOpen` plus a `modalKind`; the song and the kind are payload
+// state that outlives the close so the sheet keeps its body through the exit, and
+// each body is keyed on `modalSeq` so a reopen starts from a fresh form.
+// 6 → 5 (2026-09-18, motion R6 Task 1): `KidsPlanner`'s `SeatPicker` took an
+// `open` prop — it is mounted always and opened by `pickerOpen`, while `picking`
+// (the seat and Sunday) is payload state that is NOT cleared on dismiss, so the
+// sheet keeps its body and its title through the exit.
+const BASELINE = 5;
 
 // Every literal `open` boolean attribute on a `<CueDialog` element — bare
 // `open`, never `open={…}`. Matches regardless of what (if anything)

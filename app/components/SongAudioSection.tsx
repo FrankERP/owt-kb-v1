@@ -1,6 +1,8 @@
 "use client";
 
 import { usePlayer, AudioTrack } from "@/app/context/PlayerContext";
+import Equalizer from "@/app/components/ui/Equalizer";
+import PlayPauseGlyph from "@/app/components/ui/PlayPauseGlyph";
 
 interface Track {
   title: string;
@@ -39,11 +41,14 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
                 : "border-surface-accent-l25-d15"
             }`}
           >
-            <div>
-              <p className="font-display text-base font-semibold leading-snug">{track.title}</p>
-              {track.tone && (
-                <p className="font-label text-xs text-accent uppercase tracking-wide mt-1">{track.tone}</p>
-              )}
+            <div className="flex items-start gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-display text-base font-semibold leading-snug">{track.title}</p>
+                {track.tone && (
+                  <p className="font-label text-xs text-accent uppercase tracking-wide mt-1">{track.tone}</p>
+                )}
+              </div>
+              <Equalizer playing={isCurrent && player.isPlaying} className="ml-auto" />
             </div>
             <button
               onClick={() => (isCurrent ? togglePlay() : playTrack(audioTrack))}
@@ -54,7 +59,7 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
                   : "border-accent-deep/30 hover:border-accent/40 hover:bg-accent/5 text-mono-400 hover:text-accent"
               }`}
             >
-              <PlayIcon playing={isCurrent && player.isPlaying} />
+              <PlayPauseGlyph playing={isCurrent && player.isPlaying} />
               {isCurrent && player.isPlaying ? "Reproduciendo" : "Reproducir"}
             </button>
             <a
@@ -69,20 +74,5 @@ export default function SongAudioSection({ tracks, songTitle, songSlug }: Props)
         );
       })}
     </div>
-  );
-}
-
-function PlayIcon({ playing }: { playing: boolean }) {
-  if (playing) {
-    return (
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-        <rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" />
-      </svg>
-    );
-  }
-  return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-      <polygon points="5 3 19 12 5 21 5 3" />
-    </svg>
   );
 }

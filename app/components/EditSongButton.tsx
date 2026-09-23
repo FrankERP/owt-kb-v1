@@ -39,8 +39,11 @@ type LoadState = "idle" | "loading" | "ready" | "error";
 
 const SECTION_LABELS = ["Intro", "Verso", "Pre-Coro", "Coro", "Puente", "Outro"];
 
+// 16 px on a phone, the design's size from `sm` up (F3): WebKit auto-zooms any
+// focused control under 16 px and never zooms back, which pushed the tab bar off
+// screen on the simulator. `inputFontSize.test.ts` is the guard.
 const inputCls =
-  "w-full rounded-lg border border-accent/20 bg-transparent px-3 py-2 font-body text-sm text-ink transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none";
+  "w-full rounded-lg border border-accent/20 bg-transparent px-3 py-2 font-body text-[16px] sm:text-sm text-ink transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none";
 
 function postToForm(post: Post): FormState {
   const shared = songToForm(post);
@@ -229,7 +232,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           ref={triggerRef}
           type="button"
           onClick={(e) => { e.stopPropagation(); handleOpen(); }}
-          className="flex h-7 w-7 items-center justify-center rounded-full text-mono-500 transition-colors hover:bg-accent/10 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-mono-500 transition-[color,background-color,transform] duration-fast ease-out-brand hover:bg-accent/10 hover:text-accent active:translate-y-px active:scale-[0.985] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
           aria-label={`Editar canción ${post.title}`}
           title="Editar canción"
         >
@@ -334,7 +337,7 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
               <textarea
                 id={`${fieldId}-lyrics`}
                 ref={lyricsRef}
-                className="w-full resize-none rounded-b-lg border border-edge-control bg-transparent px-3 py-2 font-mono text-xs leading-relaxed text-ink transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none"
+                className="w-full resize-none rounded-b-lg border border-edge-control bg-transparent px-3 py-2 font-mono text-[16px] sm:text-xs leading-relaxed text-ink transition-colors placeholder:text-placeholder focus:border-accent focus:outline-none"
                 rows={14}
                 value={form.lyrics}
                 onChange={set("lyrics")}
@@ -502,8 +505,8 @@ function RepeatRows({
           </div>
           {rows.map((row, i) => (
             <div key={row.key} className={`group grid grid-cols-[1fr_2fr_2rem] items-center gap-3 px-3 py-2 transition-colors hover:bg-accent/5 ${i > 0 ? "border-t border-accent/10" : ""}`}>
-              <input aria-label={row.titleLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-placeholder focus:outline-none" value={row.title} onChange={(e) => row.onTitle(e.target.value)} placeholder={firstHeader} />
-              <input aria-label={row.urlLabel} className="min-w-0 bg-transparent font-body text-sm placeholder:text-placeholder focus:outline-none" value={row.url} onChange={(e) => row.onUrl(e.target.value)} placeholder="https://…" />
+              <input aria-label={row.titleLabel} className="min-w-0 bg-transparent font-body text-[16px] sm:text-sm placeholder:text-placeholder focus:outline-none" value={row.title} onChange={(e) => row.onTitle(e.target.value)} placeholder={firstHeader} />
+              <input aria-label={row.urlLabel} className="min-w-0 bg-transparent font-body text-[16px] sm:text-sm placeholder:text-placeholder focus:outline-none" value={row.url} onChange={(e) => row.onUrl(e.target.value)} placeholder="https://…" />
               <button type="button" onClick={row.onRemove} aria-label={row.removeLabel} className="justify-self-center text-base leading-none text-mono-500 opacity-100 transition-colors hover:text-negative-fg sm:opacity-0 sm:transition-all sm:group-hover:opacity-100">
                 ×
               </button>

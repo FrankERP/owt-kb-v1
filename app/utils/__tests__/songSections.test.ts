@@ -73,4 +73,10 @@ describe("songSections", () => {
     // One section renders no nav; the page keys that on `length > 1`.
     expect(songSections({ body: [{}] }, 0)).toHaveLength(1);
   });
+
+  it("shows Ensayo first when the song has rehearsal mixes, and not for an empty array", () => {
+    expect(ids({ rehearsalMixes: [{}], audioTracks: [{}] })).toEqual(["ensayo", "audio"]);
+    expect(ids({ rehearsalMixes: [] })).toEqual([]);
+    expect(songSections({ rehearsalMixes: [{}] }, 0)[0].label).toBe("Ensayo");
+  });
 });

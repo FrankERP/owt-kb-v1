@@ -30,6 +30,9 @@ const EYEBROW = "mb-2 font-label text-[11px] uppercase tracking-widest text-ink-
 // Chip size follows count, in three steps — the same scale for themes and artists.
 const chipSize = (w: number) => (w > 0.66 ? "text-sm px-3 py-1.5" : w > 0.33 ? "text-xs px-2.5 py-1" : "text-[11px] px-2 py-0.5");
 
+// 16 px on a phone, the design's size from `sm` up (F3): WebKit auto-zooms any
+// focused control under 16 px and never zooms back, which pushed the tab bar off
+// screen on the simulator. `inputFontSize.test.ts` is the guard.
 /** The shared search box over a chip cloud. `brand-search-console` chrome, same
  *  as the page's own console, so the drawer reads as part of the same surface. */
 function ChipSearch({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
@@ -41,7 +44,7 @@ function ChipSearch({ label, value, onChange }: { label: string; value: string; 
         onChange={(e) => onChange(e.target.value)}
         aria-label={label}
         placeholder={label}
-        className="w-full bg-transparent px-3 py-2 font-label text-xs text-ink placeholder:text-placeholder focus:outline-none"
+        className="w-full bg-transparent px-3 py-2 font-label text-[16px] sm:text-xs text-ink placeholder:text-placeholder focus:outline-none"
       />
     </div>
   );

@@ -13,6 +13,7 @@ Spec: `docs/superpowers/specs/2026-09-01-dev-verify-runner-design.md`. Decision 
 |---|---|
 | `--route <path>` | Required. |
 | `--base-url <origin>` | Default `https://dev-owt-backstage.vercel.app`. Only dev and this project's preview hosts are accepted; production is refused by name. |
+| `--settle <ms>` | Idle this long after `--wait` and before any capture — a screenshot taken right after a `--click` lands mid-enter-animation (a `Menu`, a sheet, a `Collapse`); 400 clears the house 320 ms. 0–10000. |
 | `--screenshot <file>` / `--full-page` | PNG into `test-results/dev-verify/` (or `$DEV_VERIFY_OUT_DIR`, or an absolute path). |
 | `--text` / `--a11y` | Page text / accessibility tree, written next to the screenshot. |
 | `--console` | Include console errors and warnings, plus failed requests, in the report. |
@@ -135,6 +136,37 @@ touches that field, so rotating afterwards keeps it disabled. Rotate: new hash, 
 roles — admin destructive actions live behind a kebab whose items are `menuitem` — and
 prefers an exact name match over a substring one, so a modal's confirm (`Eliminar`) is not
 shadowed by its close control (`Cerrar Eliminar servicio`).
+
+## Galería (VR) — the other, unrelated harness
+
+`scripts/dev-verify.ts` looks at the **deployed** app as a member. The theme gallery's
+visual-regression harness (`playwright.vr.config.ts`, `npm run test:vr`) looks at a
+**locally built** app with no session at all — the gallery is public and prerendered
+(ADR-0017). They share nothing: no credentials, no storage state, no Vercel target.
+
+It runs against a server you start yourself (the config has no `webServer`):
+
+```bash
+npm run build
+npx next start -p 3000
+THEME_GALLERY_VR_ENABLED=true THEME_GALLERY_VR_BASE_URL=http://localhost:3000 npm run test:vr
+```
+
+Two variables, and **neither is a secret** — no entry in `docs/SECRETS.md`, deliberately:
+
+| Name | Purpose | Where it is needed |
+|---|---|---|
+| `THEME_GALLERY_VR_ENABLED` | Must be `true`. The opt-in; without it the config throws at load rather than shooting a baseline nobody asked for (ADR-0014). | Local shell only. **Not** on Vercel (any environment), **not** in CI, **not** in `.env.local`. |
+| `THEME_GALLERY_VR_BASE_URL` | The origin to capture, e.g. `http://localhost:3000`. Names the target explicitly so a baseline can never be shot against an unspecified one. | Same — local shell only. |
+
+Both are ordinary public configuration: a boolean and a localhost URL. There is nothing to
+rotate and nothing to leak.
+
+**Baselines are darwin-only.** `snapshotPathTemplate` carries `{platform}`, so the committed
+PNGs live under `__screenshots__/{project}/darwin/` and a Linux run finds no baseline rather
+than diffing against macOS font rendering. That is also why VR is **not in CI** — see
+`docs/CI.md`. The policy numbers (36 tests, 1% tolerance, which fixtures are full-page) live
+in `e2e/theme-gallery/README.md`.
 
 ## Verified runs
 

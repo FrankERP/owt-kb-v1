@@ -88,6 +88,9 @@ export default function DayCardDisclosure(props: DayCardProps) {
         <span className="font-display text-lg uppercase text-ink">
           {props.day}
           {shortDate && <span className="text-ink-dim font-normal"> · {shortDate}</span>}
+          {/* Same-day sets differ only by the clock, so the collapsed row carries
+              it too — matching `DayCard`'s own `day · date · time` header. */}
+          {props.time && <span className="text-ink-dim font-normal tabular-nums"> · {props.time}</span>}
         </span>
         <span className="flex shrink-0 items-center gap-3 font-label text-[11px] uppercase tracking-widest text-ink-dim">
           {days !== null && formatCountdown(days).toLowerCase()}

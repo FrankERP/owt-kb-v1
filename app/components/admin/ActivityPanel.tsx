@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Collapse from "@/app/components/ui/Collapse";
+import Button from "@/app/components/ui/Button";
+import NumberRoll from "@/app/components/ui/NumberRoll";
+import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 
 interface LoginEvent {
   _id: string;
@@ -103,7 +106,9 @@ export default function ActivityPanel() {
   // the unguarded `activity.filter(...)` two lines below threw during render.
   // That unmounts the whole /admin tree to the error boundary: a blank page
   // instead of "Error al cargar actividad."
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(null);
     fetch("/api/admin/login-events")
       .then(async (r) => {
         if (!r.ok) throw new Error(String(r.status));
@@ -116,22 +121,30 @@ export default function ActivityPanel() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => { load(); }, [load]);
+
   const activeThisWeek  = activity.filter((m) => (daysSince(m.lastActive) ?? 999) <= 7).length;
   const activeThisMonth = activity.filter((m) => (daysSince(m.lastActive) ?? 999) <= 30).length;
   const neverActive     = activity.filter((m) => !m.lastActive).length;
 
   if (loading) {
     return (
-      <div className="space-y-3">
+      <SkeletonGroup label="Cargando actividad" className="space-y-3">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-16 rounded-xl bg-surface-accent-wash animate-pulse" />
+          <Skeleton key={i} className="h-16 w-full" rounded="lg" />
         ))}
-      </div>
+      </SkeletonGroup>
     );
   }
 
   if (error) {
-    return <p className="text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">{error}</p>;
+    return (
+      <div className="flex flex-wrap items-center gap-3 text-sm text-negative-fg bg-negative-surface-deep/20 border border-negative-surface rounded-xl px-4 py-3">
+        <span>{error}</span>
+        {/* A dead end is not a state: the retry calls the same loader the effect does. */}
+        <Button variant="ghost" size="sm" onClick={load}>Reintentar</Button>
+      </div>
+    );
   }
 
   return (
@@ -146,7 +159,9 @@ export default function ActivityPanel() {
           <div key={stat.label} className="rounded-xl border border-edge-accent-subtle bg-accent/5 px-4 py-3 text-center">
             <div className="flex items-center justify-center gap-1.5 mb-1">
               <span className={`w-2 h-2 rounded-full shrink-0 ${stat.dot}`} />
-              <p className="font-display text-2xl leading-none">{stat.value}</p>
+              <p className="font-display text-2xl leading-none">
+                <NumberRoll value={stat.value} />
+              </p>
             </div>
             <p className="font-label text-[10px] uppercase tracking-widest text-mono-500">{stat.label}</p>
           </div>

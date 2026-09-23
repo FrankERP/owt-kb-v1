@@ -7,7 +7,7 @@
 // provides motion features synchronously and skips animations under
 // data-motion="off", so every frame here is final.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Button from "@/app/components/ui/Button";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import Switch from "@/app/components/ui/Switch";
@@ -16,6 +16,8 @@ import Select from "@/app/components/ui/Select";
 import DateField from "@/app/components/ui/DateField";
 import NumberRoll from "@/app/components/ui/NumberRoll";
 import Collapse from "@/app/components/ui/Collapse";
+import Menu, { MenuItem } from "@/app/components/ui/Menu";
+import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import { ToastProvider, useToast } from "@/app/components/ui/Toast";
 
 function Row({ title, children }: { title: string; children: React.ReactNode }) {
@@ -37,6 +39,21 @@ function Toasts() {
   return null;
 }
 
+// The panel opens itself on mount, the way the toasts fire themselves: a
+// capture must find it already open, and `Menu` has no `defaultOpen` — the
+// house rule is that its open state belongs to the trigger's own click.
+function OpenMenu() {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => { ref.current?.click(); }, []);
+  return (
+    <Menu label="Acciones" trigger={<Button ref={ref} variant="secondary">Acciones ▾</Button>}>
+      <MenuItem onSelect={() => {}}>Editar</MenuItem>
+      <MenuItem selected onSelect={() => {}}>Ver como</MenuItem>
+      <MenuItem danger onSelect={() => {}}>Eliminar</MenuItem>
+    </Menu>
+  );
+}
+
 function Controls() {
   const [seg, setSeg] = useState<"a" | "b" | "c">("b");
   const [on, setOn] = useState(true);
@@ -46,7 +63,9 @@ function Controls() {
   const [n, setN] = useState(4);
   const [open, setOpen] = useState(true);
   return (
-    <div data-gallery-surface="controls" className="space-y-10">
+    // `pb-64` leaves the portalled, FIXED menu panel room below its trigger in
+    // the capture — without it the panel would flip above the trigger or be cut.
+    <div data-gallery-surface="controls" className="space-y-10 pb-64">
       <Row title="Botones">
         <Button variant="primary">Primario</Button>
         <Button variant="secondary">Secundario</Button>
@@ -58,6 +77,10 @@ function Controls() {
         <Button variant="primary" busy busyLabel="Guardando…">Guardar</Button>
         <Button variant="secondary" disabled>Deshabilitado</Button>
         <Button variant="primary" size="lg">Grande (44px)</Button>
+        <Button variant="pill" tone="availability" active>Disponible</Button>
+        <Button variant="icon" tone="danger" aria-label="Eliminar">×</Button>
+        <Button variant="primary" size="sm">Pequeño</Button>
+        <Button variant="secondary" size="sm">Pequeño</Button>
       </Row>
       <Row title="Segmentado">
         <SegmentedControl label="Contorno" value={seg} onChange={setSeg} options={[{ value: "a", label: "Uno" }, { value: "b", label: "Dos" }, { value: "c", label: "Tres", badge: 3 }]} />
@@ -94,6 +117,16 @@ function Controls() {
       <Row title="Desplegable">
         <Button variant="secondary" size="sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>Alternar</Button>
         <Collapse open={open} id="g-collapse" className="w-full rounded-lg border border-surface-accent-30 p-4 text-sm">Contenido desplegado.</Collapse>
+      </Row>
+      <Row title="Esqueleto">
+        <SkeletonGroup label="Cargando" className="w-full space-y-2">
+          <Skeleton className="h-4 w-1/2" />
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton rounded="lg" className="h-16 w-full" />
+        </SkeletonGroup>
+      </Row>
+      <Row title="Menú">
+        <OpenMenu />
       </Row>
       <Toasts />
     </div>

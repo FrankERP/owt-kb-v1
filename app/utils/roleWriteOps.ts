@@ -76,6 +76,8 @@ export interface StoredRole {
   week?: string;
   date?: string;
   service_name?: string;
+  time?: string;
+  format?: string;
   published?: boolean;
   songs?: unknown[];
   creationReceiptId?: string;

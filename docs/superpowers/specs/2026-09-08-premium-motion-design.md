@@ -1678,3 +1678,826 @@ sheet) and `app/components/DayCardDisclosure.tsx`.
 **Bundle:** `main 61d5330f` → `R7 tip 6fcfb22c` (git-archive cold builds, gzip −9; the two later fix commits move classes and one sheet, not chunks): shared 172.5 → 172.5; `/` 118.0 → 122.1 (+4.1); `/schedule` 121.7 → 124.1 (+2.4); `/biblioteca` 111.9 → 116.9 (+5.0, the long-press hook and the page's one sheet); `/me` 119.5 → 123.1 (+3.6); `/admin` 354.4 → 357.0 (+2.6). Within the accepted absolute cap measured in this environment.
 
 **Release:** merged to `main` as `2fae55b8` (PR #72, 2026-09-13 21:2x CST, after PR #71 landed); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`, 21:22 CST). Preview last verified at `7f5c52c7`.
+
+# Part XIV — R4 (2026-09-16)
+
+Branch `claude/motion-r4-song`. Seven implementation tasks plus this documentation
+task, turning `/posts/[slug]` into a practice surface — §12.7 (decision K) plus Part I
+§5.3 and §19.5's song hero row: the hero key becomes a transposer, the BPM pill taps a
+visual tempo, the Letra section scrolls itself, a practice cluster appears in the page's
+sticky bar once the hero leaves, the audio cards morph and the playing one carries an
+equaliser, and the page joins the route reveal.
+
+**Data reality (measured on the production dataset, read-only, 2026-09-16).** 142 songs
+carry `key` and `bpm`, 127 carry lyrics (`body`), 120 carry a reference link, 6 carry
+tutorials — and **0 carry an inline chart (`chords`), 0 carry `audioTracks`.** So the
+tempo pill, the autoscroll, the practice cluster and the reveal apply to nearly the whole
+catalogue, while **the transposer and the equaliser are capabilities, not production
+paths**: the song form writes both fields and no song exercises either one today. That is
+why Task 3 added the `song` theme-gallery fixture (a sample ChordPro chart and a sample
+track) — it is the only surface on which the drawer and the equaliser can be seen without
+writing to the dataset, and it is where the flats defect below was found.
+
+**Shipped.** `app/utils/transpose.ts` + `app/utils/practice.ts` — the neutral maths
+(`rootIndex`/`noteAt`/`semitonesBetween`/`transposeKey`/`transposeChord`/`capoSuggestion`/
+`isChordPro`; `tempoPeriodMs`/`autoscrollPxPerSecond`/`countLyricLines`), lifted out of
+`ChordChart` so the Server Component and the tests may call them (ADR-0028).
+`app/components/song/TransposeProvider.tsx` — the page's ONE transposition seat.
+`app/components/song/SongHeroPills.tsx` (+ `KeyDial.tsx`, `TempoPill.tsx`) — the hero row
+and the 12-key drawer it discloses. `app/components/song/PracticeCluster.tsx`, rendered
+by `app/components/SectionNav.tsx` into a right-hand slot of the page's own sticky bar.
+`app/components/song/LyricsAutoscroll.tsx` — the «Autoscroll» pill in the Letra header.
+`app/components/ui/PlayPauseGlyph.tsx` + `app/components/ui/Equalizer.tsx`, wired into
+`SongAudioSection`, `AudioTransport` and `PracticeCluster`. `app/utils/navbarHeight.ts`
+(`NAVBAR_H_CLASS`) — one spelling of the navbar's height for `Navbar` and
+`NavbarSkeleton`. `app/components/ChordChart.tsx` — the 12-key strip is now a ± pair with
+a `NumberRoll` readout, reading the provider when there is one. `app/brand.css` —
+`.brand-tempo-pill::after` + `@keyframes brand-tempo-pulse`, `.brand-eq-bar` +
+`@keyframes brand-eq`, and `.brand-surface-interactive:active` (the press twin, for every
+consumer of that class app-wide). `app/(client)/posts/[slug]/page.tsx` and its
+`loading.tsx` carry the wiring and the reveal;
+`app/(gallery)/theme-gallery/[theme]/[fixture]/fixtures/SongPracticeFixture.tsx` is the
+sixth gallery fixture.
+
+**Rulings, with reasons.**
+- **The practice cluster lives in the page's own sticky section bar, not in `Navbar`**
+  (plan ruling 1). §12.7 says "replacing the navbar title slot", but on the phone that
+  slot already holds the song title and the cue strip, and on desktop it holds the app's
+  navigation links — taking either would remove or repeat something. The bar that already
+  belongs to the song page gains the cluster. Cost if wrong: it sits ~5 rem lower than
+  the spec pictured.
+- **One 12-key picker on the page, not two** (ruling 2). The hero drawer is the picker;
+  `ChordChart`'s old 12-button strip became a ± pair with a `NumberRoll` readout and an
+  «Original» reset. Two 12-key strips on one page is the "too many buttons" smell R3 F3
+  removed, and §12.7's "buttons remain for keyboard users" is satisfied by both controls.
+- **The reveal stagger uses the house 40 ms step** (ruling 3), not §5.3's 30 ms — one
+  clock for every route. **No FAB** (ruling 4): `EditSongButton` stays inline, top-right,
+  for the reason its own comment already gave (nothing floats over the lyrics).
+- **The chart's transpose crossfade is a CSS `fade-in` on a keyed remount** (ruling 5) —
+  `ChordChart` stays outside the `motion` import boundary, and no exiting copy of the
+  chart overlaps the entering one anyway.
+- **Autoscroll model** (ruling 6): a lyric line is 8 beats, so `L` lines at `bpm` last
+  `L × 8 × 60 / bpm` seconds and the speed is `sectionHeight / thatDuration` px/s, clamped
+  to [8, 160]; no BPM means 80. **The page's own scroll is what moves** — rAF +
+  `window.scrollTo`, never a transform: a transformed ancestor would become the containing
+  block for every `fixed` descendant (ADR-0031).
+- **Tap tempo is a CSS animation clocked by a custom property** (ruling 7) —
+  `--tempo-period: ${60000 / bpm}ms` published inline, read by
+  `.brand-tempo-pill[data-active="true"]::after`. No `setInterval`, no frame loop, and one
+  `haptic("light")` on the toggle only: a haptic per beat is a metronome app, not a pill.
+  `brand.css` carries a `:root` default of 750 ms, the same pattern `--impersonation-h`
+  and `--bottom-nav-h` already use for a JS-published value, so `brandCss.test.ts` sees no
+  dangling reference and no exemption list grew.
+- **The key dial is a `<button className="brand-key-dial …">`** (ruling 8), the chrome the
+  hero already painted for the static badge — `Button` has no dial variant and adding one
+  for a single site is the wrong trade.
+- **Deferred on purpose** (ruling 9): §19.5's "history row press opens the day sheet"
+  (there is no day sheet — R5/R6 decide) and §20's lyric-section rail eyebrows and tutorial
+  poster facade (assigned to R6). **The bar still renders only when `sections.length > 1`**
+  (ruling 10), so a one-section song has no cluster.
+
+Made during execution, on top of the plan:
+- **The drawer's radiogroup value is the sounding ROOT, not the sounding key.** The plan
+  wrote `value={soundingKey}`; for a song with a quality in its name ("Gm") that is "Am",
+  which matches no option, so the drawer would show nothing checked while transposing
+  correctly. The root always matches, and the «(original)» hint is enharmonic
+  (`rootIndex(n) === rootIndex(nativeKey)`), not textual — a song written in `Db` is in
+  `C#` and the hint belongs on the pill that sounds the same, not the one spelled the same.
+- **`data-active` is absent when idle**, not `"false"` — the CSS selector is
+  `[data-active="true"]` either way, and the attribute's absence is what the test reads.
+- **`Number(bpm)` coercion, with the raw text kept.** `Post.bpm` is typed `string` in
+  `app/utils/interface.tsx` while the Sanity field is a number; the page parses once
+  (`Number.isFinite(n) && n > 0`) and passes an unusable value through as `bpmText`, which
+  renders as the static pill it always was. A tapable tempo needs a number; legacy text
+  still deserves to be shown. The mis-typing predates R4 and was left alone.
+- **`wheel` STOPS the autoscroll, it does not pause it.** A mouse has no lift event, so a
+  literal pause would strand the control reading «Detener» over a page that no longer
+  moves. Same hand-over, honest label.
+- **The provider is seated on the first ChordPro chart's key, not on `post.key`**, and
+  `transposable` requires chart[0] to be ChordPro — `ChordChart` opens on index 0 and only
+  the chart on screen transposes. Dial, «(original)» hint and chart readout then name the
+  same key. `transposeKey` also returns its input unchanged at 0 semitones (mirroring
+  `transposeChord`), because `DISPLAY_NOTES` carries one enharmonic per pitch and the badge
+  was otherwise re-spelling a `Db` song as `C#` at rest.
+- **The press twin lives in `.brand-surface-interactive:active`**, in `brand.css` right
+  after the `:hover` rule, instead of `active:` utilities on the two referencia cards.
+  Tailwind v3 compiles `@layer` away, so the two were a same-specificity source-order tie;
+  the class rule wins cleanly and every consumer of the class gets the press for free.
+- **A 400 ms backstop behind `scrollend`.** The autoscroll waits for `scrollend` after a
+  touch that actually scrolled — on a UA that never fires it the run would never resume,
+  so a timer resumes it. Every lift clears the timer FIRST (one gesture lifts twice), a
+  new touch clears it, and `resume()` returns early while a finger is down: a backstop is
+  a timer and must always lose to a finger.
+- **The hero observer's inset is the bar's STICKY top plus its height**
+  (`parseFloat(getComputedStyle(bar).top) + rect.height`), never the rect's `bottom`: read
+  at mount, at scroll 0, the bar has not stuck yet and sits in flow below the hero, so
+  `-bottom` shrank the observer root past the hero entirely and the cluster latched visible
+  from load.
+
+**Review trail.**
+- **Task 1 (maths utils, sonnet):** APPROVED, 0 findings. **Task 2 (`TransposeProvider`,
+  `ChordChart` ± pair, opus):** APPROVED, 0 findings.
+- **Task 3 (hero pills, page wiring, gallery fixture, opus):** spec conformance ✅, quality
+  CHANGES_REQUIRED — 1 MEDIUM (the static key/compás pills sat at 38.4 px beside a 44 px
+  dial; both now carry `min-h-[44px]` through one shared constant) + 4 LOW (the `bpmText`
+  fallback; the enharmonic «(original)» hint; `DRAWER_ID` → `useId()`, since the gallery is
+  already a second render path; haptics asserted rather than assumed). Fixed in one round;
+  re-review closed all five, 0 new.
+- **Task 4 (practice cluster, opus):** APPROVED, 0 findings. **Task 5 (play/pause morph +
+  equaliser, sonnet):** APPROVED, 0 findings. **Task 6 (reveal, press twins,
+  `NAVBAR_H_CLASS`, sonnet):** APPROVED, 1 MEDIUM parked for the final wave — the
+  referencia cards' `active:` utilities versus `.brand-surface-interactive:hover`, closed
+  by moving the press twin into the class.
+- **Task 7 (autoscroll, opus):** CHANGES_REQUIRED — 1 HIGH (`touchcancel` stranded the
+  run paused forever), 2 MEDIUM (44 px target; resuming through iOS momentum, solved with
+  a `scrollend` wait plus a 3-frame re-seed), 3 LOW. Fixed in one round; the re-review
+  closed all six and parked "`scrollend` may never fire" for the final wave.
+- **Whole-branch review (fable):** CHANGES_REQUIRED — 1 HIGH (`pointercancel` fires when a
+  touch is promoted to a pan, finger still down, and the lift handler resumed the scroll
+  under it; the binding is gone, `touchcancel` still covers a genuine cancel), 2 MEDIUM
+  (`transposeKey` re-spelling at 0; end detection ignoring the tab bar and the audio
+  transport — it now subtracts `--bottom-nav-h` plus the measured `.audio-player` height,
+  re-measured at every resume since the transport appears on play), 3 LOW.
+- **Scoped re-verify of that fix wave:** CHANGES_REQUIRED again — 2 HIGH, both introduced
+  by the fix (the flow-rect observer inset above; a re-touch inside the 400 ms backstop
+  resuming under the finger). Round 2 fixed both, and the tests were tightened to fail on
+  the round-1 code (the margin assertion had been satisfied by a no-op `-0px`). The second
+  re-verify returned **VERIFIED FOR MERGE** at `bcdd511c`.
+- **F1 (after Frank's phone look).** Strip fade tokenised for light; active item scrolls into
+  view. The phone strip's right-edge fade painted an opaque `from-surface-base` rectangle over
+  `.brand-atmosphere` (surface-base PLUS accent radials), so it could never match the page and
+  read at 390 px as a grey block; it is now a `mask-image` fade of the CONTENT, prefixed and
+  unprefixed (no autoprefixer in this repo's PostCSS), only below `md` and only while the
+  strip can still scroll right — otherwise the mask would eat the last tab. And
+  `useActiveIntoView` took an opt-in `onMount`: `/admin?tab=x` seeds the tab before the first
+  paint, so the strip's active item never saw a false→true edge and «Contenido» opened
+  off-screen with its underline invisible.
+- **Parked residuals, all known and none blocking.** `getComputedStyle(bar).top` is read
+  once at mount: a rotation that crosses the `lg:` navbar breakpoint leaves the observer
+  inset stale until the page remounts, and a resize observer is more machinery than the
+  failure justifies. A song whose chart[1] is written in another key will disagree with the
+  hero readout by that interval — only the chart on screen transposes, and the answer is an
+  editors' data rule, not more code. The `pointercancel` and bottom-inset behaviours are
+  pinned by unit tests against the component's contract, not against a real UA.
+
+**Open notes for Frank's look.**
+- ~~**The autoscroll under a real finger.**~~ **CLOSED** by the 2026-09-16 simulator look
+  (iPhone 17 Pro, production build): pause on touch and the resume through iOS momentum both
+  behave, and the 400 ms backstop is invisible. The look opened a different one instead — see
+  F3, the pill on a lyric that already fits.
+- ~~**Where the run stops**~~ **CLOSED**, same look: the last lines clear the tab bar and the
+  audio transport, so the jsdom-only measurement holds on the device.
+- ~~**The cluster's arrival timing**~~ **CLOSED**, same look: the hand-off reads as a
+  replacement, not as a second thing appearing.
+- **On a 390 px phone the cluster's key + BPM slot takes ~110 px** and squeezes the section
+  links to roughly three visible before they scroll. Acceptable or not is a look, not a test.
+- **The idle equaliser** reads a little like a `⋯` ellipsis at `scaleY(0.3)`; it only
+  animates on the playing card, by design (the row must not change height when playback
+  starts).
+- **The tempo ring's legibility on the light theme**, at 60 BPM and at 160 — a slow pulse
+  and a fast one are very different objects.
+- **Is «Autoscroll» the word?** It is the one English label on the page; «Desplazar» and
+  «Seguir la letra» were the alternatives.
+- **«C# (original)» for a song written in `Db`.** The hint is enharmonic on purpose, but a
+  member who knows the song as `Db` will read it on the `C#` pill.
+- **The click with the phone's silent switch on** (F1, ruling 12). Web Audio obeys the
+  switch, so a muted iPhone rings the pill and plays nothing; the guide-track `<audio>`
+  player on the same page does NOT obey it, so the two behave differently on one screen.
+  Whether that reads as broken is Frank's call — the fix is a native audio-session plugin,
+  which this delivery deliberately does not ship.
+- **The click's voice and level** — a 1000/800 Hz sine at gain 0.5, under a band. Loud
+  enough on a phone speaker in a rehearsal room, or does it need a sharper (square) click?
+- **6/8 accents beat 1 of SIX quarter-note clicks** (`beatsPerBar` is the numerator), not the
+  two dotted-quarter pulses a band actually feels. No 6/8 song has been heard against it —
+  decide on one.
+
+**Bundle:** `main 7fbbb105` → `R4 tip 5a899be0` (git-archive cold builds, gzip −9; the
+three later commits move classes and handlers, not chunks): shared 172.5 → 172.5; `/`
+122.6 → 121.2; **`/posts/[slug]` 110.7 → 111.7 (+1.0)**; `/schedule` 124.6 → 123.3;
+`/biblioteca` 117.0 → 115.7; `/me` 123.6 → 122.3; `/admin` 357.6 → 356.2. The one route
+that gained is the one that gained a feature; the rest drift down with the shared graph.
+Within the accepted absolute cap measured in this environment.
+
+**Shots** (`docs/superpowers/specs/2026-09-08-premium-motion-shots/`): `song-before.png` /
+`song-after.png` (phone), `song-after-1440.png` (desktop), plus
+`r4-gallery-song-transposer-light.png` (the gallery `song` fixture on light, drawer open —
+the only surface where the transposer exists today) and
+`r4-song-practice-cluster-phone.png` (scrolled past the hero).
+
+**Release:** merged to `main` as `9c9ec881` (PR #75, 2026-09-16 16:52 CST); production alias
+`owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`, 16:57 CST).
+Preview last verified at `88c3e8d0`.
+
+### F1 — the pill clicks (2026-09-16)
+
+Frank, after his look at the R4 branch on dev: *"can the bpm pill play the sound of the
+metronome?"* → *"go, tap = ring + click"*. One task on the same branch, after Task 8's docs.
+
+**Rulings.**
+- **Ruling 11.** The click is the master clock for SOUND — Web Audio, sample-accurate,
+  lookahead-scheduled — and the ring stays CSS-clocked exactly as shipped. Both start on
+  the same tap. Two monotonic clocks drift against each other by nothing audible over a
+  rehearsal, and keeping the ring in CSS keeps the reduced-motion story unchanged: the ring
+  collapses, the click keeps playing, because sound is not motion. Cost if wrong: a visible
+  phase offset between ring and click after many minutes, whose fix would be a WAAPI pulse
+  per beat.
+- **Ruling 12.** iOS silent switch: Web Audio obeys it, the `<audio>` guide track does not.
+  Ship the web click anyway; no native audio-session plugin in this delivery. Recorded in
+  the open notes above for Frank's device look.
+- **Ruling 13.** Tap = ring + click, with no separate silent mode (Frank's call). The
+  phone's volume is the control.
+
+**Shipped.** `app/components/song/metronome.ts` — `createMetronome({ bpm, beatsPerBar,
+onStop?, audioContext? })` plus the `CLICK` constants (accent 1000 Hz on beat 1, 800 Hz
+otherwise, 30 ms, gain 0.5, 25 ms lookahead, 100 ms scheduling window). A self-rescheduling
+`setTimeout` — never a `setInterval`, so a stop cannot race a queued tick — books every beat
+inside the window as a sine `OscillatorNode` through a `GainNode` ramp. The `AudioContext` is
+created lazily on the first `start()` (which must therefore run inside a user gesture) and
+reused; `stop()` clears the loop and suspends the context, never closes it; a
+`visibilitychange` to hidden stops and reports through `onStop`; with no `AudioContext` at all
+(prefixed or not) `start()` is a silent no-op and the pill still rings.
+`app/utils/practice.ts` — `beatsPerBar(timeSig)`, the numerator of the written compás, 4 on
+anything unparsable. `app/components/song/TempoPill.tsx` — one metronome per pill, built on the
+first tap from `bpm` + `beatsPerBar(timeSig)`, stopped on the second tap, on `onStop`, on
+unmount and whenever `bpm`/`timeSig` change under a running beat; labels are now «Marcar tempo
+con clic, N BPM» / «Detener el clic, N BPM». `app/components/song/SongHeroPills.tsx` passes
+`timeSig` through. Tests: `metronome.test.ts` (7, jsdom + fake timers against a hand-rolled
+`AudioContext` whose clock the test advances — beats booked at 0.05 s and 0.55 s inside the
+first second at 120 BPM with 1.05 s already looked ahead, the accent pattern at 4/4 and 3/4,
+`stop()` leaving zero timers and one `suspend()`, one context across two starts, the hidden-tab
+stop, and the no-Web-Audio no-op), plus the rewritten `tempoPill.test.tsx` — where the old
+"zero timers while active" assertion becomes zero BEFORE the first tap, present while active,
+zero after the second tap and after unmount.
+
+**Verification.** The scheduling test was mutation-checked: removing the `tick()` call from
+`start()` fails 4 of the 7. Gates green on the whole tree.
+
+**Review (opus, F1 diff): APPROVED with two MEDIUMs, both fixed in round 1.** (1) A tick that
+ran late — a stall or a throttled tab longer than the 100 ms window — booked beats already
+behind the context clock, and `osc.start(pastTime)` fires immediately: a flam of stacked clicks
+catching up. The scheduler now skips the missed beats (`Math.ceil` of the gap in beats) and
+keeps the bar's accent phase. (2) `stop()` suspended the context over up to a window of already
+booked oscillators; suspension FREEZES the clock they are pinned to instead of cancelling them,
+so they would have sounded off-phase on the next tap. Every booked oscillator is now stopped by
+hand, the list is pruned on each tick so it holds at most one window, and the module header no
+longer claims that suspension silences them. Three tests added, both fixes mutation-checked
+(removing either makes exactly its own test fail). Two LOWs (a rewinding fake clock in the
+tests, this 6/8 note) and one nit (the doc bullet's home) taken with them.
+
+### F2 — the sheet clicks too (2026-09-16)
+
+Frank, still on the R4 branch: *"Can you also enable the metronome on the small card that
+pops when you click the name of a song either on day cards or on the Biblioteca"* — that card
+is `SongSheet`, the `CueDialog mode="sheet"` the player context opens from `DayCard` rows and
+`LibraryRow`. One task on the same branch, after F1.
+
+**Rulings.**
+- **Ruling 14.** The sheet's BPM span becomes the same `TempoPill` — one component, one look,
+  no second metronome implementation. The sheet's chrome survives as a `size="sm"` skin
+  (outlined pill, `text-sm`) over the same ring, click and 44px target; `size="md"` stays the
+  hero's console pill. Cost if wrong: two pills that drift apart visually, which is what the
+  single component prevents.
+- **Ruling 15.** ONE metronome sounds at a time, app-wide. The sheet opens OVER the song page,
+  so both pills can exist at once and two tempos together is noise, not a feature. The module
+  owns the rule rather than the pills: `metronome.ts` keeps a module-level "current" and a
+  `start()` takes the floor from whoever held it, stopping that instance through its own path
+  so it reports to its pill through `onStop` and un-presses. A ringing pill therefore always
+  means a sounding click. Two edges fall out of it and are tested: an instance that cannot
+  sound at all (no Web Audio) never silences the one that can, and a late `stop()` from the
+  loser's own unmount cleanup must not release the new holder's floor.
+- **Ruling 16.** Closing the sheet stops the click. `TempoPill` gains `enabled?: boolean`
+  (default true) and `SongSheet` passes `enabled={isOpen}`; the pill stops and un-presses on
+  the falling edge rather than waiting for an unmount. `SongSheet` happens to return `null`
+  while closed today, so the unmount cleanup already covers it — the prop costs one effect and
+  is what keeps the rule true for a sheet that later stays mounted.
+
+**Shipped.** `app/components/song/metronome.ts` — the module-level `current`, taken in
+`start()` (after the no-Web-Audio bail) and released in `stop()` only when this instance still
+holds it, plus a private `handOver()` (stop + `onStop`) that the hidden-tab path now shares,
+and an exported `stopCurrentMetronome()`. `app/components/song/TempoPill.tsx` — `enabled` and
+`size`, the chrome split into a two-entry `CHROME` map. `app/components/SongSheet.tsx` — the
+meta row's BPM is a `TempoPill` (`size="sm"`, `enabled={isOpen}`) when `Number(sheet.bpm)` is
+finite and positive, the same guard the song page uses, and the old static span otherwise
+("libre", "70-80"). Tests: `metronome.test.ts` +4 (the hand-over stopping A's loop and firing
+its `onStop` while B books on; the silent instance leaving the sounding one alone; the stale
+stop that must not release B's floor; `stopCurrentMetronome()`), `tempoPill.test.tsx` +2 (the
+`enabled` falling edge leaving `aria-pressed="false"` and zero timers; each size's chrome),
+`songSheet.test.tsx` +3 (the sheet's pill, its label and its `--tempo-period`; the unparsable
+BPM keeping the static span; the close giving the loop back and suspending the context).
+
+**Verification.** Both singleton lines were mutation-checked: removing the hand-over in
+`start()` fails the hand-over test, removing the `current === self` guard in `stop()` fails the
+stale-stop test. Gates green on the whole tree.
+
+**Review (opus, F2 diff): APPROVED, VERIFIED FOR MERGE, with two LOWs and a nit, all taken in
+one fix commit.** (1) A click on a pill rendered `enabled={false}` would still have started the
+metronome — the effect only fires on the prop edge — so the handler now returns early while
+disabled; not `disabled`, which would change the chrome and the focus behaviour. (2) The sheet's
+meta row mixed the 44px pill with ~30px chips, so both static spans (`timeSig` and the
+unparsable-BPM one) got `inline-flex min-h-[44px] items-center`, the treatment Task 3 gave the
+hero's neighbours. (3) An article typo in the `TempoPill` entry of `CLAUDE.md`/`AGENTS.md`. The
+early return is mutation-checked: removing it fails the new disabled-tap test.
+
+### F3 — after the simulator look (2026-09-16)
+
+R4 shipped, and the first long look at it was on the iPhone 17 Pro simulator against the
+production build. Three things came back, all of them invisible to the three gates and to a
+1440 px browser; one commit on `claude/motion-r4-f3-followups`.
+
+**Autoscroll was dead on any lyric that already fits the screen.** Tapping «Autoscroll» on a
+short song un-pressed the pill instantly and moved nothing: the run's end check
+(`bottom <= innerHeight - bottomInset`) is already true on the FIRST frame when the whole
+section is on screen, so the run ended correctly and the control read as broken. The honest
+fix is not to offer it — `LyricsAutoscroll` now measures on mount and on `resize`
+(`offsetHeight` against `innerHeight` minus the same bottom inset the run uses and the
+section's resolved `scroll-margin-top`, the line the sticky bar parks it at) and renders
+`null` when there is nothing to scroll. It starts hidden and appears once measured, never the
+reverse: a pill offered and then withdrawn is the same broken control in a different order.
+The run-time end check is untouched. Two tests pin it — 400 px of lyrics in an 800 px viewport
+renders no button, 2 400 px still does.
+
+**iOS zoomed into the Biblioteca search field and stayed zoomed.** WebKit scales the page into
+any focused form control whose computed font size is under 16 px and does not scale back on
+blur, so one tap on the filter drawer's search (`font-label text-xs`, 12 px) left the app
+magnified with the phone tab bar off screen and only a pinch to get back. The viewport meta is
+deliberately NOT touched — `maximum-scale=1` / `user-scalable=no` would fix it by taking pinch
+zoom away from everyone. Instead the house pattern is `text-[16px] sm:text-<size>`: phones get
+16 px, `sm` and up keep the design's own size, since a pointer never triggers the zoom. Applied
+to every member-reachable control: `LibraryFilters`' chip search, `LibraryIndex`' page search,
+`ProfilePanel`'s and `EditSongButton`'s shared `inputCls` (plus its lyrics textarea and the two
+reference-row inputs), `ProposalEditor`'s `inputCls` (input + both textareas), `ProposalThread`'s
+reply textarea, the availability `NotePopover` and the sign-in form. `admin/` and `kids/` are
+dense desk surfaces and were deliberately left: `app/utils/__tests__/inputFontSize.test.ts`
+excludes them BY PATH, not by a baseline count, and fails on any other `<input>`/`<textarea>`/
+`<select>` under `app/**` carrying a sub-16 px text utility that applies at phone width — a
+breakpoint variant is fine, `focus:` and `dark:` are not, since focus is exactly when the zoom
+fires. It reads the whole `className={…}` expression brace-aware and resolves an identifier one
+level to a `const` string or template literal in the same file. `ui/Select` and `ui/DateField`
+carry their size in a `SIZE` map the scan cannot resolve, so their `md`/`lg` entries were
+changed by hand to the same pattern (the `sm` entries are the admin-density skin and keep their
+11 px); both maps carry a comment saying so.
+
+**A long press on a day-card setlist row selected text.** R7 gave `LibraryRow` the gesture and
+`LibraryIndex` the one sheet per page; the run sheet's own rows — the most looked-at list in the
+app — had neither, so a hold did what a hold does to plain text on iOS. `SongRow` now spreads
+`useLongPress(() => onQuickActions?.(song))` and carries `select-none`; `DayCard` owns ONE
+`QuickActions` (`open={actionsOpen}`, never a literal `open`) with the same two actions the
+library offers — «Abrir» → `openSheet(song._id, song.play_key)`, «Copiar enlace» over
+`/posts/<slug>` with an `ok`/`error` toast, offered only when the row carries a slug (the home
+page's setlist projection does). The sheet is on the card, not on the row, for the reason
+`LibraryIndex` records: a mounted `QuickActions` subscribes to the CueDialog layer context.
+Tests: a long press opens the sheet with «Abrir» and opens no song; a plain tap still calls
+`openSheet("s1", "G")` and opens no sheet.
+
+**Fix round 1** (whole-branch review, CHANGES_REQUIRED). One MEDIUM: `ui/Select`'s `md`/`lg`
+and `ui/DateField`'s `md` still zoomed — they reach a phone at `/biblioteca` (Tonalidad),
+`/me/disponibilidad` and `/schedule` — so the `SIZE` maps take the house pattern too. Two LOWs:
+`LyricsAutoscroll` now keeps the pill while `running`, so a resize mid-run (the transport
+appearing, a rotation) can never take «Detener» away from a page that is still scrolling
+itself; and the guard grew teeth — it reads the whole `className` expression rather than
+stopping at the first `}` (a `${inputCls} resize-none` tail was invisible), resolves
+template-literal consts, and counts `focus:`/`dark:` small sizes as violations.
+
+**Release:** merged to `main` as `baf9cbfe` (PR #78, 2026-09-16 22:19 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`, 22:23 CST). Preview last verified at `ef57eff9`.
+
+# Part XV — R5 (2026-09-16/17)
+
+Branch `claude/motion-r5-admin`. Seven implementation tasks plus this documentation task,
+turning `/admin` from a box in a box in a box into the Control Room — §12.5, §17's correction
+to Part III finding 4, Part I §5.8 (M7a) and decisions J, N and O, plus the desktop `Select`
+popover deferred in Part VIII and the `NavLinks` flag unification deferred in Part IX. The
+outer frame, the shell, the tab-bar box and the per-tab panel surfaces are gone; the page is
+the workspace and cards are the only boxes left. Desktop gets a left rail carrying the
+integrity state as a lit dot, Servicios becomes a horizontal snap board, the kill switch moves
+into a confirmed row menu, every panel adopts the primitives, and five of six tabs plus the
+month generator leave the first load.
+
+**Shipped.** `app/(client)/admin/page.tsx` — navbar, an `h1` and `AdminPanel` inside
+`brand-admin-frame`; no eyebrow, no subtitle, no «Acceso autorizado» pill, no shell div.
+`app/components/admin/AdminPanel.tsx` — 1 451 → ~265 lines: one tree (six mutually exclusive
+early returns are gone), the tab reducer, the `?tab=` contract, one `AdminRail` and one body
+`key={tab} … animate-fade-in`, plus the integrity hook at the top level and the five
+`next/dynamic` panels. `app/components/admin/AdminRail.tsx` — the section nav, one component
+in two layouts, exporting `ADMIN_TAB_ICON`. `app/components/admin/useIntegrityQueue.ts` — the
+three service-integrity fetches lifted out of `IntegrityQueuePanel`, returning
+`{ queue, tone, sources, loading, reload, resolve }`. `app/components/admin/MembersPanel.tsx`
+— the Miembros body extracted whole (list, filters, Fuse search, every member write, the five
+dialogs) with the row `Menu` and the confirmed kill switch. `app/components/admin/PanelSkeleton.tsx`
+— the `loading` component for every dynamically imported panel, a Suspense fallback only.
+`app/components/admin/PanelBoundary.tsx` — the error boundary those panels render inside, and
+the one place a chunk-load failure surfaces («Reintentar», which reloads the page). `app/components/admin/ServicesPanel.tsx` —
+the snap board, every control a primitive, `MonthGenerator` behind `next/dynamic`.
+`app/components/admin/ServicePrimaryAction.tsx` — a house `Button` whose TONE is the variant.
+`app/components/admin/ServiceReadinessCard.tsx` — `className` (layout only) + `revealAttrs`.
+`ActivityPanel`, `AvailabilityPanel`, `ContentPanel`, `ProposalsPanel`, `IntegrityQueuePanel`
+— `Skeleton`, `NumberRoll`, `AnimatedList`, touch-visible row actions and the matrix's
+sentinel-driven sticky edge. `app/components/ui/Select.tsx` — the desktop popover.
+`app/components/ui/Menu.tsx` — the panel portalled to `document.body`, `fixed`, flipped,
+clamped, opaque, closing on ancestor scroll. `app/brand.css` — `.brand-admin-shell`, its
+`::before` and `.brand-admin-tabs` deleted; `--admin-rail-w`, the collapsed-rail rules and
+`.availability-matrix[data-scrolled] .sticky-col` added; the `:has(.planner-wide)` comment
+re-derived with the rail in the arithmetic. `docs/adr/0035-the-admin-shell-is-gone.md` records
+why the shell is gone and why explicit scrollers are now the rule. **The ADR is numbered 0035
+on this branch, and it renumbers to 0037 before the PR if #76/#77 land on `main` first** — the
+renumber was attempted mid-branch, broke `adrIndex`, and was reverted (`df2db9b2`); it is a
+pre-PR step, not a mid-branch one.
+
+**Rulings, with reasons.**
+- **The shell goes, the frame stays as a hook** (plan ruling 1). `.brand-admin-shell` was
+  `overflow: hidden` on BOTH axes and was named as a premise in three places; deleting it
+  removes the clipping ancestor, so the `brand-admin-frame` div survives only because the
+  `:has(.planner-wide)` widening hangs on it. The planner's full-screen portal and
+  `MonthGenerator`'s hand-centring STAY — they are correct regardless of the shell — and
+  their comments now name `[data-route-main]` as the nearest clipping ancestor.
+- **A tab change fades the INCOMING body in, on a keyed remount** (ruling 2), rather than
+  §5.8's crossfade of two absolutely positioned panels. Only the active panel is mounted
+  today and these panels are thousands of lines each; doubling the DOM for 200 ms buys
+  nothing a member notices. The same ruling R4 made for the chart.
+- **Rail at `lg+`, underline strip below** (ruling 3), both always in the DOM with CSS
+  picking one — a JS media query paints the wrong one first — and a DIFFERENT
+  `SlidingIndicator` id per layout, or the shared `layoutId` would fly the marker across the
+  page at the breakpoint. While the planner is open the rail collapses to 56 px of icons,
+  written once as `--admin-rail-w` and read by the grid template, and the widened-frame
+  arithmetic was re-derived with it (`1512 − 24 = 1488`; `56 + 32 + 1400 = 1488`;
+  `216 + 12 + 920 + 12 + 240 = 1400`).
+- **The integrity dot has THREE states, never two** (ruling 4): nothing when the inventory is
+  proven clean, a dim `?` when a domain failed, is loading or was never asked, the count when
+  there are issues. An unknown queue must not read clean, in the dot or in the accessible name.
+  The panel's `Collapse` follows the tone — open until proven clean.
+- **Servicios is a board from `lg`** (ruling 5): a snap track of 380 px cards inside its own
+  `min-w-0` column, instead of a grid that squeezed a card to ~260 px on a full month. The
+  phone keeps the vertical list, the `ParticipationSidebar` split stays, and the track scrolls
+  ITSELF so the page never widens.
+- **One `Menu` per member row** (ruling 6, decision O widened) and a confirm before access is
+  taken away. Nothing depends on hover, so a phone reaches every action a desktop does.
+- **Load on demand** (ruling 7): the five secondary tabs, `MembersPanel` and `MonthGenerator`
+  through `next/dynamic`; `ServicesPanel` and `IntegrityQueuePanel` stay eager, because
+  Servicios is the default tab for most roles and the integrity fetch feeds a dot every tab
+  shows.
+- **The desktop `Select` popover** (ruling 8) keeps the native element as the form value and
+  the label target; the popover is chrome, not a reimplementation. **`NavLinks` flags
+  unified** (ruling 9): Calendario and Biblioteca show for every worship member on every page,
+  so the row stops changing shape between routes. **M7b stays out** (ruling 10) except
+  comments and the dynamic-import boundary. **Label budget** (ruling 11): «Backstage
+  operations» and «Acceso autorizado» pinned at 0 (decision N). **Deferred on purpose**
+  (ruling 12): a `control-room` gallery fixture, the `AvailabilityPanel` date-chip menu (the
+  panel is read-only today) and planner-cell motion.
+
+Made during execution, on top of the plan:
+- **The eager `membersBody` value stayed a value.** Turning it into a function makes
+  `react-hooks/refs` an ERROR at `onClick={() => handlePhotoClick(m._id)}` — the ref can no
+  longer be proven to be read outside render — and the gate is 0 errors. The real fix was
+  Task 3's extraction plus Task 6's `next/dynamic`, which is lazy for real rather than merely
+  deferring construction.
+- **The ADR keeps its 0035 number until the pre-PR renumber.** Renumbering mid-branch to 0037
+  broke `adrIndex` and the failure was hidden by a gate chain that piped `vitest` through
+  `tail` — the exact anti-pattern this repo has a rule about. Reverted; the branch carries
+  0035 and the renumber happens once, at the end.
+- **The integrity fetch is gated on the tab existing, and re-read on ENTERING Servicios.**
+  `useIntegrityQueue({ enabled })` takes the same predicate that builds the rail, so the fetch
+  and the surface can never disagree about who may ask; a `content-editor` made three 403s
+  before. Disabled reads `tone: "unknown"` explicitly — "we never asked" must never come to
+  look like "we asked and it was fine". The re-read is on entering, deliberately not on first
+  mount, which would double every load's requests.
+- **Impersonation stayed as a fifth menu item.** Ruling 6 enumerates four; «Ver como este
+  miembro» is the app's ONLY entry point to impersonation, so dropping it would have deleted
+  the feature. Accepted at review.
+- **«Eliminar» is UI-gated to super-admin.** It sat ungated beside gated siblings; Miembros is
+  super-admin-only by tab, so no role loses anything real. Accepted at review.
+- **Every dialog keeps its PAYLOAD through the exit.** `open={state !== null}` with the body
+  read from the same state blanks the dialog for the ~180 ms it spends closing. The house
+  shape is now payload + `open` boolean + an open counter in the body's `key`: the text
+  survives the exit, and a REOPEN still mounts a fresh form rather than the last one's
+  contents — or its password.
+- **`ServicePrimaryAction`'s tone is the Button VARIANT, not an additive `className`.**
+  Keeping the old tone string beside `variant="primary"` puts two `bg-`/`text-`/`hover:` sets
+  on one element and the winner is Tailwind's emission order, not the tone asked for — the
+  card could silently lose its red «Revisar datos» / amber «Reintentar» distinction.
+- **Contenido's row actions are `size="lg"`, not `size="sm"`.** On the `icon` variant `sm`
+  resolves to 36 px; these controls became reachable by touch in the same change, so shrinking
+  them at that exact moment was the wrong trade.
+- **The board reveals with `revealProps(i)`, not `AnimatedList`.** The month filter SWAPS the
+  card set, it does not reflow a list in place.
+- **`Menu` portals to `document.body`.** Found on dev, not in a test: a ten-row Tonalidad
+  panel cut to two by `CueDialog`'s scrolling body. `absolute` is clipped by any scrolling
+  ancestor and a bare `fixed` is trapped by the transformed reveal host (ADR-0031), so the
+  panel is portalled, `fixed`, flipped when the room below is short, SIZED to the room it has,
+  clamped from the right edge, opaque, and it closes on any ancestor scroll — a panel pinned
+  to a rect cannot honestly travel with its trigger.
+- **The `Select` popover's names are composed** — «campo: elección» on the trigger, «Opciones
+  de campo» on the panel. The obvious `aria-labelledby` spelling made `getByLabelText("Mes")`
+  match three elements, because dom-testing-library resolves each reference individually.
+- **Detection is `useSyncExternalStore`**, not `useEffect` + `setState`: it has a server
+  snapshot, it drops the "setState synchronously in an effect" warning, and it follows a mouse
+  attached mid-session.
+
+**Review trail.**
+- **Task 1 (flatten, opus):** APPROVED, 3 LOW — the eager `membersBody` (folded into Task 2
+  and then reverted, above), sub-`lg` spacing (the rail replaced the bar in Task 2), and the
+  unmeasured "no horizontal scroll" claim, which the coordinator then measured on dev at 390
+  and 1440.
+- **Task 2 (rail + integrity dot, opus):** CHANGES_REQUIRED — 1 HIGH (the mid-branch ADR
+  renumber broke `adrIndex`, hidden by a piped gate chain; reverted), 1 MEDIUM (the integrity
+  fetch ran for roles with no Servicios tab — three 403s), 3 LOW (the dot overflowed the
+  collapsed rail; wrong task numbers in a comment; the load cadence was undocumented). One fix
+  round; the sonnet re-review closed all four with 0 new.
+- **Task 3 (members menu + confirmed kill switch, opus):** CHANGES_REQUIRED — 1 MEDIUM (the
+  confirm closed on a REFUSED PATCH, which reads as success against an unchanged row), 3 LOW
+  (no in-flight guard on the no-confirm «Habilitar»; a transition list that named a property
+  the hover cannot animate; every dialog blanking during its exit). The two deviations —
+  impersonation kept, «Eliminar» narrowed — were accepted. One fix round; sonnet re-review
+  closed all four, 0 new.
+- **Task 4 (snap board, opus):** APPROVED with five findings folded into Task 5 — a dead pill
+  border class that lost to the variant on emission order, the toolbar's `title` reasons made
+  unreachable by `disabled:pointer-events-none`, an unguarded tone mapping, `adminShell`'s
+  unscoped queries (the flake vector below), and `serviceCardModel.ts`'s `transition-all`,
+  invisible to a guard that only read `.tsx`.
+- **Task 5 (the five panels, sonnet):** APPROVED, 0 findings. **Task 6 (load on demand,
+  sonnet):** APPROVED, 0 findings; `/admin` 358.6 → 150.2 kB.
+- **Task 7 (`Select` popover, opus):** CHANGES_REQUIRED — 4 MEDIUM (an `inline-block` `Menu`
+  root against a `w-full` trigger; a re-pick firing `change` and sending a PATCH; the
+  `sr-only` native select as an invisible tab stop; no panel max-height) + 4 LOW + the
+  `useSyncExternalStore` recommendation, plus the clipped panel Frank found on dev. Fix round
+  1 introduced the portal, and the scoped re-verify came back NOT VERIFIED: the portal itself
+  brought 2 MEDIUM (Tab dropping focus out of the document; a flip threshold shorter than the
+  panel) and 6 LOW, with one more from a second dev screenshot (the translucent panel over the
+  filter dialog). Fix round 2 closed all nine and the sonnet re-review returned VERIFIED.
+- **Whole-branch review (`856f3e87..649c905e`, opus):** CHANGES_REQUIRED — 1 MEDIUM
+  (a failed chunk load took the WHOLE of `/admin` down: App Router `next/dynamic` renders
+  `loading` only as a Suspense fallback and never passes `error`/`retry`, so the «Reintentar»
+  branch in `PanelSkeleton` was unreachable and the rejection threw through `React.lazy` to
+  `app/(client)/error.tsx`, whose `reset` cannot recover a CACHED lazy rejection either) and
+  3 LOW (the integrity dot and disclosure twitching on every clean entry into Servicios, the
+  reload having reset the tone to `unknown` mid-flight; two admin inputs under 16 px on a
+  phone; four raw controls left on rewritten surfaces).
+- **Fix wave (this commit).** `PanelBoundary` — a client error boundary around every dynamic
+  panel, so a bad chunk stays in its own column; its «Reintentar» RELOADS the page and the
+  copy says so, because `React.lazy` caches the rejection and rebuilding the `dynamic()`
+  instance per render is an eslint ERROR here (`react-hooks/static-components`). The dead
+  `error`/`retry` branch left `PanelSkeleton` with it. `useIntegrityQueue` holds the last
+  SETTLED tone while a reload is in flight (`loading` is exposed separately; a first load
+  still reads `unknown`). `MembersPanel`'s shared `inputCls` and `ContentPanel`'s song search
+  are `text-[16px] sm:text-sm`. `IntegrityQueuePanel`'s disclosure toggle and «Recargar»,
+  and `MembersPanel`'s clear-search ×, are `Button`s; `ContentPanel`'s «Eliminar» dropped its
+  hover colour overrides. `AdminRail`'s items stay raw — navigation, documented in its header.
+- **Parked residuals, all known and none blocking.** `ui/Select`'s and `ui/DateField`'s
+  `size="sm"` are still 11 px, which is under the 16 px phone rule — every consumer of that
+  size is under `admin/`, which `inputFontSize.test.ts` excludes by path, so it is a
+  deliberate gap rather than an unseen one. `AvailabilityPanel`'s Conflictos/Matriz toggle is
+  still two raw `<button>`s in a one-of-N arrangement where the constraints want
+  `SegmentedControl`; it is load-bearing for two existing tests and was out of Task 5's
+  bounds. R4's day-card sheet × nit is unchanged. The `adminShell.test.tsx` flake — a case
+  seeing the previous test's tree, sighted twice — had its query scope closed to the rendered
+  container, which is the likeliest vector; it has not recurred since.
+
+**Open notes for Frank's look.**
+- **Rail versus strip, as a feel.** The rail is the biggest visual change on the page and it
+  has never been seen outside jsdom and two full-page screenshots. Does the vertical pill
+  read as the same control the underline strip is on a phone?
+- **The collapsed 56 px rail with the planner open.** The collapse is ARITHMETIC, not a
+  measurement: the planner grid now budgets 920 px where it had 1008, and the integrity
+  badge's 4 px offsets are reasoned from the 56 px box rather than measured in a browser.
+- **The snap board on a laptop.** 380 px cards with `snap-mandatory` on a 1440 screen show
+  three and a bit; the right-edge gradient is the only hint there are more. On a 1280 laptop
+  with the sidebar it is closer to two.
+- **The members ⋯ menu and its confirm at 390 px.** The dev-verify bot is not a super-admin,
+  so `?tab=members` falls back to Servicios for it — this one can only be seen by Frank or in
+  the simulator.
+- **Every menu is now an opaque raised panel that closes on scroll.** That is `NavMenu`,
+  `PracticePlaylistButton`, `ServiceReadinessCard` and the members rows, not just the one
+  over the dialog that prompted it. The opacity is a change in every theme; the scroll-close
+  is a change in every gesture.
+- **The `Select` popover's typography.** The trigger inherits the house `Button` chrome —
+  uppercase, `tracking-widest` — where the native select was `font-body`. That is visible on
+  `/biblioteca`'s Tonalidad and on the admin Rol/Persona selects, and it is a taste call, not
+  a bug.
+- **The `Select` popover near the bottom and the right of the viewport.** The flip threshold,
+  the room-aware `maxHeight` and the right-edge clamp are layout decisions jsdom cannot
+  measure; the clamp's real branch is exercised by no test.
+- **The integrity panel collapsing when it is clean.** "Expands only when it has something to
+  say" is the ruling; whether a collapsed panel reads as "nothing wrong" or as "missing" is a
+  look.
+
+**Bundle:** `main 856f3e87` → `R5 final tip 07ed88a9` (git-archive cold builds, gzip −9;
+`measure-bundle.mjs` now excludes the `server/chunks/ssr` entries newer builds list in the
+client reference manifest — an earlier reading's +27 kB per route was that artefact): shared
+172.5 → 172.5; `/` 122.8 → 123.5; `/posts/[slug]` 113.0 → 113.3; `/schedule` 125.6 → 125.9;
+`/biblioteca` 116.9 → 118.3 (+1.4 — the `Select` popover and the portalled `Menu` on the
+filters); `/me` 123.8 → 124.3; **`/admin` 358.6 → 150.8 (−207.8)** — the five secondary tabs
+plus `MonthGenerator`/`PlannerGrid`/`SetlistEditor` are async chunks now, so that row measures
+Servicios + the shell and is not like-for-like with an earlier one.
+
+**Shots** (`docs/superpowers/specs/2026-09-08-premium-motion-shots/`):
+`admin-before-1440.png` / `admin-after-1440.png` (Servicios at 1440 — the frame, the tab box
+and the panel surfaces against the rail and the board), `admin-before-phone.png` /
+`admin-after-phone.png`, plus `r5-select-popover-1440.png` (the popover open on a fine
+pointer) and `r5-admin-board-1440.png` (the snap track mid-scroll).
+
+**Release:** merged to `main` as `a2a7b9c3` (PR #80, 2026-09-17 13:58 CST); production alias
+`owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last
+verified at `26a8f749` (the F1 strip fix, phone shots in the ledger).
+
+# Part XVI — R6 (2026-09-18)
+
+Branch `claude/motion-r6-kids-auth-gallery`, forked from `main` at `67a75b9d` (the bundle
+baseline below was built from `6e69fed0`, one merge earlier). Eight implementation tasks plus
+this documentation task, covering Part I §5.9 (Kids), §5.10 (auth and the fallback pages),
+§5.11 (the theme gallery), §19.5's two song-page rows and decision P, and §20's R6 line. The
+last product surfaces that had never seen a primitive adopt them; the two song-page items R4
+deferred land; and the theme gallery stops being a place to look and becomes a baseline that
+fails a build.
+
+**Shipped.** `app/components/kids/KidsPlanner.tsx` — the toolbar is `Button`s and a
+`DateField kind="month"` with `onStep`, the three inline flashes are `useToast`, loading is a
+`SkeletonGroup` of `Skeleton`s, the month body is a keyed `animate-rise` remount and
+`SeatPicker` is controlled (`open`), mounted always. `app/components/kids/SeatPicker.tsx` —
+the `open` prop (`cueDialogMount` 6 → 5). `app/components/ui/DateField.tsx` — `disabled`
+forwards to BOTH stepper arrows. `app/components/kids/KidsRotationBoard.tsx` — the shared
+dashed drop-target pattern named in `MOTION.md`, the source chip's lift
+(`opacity-30 scale-95`), the landing `animate-pop` armed by a per-cell change effect, and
+`Button` publish toggles. `app/components/kids/KidsSundayCards.tsx` — the same chip, a keyed
+`animate-fade-in` crossfade when a seat's name changes, `Button` toggles.
+`app/components/kids/PairChip.tsx` — the optional `landed` prop.
+`app/components/kids/PairRoster.tsx` — rows through `AnimatedList`, the retire confirm inside
+`Presence variant="rise"`, `Button`s and `useToast`.
+`app/components/kids/KidsAvailabilityPanel.tsx` — `DateField` month stepping, `Button` marks,
+`useToast` with a HELD 409 conflict message that carries its own id.
+`app/(client)/kids/page.tsx` — `revealProps` stagger over the Sunday cards, the «Te toca» pill
+on `animate-pop`, «Planear Kids» as a `Button`. `app/(client)/kids/admin/page.tsx` — three
+`revealProps` sections. `app/(client)/auth/signin/page.tsx` — the ruling-8 stagger, the error
+alert inside `Presence variant="rise"`, `Button`s with a busy submit.
+`app/(client)/auth/not-a-member/page.tsx`, `app/(client)/not-found.tsx`,
+`app/(client)/posts/not-found.tsx`, `app/(client)/error.tsx` — `revealProps(0)` and a house
+`Button` each. `app/utils/lyricMarkers.tsx` — the NEUTRAL `LYRIC_EYEBROW`,
+`LYRIC_EYEBROW_BLOCK` and `dimRepeatMarkers`, called by the song page and `ChordChart`.
+`app/components/song/TutorialPoster.tsx` — the click-to-load YouTube facade.
+`next.config.mjs` — the `i.ytimg.com` remote pattern. `app/components/BottomNavBar.tsx` — the
+tab bar's presentational half, split out of `BottomNav`. The gallery's `NavFixture` (new) and
+`ControlsFixture` (Skeleton, an open `Menu`, `pill tone="availability"`, `icon tone="danger"`,
+`size="sm"` primary/secondary); `FIXTURES` is seven and the route prerenders 14 pages.
+`app/(gallery)/theme-gallery/[theme]/GalleryMotion.tsx` — the `#motion` escape hatch, in a
+LAYOUT effect. `tailwind.config.ts` — the `pop` keyframe and `animate-pop`.
+`playwright.vr.config.ts`, `e2e/theme-gallery/gallery.spec.ts`,
+`e2e/theme-gallery/motion-on.spec.ts` and 28 committed darwin PNGs (8.5 MB) under
+`e2e/theme-gallery/__screenshots__/{desktop,phone}/darwin/`; `npm run test:vr`.
+
+**Rulings 1–14 are in the plan** (`docs/superpowers/plans/2026-09-18-motion-r6-kids-auth-gallery.md`)
+and all of them stood. In short: `pop` is CSS, not a spring (1); the Kids board keeps HTML5
+drag and gains no landing beam (2); `useToast` replaces the three inline flashes while the
+«Cambios sin guardar» banners stay (3); a full-width multi-line LIST ROW is not a `Button` (4);
+month navigation is `DateField kind="month"` with `onStep` (5); `SeatPicker` is controlled (6);
+the roster reflows through `AnimatedList` and retiring needs no `CueDialog` because it is
+reversible (7); the sign-in stagger indices are 0/3/4/5/6/7 (8); one neutral
+`dimRepeatMarkers` serves both lyric renderers (9); the tutorial poster is a facade, and a
+non-YouTube url keeps today's iframe (10); the `nav` fixture hosts a presentational
+`BottomNavBar` (11); the `controls` fixture closes its gaps (12); the VR policy is
+darwin-only, committed, opt-in and out of CI (13); and the kids `loading.tsx`, planner-cell
+motion, a hover state in VR and R4's day sheet are deferred on purpose (14).
+
+**Made during execution, on top of the plan.**
+- **15. `DateField` forwards `disabled` to its stepper arrows.** A composite field is ONE
+  control: the month input went inert while the planner was busy and the arrows did not, so a
+  press mid-generate or mid-save started a second month load. `monthLabel` was deleted in the
+  same fix — the native month input IS the label now, exactly as `ScheduleHeader` has read
+  since R2. Whether that reads as a label at all is a look for Frank on dev.
+- **16. The controlled picker is a boolean plus a RETAINED payload,** not a ref written during
+  render: `pickerOpen` decides `open` and the last `picking` survives the exit so the sheet
+  still has content while it closes. The obvious `if (picking) lastPick.current = picking`
+  spelling the plan sketched is a write during render, which the React compiler rejects as an
+  error — and the gate is 0 errors. `loadMonth` closes the picker, so a month change can never
+  leave a sheet pointing at a seat that no longer exists.
+- **17. A landed chip is detected by CHANGE, never by intent.** The first implementation armed
+  `landed` on the cell CLICK, so opening a picker popped the chip already sitting there and
+  cancelling popped it again. It is now a per-cell snapshot of `assignedPairId` compared in an
+  effect, armed only when `key in prev && prev[key] !== next && next !== null`. The
+  `key in prev` half is the second fix: a month load swaps in a whole new set of cell keys, and
+  without it every pre-filled seat in the new month read as "just landed" and the board
+  fireworked. One arming path covers drag and picker identically; mount and a month load seed
+  the snapshot and arm nothing.
+- **18. A held (409) toast keeps its id.** `Toast` only auto-replaces a toast carrying the same
+  message text, so a conflict warning held until something replaces it would otherwise sit
+  beside a later save's success toast and contradict it. The panel tracks the id and dismisses
+  it at the next save and on unmount.
+- **19. The lyric eyebrow is a `<div>`, and only the PAGE's first one sits flush.** Two
+  defects, both found by building CSS rather than by the suite. A `<p>` loses the `!important`
+  tie to the prose wrapper's `prose-p:!mt-0` — same specificity, equally `!important`, and
+  Tailwind emits variant utilities last — so every section name shipped with zero margin; a
+  bare `div` has no tie to lose. Then `first:!mt-0` inside `LYRIC_EYEBROW_BLOCK` compiled to
+  `:first-child`, and `groupBySections` starts EVERY group with its heading in its own wrapper,
+  so the variant zeroed the whole rhythm it was meant to trim once. The block carries no
+  `first:`; the page (and the gallery fixture, byte-identically) carries
+  `[&>div:first-child>div:first-child]:!mt-0`. A source guard pins the element and the clause.
+- **20. The repeat marker is `text-ink-dim` at FULL alpha.** The plan's `/70` measures 3.60:1
+  in dark — under the 4.5 floor `lightContrast.test.ts` enforces on text. The role already
+  reads dimmer than the lyric body, which is the whole effect. `TutorialPoster.url` is optional
+  because the Sanity `tutorial` object requires neither field, and url-less rows are filtered
+  out on the page rather than rendering an iframe with no `src`.
+- **21. The gallery's paint assertions target what is actually painted.** The planner test
+  probes the PORTALLED overlay
+  (`[role="dialog"][aria-label="Cuadrícula del mes en pantalla completa"]` +
+  `data-planner-fullscreen-activated`) — `data-planner-fullscreen` is on the toggle, not the
+  overlay. The dialog test probes two points, because `CueDialog` is `items-start` below `sm`.
+  `gallery.spec.ts` fulfils `/_next/image` and `i.ytimg.com` in `beforeEach`: the song
+  fixture's tutorial poster is the ONE non-hermetic thing in the gallery, and the URL is
+  hard-coded inside the production component. `useLayoutEffect` sufficed for `#motion` (React
+  19 emits no SSR warning for it), and `#motion` applies to a HARD load only — `GalleryMotion`
+  reads the hash on mount.
+
+**Guards.** `cueDialogMount` 6 → 5 (ruling 6). New: `tailwindMotion.test.ts` (the `pop`
+keyframe's frames and its animation string), `lyricMarkers.test.tsx` (behaviour plus the three
+source guards of ruling 19 — the eyebrow is a `div`, the block carries no `first:`, and the
+page and fixture wrappers are byte-identical), `vrConfig.test.ts` (the snapshot path template,
+the diff ratio, `animations: "disabled"`, the two projects). `themeGallery.test.ts` grew to
+seven fixtures, swept `NavFixture` into the hermetic check, and asserts both the `#motion`
+source and that `nav` hosts `BottomNavBar` rather than `BottomNav`. `textZoomLayout.test.ts`
+reads `BottomNavBar.tsx` now. Unchanged and deliberately not raised: `rawMotionLiterals` 5/0,
+`tokenLayer` 62, `labelBudget` all 0, `inputFontSize` green (the sign-in inputs were already
+`text-[16px] sm:text-sm`).
+
+**Counts at the tip (`66cb7192`).** 320 test files / 5 526 tests, `npx eslint .` 0 errors and
+82 warnings (two `no-img-element` from `next/image` test mocks, the `meHeader.test` precedent).
+VR: 36 of 36 green with zero diffs (desktop 18 + phone 18), 28 committed PNGs, 8.5 MB.
+
+**Review trail.** Every task was reviewed on its diff; five of eight needed a fix round
+(Tasks 1, 2, 3, 6, 8), and two of those needed a second (2, 6) because the first fix was
+incomplete.
+- **Task 1 (planner controls, opus):** CHANGES_REQUESTED — MEDIUM, `DateField` did not forward
+  `disabled` to its steppers, so the month arrows stayed live mid-generate and mid-save; plus
+  a dead `monthLabel` and the `pickerOpen` second source of truth. One fix round; the sonnet
+  re-review closed all of it with 0 new.
+- **Task 2 (board chip, sonnet):** CHANGES_REQUESTED — HIGH, `landed` was armed on the cell
+  CLICK, so simply OPENING the picker popped the chip already in the seat, and the test could
+  not tell the two apart. Fix round 1 moved the arming onto the change; the re-review then
+  found a NEW MEDIUM — a month navigation popped every pre-filled seat, because the new keys
+  read as changes. Fix round 2 added the `key in prev` guard. VERIFIED on the third look.
+- **Task 3 (roster and availability, sonnet):** SPEC ✅; MEDIUM — the held 409 toast was never
+  dismissed by a later successful save, so a resolved conflict kept warning. One fix round
+  (ruling 18), VERIFIED.
+- **Task 4 (kids member page, sonnet):** APPROVED, 0 findings.
+- **Task 5 (sign-in and the fallbacks, opus):** APPROVED, 0 findings; the two new
+  `no-img-element` warnings were checked against the existing `meHeader.test` precedent.
+- **Task 6 (lyric eyebrows and the tutorial poster, opus):** CHANGES_REQUESTED — MEDIUM, the
+  `<p>` eyebrow loses the `!important` tie to `prose-p:!mt-0`, MEASURED in a real Tailwind
+  build rather than argued from the source. Fix round 1 made it a `div`; the re-review found a
+  NEW MEDIUM — `first:!mt-0` matched every group wrapper, so every eyebrow was still flush.
+  Fix round 2 moved the clause onto the page wrapper. VERIFIED on the third look. Both defects
+  were invisible to jsdom by construction: they are cascade ties, and only a real build has an
+  emission order.
+- **Task 7 (the `nav` and `controls` fixtures, opus):** APPROVED, 0 findings.
+- **Task 8 (the VR baseline, opus):** APPROVED with three findings — a stale "hermetic" comment
+  in `SongPracticeFixture` that the spec's own route stub had made untrue, an unbounded
+  `getAnimations()` await that could hang the motion-on spec, and the one-shot `#motion` hash.
+  One fix round closed all three (`Promise.race` at 400 ms, the comment corrected, a README
+  note); VR came back 36/36 again.
+- **Whole-branch review (post-tip):** CHANGES_REQUESTED — four findings. MEDIUM: the board
+  wrapper's own `fade-in` `onAnimationEnd` stripped `animate-pop` unconditionally, clearing the
+  landing pop at ~37% through it — fixed by checking `e.animationName === "pop"`. LOW: «Generar
+  mes» changes every cell in one pass, and the effect armed `landed` on whichever key it
+  reached last — fixed by collecting changed keys first and arming only when exactly one
+  changed. LOW: `KidsPlannerFixture` mounted `SeatPicker` conditionally instead of controlled —
+  fixed to mount always with an `EMPTY_SEAT_VIEW` fallback, mirroring `KidsPlanner`. Docs: this
+  Part's own review-trail count was wrong (six of eight / three of those, not five / two) —
+  corrected above. One fix round closed all four; re-verified with the full gate chain.
+
+**Parked residuals, all known and none blocking.** `posts/not-found.tsx`'s action reads «Ver
+todas las canciones» and links `/` — pre-existing, and a copy decision rather than a bug to
+fix mid-branch. The kids planner's month is the native `<input type="month">` chrome with no
+display-font label (ruling 15); Frank's look on dev decides whether it comes back. The kids
+name input stays `text-sm` — `kids/` is excluded from the 16 px guard by path, which makes
+this a deliberate gap rather than an unseen one, the same shape as R5's `admin/` exemption.
+`TutorialPoster` has no `poster` prop, so the gallery stubs the image route instead; a prop
+would make the fixture hermetic and is not worth a production seam today. `#motion` is one-shot
+per hard load. And R4's "history row press opens the day sheet" is parked again — there is
+still no day sheet.
+
+**Bundle:** `main 6e69fed0` → `R6 tip` (git-archive cold builds, `static/chunks/*` only;
+measured at `ada76ed8`, and `66cb7192` on top of it changes a comment, a `Promise.race` and a
+README, so no chunk moves): shared 172.5 → 172.0 (−0.5); `/` 123.5 → 122.8 (−0.7);
+`/posts/[slug]` 113.3 → 113.1 (−0.2); `/schedule` 126.0 → 125.2 (−0.8); `/biblioteca`
+118.3 → 117.5 (−0.8); `/me` 124.4 → 123.6 (−0.8); `/admin` 151.2 → 150.5 (−0.7). The kids and
+auth routes are not in the table. Every route falls slightly: the `BottomNavBar` split and the
+primitives adoption both remove hand-written class strings and one-off handlers from the
+shared graph, and nothing R6 added ships to a route that does not ask for it — the tutorial
+poster replaces three eagerly-booted iframes with a still.
+
+**Shots** (`docs/superpowers/specs/2026-09-08-premium-motion-shots/`, captured from dev at
+preview `8b024c5e` on 2026-09-18): `r6-kids-admin-1440.png` (the planner toolbar with its
+`DateField` month and Buttons, the board's cells and publish toggles), `r6-song-tutorials-1440.png`
+(the tutorial posters with their «Reproducir» buttons, the lyric eyebrows — VERSO 1 · PRE-CORO 1 ·
+CORO — at a 62 ch measure with their restored spacing, and the dimmed `//` in the Puente),
+`r6-signin-phone-light.png` (the stagger behind the beam, in light — captured from a local
+`next start`, because `dev-verify` signs in first and refuses `/auth/signin` as a session page),
+`r6-nav-sheet-phone-light.png` (the gallery's `nav` fixture: the phone bar with the «Más» sheet
+open) and `r6-gallery-kids-planner-1280.png` (the `kids-planner` fixture on dev). The member
+`/kids` page has no shot: the verification bot is a worship-only member and the page redirects
+it to `/` by design (its gate is `requireMinistryMember("kids")`); the Sunday cards' stagger and
+the «Te toca» pop are covered by `kidsPage.test.tsx`'s reveal-index and class assertions.
+One data fact the song shot surfaced: 124 of the 127 songs with lyrics store their section
+names as heading blocks (the eyebrow path). Of the other three, one («Amor Sin Condición»)
+stored its labels as plain lines and was converted to `h3` on 2026-09-18 by
+`scripts/fix-lyric-section-labels.mjs` (dry run, then `--apply`; idempotent); the other two
+(«En El Monte Calvario», «Gloriosa Cruz») carry no labels at all — stanzas separated by blank
+lines — and stay that way, because inventing labels is content authoring, not a fix. Another: the catalogue writes some repeats as
+`///`, which dims as `//` + `/` — a residual for the marker helper.
+
+**Release:** merged to `main` as `0d21f8ce` (PR #83, 2026-09-18 16:26 CST); production alias `owt-backstage.vercel.app` verified on that SHA (`alias` + `meta.githubCommitSha`). Preview last verified at `cd6d7176` (dev alias on `8b024c5e` carried the final code; `cd6d7176` added only the shots record).

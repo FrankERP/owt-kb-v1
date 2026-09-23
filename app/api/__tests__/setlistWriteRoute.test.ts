@@ -710,4 +710,50 @@ describe("PUT /api/admin/setlists — special service", () => {
     expect((await PUT(req(specialBody()))).status).toBe(409);
     expect(transactions).toHaveLength(0);
   });
+
+  describe("song leaders", () => {
+    const night = (over: Record<string, unknown> = {}) =>
+      specialRole({ format: "worship_night", Lead: [ref("c1", "mem-1"), ref("c2", "mem-2")], ...over });
+
+    it("stores leaders from Lead on a worship night, under the role revision", async () => {
+      store.roles.push(night());
+      const res = await PUT(req(specialBody({ songs: [{ songId: "song-1", play_key: "G", leadIds: ["mem-2", "mem-1"] }, { songId: "song-2", play_key: "A" }] })));
+      expect(res.status).toBe(200);
+      const op = patches(committedTransactions()[0])[0];
+      expect(op).toMatchObject({ id: "role-sp", rev: "role-rev-sp" });
+      const songs = op.set.songs as Record<string, unknown>[];
+      expect((songs[0].leads as { _ref: string }[]).map((l) => l._ref)).toEqual(["mem-2", "mem-1"]);
+      expect("leads" in songs[1]).toBe(false);
+    });
+
+    it("refuses a leader who is not in Lead", async () => {
+      store.roles.push(night());
+      const res = await PUT(req(specialBody({ songs: [{ songId: "song-1", play_key: "G", leadIds: ["mem-9"] }] })));
+      expect(res.status).toBe(400);
+      expect((await res.json()).details).toMatchObject({ issues: ["songs[0].leadIds"] });
+      expect(transactions).toHaveLength(0);
+    });
+
+    it("refuses leaders on an ordinary special", async () => {
+      store.roles.push(specialRole());
+      const res = await PUT(req(specialBody({ songs: [{ songId: "song-1", play_key: "G", leadIds: ["mem-1"] }] })));
+      expect(res.status).toBe(400);
+      expect(transactions).toHaveLength(0);
+    });
+
+    it("refuses leaders on a weekend setlist", async () => {
+      seedWeekendService();
+      const res = await PUT(req(body({ songs: [{ songId: "song-1", play_key: "G", leadIds: ["mem-1"] }] })));
+      expect(res.status).toBe(400);
+      expect(transactions).toHaveLength(0);
+    });
+
+    it("a seat change racing the save fails it as stale, storing nothing", async () => {
+      store.roles.push(night());
+      commitOutcomes.push(conflictError());
+      const res = await PUT(req(specialBody({ songs: [{ songId: "song-1", play_key: "G", leadIds: ["mem-1"] }] })));
+      expect(res.status).toBe(409);
+      expect(committedTransactions()).toHaveLength(0);
+    });
+  });
 });

@@ -44,6 +44,23 @@ npx eslint .
 
 `eslint` must report **0 errors**; the warnings are a deliberate backlog (see `eslint.config.mjs`).
 
+### Visual regression (opt-in, not part of the gate)
+
+The theme gallery has committed screenshot baselines. They are **darwin-only and not in
+CI**; run them when a change is visual:
+
+```bash
+npm run build
+npx next start -p 3000
+THEME_GALLERY_VR_ENABLED=true THEME_GALLERY_VR_BASE_URL=http://localhost:3000 npm run test:vr
+```
+
+Both variables are public configuration, not secrets: the first is the explicit opt-in
+(the config refuses to run without it) and the second names the origin to capture. Neither
+belongs on Vercel, in CI or in `.env.local`. See
+[e2e/theme-gallery/README.md](e2e/theme-gallery/README.md) and
+[docs/DEV_VERIFY.md](docs/DEV_VERIFY.md).
+
 ## Documentation map
 
 | Doc | Contents |

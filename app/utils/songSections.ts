@@ -17,13 +17,14 @@
  */
 
 export interface SongSection {
-  id: "audio" | "tutoriales" | "referencia" | "letra" | "historial";
+  id: "ensayo" | "audio" | "tutoriales" | "referencia" | "letra" | "historial";
   label: string;
   show: boolean;
 }
 
 /** Only what the section list reads — deliberately narrower than `Post`. */
 export interface SongSectionInput {
+  rehearsalMixes?: unknown[] | null;
   audioTracks?: unknown[] | null;
   tutorials2?: unknown[] | null;
   chords?: unknown[] | null;
@@ -50,6 +51,7 @@ export function songSections(
     !!post?.musicalReferenceUrl || !!post?.lyricsVideoUrl || filled(post?.referenceLinks);
 
   return [
+    { id: "ensayo" as const,     label: "Ensayo",     show: filled(post?.rehearsalMixes) },
     { id: "audio" as const,      label: "Audio",      show: filled(post?.audioTracks) },
     { id: "tutoriales" as const, label: "Tutoriales", show: filled(post?.tutorials2) },
     { id: "referencia" as const, label: "Referencia", show: hasRefLinks },

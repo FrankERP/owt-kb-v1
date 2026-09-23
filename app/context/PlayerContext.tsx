@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useRef, useCallback, useMemo, useEffect, ReactNode } from "react";
-import type { PortableTextBody } from "@/app/utils/interface";
+import type { PortableTextBody, RehearsalMix } from "@/app/utils/interface";
 
 export interface AudioTrack {
   url: string;
@@ -23,6 +23,9 @@ export interface SongSheetData {
   body?: PortableTextBody;
   chords?: { key: string; content: string }[];
   audioTracks?: { title: string; tone?: string; audioFileURL: string }[];
+  rehearsalMixes?: RehearsalMix[];
+  /** The viewer's declared instruments (`teamMembers.instruments`), for preselection. */
+  myInstruments?: string[];
   chordsPDF?: { title: string; key: string; chordsURL: string }[];
   lyricsURL?: string;
   history?: SongHistoryEntry[];

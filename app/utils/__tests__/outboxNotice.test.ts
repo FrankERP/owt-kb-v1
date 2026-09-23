@@ -78,6 +78,34 @@ describe("songRowsFrom", () => {
     expect(songRowsFrom(null)).toEqual([]);
     expect(songRowsFrom([{}, { song: {} }])).toEqual([]);
   });
+
+  // A worship night's leaders (spec §8). Sorted ids, and the key ABSENT when a
+  // song has none, so a snapshot taken before leaders existed — and every
+  // leaderless setlist — compares exactly as it did.
+  const led = (ref: string, leads: unknown, tag?: string) => ({ ...song(ref, "G", tag), leads });
+
+  it("keeps a song's leaders as sorted ids", () => {
+    const rows = songRowsFrom([led("a", [{ _key: "x", _ref: "m2" }, { _key: "y", _ref: "m1" }])]);
+    expect(rows[0].leads).toEqual(["m1", "m2"]);
+  });
+
+  it("omits the leads key when a song has none — null, empty or absent", () => {
+    const rows = songRowsFrom([led("a", null), led("b", []), song("c", "G")]);
+    expect(rows).toHaveLength(3);
+    for (const r of rows) expect("leads" in r).toBe(false);
+  });
+
+  it("keeps each medley item's own leaders, and a one-song run's too", () => {
+    const rows = songRowsFrom([
+      led("a", [{ _key: "x", _ref: "m1" }], "t1"),
+      led("b", [{ _key: "y", _ref: "m2" }], "t1"),
+      song("c", "G", "t1"),
+      led("d", [{ _key: "z", _ref: "m3" }], "lonely"),
+    ]);
+    expect(rows.map((r) => r.group)).toEqual([0, 0, 0, null]);
+    expect(rows.map((r) => r.leads)).toEqual([["m1"], ["m2"], undefined, ["m3"]]);
+    expect("leads" in rows[2]).toBe(false);
+  });
 });
 
 describe("parseMinutesEnv", () => {

@@ -19,6 +19,9 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "cdn.sanity.io" },
       { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      // YouTube tutorial posters (TutorialPoster) — the still that replaces an
+      // eagerly-booted embed iframe.
+      { protocol: "https", hostname: "i.ytimg.com" },
     ],
   },
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/app/components/ui/Toast";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import ProposalThread, { type ThreadMessage } from "@/app/components/ProposalThread";
 
 import {
@@ -707,11 +708,11 @@ export default function ProposalsPanel({ target = null, onResolved, viewerId = n
 
       {/* States */}
       {loading && (
-        <div className="space-y-4">
+        <SkeletonGroup label="Cargando propuestas" className="space-y-4">
           {[1, 2].map(i => (
-            <div key={i} className="h-40 rounded-xl bg-surface-accent-wash animate-pulse" />
+            <Skeleton key={i} className="h-40 w-full" rounded="lg" />
           ))}
-        </div>
+        </SkeletonGroup>
       )}
 
       {error && (

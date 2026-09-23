@@ -8,7 +8,7 @@
 
 import { fireEvent, render, cleanup } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemberForm } from "../AdminPanel";
+import { MemberForm } from "../MembersPanel";
 
 afterEach(() => cleanup());
 

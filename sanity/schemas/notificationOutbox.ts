@@ -104,6 +104,15 @@ export const notificationOutbox = defineType({
                 description:
                   "Index of the contiguous medley run, or absent for a standalone song. Never a raw medley_tag — those are regenerated on every editor write and would make every edit compare as changed.",
               },
+              // Absent when a song has no leaders, so snapshots stored before
+              // leaders existed compare unchanged.
+              {
+                name: "leads",
+                title: "Leads",
+                type: "array",
+                of: [{ type: "string" }],
+                description: "Worship-night song leaders (member ids, sorted). Absent when none.",
+              },
             ],
           }],
         },

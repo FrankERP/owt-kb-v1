@@ -43,9 +43,9 @@ const SCHEDULE_QUERY = `{
   "saturdays":   *[_type == "saturday_role" && week >= $today && week <= $limit && published != false] | order(week asc)  { ${ROLE_FIELDS} },
   "sunSetlists": *[_type == "featuredSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
   "satSetlists": *[_type == "saturdarSongs" && week >= $today && week <= $limit] | order(week asc)  { ${SETLIST_FRAGMENT} },
-  "specials":    *[_type == "special_role"  && date >= $weekStart && date <= $limit && published != false] | order(date asc) {
-    _id, date, service_name, team_notes,
-    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key },
+  "specials":    *[_type == "special_role"  && date >= $weekStart && date <= $limit && published != false] | order(date asc, time asc) {
+    _id, date, time, service_name, team_notes,
+    songs[]{ play_key, medley_tag, "title": song->title, "slug": song->slug, "_id": song->_id, "author": song->author, "bpm": song->bpm, "key": song->key, "leads": leads[]->{ member_name, alias } },
     ${ROLE_FIELDS}
   }
 }`;
@@ -156,6 +156,7 @@ export default async function SchedulePage({
     push(dateStr, {
       day: sp.service_name || "Servicio Especial",
       date: dateStr,
+      time: sp.time ?? null,
       roleId: sp._id,
       leads: sp.Lead?.map((m) => m.alias || m.member_name) ?? [],
       setlist,
@@ -168,7 +169,7 @@ export default async function SchedulePage({
 
   return (
     <div>
-      <Navbar title="Calendario" tags schedule />
+      <Navbar title="Calendario" />
       <div className="mx-auto max-w-4xl px-6 pt-10 pb-16">
         {/* No page heading: `ScheduleHeader`'s month IS the route's heading (R2
             Task 4). `todayStr` is the same `today` the fetch above computed —

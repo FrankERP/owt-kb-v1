@@ -1,4 +1,4 @@
-// The ONE date/month field (spec §19.3, decision M). NEUTRAL. The input stays
+// The ONE date/month/time field (spec §19.3, decision M). NEUTRAL. The input stays
 // native — the OS picker is the control — and the chrome is tokenised. In month
 // kind an optional stepper pair turns it into a month strip; the parent owns
 // what a step means (a router push, a state change). The schedule header does
@@ -9,9 +9,11 @@
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 import Button from "./Button";
 
+// 16 px on a phone, the design's size from `sm` up — see `ui/Select`'s SIZE map and
+// `inputFontSize.test.ts`. `sm` is the admin-density skin and keeps its 11 px.
 const SIZE = {
   sm: "px-1.5 py-1 text-[11px]",
-  md: "px-3 py-1.5 text-xs",
+  md: "px-3 py-1.5 text-[16px] sm:text-xs",
 } as const;
 
 export default function DateField({
@@ -22,7 +24,7 @@ export default function DateField({
   onStep,
   ...input
 }: Omit<ComponentPropsWithoutRef<"input">, "type" | "className" | "children" | "size"> & {
-  kind: "date" | "month";
+  kind: "date" | "month" | "time";
   label?: ReactNode;
   size?: keyof typeof SIZE;
   className?: string;
@@ -44,12 +46,16 @@ export default function DateField({
         </label>
       )}
       {onStep ? (
+        // `disabled` reaches the ARROWS too, not just the input. The field is one
+        // composite control and a stepper is the input's other half: a caller that
+        // disables it while a month is loading (KidsPlanner does) would otherwise
+        // leave two live buttons that page the month out from under the request.
         <div className="inline-flex items-center gap-1">
-          <Button variant="icon" aria-label="Mes anterior" onClick={() => onStep(-1)}>
+          <Button variant="icon" aria-label="Mes anterior" disabled={input.disabled} onClick={() => onStep(-1)}>
             <span aria-hidden>‹</span>
           </Button>
           {field}
-          <Button variant="icon" aria-label="Mes siguiente" onClick={() => onStep(1)}>
+          <Button variant="icon" aria-label="Mes siguiente" disabled={input.disabled} onClick={() => onStep(1)}>
             <span aria-hidden>›</span>
           </Button>
         </div>

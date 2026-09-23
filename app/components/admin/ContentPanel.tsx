@@ -9,8 +9,10 @@ import {
   songToForm,
   buildPayload,
 } from "./SongFormModal";
+import Button from "../ui/Button";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
+import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { useToast } from "../ui/Toast";
 import { writeErrorMessage } from "@/app/utils/writeError";
 
@@ -32,11 +34,16 @@ interface Song {
   authors?: Array<{ _id: string; name: string }>;
 }
 
-type ModalState =
-  | { type: "add" }
-  | { type: "edit"; song: Song }
-  | { type: "delete"; song: Song }
-  | null;
+/**
+ * Which song dialog the panel is showing. The KIND and its song are held apart
+ * from the open flag on purpose (the shape R5 Tasks 3-4 established): `CueDialog`
+ * stays mounted for the whole exit, so a body read out of a state that closing
+ * sets to `null` blanks itself on the way out — the admin watches the song's
+ * title vanish before the sheet does. Closing flips `modalOpen` only; the next
+ * open overwrites the payload, and `modalSeq` (part of each body's key) makes a
+ * REOPEN a fresh form rather than the text left in the last one.
+ */
+type ModalKind = "add" | "edit" | "delete";
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
@@ -47,7 +54,10 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
   const [loading, setLoading]   = useState(true);
   const [error, setError]     = useState<string | null>(null);
   const [search, setSearch]   = useState("");
-  const [modal, setModal]     = useState<ModalState>(null);
+  const [modalKind, setModalKind] = useState<ModalKind>("add");
+  const [modalSong, setModalSong] = useState<Song | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalSeq, setModalSeq]   = useState(0);
   const [modalError, setModalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
@@ -75,6 +85,19 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const openModal = (kind: ModalKind, song: Song | null = null) => {
+    setModalError(null);
+    setModalKind(kind);
+    setModalSong(song);
+    setModalSeq((n) => n + 1);
+    setModalOpen(true);
+  };
+  // The song and the kind stay: `CueDialog` is still on screen for its exit.
+  const closeModal = () => {
+    setModalError(null);
+    setModalOpen(false);
+  };
 
   const handleCreateTag = async (name: string): Promise<SongTag | null> => {
     try {
@@ -120,7 +143,7 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildPayload(form)),
       });
-      if (res.ok) { setModal(null); setModalError(null); fetchAll(); showToast("Canción creada."); }
+      if (res.ok) { closeModal(); fetchAll(); showToast("Canción creada."); }
       else setModalError(await writeErrorMessage(res) ?? "Error al crear canción.");
     } catch {
       setModalError("Error de conexión.");
@@ -130,15 +153,15 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
   };
 
   const handleEdit = async (form: FormState) => {
-    if (modal?.type !== "edit") return;
+    if (!modalSong) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/content/posts/${modal.song._id}`, {
+      const res = await fetch(`/api/content/posts/${modalSong._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(buildPayload(form)),
       });
-      if (res.ok) { setModal(null); setModalError(null); fetchAll(); showToast("Canción actualizada."); }
+      if (res.ok) { closeModal(); fetchAll(); showToast("Canción actualizada."); }
       else setModalError(await writeErrorMessage(res) ?? "Error al actualizar.");
     } catch {
       setModalError("Error de conexión.");
@@ -148,11 +171,11 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
   };
 
   const handleDelete = async () => {
-    if (modal?.type !== "delete") return;
+    if (!modalSong) return;
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/content/posts/${modal.song._id}`, { method: "DELETE" });
-      if (res.ok) { setModal(null); setModalError(null); fetchAll(); showToast("Canción eliminada."); }
+      const res = await fetch(`/api/content/posts/${modalSong._id}`, { method: "DELETE" });
+      if (res.ok) { closeModal(); fetchAll(); showToast("Canción eliminada."); }
       else setModalError("Error al eliminar.");
     } catch {
       setModalError("Error de conexión.");
@@ -169,6 +192,10 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
   // For edit modal: convert Song to the partial form shape SongForm expects
   const songToFormInitial = (song: Song): Partial<FormState> => songToForm(song);
 
+  // Derived from the KIND, which outlives the close — so the header does not
+  // change wording halfway through the sheet's exit.
+  const formTitle = modalKind === "edit" ? "Editar canción" : "Nueva canción";
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -181,18 +208,16 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
             </p>
           )}
         </div>
-        <button
-          onClick={() => { setModalError(null); setModal({ type: "add" }); }}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors"
-        >
+        <Button variant="primary" size="lg" onClick={() => openModal("add")}>
           <span className="text-base leading-none">+</span>
           Agregar
-        </button>
+        </Button>
       </div>
 
-      {/* Search */}
+      {/* Search — 16px on the phone, or iOS Safari zooms the page on focus and
+          never zooms back (`inputFontSize.test.ts` excludes `admin/` by path). */}
       <input
-        className="w-full px-4 py-2.5 rounded-xl border border-surface-accent-20 bg-transparent font-body text-sm focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 transition-colors"
+        className="w-full px-4 py-2.5 rounded-xl border border-surface-accent-20 bg-transparent font-body text-[16px] sm:text-sm focus:outline-none focus:border-accent dark:focus:border-surface-accent-20 transition-colors"
         placeholder="Buscar canción o artista..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -200,11 +225,11 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
 
       {/* States */}
       {loading && (
-        <div className="space-y-3">
+        <SkeletonGroup label="Cargando canciones" className="space-y-3">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 rounded-xl bg-surface-accent-wash animate-pulse" />
+            <Skeleton key={i} className="h-16 w-full" rounded="lg" />
           ))}
-        </div>
+        </SkeletonGroup>
       )}
 
       {error && (
@@ -253,15 +278,31 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
                 </span>
               )}
 
-              {/* Actions */}
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ActionBtn title="Editar" onClick={() => { setModalError(null); setModal({ type: "edit", song }); }}>
+              {/*
+                Actions. A hover-only affordance does not exist on a phone: there
+                is no hover state to enter, so `opacity-0 group-hover:opacity-100`
+                hid Editar and Eliminar from every touch admin permanently. They
+                are visible by default and only fade behind hover FROM `sm` up —
+                where `focus-within` brings them back for the keyboard, which the
+                hover-only spelling excluded at every width.
+              */}
+              <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100 transition-opacity duration-fast ease-out-brand">
+                {/* `size="lg"` on the icon variant is the house 44px target — the
+                    actions are reachable by touch now, so they have to be hittable. */}
+                <Button variant="icon" size="lg" title="Editar" aria-label="Editar" onClick={() => openModal("edit", song)}>
                   <PencilIcon />
-                </ActionBtn>
+                </Button>
                 {canDelete && (
-                  <ActionBtn title="Eliminar" onClick={() => { setModalError(null); setModal({ type: "delete", song }); }} danger>
+                  <Button
+                    variant="icon"
+                    size="lg"
+                    tone="danger"
+                    title="Eliminar"
+                    aria-label="Eliminar"
+                    onClick={() => openModal("delete", song)}
+                  >
                     <TrashIcon />
-                  </ActionBtn>
+                  </Button>
                 )}
               </div>
             </div>
@@ -269,67 +310,56 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
         </div>
       )}
 
-      {/* ── Modals ── */}
-      {(modal?.type === "add" || modal?.type === "edit") && (
-        <CueDialog
-          open
-          title={modal.type === "add" ? "Nueva canción" : "Editar canción"}
-          label={modal.type === "add" ? "Nueva canción" : "Editar canción"}
-          mode="sheet"
-          size="lg"
-          onDismiss={() => { setModalError(null); setModal(null); }}
-        >
-          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
+      {/* ── Modals — mounted always, opened by their own boolean ── */}
+      <CueDialog
+        open={modalOpen && modalKind !== "delete"}
+        title={formTitle}
+        label={formTitle}
+        mode="sheet"
+        size="lg"
+        onDismiss={closeModal}
+      >
+        <div key={`form-${modalSeq}`} className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
           {modalError && <CueDialogStatus tone="error">{modalError}</CueDialogStatus>}
           <SongForm
-            initial={modal.type === "edit" ? songToFormInitial(modal.song) : undefined}
+            initial={modalKind === "edit" && modalSong ? songToFormInitial(modalSong) : undefined}
             allTags={tags}
             allAuthors={authors}
-            onSubmit={modal.type === "add" ? handleAdd : handleEdit}
-            onClose={() => { setModalError(null); setModal(null); }}
+            onSubmit={modalKind === "add" ? handleAdd : handleEdit}
+            onClose={closeModal}
             loading={submitting}
             canCreateTag={handleCreateTag}
             canCreateAuthor={handleCreateAuthor}
           />
-          </div>
-        </CueDialog>
-      )}
+        </div>
+      </CueDialog>
 
-      {modal?.type === "delete" && (
-        <CueDialog open title="Eliminar canción" label="Eliminar canción" mode="sheet" size="sm" onDismiss={() => { setModalError(null); setModal(null); }}>
-          <div className="space-y-5 p-6">
+      <CueDialog
+        open={modalOpen && modalKind === "delete"}
+        title="Eliminar canción"
+        label="Eliminar canción"
+        mode="sheet"
+        size="sm"
+        onDismiss={closeModal}
+      >
+        <div key={`delete-${modalSeq}`} className="space-y-5 p-6">
           {modalError && <CueDialogStatus tone="error">{modalError}</CueDialogStatus>}
           <p className="font-body text-sm text-mono-400">
-            ¿Eliminar <span className="text-negative-fg font-semibold">{modal.song.title}</span>? Esta acción no se puede deshacer.
+            ¿Eliminar <span className="text-negative-fg font-semibold">{modalSong?.title ?? ""}</span>? Esta acción no se puede deshacer.
           </p>
           <div className="flex gap-3 pt-1">
-            <button onClick={() => { setModalError(null); setModal(null); }} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
-              Cancelar
-            </button>
-            <button onClick={handleDelete} disabled={submitting} className="flex-1 py-2 rounded-lg bg-negative-surface/60 hover:bg-negative-border/60 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
-              {submitting ? "Eliminando..." : "Eliminar"}
-            </button>
+            <Button variant="secondary" className="flex-1" onClick={closeModal}>Cancelar</Button>
+            <Button variant="danger" className="flex-1" busy={submitting} busyLabel="Eliminando..." onClick={handleDelete}>
+              Eliminar
+            </Button>
           </div>
-          </div>
-        </CueDialog>
-      )}
+        </div>
+      </CueDialog>
     </div>
   );
 }
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
-
-function ActionBtn({ onClick, title, danger, children }: { onClick: () => void; title: string; danger?: boolean; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={`p-1.5 rounded-lg transition-colors ${danger ? "hover:bg-negative-strong/20 hover:text-negative-fg text-mono-500" : "hover:bg-accent/10 hover:text-accent text-mono-500"}`}
-    >
-      {children}
-    </button>
-  );
-}
 
 function PencilIcon() {
   return (

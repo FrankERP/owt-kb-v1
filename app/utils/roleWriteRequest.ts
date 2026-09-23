@@ -18,6 +18,8 @@
 import { normalizeLabel } from "./normalizeLabel";
 import { ROLE_TYPES, isValidServiceDate, type RoleType } from "./serviceReadModel";
 import { serviceDayKey } from "./serviceReadSelect";
+import { isServiceTime } from "./serviceTime";
+import type { ServiceFormat } from "./serviceFormat";
 import {
   ROLE_CREATION_RECEIPT_TYPE,
   canonicalizeCreatePayload,
@@ -203,6 +205,8 @@ export function buildRoleDocument(input: {
   roleType: RoleType;
   date: string;
   serviceName: string | null;
+  time: string | null;
+  format: ServiceFormat | null;
   published: boolean;
   seats: NormalizedSeats;
   receiptId: string;
@@ -214,6 +218,8 @@ export function buildRoleDocument(input: {
     _type: input.roleType,
     [roleDateField(input.roleType)]: input.date,
     ...(input.roleType === "special_role" ? { service_name: input.serviceName ?? "" } : {}),
+    ...(input.roleType === "special_role" && input.time ? { time: input.time } : {}),
+    ...(input.roleType === "special_role" && input.format ? { format: input.format } : {}),
     ...seatFields(input.seats, input.nextKey),
     published: input.published,
     // Forward link to the idempotency tombstone. The receipt's own `roleId`
@@ -231,13 +237,21 @@ export function buildRoleEditPatch(input: {
   roleType: RoleType;
   date: string;
   serviceName: string | null;
+  time: string | null;
   seats: NormalizedSeats;
   nextKey: KeyFactory;
-}): Record<string, unknown> {
+}): { set: Record<string, unknown>; unset: string[] } {
+  const special = input.roleType === "special_role";
   return {
-    [roleDateField(input.roleType)]: input.date,
-    ...(input.roleType === "special_role" ? { service_name: input.serviceName ?? "" } : {}),
-    ...seatFields(input.seats, input.nextKey),
+    set: {
+      [roleDateField(input.roleType)]: input.date,
+      ...(special ? { service_name: input.serviceName ?? "" } : {}),
+      ...(special && input.time ? { time: input.time } : {}),
+      ...seatFields(input.seats, input.nextKey),
+    },
+    // Clearing the field in the editor must really clear it; a weekend role
+    // never stored one, so it has nothing to unset.
+    unset: special && !input.time ? ["time"] : [],
   };
 }
 
@@ -251,6 +265,8 @@ export interface ParsedCreateRequest {
   roleType: RoleType;
   date: string;
   serviceName: string | null;
+  time: string | null;
+  format: ServiceFormat | null;
   published: boolean;
   seats: NormalizedSeats;
   /** Deterministic weekend lock id; null for a special service. */
@@ -291,6 +307,8 @@ export function parseCreateRequest(body: unknown): ParseResult<ParsedCreateReque
       roleType,
       date: canonical.date,
       serviceName: canonical.serviceName,
+      time: canonical.time ?? null,
+      format: canonical.format ?? null,
       published: canonical.published,
       seats: normalizeSeats(payload),
       lockId: roleTargetLockId(`${roleType}:${canonical.date}`),
@@ -308,6 +326,7 @@ export interface ParsedEditRequest {
   lockRev: string | null;
   date: string;
   serviceName: string | null;
+  time: string | null;
   /** Only for cross-checking against the STORED type — never used to convert. */
   requestedType: RoleType | null;
   seats: NormalizedSeats;
@@ -323,6 +342,11 @@ export function parseEditRequest(body: unknown): ParseResult<ParsedEditRequest> 
     ? (body._type as RoleType)
     : null;
   if (body._type != null && !requestedType) return fail(["_type"]);
+  // The edit parser never sees the STORED type (the route holds it), so it only
+  // validates the shape; the route refuses a time on a non-special document.
+  const rawTime = body.time;
+  const hasTime = rawTime !== undefined && rawTime !== null && rawTime !== "";
+  if (hasTime && !isServiceTime(rawTime)) return fail(["time"]);
   return {
     ok: true,
     value: {
@@ -330,6 +354,7 @@ export function parseEditRequest(body: unknown): ParseResult<ParsedEditRequest> 
       lockRev: isRevisionString(body.lockRev) ? body.lockRev : null,
       date,
       serviceName: normalizeLabel(body.service_name),
+      time: hasTime ? (rawTime as string) : null,
       requestedType,
       seats: normalizeSeats(body),
     },

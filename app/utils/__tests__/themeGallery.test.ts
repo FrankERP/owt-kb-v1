@@ -131,14 +131,38 @@ describe("theme gallery — segment validation", () => {
     expect(page).toContain("generateStaticParams");
   });
 
-  it("enumerates exactly two themes and five fixtures", () => {
+  it("enumerates exactly two themes and seven fixtures", () => {
     expect(read(`${GALLERY}/layout.tsx`)).toContain('["dark", "light"] as const');
-    expect(page).toContain('["swatches", "dialog", "planner", "kids-planner", "controls"] as const');
+    expect(page).toContain('["swatches", "dialog", "planner", "kids-planner", "controls", "song", "nav"] as const');
   });
 
   it("also calls notFound() for an unknown value reaching the component", () => {
     expect(page).toContain("notFound()");
   });
+
+  // The bar's presentational half is the only one that can be hosted here:
+  // BottomNav itself reads useSession and usePathname, which the hermetic sweep
+  // below forbids — and which would break the prerender the route's public
+  // safety argument rests on (ADR-0017).
+  it("the nav fixture hosts the presentational bar, never BottomNav itself", () => {
+    const src = read(`${GALLERY}/[fixture]/fixtures/NavFixture.tsx`);
+    expect(src).toMatch(/from "@\/app\/components\/BottomNavBar"/);
+    expect(src).not.toMatch(/BottomNav"/);
+  });
+
+  // A `CueDialog` throws without `CueDialogProvider`, and it throws at PRERENDER
+  // time — which is how a permanently mounted (controlled) `SeatPicker` took the
+  // `kids-planner` route down on Vercel with tsc, vitest and eslint all green
+  // (2026-09-18). Every fixture that renders a CueDialog-bearing component mounts
+  // the provider itself, the way `DialogFixture` and `NavFixture` do.
+  it.each(["DialogFixture", "NavFixture", "KidsPlannerFixture"])(
+    "%s mounts CueDialogProvider because it renders a CueDialog",
+    (name) => {
+      const src = read(`${GALLERY}/[fixture]/fixtures/${name}.tsx`);
+      expect(src).toMatch(/CueDialogProvider/);
+      expect(src).toMatch(/<CueDialogProvider>/);
+    },
+  );
 });
 
 describe("theme gallery — the fixtures are hermetic", () => {
@@ -148,6 +172,8 @@ describe("theme gallery — the fixtures are hermetic", () => {
     "PlannerFixture",
     "KidsPlannerFixture",
     "ControlsFixture",
+    "SongPracticeFixture",
+    "NavFixture",
   ] as const;
   const files = names.map((f) => read(`${GALLERY}/[fixture]/fixtures/${f}.tsx`));
   const codes = names.map((f) => code(`${GALLERY}/[fixture]/fixtures/${f}.tsx`));
@@ -272,5 +298,18 @@ describe("theme gallery — the fixtures are hermetic", () => {
   it("the dialog fixture mounts CueDialogProvider directly, not Provider", () => {
     expect(codes[1]).toContain("CueDialogProvider");
     expect(codes[1]).not.toMatch(/utils\/Provider/);
+  });
+
+  // The gallery is a BASELINE surface, so `data-motion="off"` is the default and every
+  // capture is a final frame. `#motion` is the single documented escape hatch: one page,
+  // opted in by URL, so `motion-on.spec.ts` can watch the dialog's enter actually run and
+  // prove no ancestor is transformed while it does (the containing-block trap). If this
+  // branch disappears, that spec silently captures two identical final frames and passes.
+  it("GalleryMotion keeps animations only under the #motion hash", () => {
+    const src = code(`${GALLERY}/GalleryMotion.tsx`);
+    expect(src).toMatch(/location\.hash === "#motion"/);
+    expect(src).toMatch(/removeAttribute\("data-motion"\)/);
+    // The removal must beat the first paint, or the t=0 capture is already the end state.
+    expect(src).toContain("useLayoutEffect");
   });
 });

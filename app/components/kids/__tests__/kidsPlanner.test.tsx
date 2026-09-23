@@ -19,7 +19,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import KidsPlanner, {
   formatSunday,
   historyMonthsFor,
-  monthLabel,
   shiftMonth,
   sundaysOfMonth,
   type PlannerPair,
@@ -34,6 +33,37 @@ import {
 } from "../kidsPlannerLabels";
 import { buildPlannerView } from "@/app/utils/kidsPlannerView";
 import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
+import { ToastProvider } from "@/app/components/ui/Toast";
+
+/**
+ * Every render goes through both providers. `CueDialogProvider` owns the portal
+ * the seat picker draws into — and since R6 Task 1 the picker is MOUNTED ALWAYS
+ * (controlled `open`), so it is needed even by a test that never opens one.
+ * `ToastProvider` owns the one toast stack the planner now reports through.
+ */
+/**
+ * jsdom has no `AnimationEvent` global, so React's own feature detection
+ * (`"AnimationEvent" in window`) falls back to listening for the
+ * WEBKIT-PREFIXED native event name (`webkitAnimationEnd`) instead of the
+ * standard `animationend` — confirmed against `react-dom-client.development.js`'s
+ * `getVendorPrefixedEventName`. `fireEvent.animationEnd` also can't carry
+ * `animationName` here (jsdom's plain `Event` fallback has no such
+ * property), so both are built and dispatched by hand.
+ */
+const animationEnd = (el: Element, animationName: string) => {
+  const event = new Event("webkitAnimationEnd", { bubbles: true, cancelable: false });
+  Object.defineProperty(event, "animationName", { value: animationName });
+  // `fireEvent`, not a bare `dispatchEvent` — it wraps the dispatch in `act()`
+  // so the resulting state update flushes before the next assertion runs.
+  fireEvent(el, event);
+};
+
+const withProviders = (ui: React.ReactNode) =>
+  render(
+    <ToastProvider>
+      <CueDialogProvider>{ui}</CueDialogProvider>
+    </ToastProvider>,
+  );
 
 afterEach(() => {
   cleanup();
@@ -88,10 +118,6 @@ describe("month + date helpers", () => {
     expect(shiftMonth("2026-01", -1)).toBe("2025-12");
     expect(shiftMonth("2026-12", 1)).toBe("2027-01");
     expect(shiftMonth("2026-09", 0)).toBe("2026-09");
-  });
-
-  it("labels a month in Spanish", () => {
-    expect(monthLabel("2026-09")).toBe("Septiembre 2026");
   });
 
   it("renders a date at LOCAL NOON — never a UTC day-flip", () => {
@@ -203,17 +229,15 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
   // `CueDialogProvider` creates — mounted app-wide in production
   // (`app/utils/Provider.tsx`) but not here, so tests that open it need it too.
   const renderPlanner = (over: Partial<Parameters<typeof KidsPlanner>[0]> = {}) =>
-    render(
-      <CueDialogProvider>
-        <KidsPlanner
-          initialMonth="2026-09"
-          initialPairs={PAIRS}
-          initialMembers={MEMBERS}
-          initialSchedules={[]}
-          initialHistory={[]}
-          {...over}
-        />
-      </CueDialogProvider>,
+    withProviders(
+      <KidsPlanner
+        initialMonth="2026-09"
+        initialPairs={PAIRS}
+        initialMembers={MEMBERS}
+        initialSchedules={[]}
+        initialHistory={[]}
+        {...over}
+      />,
     );
 
   /** The phone layout's seat row — the primary target, opened by tap. */
@@ -306,16 +330,14 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(
-      <CueDialogProvider>
-        <KidsPlanner
-          initialMonth="2026-08"
-          initialPairs={PAIRS}
-          initialMembers={MEMBERS}
-          initialSchedules={[]}
-          initialHistory={[]}
-        />
-      </CueDialogProvider>,
+    withProviders(
+      <KidsPlanner
+        initialMonth="2026-08"
+        initialPairs={PAIRS}
+        initialMembers={MEMBERS}
+        initialSchedules={[]}
+        initialHistory={[]}
+      />,
     );
     fireEvent.click(screen.getByLabelText("Mes siguiente"));
     await waitFor(() => expect(screen.getByLabelText("Domingo, 6 de septiembre")).toBeTruthy());
@@ -534,6 +556,92 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     expect(benchRoom("RG Chiquitos").textContent).toContain("Todas colocadas este mes");
   });
 
+  // ─── R6 Task 1: the shared primitives ──────────────────────────────────────
+
+  it("reports a saved month through the toast stack, not an inline paragraph", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPlanner();
+
+    fireEvent.click(seatRow("RG Chiquitos", "Domingo, 13 de septiembre"));
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: /RG Chiquitos/ })).getByRole("button", {
+        name: /C1/,
+      }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Guardar borradores" }));
+
+    // The message the planner has always said, now raised through `useToast` —
+    // so it lands in the ONE portalled stack rather than in a paragraph wedged
+    // between the board and the intro text.
+    const message = await screen.findByText("Borradores guardados (1 domingo(s)).");
+    expect(message.closest("[data-toast-root]")).not.toBeNull();
+  });
+
+  it("keeps the seat picker MOUNTED while nothing is being picked", () => {
+    // A CLOSED `CueDialog` renders nothing at all, so "still mounted" leaves no
+    // trace in the DOM to assert on. It does leave a behavioural one: `CueDialog`
+    // calls `useCueDialogContext()` on every render and that throws without the
+    // provider. While the picker was mounted conditionally, a planner with no
+    // seat selected rendered no `CueDialog` and needed no provider — this render
+    // succeeded. Now it does not, which is exactly the claim: the picker is in
+    // the tree, closed, ready to be OPENED rather than created.
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(() =>
+        render(
+          <ToastProvider>
+            <KidsPlanner
+              initialMonth="2026-09"
+              initialPairs={PAIRS}
+              initialMembers={MEMBERS}
+              initialSchedules={[]}
+            />
+          </ToastProvider>,
+        ),
+      ).toThrow(/CueDialogProvider/);
+    } finally {
+      quiet.mockRestore();
+      cleanup();
+    }
+
+    // …and with the provider it renders, showing no dialog until a seat is tapped.
+    renderPlanner();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("makes the month arrows inert while the planner is busy", async () => {
+    // `busy` covers load/generate/save/publish. The arrows are the one control
+    // that can change WHICH month the answer in flight belongs to, so a live
+    // arrow mid-generate lands the old proposal on the new board.
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    renderPlanner();
+
+    fireEvent.click(screen.getByLabelText("Mes siguiente"));
+    await waitFor(() =>
+      expect(
+        (screen.getByRole("button", { name: "Mes siguiente" }) as HTMLButtonElement).disabled,
+      ).toBe(true),
+    );
+    expect(
+      (screen.getByRole("button", { name: "Mes anterior" }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect((screen.getByLabelText("Mes") as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("shows Skeleton placeholders while a month loads — never animate-pulse", async () => {
+    // A fetch that never settles: the loading state is the whole assertion.
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    renderPlanner();
+
+    fireEvent.click(screen.getByLabelText("Mes siguiente"));
+
+    const region = await screen.findByRole("status", { name: "Cargando el mes" });
+    expect(region.getAttribute("aria-busy")).toBe("true");
+    expect(document.querySelectorAll(".animate-pulse")).toHaveLength(0);
+    expect(region.querySelectorAll(".brand-skeleton")).toHaveLength(4);
+  });
+
   it("drops a bench pair into a board cell", () => {
     renderPlanner();
     // The bench is the only place an unassigned pair's name appears.
@@ -550,21 +658,222 @@ describe("KidsPlanner — the board shows what a dropdown hid", () => {
     ).toContain("C2");
     expect(screen.getByText("Cambios sin guardar")).toBeTruthy();
   });
+
+  // ─── R6 Task 2: landing pop + crossfade ────────────────────────────────────
+
+  it("pops the chip that just landed in a board cell, via a drop", () => {
+    renderPlanner();
+    // The bench is the only place an unassigned pair's name appears.
+    const chip = screen.getByText("C2");
+    const cell = screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/);
+
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    fireEvent.dragStart(chip, { dataTransfer });
+    fireEvent.dragOver(cell, { dataTransfer });
+    fireEvent.drop(cell, { dataTransfer });
+
+    // The board's chip alone carries `animate-pop` — the phone card's copy of
+    // "C2" only crossfades (`animate-fade-in`), so the selector picks out
+    // exactly the wrapper the drop landed in.
+    expect(screen.getByText("C2", { selector: ".animate-pop *" })).toBeTruthy();
+  });
+
+  it("pops the chip picked from a board cell's own seat picker", () => {
+    renderPlanner();
+    fireEvent.click(
+      screen.getByLabelText("RG Chiquitos, Domingo, 13 de septiembre: sin asignar"),
+    );
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: /RG Chiquitos/ })).getByRole("button", {
+        name: /C1/,
+      }),
+    );
+
+    expect(screen.getByText("C1", { selector: ".animate-pop *" })).toBeTruthy();
+  });
+
+  /**
+   * The bug the fresh review caught: `landed` used to arm on the CLICK that
+   * opens the picker, so an already-assigned seat popped its own chip the
+   * moment the picker was opened — nothing had landed yet, and cancelling
+   * proved it. It is armed on the assignment actually CHANGING now, so opening
+   * and dismissing a picker with Escape is a no-op.
+   */
+  it("does not pop an already-assigned cell's chip when its picker is opened and cancelled", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+      ],
+    });
+    fireEvent.click(
+      screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/),
+    );
+    expect(screen.getByRole("dialog", { name: /RG Chiquitos/ })).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+
+    expect(screen.queryByText("C1", { selector: ".animate-pop *" })).toBeNull();
+  });
+
+  /** The negative control for a genuine no-op: picking the SAME pair back
+   *  leaves `assignedPairId` unchanged, so nothing pops either. */
+  it("does not pop when the picker re-confirms the same pair already in the seat", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+      ],
+    });
+    fireEvent.click(
+      screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/),
+    );
+    // With C1 already in the seat, the dialog also has a "Quitar C1 — dejar sin
+    // asignar" row, so `/C1/` alone matches two buttons — `current: true` picks
+    // the one marked ✓, which is the option row, not the removal row.
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: /RG Chiquitos/ })).getByRole("button", {
+        name: /C1/,
+        current: true,
+      }),
+    );
+
+    expect(screen.queryByText("C1", { selector: ".animate-pop *" })).toBeNull();
+  });
+
+  /**
+   * The regression the second review round caught: a month navigation hands
+   * the board a whole new set of cell keys, so the previous snapshot has no
+   * entry for any of them — reading `prev[key]` as `undefined` made every
+   * pre-filled seat in the freshly loaded month look like it "just changed"
+   * from `undefined` to a pair id, and it popped. A key absent from the
+   * previous snapshot must be SEEDED, never armed.
+   */
+  it("does not pop a freshly loaded month's pre-filled seats, but still pops a genuine pick afterward", async () => {
+    const json = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: async () => body });
+    const fetchMock = vi.fn((url: string) => {
+      if (url.startsWith("/api/kids/pairs")) return json(PAIRS);
+      if (url.startsWith("/api/kids/members")) return json(MEMBERS);
+      if (url === "/api/kids/schedules?month=2026-09") {
+        return json([{ date: "2026-09-06", seats: { chiquitos: "c1" }, published: true }]);
+      }
+      if (url.startsWith("/api/kids/schedules?month=")) return json([]);
+      throw new Error(`unstubbed fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    withProviders(
+      <KidsPlanner
+        initialMonth="2026-08"
+        initialPairs={PAIRS}
+        initialMembers={MEMBERS}
+        initialSchedules={[]}
+        initialHistory={[]}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("Mes siguiente"));
+    await waitFor(() => expect(screen.getByLabelText("Domingo, 6 de septiembre")).toBeTruthy());
+
+    // The month arrived already carrying an assignment — nothing here just
+    // landed, so nothing should pop.
+    expect(document.querySelectorAll(".animate-pop")).toHaveLength(0);
+
+    // A genuine pick, in that SAME loaded month, still pops — the guard above
+    // must not have also silenced real landings after a load.
+    fireEvent.click(
+      screen.getByLabelText("RG Chiquitos, Domingo, 13 de septiembre: sin asignar"),
+    );
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: /RG Chiquitos/ })).getByRole("button", {
+        name: /C2/,
+      }),
+    );
+    expect(screen.getByText("C2", { selector: ".animate-pop *" })).toBeTruthy();
+  });
+
+  /**
+   * The whole-branch review's finding: the wrapper span's OWN `fade-in`
+   * animation ends at 120ms, well before the chip's `pop` (320ms) finishes,
+   * and its `onAnimationEnd` used to strip `animate-pop` unconditionally —
+   * clearing the pop at ~37% through it. The handler now checks WHICH
+   * animation just ended.
+   */
+  it("keeps the pop through the wrapper's own fade-in, and clears it only on the chip's own pop", () => {
+    renderPlanner();
+    const chipText = screen.getByText("C2");
+    const cell = screen.getByLabelText(/^RG Chiquitos, Domingo, 13 de septiembre/);
+
+    const dataTransfer = { setData: vi.fn(), effectAllowed: "", dropEffect: "" };
+    fireEvent.dragStart(chipText, { dataTransfer });
+    fireEvent.dragOver(cell, { dataTransfer });
+    fireEvent.drop(cell, { dataTransfer });
+
+    const wrapper = screen
+      .getByText("C2", { selector: ".animate-pop *" })
+      .closest(".animate-fade-in")!;
+    expect(wrapper.querySelector(".animate-pop")).not.toBeNull();
+
+    // The wrapper's own crossfade ending first — the actual failure mode —
+    // must not strip the pop.
+    animationEnd(wrapper, "fade-in");
+    expect(wrapper.querySelector(".animate-pop")).not.toBeNull();
+
+    // The chip's own `pop` ending (it bubbles up to the wrapper's handler) is
+    // what clears it.
+    animationEnd(wrapper.querySelector(".animate-pop")!, "pop");
+    expect(wrapper.querySelector(".animate-pop")).toBeNull();
+  });
+
+  /**
+   * The whole-branch review's second finding: «Generar mes» rewrites every
+   * cell in one pass, and the effect used to arm `landed` on whichever key
+   * it reached last — one arbitrary chip popping out of a whole month that
+   * just changed. It now arms only when EXACTLY ONE cell changed.
+   */
+  it("stays quiet when «Generar mes» changes several cells at once", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        proposal: [
+          { date: "2026-09-06", seats: { chiquitos: "c1" } },
+          { date: "2026-09-13", seats: { chiquitos: "c2" } },
+        ],
+        warnings: [],
+        diagnostics: [],
+        seed: 0,
+        fingerprint: "fp-0",
+        exhausted: false,
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPlanner();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
+    await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
+
+    expect(document.querySelectorAll(".animate-pop")).toHaveLength(0);
+  });
+
+  it("wraps the phone card's chip in the crossfade span whether or not it just changed", () => {
+    renderPlanner({
+      initialSchedules: [
+        { date: "2026-09-13", published: false, seats: { chiquitos: "c1" } },
+      ],
+    });
+    const row = seatRow("RG Chiquitos", "Domingo, 13 de septiembre");
+    expect(within(row).getByText("C1").closest(".animate-fade-in")).not.toBeNull();
+  });
 });
 
 describe("KidsPlanner — a failed save never reads as success", () => {
   it("surfaces the failure, resets the loading flag and keeps the changes dirty", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500 });
     vi.stubGlobal("fetch", fetchMock);
-    render(
-      <CueDialogProvider>
-        <KidsPlanner
-          initialMonth="2026-09"
-          initialPairs={PAIRS}
-          initialMembers={MEMBERS}
-          initialSchedules={[]}
-        />
-      </CueDialogProvider>,
+    withProviders(
+      <KidsPlanner
+        initialMonth="2026-09"
+        initialPairs={PAIRS}
+        initialMembers={MEMBERS}
+        initialSchedules={[]}
+      />,
     );
 
     fireEvent.click(
@@ -614,7 +923,7 @@ describe("KidsPlanner — «Otra opción»", () => {
   );
 
   it("is hidden until there is a proposal to be dissatisfied with", () => {
-    render(board());
+    withProviders(board());
     expect(screen.queryByRole("button", { name: "Otra opción" })).toBeNull();
   });
 
@@ -634,7 +943,7 @@ describe("KidsPlanner — «Otra opción»", () => {
       };
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(board());
+    withProviders(board());
 
     fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
     await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
@@ -690,7 +999,7 @@ describe("KidsPlanner — «Otra opción»", () => {
           };
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(board());
+    withProviders(board());
 
     fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
     await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());
@@ -735,7 +1044,7 @@ describe("KidsPlanner — «Otra opción»", () => {
       };
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(board());
+    withProviders(board());
 
     fireEvent.click(screen.getByRole("button", { name: "Generar mes" }));
     await waitFor(() => expect(screen.getByText("Opción 1")).toBeTruthy());

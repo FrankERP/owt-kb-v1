@@ -289,7 +289,7 @@ function goToGrid(
   allRoles: ParticipantRole[],
   existingRoles: { _id: string; _type: string; date: string }[] = [],
   // `container` mounts the generator inside a caller-supplied node — the only
-  // way to put a real `.brand-admin-shell` above it, which the portal tests
+  // way to put a CLIPPING ANCESTOR above it, which the portal tests
   // need. Everything else renders into RTL's default node as before.
   options: { container?: HTMLElement } = {},
 ) {
@@ -504,8 +504,8 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
 
       expect(rail).not.toBeNull();
       expect(rail.getAttribute("data-rail-placement")).toBe("column");
-      // Nothing viewport-anchored: `fixed` inside `.brand-admin-shell` is the
-      // shape that needed the portal, and re-introducing any of it here would
+      // Nothing viewport-anchored: `fixed` inside a clipping/isolated ancestor
+      // is the shape that needed the portal, and re-introducing any of it here would
       // re-introduce the Safari paint bug along with it.
       // The bare `w-[216px]` is the retired gutter's unprefixed width; the
       // column's is `xl:`-prefixed, asserted below. Same number, different class.
@@ -852,7 +852,8 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
  *
  * The gutter rail paints nothing in Safari while it is a descendant of an
  * ancestor carrying `position: relative` + `isolation: isolate` +
- * `overflow: hidden` (`.brand-admin-shell`, `.brand-facet-panel`). The remedy
+ * `overflow: hidden` (`.brand-facet-panel`; `.brand-admin-shell` was another
+ * until R5 retired it — ADR-0035). The remedy
  * is to render it somewhere else entirely, and "somewhere else" is now a design
  * decision rather than an implementation detail — so it is worth a test.
  *
@@ -863,7 +864,7 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
  *
  * DOES NOT CATCH — and cannot, in jsdom, which has no layout or paint engine:
  * that the rail is actually VISIBLE; clipping, stacking, compositing or z-order
- * of any kind; whether `.brand-admin-shell` still carries the offending trio
+ * of any kind; whether any real ancestor still carries the offending trio
  * (nothing here reads CSS); or the same bug arriving via a NEW ancestor
  * elsewhere. It pins the shape of the fix, not the absence of the bug. The only
  * instrument that can confirm the bug is gone is a human looking at real Safari
@@ -871,7 +872,7 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
  */
 describe("the gutter rail renders outside the surfaces that swallow it", () => {
   for (const wide of [true, false]) {
-    it(`keeps the grid's chart INSIDE .brand-admin-shell, in the flow (${wide ? "wide" : "narrow"})`, () => {
+    it(`keeps the grid's chart INSIDE a clipping ancestor, in the flow (${wide ? "wide" : "narrow"})`, () => {
       // The inverse pin, and the reason it is worth writing down: the portal was
       // the right answer while the chart was `position: fixed`, and the WebKit
       // bug it works around is real. An in-flow column is not fixed, so the bug
@@ -880,7 +881,7 @@ describe("the gutter rail renders outside the surfaces that swallow it", () => {
       // viewport widths, because the old code branched on width here.
       stubWideViewport(wide);
       const shell = document.createElement("div");
-      shell.className = "brand-admin-shell";
+      shell.className = "test-clipping-ancestor";
       document.body.appendChild(shell);
       try {
         const { container } = goToGrid([savedSunday("2026-02-08", "m1")], [], { container: shell });
@@ -888,7 +889,7 @@ describe("the gutter rail renders outside the surfaces that swallow it", () => {
 
         expect(rail).not.toBeNull();
         expect(rail.getAttribute("data-rail-placement")).toBe("column");
-        expect(rail.closest(".brand-admin-shell")).toBe(shell);
+        expect(rail.closest(".test-clipping-ancestor")).toBe(shell);
         expect(rail.parentElement).not.toBe(document.body);
         // Same component, same state: the counts move when a seat moves.
         expect(railTotal(container, "Frank")).toBe(1);
@@ -900,13 +901,15 @@ describe("the gutter rail renders outside the surfaces that swallow it", () => {
     });
   }
 
-  it("puts FULL SCREEN outside .brand-admin-shell — the one fixed thing left here", () => {
-    // Full screen IS `position: fixed` inside the shell's `relative` +
-    // `isolation: isolate` + `overflow: hidden` trio, so it inherits the bug the
-    // rail's portal was written for, and it inherits the portal with it.
+  it("puts FULL SCREEN outside its clipping ancestor — the one fixed thing left here", () => {
+    // Full screen IS `position: fixed`, and inside a `relative` +
+    // `isolation: isolate` + `overflow: hidden` ancestor it inherits the bug the
+    // rail's portal was written for, and the portal with it. The ancestor is
+    // synthetic here: `/admin`'s own shell is gone (ADR-0035), and the point of
+    // the portal is that it survives whatever ancestor arrives next.
     stubWideViewport();
     const shell = document.createElement("div");
-    shell.className = "brand-admin-shell";
+    shell.className = "test-clipping-ancestor";
     document.body.appendChild(shell);
     try {
       const { container } = goToGrid([], [], { container: shell });
@@ -914,7 +917,7 @@ describe("the gutter rail renders outside the surfaces that swallow it", () => {
       const full = document.body.querySelector('[role="dialog"][aria-modal="true"]') as HTMLElement;
 
       expect(full).not.toBeNull();
-      expect(full.closest(".brand-admin-shell")).toBeNull();
+      expect(full.closest(".test-clipping-ancestor")).toBeNull();
       expect(shell.contains(full)).toBe(false);
       expect(container.querySelector('[role="dialog"][aria-modal="true"]')).toBeNull();
     } finally {
@@ -945,8 +948,9 @@ describe("the picker's load figure is labelled, so it cannot pose as the rail's 
 /**
  * The three column widths, prose versus code.
  *
- * `PlannerGrid.tsx`'s header derives the fit at 1512 (190 + 12 + 1008 + 12 + 240
- * = 1462 usable), `app/brand.css` repeats the same sum as the justification for
+ * `PlannerGrid.tsx`'s header derives the fit at 1512 (216 + 12 + 920 + 12 + 240
+ * = 1400 workspace, inside 1488 usable once the collapsed rail and its gap are
+ * paid), `app/brand.css` repeats the same sum as the justification for
  * lifting the admin frame's 1280px cap, and the component renders two Tailwind
  * literals that cannot be built from either. Three copies of one arithmetic is
  * exactly the drift the retired threshold guard existed to catch, so it is
@@ -1013,36 +1017,77 @@ describe("the planner's three column widths agree wherever they are written", ()
     expect(read("app/(client)/layout.tsx")).toContain("data-route-main");
   });
 
-  it("the shell padding the derivation SPENDS is the padding it applies", () => {
+  it("the frame padding the derivation SPENDS is the padding it applies", () => {
     // The third rule of the three, and the one that was unpinned: a reviewer
-    // deleted `.brand-admin-shell:has(.planner-wide) { padding: .75rem }` and
-    // every test stayed green. Without it the shell falls back to
-    // `clamp(1rem, 2.5vw, 1.75rem)` — 28px a side at 1512 — so the three columns
-    // silently lose 32px and the stated `= 1462` stops being true with nothing
-    // to notice. It looks like a cosmetic tidy-up; it is load-bearing.
+    // deleted the planner's padding override and every test stayed green, so
+    // the frame fell back to the page's own `px-6` and the stated sum quietly
+    // stopped being true. It looks like a cosmetic tidy-up; it is load-bearing.
+    // Until R5 this was `.brand-admin-shell:has(.planner-wide) { padding: .75rem }`
+    // — the shell is gone (ADR-0035) and the frame now spends the same 24px.
     const rule = cssSrc.match(
-      /\.brand-admin-shell:has\(\.planner-wide\)\s*\{\s*padding:\s*([\d.]+)rem;/,
+      /\.brand-admin-frame:has\(\.planner-wide\)\s*\{[^}]*padding-right:\s*([\d.]+)rem;\s*padding-left:\s*([\d.]+)rem;/,
     );
-    expect(rule, "could not find the shell padding rule in brand.css").toBeTruthy();
+    expect(rule, "could not find the frame padding rule in brand.css").toBeTruthy();
+    expect(rule![2]).toBe(rule![1]);
     // Scoped to desktop, like the other two — on a phone nothing is side by side.
     expect(cssSrc).toMatch(
-      /@media \(min-width: 1280px\) \{[\s\S]*?\.brand-admin-shell:has\(\.planner-wide\)[\s\S]*?\n\}/,
+      /@media \(min-width: 1280px\) \{[\s\S]*?\.brand-admin-frame:has\(\.planner-wide\)[\s\S]*?\n\}/,
     );
 
     const applied = Number(rule![1]) * 16; // one side
     // The comment's first line, in the units it is written in.
-    const derived = cssSrc.match(
-      /1512 − 24 \(frame px\) − 2 \(shell border\) − (\d+) \(shell padding\) = (\d+)/,
-    );
+    const derived = cssSrc.match(/1512 − (\d+) \(frame padding[^)]*\) = (\d+)/);
     expect(derived, "could not read the usable-width derivation from brand.css").toBeTruthy();
     expect(Number(derived![1]), "the derivation spends padding the rule does not apply").toBe(
       2 * applied,
     );
-    expect(1512 - 24 - 2 - Number(derived![1])).toBe(Number(derived![2]));
+    expect(1512 - Number(derived![1])).toBe(Number(derived![2]));
 
-    // …and that usable width is what the three columns are budgeted against.
+    // …and that usable width is what the RAIL and the three columns are budgeted
+    // against together. The rail (R5 ruling 3) sits in the same 1488: it spends
+    // 56 collapsed plus the grid's 32px gap, and what is left is the workspace
+    // the planner's own three columns are budgeted inside. Two lines, one sum —
+    // and the CSS rule that actually applies the 56 is checked below, so the
+    // prose cannot state a rail the stylesheet does not collapse.
+    const rail = cssSrc.match(/(\d+) \(rail, collapsed\) \+ (\d+) \(gap-8\) \+ (\d+) \(workspace\)\s+= (\d+)/);
+    expect(rail, "could not read the rail derivation from brand.css").toBeTruthy();
+    expect(Number(rail![1]) + Number(rail![2]) + Number(rail![3])).toBe(Number(rail![4]));
+    expect(rail![4]).toBe(derived![2]);
+
     const columns = cssSrc.match(/\(chart\) \+ 12 \+ \d+ \(grid\) \+ 12 \+ \d+ \(picker\)\s+= (\d+)/);
-    expect(columns![1]).toBe(derived![2]);
+    expect(columns![1]).toBe(rail![3]);
+
+    // The collapsed width is declared ONCE, as the custom property the layout
+    // class reads — a second literal in `AdminPanel` is exactly the drift this
+    // whole describe block exists to catch.
+    const railVar = cssSrc.match(
+      /\.brand-admin-frame:has\(\.planner-wide\)\s*\{[^}]*--admin-rail-w:\s*(\d+)px;/,
+    );
+    expect(railVar, "could not find the --admin-rail-w override in brand.css").toBeTruthy();
+    expect(railVar![1]).toBe(rail![1]);
+    expect(cssSrc).toMatch(
+      /\.brand-admin-frame:has\(\.planner-wide\)\s+\.brand-admin-rail\s*\{\s*width:\s*(\d+)px;/,
+    );
+    expect(
+      cssSrc.match(/\.brand-admin-frame:has\(\.planner-wide\)\s+\.brand-admin-rail\s*\{\s*width:\s*(\d+)px;/)![1],
+    ).toBe(rail![1]);
+    expect(read("app/components/admin/AdminPanel.tsx")).toContain(
+      "lg:grid-cols-[var(--admin-rail-w,200px)_1fr]",
+    );
+
+    // The third rail rule: inside 56px there is no room for the integrity dot in
+    // flow (icon + gap + a two-digit count is ~72px and shoves the icon off the
+    // button), so the collapsed rail pins it to the icon as a badge. It relies
+    // on the item being positioned, which `AdminRail`'s `relative` provides.
+    expect(cssSrc).toMatch(
+      /\.brand-admin-frame:has\(\.planner-wide\)\s+\.brand-admin-rail\s+\[data-integrity\]\s*\{\s*position:\s*absolute;/,
+    );
+    expect(read("app/components/admin/AdminRail.tsx")).toMatch(/"relative flex select-none/);
+
+    // And the retired shell stays retired — as a RULE, not as a word: the
+    // comment above still names the class it is explaining the absence of.
+    // `adminShell.test.tsx` owns the page-side half.
+    expect(cssSrc).not.toMatch(/^\s*\.brand-admin-shell/m);
   });
 
   it("the page header keeps a cap of its own while the frame loses one", () => {
@@ -1116,7 +1161,7 @@ describe("the planner's chart column is at least the chart's content floor", () 
   });
 
   it("derives the floor a real browser measured, to the pixel", () => {
-    // Chromium at 1512, inside the real `.brand-admin-shell` chain: at a 212px
+    // Chromium at 1512, inside the real admin chain: at a 212px
     // aside the count column's left edge lands exactly on the bar's right edge.
     // If this number ever stops being 212, the two browser measurements quoted
     // in `PlannerGrid.tsx`'s header have stopped describing the code.

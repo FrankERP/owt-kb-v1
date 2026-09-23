@@ -27,7 +27,22 @@ import { KIDS_SEAT_LABELS, type KidsRoom, type KidsSeat } from "@/app/utils/kids
 import { KidsRotationBoard } from "@/app/components/kids/KidsRotationBoard";
 import { KidsSundayCards } from "@/app/components/kids/KidsSundayCards";
 import { SeatPicker } from "@/app/components/kids/SeatPicker";
+import { CueDialogProvider } from "@/app/components/ui/CueDialogProvider";
 import type { KidsSundayState } from "@/app/components/kids/kidsBoardProps";
+import type { SeatView } from "@/app/utils/kidsPlannerView";
+
+/**
+ * Mirrors `KidsPlanner`'s own `EMPTY_SEAT_VIEW`: the picker is mounted ALWAYS
+ * (controlled `open`), so it needs a seat to render even while closed — an
+ * empty pool, nothing assigned, nothing to explain.
+ */
+const EMPTY_SEAT_VIEW: SeatView = {
+  date: "",
+  seat: "ensenanza",
+  assignedPairId: null,
+  options: [],
+  unfillableReason: null,
+};
 
 // PLACEHOLDER NAMES, DELIBERATELY — do not "improve" these to the real roster.
 //
@@ -176,7 +191,14 @@ export function KidsPlannerFixture() {
 
   const pickingView = picking ? seatOf(picking.date, picking.seat) : null;
 
+  // `CueDialogProvider` is mounted DIRECTLY (the gallery mounts no `Provider`),
+  // exactly as `DialogFixture` does: a permanently mounted, controlled `SeatPicker`
+  // is a `CueDialog` even while closed, and `CueDialog` throws without its
+  // provider — at PRERENDER time, which `tsc`/vitest/eslint never reach. The
+  // conditional mount this replaced only ever rendered the sheet after a click,
+  // so the missing provider was invisible until the mount became unconditional.
   return (
+    <CueDialogProvider>
     <div data-gallery-surface="kids-planner" className="space-y-5">
       <p className="text-sm opacity-80">
         El tablero de rotación (≥ md) y las tarjetas por domingo (&lt; md) se montan a la vez, como
@@ -191,19 +213,24 @@ export function KidsPlannerFixture() {
       />
       <KidsSundayCards {...boardProps} />
 
-      {picking && pickingView && (
-        <SeatPicker
-          seatView={pickingView}
-          seatLabel={KIDS_SEAT_LABELS[picking.seat]}
-          dateLabel={label(picking.date)}
-          monthLoad={view.monthLoad}
-          assignedName={
-            pickingView.assignedPairId ? boardProps.pairName(pickingView.assignedPairId) : null
-          }
-          onChoose={() => setPicking(null)}
-          onClose={() => setPicking(null)}
-        />
-      )}
+      {/* Mounted ALWAYS, controlled `open` — mirrors `KidsPlanner`'s own picker.
+          Conditional mounting made every gallery capture miss the sheet's
+          entrance transition, since a freshly-mounted `CueDialog` never
+          animates in. The seat/labels fall back to `EMPTY_SEAT_VIEW` and a
+          placeholder so the closed sheet still has content to render. */}
+      <SeatPicker
+        open={picking !== null && pickingView !== null}
+        seatView={pickingView ?? EMPTY_SEAT_VIEW}
+        seatLabel={picking ? KIDS_SEAT_LABELS[picking.seat] : "—"}
+        dateLabel={picking ? label(picking.date) : "—"}
+        monthLoad={view.monthLoad}
+        assignedName={
+          pickingView?.assignedPairId ? boardProps.pairName(pickingView.assignedPairId) : null
+        }
+        onChoose={() => setPicking(null)}
+        onClose={() => setPicking(null)}
+      />
     </div>
+    </CueDialogProvider>
   );
 }
