@@ -87,14 +87,22 @@ export function searchPosts(posts: Post[], q: string, fuse: Fuse<IndexedPost> = 
 
 const byTitle = (a: Post, b: Post) => normalizeText(a.title).localeCompare(normalizeText(b.title));
 
+export const isTipoSlug = (slug: string) => (TIPO_SLUGS as readonly string[]).includes(slug);
+const hasTag = (p: Post, slug: string) => (p.tags ?? []).some((t) => t.slug?.current === slug);
+
 // A query orders by relevance, so it runs FIRST over the WHOLE catalogue (using
 // the shared `fuse`, built once by the caller over every post — rebuilding it
 // per filter change is the cost this ordering avoids). Filters then narrow
 // that order with `.filter`, which preserves it. Without a query there is no
 // relevance order to preserve, so filters run first and A–Z sort runs last.
+// `tags` carries two axes in one list: the Tipo and the themes. Within an axis a
+// song needs ANY chosen slug (picking «amor» and «gratitud» widens the list);
+// across axes — Tipo, themes, artist, key — every one must hold.
 export function applyLibraryFilters(posts: Post[], f: LibraryFilters, fuse?: Fuse<IndexedPost>): Post[] {
   let out = f.q ? searchPosts(posts, f.q, fuse) : posts;
-  if (f.tags.length) out = out.filter((p) => f.tags.every((slug) => (p.tags ?? []).some((t) => t.slug?.current === slug)));
+  const tipos = f.tags.filter(isTipoSlug), themes = f.tags.filter((s) => !isTipoSlug(s));
+  if (tipos.length) out = out.filter((p) => tipos.some((slug) => hasTag(p, slug)));
+  if (themes.length) out = out.filter((p) => themes.some((slug) => hasTag(p, slug)));
   if (f.author) {
     const a = normalizeText(f.author);
     out = out.filter((p) => (p.authors ?? []).some((x) => x.slug?.current === f.author) || normalizeText(p.author ?? "") === a);

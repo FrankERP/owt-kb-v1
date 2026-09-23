@@ -43,9 +43,15 @@ describe("applyLibraryFilters", () => {
     expect(applyLibraryFilters(POSTS, parseLibraryParams({})).map((p) => p.title))
       .toEqual(["10,000 razones", "Alaba", "Ánclame", "Bueno es"]);
   });
-  it("tags are AND-ed", () => {
-    expect(applyLibraryFilters(POSTS, parseLibraryParams({ tag: "up-beat,amor" })).map((p) => p.title))
+  it("themes are OR-ed: a song carrying ANY chosen theme shows", () => {
+    expect(applyLibraryFilters(POSTS, parseLibraryParams({ tag: "amor,gratitud" })).map((p) => p.title))
+      .toEqual(["10,000 razones", "Ánclame", "Bueno es"]);
+  });
+  it("the Tipo is its own axis, AND-ed on top of the themes", () => {
+    // up-beat AND (amor OR gratitud): «10,000 razones» has gratitud but is not up-beat.
+    expect(applyLibraryFilters(POSTS, parseLibraryParams({ tag: "up-beat,amor,gratitud" })).map((p) => p.title))
       .toEqual(["Ánclame", "Bueno es"]);
+    expect(applyLibraryFilters(POSTS, parseLibraryParams({ tag: "down-beat,amor" }))).toEqual([]);
   });
   it("author matches the reference slug OR the legacy author string, accent-insensitive", () => {
     expect(applyLibraryFilters(POSTS, parseLibraryParams({ author: "redman" }))).toHaveLength(1);
