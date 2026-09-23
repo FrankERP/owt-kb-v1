@@ -21,6 +21,7 @@
 import { createHash } from "node:crypto";
 import { normalizeLabel } from "@/app/utils/normalizeLabel";
 import { isServiceTime } from "./serviceTime";
+import { isWorshipNightFormat, type ServiceFormat } from "./serviceFormat";
 import { ROLE_TYPES, type RoleType } from "@/app/utils/serviceReadModel";
 import { serviceDayKey } from "@/app/utils/serviceReadSelect";
 
@@ -38,6 +39,7 @@ export interface RoleCreatePayload {
   date?: unknown;
   service_name?: unknown;
   time?: unknown;
+  format?: unknown;
   published?: unknown;
   leads?: unknown;
   bgvs?: unknown;
@@ -64,6 +66,11 @@ export interface CanonicalCreatePayload {
    * matches its receipt). Never `null` here — that would change every hash.
    */
   time?: string;
+  /**
+   * Present ONLY for a worship night. Omitted otherwise so every existing
+   * fingerprint stays byte-identical (the same rule as `time`).
+   */
+  format?: ServiceFormat;
   published: boolean;
   leads: string[];
   bgvs: string[];
@@ -154,6 +161,15 @@ export function canonicalizeCreatePayload(payload: RoleCreatePayload): Canonical
   if (hasTime && !time) issues.push("time");
   if (time && roleType !== "special_role") issues.push("time");
 
+  // `format` is optional, specials-only, set once at creation. Absent/null/""
+  // is an ordinary special; the only accepted value is "worship_night"; a
+  // weekend role refuses one rather than dropping it.
+  const rawFormat = doc.format;
+  const hasFormat = rawFormat !== undefined && rawFormat !== null && rawFormat !== "";
+  const format = hasFormat && isWorshipNightFormat(rawFormat) ? rawFormat : null;
+  if (hasFormat && !format) issues.push("format");
+  if (format && roleType !== "special_role") issues.push("format");
+
   let targetIdentity: string | null = null;
   if (roleType && date) {
     if (roleType === "special_role") {
@@ -173,6 +189,7 @@ export function canonicalizeCreatePayload(payload: RoleCreatePayload): Canonical
       targetIdentity,
       serviceName,
       ...(time && roleType === "special_role" ? { time } : {}),
+      ...(format && roleType === "special_role" ? { format } : {}),
       // Effective publication default: only an exact boolean `true` publishes,
       // matching the writer's `published === true` (missing/false = draft).
       published: doc.published === true,

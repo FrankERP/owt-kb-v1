@@ -64,7 +64,7 @@ export async function GET() {
   const roles = await operationalClient.fetch(`
     *[_type in ["sunday_role", "saturday_role", "special_role"]]
     | order(coalesce(week, date) asc, time asc) {
-      _id, _rev, _type, service_name, time,
+      _id, _rev, _type, service_name, time, format,
       "published": coalesce(published, true),
       "date": coalesce(week, date),
       "leads": Lead[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
@@ -227,6 +227,7 @@ async function postHandler(req: NextRequest) {
     date: request.date,
     serviceName: request.serviceName,
     time: request.time,
+    format: request.format,
     published: request.published,
     seats: request.seats,
     receiptId: request.receiptId,

@@ -115,6 +115,7 @@ describe("stored document shapes", () => {
       date: "2026-08-09",
       serviceName: null,
       time: null,
+      format: null,
       published: true,
       seats: normalizeSeats(createBody()),
       receiptId: "roleCreate.abc",
@@ -694,9 +695,9 @@ describe("special-service time", () => {
   it("document and patch: time is written only when present, and unset when absent", () => {
     const seats = normalizeSeats(special());
     const nextKey = () => "k";
-    const withTime = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
+    const withTime = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", format: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
     expect(withTime.time).toBe("09:00");
-    const without = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
+    const without = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, format: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
     expect("time" in without).toBe(false);
 
     const patchWith = buildRoleEditPatch({ roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", seats, nextKey });
@@ -707,5 +708,60 @@ describe("special-service time", () => {
     expect(patchWithout.unset).toEqual(["time"]);
     const weekend = buildRoleEditPatch({ roleType: "sunday_role", date: "2026-10-04", serviceName: null, time: null, seats, nextKey });
     expect(weekend.unset).toEqual([]);
+  });
+});
+
+describe("special-service format", () => {
+  const special = (over: Record<string, unknown> = {}) =>
+    createBody({ _type: "special_role", service_name: "Noche de Alabanza · Bloque 1", ...over });
+
+  it("create: absent, null and empty mean an ordinary special", () => {
+    for (const format of [undefined, null, ""]) {
+      const parsed = parseCreateRequest(special(format === undefined ? {} : { format }));
+      expect(parsed.ok).toBe(true);
+      if (parsed.ok) expect(parsed.value.format).toBeNull();
+    }
+  });
+
+  it("create: worship_night is carried; any other value is issue `format`", () => {
+    const ok = parseCreateRequest(special({ format: "worship_night" }));
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.value.format).toBe("worship_night");
+    for (const format of ["noche", "WORSHIP_NIGHT", 1, true]) {
+      expect(parseCreateRequest(special({ format }))).toMatchObject({ ok: false, issues: ["format"] });
+    }
+  });
+
+  it("create: a weekend role refuses a format", () => {
+    expect(parseCreateRequest(createBody({ format: "worship_night" }))).toMatchObject({ ok: false, issues: ["format"] });
+  });
+
+  it("create: the fingerprint ignores an absent format and changes with a present one", () => {
+    const base = special();
+    expect(payloadFingerprint({ ...base, format: null })).toBe(payloadFingerprint(base));
+    expect(payloadFingerprint({ ...base, format: "" })).toBe(payloadFingerprint(base));
+    expect(payloadFingerprint({ ...base, format: "worship_night" })).not.toBe(payloadFingerprint(base));
+  });
+
+  // Pinned 2026-09-22: adding format must not move a format-less fingerprint.
+  it("create: a format-less special payload keeps its exact historical fingerprint", () => {
+    expect(payloadFingerprint(special())).toBe(
+      "2d4971bba79e80b5d777cd9d814bd355458393496cf803f9a01d8b53ef125b70",
+    );
+  });
+
+  it("document: format is written only for a special that carries it", () => {
+    const seats = normalizeSeats(special());
+    const nextKey = () => "k";
+    const common = { roleId: "special_role.x", date: "2026-10-03", serviceName: "X", time: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey } as const;
+    expect(buildRoleDocument({ ...common, roleType: "special_role", format: "worship_night" }).format).toBe("worship_night");
+    expect("format" in buildRoleDocument({ ...common, roleType: "special_role", format: null })).toBe(false);
+  });
+
+  it("edit patch never sets or unsets format", () => {
+    const seats = normalizeSeats(special());
+    const patch = buildRoleEditPatch({ roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, seats, nextKey: () => "k" });
+    expect("format" in patch.set).toBe(false);
+    expect(patch.unset).not.toContain("format");
   });
 });

@@ -199,7 +199,9 @@ export default async function MePage() {
             medley_tag,
             "title": song->title, "slug": song->slug, "_id": song->_id,
             "author": song->author, "bpm": song->bpm, "key": song->key,
-          }
+            "leads": leads[]->{ member_name, alias },
+          },
+          "myLeadSongs": songs[$id in leads[]._ref]{ "title": song->title }
         }
       }`,
       { today, limit, id: sanityId }
@@ -280,6 +282,7 @@ export default async function MePage() {
     setlist?: Setlist;
     setlistCandidates?: Setlist[];
     songs?: SetlistSong[];
+    myLeadSongs?: { title?: string }[] | null;
     team_notes?: string;
   };
 
@@ -323,6 +326,7 @@ export default async function MePage() {
     fohTeam: doc.foh_team?.map((s) => ({ label: s.role, person: s.person })),
     bgvs: doc.BGVs,
     chorus: doc.Chorus,
+    myLeadSongs: (doc.myLeadSongs ?? []).map((s) => s.title).filter((t): t is string => !!t),
   });
 
   // Only the assignments whose card will actually paint something reach the

@@ -113,6 +113,17 @@ describe("fillSpecialGroup — eligibility", () => {
   });
 });
 
+describe("fillSpecialGroup — worship night", () => {
+  it("leaves a worship night's Lead empty for the admin and still fills its three BGVs", () => {
+    const night: GridColumn = { ...special("s1", "2026-10-03", "20:45"), format: "worship_night" };
+    const out = fill([night]);
+    expect(occ(out.cells, "s1", "lead")).toEqual([]);
+    expect(occ(out.cells, "s1", "bgv")).toHaveLength(3);
+    // No target on Lead means no seat to report missing either.
+    expect(out.unfilled.filter((u) => u.rowId === "lead")).toEqual([]);
+  });
+});
+
 describe("fillSpecialGroup — instruments", () => {
   it("fills Keys on every set, alternating between two players inside the group", () => {
     const players: RankMember[] = [

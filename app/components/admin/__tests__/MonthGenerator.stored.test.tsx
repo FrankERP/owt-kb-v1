@@ -341,6 +341,40 @@ describe("MonthGenerator — stored mode", () => {
     expect(bodies[1].creationRequestId).toBe(bodies[0].creationRequestId);
   });
 
+  it("creates a «Noche de alabanza» as a special_role carrying format: worship_night", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
+    vi.stubGlobal("fetch", fetchMock);
+    renderStored([role()], { openComposerInitially: true });
+
+    fireEvent.change(screen.getByLabelText("Tipo"), { target: { value: "worship_night" } });
+    fireEvent.change(screen.getByPlaceholderText("Nombre del servicio"), { target: { value: "Noche de alabanza" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crear vacío" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/admin/roles");
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      _type: "special_role",
+      service_name: "Noche de alabanza",
+      format: "worship_night",
+    });
+  });
+
+  it("creates an «Especial» with no format key at all", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
+    vi.stubGlobal("fetch", fetchMock);
+    renderStored([role()], { openComposerInitially: true });
+
+    fireEvent.change(screen.getByLabelText("Tipo"), { target: { value: "special_role" } });
+    fireEvent.change(screen.getByPlaceholderText("Nombre del servicio"), { target: { value: "Vigilia" } });
+    fireEvent.click(screen.getByRole("button", { name: "Crear vacío" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body));
+    expect(body).toMatchObject({ _type: "special_role", service_name: "Vigilia" });
+    expect("format" in body).toBe(false);
+  });
+
   it("treats a 500 with a pre-write-looking create code as unknown", async () => {
     const fetchMock = vi.fn(async () => response(500, { error: "invalid_request" }));
     vi.stubGlobal("fetch", fetchMock);

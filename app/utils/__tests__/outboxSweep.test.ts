@@ -532,6 +532,116 @@ describe("sweepOutbox — grouping and fan-out", () => {
   });
 });
 
+describe("sweepOutbox — a worship night's song leaders", () => {
+  // End to end, because the property lives in the STORED snapshot: the flush
+  // side re-reads `beforeSongs` from Sanity, and a reader that dropped `leads`
+  // there would compare a leaderless snapshot against a led live setlist.
+  const team = ["m1", "m2", "m3"];
+  const leadRef = (id: string) => ({ _key: `l-${id}`, _ref: id });
+
+  function worshipNight(songs: Doc[]): void {
+    world.notices = [
+      setlistNotice({
+        roleType: "special_role", roleId: "r9", subjectKey: "r9", serviceDate: "2026-08-08",
+        before: { beforeSongs: [{ ...snapshotRow("song1"), leads: ["m1"] }] },
+        knownRecipients: team,
+      }),
+    ];
+    world.roles = {
+      r9: roleDoc({
+        _id: "r9", _type: "special_role", date: "2026-08-08", week: undefined, format: "worship_night",
+        Lead: [leadRef("m1"), leadRef("m2")], songs,
+      }),
+    };
+    world.recipients = { r9: team };
+    world.titles = { song1: "Santo" };
+    world.members = { ...members(team), m2: { ...member("m2"), alias: "Beto" } };
+  }
+
+  it("says nothing when the songs and their leaders are unchanged", async () => {
+    worshipNight([{ ...storedSong("song1"), leads: [leadRef("m1")] }]);
+
+    const report = await sweepOutbox();
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(report.claimed).toBe(1);
+    expect(report.consumed).toBe(1);
+  });
+
+  it("tells every participant when a song's leader changes, and names the new one", async () => {
+    worshipNight([{ ...storedSong("song1"), leads: [leadRef("m2")] }]);
+
+    const report = await sweepOutbox();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(team.length);
+    expect(report.emailed).toBe(team.length);
+    const sent = sendEmailMock.mock.calls[0][0] as { subject: string; html: string };
+    expect(sent.subject).toContain("El setlist cambió");
+    expect(sent.html).toContain("— dirige Beto");
+    // One names read, for the leaders only, in the read stage.
+    const nameReads = readsMatching("defined(member_name)");
+    expect(nameReads).toHaveLength(1);
+    expect((nameReads[0].params as { ids: string[] }).ids).toEqual(["m2"]);
+  });
+
+  it("tells every participant when every leader is cleared", async () => {
+    worshipNight([storedSong("song1")]);
+
+    const report = await sweepOutbox();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(team.length);
+    expect(report.emailed).toBe(team.length);
+    expect((sendEmailMock.mock.calls[0][0] as { html: string }).html).not.toContain("dirige");
+    // No live leader to name, so no names read at all.
+    expect(readsMatching("defined(member_name)")).toHaveLength(0);
+  });
+
+  it("still sends, without names, when the leader-names read fails", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    worshipNight([{ ...storedSong("song1"), leads: [leadRef("m2")] }]);
+    // Only the leader-names read fails; the recipients' MEMBERS_QUERY still works.
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      if (query.includes("defined(member_name)")) throw new Error("names read down");
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox();
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(team.length);
+    expect(report.emailed).toBe(team.length);
+    expect(report.failed).toBe(0);
+    expect(report.skipped).toBe(0);
+    expect(report.consumed).toBe(1);
+    for (const call of sendEmailMock.mock.calls) {
+      expect((call[0] as { html: string }).html).not.toContain("dirige");
+    }
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("notify_sweep_leader_names_failed"), expect.anything());
+    // It was the names read that failed, not the sweep.
+    expect(errorSpy).not.toHaveBeenCalledWith(expect.stringContaining("notify_sweep_failed"), expect.anything());
+    errorSpy.mockRestore();
+  });
+
+  it("charges the leader-names read to the read phase, never to the send budget", async () => {
+    // The names read costs 25 s here. Charged to the send stage, it alone would
+    // exhaust a 20 s budget and nothing would go out; before `sendStartedAt` it
+    // costs the budget nothing. The sweep deadline is lifted so only the send
+    // budget can decide.
+    worshipNight([{ ...storedSong("song1"), leads: [leadRef("m2")] }]);
+    operationalFetch.mockImplementation(async (query: string, params: Doc = {}) => {
+      reads.push({ query, params });
+      if (query.includes("defined(member_name)")) vi.setSystemTime(new Date(Date.now() + 25_000));
+      return routeRead(query, params);
+    });
+
+    const report = await sweepOutbox({ sendBudgetMs: 20_000, sweepDeadlineMs: 120_000 });
+
+    expect(report.emailed).toBe(team.length);
+    expect(report.unserved).toBe(0);
+    expect((sendEmailMock.mock.calls[0][0] as { html: string }).html).toContain("— dirige Beto");
+  });
+});
+
 describe("sweepOutbox — selection bounds the recipient union", () => {
   it("does not treat a 20-recipient setlist notice as oversized", async () => {
     // Regression for the 12-vs-20 defect: a Sunday service routinely has 12-20
