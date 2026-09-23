@@ -25,6 +25,10 @@
 //    one subject), a `false -> true` publish queues the same notice with an EMPTY
 //    snapshot so publishing INTRODUCES the setlist, and a lead-notes edit on an
 //    already-reviewable proposal queues one `leadNotes` notice for admins.
+//    THE PUBLISH ONE IS NOT ACTUALLY DEBOUNCED: it is queued with `debounceMs: 0`
+//    so layer 2 sends it in the same `after()` block (ADR-0037). It sits in this
+//    list because it travels through the outbox — the classify/group/preference
+//    pipeline is the outbox's — not because it waits.
 //  - LAYER 2 of the flush triggers (spec §3): the same `after()` block that
 //    commits an outbox upsert then runs the sweep OPPORTUNISTICALLY, derating
 //    BOTH knobs to half. See `commitUpserts` for why it lives there and what it
@@ -67,7 +71,12 @@ import {
   setlistRecipientIds,
   type SetlistPref,
 } from "./notifyTargets";
-import { buildUpsert, outboxId, songRowsFrom } from "./outboxNotice";
+import {
+  buildUpsert,
+  outboxId,
+  songRowsFrom,
+  type UpsertWindowOverrides,
+} from "./outboxNotice";
 import {
   EMAIL_LIMIT,
   SEND_BUDGET_MS,
@@ -430,7 +439,11 @@ export interface QueueSetlistNoticeInput {
 }
 
 /** Build one `setlist` upsert, or `null` when this write says nothing. */
-function setlistUpsert(input: QueueSetlistNoticeInput, now: Date) {
+function setlistUpsert(
+  input: QueueSetlistNoticeInput,
+  now: Date,
+  windows: UpsertWindowOverrides = {},
+) {
   // `published !== false` — missing/true is member-visible (grandfathered).
   if (input.published === false) return null;
   if (!input.roleId) return null;
@@ -455,6 +468,7 @@ function setlistUpsert(input: QueueSetlistNoticeInput, now: Date) {
         knownRecipients: input.knownRecipients,
       },
       now,
+      windows,
     ),
   };
 }
@@ -642,6 +656,17 @@ const WEEKEND_SETLIST_TYPE: Record<string, string> = {
 };
 
 /**
+ * The publish transition's outbox window: NO debounce, so the notice is due the
+ * moment it is committed and layer 2's sweep — which runs at the end of the very
+ * `commitUpserts` that writes it — sends it without waiting for a Scheduler
+ * tick. Exported so a guard can assert the value rather than infer it from a
+ * timing test. `maxWindowMs` is deliberately left at its default: the starvation
+ * ceiling is already satisfied by `notifyAfter`, and pinning it here would only
+ * be a second way to say the same thing. See ADR-0037.
+ */
+export const PUBLISH_WINDOWS: Readonly<UpsertWindowOverrides> = Object.freeze({ debounceMs: 0 });
+
+/**
  * Publishing must ANNOUNCE the setlist (§2). The dominant workflow is *create as
  * draft → build the setlist → publish*, and nothing queues while the service is a
  * draft — so without this a service published with a setlist already on it would
@@ -658,6 +683,26 @@ const WEEKEND_SETLIST_TYPE: Record<string, string> = {
  * the deferred block is exact — and it keeps the read off the admin's request.
  * The `before` snapshot is the constant `[]`, so nothing here is subject to the
  * pre-commit capture rule.
+ *
+ * **This notice is NOT DEBOUNCED — `debounceMs: 0`, so it is due the instant it
+ * is written and layer 2's sweep at the end of `commitUpserts` sends it in this
+ * same `after()` block.** It is the one outbox notice that behaves that way, and
+ * the reason is the one spec §7 already gives for the consolidated publish
+ * EMAIL, which has never been debounced: publishing is a single deliberate
+ * click, and the click IS the terminal edit. The debounce exists to collapse a
+ * burst of edits and to let a change that nets out to nothing fall silent;
+ * neither applies here, because the before-snapshot is the constant `[]` and
+ * `[] -> songs` can never net out to nothing. What it cost before this was the
+ * whole delay: 5 minutes of debounce plus up to one Cloud Scheduler tick
+ * (ADR-0032), so «Setlist listo» reached the team 5–10 minutes after a publish
+ * the admin experienced as instant — and longer if anyone touched the setlist
+ * inside the window, since an edit slides `notifyAfter` forward up to the 60
+ * minute ceiling. See ADR-0037.
+ *
+ * The trade is real and was accepted deliberately: publishing and THEN editing
+ * within a few minutes now sends «Setlist listo» and a second «El setlist
+ * cambió», where the debounce used to collapse both into one. Ordinary editing
+ * of an already-published service is untouched — it still debounces.
  */
 export function queuePublishedSetlistNotices(subjects: PublishedSetlistSubject[]): void {
   // The caller already committed the business write. `attemptSync` guards this
@@ -708,6 +753,8 @@ export function queuePublishedSetlistNotices(subjects: PublishedSetlistSubject[]
                 knownRecipients: subject.knownRecipients,
               },
               now,
+              // Due immediately — see this function's doc comment and ADR-0037.
+              PUBLISH_WINDOWS,
             ),
           )
           .filter((u): u is BuiltUpsert => !!u);

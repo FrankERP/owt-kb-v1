@@ -3,7 +3,11 @@
 Members get an email when the setlist of a service they serve appears or
 changes, and when they are added to, removed from, or moved within a service.
 Changes are debounced 5 minutes per subject (15 until 2026-09-10) and grouped into one email per
-person.
+person. **Publishing is the one exception: it is not debounced at all.** A
+single-service publish goes out in the same request, within seconds; a whole-month
+batch sends what fits layer 2's derated limit and the rest on the next tick,
+still inside five minutes — see "The publish transition is immediate" below and
+[ADR-0037](adr/0037-the-publish-notice-is-not-debounced.md).
 
 - **Design and reasoning:** [`superpowers/specs/2026-07-27-service-notification-emails-design.md`](superpowers/specs/2026-07-27-service-notification-emails-design.md) — the authority on every rule.
 - **Implementation plan:** [`superpowers/plans/2026-07-27-service-notification-emails.md`](superpowers/plans/2026-07-27-service-notification-emails.md).
@@ -94,6 +98,40 @@ not run on the schedule it declares"). The proposal-submit **email** (`buildProp
 queued: intro + CTA, the same setlist table as "Setlist listo" (no Mov. column,
 medleys grouped), and the lead's newest `lead_note` message when the thread has one — the same thread source as the debounced email below, moved in the same delivery that stopped writing the legacy field. Empty or unreadable songs still
 send the intro and CTA. Push stays a one-line alert.
+
+### The publish transition is immediate
+
+**One notice escapes all of the above, and it is the one members notice most.**
+A `false -> true` publish queues its `setlist` notice with **`debounceMs: 0`**
+(`PUBLISH_WINDOWS` in `serviceMutationSideEffects.ts`), so it is due the instant
+it is committed and **layer 2's sweep — which runs at the end of the very
+`commitUpserts` that wrote it — sends it in the same `after()` block.** «Setlist
+listo» reaches the team in seconds, with no Scheduler tick involved.
+
+**That is the single-service case. A whole-month «Publicar todos» is partly
+deferred and that is expected**, not a bug: layer 2 runs at `EMAIL_LIMIT / 2` =
+**20** distinct recipients against layer 1's 40, and stage 2 stops selecting once
+the recipient union passes it. August 2026 — 7 services over ~20 people — sits
+right on that ceiling, so the overflow waits for the next tick. It is still
+inside five minutes, because a deferred notice is ALREADY DUE and the next tick
+takes it whole; what it is not is instant for everyone.
+
+That is the only place the sentence above ("layer 2 can never flush the terminal
+edit") does not apply, and the reason is that a publish click is not an edit in a
+session: it IS the terminal event. It is the same reasoning spec §7 already
+applied to the consolidated publish EMAIL, which has never been debounced.
+
+Before 2026-09-16 this notice took the ordinary path, so «Setlist listo» arrived
+**5–10 minutes** after a publish the admin experienced as instant — 5 of debounce
+plus up to one Scheduler tick — and later still if anyone touched the setlist
+inside the window, up to the 60-minute ceiling.
+
+**The cost, accepted deliberately:** publishing and then editing within a few
+minutes now sends «Setlist listo» and then «El setlist cambió», where the
+debounce used to collapse them into one. Ordinary edits on an already-published
+service are untouched and still debounce.
+[ADR-0037](adr/0037-the-publish-notice-is-not-debounced.md) has the rejected
+alternatives — a global debounce retune, and a `*/1` Scheduler.
 
 ## Send throughput on Gmail — MEASURED 2026-08-27
 
@@ -268,7 +306,9 @@ and layer 2 (the writer's own `after()` sweep) has already run by then, so layer
 is what must come back. With only the GitHub caller running, the median was an
 hour and a bad day was half a day; with Scheduler the next tick is at most five
 minutes away. Layer 3's liveness alarm is daily, so a stall shorter than that is
-still invisible.
+still invisible. The publish notice is the exception that does not depend on any
+of this — it is due at commit and layer 2 catches it (§"The publish transition is
+immediate").
 
 **The mitigation above is applied.** The bearer travels
 in the HEADER, never in a `?secret=` query string, where it would land in access
@@ -632,7 +672,7 @@ pending notification.
 
 | Name | Default | Meaning |
 |---|---|---|
-| `NOTIFY_DEBOUNCE_MINUTES` | 15 | Quiet period before a subject flushes. **Production and Preview run `5` since 2026-09-10.** Measured over the outbox's first six weeks (Sanity transaction history, 2026-07-28 → 09-10: 74 app edits on 32 services/proposals): a 15-minute window collapsed 9 bursts into 59 notices, a 5-minute one would have produced 63 — four more emails in six weeks, every notice ten minutes sooner. Only four bursts ever spanned more than five minutes, three of them on proposals, whose thread does not collapse anyway. Delivery is now the debounce plus up to one Scheduler tick: 5–10 min after the last edit |
+| `NOTIFY_DEBOUNCE_MINUTES` | 15 | Quiet period before a subject flushes. **Production and Preview run `5` since 2026-09-10.** Measured over the outbox's first six weeks (Sanity transaction history, 2026-07-28 → 09-10: 74 app edits on 32 services/proposals): a 15-minute window collapsed 9 bursts into 59 notices, a 5-minute one would have produced 63 — four more emails in six weeks, every notice ten minutes sooner. Only four bursts ever spanned more than five minutes, three of them on proposals, whose thread does not collapse anyway. Delivery is now the debounce plus up to one Scheduler tick: 5–10 min after the last edit. **This does not govern the publish transition**, which sets its own `debounceMs: 0` and sends in-request — ADR-0037 |
 | `NOTIFY_MAX_WINDOW_MINUTES` | 60 | Hard ceiling from first queue; defeats starvation |
 | `NOTIFY_CLAIM_TTL_MINUTES` | 5 | Lease on a claimed notice; expiry makes it due again |
 | `NOTIFY_SEND_BUDGET_MS` | 40000 | Wall-clock bound on the send loop |

@@ -1,4 +1,4 @@
-# ADR-0037: The lexicographic objective's weights use per-tier maxima
+# ADR-0038: The lexicographic objective's weights use per-tier maxima
 
 **Date:** 2026-09-16 · **Status:** Accepted
 
