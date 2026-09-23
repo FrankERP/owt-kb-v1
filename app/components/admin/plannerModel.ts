@@ -47,6 +47,7 @@ import {
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { displayMemberName, rulePersonNamesMember } from "@/app/utils/memberRuleNames";
+import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
 
 // ─── Grid shape ───────────────────────────────────────────────────────────────
 
@@ -152,6 +153,8 @@ export interface GridColumn {
    * part of any collision key, and never set on a weekend column.
    */
   time?: string;
+  /** SPECIALS ONLY — "worship_night" for a «Noche de alabanza». Never identity. */
+  format?: ServiceFormat;
 }
 
 /** Fail closed when a caller supplies ambiguous or detached grid identity. */
@@ -394,8 +397,12 @@ export function isSolvable(row: GridRow, column: Pick<GridColumn, "type">): bool
  * unsolvable. Overloading `isSolvable` for both would have silently dropped
  * both on every special column.
  */
-export function hasTarget(row: GridRow, column: Pick<GridColumn, "type">): boolean {
+export function hasTarget(row: GridRow, column: Pick<GridColumn, "type" | "format">): boolean {
   if (!rowAppliesTo(row, column)) return false;
+  // A worship night's Lead holds every song leader of the block, so it has no
+  // target and no «+N». `fillColumn` skips rows without a target, which is how
+  // the group fill leaves Lead to the admin (spec 2026-09-22 worship-night §5).
+  if (row.id === "lead" && column.format === WORSHIP_NIGHT_FORMAT) return false;
   if (row.category !== "voz") return false;
   return row.target != null;
 }

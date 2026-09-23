@@ -11,6 +11,7 @@ import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
 import { draftCreateBody, newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
 import { normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { isServiceTime } from "@/app/utils/serviceTime";
+import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
 import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
 import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
 import MonthCalendar from "./MonthCalendar";
@@ -1794,12 +1795,13 @@ export default function MonthGenerator({
   const [createDate, setCreateDate] = useState(`${monthPrefix}-01`);
   const [createName, setCreateName] = useState("");
   const [createTime, setCreateTime] = useState("");
+  const [createWorshipNight, setCreateWorshipNight] = useState(false);
   const [creatingOne, setCreatingOne] = useState(false);
   const [createAttemptStatus, setCreateAttemptStatus] = useState<"unknown" | "committedUnverified" | null>(null);
   const createAttempt = useRef<{
     id: string;
     payloadKey: string;
-    target: { type: ServiceType; date: string; name: string | null; time: string | null };
+    target: { type: ServiceType; date: string; name: string | null; time: string | null; format: ServiceFormat | null };
     roleId?: string;
   } | null>(null);
   const baselineByRole = useRef<Map<string, RoleSemanticSnapshot>>(new Map());
@@ -2209,6 +2211,7 @@ export default function MonthGenerator({
     setComposerOpen(false);
     setCreateName("");
     setCreateTime("");
+    setCreateWorshipNight(false);
     setSaveNotice("Servicio vacío creado y verificado. Ya puedes asignar el equipo.");
     onCreated();
   }, [onCreated, storedGenerationKey, storedInventory.coherent, storedMode, storedSource?.roles]);
@@ -2659,7 +2662,8 @@ export default function MonthGenerator({
       setSaveNotice("La hora debe ser HH:mm.");
       return;
     }
-    const target = { type: createType, date: createDate, name: normalizedName, time: createTimeValue };
+    const createFormat = createType === "special_role" && createWorshipNight ? WORSHIP_NIGHT_FORMAT : null;
+    const target = { type: createType, date: createDate, name: normalizedName, time: createTimeValue, format: createFormat };
     const payloadKey = JSON.stringify(target);
     if (!createAttempt.current || createAttempt.current.payloadKey !== payloadKey) {
       createAttempt.current = { id: newCreationRequestId(), payloadKey, target };
@@ -2671,6 +2675,7 @@ export default function MonthGenerator({
       date: createDate,
       ...(createType === "special_role" ? { service_name: normalizedName ?? "" } : {}),
       ...(createTimeValue ? { time: createTimeValue } : {}),
+      ...(createFormat ? { format: createFormat } : {}),
       leads: [],
       bgvs: [],
       chorus: [],
@@ -3606,10 +3611,29 @@ export default function MonthGenerator({
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-[1fr_1fr_1.4fr_auto] md:items-end">
-              <Select id="mg-create-type" label="Tipo" size="md" value={createType} disabled={storedMutationLocked} onChange={(event) => setCreateType(event.target.value as ServiceType)}>
+              <Select
+                id="mg-create-type"
+                label="Tipo"
+                size="md"
+                value={createType === "special_role" && createWorshipNight ? "worship_night" : createType}
+                disabled={storedMutationLocked}
+                onChange={(event) => {
+                  // «Noche de alabanza» is a special with a create-time `format`,
+                  // not a fourth service type — split the one control into both.
+                  const v = event.target.value;
+                  if (v === "worship_night") {
+                    setCreateType("special_role");
+                    setCreateWorshipNight(true);
+                  } else {
+                    setCreateType(v as ServiceType);
+                    setCreateWorshipNight(false);
+                  }
+                }}
+              >
                 <option value="sunday_role">Domingo</option>
                 <option value="saturday_role">Sábado</option>
                 <option value="special_role">Especial</option>
+                <option value="worship_night">Noche de alabanza</option>
               </Select>
               <DateField
                 kind="date"

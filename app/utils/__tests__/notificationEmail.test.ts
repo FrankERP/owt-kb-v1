@@ -185,3 +185,61 @@ describe("buildGroupedEmail", () => {
     expect(html).not.toMatch(/font:13px monospace">\s*<\/td>/);
   });
 });
+
+describe("buildGroupedEmail — a worship night's song leaders", () => {
+  const led = (ref: string, key: string, leads: string[], group: number | null = null) =>
+    ({ ...song(ref, key, group), ...(leads.length ? { leads } : {}) });
+  const leaderLine = (leads: string[], extra: Partial<Line> = {}): Line => ({
+    kind: "setlistChanged", serviceDate: "2026-08-09", roleType: "special_role",
+    before: [], after: [],
+    beforeSongs: [song("a", "G"), song("b", "D"), song("c", "A")],
+    songs: [led("a", "G", leads), led("b", "D", leads, 0), led("c", "A", [], 0)],
+    ...extra,
+  });
+  const leaders = new Map([["m1", "Ani"], ["m2", "Beto"]]);
+
+  it("names a song's leaders after its title", () => {
+    const { html } = buildGroupedEmail({ name: "Ana", lines: [leaderLine(["m1", "m2"])] }, titles, leaders);
+    expect(html).toContain("— dirige Ani y Beto");
+    // Once per led song — both the single and the medley item — and never on
+    // the song nobody leads.
+    expect(html.match(/— dirige/g)).toHaveLength(2);
+  });
+
+  it("omits an id it cannot name, and says nothing when it can name nobody", () => {
+    const one = buildGroupedEmail({ name: "Ana", lines: [leaderLine(["m1", "ghost"])] }, titles, leaders).html;
+    expect(one).toContain("— dirige Ani<");
+    expect(one).not.toContain("ghost");
+    const none = buildGroupedEmail({ name: "Ana", lines: [leaderLine(["ghost"])] }, titles, leaders).html;
+    expect(none).not.toContain("dirige");
+  });
+
+  it("escapes a leader's name", () => {
+    const { html } = buildGroupedEmail(
+      { name: "Ana", lines: [leaderLine(["m1"])] },
+      titles,
+      new Map([["m1", "<b>Ani</b>"]]),
+    );
+    expect(html).not.toContain("<b>Ani</b>");
+    expect(html).toContain("— dirige &lt;b&gt;Ani&lt;/b&gt;");
+  });
+
+  it("never names a departed song's leaders", () => {
+    // A `gone` row is built from the snapshot, whose leaders are no longer news.
+    const line = leaderLine([], {
+      beforeSongs: [led("a", "G", ["m1"]), led("x", "E", ["m2"])],
+      songs: [song("a", "G")],
+    });
+    const { html } = buildGroupedEmail({ name: "Ana", lines: [line] }, new Map([...titles, ["x", "X"]]), leaders);
+    expect(html).toContain(">SALIÓ<");
+    expect(html).not.toContain("dirige");
+  });
+
+  it("renders byte-identical HTML without a leaders map", () => {
+    // Every leaderless setlist, and every caller that passes no map, must mail
+    // exactly what it mailed before leaders existed.
+    const today = buildGroupedEmail({ name: "Ana", lines: [leaderLine([])] }, titles).html;
+    expect(buildGroupedEmail({ name: "Ana", lines: [leaderLine(["m1", "m2"])] }, titles).html).toBe(today);
+    expect(buildGroupedEmail({ name: "Ana", lines: [leaderLine([])] }, titles, leaders).html).toBe(today);
+  });
+});

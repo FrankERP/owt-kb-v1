@@ -1153,6 +1153,56 @@ describe("PATCH /api/admin/proposals/[id] — approval", () => {
     // A special service takes no weekend lock.
     expect(patches(tx).some((o) => o.id.startsWith("roleTarget."))).toBe(false);
   });
+
+  describe("song leaders on a worship night", () => {
+    const liveSong = (key: string, songId: string, leads: string[]) => ({
+      _key: key, play_key: "D", song: { _type: "reference", _ref: songId },
+      ...(leads.length ? { leads: leads.map((id, i) => ref(`${key}-${i}`, id)) } : {}),
+    });
+    const specialProposal = (songs: string[]) => proposal({
+      _id: "setlistProposal.role-sp",
+      service_type: "special",
+      service_ref: "role-sp",
+      service_date: "2026-08-20",
+      songs: songs.map((id, i) => ({ _key: `p${i}`, play_key: "D", song: { _type: "reference", _ref: id } })),
+    });
+    const approvedSongs = () =>
+      patches(committedTransactions()[0]).find((o) => o.id === "role-sp")!.set.songs as Record<string, unknown>[];
+    const leadRefs = (s: Record<string, unknown>) => ((s.leads as { _ref: string }[] | undefined) ?? []).map((l) => l._ref);
+
+    it("keeps leaders by song and drops those no longer in Lead", async () => {
+      store.roles.push(specialRole({
+        format: "worship_night",
+        Lead: [ref("c1", "mem-1"), ref("c2", "mem-2")],
+        songs: [liveSong("l1", "song-1", ["mem-1"]), liveSong("l2", "song-3", ["mem-2", "mem-7"])],
+      }));
+      store.proposals.push(specialProposal(["song-3", "song-1", "song-2"]));
+      const res = await patchAdmin("setlistProposal.role-sp", { action: "approve", rev: "prop-rev-1" });
+      expect(res.status).toBe(200);
+      expect(approvedSongs().map(leadRefs)).toEqual([["mem-2"], ["mem-1"], []]);
+      expect(approvedSongs().every((s) => typeof s._key === "string")).toBe(true);
+    });
+
+    it("an ordinary special's approval writes no leaders", async () => {
+      store.roles.push(specialRole({ songs: [liveSong("l1", "song-1", ["mem-1"])] }));
+      store.proposals.push(specialProposal(["song-1"]));
+      const res = await patchAdmin("setlistProposal.role-sp", { action: "approve", rev: "prop-rev-1" });
+      expect(res.status).toBe(200);
+      expect(approvedSongs().map(leadRefs)).toEqual([[]]);
+    });
+
+    it("a lost-response retry stays a no-write success (fingerprint ignores leaders)", async () => {
+      store.roles.push(specialRole({ format: "worship_night", Lead: [ref("c1", "mem-1")], songs: [liveSong("l1", "song-1", ["mem-1"])] }));
+      store.proposals.push(specialProposal(["song-1"]));
+      expect((await patchAdmin("setlistProposal.role-sp", { action: "approve", rev: "prop-rev-1" })).status).toBe(200);
+      const writes = committedTransactions().length;
+      const stored = store.proposals.find((p) => p._id === "setlistProposal.role-sp")!;
+      const retry = await patchAdmin("setlistProposal.role-sp", { action: "approve", rev: String(stored._rev) });
+      expect(retry.status).toBe(200);
+      expect(await retry.json()).toMatchObject({ idempotent: true });
+      expect(committedTransactions()).toHaveLength(writes);
+    });
+  });
 });
 
 describe("PATCH /api/admin/proposals/[id] — request_changes and reopen", () => {

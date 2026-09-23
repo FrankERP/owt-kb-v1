@@ -184,6 +184,12 @@ several exist precisely to stop a plausible-looking change.
   **Same-day sets are created in `/admin` stored mode («+ Nuevo servicio»)**, which keys
   specials by `_id`/`date|name`; the month CREATE flow drafts one special per date on
   purpose (E19 in `plannerModel.ts`) — do not re-key it.
+- **A «Noche de alabanza» is `special_role.format = "worship_night"`, set once at creation** —
+  never a fourth role type (ADR-0038); the PATCH route never sets or unsets it. Its songs may
+  name one or two leaders (`songs[].leads`, keyed references) who must be in the set's Lead when
+  written: the setlist PUT refuses anything else under the role `_rev` it asserts, approval
+  carries leaders over by song reference, proposals and weekend setlists never carry them.
+  `serviceFormat.ts` and `songLeads.ts` are the ONLY definitions of these rules.
 - Member-facing reads must filter `published != false` (draft/publish gating) for the
   **worship** types, whose documents predate the field — an absent `published` there
   must mean "visible". **Kids reads use the stricter `published == true`** instead
@@ -370,6 +376,14 @@ load inside the group counts; empty seats only, nothing vacated, nothing written
 upcoming month pills: every month with services from the current one on, PLUS the current
 month and the next two even when empty, so a month opens in the stored editor without
 generating it),
+`isWorshipNight`/`WORSHIP_NIGHT_FORMAT` (`app/utils/serviceFormat.ts` — the ONE format
+definition, neutral), `songLeads.ts` (`app/utils/` — `leadSeatIds`/`songItemLeadIds`/
+`validateSongLeads`/`carryOverSongLeads`/`unassignedLeads`/`leadRosterOf`/`formatLeadNames`/
+`sortedLeadIds`/`SONG_LEADS_MAX`; neutral, shared by the setlist and approval writers, the
+editor, the cards and the outbox snapshot. `sortedLeadIds` is the ONE normalizer for
+snapshot leader ids, used by both `songRowsFrom` (queue side) and `outboxSweep`'s
+`normalizeSnapshotRows` (flush side) — the two must agree byte for byte, or every save on
+a worship night emails, or clearing leaders never does),
 `BottomNavBar` (`app/components/BottomNavBar.tsx` — the phone tab bar's PRESENTATIONAL
 half, props only; `BottomNav` keeps the session, the pathname and the measurement. Anything
 that needs the bar without a session — a gallery fixture — hosts this one),

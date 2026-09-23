@@ -19,6 +19,7 @@ import { normalizeLabel } from "./normalizeLabel";
 import { ROLE_TYPES, isValidServiceDate, type RoleType } from "./serviceReadModel";
 import { serviceDayKey } from "./serviceReadSelect";
 import { isServiceTime } from "./serviceTime";
+import type { ServiceFormat } from "./serviceFormat";
 import {
   ROLE_CREATION_RECEIPT_TYPE,
   canonicalizeCreatePayload,
@@ -205,6 +206,7 @@ export function buildRoleDocument(input: {
   date: string;
   serviceName: string | null;
   time: string | null;
+  format: ServiceFormat | null;
   published: boolean;
   seats: NormalizedSeats;
   receiptId: string;
@@ -217,6 +219,7 @@ export function buildRoleDocument(input: {
     [roleDateField(input.roleType)]: input.date,
     ...(input.roleType === "special_role" ? { service_name: input.serviceName ?? "" } : {}),
     ...(input.roleType === "special_role" && input.time ? { time: input.time } : {}),
+    ...(input.roleType === "special_role" && input.format ? { format: input.format } : {}),
     ...seatFields(input.seats, input.nextKey),
     published: input.published,
     // Forward link to the idempotency tombstone. The receipt's own `roleId`
@@ -263,6 +266,7 @@ export interface ParsedCreateRequest {
   date: string;
   serviceName: string | null;
   time: string | null;
+  format: ServiceFormat | null;
   published: boolean;
   seats: NormalizedSeats;
   /** Deterministic weekend lock id; null for a special service. */
@@ -304,6 +308,7 @@ export function parseCreateRequest(body: unknown): ParseResult<ParsedCreateReque
       date: canonical.date,
       serviceName: canonical.serviceName,
       time: canonical.time ?? null,
+      format: canonical.format ?? null,
       published: canonical.published,
       seats: normalizeSeats(payload),
       lockId: roleTargetLockId(`${roleType}:${canonical.date}`),

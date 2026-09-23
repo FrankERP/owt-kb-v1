@@ -651,6 +651,25 @@ describe("POST /api/admin/roles — create", () => {
     expect(roleDoc.week).toBeUndefined();
   });
 
+  it("creates a special role carrying a worship-night format", async () => {
+    const res = await createPOST(
+      req(
+        createBody({
+          _type: "special_role",
+          service_name: "Noche · Bloque 1",
+          date: "2026-08-09",
+          format: "worship_night",
+          creationRequestId: "req-special-0000003",
+        }),
+      ),
+    );
+    expect(res.status).toBe(201);
+    const roleDoc = (committedTransactions()[0].ops.find(
+      (o) => o.kind === "create" && o.doc._type === "special_role",
+    ) as { doc: Record<string, unknown> }).doc;
+    expect(roleDoc.format).toBe("worship_night");
+  });
+
   it("advances an existing special identity coordinator in the create transaction", async () => {
     store.coordinators.push(coordinator({ _rev: "coord-rev-7", version: 7 }));
 
@@ -1129,6 +1148,21 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     expect(transactions).toHaveLength(0);
     expect(afterCallbacks).toHaveLength(0);
     expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+  });
+
+  it("never sets or unsets format on a stored-mode save of a worship night", async () => {
+    store.roles.push(specialRole({ format: "worship_night" }));
+    store.coordinators.push(coordinator());
+
+    const res = await rolePATCH(req(specialEditBody()), ctx("role-sp"));
+
+    expect(res.status).toBe(200);
+    const rolePatch = committedTransactions()[0].ops.find(
+      (op) => op.kind === "patch" && op.id === "role-sp",
+    ) as PatchOp;
+    expect(rolePatch).toBeDefined();
+    expect("format" in rolePatch.set).toBe(false);
+    expect(rolePatch.unset).not.toContain("format");
   });
 
   it("refuses normalized-identical canonical occupancy on a roster-only special PATCH", async () => {

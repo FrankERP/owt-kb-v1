@@ -117,6 +117,30 @@ describe("classifySetlist", () => {
     // Pins isPast for classifySetlist, exercised so far only via classifyRole.
     expect(classifySetlist({ ...base, serviceDate: "2026-07-31", before: [], after: [row("a", "G")] })).toBeNull();
   });
+
+  // A worship night's song leaders (spec §8): a leader change is a setlist change.
+  const led = (ref: string, key: string, leads?: string[]) => ({ ...row(ref, key), ...(leads ? { leads } : {}) });
+
+  it("a change of song leader is a change, even with identical songs and keys", () => {
+    const line = classifySetlist({ ...base, before: [led("a", "G", ["m1"])], after: [led("a", "G", ["m2"])] });
+    expect(line?.kind).toBe("setlistChanged");
+  });
+
+  it("clearing every leader is a change", () => {
+    expect(classifySetlist({ ...base, before: [led("a", "G", ["m1"])], after: [led("a", "G")] })?.kind)
+      .toBe("setlistChanged");
+  });
+
+  it("an absent leads key and an empty one say nothing", () => {
+    expect(classifySetlist({ ...base, before: [led("a", "G")], after: [led("a", "G", [])] })).toBeNull();
+    expect(classifySetlist({ ...base, before: [led("a", "G", [])], after: [led("a", "G")] })).toBeNull();
+  });
+
+  it("a snapshot queued before leaders existed says nothing against a leaderless setlist", () => {
+    // The in-flight notice at deploy time: its stored rows have no `leads` at all.
+    const stored = [row("a", "G"), row("b", "D", 0), row("c", "D", 0)];
+    expect(classifySetlist({ ...base, before: stored, after: stored.map((r) => ({ ...r })) })).toBeNull();
+  });
 });
 
 describe("classifyLeadNotes", () => {
