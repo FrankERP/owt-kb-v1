@@ -196,3 +196,23 @@ co-lead edits, is the first candidate to carry it.
   can use it.
 - **Fallback that works today:** put every leader of the block in Lead and write the order
   in «Mensaje para el equipo».
+
+## 13. Amendments made while planning (2026-09-22)
+
+Read from the code for the plan (`docs/superpowers/plans/2026-09-22-worship-night-song-leads.md`):
+
+- **The setlist writer is `PUT /api/admin/setlists`**, not POST. §4.1 applies to it.
+- **`SongSheet` is out of §7.** Its «Set completo» list is a song's weekend play history, not
+  a service's setlist; members see leaders on `DayCard`'s song rows (home, `/schedule`,
+  `/me`), which is every place a member reads a service's setlist.
+- **Proposals refuse `leadIds`** rather than dropping them: the shared song-row parser now
+  reads the field, and a proposal that sent one would otherwise lose it silently.
+- **Two neutral modules hold the rules** — `app/utils/serviceFormat.ts` (the format) and
+  `app/utils/songLeads.ts` (every song-leader rule) — because client components import them
+  and `roleWriteRequest.ts` pulls server-only code.
+- **Notification snapshot compatibility:** `OutboxSongRow.leads` is present only when a song
+  has leaders, so notices queued before this delivery, and every setlist without leaders,
+  compare exactly as before. The email resolves leader names with one extra read in the
+  sweep's read stage, before the send budget clock starts, like the song titles.
+- **Approval builds its songs after loading the target**, because the carry-over needs the
+  live songs and Lead; the approval fingerprint still hashes song id, key and medley only.
