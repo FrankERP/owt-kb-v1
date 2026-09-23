@@ -94,6 +94,8 @@ export interface SetlistSong {
   key: string;
   play_key: string;
   medley_tag?: string;
+  /** A worship night's leaders for this song (Lead members). */
+  leads?: Array<{ member_name: string; alias?: string }> | null;
 }
 
 export interface Setlist {
