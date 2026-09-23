@@ -110,9 +110,16 @@ it is now a symlink to `/Volumes/OWT-2TB/abletonnl-cache`; keep it on the SSD.
 | 142 folders (6 songs unblocked by abletonnl `5a61afa`: seek past EOF → silence, <64-frame warp segments copied, foreign absolute paths rebased) | sube 72 → 63 after excluding a second C-key Way Maker | sube 63 (670 MB), reusa 1380, escribió 142 |
 | 144 folders (Resplandeció! and Orgullo De Un Padre, after abletonnl renames duplicate track names to «Name (2)» and `skip_missing` lets a lost scratch track render as silence) | sube 16 (124 MB), reusa 1443 | escribió 144 |
 | **Recalibration** — all 144 folders re-rendered with the mix rule above (abletonnl `2f38a56`…`425650c`) | sube 1458 (12.0 GB), reusa 1, reemplaza 1458 | escribió 144; the ingest deleted every replaced asset; re-run reuses 1459 |
+| **Keys** (2026-09-22) — 469 folders: the 144 above + 325 transposed renders (set key ±1 semitone + every `play_key` from the setlists; 3 shards overnight, ~4.5 min each, 0 failures) | dry run 1: 6 failed (BPM-less folder names → parser fix `1af15a26`) + 6 unmatched (shards raced on `matches.json` → overrides restored from the shard lists); dry run 2: 469 matched, sube 3354 (27.7 GB), reusa 1459, reemplaza 0 | first `--apply` paused at 8/469 on a 170 KB/s network; relaunched at 7.8 MB/s: sube 3324 (27.5 GB), reusa 1489, reemplaza 0, escribió 469 in ~95 min |
 
-Result on production (GROQ, 2026-09-21 15:20, after the recalibration): **135 of 144 songs** carry
-`rehearsalMixes` (144 renders — 9 songs in two keys), **1,468 mixes**, **12.0 GB of the 100 GB quota**.
+Result on production (GROQ, 2026-09-22 23:55, after the keys ingest): **135 of 144 songs** carry
+`rehearsalMixes`, **4,822 mixes** in **4,817 audio assets**, **39.8 GB of the 100 GB quota**; keys per
+song: 3 → 92 songs, 4 → 31, 5 → 5, 6 → 6, 7 → 1; every row's asset resolves, 3 orphan assets
+(~30 MB, uploads cut off when the slow first `--apply` was killed mid-folder). A GROQ
+`count(*[_type=="post"].rehearsalMixes[…])` over posts WITHOUT the field counts the null as 1 per
+post — the 9 songs with no mixes show up as «9 dangling rows» that do not exist; filter
+`count(rehearsalMixes) > 0` first. Before the keys ingest (2026-09-21 15:20): 144 renders — 9 songs
+in two keys, 1,468 mixes, 12.0 GB.
 Idempotence held on every re-run (reusa = all previous uploads, reemplaza 0). Three rendered
 folders were deliberately excluded (`/Volumes/OWT-2TB/Rehearsal-out/_excluded/`): the vendor
 `Oceans_132BPM_D` (the OASIS arrangement in the same key is the one ingested),

@@ -23,6 +23,12 @@ describe("parseFolderName", () => {
     expect(parseFolderName("Gracias, Dios_130BPM_Db")).toEqual({ title: "Gracias, Dios", bpm: 130, tone: "Db" });
     expect(parseFolderName("Praise_127BPM_A")).toEqual({ title: "Praise", bpm: 127, tone: "A" });
   });
+  it("reads the key from a name with no BPM (vendor sets and their transposed renders)", () => {
+    expect(parseFolderName("Increíble_B")).toEqual({ title: "Increíble", bpm: null, tone: "B" });
+    expect(parseFolderName("Quien Dices Que Soy_Gb Project")).toEqual({ title: "Quien Dices Que Soy", bpm: null, tone: "Gb" });
+    expect(parseFolderName("Nunca Me Has Fallado_Bbm")).toEqual({ title: "Nunca Me Has Fallado", bpm: null, tone: "Bbm" });
+  });
+
   it("returns nulls when the suffix is missing", () => {
     expect(parseFolderName("Tomaste mi lugar")).toEqual({ title: "Tomaste mi lugar", bpm: null, tone: null });
   });
