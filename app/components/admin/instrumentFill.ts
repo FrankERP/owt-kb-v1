@@ -51,8 +51,15 @@ export function isInstrumentRowId(rowId: string): boolean {
 }
 
 export interface FillInstrumentsInput {
-  /** The whole grid, every column type; specials are skipped, never filled. */
+  /** The whole grid, every column type. Only weekend columns are filled unless `fillColumns` names others. */
   columns: GridColumn[];
+  /**
+   * GROUP FILL (`groupFill.ts`). When present, fill EXACTLY these columns, in
+   * this order — specials included — and vacate nothing: a stored-mode group
+   * fill must never undo a pick it did not make. Absent ⇒ today's behaviour:
+   * weekend columns by date, their previous auto instrument cells vacated first.
+   */
+  fillColumns?: GridColumn[];
   rows: GridRow[];
   /** Post-solve, post-special-fill cells. */
   cells: GridCell[];
@@ -115,8 +122,10 @@ export function fillInstruments(input: FillInstrumentsInput): FillInstrumentsRes
   const unfilled: Seat[] = [];
 
   const weekend = columns.filter(isWeekend).sort((a, b) => a.date.localeCompare(b.date));
-  const weekendIds = new Set(weekend.map((c) => c.columnId));
-  let working = vacateAutoInstrumentCells(input.cells, weekendIds);
+  const targets = input.fillColumns ?? weekend;
+  let working = input.fillColumns
+    ? input.cells
+    : vacateAutoInstrumentCells(input.cells, new Set(weekend.map((c) => c.columnId)));
 
   // Rows the filler may touch: instrument rows inside the member vocabulary
   // AND whose id agrees with the id `seatDefForRow` would derive from the
@@ -135,7 +144,7 @@ export function fillInstruments(input: FillInstrumentsInput): FillInstrumentsRes
   );
 
   let previousColumnId: string | null = null;
-  for (const column of weekend) {
+  for (const column of targets) {
     // Declarer count per row, through `rankCandidates` (never a direct read of
     // `instruments`): Tipo filter applied, `undeclared` computed. Rows with
     // zero declarers are skipped; the rest go thinnest pool first, then `rows`

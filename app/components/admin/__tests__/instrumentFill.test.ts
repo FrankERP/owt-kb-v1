@@ -196,6 +196,43 @@ describe("fillInstruments — re-run semantics", () => {
   });
 });
 
+describe("fillInstruments — explicit fillColumns (group fill)", () => {
+  const SET_A = col("2026-03-18", "special_role");
+  const SET_B = col("2026-03-19", "special_role");
+  const SET_C = col("2026-03-20", "special_role");
+
+  it("fills exactly the given columns, specials included, alternating in the given order", () => {
+    const out = fillInstruments({
+      columns: [SET_A, SET_B, SET_C],
+      fillColumns: [SET_A, SET_B, SET_C],
+      rows: ROWS,
+      cells: [],
+      members: [p("a", "Ana", ["Keys"]), p("b", "Beto", ["Keys"])],
+      savedWindow: [],
+    });
+    expect([SET_A, SET_B, SET_C].map((c) => occupantsOf(out.cells, c.columnId, KEYS).join(","))).toEqual(["a", "b", "a"]);
+  });
+
+  it("vacates nothing — a stale auto cell elsewhere survives by reference", () => {
+    const staleAuto = cell(COLS[0].columnId, KEYS, ["z"], "auto");
+    const out = fillInstruments({
+      columns: [SET_A],
+      fillColumns: [SET_A],
+      rows: ROWS,
+      cells: [staleAuto],
+      members: [p("a", "Ana", ["Keys"])],
+      savedWindow: [],
+    });
+    expect(out.cells.find((c) => c.columnId === COLS[0].columnId && c.rowId === KEYS)).toBe(staleAuto);
+    expect(occupantsOf(out.cells, SET_A.columnId, KEYS)).toEqual(["a"]);
+  });
+
+  it("without fillColumns, specials are still skipped (default unchanged)", () => {
+    const out = run([p("a", "Ana", ["Keys"])], [], [...COLS, SET_A]);
+    expect(occupantsOf(out.cells, SET_A.columnId, KEYS)).toEqual([]);
+  });
+});
+
 describe("renderableUnfilled", () => {
   it("drops an instrument entry whose cell now has an occupant, keeps everything else", () => {
     const u = [

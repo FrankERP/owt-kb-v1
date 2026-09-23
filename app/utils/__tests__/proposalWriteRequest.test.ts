@@ -48,7 +48,7 @@ describe("parseProposalSaveRequest", () => {
         roleId: "role-1",
         status: "draft",
         observed: { state: "none" },
-        songs: [{ songId: "song-1", playKey: "G", medleyTag: null }],
+        songs: [{ songId: "song-1", playKey: "G", medleyTag: null, leadIds: [] }],
         leadNotes: "",
         teamNotes: "",
       },
@@ -78,6 +78,12 @@ describe("parseProposalSaveRequest", () => {
     ["oversized notes", { ...base, teamNotes: "x".repeat(4001) }],
   ])("rejects %s", (_label, body) => {
     expect(parseProposalSaveRequest(body).ok).toBe(false);
+  });
+
+  it("refuses per-song leaders instead of dropping them (proposals never carry any)", () => {
+    expect(
+      parseProposalSaveRequest({ ...base, songs: [{ songId: "song-1", play_key: "G", leadIds: ["mem-1"] }] }),
+    ).toEqual({ ok: false, issues: ["songs[0].leadIds"] });
   });
 });
 

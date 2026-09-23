@@ -13,6 +13,7 @@ import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { findDuplicates, myNameFromSession } from "@/app/utils/agenda";
+import { formatLeadNames } from "@/app/utils/songLeads";
 import NumberRoll from "./ui/NumberRoll";
 import QuickActions, { type QuickAction } from "./ui/QuickActions";
 import useLongPress from "./ui/useLongPress";
@@ -21,8 +22,12 @@ import { useToast } from "./ui/Toast";
 export interface DayCardProps {
   day: string;
   date?: string;
+  /** "HH:mm" for a same-day set; rendered after the date. Display only. */
+  time?: string | null;
   setlist?: Setlist | null;
   leads?: string[];
+  /** Titles of the songs the viewing member leads (worship nights). */
+  myLeadSongs?: string[];
   instruments?: Array<{ label: string; person: string }>;
   fohTeam?: Array<{ label: string; person: string }>;
   bgvs?: Array<{ member_name: string; alias?: string }>;
@@ -80,7 +85,7 @@ const SPECIAL_THEME = {
   accentVar:    "--info-fg-rgb",
 };
 
-export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -195,8 +200,9 @@ export function DayCard({ day, date, setlist, leads, instruments, fohTeam, bgvs,
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
               <h3 className="font-display text-2xl font-bold uppercase leading-none text-ink md:text-3xl break-words">
-                {day}{shortDate && <span className={`${t.accentMuted} font-normal`}> · {shortDate}</span>}
+                {day}{shortDate && <span className={`${t.accentMuted} font-normal`}> · {shortDate}</span>}{time && <span className={`${t.accentMuted} font-normal tabular-nums`}> · {time}</span>}
               </h3>
+              {myLeadSongs && myLeadSongs.length > 0 && <p className="mt-1 font-label text-xs text-accent">Diriges: {myLeadSongs.join(", ")}</p>}
             </div>
             {/* NO `shrink-0` here, and it wraps too. With `shrink-0` this block sat
                 at its max-content width — pill + «Ensayar» ≈ 350px at «Máximo» —
@@ -400,6 +406,7 @@ function SongRow({ song, n, accent, onOpen, onQuickActions, dense = false }: {
   dense?: boolean;
 }) {
   const longPress = useLongPress(() => onQuickActions?.(song));
+  const leadNames = formatLeadNames(song.leads);
   return (
     <button
       {...longPress}
@@ -407,9 +414,12 @@ function SongRow({ song, n, accent, onOpen, onQuickActions, dense = false }: {
       className={`group -mx-2 flex w-full cursor-pointer select-none items-center gap-3 rounded-lg px-2 ${dense ? "py-2" : "py-2.5"} text-left transition-colors hover:bg-accent/[0.055]`}
     >
       <span className="font-label text-xs text-mono-400 w-4 shrink-0 text-right tabular-nums">{n}</span>
-      <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
-        <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
-        {song.author && <span className="text-mono-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
+      <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex items-baseline gap-1.5">
+          <span className="truncate font-body text-base font-semibold transition-colors group-hover:text-accent md:text-lg">{song.title}</span>
+          {song.author && <span className="text-mono-500 text-xs truncate hidden sm:inline">· {song.author}</span>}
+        </div>
+        {leadNames && <span className="block truncate font-label text-[11px] text-mono-500">Dirige: {leadNames}</span>}
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {song.play_key && song.key && song.play_key !== song.key && (

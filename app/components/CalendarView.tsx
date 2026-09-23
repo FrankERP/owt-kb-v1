@@ -47,6 +47,7 @@ import { themeColour } from "@/app/utils/themeColour";
 export type ActiveDay = {
   day: string; // "Sábado" | "Domingo" | any special service name
   date: string;
+  time?: string | null;
   setlist?: Setlist | null;
   leads?: string[];
   instruments?: Array<{ label: string; person: string }>;
@@ -213,6 +214,7 @@ export default function CalendarView({ activeDays, viewMonth, todayStr }: Props)
                 key={i}
                 day={d.day}
                 date={d.date}
+                time={d.time}
                 setlist={d.setlist}
                 leads={d.leads}
                 instruments={d.instruments}

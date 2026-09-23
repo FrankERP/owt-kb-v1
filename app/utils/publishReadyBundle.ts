@@ -60,6 +60,7 @@ import {
   buildProposalSummary,
   buildRoleTargets,
   buildSetlistTargets,
+  specialRolesWithEmbeddedSetlist,
   collectRoleMemberRefs,
   type ProposalDomainSummary,
   type RoleDomainSummary,
@@ -180,9 +181,7 @@ export async function loadServiceReadinessSources(): Promise<ServiceReadinessSou
     locks.ok ? locks.rows : null,
   );
 
-  const specialRolesWithSongs = roles.rows.filter(
-    (r) => isObj(r) && r._type === "special_role" && r.songs !== undefined,
-  );
+  const specialRolesWithSongs = specialRolesWithEmbeddedSetlist(roles.rows);
   const setlistSummary = buildSetlistTargets(
     setlists.rows,
     setlistDrafts.rows,

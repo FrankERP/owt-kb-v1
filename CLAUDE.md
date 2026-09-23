@@ -7,9 +7,11 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 - Next.js 16 (App Router; `proxy.ts` = middleware), React 19, Sanity v5
   (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark and light themes — follows the device by default; members can pin either at `/me`.
   Studio embedded at `/studio`. iOS app via Capacitor.
-- **Before claiming done, all three must pass:** `npx tsc --noEmit`, `npm test`
-  (vitest), and `npx eslint .` with **0 errors** (warnings are a deliberate
-  backlog — see `eslint.config.mjs`). Add tests for testable pure logic.
+- **Before claiming done, all FOUR must pass:** `npx tsc --noEmit`, `npm test`
+  (vitest), `npx eslint .` with **0 errors** (warnings are a deliberate backlog —
+  see `eslint.config.mjs`), and — when the change touches `gcf/**` —
+  `python -m unittest discover -s gcf -t gcf`, which is a blocking CI gate too.
+  Add tests for testable pure logic.
 
 ## Conventions
 - Work on a branch, **merge to `main` periodically** (don't commit routine work
@@ -173,6 +175,21 @@ several exist precisely to stop a plausible-looking change.
   `special_role`): `Lead[]._ref`, `BGVs[]._ref`, `Chorus[]._ref`,
   `instruments[].person._ref`, `foh_team[].person._ref`. Any "who serves" query
   must cover all five — reuse `assignedMemberRefsQuery()` in `app/utils/notifyTargets.ts`.
+- **A special's `time` (`"HH:mm"`) is display and sort only — never identity.** Identity
+  stays `date + normalized service_name` (ADR-0011); two sets on one day need different
+  names. `isServiceTime`/`compareServiceTime` (`app/utils/serviceTime.ts`) are the ONLY
+  validator and comparator under `app/**`; the Studio schema mirrors the regex because
+  `sanity/` cannot import `app/`, and `serviceTimeSchemaSync.test.ts` fails if the two
+  drift. `time` is never combined with `date` into a `Date`.
+  **Same-day sets are created in `/admin` stored mode («+ Nuevo servicio»)**, which keys
+  specials by `_id`/`date|name`; the month CREATE flow drafts one special per date on
+  purpose (E19 in `plannerModel.ts`) — do not re-key it.
+- **A «Noche de alabanza» is `special_role.format = "worship_night"`, set once at creation** —
+  never a fourth role type (ADR-0036); the PATCH route never sets or unsets it. Its songs may
+  name one or two leaders (`songs[].leads`, keyed references) who must be in the set's Lead when
+  written: the setlist PUT refuses anything else under the role `_rev` it asserts, approval
+  carries leaders over by song reference, proposals and weekend setlists never carry them.
+  `serviceFormat.ts` and `songLeads.ts` are the ONLY definitions of these rules.
 - Member-facing reads must filter `published != false` (draft/publish gating) for the
   **worship** types, whose documents predate the field — an absent `published` there
   must mean "visible". **Kids reads use the stricter `published == true`** instead
@@ -350,6 +367,23 @@ canvas paints with `themeColour`; the KEY is the hero dial's — `mixesForKey(mi
 never a picker of its own), `rehearsalMixes.ts` (`app/utils/` — neutral `groupMixes`/
 `preselectMix`/`waveformBars`/`mixTones`/`mixesForKey`; `SEAT_TO_FAMILY` pins app seats to
 abletonnl families),
+`fillSpecialGroup`/`orderGroup` (`app/components/admin/groupFill.ts` — the ONLY stored-mode
+filler: a ticked group of special services, Lead/BGV via `fillColumn` and instruments via
+`fillInstruments({ fillColumns })`, with `columns = group` and `savedWindow = []` so only
+load inside the group counts; empty seats only, nothing vacated, nothing written until
+«Guardar»),
+`upcomingMonthPills`/`addMonths` (`app/components/admin/monthPills.ts` — the Servicios panel's
+upcoming month pills: every month with services from the current one on, PLUS the current
+month and the next two even when empty, so a month opens in the stored editor without
+generating it),
+`isWorshipNight`/`WORSHIP_NIGHT_FORMAT` (`app/utils/serviceFormat.ts` — the ONE format
+definition, neutral), `songLeads.ts` (`app/utils/` — `leadSeatIds`/`songItemLeadIds`/
+`validateSongLeads`/`carryOverSongLeads`/`unassignedLeads`/`leadRosterOf`/`formatLeadNames`/
+`sortedLeadIds`/`SONG_LEADS_MAX`; neutral, shared by the setlist and approval writers, the
+editor, the cards and the outbox snapshot. `sortedLeadIds` is the ONE normalizer for
+snapshot leader ids, used by both `songRowsFrom` (queue side) and `outboxSweep`'s
+`normalizeSnapshotRows` (flush side) — the two must agree byte for byte, or every save on
+a worship night emails, or clearing leaders never does),
 `BottomNavBar` (`app/components/BottomNavBar.tsx` — the phone tab bar's PRESENTATIONAL
 half, props only; `BottomNav` keeps the session, the pathname and the measurement. Anything
 that needs the bar without a session — a gallery fixture — hosts this one),

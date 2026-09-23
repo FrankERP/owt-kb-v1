@@ -106,8 +106,8 @@ describe("parseSongRows", () => {
     expect(parsed).toEqual({
       ok: true,
       value: [
-        { songId: "song-2", playKey: "G", medleyTag: null },
-        { songId: "song-1", playKey: "A", medleyTag: "m1" },
+        { songId: "song-2", playKey: "G", medleyTag: null, leadIds: [] },
+        { songId: "song-1", playKey: "A", medleyTag: "m1", leadIds: [] },
       ],
     });
   });
@@ -116,7 +116,7 @@ describe("parseSongRows", () => {
     expect(parseSongRows([])).toEqual({ ok: true, value: [] });
     expect(parseSongRows([{ songId: "song-1" }])).toEqual({
       ok: true,
-      value: [{ songId: "song-1", playKey: "", medleyTag: null }],
+      value: [{ songId: "song-1", playKey: "", medleyTag: null, leadIds: [] }],
     });
   });
 
@@ -142,11 +142,11 @@ describe("stored song documents", () => {
   it("gives every item its own _key and omits blank optional fields", () => {
     n = 0;
     expect(
-      buildSetlistSongDocs([{ songId: "song-1", playKey: "", medleyTag: null }], key),
+      buildSetlistSongDocs([{ songId: "song-1", playKey: "", medleyTag: null, leadIds: [] }], key),
     ).toEqual([{ _type: "setlist_song", _key: "k1", song: { _type: "reference", _ref: "song-1" } }]);
     n = 0;
     expect(
-      buildProposalSongDocs([{ songId: "song-1", playKey: "G", medleyTag: "m" }], key),
+      buildProposalSongDocs([{ songId: "song-1", playKey: "G", medleyTag: "m", leadIds: [] }], key),
     ).toEqual([
       {
         _type: "proposal_song",
@@ -163,7 +163,7 @@ describe("stored song documents", () => {
     const doc = buildWeekendSetlistDocument({
       setlistType: "saturdarSongs",
       week: "2026-08-08",
-      songs: buildSetlistSongDocs([{ songId: "song-1", playKey: "G", medleyTag: null }], key),
+      songs: buildSetlistSongDocs([{ songId: "song-1", playKey: "G", medleyTag: null, leadIds: [] }], key),
       teamNotes: "Salmo 100",
     });
     expect(doc).toEqual({
@@ -204,7 +204,7 @@ describe("parseSetlistWriteRequest", () => {
         roleId: null,
         setlistType: "featuredSongs",
         observed: { state: "none" },
-        songs: [{ songId: "song-1", playKey: "G", medleyTag: null }],
+        songs: [{ songId: "song-1", playKey: "G", medleyTag: null, leadIds: [] }],
       },
     });
   });
@@ -231,5 +231,46 @@ describe("parseSetlistWriteRequest", () => {
     ["a non-object payload", null],
   ])("rejects %s before any read", (_label, body) => {
     expect(parseSetlistWriteRequest(body).ok).toBe(false);
+  });
+});
+
+describe("song leaders on rows", () => {
+  const row = (over: Record<string, unknown> = {}) => ({ songId: "song-1", play_key: "G", ...over });
+
+  it("parses absent, null and [] as no leaders", () => {
+    for (const leadIds of [undefined, null, []]) {
+      const parsed = parseSongRows([row(leadIds === undefined ? {} : { leadIds })]);
+      expect(parsed.ok).toBe(true);
+      if (parsed.ok) expect(parsed.value[0].leadIds).toEqual([]);
+    }
+  });
+
+  it("parses one or two distinct canonical ids", () => {
+    const parsed = parseSongRows([row({ leadIds: ["mem-1", "mem-2"] })]);
+    expect(parsed.ok && parsed.value[0].leadIds).toEqual(["mem-1", "mem-2"]);
+  });
+
+  it("refuses three ids, a duplicate, a non-canonical id or a non-array", () => {
+    for (const leadIds of [["a", "b", "c"], ["mem-1", "mem-1"], ["drafts.mem-1"], [""], "mem-1", [1]]) {
+      expect(parseSongRows([row(), row({ leadIds })])).toMatchObject({ ok: false, issues: ["songs[1].leadIds"] });
+    }
+  });
+
+  it("writes leads on setlist items only when present, each with a _key", () => {
+    const docs = buildSetlistSongDocs(
+      [{ songId: "song-1", playKey: "G", medleyTag: null, leadIds: ["mem-1", "mem-2"] }, { songId: "song-2", playKey: "", medleyTag: null, leadIds: [] }],
+      key,
+    );
+    expect(docs[0].leads).toEqual([
+      { _key: expect.any(String), _type: "reference", _ref: "mem-1" },
+      { _key: expect.any(String), _type: "reference", _ref: "mem-2" },
+    ]);
+    expect(new Set([docs[0]._key, ...(docs[0].leads as { _key: string }[]).map((l) => l._key)]).size).toBe(3);
+    expect("leads" in docs[1]).toBe(false);
+  });
+
+  it("never writes leads on proposal items", () => {
+    const docs = buildProposalSongDocs([{ songId: "song-1", playKey: "G", medleyTag: null, leadIds: ["mem-1"] }], key);
+    expect("leads" in docs[0]).toBe(false);
   });
 });
