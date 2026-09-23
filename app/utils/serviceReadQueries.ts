@@ -12,7 +12,7 @@ export interface BoundQuery {
   params: Record<string, unknown>;
 }
 
-const SONGS_FRAGMENT = `songs[]{ _key, play_key, medley_tag, song{ _type, _ref } }`;
+const SONGS_FRAGMENT = `songs[]{ _key, play_key, medley_tag, song{ _type, _ref }, leads[]{ _key, _type, _ref } }`;
 
 export const ROLE_PROJECTION = `{
   _id, _rev, _type, published, week, date, service_name, time, format,
