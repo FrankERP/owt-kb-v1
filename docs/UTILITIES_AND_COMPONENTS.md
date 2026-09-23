@@ -148,8 +148,10 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   plus every `authors[].name`, joined — the ONE flat field both branches search, since Fuse's
   `getFn` reads only `path[0]` and a nested `authors.name` key would read nothing),
   `applyLibraryFilters` (query first when
-  present since it carries a relevance order, filters first and A–Z last otherwise),
-  `groupByLetter`, `libraryKeys`, `TIPO_SLUGS`.
+  present since it carries a relevance order, filters first and A–Z last otherwise; the
+  `?tag=` list holds two axes, Tipo and themes, and a song needs ANY chosen slug within an
+  axis while the axes — Tipo, themes, artist, key — must ALL hold),
+  `groupByLetter`, `libraryKeys`, `TIPO_SLUGS`, `isTipoSlug` (which axis a tag slug belongs to).
 - **`scheduleMonths.ts`** — pure `YYYY-MM` month arithmetic (leaf module, no clock/React/Sanity):
   `parseMonthParam`, `addMonths`, `monthBounds`, `monthLabel`, `windowMonths`, `windowBounds`,
   `monthRangeLabel`, `scheduleHref`, `MONTH_NAMES_ES`, `WINDOW_MONTHS=3`. Reads via `Date.UTC` for
@@ -459,7 +461,7 @@ Legend: **[C]** client, **[S]** server.
 | `LibraryIndex` [C] | The `/biblioteca` client index: search console, A–Z sections of `LibraryRow`s via `AnimatedList`, the `LibraryLetterRail` after the sections, and `LibraryFilters`. Owns the ONE `IntersectionObserver` over the `h2#letra-*` headings that tells the rail which letter is in view (band from 64 px to 30 % of the viewport; the last heading above it wins when none intersects), and mirrors its own filter state into the URL with `history.replaceState` (never the router — a `router.replace` would re-run the Server Component's fetch on every keystroke); replaced `SongSearchList`/`PostComponent`. |
 | `LibraryLetterRail` [C] | The A–Z rail as an iOS-style **index bar** (F3): `active` (from the index's observer) is accent + `font-semibold` + `aria-current`, and a pointer drag SCRUBS — the letter under the finger by arithmetic on the rail's box, `behavior: "auto"` while moving and `"smooth"` on a plain tap, `haptic("selection")` per letter, `touch-none`, and a `data-scrubbing` pill for the finger to hold. Plain `<button>`s by the recorded row exemption. |
 | `LibraryRow` [C] | One song row: key · title/artist · BPM · tags. A plain `<button>` in an `<li>`, not the `Button` primitive — the recorded row exemption (`DayCard`'s setlist rows precedent): the row IS the affordance. Memoized (~140 rows). **R7:** a long press (`useLongPress`) reports the row through `onQuickActions(post)` — the row opens NO sheet of its own; `LibraryIndex` owns ONE `QuickActions` for the page, since a mounted sheet subscribes to the CueDialog layer context and ~140 closed ones re-rendered every row on any dialog open or close. The callback must be stable (`useCallback`) or the `memo` above buys nothing. The sheet offers «Abrir» (the same `openSheet` the tap calls) and «Copiar enlace» (`/posts/<slug>` to the clipboard, confirmed or refused by a `useToast` toast); the tap itself is unchanged and the press swallows its own click. |
-| `LibraryFilters` [C] | The filter drawer (`CueDialog` sheet): Tipo as three `SegmentedControl` tiles plus a «Todos» clear tile, then **searchable** chip clouds for Temas (multi-select) and Artista (single-select, the twelve busiest shown before a query, `Select` retired in F3) — both sized by `postCount`, both pinning a selected chip to the front when it does not match the query. Tonalidad keeps its `Select`. Replaced `AuthorSearchList`/`TagSearchList`. |
+| `LibraryFilters` [C] | The filter drawer (`CueDialog` sheet): Tipo as three `SegmentedControl` tiles plus a «Todos» clear tile, then **searchable** chip clouds for Temas (multi-select, any of them — choosing more widens the list) and Artista (single-select, the twelve busiest shown before a query, `Select` retired in F3) — both sized by `postCount`, both pinning a selected chip to the front when it does not match the query. Tonalidad keeps its `Select`. Replaced `AuthorSearchList`/`TagSearchList`. |
 
 ### Services / setlists (member-facing)
 | Component | Purpose |
