@@ -463,6 +463,7 @@ git commit -m "feat(setlist): songLeads — the one set of rules for who leads e
 - Modify: `app/utils/proposalWriteRequest.ts` (`parseProposalSaveRequest`)
 - Modify: `app/api/admin/setlists/route.ts` (`putHandler`)
 - Modify: `app/api/admin/proposals/[id]/route.ts` (one line, so it still compiles — behaviour unchanged)
+- Modify: `sanity/schemas/specialRole.ts` (the inline `setlist_song` object type gains `leads`)
 - Test: `app/utils/__tests__/setlistWriteRequest.test.ts`, `app/utils/__tests__/proposalWriteRequest.test.ts`, `app/api/__tests__/setlistWriteRoute.test.ts`
 
 **Interfaces:**
@@ -659,13 +660,29 @@ In the special branch, right after `subject = { … };`:
     };
 ```
 
-Directly after the whole `if/else` (before `compareObservedTarget`):
+Directly AFTER the observed-target comparison (the `const mismatch = compareObservedTarget(observed, server); if (mismatch) { … }` block) and before the transaction is built:
 
 ```ts
+  // After the observed-target check on purpose: when the editor's view is
+  // stale (a Lead change moved the role _rev), the admin gets the 409 reload
+  // path, not a 400 that a retry cannot clear.
   const leadCheck = validateSongLeads(request.songs, leadTarget);
   if (!leadCheck.ok) {
     return reject(serviceError("invalid_request", { details: { issues: leadCheck.issues } }));
   }
+```
+
+`sanity/schemas/specialRole.ts`, inside the `songs` array's inline `setlist_song` object, after the `medley_tag` field (so Studio does not report an unknown field on a worship night's songs; the document stays read-only):
+
+```ts
+            {
+              name: 'leads',
+              title: 'Dirige',
+              type: 'array',
+              of: [{ type: 'reference', to: [{ type: 'teamMembers' }] }],
+              validation: (rule: { max: (n: number) => unknown }) => rule.max(2),
+              description: 'Solo en una Noche de alabanza: 1 o 2 personas de Lead. Lo escribe el editor de setlist.',
+            },
 ```
 
 Imports: `isWorshipNight` from `@/app/utils/serviceFormat`; `leadSeatIds, validateSongLeads` from `@/app/utils/songLeads`.
@@ -682,7 +699,7 @@ Expected: PASS, tsc clean.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add app/utils/setlistWriteRequest.ts app/utils/proposalWriteRequest.ts "app/api/admin/setlists/route.ts" "app/api/admin/proposals/[id]/route.ts" app/utils/__tests__/setlistWriteRequest.test.ts app/utils/__tests__/proposalWriteRequest.test.ts app/api/__tests__/setlistWriteRoute.test.ts
+git add app/utils/setlistWriteRequest.ts app/utils/proposalWriteRequest.ts "app/api/admin/setlists/route.ts" "app/api/admin/proposals/[id]/route.ts" sanity/schemas/specialRole.ts app/utils/__tests__/setlistWriteRequest.test.ts app/utils/__tests__/proposalWriteRequest.test.ts app/api/__tests__/setlistWriteRoute.test.ts
 git commit -m "feat(setlist): a worship night's songs carry up to two leaders from Lead
 
 The setlist PUT parses leadIds per row and stores them as keyed references on
@@ -994,8 +1011,8 @@ git commit -m "feat(home,schedule,me): members see who leads each song and which
 - Modify: `sanity/schemas/notificationOutbox.ts` (`outboxSongRow`)
 - Modify: `app/utils/setlistDiff.ts` (`TableRow`, `buildSetlistTable`)
 - Modify: `app/utils/notificationEmail.ts` (`songCell`, `songRow`, `medleyGroup`, `renderSetlistTable`, `setlistSection`, `renderLine`, `buildGroupedEmail`)
-- Modify: `app/utils/outboxSweep.ts` (leader names query next to the titles query; pass to `buildGroupedEmail`)
-- Test: `app/utils/__tests__/outboxNotice.test.ts`, `app/utils/__tests__/notificationEmail.test.ts`, the `outboxClassify` tests (find the file that covers `classifySetlist`; create `app/utils/__tests__/outboxClassify.test.ts` if none), `app/utils/__tests__/outboxSweep.test.ts` (keep passing)
+- Modify: `app/utils/outboxSweep.ts` (`normalizeSnapshotRows` keeps `leads`; a best-effort leader-names read next to the titles read; pass the names to `buildGroupedEmail`)
+- Test: `app/utils/__tests__/outboxNotice.test.ts`, `app/utils/__tests__/notificationEmail.test.ts`, the `outboxClassify` tests (find the file that covers `classifySetlist`; create `app/utils/__tests__/outboxClassify.test.ts` if none), `app/utils/__tests__/outboxSweep.test.ts` (three new cases)
 
 **Interfaces:**
 - Consumes: `songItemLeadIds` (Task 2); stored `leads` on special song items (Task 3).
@@ -1006,11 +1023,16 @@ git commit -m "feat(home,schedule,me): members see who leads each song and which
 - `outboxNotice.test.ts` (`songRowsFrom`): items with `leads: [ref(m2), ref(m1)]` produce a row with `leads: ["m1", "m2"]`; items with `leads: null`, `[]` or absent produce a row with NO `leads` key; a medley run keeps each item's own leads.
 - `outboxClassify` tests: `classifySetlist` with identical `before`/`after` rows except `leads` returns a `setlistChanged` line; with rows where one side has no `leads` key and the other `leads: []`-equivalent (absent) returns `null`; an in-flight `before` snapshot without `leads` against an `after` without leaders returns `null`.
 - `notificationEmail.test.ts` (`buildGroupedEmail`): a `setlistChanged` line whose `songs` row carries `leads: ["m1", "m2"]`, rendered with `leaders = new Map([["m1", "Ani"], ["m2", "Beto"]])`, contains `— dirige Ani y Beto`; an unknown id is omitted; a name containing `<b>` is escaped; with no `leaders` argument the HTML is byte-identical to today's for the same line.
+- `outboxSweep.test.ts` — the end-to-end guard that the STORED snapshot keeps its leaders. Use the file's `setlistNotice`, `roleDoc`, `storedSong`, `snapshotRow`, `members` helpers; a special-role notice is `setlistNotice({ roleType: "special_role", roleId: "r9", subjectKey: "r9", serviceDate: "2026-08-08", … })` with `world.roles = { r9: roleDoc({ _id: "r9", _type: "special_role", date: "2026-08-08", week: undefined, format: "worship_night", songs: [...] }) }` (live songs carry `leads: [{ _key: "x", _ref: "m1" }]`) and `world.recipients = { r9: team }`:
+  1. **Nothing changed, leaders present → no email.** Snapshot row `{ ...snapshotRow("song1"), leads: ["m1"] }`, live song `song1` with leader `m1` → `sendEmailMock` not called, the notice consumed.
+  2. **Leader changed → one «El setlist cambió» per participant.** Snapshot leads `["m1"]`, live leader `m2` → emails sent, subject contains «El setlist cambió», the HTML contains «— dirige» and the name of `m2`.
+  3. **All leaders cleared → emails sent.** Snapshot leads `["m1"]`, live song without `leads` → emails sent.
+  4. **Leader-name read fails → the email still goes, without names.** Make the `teamMembers` read throw only for the leader-names query (route on a fragment unique to `LEADER_NAMES_QUERY`), keep the recipients' `MEMBERS_QUERY` working → emails sent, no «— dirige», nothing marked failed.
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `npx vitest run app/utils/__tests__/outboxNotice.test.ts app/utils/__tests__/notificationEmail.test.ts app/utils/__tests__/outboxClassify.test.ts`
-Expected: FAIL.
+Run: `npx vitest run app/utils/__tests__/outboxNotice.test.ts app/utils/__tests__/notificationEmail.test.ts app/utils/__tests__/outboxClassify.test.ts app/utils/__tests__/outboxSweep.test.ts`
+Expected: FAIL (case 1 of the sweep emails today, because the stored snapshot loses its leaders).
 
 - [ ] **Step 3: Implement the snapshot and the comparison**
 
@@ -1039,13 +1061,35 @@ const sameSongs = (a: OutboxSongRow[], b: OutboxSongRow[]) =>
   a.every((r, n) => r.ref === b[n].ref && r.key === b[n].key && r.group === b[n].group && leadsKey(r) === leadsKey(b[n]));
 ```
 
+`outboxSweep.ts` `normalizeSnapshotRows` — the flush-side reader of the STORED `beforeSongs` — must keep `leads`, or the stored side always compares leaderless against a live side that has them:
+
+```ts
+function normalizeSnapshotRows(rows: unknown): OutboxSongRow[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(isObj).map((r, i) => {
+    // Sorted and de-duplicated exactly like `songRowsFrom`, and ABSENT when
+    // empty, so a snapshot stored before leaders existed compares unchanged.
+    const leads = Array.isArray(r.leads)
+      ? [...new Set(r.leads.filter((id): id is string => typeof id === "string" && id.length > 0))].sort()
+      : [];
+    return {
+      _key: typeof r._key === "string" ? r._key : `s${i}`,
+      ref: typeof r.ref === "string" ? r.ref : "",
+      key: typeof r.key === "string" ? r.key : "",
+      group: typeof r.group === "number" ? r.group : null,
+      ...(leads.length ? { leads } : {}),
+    };
+  });
+}
+```
+
 `notificationOutbox.ts` `outboxSongRow` fields gain `{ name: "leads", title: "Leads", type: "array", of: [{ type: "string" }], description: "Worship-night song leaders (member ids, sorted). Absent when none." }`.
 
 - [ ] **Step 4: Implement the email**
 
 - `setlistDiff.ts`: `TableRow` gains `leads?: string[];`; the `after.map` row adds `...(r.leads?.length ? { leads: r.leads } : {})`; departed (`gone`) rows carry none.
 - `notificationEmail.ts`: `songCell(title, gone, leaderText = "")` appends `leaderText ? ` <span style="color:${C.muted}">— dirige ${escapeHtml(leaderText)}</span>` : ""` inside the non-gone branch only. `songRow(row, titles, showMovement, spine, leaders)` computes `const leaderText = (row.leads ?? []).map((id) => leaders.get(id)).filter((n): n is string => !!n).join(" y ");` and passes it. Thread `leaders: Map<string, string>` through `medleyGroup`, `renderSetlistTable(rows, titles, showMovement, leaders = new Map())`, `setlistSection`, `renderLine`, and `buildGroupedEmail(o, titles, leaders = new Map())`.
-- `outboxSweep.ts`: after the titles block, collect `const leaderIds = unique([...grouped.values()].flat().flatMap((l) => (l.songs ?? []).flatMap((s) => s.leads ?? [])));` (the same `grouped` map and `unique` helper the titles block uses); when non-empty, fetch `LEADER_NAMES_QUERY = *[_type == "teamMembers" && _id in $ids]{ _id, alias, member_name }` into `const leaders = new Map<string, string>()` (name = alias || member_name); pass `leaders` as the third argument of `buildGroupedEmail`. This read happens in the same read stage as the titles, before `sendStartedAt` (the budget clock), exactly like the titles query.
+- `outboxSweep.ts`: after the titles block, collect `const leaderIds = unique([...grouped.values()].flat().flatMap((l) => (l.songs ?? []).flatMap((s) => s.leads ?? [])));` (the same `grouped` map and `unique` helper the titles block uses); when non-empty, fetch `LEADER_NAMES_QUERY = *[_type == "teamMembers" && _id in $ids && defined(member_name)]{ _id, alias, member_name }` into `const leaders = new Map<string, string>()` (name = alias || member_name); pass `leaders` as the third argument of `buildGroupedEmail`. This read happens in the same read stage as the titles, before `sendStartedAt` (the budget clock). It is **best-effort**: wrap it in `try/catch`; on failure log `notify_sweep_leader_names_failed` with the error and continue with an empty map — the emails render without names, and no notice or recipient is failed for it.
 
 - [ ] **Step 5: Run tests + gates**
 

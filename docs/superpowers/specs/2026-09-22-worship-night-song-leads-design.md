@@ -216,3 +216,13 @@ Read from the code for the plan (`docs/superpowers/plans/2026-09-22-worship-nigh
   sweep's read stage, before the send budget clock starts, like the song titles.
 - **Approval builds its songs after loading the target**, because the carry-over needs the
   live songs and Lead; the approval fingerprint still hashes song id, key and medley only.
+- **The flush side keeps leaders too.** `outboxSweep`'s `normalizeSnapshotRows`, which reads
+  the stored `beforeSongs`, keeps `leads` (sorted, absent when empty); without it a no-op
+  save would email and a clearing of every leader would not.
+- **The leader-name read is best-effort:** if it fails, the email goes without names.
+- **«Dirige» uses the house `Select`** (a `Menu` popover on desktop, the native picker on
+  touch), not a bare `Menu` as §6 first said.
+- **The Studio schema** gains `leads` on the special's inline `setlist_song` type, so Studio
+  shows the field instead of «unknown field».
+- **The setlist PUT checks leaders after the observed-target comparison**, so a stale editor
+  gets the 409 reload path rather than a 400 a retry cannot clear.
