@@ -1,6 +1,7 @@
 import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { isValidServiceDate } from "@/app/utils/serviceReadModel";
 import { isServiceTime } from "@/app/utils/serviceTime";
+import { isWorshipNightFormat } from "@/app/utils/serviceFormat";
 import type {
   RoleDomainSummary,
   RoleTarget,
@@ -122,6 +123,7 @@ export function translateStoredRole(
     admission: observation.admission,
     ...(role._type === "special_role" ? { serviceName: normalizeServiceName(role.service_name) } : {}),
     ...(role._type === "special_role" && isServiceTime(role.time) ? { time: role.time } : {}),
+    ...(role._type === "special_role" && isWorshipNightFormat(role.format) ? { format: role.format } : {}),
   };
   const cells: GridCell[] = [
     { columnId: role._id, rowId: "lead", occupants: role.leads.map(occupant), origin: "manual" },

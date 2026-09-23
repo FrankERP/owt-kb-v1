@@ -128,6 +128,7 @@ import {
 } from "./seatModel";
 import { renderableUnfilled } from "./instrumentFill";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
+import { WORSHIP_NIGHT_FORMAT } from "@/app/utils/serviceFormat";
 import type { TargetPreflight } from "./serviceReadiness";
 import {
   CARD_STYLE,
@@ -2314,8 +2315,9 @@ function ColumnHeader({
   const day = date.getDate();
   const month = date.toLocaleDateString("es-MX", { month: "short" });
   // The shared `Record<ServiceType, string>` — not a third hardcoded ternary.
-  // The old one read "Sábado" on every special column.
-  const typeLabel = SERVICE_LABEL[column.type];
+  // The old one read "Sábado" on every special column. A worship night is a
+  // special whose create-time `format` names it (spec §5).
+  const typeLabel = column.format === WORSHIP_NIGHT_FORMAT ? "Noche de alabanza" : SERVICE_LABEL[column.type];
   const blockCopy =
     createBlock === "created"
       ? CREATE_BLOCK_COPY.created
