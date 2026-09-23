@@ -1334,7 +1334,7 @@ def solve_from_dict(data: Dict) -> Dict:
         # it could not be expressed in int64 (large history offsets), or the returning
         # pass was one that builds no objective. The schedule is legal and fully
         # constrained; it is simply not fairness-optimised. Before this field the same
-        # situation was silent — see ADR-0036.
+        # situation was silent — see ADR-0037.
         "objective_skipped": bool(result.objective_skipped),
         "sun_lead_fairness_relaxed": result.sun_lead_fairness_limit_used > 1,
         "sun_bgv_fairness_relaxed": result.sun_bgv_fairness_limit_used > 1,

@@ -651,6 +651,25 @@ describe("POST /api/admin/roles — create", () => {
     expect(roleDoc.week).toBeUndefined();
   });
 
+  it("creates a special role carrying a worship-night format", async () => {
+    const res = await createPOST(
+      req(
+        createBody({
+          _type: "special_role",
+          service_name: "Noche · Bloque 1",
+          date: "2026-08-09",
+          format: "worship_night",
+          creationRequestId: "req-special-0000003",
+        }),
+      ),
+    );
+    expect(res.status).toBe(201);
+    const roleDoc = (committedTransactions()[0].ops.find(
+      (o) => o.kind === "create" && o.doc._type === "special_role",
+    ) as { doc: Record<string, unknown> }).doc;
+    expect(roleDoc.format).toBe("worship_night");
+  });
+
   it("advances an existing special identity coordinator in the create transaction", async () => {
     store.coordinators.push(coordinator({ _rev: "coord-rev-7", version: 7 }));
 
@@ -1075,6 +1094,75 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
         (query as string).includes('_type == "specialIdentityCoordinator"'),
       ),
     ).toBe(false);
+  });
+
+  // ── Optional special-service time ────────────────────────────────────────
+  // The parser validates the SHAPE of `time`; only the STORED type decides
+  // whether one is allowed, and clearing it must really clear the field — both
+  // of which are route control flow no unit test of the builders can reach.
+
+  it("writes a valid time onto the special role and unsets nothing", async () => {
+    store.roles.push(specialRole());
+    store.coordinators.push(coordinator());
+
+    const res = await rolePATCH(req(specialEditBody({ time: "09:00" })), ctx("role-sp"));
+
+    expect(res.status).toBe(200);
+    const committed = committedTransactions();
+    expect(committed).toHaveLength(1);
+    const rolePatch = committed[0].ops.find((op) => op.kind === "patch" && op.id === "role-sp");
+    expect(rolePatch).toBeDefined();
+    expect((rolePatch as PatchOp).set.time).toBe("09:00");
+    expect((rolePatch as PatchOp).unset).toEqual([]);
+  });
+
+  it("unsets the stored time when the edit carries none, touching nothing else", async () => {
+    store.roles.push(specialRole({ time: "09:00" }));
+    store.coordinators.push(coordinator());
+
+    const res = await rolePATCH(req(specialEditBody()), ctx("role-sp"));
+
+    expect(res.status).toBe(200);
+    const committed = committedTransactions();
+    expect(committed).toHaveLength(1);
+    // Exactly one op: the role patch. No lock, no coordinator — an unset of a
+    // cleared field must not widen the transaction.
+    expect(committed[0].ops).toHaveLength(1);
+    const rolePatch = committed[0].ops[0] as PatchOp;
+    expect(rolePatch.id).toBe("role-sp");
+    expect(rolePatch.unset).toEqual(["time"]);
+    expect("time" in rolePatch.set).toBe(false);
+  });
+
+  it("refuses a time on a weekend role instead of silently dropping it", async () => {
+    store.roles.push(role());
+    store.locks.push(lock());
+
+    const res = await rolePATCH(req(editBody({ time: "09:00" })), ctx("role-1"));
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      error: "invalid_request",
+      details: { id: "role-1", storedType: "sunday_role", issues: ["time"] },
+    });
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+    expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
+  });
+
+  it("never sets or unsets format on a stored-mode save of a worship night", async () => {
+    store.roles.push(specialRole({ format: "worship_night" }));
+    store.coordinators.push(coordinator());
+
+    const res = await rolePATCH(req(specialEditBody()), ctx("role-sp"));
+
+    expect(res.status).toBe(200);
+    const rolePatch = committedTransactions()[0].ops.find(
+      (op) => op.kind === "patch" && op.id === "role-sp",
+    ) as PatchOp;
+    expect(rolePatch).toBeDefined();
+    expect("format" in rolePatch.set).toBe(false);
+    expect(rolePatch.unset).not.toContain("format");
   });
 
   it("refuses normalized-identical canonical occupancy on a roster-only special PATCH", async () => {

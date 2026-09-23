@@ -1356,6 +1356,13 @@ describe("a special is never solvable, but keeps its target cap (E4/E5, P5)", ()
       if (row.category !== "voz") expect(hasTarget(row, special), row.id).toBe(false);
     }
   });
+
+  it("hasTarget is false for Lead on a worship night — no cap, no +N — and BGV keeps its target", () => {
+    expect(hasTarget(byId["lead"], { type: "special_role" })).toBe(true);
+    expect(hasTarget(byId["lead"], { type: "special_role", format: "worship_night" })).toBe(false);
+    expect(hasTarget(byId["bgv"], { type: "special_role" })).toBe(true);
+    expect(hasTarget(byId["bgv"], { type: "special_role", format: "worship_night" })).toBe(true);
+  });
 });
 
 describe("weekForColumn returns null for a special (E4)", () => {

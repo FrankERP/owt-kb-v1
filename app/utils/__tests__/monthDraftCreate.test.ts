@@ -171,4 +171,19 @@ describe("draftCreateBody — special services", () => {
     expect(result.createdLocalIds).toEqual(["s1"]);
     expect(bodies[0]).toMatchObject({ service_name: "Vigilia" });
   });
+
+  it("draftCreateBody emits time for a special only when present", () => {
+    const base = { localId: "l", creationRequestId: "req-abc-0001", _type: "special_role" as const, date: "2026-10-03", service_name: "X", leads: [], bgvs: [], chorus: [], instruments: [], foh: [] };
+    expect(draftCreateBody({ ...base, time: "09:00" }, false)).toMatchObject({ time: "09:00" });
+    expect("time" in draftCreateBody(base, false)).toBe(false);
+    expect("time" in draftCreateBody({ ...base, _type: "sunday_role", time: "09:00" }, false)).toBe(false);
+  });
+
+  it("draftCreateBody emits format for a special carrying it, never for a weekend draft, and omits it when absent", () => {
+    const base = { localId: "l", creationRequestId: "req-abc-0001", _type: "special_role" as const, date: "2026-10-03", service_name: "X", leads: [], bgvs: [], chorus: [], instruments: [], foh: [] };
+    expect(draftCreateBody({ ...base, format: "worship_night" }, false)).toMatchObject({ format: "worship_night" });
+    expect("format" in draftCreateBody(base, false)).toBe(false);
+    expect("format" in draftCreateBody({ ...base, _type: "sunday_role", format: "worship_night" }, false)).toBe(false);
+    expect("format" in draftCreateBody({ ...base, _type: "saturday_role", format: "worship_night" }, false)).toBe(false);
+  });
 });

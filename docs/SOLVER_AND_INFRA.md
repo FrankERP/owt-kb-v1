@@ -66,7 +66,7 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   penalty > random tie-break). **Each tier's weight is computed against that tier's own
   maximum**, not against a single month-wide bound — the ladder is a product over eight
   tiers, so a uniform over-estimate is exponential in it and the objective's upper bound
-  crossed int64 on ordinary months. See ADR-0036. Lead rotation uses seeded random weights on Sun.Lead
+  crossed int64 on ordinary months. See ADR-0037. Lead rotation uses seeded random weights on Sun.Lead
   assignments (monthly and per-week terms). The planner UI surfaces, separately for
   Sunday and Saturday, which lead-pool members did not hold that lead role in the
   calendar month before the month being planned (`LeadPoolHistoryPanel`); that is
@@ -105,7 +105,10 @@ member is balanced as a person, not per instrument (confirmed 2026-09-09). Its o
 Rows nobody declares are skipped with no marker; custom planner rows are outside the
 vocabulary and never filled. Rows whose stored label doesn't match the current seat vocabulary
 (`instrumentSeatDef(label).id !== row.id` — legacy-spelled rows) are likewise never filled and
-produce no marker. Spec: `docs/superpowers/specs/2026-09-09-member-instruments-auto-fill-design.md`.
+produce no marker. With `fillColumns` set (stored-mode group fill, `groupFill.ts`, spec
+`2026-09-22-camp-group-fill-design.md`) it fills exactly the given columns — specials
+included — in that order, and vacates nothing: the "vacate this run's own previous auto picks"
+step above only runs in the default (no `fillColumns`) weekend path. Spec: `docs/superpowers/specs/2026-09-09-member-instruments-auto-fill-design.md`.
 
 ---
 

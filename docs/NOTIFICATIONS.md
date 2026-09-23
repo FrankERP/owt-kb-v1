@@ -646,6 +646,9 @@ all fall back). `CRON_SECRET` and `APP_BASE_URL` are covered in `SECRETS.md`.
 
 Things that are counter-intuitive and were each a real defect at some point.
 
+- **Same-day special sets notify per document.** Six camp sets are six `special_role`
+  documents; a member seated in five Saturday sets gets up to five assignment notices
+  (debounced per the outbox rules) and five reminders. Grouping them is not built.
 - **Outbox ids are HEX digests, and the alphabet is the point.** Sanity's id
   grammar is `a-zA-Z0-9._-` with no dot-separated segment starting in `-`.
   `outboxId` originally digested the subject to base64url, whose alphabet
@@ -660,6 +663,24 @@ Things that are counter-intuitive and were each a real defect at some point.
   tag for every group on every editor write, so tag equality reports a change
   whenever any unrelated song moves. Snapshots store the **partition** — the
   index of the contiguous run — and a one-song run normalises to `null`.
+- **A worship night's setlist snapshot rows may carry `leads`.** `OutboxSongRow.leads`
+  is a sorted array of member ids, ABSENT (never `[]`) when the song has no leader, so a
+  snapshot taken before leaders existed compares byte-identical against a leaderless live
+  row. A leader-only change — no song added, removed, re-keyed or reordered — is still a
+  setlist change and is emailed like any other: `outboxClassify.ts`'s `sameSongs` compares
+  `leadsKey` alongside `ref`/`key`/`group`. The email table names each song's leaders but
+  does not flag which song's leader changed — the row simply reflects the live state. Names
+  are resolved in the sweep's read stage, before `sendStartedAt` starts the budget clock, the
+  same stage that resolves song titles; the read is best-effort, so a failure costs the email
+  its leader names, never its send. **Release-window hazard:** production's OLD setlist
+  writers rebuild `songs` without `leads` and its OLD sweep drops `leads` on both sides of its
+  comparison, so between the push to `preview` and the merge to `main`, a save made through
+  production wipes leaders assigned on dev, and a leader-only change made on dev is consumed
+  with no email once production reads it. See ADR-0036. Assign song leaders only after this
+  delivery has reached production. The same hazard outlives the release window on an admin
+  browser tab loaded before the deploy: its old `SetlistEditor` sends rows with no `leadIds`,
+  which the new setlist PUT stores as leaderless — reload `/admin` (and the phone app) after
+  the deploy before editing a worship night's setlist.
 - **`before` is captured pre-commit and threaded into `after()`.** Reading live
   state inside `after()` returns post-write state, making `before == after` for
   every notice — a system that silently sends nothing while passing its tests.

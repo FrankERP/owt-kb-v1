@@ -875,6 +875,43 @@ describe("PlannerGrid — row management", () => {
     expect(onStoredHeaderChange).not.toHaveBeenCalled();
   });
 
+  it("a stored special column edits its time through onStoredHeaderChange", () => {
+    const onStoredHeaderChange = vi.fn();
+    render(
+      <PlannerGrid
+        {...baseProps({
+          mode: "stored",
+          columns: [{ columnId: "special-1", date: "2026-10-03", type: "special_role", serviceName: "Campamento · Alabanza", time: "09:00" }],
+          cells: [],
+          onStoredHeaderChange,
+        })}
+      />,
+    );
+    const hora = screen.getByLabelText("Hora") as HTMLInputElement;
+    expect(hora.type).toBe("time");
+    expect(hora.value).toBe("09:00");
+    fireEvent.change(hora, { target: { value: "12:30" } });
+    expect(onStoredHeaderChange).toHaveBeenCalledWith("special-1", { time: "12:30" });
+  });
+
+  it("the stored mutation lock reaches the special column's «Hora» too", () => {
+    render(
+      <PlannerGrid
+        {...baseProps({
+          mode: "stored",
+          columns: [{ columnId: "special-1", date: "2026-10-03", type: "special_role", serviceName: "Campamento · Alabanza", time: "09:00" }],
+          cells: [],
+          mutationLocked: true,
+        })}
+      />,
+    );
+    // Same assertion shape as the «Fecha» lock above: the control is `disabled`,
+    // which is what stops a real browser from ever raising the change. jsdom's
+    // `fireEvent.change` dispatches straight at the node and ignores `disabled`,
+    // so asserting on the handler here would prove nothing about the browser.
+    expect((screen.getByLabelText("Hora") as HTMLInputElement).disabled).toBe(true);
+  });
+
   it("adds an instrument row via onRowsChange", () => {
     const onRowsChange = vi.fn();
     render(<PlannerGrid {...baseProps({ onRowsChange })} />);

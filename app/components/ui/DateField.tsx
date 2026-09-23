@@ -1,4 +1,4 @@
-// The ONE date/month field (spec §19.3, decision M). NEUTRAL. The input stays
+// The ONE date/month/time field (spec §19.3, decision M). NEUTRAL. The input stays
 // native — the OS picker is the control — and the chrome is tokenised. In month
 // kind an optional stepper pair turns it into a month strip; the parent owns
 // what a step means (a router push, a state change). The schedule header does
@@ -24,7 +24,7 @@ export default function DateField({
   onStep,
   ...input
 }: Omit<ComponentPropsWithoutRef<"input">, "type" | "className" | "children" | "size"> & {
-  kind: "date" | "month";
+  kind: "date" | "month" | "time";
   label?: ReactNode;
   size?: keyof typeof SIZE;
   className?: string;

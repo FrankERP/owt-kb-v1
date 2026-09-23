@@ -14,6 +14,8 @@ export interface TableRow {
   /** null for a first setlist: there is no previous position to compare to. */
   movement: { dir: "up" | "down" | "same"; n: number } | null;
   status: "present" | "new" | "gone";
+  /** A worship night's leaders for this song, from the LIVE row; a departed row carries none. */
+  leads?: string[];
 }
 
 /** The set of adjacent refs forming each group, so "new" survives reindexing. */
@@ -65,6 +67,7 @@ export function buildSetlistTable(before: OutboxSongRow[], after: OutboxSongRow[
             ? { dir: "up", n: prev - i }
             : { dir: "down", n: i - prev },
       status: prev === undefined && !isFirst ? "new" : "present",
+      ...(r.leads?.length ? { leads: r.leads } : {}),
     };
   });
 

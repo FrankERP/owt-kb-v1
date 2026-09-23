@@ -66,9 +66,15 @@ export function classifyRole(i: {
   return { kind, serviceDate: i.serviceDate, roleType: i.roleType, before: i.before, after: i.after };
 }
 
+// Both sides arrive sorted and de-duplicated (`sortedLeadIds`), and an absent
+// `leads` is no leaders — so a snapshot from before leaders existed compares
+// equal to a leaderless live setlist.
+const leadsKey = (r: OutboxSongRow) => (r.leads ?? []).join(",");
+
 const sameSongs = (a: OutboxSongRow[], b: OutboxSongRow[]) =>
   a.length === b.length &&
-  a.every((r, n) => r.ref === b[n].ref && r.key === b[n].key && r.group === b[n].group);
+  a.every((r, n) =>
+    r.ref === b[n].ref && r.key === b[n].key && r.group === b[n].group && leadsKey(r) === leadsKey(b[n]));
 
 export function classifySetlist(i: {
   before: OutboxSongRow[]; after: OutboxSongRow[];

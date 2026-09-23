@@ -65,6 +65,7 @@ import {
   type OutboxSongRow,
 } from "./outboxNotice";
 import { normalizeStoredSeats, storedRoleDate } from "./roleWriteRequest";
+import { sortedLeadIds } from "./songLeads";
 
 const TIMEZONE = "America/Mexico_City";
 
@@ -79,8 +80,8 @@ export const EMAIL_LIMIT = parsePositiveEnv(process.env.NOTIFY_FLUSH_EMAIL_LIMIT
  * `sendEmail`, not at the top of the sweep. §1 states the budget as
  * `ms_per_send × EMAIL_LIMIT < SEND_BUDGET_MS`, and charging the read phase
  * (the due-notices fetch, one recipient round trip per candidate, one
- * `Patch.commit()` per claim, 2–3 reads per classification, the members read and
- * the titles read) against it would silently turn that into
+ * `Patch.commit()` per claim, 2–3 reads per classification, the members read,
+ * the titles read and the leader-names read) against it would silently turn that into
  * `ms_per_send × EMAIL_LIMIT < SEND_BUDGET_MS − read_time`.
  */
 export const SEND_BUDGET_MS = parsePositiveEnv(process.env.NOTIFY_SEND_BUDGET_MS, 40_000);
@@ -241,6 +242,9 @@ const SONG_TITLES_QUERY = `*[_type == "post" && _id in $ids]{ _id, title }`;
 
 const MEMBERS_QUERY = `*[_type == "teamMembers" && _id in $ids]{ _id, email, alias, member_name, notifPrefs }`;
 
+/** A worship night's song leaders, named in the setlist email (spec §8). */
+const LEADER_NAMES_QUERY = `*[_type == "teamMembers" && _id in $ids && defined(member_name)]{ _id, alias, member_name }`;
+
 const WEEKEND_SETLIST_TYPE: Record<string, string> = {
   sunday_role: "featuredSongs",
   saturday_role: "saturdarSongs",
@@ -267,15 +271,26 @@ function logError(event: string, fields: Record<string, unknown>, err?: unknown)
  * (the schema field is a plain number), while `songRowsFrom` produces an
  * explicit `null`. Normalising here keeps the two comparable — `undefined`
  * would never equal `null` and every snapshot would read as changed.
+ *
+ * `leads` is KEPT, or the stored side would always compare leaderless against a
+ * live side that has leaders: a no-op save of a worship night would email, and
+ * clearing every leader would not.
  */
 function normalizeSnapshotRows(rows: unknown): OutboxSongRow[] {
   if (!Array.isArray(rows)) return [];
-  return rows.filter(isObj).map((r, i) => ({
-    _key: typeof r._key === "string" ? r._key : `s${i}`,
-    ref: typeof r.ref === "string" ? r.ref : "",
-    key: typeof r.key === "string" ? r.key : "",
-    group: typeof r.group === "number" ? r.group : null,
-  }));
+  return rows.filter(isObj).map((r, i) => {
+    // Sorted and de-duplicated exactly like `songRowsFrom`, through the same
+    // helper, and ABSENT when empty, so a snapshot stored before leaders
+    // existed compares unchanged.
+    const leads = sortedLeadIds(r.leads);
+    return {
+      _key: typeof r._key === "string" ? r._key : `s${i}`,
+      ref: typeof r.ref === "string" ? r.ref : "",
+      key: typeof r.key === "string" ? r.key : "",
+      group: typeof r.group === "number" ? r.group : null,
+      ...(leads.length ? { leads } : {}),
+    };
+  });
 }
 
 function unique(values: string[]): string[] {
@@ -875,6 +890,30 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
       for (const row of rows ?? []) if (row?._id && row.title) titles.set(row._id, row.title);
     }
 
+    // A worship night's song leaders, named after each title (spec §8). Live
+    // rows only: a departed song's row carries no leaders. Same read stage as
+    // the titles — BEFORE `sendStartedAt`, so the budget never pays for it.
+    // BEST-EFFORT: the leader change is already classified and its recipients
+    // already chosen, so a failed read costs the email its names, never its send.
+    const leaderIds = unique(
+      [...grouped.values()].flat().flatMap((l) => (l.songs ?? []).flatMap((s) => s.leads ?? [])),
+    );
+    const leaders = new Map<string, string>();
+    if (leaderIds.length) {
+      try {
+        const rows = await operationalClient.fetch<
+          { _id: string; alias?: string; member_name?: string }[] | null
+        >(LEADER_NAMES_QUERY, { ids: leaderIds });
+        for (const row of rows ?? []) {
+          const name = row?.alias || row?.member_name;
+          if (row?._id && name) leaders.set(row._id, name);
+        }
+      } catch (err) {
+        leaders.clear();
+        logError("notify_sweep_leader_names_failed", { ids: leaderIds.length }, err);
+      }
+    }
+
     // ── 7. Send ─────────────────────────────────────────────────────────────
     const allow = getAllowlist();
     const redirectTo = process.env.EMAIL_REDIRECT_TO?.trim();
@@ -920,6 +959,7 @@ export async function sweepOutbox(opts: SweepOptions = {}): Promise<SweepReport>
         ({ subject, html } = buildGroupedEmail(
           { name: m.alias || m.member_name || "", lines },
           titles,
+          leaders,
         ));
       } catch (err) {
         report.failed++;
