@@ -188,4 +188,22 @@ describe("SetlistEditor — «Dirige» on a worship night", () => {
     expect(screen.queryByText(/Cambió quién está en Lead/)).toBeNull();
     expect(screen.queryByRole("button", { name: "Recargar setlist" })).toBeNull();
   });
+
+  it("tells the admin to save Lead first when a worship night has nobody in Lead yet", async () => {
+    stubFetch(singleRead({ leadRoster: [], songs: [row(1, null), row(2, null)] }));
+    mount();
+
+    await screen.findByText("Canción 1");
+    expect(
+      screen.getByText("Nadie está en Lead todavía. Agrégalos en el planner y guarda para elegir quién dirige."),
+    ).not.toBeNull();
+  });
+
+  it("never shows the empty-Lead hint on an ordinary special", async () => {
+    stubFetch(singleRead({ format: null, leadRoster: [] }));
+    mount();
+
+    await screen.findByText("Canción 1");
+    expect(screen.queryByText(/Nadie está en Lead todavía/)).toBeNull();
+  });
 });

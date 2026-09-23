@@ -227,3 +227,6 @@ Read from the code for the plan (`docs/superpowers/plans/2026-09-22-worship-nigh
   shows the field instead of «unknown field».
 - **The setlist PUT checks leaders after the observed-target comparison**, so a stale editor
   gets the 409 reload path rather than a 400 a retry cannot clear.
+- **Member reads project `leads[]->{ member_name, alias }`** (no `_id`, which nothing on the
+  read side uses) on the home page, `/schedule` and `/me`; `/me` also projects `myLeadSongs`,
+  the caller's own led-song titles, from `songs[$id in leads[]._ref]`.

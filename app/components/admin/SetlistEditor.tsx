@@ -574,7 +574,12 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
             );
           })}
         </div>
-        {worshipNight && waiting.length > 0 && (
+        {worshipNight && roster.length === 0 && (
+          <p className="mt-2 font-body text-xs text-mono-400">
+            Nadie está en Lead todavía. Agrégalos en el planner y guarda para elegir quién dirige.
+          </p>
+        )}
+        {worshipNight && roster.length > 0 && waiting.length > 0 && (
           <p className="mt-2 font-body text-xs text-mono-400">Aún no dirigen: {waiting.map(m => m.name).join(", ")}.</p>
         )}
       </div>

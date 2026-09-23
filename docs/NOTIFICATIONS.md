@@ -677,7 +677,10 @@ Things that are counter-intuitive and were each a real defect at some point.
   comparison, so between the push to `preview` and the merge to `main`, a save made through
   production wipes leaders assigned on dev, and a leader-only change made on dev is consumed
   with no email once production reads it. See ADR-0036. Assign song leaders only after this
-  delivery has reached production.
+  delivery has reached production. The same hazard outlives the release window on an admin
+  browser tab loaded before the deploy: its old `SetlistEditor` sends rows with no `leadIds`,
+  which the new setlist PUT stores as leaderless — reload `/admin` (and the phone app) after
+  the deploy before editing a worship night's setlist.
 - **`before` is captured pre-commit and threaded into `after()`.** Reading live
   state inside `after()` returns post-write state, making `before == after` for
   every notice — a system that silently sends nothing while passing its tests.
