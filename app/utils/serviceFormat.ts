@@ -1,5 +1,5 @@
 // The ONE definition of a special service's `format` (spec
-// 2026-09-22-worship-night-song-leads-design.md §3.1; ADR-0038 — a format flag
+// 2026-09-22-worship-night-song-leads-design.md §3.1; ADR-0036 — a format flag
 // on `special_role`, not a fourth role type). Neutral: no imports, so server
 // writers and client components share it.
 export const WORSHIP_NIGHT_FORMAT = "worship_night" as const;

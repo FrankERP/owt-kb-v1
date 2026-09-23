@@ -185,7 +185,7 @@ several exist precisely to stop a plausible-looking change.
   specials by `_id`/`date|name`; the month CREATE flow drafts one special per date on
   purpose (E19 in `plannerModel.ts`) — do not re-key it.
 - **A «Noche de alabanza» is `special_role.format = "worship_night"`, set once at creation** —
-  never a fourth role type (ADR-0038); the PATCH route never sets or unsets it. Its songs may
+  never a fourth role type (ADR-0036); the PATCH route never sets or unsets it. Its songs may
   name one or two leaders (`songs[].leads`, keyed references) who must be in the set's Lead when
   written: the setlist PUT refuses anything else under the role `_rev` it asserts, approval
   carries leaders over by song reference, proposals and weekend setlists never carry them.

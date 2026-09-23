@@ -96,7 +96,7 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   non-heading (`# `) lines. Tested in `app/utils/__tests__/practice.test.ts`.
 - **`isWorshipNightFormat`, `isWorshipNight`, `WORSHIP_NIGHT_FORMAT`**
   ([serviceFormat.ts](../app/utils/serviceFormat.ts)) — the ONE definition of a special's
-  `format`; neutral, so both server writers and client components share it (ADR-0038).
+  `format`; neutral, so both server writers and client components share it (ADR-0036).
 - **`leadSeatIds`, `songItemLeadIds`, `validateSongLeads`, `carryOverSongLeads`,
   `unassignedLeads`, `leadRosterOf`, `formatLeadNames`, `sortedLeadIds`, `SONG_LEADS_MAX`**
   ([songLeads.ts](../app/utils/songLeads.ts)) — the ONE set of rules for who may lead a

@@ -37,9 +37,10 @@ export interface SolveResponse {
   /**
    * True when the month was solved WITHOUT the lexicographic objective — the
    * schedule is legal and fully constrained, it is simply not fairness-optimised.
-   * Reaches this state when the eight-tier weight ladder cannot be expressed in
-   * int64 (large history offsets), or when the returning pass was one that builds
-   * no objective. Before this field the same situation was silent — ADR-0035.
+   * Reaches this state when the eight-tier weight ladder passes what CP-SAT
+   * accepts, INT64_MAX / 2 (large history offsets), or when the returning pass was
+   * one that builds no objective. Before this field the same situation was
+   * silent — ADR-0038.
    */
   objective_skipped?: boolean;
   history_runs_used?: number;

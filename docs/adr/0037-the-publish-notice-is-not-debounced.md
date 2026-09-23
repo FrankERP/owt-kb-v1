@@ -1,4 +1,4 @@
-# ADR-0036: The publish transition's setlist notice is not debounced
+# ADR-0037: The publish transition's setlist notice is not debounced
 
 **Date:** 2026-09-16 · **Status:** Accepted
 

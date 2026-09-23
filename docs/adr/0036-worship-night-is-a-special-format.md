@@ -1,6 +1,6 @@
-# ADR-0038: A «Noche de alabanza» is a special's `format`, not a fourth role type
+# ADR-0036: A «Noche de alabanza» is a special's `format`, not a fourth role type
 
-**Date:** 2026-09-22 · **Status:** Accepted · Numbered ADR-0036 on its branch; renumbered in the `preview` merge because 0036 and 0037 were already taken there.
+**Date:** 2026-09-22 · **Status:** Accepted
 
 ## Context
 

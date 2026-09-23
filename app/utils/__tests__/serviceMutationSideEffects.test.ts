@@ -670,7 +670,7 @@ describe("setlist notice serviceDate guard", () => {
   });
 });
 
-/* ── The publish notice is NOT debounced (ADR-0036) ──────────────────────────
+/* ── The publish notice is NOT debounced (ADR-0037) ──────────────────────────
  *
  * The requirement these guard: a published setlist reaches the team within five
  * minutes of the click, and in practice within seconds. Before this, publishing

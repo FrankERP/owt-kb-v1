@@ -136,7 +136,7 @@ keyed on **`date`** (not `week`).
 | `date` | date | Date of the special service. |
 | `service_name` | string | e.g. "Viernes Santo," "Nochebuena." |
 | `time` | string | `"HH:mm"`, local (America/Mexico_City). Optional. Display/sort only for same-day sets — never identity (ADR-0011, PR #90). Validated by the `serviceTime.ts` regex, mirrored in the schema. |
-| `format` | string | Optional, only value `"worship_night"`. Set at creation (`POST /api/admin/roles`); never patched — absent from `buildRoleEditPatch`'s `set`/`unset`, so a stored-mode save cannot erase it (ADR-0038). |
+| `format` | string | Optional, only value `"worship_night"`. Set at creation (`POST /api/admin/roles`); never patched — absent from `buildRoleEditPatch`'s `set`/`unset`, so a stored-mode save cannot erase it (ADR-0036). |
 | `songs` | array of `setlist_song` | `{ song → post, play_key, medley_tag (hidden), leads (worship night only) }`. |
 | `Lead`, `BGVs`, `Chorus` | arrays of reference → `teamMembers` | Same three vocal seats. |
 | `instruments`, `foh_team` | arrays of slots | Same as above. |
@@ -366,7 +366,7 @@ actually work.
 
 | `_type` | Shape | Used in |
 |---------|-------|---------|
-| `setlist_song` | `{ song→post, play_key, medley_tag, leads }` | `featuredSongs`, `saturdarSongs`, `special_role` — `leads` (1–2 keyed references → `teamMembers`) only appears on a worship night's own song items, drawn from the set's `Lead` when written (ADR-0038) |
+| `setlist_song` | `{ song→post, play_key, medley_tag, leads }` | `featuredSongs`, `saturdarSongs`, `special_role` — `leads` (1–2 keyed references → `teamMembers`) only appears on a worship night's own song items, drawn from the set's `Lead` when written (ADR-0036) |
 | `proposal_song` | same shape | `setlistProposal.songs` |
 | `instrument_slot` | `{ instrument, person→teamMembers }` | all role docs |
 | `foh_slot` | `{ role, person→teamMembers }` | all role docs |
