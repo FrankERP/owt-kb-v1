@@ -53,6 +53,10 @@ describe("applyLibraryFilters", () => {
       .toEqual(["Ánclame", "Bueno es"]);
     expect(applyLibraryFilters(POSTS, parseLibraryParams({ tag: "down-beat,amor" }))).toEqual([]);
   });
+  it("two Tipos in a hand-edited URL are OR-ed too, not an empty list", () => {
+    expect(applyLibraryFilters(POSTS, parseLibraryParams({ tag: "up-beat,down-beat" })).map((p) => p.title))
+      .toEqual(["Alaba", "Ánclame", "Bueno es"]);
+  });
   it("author matches the reference slug OR the legacy author string, accent-insensitive", () => {
     expect(applyLibraryFilters(POSTS, parseLibraryParams({ author: "redman" }))).toHaveLength(1);
     expect(applyLibraryFilters(POSTS, parseLibraryParams({ author: "Elevation" }))).toHaveLength(1);
