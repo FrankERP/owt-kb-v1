@@ -11,6 +11,8 @@
 // confirmed successes become `exists`, everything else stays retryable with its
 // original id) are unit-testable without a DOM or a network.
 
+import type { ServiceFormat } from "./serviceFormat";
+
 export interface DraftInstrumentSlot {
   instrument: string;
   personId: string;
@@ -34,6 +36,13 @@ export interface CreatableDraft {
    * weekend role never stores it.
    */
   service_name?: string;
+  /** SPECIALS ONLY, optional. "HH:mm" — emitted only when present (see `draftCreateBody`). */
+  time?: string;
+  /**
+   * SPECIALS ONLY, optional. "worship_night" marks a «Noche de alabanza»; set only
+   * by the stored-mode composer — the month CREATE flow never drafts one.
+   */
+  format?: ServiceFormat;
   leads: string[];
   bgvs: string[];
   chorus: string[];
@@ -63,6 +72,8 @@ export function draftCreateBody(draft: CreatableDraft, published: boolean) {
     // but would still be a lie about what gets stored — the key is omitted
     // entirely instead.
     ...(draft._type === "special_role" ? { service_name: draft.service_name ?? "" } : {}),
+    ...(draft._type === "special_role" && draft.time ? { time: draft.time } : {}),
+    ...(draft._type === "special_role" && draft.format ? { format: draft.format } : {}),
     leads: draft.leads,
     bgvs: draft.bgvs,
     chorus: draft.chorus,

@@ -9,6 +9,12 @@
 > authoritative in Sanity, and automatic local fill cannot consume a human
 > override. The new one-service composer is manual-only and does not auto-fill.
 
+> **2026-09-22 stored-mode group fill:** stored mode gains «Llenar especiales…»
+> (`groupFill.ts`, spec `docs/superpowers/specs/2026-09-22-camp-group-fill-design.md`).
+> It runs this ADR's local filler on a group of stored specials the admin ticks, with
+> load scoped to that group only. Still local, still never the solver, still empty
+> seats only; the one-service composer stays manual.
+
 ## Context
 
 Special services (`special_role` — vigils, conferences, midweek nights) were

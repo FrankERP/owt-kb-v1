@@ -128,6 +128,7 @@ import {
 } from "./seatModel";
 import { renderableUnfilled } from "./instrumentFill";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
+import { WORSHIP_NIGHT_FORMAT } from "@/app/utils/serviceFormat";
 import type { TargetPreflight } from "./serviceReadiness";
 import {
   CARD_STYLE,
@@ -228,7 +229,7 @@ export interface PlannerGridProps {
   /** Add/remove instrument and FOH rows. */
   onRowsChange: (next: GridRow[]) => void;
   onToggleSkip: (columnId: string) => void;
-  onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string }) => void;
+  onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string; time?: string }) => void;
   storedDateBlockedReason?: string | null;
   /** Prevent every stored-grid mutation while another stored mutation is unresolved. */
   mutationLocked?: boolean;
@@ -2304,7 +2305,7 @@ function ColumnHeader({
   onToggleSkip: () => void;
   stored: boolean;
   readOnly: boolean;
-  onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string }) => void;
+  onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string; time?: string }) => void;
   storedDateBlockedReason?: string | null;
   mutationLocked: boolean;
   /** `min-w-[150px]` in the page, `min-w-0` in full screen — see `dateTrack`. */
@@ -2314,8 +2315,9 @@ function ColumnHeader({
   const day = date.getDate();
   const month = date.toLocaleDateString("es-MX", { month: "short" });
   // The shared `Record<ServiceType, string>` — not a third hardcoded ternary.
-  // The old one read "Sábado" on every special column.
-  const typeLabel = SERVICE_LABEL[column.type];
+  // The old one read "Sábado" on every special column. A worship night is a
+  // special whose create-time `format` names it (spec §5).
+  const typeLabel = column.format === WORSHIP_NIGHT_FORMAT ? "Noche de alabanza" : SERVICE_LABEL[column.type];
   const blockCopy =
     createBlock === "created"
       ? CREATE_BLOCK_COPY.created
@@ -2361,15 +2363,26 @@ function ColumnHeader({
             onChange={(event) => onStoredHeaderChange?.(column.columnId, { date: event.target.value })}
           />
           {column.type === "special_role" && (
-            <label className="block font-label text-[9px] uppercase tracking-widest text-mono-500">
-              Nombre
-              <input
-                value={column.serviceName ?? ""}
+            <>
+              <label className="block font-label text-[9px] uppercase tracking-widest text-mono-500">
+                Nombre
+                <input
+                  value={column.serviceName ?? ""}
+                  disabled={readOnly || mutationLocked}
+                  onChange={(event) => onStoredHeaderChange?.(column.columnId, { serviceName: event.target.value })}
+                  className="mt-1 w-full rounded border border-accent/15 bg-transparent px-1.5 py-1 font-body text-[11px] normal-case tracking-normal text-ink-muted"
+                />
+              </label>
+              <DateField
+                kind="time"
+                size="sm"
+                id={`col-time-${column.columnId}`}
+                label="Hora"
+                value={column.time ?? ""}
                 disabled={readOnly || mutationLocked}
-                onChange={(event) => onStoredHeaderChange?.(column.columnId, { serviceName: event.target.value })}
-                className="mt-1 w-full rounded border border-accent/15 bg-transparent px-1.5 py-1 font-body text-[11px] normal-case tracking-normal text-ink-muted"
+                onChange={(event) => onStoredHeaderChange?.(column.columnId, { time: event.target.value })}
               />
-            </label>
+            </>
           )}
         </div>
       )}

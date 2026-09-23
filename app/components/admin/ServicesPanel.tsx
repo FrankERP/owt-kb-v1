@@ -93,6 +93,7 @@ import CueDialogStatus from "../ui/CueDialogStatus";
 import Button from "../ui/Button";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { revealProps } from "@/app/utils/reveal";
+import { upcomingMonthPills } from "./monthPills";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 //
@@ -795,7 +796,7 @@ export default function ServicesPanel() {
   // Split months into current/future and past
   const currentYM   = today.slice(0, 7);
   const allMonths   = Array.from(new Set(roles.map(r => r.date.slice(0, 7)))).sort();
-  const futureMonths = allMonths.filter(ym => ym >= currentYM);
+  const futureMonths = upcomingMonthPills(allMonths, currentYM);
   const pastMonths   = allMonths.filter(ym => ym < currentYM).reverse(); // most-recent first
 
   const toggleMonth = (ym: string) =>
@@ -1162,7 +1163,7 @@ export default function ServicesPanel() {
       )}
 
       {/* Month filter */}
-      {canFilterMonths(sourceRecords) && allMonths.length > 0 && (
+      {canFilterMonths(sourceRecords) && (
         // Not `space-y-2`: a closed Collapse is still a child, so the gap would
         // be reserved. The Collapse's own content carries it (`mt-2`).
         <div>
@@ -1293,6 +1294,11 @@ export default function ServicesPanel() {
           <div className="grid min-w-0 grid-cols-1 gap-4 lg:flex lg:snap-x lg:snap-mandatory lg:items-start lg:overflow-x-auto lg:scroll-px-6 lg:pb-4">
           {counters.upcoming === 0 && selectedMonths.size === 0 && (
             <p className="font-body text-sm text-mono-500 text-center py-12">No hay servicios próximos.</p>
+          )}
+          {selectedMonths.size === 1 && visibleCards.length === 0 && (
+            <p className="font-body text-sm text-mono-500 text-center py-12">
+              No hay servicios en {monthLabel}. «+ Nuevo» crea el primero en este mes.
+            </p>
           )}
           {visibleCards.map((card, i) => (
             <ServiceReadinessCard

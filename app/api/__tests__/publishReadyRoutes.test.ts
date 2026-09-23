@@ -899,6 +899,42 @@ describe("publish-ready override mode", () => {
     expect(patchFor(tx, LOCK_ID)).toMatchObject({ rev: "lock-rev-1" });
   });
 
+  it("treats a special whose songs projected as null as having NO setlist, not an invalid one", async () => {
+    // Regression 2026-09-22 (the empty camp sets): GROQ projects an absent
+    // `songs` as null, and a `!== undefined` filter turned it into the hard
+    // blocker `setlist_invalid`, which no override can acknowledge.
+    store.roles = [
+      {
+        _id: "sp-1",
+        _rev: "sp-rev-1",
+        _type: "special_role",
+        date: "2026-10-03",
+        service_name: "CAMP - Set 2",
+        published: false,
+        songs: null,
+        Lead: [{ _key: "k1", _type: "reference", _ref: "mem-1" }],
+        BGVs: [],
+        Chorus: [],
+        instruments: [],
+        foh_team: [],
+      },
+    ];
+    store.members = [member()];
+
+    const ready = await publishReadyPOST(req({ mode: "ready", roles: [{ id: "sp-1", rev: "sp-rev-1" }] }));
+    expect(ready.status).toBe(409);
+    const service = ((await json(ready)).details as { services: Record<string, string[]>[] }).services[0];
+    expect(service.workflowBlockers).toEqual(["incomplete_setlist"]);
+    expect(service.hardBlockers ?? []).not.toContain("setlist_invalid");
+    expect(committed()).toHaveLength(0);
+
+    const res = await override(["incomplete_setlist"], "sp-1", "sp-rev-1");
+    expect(res.status).toBe(200);
+    // No setlist op and no lock for a special: the role's own revision guards
+    // the absence (a setlist written to the special changes that revision).
+    expect(patches(committed()[0]).map((o) => o.id).sort()).toEqual(["mem-1", "sp-1"]);
+  });
+
   it("publishes over an acknowledged availability conflict and active proposal together", async () => {
     seedReady();
     store.members = [member({ unavailableDates: [WEEK] })];

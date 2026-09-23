@@ -18,7 +18,7 @@ import { ROLE_TYPES, SETLIST_TYPES } from "@/app/utils/serviceReadModel";
 
 describe("projections", () => {
   it("role projection covers all five seat paths and identity/date fields", () => {
-    for (const frag of ["_id", "_rev", "_type", "week", "date", "Lead[]", "BGVs[]", "Chorus[]", "instruments[]", "foh_team[]", "person"]) {
+    for (const frag of ["_id", "_rev", "_type", "week", "date", "service_name", "time", "format", "Lead[]", "BGVs[]", "Chorus[]", "instruments[]", "foh_team[]", "person", "leads[]"]) {
       expect(ROLE_PROJECTION).toContain(frag);
     }
   });

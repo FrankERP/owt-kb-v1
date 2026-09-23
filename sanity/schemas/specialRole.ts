@@ -48,6 +48,22 @@ export const specialRole = {
       description: 'e.g. Viernes Santo, Nochebuena, Año Nuevo',
     },
     {
+      name: 'time',
+      title: 'Hora',
+      type: 'string',
+      description: 'HH:mm, hora local (America/Mexico_City). Opcional. Ordena los sets de un mismo día; nunca cambia la fecha.',
+      // Mirrors SERVICE_TIME_RE (app/utils/serviceTime.ts). sanity/ cannot import app/; serviceTimeSchemaSync.test.ts fails if the two drift.
+      validation: (rule: { regex: (re: RegExp, opts: { name: string; invert: boolean }) => unknown }) =>
+        rule.regex(/^([01]\d|2[0-3]):[0-5]\d$/, { name: 'HH:mm', invert: false }),
+    },
+    {
+      name: 'format',
+      title: 'Formato',
+      type: 'string',
+      description: 'worship_night = Noche de alabanza (dirige por canción). Se fija al crear el servicio; ausente = especial normal.',
+      options: { list: [{ title: 'Noche de alabanza', value: 'worship_night' }] },
+    },
+    {
       name: 'songs',
       title: 'Songs',
       type: 'array',
@@ -59,6 +75,14 @@ export const specialRole = {
             { name: 'song', title: 'Song', type: 'reference', to: [{ type: 'post' }] },
             { name: 'play_key', type: 'string', title: 'Key to play' },
             { name: 'medley_tag', type: 'string', title: 'Medley / Mashup', hidden: true, description: 'Songs sharing the same tag are shown as a grouped medley. Managed by the setlist editor.' },
+            {
+              name: 'leads',
+              title: 'Dirige',
+              type: 'array',
+              of: [{ type: 'reference', to: [{ type: 'teamMembers' }] }],
+              validation: (rule: { max: (n: number) => unknown }) => rule.max(2),
+              description: 'Solo en una Noche de alabanza: 1 o 2 personas de Lead. Lo escribe el editor de setlist.',
+            },
           ],
           preview: {
             select: { name: 'song.title', author: 'song.author', play_key: 'play_key' },
