@@ -1,7 +1,7 @@
 # «Noche de alabanza»: who leads each song — design (delivery 1)
 
-**Date:** 2026-09-22 · **Status:** implemented on branch `claude/worship-night-song-leads`; not
-released · **Risk tier:** mixed — the setlist writer and the proposal-approval carry-over are a
+**Date:** 2026-09-22 · **Status:** released to production 2026-09-23 (PR #93); song
+leaders go in only after that release · **Risk tier:** mixed — the setlist writer and the proposal-approval carry-over are a
 **critical** slice (§9); the rest is standard · **Builds on:** PR #90 (`special_role.time`) and
 PR #91 (stored-mode group fill) · **Motivating event:** the Campamento's Noche de Alabanza,
 Saturday 3 October 2026, 20:45.

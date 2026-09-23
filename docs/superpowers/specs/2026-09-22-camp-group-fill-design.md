@@ -1,6 +1,6 @@
 # Fill a group of special services together, in stored mode — design
 
-**Date:** 2026-09-22 · **Status:** implemented on branch `claude/camp-group-fill`; not released · **Risk tier:** standard
+**Date:** 2026-09-22 · **Status:** released to production 2026-09-23 (PR #91) · **Risk tier:** standard
 (client-side fill feeding the existing, unchanged stored-mode save; see §8) ·
 **Builds on:** `2026-09-22-same-day-specials-design.md` (PR #90, `special_role.time`) ·
 **Motivating event:** Campamento 2–4 October 2026.
