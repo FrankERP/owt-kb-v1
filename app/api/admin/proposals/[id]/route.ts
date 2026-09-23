@@ -247,7 +247,7 @@ async function approve(args: ApproveArgs) {
   }
 
   // ── Resolve the live setlist target and the coordination token ────────────
-  const songs = buildSetlistSongDocs(songRows, nextKey);
+  const songs = buildSetlistSongDocs(songRows.map((row) => ({ ...row, leadIds: [] })), nextKey);
   const special = target.serviceType === "special";
   let lock: StoredLock | null = null;
   let bootstrapped = false;

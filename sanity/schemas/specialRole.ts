@@ -75,6 +75,14 @@ export const specialRole = {
             { name: 'song', title: 'Song', type: 'reference', to: [{ type: 'post' }] },
             { name: 'play_key', type: 'string', title: 'Key to play' },
             { name: 'medley_tag', type: 'string', title: 'Medley / Mashup', hidden: true, description: 'Songs sharing the same tag are shown as a grouped medley. Managed by the setlist editor.' },
+            {
+              name: 'leads',
+              title: 'Dirige',
+              type: 'array',
+              of: [{ type: 'reference', to: [{ type: 'teamMembers' }] }],
+              validation: (rule: { max: (n: number) => unknown }) => rule.max(2),
+              description: 'Solo en una Noche de alabanza: 1 o 2 personas de Lead. Lo escribe el editor de setlist.',
+            },
           ],
           preview: {
             select: { name: 'song.title', author: 'song.author', play_key: 'play_key' },

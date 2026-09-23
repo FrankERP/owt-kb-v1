@@ -38,6 +38,8 @@ import {
   rawSetlistDraftsForWeekQuery,
 } from "@/app/utils/serviceReadQueries";
 import { buildSetlistRead, type CanonicalSetlistRecord } from "@/app/utils/setlistReadContract";
+import { isWorshipNight } from "@/app/utils/serviceFormat";
+import { leadSeatIds, validateSongLeads } from "@/app/utils/songLeads";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
@@ -230,7 +232,7 @@ async function getHandler(req: NextRequest) {
 /**
  * Manual live-setlist save (A2 §5).
  *
- * Body: `{ week, type, roleId?, observed, songs: [{ songId, play_key?, medley_tag? }] }`
+ * Body: `{ week, type, roleId?, observed, songs: [{ songId, play_key?, medley_tag?, leadIds? }] }`
  * where `observed` is A1's UNCHANGED observed state from the GET above.
  *
  * - An observed singleton requires the SAME target id and `_rev`.
@@ -289,6 +291,11 @@ async function putHandler(req: NextRequest) {
    */
   let subject: { roleId: string; roleType: "sunday_role" | "saturday_role" | "special_role";
     published: unknown; beforeSongs: unknown; knownRecipients: string[] } | null = null;
+  /** What this target allows for per-song leaders (spec §4.1). A weekend setlist allows none. */
+  let leadTarget: { worshipNight: boolean; leadIds: ReadonlySet<string> } = {
+    worshipNight: false,
+    leadIds: new Set(),
+  };
 
   if (request.setlistType) {
     const target = await loadWeekendSetlistTarget(request.setlistType, week);
@@ -337,6 +344,12 @@ async function putHandler(req: NextRequest) {
       beforeSongs: target.target.role.songs ?? [],
       knownRecipients: serviceParticipants(target.target.role),
     };
+    // Checked against the role THIS request loaded; the patch below asserts
+    // that same `_rev`, so a Lead change landing in between fails the write.
+    leadTarget = {
+      worshipNight: isWorshipNight(target.target.role),
+      leadIds: leadSeatIds(target.target.role.Lead),
+    };
   }
 
   // ── The observed state must still be exactly current ──────────────────────
@@ -347,6 +360,14 @@ async function putHandler(req: NextRequest) {
         details: { detail: mismatch, week, type: request.kind, observed, server },
       }),
     );
+  }
+
+  // After the observed-target check on purpose: when the editor's view is
+  // stale (a Lead change moved the role _rev), the admin gets the 409 reload
+  // path, not a 400 that a retry cannot clear.
+  const leadCheck = validateSongLeads(request.songs, leadTarget);
+  if (!leadCheck.ok) {
+    return reject(serviceError("invalid_request", { details: { issues: leadCheck.issues } }));
   }
 
   // ── One guarded transaction ───────────────────────────────────────────────
