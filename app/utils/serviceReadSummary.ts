@@ -417,6 +417,29 @@ function makeSetlistRecord(doc: Record<string, unknown>, type: SetlistDocType): 
   };
 }
 
+/**
+ * The specials that carry an embedded setlist — the ONE filter every reader uses
+ * to feed `buildSetlistTargets`' third argument.
+ *
+ * A special keeps its songs on its own document, so "no `songs`" means "no
+ * setlist target yet", exactly like a weekend with no `featuredSongs` doc. GROQ
+ * projects an ABSENT field as `null`, never omits it, so a test for
+ * `songs !== undefined` read every special without songs as a present,
+ * non-array — hence invalid — setlist: «Setlist con datos inválidos» on each
+ * empty camp set, and a hard block on «Publicar listos» (2026-09-22). `null` and
+ * absent are the same thing here (GROQ's `defined()` agrees, and the setlist
+ * editor's `hasSongs` and `serviceWriteTargets`' `Array.isArray` already read
+ * it that way). A present value that is not a list still passes through, so a
+ * genuinely corrupt `songs` is still reported invalid.
+ * `embeddedSetlistPredicate.test.ts` fails if a reader hand-rolls the check again.
+ */
+export function specialRolesWithEmbeddedSetlist(roles: unknown[]): Record<string, unknown>[] {
+  return roles.filter(
+    (r): r is Record<string, unknown> =>
+      isObj(r) && r._type === "special_role" && r.songs !== undefined && r.songs !== null,
+  );
+}
+
 export function buildSetlistTargets(
   canonicalSetlists: unknown[],
   rawSetlistDrafts: unknown[],
@@ -443,7 +466,8 @@ export function buildSetlistTargets(
         return;
       }
       // Special roles only participate as setlist targets when they carry songs.
-      if (requireSongs && raw.songs === undefined) return;
+      // `null` is how GROQ projects an absent field — see specialRolesWithEmbeddedSetlist.
+      if (requireSongs && (raw.songs === undefined || raw.songs === null)) return;
       const { key, issues } = setlistDocTargetKey(raw);
       const id = nonEmptyString(raw._id) ? raw._id : "";
       if (!key) {

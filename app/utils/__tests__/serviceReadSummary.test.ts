@@ -4,6 +4,7 @@ import {
   buildRoleTargets,
   buildSetlistTargets,
   collectRoleMemberRefs,
+  specialRolesWithEmbeddedSetlist,
 } from "@/app/utils/serviceReadSummary";
 import type { CanonicalMember } from "@/app/utils/serviceReadModel";
 
@@ -586,5 +587,48 @@ describe("buildProposalSummary", () => {
       return sundayRole();
     });
     expect(seen).toEqual(["role-sun-1"]);
+  });
+});
+
+describe("specialRolesWithEmbeddedSetlist — absent vs null vs present", () => {
+  // GROQ projects an ABSENT `songs` as `null` (verified 2026-09-22 against the
+  // camp sets, which have no `songs` field and came back `songs: null`). A
+  // `!== undefined` test read every special without songs as a present,
+  // non-array — hence invalid — setlist.
+  const special = (songs: unknown, extra: Record<string, unknown> = {}) =>
+    ({ _id: "sp-1", _rev: "r1", _type: "special_role", date: "2026-10-03", songs, ...extra });
+
+  it("drops a special whose songs projected as null or are missing", () => {
+    const noField = { _id: "sp-2", _rev: "r2", _type: "special_role", date: "2026-10-03" };
+    expect(specialRolesWithEmbeddedSetlist([special(null), noField])).toEqual([]);
+  });
+
+  it("keeps a special with an array, empty or not", () => {
+    const empty = special([]);
+    const full = special([{ _key: "k", play_key: "G", song: { _type: "reference", _ref: "p" } }], { _id: "sp-3" });
+    expect(specialRolesWithEmbeddedSetlist([empty, full])).toEqual([empty, full]);
+  });
+
+  it("keeps a present-but-corrupt value so it is still reported invalid", () => {
+    const corrupt = special("not-a-list");
+    expect(specialRolesWithEmbeddedSetlist([corrupt])).toEqual([corrupt]);
+    expect(buildSetlistTargets([], [], specialRolesWithEmbeddedSetlist([corrupt])).targets[0]?.contentState).toBe("invalid");
+  });
+
+  it("ignores weekend roles and non-objects", () => {
+    expect(specialRolesWithEmbeddedSetlist([{ _type: "sunday_role", songs: [] }, null, "x"])).toEqual([]);
+  });
+
+  it("a special with no songs yields NO setlist target at all", () => {
+    expect(buildSetlistTargets([], [], specialRolesWithEmbeddedSetlist([special(null)])).targets).toEqual([]);
+  });
+});
+
+describe("buildSetlistTargets — a special handed in with songs: null", () => {
+  it("is not a setlist target, even without the predicate in front of it", () => {
+    const special = { _id: "sp-9", _rev: "r9", _type: "special_role", date: "2026-10-03", songs: null };
+    const summary = buildSetlistTargets([], [], [special]);
+    expect(summary.targets).toEqual([]);
+    expect(summary.recordIssues).toEqual([]);
   });
 });
