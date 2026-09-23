@@ -6,7 +6,7 @@ import {
   canonicalSetlistsQuery,
   rawSetlistDraftsQuery,
 } from "@/app/utils/serviceReadQueries";
-import { buildSetlistTargets } from "@/app/utils/serviceReadSummary";
+import { buildSetlistTargets, specialRolesWithEmbeddedSetlist } from "@/app/utils/serviceReadSummary";
 
 // GET /api/admin/service-integrity/setlists
 // Read-only setlist integrity summary. Weekend setlists are `featuredSongs` /
@@ -32,13 +32,7 @@ export async function GET() {
       operationalClient.fetch<unknown[]>(rolesQ.query, rolesQ.params),
     ]);
 
-    const specialRolesWithSongs = (canonicalRoles ?? []).filter(
-      (r): r is Record<string, unknown> =>
-        !!r &&
-        typeof r === "object" &&
-        (r as Record<string, unknown>)._type === "special_role" &&
-        (r as Record<string, unknown>).songs !== undefined,
-    );
+    const specialRolesWithSongs = specialRolesWithEmbeddedSetlist(canonicalRoles ?? []);
 
     const summary = buildSetlistTargets(
       canonicalSetlists ?? [],
