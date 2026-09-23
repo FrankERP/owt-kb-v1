@@ -173,6 +173,15 @@ several exist precisely to stop a plausible-looking change.
   `special_role`): `Lead[]._ref`, `BGVs[]._ref`, `Chorus[]._ref`,
   `instruments[].person._ref`, `foh_team[].person._ref`. Any "who serves" query
   must cover all five — reuse `assignedMemberRefsQuery()` in `app/utils/notifyTargets.ts`.
+- **A special's `time` (`"HH:mm"`) is display and sort only — never identity.** Identity
+  stays `date + normalized service_name` (ADR-0011); two sets on one day need different
+  names. `isServiceTime`/`compareServiceTime` (`app/utils/serviceTime.ts`) are the ONLY
+  validator and comparator under `app/**`; the Studio schema mirrors the regex because
+  `sanity/` cannot import `app/`, and `serviceTimeSchemaSync.test.ts` fails if the two
+  drift. `time` is never combined with `date` into a `Date`.
+  **Same-day sets are created in `/admin` stored mode («+ Nuevo servicio»)**, which keys
+  specials by `_id`/`date|name`; the month CREATE flow drafts one special per date on
+  purpose (E19 in `plannerModel.ts`) — do not re-key it.
 - Member-facing reads must filter `published != false` (draft/publish gating) for the
   **worship** types, whose documents predate the field — an absent `published` there
   must mean "visible". **Kids reads use the stricter `published == true`** instead

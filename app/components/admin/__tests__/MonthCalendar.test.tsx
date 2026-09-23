@@ -237,7 +237,7 @@ describe("MonthCalendar — P2 refuses a second special on a stored one's date",
     });
     composeSpecial(WEDNESDAY, "Boda");
     expect(onAddSpecial).not.toHaveBeenCalled();
-    expect(screen.getByText(/ya tiene un servicio especial guardado: «Bautizos»/)).toBeTruthy();
+    expect(screen.getByText(/ya tiene un servicio especial guardado: «Bautizos». Para agregar otro set ese día usa «\+ Nuevo servicio»/)).toBeTruthy();
   });
 
   // The session-local created-set (`MonthGenerator`'s `createdTargets`) is the

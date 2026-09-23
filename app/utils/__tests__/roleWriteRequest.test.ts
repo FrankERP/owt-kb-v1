@@ -114,6 +114,7 @@ describe("stored document shapes", () => {
       roleType: "sunday_role",
       date: "2026-08-09",
       serviceName: null,
+      time: null,
       published: true,
       seats: normalizeSeats(createBody()),
       receiptId: "roleCreate.abc",
@@ -135,13 +136,14 @@ describe("stored document shapes", () => {
       roleType: "special_role",
       date: "2026-08-09",
       serviceName: "Bautizos",
+      time: null,
       seats: normalizeSeats(createBody()),
       nextKey: () => "k",
     });
-    expect(patch._type).toBeUndefined();
-    expect(patch.date).toBe("2026-08-09");
-    expect(patch.service_name).toBe("Bautizos");
-    expect(patch.week).toBeUndefined();
+    expect(patch.set._type).toBeUndefined();
+    expect(patch.set.date).toBe("2026-08-09");
+    expect(patch.set.service_name).toBe("Bautizos");
+    expect(patch.set.week).toBeUndefined();
   });
 });
 
@@ -631,5 +633,79 @@ describe("stored seat addressing", () => {
     expect(swapped.leads).toEqual(["mem-9"]);
     expect(swapped.instruments).toEqual([{ instrument: "Bajo", personId: "mem-8" }]);
     expect(seatAssignees(swapped)).toEqual(["mem-9", "mem-2", "mem-8", "mem-4"]);
+  });
+});
+
+describe("special-service time", () => {
+  const special = (over: Record<string, unknown> = {}) =>
+    createBody({ _type: "special_role", service_name: "Campamento · Alabanza", ...over });
+
+  it("create: absent, null and empty mean no time", () => {
+    for (const time of [undefined, null, ""]) {
+      const parsed = parseCreateRequest(special(time === undefined ? {} : { time }));
+      expect(parsed.ok).toBe(true);
+      if (parsed.ok) expect(parsed.value.time).toBeNull();
+    }
+  });
+
+  it("create: a valid HH:mm is carried; anything else is issue `time`", () => {
+    const ok = parseCreateRequest(special({ time: "18:45" }));
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.value.time).toBe("18:45");
+    for (const time of ["9:00", "24:00", "18:60", 1845]) {
+      expect(parseCreateRequest(special({ time }))).toMatchObject({ ok: false, issues: ["time"] });
+    }
+  });
+
+  it("create: a weekend role refuses a time instead of silently dropping it", () => {
+    expect(parseCreateRequest(createBody({ time: "09:00" }))).toMatchObject({ ok: false, issues: ["time"] });
+  });
+
+  it("create: the fingerprint ignores an absent time and changes with a present one", () => {
+    const base = special();
+    expect(payloadFingerprint({ ...base, time: null })).toBe(payloadFingerprint(base));
+    expect(payloadFingerprint({ ...base, time: "" })).toBe(payloadFingerprint(base));
+    expect(payloadFingerprint({ ...base, time: "09:00" })).not.toBe(payloadFingerprint(base));
+  });
+
+  // Pinned on 2026-09-22: a time-less payload's fingerprint must never move — every in-flight create receipt depends on it.
+  it("create: a time-less special payload keeps its exact historical fingerprint", () => {
+    const pinned = {
+      creationRequestId: "req-abc-0001",
+      _type: "special_role",
+      date: "2026-10-03",
+      service_name: "Campamento · Alabanza",
+      published: false,
+      leads: ["mem-1"],
+    };
+    expect(payloadFingerprint(pinned)).toBe("0dc48431d0dd77cfee752363fbc7c6d2697dc1b4e9499d260635bc90d6a978bd");
+  });
+
+  it("edit: parses time like create and does not know the stored type", () => {
+    const ok = parseEditRequest({ rev: "r1", date: "2026-10-03", _type: "special_role", service_name: "X", time: "12:30" });
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.value.time).toBe("12:30");
+    expect(parseEditRequest({ rev: "r1", date: "2026-10-03", time: "12:3" })).toMatchObject({ ok: false, issues: ["time"] });
+    const none = parseEditRequest({ rev: "r1", date: "2026-10-03" });
+    expect(none.ok).toBe(true);
+    if (none.ok) expect(none.value.time).toBeNull();
+  });
+
+  it("document and patch: time is written only when present, and unset when absent", () => {
+    const seats = normalizeSeats(special());
+    const nextKey = () => "k";
+    const withTime = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
+    expect(withTime.time).toBe("09:00");
+    const without = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
+    expect("time" in without).toBe(false);
+
+    const patchWith = buildRoleEditPatch({ roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", seats, nextKey });
+    expect(patchWith.set.time).toBe("09:00");
+    expect(patchWith.unset).toEqual([]);
+    const patchWithout = buildRoleEditPatch({ roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, seats, nextKey });
+    expect("time" in patchWithout.set).toBe(false);
+    expect(patchWithout.unset).toEqual(["time"]);
+    const weekend = buildRoleEditPatch({ roleType: "sunday_role", date: "2026-10-04", serviceName: null, time: null, seats, nextKey });
+    expect(weekend.unset).toEqual([]);
   });
 });

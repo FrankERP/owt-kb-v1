@@ -44,4 +44,13 @@ describe("DateField", () => {
     expect(input.max).toBe("2026-09-30");
     expect(input.disabled).toBe(true);
   });
+
+  it("time kind is the native time input", () => {
+    const onChange = vi.fn((e: React.ChangeEvent<HTMLInputElement>) => e.target.value);
+    render(<DateField kind="time" id="t" label="Hora" value="09:00" onChange={onChange} />);
+    const input = screen.getByLabelText("Hora") as HTMLInputElement;
+    expect(input.type).toBe("time");
+    fireEvent.change(input, { target: { value: "18:45" } });
+    expect(onChange).toHaveReturnedWith("18:45");
+  });
 });

@@ -171,4 +171,11 @@ describe("draftCreateBody — special services", () => {
     expect(result.createdLocalIds).toEqual(["s1"]);
     expect(bodies[0]).toMatchObject({ service_name: "Vigilia" });
   });
+
+  it("draftCreateBody emits time for a special only when present", () => {
+    const base = { localId: "l", creationRequestId: "req-abc-0001", _type: "special_role" as const, date: "2026-10-03", service_name: "X", leads: [], bgvs: [], chorus: [], instruments: [], foh: [] };
+    expect(draftCreateBody({ ...base, time: "09:00" }, false)).toMatchObject({ time: "09:00" });
+    expect("time" in draftCreateBody(base, false)).toBe(false);
+    expect("time" in draftCreateBody({ ...base, _type: "sunday_role", time: "09:00" }, false)).toBe(false);
+  });
 });

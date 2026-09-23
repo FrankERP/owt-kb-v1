@@ -126,7 +126,9 @@ const weekendNoun = (iso: string) => (dayOfWeek(iso) === 0 ? "domingo" : "sábad
  *  4. **P2** — a `special_role` already exists in Sanity on that date. The
  *     generator's preflight for a special is name-BLIND (`special_role:<date>`),
  *     so a second special on the same date is refused at the picker rather than
- *     drafted against an observation that cannot tell the two apart.
+ *     drafted against an observation that cannot tell the two apart. A second
+ *     set on a stored date is created from stored mode's composer, which is
+ *     name-aware; this flow drafts one special per date on purpose (E19).
  *
  * Never keyed off a draft's `exists`: that means "this column once matched a
  * Sanity document", which survives a rename and cannot distinguish this
@@ -161,7 +163,7 @@ export function refuseSpecialOn(input: {
   );
   if (stored) {
     const name = stored.service_name?.trim();
-    return `El ${longDate(date)} ya tiene un servicio especial guardado${name ? `: «${name}»` : ""}. No se puede crear otro en la misma fecha.`;
+    return `El ${longDate(date)} ya tiene un servicio especial guardado${name ? `: «${name}»` : ""}. Para agregar otro set ese día usa «+ Nuevo servicio» en los servicios guardados.`;
   }
   return null;
 }

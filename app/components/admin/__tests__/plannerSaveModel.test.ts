@@ -140,3 +140,43 @@ describe("plannerSaveModel", () => {
     }).kind).toBe("unresolved");
   });
 });
+
+describe("special-service time", () => {
+  const specialCells: GridCell[] = cells.map((cell) => ({ ...cell, columnId: "special-1" }));
+  const special: StoredGridColumn = { ...column, columnId: "special-1", roleId: "special-1", type: "special_role", serviceName: "Campamento · Alabanza" };
+
+  it("emits the time in the PATCH body and the snapshot, and its absence as null", () => {
+    const timed = serializeStoredColumn({ ...special, time: "09:00" }, rows, specialCells);
+    expect(timed.ok).toBe(true);
+    if (timed.ok) {
+      expect(timed.body.time).toBe("09:00");
+      expect(timed.snapshot.time).toBe("09:00");
+    }
+    const untimed = serializeStoredColumn(special, rows, specialCells);
+    expect(untimed.ok).toBe(true);
+    if (untimed.ok) {
+      expect("time" in untimed.body).toBe(false);
+      expect(untimed.snapshot.time).toBeNull();
+    }
+  });
+
+  it("a changed time is a semantic change", () => {
+    const a = serializeStoredColumn({ ...special, time: "09:00" }, rows, specialCells);
+    const b = serializeStoredColumn({ ...special, time: "12:30" }, rows, specialCells);
+    expect(a.ok && b.ok && sameRoleSemantics(a.snapshot, b.snapshot)).toBe(false);
+  });
+
+  it("refuses a malformed time instead of sending it", () => {
+    const bad = serializeStoredColumn({ ...special, time: "9:00" }, rows, specialCells);
+    expect(bad).toMatchObject({ ok: false, reasons: ["invalid_special_time"] });
+  });
+
+  it("a weekend column never carries a time", () => {
+    const weekend = serializeStoredColumn({ ...column, time: "09:00" }, rows, cells);
+    expect(weekend.ok).toBe(true);
+    if (weekend.ok) {
+      expect("time" in weekend.body).toBe(false);
+      expect(weekend.snapshot.time).toBeNull();
+    }
+  });
+});

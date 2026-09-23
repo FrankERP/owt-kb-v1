@@ -16,6 +16,7 @@ import { pickUnique, serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { orderProposals } from "@/app/utils/serviceReadModel";
 import { nextSeatLine, seatLabel } from "@/app/utils/myWeek";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
+import { compareServiceTime } from "@/app/utils/serviceTime";
 import { revealProps } from "@/app/utils/reveal";
 import { horizon } from "./queries";
 import { KIDS_SEATS, KIDS_SEAT_LABELS, type KidsSeat } from "@/app/utils/kidsTypes";
@@ -181,8 +182,8 @@ export default async function MePage() {
             team_notes,
           }
         },
-        "specials": *[_type == "special_role" && date >= $today && date <= $limit && published != false && ${memberFilter}] | order(date asc) {
-          _id, date, service_name, team_notes,
+        "specials": *[_type == "special_role" && date >= $today && date <= $limit && published != false && ${memberFilter}] | order(date asc, time asc) {
+          _id, date, time, service_name, team_notes,
           "isLead": $id in Lead[]._ref,
           "isBGV": $id in BGVs[]._ref,
           "isChorus": $id in Chorus[]._ref,
@@ -264,6 +265,7 @@ export default async function MePage() {
     _id: string;
     week?: string;
     date?: string;
+    time?: string | null;
     service_name?: string;
     isLead?: boolean;
     isBGV?: boolean;
@@ -304,7 +306,7 @@ export default async function MePage() {
     ...roleDocs(data?.specials).map((d) => asAssignment(d.date, d.service_name || "Servicio Especial", d)),
   ]
     .filter((a): a is { dateKey: string; day: string; doc: RoleDoc } => a !== null)
-    .sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey) || compareServiceTime(a.doc.time, b.doc.time));
 
   // The `DayCardProps` for one assignment, so the hero and the collapsed rows
   // below it are fed from ONE place — they were two copies of the same nine
@@ -312,6 +314,7 @@ export default async function MePage() {
   const cardProps = ({ day, doc, dateKey }: (typeof allAssignments)[number]): DayCardProps => ({
     day,
     date: dateKey,
+    time: doc.time ?? null,
     roleId: day !== "Domingo" && day !== "Sábado" ? doc._id : undefined,
     serviceId: doc._id,
     setlist: doc.setlist ?? (doc.songs?.length ? { songs: doc.songs, week: dateKey, team_notes: doc.team_notes } : undefined),
