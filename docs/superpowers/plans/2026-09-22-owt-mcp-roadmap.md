@@ -21,6 +21,14 @@ stated and answered explicitly:
    history).
 3. **Worship only.** Kids stays out of the surface.
 
+Two more, on 2026-09-23:
+
+4. **The spec states contracts; the child plans choose implementations.**
+5. **The claude.ai connector is registered against production only.** dev sits
+   behind Vercel Deployment Protection, which claude.ai cannot pass; lifting it
+   was declined. Code still goes preview-first; the connector is exercised on
+   production.
+
 ## Parent scope
 
 - **Shared outcome:** Frank manages the OWT app conversationally from the Claude
@@ -78,44 +86,58 @@ different owner; it blocks only P4.
 
 | ID | Type | Outcome and acceptance contract | Prerequisites | Outputs | Safe ending state | Rollback | Review order |
 |---|---|---|---|---|---|---|---|
-| **P0** | Implementation plan | OAuth 2.1 + `.well-known` discovery + MCP route with a single `ping` tool. **Accepted when the full connector handshake completes from the phone** and a revoked grant stops working within the cache TTL | v2 spec approved | The chosen SDK + its zod major, pinned; the JWT library, pinned; the observed callback-URI allowlist; the rate limiter; `MCP_OAUTH_SECRET`/`MCP_DISABLED` documented | A connector that authenticates and exposes one no-op tool | `MCP_DISABLED=1`, then remove the routes and both matcher list entries | 1st |
-| **P1** | Implementation plan | The seven read tools, reconciled per the v2 tool table. **Accepted when each returns data identical to the corresponding admin surface**, drafts marked `published: false` | P0 | Proven payload shapes; the `app/mcp/tools/` module pattern | Read-only connector | Delete the tool modules; P0 survives | 2nd |
+| **P0** | Implementation plan | OAuth 2.1 + `.well-known` discovery + MCP route with a single `ping` tool. **Accepted when the full connector handshake completes from the phone against production**, the MCP and OAuth endpoints pass a smoke test on dev through a local client carrying the protection bypass, and a revoked grant stops working within the cache TTL | v2 spec approved | The chosen SDK + its zod major, pinned; the JWT library, pinned; the observed callback-URI allowlist; the rate limiter; `MCP_OAUTH_SECRET`/`MCP_DISABLED` documented | A connector that authenticates and exposes one no-op tool | `MCP_DISABLED=1`, then remove the routes and both matcher list entries | 1st |
+| **P1** | Implementation plan | The seven read tools per the spec's read contracts, under I1–I5. **Accepted when each returns data identical to the corresponding admin surface**, every service marked with its `published` flag | P0 | Proven payload shapes; the `app/mcp/tools/` module pattern | Read-only connector | Delete the tool modules; P0 survives | 2nd |
 | **P2** | Spec, then implementation plan | Solver fairness history derived server-side from role documents instead of `localStorage`. **Accepted when the derived history is diffed against Frank's exported `owt_solver_history_v2` and the differences are explained, not merely small** | None (independent of P0/P1) | A server-callable history builder; a new ADR amending ADR-0010 | Either cut over, or not cut over and P4 is dropped | Keep the browser as the history source; no MCP code is affected | 3rd |
-| **P3** | Implementation plan | `edit_setlist`, `swap_assignment`, `publish_service`, `unpublish_service`. **Accepted when each produces the same document diff and the same notification set as the admin UI**, proven per tool against a throwaway draft service | P1 | The "extract authorization from write" pattern; registry-entry precedent | Read-only connector plus three proven writers | Remove the tools and their registry entries in one commit — the audit test forbids leaving either behind | 4th |
-| **P4** | Implementation plan | `solve_month` (no writes) + `apply_schedule` (guarded writes). **Accepted when a month solved through the connector produces the same schedule the browser produces from the same inputs**, and applying it refuses a published month | P2 **and** P3 | — | Full surface | Remove both tools; P2's history builder stays (it is independently correct) | 5th |
+| **P3** | Implementation plan | `edit_setlist`, `swap_assignment`, `publish_service`, `unpublish_service` per the spec's write contracts, under I6–I9. **Accepted when each produces the same document diff and the same notification set as the admin UI**, proven per tool on production against a throwaway service seated with Frank alone, **after** the exact notification recipients of each tool are confirmed — and when `publish_service` is shown to refuse a service the admin UI would refuse (I4) and to expose no override | P1 | The "extract authorization from write" pattern; registry-entry precedent | Read-only connector plus three proven writers | Remove the tools and their registry entries in one commit — the audit test forbids leaving either behind | 4th |
+| **P4** | Implementation plan | `solve_month` + `apply_schedule` per the spec. **Accepted when a month solved through the connector produces the same schedule the browser produces from the same inputs**, applying never touches an occupied target (published or draft) and reports each one, a retry never creates a service twice, and a partial apply is reported per service rather than as a whole-month success. **Not atomic across the month** — a limitation the spec states and owns | P2 **and** P3 | — | Full surface | Remove both tools; P2's history builder stays (it is independently correct) | 5th |
 
 Each child is written against the implementation-plan template when it is about
-to be delivered — not now. Writing five plans before the first is reviewed
+to be delivered — not now. Repository facts already verified for them are carried in
+[`2026-09-22-owt-mcp-child-plan-evidence.md`](2026-09-22-owt-mcp-child-plan-evidence.md)
+— input to those plans, not a requirement, and re-verified when each is written. Writing five plans before the first is reviewed
 wastes them: a material finding in P0 propagates to every later artifact and
 stales its approval.
 
 ## Requirement-to-plan coverage
 
+Requirement IDs are the spec's own: **I1–I11** (invariants), **O1–O7** (auth
+contracts) and the tool names (tool contracts). **H1–H3** are owned here, for
+P2, because P2 writes its own spec. How each is met is decided in the child plan
+that owns it — not in this table.
+
 | ID | Requirement | Primary | Dependent | Verification owner |
 |---|---|---|---|---|
-| R1 | OAuth 2.1 + PKCE + DCR handshake completes from the phone | P0 | — | P0 (manual, from the phone) |
-| R2 | Bearer verified per request; revocation effective within the cache TTL | P0 | P1, P3, P4 | P0 (route-level tests) |
-| R3 | Middleware exclusions in **both** the matcher literal and `PUBLIC_ROUTES` | P0 | — | `routeMatcher.test.ts` |
-| R4 | `MCP_OAUTH_SECRET` + `MCP_DISABLED` in `docs/SECRETS.md`, same change | P0 | — | P0 code review |
-| R5 | Rate limit + hard registration cap on the unauthenticated DCR endpoint | P0 | — | P0 (unit) |
-| R6 | Auth-code replay refused via the `create()` 409 conflict path | P0 | — | P0 (test asserts the conflict path specifically) |
-| R7 | Seven read tools, reconciled against A6–A9 of the v2 ledger | P1 | — | P1 vs admin surfaces |
-| R8 | Every protected read via a named `operationalClient` import | P1 | P3, P4 | `protectedReadAudit.test.ts` |
-| R9 | Draft gating on every new read | P1 | P3, P4 | `draftGatingCoverage.test.ts` |
-| R10 | Worship-only surface | P1 | P3, P4 | P1 code review |
-| R11 | Fairness history derived from role documents, with an ADR | P2 | — | P2 diff against exported browser history |
-| R12 | `edit_setlist` with `_key` per item and both revision assertions | P3 | — | P3 (route-parity test) |
-| R13 | `swap_assignment` asserting **both** role revisions plus lock revisions | P3 | — | P3 |
-| R14 | Publish notifications fire from a **pre-commit** `before` capture | P3 | — | P3 + the existing regression guard |
-| R15 | Every protected write registered by exact file+operation, same commit | P3 | P4 | `protectedReadAudit.test.ts` |
-| R16 | Authorization extracted separately from write logic | P3 | P4 | P3 code review |
-| R17 | `solve_month` completes within 60 s and writes nothing | P4 | — | P4 (measured, not assumed) |
-| R18 | `apply_schedule` refuses a month containing a published service | P4 | — | P4 |
-| R19 | A committed review log beside each reviewed artifact | all | — | `finish-cycle` |
+| O1 | The connector handshake completes from the phone, against production | P0 | — | P0 (manual, from the phone) |
+| O2 | Per request within 30 s: signature, expiry, grant not revoked, subject still a live non-disabled super-admin, audience equals this origin; `MCP_DISABLED` kill switch | P0 | P1, P3, P4 | P0 (route tests: demoted subject, disabled subject, foreign-origin token) |
+| O3 | Rate limit **and** hard registration cap on the unauthenticated registration endpoint | P0 | — | P0 (unit) |
+| O4 | Auth-code replay refused; refresh-token reuse revokes the grant | P0 | — | P0 (tests assert the refusal paths specifically) |
+| O5 | Stored OAuth state is non-secret and non-replayable | P0 | — | P0 code review |
+| O6 | Dedicated signing secret; direct, pinned JWT dependency | P0 | — | P0 code review |
+| O7 | Both secrets documented in `docs/SECRETS.md` in the same change | P0 | — | P0 code review |
+| I10 | Discovery computed per request, `issuer`/`resource` equal to the origin fetched | P0 | — | P0 (production with no cookie; dev through the local bypass client; compare `issuer` to the host fetched, not merely that it responds) |
+| I11 | Middleware exclusion, both hand-kept lists in sync | P0 | — | `routeMatcher.test.ts` |
+| I6 | Bearer auth at the route before dispatch; authorization separate from domain logic | P0 | P1, P3, P4 | P0 route tests + each child's code review |
+| I1 | Audit: canonical reads; exact write registration in the same commit | P1 | P2, P3, P4 | `protectedReadAudit.test.ts` |
+| I2 | No new `MAY_SEE_DRAFTS` entry; no draft-gated literal in an MCP-owned file | P1 | P2, P3, P4 | `draftGatingCoverage.test.ts` |
+| I3 | `published` verbatim on every service payload | P1 | P3, P4 | P1 tests |
+| I4 | One readiness predicate for reads and `publish_service` | P1 | P3 | P1 + P3 agreement test: what a read reports blocking is what publish refuses on |
+| I5 | Worship scope; the super-admin bypass does not apply | P1 | — | P1 test with a kids-only fixture member |
+| reads | `get_service`, `list_services`, `search_songs`, `get_song`, `get_member_availability`, `get_participation`, `list_proposals` | P1 | — | P1, each against its admin surface |
+| H1 | Derived fairness history excludes specials (ADR-0010 Decision 3) | P2 | P4 | P2 |
+| H2 | An ADR amending ADR-0010 settles the specials rule **and** whether unpublished services count, **before** the diff runs | P2 | — | P2 |
+| H3 | Derived history diffed against Frank's exported `owt_solver_history_v2`, every difference explained | P2 | P4 | P2 |
+| I7 | Concurrency parity: each write requires the observations its admin counterpart requires, taken from a read the user acted on; reads return them | P1 | P3, P4 | P1 (reads return them) + P3 stale-observation tests per tool |
+| I8 | Notification parity, computed from pre-commit state | P3 | P4 | P3 + the existing regression guard |
+| I9 | Honest, per-item outcomes | P3 | P4 | Per-tool tests |
+| writes | `edit_setlist`, `swap_assignment`, `publish_service`, `unpublish_service` | P3 | — | P3, each against the admin UI, on production, on a throwaway service seated with Frank alone |
+| `solve_month` | Writes nothing; inside 60 s; per-service idempotency identity | P4 | — | P4 (measured, not assumed) |
+| `apply_schedule` | Creates only; occupied targets skipped and reported; at most once per service; occupancy re-checked at write time; per-service outcome | P4 | — | P4 (stale-apply, retry, partial-failure and occupied-target tests) |
+| L1 | A committed review log beside each reviewed artifact | all | — | `finish-cycle` |
 
-Every requirement has exactly one primary owner. R2, R8, R9, R15 and R16 are
-intentionally cross-cutting: they are established once and re-verified by the
-gate on every later child.
+Every requirement has exactly one primary owner. I1, I2, I6 and I7 are
+intentionally cross-cutting: established once, then re-verified by the gate on
+every later child.
 
 ## Sequence and safe states
 
@@ -144,7 +166,7 @@ Carried from the v2 spec; each child re-validates the ones it depends on.
 
 ## Review handoff
 
-- **Order:** this roadmap first, then P0, P1, P2, P3, P4 — each as a separate
+- **Order:** after the v2 spec, this roadmap, then P0, P1, P2, P3, P4 — each as a separate
   fresh review with no prior findings exposed.
 - **Risk tier: CRITICAL** for the roadmap, P0, P3 and P4 (auth/ACL boundary,
   production writers, multi-document concurrency). Two sequential fresh

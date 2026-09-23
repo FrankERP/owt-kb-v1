@@ -2,9 +2,12 @@
 
 **Date:** 2026-07-28
 **Status:** **SUPERSEDED by [`2026-09-22-owt-mcp-design-v2.md`](2026-09-22-owt-mcp-design-v2.md).**
-Approved on its own terms on 2026-07-28 and never implemented. Eleven of its
-load-bearing statements went stale in the 56 days that followed, and two of its
-preconditions are unattainable on Vercel Hobby. **Do not plan against this file.**
+Approved on its own terms on 2026-07-28 and never implemented. Twelve of its
+load-bearing statements went stale in the 56 days that followed, two of its
+preconditions are unattainable on Vercel Hobby, and two more — that publishing
+goes "through the same code path as the admin publish routes", and that
+`summarizeUnfilledSeats` reports coverage gaps — were already false the day it
+was approved. **Do not plan against this file.**
 It is kept because v2's reconciliation ledger cites it line by line, and because
 its OAuth design — endpoint table, PKCE binding, the `create()` 409 replay signal,
 refresh rotation as a theft signal, and the world-readable-dataset constraint on
