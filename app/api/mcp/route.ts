@@ -102,15 +102,53 @@ function presentedBearer(request: Request): PresentedBearer {
 }
 
 /**
- * What the MCP server is handed: a copy of the request WITHOUT `Authorization`,
- * carrying the verified principal as `auth` (which `mcp-handler` forwards to
- * the SDK as `authInfo`). The SDK gives every tool the request it received as
- * `ctx.http.req`, so dropping the header here is what keeps the raw bearer out
- * of every tool. The body moves to the copy; the original is not read again.
+ * The ONLY request headers the MCP server is handed — every one that
+ * `mcp-handler` 2.2 or `@modelcontextprotocol/server` 2.1 reads on this route's
+ * path, and nothing else. An allowlist, not a deny-list: `Authorization`, a
+ * session `Cookie`, `x-vercel-protection-bypass` (which the dev smoke sends on
+ * every request) and whatever a client adds tomorrow never reach a tool.
+ *
+ *   content-type, accept         — the entry's media-type and SSE checks
+ *   content-length               — the SDK refuses an over-cap declared length unread
+ *   mcp-protocol-version         — era classification (both eras)
+ *   mcp-method, mcp-name         — the 2026-07-28 standard headers it validates
+ *   mcp-session-id, last-event-id — the legacy transport's session/resume reads
+ *   host, origin                 — its DNS-rebinding checks (off in mcp-handler
+ *                                  today; kept so turning them on cannot 403
+ *                                  every request)
+ *   mcp-param-*                  — values a tool's `x-mcp-header` inputs mirror
+ *
+ * Not forwarded, though the package reads them elsewhere: `x-forwarded-*` and
+ * `forwarded` (only its `withMcpAuth`/metadata helpers, which this route does
+ * not use). Re-check this list when either package is upgraded.
+ */
+const FORWARDED_HEADERS = new Set([
+  "content-type",
+  "accept",
+  "content-length",
+  "mcp-protocol-version",
+  "mcp-method",
+  "mcp-name",
+  "mcp-session-id",
+  "last-event-id",
+  "host",
+  "origin",
+]);
+const FORWARDED_HEADER_PREFIX = "mcp-param-";
+
+/**
+ * What the MCP server is handed: a copy of the request carrying ONLY the
+ * `FORWARDED_HEADERS`, plus the verified principal as `auth` (which
+ * `mcp-handler` forwards to the SDK as `authInfo`). The SDK gives every tool
+ * the request it received as `ctx.http.req`, so the allowlist here is what
+ * keeps the raw bearer, the session cookie and the bypass secret out of every
+ * tool. The body moves to the copy; the original is not read again.
  */
 function forwardedRequest(request: Request, authInfo: AuthInfo): Request {
-  const headers = new Headers(request.headers);
-  headers.delete("authorization");
+  const headers = new Headers();
+  for (const [name, value] of request.headers) {
+    if (FORWARDED_HEADERS.has(name) || name.startsWith(FORWARDED_HEADER_PREFIX)) headers.append(name, value);
+  }
   const forwarded = new Request(request, { headers });
   forwarded.auth = authInfo;
   return forwarded;
@@ -196,7 +234,7 @@ async function handle(request: Request): Promise<Response> {
 
     // `mcp-handler` hands `request.auth` to the SDK, which gives it to tools
     // as `ctx.http.authInfo` — what its own `withMcpAuth` does, on the
-    // original request. Here it rides on the header-stripped copy, built only
+    // original request. Here it rides on the allowlisted copy, built only
     // after every check has passed.
     return await mcpHandler(forwardedRequest(request, auth.authInfo));
   } catch {

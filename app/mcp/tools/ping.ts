@@ -17,6 +17,9 @@
 //      line is fixed too: never the error, never anything from the request.
 // The route has already authenticated the caller before any of this runs
 // (spec I6); a tool that needs the principal reads `ctx.http?.authInfo`.
+// `ctx.http?.req` carries only the headers the SDK needs (`FORWARDED_HEADERS`
+// in `app/api/mcp/route.ts`) — never `Authorization`, a cookie or Vercel's
+// bypass header, so no credential can be read from it.
 
 import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";

@@ -18,7 +18,8 @@
  * run is not a dry run. `--base https://owt-backstage.vercel.app` and a
  * missing `SR_VERIFY_BYPASS_SECRET` are the two invocations anyone may run to
  * PROVE this script refuses — neither makes a network call (see
- * `resolveBase`).
+ * `resolveBase` for the first, and the bypass-secret check at the top of
+ * `main()` for the second).
  *
  *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs
  *     … the full handshake against https://dev-owt-backstage.vercel.app:
@@ -28,8 +29,8 @@
  *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --await-revocation
  *     … same, then pauses for Enter after printing the revoke command — run
  *       `revoke-mcp-grant.mjs --id <id> --apply` in another terminal, press
- *       Enter, and this polls `ping` every 10 s for up to 60 s for the 401
- *       that proves the revocation landed.
+ *       Enter, and this polls `tools/list` every 10 s for up to 60 s for the
+ *       401 that proves the revocation landed.
  *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --base http://localhost:3000
  *     … same, against a local `next dev` — no bypass secret needed there.
  *   … --no-open prints the authorize URL instead of opening it (macOS `open`).

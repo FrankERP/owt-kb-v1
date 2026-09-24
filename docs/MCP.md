@@ -18,24 +18,27 @@ for the route-level contract.
 
 ### Endpoints
 
-| Route | Gated by the session middleware? | Notes |
-|---|---|---|
-| `GET /.well-known/oauth-authorization-server` | No — self-authenticating | `beforeFiles` rewrite to `app/api/oauth/discovery/authorization-server/route.ts`, which stays gated at its own path |
-| `GET /.well-known/oauth-protected-resource` | No | rewrite to `app/api/oauth/discovery/protected-resource/route.ts` |
-| `GET /.well-known/oauth-protected-resource/api/mcp` | No | same rewrite target, path-suffixed RFC 9728 form (what `resourceMetadataUrl` points at) |
-| `POST /api/oauth/register` | No | stateless DCR — writes nothing (ADR-0039) |
-| `POST /api/oauth/token` | No | the only place grants are created and refresh tokens rotate |
-| `GET \| POST \| DELETE /api/mcp` | No | the MCP endpoint itself — authenticates every request with its own bearer token |
-| `GET /oauth/authorize` | **Yes** | the consent screen (a page, not an API route) |
-| `POST /api/oauth/authorize` | **Yes** | the only thing that mints an authorization code; GET is 405 |
+| Route | Gated by the session middleware? | What enforces it | Notes |
+|---|---|---|---|
+| `GET /.well-known/oauth-authorization-server` | No | nothing — **public by design**: fixed metadata, no input | `beforeFiles` rewrite to `app/api/oauth/discovery/authorization-server/route.ts`, which stays gated at its own path |
+| `GET /.well-known/oauth-protected-resource` | No | nothing — **public by design** | rewrite to `app/api/oauth/discovery/protected-resource/route.ts` |
+| `GET /.well-known/oauth-protected-resource/api/mcp` | No | nothing — **public by design** | same rewrite target, path-suffixed RFC 9728 form (what `resourceMetadataUrl` points at) |
+| `POST /api/oauth/register` | No | the **redirect-URI allowlist**; what it returns is a **signed client id** that every later step verifies | stateless DCR — writes nothing (ADR-0039) |
+| `POST /api/oauth/token` | No | the **signed authorization code plus its PKCE verifier** (or a signed refresh token and its live grant), and the signed client id | the only place grants are created and refresh tokens rotate |
+| `GET \| POST \| DELETE /api/mcp` | No | its own **bearer-token** check, on every request | the MCP endpoint itself |
+| `GET /oauth/authorize` | **Yes** | the session, plus a live, non-impersonating super-admin | the consent screen (a page, not an API route) |
+| `POST /api/oauth/authorize` | **Yes** | the same, plus the same-origin check and the re-validated signed client id | the only thing that mints an authorization code; GET is 405 |
 
-The three routes above marked "No" are excluded from `proxy.ts` / `MIDDLEWARE_MATCHER`
-(`app/utils/routeMatcher.ts`) by design — each authenticates itself (a bearer token, a signed
-client id, a signed code). `/oauth/authorize` and `/api/oauth/authorize` deliberately stay
-**gated**: the consent screen needs a real super-admin session, and it can afford to sit behind
-the middleware because NextAuth's **default** `redirect` callback carries a relative
-`callbackUrl` (query included) through sign-in unchanged — see the invariant in `CLAUDE.md` and
-the guard test `app/utils/__tests__/authRedirectCallback.test.ts`.
+Every route in the table runs the same preflight before anything else (`mcpRoutePreflight`: the
+kill switch, a foreign `Host`, a missing signing secret — a 503/404/503 on the API routes, «No
+disponible» or a not-found page on the consent screen). The six routes marked "No" are excluded
+from `proxy.ts` / `MIDDLEWARE_MATCHER` (`app/utils/routeMatcher.ts`) by design — none of them
+reads a session cookie, and each is enforced by what its row names instead. `/oauth/authorize`
+and `/api/oauth/authorize` deliberately stay **gated**: the consent screen needs a real
+super-admin session, and it can afford to sit behind the middleware because NextAuth's
+**default** `redirect` callback carries a relative `callbackUrl` (query included) through sign-in
+unchanged — see the invariant in `CLAUDE.md` and the guard test
+`app/utils/__tests__/authRedirectCallback.test.ts`.
 
 **Canonical origin, one per deployment.** Every request is checked against the ONE origin that
 deployment is allowed to serve, chosen by `VERCEL_ENV` (`app/mcp/oauth/origin.ts`):
@@ -79,7 +82,10 @@ ignored. Returns:
 this is how you tell from the phone which deployment answered. `now` is
 America/Mexico_City wall-clock time with its UTC offset. Pattern for adding a second tool: one
 file per tool in `app/mcp/tools/`, exporting a `register<Tool>(server, deps)` function that
-`app/api/mcp/route.ts` calls inside its handler init.
+`app/api/mcp/route.ts` calls inside its handler init. A tool reads the principal from
+`ctx.http.authInfo`; the request it sees as `ctx.http.req` carries only an **allowlist** of the
+headers the SDK needs (`FORWARDED_HEADERS` in `app/api/mcp/route.ts`) — never `Authorization`,
+a session cookie or the Vercel bypass header.
 
 ### Stored state
 
@@ -101,13 +107,20 @@ are not surfaced by the public reader regardless.
 
 ## Adding the connector (claude.ai)
 
+**The connector is production-only** (the spec's «Connector origin» decision, D-2026-09-23).
+Dev (`dev-owt-backstage.vercel.app`) sits behind Vercel Deployment Protection, and claude.ai's
+servers carry neither the bypass header nor the bypass cookie, so they cannot reach discovery,
+the token endpoint or `/api/mcp` there — a claude.ai connector pointed at dev fails at its first
+request. Dev is exercised **only** by the local dev smoke client, `scripts/mcp-dev-smoke.mjs`
+([below](#dev-smoke-procedure)), which sends the bypass header itself. Lifting the protection
+instead was considered and declined: dev writes the production dataset.
+
 1. In claude.ai (web, Desktop or mobile), add a **custom connector** with URL:
    ```
    https://owt-backstage.vercel.app/api/mcp
    ```
-   (or `https://dev-owt-backstage.vercel.app/api/mcp` to connect to dev instead of production —
-   see [Release checklist](#release-checklist-steps-1213) for why dev is the one to use before
-   step 13).
+   Production only, and only once the [release checklist](#release-checklist-steps-1213) has
+   shipped P0 there (its step 7 is exactly this).
 2. Claude discovers the OAuth endpoints, registers itself (stateless DCR — nothing is written
    yet), and opens the authorize URL in a browser.
 3. **Sign in to Backstage** if you are not already — the consent page is a real app page behind
@@ -195,7 +208,7 @@ node --env-file=.env.local scripts/mcp-dev-smoke.mjs
 
 # Same, then pauses after printing the revoke command so you can run
 # revoke-mcp-grant.mjs --id <id> --apply in another terminal, press Enter, and this
-# polls ping every 10s for up to 60s for the 401 that proves the revocation landed.
+# polls tools/list every 10s for up to 60s for the 401 that proves the revocation landed.
 node --env-file=.env.local scripts/mcp-dev-smoke.mjs --await-revocation
 
 # Local next dev instead of the deployed dev origin — no bypass secret needed.
@@ -218,9 +231,10 @@ env -u SR_VERIFY_BYPASS_SECRET node scripts/mcp-dev-smoke.mjs            # refus
 **The revoke-and-401 check, end to end:** run the script with `--await-revocation`, let it walk
 through registration/consent/token/ping/refresh, then when it prints the grant id and pauses, run
 `revoke-mcp-grant.mjs --id <id> --apply` in a second terminal, come back to the first terminal and
-press Enter. The script polls `ping` every 10 s for up to 60 s and passes once it observes a 401
-whose `WWW-Authenticate` header carries `error="invalid_token"` — the same challenge a real,
-revoked Claude connection would see.
+press Enter. The script polls `tools/list` (not `ping` — the route authenticates before it
+dispatches any method, so a `tools/list` 401 already proves the revocation) every 10 s for up to
+60 s, and passes once it observes a 401 whose `WWW-Authenticate` header carries
+`error="invalid_token"` — the same challenge a real, revoked Claude connection would see.
 
 Every secret, code and token the script ever prints is redacted (an 8-character prefix plus the
 length, never the value); nothing is written to disk.
@@ -257,9 +271,13 @@ A few things that look like bugs at first glance and are not:
   a 405 JSON body**, not at a helpful error screen — `GET /api/oauth/authorize` (which is what a
   stale form would effectively hit) is deliberately 405, because a GET must never mint a code.
   Frank should restart the connection from Claude rather than retry the stale page.
-- **The token endpoint answers `invalid_client` with a 400**, never a 401 — the connector uses
-  public clients (`token_endpoint_auth_method: "none"`), so a 401 would imply a `WWW-Authenticate`
-  challenge for a scheme this server doesn't offer.
+- **The token endpoint refuses client authentication with two different statuses.** Clients are
+  public (`token_endpoint_auth_method: "none"`), so any attempt is `invalid_client` — a
+  `client_secret` in the body is a **400**, but an `Authorization: Basic` header is a **401**
+  with `WWW-Authenticate: Basic realm="owt-backstage"`. RFC 6749 §5.2 requires that 401, with a
+  challenge in the client's own scheme, whenever the client authenticated through the
+  `Authorization` header. Every other `invalid_client` (a client id this origin never minted) is
+  a 400.
 - **A replayed authorization code is refused, but the tokens issued on its FIRST redemption are
   not revoked.** Spec O4 requires refusing the replay itself, not retroactively invalidating a
   legitimate prior exchange — if that is a security concern in a specific incident, revoke the

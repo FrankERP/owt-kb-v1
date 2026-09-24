@@ -29,15 +29,18 @@
 //
 // Ungated: excluded from the session middleware at the exact path
 // `api/oauth/token$` (`app/utils/routeMatcher.ts`, P0 step 5). Public clients
-// only (`token_endpoint_auth_method: "none"`), so any client authentication —
-// a `client_secret` or an `Authorization: Basic` header — is `invalid_client`.
+// only (`token_endpoint_auth_method: "none"`), so any client authentication is
+// `invalid_client`: a `client_secret` in the body is a 400, and an
+// `Authorization: Basic` header is a 401 with a `Basic` challenge (RFC 6749
+// §5.2 — the client used the header, so the answer names its scheme).
 
 import { getMemberAccess } from "@/app/utils/memberAccess";
 import { createGrant, loadGrant, redeemCode, rotateRefresh } from "@/app/mcp/oauth/grantStore";
 import { mcpRoutePreflight } from "@/app/mcp/oauth/guard";
 import { resolveResource } from "@/app/mcp/oauth/origin";
 import { isRedirectUriAllowed } from "@/app/mcp/oauth/redirects";
-import { jsonNoStore, oauthErrorResponse } from "@/app/mcp/oauth/responses";
+import { hasMediaType, readCappedBody } from "@/app/mcp/oauth/requestBody";
+import { basicClientAuthRefusedResponse, jsonNoStore, oauthErrorResponse } from "@/app/mcp/oauth/responses";
 import {
   checkCodeBinding,
   clientHashOf,
@@ -120,51 +123,15 @@ function serverError(stage: FailureStage, cause?: unknown): Response {
   return oauthErrorResponse("server_error");
 }
 
-function isFormContentType(header: string | null): boolean {
-  if (!header) return false;
-  // Ignore parameters (e.g. `; charset=UTF-8`) — the media type is what matters.
-  return header.split(";")[0]?.trim().toLowerCase() === FORM_MEDIA_TYPE;
-}
-
-type BodyReadResult = { ok: true; bytes: Uint8Array } | { ok: false };
-
 /**
- * Reads the body, aborting the moment more than `maxBytes` have arrived — the
- * cap applies to what is actually read, never only to a declared
- * Content-Length. Same shape as registration's and the consent POST's.
+ * The form: the media type (parameters such as `; charset=UTF-8` ignored),
+ * then the body capped on its declared length AND on the bytes actually read
+ * (`app/mcp/oauth/requestBody.ts`, shared with registration and the consent
+ * POST), then strict UTF-8.
  */
-async function readCappedBody(request: Request, maxBytes: number): Promise<BodyReadResult> {
-  const reader = request.body?.getReader();
-  if (!reader) return { ok: true, bytes: new Uint8Array(0) };
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value && value.byteLength > 0) {
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel().catch(() => {});
-        return { ok: false };
-      }
-      chunks.push(value);
-    }
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return { ok: true, bytes };
-}
-
 async function readForm(request: Request): Promise<URLSearchParams | Response> {
-  if (!isFormContentType(request.headers.get("content-type"))) return invalidRequest(DESCRIPTION.contentType);
-  const declaredLength = request.headers.get("content-length");
-  if (declaredLength !== null) {
-    const n = Number(declaredLength);
-    if (Number.isFinite(n) && n > MAX_BODY_BYTES) return invalidRequest(DESCRIPTION.tooLarge);
+  if (!hasMediaType(request.headers.get("content-type"), FORM_MEDIA_TYPE)) {
+    return invalidRequest(DESCRIPTION.contentType);
   }
   const body = await readCappedBody(request, MAX_BODY_BYTES);
   if (!body.ok) return invalidRequest(DESCRIPTION.tooLarge);
@@ -181,11 +148,16 @@ function param(form: URLSearchParams, name: string): string | null {
   return value === null || value === "" ? null : value;
 }
 
-/** Public clients only: a client secret or HTTP Basic credentials are refused, not ignored. */
-function attemptsClientAuthentication(request: Request, form: URLSearchParams): boolean {
+/**
+ * Public clients only: client authentication is refused, not ignored. `header`
+ * when the client sent HTTP Basic credentials (answered 401, RFC 6749 §5.2),
+ * `body` for a `client_secret` parameter (400), `null` when it tried neither.
+ * Another `Authorization` scheme is not client authentication and is ignored.
+ */
+function attemptedClientAuthentication(request: Request, form: URLSearchParams): "header" | "body" | null {
   const authorization = request.headers.get("authorization");
-  if (authorization !== null && /^basic(?:\s|$)/i.test(authorization.trim())) return true;
-  return form.has("client_secret");
+  if (authorization !== null && /^basic(?:\s|$)/i.test(authorization.trim())) return "header";
+  return form.has("client_secret") ? "body" : null;
 }
 
 /** O2: the subject is an existing, non-disabled member whose LIVE role is super-admin. */
@@ -340,9 +312,9 @@ export async function POST(request: Request): Promise<Response> {
   if (form instanceof Response) return form;
 
   // 3. Public clients only.
-  if (attemptsClientAuthentication(request, form)) {
-    return oauthErrorResponse("invalid_client", DESCRIPTION.clientAuthentication);
-  }
+  const clientAuthentication = attemptedClientAuthentication(request, form);
+  if (clientAuthentication === "header") return basicClientAuthRefusedResponse(DESCRIPTION.clientAuthentication);
+  if (clientAuthentication === "body") return oauthErrorResponse("invalid_client", DESCRIPTION.clientAuthentication);
 
   // 4. No repeated parameter (RFC 6749 §3.2).
   if (SINGLE_VALUED_PARAMS.some((name) => form.getAll(name).length > 1)) {

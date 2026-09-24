@@ -55,13 +55,28 @@ export type OAuthTokenErrorCode =
   | "server_error";
 
 /**
- * RFC 6749 §5.2 token-endpoint error. 400 for every client-side code —
- * including `invalid_client`: our clients are public (`none` auth), and a 401
- * would owe a `WWW-Authenticate` challenge for a scheme we do not offer — and
- * 500 for `server_error`.
+ * RFC 6749 §5.2 token-endpoint error: 400 for every client-side code, 500 for
+ * `server_error`. That includes `invalid_client` whenever the client did NOT
+ * try to authenticate through the `Authorization` header — an unknown client
+ * id, or a `client_secret` in the body — where §5.2 allows the 400. The one
+ * case §5.2 answers with a 401 instead is `basicClientAuthRefusedResponse`.
  */
 export function oauthErrorResponse(error: OAuthTokenErrorCode, description?: string): Response {
   return jsonNoStore(errorBody(error, description), error === "server_error" ? 500 : 400);
+}
+
+/**
+ * The token endpoint's refusal of HTTP Basic client authentication. Clients
+ * here are public (`none`), so it is still `invalid_client` — but RFC 6749
+ * §5.2 says that when the client attempted authentication via the
+ * `Authorization` header, the server MUST answer 401 with a `WWW-Authenticate`
+ * challenge in the scheme the client used. Minimal on purpose: a realm and
+ * nothing else.
+ */
+export function basicClientAuthRefusedResponse(description?: string): Response {
+  return jsonNoStore(errorBody("invalid_client", description), 401, {
+    "WWW-Authenticate": 'Basic realm="owt-backstage"',
+  });
 }
 
 export type RegistrationErrorCode = "invalid_redirect_uri" | "invalid_client_metadata";

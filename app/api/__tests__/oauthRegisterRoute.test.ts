@@ -485,6 +485,43 @@ describe("POST /api/oauth/register — client_name", () => {
   });
 });
 
+describe("POST /api/oauth/register — a whitespace-only client_name is ABSENT (R26)", () => {
+  // Nothing to show: signed, it would render an empty name on the consent
+  // page. Treated exactly like an absent name — no claim, nothing echoed.
+  it.each([
+    ["ASCII spaces", "   "],
+    ["an ideographic space (U+3000)", "\u3000"],
+    ["mixed spaces (U+0020, U+00A0, U+3000)", " \u00A0\u3000 "],
+  ])("%s → no name in the token, none echoed", async (_label, clientName) => {
+    stubEnv({ vercelEnv: "preview" });
+    const res = await POST(req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: clientName }) }));
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect("client_name" in body).toBe(false);
+    const verified = await verifyClientId(body.client_id, { key: KEY, origin: PREVIEW_ORIGIN });
+    expect(verified.ok).toBe(true);
+    if (!verified.ok) throw new Error("unreachable");
+    expect(verified.claims.clientName).toBeNull();
+  });
+
+  it("a name with real characters keeps its surrounding spaces verbatim — only an EMPTY trim is absent", async () => {
+    stubEnv({ vercelEnv: "preview" });
+    const res = await POST(req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: " Claude " }) }));
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.client_name).toBe(" Claude ");
+  });
+
+  it("whitespace that is also a control character is still refused, not treated as absent", async () => {
+    stubEnv({ vercelEnv: "preview" });
+    for (const clientName of ["\t", "\n", "  \u2028  "]) {
+      const res = await POST(req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: clientName }) }));
+      expect(res.status, JSON.stringify(clientName)).toBe(400);
+      expect(await res.json()).toEqual(expect.objectContaining({ error: "invalid_client_metadata" }));
+    }
+  });
+});
+
 describe("POST /api/oauth/register — refused-redirect logging", () => {
   it("logs exactly once, JSON.stringify'd, for a refused claude.ai near-miss", async () => {
     stubEnv({ vercelEnv: "preview" });

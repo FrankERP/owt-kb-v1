@@ -660,24 +660,49 @@ describe("POST /api/oauth/token — request shape", () => {
     await expectError(await POST(post(twice)), "invalid_request");
   });
 
-  it("a client_secret parameter → invalid_client (public clients only)", async () => {
+  it("a client_secret parameter → 400 invalid_client, no challenge (public clients only)", async () => {
     const clientId = await mintClient();
     const form = codeForm({ code: await mintCode(clientId), clientId });
     form.set("client_secret", "anything");
-    await expectError(await POST(post(form)), "invalid_client");
+    const res = await POST(post(form));
+    expect(res.headers.get("www-authenticate")).toBeNull();
+    await expectError(res, "invalid_client");
     const empty = codeForm({ code: await mintCode(clientId), clientId });
     empty.set("client_secret", "");
     await expectError(await POST(post(empty)), "invalid_client");
     expect(h.creates).toEqual([]);
   });
 
-  it("an Authorization: Basic header → invalid_client", async () => {
+  it("an Authorization: Basic header → 401 invalid_client with a Basic challenge (RFC 6749 §5.2)", async () => {
+    // The client attempted authentication through the Authorization header,
+    // so §5.2 owes a 401 whose WWW-Authenticate names the scheme it used.
     const clientId = await mintClient();
     const form = codeForm({ code: await mintCode(clientId), clientId });
-    for (const authorization of ["Basic Y2xpZW50OnNlY3JldA==", "basic Y2xpZW50OnNlY3JldA=="]) {
-      await expectError(await POST(post(form, { authorization })), "invalid_client");
+    for (const authorization of ["Basic Y2xpZW50OnNlY3JldA==", "basic Y2xpZW50OnNlY3JldA==", "BASIC"]) {
+      const res = await POST(post(form, { authorization }));
+      expect(res.headers.get("www-authenticate"), authorization).toBe('Basic realm="owt-backstage"');
+      const body = await expectError(res, "invalid_client", 401);
+      expect(body.error_description).toBe("client authentication is not supported: clients are public");
     }
+    // Basic AND a client_secret: the header was still attempted, so still the 401.
+    const both = codeForm({ code: await mintCode(clientId), clientId });
+    both.set("client_secret", "anything");
+    await expectError(await POST(post(both, { authorization: "Basic Y2xpZW50OnNlY3JldA==" })), "invalid_client", 401);
     expect(h.creates).toEqual([]);
+  });
+
+  it("every other invalid_client stays a 400 without a challenge", async () => {
+    // A client id this origin never minted.
+    const foreign = await mintClient({ key: OTHER_KEY });
+    const res = await POST(post(codeForm({ code: await mintCode(foreign), clientId: foreign })));
+    expect(res.headers.get("www-authenticate")).toBeNull();
+    await expectError(res, "invalid_client");
+    // Another scheme in the header is not client authentication — the Bearer
+    // here is ignored and the exchange proceeds.
+    const clientId = await mintClient();
+    const bearer = await POST(post(codeForm({ code: await mintCode(clientId), clientId }), { authorization: "Bearer x" }));
+    expect(bearer.headers.get("www-authenticate")).toBeNull();
+    await expectTokens(bearer);
   });
 
   it("an unsupported grant_type → unsupported_grant_type; a missing one → invalid_request", async () => {

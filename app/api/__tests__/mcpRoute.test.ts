@@ -35,8 +35,8 @@ vi.mock("@/sanity/lib/serverClient", () => ({ writeClient: h.writeClient, server
 // The REAL mcp-handler, observed: the wrapper records every request the route
 // forwards (so a refusal can assert the handler was never called at all), and
 // can add a test-only `probe` tool that reports what a tool actually sees —
-// `ctx.http.req`'s Authorization header and `ctx.http.authInfo`. The init runs
-// per request, so the probe exists only in the tests that switch it on.
+// every header on `ctx.http.req`, and `ctx.http.authInfo`. The init runs per
+// request, so the probe exists only in the tests that switch it on.
 vi.mock("mcp-handler", async (importOriginal) => {
   const actual = await importOriginal<typeof import("mcp-handler")>();
   const { z } = await import("zod");
@@ -54,7 +54,7 @@ vi.mock("mcp-handler", async (importOriginal) => {
               {
                 type: "text",
                 text: JSON.stringify({
-                  authorization: ctx.http?.req?.headers.get("authorization") ?? null,
+                  headers: Object.fromEntries(ctx.http?.req?.headers ?? []),
                   authInfo: ctx.http?.authInfo ?? null,
                 }),
               },
@@ -102,6 +102,16 @@ const INVALID_TOKEN_CHALLENGE = `Bearer error="invalid_token", resource_metadata
 
 const LEGACY_PROTOCOL = "2025-06-18";
 const MODERN_PROTOCOL = "2026-07-28";
+
+/**
+ * Credentials a real caller may send beside the bearer — a browser session
+ * cookie, and the Deployment Protection bypass the dev smoke sends on every
+ * request. The route must forward neither to the MCP server.
+ */
+const CREDENTIAL_HEADERS = {
+  cookie: "__Secure-next-auth.session-token=session-cookie-under-test",
+  "x-vercel-protection-bypass": "bypass-secret-under-test",
+};
 
 /** The 2026-07-28 per-request envelope: the two REQUIRED `_meta` keys, plus clientInfo (SHOULD). */
 const MODERN_META = {
@@ -169,6 +179,8 @@ interface RequestOptions {
   method?: "GET" | "POST" | "DELETE";
   /** Query string appended to the URL, e.g. `?access_token=…`. */
   search?: string;
+  /** Any further headers, verbatim (e.g. a cookie the route must not forward). */
+  headers?: Record<string, string>;
 }
 
 function mcpRequest(body: unknown, opts: RequestOptions = {}): Request {
@@ -182,6 +194,7 @@ function mcpRequest(body: unknown, opts: RequestOptions = {}): Request {
   if (!isInitialize) headers["mcp-protocol-version"] = LEGACY_PROTOCOL;
   if (opts.authorization !== undefined) headers.authorization = opts.authorization;
   else if (opts.token !== undefined) headers.authorization = `Bearer ${opts.token}`;
+  Object.assign(headers, opts.headers);
   return new Request(`https://ignored.example/api/mcp${opts.search ?? ""}`, {
     method,
     headers,
@@ -197,7 +210,7 @@ function mcpRequest(body: unknown, opts: RequestOptions = {}): Request {
 function modernRequest(
   method: string,
   params: Record<string, unknown>,
-  opts: { token?: string; name?: string; id?: number } = {},
+  opts: { token?: string; name?: string; id?: number; headers?: Record<string, string> } = {},
 ): Request {
   const headers: Record<string, string> = {
     host: PREVIEW_HOST,
@@ -208,6 +221,7 @@ function modernRequest(
   };
   if (opts.name !== undefined) headers["mcp-name"] = opts.name;
   if (opts.token !== undefined) headers.authorization = `Bearer ${opts.token}`;
+  Object.assign(headers, opts.headers);
   return new Request("https://ignored.example/api/mcp", {
     method: "POST",
     headers,
@@ -626,7 +640,10 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
   it("forwards a copy WITHOUT Authorization that carries the verified principal, never the raw token", async () => {
     const grantId = await liveGrant();
     const token = await accessToken(grantId);
-    const request = mcpRequest(rpc("tools/list"), { token });
+    const request = mcpRequest(rpc("tools/list"), {
+      token,
+      headers: { ...CREDENTIAL_HEADERS, "mcp-param-region": "mx", "x-unlisted": "dropped" },
+    });
     // The body really moved to the copy: the handler parsed it and answered.
     const result = await rpcResult(await POST(request));
     expect(result.tools).toHaveLength(1);
@@ -637,6 +654,17 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(forwarded.headers.get("authorization")).toBeNull();
     // Positive control: the caller's request did carry the header.
     expect(request.headers.get("authorization")).toBe(`Bearer ${token}`);
+    // An ALLOWLIST, not a deny-list: exactly the headers the SDK reads survive
+    // the copy (an `Mcp-Param-*` one included); the session cookie, Vercel's
+    // bypass header and anything unlisted do not reach the MCP server.
+    expect([...forwarded.headers.keys()].sort()).toEqual([
+      "accept",
+      "content-type",
+      "host",
+      "mcp-param-region",
+      "mcp-protocol-version",
+    ]);
+    expect(request.headers.get("cookie")).toBe(CREDENTIAL_HEADERS.cookie);
     // Everything else the SDK routes on survives the copy.
     expect(forwarded.method).toBe("POST");
     expect(forwarded.headers.get("content-type")).toBe("application/json");
@@ -657,23 +685,52 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(JSON.stringify(auth)).not.toContain(token);
   });
 
-  it("a tool sees no Authorization header, only the principal — on both protocol eras", async () => {
+  it("a tool sees no Authorization, Cookie or bypass header, only the principal — on both protocol eras", async () => {
     h.probe.enabled = true;
     const grantId = await liveGrant();
     const token = await accessToken(grantId);
     const legacy = await rpcResult(
-      await POST(mcpRequest(rpc("tools/call", { name: "probe", arguments: {} }), { token })),
+      await POST(
+        mcpRequest(rpc("tools/call", { name: "probe", arguments: {} }), { token, headers: CREDENTIAL_HEADERS }),
+      ),
     );
     const modern = await modernResult(
-      await POST(modernRequest("tools/call", { name: "probe", arguments: {} }, { token, name: "probe" })),
+      await POST(
+        modernRequest(
+          "tools/call",
+          { name: "probe", arguments: {} },
+          { token, name: "probe", headers: CREDENTIAL_HEADERS },
+        ),
+      ),
     );
-    for (const result of [legacy, modern]) {
-      expect(result.isError).toBeFalsy();
+    // What each era's SDK path needs to route the call must still reach it.
+    const required = {
+      legacy: {
+        host: PREVIEW_HOST,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": LEGACY_PROTOCOL,
+      },
+      modern: {
+        host: PREVIEW_HOST,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": MODERN_PROTOCOL,
+        "mcp-method": "tools/call",
+        "mcp-name": "probe",
+      },
+    };
+    for (const [era, result] of [["legacy", legacy], ["modern", modern]] as const) {
+      expect(result.isError, era).toBeFalsy();
       const text = (result.content as { text: string }[])[0]!.text;
-      expect(text).not.toContain(token);
-      const seen = JSON.parse(text) as { authorization: string | null; authInfo: Record<string, unknown> | null };
-      expect(seen.authorization).toBeNull();
-      expect(seen.authInfo).toMatchObject({ clientId: clientHashOf(CLIENT_ID), extra: { sub: MEMBER, grantId } });
+      expect(text, era).not.toContain(token);
+      for (const value of Object.values(CREDENTIAL_HEADERS)) expect(text, era).not.toContain(value);
+      const seen = JSON.parse(text) as { headers: Record<string, string>; authInfo: Record<string, unknown> | null };
+      expect(seen.headers.authorization, era).toBeUndefined();
+      expect(seen.headers.cookie, era).toBeUndefined();
+      expect(seen.headers["x-vercel-protection-bypass"], era).toBeUndefined();
+      expect(seen.headers, era).toMatchObject(required[era]);
+      expect(seen.authInfo, era).toMatchObject({ clientId: clientHashOf(CLIENT_ID), extra: { sub: MEMBER, grantId } });
     }
   });
 

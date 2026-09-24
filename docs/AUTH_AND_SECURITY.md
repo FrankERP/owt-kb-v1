@@ -136,7 +136,9 @@ Next.js 16 renamed `middleware.ts` → **`proxy.ts`**. It wraps the app in NextA
 `favicon.ico`, `LogoOasis.png`, `/icons`, `manifest.webmanifest`).
 The cron routes authenticate with `Bearer CRON_SECRET` in-handler; the identity route fails
 closed with a 404; the theme gallery is prerendered and reads nothing (ADR-0017); the MCP/OAuth
-routes authenticate themselves (a bearer token, a signed client id, a signed code) — see
+routes read no session — the discovery documents are public by design, registration only signs
+allowlisted redirect URIs into a client id, the token endpoint needs a signed code plus its PKCE
+verifier (or a signed refresh token), and `/api/mcp` checks its own bearer token — see
 [MCP / OAuth](#mcp--oauth) below. The first three had been public for some time without
 appearing in this list.
 Each excluded prefix is anchored with `(?:/|$)` so `/author` is **not** mistaken for the public

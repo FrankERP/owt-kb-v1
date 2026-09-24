@@ -25,6 +25,15 @@ const nextConfig = {
     ],
   },
 
+  // CSP CAVEAT (MCP connector, docs/MCP.md). There is no Content-Security-Policy
+  // here today. If one is added, `form-action 'self'` alone BREAKS the consent
+  // flow: the «Permitir»/«Cancelar» form posts to /api/oauth/authorize, which
+  // answers 303 to the client's redirect_uri, and Chrome enforces `form-action`
+  // on every redirect that follows a form submission — so the hop to claude.ai
+  // is blocked and the connector never receives its code. Either allow the
+  // redirect targets (`form-action 'self' https://claude.ai`, plus the loopback
+  // callbacks `http://127.0.0.1:*` / `http://localhost:*` on preview and local,
+  // where app/mcp/oauth/redirects.ts accepts them) or omit `form-action`.
   async headers() {
     return [
       {

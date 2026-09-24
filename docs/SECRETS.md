@@ -385,7 +385,8 @@ that order, and the window is zero.
   Automation.
 - **Purpose:** passes Vercel SSO protection on preview deployments, sent only as the
   `x-vercel-protection-bypass` header. Without it all three tools refuse — the dev smoke client
-  refuses before any network call (`resolveBase`'s env check), same as the other two.
+  refuses before any network call (the bypass-secret check at the top of its `main()`, right
+  after `resolveBase` has accepted the dev base), same as the other two.
 - **Where it came from:** Vercel → project `owt-backstage` → Settings → Deployment Protection →
   Protection Bypass for Automation. The A3 harness's use of it is described in
   `docs/VERIFICATION_HARNESS.md` §2 "Secret hygiene" and §3 "Environment"; this entry is the
@@ -426,10 +427,11 @@ environment**. Env vars bind at build time, same as every other variable in this
 
 **Blast radius.** Every access and refresh token that environment's routes ever signed stops
 verifying the instant the new key is live — a rotated secret cannot check a token signed under
-the old one, by construction. That is **that one environment's connectors only**: every human who
-connected Claude to it (or ran the dev smoke against it) must reconnect / re-run the OAuth
-handshake from scratch. The other environment, and the rest of the app, are unaffected — nothing
-here touches a session cookie or any non-MCP route.
+the old one, by construction. That is **that one environment's grants only**: on production, every
+claude.ai connector must be reconnected from Claude; on preview, only dev-smoke runs are affected
+and must re-run the handshake — no claude.ai connector exists there (it cannot pass Deployment
+Protection; see [docs/MCP.md](MCP.md#adding-the-connector-claudeai)). The other environment, and
+the rest of the app, are unaffected — nothing here touches a session cookie or any non-MCP route.
 
 ---
 
@@ -465,10 +467,12 @@ suspect a missing secret.
 
 - **`VERCEL_ENV`** (`production` | `preview` | absent locally) selects this deployment's single
   canonical origin (`app/mcp/oauth/origin.ts`'s `canonicalOrigin`) — production →
-  `owt-backstage.vercel.app`, preview → `dev-owt-backstage.vercel.app`, absent or `development` →
-  `localhost:3000`. **Any other value — or this variable being cleared at runtime — makes every
-  `Host` 404**, never open: the routes fail closed to "not found", exactly like an unrecognized
-  host normally does. Never set or override this manually.
+  `owt-backstage.vercel.app`, preview → `dev-owt-backstage.vercel.app`, absent, empty or
+  `development` → `localhost:3000`. **Any other value makes every `Host` 404**: `canonicalOrigin`
+  returns no origin at all, and the routes fail closed to "not found". **A cleared value (absent
+  or empty) is not that case** — it selects the LOCAL origin, so on a Vercel deployment every
+  request still 404s, but because no real `Host` there is `localhost:3000`, not because there is
+  no origin. Either way it fails closed, never open. Never set or override this manually.
 - **`VERCEL_GIT_COMMIT_SHA`** — the deployed commit. `ping`'s `version` field reports its first 7
   characters (`"local"` when the variable is absent), so Frank can tell from the phone which
   deployment answered a `ping` call. Not sensitive — the repository is public.

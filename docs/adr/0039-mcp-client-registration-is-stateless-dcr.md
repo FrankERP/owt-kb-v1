@@ -44,8 +44,9 @@ sweep on `client_name`) and, if it passes, signs a `client` JWT with `MCP_OAUTH_
 and `iat` — no expiry, because DCR clients are meant to be long-lived and what actually gets
 revoked is a *grant*, not a registration. That token **is** the `client_id` handed back in the
 201. Nothing is written to Sanity; the route never imports `writeClient` or the grant store, not
-even transitively for types (guarded by an import-closure test). A client id can be verified by
-anyone who re-derives the signature — it needs no lookup, no cap, and no cleanup job.
+even transitively for types (guarded by an import-closure test). A client id is verified by this
+server alone, with its own secret (HS256 is symmetric: nobody without `MCP_OAUTH_SECRET` can check
+the signature, let alone mint one) — it needs no lookup, no cap, and no cleanup job.
 
 ## Rejected
 

@@ -308,7 +308,8 @@ script. Full operator runbook: [`docs/MCP.md`](MCP.md).
 
 ### `mcpOauthGrant` — one document per authorized connection
 
-Deterministic `_id`: **`mcpOauthGrant.<uuid>`**.
+`_id`: **`mcpOauthGrant.<uuid>`** — a RANDOM uuid (`newGrantId`), minted fresh for every grant;
+unlike the redemption receipt below, nothing about the id is derived from its content.
 
 | Field | Type | Notes |
 |-------|------|-------|

@@ -99,7 +99,7 @@ flowchart TB
 ## 4. Request lifecycle
 
 Every request (except the small public allow-list — auth, cron, the A3 identity route,
-the theme gallery, and the self-authenticating MCP/OAuth routes, [MCP.md](MCP.md)) passes
+the theme gallery, and the ungated MCP/OAuth routes, [MCP.md](MCP.md) lists what enforces each) passes
 through **`proxy.ts`**
 (NextAuth `withAuth` middleware) before hitting a page or API route:
 

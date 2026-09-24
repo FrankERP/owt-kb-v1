@@ -31,6 +31,7 @@ import { requireActiveSession } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
 import { authorizationResponseUrl, authorizeErrorLocation, validateAuthorizeRequest } from "@/app/mcp/oauth/authorizeRequest";
 import { mcpRoutePreflight } from "@/app/mcp/oauth/guard";
+import { hasMediaType, readCappedBody } from "@/app/mcp/oauth/requestBody";
 import { jsonNoStore } from "@/app/mcp/oauth/responses";
 import { signAuthorizationCode } from "@/app/mcp/oauth/tokens";
 
@@ -46,12 +47,6 @@ const MAX_BODY_BYTES = 32 * 1024;
 
 const FORM_MEDIA_TYPE = "application/x-www-form-urlencoded";
 
-function isFormContentType(header: string | null): boolean {
-  if (!header) return false;
-  // Ignore parameters (e.g. `; charset=UTF-8`) — the media type is what matters.
-  return header.split(";")[0]?.trim().toLowerCase() === FORM_MEDIA_TYPE;
-}
-
 function badRequest(description: string): Response {
   return jsonNoStore({ error: "invalid_request", error_description: description }, 400);
 }
@@ -61,47 +56,15 @@ function seeOther(location: string): Response {
   return new Response(null, { status: 303, headers: { Location: location, "Cache-Control": "no-store" } });
 }
 
-type BodyReadResult = { ok: true; bytes: Uint8Array } | { ok: false };
-
 /**
- * Reads the body, aborting the moment more than `maxBytes` have arrived — the
- * cap applies to what is actually read, never only to a declared
- * Content-Length. Same shape as registration's (`app/api/oauth/register/route.ts`).
+ * The form: the media type (parameters such as `; charset=UTF-8` ignored),
+ * then the body capped on its declared length AND on the bytes actually read
+ * (`app/mcp/oauth/requestBody.ts`, shared with registration and the token
+ * endpoint), then strict UTF-8.
  */
-async function readCappedBody(request: Request, maxBytes: number): Promise<BodyReadResult> {
-  const reader = request.body?.getReader();
-  if (!reader) return { ok: true, bytes: new Uint8Array(0) };
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value && value.byteLength > 0) {
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel().catch(() => {});
-        return { ok: false };
-      }
-      chunks.push(value);
-    }
-  }
-  const bytes = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return { ok: true, bytes };
-}
-
 async function readForm(request: Request): Promise<URLSearchParams | Response> {
-  if (!isFormContentType(request.headers.get("content-type"))) {
+  if (!hasMediaType(request.headers.get("content-type"), FORM_MEDIA_TYPE)) {
     return badRequest(`Content-Type must be ${FORM_MEDIA_TYPE}`);
-  }
-  const declaredLength = request.headers.get("content-length");
-  if (declaredLength !== null) {
-    const n = Number(declaredLength);
-    if (Number.isFinite(n) && n > MAX_BODY_BYTES) return badRequest("request body too large");
   }
   const body = await readCappedBody(request, MAX_BODY_BYTES);
   if (!body.ok) return badRequest("request body too large");

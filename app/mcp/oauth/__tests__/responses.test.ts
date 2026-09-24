@@ -1,6 +1,7 @@
 // app/mcp/oauth/__tests__/responses.test.ts
 import { describe, it, expect } from "vitest";
 import {
+  basicClientAuthRefusedResponse,
   jsonNoStore,
   mcpUnauthorizedResponse,
   oauthErrorResponse,
@@ -32,6 +33,21 @@ describe("mcpUnauthorizedResponse", () => {
     );
     expectNoStoreJson(res);
     expect(await res.json()).toEqual({ error: "invalid_token" });
+  });
+});
+
+describe("basicClientAuthRefusedResponse (RFC 6749 §5.2, header-based client auth)", () => {
+  it("→ 401 invalid_client with a Basic challenge, JSON, no-store", async () => {
+    const res = basicClientAuthRefusedResponse("clients are public");
+    expect(res.status).toBe(401);
+    expect(res.headers.get("www-authenticate")).toBe('Basic realm="owt-backstage"');
+    expectNoStoreJson(res);
+    expect(await res.json()).toEqual({ error: "invalid_client", error_description: "clients are public" });
+  });
+
+  it("sanitises its description like every other token error", async () => {
+    const body = await basicClientAuthRefusedResponse('bad "x"\n').json();
+    expect(body.error_description).not.toMatch(/["\\\n]/);
   });
 });
 
