@@ -272,6 +272,11 @@ several exist precisely to stop a plausible-looking change.
   stubs that route so the baseline stays deterministic. Splitting a component is the
   answer; loosening the guard is not.
 - **Form controls are 16 px on a phone.** WebKit zooms into any focused `<input>`/`<textarea>`/`<select>` under 16 px and never zooms back, so every member-reachable control is `text-[16px] sm:text-<size>` (`ui/Select`/`ui/DateField` carry it in their `SIZE` maps). Never `maximum-scale=1` on the viewport. `inputFontSize.test.ts` is the guard (`admin/`, `kids/` excluded by path).
+- **OAuth/MCP routes serve only their deployment's canonical origin, fail closed without
+  `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and it depends
+  on NextAuth's DEFAULT `redirect` callback preserving its query** — never add a custom
+  `redirect` callback without keeping that. `authRedirectCallback.test.ts` is the guard. See
+  [`docs/MCP.md`](docs/MCP.md).
 
 ## Reusable utils (don't reinvent)
 `normalizeText` (accent-insensitive search), `assignedMemberRefsQuery`,

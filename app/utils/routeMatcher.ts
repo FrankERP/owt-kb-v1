@@ -36,8 +36,27 @@
 // produces identical exposure with less auditability.
 //
 // The exclusion is deliberately anchored. `/theme-gallery-secrets` stays gated.
+//
+// `api/mcp(?:/|$)` (P0 plan step 5, spec I11) is the MCP route itself — a plain
+// `(Request) => Promise<Response>` that authenticates every call with its own
+// bearer token, never a session cookie. Prefix-anchored because the handler
+// owns everything under it.
+// `api/oauth/register$` and `api/oauth/token$` are anchored with `$` to their
+// EXACT path, not a prefix, matching `api/service-readiness-verification/identity$`
+// above: registration validates a signed client id and token exchange validates
+// a signed code, both inside the handler, and neither authentication extends to
+// a sibling route. `/oauth/authorize` and `/api/oauth/authorize` deliberately
+// stay OUT of this list — the consent screen needs the real member session, and
+// NextAuth's default `redirect` callback round-trips its full query string
+// through sign-in unchanged, so gating it costs nothing.
+// `\.well-known(?:/|$)` opens the public `/.well-known/*` request path that
+// `proxy.ts` sees before `next.config.mjs`'s `beforeFiles` rewrites run —
+// discovery (RFC 8414 / RFC 9728) must be reachable before any login exists.
+// The rewrite destinations themselves (`app/api/oauth/discovery/*`) are
+// ordinary route files under `/api`, so they stay gated; they are reachable
+// only through the rewrite, never directly.
 export const MIDDLEWARE_MATCHER =
-  "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)";
+  "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|api/mcp(?:/|$)|api/oauth/register$|api/oauth/token$|\\.well-known(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)";
 
 // Mirrors Next.js matcher semantics (full-path match) so the exclusion logic
 // can be unit-tested without importing the middleware runtime.

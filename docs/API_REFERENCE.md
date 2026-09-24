@@ -1,6 +1,6 @@
 # API Reference — `app/api/`
 
-36 route handlers (`route.ts` files). Most talk to Sanity through `serverClient` (read) /
+60 route handlers (`route.ts` files). Most talk to Sanity through `serverClient` (read) /
 `writeClient` (write). Exceptions: `/api/practice-playlist` uses the CDN `client`, and
 `/api/admin/solve` touches no Sanity at all (it calls the external solver / spawns a subprocess).
 
@@ -217,6 +217,30 @@ each provider rejects non-members / disabled members. Side effects: writes a `lo
 every sign-in; patches `googlePhotoUrl` on Google sign-in; the `jwt` callback enforces
 super-admin-only impersonation and live role/revocation refresh. Full detail in
 [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md).
+
+---
+
+## MCP / OAuth — the Claude connector (super-admin only; no session cookie outside consent)
+
+Full detail — the endpoints, the one tool, adding/revoking the connector, the kill switch, the
+dev smoke procedure — is [`docs/MCP.md`](MCP.md); why client registration is stateless is
+[ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md). **Status: implemented, not yet
+released** (`docs/MCP.md`'s release checklist). Every route here is excluded from `proxy.ts`
+except the two marked **gated**. None of the excluded ones reads a session cookie; what enforces
+each is named in its Auth cell — the discovery documents are **public by design**, registration
+is bounded by the **redirect-URI allowlist** and hands out a **signed client id**, the token
+endpoint needs a **signed code plus its PKCE verifier** (or a signed refresh token), and
+`/api/mcp` checks its own **bearer token**.
+
+| Route | Methods | Auth | Purpose |
+|-------|---------|------|---------|
+| `/.well-known/oauth-authorization-server` | GET | none — public by design | RFC 8414 AS metadata; `beforeFiles` rewrite to `app/api/oauth/discovery/authorization-server/route.ts` |
+| `/.well-known/oauth-protected-resource`, `/.well-known/oauth-protected-resource/api/mcp` | GET | none — public by design | RFC 9728 protected-resource metadata; rewrites to `app/api/oauth/discovery/protected-resource/route.ts` |
+| `/api/oauth/register` | POST | public — the redirect-URI allowlist; returns a signed client id (stateless, ADR-0039) | RFC 7591 DCR. The `client_id` returned IS a signed token; nothing is written to Sanity. A `client_name` that is empty after trimming (spaces, U+3000, …) is treated as absent. |
+| `/oauth/authorize` | GET | **gated** — `requireActiveSession` + live `super-admin` | The consent screen. Streams (`app/(client)/loading.tsx`); a foreign host or refused request never redirects the caller anywhere it didn't come from. |
+| `/api/oauth/authorize` | POST, GET | **gated**, same as above, plus same-origin check | The ONLY thing that mints an authorization code (303 to the verified `redirect_uri`). GET is 405 — a code is never minted by a link, prefetch or redirect. |
+| `/api/oauth/token` | POST | public — the signed code plus its PKCE verifier (or a signed refresh token and its live grant), and the signed client id | `authorization_code` and `refresh_token` grants. Public clients only (`token_endpoint_auth_method: "none"`), so client authentication is `invalid_client`: a `client_secret` in the body is a **400**; an `Authorization: Basic` header is a **401** with `WWW-Authenticate: Basic realm="owt-backstage"` (RFC 6749 §5.2). Creates the `mcpOauthGrant` and rotates its refresh `jti` on every use; a reused refresh token revokes the whole grant. |
+| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live super-admin lookup — gate every request before it reaches the MCP server; see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. One tool: `ping`. |
 
 ---
 
@@ -474,7 +498,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
   history, and `notifyProposalSubmitted` sends nothing.
 - **Protected mutations have no alternate path:** the API routes above are the only writers. The
-  embedded Studio strips every mutating action from all thirteen protected types, and the seven historical
+  embedded Studio strips every mutating action from all fifteen protected types, and the seven historical
   one-shot scripts fail closed before constructing a client — see
   [DATA_MODEL → Studio](DATA_MODEL.md#studio) and
   [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).
