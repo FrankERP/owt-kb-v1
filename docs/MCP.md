@@ -2,9 +2,9 @@
 
 > **Status: released to production 2026-09-24** (PR
 > [#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). Every route, test and
-> script this document describes is deployed and has been exercised end to end — the dev smoke,
-> production discovery and a live claude.ai connection from Frank's phone, including a
-> revocation test. See [Release record](#release-record-p0-2026-09-24) for the evidence and the
+> script this document describes is deployed; the core flow (discovery, registration, consent,
+> token exchange, `ping`, refresh and revocation) has been exercised end to end on dev and
+> production. See [Release record](#release-record-p0-2026-09-24) for the evidence and the
 > [release checklist](#release-checklist-steps-1213) for how it shipped.
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
@@ -298,8 +298,9 @@ A few things that look like bugs at first glance and are not:
   built with `maxSubscriptions: 0` deliberately (see `app/api/mcp/route.ts`'s header comment) — a
   kept-open SSE stream would mean a revocation or a role demotion could not bite within the
   30-second cache window, and would keep a serverless function invocation alive for no reason.
-  **Observed in the step-13 live acceptance** (2026-09-24): claude.ai's iOS app completed its
-  authorization and `ping` round-trip with no visible effect from this refusal.
+  **Not observed to be invoked during the step-13 live acceptance** (2026-09-24) — whether
+  claude.ai's iOS app called `subscriptions/listen` was not directly confirmed; what was observed
+  is that the authorization and `ping` flow completed with no visible effect from this refusal.
 - **Not observed:** the consent page's streaming quirks above (`notFound()` arriving as a 200,
   an error redirect delivered in-stream) were not exercised by the step-13 happy path — Frank's
   phone never hit a foreign host or a refused request. Treat those two bullets as a design
@@ -327,8 +328,10 @@ no bearer token returns 401 with
 iOS app (~13:25) and completed consent on the phone. `ping` returned `ok` with
 `version: c2ca5f7` and Mexico City wall-clock time. Revocation test: the grant was revoked at
 13:30:47; `ping` failed once the ≤30 s grant cache expired; Frank reconnected (a new grant at
-13:31:59) and `ping` worked again. Vercel's runtime logs for `/api/mcp` over the session showed
-11×200 and 1×401 — the 401 was the client's first, token-less contact, not a failure.
+13:31:59) and `ping` worked again. Vercel's runtime logs for `/api/mcp` showed 11×200 and 1×401
+in the 15 minutes before the revocation test (the log read preceded the post-revocation `ping`,
+whose failure Frank observed in the app); the 401 is consistent with an MCP client's token-less
+first request, which is how clients discover auth, but it was not individually attributed.
 
 **The WAF rule.** «MCP register rate limit», live since 2026-09-24: Request Path equals
 `/api/oauth/register`, a fixed 60 s window, 10 requests, keyed by IP address, action 429. It
@@ -336,7 +339,8 @@ occupies the project's only Hobby-tier rate-limit slot — a future rate-limit n
 route means replacing this rule or upgrading the plan.
 
 **Secrets.** Preview and Production each carry their own `MCP_OAUTH_SECRET`, generated
-separately by Frank (~07:30 and ~10:56) — see [SECRETS.md](SECRETS.md#mcp_oauth_secret).
+separately by Frank (~07:30 and ~10:56, per `vercel env ls`'s `created` timestamp at the
+coordinator's check) — see [SECRETS.md](SECRETS.md#mcp_oauth_secret).
 
 **Live state.** One live grant, from the phone connection above. Two revoked: the dev smoke's
 grant and the one created and then revoked during the step-13 revocation test.
@@ -349,7 +353,8 @@ grant and the one created and then revoked during the step-13 revocation test.
 [#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). All seven steps below
 are complete; see [Release record](#release-record-p0-2026-09-24) above for the full evidence.
 
-1. ✅ `MCP_OAUTH_SECRET` generated and set on **preview** by Frank, ~07:30.
+1. ✅ `MCP_OAUTH_SECRET` generated and set on **preview** by Frank, ~07:30 (per `vercel env ls`'s
+   `created` timestamp).
 2. ✅ Branch merged into `preview` as `fd0bbe28`, pushed 09:21; dev alias verified — deployment
    `dpl_o5ZZH4Hw5jegrVa4HUshmXXuov8x` READY, alias includes `dev-owt-backstage.vercel.app`,
    `githubCommitSha` `fd0bbe28`.
@@ -357,8 +362,9 @@ are complete; see [Release record](#release-record-p0-2026-09-24) above for the 
    grant it created was revoked afterward.
 4. ✅ WAF rate-limit rule «MCP register rate limit» created on `/api/oauth/register` — live since
    2026-09-24.
-5. ✅ A **separate** `MCP_OAUTH_SECRET` generated and set on **production** by Frank, ~10:56 —
-   never reused preview's value (see why in [SECRETS.md](SECRETS.md#mcp_oauth_secret)).
+5. ✅ A **separate** `MCP_OAUTH_SECRET` generated and set on **production** by Frank, ~10:56 (per
+   `vercel env ls`'s `created` timestamp) — never reused preview's value (see why in
+   [SECRETS.md](SECRETS.md#mcp_oauth_secret)).
 6. ✅ PR [#95](https://github.com/FrankERP/owt-kb-v1/pull/95) opened, `gates` passed (7m17s),
    merged 13:05 (`main` `c2ca5f7c`); production alias verified — deployment
    `dpl_CEFFwWzqX2GW6ADvprH2Up9XyWZe` READY, alias includes `owt-backstage.vercel.app`,
