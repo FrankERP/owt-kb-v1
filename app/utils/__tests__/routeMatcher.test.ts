@@ -36,6 +36,7 @@ const PUBLIC_ROUTES = [
   "/api/cron/flush-notifications", // Bearer CRON_SECRET, checked in-handler
   "/api/cron/service-reminders", // Bearer CRON_SECRET, checked in-handler
   "/api/cron/smtp-probe", // Bearer CRON_SECRET, checked in-handler; sends no mail
+  "/api/mcp", // MCP endpoint — every method checks its own OAuth bearer token (grant + live super-admin) before any tool runs (P0 step 9)
   "/api/oauth/register", // stateless DCR — validates the body itself, no session (P0 step 6)
   "/api/oauth/token", // OAuth token endpoint — a signed code + PKCE or a signed refresh token, no session (P0 step 8)
   "/api/service-readiness-verification/identity", // A3 §4; fails closed with 404

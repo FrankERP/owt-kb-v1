@@ -13,99 +13,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const h = vi.hoisted(() => {
-  type Doc = Record<string, unknown> & { _id: string; _type: string; _rev: string };
-  const docs = new Map<string, Doc>();
-  const creates: Record<string, unknown>[] = [];
-  const patches: { id: string; ifRevisionId?: string; set?: Record<string, unknown> }[] = [];
-  let rev = 0;
-  const nextRev = () => `rev-${++rev}`;
-  const conflict = (type: string) =>
-    Object.assign(new Error("Sanity 409 conflict with internal detail"), {
-      statusCode: 409,
-      details: { type: "mutationError", description: "x", items: [{ error: { type } }] },
-    });
-  /** One-shot failures injected by a test, consumed by the next call of that kind. */
-  const failNext: { create: unknown; fetch: unknown; commit: unknown } = { create: null, fetch: null, commit: null };
-  /** Runs just before a patch commits — lets a test land a concurrent write first. */
-  const hooks: { beforeCommit: (() => void) | null } = { beforeCommit: null };
-
-  const writeClient = {
-    async create(doc: Record<string, unknown>) {
-      if (failNext.create) {
-        const err = failNext.create;
-        failNext.create = null;
-        throw err;
-      }
-      const id = doc._id as string;
-      if (docs.has(id)) throw conflict("documentAlreadyExistsError");
-      creates.push(doc);
-      docs.set(id, { ...(doc as Doc), _rev: nextRev() });
-      return doc;
-    },
-    async fetch(_query: string, params: { id: string; type: string }) {
-      if (failNext.fetch) {
-        const err = failNext.fetch;
-        failNext.fetch = null;
-        throw err;
-      }
-      const d = docs.get(params.id);
-      return d && d._type === params.type ? structuredClone(d) : null;
-    },
-    patch(id: string) {
-      const call: { id: string; ifRevisionId?: string; set?: Record<string, unknown> } = { id };
-      const builder = {
-        ifRevisionId(r: string) {
-          call.ifRevisionId = r;
-          return builder;
-        },
-        set(fields: Record<string, unknown>) {
-          call.set = fields;
-          return builder;
-        },
-        async commit() {
-          patches.push(call);
-          hooks.beforeCommit?.();
-          hooks.beforeCommit = null;
-          if (failNext.commit) {
-            const err = failNext.commit;
-            failNext.commit = null;
-            throw err;
-          }
-          const d = docs.get(id);
-          if (!d) throw Object.assign(new Error("not found"), { statusCode: 404 });
-          if (call.ifRevisionId !== undefined && call.ifRevisionId !== d._rev) {
-            throw conflict("documentRevisionIDDoesNotMatchError");
-          }
-          Object.assign(d, call.set ?? {}, { _rev: nextRev() });
-          return structuredClone(d);
-        },
-      };
-      return builder;
-    },
-  };
-
-  return {
-    docs,
-    creates,
-    patches,
-    failNext,
-    hooks,
-    conflict,
-    bumpRev: (id: string) => {
-      const d = docs.get(id);
-      if (d) d._rev = nextRev();
-    },
-    reset() {
-      docs.clear();
-      creates.length = 0;
-      patches.length = 0;
-      failNext.create = failNext.fetch = failNext.commit = null;
-      hooks.beforeCommit = null;
-    },
-    writeClient,
-    getMemberAccess: vi.fn(),
-  };
+// The in-memory dataset is shared with the MCP route test (`inMemorySanity.ts`).
+const h = await vi.hoisted(async () => {
+  const { createInMemorySanity } = await import("./inMemorySanity");
+  return { ...createInMemorySanity(), getMemberAccess: vi.fn() };
 });
 
 vi.mock("@/app/utils/memberAccess", () => ({ getMemberAccess: (id: string) => h.getMemberAccess(id) }));
