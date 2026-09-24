@@ -405,6 +405,11 @@ run and entered by Frank in each environment) — and local `.env.local`. Not ne
 Actions, the iOS build, GCF.** Full operator context (what the connector is, how to add/revoke it)
 lives in [docs/MCP.md](MCP.md); this entry is the rotation record.
 
+**Set since 2026-09-24** as part of the P0 release: Preview (~07:30) and Production (~10:56, both
+per `vercel env ls`'s `created` timestamp at the coordinator's check), each generated separately
+by Frank. `vercel env ls` shows separate Preview and Production entries (checked by name only,
+per the retrievability rule above — neither value was read back).
+
 **Purpose.** The HS256 signing key (`jose`) for every client id, authorization code, access token
 and refresh token this deployment's MCP/OAuth routes mint or verify (`app/mcp/oauth/tokens.ts`).
 **Without it, every OAuth and MCP route answers 503** — `mcpRoutePreflight` treats a missing or

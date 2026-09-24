@@ -224,8 +224,9 @@ super-admin-only impersonation and live role/revocation refresh. Full detail in
 
 Full detail — the endpoints, the one tool, adding/revoking the connector, the kill switch, the
 dev smoke procedure — is [`docs/MCP.md`](MCP.md); why client registration is stateless is
-[ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md). **Status: implemented, not yet
-released** (`docs/MCP.md`'s release checklist). Every route here is excluded from `proxy.ts`
+[ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md). **Status: released to
+production 2026-09-24** (PR #95, `main` `c2ca5f7c`; see `docs/MCP.md`'s
+[release record](MCP.md#release-record-p0-2026-09-24)). Every route here is excluded from `proxy.ts`
 except the two marked **gated**. None of the excluded ones reads a session cookie; what enforces
 each is named in its Auth cell — the discovery documents are **public by design**, registration
 is bounded by the **redirect-URI allowlist** and hands out a **signed client id**, the token
