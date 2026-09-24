@@ -19,6 +19,8 @@
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/text-zoom": "^8.0.1",
     "@capgo/capacitor-social-login": "^8.3.25",
+    "@modelcontextprotocol/core": "2.1.0",
+    "@modelcontextprotocol/server": "2.1.0",
     "@portabletext/react": "^6.0.3",
     "@sanity/image-url": "^2.1.1",
     "@sanity/ui": "^3.1.14",
@@ -27,6 +29,8 @@
     "firebase-admin": "^14.0.0",
     "fuse.js": "^7.3.0",
     "google-auth-library": "^10.7.0",
+    "jose": "6.2.12",
+    "mcp-handler": "2.2.0",
     "motion": "^13.2.0",
     "next": "^16.2.12",
     "next-auth": "^4.24.15",
@@ -37,7 +41,8 @@
     "react-dom": "^19.2.5",
     "react-player": "^2.16.0",
     "resend": "^6.16.0",
-    "sanity": "^5.22.0"
+    "sanity": "^5.22.0",
+    "zod": "4.3.6"
   },
   "overrides": {
     "minimatch": "^10.2.6",
