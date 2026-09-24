@@ -201,7 +201,7 @@ describe("POST /api/oauth/register — never writes", () => {
     // that only changed which files get READ, not which ones get CALLED.
     const repoRoot = process.cwd();
     const entry = path.join(repoRoot, "app/api/oauth/register/route.ts");
-    const { files } = walkImportClosure(entry, repoRoot);
+    const { files, externalSpecifiers } = walkImportClosure(entry, repoRoot);
 
     // Positive control: prove the walker really does find files reached
     // through the same `@/` alias and relative-import machinery, so an empty
@@ -220,6 +220,18 @@ describe("POST /api/oauth/register — never writes", () => {
       "app/mcp/oauth/grantDocument.ts",
     ]) {
       expect([...files], forbidden).not.toContain(path.join(repoRoot, forbidden));
+    }
+
+    // `walkImportClosure` now THROWS on an unresolvable `@/` or relative
+    // specifier (R15 follow-up) rather than folding it into
+    // `externalSpecifiers` — so anything left in this set really is a bare
+    // package, never a typo'd or renamed internal path. Pin it to an explicit
+    // allow-list: a NEW bare dependency entering the closure is exactly the
+    // kind of change that deserves a human looking at this test, not a
+    // silent pass.
+    const ALLOWED_EXTERNAL_SPECIFIERS = new Set(["node:crypto", "jose"]);
+    for (const specifier of externalSpecifiers) {
+      expect(ALLOWED_EXTERNAL_SPECIFIERS.has(specifier), specifier).toBe(true);
     }
   });
 });
@@ -443,7 +455,7 @@ describe("POST /api/oauth/register — client_name", () => {
   it("a bidi override (U+202E) is refused (R15 #1)", async () => {
     stubEnv({ vercelEnv: "preview" });
     const res = await POST(
-      req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: "evil‮name" }) }),
+      req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: "evil\u202Ename" }) }),
     );
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual(expect.objectContaining({ error: "invalid_client_metadata" }));
@@ -452,7 +464,7 @@ describe("POST /api/oauth/register — client_name", () => {
   it("a Unicode line separator (U+2028) is refused (R15 #1)", async () => {
     stubEnv({ vercelEnv: "preview" });
     const res = await POST(
-      req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: "evil name" }) }),
+      req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: "evil\u2028name" }) }),
     );
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual(expect.objectContaining({ error: "invalid_client_metadata" }));
