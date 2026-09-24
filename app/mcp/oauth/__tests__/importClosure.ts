@@ -124,6 +124,17 @@ export interface ImportClosure {
   externalSpecifiers: Set<string>;
 }
 
+export interface WalkOptions {
+  /**
+   * Absolute paths recorded in `files` when reached but NOT walked through —
+   * a sanctioned boundary the caller reasons about separately (e.g. the
+   * app's existing session guards, which reach Sanity for every gated route).
+   * A path that reaches the same module AROUND a leaf is still walked. Every
+   * leaf must be a real file, so a typo cannot silently prune nothing.
+   */
+  leaves?: readonly string[];
+}
+
 /**
  * Walks the transitive import graph of `entryFile`, following only relative
  * and `@/`-aliased specifiers (see `resolveModuleFile`). Cycle-safe: a file is
@@ -132,13 +143,18 @@ export interface ImportClosure {
  * Throws if:
  *  - a `@/`- or `.`-prefixed specifier fails to resolve to a real file
  *    (naming the importing file and the specifier), or
- *  - `repoRoot`'s tsconfig.json declares a `paths` alias besides `@/*`.
+ *  - `repoRoot`'s tsconfig.json declares a `paths` alias besides `@/*`, or
+ *  - an `options.leaves` entry is not a real file.
  *
- * Both would otherwise widen `externalSpecifiers` with something that was
- * never really external, hiding a forbidden module behind a false "leaf".
+ * The first two would otherwise widen `externalSpecifiers` with something that
+ * was never really external, hiding a forbidden module behind a false "leaf".
  */
-export function walkImportClosure(entryFile: string, repoRoot: string): ImportClosure {
+export function walkImportClosure(entryFile: string, repoRoot: string, options: WalkOptions = {}): ImportClosure {
   assertNoUnknownAlias(repoRoot);
+  const leaves = new Set((options.leaves ?? []).map((leaf) => path.resolve(leaf)));
+  for (const leaf of leaves) {
+    if (!fileExists(leaf)) throw new Error(`walkImportClosure: leaf ${leaf} is not a file`);
+  }
   const files = new Set<string>();
   const externalSpecifiers = new Set<string>();
   const stack = [path.resolve(entryFile)];
@@ -146,6 +162,7 @@ export function walkImportClosure(entryFile: string, repoRoot: string): ImportCl
     const file = stack.pop()!;
     if (files.has(file)) continue;
     files.add(file);
+    if (leaves.has(file)) continue;
     const src = readFileSync(file, "utf8");
     for (const specifier of importSpecifiers(src)) {
       const resolved = resolveModuleFile(file, specifier, repoRoot);

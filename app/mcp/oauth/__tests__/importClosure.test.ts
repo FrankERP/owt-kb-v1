@@ -152,3 +152,40 @@ describe("walkImportClosure — the real repo", () => {
     expect(() => walkImportClosure(entry, repoRoot)).not.toThrow();
   });
 });
+
+describe("walkImportClosure — leaves (a sanctioned boundary the caller does not walk through)", () => {
+  it("records a leaf file but never follows its imports", () => {
+    const root = makeTempRepo();
+    writeFileSync(path.join(root, "entry.ts"), `import "./boundary";\nimport "./own";`);
+    writeFileSync(path.join(root, "boundary.ts"), `import "./behind";\nimport "pkg-behind";`);
+    writeFileSync(path.join(root, "behind.ts"), `export const x = 1;`);
+    writeFileSync(path.join(root, "own.ts"), `import "jose";`);
+
+    const full = walkImportClosure(path.join(root, "entry.ts"), root);
+    expect(full.files).toContain(path.join(root, "behind.ts"));
+
+    const pruned = walkImportClosure(path.join(root, "entry.ts"), root, { leaves: [path.join(root, "boundary.ts")] });
+    expect(pruned.files).toContain(path.join(root, "boundary.ts"));
+    expect(pruned.files).not.toContain(path.join(root, "behind.ts"));
+    expect(pruned.externalSpecifiers).toEqual(new Set(["jose"]));
+  });
+
+  it("a path reaching the same module AROUND the leaf is still walked", () => {
+    const root = makeTempRepo();
+    writeFileSync(path.join(root, "entry.ts"), `import "./boundary";\nimport "./own";`);
+    writeFileSync(path.join(root, "boundary.ts"), `import "./behind";`);
+    writeFileSync(path.join(root, "own.ts"), `import "./behind";`);
+    writeFileSync(path.join(root, "behind.ts"), `export const x = 1;`);
+
+    const pruned = walkImportClosure(path.join(root, "entry.ts"), root, { leaves: [path.join(root, "boundary.ts")] });
+    expect(pruned.files).toContain(path.join(root, "behind.ts"));
+  });
+
+  it("a leaf that is not a real file is refused rather than silently matching nothing", () => {
+    const root = makeTempRepo();
+    writeFileSync(path.join(root, "entry.ts"), `export const ok = true;`);
+    expect(() => walkImportClosure(path.join(root, "entry.ts"), root, { leaves: [path.join(root, "typo.ts")] })).toThrow(
+      /typo\.ts/,
+    );
+  });
+});

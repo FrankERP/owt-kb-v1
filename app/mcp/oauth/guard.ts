@@ -2,7 +2,7 @@
 // (discovery, registration, authorize, token and the MCP endpoint), from the
 // commit that creates the route.
 
-import { type OAuthEnv, loadSecret, resolveOrigin, resourceFor } from "./origin";
+import { type OAuthEnv, type RequestHeadersSource, loadSecret, resolveOrigin, resourceFor } from "./origin";
 import { notFoundResponse, unavailableResponse } from "./responses";
 
 export type McpPreflight =
@@ -23,9 +23,11 @@ export type McpPreflight =
  *     switch (spec O2) answers before anything else is looked at;
  *  2. `Host` is not this deployment's canonical host → 404;
  *  3. `MCP_OAUTH_SECRET` missing or < 32 bytes → 503 (fail closed).
- * A route returns `response` verbatim on `ok: false`.
+ * A route returns `response` verbatim on `ok: false`. A Server Component
+ * (the consent page) passes `{ headers: await headers() }` and maps the
+ * refusal by `response.status` instead — it cannot return a Response (R17).
  */
-export function mcpRoutePreflight(request: Request, env: OAuthEnv = process.env): McpPreflight {
+export function mcpRoutePreflight(request: RequestHeadersSource, env: OAuthEnv = process.env): McpPreflight {
   if ((env.MCP_DISABLED ?? "") !== "") return { ok: false, response: unavailableResponse() };
   const origin = resolveOrigin(request, env);
   if (!origin) return { ok: false, response: notFoundResponse() };

@@ -33,11 +33,18 @@ export function canonicalOrigin(env: OAuthEnv = process.env): string | null {
 }
 
 /**
+ * What the origin check reads from a request: its headers, nothing else. A
+ * route handler's `Request` satisfies it, and so does `{ headers: await
+ * headers() }` in a Server Component, which has no `Request` (R17).
+ */
+export type RequestHeadersSource = Pick<Request, "headers">;
+
+/**
  * The canonical origin when the request's `Host` header is exactly the
  * canonical host (port included; case-insensitive), else null. Callers answer
  * 404 on null — use `mcpRoutePreflight`, which does.
  */
-export function resolveOrigin(request: Request, env: OAuthEnv = process.env): string | null {
+export function resolveOrigin(request: RequestHeadersSource, env: OAuthEnv = process.env): string | null {
   const origin = canonicalOrigin(env);
   if (!origin) return null;
   const host = request.headers.get("host");

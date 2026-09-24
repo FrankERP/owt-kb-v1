@@ -227,3 +227,16 @@ describe("mcpRoutePreflight", () => {
     await expectRefusal(mcpRoutePreflight(req("evil.example"), { VERCEL_ENV: "production" }), 404);
   });
 });
+
+describe("mcpRoutePreflight — headers only (R17: a Server Component has headers(), not a Request)", () => {
+  it("runs the same checks, in the same order, on a bare { headers } object", async () => {
+    const headersOnly = (host: string) => ({ headers: new Headers({ host }) });
+    const ok = mcpRoutePreflight(headersOnly("owt-backstage.vercel.app"), PROD);
+    expect(ok.ok).toBe(true);
+    if (!ok.ok) throw new Error("unreachable");
+    expect(ok.origin).toBe(PRODUCTION_ORIGIN);
+    await expectRefusal(mcpRoutePreflight(headersOnly("evil.example"), PROD), 404);
+    await expectRefusal(mcpRoutePreflight(headersOnly("owt-backstage.vercel.app"), { ...PROD, MCP_DISABLED: "1" }), 503);
+    await expectRefusal(mcpRoutePreflight(headersOnly("owt-backstage.vercel.app"), { VERCEL_ENV: "production" }), 503);
+  });
+});
