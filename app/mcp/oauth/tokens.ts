@@ -94,8 +94,13 @@ async function verifyKind(
     if (payload.typ !== kind || payload.iss !== opts.origin) return INVALID;
     return { ok: true, payload };
   } catch (err) {
-    // JWTExpired is only thrown after the signature has verified.
-    return err instanceof errors.JWTExpired ? EXPIRED : INVALID;
+    // JWTExpired is only thrown after the signature has verified — but jose
+    // checks `exp` BEFORE the `typ` check above runs, so an expired token of
+    // ANOTHER kind (an expired access token presented as a refresh token) would
+    // otherwise read as `expired`. `expired` only for an expired payload of THIS
+    // kind (R12); jose attaches the payload to the error.
+    if (err instanceof errors.JWTExpired && err.payload?.typ === kind) return EXPIRED;
+    return INVALID;
   }
 }
 

@@ -390,3 +390,33 @@ describe("refresh token", () => {
     }
   });
 });
+
+// R12: jose checks `exp` BEFORE this module checks `typ`, so an expired token
+// of the WRONG kind used to come back `expired`. `expired` must mean "a token of
+// THIS kind whose time ran out" — anything else is `invalid`.
+describe("expired vs invalid (R12)", () => {
+  const long = at(REFRESH_TOKEN_TTL_SECONDS + 3600); // past every kind's expiry
+
+  it("an EXPIRED access token presented as a refresh token is invalid, not expired", async () => {
+    const { token } = await signAccessToken({ key: KEY, origin: O, sub: MEMBER, grantId: GRANT, now: T0 });
+    expect(await verifyRefreshToken(token, { key: KEY, origin: O, now: long })).toEqual(INVALID);
+  });
+
+  it("an EXPIRED code presented as a client id is invalid, not expired", async () => {
+    const code = await mintCode();
+    expect(await verifyClientId(code, { key: KEY, origin: O, now: long })).toEqual(INVALID);
+  });
+
+  it("an EXPIRED token of the right kind is still expired", async () => {
+    const rt = await signRefreshToken({ key: KEY, origin: O, sub: MEMBER, grantId: GRANT, jti: "r", now: T0 });
+    expect(await verifyRefreshToken(rt, { key: KEY, origin: O, now: long })).toEqual(EXPIRED);
+    const { token } = await signAccessToken({ key: KEY, origin: O, sub: MEMBER, grantId: GRANT, now: T0 });
+    expect(await verifyAccessToken(token, { key: KEY, origin: O, now: long })).toEqual(EXPIRED);
+    expect(await verifyAuthorizationCode(await mintCode(), { key: KEY, origin: O, now: long })).toEqual(EXPIRED);
+  });
+
+  it("an expired payload with no typ at all is invalid", async () => {
+    const noTyp = await craft({ iss: O, sub: MEMBER, grant: GRANT, jti: "r", exp: T0_S + 60 });
+    expect(await verifyRefreshToken(noTyp, { key: KEY, origin: O, now: long })).toEqual(INVALID);
+  });
+});
