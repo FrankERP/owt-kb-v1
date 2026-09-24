@@ -239,7 +239,7 @@ Measured at implementation time (steps 1 and 9):
   themselves cause.
 - **The per-deployment total on Vercel (Function Storage impact) is measured at step 13, once
   this ships to a real deployment.** This section will be updated with that number rather than
-  left as a placeholder once it exists — see [CI.md](CI.md#why-and-why-not-gitdeploymentenabled)
+  left as a placeholder once it exists — see [CI.md](CI.md#which-branches-vercel-builds)
   for why Function Storage matters on this project's Hobby quota.
 
 ---

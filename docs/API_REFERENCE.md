@@ -1,6 +1,6 @@
 # API Reference — `app/api/`
 
-36 route handlers (`route.ts` files). Most talk to Sanity through `serverClient` (read) /
+60 route handlers (`route.ts` files). Most talk to Sanity through `serverClient` (read) /
 `writeClient` (write). Exceptions: `/api/practice-playlist` uses the CDN `client`, and
 `/api/admin/solve` touches no Sanity at all (it calls the external solver / spawns a subprocess).
 

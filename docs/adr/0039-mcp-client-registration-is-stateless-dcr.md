@@ -1,6 +1,6 @@
 # ADR-0039: MCP client registration is stateless DCR — the client id is a signed token, nothing is stored
 
-**Date:** 2026-09-23 · **Status:** Accepted
+**Date:** 2026-09-24 · **Status:** Accepted
 
 ## Context
 
