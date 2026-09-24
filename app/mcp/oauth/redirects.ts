@@ -57,13 +57,24 @@ export function isRedirectUriAllowed(uri: unknown, origin: string): boolean {
   return false;
 }
 
+/** Longest raw string `shouldLogRefusedRedirect` will consider (R11). */
+const MAX_LOGGED_REDIRECT_URI_LENGTH = 2048;
+
 /**
  * Whether a REFUSED redirect URI is worth logging: its host is `claude.ai`,
  * `claude.com` or a subdomain of either — i.e. Claude may have moved its
  * callback. The routes do the logging (of the URI only); this module never logs.
+ *
+ * R11: the raw string is checked BEFORE it ever reaches `new URL()`. The
+ * WHATWG parser strips `\n`/`\t` from the input first, so a hostname check on
+ * the PARSED url alone would still say "claude" for
+ * `"https://claude.ai/x\n<forged line>"` — printable-ASCII and the 2048-char
+ * cap close both the log-injection and the multi-KB-string paths.
  */
 export function shouldLogRefusedRedirect(uri: unknown): boolean {
   if (typeof uri !== "string") return false;
+  if (uri.length > MAX_LOGGED_REDIRECT_URI_LENGTH) return false;
+  if (!PRINTABLE_RE.test(uri)) return false;
   let host: string;
   try {
     host = new URL(uri).hostname;

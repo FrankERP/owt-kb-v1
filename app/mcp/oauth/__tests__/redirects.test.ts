@@ -140,4 +140,28 @@ describe("shouldLogRefusedRedirect", () => {
     }
     expect(shouldLogRefusedRedirect(undefined)).toBe(false);
   });
+
+  it("refuses a claude host once whitespace/control characters are present (R11: log-injection)", () => {
+    // The WHATWG URL parser strips \n and \t before parsing, so a naive
+    // hostname check on the PARSED url would still say "claude" for a string
+    // that carries a forged log line. The raw string must be rejected first.
+    for (const uri of [
+      "https://claude.ai/x\n<forged line>",
+      "https://claude.ai/x\t<forged>",
+      "https://claude.ai/x\r\nSet-Cookie: evil=1",
+      "https://claude.ai/\u0000cb",
+    ]) {
+      expect(shouldLogRefusedRedirect(uri), JSON.stringify(uri)).toBe(false);
+    }
+  });
+
+  it("refuses a claude host once the raw string exceeds 2048 characters (R11: size cap)", () => {
+    const short = `https://claude.ai/${"a".repeat(2000)}`;
+    expect(short.length).toBeLessThanOrEqual(2048);
+    expect(shouldLogRefusedRedirect(short)).toBe(true);
+
+    const long = `https://claude.ai/${"a".repeat(3000)}`;
+    expect(long.length).toBeGreaterThan(2048);
+    expect(shouldLogRefusedRedirect(long)).toBe(false);
+  });
 });
