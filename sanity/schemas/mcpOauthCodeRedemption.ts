@@ -1,5 +1,7 @@
 import { defineType } from "sanity";
 
+import { CODE_REDEMPTION_FIELD, MCP_OAUTH_CODE_REDEMPTION_TYPE } from "../../app/mcp/oauth/documentTypes";
+
 /**
  * Internal MCP OAuth code-redemption replay guard (P0 auth spec O4).
  *
@@ -12,20 +14,22 @@ import { defineType } from "sanity";
  * NOT editable content: hidden and read-only in the Studio; never authored by
  * hand.
  *
- * The type name and this field list MIRROR `MCP_OAUTH_CODE_REDEMPTION_TYPE` /
- * `CODE_REDEMPTION_FIELDS` in `app/mcp/oauth/documentTypes.ts` (not imported —
- * see the comment on `mcpOauthGrant.ts` / controller ruling R10).
+ * The type name (`MCP_OAUTH_CODE_REDEMPTION_TYPE`) and the field's `name:`
+ * (`CODE_REDEMPTION_FIELD.redeemedAt`) are IMPORTED from the import-free
+ * `app/mcp/oauth/documentTypes.ts` (controller ruling R10) — see the longer
+ * comment on `mcpOauthGrant.ts` for why that module is safe to import here.
  * `app/mcp/oauth/__tests__/documentTypes.test.ts` asserts this schema's
- * declared field names equal `CODE_REDEMPTION_FIELDS` exactly.
+ * declared field names equal `CODE_REDEMPTION_FIELDS` exactly, and that this
+ * file's import closure never reaches `node:crypto`/`jose`.
  */
 export const mcpOauthCodeRedemption = defineType({
-  name: "mcpOauthCodeRedemption",
+  name: MCP_OAUTH_CODE_REDEMPTION_TYPE,
   title: "MCP OAuth Code Redemption (internal)",
   type: "document",
   hidden: true,
   readOnly: true,
   description: "Interno: registro de canje de código OAuth (evita reintentos). No editar ni borrar a mano.",
-  fields: [{ name: "redeemedAt", title: "Canjeado el", type: "datetime" }],
+  fields: [{ name: CODE_REDEMPTION_FIELD.redeemedAt, title: "Canjeado el", type: "datetime" }],
   preview: {
     select: { redeemedAt: "redeemedAt" },
     prepare(sel: { redeemedAt?: string }) {

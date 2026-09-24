@@ -10,7 +10,7 @@
 // assert "the writer never sets a field outside GRANT_FIELDS" against these
 // functions without a Sanity client.
 //
-// The type names, `_id` prefixes and field lists themselves live in the
+// The type names, `_id` prefixes and field lists/names themselves live in the
 // import-free `./documentTypes` (controller ruling R10), because the two
 // Sanity schema files import them directly and a schema file must never drag
 // `node:crypto`/`jose` into the embedded Studio bundle. They are re-exported
@@ -19,8 +19,10 @@
 import { randomUUID } from "node:crypto";
 import { clientHashOf, sha256Hex } from "./tokens";
 import {
+  CODE_REDEMPTION_FIELD,
   CODE_REDEMPTION_FIELDS,
   CODE_REDEMPTION_ID_PREFIX,
+  GRANT_FIELD,
   GRANT_FIELDS,
   GRANT_ID_PREFIX,
   MCP_OAUTH_CODE_REDEMPTION_TYPE,
@@ -29,8 +31,10 @@ import {
 } from "./documentTypes";
 
 export {
+  CODE_REDEMPTION_FIELD,
   CODE_REDEMPTION_FIELDS,
   CODE_REDEMPTION_ID_PREFIX,
+  GRANT_FIELD,
   GRANT_FIELDS,
   GRANT_ID_PREFIX,
   MCP_OAUTH_CODE_REDEMPTION_TYPE,

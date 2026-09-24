@@ -474,7 +474,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
   history, and `notifyProposalSubmitted` sends nothing.
 - **Protected mutations have no alternate path:** the API routes above are the only writers. The
-  embedded Studio strips every mutating action from all thirteen protected types, and the seven historical
+  embedded Studio strips every mutating action from all fifteen protected types, and the seven historical
   one-shot scripts fail closed before constructing a client — see
   [DATA_MODEL → Studio](DATA_MODEL.md#studio) and
   [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).

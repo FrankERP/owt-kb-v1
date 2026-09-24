@@ -2,7 +2,7 @@
 // without a browser.
 //
 // The point of these tests: "we configured the Studio" is not evidence. The
-// policy is code, so every capability of every one of the thirteen protected types
+// policy is code, so every capability of every one of the fifteen protected types
 // is asserted here, plus the wiring in `sanity.config.ts` / `sanity/structure.ts`
 // that actually installs it — and the fact that the v5-inert
 // `__experimental_actions` is used nowhere.
@@ -488,9 +488,18 @@ describe("studio config installs the policy", () => {
       mcpOauthCodeRedemption: "sanity/schemas/mcpOauthCodeRedemption.ts",
     };
     expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
+    // The two MCP OAuth types declare `name:` as an IMPORTED constant
+    // (`MCP_OAUTH_GRANT_TYPE`/`MCP_OAUTH_CODE_REDEMPTION_TYPE`, ruling R10a),
+    // never a hand-typed literal — every other protected type still writes the
+    // literal string directly, which is what the fallback pattern below checks.
+    const NAME_DECLARATION: Partial<Record<string, RegExp>> = {
+      mcpOauthGrant: /name:\s*MCP_OAUTH_GRANT_TYPE\b/,
+      mcpOauthCodeRedemption: /name:\s*MCP_OAUTH_CODE_REDEMPTION_TYPE\b/,
+    };
     for (const type of PROTECTED_STUDIO_TYPES) {
       const src = read(files[type]);
-      expect(src, `${files[type]} declares ${type}`).toMatch(new RegExp(`name:\\s*['"]${type}['"]`));
+      const namePattern = NAME_DECLARATION[type] ?? new RegExp(`name:\\s*['"]${type}['"]`);
+      expect(src, `${files[type]} declares ${type}`).toMatch(namePattern);
       expect(src, `${files[type]} must be readOnly`).toMatch(/readOnly:\s*true/);
       expect(src, `${files[type]} assigns __experimental_actions`).not.toMatch(/__experimental_actions\s*:/);
     }

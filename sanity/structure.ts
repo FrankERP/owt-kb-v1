@@ -21,7 +21,7 @@ import { apiVersion } from './env'
  * needs a pane at all.
  *
  * `documentList` (rather than `documentTypeList`) is used on purpose: it works
- * uniformly for the five `hidden: true` internal types, which have no
+ * uniformly for the seven `hidden: true` internal types, which have no
  * `documentTypeListItem` to filter.
  */
 export const serviceReadinessStructure: StructureResolver = (S) => {

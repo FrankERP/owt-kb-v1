@@ -585,13 +585,21 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Thirteen** types are closed to it — the six protected service types, the five internal types
+**Fifteen** types are closed to it — the six protected service types, the seven internal types
 (`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry) **plus** the two
 Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
-`solverConfig`, `kidsPair`, `kidsSchedule`.
+`solverConfig`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
+
+The last two hold OAuth state for the MCP connector (P0 auth): `mcpOauthGrant` is one document per
+authorized connection (member id, a HASH of the client id, origin, timestamps, the current refresh
+`jti`, the revocation flag); `mcpOauthCodeRedemption` is a replay guard, `redeemedAt` only, keyed by
+the hashed authorization-code `jti`. Both are hidden, read-only, and never authored by hand — see
+[`app/mcp/oauth/documentTypes.ts`](../app/mcp/oauth/documentTypes.ts). Everything in them is safe to
+be world-readable (the dataset answers unauthenticated published reads): a member id is already
+public, and neither a refresh `jti` nor a client hash is usable without the signing secret.
 
 The kids pair is protected but **not** internal: unlike the coordination types it is a
 human-meaningful document, so it stays visible (read-only) rather than `hidden: true`. What

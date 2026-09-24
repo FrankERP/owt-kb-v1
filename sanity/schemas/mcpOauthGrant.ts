@@ -1,5 +1,7 @@
 import { defineType } from "sanity";
 
+import { GRANT_FIELD, MCP_OAUTH_GRANT_TYPE } from "../../app/mcp/oauth/documentTypes";
+
 /**
  * Internal MCP OAuth grant (P0 auth spec O4/O5/O9).
  *
@@ -15,49 +17,62 @@ import { defineType } from "sanity";
  * `mcpOauthGrant.<uuid>` (dotted, so the public reader never surfaces it as a
  * slug).
  *
- * The type name and this field list MIRROR `MCP_OAUTH_GRANT_TYPE` /
- * `GRANT_FIELDS` in `app/mcp/oauth/documentTypes.ts` — the source every write
- * `app/mcp/oauth/grantStore.ts` makes is built against. This file does not
- * import that module: a Sanity schema must never pull `node:crypto`/`jose`
- * into the embedded Studio bundle (controller ruling R10), and
- * `documentTypes.ts` is import-free specifically so it COULD be imported
- * safely — the two are kept in exact sync instead by
- * `app/mcp/oauth/__tests__/documentTypes.test.ts`, which asserts this schema's
- * declared field names equal `GRANT_FIELDS` exactly.
+ * The type name (`MCP_OAUTH_GRANT_TYPE`) and every field's `name:`
+ * (`GRANT_FIELD.*`) are IMPORTED from the import-free
+ * `app/mcp/oauth/documentTypes.ts` (controller ruling R10) — the same source
+ * every write `app/mcp/oauth/grantStore.ts` makes is built against, so the two
+ * can never drift. Only `title`/`type`/`description` are hand-written here.
+ * `documentTypes.ts` itself carries zero imports, which is what makes it safe
+ * to pull into this file: the embedded Studio (`/studio`) bundles every schema
+ * file for the browser, and a schema must never drag `node:crypto`/`jose` (both
+ * reachable from `grantDocument.ts`) into that bundle.
+ * `app/mcp/oauth/__tests__/documentTypes.test.ts` asserts this schema's
+ * declared field names equal `GRANT_FIELDS` exactly, and that this file's
+ * import closure never reaches `node:crypto`/`jose`.
  */
 export const mcpOauthGrant = defineType({
-  name: "mcpOauthGrant",
+  name: MCP_OAUTH_GRANT_TYPE,
   title: "MCP OAuth Grant (internal)",
   type: "document",
   hidden: true,
   readOnly: true,
   description: "Interno: estado de concesión OAuth del servidor MCP. No editar ni borrar a mano.",
   fields: [
-    { name: "sub", title: "Miembro (sub)", type: "string", description: "Sanity id del miembro autorizado." },
     {
-      name: "clientHash",
+      name: GRANT_FIELD.sub,
+      title: "Miembro (sub)",
+      type: "string",
+      description: "Sanity id del miembro autorizado.",
+    },
+    {
+      name: GRANT_FIELD.clientHash,
       title: "Hash del cliente",
       type: "string",
       description: "sha256 del client id firmado — nunca el client id en claro.",
     },
-    { name: "origin", title: "Origin", type: "string", description: "Origen canónico que emitió la concesión." },
-    { name: "createdAt", title: "Creado", type: "datetime" },
     {
-      name: "lastRefreshAt",
+      name: GRANT_FIELD.origin,
+      title: "Origin",
+      type: "string",
+      description: "Origen canónico que emitió la concesión.",
+    },
+    { name: GRANT_FIELD.createdAt, title: "Creado", type: "datetime" },
+    {
+      name: GRANT_FIELD.lastRefreshAt,
       title: "Último refresh",
       type: "datetime",
       description: "Ausente hasta el primer refresh.",
     },
-    { name: "currentRefreshJti", title: "Refresh jti actual", type: "string" },
-    { name: "revoked", title: "Revocado", type: "boolean" },
+    { name: GRANT_FIELD.currentRefreshJti, title: "Refresh jti actual", type: "string" },
+    { name: GRANT_FIELD.revoked, title: "Revocado", type: "boolean" },
     {
-      name: "revokedAt",
+      name: GRANT_FIELD.revokedAt,
       title: "Revocado el",
       type: "datetime",
       description: "Ausente salvo que esté revocado.",
     },
     {
-      name: "revokedReason",
+      name: GRANT_FIELD.revokedReason,
       title: "Motivo de revocación",
       type: "string",
       description: "Ausente salvo que esté revocado.",
