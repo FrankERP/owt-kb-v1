@@ -2,7 +2,7 @@
 
 ## Status
 
-`DRAFT` — **risk tier CRITICAL**: it changes what the month solver, a production
+**APPROVED** (digest `a6958d85…`; see the review log) — **risk tier CRITICAL**: it changes what the month solver, a production
 writer's input, is told about the past. **Authorizes nothing.**
 
 Child **P2** of [`2026-09-22-owt-mcp-roadmap.md`](../plans/2026-09-22-owt-mcp-roadmap.md)
@@ -62,20 +62,95 @@ Three decisions Frank made on 2026-09-23, each after its cost was stated:
 | **R1** | **Source.** The history is derived from canonical `sunday_role` and `saturday_role` documents. `special_role` is never counted | ADR-0010 Decision 3 keeps specials out of the solver's history on purpose (H1) | A special in the window changes nothing in the derived entry |
 | **R2** | **Stored state.** Each seat counts the member **stored in it at derivation time** — after every swap, edit and stored-mode change **[D-2026-09-23]** | What happened, not what was first proposed | A month created by the planner, then swapped, derives the post-swap counts |
 | **R3** | **Drafts.** A service in a counted month counts whether published or not; a missing `published` field is irrelevant **[D-2026-09-23]** | A month planned but not yet published is still assigned duty the next month must weigh | An all-draft prior month counts in full |
-| **R4** | **Window.** The history for a target month is exactly **the three calendar months before it**, one entry per month, oldest first — an entry with empty counts when a month has no weekend services. The target month and every later month are never counted | The solver uses three entries weighted by position; calendar alignment makes "most recent" mean the latest month, and fixes defects (c) and (d) | Solving November yields August, September, October in that order, whatever was written or solved before |
-| **R5** | **Month assignment.** A service belongs to the calendar month of its own date (`week` for weekend roles) in `America/Mexico_City` | Matches the planner; participation's week key would move month-end Saturdays | A 31 October Saturday counts in October |
+| **R4** | **Window.** The history for a target month is exactly **the three calendar months before it**, one entry per month, oldest first — an entry with empty counts when a month has no weekend services. The target month and every later month are never counted | The solver uses three entries weighted by position; calendar alignment makes "most recent" mean the latest month, and fixes defects (c) and (d) | Solving November yields August, September, October in that order, whatever was written or solved before; solving January yields October, November, December of the previous year. Because three entries are always present, the solver's `history_runs_used` always reads 3 and the lead-pool panel's «Sin historial guardado» note can no longer fire — their copy changes with the cutover to say which months are empty, as does the «Historial» header's «últimas N ejecuciones usadas», since the entries become months rather than runs |
+| **R5** | **Month assignment.** A service belongs to the calendar month of its own date — taken from the stored `YYYY-MM-DD` string (`week` for weekend roles), never through a `Date` object — which is its `America/Mexico_City` calendar date | Matches the planner; participation's week key would move month-end Saturdays | A 31 October Saturday counts in October |
 | **R6** | **Counting rules unchanged** from `historyEntryFromDrafts`: the role keys, Saturday Chorus ignored, instruments and FOH never, `total_counts` as the sum, zero-seat members omitted, the entry shape and key format as today | The solver and its tests stay untouched | The equivalence test (R12) passes |
-| **R7** | **Identity.** Members are keyed by their **current** `member_name`. A seat referencing a member who no longer exists is dropped and **reported** in the derivation's diagnostics, as are two members sharing a name. No ministry filter applies (the solver's pool is not a member-listing read — spec v2 I5) | The solver matches by name | A renamed member's past seats count under the new name; a dangling reference is reported, never counted |
-| **R8** | **One source (H4).** A single pure derivation function in a neutral module (ADR-0028) turns role documents into entries; one server read feeds it; one admin read route exposes it, guarded like `solver-config` (manager; content-editor refused). The admin planner and, later, `solve_month` both use that route's result | Two derivations would drift | No other code path produces a history |
-| **R9** | **Read compliance.** The read counts unpublished services, so it lives under `api/admin/**` or as a **new** builder in `serviceReadQueries.ts`; it adds no `MAY_SEE_DRAFTS` entry, runs on `operationalClient`, and changes no existing export of a writer-imported module | Spec v2 I1, I2; the roadmap's additive-only rule | `protectedReadAudit.test.ts` and `draftGatingCoverage.test.ts` pass unchanged in their lists |
+| **R7** | **Identity.** Members are keyed by their **current** `member_name`. A seat referencing a member who no longer exists is dropped and **reported** in the derivation's diagnostics, as are two members sharing a name, and **duplicate weekend targets** (two documents of one type on one date — an integrity state the read model already recognises), which are reported and **counted by neither copy** — the read model already treats such a target as ambiguous and counts neither (`serviceReadSelect.ts:19`), and the derivation must stay a deterministic function of the documents. After cutover the planner shows these diagnostics beside the history, not only on request. No ministry filter applies (the solver's pool is not a member-listing read — spec v2 I5) | The solver matches by name | A renamed member's past seats count under the new name; a dangling reference is reported, never counted |
+| **R8** | **One source (H4).** A single pure derivation function in a neutral module (ADR-0028) turns role documents into entries; one **server-callable builder** (the read plus the derivation) produces the entries; the admin planner reaches it through one admin read route, guarded like `solver-config` (manager; content-editor refused), and P4's `solve_month` calls **the builder directly** — the MCP authenticates with a bearer token, not a session, so it cannot use the route | Two derivations would drift | No other path feeds a solve (the browser's `localStorage` write continues only as R15's rollback target) |
+| **R9** | **Read compliance.** The read counts unpublished services, so its query is a **new** builder in `serviceReadQueries.ts` (the exempt home spec v2 I2 names, callable from P4) — never an operator script that reads Sanity, which would need an `OPERATOR_TOOLING_ALLOWLIST` entry; it adds no `MAY_SEE_DRAFTS` entry, runs on `operationalClient`, and changes no existing export of a writer-imported module | Spec v2 I1, I2; the roadmap's additive-only rule | `protectedReadAudit.test.ts` and `draftGatingCoverage.test.ts` pass unchanged in their lists |
 | **R10** | **No write.** The derivation stores nothing; the history is derived on each request | Nothing to drift, nothing to migrate | No writer is added |
-| **R11** | **Diff gate (H3).** Before any cutover, a read-only comparison of the derived history against Frank's exported production history, per month × member × role key, with **every difference classified**: stored-vs-created (swaps, edits), months never created in create mode, a partial-month overwrite, a pre-2026-07-30 raw-response entry, a rename or unknown id, a special, a future month, a month outside the calendar window. **Any unclassified difference blocks the cutover.** The same comparison runs the solve for at least one recent month with each history and records `objective_skipped` and the schedule difference for both | Differences are expected by design; unexplained ones are bugs | A written report, kept **outside the repository** (it holds member names), that Frank reads |
-| **R12** | **Equivalence for the untouched case.** For a month created by the planner and never edited, whose three prior months are likewise untouched and non-empty, the derived entry equals what `historyEntryFromDrafts` wrote | Proves the counting rules survived the change of source | A unit test on constructed documents |
-| **R13** | **Export procedure.** Frank exports his history from the **production origin** in the browser profile he plans in (DevTools: `copy(localStorage.getItem("owt_solver_history_v2"))`), per profile if he uses more than one; the export never enters git | The history is per origin and per profile | The procedure is written in the P2 plan and run by Frank |
-| **R14** | **Cutover (H4) — Frank's decision.** After R11 is explained, Frank decides. On cutover the planner's solve, the `LeadPoolHistoryPanel` and the «Historial» display all read the derived history; the chips become **read-only** (deleting a derived month would mean nothing); `localStorage` is no longer read | The browser and the connector must never solve against different histories | No solve request is built from `localStorage` |
-| **R15** | **Clean rollback.** Until the cutover is proven, the planner **keeps writing** `localStorage` as today; rollback is a switch back to reading it. The dual-write stops in a separate, later change once one real month has been solved and created on the derived history without rollback. After P4 ships, rolling back also withdraws `solve_month` | H4; the roadmap's P2 rollback | The P2 plan names the switch and the stop point |
-| **R16** | **ADR (H2).** A new ADR amending ADR-0010, written before the diff runs: it ratifies the specials exclusion, records decision 1 (stored state) and decision 2 (prior-month drafts count), and records that the history is shared rather than per-browser. ADR-0010's status becomes "Accepted, amended by ADR-NNNN"; `docs/DATA_MODEL.md` and the per-browser test change with the cutover | The reasoning is not obvious from code | The ADR merges no later than the diff |
-| **R17** | **Known limitation recorded.** The ADR and the roadmap record that the history influences the schedule only when the objective is not skipped (ADR-0038), and that fixing the ceiling is separate follow-on work **[D-2026-09-23]** | Otherwise P2 looks like a fairness fix it is not | Both documents say so |
+| **R11** | **Diff gate (H3).** Before any cutover, a read-only comparison of the derived history against Frank's exported production history, per month × member × role key, over the **union** of the export's months and the derived months in the windows compared. Every difference receives exactly one verdict from the evidence table below — **explained**, **unverified**, or **bug** — and a class is admitted only when its evidence holds; a label alone admits nothing. **Any `bug`, and any difference no class admits, blocks the cutover; the `unverified` total blocks it unless Frank accepts that total explicitly.** The same report runs the solve for at least one recent month with each history, the seed pinned and each side run twice (a time-limited search is not repeatable even with a fixed seed), and records `objective_skipped` for every run; where both sides skip the objective, the report says the difference is **not fairness-driven** — the two runs per side are the noise baseline that shows how far a seeded, time-limited search wanders on its own | Differences are expected by design; an unexplained one — or one explained only by a label — is a bug | A written report, kept **outside the repository** (it holds member names), that Frank reads |
+| **R12** | **Equivalence for the untouched case.** For a month created by the planner and never edited, whose three prior months are likewise untouched and non-empty, the derived entry equals what `historyEntryFromDrafts` wrote | Proves the counting rules survived the change of source | A unit test whose documents are built with the create route's own `buildRoleDocument` from the same drafts — hand-built mirror documents would make it circular |
+| **R13** | **Export procedure.** Frank exports his history from the **production origin** in the browser profile he plans in (DevTools: `copy(localStorage.getItem("owt_solver_history_v2"))`), per profile if he uses more than one, and from the iOS shell's own store if he has ever planned there; the export never enters git | The history is per origin and per profile | The procedure is written in the P2 plan and run by Frank |
+| **R14** | **Cutover (H4) — Frank's decision.** After R11 is explained, Frank decides. On cutover the planner's solve, the `LeadPoolHistoryPanel` and the «Historial» display all read the derived history; the chips become **read-only** (deleting a derived month would mean nothing) — which removes Frank's manual month exclusion, so it is part of what he decides at cutover; `localStorage` is no longer read | The browser and the connector must never solve against different histories | No solve request is built from `localStorage`; a solve always carries the history derived **for its own target month, at solve time** — never a copy cached before an edit to a prior month in the same session — a test switches the month while the history is loading and then solves |
+| **R15** | **Clean rollback.** Until the cutover is proven, the planner **keeps writing** `localStorage` as today, building each write from `localStorage`'s own contents — never from the in-memory history, which after cutover holds derived entries and would quietly replace the rollback target; rollback is a switch back to reading it. The switch is **deployment-wide**, never per browser — a per-browser switch would bring back the two-admins gap — and if it is an environment variable it gets a `docs/SECRETS.md` entry in the same change. `historyEntryFromDrafts` stays until the dual-write ends, and R12's equivalence test goes with it. The dual-write stops in a separate, later change once one real month has been solved and created on the derived history without rollback. After P4 ships, rolling back also withdraws `solve_month` | H4; the roadmap's P2 rollback | The P2 plan names the switch and the stop point |
+| **R16** | **ADR (H2).** A new ADR amending ADR-0010, written before the diff runs: it ratifies the specials exclusion, records decision 1 (stored state) and decision 2 (prior-month drafts count), and records that the history is shared rather than per-browser, and records R11's `unverified` verdict as a stated narrowing of H3. ADR-0010's status becomes "Accepted, amended by ADR-NNNN"; `docs/DATA_MODEL.md` and the per-browser test change with the cutover | The reasoning is not obvious from code | The ADR is merged **before** the diff runs |
+| **R17** | **Known limitation recorded.** The ADR and P2's review log record that the history influences the schedule only when the objective is not skipped (ADR-0038), and that fixing the ceiling is separate follow-on work **[D-2026-09-23]** | Otherwise P2 looks like a fairness fix it is not | Both say so; the approved roadmap is not edited for it |
+
+### R11 — the diff gate's evidence
+
+**Where the evidence comes from.** Every item below is read through the same compliant
+path as the derivation: role documents through the canonical projection, which already
+carries `creationReceiptId` and `creationFingerprint` (`app/utils/serviceReadQueries.ts:19`),
+and creation receipts through a new additive builder in the same file, all on
+`operationalClient`. The builder exposes them as **diagnostics** beside the entries, and
+**computes every fingerprint comparison itself, on the server** — match or mismatch, under
+`published` true and false — because the fingerprint code is server-only
+(`app/utils/roleCreationReceipt.ts`) and a second implementation in a browser would drift.
+The admin route returns the diagnostics on request; the comparison consumes them with
+Frank's export and never reads Sanity itself.
+
+**The fingerprint comparison has a positive control.** A round-trip test — create payload → stored document → payload rebuilt from the stored fields → fingerprint — must reproduce the stamped value, and the report states the match rate. Without it, a rebuild defect would read every document as changed and quietly turn every would-be `bug` into `unverified`.
+
+**What a fingerprint can and cannot prove.** `creationFingerprint` hashes the whole create
+payload — voices, instruments, FOH, date, name and publication state
+(`roleCreationReceipt.ts:195-225`). A document whose recomputed fingerprint matches has
+**stored seats equal to what was created**. A mismatch proves only that *something*
+changed, not that the voice seats did.
+
+**The verdict is decided in this order; the first rule that applies wins, and within a rule the first arm that applies wins.** Every
+difference gets exactly one verdict: **explained**, **unverified**, or **bug**.
+
+1. **A duplicate weekend target in the window** (two documents of one type on one date)
+   gets the verdict **bug** and so **blocks the cutover** until it is resolved. R7 counts neither copy, so every difference
+   around it would otherwise be unattributable.
+2. **Month-level** — the month is on one side only:
+   - the export entry's `(year, month)` is ≥ the target's, compared as numbers — never the
+     unpadded key as a string ("2026-10" sorts before "2026-9") → *future*, **explained**;
+   - the month is not one of the three before the target → *outside the window*, **explained**;
+   - an in-window month is absent from an export holding six entries → *evicted or deleted*,
+     **unverified** (a full export cannot tell eviction from a chip removal);
+   - an in-window month is present in another export Frank supplied → *another browser or profile*, **explained**;
+   - an in-window month is absent from an export holding fewer than six, while the derived
+     side has documents → *deleted by hand or never written*, **unverified** (absence alone
+     cannot tell a chip removal from a write that failed).
+3. **Entry-level** — the export's entry for the month:
+   - holds **zero-count rows** → *pre-2026-07-30 raw-response entry*, **explained** for the
+     whole month. Zero rows are the signature: entries written since commit `618097e1` come
+     from `historyEntryFromDrafts`, which only ever counts upward and never writes a zero
+     (`plannerModel.ts:1254-1282`), while earlier entries copied the solver's rows, zeros
+     included. A name merely absent from the month's seats is **not** evidence — swaps and
+     deletions produce it too, and rule 4 classifies those;
+   - carries a key that is a raw `_id`, or no current member's name while a current name on
+     the derived side carries exactly its counts → *rename or unknown id*, **explained** for
+     that key. The remaining comparison uses current names.
+4. **Document-level** — only inside a month the export holds as an ordinary create-mode entry:
+   - a document with no receipt (which also means no fingerprint — the two have always been
+     written together, since 2026-07-24), or whose receipt's fingerprint equals the fingerprint of an
+     **empty-seat** payload for its target (stored mode's «+ Nuevo servicio») → *created
+     outside create mode*, **explained**: the browser never recorded it;
+   - a document whose receipt predates the latest create session for that month, where the
+     export entry equals exactly the counts of the latest session's documents and **all** of
+     those documents are unchanged → *partial-month overwrite*, **explained**; if a
+     latest-session document has since changed, the earlier-session documents are
+     **unverified** instead (the session boundary is the receipt `createdAt` grouping the P2
+     plan pins);
+   - a document whose fingerprint mismatches → *changed since creation*, **unverified**;
+   - a `role_deleted` receipt whose target date is in the month → *deleted since creation*,
+     **unverified** (its seats cannot be recovered);
+   - a receipt whose target date is in the month while its role's current date is not →
+     *moved out of the month*, **unverified**.
+**Attribution is per cell.** Differences are counted per month × member × role key, and a document-level class explains only the counts that document actually contributes: when the derived count is higher, only documents that seat that member in that role can explain it; when the export's is higher, only a changed, deleted or moved document of the matching type in that month can. Whatever remains in the cell falls to rule 5.
+
+5. **Residual.** A difference still unaccounted for after rules 1–4 — including one on a
+   document that is unchanged, recorded in this export's session, and not explained above
+   — is a **bug**. A difference traced to a special's seats is a **bug** (neither side counts
+   specials).
+
+**This narrows H3, and says so.** The roadmap's H3 asks for *every* difference explained.
+The fingerprint cannot prove what changed inside an edited document, and deleted or moved
+documents leave nothing to test, so R11 adds an **unverified** verdict that Frank accepts
+or rejects as a total, by class. The ADR (R16) records this departure.
 
 ## Scope
 
@@ -113,7 +188,7 @@ Three decisions Frank made on 2026-09-23, each after its cost was stated:
 
 ## Dependencies and constraints
 
-- Additive-only changes to writer-imported modules (roadmap P2 row).
+- Additive-only changes to writer-imported modules (roadmap P2 row) — including `plannerModel.ts`, which `app/utils/solverConfigWriteRequest.ts` imports; if P1 is in flight at the same time, whichever lands second rebases onto the other's changes to `serviceReadQueries.ts`.
 - Solver untouched; `gcf/**` untouched.
 - The P2 plan (standard tier) follows this spec; the ADR is part of it.
 
@@ -126,7 +201,8 @@ Three decisions Frank made on 2026-09-23, each after its cost was stated:
 | Objective ceiling | Out of P2; recorded as follow-on | Keeps one behaviour change per delivery | History stays mostly inert until the follow-on ships | Frank, 2026-09-23 |
 | Window | Three calendar months, empty entries allowed | The solver weights by position; calendar alignment makes recency mean the latest month | An empty month takes one of the three slots | this spec |
 | Names | Current `member_name` | The solver keys by name; current names survive renames | Two members with one name merge in the solver — reported, not fixed here | this spec |
-| Chips | Read-only after cutover | A derived month cannot be meaningfully deleted | Frank loses the ability to exclude a month by hand | this spec |
+| H3 narrowing | An `unverified` verdict Frank accepts or rejects as a total, by class | A fingerprint cannot prove what changed inside an edited document; deleted and moved documents leave nothing to test | Not every difference is individually proven | **Frank, at the diff** — approving this spec is not approving the narrowing |
+| Chips | Read-only after cutover | A derived month cannot be meaningfully deleted | Frank loses the ability to exclude a month by hand | Frank, at cutover (R14) |
 
 ## Assumptions
 
@@ -135,6 +211,7 @@ Three decisions Frank made on 2026-09-23, each after its cost was stated:
 | Frank's planning history lives on the production origin in one browser profile | The diff compares against the wrong history | Frank confirms which profile he plans in when exporting | Export each profile; diff each |
 | The window's months have role documents (documents exist from June 2026) | Older windows are empty | The diff report shows it | Expected; empty entries are valid |
 | The solve route can be called read-only for the R11 comparison | The objective comparison cannot run | P2 plan | Run the solver locally (`gcf/owt_solver_v2.py --json-mode`), which the solve route already supports |
+| Production role documents in the compared windows mostly carry `creationFingerprint` (stamped since the guarded create route: committed 2026-07-24, deployed 2026-07-27 — the rules test whether a receipt exists, not its date) | More differences land in `unverified` | The diff report counts them | Frank accepts or rejects the `unverified` remainder explicitly (R11) |
 
 ## Open questions
 
@@ -147,11 +224,13 @@ None blocking.
 | R1, R5, R6, R7 | Derived entries on constructed documents | Unit tests of the pure function |
 | R2, R3, R4 | Swapped month, all-draft month, calendar window with an empty month and a future month present | Unit tests |
 | R8, R9, R10 | One route, guarded; lists unchanged | Route tests; the two guard suites |
-| R11, R13 | The classified diff report, including `objective_skipped` per case | Frank reads it before deciding |
+| R11, R13 | The classified diff report — every difference with its verdict and the evidence that admitted it, the `unverified` total by class, `objective_skipped` for every run (seed pinned, each side twice) | Frank reads it before deciding; the diff consumes the builder's output or runs in Frank's browser, never a new Sanity-reading script |
 | R12 | Equality with `historyEntryFromDrafts` | Unit test |
 | R14, R15 | Cutover switch and rollback | Tests of both read paths; the stop point named in the plan |
-| R16, R17 | ADR merged; roadmap note | Code review |
+| R16, R17 | ADR merged before the diff; the known limitation in the ADR and P2's review log | Code review |
 
 ## Terminal state
 
-`READY_FOR_ADVERSARIAL_REVIEW`
+**APPROVED** at critical tier — two sequential fresh `APPROVED` verdicts on
+byte-identical digest `a6958d85…`. Changes made after that approval are listed,
+un-reviewed, in [`2026-09-23-solver-history-derivation-design-review-log.md`](2026-09-23-solver-history-derivation-design-review-log.md). Approval is not authorization to implement.

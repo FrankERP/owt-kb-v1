@@ -7,7 +7,7 @@
 
 ## Status and contract
 
-- **Document status:** Draft. **Risk tier: CRITICAL** (auth/ACL/secret boundary; the
+- **Document status:** **APPROVED** (digest `8e52e91e…`; see the review log). **Risk tier: CRITICAL** (auth/ACL/secret boundary; the
   first unauthenticated endpoints this app exposes to the internet).
 - **Accepted requirement source:** [`2026-09-22-owt-mcp-design-v2.md`](../specs/2026-09-22-owt-mcp-design-v2.md)
   (contracts O1–O9, I6, I10, I11, I13, I14, E1, DV1, the Connector origin section) and
@@ -101,7 +101,7 @@ Each step leaves the tree green on the four gates. Nothing is deployed until ste
 - **Purpose:** C4 of the spec — prove `mcp-handler@2.2.0` + `@modelcontextprotocol/server@2.1.0` work in this app before anything depends on them.
 - **Change:** install the five exact pins; add a throwaway `app/api/mcp/route.ts` serving `ping` with **no auth**, and run it only locally: `next build` succeeds; a JSON-RPC `initialize` + `tools/list` + `tools/call ping` over Streamable HTTP POST returns correctly (a vitest calling the exported handler with a `Request`, plus one `curl` against `next start`).
 - **Failure and recovery:** if either fails on Next 16, replace `mcp-handler` with a hand-written POST handler on `@modelcontextprotocol/server`'s web-standard transport (its v2 core is `Request`/`Response`), keeping every other step unchanged. Record which path was taken in the ADR (step 11).
-- **Verification:** the build log and the test.
+- **Verification:** the build log and the test; the build output's function-size delta is recorded here, before anything is released.
 - **State after:** dependencies pinned; the unauthenticated route **is removed again** before the commit ends — it never reaches a commit that could deploy.
 
 ### 2. OAuth core module — pure, fully unit-tested
@@ -116,10 +116,10 @@ Each step leaves the tree green on the four gates. Nothing is deployed until ste
     - *authorization code* — `{ typ: "code", sub, client (sha256 of client_id), redirect_uri, code_challenge, resource, jti, exp: 60 s }`;
     - *access token* — `{ typ: "at", sub, aud: resource, grant, jti, exp: 7 d }`;
     - *refresh token* — `{ typ: "rt", sub, grant, jti, exp: 30 d }`.
-    Verification checks signature, `typ`, `iss === origin`, expiry, and `aud` where present — a token minted on one deployment fails on the other twice over (different secret by O7, different `iss`/`aud` by I10).
+    Verification pins `algorithms: ["HS256"]` and **requires** `typ`, `iss === origin` and `exp` on codes and access and refresh tokens, and `aud` on access tokens (jose `requiredClaims`, `audience`) — never "where present" — a token minted on one deployment fails on the other twice over (different secret by O7, different `iss`/`aud` by I10).
   - **PKCE.** S256 only; `plain` refused. Verifier compared to the challenge through `crypto.timingSafeEqual` on equal-length buffers.
   - **Redirect allowlist, per origin.** Production and preview: exactly `https://claude.ai/api/mcp/auth_callback` (a dated constant citing the source). Preview only, additionally: loopback `http://127.0.0.1:<port>/…` and `http://localhost:<port>/…` (RFC 8252) for the dev smoke client. The allowlist is re-checked at authorize **and** at token, never read from anything stored (O1).
-  - **Grant store** (`writeClient`): `createGrant`, `loadGrant` (30 s cache, reusing the `isMemberActive` pattern), `rotateRefresh(grant, presentedJti)` under `ifRevisionId`, `revokeGrant`; `redeemCode(jti)` = `writeClient.create({ _id: "mcpOauthCode." + sha256(jti), _type: "mcpOauthCodeRedemption", redeemedAt })`, where `sanityConflictKind(err) === "already_exists"` means **replay** (O4).
+  - **Grant store** (`writeClient`; the module is marked `server-only`, since it imports a write token): `createGrant` (at `_id` `mcpOauthGrant.<uuid>` — a dotted id, so the document is not publicly readable, as `roleCreate.…` receipts already are), `loadGrant` (30 s cache, reusing the `isMemberActive` pattern), `rotateRefresh(grant, presentedJti)` under `ifRevisionId`, `revokeGrant`; a **missing** grant document is treated as revoked (401), so deleting OAuth documents can only ever shut access; `redeemCode(jti)` = `writeClient.create({ _id: "mcpOauthCode." + sha256(jti), _type: "mcpOauthCodeRedemption", redeemedAt })`, where `sanityConflictKind(err) === "already_exists"` means **replay** (O4).
 - **Failure and recovery:** pure; nothing ships.
 - **Verification:** vitest per function — including a token signed with another secret, a wrong `iss`, a wrong `aud`, an expired code, a `plain` PKCE method, a verifier of the wrong length, a loopback redirect presented to production, a host outside the canonical set, a second redemption of one code (the mocked `create` throws a 409 → refused), a superseded refresh `jti` (→ grant revoked).
 - **State after:** module merged, unused.
@@ -141,8 +141,8 @@ Each step leaves the tree green on the four gates. Nothing is deployed until ste
 
 ### 5. Middleware exclusions (I11)
 
-- **Change:** add `api/mcp(?:/|$)`, `api/oauth/register$`, `api/oauth/token$` and `\.well-known(?:/|$)` to `MIDDLEWARE_MATCHER`; copy the literal into `proxy.ts`; add `/api/mcp`, `/api/oauth/register`, `/api/oauth/token` to `PUBLIC_ROUTES`. `/oauth/authorize` and `/api/oauth/authorize` **stay gated**; the discovery handlers under `/api/oauth/discovery/*` stay gated too (reachable only through the rewrite).
-- **Verification:** `routeMatcher.test.ts` green (sync guard + exact public set); a matcher test that `/oauth/authorize?x=1`, `/api/oauth/authorize` and `/api/oauth/discovery/protected-resource` are still gated.
+- **Change:** add `api/mcp(?:/|$)`, `api/oauth/register$`, `api/oauth/token$` and `\.well-known(?:/|$)` to `MIDDLEWARE_MATCHER`; copy the literal into `proxy.ts`. Each `PUBLIC_ROUTES` entry lands **in the same commit as the route file it names** (`/api/oauth/register` in step 6, `/api/oauth/token` in step 8, `/api/mcp` in step 9) — adding them here, before the files exist, would turn `routeMatcher.test.ts` red. `/oauth/authorize` and `/api/oauth/authorize` **stay gated**; the discovery handlers under `/api/oauth/discovery/*` stay gated too (reachable only through the rewrite).
+- **Verification:** `routeMatcher.test.ts` green (sync guard + exact public set); a matcher test that `/oauth/authorize?x=1`, `/api/oauth/authorize` and `/api/oauth/discovery/protected-resource` are still gated and `/.well-known/oauth-protected-resource` is not. Because rewrites have no route file, the `PUBLIC_ROUTES` walk cannot see what the `/.well-known` exclusion exposes, so a new test **pins `next.config.mjs`'s `/.well-known/*` rewrites to exactly the discovery handlers** — a future rewrite to anything else fails the suite.
 
 ### 6. Stateless registration — `POST /api/oauth/register` (ungated)
 
@@ -152,9 +152,9 @@ Each step leaves the tree green on the four gates. Nothing is deployed until ste
 
 ### 7. Consent — `/oauth/authorize` page and its POST (both gated)
 
-- **Page (GET):** a Server Component. Validates every parameter before rendering: `response_type=code`; `client_id` verifies and was issued by this origin; `redirect_uri` is **exactly** one of the client's URIs **and** on this origin's allowlist; `code_challenge_method=S256` with a challenge present; `resource`, if sent, equals this origin's resource (else `invalid_target`); `state` carried through. An invalid `client_id` or `redirect_uri` renders an error page and **never redirects** (an unverified redirect target is never followed); every other error redirects to the verified `redirect_uri` with `error`, `state` and `iss`.
-  Session: `requireActiveSession()` (the middleware already sent a cookie-less browser through sign-in and back); `role !== "super-admin"` → rejection page; `session.user.isImpersonating` → rejection page ("sal de la suplantación para conectar").
-  Renders (Spanish UI): the client's self-declared name **labelled as unverified**, the redirect host, how long ago the client registered (from `iat`), and «Aprueba sólo si acabas de iniciar esta conexión en Claude». Two buttons: «Permitir» and «Cancelar», in a `<form method="POST">` to `/api/oauth/authorize` carrying the validated parameters.
+- **Page (GET):** a Server Component. Validates every parameter before rendering: `response_type=code`; `client_id` verifies and was issued by this origin; `redirect_uri` is **exactly** one of the client's URIs **and** on this origin's allowlist; `code_challenge_method=S256` with a challenge present; `resource`, if sent, equals this origin's resource (else `invalid_target`); `state` carried through; an absent or unknown `scope` is accepted and ignored (one implicit scope). An invalid `client_id` or `redirect_uri` renders an error page and **never redirects** (an unverified redirect target is never followed); every other error redirects to the verified `redirect_uri` with `error`, `state` and `iss`.
+  Session: `requireActiveSession()` (the middleware already sent a cookie-less browser through sign-in and back), with the role read from the live `getMemberAccess` record it already fetched, not from the session copy; not `super-admin` → rejection page; `session.user.isImpersonating` → rejection page ("sal de la suplantación para conectar").
+  Renders (Spanish UI): the client's self-declared name **labelled as unverified**, the full redirect URI, how long ago the client registered (from `iat`), and «Aprueba sólo si acabas de iniciar esta conexión en Claude». Two buttons: «Permitir» and «Cancelar», in a `<form method="POST">` to `/api/oauth/authorize` carrying the validated parameters.
 - **POST:** re-validates **everything** the page validated (never trusts the page) plus the session, role and impersonation. «Cancelar» → redirect with `error=access_denied`. «Permitir» → mint the 60 s code and 302 to `redirect_uri?code=…&state=…&iss=<origin>` (RFC 9207). A GET to this route never issues a code (405). Consent is never remembered (O8): every authorization renders the page and needs its own POST.
 - **CSRF:** the NextAuth cookie keeps its default `SameSite=Lax`, so a cross-site POST arrives without a session and is refused; no GET issues a code.
 - **Verification:** route and page tests — member, admin and content-editor sessions rejected; impersonating super-admin rejected; mismatched redirect never redirected to; `plain` PKCE refused; a returning client still sees consent; the POST refuses a parameter set that differs from what a valid page would show.
@@ -163,7 +163,7 @@ Each step leaves the tree green on the four gates. Nothing is deployed until ste
 
 - **Change:** `application/x-www-form-urlencoded` only.
   - `authorization_code`: verify the code (signature, `typ`, `iss`, 60 s expiry); its `client` equals the hash of the presented `client_id`, which itself verifies for this origin; `redirect_uri` equals the code's; PKCE verifier matches; `resource`, if sent, equals the code's; the subject is still a live, non-disabled super-admin (`getMemberAccess`); **then** `redeemCode(jti)` — a conflict means replay → `invalid_grant`. Create the grant, issue access (7 d) and refresh (30 d) tokens.
-  - `refresh_token`: verify; load the grant **uncached** (the 30 s cache serves only the per-request revocation check, never a rotation); revoked → `invalid_grant`; presented `jti` ≠ `currentRefreshJti` → **revoke the whole grant** and answer `invalid_grant` (O4 — a lost-response retry looks the same and is accepted as a reconnect); live-principal check; rotate under `ifRevisionId` (a concurrent rotation loses the revision race and gets `invalid_grant` rather than a second valid token); issue both tokens.
+  - `refresh_token`: verify; the presented `client_id` must verify and hash to the grant's `clientHash` (RFC 6749 §6); load the grant **uncached** (the 30 s cache serves only the per-request revocation check, never a rotation); revoked → `invalid_grant`; presented `jti` ≠ `currentRefreshJti` → **revoke the whole grant** and answer `invalid_grant` (O4 — a lost-response retry looks the same and is accepted as a reconnect); live-principal check; rotate under `ifRevisionId`. Two concurrent refreshes resolve one of two ways: if both loaded the grant first, the loser fails the revision check and gets `invalid_grant`; if the second loaded it after the first committed, it presents a superseded `jti` and **revokes the grant**, the winner's new tokens included — the reconnect cost O4 accepts; issue both tokens.
   - Responses carry `Cache-Control: no-store`; errors are RFC 6749 JSON (`invalid_grant`, `invalid_request`, `invalid_client`, `unsupported_grant_type`), never a stack trace (E1).
 - **Verification:** replay refused on the second redemption; wrong verifier, wrong redirect, expired code, foreign `client_id` refused; superseded refresh revokes the grant; demoted and disabled subjects refused at both grants; responses `no-store`.
 
@@ -188,19 +188,20 @@ Each step leaves the tree green on the four gates. Nothing is deployed until ste
 
 - `docs/SECRETS.md`:
   - **`MCP_OAUTH_SECRET`** — Needed in: Vercel **preview and production, each generated separately** (`openssl rand -hex 32`, run and entered by Frank), and local `.env.local`; **not** CI, iOS, GCF. Purpose: signs every client id, code and token; without it every OAuth/MCP route answers 503. Rotate: generate, set in the one environment, redeploy it; every connector on that environment must be re-added. Blast radius: that environment's connector only; the app is unaffected.
-  - **`MCP_DISABLED`** — optional kill switch; any non-empty value shuts every MCP and OAuth route; takes effect on the next deployment.
+  - **`MCP_DISABLED`** — Needed in: Vercel production and preview only when switching off (unset otherwise); not in `.env.local`, CI, iOS or GCF. Purpose: any non-empty value shuts every MCP and OAuth route. Where it comes from: set by Frank in Vercel → Settings → Environment Variables; not a secret. Rotation: n/a — set to switch off, remove to switch on; takes effect on the next deployment. Blast radius: the connector only.
   - **`SR_VERIFY_BYPASS_SECRET`** — add the dev smoke client as a consumer.
-- **ADR (next free number at merge):** "MCP client registration is stateless DCR". Rejected: stored registrations (an unauthenticated write, and the cap problem O3 exists for) and CIMD (preferred by MCP 2026-07-28, but the approved spec's O1 names DCR and Claude supports both; switching is a spec change). Also records the step-1 library path.
+- **ADR (next free number at merge):** "MCP client registration is stateless DCR". Rejected: stored registrations (an unauthenticated write, and the cap problem O3 exists for) and CIMD (preferred by MCP 2026-07-28, but the approved spec's O1 names DCR and Claude supports both; switching is a spec change). Also records the step-1 library path, and that a direct `jose@6` moves next-auth's `jose@4` into a nested copy (harmless).
 - **`docs/MCP.md` (new):** the operator runbook — adding the connector in claude.ai, revoking, the kill switch, the WAF rule, the dev smoke procedure.
-- **`CLAUDE.md`:** one line under invariants — "OAuth/MCP routes serve only their deployment's canonical origin, fail closed without `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not."
+- **`CLAUDE.md`:** one line under invariants — "OAuth/MCP routes serve only their deployment's canonical origin, fail closed without `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and it depends on NextAuth's **default** `redirect` callback preserving its query — never add a custom `redirect` callback without keeping that." A test asserts `authOptions.callbacks.redirect` is undefined.
+- **`docs/AUTH_AND_SECURITY.md`** (its list of public matcher exclusions and env vars) and **`docs/DATA_MODEL.md`** (its internal types) gain the new routes, variables and types in the same delivery.
 
 ### 12. Release to dev, then production (per CLAUDE.md)
 
 1. Gates green locally; fresh code review of the merge range; fix; re-verify the fix.
 2. **Frank** sets `MCP_OAUTH_SECRET` on **preview** (its own value). Merge into `preview`, push, verify the dev alias moved (alias + `githubCommitSha`).
-3. **Dev smoke (Frank; no agent can — it needs his super-admin session and a consent POST):** a local MCP client (e.g. the MCP Inspector) configured with the `x-vercel-protection-bypass` header runs discovery → registration with a loopback redirect → consent → token → `ping`; then a revoke via the script against a **dev-created** grant and a `401` within 30 s. The smoke calls no other tool (DV1). Discovery fetched on dev shows `issuer`/`resource` equal to `https://dev-owt-backstage.vercel.app`.
-4. **Frank** sets a **separately generated** `MCP_OAUTH_SECRET` on **production**. PR to `main`, `gates` green, merge; verify the production alias.
-5. **Frank** creates the WAF rate-limit rule on `/api/oauth/register` (Vercel → Firewall → New Rule → Rate Limit; IP key; e.g. 10 requests / 60 s; action 429) and confirms it in the dashboard.
+3. **Dev smoke (Frank; no agent can — it needs his super-admin session and a consent POST):** a small local script acting as the MCP client, sending the `x-vercel-protection-bypass` header on every request (off-the-shelf inspectors run OAuth in the browser, where CORS and the header are a problem), runs discovery → registration with a loopback redirect → consent → token → `ping`; then a revoke via the script against a **dev-created** grant and a `401` within 30 s. The smoke calls no other tool (DV1). Discovery fetched on dev shows `issuer`/`resource` equal to `https://dev-owt-backstage.vercel.app`.
+4. **Frank** creates the WAF rate-limit rule on `/api/oauth/register` **before** the production merge (Vercel → Firewall → New Rule → Rate Limit; IP key; e.g. 10 requests / 60 s; action 429 — the path may exist in a rule before it is deployed) and confirms it in the dashboard. If the project's one Hobby rate-limit rule is already in use, stop and ask Frank.
+5. **Frank** sets a **separately generated** `MCP_OAUTH_SECRET` on **production**. PR to `main`, `gates` green, merge; verify the production alias.
 6. `vercel env ls` shows separate preview and production entries for `MCP_OAUTH_SECRET` (entries only — never a value).
 
 ### 13. Live acceptance on production (from the phone)
@@ -240,7 +241,7 @@ Each step leaves the tree green on the four gates. Nothing is deployed until ste
 ## Rollout, observability, and rollback
 
 - **Release sequence:** step 12 exactly; nothing reaches `main` without the dev smoke.
-- **Signals:** Vercel function logs for `/api/oauth/*` and `/api/mcp` (status codes only — never log a token or code); the grant list from the script.
+- **Signals:** Vercel function logs for `/api/oauth/*` and `/api/mcp` (status codes only — never log a token or code) — except that a **refused redirect URI whose host is claude.ai or claude.com is logged**, at registration and at authorize: it is not secret, and it is the data the "Claude changed its callback" fallback needs; the grant list from the script.
 - **Stop conditions:** a handshake that fails on production; any `5xx` from the OAuth routes; any token accepted across environments in the step 2/9 tests.
 - **Rollback:** set `MCP_DISABLED=1` and redeploy (every MCP and OAuth route answers 503); then revert the PR — removing the routes, the matcher entries in all three files, and the `next.config.mjs` rewrites. The two document types can stay (inert) or be removed by a guarded script.
 - **Restoration check:** discovery and `/api/mcp` answer 503 or 404 on both origins; the rest of the app is unaffected (the four gates and the dev alias check).
@@ -283,4 +284,6 @@ a spec change.
 
 ## Terminal state
 
-`READY_FOR_ADVERSARIAL_REVIEW`
+**APPROVED** at critical tier — two sequential fresh `APPROVED` verdicts on
+byte-identical digest `8e52e91e…`. Changes made after that approval are listed,
+un-reviewed, in [`2026-09-23-owt-mcp-p0-auth-and-ping-review-log.md`](2026-09-23-owt-mcp-p0-auth-and-ping-review-log.md). Approval is not authorization to implement.
