@@ -429,6 +429,10 @@ async function main() {
       state,
       resource,
     });
+    // The full client_id appears here ON PURPOSE: the URL must be actionable
+    // (copy-pasteable / openable), and a client_id is a public identifier —
+    // it rides in the browser's URL bar in every OAuth authorization-code
+    // flow, this one included. It is not a secret (ADR-0039).
     console.log(`  ${authorizeUrl}`);
     if (args.open) {
       try {
@@ -526,6 +530,9 @@ async function main() {
       const deadline = Date.now() + REVOCATION_POLL_TIMEOUT_MS;
       let revoked = false;
       while (Date.now() < deadline) {
+        // Polls `tools/list`, never `tools/call` — the route authenticates
+        // BEFORE it dispatches to any method, so a `tools/list` 401 already
+        // proves the revocation landed, with no need to actually invoke a tool.
         const res = await mcpRequest(tokens.access_token, rpc("tools/list"), LEGACY_PROTOCOL_VERSION);
         const challenge = res.headers.get("www-authenticate") ?? "";
         if (res.status === 401 && /error="invalid_token"/.test(challenge)) {

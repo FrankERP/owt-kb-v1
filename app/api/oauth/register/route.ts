@@ -1,10 +1,11 @@
 // app/api/oauth/register/route.ts
 //
-// RFC 7591 dynamic client registration — STATELESS (P0 plan step 6, spec's
-// registration ADR). The client id IS the signed token `signClientId` mints;
-// nothing is written to Sanity, so there is no unauthenticated write and no
-// cap to exhaust. Reached publicly: excluded from the session middleware at
-// the exact path `api/oauth/register$` (`app/utils/routeMatcher.ts`, P0 step
+// RFC 7591 dynamic client registration — STATELESS (P0 plan step 6; why, and
+// why not CIMD or a stored registration, is ADR-0039). The client id IS the
+// signed token `signClientId` mints; nothing is written to Sanity, so there
+// is no unauthenticated write and no cap to exhaust. Reached publicly:
+// excluded from the session middleware at the exact path
+// `api/oauth/register$` (`app/utils/routeMatcher.ts`, P0 step
 // 5), because this is the first endpoint that accepts input from anyone on
 // the internet without a session — every input is validated before it does
 // anything with it, and the handler never imports `writeClient` or the grant

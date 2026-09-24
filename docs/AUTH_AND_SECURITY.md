@@ -131,11 +131,14 @@ Next.js 16 renamed `middleware.ts` → **`proxy.ts`**. It wraps the app in NextA
   blocked from Studio).
 
 **Matcher** — protects everything except a small public allow-list (`/auth*`, `/api/auth*`,
-`/api/cron*`, `/api/service-readiness-verification/identity`, `/theme-gallery*`,
-`_next/static`, `_next/image`, `favicon.ico`, `LogoOasis.png`, `/icons`, `manifest.webmanifest`).
+`/api/cron*`, `/api/service-readiness-verification/identity`, `/theme-gallery*`, `/api/mcp*`,
+`/api/oauth/register`, `/api/oauth/token`, `/.well-known/*`, `_next/static`, `_next/image`,
+`favicon.ico`, `LogoOasis.png`, `/icons`, `manifest.webmanifest`).
 The cron routes authenticate with `Bearer CRON_SECRET` in-handler; the identity route fails
-closed with a 404; the theme gallery is prerendered and reads nothing (ADR-0017). The first
-three had been public for some time without appearing in this list.
+closed with a 404; the theme gallery is prerendered and reads nothing (ADR-0017); the MCP/OAuth
+routes authenticate themselves (a bearer token, a signed client id, a signed code) — see
+[MCP / OAuth](#mcp--oauth) below. The first three had been public for some time without
+appearing in this list.
 Each excluded prefix is anchored with `(?:/|$)` so `/author` is **not** mistaken for the public
 `/auth` route (this was a real login-gate-bypass bug — the anchor is the fix).
 
@@ -143,6 +146,23 @@ Each excluded prefix is anchored with `(?:/|$)` so `/author` is **not** mistaken
 > analyzable literal) but must stay **byte-for-byte equal** to `MIDDLEWARE_MATCHER` in
 > [`app/utils/routeMatcher.ts`](../app/utils/routeMatcher.ts), which carries the tested version
 > and a sync guard (`routeMatcher.test.ts`). Change both together.
+
+---
+
+## MCP / OAuth
+
+This app is also an MCP server: `GET|POST|DELETE /api/mcp` plus a stateless OAuth 2.1 flow under
+`/api/oauth/*` and `/.well-known/*`, gating a Claude connector to super-admins only. It is a
+separate authentication surface from everything above — its own signed tokens
+(`MCP_OAUTH_SECRET`, never `NEXTAUTH_SECRET`), its own origin/audience checks, and its own
+revocation path — documented in full in [`docs/MCP.md`](MCP.md) (the operator runbook) and
+[ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) (why client registration is
+stateless). **Status: implemented, not yet released** — see `docs/MCP.md`'s release checklist.
+
+The one point of contact with the code above this section: `/oauth/authorize` (the consent
+screen) reuses `requireActiveSession()` and `getMemberAccess()` like any other gated page, and
+relies on the middleware's `redirect` callback staying NextAuth's default — the invariant in
+`CLAUDE.md`, guarded by `authRedirectCallback.test.ts`.
 
 ---
 
@@ -264,6 +284,9 @@ Full list (names only — never print values; `.env.local` is git/claude-ignored
 | `CRON_SECRET` | Auth for the cron route |
 | `OWT_SOLVER_URL` / `OWT_SOLVER_API_KEY` / `OWT_SOLVER_PYTHON` | Solver endpoint/key/local python path |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Production URL fallback for email links |
+| `MCP_OAUTH_SECRET` | Signs every MCP/OAuth client id, code and token; see [SECRETS.md](SECRETS.md#mcp_oauth_secret) |
+| `MCP_DISABLED` | MCP/OAuth kill switch, not a secret; see [SECRETS.md](SECRETS.md#mcp_disabled) |
+| `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` | Vercel system vars (not configured by hand), read by the MCP/OAuth routes to pick this deployment's canonical origin and report its commit — see the matching entry in [SECRETS.md](SECRETS.md) |
 | `CATALOG_DIR`, `MEMBER_ID`, `PASSWORD` | One-off script args |
 
 > **Security reminder:** `.env.local` on disk contains real secret values. It is correctly

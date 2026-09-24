@@ -296,6 +296,51 @@ recreating the service. Full replay semantics:
 
 ---
 
+## `mcpOauthGrant` / `mcpOauthCodeRedemption` — MCP OAuth state
+
+Files: [`documentTypes.ts`](../app/mcp/oauth/documentTypes.ts) (the import-free source of the type
+names, `_id` prefixes and field lists — both Sanity schema files import it directly, never mirror
+it, controller ruling R10) and [`grantDocument.ts`](../app/mcp/oauth/grantDocument.ts) (the pure
+builders every write goes through). Both types are declared **`hidden: true` and `readOnly: true`**
+at the schema level and are written **only** by `/api/oauth/token` (grant creation, refresh
+rotation) and `scripts/revoke-mcp-grant.mjs` (revocation) — never in Studio, never by any other
+script. Full operator runbook: [`docs/MCP.md`](MCP.md).
+
+### `mcpOauthGrant` — one document per authorized connection
+
+Deterministic `_id`: **`mcpOauthGrant.<uuid>`**.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `sub` | string | The authorizing member's `teamMembers` `_id`. |
+| `clientHash` | string | `sha256(client_id)` — the RAW client id (a signed DCR token) is never stored. |
+| `origin` | string | The canonical origin that issued the grant (`app/mcp/oauth/origin.ts`) — checked against the token's `iss` on every request (R13). |
+| `createdAt` | datetime | |
+| `lastRefreshAt` | datetime | Absent until the first refresh. |
+| `currentRefreshJti` | string | The refresh token's single valid `jti`. A refresh presenting any other `jti` is a reuse and revokes the WHOLE grant (spec O4). |
+| `revoked` | boolean | Read back as `true` unless the stored flag is exactly `false` — a missing or malformed document therefore reads as revoked, so deleting one can only ever shut access, never grant it. |
+| `revokedAt`, `revokedReason` | datetime, string | Absent until revoked. |
+
+### `mcpOauthCodeRedemption` — the authorization-code replay guard
+
+Deterministic `_id`: **`mcpOauthCode.<sha256 hex of the code's jti>`**. `create()` on this
+deterministic id IS the replay guard — a second redemption attempt for the same code is a
+document-conflict, refused as `invalid_grant` at the token endpoint, same pattern as
+`roleCreationReceipt` above.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `redeemedAt` | datetime | The only field besides `_id`/`_type`. |
+
+**Everything in both types is safe to be world-readable** (the dataset answers unauthenticated
+published reads): a member id is already public elsewhere in the dataset, and neither a client
+hash nor a refresh `jti` is usable without `MCP_OAUTH_SECRET`. See
+[AUTH_AND_SECURITY → MCP / OAuth](AUTH_AND_SECURITY.md#mcp--oauth) and
+[ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why registration itself
+writes nothing at all.
+
+---
+
 ## `solverConfig` — the shared planner rule set (singleton)
 
 One document, always at `_id: "solverConfig"`

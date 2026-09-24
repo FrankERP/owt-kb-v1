@@ -379,18 +379,99 @@ that order, and the window is zero.
 
 ## `SR_VERIFY_BYPASS_SECRET`
 
-- **Needed on:** local `.env.local` (A3 harness and `scripts/dev-verify.ts`). **Not needed on:**
-  Vercel — Vercel holds its own copy as the project's Protection Bypass for Automation.
+- **Needed on:** local `.env.local` (A3 harness, `scripts/dev-verify.ts` **and
+  `scripts/mcp-dev-smoke.mjs`** — the MCP OAuth+ping smoke client, [docs/MCP.md](MCP.md)). **Not
+  needed on:** Vercel — Vercel holds its own copy as the project's Protection Bypass for
+  Automation.
 - **Purpose:** passes Vercel SSO protection on preview deployments, sent only as the
-  `x-vercel-protection-bypass` header. Without it both tools refuse.
+  `x-vercel-protection-bypass` header. Without it all three tools refuse — the dev smoke client
+  refuses before any network call (`resolveBase`'s env check), same as the other two.
 - **Where it came from:** Vercel → project `owt-backstage` → Settings → Deployment Protection →
   Protection Bypass for Automation. The A3 harness's use of it is described in
   `docs/VERIFICATION_HARNESS.md` §2 "Secret hygiene" and §3 "Environment"; this entry is the
-  rotation record for both tools.
+  rotation record for all three tools.
 - **Rotate:** regenerate in that Vercel screen (the old value stops working immediately) → update
   `.env.local`.
-- **Blast radius of rotation:** every local A3 and dev-verify run fails until `.env.local` is
-  updated. Deployments themselves are unaffected.
+- **Blast radius of rotation:** every local A3, dev-verify and MCP dev-smoke run fails until
+  `.env.local` is updated. Deployments themselves are unaffected — the MCP connector itself does
+  not use this header at all (it authenticates with its own bearer token, never Vercel's SSO
+  bypass), only the dev-smoke client's *requests to the dev deployment* do.
+
+## `MCP_OAUTH_SECRET`
+
+**Needed in: Vercel preview AND production — each generated SEPARATELY (`openssl rand -hex 32`,
+run and entered by Frank in each environment) — and local `.env.local`. Not needed in: GitHub
+Actions, the iOS build, GCF.** Full operator context (what the connector is, how to add/revoke it)
+lives in [docs/MCP.md](MCP.md); this entry is the rotation record.
+
+**Purpose.** The HS256 signing key (`jose`) for every client id, authorization code, access token
+and refresh token this deployment's MCP/OAuth routes mint or verify (`app/mcp/oauth/tokens.ts`).
+**Without it, every OAuth and MCP route answers 503** — `mcpRoutePreflight` treats a missing or
+under-length (< 32 bytes / 256 bits) value as "no usable key" and fails closed, the same branch
+the kill switch below uses.
+
+**Deliberately two independent values, never one shared between preview and production.** Each
+deployment is its own issuer (`iss` = that deployment's canonical origin — production →
+`owt-backstage.vercel.app`, preview → `dev-owt-backstage.vercel.app`), and a distinct secret per
+environment means a token minted on one origin can never even attempt to verify on the other —
+the origin check and the key are two independent locks on the same door, not one.
+
+**Where the value came from.** `openssl rand -hex 32`, generated and entered by Frank directly —
+there is no dashboard-issued value to copy from.
+
+**How to rotate.** Generate a fresh value, set it in the ONE environment being rotated (`npx
+vercel env rm MCP_OAUTH_SECRET <env>` first — `vercel env add` refuses an existing key — then
+`printf '%s' "$SECRET" | npx vercel env add MCP_OAUTH_SECRET <env>`), then **redeploy that
+environment**. Env vars bind at build time, same as every other variable in this file.
+
+**Blast radius.** Every access and refresh token that environment's routes ever signed stops
+verifying the instant the new key is live — a rotated secret cannot check a token signed under
+the old one, by construction. That is **that one environment's connectors only**: every human who
+connected Claude to it (or ran the dev smoke against it) must reconnect / re-run the OAuth
+handshake from scratch. The other environment, and the rest of the app, are unaffected — nothing
+here touches a session cookie or any non-MCP route.
+
+---
+
+## `MCP_DISABLED`
+
+**Needed in: Vercel production and preview, ONLY when switching MCP off — leave unset otherwise.
+Not needed in: `.env.local`, GitHub Actions, the iOS build, GCF.**
+
+**Not a secret** — a kill switch, plain config. `mcpRoutePreflight` checks it FIRST, before the
+host check and before the signing-key check: **any non-empty value (`"0"` included)** makes every
+MCP and OAuth route answer 503, and the `/oauth/authorize` consent page renders «No disponible»
+instead of the consent form.
+
+**Where it comes from.** Set directly by Frank, Vercel → project `owt-backstage` → Settings →
+Environment Variables → the environment to disable. Any non-empty string works; there is no
+issuer or generator to run.
+
+**Rotate:** n/a — set a value to switch the connector off, remove it (or clear it to empty) to
+switch back on. **Takes effect on the next deployment** — like every Vercel env var, it binds at
+build time, so flipping it needs a redeploy to actually bite, not just a save in the dashboard.
+
+**Blast radius.** The MCP connector and the whole OAuth flow on that one environment, and nothing
+else — no other route, page or data path reads this variable.
+
+---
+
+## `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` — read by the MCP/OAuth routes
+
+**Not secrets, and never configured by hand — Vercel sets both automatically on every
+deployment.** Listed here, config-style, because the MCP/OAuth routes' behavior depends on them
+and an operator debugging a 404 or a stale `ping` version should know they exist rather than
+suspect a missing secret.
+
+- **`VERCEL_ENV`** (`production` | `preview` | absent locally) selects this deployment's single
+  canonical origin (`app/mcp/oauth/origin.ts`'s `canonicalOrigin`) — production →
+  `owt-backstage.vercel.app`, preview → `dev-owt-backstage.vercel.app`, absent or `development` →
+  `localhost:3000`. **Any other value — or this variable being cleared at runtime — makes every
+  `Host` 404**, never open: the routes fail closed to "not found", exactly like an unrecognized
+  host normally does. Never set or override this manually.
+- **`VERCEL_GIT_COMMIT_SHA`** — the deployed commit. `ping`'s `version` field reports its first 7
+  characters (`"local"` when the variable is absent), so Frank can tell from the phone which
+  deployment answered a `ping` call. Not sensitive — the repository is public.
 
 ## Not yet documented
 
