@@ -1,4 +1,4 @@
-// Studio protection policy for the thirteen protected stored types
+// Studio protection policy for the fifteen protected stored types
 // (Service Readiness A2 §8 / A3 §4) — pure, exported, and unit-testable.
 //
 // WHY a code-owned policy instead of UI configuration alone: the Studio is an
@@ -24,7 +24,7 @@
 // look at a lock, a receipt, or a malformed role while diagnosing.
 
 /**
- * The thirteen protected stored types. `saturdarSongs` is a deliberate stored typo —
+ * The fifteen protected stored types. `saturdarSongs` is a deliberate stored typo —
  * never rename.
  *
  * Membership here is what earns a type a pane in `sanity/structure.ts`'s
@@ -67,6 +67,14 @@ export const PROTECTED_STUDIO_TYPES = [
   // key. A Studio-authored draft is the same failure by another route.
   "kidsPair",
   "kidsSchedule",
+  // MCP OAuth-state (P0 auth spec O5/O9): the dataset answers unauthenticated
+  // published reads, so both types store only what is safe to publish — a
+  // member id, a client HASH (never the raw client id), timestamps, a refresh
+  // `jti` and the revocation flag. Never authored by hand; revocation is a
+  // guarded script. Deliberately {@link INTERNAL_STUDIO_TYPES} like the other
+  // machine coordination state above, not like `kidsPair`/`kidsSchedule`.
+  "mcpOauthGrant",
+  "mcpOauthCodeRedemption",
 ] as const;
 
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
@@ -129,7 +137,7 @@ const DELETE_ONLY_REASONS: Readonly<Record<DeleteOnlyStudioType, { read: string;
   });
 
 /**
- * The five internal types: never authored by hand at all, so they are also
+ * The seven internal types: never authored by hand at all, so they are also
  * `hidden: true` in the schema and never appear in any create affordance.
  * `notificationOutbox` is additionally delete-only (above) — it is the one type
  * governed by both lists at once.
@@ -143,6 +151,11 @@ const DELETE_ONLY_REASONS: Readonly<Record<DeleteOnlyStudioType, { read: string;
  * enforcement for every admin on both planner surfaces. `document.actions` is
  * the mechanism that applies however the pane was reached, and only a GOVERNED
  * type gets it.
+ *
+ * `mcpOauthGrant`/`mcpOauthCodeRedemption` (P0 auth spec O5/O9) join the list
+ * for the same reason as the coordination types above: machine state written
+ * only by `app/mcp/oauth/grantStore.ts`, never human-meaningful content — unlike
+ * `kidsPair`/`kidsSchedule`, which are protected but deliberately NOT internal.
  */
 export const INTERNAL_STUDIO_TYPES = [
   "roleTargetLock",
@@ -150,6 +163,8 @@ export const INTERNAL_STUDIO_TYPES = [
   "notificationOutbox",
   "specialIdentityCoordinator",
   "solverConfig",
+  "mcpOauthGrant",
+  "mcpOauthCodeRedemption",
 ] as const;
 
 /**
@@ -162,8 +177,9 @@ export const INTERNAL_STUDIO_TYPES = [
  *   · on the three role types the listed fields are `hidden: true` FIELDS inside
  *     an otherwise operator-visible document;
  *   · `roleTargetLock` / `roleCreationReceipt` / `notificationOutbox` /
- *     `solverConfig` are `hidden: true` TYPES, so every field is off the
- *     authoring surface with them.
+ *     `solverConfig` / `mcpOauthGrant` / `mcpOauthCodeRedemption` are
+ *     `hidden: true` TYPES, so every field is off the authoring surface with
+ *     them.
  * The read-only inspection group in `sanity/structure.ts` is the one deliberate
  * place these are visible, and it cannot write. That statement holds only
  * because every one of them is also in {@link PROTECTED_STUDIO_TYPES}, which is
@@ -208,6 +224,22 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "updatedAt",
     "updatedBy",
   ],
+  // Every field either MCP OAuth type may carry — written only by
+  // `app/mcp/oauth/grantStore.ts`, mirroring `GRANT_FIELDS`/`CODE_REDEMPTION_FIELDS`
+  // in `app/mcp/oauth/documentTypes.ts`. `documentTypes.test.ts` pins the two
+  // lists equal to each other.
+  mcpOauthGrant: [
+    "sub",
+    "clientHash",
+    "origin",
+    "createdAt",
+    "lastRefreshAt",
+    "currentRefreshJti",
+    "revoked",
+    "revokedAt",
+    "revokedReason",
+  ],
+  mcpOauthCodeRedemption: ["redeemedAt"],
 });
 
 /**
@@ -463,4 +495,6 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   solverConfig: "Reglas del planificador (solo lectura)",
   kidsPair: "Kids — Parejas (solo lectura)",
   kidsSchedule: "Kids — Roles del domingo (solo lectura)",
+  mcpOauthGrant: "MCP OAuth — Concesiones (solo lectura)",
+  mcpOauthCodeRedemption: "MCP OAuth — Códigos canjeados (solo lectura)",
 });

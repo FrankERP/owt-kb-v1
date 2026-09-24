@@ -9,31 +9,34 @@
 // Every write `grantStore.ts` makes is built here, so the schema (step 3) can
 // assert "the writer never sets a field outside GRANT_FIELDS" against these
 // functions without a Sanity client.
+//
+// The type names, `_id` prefixes and field lists themselves live in the
+// import-free `./documentTypes` (controller ruling R10), because the two
+// Sanity schema files import them directly and a schema file must never drag
+// `node:crypto`/`jose` into the embedded Studio bundle. They are re-exported
+// here unchanged, so every existing caller of this module keeps working.
 
 import { randomUUID } from "node:crypto";
 import { clientHashOf, sha256Hex } from "./tokens";
+import {
+  CODE_REDEMPTION_FIELDS,
+  CODE_REDEMPTION_ID_PREFIX,
+  GRANT_FIELDS,
+  GRANT_ID_PREFIX,
+  MCP_OAUTH_CODE_REDEMPTION_TYPE,
+  MCP_OAUTH_GRANT_TYPE,
+  type GrantField,
+} from "./documentTypes";
 
-export const MCP_OAUTH_GRANT_TYPE = "mcpOauthGrant";
-export const MCP_OAUTH_CODE_REDEMPTION_TYPE = "mcpOauthCodeRedemption";
-export const GRANT_ID_PREFIX = "mcpOauthGrant.";
-export const CODE_REDEMPTION_ID_PREFIX = "mcpOauthCode.";
-
-/** Every field an `mcpOauthGrant` may carry besides `_id`/`_type`. */
-export const GRANT_FIELDS = [
-  "sub",
-  "clientHash",
-  "origin",
-  "createdAt",
-  "lastRefreshAt",
-  "currentRefreshJti",
-  "revoked",
-  "revokedAt",
-  "revokedReason",
-] as const;
-export type GrantField = (typeof GRANT_FIELDS)[number];
-
-/** Every field an `mcpOauthCodeRedemption` may carry besides `_id`/`_type` (the id holds the hashed jti). */
-export const CODE_REDEMPTION_FIELDS = ["redeemedAt"] as const;
+export {
+  CODE_REDEMPTION_FIELDS,
+  CODE_REDEMPTION_ID_PREFIX,
+  GRANT_FIELDS,
+  GRANT_ID_PREFIX,
+  MCP_OAUTH_CODE_REDEMPTION_TYPE,
+  MCP_OAUTH_GRANT_TYPE,
+};
+export type { GrantField };
 
 const GRANT_ID_RE = /^mcpOauthGrant\.[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

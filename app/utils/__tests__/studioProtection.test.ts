@@ -58,7 +58,7 @@ function gitTracked(): string[] {
 // ── The policy ──────────────────────────────────────────────────────────────
 
 describe("studio protection policy", () => {
-  it("covers exactly the thirteen protected types, keeping the saturdarSongs typo", () => {
+  it("covers exactly the fifteen protected types, keeping the saturdarSongs typo", () => {
     expect([...PROTECTED_STUDIO_TYPES]).toEqual([
       "sunday_role",
       "saturday_role",
@@ -77,6 +77,9 @@ describe("studio protection policy", () => {
       // Oasis Kids: the app is the writer (kids design spec §4.2, §5).
       "kidsPair",
       "kidsSchedule",
+      // MCP OAuth-state (P0 auth spec O5/O9): written only by grantStore.ts.
+      "mcpOauthGrant",
+      "mcpOauthCodeRedemption",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");
     expect(PROTECTED_STUDIO_TYPES as readonly string[]).not.toContain("saturdaySongs");
@@ -94,6 +97,8 @@ describe("studio protection policy", () => {
       "solverConfig",
       "kidsPair",
       "kidsSchedule",
+      "mcpOauthGrant",
+      "mcpOauthCodeRedemption",
     ]);
   });
 
@@ -170,6 +175,8 @@ describe("studio protection policy", () => {
       "notificationOutbox",
       "specialIdentityCoordinator",
       "solverConfig",
+      "mcpOauthGrant",
+      "mcpOauthCodeRedemption",
     ]);
     for (const type of INTERNAL_STUDIO_TYPES) {
       expect(isInternalStudioType(type)).toBe(true);
@@ -446,6 +453,8 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/solverConfig.ts",
       "sanity/schemas/kidsPair.ts",
       "sanity/schemas/kidsSchedule.ts",
+      "sanity/schemas/mcpOauthGrant.ts",
+      "sanity/schemas/mcpOauthCodeRedemption.ts",
     ];
     const tracked = new Set(gitTracked());
     for (const file of owned) {
@@ -460,7 +469,7 @@ describe("studio config installs the policy", () => {
     expect(structure).toContain("PROTECTED_STUDIO_TYPES");
   });
 
-  it("marks all thirteen protected schema types read-only", () => {
+  it("marks all fifteen protected schema types read-only", () => {
     const files: Record<string, string> = {
       sunday_role: "sanity/schemas/sunRole.ts",
       saturday_role: "sanity/schemas/satRole.ts",
@@ -475,6 +484,8 @@ describe("studio config installs the policy", () => {
       solverConfig: "sanity/schemas/solverConfig.ts",
       kidsPair: "sanity/schemas/kidsPair.ts",
       kidsSchedule: "sanity/schemas/kidsSchedule.ts",
+      mcpOauthGrant: "sanity/schemas/mcpOauthGrant.ts",
+      mcpOauthCodeRedemption: "sanity/schemas/mcpOauthCodeRedemption.ts",
     };
     expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
     for (const type of PROTECTED_STUDIO_TYPES) {
@@ -508,6 +519,8 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/notificationOutbox.ts",
       "sanity/schemas/specialIdentityCoordinator.ts",
       "sanity/schemas/solverConfig.ts",
+      "sanity/schemas/mcpOauthGrant.ts",
+      "sanity/schemas/mcpOauthCodeRedemption.ts",
     ]) {
       const src = read(file);
       expect(src, `${file} must be a hidden type`).toMatch(/^\s*hidden:\s*true,\s*$/m);
@@ -524,7 +537,16 @@ describe("studio config installs the policy", () => {
         "notificationOutbox",
         "specialIdentityCoordinator",
         "solverConfig",
+        "mcpOauthGrant",
+        "mcpOauthCodeRedemption",
       ].sort(),
     );
+  });
+
+  it("registers both MCP OAuth-state types in the Sanity schema", () => {
+    const src = read("sanity/schema.ts");
+    expect(src).toContain("./schemas/mcpOauthGrant");
+    expect(src).toContain("./schemas/mcpOauthCodeRedemption");
+    expect(src).toMatch(/types:\s*\[[\s\S]*mcpOauthGrant[\s\S]*mcpOauthCodeRedemption[\s\S]*\]/);
   });
 });
