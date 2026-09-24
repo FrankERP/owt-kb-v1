@@ -3,8 +3,10 @@
 > **Status: released to production 2026-09-24** (PR
 > [#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). Every route, test and
 > script this document describes is deployed; the core flow (discovery, registration, consent,
-> token exchange, `ping`, refresh and revocation) has been exercised end to end on dev and
-> production. See [Release record](#release-record-p0-2026-09-24) for the evidence and the
+> token exchange, `ping` and revocation) has been exercised end to end on dev and production.
+> **Refresh has run only on dev** — claude.ai won't refresh a production access token until close
+> to its 7-day expiry, so the first production refresh is expected around 2026-10-01. See
+> [Release record](#release-record-p0-2026-09-24) for the evidence and the
 > [release checklist](#release-checklist-steps-1213) for how it shipped.
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
