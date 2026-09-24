@@ -1,8 +1,11 @@
 # MCP connector — operator runbook
 
-> **Status: implemented on branch `claude/mcp-page-app-247b7c`, NOT released.** Every route,
-> test and script this document describes exists in the repository; nothing has been deployed.
-> See [Release checklist](#release-checklist-steps-1213) for what remains.
+> **Status: released to production 2026-09-24** (PR
+> [#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). Every route, test and
+> script this document describes is deployed and has been exercised end to end — the dev smoke,
+> production discovery and a live claude.ai connection from Frank's phone, including a
+> revocation test. See [Release record](#release-record-p0-2026-09-24) for the evidence and the
+> [release checklist](#release-checklist-steps-1213) for how it shipped.
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
@@ -79,7 +82,10 @@ ignored. Returns:
 ```
 
 `version` is the deployment's `VERCEL_GIT_COMMIT_SHA`, first 7 characters (`"local"` if absent) —
-this is how you tell from the phone which deployment answered. `now` is
+this is how you tell from the phone which deployment answered. Confirmed live 2026-09-24: the dev
+smoke's `ping` returned `version: fd0bbe2` and the phone's returned `version: c2ca5f7`, both the
+deployed commit, never `"local"` — `VERCEL_GIT_COMMIT_SHA` is available at runtime on this
+project. `now` is
 America/Mexico_City wall-clock time with its UTC offset. Pattern for adding a second tool: one
 file per tool in `app/mcp/tools/`, exporting a `register<Tool>(server, deps)` function that
 `app/api/mcp/route.ts` calls inside its handler init. A tool reads the principal from
@@ -119,8 +125,8 @@ instead was considered and declined: dev writes the production dataset.
    ```
    https://owt-backstage.vercel.app/api/mcp
    ```
-   Production only, and only once the [release checklist](#release-checklist-steps-1213) has
-   shipped P0 there (its step 7 is exactly this).
+   Production only — P0 shipped there 2026-09-24 (its step 7 is exactly this; see
+   [Release record](#release-record-p0-2026-09-24)).
 2. Claude discovers the OAuth endpoints, registers itself (stateless DCR — nothing is written
    yet), and opens the authorize URL in a browser.
 3. **Sign in to Backstage** if you are not already — the consent page is a real app page behind
@@ -251,10 +257,11 @@ Measured at implementation time (steps 1 and 9):
 - Adding any new route rehashes Turbopack's shared chunks, so **every existing function's trace
   shifted by ≈+90 KB** too — this is Turbopack build behavior, not something the new dependencies
   themselves cause.
-- **The per-deployment total on Vercel (Function Storage impact) is measured at step 13, once
-  this ships to a real deployment.** This section will be updated with that number rather than
-  left as a placeholder once it exists — see [CI.md](CI.md#which-branches-vercel-builds)
-  for why Function Storage matters on this project's Hobby quota.
+- **The per-deployment total on Vercel (Function Storage impact) was not measured.** Vercel's API
+  does not expose a per-deployment total, and step 13 (the production release) did not surface
+  one either — the three build-measured numbers above are the only size evidence this project
+  has. See [CI.md](CI.md#which-branches-vercel-builds) for why Function Storage matters on this
+  project's Hobby quota.
 
 ---
 
@@ -291,29 +298,71 @@ A few things that look like bugs at first glance and are not:
   built with `maxSubscriptions: 0` deliberately (see `app/api/mcp/route.ts`'s header comment) — a
   kept-open SSE stream would mean a revocation or a role demotion could not bite within the
   30-second cache window, and would keep a serverless function invocation alive for no reason.
+  **Observed in the step-13 live acceptance** (2026-09-24): claude.ai's iOS app completed its
+  authorization and `ping` round-trip with no visible effect from this refusal.
+- **Not observed:** the consent page's streaming quirks above (`notFound()` arriving as a 200,
+  an error redirect delivered in-stream) were not exercised by the step-13 happy path — Frank's
+  phone never hit a foreign host or a refused request. Treat those two bullets as a design
+  description, not a production-verified behavior, until an actual refusal is exercised there.
+
+---
+
+## Release record (P0, 2026-09-24)
+
+All times America/Mexico_City.
+
+**Dev smoke.** `scripts/mcp-dev-smoke.mjs --await-revocation` passed 10/10 at 10:42–10:44 against
+the `fd0bbe28` preview deployment: discovery (issuer = dev), DCR registration, browser consent,
+token exchange, `initialize`/`tools/list`/`ping` (`version: fd0bbe2`), refresh + `ping` again,
+then a manual revoke (`scripts/revoke-mcp-grant.mjs … --apply`) that the smoke observed as a
+`401 invalid_token`.
+
+**Production discovery and the no-token 401.** Without a cookie, both discovery documents
+(`/.well-known/oauth-authorization-server`, `/.well-known/oauth-protected-resource`) return 200
+JSON with `issuer`/`resource` equal to `https://owt-backstage.vercel.app`. `POST /api/mcp` with
+no bearer token returns 401 with
+`WWW-Authenticate: Bearer resource_metadata="https://owt-backstage.vercel.app/.well-known/oauth-protected-resource/api/mcp"`.
+
+**Step 13 — live acceptance from the phone.** Frank added the custom connector in the claude.ai
+iOS app (~13:25) and completed consent on the phone. `ping` returned `ok` with
+`version: c2ca5f7` and Mexico City wall-clock time. Revocation test: the grant was revoked at
+13:30:47; `ping` failed once the ≤30 s grant cache expired; Frank reconnected (a new grant at
+13:31:59) and `ping` worked again. Vercel's runtime logs for `/api/mcp` over the session showed
+11×200 and 1×401 — the 401 was the client's first, token-less contact, not a failure.
+
+**The WAF rule.** «MCP register rate limit», live since 2026-09-24: Request Path equals
+`/api/oauth/register`, a fixed 60 s window, 10 requests, keyed by IP address, action 429. It
+occupies the project's only Hobby-tier rate-limit slot — a future rate-limit need on a different
+route means replacing this rule or upgrading the plan.
+
+**Secrets.** Preview and Production each carry their own `MCP_OAUTH_SECRET`, generated
+separately by Frank (~07:30 and ~10:56) — see [SECRETS.md](SECRETS.md#mcp_oauth_secret).
+
+**Live state.** One live grant, from the phone connection above. Two revoked: the dev smoke's
+grant and the one created and then revoked during the step-13 revocation test.
 
 ---
 
 ## Release checklist (steps 12–13)
 
-**Status: not released.** Everything above describes what is built on
-`claude/mcp-page-app-247b7c`; none of it has reached a real deployment. What remains, per the P0
-plan:
+**Status: done — released 2026-09-24** (PR
+[#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). All seven steps below
+are complete; see [Release record](#release-record-p0-2026-09-24) above for the full evidence.
 
-1. Generate and set `MCP_OAUTH_SECRET` on **preview** (`openssl rand -hex 32`, entered by Frank —
-   see [SECRETS.md](SECRETS.md#mcp_oauth_secret)).
-2. Merge the branch into `preview`, push, and **verify the dev alias moved** (the alias +
-   `githubCommitSha` check — a green build is not enough).
-3. Run the dev smoke (`scripts/mcp-dev-smoke.mjs`) against `dev-owt-backstage`, including the
-   `--await-revocation` check, and revoke the grant it creates afterward.
-4. Create the WAF rate-limit rule on `/api/oauth/register` (above) — check the project's one
-   Hobby slot is free first.
-5. Generate and set a **separate** `MCP_OAUTH_SECRET` on **production** — never reuse preview's
-   value (see why in [SECRETS.md](SECRETS.md#mcp_oauth_secret)).
-6. Open the PR, wait for the `gates` check, merge, then **verify the production alias** the same
-   way as step 2.
-7. Add the connector from the phone, against `https://owt-backstage.vercel.app/api/mcp`, and
-   confirm `ping` answers with `version` matching the just-merged commit.
-
-Until all seven are done, this document's "not released" status stands — do not update it to
-imply a deployment that has not happened.
+1. ✅ `MCP_OAUTH_SECRET` generated and set on **preview** by Frank, ~07:30.
+2. ✅ Branch merged into `preview` as `fd0bbe28`, pushed 09:21; dev alias verified — deployment
+   `dpl_o5ZZH4Hw5jegrVa4HUshmXXuov8x` READY, alias includes `dev-owt-backstage.vercel.app`,
+   `githubCommitSha` `fd0bbe28`.
+3. ✅ Dev smoke (`scripts/mcp-dev-smoke.mjs --await-revocation`) passed 10/10 at 10:42–10:44; the
+   grant it created was revoked afterward.
+4. ✅ WAF rate-limit rule «MCP register rate limit» created on `/api/oauth/register` — live since
+   2026-09-24.
+5. ✅ A **separate** `MCP_OAUTH_SECRET` generated and set on **production** by Frank, ~10:56 —
+   never reused preview's value (see why in [SECRETS.md](SECRETS.md#mcp_oauth_secret)).
+6. ✅ PR [#95](https://github.com/FrankERP/owt-kb-v1/pull/95) opened, `gates` passed (7m17s),
+   merged 13:05 (`main` `c2ca5f7c`); production alias verified — deployment
+   `dpl_CEFFwWzqX2GW6ADvprH2Up9XyWZe` READY, alias includes `owt-backstage.vercel.app`,
+   `githubCommitSha` `c2ca5f7c`.
+7. ✅ Connector added from Frank's phone (claude.ai iOS app, ~13:25) against
+   `https://owt-backstage.vercel.app/api/mcp`; `ping` answered with `version: c2ca5f7`, matching
+   the merged commit — including a revocation-and-reconnect test.
