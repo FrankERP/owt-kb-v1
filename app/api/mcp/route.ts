@@ -49,12 +49,25 @@ const SERVER_INFO = { name: MCP_SERVER_NAME, version: mcpServerVersion() };
  * Built ONCE per module. `mcp-handler` still creates a fresh `McpServer` per
  * request and runs this init on it — stateless, nothing shared between
  * callers. One `register<Tool>` call per tool file in `app/mcp/tools/`.
+ *
+ * NO HELD STREAMS. Every exchange must end with the request that was checked,
+ * or a revocation or demotion could not bite within 30 s (spec O2/O9) and an
+ * open stream would keep a function invocation alive. The SDK would otherwise
+ * advertise `tools.listChanged` and serve the 2026-07-28 `subscriptions/listen`
+ * as an SSE stream kept open by a keep-alive: `maxSubscriptions: 0` makes it
+ * answer a completed JSON-RPC error instead, and `listChanged: false` stops
+ * advertising a notification this server never sends (the tool list is fixed
+ * per deployment). The capability MERGES with what `registerTool` sets up.
  */
 const mcpHandler = createMcpHandler(
   (server) => {
     registerPing(server, { version: SERVER_INFO.version });
   },
-  { serverInfo: SERVER_INFO },
+  {
+    serverInfo: SERVER_INFO,
+    capabilities: { tools: { listChanged: false } },
+    maxSubscriptions: 0,
+  },
 );
 
 /**
@@ -86,6 +99,21 @@ function presentedBearer(request: Request): PresentedBearer {
   if (credentials === "") return { kind: "absent" };
   if (!B64TOKEN_RE.test(credentials)) return { kind: "malformed" };
   return { kind: "token", token: credentials };
+}
+
+/**
+ * What the MCP server is handed: a copy of the request WITHOUT `Authorization`,
+ * carrying the verified principal as `auth` (which `mcp-handler` forwards to
+ * the SDK as `authInfo`). The SDK gives every tool the request it received as
+ * `ctx.http.req`, so dropping the header here is what keeps the raw bearer out
+ * of every tool. The body moves to the copy; the original is not read again.
+ */
+function forwardedRequest(request: Request, authInfo: AuthInfo): Request {
+  const headers = new Headers(request.headers);
+  headers.delete("authorization");
+  const forwarded = new Request(request, { headers });
+  forwarded.auth = authInfo;
+  return forwarded;
 }
 
 /** A fixed 500: a stage name and, when the cause has one, a numeric status code — never the error. */
@@ -167,10 +195,10 @@ async function handle(request: Request): Promise<Response> {
     if (!auth.ok) return auth.response;
 
     // `mcp-handler` hands `request.auth` to the SDK, which gives it to tools
-    // as `ctx.http.authInfo` — the same thing its own `withMcpAuth` does. Set
-    // only here, after every check has passed.
-    request.auth = auth.authInfo;
-    return await mcpHandler(request);
+    // as `ctx.http.authInfo` — what its own `withMcpAuth` does, on the
+    // original request. Here it rides on the header-stripped copy, built only
+    // after every check has passed.
+    return await mcpHandler(forwardedRequest(request, auth.authInfo));
   } catch {
     // Never echo or log the error: it may carry request data.
     return serverError("unexpected");

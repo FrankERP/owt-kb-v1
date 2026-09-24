@@ -19,11 +19,56 @@ const h = await vi.hoisted(async () => {
   // set here, before the import below. `vi.unstubAllEnvs()` restores it later.
   vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "0123456789abcdef0123456789abcdef01234567");
   const { createInMemorySanity } = await import("./inMemorySanity");
-  return { ...createInMemorySanity(), getMemberAccess: vi.fn() };
+  return {
+    ...createInMemorySanity(),
+    getMemberAccess: vi.fn(),
+    /** Every request the route handed to the MCP handler, in order. */
+    forwarded: [] as Request[],
+    /** When on, each per-request server also gets a test-only `probe` tool (see the mcp-handler mock). */
+    probe: { enabled: false },
+  };
 });
 
 vi.mock("@/app/utils/memberAccess", () => ({ getMemberAccess: (id: string) => h.getMemberAccess(id) }));
 vi.mock("@/sanity/lib/serverClient", () => ({ writeClient: h.writeClient, serverClient: { fetch: vi.fn() } }));
+
+// The REAL mcp-handler, observed: the wrapper records every request the route
+// forwards (so a refusal can assert the handler was never called at all), and
+// can add a test-only `probe` tool that reports what a tool actually sees —
+// `ctx.http.req`'s Authorization header and `ctx.http.authInfo`. The init runs
+// per request, so the probe exists only in the tests that switch it on.
+vi.mock("mcp-handler", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("mcp-handler")>();
+  const { z } = await import("zod");
+  return {
+    ...actual,
+    createMcpHandler: (...[init, options]: Parameters<typeof actual.createMcpHandler>) => {
+      const handler = actual.createMcpHandler(async (server) => {
+        await init(server);
+        if (!h.probe.enabled) return;
+        server.registerTool(
+          "probe",
+          { inputSchema: z.object({}).strict(), annotations: { readOnlyHint: true } },
+          async (_args, ctx) => ({
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  authorization: ctx.http?.req?.headers.get("authorization") ?? null,
+                  authInfo: ctx.http?.authInfo ?? null,
+                }),
+              },
+            ],
+          }),
+        );
+      }, options);
+      return async (request: Request) => {
+        h.forwarded.push(request);
+        return handler(request);
+      };
+    },
+  };
+});
 
 import { DELETE, GET, POST } from "@/app/api/mcp/route";
 import * as mcpRoute from "@/app/api/mcp/route";
@@ -56,6 +101,14 @@ const NO_TOKEN_CHALLENGE = `Bearer resource_metadata="${METADATA_URL}"`;
 const INVALID_TOKEN_CHALLENGE = `Bearer error="invalid_token", resource_metadata="${METADATA_URL}"`;
 
 const LEGACY_PROTOCOL = "2025-06-18";
+const MODERN_PROTOCOL = "2026-07-28";
+
+/** The 2026-07-28 per-request envelope: the two REQUIRED `_meta` keys, plus clientInfo (SHOULD). */
+const MODERN_META = {
+  "io.modelcontextprotocol/protocolVersion": MODERN_PROTOCOL,
+  "io.modelcontextprotocol/clientCapabilities": {},
+  "io.modelcontextprotocol/clientInfo": { name: "vitest", version: "0" },
+};
 
 function liveAccess(role: string | null, active = true) {
   return { active, role, ministries: ["worship"], managesMinistries: [] };
@@ -136,6 +189,66 @@ function mcpRequest(body: unknown, opts: RequestOptions = {}): Request {
   });
 }
 
+/**
+ * A 2026-07-28 request: the envelope rides in `params._meta`, and the SDK
+ * requires `MCP-Protocol-Version`, `Mcp-Method` and — for a named target like
+ * `tools/call` — an `Mcp-Name` equal to `params.name`.
+ */
+function modernRequest(
+  method: string,
+  params: Record<string, unknown>,
+  opts: { token?: string; name?: string; id?: number } = {},
+): Request {
+  const headers: Record<string, string> = {
+    host: PREVIEW_HOST,
+    accept: "application/json, text/event-stream",
+    "content-type": "application/json",
+    "mcp-protocol-version": MODERN_PROTOCOL,
+    "mcp-method": method,
+  };
+  if (opts.name !== undefined) headers["mcp-name"] = opts.name;
+  if (opts.token !== undefined) headers.authorization = `Bearer ${opts.token}`;
+  return new Request("https://ignored.example/api/mcp", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ jsonrpc: "2.0", id: opts.id ?? 1, method, params: { ...params, _meta: MODERN_META } }),
+  });
+}
+
+/** The modern era answers a plain JSON-RPC body, not an SSE stream. */
+async function modernResult(res: Response): Promise<Record<string, unknown>> {
+  expect(res.status).toBe(200);
+  expect(res.headers.get("content-type")).toMatch(/^application\/json/);
+  const message = (await res.json()) as Record<string, unknown>;
+  expect(message.error).toBeUndefined();
+  return message.result as Record<string, unknown>;
+}
+
+/**
+ * Reads a response body for at most `ms`. `done: false` means the server was
+ * still holding the stream open — it is then cancelled, so a held stream
+ * cannot keep the suite alive.
+ */
+async function readWithin(res: Response, ms: number): Promise<{ done: boolean; text: string }> {
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  const deadline = Date.now() + ms;
+  let text = "";
+  for (;;) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
+    const chunk = await Promise.race([
+      reader.read(),
+      new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), remaining)),
+    ]);
+    if (chunk === "timeout") break;
+    if (chunk.done) return { done: true, text };
+    text += decoder.decode(chunk.value);
+  }
+  await reader.cancel();
+  return { done: false, text };
+}
+
 function sseMessages(text: string): Record<string, unknown>[] {
   return text
     .split(/\r?\n\r?\n/)
@@ -176,10 +289,10 @@ async function expectUnauthorized(res: Response, cause: "no_token" | "invalid_to
 
 /** Sends a tools/call for ping and asserts the request was refused before any dispatch. */
 async function expectRefused(opts: RequestOptions, cause: "no_token" | "invalid_token") {
-  const request = mcpRequest(rpc("tools/call", { name: "ping", arguments: {} }), opts);
-  await expectUnauthorized(await POST(request), cause);
-  // No principal was ever attached, so nothing downstream could have run as one.
-  expect(request.auth).toBeUndefined();
+  const forwardedBefore = h.forwarded.length;
+  await expectUnauthorized(await POST(mcpRequest(rpc("tools/call", { name: "ping", arguments: {} }), opts)), cause);
+  // The MCP handler was not called for this request: nothing downstream could have run.
+  expect(h.forwarded).toHaveLength(forwardedBefore);
 }
 
 let consoleSpies: ReturnType<typeof vi.spyOn>[];
@@ -193,6 +306,8 @@ function consoleText(): string {
 beforeEach(() => {
   vi.clearAllMocks();
   h.reset();
+  h.forwarded.length = 0;
+  h.probe.enabled = false;
   __clearGrantCache();
   stubEnv();
   h.getMemberAccess.mockResolvedValue(liveAccess("super-admin"));
@@ -238,7 +353,7 @@ describe("/api/mcp — no bearer token: 401 without an error code (RFC 6750 §3.
     const token = await accessToken(await liveGrant());
     const request = mcpRequest({ ...rpc("tools/list"), access_token: token });
     await expectUnauthorized(await POST(request), "no_token");
-    expect(request.auth).toBeUndefined();
+    expect(h.forwarded).toHaveLength(0);
   });
 });
 
@@ -436,7 +551,8 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     const result = await rpcResult(await POST(mcpRequest(INITIALIZE, { token })));
     expect(result.protocolVersion).toBe(LEGACY_PROTOCOL);
     expect(result.serverInfo).toMatchObject({ name: "owt-backstage", version: VERSION });
-    expect(result.capabilities).toHaveProperty("tools");
+    // Tools, but no list-changed notifications: nothing here holds a stream open.
+    expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
   });
 
   it("tools/list shows exactly one tool, ping: read-only, strict, described in Spanish", async () => {
@@ -507,13 +623,29 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     }
   });
 
-  it("hands the tools the verified principal, never the raw token", async () => {
+  it("forwards a copy WITHOUT Authorization that carries the verified principal, never the raw token", async () => {
     const grantId = await liveGrant();
     const token = await accessToken(grantId);
     const request = mcpRequest(rpc("tools/list"), { token });
-    await rpcResult(await POST(request));
+    // The body really moved to the copy: the handler parsed it and answered.
+    const result = await rpcResult(await POST(request));
+    expect(result.tools).toHaveLength(1);
 
-    const auth = request.auth;
+    expect(h.forwarded).toHaveLength(1);
+    const forwarded = h.forwarded[0]!;
+    expect(forwarded).not.toBe(request);
+    expect(forwarded.headers.get("authorization")).toBeNull();
+    // Positive control: the caller's request did carry the header.
+    expect(request.headers.get("authorization")).toBe(`Bearer ${token}`);
+    // Everything else the SDK routes on survives the copy.
+    expect(forwarded.method).toBe("POST");
+    expect(forwarded.headers.get("content-type")).toBe("application/json");
+    expect(forwarded.headers.get("accept")).toBe("application/json, text/event-stream");
+    expect(forwarded.headers.get("mcp-protocol-version")).toBe(LEGACY_PROTOCOL);
+    // The principal rides on the copy only; the caller's request is never touched.
+    expect(request.auth).toBeUndefined();
+
+    const auth = forwarded.auth;
     expect(auth).toBeDefined();
     expect(auth!.clientId).toBe(clientHashOf(CLIENT_ID));
     expect(auth!.scopes).toEqual([]);
@@ -525,10 +657,117 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(JSON.stringify(auth)).not.toContain(token);
   });
 
+  it("a tool sees no Authorization header, only the principal — on both protocol eras", async () => {
+    h.probe.enabled = true;
+    const grantId = await liveGrant();
+    const token = await accessToken(grantId);
+    const legacy = await rpcResult(
+      await POST(mcpRequest(rpc("tools/call", { name: "probe", arguments: {} }), { token })),
+    );
+    const modern = await modernResult(
+      await POST(modernRequest("tools/call", { name: "probe", arguments: {} }, { token, name: "probe" })),
+    );
+    for (const result of [legacy, modern]) {
+      expect(result.isError).toBeFalsy();
+      const text = (result.content as { text: string }[])[0]!.text;
+      expect(text).not.toContain(token);
+      const seen = JSON.parse(text) as { authorization: string | null; authInfo: Record<string, unknown> | null };
+      expect(seen.authorization).toBeNull();
+      expect(seen.authInfo).toMatchObject({ clientId: clientHashOf(CLIENT_ID), extra: { sub: MEMBER, grantId } });
+    }
+  });
+
+  it("serves a streamed body inside a NextRequest (what Next hands the route) through the copy", async () => {
+    const { NextRequest } = await import("next/server");
+    const token = await accessToken(await liveGrant());
+    const bytes = new TextEncoder().encode(JSON.stringify(rpc("tools/call", { name: "ping" })));
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes.slice(0, 10));
+        controller.enqueue(bytes.slice(10));
+        controller.close();
+      },
+    });
+    const request = new NextRequest("https://ignored.example/api/mcp", {
+      method: "POST",
+      headers: {
+        host: PREVIEW_HOST,
+        accept: "application/json, text/event-stream",
+        "content-type": "application/json",
+        "mcp-protocol-version": LEGACY_PROTOCOL,
+        authorization: `Bearer ${token}`,
+      },
+      body,
+      duplex: "half",
+    } as ConstructorParameters<typeof NextRequest>[1]);
+    const result = await rpcResult(await POST(request));
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({ ok: true, server: "owt-backstage" });
+    expect(h.forwarded[0]!.headers.get("authorization")).toBeNull();
+  });
+
   it("logs nothing on success", async () => {
     const token = await accessToken(await liveGrant());
     await rpcResult(await POST(mcpRequest(rpc("tools/call", { name: "ping" }), { token })));
     for (const spy of consoleSpies) expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+// ── the 2026-07-28 era ─────────────────────────────────────────────────────
+
+describe("/api/mcp — the 2026-07-28 envelope, authenticated", () => {
+  it("tools/call ping returns the same payload as on the 2025 path", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await modernResult(
+      await POST(modernRequest("tools/call", { name: "ping", arguments: {} }, { token, name: "ping" })),
+    );
+    expect(result.isError).toBeFalsy();
+    expect(result.resultType).toBe("complete");
+    const content = result.content as { type: string; text: string }[];
+    const payload = JSON.parse(content[0]!.text) as Record<string, unknown>;
+    expect(Object.keys(payload).sort()).toEqual(["now", "ok", "server", "version"]);
+    expect(payload).toMatchObject({ ok: true, server: "owt-backstage", version: VERSION });
+    expect(payload.now).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}$/);
+    expect(result.structuredContent).toEqual(payload);
+  });
+
+  it("refuses an argument to ping there too", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await modernResult(
+      await POST(modernRequest("tools/call", { name: "ping", arguments: { extra: "x" } }, { token, name: "ping" })),
+    );
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toBeUndefined();
+  });
+
+  it("server/discover advertises tools without list-changed notifications", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await modernResult(await POST(modernRequest("server/discover", {}, { token })));
+    expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
+  });
+});
+
+describe("/api/mcp — no stream outlives the request that was checked (O2/O9)", () => {
+  it("refuses an authenticated subscriptions/listen with a completed JSON-RPC error, never an open SSE stream", async () => {
+    const token = await accessToken(await liveGrant());
+    const res = await POST(
+      modernRequest("subscriptions/listen", { notifications: { toolsListChanged: true } }, { token, id: 9 }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/^application\/json/);
+    expect(res.headers.get("content-type")).not.toMatch(/event-stream/);
+    const { done, text } = await readWithin(res, 1000);
+    expect(done).toBe(true);
+    const message = JSON.parse(text) as { id: unknown; result?: unknown; error?: { code: number } };
+    expect(message.id).toBe(9);
+    expect(message.result).toBeUndefined();
+    expect(message.error?.code).toBe(-32603);
+  });
+
+  it("refuses an unauthenticated subscriptions/listen before the handler", async () => {
+    const res = await POST(modernRequest("subscriptions/listen", { notifications: { toolsListChanged: true } }));
+    await expectUnauthorized(res, "no_token");
+    expect(h.forwarded).toHaveLength(0);
   });
 });
 
@@ -548,7 +787,7 @@ describe("/api/mcp — a server failure is a fixed 500 and never echoes (E1)", (
     h.failNext.fetch = Object.assign(new Error("Sanity said: internal detail"), { statusCode: 502 });
     const request = mcpRequest(rpc("tools/list"), { token });
     await expectServerError(await POST(request));
-    expect(request.auth).toBeUndefined();
+    expect(h.forwarded).toHaveLength(0);
     expect(h.getMemberAccess).not.toHaveBeenCalled();
     expect(consoleText()).not.toMatch(/internal detail/);
   });
@@ -558,7 +797,7 @@ describe("/api/mcp — a server failure is a fixed 500 and never echoes (E1)", (
     h.getMemberAccess.mockRejectedValue(new Error("Sanity said: internal detail"));
     const request = mcpRequest(rpc("tools/list"), { token });
     await expectServerError(await POST(request));
-    expect(request.auth).toBeUndefined();
+    expect(h.forwarded).toHaveLength(0);
     expect(consoleText()).not.toMatch(/internal detail/);
   });
 
@@ -571,7 +810,7 @@ describe("/api/mcp — a server failure is a fixed 500 and never echoes (E1)", (
       return realGet(name);
     });
     await expectServerError(await POST(request));
-    expect(request.auth).toBeUndefined();
+    expect(h.forwarded).toHaveLength(0);
     expect(consoleText()).not.toMatch(/internal detail/);
   });
 });
