@@ -21,6 +21,7 @@ import { describe, expect, it } from "vitest";
 import { mcpOauthCodeRedemption } from "@/sanity/schemas/mcpOauthCodeRedemption";
 import { mcpOauthGrant } from "@/sanity/schemas/mcpOauthGrant";
 
+import { importSpecifiers } from "./importClosure";
 import {
   CODE_REDEMPTION_FIELD,
   CODE_REDEMPTION_FIELDS,
@@ -42,10 +43,6 @@ const REPO_ROOT = path.resolve(HERE, "../../../..");
 
 function fieldNames(schema: { fields?: unknown }): string[] {
   return ((schema.fields as { name: string }[] | undefined) ?? []).map((f) => f.name);
-}
-
-function importSpecifiers(src: string): string[] {
-  return [...src.matchAll(/(?:^|\n)\s*import\b[^;]*?\bfrom\s+["']([^"']+)["']/g)].map((m) => m[1]);
 }
 
 const DOCUMENT_TYPES_SRC = readFileSync(path.join(HERE, "../documentTypes.ts"), "utf8");

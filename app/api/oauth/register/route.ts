@@ -28,7 +28,15 @@ const MAX_CLIENT_NAME_LENGTH = 200;
 const SUPPORTED_GRANT_TYPES = ["authorization_code", "refresh_token"] as const;
 const SUPPORTED_RESPONSE_TYPES = ["code"] as const;
 
-const CONTROL_CHAR_RE = /[\x00-\x1F\x7F]/;
+// `client_name` is shown to a super-admin at consent time (unverified), so it
+// must reject anything that can reorder or hide what they read — not just
+// C0/C1 control characters (`\p{Cc}`, which the old `[\x00-\x1F\x7F]` only
+// half-covered: it caught C0 but not C1 codes like U+0085/U+009B) but format
+// characters (`\p{Cf}`, which includes the bidi override U+202E) and the two
+// Unicode LINE/PARAGRAPH separators (U+2028/U+2029, category Zl/Zp — Unicode
+// does not classify them as Cc or Cf, but they are exactly the same class of
+// problem: an invisible way to inject a line break into rendered text).
+const CONTROL_OR_FORMAT_CHAR_RE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u;
 
 function isJsonContentType(header: string | null): boolean {
   if (!header) return false;
@@ -121,14 +129,24 @@ export async function POST(request: Request): Promise<Response> {
   ) {
     return registrationErrorResponse("invalid_client_metadata", "redirect_uris must be an array of 1-5 strings");
   }
+  // Check every URI — never short-circuit on the first refusal — so a claude
+  // host near-miss later in the array still gets logged even when an earlier
+  // URI (e.g. a loopback refused on production) is what's refused first. At
+  // most one line per request: only the FIRST refused URI that
+  // `shouldLogRefusedRedirect` accepts is logged.
+  let hasRefusedUri = false;
+  let loggedRefusal = false;
   for (const uri of redirectUris) {
-    if (!isRedirectUriAllowed(uri, origin)) {
-      if (shouldLogRefusedRedirect(uri)) {
-        // Never the client_id, never the body — just the refused URI.
-        console.warn("[mcp-oauth] refused redirect_uri from a claude host:", JSON.stringify(uri));
-      }
-      return registrationErrorResponse("invalid_redirect_uri");
+    if (isRedirectUriAllowed(uri, origin)) continue;
+    hasRefusedUri = true;
+    if (!loggedRefusal && shouldLogRefusedRedirect(uri)) {
+      // Never the client_id, never the body — just the refused URI.
+      console.warn("[mcp-oauth] refused redirect_uri from a claude host:", JSON.stringify(uri));
+      loggedRefusal = true;
     }
+  }
+  if (hasRefusedUri) {
+    return registrationErrorResponse("invalid_redirect_uri");
   }
 
   // token_endpoint_auth_method: only "none" is ever accepted (public clients).
@@ -147,14 +165,17 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   // client_name: optional, shown unverified on the consent page later — reject
-  // anything malformed rather than silently rewrite it.
+  // anything malformed rather than silently rewrite it. An empty string is
+  // treated as ABSENT (no name in the signed token, none echoed) rather than
+  // signed as the empty string — there is nothing to show, so there is
+  // nothing to validate.
   const clientNameRaw = body.client_name;
   let clientName: string | undefined;
-  if (clientNameRaw !== undefined) {
+  if (clientNameRaw !== undefined && clientNameRaw !== "") {
     if (
       typeof clientNameRaw !== "string" ||
       clientNameRaw.length > MAX_CLIENT_NAME_LENGTH ||
-      CONTROL_CHAR_RE.test(clientNameRaw)
+      CONTROL_OR_FORMAT_CHAR_RE.test(clientNameRaw)
     ) {
       return registrationErrorResponse("invalid_client_metadata", "client_name is invalid");
     }

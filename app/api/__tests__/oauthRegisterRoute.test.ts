@@ -7,6 +7,7 @@
 // and the "writes nothing" contract — `sanity/lib/serverClient` is mocked and
 // asserted never called.
 
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const writeClientCreate = vi.fn();
@@ -21,6 +22,7 @@ vi.mock("@/sanity/lib/serverClient", () => ({
 import { POST } from "@/app/api/oauth/register/route";
 import { verifyClientId } from "@/app/mcp/oauth/tokens";
 import { CLAUDE_AI_REDIRECT_URI } from "@/app/mcp/oauth/redirects";
+import { walkImportClosure } from "@/app/mcp/oauth/__tests__/importClosure";
 
 const SECRET = "s".repeat(32);
 const KEY = new TextEncoder().encode(SECRET);
@@ -29,6 +31,13 @@ const PRODUCTION_ORIGIN = "https://owt-backstage.vercel.app";
 const PREVIEW_ORIGIN = "https://dev-owt-backstage.vercel.app";
 
 const LOOPBACK_URI = "http://127.0.0.1:51004/callback";
+
+/** Every canonical environment this route must serve (mirrors oauthDiscoveryRoutes.test.ts). */
+const ENVIRONMENTS = [
+  { name: "production", vercelEnv: "production", host: "owt-backstage.vercel.app" },
+  { name: "preview", vercelEnv: "preview", host: "dev-owt-backstage.vercel.app" },
+  { name: "local", vercelEnv: undefined, host: "localhost:3000" },
+] as const;
 
 interface ReqOptions {
   host?: string;
@@ -108,10 +117,14 @@ describe("POST /api/oauth/register — allowlisted redirect_uris accepted", () =
   });
 
   it("a foreign URI is refused on every environment", async () => {
-    stubEnv({ vercelEnv: "preview" });
-    const res = await POST(req({ body: JSON.stringify({ redirect_uris: ["https://evil.example/cb"] }) }));
-    expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: "invalid_redirect_uri" });
+    for (const env of ENVIRONMENTS) {
+      stubEnv({ vercelEnv: env.vercelEnv });
+      const res = await POST(
+        req({ host: env.host, body: JSON.stringify({ redirect_uris: ["https://evil.example/cb"] }) }),
+      );
+      expect(res.status, env.name).toBe(400);
+      expect(await res.json(), env.name).toEqual({ error: "invalid_redirect_uri" });
+    }
   });
 });
 
@@ -176,6 +189,38 @@ describe("POST /api/oauth/register — never writes", () => {
     expect(writeClientCreate).not.toHaveBeenCalled();
     expect(writeClientPatch).not.toHaveBeenCalled();
     expect(serverClientFetch).not.toHaveBeenCalled();
+  });
+
+  it("the route's import closure never reaches serverClient, grantStore or grantDocument (static guard, R15 #3)", () => {
+    // A mocked-module assertion only proves the paths a given RUN happened to
+    // exercise. This proves it from the SOURCE TEXT instead: a helper added
+    // deep inside a module this route already imports (`tokens.ts`, shared
+    // with a future route that legitimately needs `grantStore`) would pull a
+    // writer into this public, unauthenticated route with every runtime test
+    // still green, because the mock above is simply never invoked on a path
+    // that only changed which files get READ, not which ones get CALLED.
+    const repoRoot = process.cwd();
+    const entry = path.join(repoRoot, "app/api/oauth/register/route.ts");
+    const { files } = walkImportClosure(entry, repoRoot);
+
+    // Positive control: prove the walker really does find files reached
+    // through the same `@/` alias and relative-import machinery, so an empty
+    // `files` set (or a resolver bug) can't produce a false-green "never
+    // reaches X" below. `grantStore.ts` is known to import both.
+    const { files: grantStoreClosure } = walkImportClosure(
+      path.join(repoRoot, "app/mcp/oauth/grantStore.ts"),
+      repoRoot,
+    );
+    expect(grantStoreClosure).toContain(path.join(repoRoot, "sanity/lib/serverClient.ts"));
+    expect(grantStoreClosure).toContain(path.join(repoRoot, "app/mcp/oauth/grantDocument.ts"));
+
+    for (const forbidden of [
+      "sanity/lib/serverClient.ts",
+      "app/mcp/oauth/grantStore.ts",
+      "app/mcp/oauth/grantDocument.ts",
+    ]) {
+      expect([...files], forbidden).not.toContain(path.join(repoRoot, forbidden));
+    }
   });
 });
 
@@ -385,6 +430,47 @@ describe("POST /api/oauth/register — client_name", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual(expect.objectContaining({ error: "invalid_client_metadata" }));
   });
+
+  it("a C1 control character (U+0085) is refused (R15 #1)", async () => {
+    stubEnv({ vercelEnv: "preview" });
+    const res = await POST(
+      req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: "evil\u0085name" }) }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual(expect.objectContaining({ error: "invalid_client_metadata" }));
+  });
+
+  it("a bidi override (U+202E) is refused (R15 #1)", async () => {
+    stubEnv({ vercelEnv: "preview" });
+    const res = await POST(
+      req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: "evil‮name" }) }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual(expect.objectContaining({ error: "invalid_client_metadata" }));
+  });
+
+  it("a Unicode line separator (U+2028) is refused (R15 #1)", async () => {
+    stubEnv({ vercelEnv: "preview" });
+    const res = await POST(
+      req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: "evil name" }) }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual(expect.objectContaining({ error: "invalid_client_metadata" }));
+  });
+
+  it("an empty string is treated as ABSENT — no name in the token, none echoed (R15 #5)", async () => {
+    stubEnv({ vercelEnv: "preview" });
+    const res = await POST(
+      req({ body: JSON.stringify({ redirect_uris: [CLAUDE_AI_REDIRECT_URI], client_name: "" }) }),
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect("client_name" in body).toBe(false);
+    const verified = await verifyClientId(body.client_id, { key: KEY, origin: PREVIEW_ORIGIN });
+    expect(verified.ok).toBe(true);
+    if (!verified.ok) throw new Error("unreachable");
+    expect(verified.claims.clientName).toBeNull();
+  });
 });
 
 describe("POST /api/oauth/register — refused-redirect logging", () => {
@@ -416,6 +502,27 @@ describe("POST /api/oauth/register — refused-redirect logging", () => {
     expect(warnSpy).toHaveBeenCalledTimes(1);
     const loggedArgs = warnSpy.mock.calls[0]!.map(String).join(" ");
     expect(loggedArgs).not.toContain("should-not-log");
+  });
+
+  it("logs a later claude.ai near-miss even when an earlier URI is refused first (R15 #2)", async () => {
+    // On production, the loopback URI is refused for a reason that has
+    // nothing to do with Claude (loopback is never allowed there) — the OLD
+    // implementation returned on that first refusal and never even looked at
+    // the second URI, so a genuine claude.ai callback change went unlogged.
+    stubEnv({ vercelEnv: "production" });
+    const nearMiss = "https://claude.ai/api/mcp/new_callback";
+    const res = await POST(
+      req({
+        host: "owt-backstage.vercel.app",
+        body: JSON.stringify({ redirect_uris: ["http://127.0.0.1:5000/cb", nearMiss] }),
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_redirect_uri" });
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const [prefix, logged] = warnSpy.mock.calls[0]!;
+    expect(String(prefix)).toContain("refused redirect_uri from a claude host");
+    expect(logged).toBe(JSON.stringify(nearMiss));
   });
 });
 
