@@ -56,6 +56,30 @@ const nextConfig = {
       { source: "/author/:slug",   destination: "/biblioteca?author=:slug", permanent: true },
     ];
   },
+
+  // MCP OAuth discovery (P0 plan step 4). `beforeFiles`, so these win over any
+  // matching filesystem route. `proxy.ts` runs before rewrites, so it still sees
+  // the literal `/.well-known/*` request path — step 5 (not this change) is what
+  // excludes that prefix from the session middleware. The destinations are plain
+  // route handlers, reached at these RFC-mandated paths only through the rewrite.
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/.well-known/oauth-authorization-server",
+          destination: "/api/oauth/discovery/authorization-server",
+        },
+        {
+          source: "/.well-known/oauth-protected-resource",
+          destination: "/api/oauth/discovery/protected-resource",
+        },
+        {
+          source: "/.well-known/oauth-protected-resource/api/mcp",
+          destination: "/api/oauth/discovery/protected-resource",
+        },
+      ],
+    };
+  },
 };
 
 export default nextConfig;
