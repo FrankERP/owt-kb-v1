@@ -27,7 +27,11 @@ import { solverConfig } from './schemas/solverConfig';
 // sanity/schemas/kidsSchedule.ts.
 import { kidsPair } from './schemas/kidsPair';
 import { kidsSchedule } from './schemas/kidsSchedule';
+// MCP OAuth-state document types (P0 auth): hidden/read-only, never authored
+// by hand. See sanity/schemas/mcpOauthGrant.ts and mcpOauthCodeRedemption.ts.
+import { mcpOauthGrant } from './schemas/mcpOauthGrant';
+import { mcpOauthCodeRedemption } from './schemas/mcpOauthCodeRedemption';
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox, specialIdentityCoordinator, solverConfig, kidsPair, kidsSchedule],
+  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox, specialIdentityCoordinator, solverConfig, kidsPair, kidsSchedule, mcpOauthGrant, mcpOauthCodeRedemption],
 }

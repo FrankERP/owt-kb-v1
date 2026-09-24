@@ -25,6 +25,15 @@ const nextConfig = {
     ],
   },
 
+  // CSP CAVEAT (MCP connector, docs/MCP.md). There is no Content-Security-Policy
+  // here today. If one is added, `form-action 'self'` alone BREAKS the consent
+  // flow: the «Permitir»/«Cancelar» form posts to /api/oauth/authorize, which
+  // answers 303 to the client's redirect_uri, and Chrome enforces `form-action`
+  // on every redirect that follows a form submission — so the hop to claude.ai
+  // is blocked and the connector never receives its code. Either allow the
+  // redirect targets (`form-action 'self' https://claude.ai`, plus the loopback
+  // callbacks `http://127.0.0.1:*` / `http://localhost:*` on preview and local,
+  // where app/mcp/oauth/redirects.ts accepts them) or omit `form-action`.
   async headers() {
     return [
       {
@@ -55,6 +64,30 @@ const nextConfig = {
       { source: "/author",         destination: "/biblioteca",            permanent: true },
       { source: "/author/:slug",   destination: "/biblioteca?author=:slug", permanent: true },
     ];
+  },
+
+  // MCP OAuth discovery (P0 plan step 4). `beforeFiles`, so these win over any
+  // matching filesystem route. `proxy.ts` runs before rewrites, so it still sees
+  // the literal `/.well-known/*` request path — step 5 (not this change) is what
+  // excludes that prefix from the session middleware. The destinations are plain
+  // route handlers, reached at these RFC-mandated paths only through the rewrite.
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/.well-known/oauth-authorization-server",
+          destination: "/api/oauth/discovery/authorization-server",
+        },
+        {
+          source: "/.well-known/oauth-protected-resource",
+          destination: "/api/oauth/discovery/protected-resource",
+        },
+        {
+          source: "/.well-known/oauth-protected-resource/api/mcp",
+          destination: "/api/oauth/discovery/protected-resource",
+        },
+      ],
+    };
   },
 };
 

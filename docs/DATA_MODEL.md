@@ -11,13 +11,13 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (18)
+## Registered document types (20)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
 `teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, the two Oasis Kids types
-`kidsPair` and `kidsSchedule`, and five **internal** types never authored by hand:
+`kidsPair` and `kidsSchedule`, and seven **internal** types never authored by hand:
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
-`solverConfig`.
+`solverConfig`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -293,6 +293,52 @@ deletes the role and vacates the lock. Both states are durable idempotency tombs
 cleanup never deletes them, and a retried key returns `409 idempotency_key_retired` rather than
 recreating the service. Full replay semantics:
 [API_REFERENCE](API_REFERENCE.md#creationrequestid--deterministic-creation-receipts).
+
+---
+
+## `mcpOauthGrant` / `mcpOauthCodeRedemption` — MCP OAuth state
+
+Files: [`documentTypes.ts`](../app/mcp/oauth/documentTypes.ts) (the import-free source of the type
+names, `_id` prefixes and field lists — both Sanity schema files import it directly, never mirror
+it, controller ruling R10) and [`grantDocument.ts`](../app/mcp/oauth/grantDocument.ts) (the pure
+builders every write goes through). Both types are declared **`hidden: true` and `readOnly: true`**
+at the schema level and are written **only** by `/api/oauth/token` (grant creation, refresh
+rotation) and `scripts/revoke-mcp-grant.mjs` (revocation) — never in Studio, never by any other
+script. Full operator runbook: [`docs/MCP.md`](MCP.md).
+
+### `mcpOauthGrant` — one document per authorized connection
+
+`_id`: **`mcpOauthGrant.<uuid>`** — a RANDOM uuid (`newGrantId`), minted fresh for every grant;
+unlike the redemption receipt below, nothing about the id is derived from its content.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `sub` | string | The authorizing member's `teamMembers` `_id`. |
+| `clientHash` | string | `sha256(client_id)` — the RAW client id (a signed DCR token) is never stored. |
+| `origin` | string | The canonical origin that issued the grant (`app/mcp/oauth/origin.ts`) — checked against the token's `iss` on every request (R13). |
+| `createdAt` | datetime | |
+| `lastRefreshAt` | datetime | Absent until the first refresh. |
+| `currentRefreshJti` | string | The refresh token's single valid `jti`. A refresh presenting any other `jti` is a reuse and revokes the WHOLE grant (spec O4). |
+| `revoked` | boolean | Read back as `true` unless the stored flag is exactly `false` — a missing or malformed document therefore reads as revoked, so deleting one can only ever shut access, never grant it. |
+| `revokedAt`, `revokedReason` | datetime, string | Absent until revoked. |
+
+### `mcpOauthCodeRedemption` — the authorization-code replay guard
+
+Deterministic `_id`: **`mcpOauthCode.<sha256 hex of the code's jti>`**. `create()` on this
+deterministic id IS the replay guard — a second redemption attempt for the same code is a
+document-conflict, refused as `invalid_grant` at the token endpoint, same pattern as
+`roleCreationReceipt` above.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `redeemedAt` | datetime | The only field besides `_id`/`_type`. |
+
+**Everything in both types is safe to be world-readable** (the dataset answers unauthenticated
+published reads): a member id is already public elsewhere in the dataset, and neither a client
+hash nor a refresh `jti` is usable without `MCP_OAUTH_SECRET`. See
+[AUTH_AND_SECURITY → MCP / OAuth](AUTH_AND_SECURITY.md#mcp--oauth) and
+[ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why registration itself
+writes nothing at all.
 
 ---
 
@@ -585,13 +631,21 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Thirteen** types are closed to it — the six protected service types, the five internal types
+**Fifteen** types are closed to it — the six protected service types, the seven internal types
 (`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry) **plus** the two
 Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
-`solverConfig`, `kidsPair`, `kidsSchedule`.
+`solverConfig`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
+
+The last two hold OAuth state for the MCP connector (P0 auth): `mcpOauthGrant` is one document per
+authorized connection (member id, a HASH of the client id, origin, timestamps, the current refresh
+`jti`, the revocation flag); `mcpOauthCodeRedemption` is a replay guard, `redeemedAt` only, keyed by
+the hashed authorization-code `jti`. Both are hidden, read-only, and never authored by hand — see
+[`app/mcp/oauth/documentTypes.ts`](../app/mcp/oauth/documentTypes.ts). Everything in them is safe to
+be world-readable (the dataset answers unauthenticated published reads): a member id is already
+public, and neither a refresh `jti` nor a client hash is usable without the signing secret.
 
 The kids pair is protected but **not** internal: unlike the coordination types it is a
 human-meaningful document, so it stays visible (read-only) rather than `hidden: true`. What

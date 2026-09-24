@@ -98,8 +98,9 @@ flowchart TB
 
 ## 4. Request lifecycle
 
-Every request (except the small public allow-list — auth, cron, the A3 identity route
-and the theme gallery) passes through **`proxy.ts`**
+Every request (except the small public allow-list — auth, cron, the A3 identity route,
+the theme gallery, and the ungated MCP/OAuth routes, [MCP.md](MCP.md) lists what enforces each) passes
+through **`proxy.ts`**
 (NextAuth `withAuth` middleware) before hitting a page or API route:
 
 ```mermaid
@@ -381,7 +382,7 @@ the load-bearing shapes are:
   unchanged, no side effects, but the lock and advanced role revision persist.
 - **Post-commit side effects are centralized** in
   [`app/utils/serviceMutationSideEffects.ts`](../app/utils/serviceMutationSideEffects.ts) — see §9.
-- **Alternate write paths are closed:** the Studio strips every mutating action from all **thirteen**
+- **Alternate write paths are closed:** the Studio strips every mutating action from all **fifteen**
   protected types (→ [DATA_MODEL → Studio](DATA_MODEL.md#studio)) and the seven historical one-shot
   scripts fail closed (→ [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops)).
 

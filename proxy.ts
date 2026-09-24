@@ -30,13 +30,19 @@ export default withAuth(
 
 export const config = {
   // Protect everything except: auth pages, NextAuth API, the cron routes, the
-  // service-readiness identity route, the theme gallery and static assets.
+  // service-readiness identity route, the theme gallery, the MCP route, the
+  // OAuth register/token endpoints, /.well-known discovery, and static assets.
   // (The identity route was already excluded and this comment had never said so.)
   // The theme gallery is a prerendered, data-free review surface — see ADR-0017
   // and the rationale block in app/utils/routeMatcher.ts. Studio is now included — it requires login + admin role
   // (checked above). `api/cron/*` is excluded because it authenticates with
   // `Authorization: Bearer ${CRON_SECRET}` inside each handler; a session gate
   // in front of a machine caller only ever redirects it to the sign-in page.
+  // `api/mcp`, `api/oauth/register` and `api/oauth/token` (P0 plan step 5, spec
+  // I11) authenticate themselves — bearer token, signed client id, signed code
+  // — and `/.well-known/*` must be reachable before any login exists so
+  // discovery works. `/oauth/authorize` and `/api/oauth/authorize` deliberately
+  // stay gated; see app/utils/routeMatcher.ts for the full rationale.
   //
   // NOTE: Next.js requires this matcher to be a statically-analyzable string
   // literal (an imported constant is ignored at build time), so it is inlined
@@ -45,6 +51,6 @@ export const config = {
   // sync guard (routeMatcher.test.ts). Each excluded prefix is anchored with
   // `(?:/|$)` so `/author` is not mistaken for a public `/auth` route.
   matcher: [
-    "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)",
+    "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|api/mcp(?:/|$)|api/oauth/register$|api/oauth/token$|\\.well-known(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)",
   ],
 };

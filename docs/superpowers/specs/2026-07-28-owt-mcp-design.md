@@ -1,7 +1,17 @@
 # OWT Backstage MCP server — design spec
 
 **Date:** 2026-07-28
-**Status:** Approved approach; staged implementation
+**Status:** **SUPERSEDED by [`2026-09-22-owt-mcp-design-v2.md`](2026-09-22-owt-mcp-design-v2.md).**
+Approved on its own terms on 2026-07-28 and never implemented. Fourteen of its
+load-bearing statements went stale in the 56 days that followed, two of its
+preconditions are unattainable on Vercel Hobby, and four more — the publish path,
+`summarizeUnfilledSeats` for coverage gaps, each tool's own read-capture-assert as
+a concurrency guard, and static discovery JSON across two origins — were already
+false the day it was approved. **Do not plan against this file.**
+It is kept because v2's reconciliation ledger cites it line by line, and because
+its OAuth design — endpoint table, PKCE binding, the `create()` 409 replay signal,
+refresh rotation as a theft signal, and the world-readable-dataset constraint on
+what may be stored — survives into v2 essentially unchanged.
 **Consumer:** Frank only (super-admin), via claude.ai custom connector — phone, desktop, and web.
 
 ## Goal

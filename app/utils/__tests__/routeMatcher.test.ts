@@ -36,6 +36,9 @@ const PUBLIC_ROUTES = [
   "/api/cron/flush-notifications", // Bearer CRON_SECRET, checked in-handler
   "/api/cron/service-reminders", // Bearer CRON_SECRET, checked in-handler
   "/api/cron/smtp-probe", // Bearer CRON_SECRET, checked in-handler; sends no mail
+  "/api/mcp", // MCP endpoint — every method checks its own OAuth bearer token (grant + live super-admin) before any tool runs (P0 step 9)
+  "/api/oauth/register", // stateless DCR — validates the body itself, no session (P0 step 6)
+  "/api/oauth/token", // OAuth token endpoint — a signed code + PKCE or a signed refresh token, no session (P0 step 8)
   "/api/service-readiness-verification/identity", // A3 §4; fails closed with 404
   "/auth/not-a-member",
   "/auth/signin",
@@ -145,6 +148,54 @@ describe("auth middleware route matcher", () => {
     ]);
     // And the ones that changed became reachable, not the other way round.
     for (const p of changed) expect(middlewareRuns(p)).toBe(false);
+  });
+
+  it("keeps /oauth/authorize, /api/oauth/authorize and the discovery handlers gated (I11)", () => {
+    // Next's middleware matcher runs on the URL's pathname only — a query
+    // string like `/oauth/authorize?x=1` has already been split off by the
+    // time this regex ever sees it, so the pathname alone is what's tested.
+    for (const p of [
+      "/oauth/authorize",
+      "/api/oauth/authorize",
+      "/api/oauth/discovery/protected-resource",
+      "/api/oauth/discovery/authorization-server",
+    ]) {
+      expect(middlewareRuns(p)).toBe(true);
+    }
+  });
+
+  it("excludes the MCP route and the exact register/token endpoints, anchored (I11)", () => {
+    // The route itself, and anything nested under it, is public — the handler
+    // authenticates the bearer token itself.
+    expect(middlewareRuns("/api/mcp")).toBe(false);
+    expect(middlewareRuns("/api/mcp/")).toBe(false);
+    expect(middlewareRuns("/api/mcp/tools/call")).toBe(false);
+    // Registration and token exchange authenticate a signed client id / signed
+    // code inside the handler, but only at the exact path — anchored with `$`,
+    // not a prefix, so no sibling route inherits public reachability.
+    expect(middlewareRuns("/api/oauth/register")).toBe(false);
+    expect(middlewareRuns("/api/oauth/token")).toBe(false);
+    // Near-misses stay gated.
+    for (const p of ["/api/mcpx", "/api/oauth/registerx", "/api/oauth/register/x", "/api/oauth/tokens"]) {
+      expect(middlewareRuns(p)).toBe(true);
+    }
+  });
+
+  it("excludes every /.well-known path, anchored so lookalikes stay gated (I11)", () => {
+    // Discovery must be reachable before any login exists. The rewrite
+    // destinations behind these paths (app/api/oauth/discovery/*) stay gated —
+    // see the previous test — the exclusion only opens the public
+    // /.well-known/* request path proxy.ts sees before rewrites run.
+    for (const p of [
+      "/.well-known/oauth-protected-resource",
+      "/.well-known/oauth-protected-resource/api/mcp",
+      "/.well-known/oauth-authorization-server",
+    ]) {
+      expect(middlewareRuns(p)).toBe(false);
+    }
+    for (const p of ["/well-known", "/x.well-known"]) {
+      expect(middlewareRuns(p)).toBe(true);
+    }
   });
 
   it("the exported matcher is anchored, not a bare prefix", () => {
