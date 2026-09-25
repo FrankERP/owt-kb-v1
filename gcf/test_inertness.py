@@ -4,67 +4,107 @@ docs/superpowers/specs/2026-09-15-solver-pinned-assignments-design.md §7, §9).
 
 The solver serves production AND dev from one Cloud Function, deployed from `main`
 with no `preview` rehearsal. What makes a solver change safe to ship that way is that
-a request with no `pinned` key builds the SAME MODEL it built before — so these
-literals were frozen from the code as it stood before pins existed, and a change is
-measured against the past rather than against itself.
+a request with no `pinned` key builds the SAME MODEL and runs the SAME SEARCH it did
+before — so these literals were frozen from the code as it stood before pins existed,
+and a change is measured against the past rather than against itself.
 
-GOVERNANCE — the two goldens move for different reasons (spec §7):
+GOVERNANCE — the literals move for different reasons (spec §7; docs/CI.md has the table):
 
-  literal               moves when                   legitimate re-capture
-  STAGE_A_FINGERPRINTS  the model construction       a runner-image or ortools pin bump, in
-                                                     a PR that changes nothing else
-  GOLDEN_SCHEDULE       the model OR the objective   the above, plus a deliberate, reviewed
-                                                     objective change
+  STAGE_A_FINGERPRINTS  moves with Stage A's model or search parameters. Legitimate
+                        re-capture: a runner-image or ortools pin bump, in a PR that
+                        changes nothing else.
+  STAGE_B_FINGERPRINTS  also moves with the OBJECTIVE (compute_priority_weights feeds
+                        it; Stage A never enters that branch). Legitimate re-capture: the
+                        above, plus a deliberate, reviewed objective change.
+  GOLDEN_SCHEDULE       also moves with how ortools breaks a tie on the runner. The
+                        above, plus a runner-image change — check the CI log's "Runner
+                        Image" group against CAPTURED_ON before calling a red a finding.
 
-`compute_priority_weights` is reached only inside the optimising branch, which Stage A
-never enters, so an objective change moves GOLDEN_SCHEDULE and NOT the fingerprint.
+A red FINGERPRINT inside a PR that claims the pinless path unchanged — the pinned-
+assignments PR is one — is a FINDING, and gets explained, never re-captured.
 
-A red fingerprint inside a solver PR is a FINDING — the pinless path moved — and gets
-explained, never re-captured. Re-capture procedure: set the literal to None, push, read
-the value from the test's skip message in the CI log, commit it, and it un-skips itself.
+Re-capture: a fingerprint's failure message already prints the actual hash (assertEqual
+shows both sides). The golden: set GOLDEN_SCHEDULE to None, push, read the value from the
+test's skip message in the CI log, commit it with the runner image it came from.
 """
 
 import hashlib
 import json
+import os
 import platform
 import unittest
 
 from ortools.sat.python import cp_model
 
 import owt_solver_v2 as mod
-from test_owt_solver_v2 import make_config
 
-# sha256(str(model.Proto())) of the FIRST solve — Stage A — on make_config(seed=s).
-# The protobuf TEXT format, not SerializeToString(): CpModel.Proto() on ortools
-# 9.15.6755 is a pybind proto with no SerializeToString. Everything hashed is built
-# before any solve and depends only on the seed, so the value is machine-independent:
-# measured identical at 10 s and 3 s budgets, distinct between seeds.
+# The fixture every literal below was captured on: make_config(seed=s) from
+# test_owt_solver_v2.py as it stood on 2026-09-25, FROZEN here so that editing that
+# shared fixture for an unrelated test cannot redden a guard whose red means "the
+# pinless path moved". The budget is this file's own: if a slow runner trips an
+# OPTIMAL precondition, raise INERTNESS_BUDGET_SECONDS (clamped to 30 s by the solver),
+# never drop the assertion. The time limit is not part of any fingerprint.
+INERTNESS_BUDGET_SECONDS = 10
+
+
+def frozen_config(seed):
+    return {
+        "weeks": 4, "weekends_with_saturday": [2, 4],
+        "sunday_leads": ["Frank", "Gaby", "Marianne", "Rachel", "Lali", "Hugo", "Jakey",
+                         "Mkz", "Niza", "Liu", "Pau E"],
+        "saturday_leads": ["Lucía"], "support": [],
+        "dsl_rules": [
+            "Frank !in Sat.* & !in Sun.BGV & !in Sun.Choir & fairness_exempt",
+            "Mkz !in Sat.* & !in Sun.BGV & !in Sun.Choir & fairness_exempt",
+            "Gaby !in Sat.* & !in Sun.Choir & fairness_slack 1 & Sun.BGV <= {weeks-2}",
+            "Lucía !with Niza on *.LeadBGV",
+            "Hugo !with Lucía on *.Lead",
+            "Niza !with Hugo on *.Lead",
+            "Jakey !with Hugo on *.BGV",
+            "Jakey !with Hugo on *.Lead",
+            "any_of(Hugo,Jakey) on Sun.BGV each_week",
+        ],
+        "history": [], "seed": seed,
+        "solver_max_time_seconds": INERTNESS_BUDGET_SECONDS,
+    }
+
+
+# sha256 over a solve's model — str(model.Proto()), the protobuf TEXT format; CpModel
+# .Proto() on ortools 9.15.6755 has no SerializeToString — plus its solver parameters
+# with max_time_in_seconds stripped (it varies with the shared deadline). The
+# parameters are what make it "the same search", not only the same model: branching,
+# seed and worker count live there, not in the proto. Machine-independent: all of it is
+# built before the solve and depends only on the seed — confirmed on the Linux runner
+# and on macOS, at 10 s and 3 s budgets, across PYTHONHASHSEED values.
+#
+# STAGE_A is the first solve. STAGE_B is the first optimising pass of the fairness
+# ladder, the second solve: its model carries Stage A's weighted_empty as a bound, which
+# is machine-independent only because Stage A proved OPTIMAL — asserted, not assumed.
 STAGE_A_FINGERPRINTS = {
-    1: "85263e6ce8d41d55cbd59b2b300991bf9585a182ac6f2a3469b264c3094704e9",
-    42: "cace8e615584abc376da3c7784cbff20deb0083eacab1cc6c2fdc741d67e1feb",
-    2024: "1f840571525f3260aea9a96dd886ff9415ac1f2967c1332ee6a704c9a7dfcbaf",
+    1: "43870d582112e547492fbb22f24dbd53857125d8e428425e3c0165ae5d29aefb",
+    42: "feff7b363731ab259fdf0165e096065ebc70b1365e083831994fb7b091139c3d",
+    2024: "c7c99d43bc2eae927fd8461ae9121cb5cad9114b600b8c15bfb53cd9b6f1f774",
+}
+STAGE_B_FINGERPRINTS = {
+    1: "5a34a77fd24fbc2b2947335464e597b236532aed85abddfd804599d129f9679e",
+    42: "a919e7222261df1e4d10ff87946ee2dcf20037a968e1b197d7cb23774c6475af",
+    2024: "7b17dd7e1b65f77cb50b7a29e8a98f1ea5d77b6eaba444270bc65af6b73a98a5",
 }
 
-# Objective terms of the first OPTIMISING pass on make_config(seed=42). The
-# fingerprint cannot see Stage B, where a violation term leaking into the pinless
-# objective would land. Per seed (574 / 568 / 578 on 1 / 42 / 2024), because CP-SAT
-# drops zero-coefficient tie-break terms from the proto — which also means this
-# catches a leak with a NONZERO coefficient only; a zero-coefficient one is
-# invisible to it by construction.
-OBJECTIVE_TERMS_SEED_42 = 568
-
 # The platform the golden was captured on, and the only one that enforces it. OPTIMAL
-# removes the wall clock, not every tie: measured 2026-09-25, macOS arm64 and the
-# Linux x86_64 runner run the same statuses on seed 42 (OPTIMAL, INFEASIBLE,
-# INFEASIBLE, OPTIMAL) — equal objective — and return schedules that differ in 7 of 20
-# cells. A runner-captured golden enforced everywhere would be red on every developer
-# Mac, so it skips off-platform; the fingerprint, machine-independent by construction,
-# runs everywhere and is the primary guard.
+# removes the wall clock, not every tie: measured 2026-09-25, macOS arm64 and the Linux
+# x86_64 runner run the same statuses on seed 42 (OPTIMAL, INFEASIBLE, INFEASIBLE,
+# OPTIMAL) — equal objective — and return schedules that differ in 7 of 16 role cells.
+# Enforced everywhere, a runner-captured golden would be red on every developer Mac, so
+# it skips off-platform — EXCEPT in CI, where a skip would leave the required gate green
+# with the guard switched off, so there it fails instead.
 GOLDEN_PLATFORM = ("Linux", "x86_64")
+CAPTURED_ON = ("GitHub Actions ubuntu-24.04, runner image 20260920.314.1, Python 3.12.14, "
+               "ortools 9.15.6755, protobuf 6.33.6 — run 36172243640, PR #100")
 
-# The schedule make_config(seed=42) returns on GOLDEN_PLATFORM, captured by the CI
-# runner that enforces it (run 36172243640, PR #100) — never on a laptop. None means
-# capture mode: the test skips and prints it.
+# The schedule frozen_config(42) returns on GOLDEN_PLATFORM, captured by the CI runner
+# that enforces it, never by a laptop. None means capture mode: the test skips and
+# prints it.
 GOLDEN_SCHEDULE = {
     "1": {
         "Sunday": {"BGV": ["Hugo", "Lucía", "Rachel"], "Choir": ["Jakey", "Lali", "Niza"], "Lead": ["Frank", "Gaby"]},
@@ -82,39 +122,73 @@ GOLDEN_SCHEDULE = {
     },
 }
 
-
-class _StopAfterStageA(Exception):
-    """Raised from the Solve patch once Stage A is hashed: nothing after it is needed."""
+_TIME_LIMIT = "max_time_in_seconds"
 
 
-def _stage_a_hash(seed):
+def _search_fingerprint(solver, model):
+    params = "\n".join(line for line in str(solver.parameters).splitlines()
+                        if not line.startswith(_TIME_LIMIT))
+    text = str(model.Proto()) + "\n--- solver parameters ---\n" + params
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+class _StopAfterStageB(Exception):
+    """Raised once the first optimising pass is fingerprinted: nothing after it is needed."""
+
+
+def _fingerprints(seed):
+    """(Stage A fingerprint, Stage A status, first optimising pass fingerprint, whether
+    that pass carried an objective) for frozen_config(seed)."""
     original = cp_model.CpSolver.Solve
-    captured = {}
+    seen = []
 
     def capture(solver_self, model):
-        captured["hash"] = hashlib.sha256(str(model.Proto()).encode()).hexdigest()
-        raise _StopAfterStageA
+        seen.append((_search_fingerprint(solver_self, model), model.HasObjective()))
+        if len(seen) == 1:
+            status = original(solver_self, model)   # Stage B needs Stage A's real result
+            seen.append(solver_self.StatusName(status))
+            return status
+        raise _StopAfterStageB
 
     cp_model.CpSolver.Solve = capture
     try:
-        mod.solve_from_dict(make_config(seed=seed))
-    except _StopAfterStageA:
+        mod.solve_from_dict(frozen_config(seed))
+    except _StopAfterStageB:
         pass
     finally:
         cp_model.CpSolver.Solve = original
-    return captured["hash"]
+    (stage_a, _), stage_a_status, (stage_b, stage_b_has_objective) = seen
+    return stage_a, stage_a_status, stage_b, stage_b_has_objective
 
 
 class PinlessModelIsUnchanged(unittest.TestCase):
-    """The primary guard: model identity, not output identity (spec §9)."""
+    """The primary guard: model and search identity, not output identity (spec §9)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.prints = {seed: _fingerprints(seed) for seed in STAGE_A_FINGERPRINTS}
 
     def test_stage_a_fingerprint(self):
         for seed, expected in STAGE_A_FINGERPRINTS.items():
             with self.subTest(seed=seed):
                 self.assertEqual(
-                    _stage_a_hash(seed), expected,
-                    "the pinless Stage A model changed — a finding to explain, not a "
-                    "literal to update (see the module docstring)")
+                    self.prints[seed][0], expected,
+                    "the pinless Stage A model or search changed — a finding to explain, "
+                    "not a literal to update (see the module docstring)")
+
+    def test_first_optimising_pass_fingerprint(self):
+        for seed, expected in STAGE_B_FINGERPRINTS.items():
+            with self.subTest(seed=seed):
+                _a, stage_a_status, stage_b, has_objective = self.prints[seed]
+                self.assertEqual(
+                    stage_a_status, "OPTIMAL",
+                    "precondition: Stage A must prove OPTIMAL for its bound on Stage B to "
+                    "be machine-independent — raise INERTNESS_BUDGET_SECONDS")
+                self.assertTrue(has_objective, "the second solve is not an optimising pass")
+                self.assertEqual(
+                    stage_b, expected,
+                    "the pinless Stage B model, objective or search changed — a finding "
+                    "unless this PR is a deliberate, reviewed objective change")
 
 
 class PinlessOutputGolden(unittest.TestCase):
@@ -125,52 +199,55 @@ class PinlessOutputGolden(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        solves = []
+        statuses = []
         original = cp_model.CpSolver.Solve
 
         def record(solver_self, model):
             status = original(solver_self, model)
-            solves.append((solver_self.StatusName(status),
-                           len(model.Proto().objective.vars)))
+            statuses.append(solver_self.StatusName(status))
             return status
 
         cp_model.CpSolver.Solve = record
         try:
-            cls.res = mod.solve_from_dict(make_config(seed=42))
+            cls.res = mod.solve_from_dict(frozen_config(42))
         finally:
             cp_model.CpSolver.Solve = original
-        cls.solves = solves
+        cls.statuses = statuses
 
     def test_the_returning_solve_proved_optimality(self):
         """
         The precondition that makes a golden meaningful: the time limit did not bind.
-        If a loaded runner trips this, RAISE THE FIXTURE'S BUDGET — never drop the
-        assertion or the golden (spec §7).
+        A returning pass returns at once, so the LAST solve is the one that produced the
+        month; both stage_a fall-throughs leave a non-OPTIMAL last status and go red
+        here. If a loaded runner trips this, raise INERTNESS_BUDGET_SECONDS — never drop
+        the assertion or the golden (spec §7).
         """
         self.assertTrue(self.res["ok"], self.res.get("error"))
-        self.assertEqual(self.solves[-1][0], "OPTIMAL", f"solves: {self.solves}")
+        self.assertEqual(self.statuses[-1], "OPTIMAL", f"statuses: {self.statuses}")
+        self.assertFalse(self.res["objective_skipped"], "the returning pass had no objective")
 
     def test_schedule_matches_the_golden(self):
         here = (platform.system(), platform.machine())
         if GOLDEN_SCHEDULE is None:
-            self.skipTest(f"capture: platform={here} "
-                          f"statuses={[s for s, _ in self.solves]} "
+            self.skipTest(f"capture: platform={here} python={platform.python_version()} "
+                          f"statuses={self.statuses} "
                           f"schedule={json.dumps(self.res['schedule'], sort_keys=True)}")
         if here != GOLDEN_PLATFORM:
+            if os.environ.get("GITHUB_ACTIONS") == "true":
+                self.fail(f"CI now runs on {here}, not {GOLDEN_PLATFORM}: off-platform the "
+                          "golden skips, which would leave the required gate green with it "
+                          "switched off. Re-capture it on this platform (module docstring).")
             self.skipTest(f"the golden was captured on {GOLDEN_PLATFORM} and this is {here}; "
                           "an equal-objective tie can resolve differently across platforms")
-        self.assertEqual(self.res["schedule"], GOLDEN_SCHEDULE)
-
-    def test_objective_term_count(self):
-        optimising = [n for _status, n in self.solves[1:] if n > 1]
-        self.assertTrue(optimising, f"no optimising pass ran: {self.solves}")
-        self.assertEqual(optimising[0], OBJECTIVE_TERMS_SEED_42)
+        self.assertEqual(self.res["schedule"], GOLDEN_SCHEDULE,
+                         f"captured on {CAPTURED_ON}")
 
     def test_new_response_fields_are_inert(self):
         """
         Before pins exist these fields are absent; after, a pinless response carries
-        pinned_honored 0, an empty pin_violations and no violation_ceiling_proven. Either
-        way nothing here may say a pin mattered.
+        pinned_honored 0, an empty pin_violations and no violation_ceiling_proven. This
+        pre-pin baseline has to accept absence; the pinned-assignments PR tightens it to
+        REQUIRE pinned_honored, whose absence is the deploy check's revert trigger.
         """
         self.assertEqual(self.res.get("pinned_honored", 0), 0)
         self.assertEqual(self.res.get("pin_violations", []), [])

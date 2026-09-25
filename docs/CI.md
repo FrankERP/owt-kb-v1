@@ -32,26 +32,41 @@ a local run — 0 errors, warnings tolerated.
 ### Solver inertness goldens (`gcf/test_inertness.py`)
 
 The Cloud Function deploys from `main` with no `preview` rehearsal and serves both
-environments, so a solver change is safe to ship only if a request with no `pinned` key
-builds the model it built before. Two literals, frozen from the solver as it stood before
-pins existed, hold that:
+environments, so a solver change is safe to ship only if a request with no `pinned` key builds
+the model **and runs the search** it did before. Three literals, frozen from the solver as it
+stood before pins existed, hold that. All three are captured on the file's own frozen copy of
+the fixture (`frozen_config`), not on `make_config`, so editing the shared test fixture for an
+unrelated test cannot redden them.
 
 | Literal | Moves when | Legitimate re-capture |
 |---|---|---|
-| `STAGE_A_FINGERPRINTS` — sha256 of Stage A's model proto, three seeds | the model construction changes | a runner-image or ortools pin bump, in a PR that changes nothing else |
-| `GOLDEN_SCHEDULE` — the seed-42 schedule, behind an `OPTIMAL` precondition, enforced only on `GOLDEN_PLATFORM` (the runner's Linux x86_64) | the model **or** the objective changes | the above, plus a deliberate, reviewed objective change |
+| `STAGE_A_FINGERPRINTS` — sha256 of Stage A's model proto plus its solver parameters (time limit stripped), three seeds | Stage A's model or search parameters change | a runner-image or ortools pin bump, in a PR that changes nothing else |
+| `STAGE_B_FINGERPRINTS` — the same for the ladder's first optimising pass, behind a Stage A `OPTIMAL` precondition | the above, **or the objective** (`compute_priority_weights` feeds it; Stage A never enters that branch) | the above, plus a deliberate, reviewed objective change |
+| `GOLDEN_SCHEDULE` — the seed-42 schedule, behind an `OPTIMAL` precondition on the returning solve | the above, **or how ortools breaks a tie on the runner** | the above, plus a runner-image change |
 
-**The output golden skips off-platform, on purpose.** `OPTIMAL` removes the wall clock, not
-every tie: on 2026-09-25 a Mac (arm64) and this runner both proved seed 42 optimal through the
-same statuses and returned schedules differing in 7 of 20 cells. Enforced everywhere, a
-runner-captured golden would be red on every developer machine. The fingerprint is
-machine-independent by construction and runs everywhere.
+**A red fingerprint inside a PR that claims the pinless path unchanged — the pinned-assignments
+PR is one — is a finding, never a literal to update.** It means the pinless path moved, which is
+the one thing the preview-less release bets did not happen.
 
-**A red fingerprint inside a solver PR is a finding, never a literal to update** — it means
-the pinless path moved, which is the one thing the preview-less release bets did not happen.
-If a slow runner trips the `OPTIMAL` precondition, raise the fixture's budget; never drop the
-assertion. To re-capture: set the literal to `None`, push, read the value from the test's
-skip message in this job's log, commit it.
+**The output golden runs only on the platform that captured it.** `OPTIMAL` removes the wall
+clock, not every tie: on 2026-09-25 a Mac (arm64) and this runner both proved seed 42 optimal
+through the same statuses and returned schedules differing in 7 of 16 role cells. Enforced
+everywhere, a runner-captured golden would be red on every developer machine, so it skips
+off-platform — **except inside GitHub Actions**, where a skip would leave the required gate green
+with the guard switched off; there it fails, asking for a re-capture on the new platform. Both
+fingerprints are machine-independent by construction (measured on both platforms, across budgets
+and `PYTHONHASHSEED` values) and run everywhere.
+
+**Captured on:** GitHub Actions `ubuntu-24.04`, runner image `20260920.314.1`, Python 3.12.14,
+ortools 9.15.6755, protobuf 6.33.6 — run 36172243640 (`CAPTURED_ON` in the file). A runner-image
+bump never arrives as a PR here, so a red golden will first show up on an unrelated one: compare
+the job log's **Runner Image** group against that before treating it as a finding.
+
+**If a slow runner trips an `OPTIMAL` precondition,** raise `INERTNESS_BUDGET_SECONDS` in the file
+(the solver clamps it to 30 s); never drop the assertion. **To re-capture:** a fingerprint's
+failure message already prints the actual hash — commit it only for a cause in the table. The
+golden: set `GOLDEN_SCHEDULE` to `None`, push, read the value from the test's skip message in this
+job's log, and commit it with the runner image it came from.
 
 ### Deliberately not in CI
 
