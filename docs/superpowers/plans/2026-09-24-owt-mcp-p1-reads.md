@@ -7,7 +7,8 @@
 
 ## Status and contract
 
-- **Document status:** Draft. **Risk tier: STANDARD** (the roadmap's P1 row). The work
+- **Document status:** Implemented on branch `claude/mcp-p1-reads` 2026-09-25, with Frank's
+  go-ahead of 2026-09-24; not released. **Risk tier: STANDARD** (the roadmap's P1 row). The work
   reads only, touches no audit registry, and changes **no existing export** of a module a
   production writer imports. The one edit to such a module is a header comment (A13). By
   CLAUDE.md's 2026-08-19 retier it gets **no adversarial plan review**: spec (approved)
@@ -22,8 +23,8 @@
   seats, readiness, songs, availability, participation and proposal threads, and the
   answers match what `/admin` shows. The connector still **mutates nothing**.
 - **Preconditions (all met):** P0 released, its production alias verified, and the
-  handshake and revocation proven from the phone on 2026-09-24. **Frank's go-ahead to
-  implement is still needed.**
+  handshake and revocation proven from the phone on 2026-09-24. **Frank gave the go-ahead
+  to implement on 2026-09-24.**
 - **Safe ending state:** a read-only connector with eight tools, `ping` plus seven reads,
   every one declared `readOnlyHint: true`.
 
