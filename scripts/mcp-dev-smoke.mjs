@@ -316,14 +316,21 @@ const FIXED_READ_ARGS = {
  * The arguments for one `--reads` check. `get_song` is the one exception: its
  * `songId` comes from `search_songs`'s OWN result earlier in the same pass
  * (`songIdFromSearchResult`) — there is no other id this script has. Throws
- * if that never happened, since that is a bug in this script's own ordering
- * (`READ_TOOL_NAMES` runs `search_songs` before `get_song`), never a network
- * failure — `main()` must not swallow it as an ordinary per-tool FAIL. Pure.
+ * when that never happened — `main()`'s per-tool `try` (`READ_TOOL_NAMES`'s
+ * loop) catches it like any other failure and prints it as `get_song`'s OWN
+ * FAIL line, so the message names the likely real cause instead of reading
+ * like a network error: `search_songs` itself failing, or a `{ query: "a" }`
+ * search that matched no song in this deployment's catalogue — never a
+ * script-ordering bug, since `READ_TOOL_NAMES` always runs `search_songs`
+ * before `get_song`. Pure.
  */
 export function readCheckArguments(name, songId) {
   if (name === "get_song") {
     if (typeof songId !== "string" || songId === "") {
-      throw new Error("get_song needs a songId from search_songs's own result (check READ_TOOL_NAMES's order)");
+      throw new Error(
+        "get_song needs a songId, but search_songs failed or returned no songs earlier in this pass " +
+          "(see its own PASS/FAIL line above)",
+      );
     }
     return { songId };
   }

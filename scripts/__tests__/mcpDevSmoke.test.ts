@@ -373,7 +373,7 @@ describe("readCheckArguments", () => {
     expect(readCheckArguments("get_song", "song-123")).toEqual({ songId: "song-123" });
   });
 
-  it("get_song throws (not a per-tool FAIL) when no songId was ever found — a script-ordering bug", () => {
+  it("get_song throws (caught by main()'s own per-tool try, printed as get_song's FAIL line) when no songId was ever found", () => {
     expect(() => readCheckArguments("get_song", null)).toThrow(/songId/);
   });
 });

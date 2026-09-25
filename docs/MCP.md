@@ -144,6 +144,11 @@ the one a future `edit_setlist`/`swap_assignment` would take).
   `publishCheck.alreadyPublished` is broken out separately (a live service is not a "problem");
   everything else that would block a publish is in `publishCheck.problems`, and the SAME
   information is also summarized as blockers in `readiness.blockers`.
+- **`observations`** is everything a later write would need (I7): `roleId` and `roleRev` (the
+  role's own `_id`/`_rev` — pass unchanged to `publish_service`/`swap_assignment` once either
+  exists, never build them by hand), `seatItemKeys` (every seat item's `_key` per path — `Lead`,
+  `BGVs`, `Chorus`, `instruments`, `foh_team` — `swap_assignment` would need one), and `setlist`,
+  below.
 - **`observations.setlist`** is the setlist's OBSERVED state, in the same vocabulary the setlist
   writer itself would use: `none` (no setlist exists), `single { id, rev, rowKeys }` (exactly one
   — the only state a write can act on), `ambiguous { ids }` (more than one candidate — a data
@@ -161,6 +166,11 @@ the one a future `edit_setlist`/`swap_assignment` would take).
   itself does not already name the draft. Tracked as
   [issue #97](https://github.com/FrankERP/owt-kb-v1/issues/97) — the same divergence the publish
   route and the setlist editor already disagree about.
+- **Also in the payload:** `sameDayOthers` (when `{}` resolved a service, every other candidate
+  that shared its earliest date), `failedSources` (which domain of the snapshot failed, if any —
+  the same list every other tool below reports) and `notes` (Spanish text for content a failed
+  read could not show, e.g. an unresolved song title) — never a silent empty answer in place of
+  either.
 
 #### `list_services` (P1, not released)
 
@@ -556,7 +566,7 @@ implemented and gate-green on the branch; none of the steps below have happened 
    (`dev-owt-backstage.vercel.app`'s deployment has the merged commit's `githubCommitSha`).
 3. ☐ Run `scripts/mcp-dev-smoke.mjs --reads` against dev (Frank only — see
    [Dev smoke procedure](#dev-smoke-procedure)) and confirm all seven read tools PASS.
-4. ☐ Open a PR from `preview` (or the feature branch) into `main`, wait for the `gates` check.
+4. ☐ Open a PR from the feature branch into `main`, wait for the `gates` check.
 5. ☐ Merge the PR — production release — then verify the production alias the same way.
 6. ☐ Update this document's status banner, the [Tools](#tools) section's per-tool "(P1, not
    released)" markers, and `docs/API_REFERENCE.md` / `docs/README.md` to say released, with the PR
