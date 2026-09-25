@@ -16,7 +16,10 @@
 // matching the sidebar means matching its INPUT SET (services whose own date
 // falls in the month), never its week-key output, and that is exactly what
 // `participantRolesForMonth` does below: no neighbouring-month bleed either
-// way.
+// way. "Service" there is `servicePresenter.ts`'s `serviceCandidateOf`, so a
+// role whose `_id` is not a canonical document id is left out of the counts as
+// well as `services[]`. The sidebar has no such check. The two can differ only
+// on such an id, which a published-perspective row does not carry in practice.
 //
 // Unlike the admin roles GET (which drops a dangling seat reference silently,
 // `Lead[defined(@->)]`), a seat referencing a member missing from `members`
