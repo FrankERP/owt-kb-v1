@@ -333,6 +333,10 @@ describe("publishRefusalFor agrees with the publish-ready route", () => {
       expect(route.committed).toEqual([]);
       expect(h.transactions).toEqual([]);
       expect(route.afterCallbacks).toBe(0);
+      // Documents the route's CURRENT top-level code — not part of I4. The route
+      // answers `stale_revision` even when the only reasons are
+      // `already_published` / `not_ready`; if it is fixed to say something
+      // truer, update this line. The per-service `reasons` above are the contract.
       expect(route.error).toBe(
         mcp.answer.refusals.some((c) => HARD_ROUTE_CODES.has(c)) ? "integrity_conflict" : "stale_revision",
       );
@@ -370,7 +374,10 @@ describe("publishRefusalFor agrees with the publish-ready route", () => {
     expect(mcp.answer.copy[0]).toMatch(/\S/);
   });
 
-  it("is never asked about a drafts.* id: the route rejects the request before reading", async () => {
+  // Documents a caller precondition; nothing here enforces it. The route never
+  // evaluates a `drafts.*` id (its parser refuses it before any read), so there
+  // is no route verdict to compare — callers must pass canonical role ids only.
+  it("documents that the route never evaluates a drafts.* id: it rejects the request before reading", async () => {
     const res = await publishReadyPOST(
       req({ mode: "ready", roles: [{ id: "drafts.role-sp-draftonly", rev: "any-rev" }] }),
     );
@@ -406,6 +413,21 @@ describe("the fixture matrix, as the route sees it", () => {
     expect(verdicts.get("role-sun-1115-live")!.codes).toEqual(["already_published", "not_ready"]);
     const live = await snapshotAnswer("role-sun-1115-live");
     expect(live.answer.blockers).toStrictEqual({ workflow: ["incomplete_setlist"], hard: [] });
+
+    // The two integrity codes must come apart somewhere, or a predicate that
+    // derives one from the other (never reading the observation) passes.
+    const hardWithoutObservation = [...verdicts].filter(
+      ([, v]) => v.codes.includes("hard_integrity_blocker") && !v.codes.includes("unusable_observation"),
+    );
+    expect(hardWithoutObservation.length).toBeGreaterThanOrEqual(1);
+    // The duplicate-target pair is that case: a hard target blocker, a usable observation.
+    for (const id of ["role-sun-1122-a", "role-sun-1122-b"]) {
+      expect(verdicts.get(id)!.codes, id).toEqual(["hard_integrity_blocker", "not_ready"]);
+      expect(verdicts.get(id)!.rejection, id).toMatchObject({
+        hardBlockers: ["role_target_duplicate"],
+        workflowBlockers: ["incomplete_setlist"],
+      });
+    }
   });
 });
 

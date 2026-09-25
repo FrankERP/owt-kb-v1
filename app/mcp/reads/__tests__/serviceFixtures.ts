@@ -206,6 +206,16 @@ export const SERVICE_FIXTURE_CASES: readonly ServiceFixtureCase[] = [
     covers: "published (live) Sunday that lost its setlist: a readiness gap on a published service",
     readyToPublish: false,
   },
+  {
+    roleId: "role-sun-1122-a",
+    covers: "draft Sunday sharing its week with a second canonical role (duplicate target), owns the lock: a hard blocker with a usable observation",
+    readyToPublish: false,
+  },
+  {
+    roleId: "role-sun-1122-b",
+    covers: "the second canonical Sunday on the same week, not the lock owner: a hard blocker with a usable observation",
+    readyToPublish: false,
+  },
 ];
 
 /** Every canonical role id in the matrix. */
@@ -335,6 +345,26 @@ export function serviceFixtureStore(): ServiceFixtureStore {
         published: true,
         Lead: [reference("l1", sofia)],
       }),
+      // Two canonical Sundays on one week (a duplicate target) and ONE claimed
+      // lock, owned by the first. The target is a hard blocker, yet each role's
+      // observation stays usable — the only case in the matrix where
+      // `hard_integrity_blocker` comes without `unusable_observation`.
+      ...["role-sun-1122-a", "role-sun-1122-b"].map((id) =>
+        role({
+          _id: id,
+          _rev: `${id}-rev`,
+          _type: "sunday_role",
+          week: "2026-11-22",
+          published: false,
+          Lead: [reference("l1", ana)],
+          BGVs: [reference("b1", sofia)],
+          Chorus: [reference("c1", luis)],
+          instruments: [
+            { _key: "i1", _type: "instrument_slot", instrument: "Bajo", person: { _type: "reference", _ref: luis } },
+          ],
+          foh_team: [{ _key: "f1", _type: "foh_slot", role: "Sonido", person: { _type: "reference", _ref: sofia } }],
+        }),
+      ),
     ],
     locks: [
       lock("sunday_role", "2026-10-04", "role-sun-1004"),
@@ -346,6 +376,7 @@ export function serviceFixtureStore(): ServiceFixtureStore {
       // that no longer exists (orphan_lock) and sits at a target nobody owns.
       lock("sunday_role", "2026-11-01", "role-deleted"),
       lock("sunday_role", "2026-11-15", "role-sun-1115-live"),
+      lock("sunday_role", "2026-11-22", "role-sun-1122-a"),
     ],
     members: [
       member(ana, "Ana", { unavailableDates: [] }),

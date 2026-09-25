@@ -28,6 +28,12 @@
 //  - `blockers` — the FULL readiness classification, never cut short by a
 //    refusal, so a live service that lost its setlist still shows the gap.
 //
+// PRECONDITION: pass only CANONICAL role ids to `assembleService`. The route's
+// parser refuses a `drafts.*` id before reading anything (`isCanonicalDocumentId`),
+// so there is no route verdict for one to agree with — and here a draft-only
+// record would read as `already_published`, because it has no canonical
+// `published` field and `derivePublishState(undefined)` is "published".
+//
 // Neutral: no Sanity client, no `server-only`. `AssembledService` is a type-only
 // import from the server-only bundle; the caller hands the assembly in.
 
