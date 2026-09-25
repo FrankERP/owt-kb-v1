@@ -1688,3 +1688,11 @@ calls that a design signal.
   case also named exactly its forced instance on all three seeds.
 - **`gmax + 0` serialises identically to `gmax`** — the fingerprint stayed green through Task 4
   with the unconditional form, as the spec claimed.
+- **Task 1 grew under three code reviews of #100** (merged `23aa5a8c`, 2026-09-25): the
+  fingerprints hash the solver parameters too; a `LADDER_FINGERPRINTS` list covers every solve
+  after Stage A behind a Stage A `OPTIMAL` precondition, replacing the objective-term count;
+  the literals use a frozen fixture copy; inside GitHub Actions an off-platform or `None`
+  golden fails rather than skips; the frozen config sets the 110 s total budget so the
+  documented remedy cannot cut the ladder. The pin branch then tightened the inert-fields test
+  to REQUIRE `pinned_honored`, amended spec §7 with an as-built box, and raised the CI job
+  timeout from 15 to 25 minutes (the job ran ~11.5 with the pin suite).

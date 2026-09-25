@@ -261,13 +261,16 @@ class PinlessOutputGolden(unittest.TestCase):
 
     def test_new_response_fields_are_inert(self):
         """
-        Before pins exist these fields are absent; after, a pinless response carries
-        pinned_honored 0, an empty pin_violations and no violation_ceiling_proven. This
-        pre-pin baseline has to accept absence; the pinned-assignments PR tightens it to
-        REQUIRE pinned_honored, whose absence is the deploy check's revert trigger.
+        A pinless response carries pinned_honored 0, an empty pin_violations and no
+        violation_ceiling_proven. pinned_honored is REQUIRED, not merely allowed to be
+        0: its presence is how the client and the deploy check tell this solver from one
+        that ignores `pinned`, and its absence is the deploy check's revert trigger
+        (docs/SOLVER_AND_INFRA.md, "Verifying a Cloud Function deploy"). The pre-pin
+        baseline in #100 had to accept absence; the pinned-assignments PR tightened it.
         """
-        self.assertEqual(self.res.get("pinned_honored", 0), 0)
-        self.assertEqual(self.res.get("pin_violations", []), [])
+        self.assertIn("pinned_honored", self.res)
+        self.assertEqual(self.res["pinned_honored"], 0)
+        self.assertEqual(self.res["pin_violations"], [])
         self.assertNotIn("violation_ceiling_proven", self.res)
 
 

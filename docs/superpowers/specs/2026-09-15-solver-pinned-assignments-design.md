@@ -1180,6 +1180,31 @@ and behaved otherwise:
 - **Inertness for a request with no `pinned` key — two guards, because this solver does not
   have reproducible output and a golden alone would be a flaky lie.**
 
+  > **As built — amended 2026-09-25, after implementation; this box supersedes the guard
+  > design below wherever they differ.** The guards shipped first, in their own PR (#100,
+  > `main` `23aa5a8c`), frozen from the pre-pin solver; `gcf/test_inertness.py` and
+  > `docs/CI.md` are canonical. Three code reviews of that PR changed the design this section
+  > describes:
+  >
+  > - **Not "Stage A only".** A fingerprint covers every solve of the pinless month, in order —
+  >   `STAGE_A_FINGERPRINTS` and `LADDER_FINGERPRINTS` — each hashing the model proto **and
+  >   the solver parameters** (time limit stripped), because "the same search" lives in
+  >   branching, seed and worker count, which the proto does not carry. The ladder's
+  >   `empty_target` objection below is answered by a Stage A `OPTIMAL` precondition, asserted.
+  >   Intermediate statuses are deliberately not frozen.
+  > - **The objective-coefficient count below was dropped**, subsumed by the ladder
+  >   fingerprints; the zero-coefficient blind spot remains and is stated in the file.
+  > - **The output golden is platform-scoped.** A Mac (arm64) and the Linux x86_64 runner prove
+  >   seed 42 `OPTIMAL` through the same statuses and return schedules differing in 7 of 16
+  >   role cells, so it is enforced only on the capture platform — and inside GitHub Actions an
+  >   off-platform run or a `None` golden **fails** rather than skips.
+  > - **The literals use a frozen copy of the fixture** (`frozen_config`), not the shared
+  >   `make_config`.
+  > - **The gate is `python -m unittest discover -s gcf -t gcf -v`**, in `gates` since #76 — not
+  >   pytest; the `pytest`, `-s` and `pythonpath` wording below and in §9 is stale.
+  > - A runner-image change is a legitimate re-capture cause for the golden only, never for a
+  >   fingerprint, which is machine-independent (confirmed on both platforms).
+
   *The trap, measured.* `solver.parameters.max_time_in_seconds` (`:963-966`) is **wall clock**,
   so a fixed seed fixes the search *order*, not where it stops. Run the repo's own
   `make_config` fixture at falling budgets: seeds 1 and 42 are stable from 3 s to 10 s, seed
