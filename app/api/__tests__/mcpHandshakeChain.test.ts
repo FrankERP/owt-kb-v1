@@ -315,6 +315,7 @@ describe("the connector handshake, end to end on preview (discovery → ping →
       "get_song",
       "get_member_availability",
       "get_participation",
+      "list_proposals",
     ]);
 
     const ping = (token: string) => mcp(token, "tools/call", { name: "ping", arguments: {} }, negotiated);

@@ -584,7 +584,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
   });
 
-  it("tools/list shows exactly ping, get_service, list_services, search_songs, get_song, get_member_availability and get_participation: all read-only, strict, described in Spanish", async () => {
+  it("tools/list shows exactly ping, get_service, list_services, search_songs, get_song, get_member_availability, get_participation and list_proposals: all read-only, strict, described in Spanish", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const tools = result.tools as Record<string, unknown>[];
@@ -596,14 +596,16 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       "get_song",
       "get_member_availability",
       "get_participation",
+      "list_proposals",
     ]);
     for (const tool of tools) {
       expect(tool.annotations, String(tool.name)).toEqual({ readOnlyHint: true });
       expect(tool.inputSchema, String(tool.name)).toMatchObject({ type: "object", additionalProperties: false });
     }
-    const [ping, getService, listServices, searchSongs, getSong, getMemberAvailability, getParticipation] = tools;
+    const [ping, getService, listServices, searchSongs, getSong, getMemberAvailability, getParticipation, listProposals] =
+      tools;
     // `search_songs` names no calendar day: only the time-aware tools state the zone.
-    for (const tool of [ping!, getService!, listServices!, getSong!, getMemberAvailability!, getParticipation!]) {
+    for (const tool of [ping!, getService!, listServices!, getSong!, getMemberAvailability!, getParticipation!, listProposals!]) {
       expect(tool.description, String(tool.name)).toMatch(/America\/Mexico_City/);
     }
     expect(ping!.inputSchema).toMatchObject({ properties: {} });
@@ -627,10 +629,16 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       "name",
     ]);
     expect(Object.keys((getParticipation!.inputSchema as { properties: object }).properties)).toEqual(["month"]);
+    expect(Object.keys((listProposals!.inputSchema as { properties: object }).properties).sort()).toEqual([
+      "month",
+      "serviceId",
+    ]);
     for (const tool of [getService!, listServices!]) expect(tool.description).toMatch(/SIN CAMBIOS/);
     expect(getSong!.description).toMatch(/especiales NO cuentan/);
     expect(getMemberAvailability!.description).toMatch(/SOLO al equipo de alabanza/);
     expect(getParticipation!.description).toMatch(/borradores incluidos/);
+    expect(listProposals!.description).toMatch(/truncated/);
+    expect(listProposals!.description).toMatch(/leído/);
   });
 
   it("tools/call ping returns { ok, server, version, now } with now in Mexico City time", async () => {
@@ -697,7 +705,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     });
     // The body really moved to the copy: the handler parsed it and answered.
     const result = await rpcResult(await POST(request));
-    expect(result.tools).toHaveLength(7);
+    expect(result.tools).toHaveLength(8);
 
     expect(h.forwarded).toHaveLength(1);
     const forwarded = h.forwarded[0]!;
@@ -1009,6 +1017,55 @@ describe("/api/mcp — get_member_availability and get_participation, end to end
       );
       expect(result.isError, name).toBe(true);
     }
+    expect(h.operationalFetch).not.toHaveBeenCalled();
+  });
+});
+
+// ── the proposal read tool (P1 step 7) ────────────────────────────────────────
+
+describe("/api/mcp — list_proposals, end to end", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(FROZEN_EVENING));
+    const responder = scopedResponder(readToolStore());
+    h.operationalFetch.mockImplementation(responder.operational);
+    h.rawFetch.mockImplementation(responder.raw);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    h.operationalFetch.mockReset();
+    h.rawFetch.mockReset();
+  });
+
+  it("tools/call list_proposals { month } links a weekend proposal to its role and reports an unresolvable one as null, never dropping it", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(
+      await POST(mcpRequest(rpc("tools/call", { name: "list_proposals", arguments: { month: "2026-10" } }), { token })),
+    );
+    expect(result.isError).toBeFalsy();
+    const content = result.content as { type: string; text: string }[];
+    const payload = JSON.parse(content[0]!.text) as {
+      month: string;
+      proposals: { proposalId: string; serviceId: string | null }[];
+    };
+    expect(payload.month).toBe("2026-10");
+    expect(payload.proposals.map((p) => [p.proposalId, p.serviceId])).toEqual(
+      expect.arrayContaining([
+        ["prop-sat-1003", "role-sat-1003"],
+        ["prop-sun-1011", "role-sun-1011"],
+        ["prop-orphan", null],
+      ]),
+    );
+    expect(result.structuredContent).toEqual(payload);
+  });
+
+  it("refuses an unknown argument as a tool error (I13)", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(
+      await POST(mcpRequest(rpc("tools/call", { name: "list_proposals", arguments: { extra: "x" } }), { token })),
+    );
+    expect(result.isError).toBe(true);
     expect(h.operationalFetch).not.toHaveBeenCalled();
   });
 });

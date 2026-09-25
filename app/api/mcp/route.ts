@@ -41,6 +41,7 @@ import { registerGetMemberAvailability } from "@/app/mcp/tools/getMemberAvailabi
 import { registerGetParticipation } from "@/app/mcp/tools/getParticipation";
 import { registerGetService } from "@/app/mcp/tools/getService";
 import { registerGetSong } from "@/app/mcp/tools/getSong";
+import { registerListProposals } from "@/app/mcp/tools/listProposals";
 import { registerListServices } from "@/app/mcp/tools/listServices";
 import { registerPing } from "@/app/mcp/tools/ping";
 import { registerSearchSongs } from "@/app/mcp/tools/searchSongs";
@@ -76,6 +77,7 @@ const mcpHandler = createMcpHandler(
     registerGetSong(server);
     registerGetMemberAvailability(server);
     registerGetParticipation(server);
+    registerListProposals(server);
   },
   {
     serverInfo: SERVER_INFO,
