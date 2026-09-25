@@ -14,8 +14,8 @@
 > below (`get_service`, `list_services`, `search_songs`, `get_song`, `get_member_availability`,
 > `get_participation`, `list_proposals`) exist in the [Tools](#tools) section, the route registers
 > them, the full gate set (`tsc`, `vitest`, `eslint`) is green, and production now exposes all
-> eight tools. **Frank's phone acceptance is still pending** — he is teaching and will run it
-> later; checklist steps 8–9 (the answers compared against `/admin` and the song page, and
+> eight tools. **Frank's phone acceptance is still pending** — Frank runs it later; checklist
+> steps 8–9 (the answers compared against `/admin` and the song page, and
 > production latency recorded against the 10 s stop condition) are not done. See the
 > [P1 release record](#release-record-p1-2026-09-25) for the evidence and the
 > [P1 release checklist](#p1-release-checklist-released-2026-09-25) for how it shipped and what's
@@ -626,7 +626,8 @@ All times America/Mexico_City.
 
 **Code on the branch.** P1 was implemented on `claude/mcp-p1-reads`, head `becffada`. Its gates:
 `tsc` 0 errors, vitest 376 files / 6649 tests, eslint 0 errors. The last review before merge was a
-scoped re-verify of the final fix wave, not a fresh fix — see the
+scoped re-verify over `b74bc9ae..becffada` — the final fix wave, not a fresh fix — so the last
+worklog entry before the merge is that verification, not a fix. See the
 [P1 release checklist](#p1-release-checklist-released-2026-09-25) below.
 
 **Real-data probe.** Read-only, run against the production dataset before release: 0
@@ -658,7 +659,7 @@ grant is not revoked as a routine release check, since revocation was already pr
 above). The [P1 release checklist](#p1-release-checklist-released-2026-09-25) below reflects
 this — it carries no "revoke the production grant" step.
 
-**Not yet done.** Frank's phone acceptance (checklist items 8 and 9) — he is teaching and will run
+**Not yet done.** Frank's phone acceptance (checklist items 8 and 9) is still pending; Frank runs
 it later. Both are marked pending, not done, below.
 
 ---
@@ -707,20 +708,23 @@ steps of the P1 plan are implemented and gate-green:
 8. registration, the tool-list test, the dev smoke's `--reads` and these docs.
 
 The plan's step 9, the release, is the checklist below — all release steps through the production
-alias are done; **phone acceptance (items 8–9) is still pending**, deliberately, since Frank is
-teaching and will run it later. See the
+alias are done; **phone acceptance (items 8–9) is still pending**, deliberately — Frank runs it
+later. See the
 [P1 release record](#release-record-p1-2026-09-25) above for the full evidence behind every ✅.
 
 1. ✅ A fresh code review on the merge range (this repo's release rule: a merge to `main` needs a
    review of the diff, not just the plan). It ran over `2fcb319c..b74bc9ae` and returned "with
    fixes", with the additive-only rule confirmed.
 2. ✅ The fix wave for that review is committed on the branch (head `becffada`).
-3. ✅ **Re-verify the fix** (CLAUDE.md): a scoped review of the fix commits' range, with the gates
-   (`tsc`, `vitest`, `eslint`) re-run on the final tree — `tsc` 0, vitest 376 files / 6649 tests,
-   eslint 0 errors. `mcpProtectedTypeLiterals.test.ts` pins the no-role-type-literal confirmation.
-   **Not separately evidenced in this release's record:** whether the re-verify explicitly
-   reconfirmed that every returned `_rev`/`_key` comes from the same query row as its content —
-   the record available at release time does not show this check by name.
+3. ✅ **Re-verify the fix** (CLAUDE.md): a scoped review over `b74bc9ae..becffada` — the fix
+   commits' range — with the gates (`tsc`, `vitest`, `eslint`) re-run on the final tree — `tsc` 0,
+   vitest 376 files / 6649 tests, eslint 0 errors. `mcpProtectedTypeLiterals.test.ts` pins the
+   no-role-type-literal confirmation. The re-verify also confirmed the plan's other
+   release-review ask — that every returned `_rev`/`_key` comes from the same query row as its
+   content: `presentServiceList` (`app/mcp/reads/servicePresenter.ts`) reads `row._rev` from the
+   same row it built the candidate from, and `serviceSnapshotParity.test.ts` pins it ("serves the
+   raw rows and the readiness from the SAME row objects"; "gives a document the same `_rev`
+   wherever it appears in one snapshot").
 4. ✅ Merged `claude/mcp-p1-reads` into `preview` as `1345f711`, pushed 07:22; dev alias verified —
    deployment `dpl_AdqsDZ7XK45vQN5rAiDp4BzaEMhi`, alias includes `dev-owt-backstage.vercel.app`,
    `githubCommitSha` `1345f711`.
@@ -746,8 +750,8 @@ teaching and will run it later. See the
 
    Compare each answer with `/admin` (Servicios, Disponibilidad) and the song page. Any
    disagreement that is not one of the named departures in [Tools](#tools) is a stop condition.
-   So is any `isError` on a valid request. Frank is teaching as of 2026-09-25 and will run this
-   later — do not mark it done until he has.
+   So is any `isError` on a valid request. Frank runs this later — do not mark it done until he
+   has.
 9. ☐ **PENDING — record the observed latency** of `get_service` and `list_services` on
    production, here, once Frank runs item 8. The plan's stop condition is **10 s**: a slower
    answer stops the release. **The 870 ms real-data probe in the
