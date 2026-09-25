@@ -40,8 +40,8 @@ Also in this repo root:
 - [`MOBILE.md`](MOBILE.md) — native iOS/Android setup & handoff runbook.
 - [`MCP.md`](MCP.md) — the MCP connector operator runbook: endpoints, [tools](MCP.md#tools),
   adding/revoking the Claude connector, the kill switch, the WAF rule, the dev smoke procedure.
-  **P0 (`ping`) released to production 2026-09-24; P1 (seven read tools) implemented on branch
-  `claude/mcp-p1-reads`, not yet released.**
+  **P0 (`ping`) released to production 2026-09-24; P1 (seven read tools) released to production
+  2026-09-25 (PR #98, `main` `a04edb43`); Frank's phone acceptance is still pending.**
 - [`superpowers/`](superpowers/) — dated design **specs** and **plans** for every shipped feature (the "why" behind each subsystem). Great for archaeology.
 
 ---
