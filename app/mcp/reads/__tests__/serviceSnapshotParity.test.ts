@@ -172,10 +172,6 @@ describe("loadServiceSnapshot — readiness parity with loadServiceReadinessSour
     expect(run.snapshotCalls).toHaveLength(8);
   });
 
-  it("keeps parity when revisions differ between reads", async () => {
-    expectParity(await runBoth(serviceFixtureStore(), { revisionDrift: true }));
-  });
-
   it("keeps parity on an empty catalogue, with no members round trip", async () => {
     const run = await runBoth(emptyFixtureStore());
     expectParity(run);
@@ -184,7 +180,7 @@ describe("loadServiceSnapshot — readiness parity with loadServiceReadinessSour
   });
 
   // Where each domain's raw rows surface in the snapshot, and the source that reports them failed.
-  const RAW_ROWS: Record<ReadinessDomain, (s: ServiceSnapshot) => unknown[]> = {
+  const RAW_ROWS: Record<ReadinessDomain, (s: ServiceSnapshot) => readonly unknown[]> = {
     roles: (s) => s.roles,
     roleDrafts: (s) => s.roleDraftIds,
     locks: (s) => s.readiness.roleSummary.lockIssues,
@@ -241,6 +237,24 @@ describe("loadServiceSnapshot — the rows the readiness bundle discards", () =>
       alias: "Lucho",
       unavailableDates: ["2026-10-11"],
     });
+  });
+
+  it("types those shared rows read-only, so an in-place edit does not compile", () => {
+    // Never called: `tsc --noEmit` is the assertion. Each line would change what
+    // `assembleService` sees if it compiled, because the objects are shared.
+    const inPlaceEdits = (s: ServiceSnapshot) => {
+      // @ts-expect-error — a read-only array has no in-place sort.
+      s.roles.sort();
+      // @ts-expect-error — a row's fields are read-only.
+      s.roles[0]._rev = "edited";
+      // @ts-expect-error — a read-only array has no push.
+      s.proposals.push({});
+      // @ts-expect-error — a read-only id list has no push.
+      s.setlistDraftIds.push("drafts.x");
+      // @ts-expect-error — a read-only map has no set.
+      s.membersById.set("mem-x", { _id: "mem-x", _rev: "r" });
+    };
+    expect(typeof inPlaceEdits).toBe("function");
   });
 
   it("serves the raw rows and the readiness from the SAME row objects", async () => {

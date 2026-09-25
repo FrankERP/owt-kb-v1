@@ -81,28 +81,58 @@ async function attempt<T>(label: string, bound: BoundQuery, raw = false): Promis
   }
 }
 
+/** A row exactly as its projection returned it. Read-only: it is the same object readiness holds. */
+export type SnapshotRow = Readonly<Record<string, unknown>>;
+
+/**
+ * Every row, id list and map here is the SAME object `readiness` was computed
+ * from (`readiness.rolesById.get(id) === roles[i]`), so the fields are typed
+ * read-only: sorting or editing one in place would silently change what
+ * `assembleService` sees. Copy before reshaping. `readiness` keeps the mutable
+ * `ServiceReadinessSources` type because `assembleService` takes exactly that.
+ */
 export interface ServiceSnapshot {
   /**
    * Exactly what `loadServiceReadinessSources()` returns for the same reads, so
    * it goes straight into `assembleService(snapshot.readiness, roleId)`.
    */
-  readiness: ServiceReadinessSources;
-  /** Canonical role rows (`ROLE_PROJECTION`). Empty when `sources.roles` is `error`. */
-  roles: Record<string, unknown>[];
-  /** Canonical weekend setlist rows (`SETLIST_PROJECTION`). Empty when `sources.setlistTargets` is `error`. */
-  setlists: Record<string, unknown>[];
-  /** Ids of the raw `drafts.*` setlist rows. Empty when `sources.setlistTargets` is `error`. */
-  setlistDraftIds: string[];
-  /** Ids of the raw `drafts.*` role rows. Empty when `sources.roleTargets` is `error`. */
-  roleDraftIds: string[];
+  readonly readiness: ServiceReadinessSources;
+  /** Canonical role rows (`ROLE_PROJECTION`). `[]` when this read failed, and then `sources.roles` is `error`. */
+  readonly roles: ReadonlyArray<SnapshotRow>;
+  /**
+   * Canonical weekend setlist rows (`SETLIST_PROJECTION`). `[]` when this read
+   * failed; `sources.setlistTargets` is also `error` when its sibling read (the
+   * raw setlist drafts) failed — check `sources.setlistTargets` before trusting
+   * presence or absence.
+   */
+  readonly setlists: ReadonlyArray<SnapshotRow>;
+  /**
+   * Ids of the raw `drafts.*` setlist rows. `[]` when this read failed;
+   * `sources.setlistTargets` is also `error` when its sibling read (the canonical
+   * setlists) failed — check `sources.setlistTargets` before trusting presence or
+   * absence.
+   */
+  readonly setlistDraftIds: readonly string[];
+  /**
+   * Ids of the raw `drafts.*` role rows. `[]` when this read failed;
+   * `sources.roleTargets` is also `error` when its sibling read (the weekend
+   * locks) failed — check `sources.roleTargets` before trusting presence or
+   * absence.
+   */
+  readonly roleDraftIds: readonly string[];
   /**
    * Members seated on any groupable role, from `CANONICAL_MEMBER_PROJECTION` — the
    * same map (and the same objects) readiness resolved seats against. Empty when
-   * `sources.members` is `error`.
+   * `sources.members` is `error` (its read failed, or roles failed and it never ran).
    */
-  membersById: Map<string, CanonicalMember>;
-  /** Canonical proposal rows (`PROPOSAL_PROJECTION`). Empty when `sources.proposals` is `error`. */
-  proposals: Record<string, unknown>[];
+  readonly membersById: ReadonlyMap<string, Readonly<CanonicalMember>>;
+  /**
+   * Canonical proposal rows (`PROPOSAL_PROJECTION`). `[]` when this read failed;
+   * `sources.proposals` is also `error` when its sibling read (the raw proposal
+   * drafts) failed — check `sources.proposals` before trusting presence or
+   * absence.
+   */
+  readonly proposals: ReadonlyArray<SnapshotRow>;
 }
 
 /**
@@ -204,9 +234,9 @@ export interface MemberNameLookup {
    * False when the lookup read failed. An id missing from `byId` is then
    * UNKNOWN, not missing — the caller must say so rather than report it absent.
    */
-  ok: boolean;
-  /** Every requested id that resolved, from `known` first and then the dataset. */
-  byId: Map<string, CanonicalMember>;
+  readonly ok: boolean;
+  /** Every requested id that resolved, from `known` first (the same objects) and then the dataset. */
+  readonly byId: ReadonlyMap<string, Readonly<CanonicalMember>>;
 }
 
 /**
@@ -218,10 +248,10 @@ export interface MemberNameLookup {
  */
 export async function loadMemberNames(
   ids: readonly string[],
-  known: ReadonlyMap<string, CanonicalMember>,
+  known: ReadonlyMap<string, Readonly<CanonicalMember>>,
 ): Promise<MemberNameLookup> {
   const wanted = [...new Set(ids.filter(nonEmptyString))];
-  const byId = new Map<string, CanonicalMember>();
+  const byId = new Map<string, Readonly<CanonicalMember>>();
   const unknown: string[] = [];
   for (const id of wanted) {
     const member = known.get(id);

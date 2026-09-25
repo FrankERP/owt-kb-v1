@@ -376,7 +376,7 @@ Every step leaves the four gates green. Nothing deploys until step 9.
 
 | Requirement | Test or check | Failure it detects |
 |---|---|---|
-| I1 audit | `protectedReadAudit.test.ts` green, registries unchanged | a protected read on a non-canonical client |
+| I1 audit | `protectedReadAudit.test.ts` green, registries unchanged; `app/mcp/__tests__/mcpSanityClients.test.ts` (every git-tracked non-test `app/mcp/**` file imports Sanity clients only from `sanity/lib/operationalClient`, one documented exemption: P0's grant store `writeClient`), because the audit cannot resolve a query passed through a helper parameter; step 2's parity responder rejects any snapshot read on the wrong client | a protected read on a non-canonical client |
 | I2 draft gating | `draftGatingCoverage.test.ts` green, `MAY_SEE_DRAFTS` unchanged; review: no role literal in `app/mcp/**` | a draft-gated literal outside the exempt model |
 | I3 | step 4 tests (legacy, draft, published) | a raw empty field reported as "not published" |
 | I4 | step 3 parity test against the publish-ready route; step 2 snapshot parity | a read that says "ready" and a publish that refuses |
