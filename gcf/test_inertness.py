@@ -71,6 +71,10 @@ def frozen_config(seed):
         ],
         "history": [], "seed": seed,
         "solver_max_time_seconds": INERTNESS_BUDGET_SECONDS,
+        # The solver's own ceiling, so raising INERTNESS_BUDGET_SECONDS can never make the
+        # shared 40 s deadline cut the ladder short. It only feeds max_time_in_seconds,
+        # which the fingerprints strip.
+        "solver_total_budget_seconds": 110,
     }
 
 
@@ -199,12 +203,16 @@ class PinlessModelIsUnchanged(unittest.TestCase):
                     solves[0][1], "OPTIMAL",
                     "precondition: Stage A must prove OPTIMAL for its bound on the ladder "
                     "to be machine-independent — raise INERTNESS_BUDGET_SECONDS")
+                trace = [(status, "objective" if has_objective else "no objective")
+                         for _fingerprint, status, has_objective in solves]
                 self.assertEqual(
                     [fingerprint for fingerprint, _status, _obj in solves[1:]], expected,
                     "the pinless ladder's models, objective, search or pass sequence "
                     "changed — a finding unless this PR is a deliberate, reviewed objective "
-                    "change. (A LONGER sequence with an UNKNOWN last pass means the "
-                    "returning pass timed out: raise INERTNESS_BUDGET_SECONDS.)")
+                    "change. One exception, and it looks like this: the sequence is ONE "
+                    "pass longer, the pass expected to return shows UNKNOWN, and an extra "
+                    "last pass with no objective returned instead — the returning pass "
+                    f"timed out; raise INERTNESS_BUDGET_SECONDS. Solves: {trace}")
 
 
 class PinlessOutputGolden(unittest.TestCase):
