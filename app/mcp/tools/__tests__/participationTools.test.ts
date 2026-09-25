@@ -88,7 +88,7 @@ describe("registration", () => {
   it("is read-only, strict, and states the drafts-included and especial rules in Spanish", () => {
     const tool = registered(registerGetParticipation as (server: never) => void);
     expect(tool.name).toBe("get_participation");
-    expect(tool.config.annotations).toEqual({ readOnlyHint: true });
+    expect(tool.config.annotations).toEqual({ readOnlyHint: true, openWorldHint: false });
     expect(tool.config.inputSchema.safeParse({ extra: 1 }).success).toBe(false);
     expect(tool.config.description).toMatch(/America\/Mexico_City/);
     expect(tool.config.description).toMatch(/borradores incluidos/);

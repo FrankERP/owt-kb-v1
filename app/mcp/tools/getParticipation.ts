@@ -42,11 +42,13 @@ export const GET_PARTICIPATION_DESCRIPTION =
   "se pudo resolver), sunLead, satLead, sunBGV, satBGV, coro, especial (todo asiento de voz de un especial), total " +
   "(incluye especial), instrWeeks y fohWeeks (semanas distintas con ese asiento; un sábado cuenta en la semana del " +
   "domingo siguiente, un especial en la del domingo en curso o el que sigue). Un asiento cuyo miembro no tiene " +
-  "documento (una referencia colgante) aparece con missing: true, nunca se descarta; si la lectura de miembros falló, " +
-  "todos aparecen con unresolved: true y una nota. services trae serviceId, date, kind y published " +
-  "(\"draft\" | \"published\") de cada servicio incluido, para saber qué cuentan incluyen borradores. Si no se pudo " +
-  "leer el catálogo de servicios, la herramienta responde con un error, nunca con participación en cero. Solo lee: no " +
-  "cambia nada.";
+  "documento (una referencia colgante) aparece con missing: true, nunca se descarta; un miembro cuyo nombre no se pudo " +
+  "leer (porque la lectura de nombres falló, total o parcialmente) aparece con unresolved: true y se agrega una nota — " +
+  "el resto de los miembros de ese mismo resultado puede seguir resolviendo su nombre con normalidad. services trae " +
+  "serviceId, date, kind y published (\"draft\" | \"published\") de cada servicio incluido, en el mismo orden que " +
+  "list_services (fecha y luego hora), para saber qué conteos incluyen borradores. failedSources aparece si alguna " +
+  "lectura falló. Si no se pudo leer el catálogo de servicios, la herramienta responde con un error, nunca con " +
+  "participación en cero. Solo lee: no cambia nada.";
 
 /** The tool's whole behaviour, callable without a server (the route registers it below). */
 export async function getParticipationResult(args: GetParticipationArgs): Promise<CallToolResult> {
@@ -74,7 +76,7 @@ export function registerGetParticipation(server: McpServer): void {
       title: "Ver participación del mes",
       description: GET_PARTICIPATION_DESCRIPTION,
       inputSchema: GET_PARTICIPATION_INPUT,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args) => getParticipationResult(args),
   );

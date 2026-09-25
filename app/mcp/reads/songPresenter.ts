@@ -148,7 +148,7 @@ export interface ReferenceLinksOut {
 }
 
 export interface MixOut {
-  mixKey: string;
+  mixKey: string | null;
   kind: string | null;
   family: string | null;
   track: string | null;
@@ -221,7 +221,7 @@ function mixGroupsOf(row: SongDetailRow): MixGroup[] {
       order.push(tone);
     }
     byTone.get(tone)!.push({
-      mixKey: mix._key,
+      mixKey: nonEmptyString(mix._key) ? mix._key : null,
       kind: mix.kind ?? null,
       family: mix.family ?? null,
       track: mix.track ?? null,

@@ -115,7 +115,7 @@ export function registerListProposals(server: McpServer): void {
       title: "Listar propuestas de setlist",
       description: LIST_PROPOSALS_DESCRIPTION,
       inputSchema: LIST_PROPOSALS_INPUT,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args) => listProposalsResult(args),
   );

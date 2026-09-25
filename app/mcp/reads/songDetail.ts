@@ -57,7 +57,7 @@ export interface SongDetailRow {
   lyricsVideoUrl: string | null;
   lyricsURL: string | null;
   tutorials2: { title: string | null; url: string | null }[] | null;
-  rehearsalMixes: { _key: string; kind: string | null; family: string | null; track: string | null; tone: string | null; bpm: number | null }[] | null;
+  rehearsalMixes: { _key: string | null; kind: string | null; family: string | null; track: string | null; tone: string | null; bpm: number | null }[] | null;
 }
 
 export interface BoundQueryLike {

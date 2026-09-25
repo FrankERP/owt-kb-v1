@@ -32,10 +32,10 @@ const h = await vi.hoisted(async () => {
 vi.mock("@/app/utils/authGuards", () => ({ requireActiveSession: () => h.requireActiveSession() }));
 vi.mock("@/app/utils/memberAccess", () => ({ getMemberAccess: (id: string) => h.getMemberAccess(id) }));
 vi.mock("@/sanity/lib/serverClient", () => ({ writeClient: h.writeClient, serverClient: { fetch: vi.fn() } }));
-// A future read tool's import of `operationalClient`/`rawIntegrityClient` must
+// Every read tool's import of `operationalClient`/`rawIntegrityClient` must
 // never reach `sanity/env.ts`, which throws when `NEXT_PUBLIC_SANITY_*` is
-// unset (as it is under vitest). No read tool is registered yet, so nothing
-// here calls `fetch`.
+// unset (as it is under vitest). This chain only calls `ping` (step 5 below),
+// so nothing here calls `fetch` even though all eight tools are registered.
 vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: { fetch: vi.fn() }, rawIntegrityClient: { fetch: vi.fn() } }));
 
 import nextConfig from "../../../next.config.mjs";

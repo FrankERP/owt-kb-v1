@@ -1,11 +1,13 @@
 // scripts/__tests__/mcpDevSmoke.test.ts
 //
-// TDD for scripts/mcp-dev-smoke.mjs (P0 plan step 11a, controller ruling R24):
-// the dev-smoke client's pure helpers — base-URL validation (including the
-// production refusal), PKCE, authorize-URL building, form encoding, SSE-frame
-// parsing, token redaction and unverified JWT decoding. None of this touches
-// the network; the live handshake against dev is Frank's own run (see the
-// task-11a report for the exact commands and their output).
+// TDD for scripts/mcp-dev-smoke.mjs (P0 plan step 11a, controller ruling R24;
+// the `--reads` pass added at P1 plan step 8): the dev-smoke client's pure
+// helpers — base-URL validation (including the production refusal), PKCE,
+// authorize-URL building, form encoding, SSE-frame parsing, token redaction,
+// unverified JWT decoding, the tools/list check and the `--reads` pass'
+// arguments/detail/summary helpers. None of this touches the network; the
+// live handshake against dev is Frank's own run (see the task-11a report for
+// the exact commands and their output).
 //
 // Several groups cross-check the script's duplicated logic against the real
 // server modules it talks to, so a drift in either fails here instead of
@@ -25,21 +27,29 @@ import {
   BYPASS_HEADER,
   buildAuthorizeUrl,
   bypassHeaderFor,
+  checkToolList,
   codeChallengeFromVerifier,
   decodeJwtPayloadUnsafe,
   DEFAULT_BASE,
+  EXPECTED_TOOLS,
   formEncode,
+  formatReadCheckLine,
   generateCodeVerifier,
   generateState,
   LOCAL_BASE,
   parseArgs,
   parseSseMessages,
   PRODUCTION_BASE,
+  READ_TOOL_NAMES,
+  readCheckArguments,
+  readCheckDetail,
   redact,
   redirectUriFor,
   resolveBase,
   rpc,
   SmokeError,
+  songIdFromSearchResult,
+  summarizeReadChecks,
 } from "../mcp-dev-smoke.mjs";
 
 const KEY = new TextEncoder().encode("a".repeat(MIN_SECRET_BYTES));
@@ -85,16 +95,19 @@ describe("resolveBase", () => {
 });
 
 describe("parseArgs", () => {
-  it("defaults: no base override, open/refresh on, await-revocation off", () => {
-    expect(parseArgs([])).toEqual({ base: null, open: true, refresh: true, awaitRevocation: false });
+  it("defaults: no base override, open/refresh on, await-revocation and reads off", () => {
+    expect(parseArgs([])).toEqual({ base: null, open: true, refresh: true, awaitRevocation: false, reads: false });
   });
 
-  it("parses --base, --no-open, --no-refresh, --await-revocation together", () => {
-    expect(parseArgs(["--base", "http://localhost:3000", "--no-open", "--no-refresh", "--await-revocation"])).toEqual({
+  it("parses --base, --no-open, --no-refresh, --await-revocation, --reads together", () => {
+    expect(
+      parseArgs(["--base", "http://localhost:3000", "--no-open", "--no-refresh", "--await-revocation", "--reads"]),
+    ).toEqual({
       base: "http://localhost:3000",
       open: false,
       refresh: false,
       awaitRevocation: true,
+      reads: true,
     });
   });
 
@@ -315,6 +328,91 @@ describe("rpc", () => {
       method: "tools/call",
       params: { name: "ping" },
     });
+  });
+});
+
+describe("checkToolList", () => {
+  const readOnly = { readOnlyHint: true, openWorldHint: false };
+
+  it("accepts the exact eight names, in order, all annotated readOnlyHint/openWorldHint", () => {
+    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: readOnly }));
+    expect(checkToolList(tools)).toEqual({ ok: true });
+  });
+
+  it("refuses a wrong count or a wrong order", () => {
+    const tooFew = EXPECTED_TOOLS.slice(0, 1).map((name) => ({ name, annotations: readOnly }));
+    expect(checkToolList(tooFew).ok).toBe(false);
+
+    const reordered = [...EXPECTED_TOOLS].reverse().map((name) => ({ name, annotations: readOnly }));
+    expect(checkToolList(reordered).ok).toBe(false);
+  });
+
+  it("refuses a tool missing openWorldHint: false (a stale registration)", () => {
+    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: { readOnlyHint: true } }));
+    const result = checkToolList(tools);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain(EXPECTED_TOOLS[0]);
+  });
+
+  it("refuses a tool declared writable", () => {
+    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: { readOnlyHint: false, openWorldHint: false } }));
+    expect(checkToolList(tools).ok).toBe(false);
+  });
+});
+
+describe("readCheckArguments", () => {
+  it("every fixed tool has {} or a trivial short query, never a write shape", () => {
+    for (const name of READ_TOOL_NAMES) {
+      if (name === "get_song") continue;
+      expect(readCheckArguments(name, null)).toBeTypeOf("object");
+    }
+    expect(readCheckArguments("search_songs", null)).toEqual({ query: "a" });
+  });
+
+  it("get_song takes the songId handed in from search_songs's result", () => {
+    expect(readCheckArguments("get_song", "song-123")).toEqual({ songId: "song-123" });
+  });
+
+  it("get_song throws (not a per-tool FAIL) when no songId was ever found — a script-ordering bug", () => {
+    expect(() => readCheckArguments("get_song", null)).toThrow(/songId/);
+  });
+});
+
+describe("songIdFromSearchResult", () => {
+  it("reads the first song's id, ignoring everything else in the payload", () => {
+    expect(songIdFromSearchResult({ songs: [{ id: "song-1", title: "Grande" }, { id: "song-2" }] })).toBe("song-1");
+  });
+
+  it("returns null for an empty or malformed payload — never throws", () => {
+    expect(songIdFromSearchResult({ songs: [] })).toBeNull();
+    expect(songIdFromSearchResult({})).toBeNull();
+    expect(songIdFromSearchResult(null)).toBeNull();
+    expect(songIdFromSearchResult({ songs: [{}] })).toBeNull();
+  });
+});
+
+describe("readCheckDetail", () => {
+  it("counts only — a payload carrying a name never leaks it into the detail string", () => {
+    const detail = readCheckDetail("get_member_availability", {
+      members: [{ memberId: "mem-1", name: "Ana Confidencial" }],
+    });
+    expect(detail).toBe("1 members");
+    expect(detail).not.toContain("Ana");
+  });
+
+  it("reports both counts for get_participation, and falls back to a fixed word for an unknown shape", () => {
+    expect(readCheckDetail("get_participation", { members: [1, 2], services: [1] })).toBe("2 members, 1 services");
+    expect(readCheckDetail("get_service", {})).toBe("1 service");
+    expect(readCheckDetail("nonexistent_tool", { x: 1 })).toBe("ok");
+    expect(readCheckDetail("list_services", null)).toBe("ok");
+  });
+});
+
+describe("formatReadCheckLine / summarizeReadChecks", () => {
+  it("formats a PASS and a FAIL line, and a counts-only summary", () => {
+    expect(formatReadCheckLine("list_services", { ok: true, detail: "3 services" })).toBe("  PASS list_services — 3 services");
+    expect(formatReadCheckLine("get_song", { ok: false, detail: "HTTP 500" })).toBe("  FAIL get_song — HTTP 500");
+    expect(summarizeReadChecks([{ ok: true }, { ok: true }, { ok: false }])).toBe("  reads: 2/3 passed");
   });
 });
 

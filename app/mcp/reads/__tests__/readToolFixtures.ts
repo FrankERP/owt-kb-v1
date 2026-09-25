@@ -122,8 +122,12 @@ export const SONG_POSTS: readonly Row[] = [
  *   `collectRoleMemberRefs` skips a non-groupable role entirely, so her ref
  *   never reaches the snapshot's bulk `membersById` read; a consumer that reads
  *   ONLY `membersById` reports her `missing` even though her document exists.
- *   December carries no other fixture role, so this cannot collide with a
- *   month any other test enumerates exactly (P1 step 6's regression case).
+ * - `role-sp-1220-z` (08:00) / `role-sp-1220-a` (20:00): two specials on the
+ *   SAME later December day, with their id order and their time order
+ *   DELIBERATELY reversed (`"role-sp-1220-a" < "role-sp-1220-z"` lexically,
+ *   but 08:00 is earlier than 20:00) — a sort keyed on date-then-id alone
+ *   would report `-a` before `-z`; the correct date-then-`compareServiceTime`-
+ *   then-id order reports `-z` first (P1 step 8 item 2g's regression case).
  */
 export function readToolStore(): ServiceFixtureStore {
   const store = serviceFixtureStore();
@@ -210,6 +214,51 @@ export function readToolStore(): ServiceFixtureStore {
       Lead: [ref("l1", tono)],
       Chorus: null,
     }),
+    role({
+      _id: "role-sp-1220-z",
+      _rev: "role-sp-1220-z-rev",
+      _type: "special_role",
+      date: "2026-12-20",
+      service_name: "Mañana",
+      time: "08:00",
+      published: false,
+      Lead: [ref("l1", ana)],
+    }),
+    role({
+      _id: "role-sp-1220-a",
+      _rev: "role-sp-1220-a-rev",
+      _type: "special_role",
+      date: "2026-12-20",
+      service_name: "Noche",
+      time: "20:00",
+      published: false,
+      Lead: [ref("l1", sofia)],
+    }),
+    // A PAST month (2025-06), so `resolveService({})`'s "next upcoming" search
+    // (exercised with several different frozen "today"s across this suite)
+    // never picks either of these up. `role-sp-2506-first` is pushed BEFORE
+    // `role-sp-2506-second`, so `computeParticipation`'s Map preserves that
+    // insertion order — but "Zeta" sorts AFTER "Alfa", so the two orders
+    // disagree. Both seat exactly one Lead: tied at total: 1 (P1 step 8 item
+    // 2h's regression case).
+    role({
+      _id: "role-sp-2506-first",
+      _rev: "role-sp-2506-first-rev",
+      _type: "special_role",
+      date: "2025-06-10",
+      service_name: "Primero",
+      published: false,
+      Lead: [ref("l1", "mem-zeta")],
+    }),
+    role({
+      _id: "role-sp-2506-second",
+      _rev: "role-sp-2506-second-rev",
+      _type: "special_role",
+      date: "2025-06-17",
+      service_name: "Segundo",
+      published: false,
+      Lead: [ref("l1", "mem-alfa")],
+    }),
   );
   store.locks.push(
     lock("sunday_role", "2026-09-27", "role-sun-0927"),
@@ -231,6 +280,22 @@ export function readToolStore(): ServiceFixtureStore {
       _id: tono,
       _rev: `${tono}-rev`,
       member_name: "Tono",
+      alias: null,
+      unavailableDates: null,
+      unavailabilityNotes: null,
+    },
+    {
+      _id: "mem-zeta",
+      _rev: "mem-zeta-rev",
+      member_name: "Zeta",
+      alias: null,
+      unavailableDates: null,
+      unavailabilityNotes: null,
+    },
+    {
+      _id: "mem-alfa",
+      _rev: "mem-alfa-rev",
+      member_name: "Alfa",
       alias: null,
       unavailableDates: null,
       unavailabilityNotes: null,

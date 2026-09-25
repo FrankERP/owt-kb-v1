@@ -91,7 +91,7 @@ describe("registration", () => {
   it("is read-only, strict, and states the truncation and no-unread rules in Spanish", () => {
     const tool = registered(registerListProposals as (server: never) => void);
     expect(tool.name).toBe("list_proposals");
-    expect(tool.config.annotations).toEqual({ readOnlyHint: true });
+    expect(tool.config.annotations).toEqual({ readOnlyHint: true, openWorldHint: false });
     expect(tool.config.inputSchema.safeParse({ extra: 1 }).success).toBe(false);
     expect(tool.config.description).toMatch(/America\/Mexico_City/);
     expect(tool.config.description).toMatch(/truncated/);

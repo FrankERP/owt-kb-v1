@@ -122,7 +122,7 @@ describe("presentParticipation", () => {
       expect(m.unresolved).toBe(true);
     }
     expect(payload.notes).toEqual([
-      "No se pudieron leer los nombres de los miembros; los conteos son correctos, pero los nombres no están disponibles.",
+      "No se pudo leer el nombre de uno o más miembros; los conteos son correctos, pero esos miembros aparecen con unresolved: true.",
     ]);
   });
 
@@ -130,5 +130,40 @@ describe("presentParticipation", () => {
     const snapshot = await loadServiceSnapshot();
     const payload = presentParticipation(snapshot, "2020-01", await resolveMembers(snapshot, "2020-01"));
     expect(payload).toEqual({ month: "2020-01", members: [], services: [] });
+  });
+
+  it("orders services by date, then compareServiceTime, then id — same-day specials whose id order contradicts their time order", async () => {
+    // `role-sp-1220-a` (20:00) sorts BEFORE `role-sp-1220-z` (08:00) by id
+    // alone; the correct order (matching list_services) is by TIME.
+    const snapshot = await loadServiceSnapshot();
+    const payload = presentParticipation(snapshot, "2026-12", await resolveMembers(snapshot, "2026-12"));
+    const ids = payload.services.map((s) => s.serviceId);
+    expect(ids.indexOf("role-sp-1220-z")).toBeLessThan(ids.indexOf("role-sp-1220-a"));
+  });
+
+  it("members tied on total are ordered by resolved name, not by insertion order", async () => {
+    // `role-sp-2506-first` (Lead "Zeta") is pushed before `role-sp-2506-second`
+    // (Lead "Alfa"), so Map insertion order alone would put Zeta first — both
+    // are tied at total: 1. The admin sidebar's order is alphabetical.
+    const snapshot = await loadServiceSnapshot();
+    const payload = presentParticipation(snapshot, "2025-06", await resolveMembers(snapshot, "2025-06"));
+    const names = payload.members.map((m) => m.name);
+    expect(names).toEqual(["Alfa", "Zeta"]);
+  });
+
+  it("failedSources appears when a domain failed, absent on success", async () => {
+    const snapshot = await loadServiceSnapshot();
+    const clean = presentParticipation(snapshot, "2026-09", await resolveMembers(snapshot, "2026-09"));
+    expect(clean.failedSources).toBeUndefined();
+
+    // "setlists" is the fixture's DOMAIN name; a failed read there degrades the
+    // "setlistTargets" SOURCE (`setlists.ok && setlistDrafts.ok`), which is
+    // what `failedSourcesOf` actually reports.
+    const responder = scopedResponder(readToolStore(), { fail: ["setlists"] });
+    h.operational.mockImplementation(responder.operational);
+    h.raw.mockImplementation(responder.raw);
+    const degraded = await loadServiceSnapshot();
+    const payload = presentParticipation(degraded, "2026-09", await resolveMembers(degraded, "2026-09"));
+    expect(payload.failedSources).toEqual(["setlistTargets"]);
   });
 });

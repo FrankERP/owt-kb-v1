@@ -1,4 +1,6 @@
-// `/api/mcp` — P0 plan step 9: the MCP endpoint and its one tool, `ping`.
+// `/api/mcp` — P0 plan step 9 (the endpoint and its one tool, `ping`) plus P1's
+// seven read tools (steps 4-7): `get_service`, `list_services`, `search_songs`,
+// `get_song`, `get_member_availability`, `get_participation`, `list_proposals`.
 // Ungated by the session middleware, so it authenticates itself: every request
 // passes the preflight and the whole bearer check before anything reaches the
 // MCP server (spec I6), on every method.
@@ -599,7 +601,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       "list_proposals",
     ]);
     for (const tool of tools) {
-      expect(tool.annotations, String(tool.name)).toEqual({ readOnlyHint: true });
+      expect(tool.annotations, String(tool.name)).toEqual({ readOnlyHint: true, openWorldHint: false });
       expect(tool.inputSchema, String(tool.name)).toMatchObject({ type: "object", additionalProperties: false });
     }
     const [ping, getService, listServices, searchSongs, getSong, getMemberAvailability, getParticipation, listProposals] =
@@ -639,6 +641,21 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(getParticipation!.description).toMatch(/borradores incluidos/);
     expect(listProposals!.description).toMatch(/truncated/);
     expect(listProposals!.description).toMatch(/leído/);
+  });
+
+  it("refuses an unknown extra argument to EVERY read tool (I13), never reaching a read", async () => {
+    const token = await accessToken(await liveGrant());
+    const list = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
+    const names = (list.tools as { name: string }[]).map((t) => t.name);
+    expect(names).toHaveLength(8);
+    for (const name of names) {
+      const result = await rpcResult(
+        await POST(mcpRequest(rpc("tools/call", { name, arguments: { extra: "x" } }), { token })),
+      );
+      expect(result.isError, name).toBe(true);
+    }
+    expect(h.operationalFetch).not.toHaveBeenCalled();
+    expect(h.rawFetch).not.toHaveBeenCalled();
   });
 
   it("tools/call ping returns { ok, server, version, now } with now in Mexico City time", async () => {

@@ -95,14 +95,15 @@ describe("registration", () => {
   ] as const)("%s is read-only and strict", (name, register) => {
     const tool = registered(register as (server: never) => void);
     expect(tool.name).toBe(name);
-    expect(tool.config.annotations).toEqual({ readOnlyHint: true });
+    expect(tool.config.annotations).toEqual({ readOnlyHint: true, openWorldHint: false });
     expect(tool.config.inputSchema.safeParse({ extra: 1 }).success).toBe(false);
   });
 
-  it("get_song's description states the special exclusion and America/Mexico_City", () => {
+  it("get_song's description states the special exclusion, America/Mexico_City, and that playHistory is uncapped", () => {
     const { config } = registered(registerGetSong as (server: never) => void);
     expect(config.description).toMatch(/especiales NO cuentan/);
     expect(config.description).toMatch(/America\/Mexico_City/);
+    expect(config.description).toMatch(/SIN LÍMITE/);
   });
 
   it("types each field strictly", () => {
@@ -191,6 +192,13 @@ describe("get_song", () => {
   it("by slug resolves the same song", async () => {
     const result = await getSongResult({ slug: "grande-es-tu-fidelidad" });
     expect((result.structuredContent as { title: string }).title).toBe("Grande es tu fidelidad");
+  });
+
+  it("refuses a slug two posts share, never picking one (Studio data problem, not enforced by Sanity)", async () => {
+    const result = await getSongResult({ slug: "cancion-compartida" });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toMatch(/más de una canción/);
+    expect(text(result)).toMatch(/songId/);
   });
 
   it("refuses neither songId nor slug", async () => {

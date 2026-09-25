@@ -626,7 +626,8 @@ function publication(role: SnapshotRow): { published: "draft" | "published"; pub
   };
 }
 
-function failedSourcesOf(snapshot: ServiceSnapshot): { failedSources?: ServiceSourceKey[] } {
+/** `{ failedSources }` when the snapshot has any, `{}` otherwise — shared by every payload that reports a snapshot's health (`get_service`, `list_services`, `get_participation`). */
+export function failedSourcesOf(snapshot: ServiceSnapshot): { failedSources?: ServiceSourceKey[] } {
   const failed = snapshot.readiness.failedSources;
   return failed.length ? { failedSources: [...failed] } : {};
 }

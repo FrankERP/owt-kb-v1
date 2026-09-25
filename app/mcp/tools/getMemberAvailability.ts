@@ -76,7 +76,7 @@ export function registerGetMemberAvailability(server: McpServer): void {
       title: "Ver disponibilidad de un miembro",
       description: GET_MEMBER_AVAILABILITY_DESCRIPTION,
       inputSchema: GET_MEMBER_AVAILABILITY_INPUT,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args) => getMemberAvailabilityResult(args),
   );

@@ -226,6 +226,13 @@ describe("presentSong — rehearsalMixes, grouped by tone", () => {
     expect(SONG_CATALOGUE_QUERY).not.toContain("peaks");
     expect(songDetailByIdQuery("x").query).not.toContain("peaks");
   });
+
+  it("a mix with no _key falls back to mixKey: null, like every other absent field — never undefined or a throw", () => {
+    const payload = presentSong(detailRowFor("song-mixgap"), TODAY, { playHistory: { ok: true, rows: [] } });
+    expect(payload.rehearsalMixes).toEqual([
+      { tone: "D", mixes: [{ mixKey: null, kind: "full", family: null, track: null, bpm: 80 }] },
+    ]);
+  });
 });
 
 describe("songPlayHistory (D4)", () => {
@@ -265,6 +272,11 @@ describe("songPlayHistory (D4)", () => {
 
   it("returns [] for a song with no history", () => {
     expect(songPlayHistory(SONG_SETLIST_ROWS, "song-nope", TODAY)).toEqual([]);
+  });
+
+  it("play_key: null passes through as key: null, with no base-key fallback", () => {
+    const history = songPlayHistory(SONG_SETLIST_ROWS, "song-nullkey", TODAY);
+    expect(history).toEqual([{ date: "2026-08-01", service: "sunday", key: null }]);
   });
 });
 

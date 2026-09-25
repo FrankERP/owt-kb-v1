@@ -85,7 +85,7 @@ describe("registration", () => {
   it("is read-only, strict, and states the worship-only and mutual-exclusion rules in Spanish", () => {
     const tool = registered(registerGetMemberAvailability as (server: never) => void);
     expect(tool.name).toBe("get_member_availability");
-    expect(tool.config.annotations).toEqual({ readOnlyHint: true });
+    expect(tool.config.annotations).toEqual({ readOnlyHint: true, openWorldHint: false });
     expect(tool.config.inputSchema.safeParse({ extra: 1 }).success).toBe(false);
     expect(tool.config.description).toMatch(/America\/Mexico_City/);
     expect(tool.config.description).toMatch(/SOLO al equipo de alabanza/);

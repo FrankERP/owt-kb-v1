@@ -57,7 +57,7 @@ export function registerListServices(server: McpServer): void {
       title: "Listar servicios del mes",
       description: LIST_SERVICES_DESCRIPTION,
       inputSchema: LIST_SERVICES_INPUT,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args) => listServicesResult(args),
   );

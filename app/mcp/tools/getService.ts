@@ -90,7 +90,7 @@ export function registerGetService(server: McpServer): void {
       title: "Ver un servicio",
       description: GET_SERVICE_DESCRIPTION,
       inputSchema: GET_SERVICE_INPUT,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args) => getServiceResult(args),
   );

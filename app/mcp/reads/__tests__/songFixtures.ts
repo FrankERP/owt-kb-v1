@@ -53,6 +53,14 @@ export const TAG_CATALOGUE: readonly Row[] = [
  *   songs carry neither of those two).
  * - `drafts.song-ghost`: a Studio draft copy — must never be searched, found by
  *   slug, or resolved by id.
+ * - `song-dup-a` / `song-dup-b`: two DIFFERENT songs sharing one slug
+ *   (`cancion-compartida`) — a Studio data problem, not enforced by Sanity;
+ *   `get_song`'s by-slug lookup must refuse rather than pick one (task-5
+ *   report, Concern 3). Untagged, so they cannot join a tag-combination
+ *   assertion pinned elsewhere in this file.
+ * - `song-mixgap`: one rehearsal mix with NO `_key` at all (a malformed
+ *   array item, like a dangling seat ref elsewhere in this connector) —
+ *   `mixKey` must fall back to `null`, never `undefined` or a thrown error.
  */
 export const SONG_CATALOGUE: readonly Row[] = [
   {
@@ -164,6 +172,60 @@ export const SONG_CATALOGUE: readonly Row[] = [
     rehearsalMixes: [],
   },
   {
+    _id: "song-dup-a",
+    title: "Ave María",
+    author: "",
+    slug: "cancion-compartida",
+    key: null,
+    authors: [],
+    tags: [],
+    body: [],
+    chords: [],
+    chordsPDF: [],
+    referenceLinks: [],
+    musicalReferenceUrl: null,
+    lyricsVideoUrl: null,
+    lyricsURL: null,
+    tutorials2: [],
+    rehearsalMixes: [],
+  },
+  {
+    _id: "song-dup-b",
+    title: "Alabanza eterna",
+    author: "",
+    slug: "cancion-compartida",
+    key: null,
+    authors: [],
+    tags: [],
+    body: [],
+    chords: [],
+    chordsPDF: [],
+    referenceLinks: [],
+    musicalReferenceUrl: null,
+    lyricsVideoUrl: null,
+    lyricsURL: null,
+    tutorials2: [],
+    rehearsalMixes: [],
+  },
+  {
+    _id: "song-mixgap",
+    title: "Mezcla sin llave",
+    author: "",
+    slug: "mezcla-sin-llave",
+    key: "D",
+    authors: [],
+    tags: [],
+    body: [],
+    chords: [],
+    chordsPDF: [],
+    referenceLinks: [],
+    musicalReferenceUrl: null,
+    lyricsVideoUrl: null,
+    lyricsURL: null,
+    tutorials2: [],
+    rehearsalMixes: [{ kind: "full", family: null, track: null, tone: "D", bpm: 80 }],
+  },
+  {
     _id: "drafts.song-ghost",
     title: "Fantasma",
     author: "",
@@ -260,9 +322,15 @@ function songItem(key: string, songId: string, playKey: string | null): Row {
  * - `2026-09-30`: exactly today — excluded (`week < today` is strict).
  * - `2026-10-04`: future — excluded; also carries `song-2` for a second song's history.
  * - `2026-08-16` a/b: a duplicate (ambiguous) past target — contributes NO rows.
+ *
+ * `song-nullkey` (a song no other row references): one past row with
+ * `play_key: null` — a set played with no key recorded. `key` must pass
+ * through as `null`, with no base-key fallback (the route's own projection has
+ * none).
  */
 export const SONG_SETLIST_ROWS: readonly Row[] = [
   setlistRow("set-song1-0802", "featuredSongs", "2026-08-02", [songItem("r1", "song-1", "C")]),
+  setlistRow("set-nullkey-0801", "featuredSongs", "2026-08-01", [songItem("r1", "song-nullkey", null)]),
   setlistRow("set-song1-0830", "saturdarSongs", "2026-08-30", [songItem("r1", "song-1", "Eb")]),
   setlistRow("set-song1-0913", "featuredSongs", "2026-09-13", [songItem("r1", "song-1", "D")]),
   setlistRow("set-song1-0930", "saturdarSongs", "2026-09-30", [songItem("r1", "song-1", "F")]),

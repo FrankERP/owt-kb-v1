@@ -94,7 +94,7 @@ describe("registration", () => {
   ] as const)("%s is read-only, strict, and states the I7 rule in Spanish", (name, register) => {
     const tool = registered(register as (server: never) => void);
     expect(tool.name).toBe(name);
-    expect(tool.config.annotations).toEqual({ readOnlyHint: true });
+    expect(tool.config.annotations).toEqual({ readOnlyHint: true, openWorldHint: false });
     expect(tool.config.inputSchema.safeParse({ extra: 1 }).success).toBe(false);
     expect(tool.config.description).toMatch(/SIN CAMBIOS/);
     expect(tool.config.description).toMatch(/nunca los? construyas/);

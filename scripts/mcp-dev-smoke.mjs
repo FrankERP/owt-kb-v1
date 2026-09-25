@@ -26,6 +26,14 @@
  *       discovery → registration (loopback redirect) → consent (opens the
  *       default browser) → token → initialize/tools-list/ping → refresh →
  *       ping again → prints the grant id and the exact revoke command.
+ *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --reads
+ *     … same, and after `ping` (still inside step 7, before refresh) calls
+ *       each of the seven P1 read tools once — list_services, get_service,
+ *       search_songs, get_song (using the first song search_songs found),
+ *       get_member_availability, get_participation, list_proposals — with no
+ *       arguments or a trivial one, printing one PASS/FAIL line per tool and
+ *       a counts-only summary (never a name or any other personal data). No
+ *       write tool exists (DV1); this remains a read-only smoke.
  *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --await-revocation
  *     … same, then pauses for Enter after printing the revoke command — run
  *       `revoke-mcp-grant.mjs --id <id> --apply` in another terminal, press
@@ -42,9 +50,8 @@
  * refresh token) is ever written to disk or logged past an 8-character
  * prefix plus its length.
  *
- * The smoke calls exactly one MCP tool, `ping` (DV1) — grep this file for
- * `tools/call` to confirm there is only the one call site, reused for the
- * post-refresh check.
+ * The smoke calls `ping` always, and — only with `--reads` — the seven P1
+ * read tools once each (DV1: reads only). It calls no write tool; none exist.
  *
  * Every exported function below is pure — no network, no filesystem, no
  * `process`/env access — and is what `scripts/__tests__/mcpDevSmoke.test.ts`
@@ -78,9 +85,9 @@ const TOTAL_STEPS = 10;
 
 // ── pure helpers (unit-tested without any network) ─────────────────────────
 
-/** Parse argv into `{ base, open, refresh, awaitRevocation }`, or throw. Pure. */
+/** Parse argv into `{ base, open, refresh, awaitRevocation, reads }`, or throw. Pure. */
 export function parseArgs(argv) {
-  const args = { base: null, open: true, refresh: true, awaitRevocation: false };
+  const args = { base: null, open: true, refresh: true, awaitRevocation: false, reads: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--base") {
@@ -94,6 +101,8 @@ export function parseArgs(argv) {
       args.refresh = false;
     } else if (a === "--await-revocation") {
       args.awaitRevocation = true;
+    } else if (a === "--reads") {
+      args.reads = true;
     } else {
       throw new Error(`Unrecognized argument: ${a}`);
     }
@@ -237,6 +246,132 @@ export function decodeJwtPayloadUnsafe(token) {
 /** A JSON-RPC request envelope, matching `mcpRoute.test.ts`'s `rpc()`. Pure. */
 export function rpc(method, params, id = 1) {
   return { jsonrpc: "2.0", id, method, ...(params !== undefined ? { params } : {}) };
+}
+
+// ── tools/list check (P1 step 8) ────────────────────────────────────────────
+
+/** The registration this deployment is expected to carry (`app/api/mcp/route.ts`), in order. */
+export const EXPECTED_TOOLS = [
+  "ping",
+  "get_service",
+  "list_services",
+  "search_songs",
+  "get_song",
+  "get_member_availability",
+  "get_participation",
+  "list_proposals",
+];
+
+/**
+ * Checks a `tools/list` result against `EXPECTED_TOOLS`: the exact names, in
+ * order, each declared `readOnlyHint: true, openWorldHint: false` — the same
+ * assertion `mcpRoute.test.ts`'s own tools/list test makes. Pure — takes the
+ * already-parsed `tools` array, never the network response.
+ */
+export function checkToolList(tools) {
+  const names = Array.isArray(tools) ? tools.map((t) => (t && typeof t.name === "string" ? t.name : null)) : [];
+  if (JSON.stringify(names) !== JSON.stringify(EXPECTED_TOOLS)) {
+    return { ok: false, message: `expected tools ${JSON.stringify(EXPECTED_TOOLS)}, got ${JSON.stringify(names)}` };
+  }
+  for (const tool of tools) {
+    const a = tool && tool.annotations;
+    if (!a || a.readOnlyHint !== true || a.openWorldHint !== false) {
+      return {
+        ok: false,
+        message: `${tool && tool.name} is not annotated { readOnlyHint: true, openWorldHint: false }`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+// ── --reads pass (P1 step 8, DV1: reads only, after ping) ──────────────────
+
+/**
+ * The seven read tools the `--reads` pass exercises, in this order, always
+ * after `ping` and before any refresh/revocation step — never a write tool,
+ * because none exist (DV1).
+ */
+export const READ_TOOL_NAMES = [
+  "list_services",
+  "get_service",
+  "search_songs",
+  "get_song",
+  "get_member_availability",
+  "get_participation",
+  "list_proposals",
+];
+
+/** Every read check's fixed arguments except `get_song`'s (see `readCheckArguments`). `search_songs` runs a short, one-letter query on purpose — the SUBSTRING path (`libraryIndex.ts`), not the fuzzy one — sure to match something in a real Spanish song catalogue. */
+const FIXED_READ_ARGS = {
+  list_services: {},
+  get_service: {},
+  search_songs: { query: "a" },
+  get_member_availability: {},
+  get_participation: {},
+  list_proposals: {},
+};
+
+/**
+ * The arguments for one `--reads` check. `get_song` is the one exception: its
+ * `songId` comes from `search_songs`'s OWN result earlier in the same pass
+ * (`songIdFromSearchResult`) — there is no other id this script has. Throws
+ * if that never happened, since that is a bug in this script's own ordering
+ * (`READ_TOOL_NAMES` runs `search_songs` before `get_song`), never a network
+ * failure — `main()` must not swallow it as an ordinary per-tool FAIL. Pure.
+ */
+export function readCheckArguments(name, songId) {
+  if (name === "get_song") {
+    if (typeof songId !== "string" || songId === "") {
+      throw new Error("get_song needs a songId from search_songs's own result (check READ_TOOL_NAMES's order)");
+    }
+    return { songId };
+  }
+  const args = FIXED_READ_ARGS[name];
+  if (args === undefined) throw new Error(`no fixed arguments for "${name}"`);
+  return args;
+}
+
+/** The first song id `search_songs`'s own tool result named, or null. Pure — takes the ALREADY-PARSED payload, never the raw text. */
+export function songIdFromSearchResult(payload) {
+  const songs = payload && typeof payload === "object" ? payload.songs : null;
+  const first = Array.isArray(songs) ? songs[0] : null;
+  return first && typeof first === "object" && typeof first.id === "string" ? first.id : null;
+}
+
+function arrayLength(v) {
+  return Array.isArray(v) ? v.length : 0;
+}
+
+/**
+ * A short, SAFE detail for a PASS line: counts only — never a name, a
+ * message body, an email or any other personal data (the brief's own rule
+ * for this pass's output). Falls back to a fixed word when a tool's payload
+ * carries no obvious count. Pure.
+ */
+export function readCheckDetail(name, payload) {
+  if (!payload || typeof payload !== "object") return "ok";
+  if (name === "list_services") return `${arrayLength(payload.services)} services`;
+  if (name === "get_service") return "1 service";
+  if (name === "search_songs") return `${arrayLength(payload.songs)} songs`;
+  if (name === "get_song") return "1 song";
+  if (name === "get_member_availability") return `${arrayLength(payload.members)} members`;
+  if (name === "get_participation") {
+    return `${arrayLength(payload.members)} members, ${arrayLength(payload.services)} services`;
+  }
+  if (name === "list_proposals") return `${arrayLength(payload.proposals)} proposals`;
+  return "ok";
+}
+
+/** One check's PASS/FAIL line. Pure. */
+export function formatReadCheckLine(name, outcome) {
+  return outcome.ok ? `  PASS ${name} — ${outcome.detail}` : `  FAIL ${name} — ${outcome.detail}`;
+}
+
+/** The `--reads` pass' closing summary line: counts only. Pure. */
+export function summarizeReadChecks(outcomes) {
+  const passed = outcomes.filter((o) => o.ok).length;
+  return `  reads: ${passed}/${outcomes.length} passed`;
 }
 
 /** An HTTP failure carrying the server's fixed JSON `error` (and `error_description`, if any). */
@@ -471,8 +606,8 @@ async function main() {
     });
     pass(`access_token=${redact(tokens.access_token)}, refresh_token=${redact(tokens.refresh_token)}, expires_in=${tokens.expires_in}s`);
 
-    // 7. initialize, tools/list, tools/call ping.
-    begin(7, "initialize, tools/list, tools/call ping");
+    // 7. initialize, tools/list, tools/call ping [+ --reads sub-step].
+    begin(7, args.reads ? "initialize, tools/list, tools/call ping, --reads" : "initialize, tools/list, tools/call ping");
     const initResult = await mcpRpc(tokens.access_token, rpc("initialize", {
       protocolVersion: LEGACY_PROTOCOL_VERSION,
       capabilities: {},
@@ -483,13 +618,42 @@ async function main() {
     }
     const listResult = await mcpRpc(tokens.access_token, rpc("tools/list"), LEGACY_PROTOCOL_VERSION);
     const tools = listResult.tools ?? [];
-    if (tools.length !== 1 || tools[0].name !== "ping") {
-      throw new Error(`expected exactly one tool "ping", got ${JSON.stringify(tools.map((t) => t.name))}`);
-    }
-    if (tools[0].annotations?.readOnlyHint !== true) throw new Error('ping is not annotated readOnlyHint: true');
+    const toolsCheck = checkToolList(tools);
+    if (!toolsCheck.ok) throw new Error(toolsCheck.message);
     const callResult = await mcpRpc(tokens.access_token, rpc("tools/call", { name: "ping", arguments: {} }), LEGACY_PROTOCOL_VERSION);
     const payload = JSON.parse(callResult.content[0].text);
     pass(`ping → ${JSON.stringify(payload)}`);
+
+    // 7b. --reads: one call per read tool, after ping, before refresh (DV1).
+    if (args.reads) {
+      console.log(`  --reads: ${READ_TOOL_NAMES.join(", ")}`);
+      let songId = null;
+      const outcomes = [];
+      for (const name of READ_TOOL_NAMES) {
+        try {
+          const toolArgs = readCheckArguments(name, songId);
+          const readResult = await mcpRpc(
+            tokens.access_token,
+            rpc("tools/call", { name, arguments: toolArgs }),
+            LEGACY_PROTOCOL_VERSION,
+          );
+          if (readResult.isError) throw new Error("tool result carried isError: true");
+          const readPayload = JSON.parse(readResult.content[0].text);
+          if (name === "search_songs") songId = songIdFromSearchResult(readPayload);
+          const outcome = { ok: true, detail: readCheckDetail(name, readPayload) };
+          outcomes.push(outcome);
+          console.log(formatReadCheckLine(name, outcome));
+        } catch (err) {
+          const outcome = { ok: false, detail: err instanceof Error ? err.message : String(err) };
+          outcomes.push(outcome);
+          console.log(formatReadCheckLine(name, outcome));
+        }
+      }
+      console.log(summarizeReadChecks(outcomes));
+      if (outcomes.some((o) => !o.ok)) {
+        throw new Error("one or more --reads checks failed (see the PASS/FAIL lines above)");
+      }
+    }
 
     // 8. Refresh, then ping again.
     begin(8, "refresh + ping");

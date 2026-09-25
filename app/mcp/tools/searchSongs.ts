@@ -68,7 +68,7 @@ export function registerSearchSongs(server: McpServer): void {
       title: "Buscar canciones",
       description: SEARCH_SONGS_DESCRIPTION,
       inputSchema: SEARCH_SONGS_INPUT,
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async (args) => searchSongsResult(args),
   );

@@ -39,14 +39,15 @@
 // service (`serviceContentIds` + `loadMemberNames`); `getParticipation.ts`
 // does the same for the whole month before calling `presentParticipation`.
 
-import { derivePublishState } from "@/app/components/admin/serviceReadiness";
+import { derivePublishState, type ServiceSourceKey } from "@/app/components/admin/serviceReadiness";
 import {
   computeParticipation,
   type MemberParticipation,
   type ParticipantRole,
 } from "@/app/utils/computeParticipation";
 import { storedRoleDate } from "@/app/utils/roleWriteRequest";
-import { serviceKindOf, type ServiceKind } from "./servicePresenter";
+import { compareServiceTime } from "@/app/utils/serviceTime";
+import { failedSourcesOf, serviceKindOf, type ServiceKind } from "./servicePresenter";
 import type { MemberNameLookup, ServiceSnapshot, SnapshotRow } from "./serviceSnapshot";
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -151,9 +152,9 @@ export function participantMemberIds(roles: readonly ParticipantRole[]): string[
 export type ParticipationEntry = Omit<MemberParticipation, "id" | "name"> & {
   memberId: string;
   name: string | null;
-  /** The seat names a member document missing from `membersById` (a dangling reference). Never dropped. */
+  /** This id resolved to no document in the member lookup (a dangling reference) — the lookup itself succeeded. Never dropped. */
   missing?: true;
-  /** The members-domain read failed: no name resolves for anyone, not just this one. */
+  /** This id's name could not be resolved because a read it depended on failed — the bulk snapshot read, the supplementary lookup, or both (see the file header). Other members can still resolve in the same payload. */
   unresolved?: true;
 };
 
@@ -170,6 +171,7 @@ export type GetParticipationPayload = {
   members: ParticipationEntry[];
   services: ParticipationServiceEntry[];
   notes?: string[];
+  failedSources?: ServiceSourceKey[];
 };
 
 function serviceEntryOf(role: SnapshotRow): ParticipationServiceEntry | null {
@@ -179,9 +181,27 @@ function serviceEntryOf(role: SnapshotRow): ParticipationServiceEntry | null {
   return { serviceId: role._id, date, kind, published: derivePublishState(role.published) };
 }
 
-function compareServices(a: ParticipationServiceEntry, b: ParticipationServiceEntry): number {
-  if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-  return a.serviceId < b.serviceId ? -1 : a.serviceId > b.serviceId ? 1 : 0;
+/** A special's `time`, or null for a weekend service or an absent one — the same value `servicePresenter.ts`'s `catalogue()` sorts by. */
+function roleTime(role: SnapshotRow): string | null {
+  return serviceKindOf(role._type) === "special" && nonEmptyString(role.time) ? role.time : null;
+}
+
+function compareRoleIds(a: SnapshotRow, b: SnapshotRow): number {
+  const idA = nonEmptyString(a._id) ? a._id : "";
+  const idB = nonEmptyString(b._id) ? b._id : "";
+  return idA < idB ? -1 : idA > idB ? 1 : 0;
+}
+
+/** date, then `compareServiceTime`, then id — the SAME order `list_services` reports (`servicePresenter.ts`'s private `compareEntries`), so the two tools never disagree about which service comes first on a day with several. */
+function compareServiceRoles(a: SnapshotRow, b: SnapshotRow): number {
+  const da = storedRoleDate(a);
+  const db = storedRoleDate(b);
+  if (da !== db) {
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da < db ? -1 : 1;
+  }
+  return compareServiceTime(roleTime(a), roleTime(b)) || compareRoleIds(a, b);
 }
 
 function toEntry(counts: MemberParticipation, members: MemberNameLookup): ParticipationEntry {
@@ -197,13 +217,33 @@ function toEntry(counts: MemberParticipation, members: MemberNameLookup): Partic
 }
 
 /**
+ * `total` descending, then resolved `name` — the SAME key `computeParticipation`
+ * sorts its own output by (`b.total - a.total || a.name.localeCompare(b.name)`,
+ * `app/utils/computeParticipation.ts`). That function is fed bare `{_id}` refs
+ * here (see the file header), so its OWN tie-break sees an empty string for
+ * every member and falls back to Map insertion order — never the admin
+ * sidebar's order, which feeds real names in. Re-sorting AFTER names resolve,
+ * with the identical formula, is what matches it; `computeParticipation`
+ * itself stays unchanged.
+ */
+function byTotalThenName(a: ParticipationEntry, b: ParticipationEntry): number {
+  return b.total - a.total || (a.name ?? "").localeCompare(b.name ?? "");
+}
+
+const PARTIAL_NAMES_NOTE =
+  "No se pudo leer el nombre de uno o más miembros; los conteos son correctos, pero esos miembros aparecen con unresolved: true.";
+
+/**
  * `get_participation`'s whole payload for `month`. The caller must have
  * already refused an unreadable roles domain (`catalogueUnreadable`) and
  * already resolved `members` — a `MemberNameLookup` covering every id
  * `participantMemberIds` names, typically `loadMemberNames(ids,
  * snapshot.membersById)` (see the file header for why `membersById` alone
- * under-resolves). This function only degrades gracefully when `members.ok`
- * is false (names null, plus a note); it never re-reads anything itself.
+ * under-resolves). The bulk snapshot read and that supplementary read can fail
+ * SEPARATELY: `members.ok` is false only when the supplementary read itself
+ * failed, so an id already known from the bulk read still resolves even then —
+ * `notes` and each entry's `unresolved` flag describe exactly which ids did
+ * not. This function never re-reads anything itself.
  */
 export function presentParticipation(
   snapshot: ServiceSnapshot,
@@ -213,16 +253,22 @@ export function presentParticipation(
   const monthRoles = participantRolesForMonth(snapshot, month);
   const participantRoles = buildParticipantRoles(snapshot, month);
 
-  const memberEntries = computeParticipation(participantRoles).map((entry) => toEntry(entry, members));
+  const memberEntries = computeParticipation(participantRoles)
+    .map((entry) => toEntry(entry, members))
+    .sort(byTotalThenName);
 
-  const services = monthRoles
+  const services = [...monthRoles]
+    .sort(compareServiceRoles)
     .map((role) => serviceEntryOf(role))
-    .filter((service): service is ParticipationServiceEntry => service !== null)
-    .sort(compareServices);
+    .filter((service): service is ParticipationServiceEntry => service !== null);
 
-  const notes = members.ok
-    ? []
-    : ["No se pudieron leer los nombres de los miembros; los conteos son correctos, pero los nombres no están disponibles."];
+  const notes = members.ok ? [] : [PARTIAL_NAMES_NOTE];
 
-  return { month, members: memberEntries, services, ...(notes.length ? { notes } : {}) };
+  return {
+    month,
+    members: memberEntries,
+    services,
+    ...(notes.length ? { notes } : {}),
+    ...failedSourcesOf(snapshot),
+  };
 }
