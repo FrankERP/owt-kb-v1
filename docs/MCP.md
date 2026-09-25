@@ -1,21 +1,30 @@
 # MCP connector — operator runbook
 
-> **Status: released to production 2026-09-24** (PR
-> [#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). Every route, test and
+> **P0 status: released to production 2026-09-24** (PR
+> [#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). Every P0 route, test and
 > script this document describes is deployed; the core flow (discovery, registration, consent,
 > token exchange, `ping` and revocation) has been exercised end to end on dev and production.
 > **Refresh has run only on dev** — claude.ai won't refresh a production access token until close
 > to its 7-day expiry, so the first production refresh is expected around 2026-10-01. See
 > [Release record](#release-record-p0-2026-09-24) for the evidence and the
-> [release checklist](#release-checklist-steps-1213) for how it shipped.
+> [release checklist](#p0-release-checklist-steps-1213) for how it shipped.
+>
+> **P1 status: implemented on branch `claude/mcp-p1-reads`, NOT released.** The seven read tools
+> below (`get_service`, `list_services`, `search_songs`, `get_song`, `get_member_availability`,
+> `get_participation`, `list_proposals`) exist in the [Tools](#tools) section, the route registers
+> them, and the full gate set (`tsc`, `vitest`, `eslint`) is green on that branch — but it has not
+> merged to `preview` or `main`, so production still exposes `ping` alone. See the
+> [P1 release checklist](#p1-release-checklist-not-started) for what merging and deploying it
+> still needs.
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
 connector is OAuth-gated end to end: only a super-admin can authorize it, and only super-admin
-tools are exposed (today: one health check). See
-[ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client registration is
-stateless, and [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#mcp--oauth) / [API_REFERENCE.md](API_REFERENCE.md)
-for the route-level contract.
+tools are exposed — P0 shipped one health check (`ping`); P1 adds seven read-only tools over the
+same service/song/member/proposal data `/admin` shows (not yet released; see the status banner
+above). See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
+registration is stateless, and [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#mcp--oauth) /
+[API_REFERENCE.md](API_REFERENCE.md) for the route-level contract.
 
 ---
 
@@ -74,10 +83,49 @@ other check) — this is deliberate (spec O4): the second presenter of a superse
 is treated as a sign that the token leaked, not as a race to be quietly resolved. A lost token
 response therefore means Frank reconnects from Claude; there is no partial-recovery path.
 
-### The one tool: `ping`
+### Tools
 
-Read-only (`readOnlyHint: true`), a strict empty input schema — any argument is refused, not
-ignored. Returns:
+Eight tools total: `ping` (P0, released) plus seven read tools (P1, **implemented on branch
+`claude/mcp-p1-reads`, NOT released** — see the status banner at the top of this document). Every
+tool is registered the same way — one file per tool in `app/mcp/tools/`, exporting a
+`register<Tool>(server, deps?)` function that `app/api/mcp/route.ts` calls inside its handler
+init — and every one declares `annotations: { readOnlyHint: true, openWorldHint: false }` and a
+**strict** input schema (`.strict()` on the zod object): an unrecognized argument is refused as a
+tool error, never silently ignored (spec I13). A tool reads the principal from
+`ctx.http.authInfo`; the request it sees as `ctx.http.req` carries only an **allowlist** of the
+headers the SDK needs (`FORWARDED_HEADERS` in `app/api/mcp/route.ts`) — never `Authorization`, a
+session cookie or the Vercel bypass header. Every refusal and every error is **Spanish text that
+carries no internals** — no Sanity error message, no stack, no query (`runReadTool`, spec E1); the
+one documented exception is the SDK's OWN schema-violation message for a malformed call, which is
+in English regardless (see [Known behaviours](#known-behaviours)). None of the eight writes
+anything — P1 is reads only, and no write tool exists yet.
+
+Four conventions the seven read tools share:
+
+- **A refusal that has candidates names them in its TEXT**, as well as in
+  `structuredContent.candidates`: `get_service`/`list_proposals` list `serviceId (kind, date)`,
+  `get_member_availability` lists `memberId (name «alias»)`, and `get_song` lists
+  `songId («title»)`. The SDK adds no text fallback for an object payload, so without this a
+  client that reads only `content` would have no id to retry with.
+- **What counts as a service is one rule, in one order.** A service is a role row of one of the
+  three role types whose `_id` is a canonical document id (`serviceCandidateOf` in
+  `app/mcp/reads/servicePresenter.ts`). The order is date, then `compareServiceTime`, then id
+  (`compareServiceCandidates`). `get_service`, `list_services`, `get_participation` (its counts
+  and its `services[]`) and `list_proposals`' links all use both, so a row one tool lists is never
+  missing from another.
+- **`name` does not mean the same thing in every tool.** `get_participation`'s `name` is the
+  sidebar's display name: the `alias` when one is set, otherwise `member_name`. In `get_service`
+  (seats and song leaders) and `get_member_availability`, `name` is `member_name`, with `alias` as a
+  separate field. `list_proposals`' `lead`, `contributors` and message `authorName` carry
+  `member_name` only, with no alias.
+- **Readiness and the publish check come from pinned copies** of the publish-ready loader and
+  route verdict, not from the originals. See
+  [ADR-0040](adr/0040-mcp-reads-mirror-the-readiness-loader-and-publish-check.md) for why, the
+  three tests that pin them, and why they must never be merged in a routine cleanup.
+
+#### `ping` (P0, released)
+
+Read-only, a strict empty input schema. Returns:
 
 ```json
 { "ok": true, "server": "owt-backstage", "version": "a1b2c3d", "now": "2026-09-24T10:15:00-06:00" }
@@ -86,14 +134,197 @@ ignored. Returns:
 `version` is the deployment's `VERCEL_GIT_COMMIT_SHA`, first 7 characters (`"local"` if absent) —
 this is how you tell from the phone which deployment answered. Confirmed live 2026-09-24: the dev
 smoke's `ping` returned `version: fd0bbe2` and the phone's returned `version: c2ca5f7`, both the
-deployed commit, never `"local"` — `VERCEL_GIT_COMMIT_SHA` is available at runtime on this
-project. `now` is
-America/Mexico_City wall-clock time with its UTC offset. Pattern for adding a second tool: one
-file per tool in `app/mcp/tools/`, exporting a `register<Tool>(server, deps)` function that
-`app/api/mcp/route.ts` calls inside its handler init. A tool reads the principal from
-`ctx.http.authInfo`; the request it sees as `ctx.http.req` carries only an **allowlist** of the
-headers the SDK needs (`FORWARDED_HEADERS` in `app/api/mcp/route.ts`) — never `Authorization`,
-a session cookie or the Vercel bypass header.
+deployed commit, never `"local"`. `now` is America/Mexico_City wall-clock time with its UTC
+offset.
+
+#### `get_service` (P1, not released)
+
+One service, selected **unambiguously**, exactly as `/admin` → Servicios shows it, plus the
+observations a later write would need (I7 — P1 ships no write tool yet, but the shape is already
+the one a future `edit_setlist`/`swap_assignment` would take).
+
+- **Input** (exactly one of): `{ serviceId }`; `{ date, kind: "sunday" | "saturday" }` (`date` is
+  the service's own day — a Saturday's is the Saturday's own date, the same `week` its setlist is
+  stored under); `{ date, kind: "special", name? }`; `{ date }` alone when exactly one service
+  falls on that day; or `{}` for the next service on or after today in America/Mexico_City —
+  **D5: this default INCLUDES drafts**, unlike the member-facing `/api/cue`, because Frank is the
+  admin planning the next service, which is often still a draft. A `drafts.*` id, a mixed
+  selector, or a selector matching several or zero services is refused with the day's candidates
+  listed (**D8**'s "never an arbitrary pick" discipline, ledger A15) — never a guess.
+- **Payload:** `serviceId`, `kind`, `date`; for a special, `name`/`time`/`format`; `published`
+  ("draft" | "published" — **I3**'s normalised state: an absent field predates drafts and is
+  published, never inferred as invisible) alongside the raw `publishedRaw`; all five seat groups
+  (`Lead`, `BGVs`, `Chorus`, `instruments`, `foh_team`) with resolved member names, each item
+  flagged `missing: true` (the reference names no member) or `unresolved: true` (the name lookup
+  itself failed) when it cannot resolve; the setlist's rows (song id/title/author, key, medley
+  grouping, and on a «Noche de alabanza» each song's leaders); and `readiness`.
+- **`readiness`** mirrors exactly what `POST /api/admin/roles/publish-ready` would decide for this
+  service (**I4** — one predicate, never re-derived): `blockers.hard`/`blockers.workflow` (Spanish
+  copy, the same the admin card shows), `primaryAction`, `conflicts` (availability),
+  `integrityIssues`, and `publishCheck`. **`publishCheck.passesNow`** is the literal field that
+  answers "does the per-service publish check pass right now" — there is no field simply called
+  `ready`. `publishCheck.refusals` carries the route's refusal codes verbatim;
+  `publishCheck.alreadyPublished` is broken out separately (a live service is not a "problem");
+  everything else the route would refuse on is in `publishCheck.problems`, one entry per refusal
+  code (`hard_integrity_blocker`, `unusable_observation`, `not_ready`) with its Spanish copy. The
+  `hard_integrity_blocker` and `not_ready` entries also carry the copy of the blockers behind them.
+  **`readiness.blockers` is not the same list.** It is the full `classifyPublishBlockers` result,
+  one line per hard or workflow blocker code, reported whether or not the route refuses. A live
+  service that lost its setlist is refused only `already_published` + `not_ready`, but its gap
+  still shows in `blockers.workflow`. `unusable_observation` has no blocker code of its own: it
+  appears only in `refusals`/`problems`, and today it always arrives with at least one hard blocker
+  (see `list_services`).
+- **`observations`** is everything a later write would need (I7): `roleId` and `roleRev` (the
+  role's own `_id`/`_rev` — pass unchanged to `publish_service`/`swap_assignment` once either
+  exists, never build them by hand), `seatItemKeys` (every seat item's `_key` per path — `Lead`,
+  `BGVs`, `Chorus`, `instruments`, `foh_team` — `swap_assignment` would need one), and `setlist`,
+  below.
+- **`observations.setlist`** is the setlist's OBSERVED state, in the same vocabulary the setlist
+  writer itself would use: `none` (no setlist exists), `single { id, rev, rowKeys }` (exactly one
+  — the only state a write can act on), `ambiguous { ids }` (more than one candidate — a data
+  problem), `draft_overlay { draftIds }` (an unpublished Studio draft sits over the target — the
+  editor refuses until it is discarded or published in Studio), `invalid` (a malformed record), or
+  `unknown` (a read this decision depends on failed — including a COORDINATION read, e.g. the
+  weekend lock inventory, not only the setlist read itself; `unknown` is never "no setlist", it
+  means "re-read before trusting this"). **A future write tool will accept only `none` and
+  `single`** — the other four name states nothing may write to yet.
+- **The legacy-id divergence.** `get_service`'s observation can name a week `draft_overlay` (the
+  setlist WRITER's own rule: an overlay is found by `_type` + `week`) in a case where the
+  `publish-ready` route's readiness bundle would call the same week clean (it matches overlays by
+  BASE id, and a week whose canonical setlist carries a non-deterministic legacy id has no base id
+  for the overlay to match). `get_service` adds a Spanish note pointing this out whenever readiness
+  itself does not already name the draft. Tracked as
+  [issue #97](https://github.com/FrankERP/owt-kb-v1/issues/97) — the same divergence the publish
+  route and the setlist editor already disagree about.
+- **`{}` follows /admin's order, so a timed special can come before an untimed service on the
+  same day.** Untimed services sort after timed ones (`compareServiceTime`, as in /admin). So a
+  day with an untimed Sunday-morning service and a special at 19:00 answers `{}` with the evening
+  special, and lists the Sunday in `sameDayOthers`. `{}` refuses only when first place itself is
+  tied: two untimed services with no timed one that day, or two services at the same earliest
+  time. This is known and kept. A special's `time` is display and sort data only (CLAUDE.md), so
+  `{}` never picks "next" by comparing it with the clock. Ask for the day with `{ date }` to see
+  every service on it.
+- **Also in the payload:** `sameDayOthers` (when `{}` resolved a service, every other candidate
+  that shared its earliest date), `failedSources` (which domain of the snapshot failed, if any —
+  the same list every other tool below reports) and `notes` (Spanish text for content a failed
+  read could not show, e.g. an unresolved song title) — never a silent empty answer in place of
+  either.
+
+#### `list_services` (P1, not released)
+
+Every canonical service in a month (`month: "YYYY-MM"`, default the current CDMX month), in
+`/admin` → Servicios' order: date, then `compareServiceTime`. Services still tied after that are
+ordered by id. That last tie-break is the MCP's own, not /admin's; it only makes the order
+deterministic. Each entry carries identity, `published`/`publishedRaw` (I3), `roleRev` (I7 — pass
+unchanged to a later write, never build it by hand), `passesNow` and `blockers` (I4, from the
+same predicate `get_service` uses). **`passesNow` is the same verdict as `get_service`'s
+`readiness.publishCheck.passesNow`**, so the two tools always agree on "can it be published now".
+An entry does not carry the refusal codes. The one refusal with no blocker code of its own,
+`unusable_observation`, always arrives with a non-empty `blockers.hard` today. A test pins that
+over the fixture matrix (`servicePresenter.test.ts`); if it ever breaks, this entry would need the
+codes. A failed roles read is a refusal — `services: []` never means "the read failed silently."
+
+#### `search_songs` (P1, not released)
+
+The same search `/biblioteca` runs, server-side, over the live catalogue: `normalizeText`
+accent-insensitive matching (a query of 2 characters or fewer uses substring matching; 3+ uses the
+library's own fuzzy Fuse index over title/artist/key), plus a tag filter combining the library's
+own way — any match within one axis (tempo OR theme), both axes required when both are given.
+`query`, `tags`, or both are required; an unknown tag slug is refused, listing the LIVE
+vocabulary (never hard-coded). Each result carries `id, slug, title, artist, key, tags` — `tags`
+here is an array of **slugs** (re-filterable directly against this tool's own input), a
+deliberate asymmetry with `get_song`'s richer `{slug, title}` tag objects below.
+
+#### `get_song` (P1, not released)
+
+One song's OWN declared field set (**A8**) — neither of the two existing song-page projections,
+because neither is canonical. Selects by `songId` (canonical id; a `drafts.*` id is refused) or
+`slug` (never both); a slug shared by two posts — a Studio data problem, not something Sanity
+enforces — is refused rather than picking one, and the refusal lists each candidate's `songId` and
+title. **The payload carries neither the song's id nor its slug** (the caller already has whichever
+one it selected by). `search_songs` is where both come from: each of its results has `id` and
+`slug`. This is known and kept.
+
+- `title`, `authors` (names), `artist` (the legacy `author` string, kept separate from `authors`),
+  `keys` (base key, then each chord-chart key, then each PDF key, deduplicated), `bpm`, `timeSig`,
+  `tags` (**`{slug, title}` objects** here — richer than `search_songs`'s bare slugs, since a
+  single song's tag list is small and the title reads better standalone).
+- `referenceLinks`: the reference-link list, the musical-reference URL, the lyrics-video URL,
+  **`lyricsURL`** (a PDF link) and the tutorials. `lyricsURL` is returned exactly as stored,
+  regardless of the chord-chart rule below — the PDF link is not gated by whether a chart exists,
+  matching the existing song-page readers.
+- `lyrics`: `"visible" | "hidden_by_chart" | "none"`, per
+  [ADR-0018](adr/0018-lyrics-and-charts-are-independent.md) — a filled chord chart hides
+  the lyrics even though they still exist in the document; an explicitly empty lyrics field is
+  `"none"`, the same as an absent one. `hasChordChart` is reported alongside.
+- `rehearsalMixes`, grouped by tone (`{tone, mixes: [{mixKey, kind, family, track, bpm}]}`) —
+  never the waveform, the audio file or the content hash.
+- `playHistory`: every past weekend service (Sunday/Saturday) this song played in, before today in
+  America/Mexico_City, most recent first — **uncapped**: `get_song` reads the whole weekend-setlist
+  catalogue and filters in JS, with no upper bound at all. By contrast, the song page
+  (`app/(client)/posts/[slug]/page.tsx`) shows only its **3** most recent, and the song API route
+  (`app/api/song/[id]/route.ts`) returns its **5** most recent — both reached through a GROQ
+  `[0..19]` over-fetch (a buffer so canonicalizing a duplicate-week target still leaves enough rows
+  to reach 3 or 5 after filtering), which is NOT itself a 20-entry display cap, and `get_song`
+  carries no equivalent of it at all. **Specials never count** — a special's songs live on the role
+  document itself, never in a separate weekend setlist, so the exclusion is structural, not a
+  filter.
+
+#### `get_member_availability` (P1, not released)
+
+Unavailable dates for a month, for one member (`memberId` or `name`, mutually exclusive) or the
+whole team when neither is given. **I5: lists the WORSHIP TEAM only** — a kids-only member never
+appears here, not even by id (an id naming one is refused with the SAME message an unknown id
+gets, so the refusal never leaks which case it was). Contrast with `get_participation` below: a
+seat READ shows whoever is actually seated, kids-only included, because hiding a seated person
+would misreport the service — the I5 exclusion applies to LISTING members, not to reporting who
+holds a seat. **D7:** a `disabled` member is still listed, flagged `disabled: true` — `disabled`
+removes app access, not schedulability. **D8:** `name` matches exactly (accent/case-insensitive)
+against `member_name` or `alias`; an ambiguous name is refused, never a guess, and the refusal's
+text lists every candidate as `memberId (name «alias»)`. In the payload, `name` is `member_name`
+and `alias` is its own field (unlike `get_participation`). **One malformed member document fails
+the whole-team answer.** If any worship-team document has an unexpected field shape (e.g.
+`unavailableDates` or `memberType` stored as something other than a list), the whole call returns
+the generic Spanish tool error instead of skipping that member. This is known and kept. Selecting
+one member by `memberId` still works as long as that member's own document is well-formed. A
+`name` lookup compares against every member's `member_name` and `alias`, so a malformed name field
+on any member fails it too.
+
+#### `get_participation` (P1, not released)
+
+Per-member counts for a month, computed by the SAME function the Servicios sidebar uses
+(`computeParticipation`), fed every service dated that month, drafts included. Each member with at
+least one seat gets `sunLead`/`satLead`/`sunBGV`/`satBGV`/`coro`/`especial`/`total` (`total`
+includes `especial`, A6) plus `instrWeeks`/`fohWeeks`. A dangling seat reference is counted and
+flagged `missing: true`, never dropped; a member whose name could not be resolved (the bulk
+snapshot read or the supplementary lookup failed — the two can fail SEPARATELY) is flagged
+`unresolved: true` with a note, while every other member in the same result can still resolve
+normally. A member's `name` is the sidebar's display name: the `alias` when one is set, otherwise
+`member_name`. This differs from the other tools (see the conventions above). `services[]` covers
+exactly the services the counts were computed from, under the same service rule and in the same
+order as `list_services` (date, then `compareServiceTime`, then id). Each entry reports
+`published`, so Frank can see which counts include drafts. A special also carries `name` and
+`time`, so two specials on one day can be told apart. `failedSources` is reported for the same
+reason `get_service`/`list_services` report it.
+Unlike `get_member_availability`, this tool applies **no** ministry filter at all — the I5
+exception for a SEAT read (above): a kids-only member seated on a role still counts.
+
+#### `list_proposals` (P1, not released)
+
+Setlist proposals for one service (`serviceId`, reusing `get_service`'s own selector validation)
+or a month (`month`, default current CDMX month) — never both. Each proposal carries its link to
+a service (`serviceId: null` when it cannot be resolved — never a guess — and only ever a service
+`list_services` would list), `serviceDate`, `kind`, `status`, `lead`/`contributors` (with
+`missing`/`unresolved`, same meaning as `get_service`'s seats; `name` is `member_name`, with no
+alias), `songs` (title and key; a dangling song reference is `missing: true`), `threadOpen`, and
+the **live** `messages[]` conversation — never the frozen `lead_notes`/`admin_notes`/`team_notes`
+archive fields (ledger A7). **D6:** with `{ serviceId }` the full thread comes back; with
+`{ month }` each proposal is capped to its last 10 messages (chronological), `messagesTotal`
+always the true full count, `truncated: true` when anything was cut. `threadOpen` is
+`isThreadOpen`'s own rule: open while the service's day has not yet passed in
+America/Mexico_City, independent of `status`. **Unread state is never reported** — neither
+document stores a read-mark
+([ADR-0024](adr/0024-read-state-belongs-on-neither-document.md)), so this tool cannot invent one.
 
 ### Stored state
 
@@ -205,14 +436,32 @@ handshake against a real deployment of this app's own MCP server — discovery, 
 PKCE, a loopback OAuth callback, token exchange, `initialize`/`tools/list`/`ping`, refresh, and
 (optionally) a revoke-and-401 proof. It needs `SR_VERIFY_BYPASS_SECRET` (see
 [SECRETS.md](SECRETS.md#sr_verify_bypass_secret)) to pass Vercel's Deployment Protection when
-targeting the dev alias, refuses to run against production outright, and calls only the `ping`
-tool. **Running it against dev creates a real grant document in the shared production Sanity
-dataset** — revoke it afterward with `scripts/revoke-mcp-grant.mjs`, per the steps below.
+targeting the dev alias, and refuses to run against production outright. **Running it against dev
+creates a real grant document in the shared production Sanity dataset** — revoke it afterward with
+`scripts/revoke-mcp-grant.mjs`, per the steps below.
+
+By default the smoke calls only `ping`, and its `tools/list` check requires only that `ping` be
+registered — it passes against BOTH a P0-only deployment (production today) and a P1 one, since the
+plain smoke's job is proving the handshake and `ping`, not P1's registration. **`--reads`** (P1,
+once that branch is deployed to the target) adds a sub-step right after `ping` and before refresh,
+and its OWN `tools/list` check requires the full eight tools (it is about to call the other seven):
+one call each to `list_services`, `get_service` (selected BY ID from `list_services`'s own first
+result, the same way `get_song` below uses `search_songs`'s — never `{}`, so it never hits its own
+same-day-tie refusal; an empty month, with no service to select by id, falls back to `{}`, and if
+THAT refuses on a tie the pass logs it as an EXPECTED pass, "ambiguous (expected)", not a failure),
+`search_songs`, `get_song` (using the first song id `search_songs` found),
+`get_member_availability`, `get_participation` and `list_proposals`, printing a PASS/FAIL line per
+tool and a counts-only summary — never a name or any other personal data. It calls no write tool;
+none exist (DV1).
 
 ```bash
 # Full dev smoke: discovery → registration → consent (opens the browser) → token →
 # initialize/tools-list/ping → refresh → ping again → prints the grant id + revoke command.
 node --env-file=.env.local scripts/mcp-dev-smoke.mjs
+
+# Same, plus one call to each of the seven P1 read tools after ping (once P1 is on the
+# target deployment) — see the Tools section above for what each one returns.
+node --env-file=.env.local scripts/mcp-dev-smoke.mjs --reads
 
 # Same, then pauses after printing the revoke command so you can run
 # revoke-mcp-grant.mjs --id <id> --apply in another terminal, press Enter, and this
@@ -233,7 +482,7 @@ Two safe proof-of-refusal runs — no network call, may be run by anyone, any ti
 
 ```bash
 node scripts/mcp-dev-smoke.mjs --base https://owt-backstage.vercel.app   # refuses, exit 2
-env -u SR_VERIFY_BYPASS_SECRET node scripts/mcp-dev-smoke.mjs            # refuses, exit 2
+env -u SR_VERIFY_BYPASS_SECRET node scripts/mcp-dev-smoke.mjs --reads    # refuses, exit 2
 ```
 
 **The revoke-and-401 check, end to end:** run the script with `--await-revocation`, let it walk
@@ -243,6 +492,12 @@ press Enter. The script polls `tools/list` (not `ping` — the route authenticat
 dispatches any method, so a `tools/list` 401 already proves the revocation) every 10 s for up to
 60 s, and passes once it observes a 401 whose `WWW-Authenticate` header carries
 `error="invalid_token"` — the same challenge a real, revoked Claude connection would see.
+
+**A run that fails after the token exchange still names its grant.** By then the grant document
+already exists in the shared dataset, even though the run never reached step 9. So the FAIL line
+is followed by the grant id and the exact `revoke-mcp-grant.mjs --id <id> --apply` command. If the
+id cannot be decoded from the access token, it is followed instead by the dry run that lists every
+grant. A failed `--reads` pass is the usual case. Revoke that grant before re-running.
 
 Every secret, code and token the script ever prints is redacted (an 8-character prefix plus the
 length, never the value); nothing is written to disk.
@@ -349,7 +604,7 @@ grant and the one created and then revoked during the step-13 revocation test.
 
 ---
 
-## Release checklist (steps 12–13)
+## P0 release checklist (steps 12–13)
 
 **Status: done — released 2026-09-24** (PR
 [#95](https://github.com/FrankERP/owt-kb-v1/pull/95), `main` `c2ca5f7c`). All seven steps below
@@ -374,3 +629,61 @@ are complete; see [Release record](#release-record-p0-2026-09-24) above for the 
 7. ✅ Connector added from Frank's phone (claude.ai iOS app, ~13:25) against
    `https://owt-backstage.vercel.app/api/mcp`; `ping` answered with `version: c2ca5f7`, matching
    the merged commit — including a revocation-and-reconnect test.
+
+---
+
+## P1 release checklist (not started)
+
+**Status: implemented on branch `claude/mcp-p1-reads`, NOT released.** All eight implementation
+steps of the P1 plan are implemented and gate-green on the branch:
+
+1. the foundation (`runReadTool`, the route's `maxDuration`, the test client mocks);
+2. the service snapshot (D1) and its parity test;
+3. the publish-refusal predicate (D2) and its route-parity test;
+4. `get_service` / `list_services`;
+5. `search_songs` / `get_song`;
+6. `get_member_availability` / `get_participation`;
+7. `list_proposals`;
+8. registration, the tool-list test, the dev smoke's `--reads` and these docs.
+
+The plan's step 9, the release, is the checklist below.
+The final whole-branch code review ran on 2026-09-25 over `2fcb319c..b74bc9ae`, and its single
+fix wave is on the branch. Everything after that has not happened yet.
+
+1. ✅ A fresh code review on the merge range (this repo's release rule: a merge to `main` needs a
+   review of the diff, not just the plan). It ran over `2fcb319c..b74bc9ae` and returned "with
+   fixes", with the additive-only rule confirmed.
+2. ✅ The fix wave for that review is committed on the branch.
+3. ☐ **Re-verify the fix** (CLAUDE.md): a scoped review of the fix commits' range, and the gates
+   (`tsc`, `vitest`, `eslint` with 0 errors) re-run on the final tree. The last worklog entry
+   before the merge must be this verification, not a fix. The plan also asks the release review
+   to confirm two things: that every returned `_rev`/`_key` comes from the same query row as its
+   content, and that no MCP file carries a role-type literal. `mcpProtectedTypeLiterals.test.ts`
+   pins the second. If the record of step 1 does not show the first, confirm it here.
+4. ☐ Merge `claude/mcp-p1-reads` into `preview`, push, verify the dev alias moved
+   (`dev-owt-backstage.vercel.app`'s deployment has the merged commit's `githubCommitSha`).
+5. ☐ Frank runs `scripts/mcp-dev-smoke.mjs --await-revocation --reads` against dev (see
+   [Dev smoke procedure](#dev-smoke-procedure)). He confirms all seven read tools PASS, then
+   revokes the grant it prints.
+6. ☐ Open a PR from the feature branch into `main`, and wait for the `gates` check.
+7. ☐ With Frank's OK, merge the PR (the production release). Then verify the production alias the
+   same way.
+8. ☐ **Acceptance from the phone**, on production. Frank asks for:
+   - next Sunday's service;
+   - this month's services;
+   - a song search;
+   - a song;
+   - his own availability;
+   - this month's participation;
+   - a proposal thread.
+
+   Compare each answer with `/admin` (Servicios, Disponibilidad) and the song page. Any
+   disagreement that is not one of the named departures in [Tools](#tools) is a stop condition.
+   So is any `isError` on a valid request.
+9. ☐ **Record the observed latency** of `get_service` and `list_services` on production, here.
+   The plan's stop condition is **10 s**: a slower answer stops the release. The remedy is a
+   follow-up plan that narrows the load (a month-scoped snapshot plus a parity proof, plan A1/D3),
+   never an ad hoc change.
+10. ☐ Update this document's status banner, the [Tools](#tools) section's per-tool "(P1, not
+    released)" markers, and `docs/API_REFERENCE.md` / `docs/README.md` to say released, with the
+    PR number and commit.
