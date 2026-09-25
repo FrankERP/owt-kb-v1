@@ -65,12 +65,12 @@ A reviewer should read these first. Each one was verified at `963cd736`.
 |---|---|---|
 | All four admin counterparts authorize the same way and use nothing else from the session. Each calls `requireActiveManager()`, refuses `content-editor` with a 403, reads the JSON body, and then runs the domain logic. The domain logic never reads the session | `app/api/admin/setlists/route.ts:262-282`; `roles/swap/route.ts:71-87`; `roles/publish-ready/route.ts:109-125`; `roles/unpublish/route.ts:64-80` | Authorization is the 8-line prefix, and everything after it is domain logic. The MCP principal is a live super-admin, checked per request by P0 (`app/api/mcp/route.ts:186-239`), so it passes the same role test (I6) |
 | `requireActiveManager()` reads the session from ambient cookies and takes no `req` | `app/utils/authGuards.ts:13-27` | A bearer caller cannot reuse the guard. It can reuse everything after it |
-| Every counterpart is wrapped in `withVerificationRunContext`. That wrapper only attaches A3 verification markers when a marked header is present, and an unwrapped handler "is not a safety hole" | `app/utils/srVerificationRunContext.ts:156-177` | The MCP route stays unwrapped. Its forwarded-header allowlist could not carry the marker anyway (`app/api/mcp/route.ts:141-171`) |
+| Every counterpart is wrapped in `withVerificationRunContext`. That wrapper only attaches A3 verification markers when a marked header is present, and an unwrapped handler "is not a safety hole" | `app/utils/srVerificationRunContext.ts:156-177` | The MCP route stays unwrapped. It is bearer-authenticated for one super-admin and is never an SR-verification run. `srVerificationRunContext.test.ts` would not see it as delivery-capable, because its source imports the tool modules, not the `*Commit` names. So step 7 adds an **explicit, commented exception** for `app/api/mcp/route.ts` beside `DELIVERY_CAPABLE_IMPORTS`, and a test asserts that the exception is the only one. The gap is then recorded where the guard lives, not only in this plan |
 | **Setlist writer.** Parse `:278`. Weekend target plus coordination `:309-338`, or the special target `:339-362`. `compareObservedTarget` `:365-372`. `validateSongLeads` `:377-380`. One transaction `:382-407`: deterministic `create` or an `ifRevisionId` patch, plus a lock heartbeat when a lock exists. Commit and conflict mapping `:409-423`. Then `revalidateSetlistSave()` `:430`, `notifySetlistSaved(week)` (awaited, and skipped for a draft or a role-less week) `:446`, and `queueSetlistNotice` with the before-songs captured pre-commit `:450-460`. The response carries no `_rev` and no row keys `:462` | `app/api/admin/setlists/route.ts` | Moves verbatim into `setlistSaveCommit.ts`. The fresh observation the spec requires comes from a read-back (D8) |
 | The setlist writer rebuilds every row `_key` on save. It stores `play_key`/`medley_tag`/`leads` only when they are sent. It accepts at most 60 rows | `app/utils/setlistWriteRequest.ts:133,168-211` | Omitting an attribute clears it. `edit_setlist` must carry the stored attributes forward itself (spec A16) |
 | The repeat-song hint is computed inline in the setlist GET: 8 weeks back, all three kinds, excluding this date | `app/api/admin/setlists/route.ts:49-53,164-225` | Extracted to a neutral helper (step 3) so the GET and `edit_setlist` share it |
 | Medley rule: `normalizeMedleyTags` re-tags each adjacent run of 2 or more and untags singles. The editor calls it on remove and reorder only, never on a key change or an append | `app/utils/medley.ts:28-53` (neutral); `SetlistEditor.tsx:245-275` | The same trigger rule applies in `edit_setlist` (D7) |
-| **Swap writer.** Parse `:83`. `loadRoleForWrite(id, rev)` for each role (asserts the observed rev) `:93-111`. Topology admission `:114-158`. Write plan from stored arrays, with `_key`s travelling `:160-239`. Dangling refusal `:241-249`. `resolveOwnedCoordination` `:251-257`. Pre-commit seat states `:259-274`. One transaction asserting both roles and every lock `:276-303`. Then `revalidateRoleMutation`, the per-destination push via `roleUpdateNotice`, and `queueRoleNotices` (union of before and after) `:305-338` | `app/api/admin/roles/swap/route.ts` | Moves verbatim into `roleSwapCommit.ts`. `parseSwapRequest` also accepts `kind: "seat"`, which the tool never constructs (decision 6) |
+| **Swap writer.** Parse `:83`. `loadRoleForWrite(id, rev)` for each role (asserts the observed rev) `:93-111`. Topology admission `:114-158`. Write plan from stored arrays, with `_key`s travelling `:160-239`. Dangling refusal `:241-249`. `resolveOwnedCoordination` `:251-257`. Pre-commit seat states `:259-274`. One transaction asserting both roles and every lock `:276-303`. Then `revalidateRoleMutation`, the per-destination push via `roleUpdateNotice`, and `queueRoleNotices` (union of before and after) `:305-338` | `app/api/admin/roles/swap/route.ts` | Moves verbatim into `roleSwapCommit.ts`. `parseSwapRequest` also accepts `kind: "seat"`, which the tool never constructs (decision 6). The admin UI also blocks a swap client-side on `duplicate_special_identity`, `invalid_special_name` and dangling references outside the swapped section (`storedRoleReadModel.ts:300-345`; `MonthGenerator.tsx:2804`). The route repeats none of these, so neither does the tool: I15's counterpart is the route |
 | The admin UI sends only `section` and `team` swaps, and refuses Saturday↔non-Saturday client-side. The server repeats that refusal (`incompatible_team_topology`) | `app/components/admin/MonthGenerator.tsx:2775-2836,2963`; `swap/route.ts:131-158` | The tool's schema has no seat shape. The topology refusal is inherited from the server |
 | **Publish writer.** Loader `:130`. Per-entry verdict inline `:173-212`. Atomic rejection `:214-230`. Assertion bundle `:232-263`. One transaction `:269-278`. Then `notifyRolePublished` (push plus consolidated email to every current assignee), `queuePublishedSetlistNotices` (the immediate «Setlist listo», ADR-0037) and `revalidateRolePublication` `:280-311` | `app/api/admin/roles/publish-ready/route.ts` | Moves verbatim into `publishReadyCommit.ts`. The verdict becomes one function, `publishVerdict` (D2) |
 | **P1's D2 copy.** `publishRefusalFor` reproduces the route's verdict. It is pinned only behaviourally, over fixtures, and ADR-0040 names P3 as the place it ends | `app/mcp/reads/publishRefusal.ts:1-134`; `docs/adr/0040-…md` «Consequences» | P3 consolidates it (D2). D1, the snapshot mirror, stays for P4 |
@@ -180,6 +180,11 @@ changes allowed inside it are the listed boundary edits.
 
 - P1 checklist items 8 and 9 are done: phone acceptance, and a production latency figure for
   `get_service`/`list_services` under 10 s, recorded in `docs/MCP.md`.
+  - P1 has no server-side timing, and Vercel's runtime logs carry no duration on this plan
+    (§ Signals). So item 9's figure is Frank's observed wall-clock time per answer, with each
+    approval prompt answered at once.
+  - Exact server durations for the reads arrive with step 7's timing line, and step 15 records
+    them.
 - This plan is approved, with its review log. Frank gives the go-ahead.
 - Run `git worktree prune`. Branch `claude/mcp-p3-writes` from `main`. Any worktree uses the
   `cp -Rc` `node_modules` clone and the `.env.local` symlink rule.
@@ -272,6 +277,15 @@ changes allowed inside it are the listed boundary edits.
   - Define the shared outcome type in `app/utils/commitOutcome.ts`:
     `type CommitOutcome<E> = { ok: true; status: 200; body: Record<string, unknown>; effects: E } | { ok: false; status: number; body: Record<string, unknown> }`.
     The `body` is exactly what the route sends today.
+  - **Early returns outside `reject(x)` are boundary edits too.** The `mode: "recover"` branches of
+    publish-ready (`route.ts:133-165`) and unpublish (`route.ts:86-108`) return
+    `NextResponse.json` directly: a `503` `unknown_outcome`, and a recovered `200` with
+    `outcome: "recovered"`. In the moved code the `503` becomes
+    `{ ok: false, status: 503, body }`. The recovered `200` becomes
+    `{ ok: true, status: 200, body, effects }` with the module's explicit empty-effects value
+    (`recovered: true`, no descriptors, nothing patched). The admin routes' responses stay
+    byte-identical. The tools never send `mode: "recover"`, because their schemas have no
+    `mode`, and a test asserts that no tool-built body carries it.
   - The route's `putHandler` keeps lines `263-276` (auth and JSON parse), then does
     `const outcome = await saveSetlist(raw); return NextResponse.json(outcome.body, { status: outcome.status });`.
     `export const maxDuration`, `withVerificationRunContext` and the GET stay where they are.
@@ -369,7 +383,9 @@ changes allowed inside it are the listed boundary edits.
   - the new guard fails on a planted inline `reasons.push("not_ready")`;
   - the move-diff review shows only the verdict call.
 - **State after:** deployable. `/admin` behaves identically, and the reads now call the writer's
-  own predicate. **I4 holds by construction.**
+  own predicate. **I4 holds by construction for the predicate.** Its `AssembledService` input is
+  still assembled two ways: the route uses `loadServiceReadinessSources`, and the reads use P1's
+  D1 snapshot mirror. That input stays mirror-pinned by P1's `serviceSnapshotMirror`/`serviceSnapshotParity` tests (ADR-0040).
 
 ### 6. Extract the unpublish writer
 
@@ -391,8 +407,18 @@ changes allowed inside it are the listed boundary edits.
 
 ### 7. MCP write foundation (`app/mcp/writes/`)
 
-- **`runWriteTool(name, handler)`**, like P1's `runReadTool`, catches every throw. It logs a fixed
-  tag and the tool name, and nothing else. It returns
+- **SR-verification exception, same step:** add the commented `app/api/mcp/route.ts` exception
+  to `srVerificationRunContext.test.ts` (evidence row «Every counterpart is wrapped…»).
+- **Timing line.** Vercel's runtime logs on this plan carry no request duration (observed
+  2026-09-25; § Signals).
+  - `runWriteTool` and P1's `runReadTool` (`app/mcp/reads/errors.ts`, MCP-owned and imported by
+    no writer) each log one line per call, in `finally`:
+    `[mcp] tool=<name> outcome=<ok|refused|error> code=<code|-> ms=<n>`.
+  - No argument, id, name or payload is logged, and a test asserts the line's exact shape.
+  - This line is how P3's live-proof durations and the P1 latency figure are read, using
+    `vercel logs <deployment> --json`, whose `logs[].message` carries it.
+- **`runWriteTool(name, handler)`**, like P1's `runReadTool`, catches every throw. Apart from the
+  timing line, it logs a fixed tag and the tool name, and nothing else. It returns
   `{ isError: true }` with **«No se pudo confirmar si el cambio se guardó. Antes de reintentar,
   vuelve a leer el servicio con get_service.»** A thrown write is an *unknown* outcome, never "no
   se guardó" (I9, E1).
@@ -502,8 +528,13 @@ changes allowed inside it are the listed boundary edits.
     - `unavailablePlaced`: for each role, the members in `after − before` whose
       `unavailableDates` include that role's date. Read through `canonicalMembersByIdsQuery` on
       `operationalClient`.
-  - `freshRevs`: a best-effort read-back through `loadCanonicalRolesByIds`. If it fails, the text
-    says «vuelve a leer antes de otra escritura».
+  - `freshRevs`: a read-back through `loadCanonicalRolesByIds`. A rev is returned **only when the
+    read-back equals the state that was written**: all five seat arrays of both roles, including
+    `_key`s, compared with the transaction's patch. That is the same rule D8 applies to
+    `edit_setlist`. Otherwise the tool returns the read-back with
+    `changedAgainAfterSave: true` and no rev. A rev captured inside the write request is never an
+    I7 observation on its own. If the read fails, the text says «vuelve a leer antes de otra
+    escritura».
 - **Tests:**
   - twin-run: section swaps on each path and a team swap, published and draft; identical
     transactions (both role patches plus lock heartbeats), pushes and outbox upserts;
@@ -567,7 +598,17 @@ changes allowed inside it are the listed boundary edits.
     kept row (anything but a tail append); or any row sets `medleyTag` explicitly. Otherwise the
     stored tags are carried byte-identical. This is the editor's own trigger rule
     (`SetlistEditor.tsx:245-275`).
-  - **Leaders:** send `leadIds` **only** when `worshipNight` (F6).
+  - **Leaders:** the tool never drops an instruction (I13, I15, I9).
+    - On a worship night, every row carries `leadIds`: stored leaders are carried forward,
+      and an explicit `leads` replaces them (F6).
+    - On any other service, a row carries `leadIds` only when it gives an explicit,
+      **non-empty** `leads`. The writer's own `validateSongLeads` then refuses the whole
+      request, because it pushes `songs[i].leadIds` whenever `!target.worshipNight`
+      (`songLeads.ts:40-43`, called at `setlists/route.ts:377-380`). Nothing is written, and
+      the refusal reads «Solo una Noche de alabanza lleva líderes por canción; este servicio
+      no lo es. No se escribió nada.»
+    - `leads: []` on such a service is a no-op, not a refusal, since the editor stores no
+      leaders there either.
   - The body is `{ week, type: kind, roleId: serviceId, observed: { state, id?, rev? }, songs: [{ songId, play_key, medley_tag, leadIds? }] }`.
     This is the editor's own shape, and it goes through `saveSetlist`, which parses it with
     `parseSetlistWriteRequest`.
@@ -583,8 +624,11 @@ changes allowed inside it are the listed boundary edits.
     rows (title, key, medley runs, leader names). Otherwise return the read-back and flag
     `changedAgainAfterSave: true`. If the read fails, return `observation: null` with «vuelve a
     leer con get_service».
-  - **Repeat hint:** `recentSongUses(editorRecentSetlistsQuery(weeksAgoIso(8)))` gives
-    `repeatedSongs: [{ title, lastUsed }]`.
+  - **Repeat hint:** fetch `editorRecentSetlistsQuery(weeksAgoIso(8))` on `operationalClient`,
+    exactly as the GET does (`setlists/route.ts:165`). Then call
+    `recentSongUses(recentRaw, serviceDate)` with the target's own date, the step-3 signature. It
+    gives `repeatedSongs: [{ title, lastUsed }]`. A failed hint read omits the hint; it never fails
+    a committed edit.
   - **Notifications:**
     - A draft (`published === false`) or a role-less week: «ninguna (servicio en borrador)».
     - Otherwise, the push «Setlist de la semana», listed member by member from the
@@ -596,7 +640,8 @@ changes allowed inside it are the listed boundary edits.
   - Translation unit tests: every attribute survives an untouched row; a key-only edit leaves
     tags byte-identical; remove, reorder and a mid-list insert re-derive runs; a tail append does
     not; an explicit `null` clears; a duplicate or unknown `rowKey` is refused; the same song twice
-    stays two rows; leaders are sent only on a worship night.
+    stays two rows. On a worship night every row carries `leadIds`. On any other service only
+    a row with explicit, non-empty `leads` does, and `leads: []` there carries none.
   - Twin-run against the editor's body for the same intent:
     - weekend `none` → deterministic create, with the lock heartbeat when a role owns the week;
     - weekend `single` patch;
@@ -607,7 +652,9 @@ changes allowed inside it are the listed boundary edits.
     mismatch; a special whose Lead changed (role `_rev` moved); `rowKeys` that do not match.
   - **Refusal replay:** `setlist_draft_conflict`, `setlist_malformed`, `ambiguous_target`,
     `role_draft_conflict`, `special_role` not found or type mismatch, the week mismatch,
-    `leadIds` not in Lead, `songs_length`, `bootstrap_completed_reload`, and a commit conflict.
+    `leadIds` not in Lead, **explicit `leads` on a service that is not a worship night** (the
+    whole edit refused, zero transactions), `songs_length`, `bootstrap_completed_reload`, and a
+    commit conflict.
     Also each of P1's four non-writable observation states, and a `null` row key: a Spanish
     refusal with zero reads past the schema and zero transactions.
 - The caller pin adds `app/mcp/tools/editSetlist.ts` to `setlistSaveCommit`.
@@ -695,9 +742,10 @@ live. This limit is stated in the release record.
 
 | Step | Action | Expected document diff | Expected notifications (exact audience) | Delivery check |
 |---|---|---|---|---|
-| L1 | `edit_setlist` A with the observation `get_service` reports (expected `none`: `buildRoleDocument` stores no `songs` field, `roleWriteRequest.ts:203-231`), 3 songs | A's `songs` set under A's `_rev` | **none**: a draft skips the push, and `setlistUpsert` is null | Frank receives nothing for 10 min |
+| L1 | `edit_setlist` A with the observation `get_service` reports (expected `none`: `buildRoleDocument` stores no `songs` field, `roleWriteRequest.ts:203-231`), 3 songs, **each with a `key`**. A blank `play_key` makes the setlist `incomplete` (`serviceReadModel.ts:175`; `publishSelection.ts:189-191`), and L3a would then be refused | A's `songs` set under A's `_rev` | **none**: a draft skips the push, and `setlistUpsert` is null | Frank receives nothing for 10 min |
 | L2 | `edit_setlist` A with L1's fresh observation: reorder, one key change, link 2 rows as a medley | new keys; attributes carried; the medley run re-derived | **none** (draft) | nothing |
 | L3a | `publish_service` A (ready) | `published: true` plus assertion no-ops | push «Nuevo servicio asignado» → Frank; assignment email → Frank; «Setlist listo» → Frank (immediate) | Frank sees the push and both emails |
+| L3r | `publish_service` B (not ready: empty team, no songs) | **none**: zero writes | **none** | the tool returns `not_ready` naming `team_empty` and `incomplete_setlist`, and it offers no override. Frank receives nothing. This is the roadmap's I4 "shown to refuse", live |
 | L3b | Frank publishes B in `/admin` with the override (`team_empty`, `incomplete_setlist`) | `published: true` | none: B has no assignees and no songs | nothing new |
 | L4 | `swap_assignment` section `Lead`, A↔B | A.Lead `[]`, B.Lead `[Frank]`, keys travel | push «Servicio actualizado» → Frank (added to B); outbox role emails for A and B → Frank after the window | the push at once; **wait for both emails** (≤ window + 5 min) before L5 (F7) |
 | L5 | `swap_assignment` team, A↔B | the five seat fields exchanged: A gets `[Frank]` back | push → Frank (added to A); outbox emails → Frank | the push; wait for the emails |
@@ -708,17 +756,20 @@ live. This limit is stated in the release record.
 
 - After each step, Frank compares `/admin` with the tool's report. The agent records:
   - the tool's reported notifications vs what arrived;
-  - the step's duration (Vercel logs, status and duration only);
+  - the step's duration, from the `[mcp]` timing line (step 7) in `vercel logs --json`;
   - the fresh observation's rev vs `get_service`.
+- **I4 shown live:** L3r is refused by `publish_service` for the same blockers `/admin` will need an
+  override for at L3b. The agreement test proves the same for every blocker combination.
 - **Twin comparisons done live:** the publish diff (L3a MCP vs L3b `/admin`) and the unpublish diff
   (L6a vs L6b). For `edit_setlist` and `swap_assignment`, identity with `/admin` is proven by the
   twin-run tests: the same function over the same body.
 - **Stop conditions** (stop, report, and decide with Frank; `MCP_DISABLED=1` is the kill switch
   and needs a redeploy):
-  - any notification to anyone but Frank;
+  - any notification **about A or B** to anyone but Frank (a layer-2 flush may deliver an
+    unrelated notice that was already due; that is expected);
   - a reported audience that differs from what arrived, or from the table;
   - a diff that differs from the expected one;
-  - any `isError` on a valid call;
+  - any `isError` on a call expected to succeed (L3r's refusal is expected);
   - a write call slower than 20 s end-to-end.
 - **Cleanup check:** `list_services` for the two months no longer lists A or B. No outbox notice
   for A or B stays pending: after L8, a pending L4/L5 notice would at most email Frank «ya no
@@ -726,8 +777,8 @@ live. This limit is stated in the release record.
 
 ### 15. Record and close
 
-- Write `docs/MCP.md`'s P3 release record: commits, aliases, the L-step results, durations, and the
-  weekend-path limit.
+- Write `docs/MCP.md`'s P3 release record: commits, aliases, the L-step results, durations (from
+  the `[mcp]` timing line), the reads' server durations for P1's item 9, and the weekend-path limit.
 - Close with `finish-cycle`: batch-append the worklog and schedule the weekly HR run.
 
 ## Notification audiences (confirmed from code at `963cd736`)
@@ -819,9 +870,13 @@ mid-`after()` loses notifications silently, exactly as in `/admin`. That is why 
 ## Rollout, observability, and rollback
 
 - **Release sequence:** step 13, then step 14. Preview first, always.
-- **Signals:** Vercel logs for `/api/mcp` carry the status, the duration and the write runner's
-  fixed tag with tool name and refusal code, never a payload. There is also Frank's inbox and
-  phone, plus `/admin`.
+- **Signals:**
+  - Vercel's runtime logs for `/api/mcp` carry the status only. Observed 2026-09-25 on
+    production `dpl_3gs92i7…`: records from the logs API and from `vercel logs --json` have no
+    duration field, and the Observability API answers 404 on this plan.
+  - Durations therefore come from the `[mcp]` timing line (step 7). It gives the tool name,
+    outcome, refusal code and milliseconds, never a payload.
+  - Frank's inbox and phone, plus `/admin`.
 - **Stop conditions:** those of step 14, plus any `5xx` from `/api/mcp` after release.
 - **Rollback:**
   - Tools only: one commit removes the four tool modules, their four registration lines, their
@@ -857,7 +912,7 @@ mid-`after()` loses notifications silently, exactly as in `/admin`. That is why 
 | Assumption | Impact if false | Validation point | Failure response |
 |---|---|---|---|
 | A1: F2 is real, meaning a legacy `tools/call`'s `revalidatePath` is dropped without buffering | none: buffering stays, and is harmless | step 1 test (red before, green after) and spike | record in the ADR either way |
-| A2: `after()` registered in a tool body runs on Vercel after the buffered response | notifications lost | L3a (Frank receives the push and emails) | stop; the MCP route wraps a `waitUntil` path in a follow-up, with no release of writes before that |
+| A2: `after()` registered in a tool body runs on Vercel after the buffered response | notifications lost | L3a (Frank receives the push and emails) | stop. Per the roadmap's Sequence table, a released tool not yet proven is never used on a real service: remove the write tools, or set `MCP_DISABLED=1` and redeploy. The `waitUntil` fix then follows as its own reviewed change |
 | A3: Sanity is read-your-writes after commit (`visibility: "sync"` default) | the read-back shows the pre-write state | step 11 tests the mismatch flag; L2 uses L1's fresh observation | the observation is flagged and the text says to re-read |
 | A4: Frank has a push device and has not opted out | push delivery unprovable | PP0 | stop; Frank registers a device or decides |
 | A5: P1's production latency plus publish fits the table | budget exceeded | step 0 | P1's narrowing follow-up first |
@@ -871,6 +926,7 @@ mid-`after()` loses notifications silently, exactly as in `/admin`. That is why 
 | Q2: throwaway dates and names | a published throwaway is visible to the team; an early date would become everyone's "next service" | weekdays at least 2 weeks out and after the next real service; «PRUEBA MCP A/B — ignorar» | visible briefly (L3–L6) | Frank | No | PP1 | as recommended |
 | Q3: fix #97 in its own critical-tier plan? | `/admin` publishes a week the editor then refuses | yes, as a separate plan that aligns readiness to `_type`+`week` and updates P1's parity fixtures | changes admin publish behaviour | Frank | No | after P3 | leave open, as today |
 | Q4: exercise the unavailability report live (Frank marks himself unavailable on B's date for L4)? | proves one more report on production | **no**: step 10 tests it, and it would add two writes to Frank's own member document | one fewer live proof | Frank | No | PP1 | skip |
+| Q5: is tests-only proof acceptable for the **weekend** setlist paths (deterministic create, `ifRevisionId` patch, lock heartbeat)? | the live proof uses specials only: a throwaway weekend would collide with a real Sunday or Saturday identity | **yes**: twin-run tests call the same function over the same body. A live weekend run would have to touch a real service's setlist | the weekend create/patch/heartbeat never runs live before the team uses it | Frank | No | PP1 | tests only |
 
 ## Handoff
 
