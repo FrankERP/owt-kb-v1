@@ -201,6 +201,11 @@ export const SERVICE_FIXTURE_CASES: readonly ServiceFixtureCase[] = [
     covers: "structurally invalid Sunday (a null seat) with a raw role draft overlay",
     readyToPublish: false,
   },
+  {
+    roleId: "role-sun-1115-live",
+    covers: "published (live) Sunday that lost its setlist: a readiness gap on a published service",
+    readyToPublish: false,
+  },
 ];
 
 /** Every canonical role id in the matrix. */
@@ -321,6 +326,15 @@ export function serviceFixtureStore(): ServiceFixtureStore {
         Lead: [reference("l1", ana)],
         Chorus: null,
       }),
+      // Live, locked, clean — but no setlist document for its week.
+      role({
+        _id: "role-sun-1115-live",
+        _rev: "role-sun-1115-live-rev",
+        _type: "sunday_role",
+        week: "2026-11-15",
+        published: true,
+        Lead: [reference("l1", sofia)],
+      }),
     ],
     locks: [
       lock("sunday_role", "2026-10-04", "role-sun-1004"),
@@ -331,6 +345,7 @@ export function serviceFixtureStore(): ServiceFixtureStore {
       // role-sat-1010 has NO lock (missing_lock). This one is claimed by a role
       // that no longer exists (orphan_lock) and sits at a target nobody owns.
       lock("sunday_role", "2026-11-01", "role-deleted"),
+      lock("sunday_role", "2026-11-15", "role-sun-1115-live"),
     ],
     members: [
       member(ana, "Ana", { unavailableDates: [] }),
