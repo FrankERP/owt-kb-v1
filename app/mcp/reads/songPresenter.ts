@@ -90,13 +90,13 @@ export function searchSongs(posts: Post[], validated: Extract<SearchValidation, 
     title: post.title,
     artist: artistOf(post),
     key: post.key ?? null,
-    tags: (post.tags ?? []).map((t) => t.slug?.current).filter((s): s is string => nonEmptyString(s)),
+    tags: (post.tags ?? []).filter(isObj).map((t) => t.slug?.current).filter((s): s is string => nonEmptyString(s)),
   }));
 }
 
 /** Every tag slug the catalogue actually has, for I13's refusal and for `isTipoSlug`'s partner axis. */
 export function liveTagSlugsOf(tags: readonly Tag[]): string[] {
-  return tags.map((t) => t.slug?.current).filter((s): s is string => nonEmptyString(s));
+  return tags.filter(isObj).map((t) => t.slug?.current).filter((s): s is string => nonEmptyString(s));
 }
 
 // ── get_song: input ──────────────────────────────────────────────────────────
@@ -202,11 +202,11 @@ function lyricsStateOf(row: SongDetailRow): { lyrics: LyricsState; hasChordChart
 
 function referenceLinksOf(row: SongDetailRow): ReferenceLinksOut {
   return {
-    links: (row.referenceLinks ?? []).map((l) => ({ label: l.label ?? null, url: l.url ?? null })),
+    links: (row.referenceLinks ?? []).filter(isObj).map((l) => ({ label: l.label ?? null, url: l.url ?? null })),
     musicalReferenceUrl: row.musicalReferenceUrl ?? null,
     lyricsVideoUrl: row.lyricsVideoUrl ?? null,
     lyricsURL: row.lyricsURL ?? null,
-    tutorials: (row.tutorials2 ?? []).map((t) => ({ title: t.title ?? null, url: t.url ?? null })),
+    tutorials: (row.tutorials2 ?? []).filter(isObj).map((t) => ({ title: t.title ?? null, url: t.url ?? null })),
   };
 }
 
@@ -214,7 +214,7 @@ function referenceLinksOf(row: SongDetailRow): ReferenceLinksOut {
 function mixGroupsOf(row: SongDetailRow): MixGroup[] {
   const order: (string | null)[] = [];
   const byTone = new Map<string | null, MixOut[]>();
-  for (const mix of row.rehearsalMixes ?? []) {
+  for (const mix of (row.rehearsalMixes ?? []).filter(isObj)) {
     const tone = nonEmptyString(mix.tone) ? mix.tone : null;
     if (!byTone.has(tone)) {
       byTone.set(tone, []);
@@ -283,12 +283,13 @@ export function presentSong(row: SongDetailRow, today: string, lookups: GetSongL
 
   return {
     title: row.title ?? null,
-    authors: (row.authors ?? []).map((a: { name: string | null }) => a.name).filter((n): n is string => nonEmptyString(n)),
+    authors: (row.authors ?? []).filter(isObj).map((a) => a.name).filter((n): n is string => nonEmptyString(n)),
     artist: row.author ?? null,
     keys: songKeys(row),
     bpm: typeof row.bpm === "string" ? row.bpm : row.bpm != null ? String(row.bpm) : null,
     timeSig: typeof row.timeSig === "string" ? row.timeSig : row.timeSig != null ? String(row.timeSig) : null,
     tags: (row.tags ?? [])
+      .filter(isObj)
       .filter((t): t is { slug: string; name: string | null } => nonEmptyString(t.slug))
       .map((t) => ({ slug: t.slug, title: t.name ?? t.slug })),
     referenceLinks: referenceLinksOf(row),
