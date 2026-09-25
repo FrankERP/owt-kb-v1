@@ -703,9 +703,9 @@ the ADR-0010 guarantee holds for that month, and an implementer must not have to
 > guarantee: with solve 0 forced to return nothing, Stage A still needed one violation, and
 > Stage B then returned months breaking three or four rules in weeks nobody pinned. So **Stage
 > A's own violation count becomes the ceiling for every Stage B pass** whenever it is lower than
-> solve 0's, or solve 0 set none. It cannot make a pass infeasible — Stage A's solution meets
-> both `weighted_empty <= empty_target` and that count — and it also tightens a slack ceiling
-> from a `FEASIBLE` solve 0. `violation_ceiling_proven` still reports **solve 0 alone**. Second
+> solve 0's, or solve 0 set none. It never conflicts with `empty_target` — Stage A's solution
+> meets both bounds — though it can rule out a fairness tier, which is its job; it also tightens
+> a slack ceiling from a `FEASIBLE` solve 0. `violation_ceiling_proven` still reports **solve 0 alone**. Second
 > amendment, same review: **Stage A starts from solve 0's month as a search hint** when solve 0
 > returned one. A board with dozens of pinned people in one row timed Stage A out and came back
 > `ok: false` with the mandatory-lead diagnostic — the wrong cause; with the hint it returns.
@@ -1051,9 +1051,10 @@ shift is invisible — but the count per row changes, and the tests pin that.
   caller can allocate. Recorded here so the next
   person to see an unexplained fairness result on a five-week month has the thread. The pools are unbounded today for the same reason and
   that is pre-existing; this spec does not widen it further.
-- **As built (2026-09-25): a misspelt name is refused.** A pinned name with leading or trailing
-  spaces, or a pinned-only name that differs from another name only in capitalisation (`hugo`
-  beside `Hugo`), is a `ValueError`. Reproduced in review: `" Hugo"` sat as a second person in a
+- **As built (2026-09-25): a misspelt name is refused.** A pinned-only name that differs from
+  another name only in capitalisation or surrounding spaces (`hugo` or ` Hugo` beside `Hugo`) is a
+  `ValueError`. A pin on a pool member's EXACT name is always accepted, trailing space included —
+  Studio does not trim `member_name`, and refusing it would fail every pinned month naming them. Reproduced in review: `" Hugo"` sat as a second person in a
   second seat of one service, and `hugo` beside `Hugo !in Sat.*` took Hugo's rule on 3 of 8
   `PYTHONHASHSEED` values, because `parse_dsl_rules` resolves names case-insensitively over a
   set. Refused rather than silently mapped, so a client bug surfaces.

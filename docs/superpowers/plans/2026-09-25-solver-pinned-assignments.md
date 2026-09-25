@@ -1705,3 +1705,9 @@ calls that a design signal.
   another only in capitalisation, is refused. The spec carries as-built boxes for each. The
   review's LOW on the `Gaby Sun.BGV == 2` observation became an `>= 2` assertion (it drifted to 3
   at 1 s per solve), and the consecutive same-weekend double is documented rather than changed.
+- **The re-review of that wave narrowed the name refusal:** a pinned name is refused only when
+  it is pinned-only AND collides with another name after `strip().lower()`, so a pool member's
+  exact name — trailing space included, since Studio does not trim `member_name` — is always
+  accepted. The crowded-row test moved to 5 s per solve (≈10× margin), and the key-rotation
+  runbook was reordered: Vercel first, because `:latest` reaches a cold instance the moment
+  Secret Manager is written.

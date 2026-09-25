@@ -111,8 +111,19 @@ class RequestValidation(unittest.TestCase):
         pins = [pin(f"P{i}", "Sun.Choir", 1) for i in range(mod.PINNED_CAP)]
         self.assertEqual(len(mod.parse_pins(pins, 4, [1, 2, 3, 4])), mod.PINNED_CAP)
 
-    def test_a_name_with_surrounding_spaces_is_refused(self):
-        self.assertIn("spaces", self.refused([pin(" Hugo", "Sun.BGV", 1)]))
+    def test_a_spacing_variant_of_a_pool_name_is_refused(self):
+        """' Hugo' beside 'Hugo' is a misspelling: it took a second seat in Hugo's service."""
+        self.assertIn("spacing", self.refused([pin(" Hugo", "Sun.BGV", 1)]))
+
+    def test_a_pool_name_with_a_trailing_space_is_pinned_as_is(self):
+        """Studio does not trim member_name, so a pin on a pool member's exact name is
+        accepted with the space — and the space-less spelling beside it is refused."""
+        pool = [p if p != "Pau" else "Pau " for p in SUPPORT]
+        res = solve_from_dict(fixture(support=pool, pinned=[pin("Pau ", "Sun.Choir", 1)]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertIn("Pau ", seated(res, 1, "Sun.Choir"))
+        err = self.refused([pin("Pau", "Sun.Choir", 1)], support=pool)
+        self.assertIn("spacing", err)
 
     def test_a_misspelt_pool_name_is_refused(self):
         """'hugo' beside 'Hugo' is a misspelling, not a new person: it would sit beside the
@@ -628,11 +639,12 @@ class ViolationCeiling(unittest.TestCase):
         """
         64 pinned people outside every pool in one row: without the hint Stage A timed out
         and the month came back ok:false with the mandatory-lead diagnostic — the wrong
-        cause (1 s and 2 s per solve, measured). Short per-solve limits keep the test fast;
-        a slower runner can only make the unhinted failure more certain.
+        cause (measured at 1, 2, 5 and 10 s per solve). The hinted run still needs ~0.2 s of
+        presolve before its first solution, so a slow enough machine fails it too: 5 s per
+        solve keeps roughly a 10x margin over the MacBook and the old solver still fails.
         """
         data = fixture(pinned=[pin(f"Z{i}", "Sun.Choir", 1) for i in range(64)],
-                       solver_max_time_seconds=2, solver_total_budget_seconds=20)
+                       solver_max_time_seconds=5, solver_total_budget_seconds=40)
         res = solve_from_dict(data)
         self.assertTrue(res["ok"], res.get("error"))
         self.assertEqual(res["pinned_honored"], 64)

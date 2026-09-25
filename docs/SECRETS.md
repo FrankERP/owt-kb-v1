@@ -501,38 +501,49 @@ secret.
 closed); with a value that differs from Vercel's, **401** — either way «Generar mes» fails with
 "Solver service returned HTTP …" in both environments.
 
-**Where the value came from.** Set when the function moved to GitHub continuous deployment
-(2026-06-30); no external issuer, so any high-entropy string works — `openssl rand -hex 32`.
+**Where the value came from.** The Secret Manager entry was created 2026-06-30, when the
+function moved to GitHub continuous deployment, but the value itself was carried over from an
+older plaintext env var (`cloudbuild.yaml` still removes it on every deploy), and how that one was
+generated is not recorded. No external issuer, so any high-entropy string works for a rotation:
+`openssl rand -hex 32`.
 
 **How to rotate** (from a checkout linked to `owt-backstage`, with `gcloud` on the solver
-project; the value never reaches a terminal, a file, or `gcloud`'s logs):
+project; the value is only ever piped — never an argument, never printed, never in `gcloud`'s
+logs). **The outage window opens at step 2, not at a redeploy:** the function reads
+`owt-solver-api-key:latest` when an instance starts and scales to zero, so the first cold start
+after the new version is written already serves the new key while Vercel still sends the old one.
+Run steps 2–4 back to back.
 
-1. Write both stores in one command:
+1. **Vercel first** — a changed env var does nothing until a redeploy, so this opens no window:
    ```bash
    SECRET=$(openssl rand -hex 32) && \
-     printf '%s' "$SECRET" | CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true \
-       gcloud secrets versions add owt-solver-api-key --data-file=- --format="value(name)" && \
-     npx vercel env rm OWT_SOLVER_API_KEY production && \
-     printf '%s' "$SECRET" | npx vercel env add OWT_SOLVER_API_KEY production && \
-     npx vercel env rm OWT_SOLVER_API_KEY preview && \
-     printf '%s' "$SECRET" | npx vercel env add OWT_SOLVER_API_KEY preview && \
+     printf '%s' "$SECRET" | npx vercel env add OWT_SOLVER_API_KEY production,preview \
+       --force --sensitive --non-interactive
+   ```
+   (Vercel CLI 60.1.1 flags; not yet run against this project. Without `--git-branch` a Preview
+   variable applies to every preview branch, which is what this one needs. If the CLI prompts
+   anyway, answer: every Preview branch, Sensitive — nothing is live yet, so stopping here is
+   safe. Keep this shell open: step 2 reuses `$SECRET`.)
+2. **Secret Manager** — this opens the window:
+   ```bash
+   printf '%s' "$SECRET" | CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true \
+     gcloud secrets versions add owt-solver-api-key --data-file=- --format="value(name)" && \
      unset SECRET
    ```
-2. **Redeploy the function.** `gcf/main.py` reads the key once, at import, and `:latest` is
-   resolved when an instance starts — a running revision keeps the old key. Re-run the Cloud
-   Build trigger `owt-solver-deploy` on `main` (console → Cloud Build → Triggers → Run), or
-   `bash scripts/deploy-solver-gcf.sh`.
-3. **Redeploy Vercel Production and Preview** straight after: env vars bind at build time
-   (dashboard → Deployments → ⋯ → Redeploy on the current production deployment and on the
-   current `preview` one).
-4. Verify with the smoke request in `docs/SOLVER_AND_INFRA.md` ("Verifying a Cloud Function
+3. **Redeploy the function** so no warm instance keeps the old key (`gcf/main.py` reads it once,
+   at import): re-run the Cloud Build trigger `owt-solver-deploy` on `main` (console → Cloud Build
+   → Triggers → Run), or `GCP_PROJECT=eloquent-figure-421401 bash scripts/deploy-solver-gcf.sh`.
+4. **Redeploy Vercel Production and Preview** (dashboard → Deployments → ⋯ → Redeploy on the
+   current production deployment and on the current `preview` one): env vars bind at build time.
+5. Verify with the smoke request in `docs/SOLVER_AND_INFRA.md` ("Verifying a Cloud Function
    deploy"), which reads the new value from Secret Manager — then one «Generar mes» on dev.
 
-**Blast radius of rotation.** From the moment the new function revision serves until each
-Vercel environment's redeploy completes, that environment presents the old key and every
-«Generar mes» fails with HTTP 401. Nothing is written — Auto only proposes; «Guardar» writes —
-so the cost is a few minutes of Auto unavailable in both environments. Keep the window to one
-deploy each by running steps 2 and 3 back to back.
+**Blast radius of rotation.** From step 2 until each Vercel environment's redeploy (step 4)
+completes, any request that reaches a freshly started function instance fails with HTTP 401 —
+«Generar mes» fails in both environments, intermittently at first (warm instances still hold the
+old key) and then always. Nothing is written — Auto only proposes; «Guardar» writes — so the cost
+is minutes of Auto unavailable. If the rotation stalls between steps 2 and 4, finishing it is the
+fix; rolling back means disabling the new Secret Manager version and redeploying the function.
 
 ---
 

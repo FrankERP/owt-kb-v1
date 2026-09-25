@@ -332,11 +332,6 @@ def parse_pins(raw, weeks: int, weekends_w_sat: Sequence[int]) -> List[Pin]:
                 f"pinned[{i}] names an unknown role {role!r}; roles are {ROLE_ORDER}.")
         if not isinstance(person, str) or not person.strip():
             raise ValueError(f"pinned[{i}].person must be a non-empty name, got {person!r}.")
-        if person != person.strip():
-            # " Hugo" would become a second person beside "Hugo" and could take a
-            # second seat in the same service. Names arrive resolved; refuse, never trim.
-            raise ValueError(
-                f"pinned[{i}].person {person!r} has leading or trailing spaces.")
         if not 1 <= week <= weeks:
             raise ValueError(
                 f"pinned[{i}] references week {week}, but the month has {weeks} weeks.")
@@ -609,19 +604,22 @@ def validate_config(
     pins = parse_pins(config.pinned, config.weeks, config.weekends_w_sat)
     pinned_only = {p for p, _, _ in pins} - set(all_people)
     if pinned_only:
-        # A pinned-only name that differs from another name only in capitalisation is a
-        # misspelling, not a new person: it would sit beside the real one, and
-        # parse_dsl_rules' case-insensitive lookup would then attach that person's rules
-        # to either spelling depending on set iteration order — which varies between
-        # processes. Refused, never silently mapped.
+        # A pinned-only name that differs from another name only in capitalisation or
+        # surrounding spaces is a misspelling, not a new person: it would sit beside the
+        # real one — " Hugo" took a second seat in Hugo's service — and parse_dsl_rules'
+        # case-insensitive lookup would attach that person's rules to either spelling
+        # depending on set iteration order, which varies between processes. Refused,
+        # never silently mapped. Only a PINNED-ONLY spelling is refused: a pin on a pool
+        # member's exact name is always accepted, trailing space and all (Studio does
+        # not trim member_name), and a pool that already holds variants is untouched.
         spellings: Dict[str, List[str]] = defaultdict(list)
         for name in sorted(set(all_people) | pinned_only):
-            spellings[name.lower()].append(name)
+            spellings[name.strip().lower()].append(name)
         for names in spellings.values():
             if len(names) > 1 and any(n in pinned_only for n in names):
                 raise ValueError(
-                    f"pinned names {names} differ only in capitalisation; pins must use "
-                    "the member's exact name.")
+                    f"pinned names {names} differ only in capitalisation or spacing; "
+                    "pins must use the member's exact name.")
         all_people = sorted(set(all_people) | pinned_only)
 
     # After the union, so a DSL clause may name a pinned-only person and both
@@ -1611,8 +1609,9 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
     empty_target = stage_a.weighted_empty_used
 
     # Stage A's own count is a valid ceiling too: its solution meets both
-    # weighted_empty <= empty_target and n_viol <= its count, so it can never make a
-    # Stage B pass infeasible. It matters when solve 0 left no ceiling (or a slack one):
+    # weighted_empty <= empty_target and n_viol <= its count, so the two bounds never
+    # conflict (a pass can still rule out a fairness tier — that is the ceiling's job).
+    # It matters when solve 0 left no ceiling (or a slack one):
     # measured, Stage B then broke three or four rules in weeks nobody pinned while
     # Stage A had needed one — exactly what ADR-0010 forbids. violation_ceiling_proven
     # still reports solve 0 alone: Stage A's count is minimal only if Stage A proved it.

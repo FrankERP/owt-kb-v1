@@ -121,9 +121,11 @@ ADR-0041. The client that sends pins («Solo llenar vacíos») is a separate del
   increased for fairness". Which instance gives among equal-size sets is still Stage B's choice.
   Stage A's own count also caps Stage B whenever it is lower — which covers solve 0 finding
   nothing in time (then Stage A runs uncapped, but no Stage B pass can exceed what Stage A
-  needed) and a slack `FEASIBLE` solve 0. `violation_ceiling_proven` reports solve 0 alone.
+  found) and a slack `FEASIBLE` solve 0. `violation_ceiling_proven` reports solve 0 alone.
   Stage A starts from solve 0's month as a search hint, so a board with dozens of pinned people
-  in one row still returns a month instead of timing out into the mandatory-lead diagnostic.
+  in one row returns a month where it used to time out into the mandatory-lead diagnostic. It is
+  a hint, not a guarantee: Stage A still needs its presolve (~0.2 s on a MacBook for 64 such pins),
+  so a slow enough container can still time out, and that path still reports "infeasible".
   Measured 2026-09-25 (MacBook, 1 worker, 5 s cap — a laptop number): solve 0 was `OPTIMAL` on
   every §7 case × 3 seeds, including a 52-pin full board and 30 pins on 12 people, in 4–6 ms.
 - **The report is read from the assignment, never from the booleans**, which are
@@ -136,10 +138,11 @@ ADR-0041. The client that sends pins («Solo llenar vacíos») is a separate del
   `builtin:mandatory_lead` marker and a «Sin cubrir» seat instead of `ok: false`.
 - **Refusals** (all `ValueError` → `ok: false`): a malformed entry, more than 100 entries (never
   truncated), an unknown role, a week outside the month, a `Sat.*` pin on a week with no
-  Saturday, two different pins for one person in one service, a name with leading or trailing
-  spaces, and a pinned-only name that differs from another name only in capitalisation (a
-  misspelling: it would sit beside the real person and could take their DSL rules). Exact
-  duplicates collapse.
+  Saturday, two different pins for one person in one service, and a pinned-only name that differs
+  from another name only in capitalisation or surrounding spaces (a misspelling: it would sit
+  beside the real person and could take their DSL rules). A pin on a pool member's exact name is
+  always accepted — Studio does not trim `member_name`, so that can include a trailing space.
+  Exact duplicates collapse.
 - **A consecutive-rule quirk for whoever writes the copy:** pinning someone into both services
   of one weekend under `!consecutive on *.Lead` reports the W(n-1)–W(n) and W(n)–W(n+1) pairs,
   because each pair sums both weeks' services and the rule already forbade a same-weekend double.
