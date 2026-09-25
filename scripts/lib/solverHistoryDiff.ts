@@ -260,6 +260,11 @@ export interface HistoryDiffResult {
   sessions: MonthSessions[];
   totals: DiffTotals;
   control: { withReceipt: number; unchanged: number };
+  /**
+   * Plan D7: of the documents with a found receipt that are unchanged, which
+   * creation-time publication value reproduced the stamp. "The report states the mix."
+   */
+  unchangedMix: { published: number; draft: number };
   /** Evidence the verdicts do not rest on but Frank should see: ids only. */
   notes: string[];
 }
@@ -292,6 +297,16 @@ function compareStrings(a: string, b: string): number {
 
 function describe(v: unknown): string {
   return v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
+}
+
+/**
+ * A `JSON.parse` failure, described WITHOUT its message: V8 quotes an excerpt of
+ * the input ("Unexpected token 'A', "[Ana …" is not valid JSON"), and in an
+ * export that excerpt can be a member's name on its way to a terminal.
+ */
+export function describeJsonError(e: unknown): string {
+  const m = e instanceof Error ? /position (\d+)/.exec(e.message) : null;
+  return m ? `malformed at position ${m[1]}` : "malformed";
 }
 
 /** Months as one integer, so `2026-10` sorts after `2026-9` — never the key as a string. */
@@ -401,14 +416,14 @@ export function parseExport(raw: unknown, label = "export"): SolverHistoryEntry[
     try {
       value = JSON.parse(text);
     } catch (e) {
-      throw new Error(`${label}: not JSON (${e instanceof Error ? e.message : String(e)})`);
+      throw new Error(`${label}: not JSON (${describeJsonError(e)})`);
     }
     // A value pasted with its quotes on is still unambiguous: unwrap one level.
     if (typeof value === "string") {
       try {
         value = JSON.parse(value);
       } catch (e) {
-        throw new Error(`${label}: not JSON inside the quoted string (${e instanceof Error ? e.message : String(e)})`);
+        throw new Error(`${label}: not JSON inside the quoted string (${describeJsonError(e)})`);
       }
     }
   }
@@ -1028,6 +1043,10 @@ export function classifyHistoryDiff(input: ClassifyInput): HistoryDiffResult {
     sessions,
     totals: totalsOf(cells, blockers),
     control: { withReceipt: evidence.control.withReceipt, unchanged: evidence.control.unchanged },
+    unchangedMix: {
+      published: evidence.documents.filter((d) => d.receipt.status === "found" && d.unchangedAs === "published").length,
+      draft: evidence.documents.filter((d) => d.receipt.status === "found" && d.unchangedAs === "draft").length,
+    },
     notes: notesOf(derived, evidence),
   };
 }

@@ -24,6 +24,7 @@ import type { SolverHistoryEntry } from "../../app/utils/solverHistory";
 import {
   SESSION_GAP_MINUTES,
   classifyHistoryDiff,
+  describeJsonError,
   mergeBundles,
   neededTargets,
   parseBundle,
@@ -239,7 +240,7 @@ function parseSolveRequest(raw: string, label: string): Record<string, unknown> 
   try {
     value = JSON.parse(raw);
   } catch (e) {
-    throw new Error(`${label}: not JSON (${e instanceof Error ? e.message : String(e)})`);
+    throw new Error(`${label}: not JSON (${describeJsonError(e)})`);
   }
   if (!isObj(value)) throw new Error(`${label}: expected the solve request's JSON object`);
   const arrays = ["weekends_with_saturday", "sunday_leads", "saturday_leads", "support", "dsl_rules", "history"];
@@ -349,7 +350,7 @@ async function run(argv: readonly string[], deps: CliDeps): Promise<number> {
         json = JSON.parse(read(file));
       } catch (e) {
         if (e instanceof Refusal) throw e;
-        throw new Error(`${bundleLabels[i]}: not JSON (${e instanceof Error ? e.message : String(e)})`);
+        throw new Error(`${bundleLabels[i]}: not JSON (${describeJsonError(e)})`);
       }
       return parseBundle(json, bundleLabels[i]);
     }),

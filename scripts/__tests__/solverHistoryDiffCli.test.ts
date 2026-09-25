@@ -421,6 +421,20 @@ describe("refusals on the inputs", () => {
     expect(h.err.join("\n")).toMatch(/disagree on 2026-11/);
   });
 
+  it("a malformed input's refusal never echoes its text: the parser's excerpt could be a name", async () => {
+    const good = bundle("b.json", EXPORT_OCT, GOOD_DERIVED);
+    for (const argv of [
+      ["--bundle", good, "--export", writeJson("export-bad.json", `[${ANA}]`)],
+      ["--bundle", writeJson("bundle-bad.json", `{"exportRaw": ${ANA}}`)],
+      ["--bundle", good, "--solve-request", writeJson("solve-bad.json", `{"sunday_leads": [${ANA}]}`)],
+    ]) {
+      const h = harness();
+      expect(await runSolverHistoryDiff([...argv, "--out", path.join(work, "out")], h.deps)).toBe(2);
+      expect(h.err.join("\n")).toMatch(/not JSON/);
+      expect(h.err.join("\n")).not.toContain("Ana");
+    }
+  });
+
   it("refuses a malformed export with its file name", async () => {
     const h = harness();
     const code = await runSolverHistoryDiff(
@@ -461,7 +475,7 @@ describe("a whole run", () => {
     expect(md).toMatch(/single data point/);
     expect(md).toMatch(/not fairness-driven/);
     expect(md).toMatch(/Fingerprint control rate/);
-    expect(md).toMatch(/1 \/ 1/);
+    expect(md).toMatch(/1 \/ 1 \(100\.0%\); unchanged as published 1, as draft 0/);
     expect(md).toMatch(/bundle-2026-10-01\.json/);
     expect(md).toMatch(/2026-10-01T12:00:00\.000Z/);
     expect(md).toMatch(/equals the recomputed local side/);
@@ -475,6 +489,7 @@ describe("a whole run", () => {
     const stdout = h.out.join("\n");
     for (const name of [ANA, BETO, CARO, DANI]) expect(stdout).not.toContain(name);
     expect(stdout).toMatch(/explained 1 · unverified 0 · bug 0/);
+    expect(stdout).toMatch(/control 2026-11: 1 \/ 1 \(100\.0%\); unchanged as published 1, as draft 0/);
   });
 
   it("says when the captured request's history is not what this export recomputes to", async () => {

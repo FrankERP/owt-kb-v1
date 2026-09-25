@@ -190,6 +190,14 @@ function stopOnControl(c: { withReceipt: number; unchanged: number }): boolean {
   return c.withReceipt > 0 && c.unchanged === 0;
 }
 
+/** The control rate with plan D7's mix: which creation-time publication value reproduced the stamp. */
+function controlLine(r: HistoryDiffResult): string {
+  return (
+    `${controlRate(r.control)}; unchanged as published ${r.unchangedMix.published}, as draft ${r.unchangedMix.draft}` +
+    (stopOnControl(r.control) ? " — STOP: 0% while documents with a receipt are present" : "")
+  );
+}
+
 // ─── Markdown ────────────────────────────────────────────────────────────────
 
 function md(text: string): string {
@@ -308,7 +316,7 @@ function resultLines(primary: PrimaryReport, r: HistoryDiffResult): string[] {
   const lines: string[] = [];
   lines.push(`### ${md(primary.label)} → target ${r.target.key} (window ${r.window.map((w) => w.key).join(", ")})`, "");
   lines.push(
-    `- Fingerprint control rate: ${controlRate(r.control)}${stopOnControl(r.control) ? " — ⚠ **STOP**: 0% while documents with a receipt are present. Investigate the rebuild before accepting any unverified." : ""}`,
+    `- Fingerprint control rate: ${controlLine(r)}${stopOnControl(r.control) ? ". ⚠ Investigate the rebuild before accepting any unverified." : ""}`,
     `- Cells: explained ${r.totals.cells.explained} · unverified ${r.totals.cells.unverified} · bug ${r.totals.cells.bug}; duplicate targets ${r.totals.blockers}.`,
   );
   for (const n of r.notes) lines.push(`- Note: ${md(n)}`);
@@ -391,7 +399,7 @@ export function renderMarkdown(model: ReportModel): string {
     for (const r of p.results) {
       if (seen.has(r.target.key)) continue;
       seen.add(r.target.key);
-      lines.push(`- ${r.target.key}: ${controlRate(r.control)}${stopOnControl(r.control) ? " — ⚠ STOP (0% with receipts present)" : ""}`);
+      lines.push(`- ${r.target.key}: ${controlLine(r)}`);
     }
   }
   lines.push("", "**Totals** (every primary × target; overlapping windows are counted in each):", "", ...totalsTable(model.totals), "");
@@ -421,7 +429,7 @@ export function stdoutLines(model: ReportModel, paths: { md: string; json: strin
     for (const r of p.results) {
       if (seen.has(r.target.key)) continue;
       seen.add(r.target.key);
-      lines.push(`  control ${r.target.key}: ${controlRate(r.control)}${stopOnControl(r.control) ? " STOP" : ""}`);
+      lines.push(`  control ${r.target.key}: ${controlLine(r)}`);
     }
   }
   if (model.solve && model.solve.runsPerSide > 0) {

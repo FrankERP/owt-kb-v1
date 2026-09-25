@@ -669,6 +669,22 @@ describe("totals", () => {
     expect(result.totals.blockers).toBe(0);
     expect(result.control).toEqual({ withReceipt: 2, unchanged: 1 });
   });
+
+  it("states D7's mix: which publication value reproduced each unchanged document's stamp", () => {
+    const result = classify({
+      primary: [entry(2026, 10, { [BETO]: { "Sun.BGV": 1 } })],
+      derived: derivedFor(NOV, [
+        BASE_OCT,
+        doc({ roleId: "sun-1011", day: "2026-10-11", unchangedAs: "draft" }),
+        doc({ roleId: "sun-1018", day: "2026-10-18", unchangedAs: "draft" }),
+        doc({ roleId: "sun-1025", day: "2026-10-25", unchangedAs: null }),
+        // Unchanged only by its own stamp, its receipt missing: not in the control, not in the mix.
+        doc({ roleId: "sat-1003", type: "saturday_role", day: "2026-10-03", receipt: { status: "not_found", receiptId: "rc-x" } }),
+      ]),
+    });
+    expect(result.control).toEqual({ withReceipt: 4, unchanged: 3 });
+    expect(result.unchangedMix).toEqual({ published: 1, draft: 2 });
+  });
 });
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
@@ -684,6 +700,19 @@ describe("parseExport", () => {
     expect(parseExport(" null \n")).toEqual([]);
     // Zeros are kept: they are rule 3a's signature.
     expect(parseExport(JSON.stringify(good))[0].role_counts[ANA]["Sun.BGV"]).toBe(0);
+  });
+
+  it("never echoes the export's text in an error — the JSON parser quotes it, and it can be a name", () => {
+    for (const raw of [`[{"key":"2026-9", ${ANA}}]`, `[${ANA}]`, JSON.stringify(`[${ANA}]`)]) {
+      expect(() => parseExport(raw, "export-x.json")).toThrow(/export-x\.json: not JSON/);
+      let message = "";
+      try {
+        parseExport(raw, "export-x.json");
+      } catch (e) {
+        message = e instanceof Error ? e.message : String(e);
+      }
+      expect(message).not.toContain("Ana");
+    }
   });
 
   it("keeps a __proto__ name as an ordinary key", () => {
