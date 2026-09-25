@@ -22,6 +22,7 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
   rawIntegrityClient: { fetch: (...a: unknown[]) => h.raw(...a) },
 }));
 
+import { serviceTodayIso } from "@/app/components/admin/serviceReadiness";
 import { UNSEATED_MEMBER_ID } from "./serviceFixtures";
 import {
   presentProposal,
@@ -36,7 +37,7 @@ import {
 } from "../proposalPresenter";
 import { loadMemberNames, loadServiceSnapshot, type ServiceSnapshot, type SnapshotRow } from "../serviceSnapshot";
 import { loadSongTitles } from "../songTitles";
-import { readToolStore, scopedResponder, type ScopedResponderOptions } from "./readToolFixtures";
+import { FROZEN_EVENING, readToolStore, scopedResponder, type ScopedResponderOptions } from "./readToolFixtures";
 
 async function snapshotOf(options: ScopedResponderOptions = {}): Promise<ServiceSnapshot> {
   const responder = scopedResponder(readToolStore(), options);
@@ -164,6 +165,22 @@ describe("presentProposal — threadOpen", () => {
     const snapshot = await snapshotOf();
     const row = proposalRow({ service_type: "special", service_date: "2026-09-29", status: "pending", messages: [] });
     expect(presentProposal(snapshot, row, await emptyLookups(), "2026-09-30", false).threadOpen).toBe(false);
+  });
+
+  it("with the clock frozen at 2026-09-30T23:30:00-06:00 (already 2026-10-01 in UTC): a service dated 2026-09-30 is open, one dated 2026-09-29 is closed", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(FROZEN_EVENING));
+    const snapshot = await snapshotOf();
+    const lookups = await emptyLookups();
+    // `serviceTodayIso()` is CDMX ("2026-09-30"), the discriminating case: a
+    // UTC-derived "today" would already read "2026-10-01" and wrongly close
+    // the 09-30 proposal's thread.
+    const today = serviceTodayIso();
+    expect(today).toBe("2026-09-30");
+    const open = proposalRow({ service_type: "special", service_date: "2026-09-30", status: "pending", messages: [] });
+    const closed = proposalRow({ service_type: "special", service_date: "2026-09-29", status: "pending", messages: [] });
+    expect(presentProposal(snapshot, open, lookups, today, false).threadOpen).toBe(true);
+    expect(presentProposal(snapshot, closed, lookups, today, false).threadOpen).toBe(false);
   });
 });
 

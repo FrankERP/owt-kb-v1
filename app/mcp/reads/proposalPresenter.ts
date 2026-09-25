@@ -7,16 +7,18 @@
 //
 // LINKING — read from `serviceReadModel.ts:82-92` (`proposalTargetKey`) and
 // followed exactly rather than invented, over the snapshot's own rows instead
-// of re-deriving a key format to compare against `roleTargetKey` (the two use
-// different namespaces on purpose: `sunday:<date>` vs `sunday_role:<week>`).
-// A weekend proposal (`service_type` "sunday" | "saturday") resolves to the
-// ONE canonical service of that kind whose own calendar day (`storedRoleDate`
-// — a Saturday's is the Saturday's own date) equals the proposal's
+// of re-deriving a key format to compare against `roleTargetKey` (the two
+// index different domains under different namespaces on purpose, so this
+// module never compares one against the other). A weekend proposal
+// (`service_type` "sunday" | "saturday") resolves to the ONE canonical
+// service of that kind whose own calendar day (`storedRoleDate` — a
+// Saturday's is the Saturday's own date) equals the proposal's
 // `service_date`; more than one match (a duplicate weekend target) or none is
 // UNRESOLVED, never a guess (A15's discipline). A special proposal resolves by
-// `service_ref`: the canonical `special_role` that id names, or unresolved
-// when it names none. Either way an unresolvable link reports
-// `serviceId: null`, never a dropped proposal.
+// `service_ref`: the canonical special service that id names (`serviceKindOf`,
+// never a role-type literal — spec I2), or unresolved when it names none.
+// Either way an unresolvable link reports `serviceId: null`, never a dropped
+// proposal.
 //
 // UNREAD STATE IS NEVER REPORTED (ADR-0024): there is no read-mark on either
 // document, so nothing here derives one.
@@ -90,7 +92,7 @@ export function resolveProposalServiceId(snapshot: ServiceSnapshot, row: Snapsho
     const ref = stringOrNull(row.service_ref);
     if (!ref) return null;
     const role = snapshot.readiness.rolesById.get(ref);
-    return isObj(role) && role._type === "special_role" ? ref : null;
+    return isObj(role) && serviceKindOf(role._type) === "special" ? ref : null;
   }
   if (kind === "sunday" || kind === "saturday") {
     const date = stringOrNull(row.service_date);
