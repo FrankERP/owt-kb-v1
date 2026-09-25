@@ -26,6 +26,7 @@ the value from the test's skip message in the CI log, commit it, and it un-skips
 
 import hashlib
 import json
+import platform
 import unittest
 
 from ortools.sat.python import cp_model
@@ -52,9 +53,34 @@ STAGE_A_FINGERPRINTS = {
 # invisible to it by construction.
 OBJECTIVE_TERMS_SEED_42 = 568
 
-# The schedule make_config(seed=42) returns, captured on the CI runner that enforces
-# it — never on a laptop. None means capture mode: the test skips and prints it.
-GOLDEN_SCHEDULE = None
+# The platform the golden was captured on, and the only one that enforces it. OPTIMAL
+# removes the wall clock, not every tie: measured 2026-09-25, macOS arm64 and the
+# Linux x86_64 runner run the same statuses on seed 42 (OPTIMAL, INFEASIBLE,
+# INFEASIBLE, OPTIMAL) — equal objective — and return schedules that differ in 7 of 20
+# cells. A runner-captured golden enforced everywhere would be red on every developer
+# Mac, so it skips off-platform; the fingerprint, machine-independent by construction,
+# runs everywhere and is the primary guard.
+GOLDEN_PLATFORM = ("Linux", "x86_64")
+
+# The schedule make_config(seed=42) returns on GOLDEN_PLATFORM, captured by the CI
+# runner that enforces it (run 36172243640, PR #100) — never on a laptop. None means
+# capture mode: the test skips and prints it.
+GOLDEN_SCHEDULE = {
+    "1": {
+        "Sunday": {"BGV": ["Hugo", "Lucía", "Rachel"], "Choir": ["Jakey", "Lali", "Niza"], "Lead": ["Frank", "Gaby"]},
+    },
+    "2": {
+        "Saturday": {"BGV": ["Hugo", "Marianne", "Pau E"], "Lead": ["Jakey", "Lucía"]},
+        "Sunday": {"BGV": ["Jakey", "Lali", "Niza"], "Choir": ["Hugo", "Pau E", "Rachel"], "Lead": ["Liu", "Marianne"]},
+    },
+    "3": {
+        "Sunday": {"BGV": ["Hugo", "Marianne", "Pau E"], "Choir": ["Liu", "Lucía", "Niza"], "Lead": ["Jakey", "Rachel"]},
+    },
+    "4": {
+        "Saturday": {"BGV": ["Lali", "Liu", "Rachel"], "Lead": ["Lucía", "Pau E"]},
+        "Sunday": {"BGV": ["Gaby", "Jakey", "Liu"], "Choir": ["Marianne", "Niza", "Rachel"], "Lead": ["Hugo", "Lali"]},
+    },
+}
 
 
 class _StopAfterStageA(Exception):
@@ -125,9 +151,14 @@ class PinlessOutputGolden(unittest.TestCase):
         self.assertEqual(self.solves[-1][0], "OPTIMAL", f"solves: {self.solves}")
 
     def test_schedule_matches_the_golden(self):
+        here = (platform.system(), platform.machine())
         if GOLDEN_SCHEDULE is None:
-            self.skipTest(f"capture: statuses={[s for s, _ in self.solves]} "
+            self.skipTest(f"capture: platform={here} "
+                          f"statuses={[s for s, _ in self.solves]} "
                           f"schedule={json.dumps(self.res['schedule'], sort_keys=True)}")
+        if here != GOLDEN_PLATFORM:
+            self.skipTest(f"the golden was captured on {GOLDEN_PLATFORM} and this is {here}; "
+                          "an equal-objective tie can resolve differently across platforms")
         self.assertEqual(self.res["schedule"], GOLDEN_SCHEDULE)
 
     def test_objective_term_count(self):

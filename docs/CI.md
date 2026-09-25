@@ -39,7 +39,13 @@ pins existed, hold that:
 | Literal | Moves when | Legitimate re-capture |
 |---|---|---|
 | `STAGE_A_FINGERPRINTS` — sha256 of Stage A's model proto, three seeds | the model construction changes | a runner-image or ortools pin bump, in a PR that changes nothing else |
-| `GOLDEN_SCHEDULE` — the seed-42 schedule, behind an `OPTIMAL` precondition | the model **or** the objective changes | the above, plus a deliberate, reviewed objective change |
+| `GOLDEN_SCHEDULE` — the seed-42 schedule, behind an `OPTIMAL` precondition, enforced only on `GOLDEN_PLATFORM` (the runner's Linux x86_64) | the model **or** the objective changes | the above, plus a deliberate, reviewed objective change |
+
+**The output golden skips off-platform, on purpose.** `OPTIMAL` removes the wall clock, not
+every tie: on 2026-09-25 a Mac (arm64) and this runner both proved seed 42 optimal through the
+same statuses and returned schedules differing in 7 of 20 cells. Enforced everywhere, a
+runner-captured golden would be red on every developer machine. The fingerprint is
+machine-independent by construction and runs everywhere.
 
 **A red fingerprint inside a solver PR is a finding, never a literal to update** — it means
 the pinless path moved, which is the one thing the preview-less release bets did not happen.
