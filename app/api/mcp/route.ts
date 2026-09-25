@@ -37,6 +37,7 @@ import { resourceMetadataUrl } from "@/app/mcp/oauth/origin";
 import { jsonNoStore, mcpUnauthorizedResponse } from "@/app/mcp/oauth/responses";
 import { verifyAccessToken } from "@/app/mcp/oauth/tokens";
 import { MCP_SERVER_NAME, mcpServerVersion } from "@/app/mcp/serverInfo";
+import { completeResponse } from "@/app/mcp/transport/completeResponse";
 import { registerGetMemberAvailability } from "@/app/mcp/tools/getMemberAvailability";
 import { registerGetParticipation } from "@/app/mcp/tools/getParticipation";
 import { registerGetService } from "@/app/mcp/tools/getService";
@@ -67,6 +68,12 @@ const SERVER_INFO = { name: MCP_SERVER_NAME, version: mcpServerVersion() };
  * answer a completed JSON-RPC error instead, and `listChanged: false` stops
  * advertising a notification this server never sends (the tool list is fixed
  * per deployment). The capability MERGES with what `registerTool` sets up.
+ *
+ * NO WORK AFTER THE RESPONSE, either. The SDK can answer with an SSE stream
+ * while a tool is still running (always in the 2025-06-18 era; after a
+ * mid-call notification in 2026-07-28), and Next drops a `revalidatePath`
+ * pushed after the handler returned. `handle()` therefore reads every SSE
+ * response to its end before returning it (`completeResponse`, finding F2).
  */
 const mcpHandler = createMcpHandler(
   (server) => {
@@ -252,7 +259,12 @@ async function handle(request: Request): Promise<Response> {
     // as `ctx.http.authInfo` — what its own `withMcpAuth` does, on the
     // original request. Here it rides on the allowlisted copy, built only
     // after every check has passed.
-    return await mcpHandler(forwardedRequest(request, auth.authInfo));
+    const response = await mcpHandler(forwardedRequest(request, auth.authInfo));
+    // F2: an SSE response is read to its end before it is returned, so the
+    // tool behind it — its `revalidatePath`, its `after()` — finishes while
+    // this handler is still running. `await`ed inside the `try`, so a stream
+    // that errors lands in the catch below.
+    return await completeResponse(response);
   } catch {
     // Never echo or log the error: it may carry request data.
     return serverError("unexpected");
