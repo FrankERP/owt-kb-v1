@@ -9,20 +9,27 @@
 > [Release record](#release-record-p0-2026-09-24) for the evidence and the
 > [release checklist](#p0-release-checklist-steps-1213) for how it shipped.
 >
-> **P1 status: implemented on branch `claude/mcp-p1-reads`, NOT released.** The seven read tools
+> **P1 status: released to production 2026-09-25** (PR
+> [#98](https://github.com/FrankERP/owt-kb-v1/pull/98), `main` `a04edb43`). The seven read tools
 > below (`get_service`, `list_services`, `search_songs`, `get_song`, `get_member_availability`,
 > `get_participation`, `list_proposals`) exist in the [Tools](#tools) section, the route registers
-> them, and the full gate set (`tsc`, `vitest`, `eslint`) is green on that branch — but it has not
-> merged to `preview` or `main`, so production still exposes `ping` alone. See the
-> [P1 release checklist](#p1-release-checklist-not-started) for what merging and deploying it
-> still needs.
+> them, the full gate set (`tsc`, `vitest`, `eslint`) is green, and production now exposes all
+> eight tools. **Frank's phone acceptance is still pending** — he is teaching and will run it
+> later; checklist steps 8–9 (the answers compared against `/admin` and the song page, and
+> production latency recorded against the 10 s stop condition) are not done. See the
+> [P1 release record](#release-record-p1-2026-09-25) for the evidence and the
+> [P1 release checklist](#p1-release-checklist-released-2026-09-25) for how it shipped and what's
+> still open.
+>
+> **Summary: P0 released 2026-09-24; P1 released to production 2026-09-25 (PR #98, `main`
+> `a04edb43`); phone acceptance pending.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
 connector is OAuth-gated end to end: only a super-admin can authorize it, and only super-admin
 tools are exposed — P0 shipped one health check (`ping`); P1 adds seven read-only tools over the
-same service/song/member/proposal data `/admin` shows (not yet released; see the status banner
-above). See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
+same service/song/member/proposal data `/admin` shows (released to production 2026-09-25; see the
+status banner above). See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
 registration is stateless, and [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#mcp--oauth) /
 [API_REFERENCE.md](API_REFERENCE.md) for the route-level contract.
 
@@ -85,9 +92,10 @@ response therefore means Frank reconnects from Claude; there is no partial-recov
 
 ### Tools
 
-Eight tools total: `ping` (P0, released) plus seven read tools (P1, **implemented on branch
-`claude/mcp-p1-reads`, NOT released** — see the status banner at the top of this document). Every
-tool is registered the same way — one file per tool in `app/mcp/tools/`, exporting a
+Eight tools total: `ping` (P0, released to production 2026-09-24) plus seven read tools (P1,
+**released to production 2026-09-25** — PR #98, `main` `a04edb43`; see the status banner at the
+top of this document). Every tool is registered the same way — one file per tool in
+`app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `app/api/mcp/route.ts` calls inside its handler
 init — and every one declares `annotations: { readOnlyHint: true, openWorldHint: false }` and a
 **strict** input schema (`.strict()` on the zod object): an unrecognized argument is refused as a
@@ -137,7 +145,7 @@ smoke's `ping` returned `version: fd0bbe2` and the phone's returned `version: c2
 deployed commit, never `"local"`. `now` is America/Mexico_City wall-clock time with its UTC
 offset.
 
-#### `get_service` (P1, not released)
+#### `get_service` (P1, released 2026-09-25)
 
 One service, selected **unambiguously**, exactly as `/admin` → Servicios shows it, plus the
 observations a later write would need (I7 — P1 ships no write tool yet, but the shape is already
@@ -210,7 +218,7 @@ the one a future `edit_setlist`/`swap_assignment` would take).
   read could not show, e.g. an unresolved song title) — never a silent empty answer in place of
   either.
 
-#### `list_services` (P1, not released)
+#### `list_services` (P1, released 2026-09-25)
 
 Every canonical service in a month (`month: "YYYY-MM"`, default the current CDMX month), in
 `/admin` → Servicios' order: date, then `compareServiceTime`. Services still tied after that are
@@ -224,7 +232,7 @@ An entry does not carry the refusal codes. The one refusal with no blocker code 
 over the fixture matrix (`servicePresenter.test.ts`); if it ever breaks, this entry would need the
 codes. A failed roles read is a refusal — `services: []` never means "the read failed silently."
 
-#### `search_songs` (P1, not released)
+#### `search_songs` (P1, released 2026-09-25)
 
 The same search `/biblioteca` runs, server-side, over the live catalogue: `normalizeText`
 accent-insensitive matching (a query of 2 characters or fewer uses substring matching; 3+ uses the
@@ -235,7 +243,7 @@ vocabulary (never hard-coded). Each result carries `id, slug, title, artist, key
 here is an array of **slugs** (re-filterable directly against this tool's own input), a
 deliberate asymmetry with `get_song`'s richer `{slug, title}` tag objects below.
 
-#### `get_song` (P1, not released)
+#### `get_song` (P1, released 2026-09-25)
 
 One song's OWN declared field set (**A8**) — neither of the two existing song-page projections,
 because neither is canonical. Selects by `songId` (canonical id; a `drafts.*` id is refused) or
@@ -270,7 +278,7 @@ one it selected by). `search_songs` is where both come from: each of its results
   document itself, never in a separate weekend setlist, so the exclusion is structural, not a
   filter.
 
-#### `get_member_availability` (P1, not released)
+#### `get_member_availability` (P1, released 2026-09-25)
 
 Unavailable dates for a month, for one member (`memberId` or `name`, mutually exclusive) or the
 whole team when neither is given. **I5: lists the WORSHIP TEAM only** — a kids-only member never
@@ -290,7 +298,7 @@ one member by `memberId` still works as long as that member's own document is we
 `name` lookup compares against every member's `member_name` and `alias`, so a malformed name field
 on any member fails it too.
 
-#### `get_participation` (P1, not released)
+#### `get_participation` (P1, released 2026-09-25)
 
 Per-member counts for a month, computed by the SAME function the Servicios sidebar uses
 (`computeParticipation`), fed every service dated that month, drafts included. Each member with at
@@ -309,7 +317,7 @@ reason `get_service`/`list_services` report it.
 Unlike `get_member_availability`, this tool applies **no** ministry filter at all — the I5
 exception for a SEAT read (above): a kids-only member seated on a role still counts.
 
-#### `list_proposals` (P1, not released)
+#### `list_proposals` (P1, released 2026-09-25)
 
 Setlist proposals for one service (`serviceId`, reusing `get_service`'s own selector validation)
 or a month (`month`, default current CDMX month) — never both. Each proposal carries its link to
@@ -441,9 +449,10 @@ creates a real grant document in the shared production Sanity dataset** — revo
 `scripts/revoke-mcp-grant.mjs`, per the steps below.
 
 By default the smoke calls only `ping`, and its `tools/list` check requires only that `ping` be
-registered — it passes against BOTH a P0-only deployment (production today) and a P1 one, since the
-plain smoke's job is proving the handshake and `ping`, not P1's registration. **`--reads`** (P1,
-once that branch is deployed to the target) adds a sub-step right after `ping` and before refresh,
+registered — it passes against BOTH a P0-only deployment and a P1 one (production and dev have
+both carried P1 since 2026-09-25), since the plain smoke's job is proving the handshake and
+`ping`, not P1's registration. **`--reads`** (P1, once P1 is deployed to the target — true of both
+dev and production since 2026-09-25) adds a sub-step right after `ping` and before refresh,
 and its OWN `tools/list` check requires the full eight tools (it is about to call the other seven):
 one call each to `list_services`, `get_service` (selected BY ID from `list_services`'s own first
 result, the same way `get_song` below uses `search_songs`'s — never `{}`, so it never hits its own
@@ -459,8 +468,8 @@ none exist (DV1).
 # initialize/tools-list/ping → refresh → ping again → prints the grant id + revoke command.
 node --env-file=.env.local scripts/mcp-dev-smoke.mjs
 
-# Same, plus one call to each of the seven P1 read tools after ping (once P1 is on the
-# target deployment) — see the Tools section above for what each one returns.
+# Same, plus one call to each of the seven P1 read tools after ping (P1 is on both dev and
+# production as of 2026-09-25) — see the Tools section above for what each one returns.
 node --env-file=.env.local scripts/mcp-dev-smoke.mjs --reads
 
 # Same, then pauses after printing the revoke command so you can run
@@ -498,6 +507,13 @@ already exists in the shared dataset, even though the run never reached step 9. 
 is followed by the grant id and the exact `revoke-mcp-grant.mjs --id <id> --apply` command. If the
 id cannot be decoded from the access token, it is followed instead by the dry run that lists every
 grant. A failed `--reads` pass is the usual case. Revoke that grant before re-running.
+
+**If the token exchange reaches the server but its response is lost** (the request never gets a
+usable reply — a dropped connection, a client-side timeout after the server already wrote the
+grant), the smoke has nothing to decode and prints no grant id at all — neither the FAIL line's id
+nor the "cannot be decoded" fallback names it. The grant still exists in the shared dataset;
+`revoke-mcp-grant.mjs`'s dry-run listing (no `--apply`) still shows it, most recent first — find it
+there and revoke it the normal way.
 
 Every secret, code and token the script ever prints is redacted (an 8-character prefix plus the
 length, never the value); nothing is written to disk.
@@ -604,6 +620,49 @@ grant and the one created and then revoked during the step-13 revocation test.
 
 ---
 
+## Release record (P1, 2026-09-25)
+
+All times America/Mexico_City.
+
+**Code on the branch.** P1 was implemented on `claude/mcp-p1-reads`, head `becffada`. Its gates:
+`tsc` 0 errors, vitest 376 files / 6649 tests, eslint 0 errors. The last review before merge was a
+scoped re-verify of the final fix wave, not a fresh fix — see the
+[P1 release checklist](#p1-release-checklist-released-2026-09-25) below.
+
+**Real-data probe.** Read-only, run against the production dataset before release: 0
+readiness-parity mismatches across 39 roles; 0 cross-tool mismatches; 13/13 calls ok, worst
+870 ms. This was measured laptop→Sanity through direct calls, **not through Vercel** — it is not a
+production-latency measurement (see checklist item 9).
+
+**Preview.** Merged into `preview` as `1345f711`, pushed 07:22. Deployment
+`dpl_AdqsDZ7XK45vQN5rAiDp4BzaEMhi` — alias includes `dev-owt-backstage.vercel.app`,
+`githubCommitSha` `1345f711`.
+
+**Dev smoke.** `node --env-file=.env.local scripts/mcp-dev-smoke.mjs --await-revocation --reads`
+passed 10/10 at 07:26. Reads 7/7: `list_services` (6 services), `get_service` (1),
+`search_songs` (20 songs), `get_song` (1), `get_member_availability` (36 members),
+`get_participation` (24 members / 6 services), `list_proposals` (6 proposals). `ping` reported
+`version: 1345f71`. The smoke's own dev grant was revoked afterward, and a subsequent call
+observed a `401 invalid_token`, same as the P0 revocation proof.
+
+**Production.** PR [#98](https://github.com/FrankERP/owt-kb-v1/pull/98), `gates` passed in
+7m34s, merged 07:37 (`main` `a04edb43`). Deployment `dpl_DsGcCQNyZWkv5JpPqsg3aBL4TMvR` — alias
+includes `owt-backstage.vercel.app`, `githubCommitSha` `a04edb43`. Public checks: the PRM
+discovery document returns 200, and `POST /api/mcp` with no token returns 401 with
+`resource_metadata`.
+
+**Revocation policy for this release.** The revoke-and-401 proof ran only on dev, against the dev
+smoke's own grant, per the operator's preference recorded 2026-09-25: Frank's production connector
+grant is not revoked as a routine release check, since revocation was already proven live on
+2026-09-24 on both dev and production (see [Release record (P0)](#release-record-p0-2026-09-24)
+above). The [P1 release checklist](#p1-release-checklist-released-2026-09-25) below reflects
+this — it carries no "revoke the production grant" step.
+
+**Not yet done.** Frank's phone acceptance (checklist items 8 and 9) — he is teaching and will run
+it later. Both are marked pending, not done, below.
+
+---
+
 ## P0 release checklist (steps 12–13)
 
 **Status: done — released 2026-09-24** (PR
@@ -632,10 +691,11 @@ are complete; see [Release record](#release-record-p0-2026-09-24) above for the 
 
 ---
 
-## P1 release checklist (not started)
+## P1 release checklist (released 2026-09-25)
 
-**Status: implemented on branch `claude/mcp-p1-reads`, NOT released.** All eight implementation
-steps of the P1 plan are implemented and gate-green on the branch:
+**Status: done — released 2026-09-25** (PR
+[#98](https://github.com/FrankERP/owt-kb-v1/pull/98), `main` `a04edb43`). All eight implementation
+steps of the P1 plan are implemented and gate-green:
 
 1. the foundation (`runReadTool`, the route's `maxDuration`, the test client mocks);
 2. the service snapshot (D1) and its parity test;
@@ -646,29 +706,36 @@ steps of the P1 plan are implemented and gate-green on the branch:
 7. `list_proposals`;
 8. registration, the tool-list test, the dev smoke's `--reads` and these docs.
 
-The plan's step 9, the release, is the checklist below.
-The final whole-branch code review ran on 2026-09-25 over `2fcb319c..b74bc9ae`, and its single
-fix wave is on the branch. Everything after that has not happened yet.
+The plan's step 9, the release, is the checklist below — all release steps through the production
+alias are done; **phone acceptance (items 8–9) is still pending**, deliberately, since Frank is
+teaching and will run it later. See the
+[P1 release record](#release-record-p1-2026-09-25) above for the full evidence behind every ✅.
 
 1. ✅ A fresh code review on the merge range (this repo's release rule: a merge to `main` needs a
    review of the diff, not just the plan). It ran over `2fcb319c..b74bc9ae` and returned "with
    fixes", with the additive-only rule confirmed.
-2. ✅ The fix wave for that review is committed on the branch.
-3. ☐ **Re-verify the fix** (CLAUDE.md): a scoped review of the fix commits' range, and the gates
-   (`tsc`, `vitest`, `eslint` with 0 errors) re-run on the final tree. The last worklog entry
-   before the merge must be this verification, not a fix. The plan also asks the release review
-   to confirm two things: that every returned `_rev`/`_key` comes from the same query row as its
-   content, and that no MCP file carries a role-type literal. `mcpProtectedTypeLiterals.test.ts`
-   pins the second. If the record of step 1 does not show the first, confirm it here.
-4. ☐ Merge `claude/mcp-p1-reads` into `preview`, push, verify the dev alias moved
-   (`dev-owt-backstage.vercel.app`'s deployment has the merged commit's `githubCommitSha`).
-5. ☐ Frank runs `scripts/mcp-dev-smoke.mjs --await-revocation --reads` against dev (see
-   [Dev smoke procedure](#dev-smoke-procedure)). He confirms all seven read tools PASS, then
-   revokes the grant it prints.
-6. ☐ Open a PR from the feature branch into `main`, and wait for the `gates` check.
-7. ☐ With Frank's OK, merge the PR (the production release). Then verify the production alias the
-   same way.
-8. ☐ **Acceptance from the phone**, on production. Frank asks for:
+2. ✅ The fix wave for that review is committed on the branch (head `becffada`).
+3. ✅ **Re-verify the fix** (CLAUDE.md): a scoped review of the fix commits' range, with the gates
+   (`tsc`, `vitest`, `eslint`) re-run on the final tree — `tsc` 0, vitest 376 files / 6649 tests,
+   eslint 0 errors. `mcpProtectedTypeLiterals.test.ts` pins the no-role-type-literal confirmation.
+   **Not separately evidenced in this release's record:** whether the re-verify explicitly
+   reconfirmed that every returned `_rev`/`_key` comes from the same query row as its content —
+   the record available at release time does not show this check by name.
+4. ✅ Merged `claude/mcp-p1-reads` into `preview` as `1345f711`, pushed 07:22; dev alias verified —
+   deployment `dpl_AdqsDZ7XK45vQN5rAiDp4BzaEMhi`, alias includes `dev-owt-backstage.vercel.app`,
+   `githubCommitSha` `1345f711`.
+5. ✅ `scripts/mcp-dev-smoke.mjs --await-revocation --reads` ran against dev (see
+   [Dev smoke procedure](#dev-smoke-procedure)) — passed 10/10 at 07:26, all seven read tools
+   PASS, and the grant it printed was revoked afterward. **Revocation policy:** this is the only
+   revocation check this release performs — Frank's production connector grant is not revoked as
+   a routine release step, since revocation was already proven live on 2026-09-24 on both dev and
+   production (see [Release record (P0)](#release-record-p0-2026-09-24)).
+6. ✅ PR [#98](https://github.com/FrankERP/owt-kb-v1/pull/98) opened from the feature branch into
+   `main`; `gates` passed in 7m34s.
+7. ✅ Merged 07:37 (`main` `a04edb43`) — the production release. Production alias verified —
+   deployment `dpl_DsGcCQNyZWkv5JpPqsg3aBL4TMvR`, alias includes `owt-backstage.vercel.app`,
+   `githubCommitSha` `a04edb43`.
+8. ☐ **PENDING — acceptance from the phone**, on production. Frank asks for:
    - next Sunday's service;
    - this month's services;
    - a song search;
@@ -679,11 +746,21 @@ fix wave is on the branch. Everything after that has not happened yet.
 
    Compare each answer with `/admin` (Servicios, Disponibilidad) and the song page. Any
    disagreement that is not one of the named departures in [Tools](#tools) is a stop condition.
-   So is any `isError` on a valid request.
-9. ☐ **Record the observed latency** of `get_service` and `list_services` on production, here.
-   The plan's stop condition is **10 s**: a slower answer stops the release. The remedy is a
-   follow-up plan that narrows the load (a month-scoped snapshot plus a parity proof, plan A1/D3),
-   never an ad hoc change.
-10. ☐ Update this document's status banner, the [Tools](#tools) section's per-tool "(P1, not
-    released)" markers, and `docs/API_REFERENCE.md` / `docs/README.md` to say released, with the
-    PR number and commit.
+   So is any `isError` on a valid request. Frank is teaching as of 2026-09-25 and will run this
+   later — do not mark it done until he has.
+9. ☐ **PENDING — record the observed latency** of `get_service` and `list_services` on
+   production, here, once Frank runs item 8. The plan's stop condition is **10 s**: a slower
+   answer stops the release. **The 870 ms real-data probe in the
+   [release record](#release-record-p1-2026-09-25) above does NOT satisfy this item** — it was
+   measured laptop→Sanity through direct calls, not through Vercel, so it is not a production
+   latency measurement. The remedy for a genuine latency failure is a follow-up plan that narrows
+   the load (a month-scoped snapshot plus a parity proof, plan A1/D3), never an ad hoc change.
+10. ✅ Updated this document's status banner, the [Tools](#tools) section's per-tool markers, and
+    `docs/API_REFERENCE.md` / `docs/README.md` to say released, with the PR number and commit
+    (this change).
+
+**Rollback:** revert PR [#98](https://github.com/FrankERP/owt-kb-v1/pull/98), or set
+`MCP_DISABLED` (see [Kill switch](#kill-switch) and
+[SECRETS.md](SECRETS.md#mcp_disabled)) as the emergency switch — it shuts every MCP and OAuth
+route (503, «No disponible»), but **takes effect on the next deployment**, not immediately, since
+env vars bind at build time.
