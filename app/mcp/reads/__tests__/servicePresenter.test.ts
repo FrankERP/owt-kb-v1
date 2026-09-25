@@ -161,6 +161,16 @@ describe("resolveService", () => {
     if (!missing.ok) expect(missing.message).toMatch(/no existe/i);
   });
 
+  it("refuses a canonical id of another document type — only a role is a service (I13)", async () => {
+    const snapshot = await snapshotOf(readToolStore());
+    for (const id of ["set-sun-1004", "mem-ana", "prop-sat-1003", "roleTarget.sunday_role.2026-10-04"]) {
+      expect(parseServiceSelector({ serviceId: id }).ok, id).toBe(true);
+      const r = resolveService(snapshot, selector({ serviceId: id }), "2026-09-24");
+      expect(r.ok, id).toBe(false);
+      if (!r.ok) expect(r.message, id).toMatch(/no existe/i);
+    }
+  });
+
   it("resolves a Sunday by its date", async () => {
     const snapshot = await snapshotOf(readToolStore());
     const r = resolveService(snapshot, selector({ date: "2026-10-04", kind: "sunday" }), "2026-09-24");
