@@ -20,7 +20,7 @@
 // `listChanged: false` — see the route): every stream it serves ends with its
 // one JSON-RPC response. The SSE framing is unchanged, so clients parse the
 // body exactly as before; what they lose is only incremental delivery — the
-// priming event and any notification now arrive together with the result.
+// keep-alive comments and any notification now arrive together with the result.
 //
 // Its own module (not a helper inside `route.ts`, whose exports Next pins to
 // the HTTP methods and the route config) so anything that drives the MCP

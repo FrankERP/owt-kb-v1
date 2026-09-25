@@ -166,13 +166,24 @@ const FORWARDED_HEADER_PREFIX = "mcp-param-";
  * the request it received as `ctx.http.req`, so the allowlist here is what
  * keeps the raw bearer, the session cookie and the bypass secret out of every
  * tool. The body moves to the copy; the original is not read again.
+ *
+ * DETACHED FROM THE CLIENT'S ABORT SIGNAL (`signal: null`). Next aborts the
+ * incoming request's signal when the socket closes, and a copy made without
+ * `signal` follows it. The SDK treats that abort as the end of the exchange:
+ * the legacy leg tears its stream down, and the 2026-07-28 leg closes and
+ * answers 499. Either way `handle()` would return while the tool was still
+ * running, and a disconnecting client would drop that tool's `revalidatePath`
+ * and `after()` (F2 again). Detached, every tool call runs to completion
+ * inside the 60 s ceiling, and the response goes to a closed socket. For the
+ * write tools: never check an abort signal (`ctx.mcpReq.signal`) between a
+ * Sanity commit and its revalidate/after.
  */
 function forwardedRequest(request: Request, authInfo: AuthInfo): Request {
   const headers = new Headers();
   for (const [name, value] of request.headers) {
     if (FORWARDED_HEADERS.has(name) || name.startsWith(FORWARDED_HEADER_PREFIX)) headers.append(name, value);
   }
-  const forwarded = new Request(request, { headers });
+  const forwarded = new Request(request, { headers, signal: null });
   forwarded.auth = authInfo;
   return forwarded;
 }

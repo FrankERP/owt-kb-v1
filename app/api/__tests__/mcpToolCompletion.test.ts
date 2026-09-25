@@ -21,6 +21,9 @@
 // SDK's `Response` as-is: the legacy era, and a 2026-07-28 call whose tool
 // sends a notification mid-call (which upgrades that exchange to SSE early).
 // The plain 2026-07-28 case passes either way and is here as documentation.
+// Two more fail when the forwarded request follows the client's abort signal
+// (a disconnect mid-call, both eras — ruling P3-R10), and one when the
+// completion gate is not awaited inside the route's `try` (a broken stream).
 //
 // The auth harness is the minimum `mcpRoute.test.ts` uses to reach a tool: the
 // REAL grant store over the in-memory dataset, a mocked live member record.
@@ -46,6 +49,15 @@ const h = await vi.hoisted(async () => {
      * `PerRequestHTTPServerTransport.send`).
      */
     notifyFirst: { enabled: false },
+    /**
+     * When set, the stand-in tool aborts this controller — the CLIENT's signal,
+     * the one Next aborts when the socket closes — while its I/O is pending.
+     */
+    disconnect: { controller: null as AbortController | null },
+    /** Every request the route handed to the MCP handler, in order. */
+    forwarded: [] as Request[],
+    /** When on, the MCP handler answers with an SSE body that errors mid-stream. */
+    brokenStream: { enabled: false },
   };
 });
 
@@ -72,6 +84,31 @@ vi.mock("next/server", async (importOriginal) => {
   };
 });
 
+// The REAL mcp-handler, observed: the wrapper records the request the route
+// hands it, and can answer with an SSE body that errors instead of dispatching.
+vi.mock("mcp-handler", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("mcp-handler")>();
+  return {
+    ...actual,
+    createMcpHandler: (...args: Parameters<typeof actual.createMcpHandler>) => {
+      const handler = actual.createMcpHandler(...args);
+      return async (request: Request) => {
+        h.forwarded.push(request);
+        if (h.brokenStream.enabled) {
+          const body = new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('event: message\ndata: {"jsonrpc":"2.0",'));
+              controller.error(new Error("stream failure with internal detail"));
+            },
+          });
+          return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+        }
+        return handler(request);
+      };
+    },
+  };
+});
+
 // The stand-in for a write tool, registered under `ping`'s name.
 vi.mock("@/app/mcp/tools/ping", async () => {
   const { z } = await import("zod");
@@ -90,9 +127,13 @@ vi.mock("@/app/mcp/tools/ping", async () => {
               params: { progressToken: "completion-test", progress: 1 },
             });
           }
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          const io = new Promise((resolve) => setTimeout(resolve, 0));
+          // The client goes away while the tool's I/O is pending.
+          h.disconnect.controller?.abort();
+          await io;
           revalidatePath("/schedule");
           after(() => {});
+          h.sequence.push("tool returned");
           return { content: [{ type: "text", text: "done" }] };
         },
       );
@@ -115,7 +156,7 @@ const MODERN_META = {
   "io.modelcontextprotocol/clientInfo": { name: "vitest", version: "0" },
 };
 /** Everything the tool must have done by the time `POST` resolves. */
-const DONE_INSIDE_THE_HANDLER = ["revalidatePath /schedule", "after registered"];
+const DONE_INSIDE_THE_HANDLER = ["revalidatePath /schedule", "after registered", "tool returned"];
 
 async function liveToken(): Promise<string> {
   const created = await createGrant({ sub: "frank", clientId: "client-id-under-test", origin: PREVIEW_ORIGIN });
@@ -124,10 +165,11 @@ async function liveToken(): Promise<string> {
   return token;
 }
 
-/** A 2025-06-18 `tools/call` for the stand-in tool. */
-function legacyToolCall(token: string): Request {
+/** A 2025-06-18 `tools/call` for the stand-in tool; `signal` plays the client's connection. */
+function legacyToolCall(token: string, signal?: AbortSignal): Request {
   return new Request("https://ignored.example/api/mcp", {
     method: "POST",
+    ...(signal ? { signal } : {}),
     headers: {
       host: PREVIEW_HOST,
       accept: "application/json, text/event-stream",
@@ -140,9 +182,10 @@ function legacyToolCall(token: string): Request {
 }
 
 /** A 2026-07-28 `tools/call` for the stand-in tool: the envelope in `_meta`, plus the standard headers. */
-function modernToolCall(token: string): Request {
+function modernToolCall(token: string, signal?: AbortSignal): Request {
   return new Request("https://ignored.example/api/mcp", {
     method: "POST",
+    ...(signal ? { signal } : {}),
     headers: {
       host: PREVIEW_HOST,
       accept: "application/json, text/event-stream",
@@ -199,13 +242,19 @@ beforeEach(() => {
   h.sequence.length = 0;
   h.afterCallbacks.length = 0;
   h.notifyFirst.enabled = false;
+  h.disconnect.controller = null;
+  h.forwarded.length = 0;
+  h.brokenStream.enabled = false;
   __clearGrantCache();
   vi.stubEnv("VERCEL_ENV", "preview");
   vi.stubEnv("MCP_OAUTH_SECRET", "s".repeat(32));
   h.getMemberAccess.mockResolvedValue({ active: true, role: "super-admin", ministries: ["worship"], managesMinistries: [] });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // A tool a failing case left running needs one macrotask to finish; let it
+  // land HERE, not in the next case's sequence.
+  await new Promise((resolve) => setTimeout(resolve, 0));
   vi.unstubAllEnvs();
 });
 
@@ -256,5 +305,70 @@ describe("/api/mcp — a tool call finishes inside the handler (F2)", () => {
     // The notification frame, then the result.
     expect(messages.map((m) => m.method ?? "result")).toEqual(["notifications/progress", "result"]);
     expectToolResult(messages[1]);
+  });
+});
+
+describe("/api/mcp — a client that disconnects mid-call does not cut the tool short (P3-R10)", () => {
+  // Next aborts the incoming request's signal when the socket closes. Were the
+  // forwarded copy to follow it, the SDK would end the exchange early — the
+  // legacy leg tears its stream down, the modern leg answers 499 — and
+  // `handle()` would return with the tool still running. These fail without
+  // `signal: null` in `forwardedRequest`.
+
+  it("legacy era: the tool finishes inside the handler, and the SDK never sees the abort", async () => {
+    const client = new AbortController();
+    h.disconnect.controller = client;
+    const { res, atResolve, body } = await send(legacyToolCall(await liveToken(), client.signal));
+
+    expect(client.signal.aborted).toBe(true);
+    expect(atResolve).toEqual(DONE_INSIDE_THE_HANDLER);
+    expect(h.afterCallbacks).toHaveLength(1);
+    // The focused runtime check: the request the MCP server was handed does not follow the client's signal.
+    expect(h.forwarded).toHaveLength(1);
+    expect(h.forwarded[0]!.signal.aborted).toBe(false);
+    // The exchange completed normally; on Vercel it is written to a closed socket.
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/^text\/event-stream/);
+    const messages = sseMessages(body);
+    expect(messages).toHaveLength(1);
+    expectToolResult(messages[0]);
+  });
+
+  it("modern era: the tool finishes inside the handler, and the answer is the result, not a 499", async () => {
+    const client = new AbortController();
+    h.disconnect.controller = client;
+    const { res, atResolve, body } = await send(modernToolCall(await liveToken(), client.signal));
+
+    expect(client.signal.aborted).toBe(true);
+    expect(atResolve).toEqual(DONE_INSIDE_THE_HANDLER);
+    expect(h.afterCallbacks).toHaveLength(1);
+    expect(h.forwarded).toHaveLength(1);
+    expect(h.forwarded[0]!.signal.aborted).toBe(false);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toMatch(/^application\/json/);
+    expectToolResult(JSON.parse(body) as Record<string, unknown>);
+  });
+});
+
+describe("/api/mcp — an SSE body that errors is the fixed 500 (E1)", () => {
+  it("is caught inside handle(): 500 server_error, nothing echoed or logged", async () => {
+    // Holds only while `completeResponse` is awaited INSIDE the route's try: a
+    // bare `return completeResponse(…)` would reject POST instead.
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      h.brokenStream.enabled = true;
+      const res = await POST(legacyToolCall(await liveToken()));
+
+      expect(h.forwarded).toHaveLength(1);
+      expect(res.status).toBe(500);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+      const text = await res.text();
+      expect(JSON.parse(text)).toEqual({ error: "server_error" });
+      expect(text).not.toMatch(/internal detail|jsonrpc/);
+      const logged = consoleError.mock.calls.map((call) => call.map(String).join(" ")).join("\n");
+      expect(logged).toBe("[mcp] route: unexpected failure");
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 });
