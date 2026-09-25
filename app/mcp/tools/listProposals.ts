@@ -54,10 +54,11 @@ export const LIST_PROPOSALS_DESCRIPTION =
   "{ month } cada propuesta trae solo sus últimos 10 mensajes, en orden cronológico, con truncated: true cuando se " +
   "omitieron mensajes anteriores. lead y cada contributor traen missing: true cuando la referencia no nombra a nadie " +
   "(o no hay referencia), y unresolved: true cuando falló la lectura de nombres — ese fallo nunca oculta las " +
-  "propuestas, solo deja los nombres sin resolver y agrega una nota en notes; lo mismo si falla la lectura de " +
-  "títulos de canciones (title queda en null). No hay estado de leído/no leído: ningún documento lo guarda, así que " +
-  "esta herramienta nunca lo reporta. Si no se pudieron leer los servicios o las propuestas, responde con un error, " +
-  "nunca con una lista vacía. Solo lee: no cambia nada.";
+  "propuestas, solo deja los nombres sin resolver y agrega una nota en notes. En songs, song trae missing: true " +
+  "cuando la canción referenciada ya no existe (la lectura de títulos funcionó, esa referencia ya no resuelve); si " +
+  "esa lectura falló, title queda en null sin missing y también se agrega una nota. No hay estado de leído/no leído: " +
+  "ningún documento lo guarda, así que esta herramienta nunca lo reporta. Si no se pudieron leer los servicios o las " +
+  "propuestas, responde con un error, nunca con una lista vacía. Solo lee: no cambia nada.";
 
 /** The tool's whole behaviour, callable without a server (the route registers it below). */
 export async function listProposalsResult(args: ListProposalsArgs): Promise<CallToolResult> {

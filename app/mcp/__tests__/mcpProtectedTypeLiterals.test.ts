@@ -1,5 +1,5 @@
 // P1-R7 — no MCP-owned file may spell a protected role/setlist type as a bare
-// quoted string literal (spec I2).
+// word (spec I2).
 //
 // `draftGatingCoverage.test.ts` only scans GROQ `*[ … ]` filter groups, so a
 // bare TypeScript comparison like `role._type === "special_role"` is
@@ -11,8 +11,19 @@
 // Comments are stripped first (the repo's own `stripComments`, shared with
 // `protectedReadAudit.ts` and `draftGatingCoverage.test.ts`), so a doc comment
 // that MENTIONS a type in prose — several already explain why a comparison
-// does NOT use one — is never a false positive; only an actual quoted string
-// literal in code counts. All three JS quote styles are covered.
+// does NOT use one — is never a false positive; only the WORD itself
+// appearing in code counts.
+//
+// BARE-WORD, not "quoted string": an earlier version of this guard required a
+// quote character touching both sides of the literal, which misses
+// `` `${x}special_role` `` (a template literal splicing the word onto other
+// text with no quote immediately adjacent) and any other spelling that does
+// not put the literal in its own standalone quoted string. `\b…\b` matches
+// the word wherever it appears in code — inside a template literal, a
+// concatenated string, anywhere — while still skipping a comment (stripped
+// first) and never matching a mere SUBSTRING of a longer identifier (`\b` is
+// a word boundary, and every character in these five names is a word
+// character, underscore included).
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
@@ -50,12 +61,12 @@ interface Hit {
   line: number;
 }
 
-/** Every protected-type literal found as a QUOTED string (any of `"`/`'`/`` ` ``), after blanking comments. */
+/** Every protected-type literal found as a BARE WORD anywhere in code (`\b…\b`), after blanking comments. */
 export function findProtectedTypeLiterals(source: string): Hit[] {
   const stripped = stripComments(source);
   const hits: Hit[] = [];
   for (const literal of PROTECTED_TYPE_LITERALS) {
-    const re = new RegExp(`["'\`]${literal}["'\`]`, "g");
+    const re = new RegExp(`\\b${literal}\\b`, "g");
     let match: RegExpExecArray | null;
     while ((match = re.exec(stripped))) {
       hits.push({ literal, line: stripped.slice(0, match.index).split("\n").length });
@@ -66,6 +77,14 @@ export function findProtectedTypeLiterals(source: string): Hit[] {
 
 describe("app/mcp/** never spells a protected role/setlist type as a literal (spec I2)", () => {
   it("finds none in the current tree", () => {
+    // A scan matching zero files would pass vacuously — a drift in the path
+    // prefix, the extension regex, or the `__tests__` exclusion could empty
+    // the scanned set silently, exactly the failure shape this guard exists
+    // to catch in the CODE it scans. `toContain`, not a length check: a bare
+    // count could still pass if the set shifted to a different, unrelated
+    // file. `proposalPresenter.ts` is a real, present file this task added.
+    expect(mcpSourceFiles()).toContain("app/mcp/reads/proposalPresenter.ts");
+
     const violations: string[] = [];
     for (const file of mcpSourceFiles()) {
       const source = readFileSync(path.join(REPO_ROOT, file), "utf8");
@@ -111,5 +130,10 @@ describe("app/mcp/** never spells a protected role/setlist type as a literal (sp
     ]) {
       expect(findProtectedTypeLiterals(source)).toEqual([{ literal: "special_role", line: 1 }]);
     }
+  });
+
+  it("bare-word: catches the literal spliced into a template literal, with no quote touching it", () => {
+    const source = "const a = `${prefix}special_role`;";
+    expect(findProtectedTypeLiterals(source)).toEqual([{ literal: "special_role", line: 1 }]);
   });
 });

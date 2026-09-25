@@ -276,6 +276,42 @@ describe("presentProposal — name resolution", () => {
   });
 });
 
+// ── Song title resolution (parity with get_service's SetlistRow.song) ───────
+
+function songItem(key: string, songId: string, playKey: string | null): Record<string, unknown> {
+  return { _key: key, play_key: playKey, medley_tag: null, song: { _type: "reference", _ref: songId }, leads: null };
+}
+
+describe("presentProposal — song title resolution", () => {
+  it("a dangling song reference (the lookup succeeded, that id just isn't a song) is missing: true", async () => {
+    const snapshot = await snapshotOf();
+    const row = proposalRow({
+      service_type: "special",
+      service_ref: "role-sp-1107",
+      songs: [songItem("r1", "song-nonexistent", "G")],
+    });
+    const songs = await loadSongTitles(["song-nonexistent"]);
+    expect(songs.ok).toBe(true);
+    expect(songs.byId.has("song-nonexistent")).toBe(false);
+    const { members } = await emptyLookups();
+    const entry = presentProposal(snapshot, row, { members, songs }, "2026-09-30", false);
+    expect(entry.songs[0]!.song).toEqual({ id: "song-nonexistent", title: null, missing: true });
+  });
+
+  it("a resolved song carries no missing flag", async () => {
+    const snapshot = await snapshotOf();
+    const row = proposalRow({
+      service_type: "special",
+      service_ref: "role-sp-1107",
+      songs: [songItem("r1", "song-1", "G")],
+    });
+    const songs = await loadSongTitles(["song-1"]);
+    const { members } = await emptyLookups();
+    const entry = presentProposal(snapshot, row, { members, songs }, "2026-09-30", false);
+    expect(entry.songs[0]!.song).toEqual({ id: "song-1", title: "Grande es tu fidelidad" });
+  });
+});
+
 // ── Degraded supplementary lookups (missing vs unresolved, notes) ───────────
 
 describe("presentProposal / presentProposalsForX — a failed lookup is unresolved, never silently missing", () => {

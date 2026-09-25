@@ -177,7 +177,8 @@ export type ProposalMemberRef = {
 };
 export type ProposalSongRow = {
   rowKey: string | null;
-  song: { id: string; title: string | null } | null;
+  /** `missing: true` when the song reference resolves to no canonical post (the lookup succeeded; that id just isn't one) — never set on a FAILED lookup, which cannot tell the two apart. */
+  song: { id: string; title: string | null; missing?: true } | null;
   key: string | null;
 };
 export type ProposalMessageView = {
@@ -285,10 +286,19 @@ export function presentProposal(
   const songs: ProposalSongRow[] = rawSongs.map((item): ProposalSongRow => {
     const obj = isObj(item) ? item : {};
     const songId = isObj(obj.song) && nonEmptyString(obj.song._ref) ? obj.song._ref : null;
-    const title = songId ? (lookups.songs.byId.get(songId)?.title ?? null) : null;
+    // Mirrors `servicePresenter.ts`'s setlistContent song resolution: found is
+    // just a title; a SUCCEEDED lookup that resolved nothing is `missing`; a
+    // FAILED lookup cannot tell dangling from unresolved, so it carries no flag.
+    const found = songId ? lookups.songs.byId.get(songId) : undefined;
     return {
       rowKey: stringOrNull(obj._key),
-      song: songId ? { id: songId, title } : null,
+      song: songId
+        ? found
+          ? { id: songId, title: found.title }
+          : lookups.songs.ok
+            ? { id: songId, title: null, missing: true }
+            : { id: songId, title: null }
+        : null,
       key: stringOrNull(obj.play_key),
     };
   });
