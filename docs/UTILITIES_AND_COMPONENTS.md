@@ -116,7 +116,10 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   scan pins that. Returns `{ entries, months, diagnostics }`: `diagnostics` reports (never
   silently drops) two in-window documents that target one `type:day` — whatever their seats —
   plus, only when a **counted** window seat is affected, a dangling seat reference, an unnamed
-  member, and two members sharing one name. `historyEntryFromDrafts` (`plannerModel.ts`) is the
+  member, and two members sharing one name. That last one, `duplicateNames[].memberIds`, can
+  include the id of a member seated NOWHERE in the window — only their `member_name` collided
+  with a member who was counted — so a consumer only ever sees that other member's id, never
+  their name, on the strength of a name collision alone. `historyEntryFromDrafts` (`plannerModel.ts`) is the
   pre-existing, per-browser equivalent this is proven equal to (R12) and will replace at the
   dual-write stop point.
 - **`SolverHistoryResult`, `SolverHistoryEvidence`, …** ([solverHistoryTypes.ts](../app/utils/solverHistoryTypes.ts))
@@ -162,9 +165,14 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 - **`appendLocalHistoryEntry`** (module-level in `MonthGenerator.tsx`, beside `HISTORY_KEY`) —
   in derived mode, `handleConfirm` calls this instead of `saveHistoryEntry`. It reads
   `localStorage` **fresh**, merges the new entry into what is already there, and never touches
-  the `solverHistory` React state — because after cutover that state holds *derived* entries,
-  and R15 requires the rollback target to be built from `localStorage`'s own contents, never
-  from them.
+  the `solverHistory` React state — which in derived mode stays `[]` for the life of the mount
+  (the load effect that hydrates it from `localStorage` returns early on the switch), never a
+  mirror of the derived entries. Those live in `useDerivedSolverHistory`'s own state instead.
+  R15 requires the rollback target to be built from `localStorage`'s own contents, never from
+  `solverHistory`, which is why `saveHistoryEntry`/`removeHistoryEntry` — the local-mode
+  writers — both also open with `if (SOLVER_HISTORY_SOURCE !== "local") return;`: neither is
+  reachable from derived mode's UI today, but either would stamp `HISTORY_KEY` back to `[]` or
+  a strict subset of it if it ran against that always-empty state.
 - The diff tool that consumes all of the above — `scripts/solver-history-diff.ts` +
   `scripts/lib/solverHistoryDiff.ts` (the pure R11 classifier) — is documented in
   [SOLVER_AND_INFRA.md §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops), not
