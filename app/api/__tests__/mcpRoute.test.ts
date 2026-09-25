@@ -31,6 +31,11 @@ const h = await vi.hoisted(async () => {
 
 vi.mock("@/app/utils/memberAccess", () => ({ getMemberAccess: (id: string) => h.getMemberAccess(id) }));
 vi.mock("@/sanity/lib/serverClient", () => ({ writeClient: h.writeClient, serverClient: { fetch: vi.fn() } }));
+// A future read tool's import of `operationalClient`/`rawIntegrityClient` must
+// never reach `sanity/env.ts`, which throws when `NEXT_PUBLIC_SANITY_*` is
+// unset (as it is under vitest). No read tool is registered yet, so nothing
+// here calls `fetch`.
+vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: { fetch: vi.fn() }, rawIntegrityClient: { fetch: vi.fn() } }));
 
 // The REAL mcp-handler, observed: the wrapper records every request the route
 // forwards (so a refusal can assert the handler was never called at all), and
@@ -513,8 +518,9 @@ describe("/api/mcp — every method is authenticated", () => {
   });
 
   it("exports only GET, POST and DELETE plus the route config", () => {
-    expect(Object.keys(mcpRoute).sort()).toEqual(["DELETE", "GET", "POST", "dynamic", "revalidate"]);
+    expect(Object.keys(mcpRoute).sort()).toEqual(["DELETE", "GET", "POST", "dynamic", "maxDuration", "revalidate"]);
     expect(mcpRoute.dynamic).toBe("force-dynamic");
+    expect(mcpRoute.maxDuration).toBe(60);
   });
 });
 

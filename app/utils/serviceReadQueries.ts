@@ -1,4 +1,4 @@
-// Canonical read queries for the six protected service types. Projections are
+// Canonical read queries for the seven protected service types. Projections are
 // shaped for the pure `serviceReadModel` validators; all filters bind trusted,
 // code-owned type lists (and derived id lists) as GROQ parameters — never string
 // interpolation of runtime values. Canonical queries run through the published

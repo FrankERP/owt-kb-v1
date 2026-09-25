@@ -41,6 +41,8 @@ import { registerPing } from "@/app/mcp/tools/ping";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+/** The repo's Hobby-tier ceiling (ADR-0013): a read loads the whole catalogue. */
+export const maxDuration = 60;
 
 /** Read once per instance: the commit is fixed for the life of a deployment (R22). */
 const SERVER_INFO = { name: MCP_SERVER_NAME, version: mcpServerVersion() };
