@@ -12,7 +12,7 @@
 
 ## Status and contract
 
-- **Document status:** Draft, 2026-09-25. Not implemented. **Risk tier: STANDARD**. The
+- **Document status:** Approved 2026-09-25 (standard tier, one cold approval on `3fa29c68…`). Not implemented. **Risk tier: STANDARD**. The
   roadmap's review handoff says that P2's *spec* is critical, and it is approved, but its
   *implementation plan* is standard. The roadmap gives it no adversarial plan review, but
   Frank asked for one on 2026-09-25, at standard tier: one fresh cold approval. Its log is
@@ -31,7 +31,8 @@
   cutover, and P4's `solve_month` will call the same builder later. Every admin and every
   surface then solves against the same history.
 - **Preconditions:** the spec is approved (met). The roadmap's `P0/P1 ∥ P2` entry needs
-  the v2 spec and the roadmap approved (met). **Frank's go-ahead to implement is not
+  the v2 spec and the roadmap approved (met), plus "P2's own spec and ADR approved". The ADR
+  is written in D1 and merged before the diff (Spec reconciliations). **Frank's go-ahead to implement is not
   given yet.**
 - **Safe ending states:** see the delivery table below. Each delivery ends in a safe,
   releasable state. Stopping after Delivery 1 is permanent-safe: the planner behaves
@@ -68,7 +69,7 @@ below are current.
 | Admin guard: `requireActiveManager`, and content-editor gets `403` | `app/api/admin/solver-config/route.ts:58-64`; `app/api/admin/solve/route.ts:120-128` | The new route copies `solver-config`'s `gate()` |
 | The solve route forwards the body unchanged, `seed` included, to GCF or to a local `gcf/owt_solver_v2.py --json-mode` (default interpreter: the `owt-roles` conda env). It performs no Sanity read | `app/api/admin/solve/route.ts:10-25,78-92,142-145` | The R11 solve runs need no `gcf/**` change. The local env has `ortools-9.15.6755`, the `gcf/requirements.txt` pin (checked 2026-09-25, not run) |
 | ADR-0038: history offsets alone can push a month past CP-SAT's ceiling, and the month then runs with `objective_skipped: true`. The follow-on is **issue #94**, OPEN, "Solver: the fairness objective is skipped in most real months, so history has no effect" | `docs/adr/0038-*.md:59-66,125-128`; `gh issue view 94` | #94 is out of scope (Frank, 2026-09-23). The spec review log's "suggested, not done" issue now exists |
-| Pinned per-browser behaviour: a test asserts that `MonthGenerator.tsx` **contains** the key literal. The docs say the history "stays per-browser on purpose" | `app/components/admin/__tests__/solverConfigSource.test.ts:304-313`; `docs/DATA_MODEL.md:377-378`; `docs/adr/0010-*.md:119-122` | These change at cutover (D2) and again at the stop point (D3) |
+| Pinned per-browser behaviour: a test asserts that `MonthGenerator.tsx` **contains** the key literal. The docs say the history "stays per-browser on purpose" | `app/components/admin/__tests__/solverConfigSource.test.ts:304-313`; `docs/DATA_MODEL.md:376-378`; `docs/adr/0010-*.md:119-122` | These change at cutover (D2) and again at the stop point (D3) |
 | About ten `MonthGenerator.create.test.tsx` cases assert on `localStorage["owt_solver_history_v2"]` | `app/components/admin/__tests__/MonthGenerator.create.test.tsx:455-790,1605-1645` | They guard local mode and the dual-write, and stay green |
 | The iOS shell loads the production origin in its own WebView store | `capacitor.config.ts:25-29` | R13 covers it if Frank ever planned there |
 | A new route under `/api/admin/` is gated by `proxy.ts` automatically. `routeMatcher.test.ts` only lists routes that are **not** gated | `app/utils/__tests__/routeMatcher.test.ts:12-58` | No matcher or list change is needed |
@@ -235,7 +236,8 @@ Every step leaves the four gates green. Nothing deploys until step 8.
       - A reference to an id not in `members` is dropped and reported in
         `danglingSeats: [{ roleId, day, path, memberId }]`.
       - A member whose `member_name` is not a non-empty string is dropped and reported in
-        `unnamedMembers`.
+        `unnamedMembers`, **only when a window seat references it** (scoped like
+        `duplicateNames`, so no unseated member's id reaches the default payload).
       - Two members sharing one `member_name` are reported in
         `duplicateNames: [{ name, memberIds }]` **only when at least one of them is
         referenced by a window seat**. That is when the merge matters, and it keeps an
@@ -425,7 +427,9 @@ Every step leaves the four gates green. Nothing deploys until step 8.
 - **`useDerivedSolverHistory(year, month, enabled)`** exposes `loading`, `ready` or
   `error`, plus `reload`. `enabled` is `SOLVER_HISTORY_SOURCE === "derived"` while
   `MonthGenerator` is mounted, in **both** create and stored mode, because stored mode
-  also renders the grid's `LeadPoolHistoryPanel` (`MonthGenerator.tsx:3773-3781`). It keys each request by `(year, month)` and **discards a
+  also renders the grid's `LeadPoolHistoryPanel` (`MonthGenerator.tsx:3773-3781`). It fetches
+  only for a four-digit `year` (a `YearInput` mid-typing value like `202` fetches nothing and
+  keeps the last state). It keys each request by `(year, month)` and **discards a
   response for a month that is no longer current**, using a request counter plus an
   `AbortController` on change or unmount.
 - **`MonthGenerator.tsx`: everything new runs only when the switch is `"derived"`.** The
@@ -441,7 +445,11 @@ Every step leaves the four gates green. Nothing deploys until step 8.
       corrió; reintenta.")`, then `applySpecialFill(config, cells)`, then returns. That
       is a pre-flight refusal: the specials still fill (E5), and it never solves on an
       empty history (spec, Failure).
-    - On success, `buildSolveRequest` receives the fetched entries.
+    - On success, `buildSolveRequest` receives the fetched entries. The `cells` and `config`
+      it solves with are read **after** the history await, from current state (a ref), not
+      from the closure captured when Auto was pressed. Otherwise a grid edit made during the
+      fetch would be silently dropped. If `PlannerGrid` already locks edits while
+      `autoPending`, the implementation records that instead and keeps the closure.
     - The fetch carries an `AbortController` with a **20 s** timeout. A timeout is a
       failure and takes the same refusal path, so a hung route cannot keep Auto pending.
     - The existing `try/finally` widens to cover the fetch.
@@ -512,6 +520,13 @@ Every step leaves the four gates green. Nothing deploys until step 8.
   - `classifyHistoryDiff({ target, primary, others, derived, sessionGapMinutes })`
     implements the spec's R11 rules **1–5 in order, first rule and first arm wins**,
     and nothing else. Anything no arm admits is `bug`.
+  - **Rule 4's "no receipt" arm** means the role carries **neither** `creationReceiptId` nor
+    `creationFingerprint`.
+    - A role that carries either, but whose receipt is not found, is not admitted by that arm.
+      It falls to the later arms, or to `bug`.
+    - The report counts this arm's hits on their own line. Planner documents from before the
+      guarded create route (2026-07-24) have no receipt either, so this arm's evidence is
+      weaker.
   - **Domain:** the union of the target's window months and the export's months,
     compared per month × member × role key. An absent entry and an empty entry compare
     equal.
@@ -531,7 +546,8 @@ Every step leaves the four gates green. Nothing deploys until step 8.
   - **Renames (rule 3):** keys are mapped through the rename arm before rule 4 compares,
     as the spec says ("the remaining comparison uses current names").
 - **`scripts/solver-history-diff.ts`** (run with `npx tsx`), invoked as
-  `--bundle <file>` (the Gate B snippet's output) `[--export <file>]…`
+  `--bundle <file>…` (the Gate B snippet's output; repeatable, one per profile, merged by
+  target) `[--export <file>]…`
   `[--solve-request <file>] --out <dir> [--seed 42] [--runs 2]`:
   - It **refuses any input or output path inside the repository root.**
   - It writes `report-<timestamp>.md` and `.json` to `--out`.
@@ -741,7 +757,7 @@ It is saved only into the private folder (Q2), **never into the repository**.
     "**written, never read**". It asserts that the literal is still present (the
     dual-write target) **and** that the switch is `derived`.
 - **Docs:**
-  - `DATA_MODEL.md:377-378`: the history is derived and shared, and the browser key is
+  - `DATA_MODEL.md:376-378`: the history is derived and shared, and the browser key is
     written only as the rollback target until the stop point.
   - `SOLVER_AND_INFRA.md` §"Key behaviors".
   - `UTILITIES_AND_COMPONENTS.md:566` (`MonthGenerator`).
@@ -909,7 +925,15 @@ confirmation are human gates B, C and D above. The spec assigns them to him expl
   by R15, and limited to an export no production writer imports (re-verified at D3).
 - **R14 says "`localStorage` is no longer read",** while R15 builds each dual-write "from
   `localStorage`'s own contents". Resolution: after the cutover the key is never read as
-  a **history source**. It is read only to merge the rollback target (step 5, test 5).
+  a **history source**. It is read only to merge the rollback target (step 5, test 4).
+- **The roadmap's `P0/P1 ∥ P2` entry says "P2's own spec and ADR approved".** The ADR is
+  written in Delivery 1 (step 7), and the binding spec's R16 requires only that it be merged
+  before the diff runs. Resolution: the ADR reaches `main` with D1, before Gate B. The
+  roadmap's wording is read as "before the diff", not "before implementation".
+- **The spec's Evidence row asks whether derived history changes *how often* the objective is
+  skipped.** One captured month, run twice per side, is a single data point, not a frequency.
+  Resolution: a stated narrowing. The report says it is one data point (step 6), and issue #94
+  owns the frequency. **Frank decides at Gate C** whether that is enough.
 - **R11's session grouping needs receipt `createdAt`,** which the existing receipt
   projection lacks. Resolution: a new additive projection (D6). This fills a gap; it is
   not a conflict.
@@ -929,4 +953,7 @@ confirmation are human gates B, C and D above. The spec assigns them to him expl
 
 ## Terminal state
 
-READY_FOR_ADVERSARIAL_REVIEW — standard tier (one fresh cold approval, at Frank's request); implementation needs Frank's go-ahead.
+**APPROVED at standard tier**: one fresh cold approval, requested by Frank, on digest `3fa29c68…`
+(round 2). Changes made after that approval are listed as un-reviewed in
+[the review log](2026-09-25-owt-mcp-p2-solver-history-review-log.md). Implementation needs
+Frank's go-ahead.
