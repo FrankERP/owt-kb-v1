@@ -18,6 +18,8 @@ import { buildRoleDocument, parseCreateRequest } from "@/app/utils/roleWriteRequ
 import { ROLE_PROJECTION } from "@/app/utils/serviceReadQueries";
 import { deriveSolverHistory, historyWindow } from "@/app/utils/solverHistory";
 
+import { projectRow as project } from "./__fixtures__/roleProjectionReader";
+
 // Fake names only: this repository is public.
 const MEMBERS: RankMember[] = [
   { _id: "m-ana", member_name: "Ana Prueba" },
@@ -94,45 +96,6 @@ function storedDocument(d: DraftCard, published: boolean): Record<string, unknow
   });
   // The Content Lake adds the system revision on commit.
   return { ...doc, _rev: `rev-${d.localId}` };
-}
-
-// ── A literal reading of the `ROLE_PROJECTION` text ─────────────────────────
-// Supports exactly the terms that projection uses — `field`, `field{…}` and
-// `field[]{…}` — and throws on anything else, so a projection change that this
-// reader cannot follow fails loudly instead of projecting the wrong shape.
-
-function splitTopLevel(body: string): string[] {
-  const parts: string[] = [];
-  let depth = 0;
-  let current = "";
-  for (const ch of body) {
-    if (ch === "{") depth += 1;
-    if (ch === "}") depth -= 1;
-    if (ch === "," && depth === 0) {
-      parts.push(current.trim());
-      current = "";
-      continue;
-    }
-    current += ch;
-  }
-  if (current.trim()) parts.push(current.trim());
-  return parts;
-}
-
-function project(value: unknown, projection: string): unknown {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const inner = projection.trim().replace(/^\{/, "").replace(/\}$/, "");
-  const out: Record<string, unknown> = {};
-  for (const term of splitTopLevel(inner)) {
-    const m = /^(\w+)(\[\])?\s*(\{[\s\S]*\})?$/.exec(term);
-    if (!m) throw new Error(`unsupported projection term: ${term}`);
-    const [, field, isArray, sub] = m;
-    const v = (value as Record<string, unknown>)[field];
-    if (!sub) out[field] = v ?? null;
-    else if (isArray) out[field] = Array.isArray(v) ? v.map((item) => project(item, sub)) : null;
-    else out[field] = project(v, sub);
-  }
-  return out;
 }
 
 const monthOf = (date: string) => ({ year: Number(date.slice(0, 4)), month: Number(date.slice(5, 7)) });
