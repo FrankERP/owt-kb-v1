@@ -61,9 +61,13 @@
 // are started fire-and-forget or inside `after()`, outbox notices are sent (or
 // not) by a later sweep, and every downstream filter (device tokens,
 // preferences, `EMAIL_ALLOWLIST`, `wantsNotification`) still applies. Read one
-// as "queued", never "delivered". Every id list in a descriptor is a COPY, so
-// a caller that sorts or edits it cannot reach the deferred work. Existing
-// callers ignore the return value, and each helper's behaviour is unchanged.
+// as "queued", never "delivered". An EMPTY list (`recipients: []`,
+// `pushes: []`) means the helper ran and notified nobody; `null` means it
+// skipped silently or swallowed a failure (ruling P3-R12). Every id list in a
+// descriptor is a COPY — `emailBatch[].body`'s seat arrays and seat objects
+// included — so a caller that sorts or edits one cannot reach the deferred
+// work. Existing callers ignore the return value, and each helper's behaviour
+// is unchanged.
 
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -186,11 +190,28 @@ export interface RoleAssignmentPushDescriptor {
  * is exactly the argument handed to `sendAssignmentEmailsBatch`. The batch
  * carries NO recipient list: it derives its own at send time (`assigneesOf` +
  * `rolesForMember`), so a report that names those members must say it applied
- * that derivation. `body` is the caller's own object; treat it as read-only.
+ * that derivation. Each `body` is equal to the one the batch receives but is a
+ * copy ({@link copyServiceBody}), so editing it cannot change the email.
  */
 export interface RolePublishedDescriptor {
   pushes: { recipients: string[]; date: string }[];
   emailBatch: { type: ServiceType; date: string; body: ServiceBody }[];
+}
+
+/**
+ * A descriptor's copy of a {@link ServiceBody}: every key kept, and the five
+ * seat lists replaced by fresh arrays of fresh seat objects, so no id a report
+ * can reach is shared with the deferred email. Never throws on a well-typed
+ * body, which matters because it runs synchronously after the commit.
+ */
+function copyServiceBody(body: ServiceBody): ServiceBody {
+  const copy: ServiceBody = { ...body };
+  if (Array.isArray(body.leads)) copy.leads = [...body.leads];
+  if (Array.isArray(body.bgvs)) copy.bgvs = [...body.bgvs];
+  if (Array.isArray(body.chorus)) copy.chorus = [...body.chorus];
+  if (Array.isArray(body.instruments)) copy.instruments = body.instruments.map((slot) => ({ ...slot }));
+  if (Array.isArray(body.foh)) copy.foh = body.foh.map((slot) => ({ ...slot }));
+  return copy;
 }
 
 /**
@@ -204,8 +225,12 @@ export interface RoleNoticesDescriptor {
 }
 
 /**
- * {@link queueSetlistNotice}: the one `setlist` notice it queued and the
- * `knownRecipients` written into it. The audience itself is resolved at flush.
+ * {@link queueSetlistNotice}: the one `setlist` notice it queued, and the
+ * `knownRecipients` THIS CALL offered it. When a notice for that role already
+ * exists, `commitUpserts`' `createIfNotExists` keeps it and the patch
+ * (`notifyAfter`, `status`, `servedRecipients`) leaves `knownRecipients` alone,
+ * so the stored list stays the one from the call that created the notice. The
+ * audience itself is resolved at flush.
  */
 export interface SetlistNoticeDescriptor {
   kind: "setlist";
@@ -217,7 +242,9 @@ export interface SetlistNoticeDescriptor {
  * {@link queuePublishedSetlistNotices}: every subject handed to the deferred
  * block. Song presence (and so whether a subject's notice is minted at all) is
  * resolved INSIDE `after()`, so each entry means "queued if the service has
- * songs".
+ * songs". Its `knownRecipients` are what this call OFFERED: as with
+ * {@link SetlistNoticeDescriptor}, a notice that already exists for the role
+ * keeps the list from the call that created it.
  */
 export interface PublishedSetlistNoticesDescriptor {
   kind: "publishedSetlist";
@@ -383,7 +410,7 @@ export function notifyRolePublished(
   });
   return {
     pushes: services.map((s) => ({ recipients: [...s.recipients], date: s.date })),
-    emailBatch: services.map((s) => ({ type: s.type, date: s.date, body: s.body })),
+    emailBatch: services.map((s) => ({ type: s.type, date: s.date, body: copyServiceBody(s.body) })),
   };
 }
 

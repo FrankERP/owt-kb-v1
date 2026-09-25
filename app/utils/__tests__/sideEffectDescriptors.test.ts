@@ -228,6 +228,37 @@ describe("notifyRolePublished → { pushes, emailBatch } | null", () => {
     expect(notifyRolePublished([])).toBeNull();
     expect(afterMock).not.toHaveBeenCalled();
   });
+
+  it("is a snapshot: editing its pushes cannot change who the deferred push reaches", async () => {
+    const out = notifyRolePublished(services);
+    out!.pushes[0].recipients.splice(0, 1, "intruder");
+    await flushAfter();
+    expect(sendPushMock.mock.calls[0][0]).toEqual(["mem-1"]);
+  });
+
+  it("is a snapshot: editing an emailBatch body cannot change the deferred email", async () => {
+    const full = () => ({
+      leads: ["mem-lead"],
+      bgvs: ["mem-bgv"],
+      chorus: ["mem-chorus"],
+      instruments: [{ instrument: "Bajo", personId: "mem-inst" }],
+      foh: [{ role: "Sonido", personId: "mem-foh" }],
+    });
+    const out = notifyRolePublished([
+      { recipients: ["mem-lead"], type: "sunday_role", date: "2026-08-09", body: full() },
+    ]);
+    const body = out!.emailBatch[0].body;
+    body.leads!.splice(0, 1, "intruder");
+    body.bgvs!.push("intruder");
+    body.chorus!.length = 0;
+    body.instruments![0].personId = "intruder";
+    body.foh![0].personId = "intruder";
+
+    await flushAfter();
+    expect(sendAssignmentEmailsBatchMock.mock.calls[0][0]).toEqual([
+      { type: "sunday_role", date: "2026-08-09", body: full() },
+    ]);
+  });
 });
 
 // ── queueRoleNotices ────────────────────────────────────────────────────────
@@ -419,6 +450,13 @@ describe("notifySetlistSaved → Promise<{ recipients } | null>", () => {
     const out = await notifySetlistSaved("2026-08-09");
     expect(sendPushMock).toHaveBeenCalledWith([], "setlist", expect.anything());
     expect(out).toEqual({ recipients: [] });
+  });
+
+  it("is a snapshot: editing it cannot change the list sendPush was handed", async () => {
+    operationalFetch.mockResolvedValueOnce([{ _id: "mem-all" }]).mockResolvedValueOnce([]);
+    const out = await notifySetlistSaved("2026-08-09");
+    out!.recipients.push("intruder");
+    expect(sendPushMock.mock.calls[0][0]).toEqual(["mem-all"]);
   });
 
   it("is null when the audience read failed and was swallowed", async () => {
