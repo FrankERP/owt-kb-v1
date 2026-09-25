@@ -512,7 +512,9 @@ project; the value is only ever piped — never an argument, never printed, neve
 logs). **The outage window opens at step 2, not at a redeploy:** the function reads
 `owt-solver-api-key:latest` when an instance starts and scales to zero, so the first cold start
 after the new version is written already serves the new key while Vercel still sends the old one.
-Run steps 2–4 back to back.
+Run steps 2–4 back to back, and **push nothing to `preview` or `main` from step 1 until step 4
+is done**: any Vercel build in that gap bakes the new key in while the function still holds the
+old one.
 
 1. **Vercel first** — a changed env var does nothing until a redeploy, so this opens no window:
    ```bash
@@ -532,7 +534,9 @@ Run steps 2–4 back to back.
    ```
 3. **Redeploy the function** so no warm instance keeps the old key (`gcf/main.py` reads it once,
    at import): re-run the Cloud Build trigger `owt-solver-deploy` on `main` (console → Cloud Build
-   → Triggers → Run), or `GCP_PROJECT=eloquent-figure-421401 bash scripts/deploy-solver-gcf.sh`.
+   → Triggers → Run), or, **from a clean checkout of `main`** (the script deploys whatever `gcf/`
+   is on disk, to the one function production uses),
+   `GCP_PROJECT=eloquent-figure-421401 bash scripts/deploy-solver-gcf.sh`.
 4. **Redeploy Vercel Production and Preview** (dashboard → Deployments → ⋯ → Redeploy on the
    current production deployment and on the current `preview` one): env vars bind at build time.
 5. Verify with the smoke request in `docs/SOLVER_AND_INFRA.md` ("Verifying a Cloud Function
@@ -542,8 +546,18 @@ Run steps 2–4 back to back.
 completes, any request that reaches a freshly started function instance fails with HTTP 401 —
 «Generar mes» fails in both environments, intermittently at first (warm instances still hold the
 old key) and then always. Nothing is written — Auto only proposes; «Guardar» writes — so the cost
-is minutes of Auto unavailable. If the rotation stalls between steps 2 and 4, finishing it is the
-fix; rolling back means disabling the new Secret Manager version and redeploying the function.
+is minutes of Auto unavailable. **If the rotation stalls between steps 2 and 4, finish it forward** —
+that is almost always the shortest way out. A real rollback must NOT disable the new version:
+`:latest` names the most recently created version even when it is disabled, so the function could
+no longer start. Instead write the previous value back as a NEWER version and restore Vercel to
+match, both piped, then redeploy both (`<N-1>` is the version number before this rotation, from
+`gcloud secrets versions list owt-solver-api-key --format="value(name,state)"`):
+```bash
+CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true gcloud secrets versions access <N-1> --secret=owt-solver-api-key \
+  | CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true gcloud secrets versions add owt-solver-api-key --data-file=- --format="value(name)" && \
+  CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true gcloud secrets versions access <N-1> --secret=owt-solver-api-key \
+  | npx vercel env add OWT_SOLVER_API_KEY production,preview --force --sensitive --non-interactive
+```
 
 ---
 

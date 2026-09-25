@@ -213,12 +213,13 @@ The Vercel rule (alias + `githubCommitSha`) has no analogue here, so the check i
    Presence is the discriminator: an old revision answers the same request successfully and
    without the field. It needs the API key, which is Frank's to supply — never paste its value
    into a doc, a chat or a command history. Shape (the key read from Secret Manager into the
-   shell, with gcloud's file logging off so the value is not written to `~/.config/gcloud/logs`):
+   shell, with gcloud's file logging off so the value is not written to `~/.config/gcloud/logs`,
+   and handed to curl on stdin with `-H @-` so it never appears in `ps`):
 
    ```bash
    URL=$(gcloud functions describe owt-solver --gen2 --region=us-central1 --format='value(serviceConfig.uri)')
    KEY=$(CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true gcloud secrets versions access latest --secret=owt-solver-api-key)
-   curl -s -X POST "$URL" -H "Content-Type: application/json" -H "X-Api-Key: $KEY" \
+   printf 'X-Api-Key: %s\n' "$KEY" | curl -s -X POST "$URL" -H @- -H "Content-Type: application/json" \
      -d '{"weeks":4,"weekends_with_saturday":[2,4],"sunday_leads":["A","B","C"],"saturday_leads":[],"support":["D","E","F","G"],"dsl_rules":[],"history":[],"seed":1}' \
      | python3 -c 'import json,sys; r=json.load(sys.stdin); print("ok", r["ok"], "pinned_honored" in r)'
    unset KEY
