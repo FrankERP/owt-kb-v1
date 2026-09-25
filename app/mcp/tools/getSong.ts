@@ -41,7 +41,7 @@ export const GET_SONG_DESCRIPTION =
   "y una letra vacía siempre es \"none\") junto con hasChordChart, rehearsalMixes agrupados por tono ({tone, mixes: " +
   "[{mixKey, kind, family, track, bpm}]}, nunca la forma de onda ni el audio) y playHistory: los domingos y sábados en que " +
   "se tocó antes de hoy en America/Mexico_City ([{date, service, key}], más reciente primero), SIN LÍMITE de cuántos " +
-  "(la página de la canción corta en los últimos 20; esta herramienta no) — los especiales NO cuentan. " +
+  "(la página de la canción solo muestra los 3 más recientes; esta herramienta no recorta) — los especiales NO cuentan. " +
   "Selecciona con songId (el id canónico de Sanity) o slug, nunca ambos. Un songId drafts.* se rechaza: no es una canción. " +
   "Nunca incluye la letra, el contenido de los acordes ni ninguna URL de audio. Solo lee: no cambia nada.";
 

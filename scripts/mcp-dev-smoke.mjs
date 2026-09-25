@@ -28,7 +28,10 @@
  *       ping again → prints the grant id and the exact revoke command.
  *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --reads
  *     … same, and after `ping` (still inside step 7, before refresh) calls
- *       each of the seven P1 read tools once — list_services, get_service,
+ *       each of the seven P1 read tools once — list_services, get_service
+ *       (selected BY ID from list_services's own first result, so it never
+ *       hits its own same-day-tie refusal — an empty month falls back to {}
+ *       and a resulting tie is logged as an EXPECTED pass, not a failure),
  *       search_songs, get_song (using the first song search_songs found),
  *       get_member_availability, get_participation, list_proposals — with no
  *       arguments or a trivial one, printing one PASS/FAIL line per tool and
@@ -52,6 +55,10 @@
  *
  * The smoke calls `ping` always, and — only with `--reads` — the seven P1
  * read tools once each (DV1: reads only). It calls no write tool; none exist.
+ * The plain smoke's own `tools/list` check (`checkPingRegistered`) requires
+ * ONLY `ping`, so it passes against a P0-only deployment (production today)
+ * as well as a P1 one; `--reads` requires the full eight (`checkToolList`),
+ * since it is about to call the other seven.
  *
  * Every exported function below is pure — no network, no filesystem, no
  * `process`/env access — and is what `scripts/__tests__/mcpDevSmoke.test.ts`
@@ -285,6 +292,33 @@ export function checkToolList(tools) {
   return { ok: true };
 }
 
+/**
+ * The check the PLAIN smoke (no `--reads`) makes: `ping` is present and
+ * annotated `{ readOnlyHint: true, openWorldHint: false }`. Deliberately
+ * tolerates any OTHER tool being present or absent (never checks the count
+ * or the order) — this is the check that must pass against BOTH a P0-only
+ * deployment (production today, `ping` alone) and a P1 deployment (all
+ * eight), because proving the OAuth handshake and `ping` is the plain
+ * smoke's whole job, not proving P1's registration. `checkToolList` (the
+ * full `EXPECTED_TOOLS` check) is reserved for `--reads`, which is the one
+ * mode that actually NEEDS the other seven tools to exist. Pure.
+ */
+export function checkPingRegistered(tools) {
+  const list = Array.isArray(tools) ? tools : [];
+  const ping = list.find((t) => t && t.name === "ping");
+  if (!ping) {
+    return {
+      ok: false,
+      message: `expected a "ping" tool, got ${JSON.stringify(list.map((t) => t && t.name))}`,
+    };
+  }
+  const a = ping.annotations;
+  if (!a || a.readOnlyHint !== true || a.openWorldHint !== false) {
+    return { ok: false, message: 'ping is not annotated { readOnlyHint: true, openWorldHint: false }' };
+  }
+  return { ok: true };
+}
+
 // ── --reads pass (P1 step 8, DV1: reads only, after ping) ──────────────────
 
 /**
@@ -302,10 +336,9 @@ export const READ_TOOL_NAMES = [
   "list_proposals",
 ];
 
-/** Every read check's fixed arguments except `get_song`'s (see `readCheckArguments`). `search_songs` runs a short, one-letter query on purpose — the SUBSTRING path (`libraryIndex.ts`), not the fuzzy one — sure to match something in a real Spanish song catalogue. */
+/** Every read check's fixed arguments except `get_song`'s and `get_service`'s (see `readCheckArguments`). `search_songs` runs a short, one-letter query on purpose — the SUBSTRING path (`libraryIndex.ts`), not the fuzzy one — sure to match something in a real Spanish song catalogue. */
 const FIXED_READ_ARGS = {
   list_services: {},
-  get_service: {},
   search_songs: { query: "a" },
   get_member_availability: {},
   get_participation: {},
@@ -313,18 +346,34 @@ const FIXED_READ_ARGS = {
 };
 
 /**
- * The arguments for one `--reads` check. `get_song` is the one exception: its
- * `songId` comes from `search_songs`'s OWN result earlier in the same pass
- * (`songIdFromSearchResult`) — there is no other id this script has. Throws
- * when that never happened — `main()`'s per-tool `try` (`READ_TOOL_NAMES`'s
- * loop) catches it like any other failure and prints it as `get_song`'s OWN
- * FAIL line, so the message names the likely real cause instead of reading
- * like a network error: `search_songs` itself failing, or a `{ query: "a" }`
- * search that matched no song in this deployment's catalogue — never a
- * script-ordering bug, since `READ_TOOL_NAMES` always runs `search_songs`
- * before `get_song`. Pure.
+ * The arguments for one `--reads` check, given the ids earlier checks in the
+ * SAME pass have already found (`{ songId, serviceId }` — either may be
+ * `null`). Two tools are threaded rather than fixed:
+ *
+ * - `get_song` needs `songId`, from `search_songs`'s OWN result
+ *   (`songIdFromSearchResult`) — there is no other id this script has. Throws
+ *   when that never happened — `main()`'s per-tool `try` (`READ_TOOL_NAMES`'s
+ *   loop) catches it like any other failure and prints it as `get_song`'s OWN
+ *   FAIL line, so the message names the likely real cause instead of reading
+ *   like a network error: `search_songs` itself failing, or a
+ *   `{ query: "a" }` search that matched no song in this deployment's
+ *   catalogue — never a script-ordering bug, since `READ_TOOL_NAMES` always
+ *   runs `search_songs` before `get_song`.
+ * - `get_service` prefers `{ serviceId }`, from `list_services`'s OWN result
+ *   (`serviceIdFromListResult`) — `list_services` runs first, same reasoning.
+ *   Selecting by id never hits `get_service`'s A15 same-day-tie refusal (that
+ *   logic exists only for the no-selector `{}` form). When `list_services`
+ *   named NO service at all (the month is empty — a real, if rare, state),
+ *   this falls back to `{}` rather than throwing: an empty month is not a
+ *   script bug, and `main()`'s own loop treats the resulting A15 tie refusal,
+ *   if any, as an EXPECTED pass rather than a failure (see
+ *   `isAmbiguousServiceRefusal`).
+ *
+ * Pure.
  */
-export function readCheckArguments(name, songId) {
+export function readCheckArguments(name, ctx) {
+  const songId = ctx && ctx.songId;
+  const serviceId = ctx && ctx.serviceId;
   if (name === "get_song") {
     if (typeof songId !== "string" || songId === "") {
       throw new Error(
@@ -333,6 +382,9 @@ export function readCheckArguments(name, songId) {
       );
     }
     return { songId };
+  }
+  if (name === "get_service") {
+    return typeof serviceId === "string" && serviceId !== "" ? { serviceId } : {};
   }
   const args = FIXED_READ_ARGS[name];
   if (args === undefined) throw new Error(`no fixed arguments for "${name}"`);
@@ -344,6 +396,27 @@ export function songIdFromSearchResult(payload) {
   const songs = payload && typeof payload === "object" ? payload.songs : null;
   const first = Array.isArray(songs) ? songs[0] : null;
   return first && typeof first === "object" && typeof first.id === "string" ? first.id : null;
+}
+
+/** The first service id `list_services`' own tool result named, or null (an empty month). Pure — takes the ALREADY-PARSED payload, never the raw text. */
+export function serviceIdFromListResult(payload) {
+  const services = payload && typeof payload === "object" ? payload.services : null;
+  const first = Array.isArray(services) ? services[0] : null;
+  return first && typeof first === "object" && typeof first.serviceId === "string" ? first.serviceId : null;
+}
+
+/**
+ * True when a tool result is `get_service`'s OWN A15 refusal shape for the
+ * no-selector `{}` form — `isError` with TWO OR MORE candidates in
+ * `structuredContent` (a same-day tie, or several matches for an ambiguous
+ * day) — as opposed to any other failure (an unreadable catalogue, which
+ * carries `failedSources` and no `candidates`; a network error; a single-
+ * candidate "no match" refusal). Pure — takes the ALREADY-PARSED JSON-RPC
+ * tool result, never the raw text.
+ */
+export function isAmbiguousServiceRefusal(result) {
+  const candidates = result && result.isError === true && result.structuredContent && result.structuredContent.candidates;
+  return Array.isArray(candidates) && candidates.length >= 2;
 }
 
 function arrayLength(v) {
@@ -625,28 +698,47 @@ async function main() {
     }
     const listResult = await mcpRpc(tokens.access_token, rpc("tools/list"), LEGACY_PROTOCOL_VERSION);
     const tools = listResult.tools ?? [];
-    const toolsCheck = checkToolList(tools);
+    // The plain smoke only needs ping (so it passes against a P0-only
+    // deployment); --reads needs the full eight, since it is about to call
+    // the other seven.
+    const toolsCheck = args.reads ? checkToolList(tools) : checkPingRegistered(tools);
     if (!toolsCheck.ok) throw new Error(toolsCheck.message);
     const callResult = await mcpRpc(tokens.access_token, rpc("tools/call", { name: "ping", arguments: {} }), LEGACY_PROTOCOL_VERSION);
     const payload = JSON.parse(callResult.content[0].text);
     pass(`ping → ${JSON.stringify(payload)}`);
 
     // 7b. --reads: one call per read tool, after ping, before refresh (DV1).
+    // list_services runs before get_service, and search_songs before get_song
+    // (READ_TOOL_NAMES's own order), so each one's result can thread an id
+    // into the next — see readCheckArguments.
     if (args.reads) {
       console.log(`  --reads: ${READ_TOOL_NAMES.join(", ")}`);
       let songId = null;
+      let serviceId = null;
       const outcomes = [];
       for (const name of READ_TOOL_NAMES) {
         try {
-          const toolArgs = readCheckArguments(name, songId);
+          const toolArgs = readCheckArguments(name, { songId, serviceId });
           const readResult = await mcpRpc(
             tokens.access_token,
             rpc("tools/call", { name, arguments: toolArgs }),
             LEGACY_PROTOCOL_VERSION,
           );
-          if (readResult.isError) throw new Error("tool result carried isError: true");
+          if (readResult.isError) {
+            // get_service {} refuses by design (A15) on a same-day tie or an
+            // ambiguous day — expected when list_services named NO service to
+            // select by id (an empty month), never a real failure.
+            if (name === "get_service" && !serviceId && isAmbiguousServiceRefusal(readResult)) {
+              const outcome = { ok: true, detail: "ambiguous (expected — list_services named no service to select by id)" };
+              outcomes.push(outcome);
+              console.log(formatReadCheckLine(name, outcome));
+              continue;
+            }
+            throw new Error("tool result carried isError: true");
+          }
           const readPayload = JSON.parse(readResult.content[0].text);
           if (name === "search_songs") songId = songIdFromSearchResult(readPayload);
+          if (name === "list_services") serviceId = serviceIdFromListResult(readPayload);
           const outcome = { ok: true, detail: readCheckDetail(name, readPayload) };
           outcomes.push(outcome);
           console.log(formatReadCheckLine(name, outcome));

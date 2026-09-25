@@ -213,9 +213,15 @@ enforces — is refused rather than picking one.
 - `rehearsalMixes`, grouped by tone (`{tone, mixes: [{mixKey, kind, family, track, bpm}]}`) —
   never the waveform, the audio file or the content hash.
 - `playHistory`: every past weekend service (Sunday/Saturday) this song played in, before today in
-  America/Mexico_City, most recent first — **uncapped** (the song page itself caps at the last 20;
-  this tool does not) and **specials never count** — a special's songs live on the role document
-  itself, never in a separate weekend setlist, so the exclusion is structural, not a filter.
+  America/Mexico_City, most recent first — **uncapped**: `get_song` reads the whole weekend-setlist
+  catalogue and filters in JS, with no upper bound at all. By contrast, the song page
+  (`app/(client)/posts/[slug]/page.tsx`) shows only its **3** most recent, and the song API route
+  (`app/api/song/[id]/route.ts`) returns its **5** most recent — both reached through a GROQ
+  `[0..19]` over-fetch (a buffer so canonicalizing a duplicate-week target still leaves enough rows
+  to reach 3 or 5 after filtering), which is NOT itself a 20-entry display cap, and `get_song`
+  carries no equivalent of it at all. **Specials never count** — a special's songs live on the role
+  document itself, never in a separate weekend setlist, so the exclusion is structural, not a
+  filter.
 
 #### `get_member_availability` (P1, not released)
 
@@ -374,9 +380,16 @@ targeting the dev alias, and refuses to run against production outright. **Runni
 creates a real grant document in the shared production Sanity dataset** — revoke it afterward with
 `scripts/revoke-mcp-grant.mjs`, per the steps below.
 
-By default the smoke calls only `ping`. **`--reads`** (P1, once that branch is deployed to the
-target) adds a sub-step right after `ping` and before refresh: one call each to `list_services`,
-`get_service`, `search_songs`, `get_song` (using the first song id `search_songs` found),
+By default the smoke calls only `ping`, and its `tools/list` check requires only that `ping` be
+registered — it passes against BOTH a P0-only deployment (production today) and a P1 one, since the
+plain smoke's job is proving the handshake and `ping`, not P1's registration. **`--reads`** (P1,
+once that branch is deployed to the target) adds a sub-step right after `ping` and before refresh,
+and its OWN `tools/list` check requires the full eight tools (it is about to call the other seven):
+one call each to `list_services`, `get_service` (selected BY ID from `list_services`'s own first
+result, the same way `get_song` below uses `search_songs`'s — never `{}`, so it never hits its own
+same-day-tie refusal; an empty month, with no service to select by id, falls back to `{}`, and if
+THAT refuses on a tie the pass logs it as an EXPECTED pass, "ambiguous (expected)", not a failure),
+`search_songs`, `get_song` (using the first song id `search_songs` found),
 `get_member_availability`, `get_participation` and `list_proposals`, printing a PASS/FAIL line per
 tool and a counts-only summary — never a name or any other personal data. It calls no write tool;
 none exist (DV1).

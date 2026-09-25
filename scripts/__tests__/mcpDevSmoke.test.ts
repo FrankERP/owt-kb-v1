@@ -27,6 +27,7 @@ import {
   BYPASS_HEADER,
   buildAuthorizeUrl,
   bypassHeaderFor,
+  checkPingRegistered,
   checkToolList,
   codeChallengeFromVerifier,
   decodeJwtPayloadUnsafe,
@@ -36,6 +37,7 @@ import {
   formatReadCheckLine,
   generateCodeVerifier,
   generateState,
+  isAmbiguousServiceRefusal,
   LOCAL_BASE,
   parseArgs,
   parseSseMessages,
@@ -47,6 +49,7 @@ import {
   redirectUriFor,
   resolveBase,
   rpc,
+  serviceIdFromListResult,
   SmokeError,
   songIdFromSearchResult,
   summarizeReadChecks,
@@ -360,21 +363,58 @@ describe("checkToolList", () => {
   });
 });
 
+describe("checkPingRegistered", () => {
+  const readOnly = { readOnlyHint: true, openWorldHint: false };
+
+  it("accepts ping alone — a P0-only deployment, what the plain smoke (no --reads) must pass against", () => {
+    expect(checkPingRegistered([{ name: "ping", annotations: readOnly }])).toEqual({ ok: true });
+  });
+
+  it("accepts ping alongside the full P1 set too — order and the other names don't matter", () => {
+    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: readOnly }));
+    expect(checkPingRegistered(tools)).toEqual({ ok: true });
+    expect(checkPingRegistered([...tools].reverse())).toEqual({ ok: true });
+  });
+
+  it("refuses when ping is missing entirely", () => {
+    const result = checkPingRegistered([{ name: "get_service", annotations: readOnly }]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("ping");
+  });
+
+  it("refuses a ping missing openWorldHint: false or declared writable", () => {
+    expect(checkPingRegistered([{ name: "ping", annotations: { readOnlyHint: true } }]).ok).toBe(false);
+    expect(checkPingRegistered([{ name: "ping", annotations: { readOnlyHint: false, openWorldHint: false } }]).ok).toBe(false);
+  });
+});
+
 describe("readCheckArguments", () => {
-  it("every fixed tool has {} or a trivial short query, never a write shape", () => {
+  it("every fixed tool (excluding get_song and get_service) has {} or a trivial short query, never a write shape", () => {
     for (const name of READ_TOOL_NAMES) {
-      if (name === "get_song") continue;
-      expect(readCheckArguments(name, null)).toBeTypeOf("object");
+      if (name === "get_song" || name === "get_service") continue;
+      expect(readCheckArguments(name, {})).toBeTypeOf("object");
     }
-    expect(readCheckArguments("search_songs", null)).toEqual({ query: "a" });
+    expect(readCheckArguments("search_songs", {})).toEqual({ query: "a" });
   });
 
   it("get_song takes the songId handed in from search_songs's result", () => {
-    expect(readCheckArguments("get_song", "song-123")).toEqual({ songId: "song-123" });
+    expect(readCheckArguments("get_song", { songId: "song-123" })).toEqual({ songId: "song-123" });
   });
 
   it("get_song throws (caught by main()'s own per-tool try, printed as get_song's FAIL line) when no songId was ever found", () => {
-    expect(() => readCheckArguments("get_song", null)).toThrow(/songId/);
+    expect(() => readCheckArguments("get_song", {})).toThrow(/songId/);
+    expect(() => readCheckArguments("get_song", { serviceId: "role-1" })).toThrow(/songId/);
+  });
+
+  it("get_service selects BY ID when list_services named one, never {} (so it can't hit its own tie refusal)", () => {
+    expect(readCheckArguments("get_service", { serviceId: "role-sun-1004" })).toEqual({
+      serviceId: "role-sun-1004",
+    });
+  });
+
+  it("get_service falls back to {} (never throws) when list_services named no service — the empty-month case", () => {
+    expect(readCheckArguments("get_service", {})).toEqual({});
+    expect(readCheckArguments("get_service", { songId: "song-1" })).toEqual({});
   });
 });
 
@@ -388,6 +428,41 @@ describe("songIdFromSearchResult", () => {
     expect(songIdFromSearchResult({})).toBeNull();
     expect(songIdFromSearchResult(null)).toBeNull();
     expect(songIdFromSearchResult({ songs: [{}] })).toBeNull();
+  });
+});
+
+describe("serviceIdFromListResult", () => {
+  it("reads the first service's id, ignoring everything else in the payload", () => {
+    expect(
+      serviceIdFromListResult({ services: [{ serviceId: "role-sun-1004", date: "2026-10-04" }, { serviceId: "role-sun-1011" }] }),
+    ).toBe("role-sun-1004");
+  });
+
+  it("returns null for an empty or malformed payload (an empty month) — never throws", () => {
+    expect(serviceIdFromListResult({ services: [] })).toBeNull();
+    expect(serviceIdFromListResult({})).toBeNull();
+    expect(serviceIdFromListResult(null)).toBeNull();
+    expect(serviceIdFromListResult({ services: [{}] })).toBeNull();
+  });
+});
+
+describe("isAmbiguousServiceRefusal", () => {
+  it("true only for get_service's OWN A15 shape: isError with 2+ candidates", () => {
+    expect(
+      isAmbiguousServiceRefusal({
+        isError: true,
+        structuredContent: { candidates: [{ serviceId: "a" }, { serviceId: "b" }] },
+      }),
+    ).toBe(true);
+  });
+
+  it("false for a success result, a single-candidate refusal, a catalogue-unreadable refusal, or garbage", () => {
+    expect(isAmbiguousServiceRefusal({ isError: false, structuredContent: { candidates: [{ serviceId: "a" }, { serviceId: "b" }] } })).toBe(false);
+    expect(isAmbiguousServiceRefusal({ isError: true, structuredContent: { candidates: [{ serviceId: "a" }] } })).toBe(false);
+    expect(isAmbiguousServiceRefusal({ isError: true, structuredContent: { failedSources: ["roles"] } })).toBe(false);
+    expect(isAmbiguousServiceRefusal({ isError: true })).toBe(false);
+    expect(isAmbiguousServiceRefusal(null)).toBe(false);
+    expect(isAmbiguousServiceRefusal(undefined)).toBe(false);
   });
 });
 

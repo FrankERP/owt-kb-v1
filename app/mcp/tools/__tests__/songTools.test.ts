@@ -99,11 +99,15 @@ describe("registration", () => {
     expect(tool.config.inputSchema.safeParse({ extra: 1 }).success).toBe(false);
   });
 
-  it("get_song's description states the special exclusion, America/Mexico_City, and that playHistory is uncapped", () => {
+  it("get_song's description states the special exclusion, America/Mexico_City, and contrasts uncapped history with the song page's 3-recent display", () => {
     const { config } = registered(registerGetSong as (server: never) => void);
     expect(config.description).toMatch(/especiales NO cuentan/);
     expect(config.description).toMatch(/America\/Mexico_City/);
     expect(config.description).toMatch(/SIN LÍMITE/);
+    // Pinned against the song page's own slice (`app/(client)/posts/[slug]/page.tsx`'s
+    // `.slice(0, 3)`) — not just the vague "SIN LÍMITE" marker, so a future edit to
+    // either this description OR the page's own limit shows up as a real diff here.
+    expect(config.description).toMatch(/3 más recientes/);
   });
 
   it("types each field strictly", () => {

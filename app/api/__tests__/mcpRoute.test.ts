@@ -87,6 +87,10 @@ import { DELETE, GET, POST } from "@/app/api/mcp/route";
 import { memberResponder } from "@/app/mcp/reads/__tests__/memberFixtures";
 import { FROZEN_EVENING, readToolStore, scopedResponder } from "@/app/mcp/reads/__tests__/readToolFixtures";
 import { songResponder } from "@/app/mcp/reads/__tests__/songFixtures";
+// The dev-smoke script's own expectation of the route's registration — imported,
+// never re-typed, so the two can't drift apart silently (a 9th tool would fail
+// THIS test, not just surface on Frank's next `--reads` run).
+import { EXPECTED_TOOLS } from "@/scripts/mcp-dev-smoke.mjs";
 import * as mcpRoute from "@/app/api/mcp/route";
 import { buildGrantDocument, newGrantId } from "@/app/mcp/oauth/grantDocument";
 import { __clearGrantCache, createGrant, revokeGrant } from "@/app/mcp/oauth/grantStore";
@@ -590,16 +594,10 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const tools = result.tools as Record<string, unknown>[];
-    expect(tools.map((t) => t.name)).toEqual([
-      "ping",
-      "get_service",
-      "list_services",
-      "search_songs",
-      "get_song",
-      "get_member_availability",
-      "get_participation",
-      "list_proposals",
-    ]);
+    // EXPECTED_TOOLS is the dev-smoke script's own pinned list — imported, not
+    // re-derived from this very `tools/list` result, so a drift between the
+    // route's registration and the script's expectation fails HERE.
+    expect(tools.map((t) => t.name)).toEqual(EXPECTED_TOOLS);
     for (const tool of tools) {
       expect(tool.annotations, String(tool.name)).toEqual({ readOnlyHint: true, openWorldHint: false });
       expect(tool.inputSchema, String(tool.name)).toMatchObject({ type: "object", additionalProperties: false });
@@ -647,7 +645,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     const token = await accessToken(await liveGrant());
     const list = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const names = (list.tools as { name: string }[]).map((t) => t.name);
-    expect(names).toHaveLength(8);
+    expect(names).toHaveLength(EXPECTED_TOOLS.length);
     for (const name of names) {
       const result = await rpcResult(
         await POST(mcpRequest(rpc("tools/call", { name, arguments: { extra: "x" } }), { token })),
@@ -722,7 +720,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     });
     // The body really moved to the copy: the handler parsed it and answered.
     const result = await rpcResult(await POST(request));
-    expect(result.tools).toHaveLength(8);
+    expect(result.tools).toHaveLength(EXPECTED_TOOLS.length);
 
     expect(h.forwarded).toHaveLength(1);
     const forwarded = h.forwarded[0]!;
