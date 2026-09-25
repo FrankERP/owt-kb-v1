@@ -83,6 +83,7 @@ vi.mock("mcp-handler", async (importOriginal) => {
 
 import { DELETE, GET, POST } from "@/app/api/mcp/route";
 import { FROZEN_EVENING, readToolStore, scopedResponder } from "@/app/mcp/reads/__tests__/readToolFixtures";
+import { songResponder } from "@/app/mcp/reads/__tests__/songFixtures";
 import * as mcpRoute from "@/app/api/mcp/route";
 import { buildGrantDocument, newGrantId } from "@/app/mcp/oauth/grantDocument";
 import { __clearGrantCache, createGrant, revokeGrant } from "@/app/mcp/oauth/grantStore";
@@ -582,17 +583,20 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
   });
 
-  it("tools/list shows exactly ping, get_service and list_services: all read-only, strict, described in Spanish", async () => {
+  it("tools/list shows exactly ping, get_service, list_services, search_songs and get_song: all read-only, strict, described in Spanish", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const tools = result.tools as Record<string, unknown>[];
-    expect(tools.map((t) => t.name)).toEqual(["ping", "get_service", "list_services"]);
+    expect(tools.map((t) => t.name)).toEqual(["ping", "get_service", "list_services", "search_songs", "get_song"]);
     for (const tool of tools) {
       expect(tool.annotations, String(tool.name)).toEqual({ readOnlyHint: true });
       expect(tool.inputSchema, String(tool.name)).toMatchObject({ type: "object", additionalProperties: false });
+    }
+    const [ping, getService, listServices, searchSongs, getSong] = tools;
+    // `search_songs` names no calendar day: only the time-aware tools state the zone.
+    for (const tool of [ping!, getService!, listServices!, getSong!]) {
       expect(tool.description, String(tool.name)).toMatch(/America\/Mexico_City/);
     }
-    const [ping, getService, listServices] = tools;
     expect(ping!.inputSchema).toMatchObject({ properties: {} });
     expect(ping!.title).toMatch(/conexión/i);
     expect(Object.keys((getService!.inputSchema as { properties: object }).properties).sort()).toEqual([
@@ -602,7 +606,14 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       "serviceId",
     ]);
     expect(Object.keys((listServices!.inputSchema as { properties: object }).properties)).toEqual(["month"]);
+    expect(Object.keys((searchSongs!.inputSchema as { properties: object }).properties).sort()).toEqual([
+      "limit",
+      "query",
+      "tags",
+    ]);
+    expect(Object.keys((getSong!.inputSchema as { properties: object }).properties).sort()).toEqual(["slug", "songId"]);
     for (const tool of [getService!, listServices!]) expect(tool.description).toMatch(/SIN CAMBIOS/);
+    expect(getSong!.description).toMatch(/especiales NO cuentan/);
   });
 
   it("tools/call ping returns { ok, server, version, now } with now in Mexico City time", async () => {
@@ -669,7 +680,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     });
     // The body really moved to the copy: the handler parsed it and answered.
     const result = await rpcResult(await POST(request));
-    expect(result.tools).toHaveLength(3);
+    expect(result.tools).toHaveLength(5);
 
     expect(h.forwarded).toHaveLength(1);
     const forwarded = h.forwarded[0]!;
@@ -863,6 +874,60 @@ describe("/api/mcp — get_service and list_services, end to end", () => {
   it("refuses an unknown argument to either tool as a tool error (I13)", async () => {
     const token = await accessToken(await liveGrant());
     for (const name of ["get_service", "list_services"]) {
+      const result = await rpcResult(
+        await POST(mcpRequest(rpc("tools/call", { name, arguments: { extra: "x" } }), { token })),
+      );
+      expect(result.isError, name).toBe(true);
+    }
+    expect(h.operationalFetch).not.toHaveBeenCalled();
+  });
+});
+
+// ── the song read tools (P1 step 5) ──────────────────────────────────────────
+
+describe("/api/mcp — search_songs and get_song, end to end", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(FROZEN_EVENING));
+    const responder = songResponder();
+    h.operationalFetch.mockImplementation(responder.fetch);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    h.operationalFetch.mockReset();
+  });
+
+  it("tools/call search_songs finds a song by title, accent-insensitive, never a drafts.* copy", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(
+      await POST(mcpRequest(rpc("tools/call", { name: "search_songs", arguments: { query: "cancion" } }), { token })),
+    );
+    expect(result.isError).toBeFalsy();
+    const content = result.content as { type: string; text: string }[];
+    const payload = JSON.parse(content[0]!.text) as { songs: { id: string }[] };
+    expect(payload.songs.map((s) => s.id)).toContain("song-cancion");
+    expect(payload.songs.some((s) => s.id === "drafts.song-ghost")).toBe(false);
+  });
+
+  it("tools/call get_song answers the declared field set, with no waveform data anywhere", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(
+      await POST(mcpRequest(rpc("tools/call", { name: "get_song", arguments: { songId: "song-1" } }), { token })),
+    );
+    expect(result.isError).toBeFalsy();
+    const content = result.content as { type: string; text: string }[];
+    const payload = JSON.parse(content[0]!.text) as Record<string, unknown>;
+    expect(payload.title).toBe("Grande es tu fidelidad");
+    expect(payload.lyrics).toBe("hidden_by_chart");
+    expect((payload.playHistory as { date: string }[]).length).toBeGreaterThan(0);
+    expect(content[0]!.text).not.toContain("peaks");
+    expect(result.structuredContent).toEqual(payload);
+  });
+
+  it("refuses an unknown argument to either tool as a tool error (I13)", async () => {
+    const token = await accessToken(await liveGrant());
+    for (const name of ["search_songs", "get_song"]) {
       const result = await rpcResult(
         await POST(mcpRequest(rpc("tools/call", { name, arguments: { extra: "x" } }), { token })),
       );

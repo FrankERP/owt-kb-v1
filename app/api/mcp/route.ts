@@ -38,8 +38,10 @@ import { jsonNoStore, mcpUnauthorizedResponse } from "@/app/mcp/oauth/responses"
 import { verifyAccessToken } from "@/app/mcp/oauth/tokens";
 import { MCP_SERVER_NAME, mcpServerVersion } from "@/app/mcp/serverInfo";
 import { registerGetService } from "@/app/mcp/tools/getService";
+import { registerGetSong } from "@/app/mcp/tools/getSong";
 import { registerListServices } from "@/app/mcp/tools/listServices";
 import { registerPing } from "@/app/mcp/tools/ping";
+import { registerSearchSongs } from "@/app/mcp/tools/searchSongs";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -68,6 +70,8 @@ const mcpHandler = createMcpHandler(
     registerPing(server, { version: SERVER_INFO.version });
     registerGetService(server);
     registerListServices(server);
+    registerSearchSongs(server);
+    registerGetSong(server);
   },
   {
     serverInfo: SERVER_INFO,

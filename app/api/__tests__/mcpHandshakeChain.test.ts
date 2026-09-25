@@ -307,7 +307,13 @@ describe("the connector handshake, end to end on preview (discovery → ping →
     expect(negotiated).toBe(PROTOCOL);
 
     const list = await rpcResult(await mcp(tokens.access_token, "tools/list", undefined, negotiated));
-    expect((list.tools as { name: string }[]).map((t) => t.name)).toEqual(["ping", "get_service", "list_services"]);
+    expect((list.tools as { name: string }[]).map((t) => t.name)).toEqual([
+      "ping",
+      "get_service",
+      "list_services",
+      "search_songs",
+      "get_song",
+    ]);
 
     const ping = (token: string) => mcp(token, "tools/call", { name: "ping", arguments: {} }, negotiated);
     const first = await rpcResult(await ping(tokens.access_token));
