@@ -326,3 +326,273 @@ class FairnessUnderPins(unittest.TestCase):
         res, _result, seen = instrumented(fixture(rules=rules, pinned=pins))
         self.assertTrue(res["ok"], res.get("error"))
         self.assertEqual(seen[0][0]["global_fairness_slack"].get("Marianne"), 2)
+
+
+# ─── Blocking-mechanism cases (§7) ─────────────────────────────────────────────
+# Each starts from what an admin does — move one person into another role — and each
+# names an instance that is FORCED: the only one that can give. `violation_target`
+# bounds the count, not the identity, so a case with two equally-minimal sets would
+# flake on the seed. Each returns (request, expected pin_violations).
+
+def occupancy_case():
+    """Round 5's one-pin reproduction: Hugo pinned to lead the week Jakey is out."""
+    rules = ["any_of(Hugo,Jakey) on Sun.BGV each_week"] + unavailable("Jakey", 3)
+    return (fixture(rules=rules, pinned=[pin("Hugo", "Sun.Lead", 3)]),
+            ["W3: any_of(Hugo,Jakey) on Sun.BGV each_week"])
+
+
+def cap_case():
+    """Round 6's two-pin reproduction, authored in the seed's MERGED shape: every clause
+    after the first is subject-elided in `source`, so the person comes from the rule
+    object. The template resolves before parsing, so the entry shows 2, not {weeks-2}."""
+    rules = ["Gaby !in Sat.* & !in Sun.Choir & Sun.BGV <= {weeks-2} & fairness_slack 1",
+             "any_of(Gaby,Jakey) on Sun.BGV each_week"] + unavailable("Jakey", 3) + unavailable("Jakey", 4)
+    return (fixture(rules=rules, pinned=[pin("Gaby", "Sun.BGV", 1), pin("Gaby", "Sun.BGV", 2)]),
+            ["Gaby: Sun.BGV <= 2"])
+
+
+def pair_case():
+    """Round 6's pair reproduction. Two presence rules both need Liu in W2, so waiving
+    presence costs two and the pair is the one instance that can give."""
+    rules = (["Liu !with Vale on *.Choir",
+              "any_of(Liu,Marianne) on Sun.Choir each_week",
+              "any_of(Liu,Dani) on Sun.Choir each_week"]
+             + unavailable("Marianne", 2) + unavailable("Dani", 2))
+    return (fixture(rules=rules, pinned=[pin("Vale", "Sun.Choir", 2)]),
+            ["W2 Sun: Liu !with Vale on *.Choir"])
+
+
+def anchor_case():
+    """The only dedicated Saturday lead pinned into Sat.BGV."""
+    return fixture(pinned=[pin("Tono", "Sat.BGV", 2)]), ["builtin:sat_anchor:W2"]
+
+
+def full_row_case():
+    """A row pinned full leaves the group no seat that week."""
+    return (fixture(rules=["any_of(Liu,Marianne) on Sun.Choir each_week"],
+                    pinned=[pin(p, "Sun.Choir", 1) for p in ("Vale", "Dani", "Pau")]),
+            ["W1: any_of(Liu,Marianne) on Sun.Choir each_week"])
+
+
+def unreachable_bound_case(op):
+    """Two Sunday pins elsewhere leave Liu two Choir Sundays; the rule wants three."""
+    return (fixture(rules=[f"Liu Sun.Choir {op} 3"],
+                    pinned=[pin("Liu", "Sun.BGV", 1), pin("Liu", "Sun.BGV", 2)]),
+            [f"Liu: Liu Sun.Choir {op} 3"])
+
+
+def no_lead_case():
+    """Every lead-pool member pinned into other roles of W4's Sunday."""
+    return (fixture(pinned=[pin("Hugo", "Sun.BGV", 4), pin("Niza", "Sun.BGV", 4),
+                            pin("Lucia", "Sun.Choir", 4), pin("Rachel", "Sun.Choir", 4)]),
+            ["builtin:mandatory_lead:W4:Sun"])
+
+
+def pair_both_services_case():
+    """One rule relaxed on both services of one week: two instances, two distinct entries."""
+    return (fixture(rules=["Hugo !with Niza on *.BGV"],
+                    pinned=[pin("Hugo", "Sun.BGV", 2), pin("Niza", "Sun.BGV", 2),
+                            pin("Hugo", "Sat.BGV", 2), pin("Niza", "Sat.BGV", 2)]),
+            ["W2 Sun: Hugo !with Niza on *.BGV", "W2 Sat: Hugo !with Niza on *.BGV"])
+
+
+def consecutive_case():
+    """Merged shape again: the person comes from the rule object, not from `source`."""
+    return (fixture(rules=["Rachel !in Sat.* & !consecutive on *.Lead"],
+                    pinned=[pin("Rachel", "Sun.Lead", 2), pin("Rachel", "Sun.Lead", 3)]),
+            ["W2-3 Rachel: !consecutive on *.Lead"])
+
+
+CASES = {
+    "occupancy": occupancy_case, "cap": cap_case, "pair": pair_case, "anchor": anchor_case,
+    "full_row": full_row_case, "gte": lambda: unreachable_bound_case(">="),
+    "eq": lambda: unreachable_bound_case("=="), "no_lead": no_lead_case,
+    "pair_both_services": pair_both_services_case, "consecutive": consecutive_case,
+}
+
+
+def rules_stay_hard(data):
+    original = mod.relaxation_enabled
+    mod.relaxation_enabled = lambda pins: False
+    try:
+        return solve_from_dict(data)
+    finally:
+        mod.relaxation_enabled = original
+
+
+class PinsBeatRules(unittest.TestCase):
+
+    def assert_pins_seated(self, res, pinned):
+        for p in pinned:
+            self.assertIn(p["person"], seated(res, p["week"], p["role"]), p)
+
+    def test_each_mechanism_names_exactly_the_rule_that_gave(self):
+        for name, build in CASES.items():
+            with self.subTest(case=name):
+                data, expected = build()
+                res = solve_from_dict(data)
+                self.assertTrue(res["ok"], res.get("error"))
+                self.assertEqual(res["pinned_honored"], len(data["pinned"]))
+                self.assert_pins_seated(res, data["pinned"])
+                self.assertCountEqual(res["pin_violations"], expected)
+                self.assertTrue(res["violation_ceiling_proven"])
+
+    def test_rules_stay_hard_control(self):
+        """With the booleans off, the same reproductions must FAIL — this is what proves the
+        suite discriminates a working relaxation from a vacuous one."""
+        for build in (occupancy_case, cap_case, pair_case):
+            with self.subTest(case=build.__name__):
+                data, _ = build()
+                self.assertFalse(rules_stay_hard(data)["ok"])
+
+    def test_nothing_left_to_lead_with_leaves_the_seat_unfilled(self):
+        data, _ = no_lead_case()
+        res = solve_from_dict(data)
+        self.assertEqual(seated(res, 4, "Sun.Lead"), [])
+        self.assertIn("W4 Sunday Sun.Lead #1", res["unfilled_seats"])
+        self.assertIn("W4 Sunday Sun.Lead #2", res["unfilled_seats"])
+
+    def test_a_relaxation_stays_inside_its_own_week(self):
+        res = solve_from_dict(occupancy_case()[0])
+        for week in (1, 2, 4):
+            self.assertTrue({"Hugo", "Jakey"} & set(seated(res, week, "Sun.BGV")),
+                            f"presence also failed in W{week}")
+        res = solve_from_dict(pair_case()[0])
+        for week in (1, 3, 4):
+            self.assertFalse({"Liu", "Vale"} <= set(seated(res, week, "Sun.Choir")),
+                             f"pair also failed in W{week}")
+        res = solve_from_dict(consecutive_case()[0])
+        self.assertNotIn("Rachel", seated(res, 1, "Sun.Lead"))
+        self.assertNotIn("Rachel", seated(res, 4, "Sun.Lead"))
+
+    def test_a_pinned_unavailable_group_member_breaks_nothing(self):
+        """excluded_pwr is scoped for pins: without it, Jakey's pin would not count toward
+        the rule it satisfies and E3's headline case would report a conflict."""
+        rules = ["any_of(Hugo,Jakey) on Sun.BGV each_week"] + unavailable("Jakey", 3)
+        res = solve_from_dict(fixture(rules=rules, pinned=[pin("Jakey", "Sun.BGV", 3),
+                                                           pin("Hugo", "Sun.Lead", 3)]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["pin_violations"], [])
+
+    def test_pins_that_satisfy_rules_relax_nothing(self):
+        cap = "Gaby !in Sat.* & !in Sun.Choir & Sun.BGV <= {weeks-2} & fairness_slack 1"
+        for label, rules, pins in (
+            ("anchor", [], [pin("Tono", "Sat.Lead", 1)]),
+            ("presence", ["any_of(Hugo,Jakey) on Sun.BGV each_week"],
+             [pin("Jakey", "Sun.BGV", w) for w in range(1, 5)]),
+            ("cap", [cap], [pin("Gaby", "Sun.BGV", 1)]),
+        ):
+            with self.subTest(case=label):
+                res = solve_from_dict(fixture(rules=rules, pinned=pins))
+                self.assertTrue(res["ok"], res.get("error"))
+                self.assertEqual(res["pin_violations"], [])
+                if label == "cap":
+                    self.assertLessEqual(res["role_counts"]["Gaby"]["Sun.BGV"], 2)
+
+    def test_observation_two_pins_on_a_cap_of_one_give_exactly_two_not_a_bound(self):
+        """An OBSERVATION of the objective, not a property of the model (§5.2): the relaxed
+        cap stops binding and the per-role spread term is what holds Gaby at her pins."""
+        res = solve_from_dict(fixture(rules=["Gaby Sun.BGV <= 1"],
+                                      pinned=[pin("Gaby", "Sun.BGV", 1), pin("Gaby", "Sun.BGV", 2)]))
+        self.assertEqual(res["pin_violations"], ["Gaby: Gaby Sun.BGV <= 1"])
+        self.assertEqual(res["role_counts"]["Gaby"]["Sun.BGV"], 2)
+
+
+def occupancy_case_failures(res):
+    """
+    Every relaxable instance of the occupancy case, evaluated independently of the
+    solver: its presence rule, both mandatory leads and the Saturday anchor, each week
+    (Tono is the only dedicated Saturday lead and is available throughout). Without the
+    ceiling, Stage B does break instances nobody pinned — the Saturday anchor, measured —
+    which is exactly why this has to cover all of them.
+    """
+    failed = set()
+    for w in range(1, 5):
+        if not {"Hugo", "Jakey"} & set(seated(res, w, "Sun.BGV")):
+            failed.add(f"W{w}: any_of(Hugo,Jakey) on Sun.BGV each_week")
+        if not seated(res, w, "Sun.Lead"):
+            failed.add(f"builtin:mandatory_lead:W{w}:Sun")
+        if not seated(res, w, "Sat.Lead"):
+            failed.add(f"builtin:mandatory_lead:W{w}:Sat")
+        if "Tono" not in seated(res, w, "Sat.Lead"):
+            failed.add(f"builtin:sat_anchor:W{w}")
+    return failed
+
+
+class ViolationCeiling(unittest.TestCase):
+    """§5.2: solve 0 runs first and its minimum is a hard ceiling on every later stage."""
+
+    def patch_first_solve(self, status_for):
+        original = cp_model.CpSolver.Solve
+        calls = []
+
+        def patched(solver_self, model):
+            calls.append(1)
+            if len(calls) == 1:
+                return status_for(original, solver_self, model)
+            return original(solver_self, model)
+
+        cp_model.CpSolver.Solve = patched
+        self.addCleanup(setattr, cp_model.CpSolver, "Solve", original)
+
+    def test_solve_zero_runs_first_and_bounds_every_later_stage(self):
+        res, _result, seen = instrumented(occupancy_case()[0])
+        first, solve0 = seen[0]
+        self.assertTrue(first.get("violation_objective_only"))
+        self.assertIsNone(first.get("empty_target"))
+        self.assertEqual(solve0.violations_used, 1)
+        for kwargs, _ in seen[1:]:
+            self.assertEqual(kwargs.get("violation_target"), 1, "a stage ran without the ceiling")
+        self.assertLessEqual(len(res["pin_violations"]), solve0.violations_used)
+        self.assertTrue(res["violation_ceiling_proven"])
+
+    def test_no_solution_from_solve_zero_means_no_ceiling_and_an_honest_report(self):
+        """The regime a slow container reaches: nothing bounds the stages, so the report is
+        all that is left — every entry must be a real failure and every failure an entry."""
+        self.patch_first_solve(lambda original, s, m: cp_model.UNKNOWN)
+        res, _result, seen = instrumented(occupancy_case()[0])
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertFalse(res["violation_ceiling_proven"])
+        for kwargs, _ in seen[1:]:
+            self.assertIsNone(kwargs.get("violation_target"))
+        self.assertEqual(set(res["pin_violations"]), occupancy_case_failures(res))
+        self.assertIn("W3: any_of(Hugo,Jakey) on Sun.BGV each_week", res["pin_violations"])
+
+    def test_a_feasible_solve_zero_still_bounds_but_is_not_proven(self):
+        def feasible(original, s, m):
+            status = original(s, m)
+            return cp_model.FEASIBLE if status == cp_model.OPTIMAL else status
+        self.patch_first_solve(feasible)
+        res, _result, seen = instrumented(occupancy_case()[0])
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertFalse(res["violation_ceiling_proven"])
+        for kwargs, _ in seen[1:]:
+            self.assertEqual(kwargs.get("violation_target"), 1)
+
+    def test_the_stage_a_fall_through_carries_the_ceiling(self):
+        """
+        Earlier drafts said the fall-through escaped the ceiling. Solve 0 runs before
+        Stage A, so it does not — and the fall-through is the path production reaches
+        (0.33 vCPU, a 40 s budget) and CI does not by accident. Forced here by making
+        every Stage B pass come back empty, which is "every tier infeasible" without
+        depending on how fast the runner is.
+        """
+        original = mod.create_model_and_solve
+
+        def stage_b_finds_nothing(**kwargs):
+            if kwargs.get("violation_objective_only") or kwargs.get("empty_objective_only"):
+                return original(**kwargs)
+            return None
+
+        mod.create_model_and_solve = stage_b_finds_nothing
+        try:
+            res, result, seen = instrumented(occupancy_case()[0])
+        finally:
+            mod.create_model_and_solve = original
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(result.fairness_limit_used, BIG, "the fall-through did not happen")
+        stage_a_kwargs = [k for k, _ in seen if k.get("empty_objective_only")]
+        self.assertEqual([k.get("violation_target") for k in stage_a_kwargs], [1],
+                         "Stage A ran without the ceiling")
+        self.assertTrue(res["violation_ceiling_proven"])
+        self.assertEqual(len(res["pin_violations"]), seen[0][1].violations_used)
