@@ -2,10 +2,9 @@
 
 **Date:** 2026-09-25 · **Status:** Accepted
 
-> **The number is provisional.** ADR numbers follow the order in which records reach `main`.
-> 0040 was the next free number on every branch and worktree on 2026-09-25, but this record ships
-> with P1 (`claude/mcp-p1-reads`, not yet merged). If another ADR reaches `main` first, renumber
-> this one and the two file headers that link it.
+> **The number is final.** ADR numbers follow the order in which records reach `main`. P1
+> (`claude/mcp-p1-reads`) reached `main` 2026-09-25 (PR #98, `a04edb43`) carrying this file as
+> 0040, and no other ADR has taken that number — confirmed against `docs/adr/`.
 
 ## Context
 

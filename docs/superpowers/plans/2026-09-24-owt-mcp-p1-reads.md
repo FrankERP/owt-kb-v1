@@ -449,10 +449,11 @@ without changing the design.
 - **Supplied to P4:** the snapshot loader as a reusable read of the whole service catalogue.
 - **Review:** standard tier. No adversarial plan review; a fresh code review of the diff
   before `main`.
-- **Implementation authorization: not granted by this plan.** Frank's go-ahead is
-  required.
+- **Implementation authorization:** implemented with Frank's go-ahead of 2026-09-24; released
+  2026-09-25 (PR #98).
 
 ## Terminal state
 
 **READY_FOR_ADVERSARIAL_REVIEW**: self-contained, with no blocking unknowns. Under the
-roadmap's standard tier, the next step is Frank's go-ahead to implement, not a plan review.
+roadmap's standard tier, implemented with Frank's go-ahead of 2026-09-24; released 2026-09-25
+(PR #98).
