@@ -55,8 +55,8 @@ Turning the dial while a row plays carries the same track into the new key at th
 position; a paused row stays paused. Outside a provider (the gallery fixture) every key's
 rows show.
 
-Render driver: `render-keys.py` (session scratchpad of 2026-09-21; re-create from this
-shape) takes `[{als, stem, postId, semis}]` where `stem` is the base stem with the TARGET
+Render driver: `scripts/render-keys.py` in the AbletonNL repo (`de69c5e`; `render-list.py`
+beside it is the untransposed one) takes `[{als, stem, postId, semis}]` where `stem` is the base stem with the TARGET
 key (`Jesucristo Basta_69BPM_Ab` → `…_G`), passes `transpose=semis` to
 `render_rehearsal_mixes`, moves the folder to `<root>/<stem>/` and writes `matches.json`.
 The list comes from Sanity: per post, `mixTones` ± 1 ∪ `play_key` roots − keys already
