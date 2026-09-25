@@ -15,7 +15,7 @@
 // spawn the solver. `gcf/**` is invoked here, never edited.
 
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { historyForRequest } from "../../app/components/admin/plannerModel";
@@ -37,6 +37,7 @@ import {
 import {
   aggregateTotals,
   gateOf,
+  r11Incomplete,
   renderMarkdown,
   stdoutLines,
   summarizeRun,
@@ -137,15 +138,87 @@ function realLocation(p: string): string {
   return path.join(real, ...rest);
 }
 
-function repoRefusals(entries: { flag: string; file: string }[], repoRoot: string, platform: string): string[] {
+/** The two reads `repositoryRoots` needs, injected so the discovery is testable without a repository. */
+export interface GitFs {
+  /** A file's text, or null when the path is not a readable file. */
+  readFile(p: string): string | null;
+  /** A directory's entries, or null when the path is not a readable directory. */
+  readDir(p: string): string[] | null;
+}
+
+export const nodeGitFs: GitFs = {
+  readFile: (p) => {
+    try {
+      return statSync(p).isFile() ? readFileSync(p, "utf8") : null;
+    } catch {
+      return null;
+    }
+  },
+  readDir: (p) => {
+    try {
+      return statSync(p).isDirectory() ? readdirSync(p) : null;
+    } catch {
+      return null;
+    }
+  },
+};
+
+/**
+ * Every working tree of the repository `repoRoot` belongs to — not just
+ * `repoRoot`. A linked worktree (`git worktree add`, `.claude/worktrees/*`) has a
+ * `.git` FILE pointing into the main repository's `.git/worktrees/<name>`; a file
+ * written into the MAIN checkout, or into a sibling worktree, is just as much
+ * inside the public repository as one written here. So the roots are:
+ *  - `repoRoot` itself;
+ *  - the main working tree: the parent of the common dir, when that is a `.git`
+ *    directory (a bare repository has none);
+ *  - every linked worktree: the parent of each `<commondir>/worktrees/*` `gitdir` target.
+ * A `.git` file that cannot be followed is a `problem`: the caller refuses rather
+ * than guard less of the repository than it thinks it does.
+ */
+export function repositoryRoots(repoRoot: string, fs: GitFs): { roots: string[]; problem: string | null } {
+  const root = path.resolve(repoRoot);
+  const roots = new Set([root]);
+  const dotGit = path.join(root, ".git");
+  let commonDir: string | null = null;
+
+  const dotGitFile = fs.readFile(dotGit);
+  if (dotGitFile !== null) {
+    const m = /^gitdir:\s*(.+?)\s*$/m.exec(dotGitFile);
+    if (!m) return { roots: [...roots], problem: `cannot locate the repository: ${dotGit} has no "gitdir:" line` };
+    const gitDir = path.resolve(root, m[1]);
+    if (fs.readDir(gitDir) === null) {
+      return { roots: [...roots], problem: `cannot locate the repository: ${dotGit} points at ${gitDir}, which does not exist` };
+    }
+    const common = fs.readFile(path.join(gitDir, "commondir"))?.trim();
+    if (common) commonDir = path.resolve(gitDir, common);
+    else if (path.basename(path.dirname(gitDir)) === "worktrees") commonDir = path.dirname(path.dirname(gitDir));
+    else commonDir = gitDir;
+  } else if (fs.readDir(dotGit) !== null) {
+    commonDir = dotGit;
+  }
+
+  if (commonDir) {
+    if (path.basename(commonDir) === ".git") roots.add(path.dirname(commonDir));
+    const worktrees = path.join(commonDir, "worktrees");
+    for (const name of fs.readDir(worktrees) ?? []) {
+      const target = fs.readFile(path.join(worktrees, name, "gitdir"))?.trim();
+      if (target) roots.add(path.dirname(path.resolve(worktrees, name, target)));
+    }
+  }
+  return { roots: [...roots], problem: null };
+}
+
+function repoRefusals(entries: { flag: string; file: string }[], roots: readonly string[], platform: string): string[] {
   const caseInsensitive = platform === "darwin" || platform === "win32";
-  const roots = [path.resolve(repoRoot), realLocation(repoRoot)];
+  const resolvedRoots = roots.flatMap((r) => [{ shown: r, at: path.resolve(r) }, { shown: r, at: realLocation(r) }]);
   const refusals: string[] = [];
   for (const { flag, file } of entries) {
     const candidates = [path.resolve(file), realLocation(file)];
-    if (candidates.some((c) => roots.some((r) => isInsideRoot(c, r, caseInsensitive)))) {
+    const hit = resolvedRoots.find((r) => candidates.some((c) => isInsideRoot(c, r.at, caseInsensitive)));
+    if (hit) {
       refusals.push(
-        `${flag} ${file} is inside the repository (${repoRoot}). Exports, bundles, solve requests and reports hold ` +
+        `${flag} ${file} is inside the repository (${hit.shown}). Exports, bundles, solve requests and reports hold ` +
           "member names and this repository is public: keep them in a private folder outside it (e.g. ~/owt-private/p2-history/).",
       );
     }
@@ -313,7 +386,9 @@ async function run(argv: readonly string[], deps: CliDeps): Promise<number> {
   const args = parseCliArgs(argv);
   if ("error" in args) throw new Refusal(`${args.error}\n${USAGE}`);
 
-  // 1. Nothing inside the repository — checked before any file is read or written.
+  // 1. Nothing inside the repository — any of its working trees — checked before any file is read or written.
+  const { roots, problem } = repositoryRoots(deps.repoRoot, nodeGitFs);
+  if (problem) throw new Refusal(`${problem}; refusing rather than guard only part of the repository`);
   const refusals = repoRefusals(
     [
       ...args.bundles.map((file) => ({ flag: "--bundle", file })),
@@ -321,7 +396,7 @@ async function run(argv: readonly string[], deps: CliDeps): Promise<number> {
       ...(args.solveRequest ? [{ flag: "--solve-request", file: args.solveRequest }] : []),
       { flag: "--out", file: args.out },
     ],
-    deps.repoRoot,
+    roots,
     deps.platform,
   );
   if (refusals.length) throw new Refusal(refusals.join("\n"));
@@ -507,6 +582,7 @@ async function run(argv: readonly string[], deps: CliDeps): Promise<number> {
     primaries: reports,
     totals,
     gate: gateOf(totals),
+    r11Incomplete: r11Incomplete(solve),
     solve,
   };
   const stamp = generatedAt.replace(/[:.]/g, "-");

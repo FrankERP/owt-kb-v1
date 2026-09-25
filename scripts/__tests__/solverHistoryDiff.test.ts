@@ -538,6 +538,28 @@ describe("rule 4c–4e — changed, deleted, moved", () => {
     expect(brief(cell(result, "2026-10", CARO, "Sun.Lead"))).toEqual({ delta: 1, verdict: "bug", class: "residual" });
   });
 
+  it("flags an export-higher cell whose |Δ| exceeds the documents admitting it — no cap is invented", () => {
+    const sun = doc({ roleId: "sun-1011", day: "2026-10-11", unchangedAs: null, contributes: {} });
+    const many = classify({
+      primary: [entry(2026, 10, { [BETO]: { "Sun.BGV": 1 }, [ANA]: { "Sun.Lead": 3 } })],
+      derived: derivedFor(NOV, [BASE_OCT, sun]),
+    });
+    const c = cell(many, "2026-10", ANA, "Sun.Lead");
+    expect(brief(c)).toEqual({ delta: -3, verdict: "unverified", class: "changed_since_creation" });
+    expect(c.parts).toEqual([
+      { class: "changed_since_creation", amount: 3, evidence: ["role:sun-1011", "⚠ |Δ| exceeds admitting documents"] },
+    ]);
+    // Two deletions admitting two seats: within the count, so no flag.
+    const two = classify({
+      primary: [entry(2026, 10, { [BETO]: { "Sun.BGV": 1 }, [ANA]: { "Sun.Lead": 2 } })],
+      derived: derivedFor(NOV, [BASE_OCT], [
+        oow({ receiptId: "rc-d1", targetDay: "2026-10-18", state: "role_deleted" }),
+        oow({ receiptId: "rc-d2", targetDay: "2026-10-25", state: "role_deleted" }),
+      ]),
+    });
+    expect(cell(two, "2026-10", ANA, "Sun.Lead").parts[0].evidence).toEqual(["receipt:rc-d1", "receipt:rc-d2"]);
+  });
+
   it("4d: a role_deleted receipt of the matching type in the month explains an export-higher cell, unverified", () => {
     const exportOct = entry(2026, 10, { [BETO]: { "Sun.BGV": 1 }, [ANA]: { "Sun.Lead": 1 } });
     const deleted = oow({ receiptId: "rc-del", targetDay: "2026-10-25", state: "role_deleted", roleFound: false });
@@ -711,6 +733,20 @@ describe("parseExport", () => {
       } catch (e) {
         message = e instanceof Error ? e.message : String(e);
       }
+      expect(message).not.toContain("Ana");
+    }
+  });
+
+  it("never echoes an entry's field values either: a malformed key or year could be a name", () => {
+    const base = { key: "2026-9", year: 2026, month: 9, total_counts: {}, role_counts: {} };
+    for (const bad of [{ ...base, key: ANA }, { ...base, year: ANA }, { ...base, month: ANA }]) {
+      let message = "";
+      try {
+        parseExport(JSON.stringify([bad]), "export-x.json");
+      } catch (e) {
+        message = e instanceof Error ? e.message : String(e);
+      }
+      expect(message).toMatch(/export-x\.json\[0\]/);
       expect(message).not.toContain("Ana");
     }
   });

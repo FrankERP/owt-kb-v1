@@ -142,6 +142,8 @@ export interface ReportModel {
   primaries: PrimaryReport[];
   totals: DiffTotals;
   gate: GateStatus;
+  /** `r11Incomplete(solve)`, kept in the JSON so no reader mistakes a classification-only run for R11. */
+  r11Incomplete: string | null;
   solve: SolveSection | null;
 }
 
@@ -173,6 +175,17 @@ export function gateOf(totals: DiffTotals): GateStatus {
   if (totals.cells.bug > 0 || totals.blockers > 0) return "BLOCKED";
   if (totals.cells.unverified > 0) return "NEEDS_ACCEPTANCE";
   return "CLEAN";
+}
+
+/**
+ * R11 also requires "the solve for at least one recent month with each history, … each side
+ * run twice". The classification gate says nothing about that, so a report without it must
+ * say it is incomplete rather than read as a finished R11 report.
+ */
+export function r11Incomplete(solve: SolveSection | null): string | null {
+  if (!solve) return "R11 incomplete: solve not run (no --solve-request)";
+  if (solve.runsPerSide < 2) return `R11 incomplete: fewer than 2 runs per side (--runs ${solve.runsPerSide})`;
+  return null;
 }
 
 const GATE_TEXT: Record<GateStatus, string> = {
@@ -375,6 +388,9 @@ export function renderMarkdown(model: ReportModel): string {
     "## Header",
     "",
     `- **Gate:** ${GATE_TEXT[model.gate]}`,
+    ...(r11Incomplete(model.solve)
+      ? [`- ⚠ **${r11Incomplete(model.solve)}.** R11 needs the solve for one recent month, each side run twice; the gate above covers the classification only.`]
+      : []),
     `- \`SESSION_GAP_MINUTES\` = ${model.sessionGapMinutes}`,
     "",
     "**Bundles** (Gate B snippet, one per profile):",
@@ -422,6 +438,7 @@ export function stdoutLines(model: ReportModel, paths: { md: string; json: strin
     `  ${paths.md}`,
     `  ${paths.json}`,
     `  gate: ${model.gate}`,
+    ...(r11Incomplete(model.solve) ? [`  ${r11Incomplete(model.solve)}`] : []),
     `  cells: explained ${model.totals.cells.explained} · unverified ${model.totals.cells.unverified} · bug ${model.totals.cells.bug}; duplicate targets ${model.totals.blockers}`,
   ];
   const seen = new Set<string>();

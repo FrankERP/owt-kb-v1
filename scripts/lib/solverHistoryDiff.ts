@@ -64,6 +64,9 @@ export const EXPORT_CAPACITY = 6;
 /** The pseudo role key of a cell where `total_counts` disagrees with the role counts. */
 export const TOTAL_KEY = "total_counts";
 
+/** Appended to an export-higher part's evidence when its |Δ| exceeds the documents admitting it. */
+export const EXCEEDS_ADMITTING_DOCUMENTS = "⚠ |Δ| exceeds admitting documents";
+
 export type Verdict = "explained" | "unverified" | "bug";
 
 /** Every class R11 names, in rule-and-arm order. The order IS the precedence. */
@@ -299,6 +302,11 @@ function describe(v: unknown): string {
   return v === null ? "null" : Array.isArray(v) ? "array" : typeof v;
 }
 
+/** A number is shown (it cannot be a name); anything else only by its kind — never its text. */
+function numberOrKind(v: unknown): string {
+  return typeof v === "number" ? String(v) : `a ${describe(v)}`;
+}
+
 /**
  * A `JSON.parse` failure, described WITHOUT its message: V8 quotes an excerpt of
  * the input ("Unexpected token 'A', "[Ana …" is not valid JSON"), and in an
@@ -387,13 +395,13 @@ function parseEntry(v: unknown, where: string): SolverHistoryEntry {
   if (!isObj(v)) throw new Error(`${where}: expected an object, got ${describe(v)}`);
   const { key, year, month } = v;
   if (!Number.isInteger(year) || (year as number) < 1900 || (year as number) > 9999) {
-    throw new Error(`${where}: year must be an integer, got ${JSON.stringify(year)}`);
+    throw new Error(`${where}: year must be an integer, got ${numberOrKind(year)}`);
   }
   if (!Number.isInteger(month) || (month as number) < 1 || (month as number) > 12) {
-    throw new Error(`${where}: month must be an integer from 1 to 12, got ${JSON.stringify(month)}`);
+    throw new Error(`${where}: month must be an integer from 1 to 12, got ${numberOrKind(month)}`);
   }
   if (key !== `${year}-${month}`) {
-    throw new Error(`${where}: key ${JSON.stringify(key)} is not "${year}-${month}" (the browser writes it unpadded)`);
+    throw new Error(`${where}: key (a ${describe(key)}) is not "${year}-${month}" (the browser writes it unpadded)`);
   }
   const total_counts = countMap(v.total_counts);
   if (!total_counts) throw new Error(`${where}: total_counts must map names to non-negative integers`);
@@ -1125,12 +1133,19 @@ function exportHigherParts(
       monthOfDay(d.receipt.targetDay) === idx &&
       d.unchangedAs === null,
   );
-  if (changed.length) return [{ class: "changed_since_creation", amount, evidence: changed.map((d) => `role:${d.roleId}`) }];
+  // R11 bounds nothing here — the seats of a changed or deleted document cannot be
+  // recovered — so no cap is invented. A cell whose |Δ| exceeds the number of documents
+  // admitting it is FLAGGED instead, so it stands out when Frank weighs the unverified total.
+  const admitted = (cls: DiffClass, evidence: string[]): CellPart[] => [
+    { class: cls, amount, evidence: amount > evidence.length ? [...evidence, EXCEEDS_ADMITTING_DOCUMENTS] : evidence },
+  ];
+
+  if (changed.length) return admitted("changed_since_creation", changed.map((d) => `role:${d.roleId}`));
 
   const deleted = evidence.outOfWindowReceipts.filter(
     (r) => r.type === type && monthOfDay(r.targetDay) === idx && r.state === "role_deleted" && !r.roleFound,
   );
-  if (deleted.length) return [{ class: "deleted_since_creation", amount, evidence: deleted.map((r) => `receipt:${r.receiptId}`) }];
+  if (deleted.length) return admitted("deleted_since_creation", deleted.map((r) => `receipt:${r.receiptId}`));
 
   const moved = [
     ...evidence.outOfWindowReceipts
@@ -1140,7 +1155,7 @@ function exportHigherParts(
       .filter((d) => d.type === type && d.receipt.status === "found" && monthOfDay(d.receipt.targetDay) === idx && monthOfDay(d.day) !== idx)
       .map((d) => `role:${d.roleId}`),
   ];
-  if (moved.length) return [{ class: "moved_out_of_month", amount, evidence: moved }];
+  if (moved.length) return admitted("moved_out_of_month", moved);
 
   return [{ class: "residual", amount, evidence: [`no changed, deleted or moved ${type} created in this month`] }];
 }

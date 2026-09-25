@@ -10,7 +10,7 @@
 // Every name here is fake.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
@@ -22,10 +22,13 @@ import type { SolverHistoryEntry } from "@/app/utils/solverHistory";
 import {
   checkOrtoolsPin,
   isInsideRoot,
+  nodeGitFs,
   parseCliArgs,
   parseOrtoolsPin,
+  repositoryRoots,
   runSolverHistoryDiff,
   type CliDeps,
+  type GitFs,
   type ProcessResult,
   type RunProcess,
 } from "../lib/solverHistoryDiffRun";
@@ -221,6 +224,57 @@ describe("paths inside the repository are refused", () => {
     }
   });
 
+  it("refuses the WHOLE repository from a linked worktree: the main checkout and every other worktree", async () => {
+    // main/.git is the common dir; wt-a is nested inside main (like .claude/worktrees/*), wt-b lives elsewhere.
+    const main = path.join(work, "main");
+    const wtA = path.join(main, "nested", "wt-a");
+    const wtB = path.join(work, "elsewhere", "wt-b");
+    for (const [wt, name] of [[wtA, "wt-a"], [wtB, "wt-b"]] as const) {
+      mkdirSync(path.join(main, ".git", "worktrees", name), { recursive: true });
+      mkdirSync(wt, { recursive: true });
+      writeFileSync(path.join(wt, ".git"), `gitdir: ${path.join(main, ".git", "worktrees", name)}\n`);
+      writeFileSync(path.join(main, ".git", "worktrees", name, "commondir"), "../..\n");
+      writeFileSync(path.join(main, ".git", "worktrees", name, "gitdir"), `${path.join(wt, ".git")}\n`);
+    }
+    writeFileSync(path.join(wtB, "export.json"), JSON.stringify(EXPORT_OCT));
+    const inputs = path.join(work, "inputs");
+    mkdirSync(inputs);
+    const good = bundle(path.join("inputs", "b.json"), EXPORT_OCT, GOOD_DERIVED);
+
+    const inMain = harness();
+    inMain.deps.repoRoot = wtA;
+    try {
+      expect(await runSolverHistoryDiff(["--bundle", good, "--out", path.join(main, "p2-history")], inMain.deps)).toBe(2);
+      expect(inMain.err.join("\n")).toMatch(/--out .*inside the repository/);
+      expect(existsSync(path.join(main, "p2-history"))).toBe(false);
+    } finally {
+      rmSync(path.join(main, "p2-history"), { recursive: true, force: true });
+    }
+
+    const inOther = harness();
+    inOther.deps.repoRoot = wtA;
+    expect(
+      await runSolverHistoryDiff(["--bundle", good, "--export", path.join(wtB, "export.json"), "--out", path.join(work, "out")], inOther.deps),
+    ).toBe(2);
+    expect(inOther.err.join("\n")).toMatch(/--export .*inside the repository/);
+    expect(reports(path.join(work, "out"))).toEqual([]);
+
+    // Outside every root, the same run goes through: the refusal is not a blanket one.
+    const outside = harness();
+    outside.deps.repoRoot = wtA;
+    expect(await runSolverHistoryDiff(["--bundle", good, "--out", path.join(work, "out")], outside.deps)).toBe(0);
+  });
+
+  it("refuses to run when the checkout's .git file cannot be followed to its repository", async () => {
+    const wt = path.join(work, "broken-wt");
+    mkdirSync(wt);
+    writeFileSync(path.join(wt, ".git"), "not a gitdir line\n");
+    const h = harness();
+    h.deps.repoRoot = wt;
+    expect(await runSolverHistoryDiff(["--bundle", bundle("b.json", EXPORT_OCT, GOOD_DERIVED), "--out", path.join(work, "out")], h.deps)).toBe(2);
+    expect(h.err.join("\n")).toMatch(/cannot locate the repository/);
+  });
+
   it("refuses through the real CLI too, run by tsx (which also proves tsx loads the whole closure)", () => {
     const tsx = path.join(REPO_ROOT, "node_modules", ".bin", "tsx");
     const result = spawnSync(tsx, [CLI, "--bundle", path.join(REPO_ROOT, "package.json"), "--out", path.join(work, "out")], {
@@ -233,6 +287,83 @@ describe("paths inside the repository are refused", () => {
     expect(result.stderr).toMatch(/--bundle .*inside the repository/);
     expect(result.status).toBe(2);
   }, 60_000);
+});
+
+// ─── The repository's roots ──────────────────────────────────────────────────
+
+/** An in-memory filesystem: a string is a file, an array is a directory's entries. */
+function fakeFs(tree: Record<string, string | string[]>): GitFs {
+  return {
+    readFile: (p) => (typeof tree[p] === "string" ? (tree[p] as string) : null),
+    readDir: (p) => (Array.isArray(tree[p]) ? (tree[p] as string[]) : null),
+  };
+}
+
+describe("repositoryRoots", () => {
+  it("from a linked worktree: itself, the main checkout, and every linked worktree", () => {
+    const fs = fakeFs({
+      "/repo/.claude/wt/a/.git": "gitdir: /repo/.git/worktrees/a\n",
+      "/repo/.git/worktrees/a": ["commondir", "gitdir"],
+      "/repo/.git/worktrees/a/commondir": "../..\n",
+      "/repo/.git": ["HEAD", "worktrees"],
+      "/repo/.git/worktrees": ["a", "b"],
+      "/repo/.git/worktrees/a/gitdir": "/repo/.claude/wt/a/.git\n",
+      "/repo/.git/worktrees/b/gitdir": "/elsewhere/b/.git\n",
+    });
+    expect(repositoryRoots("/repo/.claude/wt/a", fs)).toEqual({ roots: ["/repo/.claude/wt/a", "/repo", "/elsewhere/b"], problem: null });
+  });
+
+  it("follows relative gitdir paths, and finds the common dir from the path when commondir is absent", () => {
+    const fs = fakeFs({
+      "/repo/wt/.git": "gitdir: ../.git/worktrees/wt\n",
+      "/repo/.git/worktrees/wt": ["gitdir"],
+      "/repo/.git/worktrees": ["wt"],
+      "/repo/.git/worktrees/wt/gitdir": "../../../wt/.git\n",
+    });
+    expect(repositoryRoots("/repo/wt", fs)).toEqual({ roots: ["/repo/wt", "/repo"], problem: null });
+  });
+
+  it("reads commondir when the gitdir's own path would not reveal the repository", () => {
+    const fs = fakeFs({
+      "/wt/.git": "gitdir: /var/admin/wt\n",
+      "/var/admin/wt": ["commondir"],
+      "/var/admin/wt/commondir": "/repo/.git\n",
+    });
+    expect(repositoryRoots("/wt", fs)).toEqual({ roots: ["/wt", "/repo"], problem: null });
+  });
+
+  it("from the main checkout: itself and every linked worktree", () => {
+    const fs = fakeFs({ "/repo/.git": ["HEAD", "worktrees"], "/repo/.git/worktrees": ["x"], "/repo/.git/worktrees/x/gitdir": "/tmp/x/.git" });
+    expect(repositoryRoots("/repo", fs)).toEqual({ roots: ["/repo", "/tmp/x"], problem: null });
+  });
+
+  it("never adds the parent of a common dir that is not a .git directory (a bare repository)", () => {
+    const fs = fakeFs({
+      "/wt/.git": "gitdir: /srv/repo.git/worktrees/wt\n",
+      "/srv/repo.git/worktrees/wt": ["commondir"],
+      "/srv/repo.git/worktrees/wt/commondir": "../..\n",
+    });
+    expect(repositoryRoots("/wt", fs)).toEqual({ roots: ["/wt"], problem: null });
+  });
+
+  it("reports a .git file it cannot follow — the run then refuses rather than guard too little", () => {
+    expect(repositoryRoots("/wt", fakeFs({ "/wt/.git": "garbage" })).problem).toMatch(/cannot locate the repository/);
+    // A gitdir that no longer exists: the worktree was orphaned, and its repository cannot be found from it.
+    expect(repositoryRoots("/wt", fakeFs({ "/wt/.git": "gitdir: /gone/.git/worktrees/wt" })).problem).toMatch(/cannot locate the repository/);
+  });
+
+  it("agrees with git itself on this checkout: every `git worktree list` path is a root", () => {
+    const list = spawnSync("git", ["worktree", "list", "--porcelain"], { cwd: REPO_ROOT, encoding: "utf8" });
+    expect(list.status).toBe(0);
+    const listed = list.stdout
+      .split("\n")
+      .filter((l) => l.startsWith("worktree "))
+      .map((l) => path.resolve(l.slice("worktree ".length)));
+    const { roots, problem } = repositoryRoots(REPO_ROOT, nodeGitFs);
+    expect(problem).toBeNull();
+    expect(listed.length).toBeGreaterThan(0);
+    for (const p of listed) expect(roots).toContain(p);
+  });
 });
 
 // ─── The import closure ──────────────────────────────────────────────────────
@@ -490,6 +621,29 @@ describe("a whole run", () => {
     for (const name of [ANA, BETO, CARO, DANI]) expect(stdout).not.toContain(name);
     expect(stdout).toMatch(/explained 1 · unverified 0 · bug 0/);
     expect(stdout).toMatch(/control 2026-11: 1 \/ 1 \(100\.0%\); unchanged as published 1, as draft 0/);
+    // Solved, twice per side: R11 is complete, so no warning.
+    expect(stdout).not.toMatch(/R11 incomplete/);
+    expect(md).not.toMatch(/R11 incomplete/);
+  });
+
+  it("says R11 is incomplete when the solve did not run, or ran fewer than twice per side", async () => {
+    const cases: [string[], RegExp][] = [
+      [[], /R11 incomplete: solve not run/],
+      [["--solve-request", solveRequest(), "--runs", "1"], /R11 incomplete: fewer than 2 runs per side/],
+      [["--solve-request", solveRequest(), "--runs", "0"], /R11 incomplete: fewer than 2 runs per side/],
+    ];
+    for (const [i, [extra, message]] of cases.entries()) {
+      const h = harness();
+      const out = path.join(work, `out-${i}`);
+      expect(await runSolverHistoryDiff(["--bundle", bundle("b.json", EXPORT_OCT, GOOD_DERIVED), "--out", out, ...extra], h.deps)).toBe(0);
+      expect(h.out.join("\n")).toMatch(message);
+      const md = readFileSync(path.join(out, reports(out).find((f) => f.endsWith(".md"))!), "utf8");
+      expect(md).toMatch(message);
+      const json = JSON.parse(readFileSync(path.join(out, reports(out).find((f) => f.endsWith(".json"))!), "utf8"));
+      expect(json.r11Incomplete).toMatch(message);
+      // The classification gate is still reported on its own.
+      expect(h.out.join("\n")).toMatch(/gate: CLEAN/);
+    }
   });
 
   it("says when the captured request's history is not what this export recomputes to", async () => {

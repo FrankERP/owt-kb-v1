@@ -290,8 +290,10 @@ Both of the first two are listed by exact `file + operation` in the protected-re
   `bug`, and runs the local solver against both sides for one target month. **Reads only local
   files, no Sanity client, no network** — the classifier and report modules are pure, verified
   by a test that walks their import closure. **Refuses any input or output path inside the
-  repository**, resolved through symlinks, before any read or write — exports and derived
-  bundles hold real member names, and this repository is public. Usage:
+  repository** — the checkout it runs from, the main checkout and every linked worktree (found
+  through the `.git` file's `gitdir` and `commondir`), resolved through symlinks — before any
+  read or write; a `.git` file it cannot follow refuses the run. Exports and derived bundles
+  hold real member names, and this repository is public. Usage:
 
   ```
   npx tsx scripts/solver-history-diff.ts \
@@ -304,8 +306,9 @@ Both of the first two are listed by exact `file + operation` in the protected-re
   Run from the repository root; the first `--bundle` must be the one from the profile that
   captured `--solve-request` (the consistency check treats that bundle's export as the
   capture profile). `--runs 0` records the exact request bodies for the production solve route
-  instead of spawning the local solver. Exit codes: `0` a report was written (read its gate
-  line), `2` refused, `1` failed. The export, bundle and report files are never committed —
+  instead of spawning the local solver. Without `--solve-request`, or with fewer than 2 runs per
+  side, the report and stdout say **"R11 incomplete"**: the gate line covers the classification
+  only. Exit codes: `0` a report was written (read its gate line), `2` refused, `1` failed. The export, bundle and report files are never committed —
   see the P2 plan's Gates A–B
   (`docs/superpowers/plans/2026-09-25-owt-mcp-p2-solver-history.md`) for the full procedure and
   where `~/owt-private/p2-history/` comes from. No new environment variable: the runner spawns
