@@ -1,6 +1,7 @@
 // MCP tool `list_services` (P1 step 4): every service in a month, in /admin →
-// Servicios' order, with its publication state (spec I3), its readiness
-// blockers (D2 — what publish would refuse, spec I4) and its role `_rev` (I7).
+// Servicios' order, with its publication state (spec I3), its publish verdict
+// (`passesNow`) and readiness blockers (D2 — what publish would refuse, spec
+// I4) and its role `_rev` (I7).
 // Same four rules as `ping.ts`; one snapshot per call.
 //
 // A failed roles read is a refusal, never `services: []` — an empty month and an
@@ -31,8 +32,10 @@ export const LIST_SERVICES_DESCRIPTION =
   "America/Mexico_City), borradores incluidos, en el orden de /admin → Servicios (fecha y luego hora). Cada servicio trae " +
   "serviceId, roleRev, date (el día del servicio; el de un sábado es la fecha del sábado), kind (\"sunday\" | \"saturday\" | " +
   "\"special\"; un especial también trae name, time y format), published (\"draft\" | \"published\" — un servicio sin el " +
-  "campo es anterior a los borradores y está publicado), publishedRaw (el valor guardado) y blockers: lo que hoy impide " +
-  "publicarlo, en español (hard: problemas de datos; workflow: pendientes que un admin puede aceptar). failedSources " +
+  "campo es anterior a los borradores y está publicado), publishedRaw (el valor guardado), passesNow (si la verificación " +
+  "de publicación de ese servicio pasa ahora — el mismo veredicto que readiness.publishCheck.passesNow de get_service) y " +
+  "blockers: lo que hoy impide publicarlo, en español (hard: problemas de datos; workflow: pendientes que un admin puede " +
+  "aceptar). failedSources " +
   "aparece si alguna lectura falló; si no se pudo leer el catálogo, la herramienta responde con un error, nunca con una " +
   "lista vacía. serviceId y roleRev son observaciones: pásalos SIN CAMBIOS, tal como llegaron, a una escritura posterior; " +
   "nunca los construyas a mano. Para asientos, setlist y el resto de observations usa get_service. Solo lee: no cambia nada.";

@@ -15,19 +15,19 @@
 // Saturday's is the Saturday's own date) equals the proposal's
 // `service_date`; more than one match (a duplicate weekend target) or none is
 // UNRESOLVED, never a guess (A15's discipline). A special proposal resolves by
-// `service_ref`: the canonical special service that id names (`serviceKindOf`,
-// never a role-type literal — spec I2), or unresolved when it names none.
-// Either way an unresolvable link reports `serviceId: null`, never a dropped
-// proposal.
+// `service_ref`: the canonical special service that id names, or unresolved
+// when it names none. "Service" is `servicePresenter.ts`'s `serviceCandidateOf`
+// in both cases — the rule `list_services` lists by, never a role-type literal
+// (spec I2). Either way an unresolvable link reports `serviceId: null`, never a
+// dropped proposal.
 //
 // UNREAD STATE IS NEVER REPORTED (ADR-0024): there is no read-mark on either
 // document, so nothing here derives one.
 
 import { isThreadOpen, orderedMessages } from "@/app/utils/proposalThread";
-import { isCanonicalDocumentId, storedRoleDate } from "@/app/utils/roleWriteRequest";
 import { PROPOSAL_STATUSES, SERVICE_KINDS } from "@/app/utils/serviceReadModel";
 import type { ServiceSourceKey } from "@/app/components/admin/serviceReadiness";
-import { serviceKindOf, type ServiceKind } from "./servicePresenter";
+import { failedSourcesOf, serviceCandidateOf, type ServiceCandidate, type ServiceKind } from "./servicePresenter";
 import type { MemberNameLookup, ServiceSnapshot, SnapshotRow } from "./serviceSnapshot";
 import type { SongTitleLookup } from "./songTitles";
 
@@ -53,38 +53,17 @@ export function proposalsUnreadable(snapshot: ServiceSnapshot): boolean {
 export const LIST_PROPOSALS_UNREADABLE_MESSAGE =
   "No se pudieron leer los servicios o las propuestas, así que no se puede decir qué propuestas hay. Intenta de nuevo en un momento.";
 
-function failedSourcesOf(snapshot: ServiceSnapshot): { failedSources?: ServiceSourceKey[] } {
-  const failed = snapshot.readiness.failedSources;
-  return failed.length ? { failedSources: [...failed] } : {};
-}
-
 // ── Linking ──────────────────────────────────────────────────────────────────
-
-interface CatalogueEntry {
-  serviceId: string;
-  kind: ServiceKind;
-  date: string | null;
-}
-
-/** Every canonical, validly-identified service, exactly as `get_service`'s own catalogue admits one. */
-function catalogueEntries(snapshot: ServiceSnapshot): CatalogueEntry[] {
-  const out: CatalogueEntry[] = [];
-  for (const row of snapshot.roles) {
-    const kind = serviceKindOf(row._type);
-    const id = stringOrNull(row._id);
-    if (!kind || !id || !isCanonicalDocumentId(id)) continue;
-    out.push({ serviceId: id, kind, date: storedRoleDate(row) });
-  }
-  return out;
-}
 
 /**
  * The ONE canonical service this proposal names, by the writer's own linking
- * rule — never a guess. `null` when `service_type` is unrecognized, the
- * relevant field (`service_date` for a weekend, `service_ref` for a special)
- * is missing or malformed, a weekend match is ambiguous (more than one
- * canonical service shares that kind and date), or a special's `service_ref`
- * names no canonical special.
+ * rule — never a guess. Both link kinds only ever land on a row
+ * `serviceCandidateOf` admits (`get_service`'s and `list_services`' own rule),
+ * so a proposal never links to a service no other tool lists. `null` when
+ * `service_type` is unrecognized, the relevant field (`service_date` for a
+ * weekend, `service_ref` for a special) is missing or malformed, a weekend
+ * match is ambiguous (more than one canonical service shares that kind and
+ * date), or a special's `service_ref` names no canonical special.
  */
 export function resolveProposalServiceId(snapshot: ServiceSnapshot, row: SnapshotRow): string | null {
   const kind = row.service_type;
@@ -92,12 +71,15 @@ export function resolveProposalServiceId(snapshot: ServiceSnapshot, row: Snapsho
     const ref = stringOrNull(row.service_ref);
     if (!ref) return null;
     const role = snapshot.readiness.rolesById.get(ref);
-    return isObj(role) && serviceKindOf(role._type) === "special" ? ref : null;
+    const candidate = role ? serviceCandidateOf(role) : null;
+    return candidate?.kind === "special" ? candidate.serviceId : null;
   }
   if (kind === "sunday" || kind === "saturday") {
     const date = stringOrNull(row.service_date);
     if (!date) return null;
-    const matches = catalogueEntries(snapshot).filter((e) => e.kind === kind && e.date === date);
+    const matches = snapshot.roles
+      .map((role) => serviceCandidateOf(role))
+      .filter((c): c is ServiceCandidate => c !== null && c.kind === kind && c.date === date);
     return matches.length === 1 ? matches[0]!.serviceId : null;
   }
   return null;

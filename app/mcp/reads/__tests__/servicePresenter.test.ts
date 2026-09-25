@@ -35,8 +35,10 @@ import {
   type ServiceSelector,
 } from "../servicePresenter";
 import { loadSongTitles } from "../songTitles";
+import { buildParticipantRoles, participantMemberIds, presentParticipation } from "../participationPresenter";
+import { resolveProposalServiceId } from "../proposalPresenter";
 import { FROZEN_EVENING, KIDS_ONLY_MEMBER_ID, readToolStore, scopedResponder, type ScopedResponderOptions } from "./readToolFixtures";
-import { serviceFixtureStore, type ServiceFixtureStore } from "./serviceFixtures";
+import { READINESS_DOMAINS, SERVICE_FIXTURE_ROLE_IDS, serviceFixtureStore, type ServiceFixtureStore } from "./serviceFixtures";
 
 let errorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -719,7 +721,7 @@ describe("presentServiceList", () => {
     expect(JSON.stringify(list)).not.toContain("draftonly");
   });
 
-  it("gives each entry its id, _rev, date, kind, publication and D2 blockers — special fields only on specials", async () => {
+  it("gives each entry its id, _rev, date, kind, publication, publish verdict and D2 blockers — special fields only on specials", async () => {
     const snapshot = await snapshotOf(readToolStore());
     const list = presentServiceList(snapshot, "2026-10");
     for (const entry of list.services) {
@@ -728,6 +730,7 @@ describe("presentServiceList", () => {
         hard: d2.blockers!.hard.map((code) => ({ code, copy: PUBLISH_SKIP_COPY[code] })),
         workflow: d2.blockers!.workflow.map((code) => ({ code, copy: PUBLISH_SKIP_COPY[code] })),
       });
+      expect(entry.passesNow, entry.serviceId).toBe(d2.ready);
       expect(entry.roleRev).toBe(roleOf(snapshot, entry.serviceId)._rev);
     }
     expect(list.services[0]).toEqual({
@@ -737,6 +740,7 @@ describe("presentServiceList", () => {
       kind: "saturday",
       published: "draft",
       publishedRaw: false,
+      passesNow: true,
       blockers: { hard: [], workflow: [] },
     });
     expect(list.services.find((s) => s.serviceId === "role-sun-1011")).toMatchObject({
@@ -787,5 +791,96 @@ describe("presentServiceList", () => {
     const snapshot = await snapshotOf(readToolStore());
     const list = presentServiceList(snapshot, "2026-10");
     expect(JSON.parse(JSON.stringify(list))).toStrictEqual(list);
+  });
+
+  it("answers passesNow exactly as get_service's publishCheck.passesNow does, both ways", async () => {
+    const snapshot = await snapshotOf(readToolStore());
+    const seen = new Set<boolean>();
+    for (const month of ["2026-09", "2026-10", "2026-11", "2026-12"]) {
+      for (const entry of presentServiceList(snapshot, month).services) {
+        const full = await present(snapshot, entry.serviceId);
+        expect(entry.passesNow, entry.serviceId).toBe(full.readiness.publishCheck.passesNow);
+        seen.add(entry.passesNow);
+      }
+    }
+    expect([...seen].sort()).toEqual([false, true]); // both verdicts occur, so the comparison is not vacuous
+  });
+
+  // list_services carries `blockers`, never the refusal codes. That is only
+  // honest while the one refusal with no blocker of its own,
+  // `unusable_observation`, always comes with a hard blocker.
+  it("never refuses unusable_observation without a hard blocker, over the step-2/3 matrix and every failed domain", async () => {
+    let unusable = 0;
+    for (const fail of [[], ...READINESS_DOMAINS.map((d) => [d])]) {
+      const snapshot = await snapshotOf(serviceFixtureStore(), { fail });
+      for (const id of SERVICE_FIXTURE_ROLE_IDS) {
+        const verdict = publishRefusalFor(assembleService(snapshot.readiness, id));
+        if (!verdict.refusals.includes("unusable_observation")) continue;
+        unusable++;
+        expect(verdict.blockers!.hard.length, `${id} (failed: ${fail.join(",") || "none"})`).toBeGreaterThan(0);
+      }
+      if (snapshot.readiness.sources.roles !== "ready") continue;
+      for (const entry of presentServiceList(snapshot, "2026-10").services.concat(presentServiceList(snapshot, "2026-11").services)) {
+        const verdict = publishRefusalFor(assembleService(snapshot.readiness, entry.serviceId));
+        if (verdict.refusals.includes("unusable_observation")) expect(entry.blockers.hard.length, entry.serviceId).toBeGreaterThan(0);
+      }
+    }
+    expect(unusable).toBeGreaterThan(0); // the matrix really exercises the refusal
+  });
+});
+
+// ── The one service-row rule (`serviceCandidateOf`), across every tool ──────
+
+describe("a role whose _id is not a canonical document id is no service, in any tool", () => {
+  /**
+   * `readToolStore()` plus January 2027 — a month nothing else in this suite
+   * pins. `role-sun-0103` is a real service; the two roles with whitespace in
+   * their `_id` fail `isCanonicalDocumentId`, one of them on the SAME Sunday.
+   * Ana is seated on all three, so the counts show which rows were counted.
+   */
+  function storeWithMalformedIds(): ServiceFixtureStore {
+    const store = readToolStore();
+    const blank = { published: false, week: null, date: null, service_name: null, time: null, format: null, songs: null };
+    const seats = { Lead: [{ _key: "l1", _type: "reference", _ref: "mem-ana" }], BGVs: [], Chorus: [], instruments: [], foh_team: [] };
+    store.roles.push(
+      { ...blank, ...seats, _id: "role-sun-0103", _rev: "role-sun-0103-rev", _type: "sunday_role", week: "2027-01-03" },
+      { ...blank, ...seats, _id: "role sun 0103 malformed", _rev: "m1-rev", _type: "sunday_role", week: "2027-01-03" },
+      {
+        ...blank,
+        ...seats,
+        _id: "role sp 0109 malformed",
+        _rev: "m2-rev",
+        _type: "special_role",
+        date: "2027-01-09",
+        service_name: "Mal formado",
+        time: "19:00",
+      },
+    );
+    return store;
+  }
+
+  it("list_services, get_participation's services[] and counts, and list_proposals' links all leave it out", async () => {
+    const snapshot = await snapshotOf(storeWithMalformedIds());
+    expect(snapshot.roles.filter((r) => String(r._id).includes(" "))).toHaveLength(2); // the rows did load
+
+    expect(presentServiceList(snapshot, "2027-01").services.map((s) => s.serviceId)).toEqual(["role-sun-0103"]);
+
+    const members = await loadMemberNames(
+      participantMemberIds(buildParticipantRoles(snapshot, "2027-01")),
+      snapshot.membersById,
+    );
+    const participation = presentParticipation(snapshot, "2027-01", members);
+    expect(participation.services.map((s) => s.serviceId)).toEqual(["role-sun-0103"]);
+    expect(participation.members).toEqual([expect.objectContaining({ memberId: "mem-ana", sunLead: 1, total: 1 })]);
+
+    const proposal = (over: Record<string, unknown>): SnapshotRow => ({ _id: "prop-x", ...over });
+    // A weekend link: the malformed Sunday does not make the real one ambiguous.
+    expect(
+      resolveProposalServiceId(snapshot, proposal({ service_type: "sunday", service_date: "2027-01-03" })),
+    ).toBe("role-sun-0103");
+    // A special link: `service_ref` naming the malformed special resolves to nothing.
+    expect(
+      resolveProposalServiceId(snapshot, proposal({ service_type: "special", service_ref: "role sp 0109 malformed" })),
+    ).toBeNull();
   });
 });

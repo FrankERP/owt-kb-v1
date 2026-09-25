@@ -46,8 +46,13 @@ import {
   type ParticipantRole,
 } from "@/app/utils/computeParticipation";
 import { storedRoleDate } from "@/app/utils/roleWriteRequest";
-import { compareServiceTime } from "@/app/utils/serviceTime";
-import { failedSourcesOf, serviceKindOf, type ServiceKind } from "./servicePresenter";
+import {
+  compareServiceCandidates,
+  failedSourcesOf,
+  serviceCandidateOf,
+  type ServiceCandidate,
+  type ServiceKind,
+} from "./servicePresenter";
 import type { MemberNameLookup, ServiceSnapshot, SnapshotRow } from "./serviceSnapshot";
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -107,12 +112,15 @@ function toParticipantRole(role: SnapshotRow): ParticipantRole | null {
   };
 }
 
-/** Every canonical role dated in `month` ("YYYY-MM") — the sidebar's own input set (see the header). */
+/**
+ * Every service dated in `month` ("YYYY-MM") — the sidebar's own input set (see
+ * the header). "Service" is `serviceCandidateOf`'s rule, the one `list_services`
+ * uses, so the counts, `services[]` and `list_services` all cover the same rows.
+ */
 export function participantRolesForMonth(snapshot: ServiceSnapshot, month: string): SnapshotRow[] {
   const prefix = `${month}-`;
   return snapshot.roles.filter((role) => {
-    if (serviceKindOf(role._type) === null) return false;
-    const date = storedRoleDate(role);
+    const date = serviceCandidateOf(role)?.date ?? null;
     return date !== null && date.startsWith(prefix);
   });
 }
@@ -162,6 +170,9 @@ export type ParticipationServiceEntry = {
   serviceId: string;
   date: string;
   kind: ServiceKind;
+  /** Specials only: `service_name` and `time`, so two specials on one day can be told apart. */
+  name?: string | null;
+  time?: string | null;
   /** Spec I3: `derivePublishState` — a missing field is a pre-draft service, published. */
   published: "draft" | "published";
 };
@@ -174,34 +185,32 @@ export type GetParticipationPayload = {
   failedSources?: ServiceSourceKey[];
 };
 
-function serviceEntryOf(role: SnapshotRow): ParticipationServiceEntry | null {
-  const kind = serviceKindOf(role._type);
-  const date = storedRoleDate(role);
-  if (!kind || !date || !nonEmptyString(role._id)) return null;
-  return { serviceId: role._id, date, kind, published: derivePublishState(role.published) };
-}
-
-/** A special's `time`, or null for a weekend service or an absent one — the same value `servicePresenter.ts`'s `catalogue()` sorts by. */
-function roleTime(role: SnapshotRow): string | null {
-  return serviceKindOf(role._type) === "special" && nonEmptyString(role.time) ? role.time : null;
-}
-
-function compareRoleIds(a: SnapshotRow, b: SnapshotRow): number {
-  const idA = nonEmptyString(a._id) ? a._id : "";
-  const idB = nonEmptyString(b._id) ? b._id : "";
-  return idA < idB ? -1 : idA > idB ? 1 : 0;
-}
-
-/** date, then `compareServiceTime`, then id — the SAME order `list_services` reports (`servicePresenter.ts`'s private `compareEntries`), so the two tools never disagree about which service comes first on a day with several. */
-function compareServiceRoles(a: SnapshotRow, b: SnapshotRow): number {
-  const da = storedRoleDate(a);
-  const db = storedRoleDate(b);
-  if (da !== db) {
-    if (da === null) return 1;
-    if (db === null) return -1;
-    return da < db ? -1 : 1;
+/**
+ * `services[]`, in `compareServiceCandidates`' order — the SAME order
+ * `list_services` reports, so the two tools never disagree about which service
+ * comes first on a day with several.
+ */
+function serviceEntries(roles: readonly SnapshotRow[]): ParticipationServiceEntry[] {
+  const pairs: { role: SnapshotRow; candidate: ServiceCandidate }[] = [];
+  for (const role of roles) {
+    const candidate = serviceCandidateOf(role);
+    if (candidate) pairs.push({ role, candidate });
   }
-  return compareServiceTime(roleTime(a), roleTime(b)) || compareRoleIds(a, b);
+  return pairs
+    .sort((a, b) => compareServiceCandidates(a.candidate, b.candidate))
+    .flatMap(({ role, candidate }): ParticipationServiceEntry[] =>
+      candidate.date === null
+        ? []
+        : [
+            {
+              serviceId: candidate.serviceId,
+              date: candidate.date,
+              kind: candidate.kind,
+              ...(candidate.kind === "special" ? { name: candidate.name, time: candidate.time } : {}),
+              published: derivePublishState(role.published),
+            },
+          ],
+    );
 }
 
 function toEntry(counts: MemberParticipation, members: MemberNameLookup): ParticipationEntry {
@@ -257,10 +266,7 @@ export function presentParticipation(
     .map((entry) => toEntry(entry, members))
     .sort(byTotalThenName);
 
-  const services = [...monthRoles]
-    .sort(compareServiceRoles)
-    .map((role) => serviceEntryOf(role))
-    .filter((service): service is ParticipationServiceEntry => service !== null);
+  const services = serviceEntries(monthRoles);
 
   const notes = members.ok ? [] : [PARTIAL_NAMES_NOTE];
 

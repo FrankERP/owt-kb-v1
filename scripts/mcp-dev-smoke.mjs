@@ -26,6 +26,10 @@
  *       discovery → registration (loopback redirect) → consent (opens the
  *       default browser) → token → initialize/tools-list/ping → refresh →
  *       ping again → prints the grant id and the exact revoke command.
+ *     A run that FAILS after the token exchange still prints the grant id and
+ *       the revoke command (or, if the id cannot be decoded, the dry run that
+ *       lists every grant) right after its FAIL line — the grant exists either
+ *       way (`failureGrantLines`).
  *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --reads
  *     … same, and after `ping` (still inside step 7, before refresh) calls
  *       each of the seven P1 read tools once — list_services, get_service
@@ -248,6 +252,42 @@ export function decodeJwtPayloadUnsafe(token) {
   } catch {
     return null;
   }
+}
+
+/**
+ * The two lines that point at the grant a run created: its id (decoded,
+ * unverified, from the access token's `grant` claim) and the exact revoke
+ * command. `null` when no grant id decodes. Step 9 prints these; so does the
+ * failure path (`failureGrantLines`), so the two can never drift. Pure.
+ */
+export function grantPointerLines(accessToken) {
+  const grantId = decodeJwtPayloadUnsafe(accessToken)?.grant;
+  if (typeof grantId !== "string" || grantId === "") return null;
+  return [
+    `  grant: ${grantId}`,
+    `  revoke: node --env-file=.env.local scripts/revoke-mcp-grant.mjs --id ${grantId} --apply`,
+  ];
+}
+
+/**
+ * What a FAILED run prints after its FAIL line. Once the token exchange has
+ * succeeded (`tokens` holds its response), a grant document exists in the
+ * shared Sanity dataset even though the run never reached step 9 — so the
+ * failure path names it and the command that revokes it. If the id cannot be
+ * decoded, it points at the dry run that lists every grant instead. Empty when
+ * no token exchange happened (nothing was created). Pure.
+ */
+export function failureGrantLines(tokens) {
+  const accessToken = tokens && typeof tokens === "object" ? tokens.access_token : undefined;
+  if (typeof accessToken !== "string" || accessToken === "") return [];
+  const pointer = grantPointerLines(accessToken);
+  if (!pointer) {
+    return [
+      "  This run created a grant before failing, but its id could not be decoded. List every grant (dry run) with:",
+      "  node --env-file=.env.local scripts/revoke-mcp-grant.mjs",
+    ];
+  }
+  return ["  This run created a grant before failing. Unless you already revoked it, it is still live:", ...pointer];
 }
 
 /** A JSON-RPC request envelope, matching `mcpRoute.test.ts`'s `rpc()`. Pure. */
@@ -597,6 +637,9 @@ async function main() {
   }
 
   let server;
+  // Set by step 6's token exchange. Declared out here so the failure path can
+  // still name the grant that exchange created (see `failureGrantLines`).
+  let tokens = null;
   try {
     // 1. Discovery.
     begin(1, "discovery");
@@ -672,7 +715,7 @@ async function main() {
 
     // 6. Token exchange.
     begin(6, "token exchange");
-    let tokens = await fetchJson(`${origin}/api/oauth/token`, {
+    tokens = await fetchJson(`${origin}/api/oauth/token`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: formEncode([
@@ -776,11 +819,9 @@ async function main() {
 
     // 9. Grant id and the exact revoke command.
     begin(9, "grant id and revoke command");
-    const claims = decodeJwtPayloadUnsafe(tokens.access_token);
-    const grantId = claims?.grant;
-    if (typeof grantId !== "string" || grantId === "") throw new Error("could not decode a grant id from the access token");
-    console.log(`  grant: ${grantId}`);
-    console.log(`  revoke: node --env-file=.env.local scripts/revoke-mcp-grant.mjs --id ${grantId} --apply`);
+    const pointer = grantPointerLines(tokens.access_token);
+    if (!pointer) throw new Error("could not decode a grant id from the access token");
+    for (const line of pointer) console.log(line);
     pass();
 
     // 10. Optional: wait for Frank to revoke, then prove the 401 lands.
@@ -814,6 +855,7 @@ async function main() {
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     console.error(`[${currentStep}/${TOTAL_STEPS}] FAIL ${currentLabel} — ${detail}`);
+    for (const line of failureGrantLines(tokens)) console.error(line);
     server?.close();
     process.exit(1);
   }

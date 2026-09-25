@@ -61,6 +61,12 @@ function candidateOf(row: WorshipMemberRow): MemberCandidate {
   return { memberId: row._id, name: row.member_name ?? null, alias: row.alias ?? null };
 }
 
+/** `memberId (name «alias»)` — how a refusal's TEXT names a candidate, as `get_service`'s `refusal()` does. */
+function candidateLabel(c: MemberCandidate): string {
+  const who = [c.name, c.alias ? `«${c.alias}»` : null].filter(Boolean).join(" ");
+  return `${c.memberId} (${who || "sin nombre"})`;
+}
+
 /** The one member a selector names, the whole directory, or a refusal listing candidates (D8). */
 export function resolveMembers(directory: readonly WorshipMemberRow[], selector: MemberSelector): MemberResolution {
   if (selector.by === "all") return { ok: true, members: [...directory] };
@@ -76,10 +82,16 @@ export function resolveMembers(directory: readonly WorshipMemberRow[], selector:
   );
   if (matches.length === 0) return { ok: false, message: UNKNOWN_MEMBER_MESSAGE, candidates: [] };
   if (matches.length > 1) {
+    // The candidates go in the TEXT as well as in `structuredContent`: the SDK
+    // adds no text fallback for an object payload, and a client that reads
+    // only `content` would otherwise have no memberId to retry with.
+    const candidates = matches.map(candidateOf);
     return {
       ok: false,
-      message: `Hay ${matches.length} miembros que coinciden con ese nombre; elige uno por memberId.`,
-      candidates: matches.map(candidateOf),
+      message:
+        `Hay ${matches.length} miembros que coinciden con ese nombre; elige uno por memberId. ` +
+        `Candidatos: ${candidates.map(candidateLabel).join("; ")}.`,
+      candidates,
     };
   }
   return { ok: true, members: [matches[0]!] };

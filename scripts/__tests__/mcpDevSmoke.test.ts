@@ -33,10 +33,12 @@ import {
   decodeJwtPayloadUnsafe,
   DEFAULT_BASE,
   EXPECTED_TOOLS,
+  failureGrantLines,
   formEncode,
   formatReadCheckLine,
   generateCodeVerifier,
   generateState,
+  grantPointerLines,
   isAmbiguousServiceRefusal,
   LOCAL_BASE,
   parseArgs,
@@ -319,6 +321,49 @@ describe("decodeJwtPayloadUnsafe", () => {
     expect(decodeJwtPayloadUnsafe(`a.${notAnObject}.c`)).toBeNull();
     const bareString = Buffer.from('"hello"', "utf8").toString("base64url");
     expect(decodeJwtPayloadUnsafe(`a.${bareString}.c`)).toBeNull();
+  });
+});
+
+describe("grantPointerLines / failureGrantLines", () => {
+  const REVOKE = "node --env-file=.env.local scripts/revoke-mcp-grant.mjs";
+
+  it("names a real access token's grant and the exact revoke command", async () => {
+    const token = await signAccessToken({ key: KEY, origin: PREVIEW_ORIGIN, sub: "member-1", grantId: "mcpOauthGrant.abc" });
+    expect(grantPointerLines(token.token)).toEqual([
+      "  grant: mcpOauthGrant.abc",
+      `  revoke: ${REVOKE} --id mcpOauthGrant.abc --apply`,
+    ]);
+  });
+
+  it("is null when no grant id decodes", () => {
+    expect(grantPointerLines("not-a-jwt")).toBeNull();
+    expect(grantPointerLines(undefined)).toBeNull();
+    const noGrant = `a.${Buffer.from(JSON.stringify({ sub: "x" }), "utf8").toString("base64url")}.c`;
+    expect(grantPointerLines(noGrant)).toBeNull();
+  });
+
+  it("on a failure after the token exchange, prints the grant and its revoke command — the same lines step 9 prints", async () => {
+    const token = await signAccessToken({ key: KEY, origin: PREVIEW_ORIGIN, sub: "member-1", grantId: "mcpOauthGrant.abc" });
+    const lines = failureGrantLines({ access_token: token.token, refresh_token: "r", expires_in: 604800 });
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/created a grant before failing/);
+    expect(lines.slice(1)).toEqual(grantPointerLines(token.token));
+    // Never the token itself: only the grant id, which is what the revoke script takes.
+    expect(lines.join("\n")).not.toContain(token.token);
+  });
+
+  it("points at the dry run when the token carries no decodable grant id", () => {
+    expect(failureGrantLines({ access_token: "not-a-jwt" })).toEqual([
+      expect.stringMatching(/could not be decoded/),
+      `  ${REVOKE}`,
+    ]);
+  });
+
+  it("prints nothing when no token exchange happened", () => {
+    expect(failureGrantLines(null)).toEqual([]);
+    expect(failureGrantLines(undefined)).toEqual([]);
+    expect(failureGrantLines({})).toEqual([]);
+    expect(failureGrantLines({ access_token: "" })).toEqual([]);
   });
 });
 

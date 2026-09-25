@@ -45,7 +45,8 @@ export const GET_PARTICIPATION_DESCRIPTION =
   "documento (una referencia colgante) aparece con missing: true, nunca se descarta; un miembro cuyo nombre no se pudo " +
   "leer (porque la lectura de nombres falló, total o parcialmente) aparece con unresolved: true y se agrega una nota — " +
   "el resto de los miembros de ese mismo resultado puede seguir resolviendo su nombre con normalidad. services trae " +
-  "serviceId, date, kind y published (\"draft\" | \"published\") de cada servicio incluido, en el mismo orden que " +
+  "serviceId, date, kind (un especial también trae name y time, para distinguir dos especiales del mismo día) y " +
+  "published (\"draft\" | \"published\") de cada servicio incluido, en el mismo orden que " +
   "list_services (fecha y luego hora), para saber qué conteos incluyen borradores. failedSources aparece si alguna " +
   "lectura falló. Si no se pudo leer el catálogo de servicios, la herramienta responde con un error, nunca con " +
   "participación en cero. Solo lee: no cambia nada.";

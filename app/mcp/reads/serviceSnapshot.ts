@@ -6,17 +6,35 @@
 // map. Readiness and content come from the same query rows, so every `_rev` a
 // read reports sits next to the content it was observed with (spec I4, I7).
 //
-// WHY A COPY. `loadServiceReadinessSources()` (`app/utils/publishReadyBundle.ts`)
-// runs exactly these reads but discards the rows and the member map, and
-// widening its return value would change an export a production writer imports
-// (the roadmap's additive-only rule). So this module mirrors it line for line:
-// the same seven parallel builders from `serviceReadQueries.ts` plus the same
-// follow-up member read, the same client per read (canonical reads on the
-// published-perspective `operationalClient`, draft inventories on
-// `rawIntegrityClient`), the same per-domain failure isolation (a failed domain
-// is `error`, never empty) and the same exported summary builders. Nothing is
-// re-derived. `serviceSnapshotParity.test.ts` runs both loaders over the same
-// responses and fails on any divergence — change the two together or not at all.
+// WHY A COPY — ADR-0040 (docs/adr/0040-mcp-reads-mirror-the-readiness-loader-and-publish-check.md).
+// `loadServiceReadinessSources()` (`app/utils/publishReadyBundle.ts`) runs
+// exactly these reads but discards the rows and the member map. The only way to
+// get them from it is to widen its return value, and the publish-ready route —
+// a production writer — imports it: the roadmap's additive-only rule forbids
+// changing that export. So this module mirrors it line for line: the same seven
+// parallel builders from `serviceReadQueries.ts` plus the same follow-up member
+// read, the same client per read (canonical reads on the published-perspective
+// `operationalClient`, draft inventories on `rawIntegrityClient`), the same
+// per-domain failure isolation (a failed domain is `error`, never empty) and the
+// same exported summary builders. Nothing is re-derived.
+//
+// WHAT PINS IT. `__tests__/serviceSnapshotMirror.test.ts` is a text pin: it fails
+// on any edit to either loader's orchestration, fixture-covered or not.
+// `__tests__/serviceSnapshotParity.test.ts` runs both loaders over the same
+// responses and fails on any behavioural divergence. Change the two together or
+// not at all.
+//
+// HOW IT ENDS. Not with P3: the P1 plan hands this loader to P4 as a reusable
+// read of the whole service catalogue, so P3's consolidation of the publish check
+// (`publishRefusal.ts`) does not retire it. It goes away only if the original
+// loader is widened to return the rows — a change to a writer-imported export,
+// so CRITICAL tier, with its own review. Never merge the two in a routine
+// cleanup or a `/improve` "deduplication": that is exactly the widening the
+// additive-only rule forbids, done without the review it requires.
+//
+// ONE DELIBERATE DIFFERENCE, outside readiness: `setlistDrafts` (below) keeps
+// each raw setlist draft's `_type` + `week`, because the setlist WRITER finds an
+// overlay by target while readiness matches by base id (issue #97).
 //
 // The clients are imported HERE, directly from `sanity/lib/operationalClient`,
 // because the protected-read audit only recognises clients imported from that
@@ -118,6 +136,13 @@ export interface ServiceSnapshot {
    * `sources.setlistTargets` is also `error` when its sibling read (the canonical
    * setlists) failed — check `sources.setlistTargets` before trusting presence or
    * absence.
+   *
+   * No production code reads this any more: the observation uses the
+   * target-aware `setlistDrafts` below. It stays because
+   * `serviceSnapshotParity.test.ts` reads it as the setlist-drafts domain's raw
+   * rows (a failed read must empty it). It sits outside the mirror-pinned span,
+   * but removing it means editing that parity pin, so it is not a routine
+   * cleanup either (ADR-0040).
    */
   readonly setlistDraftIds: readonly string[];
   /**

@@ -1,11 +1,25 @@
 // Would publishing refuse this service, and why? (P1, Decision D2 — spec I4.)
 //
+// WHY A COPY — ADR-0040 (docs/adr/0040-mcp-reads-mirror-the-readiness-loader-and-publish-check.md).
 // `POST /api/admin/roles/publish-ready` decides each service inline
-// (`route.ts:173-216`), in a writer route P1 may not modify. This is a second
-// copy of that per-service verdict for READ tools, and it is only safe while it
-// is provably the same thing: `__tests__/publishRefusalParity.test.ts` runs the
-// real route, one ready-mode POST per fixture service, and demands equality. A
-// change to the route's verdict must be mirrored here in the same commit.
+// (`route.ts:173-216`), in a writer route P1 may not modify (the roadmap's
+// additive-only rule). This is a second copy of that per-service verdict for READ
+// tools, and it is only safe while it is provably the same thing:
+// `__tests__/publishRefusalParity.test.ts` runs the REAL route handler, one
+// ready-mode POST per fixture service, and demands equality. A change to the
+// route's verdict must be mirrored here in the same commit.
+//
+// THE PARITY IS BEHAVIOURAL, OVER FIXTURES — there is no text pin on the route.
+// A refusal the route gains that no fixture service triggers passes the parity
+// test untouched. So a new route refusal must be added in TWO places: here, and
+// to the fixture matrix (`__tests__/serviceFixtures.ts`) as a service that
+// triggers it — plus the code list the parity file's matrix test demands to
+// occur, so the new code cannot go unexercised.
+//
+// HOW IT ENDS. P3 consolidates this with the publish-ready route into one
+// predicate, at CRITICAL tier (plan D2) — the route is a production writer. Until
+// then, never merge the two in a routine cleanup or a `/improve`
+// "deduplication": that edits the writer route without the review it requires.
 //
 // The route, for each `{ id, rev }` entry of a ready-mode request:
 //

@@ -83,8 +83,8 @@ describe("presentParticipation", () => {
 
     expect(payload.services).toEqual([
       { serviceId: "role-sun-0927", date: "2026-09-27", kind: "sunday", published: "published" },
-      { serviceId: "role-sp-0930-a", date: "2026-09-30", kind: "special", published: "draft" },
-      { serviceId: "role-sp-0930-b", date: "2026-09-30", kind: "special", published: "draft" },
+      { serviceId: "role-sp-0930-a", date: "2026-09-30", kind: "special", name: "Oración", time: "07:00", published: "draft" },
+      { serviceId: "role-sp-0930-b", date: "2026-09-30", kind: "special", name: "Vigilia", time: "21:00", published: "draft" },
     ]);
     expect(payload.notes).toBeUndefined();
   });

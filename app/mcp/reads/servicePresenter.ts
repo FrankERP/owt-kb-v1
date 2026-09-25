@@ -10,8 +10,10 @@
 //    issues, never services. A service's date is its stored `week` (weekend) or
 //    `date` (special) via `storedRoleDate`: a Saturday's is the Saturday's own
 //    calendar day, the same `week` its Saturday setlist is stored under.
-//    Order is /admin's: date, then `compareServiceTime`; ties by id, so it is
-//    deterministic.
+//    Order is /admin's: date, then `compareServiceTime`; ties by id (the MCP's
+//    own tie-break), so it is deterministic. `serviceCandidateOf` and
+//    `compareServiceCandidates` are the one rule and the one order; the
+//    participation and proposal presenters import them rather than copy them.
 //  - PUBLICATION is `derivePublishState` (absent = published, spec I3).
 //  - READINESS is `assembleService` over the snapshot's own readiness sources,
 //    classified by `publishRefusalFor` (D2) — never re-derived.
@@ -164,38 +166,49 @@ function compareIds(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-function compareEntries(a: CatalogueEntry, b: CatalogueEntry): number {
-  const da = a.candidate.date;
-  const db = b.candidate.date;
-  if (da !== db) {
-    if (da === null) return 1;
-    if (db === null) return -1;
-    return da < db ? -1 : 1;
-  }
-  return (
-    compareServiceTime(a.candidate.time, b.candidate.time) || compareIds(a.candidate.serviceId, b.candidate.serviceId)
-  );
+/**
+ * THE rule for what counts as a service, shared by every tool that names one
+ * (`get_service`, `list_services`, `get_participation`, `list_proposals`), so a
+ * row one tool lists is never missing from another: a role row of one of the
+ * three role types (`serviceKindOf`) whose `_id` is a canonical document id.
+ * Null for anything else. A special also carries its `name` and `time`.
+ */
+export function serviceCandidateOf(row: SnapshotRow): ServiceCandidate | null {
+  const kind = serviceKindOf(row._type);
+  if (!kind || !isCanonicalDocumentId(row._id)) return null;
+  const special = kind === "special";
+  return {
+    serviceId: row._id,
+    kind,
+    date: storedRoleDate(row),
+    name: special ? stringOrNull(row.service_name) : null,
+    time: special ? stringOrNull(row.time) : null,
+  };
 }
 
-/** Every canonical role row, as a service, in /admin's order. */
+/**
+ * THE service order every tool reports: date (an undated service last), then
+ * `compareServiceTime` (an untimed service after the timed ones that day) —
+ * /admin → Servicios' order — and then id. The id tie-break is the MCP's own,
+ * not /admin's; it only makes the order deterministic.
+ */
+export function compareServiceCandidates(a: ServiceCandidate, b: ServiceCandidate): number {
+  if (a.date !== b.date) {
+    if (a.date === null) return 1;
+    if (b.date === null) return -1;
+    return a.date < b.date ? -1 : 1;
+  }
+  return compareServiceTime(a.time, b.time) || compareIds(a.serviceId, b.serviceId);
+}
+
+/** Every canonical role row, as a service, in `compareServiceCandidates`' order. */
 function catalogue(snapshot: ServiceSnapshot): CatalogueEntry[] {
   const out: CatalogueEntry[] = [];
   for (const row of snapshot.roles) {
-    const kind = serviceKindOf(row._type);
-    if (!kind || !isCanonicalDocumentId(row._id)) continue;
-    const special = kind === "special";
-    out.push({
-      row,
-      candidate: {
-        serviceId: row._id,
-        kind,
-        date: storedRoleDate(row),
-        name: special ? stringOrNull(row.service_name) : null,
-        time: special ? stringOrNull(row.time) : null,
-      },
-    });
+    const candidate = serviceCandidateOf(row);
+    if (candidate) out.push({ row, candidate });
   }
-  return out.sort(compareEntries);
+  return out.sort((a, b) => compareServiceCandidates(a.candidate, b.candidate));
 }
 
 // ── Resolution (ledger A15: never an arbitrary pick) ────────────────────────
@@ -706,6 +719,12 @@ export type ServiceListEntry = {
   format?: string | null;
   published: "draft" | "published";
   publishedRaw: boolean | null;
+  /**
+   * Whether the per-service publish check passes NOW — the same verdict as
+   * `get_service`'s `readiness.publishCheck.passesNow` (`publishRefusalFor(...).ready`),
+   * so the two tools never answer "can it be published now" differently.
+   */
+  passesNow: boolean;
   blockers: BlockerLines;
 };
 
@@ -715,13 +734,24 @@ export type ListServicesPayload = {
   failedSources?: ServiceSourceKey[];
 };
 
-/** Every canonical service dated in `month` ("YYYY-MM"), in /admin's order. */
+/**
+ * Every canonical service dated in `month` ("YYYY-MM"), in /admin's order.
+ *
+ * An entry carries `passesNow` and `blockers`, not the refusal codes. The one
+ * refusal with no blocker of its own, `unusable_observation`, always arrives
+ * with a hard blocker today (every way `assembleService` marks an observation
+ * unusable — a null observation, or any `unsafe` entry — coincides with a hard
+ * code), so `blockers.hard` is never empty when it applies.
+ * `servicePresenter.test.ts` pins that over the fixture matrix; if it ever
+ * fails, this entry needs the refusal codes, not just the blockers.
+ */
 export function presentServiceList(snapshot: ServiceSnapshot, month: string): ListServicesPayload {
   const services = catalogue(snapshot)
     .filter((e) => e.candidate.date !== null && e.candidate.date.startsWith(`${month}-`))
     .map(({ row, candidate }): ServiceListEntry => {
       const assembled = assembleService(snapshot.readiness, candidate.serviceId);
       if (!assembled) throw new Error("service not in its own snapshot");
+      const verdict = publishRefusalFor(assembled);
       return {
         serviceId: candidate.serviceId,
         roleRev: stringOrNull(row._rev),
@@ -729,7 +759,8 @@ export function presentServiceList(snapshot: ServiceSnapshot, month: string): Li
         kind: candidate.kind,
         ...(candidate.kind === "special" ? specialIdentity(row) : {}),
         ...publication(row),
-        blockers: blockerLines(publishRefusalFor(assembled).blockers),
+        passesNow: verdict.ready,
+        blockers: blockerLines(verdict.blockers),
       };
     });
   return { month, services, ...failedSourcesOf(snapshot) };

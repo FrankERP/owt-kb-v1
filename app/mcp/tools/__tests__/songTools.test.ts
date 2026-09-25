@@ -203,6 +203,14 @@ describe("get_song", () => {
     expect(result.isError).toBe(true);
     expect(text(result)).toMatch(/más de una canción/);
     expect(text(result)).toMatch(/songId/);
+    // Each songId is in the TEXT, so a client that reads only `content` can retry by id.
+    expect(text(result)).toContain("Candidatos: song-dup-a («Ave María»); song-dup-b («Alabanza eterna»).");
+    expect(result.structuredContent).toEqual({
+      candidates: [
+        { songId: "song-dup-a", title: "Ave María" },
+        { songId: "song-dup-b", title: "Alabanza eterna" },
+      ],
+    });
   });
 
   it("refuses neither songId nor slug", async () => {

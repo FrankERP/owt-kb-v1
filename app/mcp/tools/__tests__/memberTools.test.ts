@@ -172,9 +172,14 @@ describe("get_member_availability", () => {
     expect(payload.members.map((m) => m.memberId)).toEqual(["mem-luis"]);
   });
 
-  it("refuses an ambiguous name and lists the candidates", async () => {
+  it("refuses an ambiguous name and lists the candidates, in the text too", async () => {
     const result = await getMemberAvailabilityResult({ name: "Popo" });
     expect(result.isError).toBe(true);
+    // A client that reads only `content` still gets a memberId to retry with.
+    expect(text(result)).toBe(
+      "Hay 2 miembros que coinciden con ese nombre; elige uno por memberId. " +
+        "Candidatos: mem-popo-1 (Guadalupe «Popo»); mem-popo-2 (Josefina «Popo»).",
+    );
     expect(result.structuredContent).toEqual({
       candidates: [
         { memberId: "mem-popo-1", name: "Guadalupe", alias: "Popo" },
