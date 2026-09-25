@@ -29,6 +29,24 @@ meant to do.
 (see `eslint.config.mjs`); errors are not. This matches what `CLAUDE.md` asks of
 a local run — 0 errors, warnings tolerated.
 
+### Solver inertness goldens (`gcf/test_inertness.py`)
+
+The Cloud Function deploys from `main` with no `preview` rehearsal and serves both
+environments, so a solver change is safe to ship only if a request with no `pinned` key
+builds the model it built before. Two literals, frozen from the solver as it stood before
+pins existed, hold that:
+
+| Literal | Moves when | Legitimate re-capture |
+|---|---|---|
+| `STAGE_A_FINGERPRINTS` — sha256 of Stage A's model proto, three seeds | the model construction changes | a runner-image or ortools pin bump, in a PR that changes nothing else |
+| `GOLDEN_SCHEDULE` — the seed-42 schedule, behind an `OPTIMAL` precondition | the model **or** the objective changes | the above, plus a deliberate, reviewed objective change |
+
+**A red fingerprint inside a solver PR is a finding, never a literal to update** — it means
+the pinless path moved, which is the one thing the preview-less release bets did not happen.
+If a slow runner trips the `OPTIMAL` precondition, raise the fixture's budget; never drop the
+assertion. To re-capture: set the literal to `None`, push, read the value from the test's
+skip message in this job's log, commit it.
+
 ### Deliberately not in CI
 
 - **Playwright e2e** (`e2e/service-readiness/`) — needs live Sanity credentials
