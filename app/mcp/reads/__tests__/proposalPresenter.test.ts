@@ -56,11 +56,16 @@ function roleOf(snapshot: ServiceSnapshot, id: string): SnapshotRow {
   return row;
 }
 
-/** A `PROPOSAL_PROJECTION`-shaped row, every field defaulted to `null` unless given. */
+/**
+ * A `PROPOSAL_PROJECTION`-shaped row, every field defaulted to `null` unless
+ * given, except `_id`/`_rev` — `presentProposal` throws on a row with no id
+ * (mirroring `presentService`), so every ad hoc row needs one; most tests here
+ * don't care WHICH one, so it defaults rather than being repeated everywhere.
+ */
 function proposalRow(over: Record<string, unknown>): SnapshotRow {
   return {
-    _id: null,
-    _rev: null,
+    _id: "prop-test",
+    _rev: "prop-test-rev",
     _createdAt: null,
     service_type: null,
     service_ref: null,
@@ -252,6 +257,88 @@ describe("presentProposal — name resolution", () => {
     expect(members.ok).toBe(true);
     const entry = presentProposal(snapshot, row, { members, songs: await loadSongTitles([]) }, "2026-09-30", false);
     expect(entry.messages[0]!.authorName).toBeNull();
+  });
+
+  it("a genuinely unknown lead id (the lookup succeeded, that id just resolves to nothing) is missing: true, not unresolved", async () => {
+    const snapshot = await snapshotOf();
+    const row = proposalRow({ service_type: "special", service_ref: "role-sp-1107", lead: "mem-nowhere" });
+    const members = await loadMemberNames(["mem-nowhere"], snapshot.membersById);
+    expect(members.ok).toBe(true);
+    const entry = presentProposal(snapshot, row, { members, songs: await loadSongTitles([]) }, "2026-09-30", false);
+    expect(entry.lead).toEqual({ memberId: "mem-nowhere", name: null, missing: true });
+  });
+
+  it("a lead with no reference at all is missing: true", async () => {
+    const snapshot = await snapshotOf();
+    const row = proposalRow({ service_type: "special", service_ref: "role-sp-1107", lead: null });
+    const entry = presentProposal(snapshot, row, await emptyLookups(), "2026-09-30", false);
+    expect(entry.lead).toEqual({ memberId: null, name: null, missing: true });
+  });
+});
+
+// ── Degraded supplementary lookups (missing vs unresolved, notes) ───────────
+
+describe("presentProposal / presentProposalsForX — a failed lookup is unresolved, never silently missing", () => {
+  it("a failed members lookup reports the lead and contributors as unresolved, not missing, and still returns the proposal", async () => {
+    const snapshot = await snapshotOf();
+    const row = proposalRow({
+      service_type: "special",
+      service_ref: "role-sp-1107",
+      lead: UNSEATED_MEMBER_ID,
+      contributors: [{ _key: "c1", person: UNSEATED_MEMBER_ID }],
+    });
+    const failedMembers = { ok: false, byId: new Map() };
+    const entry = presentProposal(snapshot, row, { members: failedMembers, songs: await loadSongTitles([]) }, "2026-09-30", false);
+    expect(entry.lead).toEqual({ memberId: UNSEATED_MEMBER_ID, name: null, unresolved: true });
+    expect(entry.contributors).toEqual([{ memberId: UNSEATED_MEMBER_ID, name: null, unresolved: true }]);
+  });
+
+  it("presentProposalsForService: a failed members lookup adds a notes entry, the proposal is still returned", async () => {
+    const snapshot = await snapshotOf();
+    const role = roleOf(snapshot, "role-sun-1011");
+    const failedMembers = { ok: false, byId: new Map() };
+    const payload = presentProposalsForService(
+      snapshot,
+      role,
+      { members: failedMembers, songs: await loadSongTitles([]) },
+      "2026-09-30",
+    );
+    expect(payload.proposals).toHaveLength(1);
+    expect(payload.proposals[0]!.lead.unresolved).toBe(true);
+    expect(payload.notes).toEqual([
+      "No se pudieron leer los nombres de algunos miembros; aparecen como unresolved: true, o sin nombre en los mensajes.",
+    ]);
+  });
+
+  it("presentProposalsForMonth: a failed song-title lookup reports null titles plus a notes entry, proposals still returned", async () => {
+    const snapshot = await snapshotOf();
+    const failedSongs = { ok: false, byId: new Map() };
+    const { members } = await emptyLookups();
+    const payload = presentProposalsForMonth(snapshot, "2026-10", { members, songs: failedSongs }, "2026-09-30");
+    expect(payload.proposals).toHaveLength(3);
+    const withSongs = payload.proposals.find((p) => p.proposalId === "prop-sat-1003")!;
+    expect(withSongs.songs[0]!.song).toEqual({ id: "song-3", title: null });
+    expect(payload.notes).toEqual([
+      "No se pudieron leer los títulos de las canciones; se muestran solo sus ids.",
+    ]);
+  });
+
+  it("no notes at all when both lookups succeed", async () => {
+    const snapshot = await snapshotOf();
+    const role = roleOf(snapshot, "role-sun-1011");
+    const payload = presentProposalsForService(snapshot, role, await emptyLookups(), "2026-09-30");
+    expect(payload.notes).toBeUndefined();
+  });
+});
+
+// ── presentProposal fails loud on a row with no real id ─────────────────────
+
+describe("presentProposal — a row with no _id", () => {
+  it("throws rather than shipping proposalId: \"\" (mirrors presentService)", async () => {
+    const snapshot = await snapshotOf();
+    const lookups = await emptyLookups();
+    const row = proposalRow({ _id: null, service_type: "special" });
+    expect(() => presentProposal(snapshot, row, lookups, "2026-09-30", false)).toThrow();
   });
 });
 

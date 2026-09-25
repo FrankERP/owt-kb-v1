@@ -167,7 +167,14 @@ export function proposalContentIds(rows: readonly SnapshotRow[]): { memberIds: s
 
 // ── Presentation ─────────────────────────────────────────────────────────────
 
-export type ProposalMemberRef = { memberId: string | null; name: string | null };
+export type ProposalMemberRef = {
+  memberId: string | null;
+  name: string | null;
+  /** The reference names no member (or there is no reference at all). */
+  missing?: true;
+  /** The members lookup failed: the name is unknown, which is not the same as missing. */
+  unresolved?: true;
+};
 export type ProposalSongRow = {
   rowKey: string | null;
   song: { id: string; title: string | null } | null;
@@ -201,11 +208,18 @@ export type ProposalEntry = {
   messages: ProposalMessageView[];
 };
 
+/**
+ * Mirrors `servicePresenter.ts`'s `memberName` exactly: no reference at all is
+ * `missing`, same as a reference to a member that does not exist; a failed
+ * members lookup instead reports `unresolved` — the name is unknown, which is
+ * not the same as absent.
+ */
 function memberRef(id: unknown, members: MemberNameLookup): ProposalMemberRef {
   const memberId = stringOrNull(id);
-  if (!memberId) return { memberId: null, name: null };
+  if (memberId === null) return { memberId: null, name: null, missing: true };
   const member = members.byId.get(memberId);
-  return { memberId, name: member ? stringOrNull(member.member_name) : null };
+  if (member) return { memberId, name: stringOrNull(member.member_name) };
+  return members.ok ? { memberId, name: null, missing: true } : { memberId, name: null, unresolved: true };
 }
 
 /** Stored-message shape `orderedMessages` needs (`at?: string | null`), plus the fields the payload reports. */
@@ -217,11 +231,18 @@ interface RawProposalMessage {
   readonly at?: string | null;
 }
 
+/**
+ * `authorName` is null whether the message carries no `author` reference, the
+ * reference names no member, or the members lookup failed — a message carries
+ * no `missing`/`unresolved` field of its own (unlike `lead`/`contributors`).
+ * A failed lookup still surfaces at the PAYLOAD level: `buildNotes` below adds
+ * a Spanish note whenever `!members.ok`, covering every name this module
+ * could not resolve, messages included.
+ */
 function presentMessage(message: RawProposalMessage, members: MemberNameLookup): ProposalMessageView {
   const authorId = stringOrNull(message.author);
   return {
     at: stringOrNull(message.at),
-    // An unresolvable author (unknown id, or the lookup read failed) is null either way — never leaked which case it was.
     authorName: authorId ? stringOrNull(members.byId.get(authorId)?.member_name) : null,
     authorRole: stringOrNull(message.author_role),
     kind: stringOrNull(message.kind),
@@ -236,6 +257,12 @@ const MONTH_MESSAGE_CAP = 10;
  * `{ serviceId }` (the whole thread), true for `{ month }` (the last 10,
  * chronological). `messagesTotal` is always the full count regardless.
  * `lead_notes` / `admin_notes` / `team_notes` are never read here (A7).
+ *
+ * `row` must carry a real `_id` — every row `snapshot.proposals` holds does,
+ * since `canonicalProposalsQuery()` always returns one; a row that somehow
+ * does not throws, exactly as `presentService` does for a role with no
+ * `serviceId` (`servicePresenter.ts`), so `runReadTool` turns it into the
+ * fixed Spanish tool error (E1) rather than shipping a `proposalId: ""`.
  */
 export function presentProposal(
   snapshot: ServiceSnapshot,
@@ -244,6 +271,9 @@ export function presentProposal(
   today: string,
   capMessages: boolean,
 ): ProposalEntry {
+  const proposalId = stringOrNull(row._id);
+  if (!proposalId) throw new Error("not a proposal row");
+
   const kind = (SERVICE_KINDS as readonly unknown[]).includes(row.service_type)
     ? (row.service_type as ServiceKind)
     : null;
@@ -272,7 +302,7 @@ export function presentProposal(
   const rawContributors = Array.isArray(row.contributors) ? row.contributors : [];
 
   return {
-    proposalId: stringOrNull(row._id) ?? "",
+    proposalId,
     serviceId: resolveProposalServiceId(snapshot, row),
     serviceDate: stringOrNull(row.service_date),
     kind,
@@ -290,12 +320,33 @@ export function presentProposal(
 // ── list_proposals ───────────────────────────────────────────────────────────
 
 export type ListProposalsPayload =
-  | { serviceId: string; proposals: ProposalEntry[]; failedSources?: ServiceSourceKey[] }
-  | { month: string; proposals: ProposalEntry[]; failedSources?: ServiceSourceKey[] };
+  | { serviceId: string; proposals: ProposalEntry[]; failedSources?: ServiceSourceKey[]; notes?: string[] }
+  | { month: string; proposals: ProposalEntry[]; failedSources?: ServiceSourceKey[]; notes?: string[] };
 
 export interface ProposalLookups {
   members: MemberNameLookup;
   songs: SongTitleLookup;
+}
+
+/**
+ * The one-line degradation notes (`get_participation`'s own pattern): a failed
+ * supplementary lookup is reported once for the whole list, never per
+ * proposal. Both `loadMemberNames`/`loadSongTitles` short-circuit to `ok: true`
+ * when they had nothing to resolve, so `!ok` here only ever means "there was
+ * at least one id to resolve and the read failed" — never a false alarm on an
+ * empty id list.
+ */
+function buildNotes(lookups: ProposalLookups): string[] {
+  const notes: string[] = [];
+  if (!lookups.songs.ok) {
+    notes.push("No se pudieron leer los títulos de las canciones; se muestran solo sus ids.");
+  }
+  if (!lookups.members.ok) {
+    notes.push(
+      "No se pudieron leer los nombres de algunos miembros; aparecen como unresolved: true, o sin nombre en los mensajes.",
+    );
+  }
+  return notes;
 }
 
 /** D6: the whole thread — every proposal linking to `role`, full `messages`. */
@@ -307,7 +358,13 @@ export function presentProposalsForService(
 ): ListProposalsPayload {
   const rows = proposalsForService(snapshot, role).slice().sort(compareProposals);
   const proposals = rows.map((row) => presentProposal(snapshot, row, lookups, today, false));
-  return { serviceId: stringOrNull(role._id) ?? "", proposals, ...failedSourcesOf(snapshot) };
+  const notes = buildNotes(lookups);
+  return {
+    serviceId: stringOrNull(role._id) ?? "",
+    proposals,
+    ...failedSourcesOf(snapshot),
+    ...(notes.length ? { notes } : {}),
+  };
 }
 
 /** D6: every proposal dated in `month`, each capped to its last 10 messages. */
@@ -319,5 +376,6 @@ export function presentProposalsForMonth(
 ): ListProposalsPayload {
   const rows = proposalsForMonth(snapshot, month).slice().sort(compareProposals);
   const proposals = rows.map((row) => presentProposal(snapshot, row, lookups, today, true));
-  return { month, proposals, ...failedSourcesOf(snapshot) };
+  const notes = buildNotes(lookups);
+  return { month, proposals, ...failedSourcesOf(snapshot), ...(notes.length ? { notes } : {}) };
 }

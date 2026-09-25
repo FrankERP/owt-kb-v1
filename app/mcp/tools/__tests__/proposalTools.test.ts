@@ -189,6 +189,35 @@ describe("list_proposals", () => {
     expect(text(result)).toBe(LIST_PROPOSALS_UNREADABLE_MESSAGE);
   });
 
+  it("a failed members lookup does NOT refuse the call — proposals still come back, lead/contributors unresolved, with a note", async () => {
+    wire({ fail: ["members"] });
+    const result = await listProposalsResult({ month: "2026-10" });
+    expect(result.isError).toBeFalsy();
+    const payload = result.structuredContent as {
+      proposals: { proposalId: string; lead: { unresolved?: true } }[];
+      notes?: string[];
+    };
+    expect(payload.proposals.length).toBeGreaterThan(0);
+    const withLead = payload.proposals.find((p) => p.proposalId === "prop-sun-1011")!;
+    expect(withLead.lead.unresolved).toBe(true);
+    expect(payload.notes).toEqual([
+      "No se pudieron leer los nombres de algunos miembros; aparecen como unresolved: true, o sin nombre en los mensajes.",
+    ]);
+  });
+
+  it("a failed song-title lookup does NOT refuse the call — proposals still come back with null titles, with a note", async () => {
+    wire({ failPosts: true });
+    const result = await listProposalsResult({ month: "2026-10" });
+    expect(result.isError).toBeFalsy();
+    const payload = result.structuredContent as {
+      proposals: { proposalId: string; songs: { song: { title: string | null } | null }[] }[];
+      notes?: string[];
+    };
+    const withSongs = payload.proposals.find((p) => p.proposalId === "prop-sat-1003")!;
+    expect(withSongs.songs[0]!.song).toEqual({ id: "song-3", title: null });
+    expect(payload.notes).toEqual(["No se pudieron leer los títulos de las canciones; se muestran solo sus ids."]);
+  });
+
   it("turns any throw into the fixed Spanish error, never the error's text (E1)", async () => {
     h.snapshotFailure = new Error("boom token=sk-fixture-secret");
     const result = await listProposalsResult({});
