@@ -14,9 +14,7 @@ actually seated; **(c)** `historyForRequest` excludes only the month being solve
 future month's entry can leak into the solver's input; **(d)** eviction keeps the six most
 recently *written* entries, not the six calendar-latest months; **(e)** entries written
 before 2026-07-30 recorded the raw solver response, zero rows included; **(f)** a «Historial»
-chip deletes any entry with one click, no confirmation. All six are invisible in the code —
-each looks like ordinary state management, not a bug — until you ask what the number is
-supposed to mean.
+chip deletes any entry with one click, no confirmation.
 
 ## Decision
 
@@ -31,10 +29,9 @@ documents**, never read from or written to `localStorage` as a source of truth
   planned but not yet published is still assigned duty the next month must weigh; the month
   being solved, and anything after it, must never leak in. This fixes (c).
 - **The window is exactly the three calendar months before the target**, oldest first, with
-  an empty entry when a month has no weekend services — never "the six most recently written."
-  This fixes (d) and (f)'s consequence (an evicted-vs-deleted entry is no longer
-  distinguishable from the browser's point of view, because there is no browser store to
-  evict from).
+  an empty entry when a month has no weekend services — never "the six most recently
+  written." This fixes (d). **(f)** is closed separately, at cutover, by the chips becoming
+  read-only (see Consequences) — a derived month has nothing left to delete.
 - **Members are keyed by their current `member_name`**, matching how the solver itself
   matches history to its pools. A rename now carries its history forward instead of losing
   it; a dangling seat reference, a duplicate name, or two weekend documents targeting one date
@@ -48,12 +45,15 @@ documents**, never read from or written to `localStorage` as a source of truth
 - **The cutover is staged and reversible.** Delivery 1 ships every piece of this
   *dormant*, gated by a code constant, `SOLVER_HISTORY_SOURCE: "local" | "derived"`
   (`app/components/admin/solverHistorySource.ts`), shipped as `"local"`: production behaviour
-  is unchanged until Frank flips it. While the switch is `"local"`, the planner **still writes**
-  `localStorage` on every confirm, built from `localStorage`'s own prior contents — so the
-  rollback target stays current — and stops only once one real month has been solved and
-  created on derived history with no rollback (the dual-write stop point).
+  is unchanged until Frank flips it — under `"local"` the planner writes `localStorage`
+  exactly as it always has. **Once the switch is `"derived"`** (Delivery 2), the planner
+  solves against the derived history, but every confirm **also** writes `localStorage`,
+  built fresh from `localStorage`'s own prior contents rather than from the in-memory
+  (now derived) state — the dual-write that keeps the rollback target current. It stops
+  only once one real month has been solved and created on derived history with no rollback
+  (Delivery 3, the dual-write stop point).
 
-**The H3 narrowing is stated here, as R16 and R17 require.** The roadmap's H3 asked for
+**The H3 narrowing is stated here, as R16 requires.** The roadmap's H3 asked for
 *every* difference between the old and new history to be individually explained. A
 document's creation fingerprint can prove its stored seats are unchanged since creation; it
 cannot prove what changed inside an edited document, and a deleted or moved document leaves
@@ -64,24 +64,21 @@ difference by difference, before deciding on cutover (Gate C).
 
 ## Rejected
 
-- **Keeping `localStorage`.** ADR-0010 already named the per-browser gap as out of scope; this
-  record closes it instead of re-deferring it. A per-browser store cannot make a shared
-  fairness signal true: two admins, or two devices, would keep solving against different
-  histories, and clearing site data would delete a month's history with no trace.
-- **A stored history document ("storing a history anywhere").** Persisting a derived snapshot
-  would need a schema, a migration, and a second value that can drift from the role documents
-  that are already the source of truth. Nothing is gained by writing down a number the role
-  documents can always recompute.
-- **Counting what was created rather than what is stored.** This is what today's system does,
-  and it is defect (b): a swap or a stored-mode edit made after the create-mode confirm would
-  leave the history describing a schedule nobody actually ran.
-- **Excluding drafts.** A month planned but not yet published is still real assigned duty; the
-  next month's fairness has to weigh it, or the solver would treat "planned but unpublished"
-  as "never happened."
-- **H3 as "every difference individually proven."** The fingerprint only proves whole-document
+- **Keeping `localStorage`.** ADR-0010 already named the per-browser gap; a per-browser store
+  cannot make a shared fairness signal true — two admins or devices solve against different
+  histories, and clearing site data deletes a month's history with no trace.
+- **A stored history document ("storing a history anywhere").** Would need its own schema and
+  migration, and a second value that can drift from the role documents already holding the
+  truth. Nothing is gained by writing down a number they can always recompute.
+- **Counting what was created rather than what is stored.** Today's behaviour, and defect (b):
+  a swap or stored-mode edit after the create-mode confirm leaves the history describing a
+  schedule nobody actually ran.
+- **Excluding drafts.** A planned-but-unpublished month is still real assigned duty; excluding
+  it would have the next month's fairness treat it as never having happened.
+- **H3 as "every difference individually proven."** A fingerprint proves only whole-document
   equivalence. Demanding individual proof for a changed or deleted document asks for evidence
-  that cannot exist; the `unverified` verdict is the honest alternative to either faking a
-  proof or blocking on the unprovable.
+  that cannot exist; `unverified` is the honest alternative to faking a proof or blocking on
+  the unprovable.
 
 ## Consequences
 
