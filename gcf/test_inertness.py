@@ -11,10 +11,11 @@ and a change is measured against the past rather than against itself.
 GOVERNANCE — the literals move for different reasons (spec §7; docs/CI.md has the table):
 
   STAGE_A_FINGERPRINTS  moves with Stage A's model or search parameters. Legitimate
-                        re-capture: a runner-image or ortools pin bump, in a PR that
-                        changes nothing else.
-  STAGE_B_FINGERPRINTS  also moves with the OBJECTIVE (compute_priority_weights feeds
-                        it; Stage A never enters that branch). Legitimate re-capture: the
+                        re-capture: an ortools pin bump, in a PR that changes nothing
+                        else. NOT a runner-image change: the fingerprints are
+                        machine-independent, so a new image is no excuse for a red one.
+  LADDER_FINGERPRINTS   also moves with the OBJECTIVE (compute_priority_weights feeds it;
+                        Stage A never enters that branch). Legitimate re-capture: the
                         above, plus a deliberate, reviewed objective change.
   GOLDEN_SCHEDULE       also moves with how ortools breaks a tie on the runner. The
                         above, plus a runner-image change — check the CI log's "Runner
@@ -23,9 +24,13 @@ GOVERNANCE — the literals move for different reasons (spec §7; docs/CI.md has
 A red FINGERPRINT inside a PR that claims the pinless path unchanged — the pinned-
 assignments PR is one — is a FINDING, and gets explained, never re-captured.
 
-Re-capture: a fingerprint's failure message already prints the actual hash (assertEqual
-shows both sides). The golden: set GOLDEN_SCHEDULE to None, push, read the value from the
-test's skip message in the CI log, commit it with the runner image it came from.
+Re-capture: a fingerprint's failure message already prints the actual value (assertEqual
+shows both sides). The golden: set GOLDEN_SCHEDULE to None and push — in CI the test then
+FAILS with the captured schedule in its message (a golden left at None must never pass the
+required gate); commit it with the runner image it came from.
+
+One blind spot, by construction: an objective term with a ZERO coefficient that adds no
+variable and no constraint is dropped from the proto and invisible to every guard here.
 """
 
 import hashlib
@@ -73,22 +78,37 @@ def frozen_config(seed):
 # .Proto() on ortools 9.15.6755 has no SerializeToString — plus its solver parameters
 # with max_time_in_seconds stripped (it varies with the shared deadline). The
 # parameters are what make it "the same search", not only the same model: branching,
-# seed and worker count live there, not in the proto. Machine-independent: all of it is
-# built before the solve and depends only on the seed — confirmed on the Linux runner
-# and on macOS, at 10 s and 3 s budgets, across PYTHONHASHSEED values.
+# seed and worker count live there, not in the proto. Measured identical on the Linux
+# runner and on macOS, at budgets of 1 to 30 s, across PYTHONHASHSEED values.
 #
-# STAGE_A is the first solve. STAGE_B is the first optimising pass of the fairness
-# ladder, the second solve: its model carries Stage A's weighted_empty as a bound, which
-# is machine-independent only because Stage A proved OPTIMAL — asserted, not assumed.
+# STAGE_A is the first solve, and machine-independent unconditionally: it depends only
+# on the seed. LADDER is every solve after it, in order — the fairness ladder's passes up
+# to and including the one that returned the month. Each carries Stage A's
+# weighted_empty as a bound, so it is machine-independent only because Stage A proved
+# OPTIMAL — asserted, not assumed. The intermediate passes' STATUSES are deliberately not
+# frozen: a proof of infeasibility may time out to UNKNOWN on a loaded runner, and the
+# ladder moves on identically either way.
 STAGE_A_FINGERPRINTS = {
     1: "43870d582112e547492fbb22f24dbd53857125d8e428425e3c0165ae5d29aefb",
     42: "feff7b363731ab259fdf0165e096065ebc70b1365e083831994fb7b091139c3d",
     2024: "c7c99d43bc2eae927fd8461ae9121cb5cad9114b600b8c15bfb53cd9b6f1f774",
 }
-STAGE_B_FINGERPRINTS = {
-    1: "5a34a77fd24fbc2b2947335464e597b236532aed85abddfd804599d129f9679e",
-    42: "a919e7222261df1e4d10ff87946ee2dcf20037a968e1b197d7cb23774c6475af",
-    2024: "7b17dd7e1b65f77cb50b7a29e8a98f1ea5d77b6eaba444270bc65af6b73a98a5",
+LADDER_FINGERPRINTS = {
+    1: [
+        "5a34a77fd24fbc2b2947335464e597b236532aed85abddfd804599d129f9679e",
+        "453c6d4373c5df96c75ead6ceec82cda2779b7557921b583699ed94258b72a64",
+        "eedcc8ba327c7f53d799aab3d9dd8d492e30ea8f30705ed7dbd7a960619acbf8",
+    ],
+    42: [
+        "a919e7222261df1e4d10ff87946ee2dcf20037a968e1b197d7cb23774c6475af",
+        "890c255935907c0ee39b0b8193f138edc13aed1b4a7a6a9ca4b6911045eaf3a5",
+        "4f0d657b4b48c6a6f9c57a0335b24f696be5c628a46c836837570bf643204418",
+    ],
+    2024: [
+        "7b17dd7e1b65f77cb50b7a29e8a98f1ea5d77b6eaba444270bc65af6b73a98a5",
+        "b309cdc6690a923c1cd59ecf8f676ba64c9f2b04097b1b325fa2e9ee6e3c3fe3",
+        "21596f5342fb3715ce8d9ef3d8cf4f8c7b396f04f770787e52e27eeb4ae62ce8",
+    ],
 }
 
 # The platform the golden was captured on, and the only one that enforces it. OPTIMAL
@@ -97,14 +117,14 @@ STAGE_B_FINGERPRINTS = {
 # OPTIMAL) — equal objective — and return schedules that differ in 7 of 16 role cells.
 # Enforced everywhere, a runner-captured golden would be red on every developer Mac, so
 # it skips off-platform — EXCEPT in CI, where a skip would leave the required gate green
-# with the guard switched off, so there it fails instead.
+# with the guard switched off, so there it fails instead. Capture mode fails in CI too.
 GOLDEN_PLATFORM = ("Linux", "x86_64")
 CAPTURED_ON = ("GitHub Actions ubuntu-24.04, runner image 20260920.314.1, Python 3.12.14, "
                "ortools 9.15.6755, protobuf 6.33.6 — run 36172243640, PR #100")
 
 # The schedule frozen_config(42) returns on GOLDEN_PLATFORM, captured by the CI runner
-# that enforces it, never by a laptop. None means capture mode: the test skips and
-# prints it.
+# that enforces it, never by a laptop. None means capture mode: the test prints it —
+# failing in CI, skipping elsewhere.
 GOLDEN_SCHEDULE = {
     "1": {
         "Sunday": {"BGV": ["Hugo", "Lucía", "Rachel"], "Choir": ["Jakey", "Lali", "Niza"], "Lead": ["Frank", "Gaby"]},
@@ -132,63 +152,59 @@ def _search_fingerprint(solver, model):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-class _StopAfterStageB(Exception):
-    """Raised once the first optimising pass is fingerprinted: nothing after it is needed."""
+_RUNS = {}
 
 
-def _fingerprints(seed):
-    """(Stage A fingerprint, Stage A status, first optimising pass fingerprint, whether
-    that pass carried an objective) for frozen_config(seed)."""
-    original = cp_model.CpSolver.Solve
-    seen = []
+def _run(seed):
+    """
+    frozen_config(seed), solved once per process: the response, and per solve its
+    (fingerprint, status name, whether it carried an objective), in order.
+    """
+    if seed not in _RUNS:
+        original = cp_model.CpSolver.Solve
+        solves = []
 
-    def capture(solver_self, model):
-        seen.append((_search_fingerprint(solver_self, model), model.HasObjective()))
-        if len(seen) == 1:
-            status = original(solver_self, model)   # Stage B needs Stage A's real result
-            seen.append(solver_self.StatusName(status))
+        def record(solver_self, model):
+            fingerprint = _search_fingerprint(solver_self, model)
+            status = original(solver_self, model)
+            solves.append((fingerprint, solver_self.StatusName(status), model.HasObjective()))
             return status
-        raise _StopAfterStageB
 
-    cp_model.CpSolver.Solve = capture
-    try:
-        mod.solve_from_dict(frozen_config(seed))
-    except _StopAfterStageB:
-        pass
-    finally:
-        cp_model.CpSolver.Solve = original
-    (stage_a, _), stage_a_status, (stage_b, stage_b_has_objective) = seen
-    return stage_a, stage_a_status, stage_b, stage_b_has_objective
+        cp_model.CpSolver.Solve = record
+        try:
+            res = mod.solve_from_dict(frozen_config(seed))
+        finally:
+            cp_model.CpSolver.Solve = original
+        _RUNS[seed] = (res, solves)
+    return _RUNS[seed]
 
 
 class PinlessModelIsUnchanged(unittest.TestCase):
     """The primary guard: model and search identity, not output identity (spec §9)."""
 
-    @classmethod
-    def setUpClass(cls):
-        cls.prints = {seed: _fingerprints(seed) for seed in STAGE_A_FINGERPRINTS}
-
     def test_stage_a_fingerprint(self):
         for seed, expected in STAGE_A_FINGERPRINTS.items():
             with self.subTest(seed=seed):
+                _res, solves = _run(seed)
                 self.assertEqual(
-                    self.prints[seed][0], expected,
+                    solves[0][0], expected,
                     "the pinless Stage A model or search changed — a finding to explain, "
                     "not a literal to update (see the module docstring)")
 
-    def test_first_optimising_pass_fingerprint(self):
-        for seed, expected in STAGE_B_FINGERPRINTS.items():
+    def test_ladder_fingerprints(self):
+        for seed, expected in LADDER_FINGERPRINTS.items():
             with self.subTest(seed=seed):
-                _a, stage_a_status, stage_b, has_objective = self.prints[seed]
+                _res, solves = _run(seed)
                 self.assertEqual(
-                    stage_a_status, "OPTIMAL",
-                    "precondition: Stage A must prove OPTIMAL for its bound on Stage B to "
-                    "be machine-independent — raise INERTNESS_BUDGET_SECONDS")
-                self.assertTrue(has_objective, "the second solve is not an optimising pass")
+                    solves[0][1], "OPTIMAL",
+                    "precondition: Stage A must prove OPTIMAL for its bound on the ladder "
+                    "to be machine-independent — raise INERTNESS_BUDGET_SECONDS")
                 self.assertEqual(
-                    stage_b, expected,
-                    "the pinless Stage B model, objective or search changed — a finding "
-                    "unless this PR is a deliberate, reviewed objective change")
+                    [fingerprint for fingerprint, _status, _obj in solves[1:]], expected,
+                    "the pinless ladder's models, objective, search or pass sequence "
+                    "changed — a finding unless this PR is a deliberate, reviewed objective "
+                    "change. (A LONGER sequence with an UNKNOWN last pass means the "
+                    "returning pass timed out: raise INERTNESS_BUDGET_SECONDS.)")
 
 
 class PinlessOutputGolden(unittest.TestCase):
@@ -199,20 +215,8 @@ class PinlessOutputGolden(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        statuses = []
-        original = cp_model.CpSolver.Solve
-
-        def record(solver_self, model):
-            status = original(solver_self, model)
-            statuses.append(solver_self.StatusName(status))
-            return status
-
-        cp_model.CpSolver.Solve = record
-        try:
-            cls.res = mod.solve_from_dict(frozen_config(42))
-        finally:
-            cp_model.CpSolver.Solve = original
-        cls.statuses = statuses
+        cls.res, solves = _run(42)
+        cls.statuses = [status for _fingerprint, status, _obj in solves]
 
     def test_the_returning_solve_proved_optimality(self):
         """
@@ -228,12 +232,17 @@ class PinlessOutputGolden(unittest.TestCase):
 
     def test_schedule_matches_the_golden(self):
         here = (platform.system(), platform.machine())
+        in_ci = os.environ.get("GITHUB_ACTIONS") == "true"
         if GOLDEN_SCHEDULE is None:
-            self.skipTest(f"capture: platform={here} python={platform.python_version()} "
-                          f"statuses={self.statuses} "
-                          f"schedule={json.dumps(self.res['schedule'], sort_keys=True)}")
+            capture = (f"capture: platform={here} python={platform.python_version()} "
+                       f"statuses={self.statuses} "
+                       f"schedule={json.dumps(self.res['schedule'], sort_keys=True)}")
+            if in_ci:
+                self.fail(capture + " — commit it; a golden left at None must never pass "
+                          "the required gate")
+            self.skipTest(capture)
         if here != GOLDEN_PLATFORM:
-            if os.environ.get("GITHUB_ACTIONS") == "true":
+            if in_ci:
                 self.fail(f"CI now runs on {here}, not {GOLDEN_PLATFORM}: off-platform the "
                           "golden skips, which would leave the required gate green with it "
                           "switched off. Re-capture it on this platform (module docstring).")
