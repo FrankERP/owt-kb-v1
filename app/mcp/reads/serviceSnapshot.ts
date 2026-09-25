@@ -84,6 +84,13 @@ async function attempt<T>(label: string, bound: BoundQuery, raw = false): Promis
 /** A row exactly as its projection returned it. Read-only: it is the same object readiness holds. */
 export type SnapshotRow = Readonly<Record<string, unknown>>;
 
+/** A raw `drafts.*` setlist row's id and the weekend target it sits on, as stored. */
+export interface SetlistDraftTarget {
+  readonly id: string;
+  readonly type: string | null;
+  readonly week: string | null;
+}
+
 /**
  * Every row, id list and map here is the SAME object `readiness` was computed
  * from (`readiness.rolesById.get(id) === roles[i]`), so the fields are typed
@@ -113,6 +120,15 @@ export interface ServiceSnapshot {
    * absence.
    */
   readonly setlistDraftIds: readonly string[];
+  /**
+   * The same raw `drafts.*` setlist rows as `setlistDraftIds`, with the target
+   * each one sits on (`_type` + `week`). The setlist WRITER finds an overlay by
+   * target (`rawSetlistDraftsForWeekQuery`), not by id — a draft whose base id
+   * differs from a legacy canonical id still blocks it — so an observation that
+   * must match the writer needs the target, not just the id. Same emptiness
+   * rule as `setlistDraftIds`. Content, outside the readiness parity.
+   */
+  readonly setlistDrafts: ReadonlyArray<SetlistDraftTarget>;
   /**
    * Ids of the raw `drafts.*` role rows. `[]` when this read failed;
    * `sources.roleTargets` is also `error` when its sibling read (the weekend
@@ -221,6 +237,14 @@ export async function loadServiceSnapshot(): Promise<ServiceSnapshot> {
     roles: roles.rows.filter(isObj),
     setlists: setlists.rows.filter(isObj),
     setlistDraftIds: draftIds(setlistDrafts.rows),
+    setlistDrafts: setlistDrafts.rows
+      .filter(isObj)
+      .filter((row) => nonEmptyString(row._id))
+      .map((row) => ({
+        id: row._id as string,
+        type: typeof row._type === "string" ? row._type : null,
+        week: typeof row.week === "string" ? row.week : null,
+      })),
     roleDraftIds: draftIds(roleDrafts.rows),
     membersById,
     proposals: proposals.rows.filter(isObj),

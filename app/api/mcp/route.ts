@@ -1,7 +1,7 @@
 // app/api/mcp/route.ts
 //
 // The MCP endpoint (P0 plan step 9, spec I6/O2/E1): Streamable HTTP through
-// `mcp-handler`, stateless, one tool (`ping`). Ungated by the session
+// `mcp-handler`, stateless, tools registered below. Ungated by the session
 // middleware (`api/mcp(?:/|$)` in `app/utils/routeMatcher.ts`, P0 step 5), so
 // it authenticates EVERY request itself, on every method, and nothing reaches
 // the MCP server — no `initialize`, no `tools/list`, no tool — until all of
@@ -37,6 +37,8 @@ import { resourceMetadataUrl } from "@/app/mcp/oauth/origin";
 import { jsonNoStore, mcpUnauthorizedResponse } from "@/app/mcp/oauth/responses";
 import { verifyAccessToken } from "@/app/mcp/oauth/tokens";
 import { MCP_SERVER_NAME, mcpServerVersion } from "@/app/mcp/serverInfo";
+import { registerGetService } from "@/app/mcp/tools/getService";
+import { registerListServices } from "@/app/mcp/tools/listServices";
 import { registerPing } from "@/app/mcp/tools/ping";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +66,8 @@ const SERVER_INFO = { name: MCP_SERVER_NAME, version: mcpServerVersion() };
 const mcpHandler = createMcpHandler(
   (server) => {
     registerPing(server, { version: SERVER_INFO.version });
+    registerGetService(server);
+    registerListServices(server);
   },
   {
     serverInfo: SERVER_INFO,

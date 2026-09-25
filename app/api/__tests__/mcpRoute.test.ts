@@ -26,16 +26,22 @@ const h = await vi.hoisted(async () => {
     forwarded: [] as Request[],
     /** When on, each per-request server also gets a test-only `probe` tool (see the mcp-handler mock). */
     probe: { enabled: false },
+    /** The read tools' Sanity clients; the read-tool tests wire them to the fixture responder. */
+    operationalFetch: vi.fn(),
+    rawFetch: vi.fn(),
   };
 });
 
 vi.mock("@/app/utils/memberAccess", () => ({ getMemberAccess: (id: string) => h.getMemberAccess(id) }));
 vi.mock("@/sanity/lib/serverClient", () => ({ writeClient: h.writeClient, serverClient: { fetch: vi.fn() } }));
-// A future read tool's import of `operationalClient`/`rawIntegrityClient` must
-// never reach `sanity/env.ts`, which throws when `NEXT_PUBLIC_SANITY_*` is
-// unset (as it is under vitest). No read tool is registered yet, so nothing
-// here calls `fetch`.
-vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: { fetch: vi.fn() }, rawIntegrityClient: { fetch: vi.fn() } }));
+// The read tools' import of `operationalClient`/`rawIntegrityClient` must never
+// reach `sanity/env.ts`, which throws when `NEXT_PUBLIC_SANITY_*` is unset (as
+// it is under vitest). Inert unless a test wires them: only the read-tool
+// tests below call `fetch`, and they answer it from the service fixture store.
+vi.mock("@/sanity/lib/operationalClient", () => ({
+  operationalClient: { fetch: (...a: unknown[]) => h.operationalFetch(...a) },
+  rawIntegrityClient: { fetch: (...a: unknown[]) => h.rawFetch(...a) },
+}));
 
 // The REAL mcp-handler, observed: the wrapper records every request the route
 // forwards (so a refusal can assert the handler was never called at all), and
@@ -76,6 +82,7 @@ vi.mock("mcp-handler", async (importOriginal) => {
 });
 
 import { DELETE, GET, POST } from "@/app/api/mcp/route";
+import { FROZEN_EVENING, readToolStore, scopedResponder } from "@/app/mcp/reads/__tests__/readToolFixtures";
 import * as mcpRoute from "@/app/api/mcp/route";
 import { buildGrantDocument, newGrantId } from "@/app/mcp/oauth/grantDocument";
 import { __clearGrantCache, createGrant, revokeGrant } from "@/app/mcp/oauth/grantStore";
@@ -575,17 +582,27 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
   });
 
-  it("tools/list shows exactly one tool, ping: read-only, strict, described in Spanish", async () => {
+  it("tools/list shows exactly ping, get_service and list_services: all read-only, strict, described in Spanish", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const tools = result.tools as Record<string, unknown>[];
-    expect(tools).toHaveLength(1);
-    const [ping] = tools;
-    expect(ping!.name).toBe("ping");
-    expect(ping!.annotations).toEqual({ readOnlyHint: true });
-    expect(ping!.inputSchema).toMatchObject({ type: "object", properties: {}, additionalProperties: false });
+    expect(tools.map((t) => t.name)).toEqual(["ping", "get_service", "list_services"]);
+    for (const tool of tools) {
+      expect(tool.annotations, String(tool.name)).toEqual({ readOnlyHint: true });
+      expect(tool.inputSchema, String(tool.name)).toMatchObject({ type: "object", additionalProperties: false });
+      expect(tool.description, String(tool.name)).toMatch(/America\/Mexico_City/);
+    }
+    const [ping, getService, listServices] = tools;
+    expect(ping!.inputSchema).toMatchObject({ properties: {} });
     expect(ping!.title).toMatch(/conexión/i);
-    expect(ping!.description).toMatch(/America\/Mexico_City/);
+    expect(Object.keys((getService!.inputSchema as { properties: object }).properties).sort()).toEqual([
+      "date",
+      "kind",
+      "name",
+      "serviceId",
+    ]);
+    expect(Object.keys((listServices!.inputSchema as { properties: object }).properties)).toEqual(["month"]);
+    for (const tool of [getService!, listServices!]) expect(tool.description).toMatch(/SIN CAMBIOS/);
   });
 
   it("tools/call ping returns { ok, server, version, now } with now in Mexico City time", async () => {
@@ -652,7 +669,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     });
     // The body really moved to the copy: the handler parsed it and answered.
     const result = await rpcResult(await POST(request));
-    expect(result.tools).toHaveLength(1);
+    expect(result.tools).toHaveLength(3);
 
     expect(h.forwarded).toHaveLength(1);
     const forwarded = h.forwarded[0]!;
@@ -773,6 +790,85 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     const token = await accessToken(await liveGrant());
     await rpcResult(await POST(mcpRequest(rpc("tools/call", { name: "ping" }), { token })));
     for (const spy of consoleSpies) expect(spy).not.toHaveBeenCalled();
+  });
+});
+
+// ── the service read tools (P1 step 4) ──────────────────────────────────────
+
+describe("/api/mcp — get_service and list_services, end to end", () => {
+  beforeEach(() => {
+    // 23:30 on 2026-09-30 in Mexico City: already October 1 in UTC.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(FROZEN_EVENING));
+    const responder = scopedResponder(readToolStore());
+    h.operationalFetch.mockImplementation(responder.operational);
+    h.rawFetch.mockImplementation(responder.raw);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    h.operationalFetch.mockReset();
+    h.rawFetch.mockReset();
+  });
+
+  function payloadOf(result: Record<string, unknown>): { text: string; payload: Record<string, unknown> } {
+    expect(result.isError).toBeFalsy();
+    const content = result.content as { type: string; text: string }[];
+    expect(content).toHaveLength(1);
+    const payload = JSON.parse(content[0]!.text) as Record<string, unknown>;
+    expect(result.structuredContent).toEqual(payload);
+    return { text: content[0]!.text, payload };
+  }
+
+  it("tools/call get_service {} answers the next service in Mexico City, drafts included, with its observations", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(
+      await POST(mcpRequest(rpc("tools/call", { name: "get_service", arguments: {} }), { token })),
+    );
+    const { text, payload } = payloadOf(result);
+    expect(payload).toMatchObject({
+      serviceId: "role-sp-0930-a",
+      kind: "special",
+      date: "2026-09-30",
+      name: "Oración",
+      time: "07:00",
+      published: "draft",
+      publishedRaw: false,
+      sameDayOthers: [{ serviceId: "role-sp-0930-b", kind: "special", date: "2026-09-30", name: "Vigilia", time: "21:00" }],
+    });
+    expect(payload.observations).toEqual({
+      roleId: "role-sp-0930-a",
+      roleRev: "role-sp-0930-a-rev",
+      seatItemKeys: { Lead: ["l1"], BGVs: ["b1"], Chorus: [], instruments: [], foh_team: [] },
+      setlist: { state: "single", id: "role-sp-0930-a", rev: "role-sp-0930-a-rev", rowKeys: ["r1"] },
+    });
+    // Names and titles reach a text-only client too.
+    for (const name of ["Ana", "Kiki", "Cuán grande es Él"]) expect(text).toContain(name);
+  });
+
+  it("tools/call list_services {} lists the Mexico City month, not UTC's", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(
+      await POST(mcpRequest(rpc("tools/call", { name: "list_services", arguments: {} }), { token })),
+    );
+    const { payload } = payloadOf(result);
+    expect(payload.month).toBe("2026-09");
+    expect((payload.services as { serviceId: string }[]).map((s) => s.serviceId)).toEqual([
+      "role-sun-0927",
+      "role-sp-0930-a",
+      "role-sp-0930-b",
+    ]);
+  });
+
+  it("refuses an unknown argument to either tool as a tool error (I13)", async () => {
+    const token = await accessToken(await liveGrant());
+    for (const name of ["get_service", "list_services"]) {
+      const result = await rpcResult(
+        await POST(mcpRequest(rpc("tools/call", { name, arguments: { extra: "x" } }), { token })),
+      );
+      expect(result.isError, name).toBe(true);
+    }
+    expect(h.operationalFetch).not.toHaveBeenCalled();
   });
 });
 
