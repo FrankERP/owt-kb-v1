@@ -2,10 +2,10 @@
 
 Artifact: `2026-09-15-solver-pinned-assignments-design.md`
 Skill: `.agents/skills/adversarial-plan-review/` (vendored copy of the canonical skill).
-**Status: open — TEN rounds done, no approval yet. Frank's cap of 10 is reached.** Current
-canonical digest `980bf729…`, commit `2baf458c`. Critical tier needs **two sequential fresh
-`APPROVED` verdicts on byte-identical text**, so the earliest possible completion from here is
-rounds 11 and 12 with no changes between them.
+**Status: closed without approval — THIRTEEN rounds, no `APPROVED` verdict. Implementation
+authorized by Frank on 2026-09-25 regardless** («Arranca la implementación del spec del
+solver»), so the fresh code review of the diff is the load-bearing gate for this delivery. See
+*Rounds 11–13 and the close* at the end. Final spec digest `92058839…`.
 
 ## Risk tier
 
@@ -37,6 +37,9 @@ log.
 | 8 | `23aa1650db99d178…` | (r8 fixes) | CHANGES_REQUIRED | yes — the fairness promise had an undisclosed `fairness_exempt` carve-out |
 | 9 | `5c90b6cc0bd623fe…` | `7ade9b56` | CHANGES_REQUIRED | yes — **the per-role slack was keyed on the wrong axis** |
 | 10 | `9988cfda0c913a86…` | `2baf458c` | CHANGES_REQUIRED | yes, but **editorial only** — stale prose from the round-9 rewrite |
+| 11 | `aaee7843…` | (r11 fixes) | CHANGES_REQUIRED | yes, internal — `violation_ceiling_proven` defined two contradictory ways; the collapse table generalised past the three-seat rows |
+| 12 | `a1d50a39…` | (r12 fixes) | CHANGES_REQUIRED | **yes, a real defect** — the violation-only solve ran after Stage A, so it was redundant when Stage A proved optimality and unsound when it did not |
+| 13 | `aa44b276…` | (r13 fixes) | CHANGES_REQUIRED | yes, internal — round 12's reorder propagated halfway; solve 0's no-solution path unspecified |
 
 ## Round 1 — the share guarantee was a tendency
 
@@ -179,3 +182,30 @@ Frank set the cap at 10 for this loop and it is reached. Ten substantive rounds,
 mechanism or contract defect; round 10 found none — its sole blocker was prose left behind by the
 round-9 rewrite, and every executable claim it checked passed. That is the first round whose
 findings were entirely editorial, and it is the signal that the design has stopped moving.
+
+## Rounds 11–13 and the close
+
+Frank authorized rounds 11 and 12 (2026-09-16, with his ADR-0010 ruling: «Lo que tú
+recomiendes, que mantenga el comportamiento que espero») and then round 13, past his cap of 10.
+
+- **11** — two blockers, both internal: `violation_ceiling_proven` had contradictory normative
+  definitions in §4 and §5.2, and §4's reading would have shipped the false assurance the field
+  exists to prevent on the `stage_a` fall-through; §5.1's collapse table generalised past the
+  three-seat rows, so §7's role-keyed control would not fail on `Sun.Lead`.
+- **12** — **the one genuine defect of the late rounds.** The violation-only solve ran *after*
+  Stage A: provably a no-op when Stage A proved optimality, and unsound when it did not, because
+  it inherited a box that could exclude the real optimum. The ADR-0010 reconciliation Frank had
+  just ruled on rested on it. Fixed by solving for the ceiling FIRST (solve 0), with every later
+  stage constrained. Also: §6 authorised a golden re-capture §7 forbids.
+- **13** — the round-12 reorder applied halfway: three sentences said Stage A carries the
+  ceiling and three said it does not, and solve 0's no-solution path was unimplementable.
+
+Every one of rounds 10–13 re-executed the mechanism against a patched solver and confirmed it;
+what they found was the author's inability to keep a 1,400-line document consistent by hand.
+That was the agreed signal to stop reviewing prose and let code be the source of truth.
+
+**Implementation authorized 2026-09-25 without an `APPROVED` verdict.** Plan:
+`docs/superpowers/plans/2026-09-25-solver-pinned-assignments.md`. The critical-tier bar this log
+could not clear is therefore carried by the diff: a fresh code review on the merge range, a
+scoped re-review of every fix, and the four gates — with the pinless inertness guard frozen from
+the pre-pin code in its own PR (#100), merged first.

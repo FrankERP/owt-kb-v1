@@ -1666,3 +1666,25 @@ calls that a design signal.
   needs the API key — hand Frank the exact command, never handle the value.
 - [ ] **Step 8:** Close the cycle (`finish-cycle`): worklog entries, memory update (instruments
   auto-fill delivery 2 → solver half released; client half next), `git worktree prune`.
+
+---
+
+## Execution record — deviations from the plan above
+
+- **Task 1 — the output golden is platform-scoped.** Measured against the runner's capture
+  (run 36172243640), a Mac (arm64) and the Linux x86_64 runner both prove seed 42 `OPTIMAL`
+  through the same statuses and return schedules differing in 7 of 20 cells. Enforced
+  everywhere, the golden would be red on every developer machine and break the local gate, so
+  `GOLDEN_PLATFORM = ("Linux", "x86_64")` scopes it. The fingerprint was confirmed
+  machine-independent on the runner and runs everywhere.
+- **Task 5 — the no-ceiling honesty test needed every relaxable family.** With solve 0 knocked
+  out, Stage B dropped the Saturday anchor in W2 and W4 (weeks with no pin) and the report named
+  it. The plan's independent evaluator knew only the presence rule; it now checks presence, both
+  mandatory leads and the anchor. This is the §5.2 hazard reproduced, not a defect.
+- **Task 5 — the fall-through test is forced by making every Stage B pass return nothing**,
+  instead of a 1 s total budget whose outcome depended on the runner's speed.
+- **Task 5 Step 6 — solve 0 measured:** `OPTIMAL` on every `CASES` entry × seeds 1/42/2024, a
+  30-pin heavy load and a 52-pin full board, 4–6 ms each (MacBook, 1 worker, 5 s cap). Every
+  case also named exactly its forced instance on all three seeds.
+- **`gmax + 0` serialises identically to `gmax`** — the fingerprint stayed green through Task 4
+  with the unconditional form, as the spec claimed.
