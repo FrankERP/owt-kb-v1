@@ -12,7 +12,12 @@
 
 ## Status and contract
 
-- **Document status:** Approved 2026-09-25 (standard tier, one cold approval on `3fa29c68…`). Not implemented. **Risk tier: STANDARD**. The
+- **Document status:** Approved 2026-09-25 (standard tier, one cold approval on `3fa29c68…`).
+  **Delivery 1 (steps 1–7) is implemented on `claude/mcp-p2-solver-history`** — the derivation,
+  the read builders, the server-side builder and evidence, the admin route, the dormant planner
+  machinery (`SOLVER_HISTORY_SOURCE === "local"`), the diff CLI, and this ADR/docs step. **Step
+  8 (Release Delivery 1: fresh code review, merge to `preview`, PR to `main`) has not run** — the
+  branch is not merged, so production is unchanged. **Risk tier: STANDARD**. The
   roadmap's review handoff says that P2's *spec* is critical, and it is approved, but its
   *implementation plan* is standard. The roadmap gives it no adversarial plan review, but
   Frank asked for one on 2026-09-25, at standard tier: one fresh cold approval. Its log is
@@ -32,8 +37,10 @@
   surface then solves against the same history.
 - **Preconditions:** the spec is approved (met). The roadmap's `P0/P1 ∥ P2` entry needs
   the v2 spec and the roadmap approved (met), plus "P2's own spec and ADR approved". The ADR
-  is written in D1 and merged before the diff (Spec reconciliations). **Frank's go-ahead to implement is not
-  given yet.**
+  is written in D1 (this task, `docs/adr/0041-*.md`) and merged before the diff runs (Spec
+  reconciliations) — it is on this branch, not yet on `main`; R16's precondition is met only
+  once step 8 lands it there. **Implementation has begun**: Delivery 1's steps 1–7 are done on
+  this branch, so Frank's go-ahead to implement was given after this plan's approval.
 - **Safe ending states:** see the delivery table below. Each delivery ends in a safe,
   releasable state. Stopping after Delivery 1 is permanent-safe: the planner behaves
   exactly as today.
@@ -955,5 +962,6 @@ confirmation are human gates B, C and D above. The spec assigns them to him expl
 
 **APPROVED at standard tier**: one fresh cold approval, requested by Frank, on digest `3fa29c68…`
 (round 2). Changes made after that approval are listed as un-reviewed in
-[the review log](2026-09-25-owt-mcp-p2-solver-history-review-log.md). Implementation needs
-Frank's go-ahead.
+[the review log](2026-09-25-owt-mcp-p2-solver-history-review-log.md). **Delivery 1 (steps
+1–7) is implemented** on `claude/mcp-p2-solver-history`; step 8's release (fresh code review,
+merge to `preview`, PR to `main`) has not run.

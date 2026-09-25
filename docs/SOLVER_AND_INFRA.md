@@ -75,6 +75,20 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   visibility only and does not change the objective. The pool ids are filtered by
   live «Tipo» first, the same rule `buildSolveRequest` applies, so a stale tick
   cannot present an unschedulable member as an available lead (ADR-0029).
+- **The history's source is moving, in stages (MCP P2, ADR-0041) — dormant today.** The
+  browser is still the source: `MonthGenerator` reads and writes `owt_solver_history_v2` in
+  `localStorage`, per browser profile, exactly as before. A server-side derivation over
+  canonical `sunday_role`/`saturday_role` documents now exists in parallel
+  (`app/utils/solverHistory.ts`'s `deriveSolverHistory`, loaded by
+  `app/utils/solverHistoryRead.ts`'s `loadSolverHistory` and exposed at
+  `GET /api/admin/solver-history` — see [API_REFERENCE.md](API_REFERENCE.md#solver)) and
+  produces the same entry shape, but it is **not yet used**: the deployment-wide constant
+  `SOLVER_HISTORY_SOURCE` (`app/components/admin/solverHistorySource.ts`) is `"local"`, so
+  every planner path is unchanged. The cutover to `"derived"` is Frank's decision, made after
+  reading the R11 diff report (below); until then, [DATA_MODEL.md](DATA_MODEL.md)'s
+  per-browser note still holds. See
+  [ADR-0041](adr/0041-the-fairness-history-is-derived-from-stored-services.md) and
+  `docs/superpowers/specs/2026-09-23-solver-history-derivation-design.md`.
 
 ### Invocation from Next.js
 `POST /api/admin/solve` (admin/super-admin, `maxDuration=60`):
@@ -268,6 +282,36 @@ Both of the first two are listed by exact `file + operation` in the protected-re
 - `backfill-member-instruments.mjs` — one-shot, dry-run by default, `--apply` with consent:
   derives `teamMembers.instruments` from held `instruments[]` seats. `setIfMissing` +
   `ifRevisionId`, backup to `.backfill-backups/`, closed vocabulary only. **Status:** applied to production 2026-09-10 (10 written; Samy skipped «sin historial»; Francisco Gutierrez listed without Tipo — Frank had already un-typed him; Antonio Navarro then patched by hand to `[Drums, AG]` at Frank's request). Backup in `.backfill-backups/` (gitignored). Idempotent: a re-run writes nothing.
+
+### Solver history diff (MCP P2, Gate B — Frank runs it, never an agent by default)
+- `solver-history-diff.ts` (tsx entry point) + `lib/solverHistoryDiff.ts` / `solverHistoryDiffReport.ts`
+  / `solverHistoryDiffRun.ts` — classifies every difference between Frank's exported
+  `localStorage` history and the derived one (R11, ADR-0041) into `explained` / `unverified` /
+  `bug`, and runs the local solver against both sides for one target month. **Reads only local
+  files, no Sanity client, no network** — the classifier and report modules are pure, verified
+  by a test that walks their import closure. **Refuses any input or output path inside the
+  repository**, resolved through symlinks, before any read or write — exports and derived
+  bundles hold real member names, and this repository is public. Usage:
+
+  ```
+  npx tsx scripts/solver-history-diff.ts \
+    --bundle ~/owt-private/p2-history/bundle-<date>.json [--bundle <another profile's bundle>]… \
+    [--export ~/owt-private/p2-history/export-<browser>-<profile>-<date>.json]… \
+    --solve-request ~/owt-private/p2-history/solve-request-<NEXT>.json \
+    --out ~/owt-private/p2-history [--seed 42] [--runs 2]
+  ```
+
+  Run from the repository root; the first `--bundle` must be the one from the profile that
+  captured `--solve-request` (the consistency check treats that bundle's export as the
+  capture profile). `--runs 0` records the exact request bodies for the production solve route
+  instead of spawning the local solver. Exit codes: `0` a report was written (read its gate
+  line), `2` refused, `1` failed. The export, bundle and report files are never committed —
+  see the P2 plan's Gates A–B
+  (`docs/superpowers/plans/2026-09-25-owt-mcp-p2-solver-history.md`) for the full procedure and
+  where `~/owt-private/p2-history/` comes from. No new environment variable: the runner spawns
+  the local solver through the already-documented `OWT_SOLVER_PYTHON` (§1, "Invocation from
+  Next.js"), and checks its `ortools` version against `gcf/requirements.txt`'s pin before
+  running anything.
 
 ### Accounts / auth
 - `set-password.ts` (tsx) — `MEMBER_ID=… PASSWORD=… npx tsx scripts/set-password.ts` — bcrypt a

@@ -106,6 +106,72 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   leaders to the current Lead; `sortedLeadIds` is the one snapshot-id normalizer shared by
   the outbox queue and flush sides.
 
+### Solver fairness history (MCP P2, dormant — ADR-0041)
+- **`historyWindow(target)`, `DERIVED_HISTORY_ROLE_KEYS`, `deriveSolverHistory({ target, roles,
+  members })`** ([solverHistory.ts](../app/utils/solverHistory.ts)) — the ONE derivation:
+  three calendar months before `target`, oldest first (empty entries allowed), summed from
+  **stored** seats on canonical `sunday_role`/`saturday_role` documents (a `special_role`
+  never counts, ADR-0010 Decision 3). Neutral module, no imports beyond a type-only pull from
+  `plannerModel.ts` and `serviceReadSelect.ts`'s `indexUniqueByKey`/`serviceDayKey` — a source
+  scan pins that. Returns `{ entries, months, diagnostics }`: `diagnostics` reports (never
+  silently drops) a dangling seat reference, an unnamed member, two members sharing one name,
+  and two documents targeting one date — each only when a **counted** window seat is
+  affected. `historyEntryFromDrafts` (`plannerModel.ts`) is the pre-existing, per-browser
+  equivalent this is proven equal to (R12) and will replace at the dual-write stop point.
+- **`SolverHistoryResult`, `SolverHistoryEvidence`, …** ([solverHistoryTypes.ts](../app/utils/solverHistoryTypes.ts))
+  — neutral, type-only exports shared by the loader and its evidence, kept out of
+  `solverHistory.ts` so that module's source never has to name `published`.
+- **`storedRoleCreatePayload`, `documentEvidence`, `outOfWindowReceiptRoleIds`,
+  `buildSolverHistoryEvidence`** ([solverHistoryEvidence.ts](../app/utils/solverHistoryEvidence.ts),
+  `server-only`, pure) — the R11 diff gate's evidence: rebuilds each stored role's creation
+  payload and compares its fingerprint under both `published` values against the matching
+  `roleCreationReceipt`, so a diff can tell "unchanged since creation" from "cannot be proven."
+- **`loadSolverHistory(target, { evidence? })`, `SolverHistoryUnavailableError`**
+  ([solverHistoryRead.ts](../app/utils/solverHistoryRead.ts), `server-only`) — the ONE
+  server-callable builder (R8): reads through `operationalClient` **directly** (never a
+  passed-in client, which the audit could not see), runs the window's role and member reads in
+  parallel, derives, and optionally attaches the evidence above. **Never returns empty entries
+  on a failed read** — it throws a fixed, Sanity-text-free error instead, so a transient read
+  failure can never be mistaken for "this month has no history." This is what
+  `GET /api/admin/solver-history` calls (see [API_REFERENCE.md](API_REFERENCE.md#solver)), and
+  what P4's `solve_month` will call directly later (bearer auth, never the admin route).
+- **`canonicalWeekendRolesInRangeQuery`, `canonicalMemberNamesQuery`,
+  `weekendRoleCreationReceiptsQuery`, `ROLE_CREATION_RECEIPT_EVIDENCE_PROJECTION`** (additions
+  to [serviceReadQueries.ts](../app/utils/serviceReadQueries.ts)) — the three read builders
+  `loadSolverHistory` uses. **No `published` filter on any of them** — a prior month's drafts
+  must count toward fairness (R3) — which is why they carry no `MAY_SEE_DRAFTS` change: the
+  file is already exempt. Purely additive; every prior export is byte-identical.
+- **`SOLVER_HISTORY_SOURCE: "local" | "derived"`**
+  ([solverHistorySource.ts](../app/components/admin/solverHistorySource.ts)) — the
+  deployment-wide cutover switch, one constant in every bundle, shipped `"local"`. Flipping it
+  is Delivery 2, gated on Frank reading the R11 diff report and deciding to cut over (Gate C).
+- **`fetchDerivedHistory(year, month, signal?)`**
+  ([derivedHistoryClient.ts](../app/components/admin/derivedHistoryClient.ts)) — a checked,
+  never-throwing client for the route above: validates the response has exactly three entries
+  matching `historyWindow`, resolves `{ ok: false }` on any failure (including an aborted
+  signal), and is what a hung route cannot leave pending.
+- **`useDerivedSolverHistory(year, month, enabled)`**
+  ([useDerivedSolverHistory.ts](../app/components/admin/useDerivedSolverHistory.ts),
+  `"use client"`) — the display-side load behind the switch: `idle` (switch is `"local"`) /
+  `loading` / `ready{data}` / `error`, plus `reload`. Keyed by `(year, month)` with an
+  `AbortController`, a request counter and a result stored with its own key, so a month switch
+  reads `loading` on the very render that switches rather than showing stale data.
+- **`appendLocalHistoryEntry`** (module-level in `MonthGenerator.tsx`, beside `HISTORY_KEY`) —
+  in derived mode, `handleConfirm` calls this instead of `saveHistoryEntry`. It reads
+  `localStorage` **fresh**, merges the new entry into what is already there, and never touches
+  the `solverHistory` React state — because after cutover that state holds *derived* entries,
+  and R15 requires the rollback target to be built from `localStorage`'s own contents, never
+  from them.
+- The diff tool that consumes all of the above — `scripts/solver-history-diff.ts` +
+  `scripts/lib/solverHistoryDiff.ts` (the pure R11 classifier) — is documented in
+  [SOLVER_AND_INFRA.md §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops), not
+  here, because it is tooling Frank runs by hand, never app code.
+
+**All of the above ships dormant.** Every existing planner path (`MonthGenerator`,
+`LeadPoolHistoryPanel`, `PlannerGrid`'s Historial diagnostics) behaves exactly as before while
+`SOLVER_HISTORY_SOURCE === "local"`; the new machinery only activates once Frank flips the
+switch. See [ADR-0041](adr/0041-the-fairness-history-is-derived-from-stored-services.md).
+
 ### Dates & schedule
 - **`daysUntil(dateStr, now?)`**, **`formatCountdown(days)`** ([daysUntil.ts](../app/utils/daysUntil.ts))
   — the service countdown, in a neutral module with no imports/hooks so a Server Component may

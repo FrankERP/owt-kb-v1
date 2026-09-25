@@ -92,3 +92,15 @@ These are the round-2 non-blocking items, all adopted:
   the repository, and Frank running the diff CLI himself.
 - **Gates A–D**: the export, the diff, the verdicts and cutover, and the stop point.
 - **The objective-skip frequency narrowing**, decided at Gate C.
+
+## 2026-09-25 — R17 known-limitation note (task 7, Delivery 1 docs step)
+
+Recorded here per R16/R17 and plan step 7, alongside the same note in the spec's own review
+log: the derived history influences the schedule the solver produces only when the fairness
+objective is not skipped. ADR-0038 shows most real months with history already run
+unoptimised (`objective_skipped: true`) on `main`, before this change, because the ladder's
+weights overflow CP-SAT's integer ceiling once history offsets are added. Fixing that ceiling
+is separate follow-on work, tracked as **issue #94** ("Solver: the fairness objective is
+skipped in most real months, so history has no effect"), OPEN, out of scope for P2 by Frank's
+decision of 2026-09-23. **ADR-0041** (new, this task) records the same limitation as one of
+its Consequences. This is a documentation note only — no plan text is edited by it.
