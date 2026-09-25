@@ -1673,7 +1673,7 @@ calls that a design signal.
 
 - **Task 1 — the output golden is platform-scoped.** Measured against the runner's capture
   (run 36172243640), a Mac (arm64) and the Linux x86_64 runner both prove seed 42 `OPTIMAL`
-  through the same statuses and return schedules differing in 7 of 20 cells. Enforced
+  through the same statuses and return schedules differing in 7 of 16 role cells. Enforced
   everywhere, the golden would be red on every developer machine and break the local gate, so
   `GOLDEN_PLATFORM = ("Linux", "x86_64")` scopes it. The fingerprint was confirmed
   machine-independent on the runner and runs everywhere.
@@ -1696,3 +1696,12 @@ calls that a design signal.
   documented remedy cannot cut the ladder. The pin branch then tightened the inert-fields test
   to REQUIRE `pinned_honored`, amended spec §7 with an as-built box, and raised the CI job
   timeout from 15 to 25 minutes (the job ran ~11.5 with the pin suite).
+- **The "capped short" ceiling cases patch the solver status** (`cp_model.UNKNOWN`, or `OPTIMAL`
+  reported as `FEASIBLE`) instead of capping the wall clock, so they reach the regime on any
+  machine rather than only on a slow one.
+- **The full diff review (7e50f0b5) changed three contracts, each by Frank's decision:** Stage A's
+  violation count caps Stage B when solve 0 left no ceiling or a slack one; Stage A is hinted with
+  solve 0's month; a pinned name with surrounding spaces, or a pinned-only name that differs from
+  another only in capitalisation, is refused. The spec carries as-built boxes for each. The
+  review's LOW on the `Gaby Sun.BGV == 2` observation became an `>= 2` assertion (it drifted to 3
+  at 1 s per solve), and the consecutive same-weekend double is documented rather than changed.

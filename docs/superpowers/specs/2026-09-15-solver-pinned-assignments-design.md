@@ -179,6 +179,14 @@ nothing in the client spec, may spell a marker differently; both cite here.
 | Mandatory lead | `builtin:mandatory_lead:W<n>:<Sun\|Sat>` |
 | Saturday anchor | `builtin:sat_anchor:W<n>` |
 
+> **As built (2026-09-25), a consecutive-rule quirk worth knowing before writing copy.** A
+> consecutive instance sums the person's matching roles across BOTH weeks of the pair, both
+> services included — the rule's existing hard form already forbids leading Sunday and Saturday
+> of the same weekend. So pinning `Rachel` into `Sun.Lead` and `Sat.Lead` of W2 under `Rachel
+> !consecutive on *.Lead` reports `W1-2 Rachel: …` and `W2-3 Rachel: …` although she leads in
+> neither W1 nor W3. The entries are accurate about the model; the client's copy should not read
+> them as "two consecutive weeks". The rule itself is unchanged.
+
 **The service token is `Sun` / `Sat`, not `Sunday` / `Saturday`** — because it must match the
 `pinned.role` field this same contract defines (`Sun.Lead`, `Sat.BGV`), which is the identifier a
 reader of a `pin_violations` entry will compare it against. **The response is not uniform and
@@ -690,6 +698,19 @@ status that is not `OPTIMAL` or `FEASIBLE` (`:976-977`), and `solve_time()` floo
 `violation_ceiling_proven` is `false`. Written out because it is the path that decides whether
 the ADR-0010 guarantee holds for that month, and an implementer must not have to invent it.
 
+> **As built — amended 2026-09-25 by Frank's decision on the solver PR's code review; supersedes
+> the paragraph above.** "No stage carries a ceiling" was measured to break the ADR-0010
+> guarantee: with solve 0 forced to return nothing, Stage A still needed one violation, and
+> Stage B then returned months breaking three or four rules in weeks nobody pinned. So **Stage
+> A's own violation count becomes the ceiling for every Stage B pass** whenever it is lower than
+> solve 0's, or solve 0 set none. It cannot make a pass infeasible — Stage A's solution meets
+> both `weighted_empty <= empty_target` and that count — and it also tightens a slack ceiling
+> from a `FEASIBLE` solve 0. `violation_ceiling_proven` still reports **solve 0 alone**. Second
+> amendment, same review: **Stage A starts from solve 0's month as a search hint** when solve 0
+> returned one. A board with dozens of pinned people in one row timed Stage A out and came back
+> `ok: false` with the mandatory-lead diagnostic — the wrong cause; with the hint it returns.
+> A hint constrains nothing.
+
 **Solve 0 does not run when there are no pins** — `soft` is false, there are no violation
 booleans, and a stray extra solve on the pinless path would consume budget invisibly to both of
 §7's guards (the fingerprint is captured before any solve; the output golden runs only on
@@ -766,6 +787,11 @@ Evaluating against the assignment does not prevent that; it makes it **honest**.
 a notice for every rule that actually gave, and never one for a rule that held. §7 asserts both
 directions on a fixture where the solve is capped short enough to leave the ceiling slack — a
 guard that a fast CI machine would otherwise pass vacuously.
+
+> **Superseded in part (as built, 2026-09-25):** no "is this the `stage_a` fall-through" flag
+> exists or is needed — §4 and the ordering above make `violation_ceiling_proven` depend on solve
+> 0 alone. What the paragraph below still gets right is that the three fields travel through
+> `SolveResult` into `solve_from_dict`'s response dict.
 
 **Two plumbing facts the prose implied without stating.** `SolveResult` gains the Stage A
 violation count **and each solve's status** (Stage A's and the violation-only solve's) —
@@ -1025,6 +1051,12 @@ shift is invisible — but the count per row changes, and the tests pin that.
   caller can allocate. Recorded here so the next
   person to see an unexplained fairness result on a five-week month has the thread. The pools are unbounded today for the same reason and
   that is pre-existing; this spec does not widen it further.
+- **As built (2026-09-25): a misspelt name is refused.** A pinned name with leading or trailing
+  spaces, or a pinned-only name that differs from another name only in capitalisation (`hugo`
+  beside `Hugo`), is a `ValueError`. Reproduced in review: `" Hugo"` sat as a second person in a
+  second seat of one service, and `hugo` beside `Hugo !in Sat.*` took Hugo's rule on 3 of 8
+  `PYTHONHASHSEED` values, because `parse_dsl_rules` resolves names case-insensitively over a
+  set. Refused rather than silently mapped, so a client bug surfaces.
 - **A `pinned` entry naming an unknown `role`** is refused with a `ValueError` naming it. The
   typed client cannot produce one, but the route validates only `sunday_leads?.length`
   (`app/api/admin/solve/route.ts:129-131`) and the function is a public HTTP endpoint behind an

@@ -11,8 +11,8 @@ collision is guaranteed: availability compiles to a hard `!in week n` rule while
 an admin seat that person anyway.
 
 The design went through 24 adversarial review rounds (11 on a combined spec, 13 on the solver
-half), and **every design rejected below was killed by executing it against the real solver**,
-not by argument. Spec: `docs/superpowers/specs/2026-09-15-solver-pinned-assignments-design.md`.
+half). **Rejections 1–6 below were each killed by executing the design against the real
+solver**, not by argument; rejection 7 is Frank's ruling on E3. Spec: `docs/superpowers/specs/2026-09-15-solver-pinned-assignments-design.md`.
 
 ## Decision
 
@@ -69,6 +69,10 @@ not by argument. Spec: `docs/superpowers/specs/2026-09-15-solver-pinned-assignme
   relaxation, «que mantenga el comportamiento que espero»). His requirement was that a rule is
   never traded for fairness. Solve 0 fixes the NUMBER of rules set aside before any fairness
   term exists, and it is a constraint thereafter: the count is never increased for fairness.
+  That holds even when solve 0 finds nothing in time: Stage A's own count then becomes Stage B's
+  ceiling (added by Frank's decision on the code review, 2026-09-25, after a measured case where
+  Stage B otherwise broke three or four rules in weeks nobody pinned). Only solve 0 can report
+  the count as proven minimal, through `violation_ceiling_proven`.
   What fairness still decides is **which** instance gives among sets of the same minimal size —
   possibly one in a week with no pin. Stated, not fixed: pinning identity needs a ceiling per
   instance and buys nothing an admin can act on.

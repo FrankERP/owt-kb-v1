@@ -332,6 +332,11 @@ def parse_pins(raw, weeks: int, weekends_w_sat: Sequence[int]) -> List[Pin]:
                 f"pinned[{i}] names an unknown role {role!r}; roles are {ROLE_ORDER}.")
         if not isinstance(person, str) or not person.strip():
             raise ValueError(f"pinned[{i}].person must be a non-empty name, got {person!r}.")
+        if person != person.strip():
+            # " Hugo" would become a second person beside "Hugo" and could take a
+            # second seat in the same service. Names arrive resolved; refuse, never trim.
+            raise ValueError(
+                f"pinned[{i}].person {person!r} has leading or trailing spaces.")
         if not 1 <= week <= weeks:
             raise ValueError(
                 f"pinned[{i}] references week {week}, but the month has {weeks} weeks.")
@@ -604,6 +609,19 @@ def validate_config(
     pins = parse_pins(config.pinned, config.weeks, config.weekends_w_sat)
     pinned_only = {p for p, _, _ in pins} - set(all_people)
     if pinned_only:
+        # A pinned-only name that differs from another name only in capitalisation is a
+        # misspelling, not a new person: it would sit beside the real one, and
+        # parse_dsl_rules' case-insensitive lookup would then attach that person's rules
+        # to either spelling depending on set iteration order — which varies between
+        # processes. Refused, never silently mapped.
+        spellings: Dict[str, List[str]] = defaultdict(list)
+        for name in sorted(set(all_people) | pinned_only):
+            spellings[name.lower()].append(name)
+        for names in spellings.values():
+            if len(names) > 1 and any(n in pinned_only for n in names):
+                raise ValueError(
+                    f"pinned names {names} differ only in capitalisation; pins must use "
+                    "the member's exact name.")
         all_people = sorted(set(all_people) | pinned_only)
 
     # After the union, so a DSL clause may name a pinned-only person and both
@@ -864,6 +882,7 @@ def create_model_and_solve(
     soft: bool = False,
     violation_objective_only: bool = False,
     violation_target: int | None = None,
+    hint: Dict[str, List[Slot]] | None = None,
 ) -> SolveResult | None:
     """
     Build and solve one pass. Returns None on any status but OPTIMAL/FEASIBLE.
@@ -905,6 +924,14 @@ def create_model_and_solve(
         filled[slot.key] = f
 
     pin_set = set(pins)
+    if hint is not None:
+        # Start from a month already known to be legal (solve 0's, under pins). Without
+        # it, a board with dozens of pinned people in one row timed Stage A out, and the
+        # month came back ok:false with the mandatory-lead diagnostic — the wrong cause.
+        # A hint steers the search; it constrains nothing.
+        hinted = {(person, s.key) for person, held in hint.items() for s in held}
+        for key, var in x.items():
+            model.AddHint(var, 1 if key in hinted else 0)
     # A pin is a fixed variable, not a removed seat (pinned-assignments spec §5): every
     # mechanism below that counts people or iterates slots — totals, role counts, DSL
     # caps, the Saturday anchor, weekly presence, `filled`, occupancy, the consecutive
@@ -1548,6 +1575,7 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
     # fairness. (Which instance gives, among sets of the same minimal size, still is.)
     violation_target: int | None = None
     ceiling_proven: bool | None = None
+    solve0: SolveResult | None = None
     if common["soft"]:
         solve0_info: Dict[str, object] = {}
         solve0 = create_model_and_solve(
@@ -1557,7 +1585,7 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
         )
         # A FEASIBLE solve 0 still sets a ceiling, possibly with slack; only OPTIMAL
         # proves it minimal. No solution at all — reachable at 1 s on the production
-        # container — leaves no ceiling anywhere, and the month still comes back.
+        # container — leaves Stage A without a ceiling; Stage B still gets one, below.
         if solve0 is not None:
             violation_target = solve0.violations_used
         ceiling_proven = solve0_info.get("status") == cp_model.OPTIMAL
@@ -1573,6 +1601,7 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
     stage_a = create_model_and_solve(
         **common, fairness_limit=big, sun_lead_limit=big, sun_bgv_limit=big,
         optimize=False, empty_objective_only=True, max_time_override=solve_time(),
+        hint=solve0.assignments if common["soft"] and solve0 is not None else None,
     )
     if stage_a is None:
         # The only true infeasibility: a service can't field its mandatory lead
@@ -1580,6 +1609,16 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
         raise RuntimeError(
             diagnose_infeasibility(config, slots, week_exclusions, pools, forbidden))
     empty_target = stage_a.weighted_empty_used
+
+    # Stage A's own count is a valid ceiling too: its solution meets both
+    # weighted_empty <= empty_target and n_viol <= its count, so it can never make a
+    # Stage B pass infeasible. It matters when solve 0 left no ceiling (or a slack one):
+    # measured, Stage B then broke three or four rules in weeks nobody pinned while
+    # Stage A had needed one — exactly what ADR-0010 forbids. violation_ceiling_proven
+    # still reports solve 0 alone: Stage A's count is minimal only if Stage A proved it.
+    if common["soft"] and stage_a.violations_used is not None and (
+            violation_target is None or stage_a.violations_used < violation_target):
+        common["violation_target"] = stage_a.violations_used
 
     # Stage B: among the max-fill solutions, optimize fairness via the relaxation
     # loop (Sun.Lead → Sun.BGV → global). empty_target keeps the fill maximal.

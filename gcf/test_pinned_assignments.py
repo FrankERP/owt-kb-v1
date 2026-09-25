@@ -111,6 +111,19 @@ class RequestValidation(unittest.TestCase):
         pins = [pin(f"P{i}", "Sun.Choir", 1) for i in range(mod.PINNED_CAP)]
         self.assertEqual(len(mod.parse_pins(pins, 4, [1, 2, 3, 4])), mod.PINNED_CAP)
 
+    def test_a_name_with_surrounding_spaces_is_refused(self):
+        self.assertIn("spaces", self.refused([pin(" Hugo", "Sun.BGV", 1)]))
+
+    def test_a_misspelt_pool_name_is_refused(self):
+        """'hugo' beside 'Hugo' is a misspelling, not a new person: it would sit beside the
+        real one and could inherit his rules depending on hash order."""
+        err = self.refused([pin("hugo", "Sun.BGV", 1)], dsl_rules=["Hugo !in Sat.*"])
+        self.assertIn("capitalisation", err)
+
+    def test_two_pinned_only_spellings_are_refused(self):
+        err = self.refused([pin("Zoe", "Sun.Choir", 1), pin("zoe", "Sun.Choir", 2)])
+        self.assertIn("capitalisation", err)
+
     def test_unknown_role(self):
         self.assertIn("Sun.Coro", self.refused([pin("Hugo", "Sun.Coro", 1)]))
 
@@ -489,13 +502,17 @@ class PinsBeatRules(unittest.TestCase):
                 if label == "cap":
                     self.assertLessEqual(res["role_counts"]["Gaby"]["Sun.BGV"], 2)
 
-    def test_observation_two_pins_on_a_cap_of_one_give_exactly_two_not_a_bound(self):
-        """An OBSERVATION of the objective, not a property of the model (§5.2): the relaxed
-        cap stops binding and the per-role spread term is what holds Gaby at her pins."""
+    def test_a_relaxed_cap_is_reported_and_the_pins_still_count(self):
+        """
+        The cap stops binding once relaxed (§5.2). What Gaby then gets is the objective's
+        doing, not the model's: measured exactly her two pins at 2 s and 5 s, but 3 on two
+        of four seeds at 1 s per solve — so this asserts only what the model guarantees,
+        never the number, or a loaded runner reddens the required gate for no code reason.
+        """
         res = solve_from_dict(fixture(rules=["Gaby Sun.BGV <= 1"],
                                       pinned=[pin("Gaby", "Sun.BGV", 1), pin("Gaby", "Sun.BGV", 2)]))
         self.assertEqual(res["pin_violations"], ["Gaby: Gaby Sun.BGV <= 1"])
-        self.assertEqual(res["role_counts"]["Gaby"]["Sun.BGV"], 2)
+        self.assertGreaterEqual(res["role_counts"]["Gaby"]["Sun.BGV"], 2)
 
 
 def occupancy_case_failures(res):
@@ -546,15 +563,44 @@ class ViolationCeiling(unittest.TestCase):
         self.assertLessEqual(len(res["pin_violations"]), solve0.violations_used)
         self.assertTrue(res["violation_ceiling_proven"])
 
-    def test_no_solution_from_solve_zero_means_no_ceiling_and_an_honest_report(self):
-        """The regime a slow container reaches: nothing bounds the stages, so the report is
-        all that is left — every entry must be a real failure and every failure an entry."""
+    def test_no_solution_from_solve_zero_falls_back_to_stage_a_as_the_ceiling(self):
+        """
+        The regime a slow container reaches: solve 0 comes back with nothing, so Stage A
+        runs without a ceiling — and Stage A's own count becomes the ceiling for Stage B.
+        Without that fallback Stage B broke three or four rules in weeks nobody pinned
+        (measured on three seeds) while Stage A had needed one: what ADR-0010 forbids.
+        """
         self.patch_first_solve(lambda original, s, m: cp_model.UNKNOWN)
         res, _result, seen = instrumented(occupancy_case()[0])
         self.assertTrue(res["ok"], res.get("error"))
-        self.assertFalse(res["violation_ceiling_proven"])
-        for kwargs, _ in seen[1:]:
-            self.assertIsNone(kwargs.get("violation_target"))
+        self.assertFalse(res["violation_ceiling_proven"], "only solve 0 can prove the ceiling")
+        stage_a = [(k, r) for k, r in seen if k.get("empty_objective_only")]
+        self.assertEqual(len(stage_a), 1)
+        self.assertIsNone(stage_a[0][0].get("violation_target"))
+        self.assertIsNone(stage_a[0][0].get("hint"), "no solve 0 month, so no hint")
+        for kwargs, _ in seen:
+            if not kwargs.get("empty_objective_only") and not kwargs.get("violation_objective_only"):
+                self.assertEqual(kwargs.get("violation_target"), stage_a[0][1].violations_used)
+        self.assertEqual(res["pin_violations"], ["W3: any_of(Hugo,Jakey) on Sun.BGV each_week"])
+
+    def test_the_report_is_honest_even_with_no_ceiling_at_all(self):
+        """
+        The booleans are one-directional, so the report is re-evaluated against the
+        returned assignment. With every ceiling stripped, Stage B does break instances
+        nobody pinned (the Saturday anchor, measured) — and every entry must then be a
+        real failure and every failure an entry.
+        """
+        original = mod.create_model_and_solve
+
+        def no_ceiling(**kwargs):
+            kwargs["violation_target"] = None
+            return original(**kwargs)
+
+        self.patch_first_solve(lambda orig, s, m: cp_model.UNKNOWN)
+        mod.create_model_and_solve = no_ceiling
+        self.addCleanup(setattr, mod, "create_model_and_solve", original)
+        res, _result, _seen = instrumented(occupancy_case()[0])
+        self.assertTrue(res["ok"], res.get("error"))
         self.assertEqual(set(res["pin_violations"]), occupancy_case_failures(res))
         self.assertIn("W3: any_of(Hugo,Jakey) on Sun.BGV each_week", res["pin_violations"])
 
@@ -568,6 +614,28 @@ class ViolationCeiling(unittest.TestCase):
         self.assertFalse(res["violation_ceiling_proven"])
         for kwargs, _ in seen[1:]:
             self.assertEqual(kwargs.get("violation_target"), 1)
+
+    def test_stage_a_starts_from_solve_zeros_month(self):
+        res, _result, seen = instrumented(occupancy_case()[0])
+        solve0 = seen[0][1]
+        stage_a = [k for k, _ in seen if k.get("empty_objective_only")][0]
+        self.assertEqual(stage_a.get("hint"), solve0.assignments)
+        for kwargs, _ in seen:
+            if not kwargs.get("empty_objective_only"):
+                self.assertIsNone(kwargs.get("hint"), "only Stage A is hinted")
+
+    def test_a_crowded_row_still_returns_a_month(self):
+        """
+        64 pinned people outside every pool in one row: without the hint Stage A timed out
+        and the month came back ok:false with the mandatory-lead diagnostic — the wrong
+        cause (1 s and 2 s per solve, measured). Short per-solve limits keep the test fast;
+        a slower runner can only make the unhinted failure more certain.
+        """
+        data = fixture(pinned=[pin(f"Z{i}", "Sun.Choir", 1) for i in range(64)],
+                       solver_max_time_seconds=2, solver_total_budget_seconds=20)
+        res = solve_from_dict(data)
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["pinned_honored"], 64)
 
     def test_the_stage_a_fall_through_carries_the_ceiling(self):
         """

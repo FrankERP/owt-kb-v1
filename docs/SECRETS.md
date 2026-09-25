@@ -482,9 +482,63 @@ suspect a missing secret.
   characters (`"local"` when the variable is absent), so Frank can tell from the phone which
   deployment answered a `ping` call. Not sensitive — the repository is public.
 
+## `OWT_SOLVER_API_KEY` (Secret Manager: `owt-solver-api-key`)
+
+**Needed in: Vercel Preview AND Production (the SAME value — both environments call the one
+Cloud Function) and GCP Secret Manager `owt-solver-api-key` (project `eloquent-figure-421401`).
+Not needed in:** `.env.local` (with `OWT_SOLVER_URL` unset, local dev spawns
+`gcf/owt_solver_v2.py` directly and no key is involved), GitHub Actions, the iOS build.
+`OWT_SOLVER_URL`, its companion, is ordinary config (Vercel Preview and Production), not a
+secret.
+
+| Platform | Role |
+|---|---|
+| Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header |
+| Secret Manager `owt-solver-api-key` | Cloud Build deploys the function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest` (`cloudbuild.yaml`, and `scripts/deploy-solver-gcf.sh` for a manual deploy) |
+
+**Purpose.** The only barrier on a publicly invokable function (`allUsers` holds
+`run.invoker`). Without it on the function, `gcf/main.py` answers **503** to every call (fails
+closed); with a value that differs from Vercel's, **401** — either way «Generar mes» fails with
+"Solver service returned HTTP …" in both environments.
+
+**Where the value came from.** Set when the function moved to GitHub continuous deployment
+(2026-06-30); no external issuer, so any high-entropy string works — `openssl rand -hex 32`.
+
+**How to rotate** (from a checkout linked to `owt-backstage`, with `gcloud` on the solver
+project; the value never reaches a terminal, a file, or `gcloud`'s logs):
+
+1. Write both stores in one command:
+   ```bash
+   SECRET=$(openssl rand -hex 32) && \
+     printf '%s' "$SECRET" | CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true \
+       gcloud secrets versions add owt-solver-api-key --data-file=- --format="value(name)" && \
+     npx vercel env rm OWT_SOLVER_API_KEY production && \
+     printf '%s' "$SECRET" | npx vercel env add OWT_SOLVER_API_KEY production && \
+     npx vercel env rm OWT_SOLVER_API_KEY preview && \
+     printf '%s' "$SECRET" | npx vercel env add OWT_SOLVER_API_KEY preview && \
+     unset SECRET
+   ```
+2. **Redeploy the function.** `gcf/main.py` reads the key once, at import, and `:latest` is
+   resolved when an instance starts — a running revision keeps the old key. Re-run the Cloud
+   Build trigger `owt-solver-deploy` on `main` (console → Cloud Build → Triggers → Run), or
+   `bash scripts/deploy-solver-gcf.sh`.
+3. **Redeploy Vercel Production and Preview** straight after: env vars bind at build time
+   (dashboard → Deployments → ⋯ → Redeploy on the current production deployment and on the
+   current `preview` one).
+4. Verify with the smoke request in `docs/SOLVER_AND_INFRA.md` ("Verifying a Cloud Function
+   deploy"), which reads the new value from Secret Manager — then one «Generar mes» on dev.
+
+**Blast radius of rotation.** From the moment the new function revision serves until each
+Vercel environment's redeploy completes, that environment presents the old key and every
+«Generar mes» fails with HTTP 401. Nothing is written — Auto only proposes; «Guardar» writes —
+so the cost is a few minutes of Auto unavailable in both environments. Keep the window to one
+deploy each by running steps 2 and 3 back to back.
+
+---
+
 ## Not yet documented
 
-Other variables in use — `NEXTAUTH_*`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
+Other variables in use — `NEXTAUTH_*`, `EMAIL_ALLOWLIST`, FCM push credentials — predate this file. Add each one here as it is next touched or rotated.
 
 Notification-outbox tuning knobs (`NOTIFY_DEBOUNCE_MINUTES`, `NOTIFY_MAX_WINDOW_MINUTES`, `NOTIFY_CLAIM_TTL_MINUTES`, `NOTIFY_SEND_BUDGET_MS`, `NOTIFY_FLUSH_EMAIL_LIMIT`, `NOTIFY_STALE_ALERT_HOURS`) are configuration, not secrets, and all have code defaults. They are specified in `docs/superpowers/specs/2026-07-27-service-notification-emails-design.md` §9. Two are currently overridden in Vercel and recorded in this file: `NOTIFY_FLUSH_EMAIL_LIMIT` (above) and `NOTIFY_DEBOUNCE_MINUTES` (below).
 
