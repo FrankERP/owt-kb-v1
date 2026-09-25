@@ -13,7 +13,11 @@
 //   · any throw from the builder — `SolverHistoryUnavailableError` or anything
 //     else — comes back as the SAME opaque `500`, with no `entries` key (so a
 //     client can never read a failure as an empty history) and nothing from
-//     the original error.
+//     the original error;
+//   · but the SERVER LOG is not opaque: an already-logged `SolverHistoryUnavailableError`
+//     (logged upstream in `solverHistoryRead.ts`'s `readList`) is not logged
+//     again here, while anything else that reaches this route's `catch`
+//     UNLOGGED gets a `console.error` — fix round 1, Important 1.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
@@ -36,6 +40,19 @@ import { GET } from "@/app/api/admin/solver-history/route";
 
 function req(url: string): NextRequest {
   return { nextUrl: new URL(url, "http://localhost") } as unknown as NextRequest;
+}
+
+/**
+ * Mirrors `solverHistoryRead.ts`'s real `SolverHistoryUnavailableError` by
+ * NAME only. The route discriminates the already-logged failure path by
+ * `err.name`, not `instanceof` — so this stand-in is enough, and the mocked
+ * `@/app/utils/solverHistoryRead` module never has to export the real class.
+ */
+class SolverHistoryUnavailableErrorStandIn extends Error {
+  constructor() {
+    super("No se pudo leer el historial de equidad.");
+    this.name = "SolverHistoryUnavailableError";
+  }
 }
 
 /** A plausible builder result: three entries, oldest first, no evidence. */
@@ -173,7 +190,7 @@ describe("200 — the shape", () => {
 
 describe("500 — the builder threw", () => {
   it("SolverHistoryUnavailableError becomes an opaque 500 with no entries key", async () => {
-    h.loadSolverHistory.mockRejectedValue(new Error("history unavailable"));
+    h.loadSolverHistory.mockRejectedValue(new SolverHistoryUnavailableErrorStandIn());
     const res = await GET(req("/api/admin/solver-history?month=2026-11"));
     expect(res.status).toBe(500);
     const body = await res.json();
@@ -192,5 +209,48 @@ describe("500 — the builder threw", () => {
     expect(body.message).toBe("No se pudo leer el historial de equidad.");
     expect(JSON.stringify(body)).not.toContain("historyWindow");
     expect(body).not.toHaveProperty("entries");
+  });
+});
+
+describe("500 — server-side logging", () => {
+  // `readList` (`solverHistoryRead.ts`) already logs a rejected Sanity read
+  // before throwing `SolverHistoryUnavailableError` — logging it again here
+  // would just duplicate that line. Anything else reaches this route's
+  // `catch` UNLOGGED, and swallowing it silently is the exact shape
+  // `solver-config/route.ts`'s POST handler comment condemns. Both cases
+  // must leave the HTTP response byte-identical.
+
+  it("does NOT log again for the already-logged SolverHistoryUnavailableError, and the response is unchanged", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    h.loadSolverHistory.mockRejectedValue(new SolverHistoryUnavailableErrorStandIn());
+
+    const res = await GET(req("/api/admin/solver-history?month=2026-11"));
+
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      error: "history_unavailable",
+      message: "No se pudo leer el historial de equidad.",
+    });
+    expect(errorSpy).not.toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+  });
+
+  it("logs an unexpected failure that reached this catch UNLOGGED, without changing the response", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const bug = new TypeError("deriveSolverHistory: cannot read seats of undefined");
+    h.loadSolverHistory.mockRejectedValue(bug);
+
+    const res = await GET(req("/api/admin/solver-history?month=2026-11"));
+
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      error: "history_unavailable",
+      message: "No se pudo leer el historial de equidad.",
+    });
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0]).toContain(bug);
+
+    errorSpy.mockRestore();
   });
 });

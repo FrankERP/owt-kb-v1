@@ -22,13 +22,24 @@ import { loadSolverHistory, SOLVER_HISTORY_UNAVAILABLE_MESSAGE } from "@/app/uti
  * names only members seated in the window's weekend roles (the builder's own
  * scoped diagnostics) — Gate B's only user is Frank, a super-admin.
  *
- * ─── Failure is opaque, on purpose ────────────────────────────────────────
+ * ─── Failure is opaque to the CLIENT, never silent on the SERVER ─────────
  *
  * `loadSolverHistory` throws `SolverHistoryUnavailableError` — a fixed
  * message, no Sanity text — on any failed read, and never returns empty
- * `entries` in place of one. This route does not distinguish that error from
- * any other throw: EVERY throw becomes the same `500`, with NO `entries`
- * key, so a client can never mistake a failed read for an empty history.
+ * `entries` in place of one. The HTTP RESPONSE does not distinguish that
+ * error from any other throw: EVERY throw becomes the same `500`, with NO
+ * `entries` key, so a client can never mistake a failed read for an empty
+ * history. But the SERVER LOG does distinguish them: `readList` in
+ * `solverHistoryRead.ts` already logs a rejected Sanity read before it
+ * throws `SolverHistoryUnavailableError`, so that path leaves a trace. A bug
+ * in `deriveSolverHistory`/`buildSolverHistoryEvidence`, or a serialization
+ * failure, would otherwise reach this `catch` and vanish — Vercel's logs
+ * showing nothing for a request the client saw fail. That is exactly the
+ * shape `solver-config/route.ts`'s POST handler condemns ("the real cause
+ * swallowed by a `catch` that did not even log it"), so this route logs
+ * anything that is not already logged upstream. The check is by `err.name`,
+ * not `instanceof` — the class stays an implementation detail of
+ * `solverHistoryRead.ts` and a test double never has to reproduce it.
  */
 
 export const dynamic = "force-dynamic";
@@ -63,10 +74,16 @@ export async function GET(req: NextRequest) {
   try {
     const result = await loadSolverHistory(target, { evidence: evidenceRequested });
     return NextResponse.json(result, { status: 200, headers: { "Cache-Control": "no-store" } });
-  } catch {
-    // Any throw — `SolverHistoryUnavailableError` or anything else — is the
-    // SAME opaque response. See the header: never leak internals, never carry
-    // an `entries` key a client could read as "an empty history".
+  } catch (err) {
+    // The RESPONSE is the same opaque `500` whatever threw (see the header):
+    // never leak internals, never carry an `entries` key a client could read
+    // as "an empty history". The SERVER LOG is not — `SolverHistoryUnavailableError`
+    // is already logged inside `readList` (`solverHistoryRead.ts`), so logging
+    // it again here would just duplicate that line; anything else reached this
+    // `catch` UNLOGGED and must not vanish silently.
+    if (!(err instanceof Error) || err.name !== "SolverHistoryUnavailableError") {
+      console.error("[solver-history route] unexpected failure reading solver history:", err);
+    }
     return NextResponse.json(
       { error: "history_unavailable", message: SOLVER_HISTORY_UNAVAILABLE_MESSAGE },
       { status: 500 },
