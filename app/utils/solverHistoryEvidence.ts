@@ -351,6 +351,7 @@ export function buildSolverHistoryEvidence(input: {
         targetDay: day,
         createdAt: stringOrNull(receipt.createdAt),
         roleId,
+        roleFound: now !== undefined,
         roleCurrentDay: now ? storedRoleDate(now) : null,
       };
     })

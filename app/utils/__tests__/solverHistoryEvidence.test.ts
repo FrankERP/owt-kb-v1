@@ -445,6 +445,7 @@ describe("buildSolverHistoryEvidence", () => {
         targetDay: "2026-09-20",
         createdAt: "2026-08-28T10:05:00.000Z",
         roleId: s.deleted.row._id,
+        roleFound: false,
         roleCurrentDay: null,
       },
       {
@@ -454,6 +455,7 @@ describe("buildSolverHistoryEvidence", () => {
         targetDay: "2026-10-11",
         createdAt: "2026-09-28T10:15:00.000Z",
         roleId: s.movedOut.row._id,
+        roleFound: true,
         roleCurrentDay: "2026-11-08",
       },
     ]);
@@ -464,6 +466,23 @@ describe("buildSolverHistoryEvidence", () => {
     // Found receipts: aug, sepSat, dupA, dupB, octSat, movedIn, badWeek = 7; unchanged: aug, sepSat, dupA, dupB = 4.
     // `stampedOnly` is unchanged too, but by its own stamp: it is not in the rate.
     expect(ev.control).toEqual({ withReceipt: 7, unchanged: 4 });
+  });
+
+  it("roleFound — not roleCurrentDay — tells a deleted role from one that moved to a day that is not a day", () => {
+    const s = scenario();
+    const derived = deriveSolverHistory({ target: TARGET, roles: s.roles, members: s.members });
+    const base = { target: TARGET, roles: s.roles, members: s.members, receipts: s.receipts, derived };
+    const record = (lookedUpRoles: unknown[]) =>
+      buildSolverHistoryEvidence({ ...base, lookedUpRoles }).outOfWindowReceipts.find((r) => r.roleId === s.movedOut.row._id);
+
+    // Exists, but its week fails serviceDayKey: found, with no day.
+    expect(record([{ ...s.movedOutNow, week: "2026-11-31" }])).toMatchObject({ roleFound: true, roleCurrentDay: null });
+    // Missing from the lookup: deleted.
+    expect(record([])).toMatchObject({ roleFound: false, roleCurrentDay: null });
+    // Answered twice: ambiguous, so it fails closed — never an arbitrary pick.
+    expect(record([s.movedOutNow, { ...s.movedOutNow, week: "2026-12-06" }])).toMatchObject({ roleFound: false, roleCurrentDay: null });
+    // The ordinary case.
+    expect(record([s.movedOutNow])).toMatchObject({ roleFound: true, roleCurrentDay: "2026-11-08" });
   });
 
   it("per month, the documents' `contributes` sum to exactly the entry — evidence and derivation share one rule", () => {

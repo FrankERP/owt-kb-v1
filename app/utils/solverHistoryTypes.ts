@@ -42,8 +42,10 @@ export type SolverHistoryExclusion =
  * - `found`: exactly one receipt names the document (or several do, and one of
  *   them is the id the document itself records).
  * - `not_found`: the document carries a creation stamp (`creationReceiptId` or
- *   `creationFingerprint`) but no single receipt could be matched — deleted, or
- *   ambiguous. This is NOT R11 rule 4's "no receipt" arm (plan step 6).
+ *   `creationFingerprint`), or is named by more than one receipt, and no single
+ *   receipt matched — the receipt is missing, or the match is ambiguous.
+ *   `receiptId` is the stamp's receipt id, or null when the document has none.
+ *   This is NOT R11 rule 4's "no receipt" arm (plan step 6).
  * - `unstamped`: the document carries neither stamp and no receipt names it —
  *   rule 4's "no receipt" arm: it was created outside the guarded create route.
  */
@@ -102,7 +104,18 @@ export interface SolverHistoryOutOfWindowReceipt {
   targetDay: string;
   createdAt: string | null;
   roleId: string | null;
-  /** The role's current day; null when it no longer exists (a missing role means deleted). */
+  /**
+   * The by-id lookup answered exactly one current document for `roleId`.
+   * False when the role is missing — deleted since creation — or when the
+   * receipt names no role, or when the lookup answered the id more than once
+   * (ambiguous; fails closed, and cannot happen in the published perspective).
+   */
+  roleFound: boolean;
+  /**
+   * That document's current day. Null whenever `roleFound` is false, AND when
+   * the role exists but its stored `week` is not a valid day — so read
+   * `roleFound`, never this field, to tell "deleted" from "moved".
+   */
   roleCurrentDay: string | null;
 }
 

@@ -292,8 +292,8 @@ describe("loadSolverHistory — the result", () => {
     const ev = result.evidence!;
 
     expect(ev.outOfWindowReceipts).toEqual([
-      { receiptId: "rc-gone", state: "role_deleted", type: "saturday_role", targetDay: "2026-09-19", createdAt: "2026-09-01T12:00:00.000Z", roleId: "r-gone", roleCurrentDay: null },
-      { receiptId: "rc-moved", state: "committed", type: "sunday_role", targetDay: "2026-10-11", createdAt: "2026-09-28T10:00:00.000Z", roleId: "r-moved", roleCurrentDay: "2026-11-08" },
+      { receiptId: "rc-gone", state: "role_deleted", type: "saturday_role", targetDay: "2026-09-19", createdAt: "2026-09-01T12:00:00.000Z", roleId: "r-gone", roleFound: false, roleCurrentDay: null },
+      { receiptId: "rc-moved", state: "committed", type: "sunday_role", targetDay: "2026-10-11", createdAt: "2026-09-28T10:00:00.000Z", roleId: "r-moved", roleFound: true, roleCurrentDay: "2026-11-08" },
     ]);
     expect(ev.documents.map((d) => [d.roleId, d.receipt.status])).toEqual([
       ["r-aug", "unstamped"],
@@ -318,18 +318,112 @@ describe("loadSolverHistory — the result", () => {
   });
 });
 
-describe("module hygiene (R9)", () => {
-  const src = readFileSync(resolve(__dirname, "../solverHistoryRead.ts"), "utf8");
+// ─── Module hygiene (R9) ─────────────────────────────────────────────────────
+// This module names no protected type, by design, so `protectedReadAudit`'s
+// fail-closed branch never fires on it (`scanSource` returns no site at all).
+// These checks are its ONLY guard against a read that bypasses the published
+// perspective — so they are written as a function over the source text and
+// proven against real bypasses below, not just run once on the clean file.
 
-  it("is server-only and imports operationalClient directly — a client passed in would be invisible to the audit", () => {
-    expect(src).toMatch(/^import "server-only";$/m);
-    expect(src).toMatch(/^import \{ operationalClient \} from "@\/sanity\/lib\/operationalClient";$/m);
-    expect(src).not.toMatch(/rawIntegrityClient|writeClient|next-sanity|@sanity\/client/);
+const READ_MODULE_SOURCE = readFileSync(resolve(__dirname, "../solverHistoryRead.ts"), "utf8");
+const OPERATIONAL_IMPORT = 'import { operationalClient } from "@/sanity/lib/operationalClient";';
+
+/** Every module the builder may import. A new one must be added here, on purpose. */
+const ALLOWED_IMPORTS = [
+  "server-only",
+  "@/sanity/lib/operationalClient",
+  "./serviceReadQueries",
+  "./solverHistory",
+  "./solverHistoryEvidence",
+  "./solverHistoryTypes",
+];
+
+/** Code only: a comment that names a client is not a bypass. */
+function codeOf(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
+
+/** Every way `source` could reach Sanity other than through `operationalClient`. Empty means clean. */
+function clientViolations(source: string): string[] {
+  const code = codeOf(source);
+  const out: string[] = [];
+  if (!code.split("\n").includes(OPERATIONAL_IMPORT)) out.push("no direct operationalClient import");
+  const libRefs = code.match(/sanity\/lib\//g) ?? [];
+  if (libRefs.length !== 1) out.push(`sanity/lib/ referenced ${libRefs.length} times`);
+  if (/sanity\/lib\/(?!operationalClient["'])/.test(code)) out.push("imports another sanity/lib module");
+  if (/rawIntegrityClient|writeClient|serverClient|next-sanity|@sanity\/client/.test(code)) out.push("names another client");
+  const receivers = [...code.matchAll(/(\w+)\s*\??\.\s*fetch\b/g)].map((m) => m[1]);
+  if (receivers.length === 0) out.push("fetches nothing");
+  for (const receiver of receivers) if (receiver !== "operationalClient") out.push(`fetches through ${receiver}`);
+  if (/(^|[^.\w])fetch\s*[(<]/m.test(code)) out.push("bare fetch");
+  const specifiers = [...code.matchAll(/^\s*import\s+(?:[^;]*?\s+from\s+)?["']([^"']+)["']/gm)].map((m) => m[1]);
+  for (const spec of specifiers) if (!ALLOWED_IMPORTS.includes(spec)) out.push(`imports ${spec}`);
+  return out;
+}
+
+describe("module hygiene (R9)", () => {
+  it("is server-only", () => {
+    expect(READ_MODULE_SOURCE).toMatch(/^import "server-only";$/m);
+  });
+
+  it("reaches Sanity ONLY through operationalClient, imported directly — a client passed in would be invisible to the audit", () => {
+    expect(clientViolations(READ_MODULE_SOURCE)).toEqual([]);
+    // The review's two checks, spelled out: operationalClient is the ONLY sanity/lib import.
+    const code = codeOf(READ_MODULE_SOURCE);
+    expect(code.match(/sanity\/lib\//g)).toHaveLength(1);
+    expect(code).not.toMatch(/sanity\/lib\/(?!operationalClient["'])/);
+  });
+
+  it("the guard is not vacuous: it rejects every bypass shape", () => {
+    const FETCH = "operationalClient.fetch<unknown>(";
+    const withExtraImport = (line: string) => {
+      expect(READ_MODULE_SOURCE).toContain(`${OPERATIONAL_IMPORT}\n`);
+      return READ_MODULE_SOURCE.replace(`${OPERATIONAL_IMPORT}\n`, `${OPERATIONAL_IMPORT}\n${line}\n`);
+    };
+    expect(READ_MODULE_SOURCE).toContain(FETCH);
+
+    // The review's probe: a raw-perspective client beside the right import.
+    const serverClientSwap = withExtraImport('import { serverClient } from "@/sanity/lib/serverClient";').replace(
+      FETCH,
+      "serverClient.fetch<unknown>(",
+    );
+    expect(clientViolations(serverClientSwap)).toEqual([
+      "sanity/lib/ referenced 2 times",
+      "imports another sanity/lib module",
+      "names another client",
+      "fetches through serverClient",
+      "imports @/sanity/lib/serverClient",
+    ]);
+
+    // Another client under the right NAME.
+    expect(
+      clientViolations(
+        READ_MODULE_SOURCE.replace(OPERATIONAL_IMPORT, 'import { serverClient as operationalClient } from "@/sanity/lib/serverClient";'),
+      ),
+    ).toEqual(expect.arrayContaining(["no direct operationalClient import", "imports another sanity/lib module"]));
+
+    // The raw-integrity client from the RIGHT module, aliased.
+    expect(
+      clientViolations(
+        withExtraImport('import { rawIntegrityClient as rc } from "@/sanity/lib/operationalClient";').replace(FETCH, "rc.fetch<unknown>("),
+      ),
+    ).toEqual(expect.arrayContaining(["names another client", "fetches through rc"]));
+
+    // A client built on the spot, and a raw HTTP read.
+    expect(clientViolations(withExtraImport('import { createClient } from "next-sanity";'))).toEqual(
+      expect.arrayContaining(["names another client", "imports next-sanity"]),
+    );
+    expect(clientViolations(READ_MODULE_SOURCE.replace(FETCH, "fetch("))).toEqual(expect.arrayContaining(["bare fetch"]));
+
+    // A helper from another module, which could read through anything.
+    expect(clientViolations(withExtraImport('import { loadServiceReadinessSources } from "./publishReadyBundle";'))).toEqual([
+      "imports ./publishReadyBundle",
+    ]);
   });
 
   it("holds no GROQ: every query comes from a serviceReadQueries builder", () => {
-    expect(src).not.toMatch(/\*\[/);
-    expect(src).not.toMatch(/_type\s*(==|in)\b/);
-    expect(src).toMatch(/from "\.\/serviceReadQueries"/);
+    expect(READ_MODULE_SOURCE).not.toMatch(/\*\[/);
+    expect(READ_MODULE_SOURCE).not.toMatch(/_type\s*(==|in)\b/);
+    expect(READ_MODULE_SOURCE).toMatch(/from "\.\/serviceReadQueries"/);
   });
 });
