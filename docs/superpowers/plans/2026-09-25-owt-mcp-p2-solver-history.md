@@ -14,9 +14,11 @@
 
 - **Document status:** Draft, 2026-09-25. Not implemented. **Risk tier: STANDARD**. The
   roadmap's review handoff says that P2's *spec* is critical, and it is approved, but its
-  *implementation plan* is standard and gets **no adversarial plan review**. The pipeline
-  is: this plan → Frank's go-ahead → implement → gates → a fresh code review of each
-  delivery's diff → release.
+  *implementation plan* is standard. The roadmap gives it no adversarial plan review, but
+  Frank asked for one on 2026-09-25, at standard tier: one fresh cold approval. Its log is
+  committed beside this plan as `2026-09-25-owt-mcp-p2-solver-history-review-log.md`. The
+  pipeline is: this plan → review → Frank's go-ahead → implement → gates → a fresh code
+  review of each delivery's diff → release.
 - **Accepted requirement source (binding):**
   [`2026-09-23-solver-history-derivation-design.md`](../specs/2026-09-23-solver-history-derivation-design.md),
   requirements R1–R17. It was approved at critical tier in commit `f6f2ed26` (digest
@@ -221,7 +223,11 @@ Every step leaves the four gates green. Nothing deploys until step 8.
       ignored defensively (the published perspective never returns one).
     - **R2, R3:** every stored seat counts. `published` is never read.
     - **R7, duplicate targets:** two or more documents of one type on one day are all
-      dropped and reported in `duplicateTargets: [{ type, day, roleIds }]`.
+      dropped and reported in `duplicateTargets: [{ type, day, roleIds }]`. The detection
+      reuses `indexUniqueByKey`/`pickUnique` (`app/utils/serviceReadSelect.ts`), so the
+      derivation and the read model cannot disagree about what is ambiguous. If their
+      semantics do not fit, the step's report says why, and a test pins the two equal on
+      the shared cases.
     - **R7, identity:**
       - The key is `member_name` **verbatim**. This is the string `buildSolveRequest`'s
         pools use via `memberIdToName`, so the solver matches it. There is **no raw-id
@@ -231,8 +237,10 @@ Every step leaves the four gates green. Nothing deploys until step 8.
       - A member whose `member_name` is not a non-empty string is dropped and reported in
         `unnamedMembers`.
       - Two members sharing one `member_name` are reported in
-        `duplicateNames: [{ name, memberIds }]`. Their counts merge, as they do in the
-        solver.
+        `duplicateNames: [{ name, memberIds }]` **only when at least one of them is
+        referenced by a window seat**. That is when the merge matters, and it keeps an
+        unseated member's name out of the default payload. Their counts merge, as they
+        do in the solver.
     - **R4, R6:** `entries` always holds three `SolverHistoryEntry`s:
       - a month with no weekend services gets empty maps;
       - `total_counts` is the sum of `role_counts`;
@@ -379,6 +387,13 @@ Every step leaves the four gates green. Nothing deploys until step 8.
     content-editor gives `403`.
   - `month` must match `^\d{4}-(0[1-9]|1[0-2])$`, otherwise
     `400 { error: "invalid_request" }`. `evidence=1` is optional.
+  - **`evidence=1` is super-admin only.** A plain `admin` who asks for it gets `403`.
+    Its `members` list holds every member, kids-only members included, and a worship
+    admin must see nothing of kids (CLAUDE.md §Auth). `/api/admin/members` hides them
+    from a non-super-admin the same way (`WORSHIP_MEMBER_GROQ_FILTER`,
+    `adminMemberVisibility.test.ts`). Gate B's only user is Frank, a super-admin.
+    Without `evidence`, the payload names only members seated in the window's weekend
+    roles (step 1's `entries` and scoped diagnostics).
   - `200` returns the builder's result with `Cache-Control: no-store`.
   - `SolverHistoryUnavailableError` (or any throw) returns
     `500 { error: "history_unavailable", message: "No se pudo leer el historial de equidad." }`
@@ -386,6 +401,8 @@ Every step leaves the four gates green. Nothing deploys until step 8.
 - **Tests** (`app/api/__tests__/solverHistoryRoute.test.ts`, following
   `solverConfigRoute.test.ts`'s `vi.hoisted` mocks):
   - `403` in both refused cases;
+  - a plain worship `admin`: `200` without `evidence`, `403` with `evidence=1`; a
+    super-admin: `200` with `evidence.members`;
   - `400` for `2026-13`, `2026-9` and a missing month;
   - the `200` shape carries three entries;
   - evidence appears only on request;
@@ -425,6 +442,8 @@ Every step leaves the four gates green. Nothing deploys until step 8.
       is a pre-flight refusal: the specials still fill (E5), and it never solves on an
       empty history (spec, Failure).
     - On success, `buildSolveRequest` receives the fetched entries.
+    - The fetch carries an `AbortController` with a **20 s** timeout. A timeout is a
+      failure and takes the same refusal path, so a hung route cannot keep Auto pending.
     - The existing `try/finally` widens to cover the fetch.
   - **`handleConfirm`:** in derived mode it calls a new module-level helper,
     `appendLocalHistoryEntry(entry)`, instead of `saveHistoryEntry`. The helper:
@@ -446,6 +465,14 @@ Every step leaves the four gates green. Nothing deploys until step 8.
   - **`LeadPoolHistoryPanel`:** an optional, additive prop carries the empty-month keys.
     In derived mode «Sin historial guardado…» never renders. An empty prior month shows
     «Sin servicios de fin de semana en {mes}.»
+  - **No leader list until the history is `ready` (derived mode).** This applies to both
+    `LeadPoolHistoryPanel` mounts: create mode, and the stored-mode grid mount
+    (`MonthGenerator.tsx:3773-3781`), which has no Historial block beside it. While the
+    hook is `loading`, each shows a `Skeleton`. On `error`, each shows «No se pudo leer el
+    historial de equidad.» and a `Button` «Reintentar» that calls the hook's `reload`. A
+    panel is never handed `[]` as a stand-in, because `priorMonthLeadVisibility`
+    (`leadPoolHistory.ts:88-110`) would read an empty history as «sin Lead» for every
+    leader. `SolverConfigPanel` (`MonthGenerator.tsx:1382`) hosts the create-mode panel and the Historial block, and it also gets the entries only when `ready`. Its Historial block shows the same loading and error states.
   - **`PlannerGrid` diagnostics:** an optional `history_months` string replaces
     «Historial usado: N» in derived mode (for example «Historial: ago · sep (sin
     servicios) · oct»). `MonthGenerator` omits `history_runs_used` there, because the
@@ -467,6 +494,12 @@ Every step leaves the four gates green. Nothing deploys until step 8.
      the solve path.
   6. **Display:** the chips have no remove control; the copy and the diagnostics render;
      the lead-pool panel shows its empty-month copy.
+  7. **Failed or pending display read:**
+     - With the display fetch failing, neither lead-pool mount (create mode, and stored
+       mode's grid) renders a leader list or any «sin Lead» line. Both render the error
+       and «Reintentar».
+     - Pressing «Reintentar» refetches, and on success the list renders.
+     - While the fetch is pending, both show a skeleton and no list.
   - The existing `MonthGenerator.*.test.tsx`, `leadPoolHistory.test.ts` and
     `solverConfigSource.test.ts` pass **unedited** (local is the default).
 - **State:** production behaviour is unchanged. The derived path is compiled in but
@@ -505,6 +538,10 @@ Every step leaves the four gates green. Nothing deploys until step 8.
   - It imports no Sanity client and reads no env secrets.
   - With several exports, it runs once with each export as primary, using the others as
     "another export" evidence.
+  - **Missing targets refuse the run.** For each export used as primary, the CLI lists
+    every target it needs that the bundle lacks (`m+1` for each export month), then
+    refuses rather than compare fewer windows. The remedy is to run Gate B's snippet in
+    that profile too, or with those targets added.
 - **Solve runs (spec R11):**
   - From the captured request, the **local** side is `historyForRequest(primary, y, m)`,
     imported from `plannerModel.ts`: exactly what the browser sends. The **derived** side
@@ -523,6 +560,9 @@ Every step leaves the four gates green. Nothing deploys until step 8.
     fairness flags, the unfilled-seat count, and per-person totals.
   - **Reported:** the within-side deltas (the noise baseline) and the cross-side deltas.
     When both sides skip the objective, the report states "**not fairness-driven**".
+    The report also states that one captured month is a **single data point**. It does
+    not measure how often the objective is skipped (the spec's Evidence row asks about
+    that; issue #94 owns it).
   - Fallback if the local env is unusable: Frank runs the four requests through
     `/api/admin/solve` from DevTools, and saves the responses into the bundle's folder.
 - **Report header:**
@@ -580,13 +620,14 @@ Every step leaves the four gates green. Nothing deploys until step 8.
 - `docs/adr/0010-*.md` Status becomes **"Accepted, amended by ADR-00NN"**, and a one-line
   pointer goes under its "stays in `localStorage`" consequence. The `docs/adr/README.md`
   index gets the 0010 status and the new row.
-- **R17 in "P2's review log":** append a dated note to
+- **R17 in "P2's review log":** append a dated note to this plan's review log
+  (`2026-09-25-owt-mcp-p2-solver-history-review-log.md`) and to
   `docs/superpowers/specs/2026-09-23-solver-history-derivation-design-review-log.md`
   recording the limitation, citing ADR-0038 and #94. Update its "Suggested, not done"
   line, since #94 exists.
 - **Docs:**
   - `docs/API_REFERENCE.md` Solver section: the new `GET`, its gate, its errors, and that
-    `evidence=1` returns member names (admin only).
+    `evidence=1` returns every member's name (super-admin only).
   - `docs/UTILITIES_AND_COMPONENTS.md`: the new modules.
   - `docs/SOLVER_AND_INFRA.md` §"Key behaviors": the source is still the browser until
     cutover, and the derived builder exists.
@@ -738,6 +779,11 @@ the derived history, with no rollback. D3 waits for this confirmation.
   `solverConfigWriteRequest.ts:38-45`, and it imports rule **types** only. Re-verify with
   `git grep` at that time; if a writer has started importing either symbol, stop and
   escalate.
+  - **Tier:** D3 stays standard only because that importer takes types only. The code
+    review of D3's diff re-checks every writer import of `plannerModel.ts` explicitly. If
+    any writer imports a value from it by then, D3 becomes critical tier and gets a plan
+    review before it is implemented (roadmap: a plan that modifies a writer-imported
+    export is critical).
 - **Docs:** `DATA_MODEL.md`, `SOLVER_AND_INFRA.md`, a dated note on the ADR, and
   `CLAUDE.md`. Stale browser values are inert.
 - **Release:** the same pipeline.
@@ -759,8 +805,10 @@ the derived history, with no rollback. D3 waits for this confirmation.
   response for a stale month is discarded. The derivation is deterministic in its inputs.
   An edit landing between the fetch and the solve is the same moment-in-time gap every
   admin read has, and the next Auto sees it.
-- **Privacy:** the route returns names to managers only, as other admin reads do. Every
-  artifact of the diff stays outside the repository (Global constraint 4).
+- **Privacy:** without `evidence`, the route returns to managers only the names of members
+  seated in the window's weekend roles, as other admin reads do. `evidence=1` carries
+  the full member list, kids-only members included, so it is super-admin only (step 4).
+  Every artifact of the diff stays outside the repository (Global constraint 4).
 
 ## Verification
 
@@ -824,7 +872,7 @@ the derived history, with no rollback. D3 waits for this confirmation.
 | D11 | Home of the diff tool | `scripts/` (pure lib plus CLI) | Tooling, never bundled; zero Sanity imports keeps it off every audit registry | — | this plan |
 | D12 | Home of the dual-write helper | `MonthGenerator.tsx`, beside `HISTORY_KEY` | The per-browser literal test stays meaningful until D3 | A module-level function inside a client component | this plan |
 | D13 | ADR number | The next free number at merge | Numbers follow the order in which they reach `main`, and P3 may land first | Renumbering at merge | this plan |
-| D14 | Where R17 is recorded | The ADR, plus a dated note on the spec's review log | The spec review log is the only review log P2 has | — | this plan |
+| D14 | Where R17 is recorded | The ADR, plus dated notes on this plan's review log and the spec's | The plan was reviewed at Frank's request, so it has its own log; the spec's log carries the "suggested" line to update | — | this plan |
 | D15 | Issue #94 | Out of scope | Frank, 2026-09-23 (spec decision 3) | The history stays mostly inert until #94 ships | Frank |
 
 ## Assumptions
@@ -854,8 +902,8 @@ confirmation are human gates B, C and D above. The spec assigns them to him expl
 
 ## Spec reconciliations
 
-- **R17 names "P2's review log",** but this plan is standard tier and gets none.
-  Resolution: it is read as the P2 spec's review log (step 7), plus the ADR (D14).
+- **R17 names "P2's review log".** Resolution: this plan's own review log, the P2 spec's
+  review log (step 7), plus the ADR (D14).
 - **R15 deletes `historyEntryFromDrafts`,** while the spec's Dependencies make
   `plannerModel.ts` additive-only. Resolution: the removal is confined to D3, sanctioned
   by R15, and limited to an export no production writer imports (re-verified at D3).
@@ -875,10 +923,10 @@ confirmation are human gates B, C and D above. The spec assigns them to him expl
   - the rollback coupling after P4 ships (withdraw `solve_month`).
 - **To P3:** the rebase rule on `serviceReadQueries.ts`, and ADR renumbering.
 - **Roadmap:** if Gate C decides "not cut over", record the P4 scope change in the roadmap.
-- **Review:** standard tier. There is no adversarial plan review; a fresh code review of
-  each delivery's diff runs before `main`.
+- **Review:** standard tier. One cold adversarial approval, at Frank's request (log beside
+  this plan). A fresh code review of each delivery's diff runs before `main`.
 - **Implementation authorization: not granted by this plan.**
 
 ## Terminal state
 
-READY — standard tier (roadmap: P2 implementation plan gets no adversarial plan review); implementation needs Frank's go-ahead.
+READY_FOR_ADVERSARIAL_REVIEW — standard tier (one fresh cold approval, at Frank's request); implementation needs Frank's go-ahead.
