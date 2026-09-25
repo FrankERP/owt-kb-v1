@@ -272,6 +272,49 @@ describe("resolveService", () => {
     ]);
   });
 
+  it("{} refuses two duplicate weekend roles tied for first place", async () => {
+    const snapshot = await snapshotOf(readToolStore());
+    // After 2026-11-15, the earliest upcoming day is 2026-11-22: two canonical Sundays, both untimed.
+    const r = resolveService(snapshot, selector({}), "2026-11-16");
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.message).toMatch(/hora/i);
+    expect(r.candidates.map((c) => c.serviceId)).toEqual(["role-sun-1122-a", "role-sun-1122-b"]);
+  });
+
+  it("{} refuses a Sunday tied with an untimed special on the same day", async () => {
+    const store = readToolStore();
+    store.roles.push({
+      ...store.roles.find((r) => r._id === "role-sp-0930-b")!,
+      _id: "role-sp-1004-untimed",
+      _rev: "role-sp-1004-untimed-rev",
+      date: "2026-10-04",
+      service_name: "Santa Cena",
+      time: null,
+    });
+    const snapshot = await snapshotOf(store);
+    const r = resolveService(snapshot, selector({}), "2026-10-04");
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.candidates).toEqual([
+        { serviceId: "role-sp-1004-untimed", kind: "special", date: "2026-10-04", name: "Santa Cena", time: null },
+        { serviceId: "role-sun-1004", kind: "sunday", date: "2026-10-04", name: null, time: null },
+      ]);
+    }
+  });
+
+  it("{} refuses two specials at the same HH:mm", async () => {
+    const store = readToolStore();
+    store.roles.find((r) => r._id === "role-sp-0930-b")!.time = "07:00";
+    const snapshot = await snapshotOf(store);
+    const r = resolveService(snapshot, selector({}), "2026-09-30");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.candidates.map((c) => [c.serviceId, c.time])).toEqual([
+      ["role-sp-0930-a", "07:00"],
+      ["role-sp-0930-b", "07:00"],
+    ]);
+  });
+
   it("{} still picks when only the LATER same-day specials tie", async () => {
     const store = readToolStore();
     store.roles.find((r) => r._id === "role-sp-0930-b")!.time = null;
@@ -315,13 +358,13 @@ describe("observeServiceSetlist", () => {
     ["role-sat-1003", { state: "single", id: "set-sat-1003", rev: "set-sat-1003-rev", rowKeys: ["r1"] }],
     ["role-sun-1011", { state: "none" }],
     ["role-sun-1025", { state: "ambiguous", ids: ["set-sun-1025-a", "set-sun-1025-b"] }],
-    ["role-sun-1018", { state: "draft_overlay" }],
-    ["role-sun-1129", { state: "draft_overlay" }],
-    ["role-sat-1128", { state: "draft_overlay" }],
+    ["role-sun-1018", { state: "draft_overlay", draftIds: ["drafts.set-sun-1018"] }],
+    ["role-sun-1129", { state: "draft_overlay", draftIds: ["drafts.featuredSongs.2026-11-29"] }],
+    ["role-sat-1128", { state: "draft_overlay", draftIds: ["drafts.saturdarSongs.2026-11-28"] }],
     ["role-sp-1024-wn", { state: "single", id: "role-sp-1024-wn", rev: "role-sp-1024-wn-rev", rowKeys: ["r1", "r2"] }],
     ["role-sp-1017-a", { state: "single", id: "role-sp-1017-a", rev: "role-sp-1017-a-rev", rowKeys: [] }],
     ["role-sp-1017-b", { state: "none" }],
-    ["role-sp-1107", { state: "draft_overlay" }],
+    ["role-sp-1107", { state: "draft_overlay", draftIds: ["drafts.role-sp-1107"] }],
     ["role-sp-1114-invalid", { state: "invalid" }],
   ])("%s → %j", async (id, expected) => {
     const snapshot = await snapshotOf(readToolStore());
@@ -335,7 +378,10 @@ describe("observeServiceSetlist", () => {
       id: "legacy-set-1129",
       rev: "legacy-set-1129-rev",
     });
-    expect(observeServiceSetlist(snapshot, roleOf(snapshot, "role-sun-1129")).observation).toEqual({ state: "draft_overlay" });
+    expect(observeServiceSetlist(snapshot, roleOf(snapshot, "role-sun-1129")).observation).toEqual({
+      state: "draft_overlay",
+      draftIds: ["drafts.featuredSongs.2026-11-29"],
+    });
   });
 
   it("carries every raw setlist draft's type and week in the snapshot, beside the unchanged id list", async () => {
@@ -488,6 +534,19 @@ describe("presentService — setlist", () => {
     ]);
   });
 
+  it("reports a worship-night leader entry with NO reference as missing, like a ref-less seat — never dropped", async () => {
+    const store = readToolStore();
+    const wnRole = store.roles.find((r) => r._id === "role-sp-1024-wn")!;
+    (wnRole.songs as { leads: unknown[] }[])[1]!.leads.splice(1, 0, { _key: "ld8", _type: "reference", _ref: null });
+    const snapshot = await snapshotOf(store);
+    const wn = await present(snapshot, "role-sp-1024-wn");
+    expect(wn.setlist!.rows[1]!.leads).toEqual([
+      { memberId: "mem-ana", name: "Ana", alias: null },
+      { memberId: null, name: null, alias: null, missing: true },
+      { memberId: "mem-luis", name: "Luis", alias: "Lucho" },
+    ]);
+  });
+
   it("keeps the service when the song titles cannot be read: titles null, with a note", async () => {
     const snapshot = await snapshotOf(readToolStore(), { failPosts: true });
     const payload = await present(snapshot, "role-sun-1004");
@@ -512,6 +571,38 @@ describe("presentService — setlist", () => {
     expect(payload.setlist).toBeNull();
     expect(payload.observations.setlist).toEqual({ state: "unknown" });
     expect(payload.failedSources).toEqual(["setlistTargets"]);
+  });
+});
+
+describe("presentService — a draft overlay readiness cannot see", () => {
+  const NOTE = /borrador sin publicar de este setlist en Studio.*La verificación de publicación no lo detecta.*se negará a guardar/;
+
+  it("names the legacy-id week's draft in the observation AND in a Spanish note, without touching readiness", async () => {
+    const snapshot = await snapshotOf(readToolStore());
+    const payload = await present(snapshot, "role-sun-1129");
+    expect(payload.observations.setlist).toEqual({ state: "draft_overlay", draftIds: ["drafts.featuredSongs.2026-11-29"] });
+    expect(payload.notes).toHaveLength(1);
+    expect(payload.notes![0]).toMatch(NOTE);
+    expect(payload.notes![0]).toContain("«drafts.featuredSongs.2026-11-29»");
+    // No synthetic blocker: readiness is still the publish route's verdict (I4).
+    const d2 = publishRefusalFor(assembleService(snapshot.readiness, "role-sun-1129"));
+    expect(payload.readiness.blockers.hard.map((b) => b.code)).toEqual(d2.blockers!.hard);
+    expect(payload.readiness.blockers.hard.map((b) => b.code)).not.toContain("setlist_draft_conflict");
+    // A draft-only week with no canonical setlist is the same blind spot.
+    expect((await present(snapshot, "role-sat-1128")).notes![0]).toContain("«drafts.saturdarSongs.2026-11-28»");
+  });
+
+  it("adds no note when readiness already names the draft", async () => {
+    const snapshot = await snapshotOf(readToolStore());
+    for (const [id, draftId] of [
+      ["role-sun-1018", "drafts.set-sun-1018"],
+      ["role-sp-1107", "drafts.role-sp-1107"],
+    ] as const) {
+      const payload = await present(snapshot, id);
+      expect(payload.observations.setlist, id).toEqual({ state: "draft_overlay", draftIds: [draftId] });
+      expect(payload.readiness.integrityIssues.flatMap((i) => i.ids), id).toContain(draftId);
+      expect(payload.notes, id).toBeUndefined();
+    }
   });
 });
 

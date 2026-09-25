@@ -256,8 +256,11 @@ export function resolveService(snapshot: ServiceSnapshot, selector: ServiceSelec
   const first = upcoming[0];
   if (!first) return refusal(`No hay servicios programados desde hoy (${today}).`, []);
   const sameDay = upcoming.filter((e) => e.candidate.date === first.candidate.date);
+  // Any tie for first place is an arbitrary pick — two duplicate weekend roles,
+  // a Sunday beside an untimed special, two specials at the same time — and the
+  // `{ date, kind }` selectors refuse the same sets, so `{}` refuses too (A15).
   const tiedFirst = sameDay.filter((e) => compareServiceTime(e.candidate.time, first.candidate.time) === 0);
-  if (tiedFirst.length > 1 && tiedFirst.some((e) => e.candidate.kind === "special")) {
+  if (tiedFirst.length > 1) {
     return refusal(
       `El ${first.candidate.date} tiene varios servicios que no se pueden ordenar por hora (sin hora o con la misma), ` +
         "así que no hay un «próximo» único; elige uno por serviceId.",
@@ -277,14 +280,20 @@ export function resolveService(snapshot: ServiceSnapshot, selector: ServiceSelec
  * What a later setlist write must hand back unchanged. `none` / `single` are
  * the writer's own `ObservedTarget` shapes (plus the row keys the connector
  * adds); `ambiguous` and `draft_overlay` are states the writer REFUSES
- * (`ambiguous_target`, `integrity_conflict`), and so is `invalid` (a malformed
- * record). `unknown` means the reads it depends on failed — never `none`.
+ * (`ambiguous_target`, `integrity_conflict` — `draftIds` are the raw drafts it
+ * names as `rawDrafts`), and so is `invalid` (a malformed record).
+ *
+ * `unknown` means a read the decision depends on failed, so the target cannot
+ * be observed — never `none`. That includes a COORDINATION read sharing the
+ * same source state: a special reads `unknown` when the weekend-lock inventory
+ * alone failed, because `roleTargets` covers both the raw role drafts and the
+ * locks and the snapshot cannot tell which one failed. It errs safe.
  */
 export type SetlistObservation =
   | { state: "none" }
   | { state: "single"; id: string; rev: string; rowKeys: (string | null)[] }
   | { state: "ambiguous"; ids: string[] }
-  | { state: "draft_overlay" }
+  | { state: "draft_overlay"; draftIds: string[] }
   | { state: "invalid" }
   | { state: "unknown" };
 
@@ -322,10 +331,13 @@ export function observeServiceSetlist(snapshot: ServiceSnapshot, role: SnapshotR
   const roleId = stringOrNull(role._id) ?? "";
 
   if (kind === "special") {
-    // Its overlay check reads the raw role drafts (part of `roleTargets`).
+    // Its overlay check reads the raw role drafts, which share the `roleTargets`
+    // source with the weekend locks: a failed lock read alone also lands here as
+    // `unknown` (see `SetlistObservation`). Deliberately conservative.
     if (sources.roleTargets !== "ready") return { observation: { state: "unknown" }, songs: null };
     const songs = Array.isArray(role.songs) ? (role.songs as readonly unknown[]) : null;
-    if (snapshot.roleDraftIds.includes(`drafts.${roleId}`)) return { observation: { state: "draft_overlay" }, songs };
+    const roleDrafts = snapshot.roleDraftIds.filter((id) => id === `drafts.${roleId}`);
+    if (roleDrafts.length > 0) return { observation: { state: "draft_overlay", draftIds: roleDrafts }, songs };
     if (!validateRole(role).groupable || !nonEmptyString(role._rev)) return { observation: { state: "invalid" }, songs };
     if (!songs) return { observation: { state: "none" }, songs: null };
     return { observation: { state: "single", id: roleId, rev: role._rev, rowKeys: rowKeysOf(songs) }, songs };
@@ -341,7 +353,9 @@ export function observeServiceSetlist(snapshot: ServiceSnapshot, role: SnapshotR
   const single = canonical.length === 1 ? canonical[0]! : null;
   const songs = single ? (Array.isArray(single.songs) ? (single.songs as readonly unknown[]) : []) : null;
 
-  if (drafts.length > 0) return { observation: { state: "draft_overlay" }, songs };
+  if (drafts.length > 0) {
+    return { observation: { state: "draft_overlay", draftIds: drafts.map((d) => d.id).sort(compareIds) }, songs };
+  }
   if (canonical.some((row) => !nonEmptyString(row._id) || !nonEmptyString(row._rev))) {
     return { observation: { state: "invalid" }, songs };
   }
@@ -429,7 +443,8 @@ export function serviceContentIds(snapshot: ServiceSnapshot, role: SnapshotRow):
 
 // ── The setlist content ─────────────────────────────────────────────────────
 
-export type SetlistLead = { memberId: string } & MemberName;
+/** A leader entry. `memberId: null` (with `missing: true`) is an entry that carries no reference at all. */
+export type SetlistLead = { memberId: string | null } & MemberName;
 
 export type SetlistRow = {
   rowKey: string | null;
@@ -442,6 +457,21 @@ export type SetlistRow = {
 };
 
 export type SetlistRun = { kind: "single" | "medley"; rowKeys: (string | null)[]; positions: number[] };
+
+/**
+ * A row's leader references in stored order, each named once — as
+ * `songItemLeadIds` reads them — except that an entry with no `_ref` is kept as
+ * `null` instead of dropped, so it is reported the way a ref-less seat is.
+ */
+function rowLeads(leads: unknown): (string | null)[] {
+  if (!Array.isArray(leads)) return [];
+  const out: (string | null)[] = [];
+  for (const entry of leads) {
+    const ref = isObj(entry) && nonEmptyString(entry._ref) ? entry._ref : null;
+    if (ref === null || !out.includes(ref)) out.push(ref);
+  }
+  return out;
+}
 
 function setlistContent(
   songs: readonly unknown[],
@@ -465,7 +495,7 @@ function setlistContent(
       key: stringOrNull(obj.play_key),
       medleyTag: stringOrNull(obj.medley_tag),
     };
-    if (worshipNight) row.leads = songItemLeadIds(obj).map((memberId) => ({ memberId, ...memberName(memberId, members) }));
+    if (worshipNight) row.leads = rowLeads(obj.leads).map((memberId) => ({ memberId, ...memberName(memberId, members) }));
     return row;
   });
 
@@ -626,6 +656,22 @@ export function presentService(snapshot: ServiceSnapshot, role: SnapshotRow, loo
     notes.push("No se pudieron leer los nombres de algunos miembros; aparecen con unresolved: true.");
   }
 
+  const readiness = readinessView(snapshot, serviceId);
+  // The writer finds a setlist overlay by target; readiness matches drafts by id
+  // and misses one beside a legacy id. Say so — as a note, never as a readiness
+  // blocker, which would part ways with the publish route (spec I4).
+  if (observation.state === "draft_overlay") {
+    const named = new Set(readiness.integrityIssues.flatMap((issue) => issue.ids));
+    const unnamed = observation.draftIds.filter((id) => !named.has(id));
+    if (unnamed.length > 0) {
+      notes.push(
+        `Hay un borrador sin publicar de este setlist en Studio (${unnamed.map((id) => `«${id}»`).join(", ")}). ` +
+          "La verificación de publicación no lo detecta, pero el editor de setlist se negará a guardar " +
+          "hasta que se descarte o publique en Studio.",
+      );
+    }
+  }
+
   return {
     serviceId,
     kind,
@@ -634,7 +680,7 @@ export function presentService(snapshot: ServiceSnapshot, role: SnapshotRow, loo
     ...publication(role),
     seats,
     setlist,
-    readiness: readinessView(snapshot, serviceId),
+    readiness,
     observations: {
       roleId: serviceId,
       roleRev: stringOrNull(role._rev),

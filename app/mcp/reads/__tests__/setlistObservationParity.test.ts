@@ -11,7 +11,7 @@
 //   loader ok, server none           ↔ { state: "none" }
 //   loader ok, server single         ↔ { state: "single", id, rev, rowKeys }  (row keys from the writer's own read)
 //   ambiguous_target (duplicates)    ↔ { state: "ambiguous", ids }
-//   integrity_conflict + rawDrafts   ↔ { state: "draft_overlay" }
+//   integrity_conflict + rawDrafts   ↔ { state: "draft_overlay", draftIds }   (the same draft ids)
 //   integrity_conflict, malformed    ↔ { state: "invalid" }
 //
 // The loaders are not modified and not mocked; only the clients underneath are.
@@ -64,7 +64,9 @@ function writerDecision(load: WriterLoad): SetlistObservation {
   if (code === "ambiguous_target" && Array.isArray(details.conflictingIds)) {
     return { state: "ambiguous", ids: [...(details.conflictingIds as string[])].sort() };
   }
-  if (code === "integrity_conflict" && Array.isArray(details.rawDrafts)) return { state: "draft_overlay" };
+  if (code === "integrity_conflict" && Array.isArray(details.rawDrafts)) {
+    return { state: "draft_overlay", draftIds: [...(details.rawDrafts as string[])].sort() };
+  }
   if (code === "integrity_conflict") return { state: "invalid" };
   throw new Error(`writer answered ${code} ${JSON.stringify(details)} — outside the observation vocabulary`);
 }
@@ -118,7 +120,7 @@ describe("the setlist observation equals the setlist writer's own target decisio
   it("documents why the readiness bundle is not the source: it misses a legacy-id week's overlay the writer refuses", async () => {
     const snapshot = await loadServiceSnapshot();
     const decision = writerDecision(await writerLoad(snapshot, "role-sun-1129"));
-    expect(decision).toEqual({ state: "draft_overlay" });
+    expect(decision).toEqual({ state: "draft_overlay", draftIds: ["drafts.featuredSongs.2026-11-29"] });
     const bundle = assembleService(snapshot.readiness, "role-sun-1129")!.observation!;
     expect(bundle.setlist).toEqual({ state: "single", id: "legacy-set-1129", rev: "legacy-set-1129-rev" });
     expect(bundle.unsafe).not.toContain("setlist");
