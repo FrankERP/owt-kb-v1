@@ -269,6 +269,27 @@ def service_of(role_type: str) -> str:
     return SATURDAY_SERVICE if role_type in SATURDAY_ROLES else SUNDAY_SERVICE
 
 
+def pin_slack(pins: Sequence[Pin], spread_role: str | None) -> Dict[str, int]:
+    """
+    Per-person slack a pin earns on one HARD spread (pinned-assignments spec §5.1).
+    `None` is the global spread, where every pin counts. Otherwise the person's pins in
+    the SERVICE that `spread_role` belongs to — the service, not the role: one seat per
+    service means a pin in any Sunday role zeroes the person in every other Sunday role
+    that week, so a role-keyed count gave a lead-pool member pinned into Choir no slack
+    on the very spread the pin tightens, and the month fell through to the fairness-free
+    stage_a with a member on zero services (measured on four seeds).
+
+    Slack, not subtraction: `t <= max + n`, `t >= min - n` lets the pins count as service
+    already performed, where `t - n` bounded by max/min would demand a full share on top
+    of them (a member pinned three times took 7 services against a 4-5 baseline).
+    """
+    counts: Dict[str, int] = defaultdict(int)
+    for person, role, _week in pins:
+        if spread_role is None or service_of(role) == service_of(spread_role):
+            counts[person] += 1
+    return dict(counts)
+
+
 def parse_pins(raw, weeks: int, weekends_w_sat: Sequence[int]) -> List[Pin]:
     """
     Shape- and range-check the request's `pinned` array (spec §6). Every refusal is a
@@ -1020,12 +1041,14 @@ def create_model_and_solve(
     if len(global_fairness_people) >= 2:
         gmax = model.NewIntVar(0, total_slots, "g_max")
         gmin = model.NewIntVar(0, total_slots, "g_min")
+        g_pins = pin_slack(pins, None)
         for p in global_fairness_people:
-            model.Add(total_vars[p] <= gmax)
-            model.Add(total_vars[p] >= gmin)
+            model.Add(total_vars[p] <= gmax + g_pins.get(p, 0))
+            model.Add(total_vars[p] >= gmin - g_pins.get(p, 0))
         for p, slack in global_fairness_slack.items():
-            model.Add(total_vars[p] <= gmax + slack)
-            model.Add(total_vars[p] >= gmin - slack)
+            # A pin's slack ADDS to their absence / authored slack; it does not replace it.
+            model.Add(total_vars[p] <= gmax + slack + g_pins.get(p, 0))
+            model.Add(total_vars[p] >= gmin - slack - g_pins.get(p, 0))
         model.Add(gmax - gmin <= fairness_limit)
         model.Add(cur_spread == gmax - gmin)
     else:
@@ -1085,6 +1108,7 @@ def create_model_and_solve(
     if len(sun_lead_constrained) >= 2 and sun_lead_slots_n > 0:
         sl_max = model.NewIntVar(0, sun_lead_slots_n, "sl_max")
         sl_min = model.NewIntVar(0, sun_lead_slots_n, "sl_min")
+        sl_pins = pin_slack(pins, "Sun.Lead")
         for p in sun_lead_constrained:
             sl_terms = [x[(p, s.key)] for s in slots if s.role_type == "Sun.Lead" and (p, s.key) in x]
             if sl_terms:
@@ -1093,7 +1117,7 @@ def create_model_and_solve(
             else:
                 pv = model.NewIntVar(0, 0, f"cur_sl[{p}]")
                 model.Add(pv == 0)
-            rslack = role_fairness_slack.get((p, "Sun.Lead"), 0)
+            rslack = role_fairness_slack.get((p, "Sun.Lead"), 0) + sl_pins.get(p, 0)
             model.Add(pv <= sl_max + rslack)
             model.Add(pv >= sl_min - rslack)
         model.Add(cur_sun_lead_spread == sl_max - sl_min)
@@ -1109,8 +1133,9 @@ def create_model_and_solve(
     if len(sun_bgv_constrained) >= 2 and sun_bgv_slots_n > 0:
         sb_max = model.NewIntVar(0, sun_bgv_slots_n, "sb_max")
         sb_min = model.NewIntVar(0, sun_bgv_slots_n, "sb_min")
+        sb_pins = pin_slack(pins, "Sun.BGV")
         for p in sun_bgv_constrained:
-            rslack = role_fairness_slack.get((p, "Sun.BGV"), 0)
+            rslack = role_fairness_slack.get((p, "Sun.BGV"), 0) + sb_pins.get(p, 0)
             model.Add(role_vars[(p, "Sun.BGV")] <= sb_max + rslack)
             model.Add(role_vars[(p, "Sun.BGV")] >= sb_min - rslack)
         model.Add(cur_sun_bgv_spread == sb_max - sb_min)

@@ -238,3 +238,91 @@ class PinnedOnlyPeopleStayOutOfFairness(unittest.TestCase):
         kw = self.first_pass(fixture(rules=rules, pinned=[pin("Zoe", "Sun.Choir", 3)]))
         self.assertEqual(kw["global_fairness_slack"], {}, "the collapse branch was not reached")
         self.assertEqual(sorted(kw["global_fairness_people"]), sorted(EVERYONE))
+
+
+def baseline_band(seed):
+    res = solve_from_dict(fixture(seed=seed))
+    assert res["ok"], res.get("error")
+    return min(res["total_counts"].values()), max(res["total_counts"].values())
+
+
+class FairnessUnderPins(unittest.TestCase):
+    """
+    §5.1/§7: the un-pinned members IN THE FAIRNESS GROUPS stay inside the un-pinned
+    baseline's spread. The fixture has no fairness_exempt member, so that is everyone
+    un-pinned; an exempt member would be outside every bound and asserted nothing about.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.band = {seed: baseline_band(seed) for seed in (1, 42)}
+
+    def assert_group_holds(self, data, pinned_people, seed):
+        res, result, _ = instrumented(data)
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["pinned_honored"], len(data["pinned"]))
+        self.assertNotEqual(result.fairness_limit_used, BIG, "fell through to the fairness-free stage_a")
+        lo, hi = self.band[seed]
+        for p in EVERYONE:
+            if p not in pinned_people:
+                self.assertTrue(lo <= res["total_counts"][p] <= hi,
+                                f"{p}: {res['total_counts'][p]} outside baseline [{lo}, {hi}]")
+
+    def test_skewed_partial_pin_leaves_everyone_else_alone(self):
+        for row in ("Sun.Lead", "Sun.BGV", "Sun.Choir"):
+            for k in (1, 2, 3):
+                with self.subTest(row=row, pins=k):
+                    pins = [pin("Rachel", row, w) for w in range(1, k + 1)]
+                    self.assert_group_holds(fixture(seed=42, pinned=pins), {"Rachel"}, 42)
+        with self.subTest(seed=1):
+            pins = [pin("Rachel", "Sun.Lead", w) for w in (1, 2, 3)]
+            self.assert_group_holds(fixture(seed=1, pinned=pins), {"Rachel"}, 1)
+
+    def test_a_full_row_pin_for_a_lead_pool_member_and_a_support_member(self):
+        """Pool membership is the discriminator, not the row's seat count (§5.1)."""
+        for row in ("Sun.Lead", "Sun.BGV", "Sun.Choir"):
+            for person in ("Hugo", "Vale"):
+                with self.subTest(row=row, person=person):
+                    pins = [pin(person, row, w) for w in range(1, 5)]
+                    self.assert_group_holds(fixture(seed=42, pinned=pins), {person}, 42)
+
+    def test_role_keyed_slack_is_a_failing_control(self):
+        """
+        The rejected role-keyed slack MUST collapse the lead-pool case, or the guard above
+        proves nothing. Three-seat rows only: measured, Sun.Lead does not collapse under
+        either form, so a control there fails to fail — never weaken this to make it pass.
+        """
+        def role_keyed(pins, spread_role):
+            counts = {}
+            for person, role, _week in pins:
+                if spread_role is None or role == spread_role:
+                    counts[person] = counts.get(person, 0) + 1
+            return counts
+
+        original = mod.pin_slack
+        mod.pin_slack = role_keyed
+        try:
+            for row in ("Sun.BGV", "Sun.Choir"):
+                with self.subTest(row=row):
+                    pins = [pin("Hugo", row, w) for w in range(1, 5)]
+                    res, result, _ = instrumented(fixture(seed=42, pinned=pins))
+                    self.assertTrue(res["ok"], res.get("error"))
+                    self.assertEqual(result.fairness_limit_used, BIG,
+                                     "role-keyed slack did not collapse: the control is vacuous")
+        finally:
+            mod.pin_slack = original
+
+    def test_heavy_pin_load_keeps_absence_slack(self):
+        """30 pins on 12 people — where routing pins through combined_slack would have emptied
+        `strict` and discarded every absence's slack (the rejected design, §5.1)."""
+        rules = unavailable("Marianne", 2)
+        base = solve_from_dict(fixture(rules=rules))
+        self.assertTrue(base["ok"], base.get("error"))
+        pins = [pin(p, ROLE[(svc, seat)], int(w))
+                for w, services in sorted(base["schedule"].items(), key=lambda t: int(t[0]))
+                for svc, seats in services.items() for seat, names in seats.items()
+                for p in names if p != "Marianne"][:30]
+        self.assertEqual(len(pins), 30)
+        res, _result, seen = instrumented(fixture(rules=rules, pinned=pins))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(seen[0][0]["global_fairness_slack"].get("Marianne"), 2)
