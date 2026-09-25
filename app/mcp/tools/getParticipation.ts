@@ -9,14 +9,20 @@
 // does (see `participationPresenter.ts`'s header for the month-set finding). A
 // failed roles read is refused, never answered with zero participation; a
 // failed members read keeps the counts and reports null names with a note.
+//
+// A second, targeted member read (`loadMemberNames`) follows the snapshot,
+// exactly as `get_service` does for one service: the snapshot's bulk
+// `membersById` skips every ref on a role that fails `validateRole(...).
+// groupable`, which under-resolves a member seated ONLY on such a role. This
+// read only fires for ids `membersById` does not already cover.
 
 import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { serviceTodayIso } from "@/app/components/admin/serviceReadiness";
 import { refusalResult, runReadTool, successResult } from "../reads/errors";
-import { presentParticipation } from "../reads/participationPresenter";
+import { buildParticipantRoles, participantMemberIds, presentParticipation } from "../reads/participationPresenter";
 import { CATALOGUE_UNREADABLE_MESSAGE, catalogueUnreadable } from "../reads/servicePresenter";
-import { loadServiceSnapshot } from "../reads/serviceSnapshot";
+import { loadMemberNames, loadServiceSnapshot } from "../reads/serviceSnapshot";
 
 export const GET_PARTICIPATION_INPUT = z
   .object({
@@ -51,7 +57,12 @@ export async function getParticipationResult(args: GetParticipationArgs): Promis
     if (catalogueUnreadable(snapshot)) {
       return refusalResult(CATALOGUE_UNREADABLE_MESSAGE, { failedSources: [...snapshot.readiness.failedSources] });
     }
-    return successResult(presentParticipation(snapshot, month));
+    // `membersById` alone under-resolves a member seated only on a
+    // structurally invalid role (see `participationPresenter.ts`'s header);
+    // this targets exactly the ids the month's seats name.
+    const ids = participantMemberIds(buildParticipantRoles(snapshot, month));
+    const members = await loadMemberNames(ids, snapshot.membersById);
+    return successResult(presentParticipation(snapshot, month, members));
   });
 }
 

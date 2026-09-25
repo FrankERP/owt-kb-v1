@@ -19,12 +19,25 @@
 // way.
 //
 // Unlike the admin roles GET (which drops a dangling seat reference silently,
-// `Lead[defined(@->)]`), a seat referencing a member missing from the
-// snapshot's `membersById` is KEPT and counted — `computeParticipation`
-// accumulates by `_id` regardless of whether a name resolved — and reported as
-// `{ missing: true }` here, never dropped. A member seated on any role appears
-// regardless of ministry (the I5 SEAT exception): this module applies no
-// worship-audience filter at all, unlike `memberAvailabilityPresenter.ts`.
+// `Lead[defined(@->)]`), a seat referencing a member missing from `members`
+// (below) is KEPT and counted — `computeParticipation` accumulates by `_id`
+// regardless of whether a name resolved — and reported as `{ missing: true }`
+// here, never dropped. A member seated on any role appears regardless of
+// ministry (the I5 SEAT exception): this module applies no worship-audience
+// filter at all, unlike `memberAvailabilityPresenter.ts`.
+//
+// NAMES COME FROM A LOOKUP, NOT DIRECTLY FROM `snapshot.membersById`, and this
+// is deliberate, not a style choice: `membersById` is built by
+// `collectRoleMemberRefs`, which SKIPS every ref on a role that fails
+// `validateRole(...).groupable` — a role with one malformed seat group (a
+// stored `null` where an array belongs) loses ALL its refs from that bulk
+// read, valid seats included. Participation still counts that role (seat
+// groups are coerced to `[]` independently per group, never all-or-nothing —
+// see `toParticipantRole`), so a member whose ONLY seat that month sits on
+// such a role would be wrongly reported `missing` despite having a real
+// document. `get_service` already solves this the same way for a single
+// service (`serviceContentIds` + `loadMemberNames`); `getParticipation.ts`
+// does the same for the whole month before calling `presentParticipation`.
 
 import { derivePublishState } from "@/app/components/admin/serviceReadiness";
 import {
@@ -34,7 +47,7 @@ import {
 } from "@/app/utils/computeParticipation";
 import { storedRoleDate } from "@/app/utils/roleWriteRequest";
 import { serviceKindOf, type ServiceKind } from "./servicePresenter";
-import type { ServiceSnapshot, SnapshotRow } from "./serviceSnapshot";
+import type { MemberNameLookup, ServiceSnapshot, SnapshotRow } from "./serviceSnapshot";
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object";
@@ -114,6 +127,25 @@ export function buildParticipantRoles(snapshot: ServiceSnapshot, month: string):
     .filter((role): role is ParticipantRole => role !== null);
 }
 
+/**
+ * Every member id a month's `ParticipantRole[]` names — every seat on every
+ * role, regardless of that role's OWN validity (unlike
+ * `collectRoleMemberRefs`, which a non-groupable role's refs never reach). The
+ * caller feeds this to `loadMemberNames` alongside `snapshot.membersById`, so
+ * a member seated only on a structurally invalid role still resolves.
+ */
+export function participantMemberIds(roles: readonly ParticipantRole[]): string[] {
+  const ids = new Set<string>();
+  for (const role of roles) {
+    for (const m of role.leads) ids.add(m._id);
+    for (const m of role.bgvs) ids.add(m._id);
+    for (const m of role.chorus) ids.add(m._id);
+    for (const s of role.instruments) if (s.person) ids.add(s.person._id);
+    for (const s of role.foh) if (s.person) ids.add(s.person._id);
+  }
+  return [...ids];
+}
+
 // ── Presentation ─────────────────────────────────────────────────────────────
 
 export type ParticipationEntry = Omit<MemberParticipation, "id" | "name"> & {
@@ -152,37 +184,45 @@ function compareServices(a: ParticipationServiceEntry, b: ParticipationServiceEn
   return a.serviceId < b.serviceId ? -1 : a.serviceId > b.serviceId ? 1 : 0;
 }
 
-function toEntry(counts: MemberParticipation, snapshot: ServiceSnapshot, membersOk: boolean): ParticipationEntry {
+function toEntry(counts: MemberParticipation, members: MemberNameLookup): ParticipationEntry {
   const { id, name: _ignored, ...rest } = counts;
-  const member = snapshot.membersById.get(id);
+  const member = members.byId.get(id);
   if (member) {
     const name = member.alias?.trim() || member.member_name || null;
     return { ...rest, memberId: id, name };
   }
-  return membersOk ? { ...rest, memberId: id, name: null, missing: true } : { ...rest, memberId: id, name: null, unresolved: true };
+  return members.ok
+    ? { ...rest, memberId: id, name: null, missing: true }
+    : { ...rest, memberId: id, name: null, unresolved: true };
 }
 
 /**
  * `get_participation`'s whole payload for `month`. The caller must have
- * already refused an unreadable roles domain (`catalogueUnreadable`) — this
- * function assumes the snapshot's roles are trustworthy and only degrades
- * gracefully when the MEMBERS domain failed (names null, plus a note).
+ * already refused an unreadable roles domain (`catalogueUnreadable`) and
+ * already resolved `members` — a `MemberNameLookup` covering every id
+ * `participantMemberIds` names, typically `loadMemberNames(ids,
+ * snapshot.membersById)` (see the file header for why `membersById` alone
+ * under-resolves). This function only degrades gracefully when `members.ok`
+ * is false (names null, plus a note); it never re-reads anything itself.
  */
-export function presentParticipation(snapshot: ServiceSnapshot, month: string): GetParticipationPayload {
+export function presentParticipation(
+  snapshot: ServiceSnapshot,
+  month: string,
+  members: MemberNameLookup,
+): GetParticipationPayload {
   const monthRoles = participantRolesForMonth(snapshot, month);
   const participantRoles = buildParticipantRoles(snapshot, month);
 
-  const membersOk = snapshot.readiness.sources.members === "ready";
-  const members = computeParticipation(participantRoles).map((entry) => toEntry(entry, snapshot, membersOk));
+  const memberEntries = computeParticipation(participantRoles).map((entry) => toEntry(entry, members));
 
   const services = monthRoles
     .map((role) => serviceEntryOf(role))
     .filter((service): service is ParticipationServiceEntry => service !== null)
     .sort(compareServices);
 
-  const notes = membersOk
+  const notes = members.ok
     ? []
     : ["No se pudieron leer los nombres de los miembros; los conteos son correctos, pero los nombres no están disponibles."];
 
-  return { month, members, services, ...(notes.length ? { notes } : {}) };
+  return { month, members: memberEntries, services, ...(notes.length ? { notes } : {}) };
 }

@@ -129,6 +129,17 @@ describe("get_participation", () => {
     expect(payload.members.find((m) => m.memberId === "mem-ghost")).toMatchObject({ missing: true });
   });
 
+  it("resolves a member seated ONLY on a structurally invalid role, never reporting her missing", async () => {
+    // `role-sp-1212-solo-invalid` is not groupable (a null Chorus), so the
+    // snapshot's bulk membersById read never collects her ref — this proves
+    // the tool's supplementary loadMemberNames call, not just the presenter's.
+    const result = await getParticipationResult({ month: "2026-12" });
+    const payload = result.structuredContent as { members: { memberId: string; name: string | null; missing?: true }[] };
+    const tono = payload.members.find((m) => m.memberId === "mem-tono");
+    expect(tono).toMatchObject({ name: "Tono" });
+    expect(tono?.missing).toBeUndefined();
+  });
+
   it("refuses when the roles read failed — never zero participation", async () => {
     wire({ fail: ["roles"] });
     const result = await getParticipationResult({ month: "2026-09" });

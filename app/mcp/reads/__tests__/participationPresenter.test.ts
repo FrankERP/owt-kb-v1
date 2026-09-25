@@ -21,8 +21,13 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
 
 import { computeParticipation, type MemberParticipation } from "@/app/utils/computeParticipation";
 import { FROZEN_EVENING, readToolStore, scopedResponder } from "./readToolFixtures";
-import { buildParticipantRoles, presentParticipation } from "../participationPresenter";
-import { loadServiceSnapshot } from "../serviceSnapshot";
+import { buildParticipantRoles, participantMemberIds, presentParticipation } from "../participationPresenter";
+import { loadMemberNames, loadServiceSnapshot, type ServiceSnapshot } from "../serviceSnapshot";
+
+/** What `getParticipation.ts` itself builds before calling `presentParticipation`. */
+async function resolveMembers(snapshot: ServiceSnapshot, month: string) {
+  return loadMemberNames(participantMemberIds(buildParticipantRoles(snapshot, month)), snapshot.membersById);
+}
 
 beforeEach(() => {
   h.operational.mockReset();
@@ -63,7 +68,7 @@ function expectCountParity(members: Record<string, unknown>[], direct: MemberPar
 describe("presentParticipation", () => {
   it("September: a special's voice seats count as especial and inside total, and a kids-only seated member is shown", async () => {
     const snapshot = await loadServiceSnapshot();
-    const payload = presentParticipation(snapshot, "2026-09");
+    const payload = presentParticipation(snapshot, "2026-09", await resolveMembers(snapshot, "2026-09"));
 
     // Parity: the same counts a direct `computeParticipation` call gives on the same input set.
     const direct = computeParticipation(buildParticipantRoles(snapshot, "2026-09"));
@@ -86,9 +91,21 @@ describe("presentParticipation", () => {
 
   it("a seat whose member is missing from membersById is counted, not dropped", async () => {
     const snapshot = await loadServiceSnapshot();
-    const payload = presentParticipation(snapshot, "2026-10");
+    const payload = presentParticipation(snapshot, "2026-10", await resolveMembers(snapshot, "2026-10"));
     const ghost = payload.members.find((m) => m.memberId === "mem-ghost");
     expect(ghost).toMatchObject({ name: null, missing: true, sunBGV: 1, total: 1 });
+  });
+
+  it("a member seated ONLY on a structurally invalid role still resolves by name, never reported missing", async () => {
+    // `role-sp-1212-solo-invalid` fails `validateRole(...).groupable` (a null
+    // Chorus), so `collectRoleMemberRefs` never adds its Lead ref to the
+    // snapshot's bulk `membersById` — "Tono" exists nowhere else in the store.
+    const snapshot = await loadServiceSnapshot();
+    expect(snapshot.membersById.has("mem-tono")).toBe(false);
+    const payload = presentParticipation(snapshot, "2026-12", await resolveMembers(snapshot, "2026-12"));
+    const tono = payload.members.find((m) => m.memberId === "mem-tono");
+    expect(tono).toMatchObject({ name: "Tono" });
+    expect(tono?.missing).toBeUndefined();
   });
 
   it("a failed members read keeps the counts, with every name null and a note", async () => {
@@ -96,7 +113,9 @@ describe("presentParticipation", () => {
     h.operational.mockImplementation(responder.operational);
     h.raw.mockImplementation(responder.raw);
     const snapshot = await loadServiceSnapshot();
-    const payload = presentParticipation(snapshot, "2026-09");
+    const members = await resolveMembers(snapshot, "2026-09");
+    expect(members.ok).toBe(false); // the supplementary read hits the same failing domain
+    const payload = presentParticipation(snapshot, "2026-09", members);
     expect(payload.members.length).toBeGreaterThan(0);
     for (const m of payload.members) {
       expect(m.name).toBeNull();
@@ -109,7 +128,7 @@ describe("presentParticipation", () => {
 
   it("months with no service in the store are empty, not an error", async () => {
     const snapshot = await loadServiceSnapshot();
-    const payload = presentParticipation(snapshot, "2020-01");
+    const payload = presentParticipation(snapshot, "2020-01", await resolveMembers(snapshot, "2020-01"));
     expect(payload).toEqual({ month: "2020-01", members: [], services: [] });
   });
 });

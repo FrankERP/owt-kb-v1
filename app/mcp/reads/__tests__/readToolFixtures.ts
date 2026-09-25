@@ -117,12 +117,20 @@ export const SONG_POSTS: readonly Row[] = [
  *   `drafts.saturdarSongs.2026-11-28`.
  * - `role-sp-1107`: a special with songs and a raw role draft overlay.
  * - `role-sp-1114-invalid`: a special with songs and a null seat (not groupable).
+ * - `role-sp-1212-solo-invalid`: a December special, not groupable (null seat),
+ *   whose ONLY Lead is `mem-tono` — a member seated NOWHERE else in the store.
+ *   `collectRoleMemberRefs` skips a non-groupable role entirely, so her ref
+ *   never reaches the snapshot's bulk `membersById` read; a consumer that reads
+ *   ONLY `membersById` reports her `missing` even though her document exists.
+ *   December carries no other fixture role, so this cannot collide with a
+ *   month any other test enumerates exactly (P1 step 6's regression case).
  */
 export function readToolStore(): ServiceFixtureStore {
   const store = serviceFixtureStore();
   const ana = "mem-ana";
   const luis = "mem-luis";
   const sofia = "mem-sofia";
+  const tono = "mem-tono";
 
   store.roles.push(
     role({
@@ -192,22 +200,42 @@ export function readToolStore(): ServiceFixtureStore {
       Chorus: null,
       songs: [songRow("r1", "song-3", "E")],
     }),
+    role({
+      _id: "role-sp-1212-solo-invalid",
+      _rev: "role-sp-1212-solo-invalid-rev",
+      _type: "special_role",
+      date: "2026-12-12",
+      service_name: "Solo Tono",
+      published: false,
+      Lead: [ref("l1", tono)],
+      Chorus: null,
+    }),
   );
   store.locks.push(
     lock("sunday_role", "2026-09-27", "role-sun-0927"),
     lock("sunday_role", "2026-11-29", "role-sun-1129"),
     lock("saturday_role", "2026-11-28", "role-sat-1128"),
   );
-  store.members.push({
-    _id: KIDS_ONLY_MEMBER_ID,
-    _rev: `${KIDS_ONLY_MEMBER_ID}-rev`,
-    member_name: "Kiki",
-    alias: null,
-    unavailableDates: null,
-    unavailabilityNotes: null,
-    // Not projected by CANONICAL_MEMBER_PROJECTION; carried to show nothing reads it.
-    ministries: ["kids"],
-  });
+  store.members.push(
+    {
+      _id: KIDS_ONLY_MEMBER_ID,
+      _rev: `${KIDS_ONLY_MEMBER_ID}-rev`,
+      member_name: "Kiki",
+      alias: null,
+      unavailableDates: null,
+      unavailabilityNotes: null,
+      // Not projected by CANONICAL_MEMBER_PROJECTION; carried to show nothing reads it.
+      ministries: ["kids"],
+    },
+    {
+      _id: tono,
+      _rev: `${tono}-rev`,
+      member_name: "Tono",
+      alias: null,
+      unavailableDates: null,
+      unavailabilityNotes: null,
+    },
+  );
   store.setlists.push({
     _id: "legacy-set-1129",
     _rev: "legacy-set-1129-rev",
