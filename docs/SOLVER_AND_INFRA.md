@@ -299,16 +299,20 @@ Both of the first two are listed by exact `file + operation` in the protected-re
   npx tsx scripts/solver-history-diff.ts \
     --bundle ~/owt-private/p2-history/bundle-<date>.json [--bundle <another profile's bundle>]… \
     [--export ~/owt-private/p2-history/export-<browser>-<profile>-<date>.json]… \
-    --solve-request ~/owt-private/p2-history/solve-request-<NEXT>.json \
+    [--solve-request ~/owt-private/p2-history/solve-request-<NEXT>.json [--solve-month YYYY-MM]] \
     --out ~/owt-private/p2-history [--seed 42] [--runs 2]
   ```
 
   Run from the repository root; the first `--bundle` must be the one from the profile that
   captured `--solve-request` (the consistency check treats that bundle's export as the
-  capture profile). `--runs 0` records the exact request bodies for the production solve route
-  instead of spawning the local solver. Without `--solve-request`, or with fewer than 2 runs per
-  side, the report and stdout say **"R11 incomplete"**: the gate line covers the classification
-  only. Exit codes: `0` a report was written (read its gate line), `2` refused, `1` failed. The export, bundle and report files are never committed —
+  capture profile). **`--solve-request` is optional** — without it the CLI still classifies
+  (R11's diff), it just cannot also run R11's solve comparison. `--solve-month YYYY-MM`
+  overrides which month the solve section targets; left off, that month defaults to the first
+  bundle's own `NEXT`. `--runs 0` records the exact request bodies for the production solve
+  route instead of spawning the local solver. Without `--solve-request`, or with fewer than 2
+  runs per side, the report and stdout say **"R11 incomplete"**: the gate line covers the
+  classification only. Exit codes: `0` a report was written (read its gate line), `2` refused,
+  `1` failed. The export, bundle and report files are never committed —
   see the P2 plan's Gates A–B
   (`docs/superpowers/plans/2026-09-25-owt-mcp-p2-solver-history.md`) for the full procedure and
   where `~/owt-private/p2-history/` comes from. No new environment variable: the runner spawns

@@ -114,10 +114,11 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   never counts, ADR-0010 Decision 3). Neutral module, no imports beyond a type-only pull from
   `plannerModel.ts` and `serviceReadSelect.ts`'s `indexUniqueByKey`/`serviceDayKey` — a source
   scan pins that. Returns `{ entries, months, diagnostics }`: `diagnostics` reports (never
-  silently drops) a dangling seat reference, an unnamed member, two members sharing one name,
-  and two documents targeting one date — each only when a **counted** window seat is
-  affected. `historyEntryFromDrafts` (`plannerModel.ts`) is the pre-existing, per-browser
-  equivalent this is proven equal to (R12) and will replace at the dual-write stop point.
+  silently drops) two in-window documents that target one `type:day` — whatever their seats —
+  plus, only when a **counted** window seat is affected, a dangling seat reference, an unnamed
+  member, and two members sharing one name. `historyEntryFromDrafts` (`plannerModel.ts`) is the
+  pre-existing, per-browser equivalent this is proven equal to (R12) and will replace at the
+  dual-write stop point.
 - **`SolverHistoryResult`, `SolverHistoryEvidence`, …** ([solverHistoryTypes.ts](../app/utils/solverHistoryTypes.ts))
   — neutral, type-only exports shared by the loader and its evidence, kept out of
   `solverHistory.ts` so that module's source never has to name `published`.
@@ -137,8 +138,10 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   what P4's `solve_month` will call directly later (bearer auth, never the admin route).
 - **`canonicalWeekendRolesInRangeQuery`, `canonicalMemberNamesQuery`,
   `weekendRoleCreationReceiptsQuery`, `ROLE_CREATION_RECEIPT_EVIDENCE_PROJECTION`** (additions
-  to [serviceReadQueries.ts](../app/utils/serviceReadQueries.ts)) — the three read builders
-  `loadSolverHistory` uses. **No `published` filter on any of them** — a prior month's drafts
+  to [serviceReadQueries.ts](../app/utils/serviceReadQueries.ts)) — the three **new** read
+  builders. `loadSolverHistory` also calls the pre-existing `canonicalRolesByIdsQuery` in
+  evidence mode, for the "moved out of the month" arm. **No `published` filter on any of the
+  three new ones** — a prior month's drafts
   must count toward fairness (R3) — which is why they carry no `MAY_SEE_DRAFTS` change: the
   file is already exempt. Purely additive; every prior export is byte-identical.
 - **`SOLVER_HISTORY_SOURCE: "local" | "derived"`**
