@@ -156,3 +156,85 @@ class PinlessResponse(unittest.TestCase):
         _res, _result, seen = instrumented(fixture())
         self.assertFalse(any(k.get("violation_objective_only") for k, _ in seen))
         self.assertTrue(seen[0][0].get("empty_objective_only"), "Stage A must be the first solve")
+
+
+class PinsAreSeated(unittest.TestCase):
+
+    def test_a_pin_is_seated_and_counted(self):
+        res = solve_from_dict(fixture(pinned=[pin("Gaby", "Sun.BGV", 1)]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertIn("Gaby", seated(res, 1, "Sun.BGV"))
+        self.assertEqual(res["pinned_honored"], 1)
+        self.assertEqual(res["pin_violations"], [])
+
+    def test_a_pin_beats_unavailability_on_its_own_row_only(self):
+        """E3's guaranteed collision, end to end — and the other service stays excluded."""
+        rules = unavailable("Gaby", 2)
+        without = solve_from_dict(fixture(rules=rules))
+        self.assertTrue(without["ok"], without.get("error"))
+        self.assertEqual([c for c in cells_of(without, "Gaby") if c[0] == 2], [])
+
+        res = solve_from_dict(fixture(rules=rules, pinned=[pin("Gaby", "Sun.Choir", 2)]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual([c for c in cells_of(res, "Gaby") if c[0] == 2], [(2, "Sun.Choir")])
+        self.assertEqual(res["pin_violations"], [], "a week exclusion is scoped, not relaxed")
+
+    def test_a_pinned_person_in_no_pool_is_seated_only_at_the_pin(self):
+        """The reproduced KeyError at assignments[person], kept as a guard — and the union's
+        placement: before `pools` it granted one pinned person three extra services."""
+        without = solve_from_dict(fixture())
+        self.assertNotIn("Zoe", without["total_counts"])
+        res = solve_from_dict(fixture(pinned=[pin("Zoe", "Sun.Choir", 3)]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(cells_of(res, "Zoe"), [(3, "Sun.Choir")])
+        self.assertEqual(res["total_counts"]["Zoe"], 1)
+        self.assertEqual(sum(res["role_counts"]["Zoe"].values()), 1)
+
+    def test_over_pinning_grows_the_row(self):
+        res = solve_from_dict(fixture(pinned=[pin(p, "Sun.Lead", 1) for p in SUNDAY_LEADS]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(sorted(seated(res, 1, "Sun.Lead")), sorted(SUNDAY_LEADS))
+        self.assertEqual(res["pinned_honored"], 4)
+        self.assertFalse([u for u in res["unfilled_seats"] if u.startswith("W1 Sunday Sun.Lead")])
+        self.assertLessEqual(len(seated(res, 2, "Sun.Lead")), 2, "only the pinned row grows")
+
+    def test_growth_keeps_the_bgv_choir_interleave(self):
+        cfg = mod.ScheduleConfig(weeks=3, weekends_w_sat=[], sunday_leads_pool=["A"],
+                                 saturday_leads_pool=[], support_pool=[], dsl_restrictions=[],
+                                 history=[])
+        pins = [(f"P{i}", "Sun.Choir", 1) for i in range(5)]
+        week1 = [s.key for s in mod.build_slots(cfg, pins) if s.week == 1]
+        self.assertEqual(week1, [
+            "W1.Sun.Lead.1", "W1.Sun.Lead.2",
+            "W1.Sun.BGV.1", "W1.Sun.Choir.1", "W1.Sun.BGV.2", "W1.Sun.Choir.2",
+            "W1.Sun.BGV.3", "W1.Sun.Choir.3", "W1.Sun.Choir.4", "W1.Sun.Choir.5"])
+
+    def test_granted_candidacy_is_appended_after_the_shuffle(self):
+        slots = [mod.Slot(1, "Sunday", "Sun.Lead", 1)]
+        pools = {"Sun.Lead": {"A", "B", "C"}}
+        forbidden = {p: set() for p in ("A", "B", "C", "Z")}
+        grown = mod.build_candidate_map(["A", "B", "C", "Z"], pools, forbidden, slots, 7,
+                                        [("Z", "Sun.Lead", 1), ("A", "Sun.Lead", 1)])
+        self.assertEqual(grown["W1.Sun.Lead.1"][-1], "Z")
+        self.assertEqual(grown["W1.Sun.Lead.1"].count("A"), 1, "an eligible pin is not appended twice")
+
+
+class PinnedOnlyPeopleStayOutOfFairness(unittest.TestCase):
+    """§5.1: a person the solver cannot place anywhere must not set gmin for everyone."""
+
+    def first_pass(self, data):
+        _res, _result, seen = instrumented(data)
+        return seen[0][0]
+
+    def test_excluded_from_strict_and_relaxed(self):
+        # The DSL names a pinned-only person — legal because `known` is built after the union.
+        kw = self.first_pass(fixture(rules=unavailable("Zoe", 1), pinned=[pin("Zoe", "Sun.Choir", 3)]))
+        self.assertNotIn("Zoe", kw["global_fairness_people"])
+        self.assertNotIn("Zoe", kw["global_fairness_slack"])
+
+    def test_excluded_from_the_collapse_rebuild(self):
+        # Every pool member but Hugo carries slack, so `strict` falls below two and is rebuilt.
+        rules = [f"{p} fairness_slack 1" for p in EVERYONE if p != "Hugo"]
+        kw = self.first_pass(fixture(rules=rules, pinned=[pin("Zoe", "Sun.Choir", 3)]))
+        self.assertEqual(kw["global_fairness_slack"], {}, "the collapse branch was not reached")
+        self.assertEqual(sorted(kw["global_fairness_people"]), sorted(EVERYONE))

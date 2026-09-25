@@ -658,19 +658,39 @@ def compute_absence_slack(
 
 # ─── Slot building ────────────────────────────────────────────────────────────
 
-def build_slots(config: ScheduleConfig) -> List[Slot]:
+def build_slots(config: ScheduleConfig, pins: Sequence[Pin] = ()) -> List[Slot]:
+    """
+    Every seat of the month. A row holds max(default, pins in that row): pin three leads
+    where there are two seats and the row grows to three, so over-pinning is never an
+    infeasibility; it never shrinks (pinned-assignments spec §5.1).
+
+    Sun.BGV and Sun.Choir are emitted INTERLEAVED, in one loop to the larger count, each
+    row appending only while its own count allows. The pinless inertness fingerprint
+    depends on it: slot order is x's insertion order, which the seeded tie-break reads,
+    so rewriting this per role would change the board of every un-pinned month.
+    """
+    per_row: Dict[Tuple[str, int], int] = defaultdict(int)
+    for _person, role, week in pins:
+        per_row[(role, week)] += 1
+
+    def seats(role: str, week: int, default: int) -> int:
+        return max(default, per_row.get((role, week), 0))
+
     slots: List[Slot] = []
     sat_weeks = set(normalize_weekend_indexes(config.weeks, config.weekends_w_sat))
     for week in range(1, config.weeks + 1):
-        for i in range(1, 3):
+        for i in range(1, seats("Sun.Lead", week, 2) + 1):
             slots.append(Slot(week, SUNDAY_SERVICE, "Sun.Lead", i))
-        for i in range(1, 4):
-            slots.append(Slot(week, SUNDAY_SERVICE, "Sun.BGV", i))
-            slots.append(Slot(week, SUNDAY_SERVICE, "Sun.Choir", i))
+        n_bgv, n_choir = seats("Sun.BGV", week, 3), seats("Sun.Choir", week, 3)
+        for i in range(1, max(n_bgv, n_choir) + 1):
+            if i <= n_bgv:
+                slots.append(Slot(week, SUNDAY_SERVICE, "Sun.BGV", i))
+            if i <= n_choir:
+                slots.append(Slot(week, SUNDAY_SERVICE, "Sun.Choir", i))
         if week in sat_weeks:
-            for i in range(1, 3):
+            for i in range(1, seats("Sat.Lead", week, 2) + 1):
                 slots.append(Slot(week, SATURDAY_SERVICE, "Sat.Lead", i))
-            for i in range(1, 4):
+            for i in range(1, seats("Sat.BGV", week, 3) + 1):
                 slots.append(Slot(week, SATURDAY_SERVICE, "Sat.BGV", i))
     return slots
 
@@ -681,13 +701,25 @@ def build_candidate_map(
     forbidden: Dict[str, Set[str]],
     slots: Sequence[Slot],
     seed: int | None,
+    pins: Sequence[Pin] = (),
 ) -> Dict[str, List[str]]:
     rng = random.Random(seed)
     people = list(all_people)
     rng.shuffle(people)
+    # A pin grants candidacy in its own (role, week) and nowhere else, so a pinned person
+    # in no pool — or whose Tipo was cleared (ADR-0029) — is seated exactly where the
+    # admin seated them. APPENDED after the shuffled eligibles, sorted, and only when not
+    # already eligible: inserting into the shuffle would move other people's draws, and a
+    # second entry for one person would be counted twice by `filled`.
+    granted: Dict[Tuple[str, int], List[str]] = defaultdict(list)
+    for person, role, week in pins:
+        granted[(role, week)].append(person)
     result: Dict[str, List[str]] = {}
     for slot in slots:
         eligible = [p for p in people if is_eligible(p, slot.role_type, pools, forbidden)]
+        for p in sorted(granted.get((slot.role_type, slot.week), ())):
+            if p not in eligible:
+                eligible.append(p)
         # An empty candidate list is allowed: optional seats (BGV/Choir, or the
         # 2nd Lead) simply go unfilled. A mandatory-lead shortfall is caught later
         # by the per-service ">= 1 lead" constraint and reported by the diagnostic.
@@ -841,6 +873,15 @@ def create_model_and_solve(
             model.Add(f == 0)
         filled[slot.key] = f
 
+    pin_set = set(pins)
+    # A pin is a fixed variable, not a removed seat (pinned-assignments spec §5): every
+    # mechanism below that counts people or iterates slots — totals, role counts, DSL
+    # caps, the Saturday anchor, weekly presence, `filled`, occupancy, the consecutive
+    # penalty, the response view — sees it with no further code.
+    for person, role, week in pins:
+        model.Add(sum(x[(person, s.key)] for s in slots
+                      if s.week == week and s.role_type == role) == 1)
+
     # At least one Lead per service — never zero leads.
     for week in range(1, config.weeks + 1):
         for _service, lead_role in (("Sunday", "Sun.Lead"), ("Saturday", "Sat.Lead")):
@@ -875,6 +916,11 @@ def create_model_and_solve(
             )
         for slot in slots:
             if slot.week == rule.week and slot.role_type in rule.role_types:
+                # Not applied to a pinned person's own row: the pin overrides their
+                # unavailability there and only there. Every other slot that week stays
+                # excluded, so a Sunday pin does not free them for Saturday (spec §5.2).
+                if (rule.person, slot.role_type, slot.week) in pin_set:
+                    continue
                 if (rule.person, slot.key) in x:
                     model.Add(x[(rule.person, slot.key)] == 0)
 
@@ -1308,19 +1354,26 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
     absence_slack = compute_absence_slack(week_exclusions, config.weeks, sat_weeks, all_people)
     combined_slack = {p: fairness_slack.get(p, 0) + absence_slack.get(p, 0) for p in all_people}
 
-    # Global fairness groups
-    strict = [p for p in all_people if p not in fairness_exempt and combined_slack.get(p, 0) == 0]
-    relaxed = {p: combined_slack[p] for p in all_people
+    # Global fairness groups. Pinned-only people are outside every one of them: the
+    # solver cannot choose them anywhere, so letting one set gmin would cap everyone else
+    # (pinned-assignments spec §5.1). That holds in `relaxed` — an absence exclusion
+    # would put them there — and in the collapse rebuild, which would otherwise read them
+    # back in from all_people on exactly the thin months where it fires. The per-role
+    # groups need nothing: they go through is_eligible, which reads the pools.
+    fairness_people = [p for p in all_people if p not in pinned_only]
+    strict = [p for p in fairness_people
+              if p not in fairness_exempt and combined_slack.get(p, 0) == 0]
+    relaxed = {p: combined_slack[p] for p in fairness_people
                if p not in fairness_exempt and combined_slack.get(p, 0) > 0}
     if len(strict) < 2:
-        strict = [p for p in all_people if p not in fairness_exempt]
+        strict = [p for p in fairness_people if p not in fairness_exempt]
         relaxed = {}
     global_people = strict
     global_slack = relaxed
 
     hist_total, hist_role, hist_runs = build_history_offsets(config.history, all_people)
-    slots = build_slots(config)
-    candidates = build_candidate_map(all_people, pools, forbidden, slots, config.seed)
+    slots = build_slots(config, pins)
+    candidates = build_candidate_map(all_people, pools, forbidden, slots, config.seed, pins)
 
     common = dict(
         config=config, all_people=all_people,
