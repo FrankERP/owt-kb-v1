@@ -27,8 +27,8 @@ import re
 import sys
 import time
 from collections import defaultdict
-from dataclasses import dataclass
-from typing import Dict, List, Sequence, Set, Tuple
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Sequence, Set, Tuple
 
 from ortools.sat.python import cp_model
 
@@ -80,6 +80,19 @@ VALID_PATTERNS = (
 SUNDAY_SERVICE = "Sunday"
 SATURDAY_SERVICE = "Saturday"
 
+# pin_violations' service token. It matches the `pinned.role` prefixes a reader compares
+# an entry against (`Sun.Lead`, `Sat.BGV`), not unfilled_seats' Sunday/Saturday — so it
+# is MAPPED from the service constants, never interpolated (pinned-assignments spec §4).
+SERVICE_TOKEN = {SUNDAY_SERVICE: "Sun", SATURDAY_SERVICE: "Sat"}
+
+# Longest `pinned` array accepted. Over it the request is REFUSED, never truncated: a
+# dropped pin is a seat the admin asked to keep (spec §6). Rows grow to fit their pins,
+# so this is what bounds what one request can make the solver allocate.
+PINNED_CAP = 100
+
+# (person, role, week) — one seat already decided on the board.
+Pin = Tuple[str, str, int]
+
 # History decay: most-recent entry gets weight 10, then 6, then 3 (oldest).
 HISTORY_DECAY_WEIGHTS = [10, 6, 3]
 
@@ -119,6 +132,9 @@ class ScheduleConfig:
     # once exceeded, return the best schedule found so far instead of grinding.
     solver_total_budget_seconds: int = 40
     discourage_consecutive_role_repeats: bool = True
+    # Seats already on the board that the solver must keep (pinned-assignments spec,
+    # 2026-09-15). The raw request array; validate_config parses and checks it.
+    pinned: List[Dict] | None = None
 
 
 @dataclass(frozen=True)
@@ -177,6 +193,14 @@ class SolveResult:
     # objective at all (Stage A, or the ladder's optimize=False passes). Reported so
     # a fairness-free month is never silent.
     objective_skipped: bool = False
+    # Pinned assignments. The per-pass values are derived from THIS pass's assignment —
+    # never echoed from the request, never read off a violation boolean.
+    pinned_honored: int = 0
+    pin_violations: List[str] = field(default_factory=list)
+    violations_used: int | None = None    # n_viol's value; None when no pins
+    # Set by solve_schedule, not by a pass: did solve 0 prove its minimum? None on a
+    # pinless request, where the response omits the field.
+    violation_ceiling_proven: bool | None = None
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -239,6 +263,63 @@ def resolve_dsl_templates(config: ScheduleConfig) -> ScheduleConfig:
 
 def is_eligible(person: str, role_type: str, pools: Dict[str, Set[str]], forbidden: Dict[str, Set[str]]) -> bool:
     return person in pools[role_type] and role_type not in forbidden[person]
+
+
+def service_of(role_type: str) -> str:
+    return SATURDAY_SERVICE if role_type in SATURDAY_ROLES else SUNDAY_SERVICE
+
+
+def parse_pins(raw, weeks: int, weekends_w_sat: Sequence[int]) -> List[Pin]:
+    """
+    Shape- and range-check the request's `pinned` array (spec §6). Every refusal is a
+    ValueError, because solve_from_dict turns those into `ok: false`; a TypeError or
+    KeyError would escape it and reach the admin as an HTTP 500.
+
+    Exact duplicates collapse (the pin set is a set). Two DIFFERENT pins for one person
+    in one service are refused: the one-seat-per-service limit makes them unsatisfiable
+    together, and two `== 1` constraints against it would fail the month instead.
+    """
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError("pinned must be a list of {week, role, person} objects.")
+    if len(raw) > PINNED_CAP:
+        raise ValueError(
+            f"pinned has {len(raw)} entries; at most {PINNED_CAP} are accepted.")
+    sat_weeks = set(normalize_weekend_indexes(weeks, weekends_w_sat))
+    pins: List[Pin] = []
+    seen: Set[Pin] = set()
+    seat_in_service: Dict[Tuple[str, int, str], str] = {}
+    for i, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ValueError(f"pinned[{i}] must be an object with week, role and person.")
+        week, role, person = entry.get("week"), entry.get("role"), entry.get("person")
+        if isinstance(week, bool) or not isinstance(week, int):
+            raise ValueError(f"pinned[{i}].week must be an integer, got {week!r}.")
+        if not isinstance(role, str) or role not in ALL_ROLE_TYPES:
+            raise ValueError(
+                f"pinned[{i}] names an unknown role {role!r}; roles are {ROLE_ORDER}.")
+        if not isinstance(person, str) or not person.strip():
+            raise ValueError(f"pinned[{i}].person must be a non-empty name, got {person!r}.")
+        if not 1 <= week <= weeks:
+            raise ValueError(
+                f"pinned[{i}] references week {week}, but the month has {weeks} weeks.")
+        if role in SATURDAY_ROLES and week not in sat_weeks:
+            raise ValueError(
+                f"pinned[{i}] pins {role} in week {week}, which has no Saturday service.")
+        key = (person, role, week)
+        if key in seen:
+            continue
+        service = service_of(role)
+        other = seat_in_service.get((person, week, service))
+        if other is not None:
+            raise ValueError(
+                f"pinned seats {person} twice in week {week}'s {service} service "
+                f"({other} and {role}); one person holds one seat per service.")
+        seat_in_service[(person, week, service)] = role
+        seen.add(key)
+        pins.append(key)
+    return pins
 
 
 # ─── DSL parsing ──────────────────────────────────────────────────────────────
@@ -464,7 +545,9 @@ def parse_dsl_rules(
 
 # ─── Validation ───────────────────────────────────────────────────────────────
 
-def validate_config(config: ScheduleConfig) -> Tuple[List[str], Dict[str, Set[str]]]:
+def validate_config(
+    config: ScheduleConfig,
+) -> Tuple[List[str], Dict[str, Set[str]], List[Pin], Set[str]]:
     if not 3 <= config.weeks <= 6:
         raise ValueError(f"weeks must be 3–6. Got {config.weeks}.")
 
@@ -482,9 +565,21 @@ def validate_config(config: ScheduleConfig) -> Tuple[List[str], Dict[str, Set[st
         "Sun.Choir": set(all_people),
     }
 
+    # Pins join all_people only AFTER pools exist: three of the five pools are
+    # set(all_people), so an earlier union would make a pinned person a BGV and Choir
+    # candidate in every service of the month (spec §5.1 — reproduced: one pin became
+    # four services). They join no pool; the pin itself grants candidacy, only where it
+    # points. The exclusivity guard above compares the three lists and is untouched.
+    pins = parse_pins(config.pinned, config.weeks, config.weekends_w_sat)
+    pinned_only = {p for p, _, _ in pins} - set(all_people)
+    if pinned_only:
+        all_people = sorted(set(all_people) | pinned_only)
+
+    # After the union, so a DSL clause may name a pinned-only person and both
+    # parse_dsl_rules call sites see the same set.
     known = set(all_people)
     parse_dsl_rules(config.dsl_restrictions, known)
-    return all_people, pools
+    return all_people, pools, pins, pinned_only
 
 
 # ─── History with weighted decay ──────────────────────────────────────────────
@@ -702,6 +797,10 @@ def create_model_and_solve(
     empty_target: int | None = None,
     max_time_override: float | None = None,
     pass_info: Dict[str, object] | None = None,
+    pins: Sequence[Pin] = (),
+    soft: bool = False,
+    violation_objective_only: bool = False,
+    violation_target: int | None = None,
 ) -> SolveResult | None:
     """
     Build and solve one pass. Returns None on any status but OPTIMAL/FEASIBLE.
@@ -1117,6 +1216,12 @@ def create_model_and_solve(
         if solver.Value(var):
             assignments[person].append(slot_by_key[slot_key])
 
+    # Derived from the solved assignment, never echoed from the request: a pin counts
+    # only if the person really holds a slot of that role that week (spec §4).
+    pinned_honored = sum(
+        1 for person, role, week in pins
+        if any(s.role_type == role and s.week == week for s in assignments[person]))
+
     total_counts = {p: solver.Value(total_vars[p]) for p in all_people}
     rc = {p: {rt: solver.Value(role_vars[(p, rt)]) for rt in ROLE_ORDER} for p in all_people}
 
@@ -1136,6 +1241,7 @@ def create_model_and_solve(
         weighted_empty_used=int(solver.Value(weighted_empty)),
         objective_skipped=objective_skipped,
         unfilled=unfilled,
+        pinned_honored=pinned_honored,
     )
 
 
@@ -1189,7 +1295,7 @@ def diagnose_infeasibility(
 
 def solve_schedule(config: ScheduleConfig) -> SolveResult:
     config = resolve_dsl_templates(config)
-    all_people, pools = validate_config(config)
+    all_people, pools, pins, pinned_only = validate_config(config)
 
     (forbidden, count_rules, pair_rules, fairness_exempt, fairness_slack,
      weekly_presence, week_exclusions, role_fairness_exempt, role_fairness_slack,
@@ -1226,6 +1332,7 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
         role_fairness_exempt=role_fairness_exempt, role_fairness_slack=role_fairness_slack,
         slots=slots, candidates=candidates,
         hist_total=hist_total, hist_role=hist_role, hist_runs=hist_runs,
+        pins=pins,
     )
 
     big = len(slots) + 1  # a fairness limit so loose it never binds
@@ -1359,6 +1466,7 @@ def solve_from_dict(data: Dict) -> Dict:
             discourage_consecutive_role_repeats=bool(
                 data.get("discourage_consecutive", True)
             ),
+            pinned=data.get("pinned"),
         )
         result = solve_schedule(config)
     except (ValueError, RuntimeError) as e:
@@ -1367,7 +1475,7 @@ def solve_from_dict(data: Dict) -> Dict:
     sat_weeks = normalize_weekend_indexes(config.weeks, config.weekends_w_sat)
     schedule_view = build_schedule_view(result, config.weeks, sat_weeks)
 
-    return {
+    response = {
         "ok": True,
         "schedule": {str(w): v for w, v in schedule_view.items()},
         "fairness_relaxed": result.fairness_limit_used > 1,
@@ -1383,7 +1491,16 @@ def solve_from_dict(data: Dict) -> Dict:
         "total_counts": result.total_counts,
         "role_counts": result.role_counts,
         "unfilled_seats": result.unfilled or [],
+        # Emitted on EVERY response, 0 without pins: its PRESENCE is how the client and the
+        # deploy check tell this solver from one that silently ignores `pinned` (§4, §9).
+        "pinned_honored": result.pinned_honored,
+        # The rules the pins forced aside, in the spec's §4 grammar. Empty without pins.
+        "pin_violations": list(result.pin_violations),
     }
+    # Absent without pins: solve 0 never ran, so there is nothing to prove.
+    if result.violation_ceiling_proven is not None:
+        response["violation_ceiling_proven"] = result.violation_ceiling_proven
+    return response
 
 
 # ─── JSON interface (CLI / subprocess mode) ───────────────────────────────────
