@@ -37,6 +37,8 @@ import { resourceMetadataUrl } from "@/app/mcp/oauth/origin";
 import { jsonNoStore, mcpUnauthorizedResponse } from "@/app/mcp/oauth/responses";
 import { verifyAccessToken } from "@/app/mcp/oauth/tokens";
 import { MCP_SERVER_NAME, mcpServerVersion } from "@/app/mcp/serverInfo";
+import { registerGetMemberAvailability } from "@/app/mcp/tools/getMemberAvailability";
+import { registerGetParticipation } from "@/app/mcp/tools/getParticipation";
 import { registerGetService } from "@/app/mcp/tools/getService";
 import { registerGetSong } from "@/app/mcp/tools/getSong";
 import { registerListServices } from "@/app/mcp/tools/listServices";
@@ -72,6 +74,8 @@ const mcpHandler = createMcpHandler(
     registerListServices(server);
     registerSearchSongs(server);
     registerGetSong(server);
+    registerGetMemberAvailability(server);
+    registerGetParticipation(server);
   },
   {
     serverInfo: SERVER_INFO,

@@ -82,6 +82,7 @@ vi.mock("mcp-handler", async (importOriginal) => {
 });
 
 import { DELETE, GET, POST } from "@/app/api/mcp/route";
+import { memberResponder } from "@/app/mcp/reads/__tests__/memberFixtures";
 import { FROZEN_EVENING, readToolStore, scopedResponder } from "@/app/mcp/reads/__tests__/readToolFixtures";
 import { songResponder } from "@/app/mcp/reads/__tests__/songFixtures";
 import * as mcpRoute from "@/app/api/mcp/route";
@@ -583,18 +584,26 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
   });
 
-  it("tools/list shows exactly ping, get_service, list_services, search_songs and get_song: all read-only, strict, described in Spanish", async () => {
+  it("tools/list shows exactly ping, get_service, list_services, search_songs, get_song, get_member_availability and get_participation: all read-only, strict, described in Spanish", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const tools = result.tools as Record<string, unknown>[];
-    expect(tools.map((t) => t.name)).toEqual(["ping", "get_service", "list_services", "search_songs", "get_song"]);
+    expect(tools.map((t) => t.name)).toEqual([
+      "ping",
+      "get_service",
+      "list_services",
+      "search_songs",
+      "get_song",
+      "get_member_availability",
+      "get_participation",
+    ]);
     for (const tool of tools) {
       expect(tool.annotations, String(tool.name)).toEqual({ readOnlyHint: true });
       expect(tool.inputSchema, String(tool.name)).toMatchObject({ type: "object", additionalProperties: false });
     }
-    const [ping, getService, listServices, searchSongs, getSong] = tools;
+    const [ping, getService, listServices, searchSongs, getSong, getMemberAvailability, getParticipation] = tools;
     // `search_songs` names no calendar day: only the time-aware tools state the zone.
-    for (const tool of [ping!, getService!, listServices!, getSong!]) {
+    for (const tool of [ping!, getService!, listServices!, getSong!, getMemberAvailability!, getParticipation!]) {
       expect(tool.description, String(tool.name)).toMatch(/America\/Mexico_City/);
     }
     expect(ping!.inputSchema).toMatchObject({ properties: {} });
@@ -612,8 +621,16 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
       "tags",
     ]);
     expect(Object.keys((getSong!.inputSchema as { properties: object }).properties).sort()).toEqual(["slug", "songId"]);
+    expect(Object.keys((getMemberAvailability!.inputSchema as { properties: object }).properties).sort()).toEqual([
+      "memberId",
+      "month",
+      "name",
+    ]);
+    expect(Object.keys((getParticipation!.inputSchema as { properties: object }).properties)).toEqual(["month"]);
     for (const tool of [getService!, listServices!]) expect(tool.description).toMatch(/SIN CAMBIOS/);
     expect(getSong!.description).toMatch(/especiales NO cuentan/);
+    expect(getMemberAvailability!.description).toMatch(/SOLO al equipo de alabanza/);
+    expect(getParticipation!.description).toMatch(/borradores incluidos/);
   });
 
   it("tools/call ping returns { ok, server, version, now } with now in Mexico City time", async () => {
@@ -680,7 +697,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     });
     // The body really moved to the copy: the handler parsed it and answered.
     const result = await rpcResult(await POST(request));
-    expect(result.tools).toHaveLength(5);
+    expect(result.tools).toHaveLength(7);
 
     expect(h.forwarded).toHaveLength(1);
     const forwarded = h.forwarded[0]!;
@@ -928,6 +945,65 @@ describe("/api/mcp — search_songs and get_song, end to end", () => {
   it("refuses an unknown argument to either tool as a tool error (I13)", async () => {
     const token = await accessToken(await liveGrant());
     for (const name of ["search_songs", "get_song"]) {
+      const result = await rpcResult(
+        await POST(mcpRequest(rpc("tools/call", { name, arguments: { extra: "x" } }), { token })),
+      );
+      expect(result.isError, name).toBe(true);
+    }
+    expect(h.operationalFetch).not.toHaveBeenCalled();
+  });
+});
+
+// ── the member/participation read tools (P1 step 6) ──────────────────────────
+
+describe("/api/mcp — get_member_availability and get_participation, end to end", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(FROZEN_EVENING));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    h.operationalFetch.mockReset();
+    h.rawFetch.mockReset();
+  });
+
+  it("tools/call get_member_availability {} lists the worship team, excluding a kids-only member (I5)", async () => {
+    const responder = memberResponder();
+    h.operationalFetch.mockImplementation(responder.fetch);
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(
+      await POST(mcpRequest(rpc("tools/call", { name: "get_member_availability", arguments: {} }), { token })),
+    );
+    expect(result.isError).toBeFalsy();
+    const content = result.content as { type: string; text: string }[];
+    const payload = JSON.parse(content[0]!.text) as { month: string; members: { memberId: string }[] };
+    expect(payload.month).toBe("2026-09");
+    expect(payload.members.map((m) => m.memberId)).not.toContain("mem-kiki");
+    expect(result.structuredContent).toEqual(payload);
+  });
+
+  it("tools/call get_participation {} counts a special's voice seats as especial, drafts included", async () => {
+    const responder = scopedResponder(readToolStore());
+    h.operationalFetch.mockImplementation(responder.operational);
+    h.rawFetch.mockImplementation(responder.raw);
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(
+      await POST(mcpRequest(rpc("tools/call", { name: "get_participation", arguments: {} }), { token })),
+    );
+    expect(result.isError).toBeFalsy();
+    const content = result.content as { type: string; text: string }[];
+    const payload = JSON.parse(content[0]!.text) as { month: string; members: { memberId: string; especial: number }[] };
+    expect(payload.month).toBe("2026-09");
+    expect(payload.members.find((m) => m.memberId === "mem-kiki")?.especial).toBe(1);
+    expect(result.structuredContent).toEqual(payload);
+  });
+
+  it("refuses an unknown argument to either tool as a tool error (I13)", async () => {
+    const responder = memberResponder();
+    h.operationalFetch.mockImplementation(responder.fetch);
+    const token = await accessToken(await liveGrant());
+    for (const name of ["get_member_availability", "get_participation"]) {
       const result = await rpcResult(
         await POST(mcpRequest(rpc("tools/call", { name, arguments: { extra: "x" } }), { token })),
       );
