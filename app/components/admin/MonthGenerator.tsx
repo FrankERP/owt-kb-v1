@@ -2079,7 +2079,8 @@ export default function MonthGenerator({
     // load order — different on a cold load than on a re-render — would have
     // decided which rule set won.
     //
-    // `owt_solver_history_v2` below stays per-browser on purpose (ADR-0010):
+    // `owt_solver_history_v2` below stays per-browser on purpose (ADR-0010,
+    // amended by ADR-0041; derived history behind the switch):
     // P6 shares the RULES, not the fairness history.
     //
     // Derived mode (R14) never READS it: the history comes from the stored
@@ -2092,7 +2093,19 @@ export default function MonthGenerator({
     } catch {}
   }, []);
 
+  /**
+   * Local-mode only. `solverHistory` React state stays `[]` for the lifetime
+   * of a derived-mode mount (the load effect above never hydrates it), so
+   * `prev` here is always empty and a write would stamp `HISTORY_KEY` back to
+   * `[]` — destroying R15's rollback target, which `appendLocalHistoryEntry`
+   * maintains separately by reading `localStorage` fresh. No current call site
+   * reaches this function in derived mode (`handleConfirm` branches on the
+   * switch before calling either writer), so the guard is currently dead code
+   * on that branch — kept anyway so a future call site cannot resurrect the
+   * I-4 failure mode by mistake.
+   */
   function saveHistoryEntry(y: number, m: number, total_counts: Record<string, number>, role_counts: Record<string, Record<string, number>>) {
+    if (SOLVER_HISTORY_SOURCE !== "local") return;
     const key = `${y}-${m}`;
     setSolverHistory(prev => {
       const next = [
@@ -2104,7 +2117,9 @@ export default function MonthGenerator({
     });
   }
 
+  /** Local-mode only — see `saveHistoryEntry`'s comment; the same danger applies. */
   function removeHistoryEntry(key: string) {
+    if (SOLVER_HISTORY_SOURCE !== "local") return;
     setSolverHistory(prev => {
       const next = prev.filter(h => h.key !== key);
       try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}

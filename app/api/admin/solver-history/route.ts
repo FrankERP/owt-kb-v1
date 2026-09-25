@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { loadSolverHistory, SOLVER_HISTORY_UNAVAILABLE_MESSAGE } from "@/app/utils/solverHistoryRead";
+import {
+  loadSolverHistory,
+  SOLVER_HISTORY_UNAVAILABLE_ERROR_NAME,
+  SOLVER_HISTORY_UNAVAILABLE_MESSAGE,
+} from "@/app/utils/solverHistoryRead";
 
 /**
  * `GET /api/admin/solver-history?month=YYYY-MM[&evidence=1]` — the read-only
@@ -81,7 +85,7 @@ export async function GET(req: NextRequest) {
     // is already logged inside `readList` (`solverHistoryRead.ts`), so logging
     // it again here would just duplicate that line; anything else reached this
     // `catch` UNLOGGED and must not vanish silently.
-    if (!(err instanceof Error) || err.name !== "SolverHistoryUnavailableError") {
+    if (!(err instanceof Error) || err.name !== SOLVER_HISTORY_UNAVAILABLE_ERROR_NAME) {
       console.error("[solver-history route] unexpected failure reading solver history:", err);
     }
     return NextResponse.json(

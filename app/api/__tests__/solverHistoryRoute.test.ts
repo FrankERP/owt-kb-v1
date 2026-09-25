@@ -34,9 +34,11 @@ vi.mock("@/app/utils/authGuards", () => ({
 vi.mock("@/app/utils/solverHistoryRead", () => ({
   loadSolverHistory: (...args: unknown[]) => h.loadSolverHistory(...args),
   SOLVER_HISTORY_UNAVAILABLE_MESSAGE: "No se pudo leer el historial de equidad.",
+  SOLVER_HISTORY_UNAVAILABLE_ERROR_NAME: "SolverHistoryUnavailableError",
 }));
 
 import { GET } from "@/app/api/admin/solver-history/route";
+import { SOLVER_HISTORY_UNAVAILABLE_ERROR_NAME } from "@/app/utils/solverHistoryRead";
 
 function req(url: string): NextRequest {
   return { nextUrl: new URL(url, "http://localhost") } as unknown as NextRequest;
@@ -47,11 +49,14 @@ function req(url: string): NextRequest {
  * NAME only. The route discriminates the already-logged failure path by
  * `err.name`, not `instanceof` — so this stand-in is enough, and the mocked
  * `@/app/utils/solverHistoryRead` module never has to export the real class.
+ * The name itself comes from the mocked module's own re-export, so this file
+ * and the route agree on the same constant rather than on two copies of the
+ * same string.
  */
 class SolverHistoryUnavailableErrorStandIn extends Error {
   constructor() {
     super("No se pudo leer el historial de equidad.");
-    this.name = "SolverHistoryUnavailableError";
+    this.name = SOLVER_HISTORY_UNAVAILABLE_ERROR_NAME;
   }
 }
 
@@ -69,7 +74,7 @@ function fixtureResult(overrides: Record<string, unknown> = {}) {
       { key: "2026-9", year: 2026, month: 9, services: 0 },
       { key: "2026-10", year: 2026, month: 10, services: 0 },
     ],
-    diagnostics: { duplicateTargets: [], dangling: [], unnamedMemberIds: [] },
+    diagnostics: { duplicateTargets: [], danglingSeats: [], unnamedMembers: [], duplicateNames: [] },
     ...overrides,
   };
 }
@@ -202,6 +207,10 @@ describe("500 — the builder threw", () => {
   });
 
   it("any other throw from the builder gets the same opaque 500, never the original message", async () => {
+    // Unlogged upstream, so the route's own catch logs it (see "500 — server-side
+    // logging" below) — spied and silenced here so `npm test` stays clean, and
+    // asserted so a regression that drops the log is caught here too.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     h.loadSolverHistory.mockRejectedValue(new RangeError("historyWindow: not a calendar month: 2026-13"));
     const res = await GET(req("/api/admin/solver-history?month=2026-11"));
     expect(res.status).toBe(500);
@@ -209,6 +218,8 @@ describe("500 — the builder threw", () => {
     expect(body.message).toBe("No se pudo leer el historial de equidad.");
     expect(JSON.stringify(body)).not.toContain("historyWindow");
     expect(body).not.toHaveProperty("entries");
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    errorSpy.mockRestore();
   });
 });
 

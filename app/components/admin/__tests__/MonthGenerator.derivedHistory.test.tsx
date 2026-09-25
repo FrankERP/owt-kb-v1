@@ -573,3 +573,62 @@ describe("derived history — no leader list until the read is ready, in both le
     });
   }
 });
+
+// ─── 8: I-4 — the local writers stay gated behind the switch ────────────────
+//
+// `saveHistoryEntry`/`removeHistoryEntry` (module-private to `MonthGenerator.tsx`)
+// now both open with `if (SOLVER_HISTORY_SOURCE !== "local") return;`. Neither is
+// reachable from this file's derived-mode renders: `handleConfirm` already
+// branches on the switch before calling either writer (`appendLocalHistoryEntry`
+// runs instead), and the delete chip that calls `removeHistoryEntry` only renders
+// when `history.length > 0` on the LOCAL `solverHistory` React state — which the
+// load effect never hydrates in derived mode, so it stays `[]` and the chip never
+// mounts. There is therefore no UI seam that calls either guarded function while
+// derived — that absence is the point of the guard, not a gap in this test.
+//
+// What IS testable without exporting either function or restructuring the
+// component: the outcome the guard exists to prevent. If either writer ever ran
+// with derived mode's always-empty `solverHistory` state, its `next` would be `[]`
+// or a strict subset of what's stored, and it would stamp that over
+// `owt_solver_history_v2` — destroying R15's rollback target that
+// `appendLocalHistoryEntry` maintains separately. This test seeds that key, spies
+// on every write to it across a full create-confirm round trip, and asserts none
+// of them ever shrinks it.
+describe("derived history — the local writers stay gated behind the switch (I-4)", () => {
+  it("8. a full create-confirm round trip never shrinks the seeded localStorage entry", async () => {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(SEEDED_LOCAL));
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem");
+    const derived = payload(2026, 11);
+    stubFetch({ history: () => respond(200, derived) });
+    const onClose = vi.fn();
+    const { container } = renderCreate("2026-11", { onClose });
+    await waitFor(() => expect(screen.getByText("Domingo — sin Lead en Octubre 2026")).toBeTruthy());
+
+    deselectAll(container, "saturday");
+    preview();
+    fireEvent.click(cellAt(container, "lead", "2026-11-01"));
+    fireEvent.click(within(container.querySelector("[data-candidate-picker]") as HTMLElement).getByText("Beto Ficticio"));
+    fireEvent.click(screen.getByText("Cerrar"));
+    fireEvent.click(createButton());
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+
+    const historyWrites = setItemSpy.mock.calls.filter(([key]) => key === HISTORY_KEY);
+    expect(historyWrites.length).toBeGreaterThan(0);
+    for (const [, value] of historyWrites) {
+      const parsed = JSON.parse(value as string) as unknown[];
+      expect(parsed.length).toBeGreaterThanOrEqual(SEEDED_LOCAL.length);
+    }
+    // The final value is still exactly the additive dual-write R15 promises —
+    // never a writer's own truncated rebuild from an empty React state.
+    expect(JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "null")).toEqual([
+      ...SEEDED_LOCAL,
+      {
+        key: "2026-11",
+        year: 2026,
+        month: 11,
+        total_counts: { "Beto Ficticio": 1 },
+        role_counts: { "Beto Ficticio": { "Sun.Lead": 1 } },
+      },
+    ]);
+  });
+});

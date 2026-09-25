@@ -22,6 +22,7 @@ import {
   weekendRoleCreationReceiptsQuery,
 } from "@/app/utils/serviceReadQueries";
 import {
+  SOLVER_HISTORY_UNAVAILABLE_ERROR_NAME,
   SOLVER_HISTORY_UNAVAILABLE_MESSAGE,
   SolverHistoryUnavailableError,
   loadSolverHistory,
@@ -123,6 +124,12 @@ beforeEach(() => {
 });
 afterEach(() => {
   consoleError.mockRestore();
+});
+
+describe("SolverHistoryUnavailableError — the name the route discriminates on", () => {
+  it("carries the pinned name, not a bare string only the route happens to know", () => {
+    expect(new SolverHistoryUnavailableError().name).toBe(SOLVER_HISTORY_UNAVAILABLE_ERROR_NAME);
+  });
 });
 
 describe("loadSolverHistory — the reads", () => {

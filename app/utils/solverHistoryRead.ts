@@ -39,11 +39,14 @@ import type { SolverHistoryResult } from "./solverHistoryTypes";
 /** The one message a failed history read carries — safe to show, and the route's own copy. */
 export const SOLVER_HISTORY_UNAVAILABLE_MESSAGE = "No se pudo leer el historial de equidad.";
 
+/** The `Error.name` the route discriminates on — its own copy, pinned so neither side can drift. */
+export const SOLVER_HISTORY_UNAVAILABLE_ERROR_NAME = "SolverHistoryUnavailableError";
+
 /** The history could not be read. Its message is fixed and carries nothing from Sanity. */
 export class SolverHistoryUnavailableError extends Error {
   constructor() {
     super(SOLVER_HISTORY_UNAVAILABLE_MESSAGE);
-    this.name = "SolverHistoryUnavailableError";
+    this.name = SOLVER_HISTORY_UNAVAILABLE_ERROR_NAME;
   }
 }
 
