@@ -8,8 +8,9 @@
 //   1. `inputSchema` is a STRICT zod object, so an unknown argument is refused
 //      rather than ignored (spec I13). The SDK validates it before the handler
 //      runs and answers a refusal as a tool error (`isError: true`).
-//   2. `annotations` are explicit: reads say `readOnlyHint: true`; every write
-//      is declared destructive (spec I14).
+//   2. `annotations` are explicit: reads say `readOnlyHint: true,
+//      openWorldHint: false` (this server never reaches outside its own
+//      dataset); every write is declared destructive (spec I14).
 //   3. `title` and `description` are Spanish, like the rest of the app.
 //   4. The handler never throws. The SDK would put `error.message` — Sanity's
 //      text, a stack-ish detail — into the tool result, so every failure is
@@ -111,7 +112,7 @@ export function registerPing(server: McpServer, deps: { version: string }): void
         "No recibe argumentos y no lee ni escribe datos del equipo. Devuelve { ok, server, version, now }: " +
         "version es el commit desplegado y now es la hora actual en America/Mexico_City, con su desfase UTC.",
       inputSchema: z.object({}).strict(),
-      annotations: { readOnlyHint: true },
+      annotations: { readOnlyHint: true, openWorldHint: false },
     },
     async () => pingResult(deps.version),
   );

@@ -222,11 +222,15 @@ super-admin-only impersonation and live role/revocation refresh. Full detail in
 
 ## MCP / OAuth — the Claude connector (super-admin only; no session cookie outside consent)
 
-Full detail — the endpoints, the one tool, adding/revoking the connector, the kill switch, the
-dev smoke procedure — is [`docs/MCP.md`](MCP.md); why client registration is stateless is
-[ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md). **Status: released to
+Full detail — the endpoints, the [tools](MCP.md#tools), adding/revoking the connector, the kill
+switch, the dev smoke procedure — is [`docs/MCP.md`](MCP.md); why client registration is stateless
+is [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md). **P0 status: released to
 production 2026-09-24** (PR #95, `main` `c2ca5f7c`; see `docs/MCP.md`'s
-[release record](MCP.md#release-record-p0-2026-09-24)). Every route here is excluded from `proxy.ts`
+[release record](MCP.md#release-record-p0-2026-09-24)). **P1 status (seven read tools —
+`get_service`, `list_services`, `search_songs`, `get_song`, `get_member_availability`,
+`get_participation`, `list_proposals`): implemented on branch `claude/mcp-p1-reads`, NOT
+released** — see `docs/MCP.md`'s
+[P1 release checklist](MCP.md#p1-release-checklist-not-started). Every route here is excluded from `proxy.ts`
 except the two marked **gated**. None of the excluded ones reads a session cookie; what enforces
 each is named in its Auth cell — the discovery documents are **public by design**, registration
 is bounded by the **redirect-URI allowlist** and hands out a **signed client id**, the token
@@ -241,7 +245,7 @@ endpoint needs a **signed code plus its PKCE verifier** (or a signed refresh tok
 | `/oauth/authorize` | GET | **gated** — `requireActiveSession` + live `super-admin` | The consent screen. Streams (`app/(client)/loading.tsx`); a foreign host or refused request never redirects the caller anywhere it didn't come from. |
 | `/api/oauth/authorize` | POST, GET | **gated**, same as above, plus same-origin check | The ONLY thing that mints an authorization code (303 to the verified `redirect_uri`). GET is 405 — a code is never minted by a link, prefetch or redirect. |
 | `/api/oauth/token` | POST | public — the signed code plus its PKCE verifier (or a signed refresh token and its live grant), and the signed client id | `authorization_code` and `refresh_token` grants. Public clients only (`token_endpoint_auth_method: "none"`), so client authentication is `invalid_client`: a `client_secret` in the body is a **400**; an `Authorization: Basic` header is a **401** with `WWW-Authenticate: Basic realm="owt-backstage"` (RFC 6749 §5.2). Creates the `mcpOauthGrant` and rotates its refresh `jti` on every use; a reused refresh token revokes the whole grant. |
-| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live super-admin lookup — gate every request before it reaches the MCP server; see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. One tool: `ping`. |
+| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live super-admin lookup — gate every request before it reaches the MCP server; see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. Eight tools in the code on this branch: `ping` (P0, released) plus seven read tools (P1, not released — see [`docs/MCP.md`](MCP.md#tools)). Every tool declares `readOnlyHint: true, openWorldHint: false` and a strict input schema. |
 
 ---
 

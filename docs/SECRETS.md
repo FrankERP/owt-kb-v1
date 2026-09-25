@@ -380,9 +380,9 @@ that order, and the window is zero.
 ## `SR_VERIFY_BYPASS_SECRET`
 
 - **Needed on:** local `.env.local` (A3 harness, `scripts/dev-verify.ts` **and
-  `scripts/mcp-dev-smoke.mjs`** — the MCP OAuth+ping smoke client, [docs/MCP.md](MCP.md)). **Not
-  needed on:** Vercel — Vercel holds its own copy as the project's Protection Bypass for
-  Automation.
+  `scripts/mcp-dev-smoke.mjs`** — the MCP OAuth+`ping` smoke client, `--reads` optionally
+  exercising the P1 read tools too, [docs/MCP.md](MCP.md)). **Not needed on:** Vercel — Vercel
+  holds its own copy as the project's Protection Bypass for Automation.
 - **Purpose:** passes Vercel SSO protection on preview deployments, sent only as the
   `x-vercel-protection-bypass` header. Without it all three tools refuse — the dev smoke client
   refuses before any network call (the bypass-secret check at the top of its `main()`, right

@@ -32,6 +32,11 @@ const h = await vi.hoisted(async () => {
 vi.mock("@/app/utils/authGuards", () => ({ requireActiveSession: () => h.requireActiveSession() }));
 vi.mock("@/app/utils/memberAccess", () => ({ getMemberAccess: (id: string) => h.getMemberAccess(id) }));
 vi.mock("@/sanity/lib/serverClient", () => ({ writeClient: h.writeClient, serverClient: { fetch: vi.fn() } }));
+// Every read tool's import of `operationalClient`/`rawIntegrityClient` must
+// never reach `sanity/env.ts`, which throws when `NEXT_PUBLIC_SANITY_*` is
+// unset (as it is under vitest). This chain only calls `ping` (step 5 below),
+// so nothing here calls `fetch` even though all eight tools are registered.
+vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: { fetch: vi.fn() }, rawIntegrityClient: { fetch: vi.fn() } }));
 
 import nextConfig from "../../../next.config.mjs";
 import { DELETE as mcpDELETE, GET as mcpGET, POST as mcpPOST } from "@/app/api/mcp/route";
@@ -302,7 +307,16 @@ describe("the connector handshake, end to end on preview (discovery → ping →
     expect(negotiated).toBe(PROTOCOL);
 
     const list = await rpcResult(await mcp(tokens.access_token, "tools/list", undefined, negotiated));
-    expect((list.tools as { name: string }[]).map((t) => t.name)).toEqual(["ping"]);
+    expect((list.tools as { name: string }[]).map((t) => t.name)).toEqual([
+      "ping",
+      "get_service",
+      "list_services",
+      "search_songs",
+      "get_song",
+      "get_member_availability",
+      "get_participation",
+      "list_proposals",
+    ]);
 
     const ping = (token: string) => mcp(token, "tools/call", { name: "ping", arguments: {} }, negotiated);
     const first = await rpcResult(await ping(tokens.access_token));

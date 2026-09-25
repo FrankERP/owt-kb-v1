@@ -16,6 +16,8 @@ const ROOT = path.resolve(__dirname, "../../..");
 const READERS = [
   "app/api/admin/service-integrity/setlists/route.ts",
   "app/utils/publishReadyBundle.ts",
+  // The MCP snapshot mirrors publishReadyBundle's loader (P1 Decision D1).
+  "app/mcp/reads/serviceSnapshot.ts",
 ];
 
 describe("special setlist targets go through one predicate", () => {

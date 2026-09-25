@@ -1,11 +1,13 @@
 // scripts/__tests__/mcpDevSmoke.test.ts
 //
-// TDD for scripts/mcp-dev-smoke.mjs (P0 plan step 11a, controller ruling R24):
-// the dev-smoke client's pure helpers — base-URL validation (including the
-// production refusal), PKCE, authorize-URL building, form encoding, SSE-frame
-// parsing, token redaction and unverified JWT decoding. None of this touches
-// the network; the live handshake against dev is Frank's own run (see the
-// task-11a report for the exact commands and their output).
+// TDD for scripts/mcp-dev-smoke.mjs (P0 plan step 11a, controller ruling R24;
+// the `--reads` pass added at P1 plan step 8): the dev-smoke client's pure
+// helpers — base-URL validation (including the production refusal), PKCE,
+// authorize-URL building, form encoding, SSE-frame parsing, token redaction,
+// unverified JWT decoding, the tools/list check and the `--reads` pass'
+// arguments/detail/summary helpers. None of this touches the network; the
+// live handshake against dev is Frank's own run (see the task-11a report for
+// the exact commands and their output).
 //
 // Several groups cross-check the script's duplicated logic against the real
 // server modules it talks to, so a drift in either fails here instead of
@@ -25,21 +27,34 @@ import {
   BYPASS_HEADER,
   buildAuthorizeUrl,
   bypassHeaderFor,
+  checkPingRegistered,
+  checkToolList,
   codeChallengeFromVerifier,
   decodeJwtPayloadUnsafe,
   DEFAULT_BASE,
+  EXPECTED_TOOLS,
+  failureGrantLines,
   formEncode,
+  formatReadCheckLine,
   generateCodeVerifier,
   generateState,
+  grantPointerLines,
+  isAmbiguousServiceRefusal,
   LOCAL_BASE,
   parseArgs,
   parseSseMessages,
   PRODUCTION_BASE,
+  READ_TOOL_NAMES,
+  readCheckArguments,
+  readCheckDetail,
   redact,
   redirectUriFor,
   resolveBase,
   rpc,
+  serviceIdFromListResult,
   SmokeError,
+  songIdFromSearchResult,
+  summarizeReadChecks,
 } from "../mcp-dev-smoke.mjs";
 
 const KEY = new TextEncoder().encode("a".repeat(MIN_SECRET_BYTES));
@@ -85,16 +100,19 @@ describe("resolveBase", () => {
 });
 
 describe("parseArgs", () => {
-  it("defaults: no base override, open/refresh on, await-revocation off", () => {
-    expect(parseArgs([])).toEqual({ base: null, open: true, refresh: true, awaitRevocation: false });
+  it("defaults: no base override, open/refresh on, await-revocation and reads off", () => {
+    expect(parseArgs([])).toEqual({ base: null, open: true, refresh: true, awaitRevocation: false, reads: false });
   });
 
-  it("parses --base, --no-open, --no-refresh, --await-revocation together", () => {
-    expect(parseArgs(["--base", "http://localhost:3000", "--no-open", "--no-refresh", "--await-revocation"])).toEqual({
+  it("parses --base, --no-open, --no-refresh, --await-revocation, --reads together", () => {
+    expect(
+      parseArgs(["--base", "http://localhost:3000", "--no-open", "--no-refresh", "--await-revocation", "--reads"]),
+    ).toEqual({
       base: "http://localhost:3000",
       open: false,
       refresh: false,
       awaitRevocation: true,
+      reads: true,
     });
   });
 
@@ -306,6 +324,49 @@ describe("decodeJwtPayloadUnsafe", () => {
   });
 });
 
+describe("grantPointerLines / failureGrantLines", () => {
+  const REVOKE = "node --env-file=.env.local scripts/revoke-mcp-grant.mjs";
+
+  it("names a real access token's grant and the exact revoke command", async () => {
+    const token = await signAccessToken({ key: KEY, origin: PREVIEW_ORIGIN, sub: "member-1", grantId: "mcpOauthGrant.abc" });
+    expect(grantPointerLines(token.token)).toEqual([
+      "  grant: mcpOauthGrant.abc",
+      `  revoke: ${REVOKE} --id mcpOauthGrant.abc --apply`,
+    ]);
+  });
+
+  it("is null when no grant id decodes", () => {
+    expect(grantPointerLines("not-a-jwt")).toBeNull();
+    expect(grantPointerLines(undefined)).toBeNull();
+    const noGrant = `a.${Buffer.from(JSON.stringify({ sub: "x" }), "utf8").toString("base64url")}.c`;
+    expect(grantPointerLines(noGrant)).toBeNull();
+  });
+
+  it("on a failure after the token exchange, prints the grant and its revoke command — the same lines step 9 prints", async () => {
+    const token = await signAccessToken({ key: KEY, origin: PREVIEW_ORIGIN, sub: "member-1", grantId: "mcpOauthGrant.abc" });
+    const lines = failureGrantLines({ access_token: token.token, refresh_token: "r", expires_in: 604800 });
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/created a grant before failing/);
+    expect(lines.slice(1)).toEqual(grantPointerLines(token.token));
+    // Never the token itself: only the grant id, which is what the revoke script takes.
+    expect(lines.join("\n")).not.toContain(token.token);
+  });
+
+  it("points at the dry run when the token carries no decodable grant id", () => {
+    expect(failureGrantLines({ access_token: "not-a-jwt" })).toEqual([
+      expect.stringMatching(/could not be decoded/),
+      `  ${REVOKE}`,
+    ]);
+  });
+
+  it("prints nothing when no token exchange happened", () => {
+    expect(failureGrantLines(null)).toEqual([]);
+    expect(failureGrantLines(undefined)).toEqual([]);
+    expect(failureGrantLines({})).toEqual([]);
+    expect(failureGrantLines({ access_token: "" })).toEqual([]);
+  });
+});
+
 describe("rpc", () => {
   it("builds a JSON-RPC 2.0 envelope, params omitted when undefined", () => {
     expect(rpc("tools/list")).toEqual({ jsonrpc: "2.0", id: 1, method: "tools/list" });
@@ -315,6 +376,163 @@ describe("rpc", () => {
       method: "tools/call",
       params: { name: "ping" },
     });
+  });
+});
+
+describe("checkToolList", () => {
+  const readOnly = { readOnlyHint: true, openWorldHint: false };
+
+  it("accepts the exact eight names, in order, all annotated readOnlyHint/openWorldHint", () => {
+    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: readOnly }));
+    expect(checkToolList(tools)).toEqual({ ok: true });
+  });
+
+  it("refuses a wrong count or a wrong order", () => {
+    const tooFew = EXPECTED_TOOLS.slice(0, 1).map((name) => ({ name, annotations: readOnly }));
+    expect(checkToolList(tooFew).ok).toBe(false);
+
+    const reordered = [...EXPECTED_TOOLS].reverse().map((name) => ({ name, annotations: readOnly }));
+    expect(checkToolList(reordered).ok).toBe(false);
+  });
+
+  it("refuses a tool missing openWorldHint: false (a stale registration)", () => {
+    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: { readOnlyHint: true } }));
+    const result = checkToolList(tools);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain(EXPECTED_TOOLS[0]);
+  });
+
+  it("refuses a tool declared writable", () => {
+    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: { readOnlyHint: false, openWorldHint: false } }));
+    expect(checkToolList(tools).ok).toBe(false);
+  });
+});
+
+describe("checkPingRegistered", () => {
+  const readOnly = { readOnlyHint: true, openWorldHint: false };
+
+  it("accepts ping alone — a P0-only deployment, what the plain smoke (no --reads) must pass against", () => {
+    expect(checkPingRegistered([{ name: "ping", annotations: readOnly }])).toEqual({ ok: true });
+  });
+
+  it("accepts ping alongside the full P1 set too — order and the other names don't matter", () => {
+    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: readOnly }));
+    expect(checkPingRegistered(tools)).toEqual({ ok: true });
+    expect(checkPingRegistered([...tools].reverse())).toEqual({ ok: true });
+  });
+
+  it("refuses when ping is missing entirely", () => {
+    const result = checkPingRegistered([{ name: "get_service", annotations: readOnly }]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("ping");
+  });
+
+  it("refuses a ping missing openWorldHint: false or declared writable", () => {
+    expect(checkPingRegistered([{ name: "ping", annotations: { readOnlyHint: true } }]).ok).toBe(false);
+    expect(checkPingRegistered([{ name: "ping", annotations: { readOnlyHint: false, openWorldHint: false } }]).ok).toBe(false);
+  });
+});
+
+describe("readCheckArguments", () => {
+  it("every fixed tool (excluding get_song and get_service) has {} or a trivial short query, never a write shape", () => {
+    for (const name of READ_TOOL_NAMES) {
+      if (name === "get_song" || name === "get_service") continue;
+      expect(readCheckArguments(name, {})).toBeTypeOf("object");
+    }
+    expect(readCheckArguments("search_songs", {})).toEqual({ query: "a" });
+  });
+
+  it("get_song takes the songId handed in from search_songs's result", () => {
+    expect(readCheckArguments("get_song", { songId: "song-123" })).toEqual({ songId: "song-123" });
+  });
+
+  it("get_song throws (caught by main()'s own per-tool try, printed as get_song's FAIL line) when no songId was ever found", () => {
+    expect(() => readCheckArguments("get_song", {})).toThrow(/songId/);
+    expect(() => readCheckArguments("get_song", { serviceId: "role-1" })).toThrow(/songId/);
+  });
+
+  it("get_service selects BY ID when list_services named one, never {} (so it can't hit its own tie refusal)", () => {
+    expect(readCheckArguments("get_service", { serviceId: "role-sun-1004" })).toEqual({
+      serviceId: "role-sun-1004",
+    });
+  });
+
+  it("get_service falls back to {} (never throws) when list_services named no service — the empty-month case", () => {
+    expect(readCheckArguments("get_service", {})).toEqual({});
+    expect(readCheckArguments("get_service", { songId: "song-1" })).toEqual({});
+  });
+});
+
+describe("songIdFromSearchResult", () => {
+  it("reads the first song's id, ignoring everything else in the payload", () => {
+    expect(songIdFromSearchResult({ songs: [{ id: "song-1", title: "Grande" }, { id: "song-2" }] })).toBe("song-1");
+  });
+
+  it("returns null for an empty or malformed payload — never throws", () => {
+    expect(songIdFromSearchResult({ songs: [] })).toBeNull();
+    expect(songIdFromSearchResult({})).toBeNull();
+    expect(songIdFromSearchResult(null)).toBeNull();
+    expect(songIdFromSearchResult({ songs: [{}] })).toBeNull();
+  });
+});
+
+describe("serviceIdFromListResult", () => {
+  it("reads the first service's id, ignoring everything else in the payload", () => {
+    expect(
+      serviceIdFromListResult({ services: [{ serviceId: "role-sun-1004", date: "2026-10-04" }, { serviceId: "role-sun-1011" }] }),
+    ).toBe("role-sun-1004");
+  });
+
+  it("returns null for an empty or malformed payload (an empty month) — never throws", () => {
+    expect(serviceIdFromListResult({ services: [] })).toBeNull();
+    expect(serviceIdFromListResult({})).toBeNull();
+    expect(serviceIdFromListResult(null)).toBeNull();
+    expect(serviceIdFromListResult({ services: [{}] })).toBeNull();
+  });
+});
+
+describe("isAmbiguousServiceRefusal", () => {
+  it("true only for get_service's OWN A15 shape: isError with 2+ candidates", () => {
+    expect(
+      isAmbiguousServiceRefusal({
+        isError: true,
+        structuredContent: { candidates: [{ serviceId: "a" }, { serviceId: "b" }] },
+      }),
+    ).toBe(true);
+  });
+
+  it("false for a success result, a single-candidate refusal, a catalogue-unreadable refusal, or garbage", () => {
+    expect(isAmbiguousServiceRefusal({ isError: false, structuredContent: { candidates: [{ serviceId: "a" }, { serviceId: "b" }] } })).toBe(false);
+    expect(isAmbiguousServiceRefusal({ isError: true, structuredContent: { candidates: [{ serviceId: "a" }] } })).toBe(false);
+    expect(isAmbiguousServiceRefusal({ isError: true, structuredContent: { failedSources: ["roles"] } })).toBe(false);
+    expect(isAmbiguousServiceRefusal({ isError: true })).toBe(false);
+    expect(isAmbiguousServiceRefusal(null)).toBe(false);
+    expect(isAmbiguousServiceRefusal(undefined)).toBe(false);
+  });
+});
+
+describe("readCheckDetail", () => {
+  it("counts only — a payload carrying a name never leaks it into the detail string", () => {
+    const detail = readCheckDetail("get_member_availability", {
+      members: [{ memberId: "mem-1", name: "Ana Confidencial" }],
+    });
+    expect(detail).toBe("1 members");
+    expect(detail).not.toContain("Ana");
+  });
+
+  it("reports both counts for get_participation, and falls back to a fixed word for an unknown shape", () => {
+    expect(readCheckDetail("get_participation", { members: [1, 2], services: [1] })).toBe("2 members, 1 services");
+    expect(readCheckDetail("get_service", {})).toBe("1 service");
+    expect(readCheckDetail("nonexistent_tool", { x: 1 })).toBe("ok");
+    expect(readCheckDetail("list_services", null)).toBe("ok");
+  });
+});
+
+describe("formatReadCheckLine / summarizeReadChecks", () => {
+  it("formats a PASS and a FAIL line, and a counts-only summary", () => {
+    expect(formatReadCheckLine("list_services", { ok: true, detail: "3 services" })).toBe("  PASS list_services — 3 services");
+    expect(formatReadCheckLine("get_song", { ok: false, detail: "HTTP 500" })).toBe("  FAIL get_song — HTTP 500");
+    expect(summarizeReadChecks([{ ok: true }, { ok: true }, { ok: false }])).toBe("  reads: 2/3 passed");
   });
 });
 

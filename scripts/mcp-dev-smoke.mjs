@@ -26,6 +26,21 @@
  *       discovery → registration (loopback redirect) → consent (opens the
  *       default browser) → token → initialize/tools-list/ping → refresh →
  *       ping again → prints the grant id and the exact revoke command.
+ *     A run that FAILS after the token exchange still prints the grant id and
+ *       the revoke command (or, if the id cannot be decoded, the dry run that
+ *       lists every grant) right after its FAIL line — the grant exists either
+ *       way (`failureGrantLines`).
+ *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --reads
+ *     … same, and after `ping` (still inside step 7, before refresh) calls
+ *       each of the seven P1 read tools once — list_services, get_service
+ *       (selected BY ID from list_services's own first result, so it never
+ *       hits its own same-day-tie refusal — an empty month falls back to {}
+ *       and a resulting tie is logged as an EXPECTED pass, not a failure),
+ *       search_songs, get_song (using the first song search_songs found),
+ *       get_member_availability, get_participation, list_proposals — with no
+ *       arguments or a trivial one, printing one PASS/FAIL line per tool and
+ *       a counts-only summary (never a name or any other personal data). No
+ *       write tool exists (DV1); this remains a read-only smoke.
  *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --await-revocation
  *     … same, then pauses for Enter after printing the revoke command — run
  *       `revoke-mcp-grant.mjs --id <id> --apply` in another terminal, press
@@ -42,9 +57,12 @@
  * refresh token) is ever written to disk or logged past an 8-character
  * prefix plus its length.
  *
- * The smoke calls exactly one MCP tool, `ping` (DV1) — grep this file for
- * `tools/call` to confirm there is only the one call site, reused for the
- * post-refresh check.
+ * The smoke calls `ping` always, and — only with `--reads` — the seven P1
+ * read tools once each (DV1: reads only). It calls no write tool; none exist.
+ * The plain smoke's own `tools/list` check (`checkPingRegistered`) requires
+ * ONLY `ping`, so it passes against a P0-only deployment (production today)
+ * as well as a P1 one; `--reads` requires the full eight (`checkToolList`),
+ * since it is about to call the other seven.
  *
  * Every exported function below is pure — no network, no filesystem, no
  * `process`/env access — and is what `scripts/__tests__/mcpDevSmoke.test.ts`
@@ -78,9 +96,9 @@ const TOTAL_STEPS = 10;
 
 // ── pure helpers (unit-tested without any network) ─────────────────────────
 
-/** Parse argv into `{ base, open, refresh, awaitRevocation }`, or throw. Pure. */
+/** Parse argv into `{ base, open, refresh, awaitRevocation, reads }`, or throw. Pure. */
 export function parseArgs(argv) {
-  const args = { base: null, open: true, refresh: true, awaitRevocation: false };
+  const args = { base: null, open: true, refresh: true, awaitRevocation: false, reads: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--base") {
@@ -94,6 +112,8 @@ export function parseArgs(argv) {
       args.refresh = false;
     } else if (a === "--await-revocation") {
       args.awaitRevocation = true;
+    } else if (a === "--reads") {
+      args.reads = true;
     } else {
       throw new Error(`Unrecognized argument: ${a}`);
     }
@@ -234,9 +254,244 @@ export function decodeJwtPayloadUnsafe(token) {
   }
 }
 
+/**
+ * The two lines that point at the grant a run created: its id (decoded,
+ * unverified, from the access token's `grant` claim) and the exact revoke
+ * command. `null` when no grant id decodes. Step 9 prints these; so does the
+ * failure path (`failureGrantLines`), so the two can never drift. Pure.
+ */
+export function grantPointerLines(accessToken) {
+  const grantId = decodeJwtPayloadUnsafe(accessToken)?.grant;
+  if (typeof grantId !== "string" || grantId === "") return null;
+  return [
+    `  grant: ${grantId}`,
+    `  revoke: node --env-file=.env.local scripts/revoke-mcp-grant.mjs --id ${grantId} --apply`,
+  ];
+}
+
+/**
+ * What a FAILED run prints after its FAIL line. Once the token exchange has
+ * succeeded (`tokens` holds its response), a grant document exists in the
+ * shared Sanity dataset even though the run never reached step 9 — so the
+ * failure path names it and the command that revokes it. If the id cannot be
+ * decoded, it points at the dry run that lists every grant instead. Empty when
+ * no token exchange happened (nothing was created). Pure.
+ */
+export function failureGrantLines(tokens) {
+  const accessToken = tokens && typeof tokens === "object" ? tokens.access_token : undefined;
+  if (typeof accessToken !== "string" || accessToken === "") return [];
+  const pointer = grantPointerLines(accessToken);
+  if (!pointer) {
+    return [
+      "  This run created a grant before failing, but its id could not be decoded. List every grant (dry run) with:",
+      "  node --env-file=.env.local scripts/revoke-mcp-grant.mjs",
+    ];
+  }
+  return ["  This run created a grant before failing. Unless you already revoked it, it is still live:", ...pointer];
+}
+
 /** A JSON-RPC request envelope, matching `mcpRoute.test.ts`'s `rpc()`. Pure. */
 export function rpc(method, params, id = 1) {
   return { jsonrpc: "2.0", id, method, ...(params !== undefined ? { params } : {}) };
+}
+
+// ── tools/list check (P1 step 8) ────────────────────────────────────────────
+
+/** The registration this deployment is expected to carry (`app/api/mcp/route.ts`), in order. */
+export const EXPECTED_TOOLS = [
+  "ping",
+  "get_service",
+  "list_services",
+  "search_songs",
+  "get_song",
+  "get_member_availability",
+  "get_participation",
+  "list_proposals",
+];
+
+/**
+ * Checks a `tools/list` result against `EXPECTED_TOOLS`: the exact names, in
+ * order, each declared `readOnlyHint: true, openWorldHint: false` — the same
+ * assertion `mcpRoute.test.ts`'s own tools/list test makes. Pure — takes the
+ * already-parsed `tools` array, never the network response.
+ */
+export function checkToolList(tools) {
+  const names = Array.isArray(tools) ? tools.map((t) => (t && typeof t.name === "string" ? t.name : null)) : [];
+  if (JSON.stringify(names) !== JSON.stringify(EXPECTED_TOOLS)) {
+    return { ok: false, message: `expected tools ${JSON.stringify(EXPECTED_TOOLS)}, got ${JSON.stringify(names)}` };
+  }
+  for (const tool of tools) {
+    const a = tool && tool.annotations;
+    if (!a || a.readOnlyHint !== true || a.openWorldHint !== false) {
+      return {
+        ok: false,
+        message: `${tool && tool.name} is not annotated { readOnlyHint: true, openWorldHint: false }`,
+      };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * The check the PLAIN smoke (no `--reads`) makes: `ping` is present and
+ * annotated `{ readOnlyHint: true, openWorldHint: false }`. Deliberately
+ * tolerates any OTHER tool being present or absent (never checks the count
+ * or the order) — this is the check that must pass against BOTH a P0-only
+ * deployment (production today, `ping` alone) and a P1 deployment (all
+ * eight), because proving the OAuth handshake and `ping` is the plain
+ * smoke's whole job, not proving P1's registration. `checkToolList` (the
+ * full `EXPECTED_TOOLS` check) is reserved for `--reads`, which is the one
+ * mode that actually NEEDS the other seven tools to exist. Pure.
+ */
+export function checkPingRegistered(tools) {
+  const list = Array.isArray(tools) ? tools : [];
+  const ping = list.find((t) => t && t.name === "ping");
+  if (!ping) {
+    return {
+      ok: false,
+      message: `expected a "ping" tool, got ${JSON.stringify(list.map((t) => t && t.name))}`,
+    };
+  }
+  const a = ping.annotations;
+  if (!a || a.readOnlyHint !== true || a.openWorldHint !== false) {
+    return { ok: false, message: 'ping is not annotated { readOnlyHint: true, openWorldHint: false }' };
+  }
+  return { ok: true };
+}
+
+// ── --reads pass (P1 step 8, DV1: reads only, after ping) ──────────────────
+
+/**
+ * The seven read tools the `--reads` pass exercises, in this order, always
+ * after `ping` and before any refresh/revocation step — never a write tool,
+ * because none exist (DV1).
+ */
+export const READ_TOOL_NAMES = [
+  "list_services",
+  "get_service",
+  "search_songs",
+  "get_song",
+  "get_member_availability",
+  "get_participation",
+  "list_proposals",
+];
+
+/** Every read check's fixed arguments except `get_song`'s and `get_service`'s (see `readCheckArguments`). `search_songs` runs a short, one-letter query on purpose — the SUBSTRING path (`libraryIndex.ts`), not the fuzzy one — sure to match something in a real Spanish song catalogue. */
+const FIXED_READ_ARGS = {
+  list_services: {},
+  search_songs: { query: "a" },
+  get_member_availability: {},
+  get_participation: {},
+  list_proposals: {},
+};
+
+/**
+ * The arguments for one `--reads` check, given the ids earlier checks in the
+ * SAME pass have already found (`{ songId, serviceId }` — either may be
+ * `null`). Two tools are threaded rather than fixed:
+ *
+ * - `get_song` needs `songId`, from `search_songs`'s OWN result
+ *   (`songIdFromSearchResult`) — there is no other id this script has. Throws
+ *   when that never happened — `main()`'s per-tool `try` (`READ_TOOL_NAMES`'s
+ *   loop) catches it like any other failure and prints it as `get_song`'s OWN
+ *   FAIL line, so the message names the likely real cause instead of reading
+ *   like a network error: `search_songs` itself failing, or a
+ *   `{ query: "a" }` search that matched no song in this deployment's
+ *   catalogue — never a script-ordering bug, since `READ_TOOL_NAMES` always
+ *   runs `search_songs` before `get_song`.
+ * - `get_service` prefers `{ serviceId }`, from `list_services`'s OWN result
+ *   (`serviceIdFromListResult`) — `list_services` runs first, same reasoning.
+ *   Selecting by id never hits `get_service`'s A15 same-day-tie refusal (that
+ *   logic exists only for the no-selector `{}` form). When `list_services`
+ *   named NO service at all (the month is empty — a real, if rare, state),
+ *   this falls back to `{}` rather than throwing: an empty month is not a
+ *   script bug, and `main()`'s own loop treats the resulting A15 tie refusal,
+ *   if any, as an EXPECTED pass rather than a failure (see
+ *   `isAmbiguousServiceRefusal`).
+ *
+ * Pure.
+ */
+export function readCheckArguments(name, ctx) {
+  const songId = ctx && ctx.songId;
+  const serviceId = ctx && ctx.serviceId;
+  if (name === "get_song") {
+    if (typeof songId !== "string" || songId === "") {
+      throw new Error(
+        "get_song needs a songId, but search_songs failed or returned no songs earlier in this pass " +
+          "(see its own PASS/FAIL line above)",
+      );
+    }
+    return { songId };
+  }
+  if (name === "get_service") {
+    return typeof serviceId === "string" && serviceId !== "" ? { serviceId } : {};
+  }
+  const args = FIXED_READ_ARGS[name];
+  if (args === undefined) throw new Error(`no fixed arguments for "${name}"`);
+  return args;
+}
+
+/** The first song id `search_songs`'s own tool result named, or null. Pure — takes the ALREADY-PARSED payload, never the raw text. */
+export function songIdFromSearchResult(payload) {
+  const songs = payload && typeof payload === "object" ? payload.songs : null;
+  const first = Array.isArray(songs) ? songs[0] : null;
+  return first && typeof first === "object" && typeof first.id === "string" ? first.id : null;
+}
+
+/** The first service id `list_services`' own tool result named, or null (an empty month). Pure — takes the ALREADY-PARSED payload, never the raw text. */
+export function serviceIdFromListResult(payload) {
+  const services = payload && typeof payload === "object" ? payload.services : null;
+  const first = Array.isArray(services) ? services[0] : null;
+  return first && typeof first === "object" && typeof first.serviceId === "string" ? first.serviceId : null;
+}
+
+/**
+ * True when a tool result is `get_service`'s OWN A15 refusal shape for the
+ * no-selector `{}` form — `isError` with TWO OR MORE candidates in
+ * `structuredContent` (a same-day tie, or several matches for an ambiguous
+ * day) — as opposed to any other failure (an unreadable catalogue, which
+ * carries `failedSources` and no `candidates`; a network error; a single-
+ * candidate "no match" refusal). Pure — takes the ALREADY-PARSED JSON-RPC
+ * tool result, never the raw text.
+ */
+export function isAmbiguousServiceRefusal(result) {
+  const candidates = result && result.isError === true && result.structuredContent && result.structuredContent.candidates;
+  return Array.isArray(candidates) && candidates.length >= 2;
+}
+
+function arrayLength(v) {
+  return Array.isArray(v) ? v.length : 0;
+}
+
+/**
+ * A short, SAFE detail for a PASS line: counts only — never a name, a
+ * message body, an email or any other personal data (the brief's own rule
+ * for this pass's output). Falls back to a fixed word when a tool's payload
+ * carries no obvious count. Pure.
+ */
+export function readCheckDetail(name, payload) {
+  if (!payload || typeof payload !== "object") return "ok";
+  if (name === "list_services") return `${arrayLength(payload.services)} services`;
+  if (name === "get_service") return "1 service";
+  if (name === "search_songs") return `${arrayLength(payload.songs)} songs`;
+  if (name === "get_song") return "1 song";
+  if (name === "get_member_availability") return `${arrayLength(payload.members)} members`;
+  if (name === "get_participation") {
+    return `${arrayLength(payload.members)} members, ${arrayLength(payload.services)} services`;
+  }
+  if (name === "list_proposals") return `${arrayLength(payload.proposals)} proposals`;
+  return "ok";
+}
+
+/** One check's PASS/FAIL line. Pure. */
+export function formatReadCheckLine(name, outcome) {
+  return outcome.ok ? `  PASS ${name} — ${outcome.detail}` : `  FAIL ${name} — ${outcome.detail}`;
+}
+
+/** The `--reads` pass' closing summary line: counts only. Pure. */
+export function summarizeReadChecks(outcomes) {
+  const passed = outcomes.filter((o) => o.ok).length;
+  return `  reads: ${passed}/${outcomes.length} passed`;
 }
 
 /** An HTTP failure carrying the server's fixed JSON `error` (and `error_description`, if any). */
@@ -382,6 +637,9 @@ async function main() {
   }
 
   let server;
+  // Set by step 6's token exchange. Declared out here so the failure path can
+  // still name the grant that exchange created (see `failureGrantLines`).
+  let tokens = null;
   try {
     // 1. Discovery.
     begin(1, "discovery");
@@ -457,7 +715,7 @@ async function main() {
 
     // 6. Token exchange.
     begin(6, "token exchange");
-    let tokens = await fetchJson(`${origin}/api/oauth/token`, {
+    tokens = await fetchJson(`${origin}/api/oauth/token`, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: formEncode([
@@ -471,8 +729,8 @@ async function main() {
     });
     pass(`access_token=${redact(tokens.access_token)}, refresh_token=${redact(tokens.refresh_token)}, expires_in=${tokens.expires_in}s`);
 
-    // 7. initialize, tools/list, tools/call ping.
-    begin(7, "initialize, tools/list, tools/call ping");
+    // 7. initialize, tools/list, tools/call ping [+ --reads sub-step].
+    begin(7, args.reads ? "initialize, tools/list, tools/call ping, --reads" : "initialize, tools/list, tools/call ping");
     const initResult = await mcpRpc(tokens.access_token, rpc("initialize", {
       protocolVersion: LEGACY_PROTOCOL_VERSION,
       capabilities: {},
@@ -483,13 +741,61 @@ async function main() {
     }
     const listResult = await mcpRpc(tokens.access_token, rpc("tools/list"), LEGACY_PROTOCOL_VERSION);
     const tools = listResult.tools ?? [];
-    if (tools.length !== 1 || tools[0].name !== "ping") {
-      throw new Error(`expected exactly one tool "ping", got ${JSON.stringify(tools.map((t) => t.name))}`);
-    }
-    if (tools[0].annotations?.readOnlyHint !== true) throw new Error('ping is not annotated readOnlyHint: true');
+    // The plain smoke only needs ping (so it passes against a P0-only
+    // deployment); --reads needs the full eight, since it is about to call
+    // the other seven.
+    const toolsCheck = args.reads ? checkToolList(tools) : checkPingRegistered(tools);
+    if (!toolsCheck.ok) throw new Error(toolsCheck.message);
     const callResult = await mcpRpc(tokens.access_token, rpc("tools/call", { name: "ping", arguments: {} }), LEGACY_PROTOCOL_VERSION);
     const payload = JSON.parse(callResult.content[0].text);
     pass(`ping → ${JSON.stringify(payload)}`);
+
+    // 7b. --reads: one call per read tool, after ping, before refresh (DV1).
+    // list_services runs before get_service, and search_songs before get_song
+    // (READ_TOOL_NAMES's own order), so each one's result can thread an id
+    // into the next — see readCheckArguments.
+    if (args.reads) {
+      console.log(`  --reads: ${READ_TOOL_NAMES.join(", ")}`);
+      let songId = null;
+      let serviceId = null;
+      const outcomes = [];
+      for (const name of READ_TOOL_NAMES) {
+        try {
+          const toolArgs = readCheckArguments(name, { songId, serviceId });
+          const readResult = await mcpRpc(
+            tokens.access_token,
+            rpc("tools/call", { name, arguments: toolArgs }),
+            LEGACY_PROTOCOL_VERSION,
+          );
+          if (readResult.isError) {
+            // get_service {} refuses by design (A15) on a same-day tie or an
+            // ambiguous day — expected when list_services named NO service to
+            // select by id (an empty month), never a real failure.
+            if (name === "get_service" && !serviceId && isAmbiguousServiceRefusal(readResult)) {
+              const outcome = { ok: true, detail: "ambiguous (expected — list_services named no service to select by id)" };
+              outcomes.push(outcome);
+              console.log(formatReadCheckLine(name, outcome));
+              continue;
+            }
+            throw new Error("tool result carried isError: true");
+          }
+          const readPayload = JSON.parse(readResult.content[0].text);
+          if (name === "search_songs") songId = songIdFromSearchResult(readPayload);
+          if (name === "list_services") serviceId = serviceIdFromListResult(readPayload);
+          const outcome = { ok: true, detail: readCheckDetail(name, readPayload) };
+          outcomes.push(outcome);
+          console.log(formatReadCheckLine(name, outcome));
+        } catch (err) {
+          const outcome = { ok: false, detail: err instanceof Error ? err.message : String(err) };
+          outcomes.push(outcome);
+          console.log(formatReadCheckLine(name, outcome));
+        }
+      }
+      console.log(summarizeReadChecks(outcomes));
+      if (outcomes.some((o) => !o.ok)) {
+        throw new Error("one or more --reads checks failed (see the PASS/FAIL lines above)");
+      }
+    }
 
     // 8. Refresh, then ping again.
     begin(8, "refresh + ping");
@@ -513,11 +819,9 @@ async function main() {
 
     // 9. Grant id and the exact revoke command.
     begin(9, "grant id and revoke command");
-    const claims = decodeJwtPayloadUnsafe(tokens.access_token);
-    const grantId = claims?.grant;
-    if (typeof grantId !== "string" || grantId === "") throw new Error("could not decode a grant id from the access token");
-    console.log(`  grant: ${grantId}`);
-    console.log(`  revoke: node --env-file=.env.local scripts/revoke-mcp-grant.mjs --id ${grantId} --apply`);
+    const pointer = grantPointerLines(tokens.access_token);
+    if (!pointer) throw new Error("could not decode a grant id from the access token");
+    for (const line of pointer) console.log(line);
     pass();
 
     // 10. Optional: wait for Frank to revoke, then prove the 401 lands.
@@ -551,6 +855,7 @@ async function main() {
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     console.error(`[${currentStep}/${TOTAL_STEPS}] FAIL ${currentLabel} — ${detail}`);
+    for (const line of failureGrantLines(tokens)) console.error(line);
     server?.close();
     process.exit(1);
   }
