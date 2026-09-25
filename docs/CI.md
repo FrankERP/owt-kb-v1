@@ -29,6 +29,50 @@ meant to do.
 (see `eslint.config.mjs`); errors are not. This matches what `CLAUDE.md` asks of
 a local run — 0 errors, warnings tolerated.
 
+### Solver inertness goldens (`gcf/test_inertness.py`)
+
+The Cloud Function deploys from `main` with no `preview` rehearsal and serves both
+environments, so a solver change is safe to ship only if a request with no `pinned` key builds
+the model **and runs the search** it did before. Three literals, frozen from the solver as it
+stood before pins existed, hold that. All three are captured on the file's own frozen copy of
+the fixture (`frozen_config`), not on `make_config`, so editing the shared test fixture for an
+unrelated test cannot redden them.
+
+| Literal | Moves when | Legitimate re-capture |
+|---|---|---|
+| `STAGE_A_FINGERPRINTS` — sha256 of Stage A's model proto plus its solver parameters (time limit stripped), three seeds | Stage A's model or search parameters change | an ortools pin bump, in a PR that changes nothing else — **not** a runner-image change: the fingerprints are machine-independent, so a new image is no excuse for a red one |
+| `LADDER_FINGERPRINTS` — the same for every solve after Stage A, in order, up to the pass that returns the month; behind a Stage A `OPTIMAL` precondition | the above, **or the objective** (`compute_priority_weights` feeds it; Stage A never enters that branch), or the ladder's pass sequence | the above, plus a deliberate, reviewed objective change |
+| `GOLDEN_SCHEDULE` — the seed-42 schedule, behind an `OPTIMAL` precondition on the returning solve | the above, **or how ortools breaks a tie on the runner** | the above, plus a runner-image change |
+
+**A red fingerprint inside a PR that claims the pinless path unchanged — the pinned-assignments
+PR is one — is a finding, never a literal to update.** It means the pinless path moved, which is
+the one thing the preview-less release bets did not happen.
+
+**The output golden runs only on the platform that captured it.** `OPTIMAL` removes the wall
+clock, not every tie: on 2026-09-25 a Mac (arm64) and this runner both proved seed 42 optimal
+through the same statuses and returned schedules differing in 7 of 16 role cells. Enforced
+everywhere, a runner-captured golden would be red on every developer machine, so it skips
+off-platform — **except inside GitHub Actions**, where a skip would leave the required gate green
+with the guard switched off; there it fails, asking for a re-capture on the new platform. The
+fingerprints run everywhere. Stage A's is machine-independent unconditionally; the ladder's only
+because Stage A proved `OPTIMAL`, which the test asserts. Both measured identical on the runner and
+on macOS, across budgets and `PYTHONHASHSEED` values. The intermediate passes' *statuses* are not
+frozen: an infeasibility proof may time out to `UNKNOWN` on a loaded runner and the ladder moves on
+identically. One blind spot by construction: a **zero-coefficient** objective term that adds no
+variable and no constraint is dropped from the proto and invisible to every guard here.
+
+**Captured on:** GitHub Actions `ubuntu-24.04`, runner image `20260920.314.1`, Python 3.12.14,
+ortools 9.15.6755, protobuf 6.33.6 — run 36172243640 (`CAPTURED_ON` in the file). A runner-image
+bump never arrives as a PR here, so a red golden will first show up on an unrelated one: compare
+the job log's **Runner Image** group against that before treating it as a finding.
+
+**If a slow runner trips an `OPTIMAL` precondition,** raise `INERTNESS_BUDGET_SECONDS` in the file
+(the solver clamps it to 30 s); never drop the assertion. **To re-capture:** a fingerprint's
+failure message already prints the actual value — commit it only for a cause in the table. The
+golden: set `GOLDEN_SCHEDULE` to `None` and push; in this job the test then **fails** with the
+captured schedule in its message (a golden left at `None` must never pass the required gate), and you
+commit it with the runner image it came from.
+
 ### Deliberately not in CI
 
 - **Playwright e2e** (`e2e/service-readiness/`) — needs live Sanity credentials
