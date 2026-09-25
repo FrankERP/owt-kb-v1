@@ -51,6 +51,19 @@
 // Reads here go through the canonical operational client, so the audience is the
 // published perspective and a `drafts.*` overlay can never widen it. The one
 // WRITE here is the outbox upsert, on `writeClient`, in its own transaction.
+//
+// DESCRIPTORS. The six post-commit helpers that a write reports on
+// (`notifyRoleAssignments`, `notifyRolePublished`, `queueRoleNotices`,
+// `queueSetlistNotice`, `queuePublishedSetlistNotices`, `notifySetlistSaved`)
+// each RETURN what they queued or started, built from the values they already
+// used — so a caller that must say WHO a write notified reads those values
+// instead of re-deriving them. A descriptor is never a delivery claim: pushes
+// are started fire-and-forget or inside `after()`, outbox notices are sent (or
+// not) by a later sweep, and every downstream filter (device tokens,
+// preferences, `EMAIL_ALLOWLIST`, `wantsNotification`) still applies. Read one
+// as "queued", never "delivered". Every id list in a descriptor is a COPY, so
+// a caller that sorts or edits it cannot reach the deferred work. Existing
+// callers ignore the return value, and each helper's behaviour is unchanged.
 
 import { after } from "next/server";
 import { revalidatePath } from "next/cache";
@@ -154,6 +167,71 @@ export function fireAndForget(label: string, promise: unknown): void {
   });
 }
 
+// ── Side-effect descriptors ─────────────────────────────────────────────────
+//
+// What each post-commit helper queued or started (see the module header). Every
+// shape reads as "queued", never "delivered".
+
+/**
+ * {@link notifyRoleAssignments}: one push per notice it kept (`null` and
+ * empty-recipient notices dropped), in order — or none.
+ */
+export interface RoleAssignmentPushDescriptor {
+  pushes: { recipients: string[]; date: string; kind: RoleAssignmentKind }[];
+}
+
+/**
+ * {@link notifyRolePublished}: one push per service, to every current assignee
+ * (an empty list included — the helper pushes it too), plus `emailBatch`, which
+ * is exactly the argument handed to `sendAssignmentEmailsBatch`. The batch
+ * carries NO recipient list: it derives its own at send time (`assigneesOf` +
+ * `rolesForMember`), so a report that names those members must say it applied
+ * that derivation. `body` is the caller's own object; treat it as read-only.
+ */
+export interface RolePublishedDescriptor {
+  pushes: { recipients: string[]; date: string }[];
+  emailBatch: { type: ServiceType; date: string; body: ServiceBody }[];
+}
+
+/**
+ * {@link queueRoleNotices}: the members it queued one `role` notice for — the
+ * union of before- and after-assignees, in upsert order.
+ */
+export interface RoleNoticesDescriptor {
+  kind: "role";
+  roleId: string;
+  memberIds: string[];
+}
+
+/**
+ * {@link queueSetlistNotice}: the one `setlist` notice it queued and the
+ * `knownRecipients` written into it. The audience itself is resolved at flush.
+ */
+export interface SetlistNoticeDescriptor {
+  kind: "setlist";
+  roleId: string;
+  knownRecipients: string[];
+}
+
+/**
+ * {@link queuePublishedSetlistNotices}: every subject handed to the deferred
+ * block. Song presence (and so whether a subject's notice is minted at all) is
+ * resolved INSIDE `after()`, so each entry means "queued if the service has
+ * songs".
+ */
+export interface PublishedSetlistNoticesDescriptor {
+  kind: "publishedSetlist";
+  subjects: { roleId: string; knownRecipients: string[] }[];
+}
+
+/**
+ * {@link notifySetlistSaved}: the exact list handed to `sendPush` — possibly
+ * empty. The push is fire-and-forget, so this says it was STARTED.
+ */
+export interface SetlistPushDescriptor {
+  recipients: string[];
+}
+
 // ── Role assignment notices ─────────────────────────────────────────────────
 
 export type RoleAssignmentKind = "created" | "updated";
@@ -255,11 +333,13 @@ export function roleUpdateNotice(input: {
  * untouched, so members still get an immediate in-app signal, and the pairing is
  * deliberate: the push says SOMETHING changed, the grouped email says WHAT.
  */
-export function notifyRoleAssignments(notices: (RoleAssignmentNotice | null)[]): void {
+export function notifyRoleAssignments(
+  notices: (RoleAssignmentNotice | null)[],
+): RoleAssignmentPushDescriptor {
   const real = notices.filter(
     (n): n is RoleAssignmentNotice => !!n && n.recipients.length > 0,
   );
-  if (!real.length) return;
+  if (!real.length) return { pushes: [] };
   after(async () => {
     for (const notice of real) {
       await attempt("assignment push", () =>
@@ -267,6 +347,9 @@ export function notifyRoleAssignments(notices: (RoleAssignmentNotice | null)[]):
       );
     }
   });
+  return {
+    pushes: real.map((n) => ({ recipients: [...n.recipients], date: n.date, kind: n.kind })),
+  };
 }
 
 export interface PublishedServiceNotice {
@@ -282,8 +365,10 @@ export interface PublishedServiceNotice {
  * one of its current assignees, plus ONE consolidated email per member across
  * the whole batch. An unpublish (or a batch with no real transition) is silent.
  */
-export function notifyRolePublished(services: PublishedServiceNotice[]): void {
-  if (!services.length) return;
+export function notifyRolePublished(
+  services: PublishedServiceNotice[],
+): RolePublishedDescriptor | null {
+  if (!services.length) return null;
   after(async () => {
     for (const service of services) {
       await attempt("publish push", () =>
@@ -296,6 +381,10 @@ export function notifyRolePublished(services: PublishedServiceNotice[]): void {
       ),
     );
   });
+  return {
+    pushes: services.map((s) => ({ recipients: [...s.recipients], date: s.date })),
+    emailBatch: services.map((s) => ({ type: s.type, date: s.date, body: s.body })),
+  };
 }
 
 // ── Outbox: the debounced role notice (spec §2) ─────────────────────────────
@@ -344,7 +433,8 @@ const NO_SEATS: NormalizedSeats = { leads: [], bgvs: [], chorus: [], instruments
  * A draft service queues nothing: it is admin-only until it is published, and
  * publishing is what introduces it.
  */
-export function queueRoleNotices(input: QueueRoleNoticesInput): void {
+export function queueRoleNotices(input: QueueRoleNoticesInput): RoleNoticesDescriptor | null {
+  let descriptor: RoleNoticesDescriptor | null = null;
   // The caller already committed the business write; everything below runs
   // AFTER that commit. `attemptSync` guards this whole synchronous build the
   // same way `attempt` guards the deferred write below, so a throw here is
@@ -391,7 +481,9 @@ export function queueRoleNotices(input: QueueRoleNoticesInput): void {
 
     // ONE transaction for this role's notices — see `commitUpserts`.
     after(() => commitUpserts("outbox role upsert", upserts));
+    descriptor = { kind: "role", roleId: input.roleId, memberIds: [...members] };
   });
+  return descriptor;
 }
 
 // ── Outbox: the debounced setlist notice (spec §2/§4) ───────────────────────
@@ -630,7 +722,8 @@ async function commitUpserts(label: string, upserts: BuiltUpsert[]): Promise<voi
  * manual editor save and the proposal approval — the latter writes the live
  * setlist today and said nothing about it at all.
  */
-export function queueSetlistNotice(input: QueueSetlistNoticeInput): void {
+export function queueSetlistNotice(input: QueueSetlistNoticeInput): SetlistNoticeDescriptor | null {
+  let descriptor: SetlistNoticeDescriptor | null = null;
   // The caller already committed the business write. `attemptSync` guards this
   // whole synchronous build so a throw here is logged and swallowed instead of
   // turning a committed content write into a 500 for the client.
@@ -638,7 +731,9 @@ export function queueSetlistNotice(input: QueueSetlistNoticeInput): void {
     const upsert = setlistUpsert(input, new Date());
     if (!upsert) return;
     after(() => commitUpserts("outbox setlist upsert", [upsert]));
+    descriptor = { kind: "setlist", roleId: input.roleId, knownRecipients: [...input.knownRecipients] };
   });
+  return descriptor;
 }
 
 export interface PublishedSetlistSubject {
@@ -704,7 +799,10 @@ export const PUBLISH_WINDOWS: Readonly<UpsertWindowOverrides> = Object.freeze({ 
  * cambió», where the debounce used to collapse both into one. Ordinary editing
  * of an already-published service is untouched — it still debounces.
  */
-export function queuePublishedSetlistNotices(subjects: PublishedSetlistSubject[]): void {
+export function queuePublishedSetlistNotices(
+  subjects: PublishedSetlistSubject[],
+): PublishedSetlistNoticesDescriptor | null {
+  let descriptor: PublishedSetlistNoticesDescriptor | null = null;
   // The caller already committed the business write. `attemptSync` guards this
   // whole synchronous body — including registering the deferred block below —
   // the same way its siblings (`queueRoleNotices`, `queueSetlistNotice`,
@@ -762,7 +860,12 @@ export function queuePublishedSetlistNotices(subjects: PublishedSetlistSubject[]
         await commitUpserts("outbox publish setlist upsert", upserts);
       });
     });
+    descriptor = {
+      kind: "publishedSetlist",
+      subjects: subjects.map((s) => ({ roleId: s.roleId, knownRecipients: [...s.knownRecipients] })),
+    };
   });
+  return descriptor;
 }
 
 // ── Outbox: the debounced lead-notes notice (spec §2) ───────────────────────
@@ -877,7 +980,8 @@ export function queueLeadNotesNotice(input: QueueLeadNotesNoticeInput): void {
  * `assigned` members who actually serve that week — resolved from committed
  * canonical state across all five seat paths, never a client list.
  */
-export async function notifySetlistSaved(week: string): Promise<void> {
+export async function notifySetlistSaved(week: string): Promise<SetlistPushDescriptor | null> {
+  let descriptor: SetlistPushDescriptor | null = null;
   await attempt("setlist push", async () => {
     // MINISTRY-SCOPED. This is the only worship audience in the codebase that is
     // not already narrowed to specific ids or to an admin role, so it is the only
@@ -925,15 +1029,18 @@ export async function notifySetlistSaved(week: string): Promise<void> {
       ).values(),
     ];
     // Fire-and-forget, as before: an editor's save never waits on FCM.
+    const recipients = setlistRecipientIds(audience, assignedIds);
     fireAndForget(
       "setlist push",
-      sendPush(setlistRecipientIds(audience, assignedIds), "setlist", {
+      sendPush(recipients, "setlist", {
         title: "Setlist de la semana",
         body: "Ya están las canciones de este servicio.",
         path: "/",
       }),
     );
+    descriptor = { recipients: [...recipients] };
   });
+  return descriptor;
 }
 
 // ── Proposals ───────────────────────────────────────────────────────────────

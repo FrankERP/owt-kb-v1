@@ -555,7 +555,7 @@ describe("notifySetlistSaved", () => {
   it("does not wait on the push, and swallows its rejection (no unhandled rejection)", async () => {
     operationalFetch.mockResolvedValueOnce([{ _id: "mem-all" }]).mockResolvedValueOnce([]);
     sendPushMock.mockRejectedValueOnce(new Error("fcm down"));
-    await expect(notifySetlistSaved("2026-08-09")).resolves.toBeUndefined();
+    await expect(notifySetlistSaved("2026-08-09")).resolves.toEqual({ recipients: ["mem-all"] });
     expect(sendPushMock).toHaveBeenCalledTimes(1);
     // Give the detached rejection handler a turn to run.
     await new Promise((r) => setTimeout(r, 0));
@@ -563,7 +563,7 @@ describe("notifySetlistSaved", () => {
 
   it("swallows a failed audience read and never throws into the save", async () => {
     operationalFetch.mockRejectedValueOnce(new Error("network"));
-    await expect(notifySetlistSaved("2026-08-09")).resolves.toBeUndefined();
+    await expect(notifySetlistSaved("2026-08-09")).resolves.toBeNull();
     expect(sendPushMock).not.toHaveBeenCalled();
   });
 });
