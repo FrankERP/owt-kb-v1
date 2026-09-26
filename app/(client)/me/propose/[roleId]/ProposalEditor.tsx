@@ -326,6 +326,12 @@ export default function ProposalEditor({ roleDoc, proposal, currentUserId }: Pro
 
   useEffect(() => { search(searchQuery); }, [searchQuery, search]);
 
+  // A pending search must not outlive the editor: it would set state on an
+  // unmounted component, and in tests fire after jsdom teardown and fail the run.
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
+
   useEffect(() => {
     if (!showSearch && searchResults.length === 0) search("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
