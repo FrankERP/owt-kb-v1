@@ -143,7 +143,8 @@ markers. That is an evidence gap, not a safety hole: blocking never depends on a
 - **A second writer in `app/mcp/`.** Two copies of every refusal, notice and revalidation drift
   apart, and I8, I12 and I15 would hold only by review. It also breaks `mcpSanityClients.test.ts`,
   which allows code under `app/mcp/` to import only the canonical operational clients. A writer
-  there would need the write client, which that guard forbids.
+  there would need the write client, which that guard admits only through a per-file allowlist
+  entry. Its one entry today is P0's OAuth grant store, which writes no protected type.
 - **One shared function that receives `writeClient` as a parameter.** The protected-write audit
   identifies clients by their import (`sanityClientIdentifiers`). A client passed in as a
   parameter is not one it knows, so `client.transaction()` would register no site, and the
