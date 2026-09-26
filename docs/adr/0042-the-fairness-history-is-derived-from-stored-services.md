@@ -2,6 +2,12 @@
 
 **Date:** 2026-09-25 · **Status:** Accepted
 
+> **The number is final.** ADR numbers follow the order in which records reach `main`. PR #102
+> ("solver-pinned-assignments") merged first and took 0041, so this record was renumbered to
+> 0042 during release prep. Delivery 1 (`claude/mcp-p2-solver-history`) reached `main`
+> 2026-09-26 (PR #104, `24209e11`), carrying this file as 0042 — dormant behind
+> `SOLVER_HISTORY_SOURCE = "local"`; production behaviour is unchanged until Frank cuts over.
+
 ## Context
 
 `owt_solver_history_v2` is a browser-local key holding the last six months' seat counts,
