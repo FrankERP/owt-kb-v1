@@ -21,7 +21,7 @@ meant to do.
 | Runner | `ubuntu-latest`, Node from `.nvmrc` (22), npm cache on; Python 3.12 with pip cache, matching the solver function's own `--runtime=python312` |
 | Install | `npm ci` — fails on a lockfile that drifted from `package.json`, rather than silently resolving something new |
 | Steps | `npx tsc --noEmit` → `npm test` (vitest) → `npx eslint .` → `python -m unittest discover -s gcf -t gcf` |
-| Timeout | 15 minutes |
+| Timeout | 25 minutes — raised from 15 when the pinned-assignments solver suite took the job to ~11.5 (solver step 6m34s). If it crowds again, split the workflow; never drop the solver step |
 | Concurrency | one run per branch (or per PR); a newer push cancels the in-flight run |
 | Permissions | `contents: read` only |
 
