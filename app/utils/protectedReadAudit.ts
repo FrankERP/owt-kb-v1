@@ -239,10 +239,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the copy surface itself)",
   },
   {
-    file: "app/api/admin/setlists/route.ts",
-    operation: "PUT",
+    file: "app/utils/setlistSaveCommit.ts",
+    operation: "module",
     reason:
-      "guarded live setlist writer: one transaction creates/patches featuredSongs/saturdarSongs at the deterministic id, or patches special_role songs, under the client-observed target state (A2 §5)",
+      "guarded live setlist writer: one transaction creates/patches featuredSongs/saturdarSongs at the deterministic id, or patches special_role songs, under the client-observed target state (A2 §5). The domain body of `PUT /api/admin/setlists`, moved here so the MCP `edit_setlist` tool calls the same writer; the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the setlist save surface itself)",
   },
   {
