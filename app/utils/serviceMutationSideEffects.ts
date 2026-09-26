@@ -268,6 +268,8 @@ export interface RoleAssignmentNotice {
   recipients: string[];
   type: ServiceType;
   date: string;
+  /** Built by `bodyOf`, which shares its five seat arrays with the caller's own
+   * `seatStates.after` — never read this inside deferred work without copying. */
   body: ServiceBody;
   kind: RoleAssignmentKind;
 }

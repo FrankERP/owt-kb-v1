@@ -82,6 +82,10 @@ interface FakeRole {
   _type: string;
   published: boolean;
   Lead: { _type: string; _key: string; _ref: string }[];
+  BGVs?: { _type: string; _key: string; _ref: string }[];
+  Chorus?: { _type: string; _key: string; _ref: string }[];
+  instruments?: unknown[];
+  foh_team?: unknown[];
 }
 
 const roleA: FakeRole = {
@@ -99,7 +103,37 @@ const roleB: FakeRole = {
   Lead: [{ _type: "reference", _key: "l2", _ref: "m-B" }],
 };
 
-const DATE_OF: Record<string, string> = { "role-A": "2026-10-04", "role-B": "2026-10-11" };
+// Section/team fixtures: `storedSeatArrays` requires all five seat fields to be
+// arrays, unlike the seat-kind fixtures above (which only ever address `Lead`).
+const roleC: FakeRole = {
+  _id: "role-C",
+  _rev: "revC",
+  _type: "sunday_role",
+  published: true,
+  Lead: [{ _type: "reference", _key: "lc1", _ref: "m-C1" }],
+  BGVs: [],
+  Chorus: [{ _type: "reference", _key: "cc1", _ref: "m-C2" }],
+  instruments: [],
+  foh_team: [],
+};
+const roleD: FakeRole = {
+  _id: "role-D",
+  _rev: "revD",
+  _type: "sunday_role",
+  published: true,
+  Lead: [{ _type: "reference", _key: "ld1", _ref: "m-D1" }],
+  BGVs: [],
+  Chorus: [{ _type: "reference", _key: "cd1", _ref: "m-D2" }],
+  instruments: [],
+  foh_team: [],
+};
+
+const DATE_OF: Record<string, string> = {
+  "role-A": "2026-10-04",
+  "role-B": "2026-10-11",
+  "role-C": "2026-10-18",
+  "role-D": "2026-10-25",
+};
 
 /** Wires `loadRoleForWrite` and `resolveOwnedCoordination` from a role table. */
 function mockTargets(roles: FakeRole[]) {
@@ -129,6 +163,15 @@ const seatSwapBody = {
   kind: "seat",
   source: { roleId: "role-A", rev: "revA", path: "Lead", itemKey: "l1" },
   target: { roleId: "role-B", rev: "revB", path: "Lead", itemKey: "l2" },
+};
+
+const sectionSwapBody = {
+  kind: "section",
+  path: "Chorus",
+  roles: [
+    { id: "role-C", rev: "revC" },
+    { id: "role-D", rev: "revD" },
+  ],
 };
 
 beforeEach(() => {
@@ -220,6 +263,40 @@ describe("swapRoles — success outcome", () => {
       expect.objectContaining({ date: "2026-10-11" }),
     ]);
     expect(h.queueRoleNotices).toHaveBeenCalledTimes(2);
+  });
+
+  it("a section swap writes each role's set from the OTHER role's stored array, but reports independent copies that never alias each other", async () => {
+    mockTargets([roleC, roleD]);
+
+    const outcome = await swapRoles(sectionSwapBody);
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+
+    // The write itself is untouched by the effects-only copy: role-C's patch is
+    // role-D's ORIGINAL Chorus content, `_key` included, and vice versa.
+    expect(h.transactions[0].ops).toEqual([
+      { patch: "role-C", rev: "revC", set: { Chorus: [{ _type: "reference", _key: "cd1", _ref: "m-D2" }] } },
+      { patch: "role-D", rev: "revD", set: { Chorus: [{ _type: "reference", _key: "cc1", _ref: "m-C2" }] } },
+    ]);
+
+    const [effC, effD] = outcome.effects.roles;
+    expect(effC.set.Chorus).toEqual([{ _type: "reference", _key: "cd1", _ref: "m-D2" }]);
+    expect(effD.role.Chorus).toEqual([{ _type: "reference", _key: "cd1", _ref: "m-D2" }]);
+
+    // Before the copy, `effC.set.Chorus` and `effD.role.Chorus` were the SAME
+    // array object (both trace back to `storedSeatArrays(roleD)`). Mutating one
+    // must never reach the other.
+    expect(effC.set.Chorus).not.toBe(effD.role.Chorus);
+    (effC.set.Chorus as Record<string, unknown>[])[0] = { mutated: true };
+    (effC.set.Chorus as unknown[]).push({ extra: true });
+    expect(effD.role.Chorus).toEqual([{ _type: "reference", _key: "cd1", _ref: "m-D2" }]);
+
+    // Symmetric check the other way: role-D's own reported set (role-C's
+    // original Chorus) must not alias role-C's own reported role snapshot.
+    expect(effD.set.Chorus).not.toBe(effC.role.Chorus);
+    (effD.set.Chorus as Record<string, unknown>[])[0] = { mutated: true };
+    expect(effC.role.Chorus).toEqual([{ _type: "reference", _key: "cc1", _ref: "m-C2" }]);
   });
 });
 

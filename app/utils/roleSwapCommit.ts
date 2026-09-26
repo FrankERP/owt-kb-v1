@@ -59,6 +59,7 @@ import {
   seatAssignees,
   seatPersonPatchPath,
   storedSeatArrays,
+  SEAT_PATHS,
   type NormalizedSeats,
   type SeatPath,
   type SeatPersonReplacement,
@@ -76,11 +77,21 @@ import type { CommitOutcome } from "@/app/utils/commitOutcome";
 /**
  * What one coordinated role's swap already held, for a caller that must report
  * the write. Nothing here is re-read after the commit.
+ *
+ * A section or team swap's `set` holds ANOTHER role's own stored seat array by
+ * reference (`storedSeatArrays` returns arrays, not copies), so without a copy
+ * `effects.roles[0].set.Chorus` and `effects.roles[1].role.Chorus` would be the
+ * SAME array object. `role` and `set` are therefore each given a fresh copy of
+ * every one of the five seat-path arrays, with every item shallow-copied — no
+ * array here is shared with another `roles[]` entry, with the transaction's own
+ * `patchOf`, or with anything deferred work holds. A seat swap's `set` carries no
+ * array at all (a keyed patch path maps to a scalar person id — ruling P3-R17),
+ * so the copy is a no-op there.
  */
 export interface RoleSwapRoleEffect {
-  /** The role exactly as `loadRoleForWrite` loaded it, pre-commit: the full `ROLE_PROJECTION` row. */
+  /** The role exactly as `loadRoleForWrite` loaded it, pre-commit: the full `ROLE_PROJECTION` row (seat arrays copied — see above). */
   role: StoredRole;
-  /** The raw `set` payload this transaction wrote for it (`patchOf.get(role._id)`), `_key`s included. */
+  /** The raw `set` payload this transaction wrote for it (`patchOf.get(role._id)`), `_key`s included (seat arrays copied — see above). */
   set: Record<string, unknown>;
   /** The seat states resolved PRE-COMMIT, from state this handler had already loaded (§2 below). */
   seatStates: { before: NormalizedSeats; after: NormalizedSeats };
@@ -375,10 +386,12 @@ export async function swapRoles(body: unknown): Promise<CommitOutcome<RoleSwapEf
 
   // What this write already held, for a caller that must report it (the
   // module header). Every value below comes from state this function already
-  // resolved — nothing is re-read after the commit.
+  // resolved — nothing is re-read after the commit. `role` and `set` are copied
+  // (see `RoleSwapRoleEffect`'s header) so a section/team swap's cross-role
+  // aliasing through `storedSeatArrays` never reaches a caller.
   const roles: RoleSwapRoleEffect[] = queued.map((input, i) => ({
-    role: targetById.get(input.roleId)!.role,
-    set: patchOf.get(input.roleId)!,
+    role: copyRoleSeatArrays(targetById.get(input.roleId)!.role),
+    set: copySeatArraysInPatch(patchOf.get(input.roleId)!),
     seatStates: seatStatesOf.get(input.roleId)!,
     notice: noticeDescriptors[i],
   }));
@@ -421,4 +434,44 @@ function sectionAssignees(seats: NormalizedSeats, path: SeatPath): string[] {
   if (path === "Chorus") return seats.chorus;
   if (path === "instruments") return seats.instruments.map((slot) => slot.personId);
   return seats.foh.map((slot) => slot.personId);
+}
+
+// ── `effects`-only copies (never fed back into the transaction) ────────────
+//
+// `storedSeatArrays` returns the FIVE seat arrays by reference, so a section or
+// team swap's `set` (built from the OTHER role's `storedSeatArrays` result) is
+// the exact same array object as that other role's own `role[path]`. Copying
+// only when building `effects` — never when building `patchOf` itself — keeps
+// the write byte-for-byte unchanged while making every `effects.roles[]` entry
+// independent of every other one, of `patchOf`, and of the loaded role objects.
+
+/** A fresh array of fresh item copies, or the value unchanged when it is not an
+ * array (a seat swap's `set` holds a scalar person id under a keyed patch path
+ * — ruling P3-R17 — never an array, so this is a no-op there). */
+function copySeatArray(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((item) => (typeof item === "object" && item !== null ? { ...item } : item));
+}
+
+/** A copy of a `patchOf` entry with every one of the five seat-path keys it
+ * carries replaced by a fresh array (see above). Any other key — there are
+ * none for section/team, and a seat swap's one keyed-path key never matches a
+ * bare `SeatPath` name — passes through unchanged. */
+function copySeatArraysInPatch(set: Record<string, unknown>): Record<string, unknown> {
+  const copy: Record<string, unknown> = { ...set };
+  for (const path of SEAT_PATHS) if (path in copy) copy[path] = copySeatArray(copy[path]);
+  return copy;
+}
+
+/** A copy of a loaded role with its five seat-path arrays replaced by fresh
+ * copies (see above); every other field is unchanged. */
+function copyRoleSeatArrays(role: StoredRole): StoredRole {
+  return {
+    ...role,
+    Lead: copySeatArray(role.Lead) as StoredRole["Lead"],
+    BGVs: copySeatArray(role.BGVs) as StoredRole["BGVs"],
+    Chorus: copySeatArray(role.Chorus) as StoredRole["Chorus"],
+    instruments: copySeatArray(role.instruments) as StoredRole["instruments"],
+    foh_team: copySeatArray(role.foh_team) as StoredRole["foh_team"],
+  };
 }
