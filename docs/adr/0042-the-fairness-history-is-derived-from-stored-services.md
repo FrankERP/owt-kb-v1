@@ -1,4 +1,4 @@
-# ADR-0041: The solver's fairness history is derived from stored role documents, not `localStorage`
+# ADR-0042: The solver's fairness history is derived from stored role documents, not `localStorage`
 
 **Date:** 2026-09-25 · **Status:** Accepted
 

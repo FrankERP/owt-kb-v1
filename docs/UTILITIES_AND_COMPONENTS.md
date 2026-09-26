@@ -106,7 +106,7 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   leaders to the current Lead; `sortedLeadIds` is the one snapshot-id normalizer shared by
   the outbox queue and flush sides.
 
-### Solver fairness history (MCP P2, dormant — ADR-0041)
+### Solver fairness history (MCP P2, dormant — ADR-0042)
 - **`historyWindow(target)`, `DERIVED_HISTORY_ROLE_KEYS`, `deriveSolverHistory({ target, roles,
   members })`** ([solverHistory.ts](../app/utils/solverHistory.ts)) — the ONE derivation:
   three calendar months before `target`, oldest first (empty entries allowed), summed from
@@ -181,7 +181,7 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
 **All of the above ships dormant.** Every existing planner path (`MonthGenerator`,
 `LeadPoolHistoryPanel`, `PlannerGrid`'s Historial diagnostics) behaves exactly as before while
 `SOLVER_HISTORY_SOURCE === "local"`; the new machinery only activates once Frank flips the
-switch. See [ADR-0041](adr/0041-the-fairness-history-is-derived-from-stored-services.md).
+switch. See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md).
 
 ### Dates & schedule
 - **`daysUntil(dateStr, now?)`**, **`formatCountdown(days)`** ([daysUntil.ts](../app/utils/daysUntil.ts))

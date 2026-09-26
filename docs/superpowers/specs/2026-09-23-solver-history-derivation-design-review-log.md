@@ -90,8 +90,9 @@ derived history changes the solver's schedule only when the fairness objective i
 skipped. ADR-0038 shows most real months with history already run unoptimised
 (`objective_skipped: true`) on `main`, before this change — history offsets alone can push
 the ladder's weights past CP-SAT's integer ceiling. Fixing the ceiling is issue #94 (above),
-out of scope for P2 by Frank's decision 3 (2026-09-23). **ADR-0041**
+out of scope for P2 by Frank's decision 3 (2026-09-23). **ADR-0041** (renumbered 0042 at release)
 ("The solver's fairness history is derived from stored role documents, not `localStorage`",
-`docs/adr/0041-the-fairness-history-is-derived-from-stored-services.md`) records the same
+`docs/adr/0041-the-fairness-history-is-derived-from-stored-services.md` — now
+`docs/adr/0042-the-fairness-history-is-derived-from-stored-services.md`) records the same
 limitation as one of its Consequences and amends ADR-0010. This is a documentation note
 only — no spec text is edited by it.

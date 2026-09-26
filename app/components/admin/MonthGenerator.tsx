@@ -2080,7 +2080,7 @@ export default function MonthGenerator({
     // decided which rule set won.
     //
     // `owt_solver_history_v2` below stays per-browser on purpose (ADR-0010,
-    // amended by ADR-0041; derived history behind the switch):
+    // amended by ADR-0042; derived history behind the switch):
     // P6 shares the RULES, not the fairness history.
     //
     // Derived mode (R14) never READS it: the history comes from the stored

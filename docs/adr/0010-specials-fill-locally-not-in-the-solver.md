@@ -1,6 +1,6 @@
 # ADR-0010: Fill special services locally; move the rules to Sanity
 
-**Date:** 2026-08-01 · **Status:** Accepted, amended by ADR-0041 · P6 implemented 2026-08-03 (seeded 2026-08-02)
+**Date:** 2026-08-01 · **Status:** Accepted, amended by ADR-0042 · P6 implemented 2026-08-03 (seeded 2026-08-02)
 
 > **2026-08-05 UI supersession:** `SeatBoard`/Tablero is no longer mounted;
 > `PlannerGrid` is the sole free-form roster editor. References below to two
@@ -120,9 +120,9 @@ A rule the user described as hard cannot depend on which browser is open.
   Decision 2 shares the rules, not the fairness history, so two admins still
   solve against different history. Pre-existing and out of scope here, but it
   makes "shared rules" narrower than it sounds.
-  **2026-09-25 amendment:** ADR-0041 closes this gap — the history moves to a
+  **2026-09-25 amendment:** ADR-0042 closes this gap — the history moves to a
   server-side derivation, shared rather than per-browser, shipped dormant behind
-  a switch. See ADR-0041.
+  a switch. See ADR-0042.
 - **Caps and presence rules are enforced by CP-SAT only.** They reach the solver
   for Sundays and Saturdays and are checked nowhere else — not on a special, not
   on a manual pick. `ruleEnforcement.ts` lists both as deliberate non-goals and

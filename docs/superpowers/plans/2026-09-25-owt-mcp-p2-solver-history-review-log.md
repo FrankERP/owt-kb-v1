@@ -102,5 +102,6 @@ unoptimised (`objective_skipped: true`) on `main`, before this change, because t
 weights overflow CP-SAT's integer ceiling once history offsets are added. Fixing that ceiling
 is separate follow-on work, tracked as **issue #94** ("Solver: the fairness objective is
 skipped in most real months, so history has no effect"), OPEN, out of scope for P2 by Frank's
-decision of 2026-09-23. **ADR-0041** (new, this task) records the same limitation as one of
-its Consequences. This is a documentation note only — no plan text is edited by it.
+decision of 2026-09-23. **ADR-0041** (new, this task; renumbered 0042 at release) records the
+same limitation as one of its Consequences. This is a documentation note only — no plan text
+is edited by it.

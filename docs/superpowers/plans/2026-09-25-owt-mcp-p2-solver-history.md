@@ -37,7 +37,8 @@
   surface then solves against the same history.
 - **Preconditions:** the spec is approved (met). The roadmap's `P0/P1 ∥ P2` entry needs
   the v2 spec and the roadmap approved (met), plus "P2's own spec and ADR approved". The ADR
-  is written in D1 (this task, `docs/adr/0041-*.md`) and merged before the diff runs (Spec
+  is written in D1 (this task, `docs/adr/0042-*.md` — renumbered from 0041 at release, after
+  PR #102 took 0041 first) and merged before the diff runs (Spec
   reconciliations) — it is on this branch, not yet on `main`; R16's precondition is met only
   once step 8 lands it there. **Implementation has begun**: Delivery 1's steps 1–7 are done on
   this branch, so Frank's go-ahead to implement was given after this plan's approval.
@@ -80,7 +81,7 @@ below are current.
 | About ten `MonthGenerator.create.test.tsx` cases assert on `localStorage["owt_solver_history_v2"]` | `app/components/admin/__tests__/MonthGenerator.create.test.tsx:455-790,1605-1645` | They guard local mode and the dual-write, and stay green |
 | The iOS shell loads the production origin in its own WebView store | `capacitor.config.ts:25-29` | R13 covers it if Frank ever planned there |
 | A new route under `/api/admin/` is gated by `proxy.ts` automatically. `routeMatcher.test.ts` only lists routes that are **not** gated | `app/utils/__tests__/routeMatcher.test.ts:12-58` | No matcher or list change is needed |
-| The ADRs run up to 0040. Numbers follow the order in which they reach `main`. P3's plan is being written in the same cycle | `docs/adr/`; `docs/adr/README.md` | The new ADR takes **the next free number at merge** (0041 if P2 lands first) |
+| The ADRs run up to 0040. Numbers follow the order in which they reach `main`. P3's plan is being written in the same cycle | `docs/adr/`; `docs/adr/README.md` | The new ADR takes **the next free number at merge** (0041 if P2 lands first) — it did not: PR #102 (solver-pinned-assignments) merged first and took 0041, so this ADR was renumbered 0042 during release prep |
 | `vitest` includes `scripts/**/*.test.ts`, `tsc` includes `**/*.ts`, and TZ is pinned to America/Mexico_City in the suite | `vitest.config.*`; `tsconfig.json` | The diff tool's pure module and tests can live under `scripts/` and still be gated |
 
 ## Scope
@@ -616,7 +617,9 @@ Every step leaves the four gates green. Nothing deploys until step 8.
 
 - **New ADR** `docs/adr/00NN-the-fairness-history-is-derived-from-stored-services.md`.
   NN is the next free number **when its PR merges**: 0041 today, but renumber if P3's ADR
-  reaches `main` first. It follows the template and stays under a page:
+  reaches `main` first. (It did — PR #102, "solver-pinned-assignments", merged first and
+  took 0041; this ADR was renumbered to 0042 during release prep.) It follows the template
+  and stays under a page:
   - **Context:** defects (a)–(f) and ADR-0010's named gap.
   - **Decision:**
     - the history is derived from canonical weekend role documents;

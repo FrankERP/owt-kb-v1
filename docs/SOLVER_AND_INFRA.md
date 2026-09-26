@@ -91,7 +91,7 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   visibility only and does not change the objective. The pool ids are filtered by
   live «Tipo» first, the same rule `buildSolveRequest` applies, so a stale tick
   cannot present an unschedulable member as an available lead (ADR-0029).
-- **The history's source is moving, in stages (MCP P2, ADR-0041) — dormant today.** The
+- **The history's source is moving, in stages (MCP P2, ADR-0042) — dormant today.** The
   browser is still the source: `MonthGenerator` reads and writes `owt_solver_history_v2` in
   `localStorage`, per browser profile, exactly as before. A server-side derivation over
   canonical `sunday_role`/`saturday_role` documents now exists in parallel
@@ -103,7 +103,7 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   every planner path is unchanged. The cutover to `"derived"` is Frank's decision, made after
   reading the R11 diff report (below); until then, [DATA_MODEL.md](DATA_MODEL.md)'s
   per-browser note still holds. See
-  [ADR-0041](adr/0041-the-fairness-history-is-derived-from-stored-services.md) and
+  [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and
   `docs/superpowers/specs/2026-09-23-solver-history-derivation-design.md`.
 
 ### Pinned assignments (`pinned`)
@@ -392,7 +392,7 @@ Both of the first two are listed by exact `file + operation` in the protected-re
 ### Solver history diff (MCP P2, Gate B — Frank runs it, never an agent by default)
 - `solver-history-diff.ts` (tsx entry point) + `lib/solverHistoryDiff.ts` / `solverHistoryDiffReport.ts`
   / `solverHistoryDiffRun.ts` — classifies every difference between Frank's exported
-  `localStorage` history and the derived one (R11, ADR-0041) into `explained` / `unverified` /
+  `localStorage` history and the derived one (R11, ADR-0042) into `explained` / `unverified` /
   `bug`, and runs the local solver against both sides for one target month. **Reads only local
   files, no Sanity client, no network** — the classifier and report modules are pure, verified
   by a test that walks their import closure. **Refuses any input or output path inside the

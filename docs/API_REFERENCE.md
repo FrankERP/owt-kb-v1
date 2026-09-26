@@ -454,7 +454,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 - **`GET /api/admin/solver-history?month=YYYY-MM[&evidence=1]`** — the server-derived
   fairness history (MCP P2): three calendar months before `month`, oldest first, from
   canonical `sunday_role`/`saturday_role` documents — a `special_role` is never counted
-  (ADR-0010 Decision 3; ADR-0041). Gated **exactly like `solver-config`**: no session or a
+  (ADR-0010 Decision 3; ADR-0042). Gated **exactly like `solver-config`**: no session or a
   **content-editor** → `403`; a missing or malformed `month` (not `^\d{4}-(0[1-9]|1[0-2])$`)
   → `400 { error: "invalid_request" }`. **`evidence=1` is super-admin only** — a plain
   worship admin asking for it gets `403` before the builder runs — because the evidence
@@ -466,7 +466,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   empty history. **Dormant as of this writing**: nothing calls this route yet — the planner
   still reads/writes `owt_solver_history_v2` in `localStorage`
   (`SOLVER_HISTORY_SOURCE === "local"`) until Frank runs the R11 diff and decides to cut
-  over. See [ADR-0041](adr/0041-the-fairness-history-is-derived-from-stored-services.md) and
+  over. See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and
   [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
 
 ---
