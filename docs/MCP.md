@@ -126,10 +126,14 @@ Four conventions the seven read tools share:
   (seats and song leaders) and `get_member_availability`, `name` is `member_name`, with `alias` as a
   separate field. `list_proposals`' `lead`, `contributors` and message `authorName` carry
   `member_name` only, with no alias.
-- **Readiness and the publish check come from pinned copies** of the publish-ready loader and
-  route verdict, not from the originals. See
-  [ADR-0040](adr/0040-mcp-reads-mirror-the-readiness-loader-and-publish-check.md) for why, the
-  three tests that pin them, and why they must never be merged in a routine cleanup.
+- **Readiness comes from a pinned copy of the publish-ready loader; the publish check is the
+  writer's own predicate.** The snapshot mirrors the loader (D1) and must never be merged with it
+  in a routine cleanup. The per-service verdict is `publishVerdict` (`app/utils/publishVerdict.ts`),
+  the same function the publish writer calls, so what `publishCheck` reports as blocking is what
+  publishing refuses. It is not the whole refusal set: the writer's later guard-bundle stage can
+  still refuse a service a read reports as passing. See
+  [ADR-0040](adr/0040-mcp-reads-mirror-the-readiness-loader-and-publish-check.md) and its
+  2026-09-26 amendment.
 
 #### `ping` (P0, released)
 
@@ -167,7 +171,9 @@ the one a future `edit_setlist`/`swap_assignment` would take).
   itself failed) when it cannot resolve; the setlist's rows (song id/title/author, key, medley
   grouping, and on a «Noche de alabanza» each song's leaders); and `readiness`.
 - **`readiness`** mirrors exactly what `POST /api/admin/roles/publish-ready` would decide for this
-  service (**I4** — one predicate, never re-derived): `blockers.hard`/`blockers.workflow` (Spanish
+  service (**I4** — one predicate, `publishVerdict`, never re-derived; the writer's later
+  guard-bundle stage is the one refusal it cannot see, per ADR-0040's amendment):
+  `blockers.hard`/`blockers.workflow` (Spanish
   copy, the same the admin card shows), `primaryAction`, `conflicts` (availability),
   `integrityIssues`, and `publishCheck`. **`publishCheck.passesNow`** is the literal field that
   answers "does the per-service publish check pass right now" — there is no field simply called

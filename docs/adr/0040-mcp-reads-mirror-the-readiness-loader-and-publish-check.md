@@ -1,6 +1,6 @@
 # ADR-0040: MCP reads mirror the readiness loader and the publish check instead of widening them
 
-**Date:** 2026-09-25 · **Status:** Accepted
+**Date:** 2026-09-25 · **Status:** Accepted; D2 superseded (amended 2026-09-26 by MCP P3 — see the end)
 
 > **The number is final.** ADR numbers follow the order in which records reach `main`. P1
 > (`claude/mcp-p1-reads`) reached `main` 2026-09-25 (PR #98, `a04edb43`) carrying this file as
@@ -85,3 +85,43 @@ also writer-imported. That work is tracked in
   someone tries, the three pins fail, and the mirror pin's message says where the change belongs.
 - **Cost.** About 60 lines of orchestration and the verdict exist twice. Any change to the
   original loader or to the route's verdict must be mirrored in the same commit.
+
+## Amendment — 2026-09-26, MCP P3: D2 consolidated
+
+Amended 2026-09-26 by MCP P3 (`docs/superpowers/plans/2026-09-25-owt-mcp-p3-writes.md`, step 5,
+plan decision D2). **D2 is superseded; D1 is unchanged.**
+
+- **One predicate.** The per-service verdict is now `publishVerdict`
+  (`app/utils/publishVerdict.ts`, neutral). It is called by both the publish writer — `publishReady`
+  in `app/utils/publishReadyCommit.ts`, the domain body the publish-ready route delegates to
+  (ADR-0041) — and `publishRefusalFor`, which is now a thin read adapter. The read passes the
+  snapshot's own `roleRev` and `mode: "ready"`, so `stale_revision` and `blocker_set_changed` are
+  unreachable there, and a compile-time narrowing turns the result into `PublishRefusalCode`. The
+  body is the route's former inline verdict, moved verbatim.
+- **The pins change meaning.** `publishRefusalParity.test.ts` keeps every assertion and remains as a
+  **wiring** test: the real route, run over the fixtures, still refuses exactly what the read
+  reports. The "mirror" premise is replaced by a single-source guard,
+  `app/utils/__tests__/publishVerdictSingleSource.test.ts`: both callers must call
+  `publishVerdict(`, and neither may call `classifyPublishBlockers(` or push any of the six verdict
+  reasons itself. The caller pin (`serviceCommitCallers.test.ts`) fixes `publishVerdict`'s
+  importers to those two. The rule "a new route refusal must be added to `publishRefusal.ts` and to
+  the fixture matrix together" is retired: a new verdict reason goes into `publishVerdict`, and the
+  adapter's narrowing fails `tsc` until the read says what it shows for it.
+- **D1 unchanged.** The verdict's input, `AssembledService`, is still assembled two ways: the
+  writer from `loadServiceReadinessSources`, the reads from the snapshot mirror
+  (`loadServiceSnapshot`). That input stays pinned by `serviceSnapshotMirror.test.ts` and
+  `serviceSnapshotParity.test.ts`, and P4 consumes the snapshot. D1's exit is as stated above.
+
+**Residual: the verdict is not the whole refusal set.** After the verdict, the writer builds the
+revision guard bundle — `buildPublishAssertion` → `planPublishReadyAssertions`, then
+`mergeAssertionOps` and `withPublishedTrue` — and refuses `integrity_conflict` with
+`assertionIssues`, `mergeIssues` or `planIssues` (the «Exact revision guard bundle» block of
+`publishReady`; `buildPublishAssertion` in `app/utils/publishReadyBundle.ts`;
+`planPublishReadyAssertions` in `app/utils/publishReadyTransaction.ts`). A read sees only the
+`unsafe` part of that stage, as `unusable_observation` (the `unsafe` list `assembleService` builds in
+`publishReadyBundle.ts`). So a read can say `passesNow: true` for a service the publish then refuses
+at the assertion stage (the plan's example: an assigned member stored with an empty `_rev`). The
+`publish_service` tool reports that refusal in words, and nothing is written. The fixture that pins
+this residual belongs to the tool's own test store (P3 step 9), never to P1's shared fixtures
+(ruling P3-R2), so the wiring test above stays unchanged. **I4 holds by construction for the predicate, not for the
+assertion stage that follows it.**
