@@ -25,31 +25,21 @@
 // `published: false` then goes through A2's guarded publication contract: one
 // revision-asserted transaction that also heartbeats every involved token. An
 // unpublish is silent by design (A2 §7) — only a real `false -> true` notifies.
+//
+// This handler authorizes and parses JSON only. Everything after that is
+// `unpublishRoles` (`app/utils/roleUnpublishCommit.ts`), the one unpublish
+// writer the MCP `unpublish_service` tool calls too; its outcome's `body` and
+// `status` are sent as-is.
 
 import { NextRequest, NextResponse } from "next/server";
 
-// An unpublish notifies nobody, but its post-commit `after()` block hosts a sweep
-// (Task 11) that can fan out dozens of emails; give it room to finish.
+// An unpublish notifies nobody and runs no sweep. 60 s is kept for parity with
+// its sibling.
 export const maxDuration = 60;
 
 import { requireActiveManager } from "@/app/utils/authGuards";
-import { writeClient } from "@/sanity/lib/serverClient";
-import { revalidateRolePublication } from "@/app/utils/serviceMutationSideEffects";
-import { computePublishTransitions } from "@/app/utils/publishTransitions";
 import { serviceError } from "@/app/utils/serviceMutation";
-import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
-import {
-  loadRoleForWrite,
-  loadTargetOccupancy,
-  nowIso,
-  resolveOwnedCoordination,
-  type RoleWriteTarget,
-} from "@/app/utils/roleWriteOps";
-import {
-  allObservedIn,
-  observePublicationStates,
-  parseUnpublishRequest,
-} from "@/app/utils/publishReadyBundle";
+import { unpublishRoles } from "@/app/utils/roleUnpublishCommit";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
 
 function reject(res: { status: number; body: unknown }) {
@@ -73,131 +63,6 @@ async function postHandler(req: NextRequest) {
   } catch {
     return reject(serviceError("invalid_request", { details: { issues: ["json"] } }));
   }
-  const parsed = parseUnpublishRequest(body);
-  if (!parsed.ok) {
-    return reject(serviceError("invalid_request", { details: { issues: parsed.issues } }));
-  }
-  const { mode, entries } = parsed.value;
-
-  // Only these three stored types have a service publication state at all.
-  const PUBLISHABLE_TYPES = ["sunday_role", "saturday_role", "special_role"] as const;
-
-  // ── Recovery for a lost/unknown response: refetch identity + state only ────
-  if (mode === "recover") {
-    const observed = await observePublicationStates(entries.map((e) => e.id));
-    if (!observed.ok) {
-      return NextResponse.json(
-        {
-          error: "unknown_outcome",
-          outcome: "unknown",
-          message: "No se pudo confirmar el resultado. Vuelve a intentar la verificación.",
-        },
-        { status: 503 },
-      );
-    }
-    if (allObservedIn(observed.states, "draft")) {
-      // Already hidden: recovered success, with no second mutation.
-      return NextResponse.json({ ok: true, mode, outcome: "recovered", services: observed.states });
-    }
-    return reject(
-      serviceError("stale_revision", {
-        message: "El resultado no coincide con lo solicitado. Recarga y vuelve a intentar.",
-        details: { outcome: "not_in_requested_state", services: observed.states },
-      }),
-    );
-  }
-
-  // ── Narrow safe-targeting proof, per role ─────────────────────────────────
-  const targets: RoleWriteTarget[] = [];
-  for (const entry of entries) {
-    const load = await loadRoleForWrite(entry.id, entry.rev);
-    if (!load.ok) {
-      return reject(serviceError(load.failure.code, { details: load.failure.details }));
-    }
-    const target = load.target;
-    if (!(PUBLISHABLE_TYPES as readonly string[]).includes(target.role._type)) {
-      return reject(
-        serviceError("integrity_conflict", {
-          details: { id: entry.id, detail: "unexpected_type" },
-        }),
-      );
-    }
-    // A duplicate or draft-conflicted service target is an ambiguous write target,
-    // even though the id itself resolved to one document.
-    const occupancy = await loadTargetOccupancy({
-      roleType: target.role._type,
-      date: target.date,
-      serviceName: target.role.service_name ?? null,
-      excludeRoleId: entry.id,
-    });
-    if (occupancy.canonicalRoleIds.length > 0) {
-      return reject(
-        serviceError("ambiguous_target", {
-          details: {
-            id: entry.id,
-            targetKey: target.targetKey,
-            conflictingIds: occupancy.canonicalRoleIds,
-          },
-        }),
-      );
-    }
-    if (occupancy.rawDraftIds.length > 0) {
-      return reject(
-        serviceError("integrity_conflict", {
-          details: { id: entry.id, rawDrafts: occupancy.rawDraftIds },
-        }),
-      );
-    }
-    targets.push(target);
-  }
-
-  // Weekend lock ownership (A2 §1). A wrong-owner, vacant or malformed token is an
-  // integrity conflict and is never implicitly reclaimed.
-  const coordination = await resolveOwnedCoordination(targets);
-  if (!coordination.ok) {
-    return reject(
-      serviceError(coordination.failure.code, { details: coordination.failure.details }),
-    );
-  }
-
-  const roles = coordination.roles;
-  const revById = new Map(roles.map((r) => [r.role._id, r.role._rev]));
-  // Missing `published` is grandfathered published, so a legacy service IS hidden
-  // by this call; an already-hidden one is a silent no-op.
-  const { toPatch } = computePublishTransitions(
-    roles.map((r) => ({ _id: r.role._id, published: r.role.published })),
-    false,
-  );
-
-  if (toPatch.length) {
-    const now = nowIso();
-    let tx = writeClient.transaction();
-    for (const id of toPatch) {
-      const rev = revById.get(id) as string;
-      tx = tx.patch(id, (p) => p.ifRevisionId(rev).set({ published: false }));
-    }
-    for (const role of roles) {
-      const lock = role.lock;
-      if (!lock) continue;
-      tx = tx.patch(lock._id, (p) => p.ifRevisionId(lock._rev).set({ updatedAt: now }));
-    }
-    try {
-      await tx.commit();
-    } catch (err) {
-      if (!sanityConflictKind(err)) throw err;
-      return reject(
-        serviceError(coordination.bootstrapped ? "bootstrap_completed_reload" : "stale_revision", {
-          details: { ids: toPatch },
-        }),
-      );
-    }
-    // Member-facing caches must drop the hidden service promptly.
-    revalidateRolePublication();
-  }
-
-  return NextResponse.json({
-    ok: true,
-    unpublished: toPatch.length,
-    services: roles.map((r) => ({ id: r.role._id })),
-  });
+  const outcome = await unpublishRoles(body);
+  return NextResponse.json(outcome.body, { status: outcome.status });
 }

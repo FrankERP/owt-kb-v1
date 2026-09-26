@@ -20,12 +20,13 @@ the same write:
 | `edit_setlist` | `PUT /api/admin/setlists` | `app/utils/setlistSaveCommit.ts` |
 | `swap_assignment` | `POST /api/admin/roles/swap` | `app/utils/roleSwapCommit.ts` |
 | `publish_service` | `POST /api/admin/roles/publish-ready` | `app/utils/publishReadyCommit.ts` |
-| `unpublish_service` | `POST /api/admin/roles/unpublish` | `roleUnpublishCommit.ts` |
+| `unpublish_service` | `POST /api/admin/roles/unpublish` | `app/utils/roleUnpublishCommit.ts` |
 
 The first row lands with this record; `swap_assignment` follows the same template as of task 4,
-and `publish_service` as of task 5; the last row follows it in turn. The publish writer's
-per-service verdict moved one step further, into the neutral `app/utils/publishVerdict.ts`, which
-the MCP reads call too (ADR-0040's amendment).
+`publish_service` as of task 5, and `unpublish_service` as of task 6 — all four domain writers now
+exist, each with exactly one caller. The publish writer's per-service verdict moved one step
+further, into the neutral `app/utils/publishVerdict.ts`, which the MCP reads call too (ADR-0040's
+amendment).
 
 Three facts decide how a tool reaches that guarded code:
 

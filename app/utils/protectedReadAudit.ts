@@ -218,10 +218,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the ready/override publish surface itself)",
   },
   {
-    file: "app/api/admin/roles/unpublish/route.ts",
-    operation: "POST",
+    file: "app/utils/roleUnpublishCommit.ts",
+    operation: "module",
     reason:
-      "guarded narrow unpublish (Plan B item 3): proves canonical singleton identity, raw-draft absence, observed revision, target occupancy and weekend lock ownership, then patches `published: false` under that revision and heartbeats each token; deliberately consults no readiness or blocker acknowledgement",
+      "guarded narrow unpublish (Plan B item 3): proves canonical singleton identity, raw-draft absence, observed revision, target occupancy and weekend lock ownership, then patches `published: false` under that revision and heartbeats each token; deliberately consults no readiness or blocker acknowledgement. The domain body of `POST /api/admin/roles/unpublish`, moved here so the MCP `unpublish_service` tool calls the same writer; the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the hide-a-service safety surface itself)",
   },
   {

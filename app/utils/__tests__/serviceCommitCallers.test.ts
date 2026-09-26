@@ -43,6 +43,7 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   publishReadyCommit: ["app/api/admin/roles/publish-ready/route.ts"],
   publishVerdict: ["app/mcp/reads/publishRefusal.ts", "app/utils/publishReadyCommit.ts"],
   roleSwapCommit: ["app/api/admin/roles/swap/route.ts"],
+  roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts"],
 };
 
