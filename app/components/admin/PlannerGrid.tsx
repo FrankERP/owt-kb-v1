@@ -162,6 +162,12 @@ export interface SolveDiagnostics {
   sun_lead_fairness_relaxed?: boolean;
   sun_bgv_fairness_relaxed?: boolean;
   history_runs_used?: number;
+  /**
+   * Derived fairness history only (R14): the window months the solve read,
+   * e.g. «ago · sep (sin servicios) · oct». Replaces «Historial usado: N»,
+   * which is always 3 on a derived history (R4) and so says nothing.
+   */
+  history_months?: string;
 }
 
 export interface AutoState {
@@ -2077,7 +2083,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
           {diagnostics.fairness_relaxed && <span>Equidad relajada</span>}
           {diagnostics.sun_lead_fairness_relaxed && <span>Equidad de líderes de domingo relajada</span>}
           {diagnostics.sun_bgv_fairness_relaxed && <span>Equidad de BGV de domingo relajada</span>}
-          {typeof diagnostics.history_runs_used === "number" && (
+          {typeof diagnostics.history_months === "string" ? (
+            <span>Historial: {diagnostics.history_months}</span>
+          ) : typeof diagnostics.history_runs_used === "number" && (
             <span>Historial usado: {diagnostics.history_runs_used}</span>
           )}
         </div>
