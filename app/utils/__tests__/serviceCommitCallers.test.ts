@@ -38,6 +38,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
  * Adding a caller is a reviewed change to this table, never a loosening of the scan.
  */
 const EXPECTED_CALLERS: Record<string, string[]> = {
+  roleSwapCommit: ["app/api/admin/roles/swap/route.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts"],
 };
 

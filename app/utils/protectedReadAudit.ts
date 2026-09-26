@@ -225,10 +225,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the hide-a-service safety surface itself)",
   },
   {
-    file: "app/api/admin/roles/swap/route.ts",
-    operation: "POST",
+    file: "app/utils/roleSwapCommit.ts",
+    operation: "module",
     reason:
-      "guarded atomic swap: one transaction exchanges stored seat/team assignments across both roles under both observed revisions (A2 §4)",
+      "guarded atomic swap: one transaction exchanges stored seat/team assignments across both roles under both observed revisions (A2 §4). The domain body of `POST /api/admin/roles/swap`, moved here so the MCP `swap_assignment` tool calls the same writer; the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the swap surface itself)",
   },
   {

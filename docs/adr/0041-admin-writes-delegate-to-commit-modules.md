@@ -18,11 +18,12 @@ the same write:
 | Tool | Counterpart | Domain module |
 |---|---|---|
 | `edit_setlist` | `PUT /api/admin/setlists` | `app/utils/setlistSaveCommit.ts` |
-| `swap_assignment` | `POST /api/admin/roles/swap` | `roleSwapCommit.ts` |
+| `swap_assignment` | `POST /api/admin/roles/swap` | `app/utils/roleSwapCommit.ts` |
 | `publish_service` | `POST /api/admin/roles/publish-ready` | `publishReadyCommit.ts` |
 | `unpublish_service` | `POST /api/admin/roles/unpublish` | `roleUnpublishCommit.ts` |
 
-The first row lands with this record; the other three follow the same template.
+The first row lands with this record; `swap_assignment` follows the same template as of task 4;
+the other two follow it in turn.
 
 Three facts decide how a tool reaches that guarded code:
 
