@@ -24,12 +24,28 @@ Entry point `solve_from_dict(data)`. Input keys: `weeks`, `weekends_with_saturda
 `sunday_leads`/`saturday_leads`/`support` (mutually-exclusive name pools), `dsl_rules` (see
 below), `history` (prior months, oldest first), `seed`, and solver knobs
 (`solver_max_time_seconds`, `solver_num_search_workers`, `solver_total_budget_seconds`,
-`discourage_consecutive`).
+`discourage_consecutive`), and optionally `pinned` — seats already on the board that the solver
+must keep, `[{week, role, person}]`, at most 100 (see *Pinned assignments* below).
 
 Output: `{ ok, schedule: {"<week>": {Sunday:{Lead[],BGV[],Choir[]}, Saturday?:{...}}},
 fairness_relaxed, sun_lead_fairness_relaxed, sun_bgv_fairness_relaxed,
 objective_skipped, history_runs_used,
-total_counts, role_counts, unfilled_seats[] }`. On error: `{ ok: false, error }`.
+total_counts, role_counts, unfilled_seats[], pinned_honored, pin_violations[],
+violation_ceiling_proven? }`. On error: `{ ok: false, error }`.
+
+- **`pinned_honored`** — how many pins the returned schedule actually holds, derived from the
+  solved assignment and never echoed. Emitted on **every** response, `0` without pins: its
+  presence is how the client (and the deploy check below) tells this solver from one that
+  silently ignores `pinned`. It can never come back short — a pin is a hard `== 1` — so the
+  signal is the field's presence, not its value.
+- **`pin_violations`** — the rules set aside to honour the pins, one entry per relaxed
+  instance, in a normative grammar the client parses: `<person>: <source>` (count rule),
+  `W<n>: <source>` (weekly presence), `W<n> <Sun|Sat>: <source>` (pair), `W<n>-<n+1> <person>:
+  <source>` (consecutive), `builtin:mandatory_lead:W<n>:<Sun|Sat>`, `builtin:sat_anchor:W<n>`.
+  `<person>` comes from the parsed rule, because `source` is the `&`-split clause and loses the
+  name on every clause after the first. `[]` without pins.
+- **`violation_ceiling_proven`** — `true` iff the violation-only solve proved its minimum, i.e.
+  the relaxations are exactly as many as the pins force. **Absent** on a pinless request.
 
 Also a **CLI mode**: `echo '<json>' | python3 owt_solver_v2.py --json-mode` (stdin→stdout);
 no-args runs a built-in demo roster.
@@ -90,6 +106,65 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   [ADR-0041](adr/0041-the-fairness-history-is-derived-from-stored-services.md) and
   `docs/superpowers/specs/2026-09-23-solver-history-derivation-design.md`.
 
+### Pinned assignments (`pinned`)
+Spec `docs/superpowers/specs/2026-09-15-solver-pinned-assignments-design.md`, decision record
+ADR-0041. The client that sends pins («Solo llenar vacíos») is a separate delivery.
+
+- **A pin is a fixed variable, not a removed seat:** `sum(x[P, slots of (R, W)]) == 1`. Every
+  mechanism that counts people or iterates slots — totals, role counts, DSL caps, the Saturday
+  anchor, presence, `filled`, occupancy, the consecutive penalty, the response view — sees it
+  with no restated offsets.
+- **Four enabling changes.** Candidacy is granted only in the pin's own (role, week), appended
+  after the shuffled eligibles, so a pinned person in no pool (or with a cleared Tipo) gains
+  nothing else. Rows grow to `max(default, pins)` and never shrink, keeping the `Sun.BGV`/
+  `Sun.Choir` interleave. Pinned-only names join `all_people` **after** `pools` is built and stay
+  out of `strict`, `relaxed` and the collapse rebuild. Each person gets slack equal to their pin
+  count on the three **hard** spreads — the global one, and for `Sun.Lead`/`Sun.BGV` their pins
+  in the Sunday **service** (not the role, which collapsed the month for lead-pool members).
+- **Rules go soft under pins, per instance.** With any pin, the six families a pin can
+  contradict — mandatory lead, Saturday anchor, weekly presence, pair, consecutive, DSL count —
+  each get one boolean per instance (per week, per service where the rule has one; one per rule
+  for counts, which are month totals). A week exclusion is not relaxed but scoped: it is skipped
+  on the pinned row only. `!in <pattern>` and pool membership need nothing — the pin grants
+  candidacy.
+- **Solve 0 fixes the count first.** Order: solve 0 minimises the violation count alone, with
+  nothing inherited → Stage A minimises `(max_weighted_empty + 1)·n_viol + weighted_empty` →
+  the Stage B ladder. **Every stage after solve 0 carries `n_viol <= violation_target` as a
+  constraint**, the `stage_a` fall-through included, so no stage buys fill or fairness with one
+  more broken rule — ADR-0010's requirement holds as "the number of rules set aside is never
+  increased for fairness". Which instance gives among equal-size sets is still Stage B's choice.
+  Stage A's own count also caps Stage B whenever it is lower — which covers solve 0 finding
+  nothing in time (then Stage A runs uncapped, but no Stage B pass can exceed what Stage A
+  found) and a slack `FEASIBLE` solve 0. `violation_ceiling_proven` reports solve 0 alone.
+  Stage A starts from solve 0's month as a search hint, so a board with dozens of pinned people
+  in one row returns a month where it used to time out into the mandatory-lead diagnostic. It is
+  a hint, not a guarantee: Stage A still needs its presolve (~0.2 s on a MacBook for 64 such pins),
+  so a slow enough container can still time out, and that path still reports "infeasible".
+  Measured 2026-09-25 (MacBook, 1 worker, 5 s cap — a laptop number): solve 0 was `OPTIMAL` on
+  every §7 case × 3 seeds, including a 52-pin full board and 30 pins on 12 people, in 4–6 ms.
+- **The report is read from the assignment, never from the booleans**, which are
+  one-directional and may sit at 1 on a constraint that holds. Measured: with the ceiling
+  removed, Stage B drops the Saturday anchor in weeks nobody pinned — and the report names it.
+- **Without pins none of this is built**, `n_viol` included, and no solve 0 runs. A pinless
+  request builds a byte-identical Stage A model to the pre-pin solver, which
+  `gcf/test_inertness.py` freezes (see `docs/CI.md`). Once any pin exists, the mandatory lead is
+  soft for the whole month: a lead shortfall from absences alone comes back as the
+  `builtin:mandatory_lead` marker and a «Sin cubrir» seat instead of `ok: false`.
+- **Refusals** (all `ValueError` → `ok: false`): a malformed entry, more than 100 entries (never
+  truncated), an unknown role, a week outside the month, a `Sat.*` pin on a week with no
+  Saturday, two different pins for one person in one service, and a pinned-only name that differs
+  from another name only in capitalisation or surrounding spaces (a misspelling: it would sit
+  beside the real person and could take their DSL rules). A pin on a pool member's exact name is
+  always accepted — Studio does not trim `member_name`, so that can include a trailing space.
+  Exact duplicates collapse.
+- **A consecutive-rule quirk for whoever writes the copy:** pinning someone into both services
+  of one weekend under `!consecutive on *.Lead` reports the W(n-1)–W(n) and W(n)–W(n+1) pairs,
+  because each pair sums both weeks' services and the rule already forbade a same-weekend double.
+- **What it does not promise:** nothing bounds the pinned person's own total, and an un-pinned
+  `fairness_exempt` member is outside every bound (a single pin can cost them a service). The
+  three `*_fairness_relaxed` flags keep their literal meaning — "the ladder loosened a limit" —
+  over slack-adjusted counts. A timed-out pinned month looks like a fairness-free month.
+
 ### Invocation from Next.js
 `POST /api/admin/solve` (admin/super-admin, `maxDuration=60`):
 - **Production:** `fetch(OWT_SOLVER_URL)` with header `X-Api-Key: OWT_SOLVER_API_KEY`; treats
@@ -141,6 +216,37 @@ can't `setIamPolicy`; auth is enforced at the app layer via `X-Api-Key`).
 
 Manual fallback: `bash scripts/deploy-solver-gcf.sh` (prints the function URL + the Vercel env
 vars to set).
+
+### Verifying a Cloud Function deploy
+The Vercel rule (alias + `githubCommitSha`) has no analogue here, so the check is:
+
+1. `gcloud functions describe owt-solver --gen2 --region=us-central1 --format='value(updateTime)'`
+   — the active revision's `updateTime` must be after the merge. This is the analogue of reading
+   the alias, not the build.
+2. One **pinless** smoke request, asserting `ok: true` and the **presence** of `pinned_honored`.
+   Presence is the discriminator: an old revision answers the same request successfully and
+   without the field. It needs the API key, which is Frank's to supply — never paste its value
+   into a doc, a chat or a command history. Shape (the key read from Secret Manager into the
+   shell, with gcloud's file logging off so the value is not written to `~/.config/gcloud/logs`,
+   and handed to curl on stdin with `-H @-` so it never appears in `ps`):
+
+   ```bash
+   URL=$(gcloud functions describe owt-solver --gen2 --region=us-central1 --format='value(serviceConfig.uri)')
+   KEY=$(CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true gcloud secrets versions access latest --secret=owt-solver-api-key)
+   printf 'X-Api-Key: %s\n' "$KEY" | curl -s -X POST "$URL" -H @- -H "Content-Type: application/json" \
+     -d '{"weeks":4,"weekends_with_saturday":[2,4],"sunday_leads":["A","B","C"],"saturday_leads":[],"support":["D","E","F","G"],"dsl_rules":[],"history":[],"seed":1}' \
+     | python3 -c 'import json,sys; r=json.load(sys.stdin); print("ok", r["ok"], "pinned_honored" in r)'
+   unset KEY
+   ```
+
+Never a bare HTTP reachability check, never a grep loop over build logs.
+
+**The one revert trigger** is the smoke request failing or coming back without
+`pinned_honored` — the deploy did not land; re-deploy the previous revision. A behavioural
+problem found later is **not** a function revert: revert the app half (it stops sending
+`pinned`, and a pinless request builds today's model). Reverting the function while a pinned
+app is live makes every Auto fail the handshake. If a pinless regression ever reaches
+production, revert **the app first**, then re-deploy the previous function revision.
 
 ---
 
