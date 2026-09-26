@@ -109,7 +109,7 @@ function isReadObservable(reason: PublishVerdictReason): reason is Exclude<Publi
 }
 
 export interface PublishRefusal {
-  /** True only when the route would publish this service now: `refusals` is empty. */
+  /** True only when the route would publish this service now: `refusals` is empty — up to the guard-bundle stage (ADR-0040's amendment). */
   ready: boolean;
   /** Why a ready-mode publish would be refused, in the route's own order. */
   refusals: PublishRefusalCode[];

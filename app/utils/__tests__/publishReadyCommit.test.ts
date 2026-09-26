@@ -245,6 +245,11 @@ describe("publishReady — recovery and refusals", () => {
       error: "stale_revision",
       details: { mode: "ready", services: [{ id: "role-sun-1011" }] },
     });
+    // Already published (grandfathered — no `published` field) plus unmet
+    // workflow blockers, never a revision reason: the rev sent above is the
+    // fixture's own.
+    const body = outcome.body as { details: { services: { reasons: string[] }[] } };
+    expect(body.details.services[0]!.reasons).toEqual(["already_published", "not_ready"]);
     expect(h.transactions).toEqual([]);
     expect(h.notifyRolePublished).not.toHaveBeenCalled();
     expect(h.queuePublishedSetlistNotices).not.toHaveBeenCalled();
