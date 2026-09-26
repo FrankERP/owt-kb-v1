@@ -580,6 +580,31 @@ A few things that look like bugs at first glance and are not:
   **Not observed to be invoked during the step-13 live acceptance** (2026-09-24) — whether
   claude.ai's iOS app called `subscriptions/listen` was not directly confirmed; what was observed
   is that the authorization and `ping` flow completed with no visible effect from this refusal.
+- **Every tool call logs one `[mcp]` timing line, and that is the only duration there is.**
+  Vercel's runtime logs on this plan carry no request duration (observed 2026-09-25: no duration
+  field from the logs API or from `vercel logs --json`, and the Observability API answers 404 on
+  Hobby). So `runReadTool` (`app/mcp/reads/errors.ts`) and the write runner `runWriteTool`
+  (`app/mcp/writes/runWriteTool.ts`) each log exactly one line per call, from `finally`, through
+  `app/mcp/toolTiming.ts`:
+  `[mcp] tool=<name> outcome=<ok|refused|error> code=<code|-> ms=<n>`. `code` is a refusal's
+  machine code (`stale_revision`, `not_found`, …) and `-` otherwise; a read logs `-`. The line
+  never carries an argument, an id, a member or service name, a payload or an error message.
+  Read it with `vercel logs <deployment> --json`: each record's `logs[].message` holds it. It is
+  how the P1 latency figure and P3's live-proof durations are measured. It goes to
+  `console.info`; `ping` does not run through `runReadTool`, so it logs nothing.
+- **`/api/mcp` reaches outbound delivery transitively, and is deliberately NOT wrapped in
+  `withVerificationRunContext`** (P3 plan D15; ADR-0041). The SR-verification coverage scan in
+  `srVerificationRunContext.test.ts` marks a route delivery-capable only when the route's OWN
+  source names a delivery-capable module, and follows no import. `/api/mcp` names none: its reach
+  is route → the tool modules → the `*Commit` domain modules → the side-effect helpers (push,
+  email, the outbox). An exception entry for it would never be exercised and would read as
+  coverage that does not exist, so there is none. The route stays unwrapped because an MCP call
+  is bearer-authenticated for one super-admin and is never an SR-verification run. Consequence:
+  **an MCP write's delivery evidence carries no run markers** — an evidence gap, not a safety
+  hole (blocking never depends on a context; `app/utils/srVerificationRunContext.ts`). What is
+  pinned is the property the scan can see: `app/api/__tests__/mcpRoute.test.ts` fails if the
+  route's comment-stripped source ever names a delivery-capable module or uses the wrapper, so
+  that change has to come with a wrapper decision.
 - **Not observed:** the consent page's streaming quirks above (`notFound()` arriving as a 200,
   an error redirect delivered in-stream) were not exercised by the step-13 happy path — Frank's
   phone never hit a foreign host or a refused request. Treat those two bullets as a design

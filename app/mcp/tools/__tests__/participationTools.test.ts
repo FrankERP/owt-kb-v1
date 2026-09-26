@@ -52,6 +52,15 @@ function wire(options: ScopedResponderOptions = {}) {
   h.raw.mockImplementation(responder.raw);
 }
 
+// Every tool call logs the `[mcp]` timing line (`app/mcp/toolTiming.ts`) on console.info.
+let timingSpy: ReturnType<typeof vi.spyOn>;
+beforeEach(() => {
+  timingSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+});
+afterEach(() => {
+  timingSpy.mockRestore();
+});
+
 beforeEach(() => {
   h.operational.mockReset();
   h.raw.mockReset();

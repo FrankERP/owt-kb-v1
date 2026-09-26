@@ -16,6 +16,7 @@
 // `content`, plus `structuredContent` for one that reads the typed payload.
 
 import type { CallToolResult } from "@modelcontextprotocol/server";
+import { logToolTiming, resultOutcome, toolTimingStart, type ToolOutcome } from "../toolTiming";
 
 /** The one message a dataset failure ever shows the model. Never templated. */
 export const READ_TOOL_FAILURE_MESSAGE = "No se pudo completar la consulta. Intenta de nuevo en un momento.";
@@ -26,16 +27,27 @@ export const READ_TOOL_FAILURE_MESSAGE = "No se pudo completar la consulta. Inte
  * tag and the tool name ONLY: never the error's message, its stack, a token or
  * a query. Returns the fixed Spanish tool error instead of letting the SDK
  * surface `error.message`, which is Sanity's own text.
+ *
+ * Every call, whatever its outcome, also logs ONE timing line from `finally`
+ * (`../toolTiming.ts`): `[mcp] tool=<name> outcome=<ok|refused|error> code=<code|-> ms=<n>`.
+ * No read refusal carries a `structuredContent.code` today, so a read logs `code=-`.
  */
 export async function runReadTool(
   toolName: string,
   handler: () => CallToolResult | Promise<CallToolResult>,
 ): Promise<CallToolResult> {
+  const startedAt = toolTimingStart();
+  let outcome: ToolOutcome = "error";
+  let code = "-";
   try {
-    return await handler();
+    const result = await handler();
+    ({ outcome, code } = resultOutcome(result));
+    return result;
   } catch {
     console.error("[mcp-read] tool failed:", toolName);
     return { isError: true, content: [{ type: "text", text: READ_TOOL_FAILURE_MESSAGE }] };
+  } finally {
+    logToolTiming(toolName, outcome, code, startedAt);
   }
 }
 

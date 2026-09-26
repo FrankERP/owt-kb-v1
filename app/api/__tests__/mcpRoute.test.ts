@@ -10,6 +10,9 @@
 // store runs underneath: a revoked grant is really revoked in the stored
 // document, and the 30 s grant cache really serves the second request.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { SignJWT } from "jose";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -104,6 +107,8 @@ import {
   signClientId,
   signRefreshToken,
 } from "@/app/mcp/oauth/tokens";
+import { DELIVERY_CAPABLE_IMPORTS } from "@/app/utils/__tests__/__fixtures__/deliveryCapableImports";
+import { stripComments } from "@/scripts/lib/strip-comments.mjs";
 
 const SECRET = "s".repeat(32);
 const KEY = new TextEncoder().encode(SECRET);
@@ -1184,5 +1189,56 @@ describe("/api/mcp — a server failure is a fixed 500 and never echoes (E1)", (
     await expectServerError(await POST(request));
     expect(h.forwarded).toHaveLength(0);
     expect(consoleText()).not.toMatch(/internal detail/);
+  });
+});
+
+// ── the SR-verification gap is stated, not excepted (P3 D15) ─────────────────
+//
+// The SR-verification coverage scan (`srVerificationRunContext.test.ts`) marks a
+// route delivery-capable when the route's OWN source names one of
+// `DELIVERY_CAPABLE_IMPORTS`, and then requires `withVerificationRunContext`. It
+// follows no import, so it cannot see `/api/mcp`'s reach, which is transitive
+// (route → the tool modules → the domain modules → the side-effect helpers). An
+// exception entry for this route would never be exercised, so there is none.
+// What IS pinned is the one property the scan can see: this route imports no
+// delivery-capable name directly and is not wrapped. A delivery-capable import
+// added here fails this test (and the scan), so it has to come with a wrapper
+// decision. The gap itself is stated in docs/MCP.md («Known behaviours») and
+// ADR-0041. Comments are stripped first: prose may name a module, code may not.
+
+const ROUTE_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../mcp/route.ts");
+
+/** The delivery-capable names `code` reaches directly, plus the wrapper if it is used. */
+function directDeliveryReach(code: string): string[] {
+  const found: string[] = DELIVERY_CAPABLE_IMPORTS.filter((name) => code.includes(name));
+  if (code.includes("withVerificationRunContext(")) found.push("withVerificationRunContext(");
+  return found;
+}
+
+describe("/api/mcp — reaches delivery only transitively, and is deliberately unwrapped (D15)", () => {
+  const code = stripComments(readFileSync(ROUTE_FILE, "utf8"));
+
+  it("reads the real route source (a scan of nothing would pass forever)", () => {
+    expect(code).toContain("createMcpHandler(");
+    expect(code).toContain("export const POST = handle;");
+    expect(DELIVERY_CAPABLE_IMPORTS).toContain("publishReadyCommit");
+  });
+
+  it("imports none of DELIVERY_CAPABLE_IMPORTS directly and does not use withVerificationRunContext", () => {
+    expect(directDeliveryReach(code)).toEqual([]);
+  });
+
+  it("control: a delivery-capable import planted in the route is caught", () => {
+    expect(
+      directDeliveryReach(`${code}\nimport { publishReady } from "@/app/utils/publishReadyCommit";\n`),
+    ).toEqual(["publishReadyCommit"]);
+    expect(directDeliveryReach(`${code}\nexport const PUT = withVerificationRunContext(handle);\n`)).toEqual([
+      "withVerificationRunContext(",
+    ]);
+  });
+
+  it("control: a name in a comment is prose, not reach", () => {
+    const commented = stripComments(`// delegates to publishReadyCommit\n/* utils/push */\nconst x = 1;\n`);
+    expect(directDeliveryReach(commented)).toEqual([]);
   });
 });

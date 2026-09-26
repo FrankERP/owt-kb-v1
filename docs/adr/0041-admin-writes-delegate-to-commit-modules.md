@@ -141,7 +141,8 @@ never be exercised, and it would read as coverage that does not exist. The route
 unwrapped, because an MCP call is bearer-authenticated for one super-admin and is never an
 SR-verification run. What gets pinned instead, with the MCP write foundation, is the one
 property the scan can see: a test in `app/api/__tests__/mcpRoute.test.ts` asserting that the
-route's own source has no direct delivery-capable import and no `withVerificationRunContext(`. An MCP write's delivery evidence therefore carries no run
+route's own source, comments stripped, has no direct delivery-capable import and no
+`withVerificationRunContext(`; `docs/MCP.md` («Known behaviours») states the gap. An MCP write's delivery evidence therefore carries no run
 markers. That is an evidence gap, not a safety hole: blocking never depends on a context
 (`app/utils/srVerificationRunContext.ts`).
 
