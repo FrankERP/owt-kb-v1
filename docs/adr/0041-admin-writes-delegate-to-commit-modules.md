@@ -73,11 +73,11 @@ through the same parser. So the route half of I15 holds by construction, and I8 
 
 **The audit registry follows the transaction (F4).** `protectedReadAudit` finds a protected write
 where a Sanity client's mutation method is called in a region that either names a protected type
-or calls a protected loader (`protectedReadAudit.ts` lines 866-882 — a writer can resolve a
-protected document through a known loader and mutate it by id, never naming its type in source).
-Once the transaction leaves a route, that route's `PROTECTED_RUNTIME_WRITERS` entry is dead. So
-each `route.ts#METHOD` entry is replaced by `app/utils/<x>Commit.ts#module`, with the same reason
-text. The MCP tool modules import no Sanity client, so they have no entry.
+or calls a protected loader (`PROTECTED_LOADER_RE` in `protectedReadAudit.ts` — a writer can
+resolve a protected document through a known loader and mutate it by id, never naming its type in
+source). Once the transaction leaves a route, that route's `PROTECTED_RUNTIME_WRITERS` entry is
+dead. So each `route.ts#METHOD` entry is replaced by `app/utils/<x>Commit.ts#module`, with the
+same reason text. The MCP tool modules import no Sanity client, so they have no entry.
 
 **The caller pin.** A per-route entry used to mean "a new write surface has to touch a reviewed
 list". A module entry does not: any new file can import the module. So
