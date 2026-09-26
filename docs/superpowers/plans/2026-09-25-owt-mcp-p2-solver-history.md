@@ -13,11 +13,11 @@
 ## Status and contract
 
 - **Document status:** Approved 2026-09-25 (standard tier, one cold approval on `3fa29c68…`).
-  **Delivery 1 (steps 1–7) is implemented on `claude/mcp-p2-solver-history`** — the derivation,
-  the read builders, the server-side builder and evidence, the admin route, the dormant planner
-  machinery (`SOLVER_HISTORY_SOURCE === "local"`), the diff CLI, and this ADR/docs step. **Step
-  8 (Release Delivery 1: fresh code review, merge to `preview`, PR to `main`) has not run** — the
-  branch is not merged, so production is unchanged. **Risk tier: STANDARD**. The
+  **Delivery 1 (steps 1–8) is implemented and released** — the derivation, the read builders,
+  the server-side builder and evidence, the admin route, the dormant planner machinery
+  (`SOLVER_HISTORY_SOURCE === "local"`), the diff CLI, and the ADR/docs step. **Step 8 (Release
+  Delivery 1) ran 2026-09-26**: PR #104 merged to `main` at `24209e11`, `preview` and production
+  aliases both verified — see "Release record (Delivery 1)" below. **Risk tier: STANDARD**. The
   roadmap's review handoff says that P2's *spec* is critical, and it is approved, but its
   *implementation plan* is standard. The roadmap gives it no adversarial plan review, but
   Frank asked for one on 2026-09-25, at standard tier: one fresh cold approval. Its log is
@@ -39,9 +39,10 @@
   the v2 spec and the roadmap approved (met), plus "P2's own spec and ADR approved". The ADR
   is written in D1 (this task, `docs/adr/0042-*.md` — renumbered from 0041 at release, after
   PR #102 took 0041 first) and merged before the diff runs (Spec
-  reconciliations) — it is on this branch, not yet on `main`; R16's precondition is met only
-  once step 8 lands it there. **Implementation has begun**: Delivery 1's steps 1–7 are done on
-  this branch, so Frank's go-ahead to implement was given after this plan's approval.
+  reconciliations) — it is now on `main` (`24209e11`, PR #104, merged 2026-09-26 13:52 CST),
+  so R16's precondition for Gate B is met. **Implementation is complete**: Delivery 1's steps
+  1–8 are done and released; Frank's go-ahead to implement was given after this plan's
+  approval.
 - **Safe ending states:** see the delivery table below. Each delivery ends in a safe,
   releasable state. Stopping after Delivery 1 is permanent-safe: the planner behaves
   exactly as today.
@@ -679,6 +680,25 @@ Every step leaves the four gates green. Nothing deploys until step 8.
 4. **PR to `main`**, wait for `gates`, merge with Frank's OK, and verify the production
    alias. The ADR is now on `main`, which is R16's precondition for the diff.
 
+**Done 2026-09-26.** All four steps ran; see "Release record (Delivery 1)" immediately below.
+
+**Release record (Delivery 1)** — completed 2026-09-26:
+
+- **PR #104** ([FrankERP/owt-kb-v1#104](https://github.com/FrankERP/owt-kb-v1/pull/104)),
+  merged 2026-09-26 13:52 CST; `main` at `24209e11`.
+- **Preview first:** `preview` at `1f65ecba` (tree identical to the reviewed head
+  `e75cfeb0`); dev alias verified — deployment `dpl_6VKNSubDjFTtRrXmp7ak7C2vJj73`,
+  `githubCommitSha` `1f65ecba`.
+- **Production alias verified** — deployment `dpl_9hAnrqHpiVXbqmT8xrqAoZW4EEAt`,
+  `owt-backstage.vercel.app`, `githubCommitSha` `24209e11`.
+- **Gates:** `gates` on #104 passed (12m18s). Gates on the reviewed head: `tsc` 0 errors;
+  `vitest` 389 files / 6931 tests; `eslint` 0 errors; `gcf` unittest 77 OK.
+- The derived history ships **dormant**: `SOLVER_HISTORY_SOURCE = "local"`; production
+  behaviour is unchanged. The ADR (`docs/adr/0042-*.md`) is now on `main`, satisfying R16's
+  precondition for Gate B.
+- **Next:** Frank's Gate A (the export) and Gate B (the diff); then Gate C (verdicts and
+  the cutover decision); then Delivery 2 (the flip) and Delivery 3.
+
 ### Gate A — the export (R13) · **Frank**
 
 The history is per origin and per browser profile, and the export holds full member names.
@@ -966,5 +986,7 @@ confirmation are human gates B, C and D above. The spec assigns them to him expl
 **APPROVED at standard tier**: one fresh cold approval, requested by Frank, on digest `3fa29c68…`
 (round 2). Changes made after that approval are listed as un-reviewed in
 [the review log](2026-09-25-owt-mcp-p2-solver-history-review-log.md). **Delivery 1 (steps
-1–7) is implemented** on `claude/mcp-p2-solver-history`; step 8's release (fresh code review,
-merge to `preview`, PR to `main`) has not run.
+1–8) is implemented and released** (PR #104, `main` `24209e11`, merged 2026-09-26; see
+"Release record (Delivery 1)" above). **Next state: parked at Gate A/B, Frank's** — Gate A
+(the export) and Gate B (the diff) are next, followed by Gate C (verdicts and the cutover
+decision), then Delivery 2 (the flip) and Delivery 3.
