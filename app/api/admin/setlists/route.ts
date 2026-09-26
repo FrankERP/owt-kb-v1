@@ -41,15 +41,10 @@ import { buildSetlistRead, type CanonicalSetlistRecord } from "@/app/utils/setli
 import { isWorshipNight } from "@/app/utils/serviceFormat";
 import { leadRosterOf, leadSeatIds, validateSongLeads } from "@/app/utils/songLeads";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+import { recentSongUses, weeksAgoIso } from "@/app/utils/setlistRecentSongs";
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
-}
-
-function nWeeksAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n * 7);
-  return d.toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
 }
 
 const SERVICE_KINDS = ["sunday", "saturday", "special"] as const;
@@ -162,7 +157,7 @@ async function getHandler(req: NextRequest) {
     }
 
     // ── 2. Repeat-song history (past 8 weeks, all three service kinds) ───────
-    const recentQ = editorRecentSetlistsQuery(nWeeksAgo(8));
+    const recentQ = editorRecentSetlistsQuery(weeksAgoIso(8));
     const setlistType = type === "sunday" ? "featuredSongs" : "saturdarSongs";
 
     let recentRaw: Record<string, { week?: string; songs?: unknown }[]>;
@@ -207,22 +202,7 @@ async function getHandler(req: NextRequest) {
 
     // Map songId → most recent past use, excluding this service's own date so a
     // setlist never warns about itself.
-    const recentSongs: Record<string, string> = {};
-    const lists = [
-      ...(recentRaw?.sunday ?? []),
-      ...(recentRaw?.saturday ?? []),
-      ...(recentRaw?.special ?? []),
-    ];
-    for (const list of lists) {
-      if (!list || list.week === serviceDate || typeof list.week !== "string") continue;
-      const entries = Array.isArray(list.songs) ? list.songs : [];
-      for (const entry of entries as { song?: { _id?: string } }[]) {
-        const id = entry?.song?._id;
-        if (!id) continue;
-        const prev = recentSongs[id];
-        if (!prev || list.week > prev) recentSongs[id] = list.week;
-      }
-    }
+    const recentSongs = recentSongUses(recentRaw, serviceDate);
 
     const read = buildSetlistRead(records, draftIds, recentSongs);
     // A special also tells the editor whether it is a worship night and who is
