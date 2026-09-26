@@ -133,7 +133,12 @@ beforeEach(() => {
     fn.mockReset();
   }
   h.notifySetlistSaved.mockResolvedValue(PUSH);
-  h.queueSetlistNotice.mockReturnValue(NOTICE);
+  // The real helper returns null when `input.published === false` — mirror that
+  // instead of a blanket NOTICE, so the draft test below exercises the actual
+  // published-gating behaviour rather than only a pass-through mock.
+  h.queueSetlistNotice.mockImplementation((input: { published?: unknown }) =>
+    input?.published === false ? null : NOTICE,
+  );
 });
 
 describe("saveSetlist — success outcome", () => {
@@ -185,7 +190,7 @@ describe("saveSetlist — success outcome", () => {
     expect(queued.knownRecipients).toEqual(["m-1"]);
   });
 
-  it("a draft service reports no push (the helper is never called) and keeps the notice descriptor", async () => {
+  it("a draft service reports no push (the helper is never called) and no notice (the real helper declines a draft)", async () => {
     mockWeekend(weekendOwner(false));
 
     const outcome = await saveSetlist(weekendBody);
@@ -194,7 +199,8 @@ describe("saveSetlist — success outcome", () => {
     if (!outcome.ok) return;
     expect(h.notifySetlistSaved).not.toHaveBeenCalled();
     expect(outcome.effects.push).toBeNull();
-    expect(outcome.effects.notice).toEqual(NOTICE);
+    expect(h.queueSetlistNotice).toHaveBeenCalled();
+    expect(outcome.effects.notice).toBeNull();
     expect(outcome.effects.subject?.published).toBe(false);
   });
 

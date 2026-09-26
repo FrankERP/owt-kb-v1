@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { stripComments } from "../../../scripts/lib/strip-comments.mjs";
+import { DELIVERY_CAPABLE_IMPORTS } from "./__fixtures__/deliveryCapableImports";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -164,6 +165,13 @@ describe("service *Commit modules are imported only by their pinned callers", ()
 
   it("pins every *Commit module, and nothing that does not exist", () => {
     expect(pinned.map(moduleName).sort()).toEqual(Object.keys(EXPECTED_CALLERS).sort());
+  });
+
+  it("lists every *Commit module in DELIVERY_CAPABLE_IMPORTS, so a route that imports only its domain module cannot silently drop out of the SR-verification scan (F5)", () => {
+    for (const file of commitModules) {
+      const name = moduleName(file);
+      expect(DELIVERY_CAPABLE_IMPORTS, name).toContain(name);
+    }
   });
 
   it("finds exactly the pinned importers of each module", () => {

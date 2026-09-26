@@ -61,7 +61,8 @@ The only edits allowed at the boundary are these:
   the post-commit helpers return. Nothing in it is re-read after the commit;
 - a helper's return value is captured at its existing call site, with the same position, the
   same arguments and the same condition;
-- a `mode: "recover"` early return becomes an outcome with an explicit empty `effects`.
+- a `mode: "recover"` 503 becomes `{ ok: false, status: 503, body }` with no `effects` — only the
+  recovered `200` carries an explicit empty `effects`.
 
 A commit that fails for any reason other than a revision or creation conflict still throws, as
 the route's 500 did.
@@ -70,7 +71,9 @@ The tool builds **the counterpart's own request body** and calls the same functi
 through the same parser. So the route half of I15 holds by construction, and I8 and I12 do too.
 
 **The audit registry follows the transaction (F4).** `protectedReadAudit` finds a protected write
-where a Sanity client's mutation method is called in a region that names a protected type.
+where a Sanity client's mutation method is called in a region that either names a protected type
+or calls a protected loader (`protectedReadAudit.ts` lines 866-882 — a writer can resolve a
+protected document through a known loader and mutate it by id, never naming its type in source).
 Once the transaction leaves a route, that route's `PROTECTED_RUNTIME_WRITERS` entry is dead. So
 each `route.ts#METHOD` entry is replaced by `app/utils/<x>Commit.ts#module`, with the same reason
 text. The MCP tool modules import no Sanity client, so they have no entry.
