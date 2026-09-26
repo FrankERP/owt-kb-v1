@@ -371,3 +371,58 @@ export function rawRoleDraftForBaseQuery(baseId: string): BoundQuery {
     params: { roleTypes: [...ROLE_TYPES], draftId: `drafts.${baseId}` },
   };
 }
+
+// ── Solver history reads (MCP P2, R9) ───────────────────────────────────────
+// Feed the server-derived solver fairness history
+// (`docs/superpowers/specs/2026-09-23-solver-history-derivation-design.md`).
+// Weekend-only — a `special_role` is out of scope for the solver's history
+// (ADR-0010) — and NONE of these carry a `published` clause: prior-month
+// drafts count toward fairness too (R3), so filtering them out here would
+// silently undercount a service the team has not published yet.
+
+/** `ROLE_TYPES` minus `special_role` — the two types the solver's history counts. */
+const WEEKEND_ROLE_TYPES = ROLE_TYPES.filter(
+  (type): type is "sunday_role" | "saturday_role" => type !== "special_role",
+);
+
+/**
+ * Weekend role documents whose `week` falls in the half-open range
+ * `[fromDay, toDayExclusive)`. No `published` filter — see the section note.
+ */
+export function canonicalWeekendRolesInRangeQuery(fromDay: string, toDayExclusive: string): BoundQuery {
+  return {
+    query: `*[_type in $roleTypes && week >= $from && week < $to] ${ROLE_PROJECTION}`,
+    params: { roleTypes: [...WEEKEND_ROLE_TYPES], from: fromDay, to: toDayExclusive },
+  };
+}
+
+/**
+ * Every team member's `_id` and current `member_name`, with no ministry
+ * filter (R7; spec v2 I5: the solver's pool is not a member-listing read).
+ */
+export function canonicalMemberNamesQuery(): BoundQuery {
+  return {
+    query: `*[_type == "teamMembers"]{ _id, member_name }`,
+    params: {},
+  };
+}
+
+/** `ROLE_CREATION_RECEIPT_PROJECTION` plus the receipt's own `createdAt`/`updatedAt` fields. */
+export const ROLE_CREATION_RECEIPT_EVIDENCE_PROJECTION = `{
+  _id, _rev, _type, requestId, fingerprint, roleId, roleType, targetIdentity, state, createdAt, updatedAt
+}`;
+
+/**
+ * Every weekend role-creation receipt (`sunday_role`/`saturday_role`),
+ * unscoped by date. Rule 4's "moved out of the month" arm needs receipts whose
+ * immutable `targetIdentity` is in the window while their role is not — a
+ * document moved INTO the window has a receipt targeting a date outside it, so
+ * one unscoped read covers both directions. Small: bounded by the weekend
+ * roles created since 2026-07-24 (Assumption A2).
+ */
+export function weekendRoleCreationReceiptsQuery(): BoundQuery {
+  return {
+    query: `*[_type == "roleCreationReceipt" && roleType in $roleTypes] ${ROLE_CREATION_RECEIPT_EVIDENCE_PROJECTION}`,
+    params: { roleTypes: [...WEEKEND_ROLE_TYPES] },
+  };
+}
