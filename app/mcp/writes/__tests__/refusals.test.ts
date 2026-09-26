@@ -59,6 +59,12 @@ describe("refusalFor — every registered code", () => {
     expect(BOOTSTRAP_COMPLETED_RELOAD_MESSAGE).toBe(textOf(result));
   });
 
+  it("a bootstrap refusal keeps the writer's detail as a machine code, with the exact text unchanged", () => {
+    const result = refusalFor(refusal("bootstrap_completed_reload", { week: "2026-10-04", detail: "revision_moved" }));
+    expect(result.structuredContent).toEqual({ refused: true, code: "bootstrap_completed_reload", detail: "revision_moved" });
+    expect(textOf(result)).toBe(BOOTSTRAP_COMPLETED_RELOAD_MESSAGE);
+  });
+
   it("bootstrap_outcome_unknown says not to retry — exactly", () => {
     const result = refusalFor(refusal("bootstrap_outcome_unknown", { id: "role-sat-1010" }));
     expect(textOf(result)).toBe("No se pudo confirmar una reparación interna. No reintentes; revísalo en /admin.");
@@ -290,11 +296,12 @@ describe("refusalFor — a publish refusal is keyed on its per-service reasons (
     expect(result.structuredContent).toEqual({ refused: true, code: "integrity_conflict", detail: key });
   });
 
-  it("a not_found row inside a publish refusal uses the route-only copy", () => {
-    const text = textOf(
+  it("a not_found row inside a publish refusal reads exactly like the top-level 404", () => {
+    const row = textOf(
       refusalFor(publishRefusalBody("stale_revision", [{ id: "role-missing", reasons: ["not_found"] }])),
     );
-    expect(text).toBe(`El servicio no existe. ${NOTHING_WRITTEN}`);
+    expect(row).toBe(`El servicio no existe; vuelve a buscarlo con list_services. ${NOTHING_WRITTEN}`);
+    expect(row).toBe(textOf(refusalFor(refusal("not_found", { ids: ["role-missing"] }))));
   });
 });
 

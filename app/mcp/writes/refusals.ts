@@ -234,7 +234,8 @@ function blockerCopy(codes: readonly string[]): string {
 function publishRowText(row: PublishServiceRefusal): string[] {
   const reasons = new Set(row.reasons);
   const parts: string[] = [];
-  if (reasons.has("not_found")) parts.push(sentence(refusalCopy("not_found")));
+  // One wording for a missing service, whether it arrives as a row or as the 404.
+  if (reasons.has("not_found")) parts.push(CODE_COPY.not_found);
   if (reasons.has("already_published")) parts.push(sentence(refusalCopy("already_published")));
 
   let blocked = false;
@@ -337,12 +338,13 @@ export function refusalFor(outcome: DomainRefusal): CallToolResult {
   }
 
   // 4. Everything else, by the top-level code.
+  if (typeof details.detail === "string") content.detail = details.detail;
   if (MAINTENANCE_CODES.has(code)) {
+    // The exact text, and nothing appended: the detail still travels as a code.
     return refusalResult(CODE_COPY[code], content);
   }
   const parts = [CODE_COPY[code]];
   if (typeof details.detail === "string") {
-    content.detail = details.detail;
     if (DETAIL_COPY[details.detail]) parts.push(DETAIL_COPY[details.detail]);
   } else if (Array.isArray(details.rawDrafts) && details.rawDrafts.length) {
     parts.push(DETAIL_COPY.role_draft_conflict);
