@@ -3,8 +3,8 @@
 // An admin write route authorizes, parses JSON, calls its `*Commit` module and
 // sends `NextResponse.json(outcome.body, { status: outcome.status })`. The MCP
 // write tools call the same modules, so both surfaces refuse, write, notify and
-// revalidate through one code path. `body` is EXACTLY what the route sends:
-// a refusal's `serviceError(...)` body, or the success JSON.
+// revalidate through one code path (ADR-0041). `body` is EXACTLY what the route
+// sends: a refusal's `serviceError(...)` body, or the success JSON.
 //
 // `effects` exists only on success. It carries values the write already held —
 // never a second read — so a caller can report what was written and what the
