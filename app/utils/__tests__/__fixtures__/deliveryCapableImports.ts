@@ -22,4 +22,5 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "proposalNotify",
   "setlistSaveCommit",
   "roleSwapCommit",
+  "publishReadyCommit",
 ];

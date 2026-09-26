@@ -8,8 +8,10 @@
 // old per-route entries did not have: a brand-new surface could import a
 // registered writer and reach production content without touching any
 // reviewed list. This pin closes it. The exact set of non-test importers of
-// every `*Commit` module is written down below, so a new caller — or a new
-// `*Commit` module — fails here until someone adds it on purpose.
+// every `*Commit` module, and of the one publish predicate `publishVerdict`
+// (which the writer and the MCP reads must share, I4), is written down below,
+// so a new caller — or a new `*Commit` module — fails here until someone adds
+// it on purpose.
 //
 // WHAT COUNTS AS A CALLER. Any git-tracked, non-test source under `app/` whose
 // comment-stripped code imports the module by a value import: `import … from`,
@@ -38,6 +40,8 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
  * Adding a caller is a reviewed change to this table, never a loosening of the scan.
  */
 const EXPECTED_CALLERS: Record<string, string[]> = {
+  publishReadyCommit: ["app/api/admin/roles/publish-ready/route.ts"],
+  publishVerdict: ["app/mcp/reads/publishRefusal.ts", "app/utils/publishReadyCommit.ts"],
   roleSwapCommit: ["app/api/admin/roles/swap/route.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts"],
 };
@@ -46,7 +50,7 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
  * Pinned modules whose name does not end in `Commit` — a shared predicate that a
  * writer and a tool must agree on. Each is a repo-relative path.
  */
-const PINNED_BEYOND_COMMIT: string[] = [];
+const PINNED_BEYOND_COMMIT: string[] = ["app/utils/publishVerdict.ts"];
 
 const SOURCE_RE = /\.(ts|tsx|mjs|cjs|js)$/;
 const RESOLVABLE_EXT_RE = /\.(ts|tsx|mjs|cjs|js)$/;

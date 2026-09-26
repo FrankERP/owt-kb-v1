@@ -211,10 +211,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the publish surface itself)",
   },
   {
-    file: "app/api/admin/roles/publish-ready/route.ts",
-    operation: "POST",
+    file: "app/utils/publishReadyCommit.ts",
+    operation: "module",
     reason:
-      "guarded readiness-aware publish (Plan B item 3): reloads the five A1 read domains, recomputes the shared readiness predicate, and commits ONE transaction whose every op asserts an observed revision — role, weekend lock, setlist singleton, proposal singleton and every assigned member — with `published: true` folded into each role's own assertion",
+      "guarded readiness-aware publish (Plan B item 3): reloads the five A1 read domains, recomputes the shared readiness predicate, and commits ONE transaction whose every op asserts an observed revision — role, weekend lock, setlist singleton, proposal singleton and every assigned member — with `published: true` folded into each role's own assertion. The domain body of `POST /api/admin/roles/publish-ready`, moved here so the MCP `publish_service` tool calls the same writer; the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the ready/override publish surface itself)",
   },
   {

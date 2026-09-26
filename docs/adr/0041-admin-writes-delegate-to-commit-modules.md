@@ -19,11 +19,13 @@ the same write:
 |---|---|---|
 | `edit_setlist` | `PUT /api/admin/setlists` | `app/utils/setlistSaveCommit.ts` |
 | `swap_assignment` | `POST /api/admin/roles/swap` | `app/utils/roleSwapCommit.ts` |
-| `publish_service` | `POST /api/admin/roles/publish-ready` | `publishReadyCommit.ts` |
+| `publish_service` | `POST /api/admin/roles/publish-ready` | `app/utils/publishReadyCommit.ts` |
 | `unpublish_service` | `POST /api/admin/roles/unpublish` | `roleUnpublishCommit.ts` |
 
-The first row lands with this record; `swap_assignment` follows the same template as of task 4;
-the other two follow it in turn.
+The first row lands with this record; `swap_assignment` follows the same template as of task 4,
+and `publish_service` as of task 5; the last row follows it in turn. The publish writer's
+per-service verdict moved one step further, into the neutral `app/utils/publishVerdict.ts`, which
+the MCP reads call too (ADR-0040's amendment).
 
 Three facts decide how a tool reaches that guarded code:
 
@@ -63,7 +65,10 @@ The only edits allowed at the boundary are these:
 - a helper's return value is captured at its existing call site, with the same position, the
   same arguments and the same condition;
 - a `mode: "recover"` 503 becomes `{ ok: false, status: 503, body }` with no `effects` — only the
-  recovered `200` carries an explicit empty `effects`.
+  recovered `200` carries an explicit empty `effects`;
+- in the publish writer only, the inline per-service verdict becomes one `publishVerdict` call,
+  with `if (verdict.integrity) integrity = true` feeding the loop's existing accumulator
+  (ADR-0040's amendment).
 
 A commit that fails for any reason other than a revision or creation conflict still throws, as
 the route's 500 did.
