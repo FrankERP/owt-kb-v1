@@ -46,8 +46,10 @@ function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
 }
 
-// A3 §3: outbound-delivery evidence emitted anywhere under this handler — including
-// its post-commit `after()` fan-out — carries the in-flight verification run's markers.
+// A3 §3: outbound-delivery evidence emitted anywhere under this handler carries the
+// in-flight verification run's markers. This handler registers no `after()` block and
+// delivers nothing today (an unpublish is silent); the wrapper is kept because the
+// route imports a delivery-capable module, which the coverage scan requires to be wrapped.
 // An unmarked ordinary request establishes nothing and behaves exactly as before.
 export const POST = withVerificationRunContext(postHandler);
 
