@@ -92,6 +92,7 @@ export interface SetlistSaveEffects {
   created: boolean;
   /** The stored `setlist_song` items exactly as written, with their new `_key`s (leaders' too). */
   songs: Record<string, unknown>[];
+  /** The pre-commit subject; its `knownRecipients` is a copy, never the list the notice holds. */
   subject: SetlistSaveSubject | null;
   /**
    * `notifySetlistSaved`'s descriptor. Null when it was not called — a draft
@@ -300,7 +301,10 @@ export async function saveSetlist(raw: unknown): Promise<CommitOutcome<SetlistSa
     setlistId: createdId ?? targetId,
     created: !!createdId,
     songs,
-    subject,
+    // A copy: `queueSetlistNotice` handed `subject.knownRecipients` itself to the
+    // upsert its deferred `after()` commits, so a caller that sorted or edited the
+    // shared array would change the outbox document (the step-2 descriptor rule).
+    subject: subject && { ...subject, knownRecipients: [...subject.knownRecipients] },
     push,
     notice,
   };

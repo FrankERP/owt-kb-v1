@@ -173,6 +173,18 @@ describe("saveSetlist — success outcome", () => {
     expect(h.notifySetlistSaved).toHaveBeenCalledWith(WEEK);
   });
 
+  it("hands back a COPY of the recipients the deferred notice holds, so editing it cannot reach the outbox", async () => {
+    mockWeekend(weekendOwner(true));
+
+    const outcome = await saveSetlist(weekendBody);
+
+    if (!outcome.ok || !outcome.effects.subject) throw new Error("expected a subject");
+    const queued = h.queueSetlistNotice.mock.calls[0][0] as { knownRecipients: string[] };
+    outcome.effects.subject.knownRecipients.push("m-intruder");
+    outcome.effects.subject.knownRecipients.reverse();
+    expect(queued.knownRecipients).toEqual(["m-1"]);
+  });
+
   it("a draft service reports no push (the helper is never called) and keeps the notice descriptor", async () => {
     mockWeekend(weekendOwner(false));
 
