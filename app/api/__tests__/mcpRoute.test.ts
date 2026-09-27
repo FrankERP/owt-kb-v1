@@ -1185,20 +1185,24 @@ describe("/api/mcp — list_proposals, end to end", () => {
 describe("/api/mcp — a schema-invalid write is refused by the SDK before its handler (P3-R24)", () => {
   const SDK_PREFIX = (name: string) => `Input validation error: Invalid arguments for tool ${name}:`;
 
-  const INVALID_CALLS: { name: string; bound: string; args: Record<string, unknown> }[] = [
+  // `field` is the argument the SDK must name first: the refusal is the bound, not another shape.
+  const INVALID_CALLS: { name: string; bound: string; field: string; args: Record<string, unknown> }[] = [
     {
       name: "unpublish_service",
       bound: "a rev with whitespace (isRevisionString)",
+      field: "rev",
       args: { serviceId: "role-sun-1004", rev: "rev with spaces" },
     },
     {
       name: "publish_service",
       bound: "a drafts.* id (isCanonicalDocumentId)",
+      field: "serviceId",
       args: { serviceId: "drafts.role-sun-1004", rev: "rev-1" },
     },
     {
       name: "swap_assignment",
       bound: "three services where exactly two are allowed",
+      field: "services",
       args: {
         kind: "section",
         path: "Lead",
@@ -1212,6 +1216,7 @@ describe("/api/mcp — a schema-invalid write is refused by the SDK before its h
     {
       name: "edit_setlist",
       bound: "61 rows where 60 is the writer's limit",
+      field: "rows",
       args: {
         serviceId: "role-sun-1004",
         roleRev: "rev-1",
@@ -1225,7 +1230,7 @@ describe("/api/mcp — a schema-invalid write is refused by the SDK before its h
     expect(INVALID_CALLS.map((c) => c.name).sort()).toEqual([...WRITE_TOOL_NAMES].sort());
   });
 
-  for (const { name, bound, args } of INVALID_CALLS) {
+  for (const { name, bound, field, args } of INVALID_CALLS) {
     it(`${name}: ${bound} — the SDK's error, zero domain calls, zero reads, zero writes`, async () => {
       const token = await accessToken(await liveGrant());
       const createsBefore = h.creates.length;
@@ -1237,7 +1242,7 @@ describe("/api/mcp — a schema-invalid write is refused by the SDK before its h
       expect(content).toHaveLength(1);
       // The SDK's own text, not the handler's: the tool's `shapeRefusal` /
       // admission refusal would carry `structuredContent: { refused: true, … }`.
-      expect(content[0]!.text.startsWith(SDK_PREFIX(name)), content[0]!.text).toBe(true);
+      expect(content[0]!.text.startsWith(`${SDK_PREFIX(name)} ${field}: `), content[0]!.text).toBe(true);
       expect(result.structuredContent).toBeUndefined();
 
       for (const fn of Object.values(h.domain)) expect(fn).not.toHaveBeenCalled();
