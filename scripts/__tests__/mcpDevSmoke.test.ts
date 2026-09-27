@@ -6,9 +6,13 @@
 // authorize-URL building, form encoding, SSE-frame parsing, token redaction,
 // unverified JWT decoding, the tools/list check (per-tool annotations since
 // P3 step 12), the `--reads` pass' arguments/detail/summary helpers, and the
-// DV1 guard: the one `tools/call` builder can never name a write tool. None
-// of this touches the network; the live handshake against dev is Frank's own
-// run (see the task-11a report for the exact commands and their output).
+// DV1 guard (P3-R25: structural, not just lexical): the one `tools/call`
+// builder can never name a write tool, AND the one function that actually
+// sends anything to `/api/mcp` refuses a write's name too, before any
+// `fetch` — a body built any other way is caught there. None of this
+// touches the network (the sender's own test stubs `fetch`); the live
+// handshake against dev is Frank's own run (see the task-11a report for the
+// exact commands and their output).
 //
 // Several groups cross-check the script's duplicated logic against the real
 // server modules it talks to, so a drift in either fails here instead of
@@ -18,7 +22,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { SignJWT } from "jose";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { stripComments } from "../lib/strip-comments.mjs";
 
 import { BYPASS_HEADER as SERVER_BYPASS_HEADER } from "@/e2e/service-readiness/lib/bypass";
@@ -36,6 +40,7 @@ import {
   checkPingRegistered,
   checkToolList,
   codeChallengeFromVerifier,
+  createMcpRequest,
   decodeJwtPayloadUnsafe,
   DEFAULT_BASE,
   EXPECTED_TOOLS,
@@ -64,6 +69,7 @@ import {
   songIdFromSearchResult,
   summarizeReadChecks,
   toolCallRequest,
+  TOOLS_CALL_METHOD,
   WRITE_ANNOTATIONS,
   WRITE_TOOL_NAMES,
 } from "../mcp-dev-smoke.mjs";
@@ -533,13 +539,17 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
     for (const name of WRITE_TOOL_NAMES) expect(() => readCheckArguments(name, {}), name).toThrow();
   });
 
-  it("is the ONLY place the script builds a tools/call: one \"tools/call\" literal, inside toolCallRequest", () => {
+  it("is the ONLY place the script builds a tools/call: one \"tools/call\" quoted literal, shared via TOOLS_CALL_METHOD", () => {
     // Comments are stripped first: prose may say `tools/call`, code may not.
     const literals = [...code.matchAll(/["'`]tools\/call["'`]/g)];
     expect(literals).toHaveLength(1);
+    expect(code).toMatch(/export const TOOLS_CALL_METHOD = "tools\/call";/);
     const builder = code.slice(code.indexOf("export function toolCallRequest("));
     const body = builder.slice(0, builder.indexOf("\n}\n"));
-    expect(body).toContain('rpc("tools/call"');
+    expect(body).toContain("rpc(TOOLS_CALL_METHOD");
+    // Exactly the constant's own definition plus its two consumers (toolCallRequest
+    // and createMcpRequest's guard) — never a second "tools/call" string of their own.
+    expect([...code.matchAll(/\bTOOLS_CALL_METHOD\b/g)]).toHaveLength(3);
     // main() routes every call through it: ping twice (steps 7 and 8) and the --reads loop.
     expect([...code.matchAll(/toolCallRequest\(/g)].length).toBeGreaterThanOrEqual(4);
   });
@@ -555,6 +565,59 @@ describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () =
     const planted = `${code}\nconst x = rpc("tools/call", { name: "edit_setlist", arguments: {} });\n`;
     expect([...planted.matchAll(/["'`]tools\/call["'`]/g)]).toHaveLength(2);
     expect([...planted.matchAll(/["'`]edit_setlist["'`]/g)]).toHaveLength(2);
+  });
+});
+
+describe("createMcpRequest — DV1 is structural, not only lexical (P3-R25)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("refuses a write tool's name at the send path itself, before any fetch — even a body toolCallRequest never built", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const send = createMcpRequest({ origin: "https://example.test", bypass: {} });
+    for (const name of WRITE_TOOL_NAMES) {
+      // Built by hand with `rpc`, never through `toolCallRequest` — which would
+      // throw first and so could never prove THIS guard exists on its own.
+      const body = rpc(TOOLS_CALL_METHOD, { name, arguments: {} });
+      await expect(send("token", body), name).rejects.toThrow(/DV1/);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses any other name outside CALLABLE_TOOLS the same way", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const send = createMcpRequest({ origin: "https://example.test", bypass: {} });
+    const body = rpc(TOOLS_CALL_METHOD, { name: "probe", arguments: {} });
+    await expect(send("token", body)).rejects.toThrow(/CALLABLE_TOOLS/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still sends a tools/call naming a callable tool", async () => {
+    const fetchMock = vi.fn(async (_url: string) => ({
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      text: async () => "{}",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const send = createMcpRequest({ origin: "https://example.test", bypass: {} });
+    const body = rpc(TOOLS_CALL_METHOD, { name: "ping", arguments: {} });
+    await send("token", body);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://example.test/api/mcp");
+  });
+
+  it("passes a non-tools/call request straight through untouched", async () => {
+    const fetchMock = vi.fn(async () => ({
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      text: async () => "{}",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const send = createMcpRequest({ origin: "https://example.test", bypass: {} });
+    // `tools/list`, `initialize`, … — the guard only inspects a `tools/call`.
+    await send("token", rpc("tools/list"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

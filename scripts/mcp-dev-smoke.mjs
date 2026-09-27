@@ -60,10 +60,14 @@
  * The smoke calls `ping` always, and — only with `--reads` — the seven P1
  * read tools once each. It NEVER calls a write tool, in any mode (DV1): dev
  * writes the production dataset, and its mail redirect covers email only.
- * That is structural, not a convention: every `tools/call` this script sends
- * is built by `toolCallRequest`, which refuses any name outside
- * `CALLABLE_TOOLS` (`ping` and the seven reads), and the smoke's unit test
- * fails if a second `tools/call` appears anywhere in this file. The plain
+ * This is enforced twice. STRUCTURALLY: `createMcpRequest` returns the one
+ * function this script uses to send anything to `/api/mcp`, and before that
+ * function ever calls `fetch` it refuses a `tools/call` naming a tool outside
+ * `CALLABLE_TOOLS` (`ping` and the seven reads) — whatever built the body, not
+ * only `toolCallRequest`. LEXICALLY: the smoke's unit test proves
+ * `toolCallRequest` is the only place in this file that builds a `tools/call`
+ * at all, over the comment-stripped source — it fails if a second
+ * `tools/call` literal appears anywhere in the script's code. The plain
  * smoke's own `tools/list` check (`checkPingRegistered`) requires ONLY
  * `ping`, so it passes against any deployment from P0 on; `--reads` requires
  * the full twelve (`checkToolList`), each with its own annotations — which
@@ -71,8 +75,12 @@
  * with `destructiveHint: true`.
  *
  * Every exported function below is pure — no network, no filesystem, no
- * `process`/env access — and is what `scripts/__tests__/mcpDevSmoke.test.ts`
- * exercises without a network. `main()` (the network calls, the loopback HTTP
+ * `process`/env access — with one exception: `createMcpRequest` returns the
+ * one function that actually sends a request to `/api/mcp`, and even that
+ * function refuses, before any `fetch`, a `tools/call` naming a tool outside
+ * `CALLABLE_TOOLS` (the structural guard above). `scripts/__tests__/mcpDevSmoke.test.ts`
+ * exercises every one of them without a real network call — the sender's own
+ * test stubs `fetch`. `main()` (the OAuth network calls, the loopback HTTP
  * listener, spawning `open`, reading stdin) runs only when this file is
  * executed directly, gated the same way `scripts/revoke-mcp-grant.mjs` is.
  */
@@ -414,12 +422,24 @@ export const READ_TOOL_NAMES = [
 export const CALLABLE_TOOLS = Object.freeze(["ping", ...READ_TOOL_NAMES]);
 
 /**
+ * The one spelling of the JSON-RPC method a `tools/call` request carries.
+ * `toolCallRequest` and `createMcpRequest`'s guard (below) both reference this
+ * constant, never a second `"tools/call"` string of their own — so grepping
+ * the comment-stripped source for that quoted literal still proves there is
+ * only one, even though the string is now consulted in two places.
+ */
+export const TOOLS_CALL_METHOD = "tools/call";
+
+/**
  * The ONE builder of a `tools/call` request in this script — `main()` sends
  * no other. It refuses, by throwing, any tool it is not allowed to call: a
  * write tool by name (DV1: the dev smoke calls no write, in any mode), and any
  * other name outside `CALLABLE_TOOLS`. An allowlist, so a tool added to the
  * route tomorrow is refused here until someone decides this smoke may call it.
- * Pure.
+ * Pure. This is the LEXICAL half of DV1 (P3-R25): it proves this script never
+ * INTENDS to call a write, by being the only place that spells the envelope.
+ * It says nothing about a body built any other way — that is `createMcpRequest`'s
+ * job, below.
  */
 export function toolCallRequest(name, args, id = 1) {
   if (WRITE_TOOL_NAMES.includes(name)) {
@@ -428,7 +448,41 @@ export function toolCallRequest(name, args, id = 1) {
   if (!CALLABLE_TOOLS.includes(name)) {
     throw new Error(`refusing to call "${name}": the dev smoke calls only ${CALLABLE_TOOLS.join(", ")}`);
   }
-  return rpc("tools/call", { name, arguments: args }, id);
+  return rpc(TOOLS_CALL_METHOD, { name, arguments: args }, id);
+}
+
+/**
+ * The STRUCTURAL half of DV1 (P3-R25). `toolCallRequest` being the only
+ * builder of a `tools/call` in this file is a LEXICAL property — proved by
+ * grepping the comment-stripped source, immediately above — and it protects
+ * nothing against a body assembled any OTHER way. `createMcpRequest` returns
+ * the one function this script uses to send anything to `/api/mcp`; before
+ * that function ever calls `fetch`, it inspects `body` itself and throws if
+ * `body.method === TOOLS_CALL_METHOD` names a tool outside `CALLABLE_TOOLS` —
+ * a write tool included. So a `tools/call` naming a write is refused at the
+ * network boundary itself, not merely absent from the one place this file
+ * happens to build one today. The factory is pure; the function it returns is
+ * the one thing in this file that fetches, and it is refused before it does.
+ */
+export function createMcpRequest({ origin, bypass }) {
+  return async function mcpRequest(accessToken, body, protocolVersion) {
+    if (body && body.method === TOOLS_CALL_METHOD) {
+      const name = body.params && body.params.name;
+      if (!CALLABLE_TOOLS.includes(name)) {
+        throw new Error(`refusing to send a tools/call naming "${name}": not in CALLABLE_TOOLS (DV1)`);
+      }
+    }
+    const headers = {
+      ...bypass,
+      authorization: `Bearer ${accessToken}`,
+      accept: "application/json, text/event-stream",
+      "content-type": "application/json",
+    };
+    if (protocolVersion) headers["mcp-protocol-version"] = protocolVersion;
+    const res = await fetch(`${origin}/api/mcp`, { method: "POST", headers, body: JSON.stringify(body) });
+    const text = await res.text();
+    return { status: res.status, headers: res.headers, text };
+  };
 }
 
 /** Every read check's fixed arguments except `get_song`'s and `get_service`'s (see `readCheckArguments`). `search_songs` runs a short, one-letter query on purpose — the SUBSTRING path (`libraryIndex.ts`), not the fuzzy one — sure to match something in a real Spanish song catalogue. */
@@ -655,18 +709,11 @@ async function main() {
     return body;
   }
 
-  async function mcpRequest(accessToken, body, protocolVersion) {
-    const headers = {
-      ...bypass,
-      authorization: `Bearer ${accessToken}`,
-      accept: "application/json, text/event-stream",
-      "content-type": "application/json",
-    };
-    if (protocolVersion) headers["mcp-protocol-version"] = protocolVersion;
-    const res = await fetch(`${origin}/api/mcp`, { method: "POST", headers, body: JSON.stringify(body) });
-    const text = await res.text();
-    return { status: res.status, headers: res.headers, text };
-  }
+  // The one function that ever sends a request to `/api/mcp` — `createMcpRequest`
+  // (above), bound to this run's origin and bypass header. Its own guard is what
+  // makes DV1 structural: a `tools/call` naming a write tool is refused here,
+  // before any `fetch`, no matter what built the body.
+  const mcpRequest = createMcpRequest({ origin, bypass });
 
   async function mcpRpc(accessToken, body, protocolVersion) {
     const res = await mcpRequest(accessToken, body, protocolVersion);
