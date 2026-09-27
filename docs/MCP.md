@@ -1010,6 +1010,11 @@ not live. The release record must say so.
     records `NOTIFY_DEBOUNCE_MINUTES=5` on Production since 2026-09-10.
   - `vercel env pull` is never run: it would write every production secret to disk.
   - With no push device, stop: delivery cannot be proven.
+  - **On L1, the first write of the run**, Frank records whether claude.ai asked him to confirm
+    before running it. `destructiveHint: true` is a hint, not a guarantee (see «Write tools» →
+    Annotations and schema, above): if he had chosen «Always allow» for the tool earlier, no prompt
+    is expected, and that is a pass too. This is the one place this whole document treats the
+    prompt as observed rather than assumed.
 - **PP1.** Frank creates, in `/admin`, two **draft** specials on weekdays at least two weeks out,
   after the next real service, **in the same calendar month** (the swap refuses a cross-month pair):
   - **A**, «PRUEBA MCP A — ignorar», with Frank alone in Lead;
