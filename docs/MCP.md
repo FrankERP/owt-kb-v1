@@ -388,10 +388,12 @@ What the four share:
   sentence (`WRITE_REREAD_RULE`): after any refusal or unknown outcome, re-read with `get_service`
   before retrying.
 - **Annotations and schema.** `{ readOnlyHint: false, destructiveHint: true, idempotentHint: false,
-  openWorldHint: false }` (I14), so claude.ai asks before it runs one. The strict input schemas
-  (I13) carry the writer's own bounds: `isCanonicalDocumentId`, `isRevisionString`, at most 60
-  rows, a key of at most 24 characters, at most 2 leaders. So `tools/list` advertises them up
-  front, and the SDK refuses a violation before the handler runs (see
+  openWorldHint: false }` (I14) — a hint, not a guarantee: claude.ai is expected to ask before
+  running a destructive tool, unless the user has chosen «Always allow» for that tool. Step 14
+  (PP0/L1) is where that prompt is confirmed on the live connector, not merely assumed. The strict
+  input schemas (I13) carry the writer's own bounds: `isCanonicalDocumentId`, `isRevisionString`,
+  at most 60 rows, a key of at most 24 characters, at most 2 leaders. So `tools/list` advertises
+  them up front, and the SDK refuses a violation before the handler runs (see
   [Known behaviours](#known-behaviours)). Each tool also re-checks the same shapes itself, in
   Spanish, for a direct call.
 - **Honest outcomes (I9), from one runner** (`runWriteTool`, `app/mcp/writes/runWriteTool.ts`):
@@ -399,9 +401,10 @@ What the four share:
     `structuredContent: { refused: true, code, detail?, services?, issues? }`. `code` is the
     route's own error code (`ServiceErrorCode`); a gate the tool mirrors uses the closest code in
     that vocabulary, and `detail` names the gate. Every refusal text ends «No se escribió nada.»,
-    with three exceptions: the two `bootstrap_*` refusals, where the route's maintenance write did
-    land and the text says so; and a code the tool does not know, which it reports as an unknown
-    outcome.
+    with three exceptions: `bootstrap_completed_reload`, where the legacy-lock maintenance write
+    DID land (the caller's own change did not, and the text says so); `bootstrap_outcome_unknown`,
+    where whether that maintenance write landed is itself unknown (the text says that, not that it
+    landed); and a code the tool does not know, which it reports as an unknown outcome.
   - A **throw before the domain was called**: «No se pudo preparar el cambio; vuelve a intentarlo.
     No se escribió nada.»
   - A **throw at or after the domain call** is an unknown outcome, never "not saved": «No se pudo
@@ -478,7 +481,10 @@ Replaces ONE service's setlist with the rows sent, in that order, as the setlist
   - `changedAgainAfterSave: true` with `current: { published?, setlist }`: something changed after
     the save, and no observation is returned. `setlist` is what was written; `current.setlist` is
     what is there now. A `single` setlist with no `songs` array reads as the empty setlist, as in
-    `get_service`.
+    `get_service`. `current.setlist` is `null` only when the post-save read-back of the target
+    itself fails (the re-read throws); a `none` read-back — reachable only through a concurrent
+    delete right after the save — reports the empty list `{ rows: [], runs: [] }` instead, where
+    `get_service` would report `null` for the same `none` state (an accepted asymmetry).
   - `observations: null`: the read-back failed. Re-read with `get_service`.
 - **Revalidates** `/`, `/schedule` and the song pages (`revalidateSetlistSave`).
 
@@ -652,7 +658,7 @@ mode.
 | P1 | The panel's `isReadyToPublish` double check | **inherited**: the same `publishVerdict` |
 | P2 | The resubmit lock while an outcome is pending | **declared narrowing** (harmless): a retry is refused `stale_revision` |
 | P3 | Visible scope: upcoming services unless a month filter is on | **declared narrowing** (harmless): a month filter reaches past services in `/admin` too |
-| P4 | The confirmation dialog | **declared narrowing** (no data effect): claude.ai's approval prompt for a destructive tool plays that role |
+| P4 | The confirmation dialog | **declared narrowing** (no data effect): claude.ai's approval prompt for a destructive tool is expected to play that role (a hint, not a guarantee — see Annotations and schema above; step 14/PP0-L1 confirms it live), unless the user chose «Always allow» |
 | P-override | `mode: "override"` with acknowledged blockers | **structural**: the schema has no `mode` |
 
 **`unpublish_service`**: the Servicios panel, against `POST /api/admin/roles/unpublish`.
@@ -796,11 +802,13 @@ THAT refuses on a tie the pass logs it as an EXPECTED pass, "ambiguous (expected
 tool and a counts-only summary — never a name or any other personal data.
 
 **The smoke never calls a write tool, in any mode (DV1)**: dev writes the production dataset, and
-its mail redirect covers email only. That is structural, not a habit. Every `tools/call` the script
-sends is built by `toolCallRequest`, which refuses each of the four write names and any tool
-outside `ping` and the seven reads. `scripts/__tests__/mcpDevSmoke.test.ts` proves the refusal,
-and it fails if a second `tools/call` literal, or a second mention of a write tool's name, appears
-anywhere in the script's code.
+its mail redirect covers email only. This is enforced twice. STRUCTURALLY: `createMcpRequest`
+returns the one function the script uses to send anything to `/api/mcp`, and before that function
+ever calls `fetch` it refuses a `tools/call` naming a tool outside `ping` and the seven reads — a
+write tool included, whatever built the request body. LEXICALLY: `scripts/__tests__/mcpDevSmoke.test.ts`
+proves, over the comment-stripped source, that `toolCallRequest` is the only place in the script
+that builds a `tools/call` at all — it fails if a second `tools/call` quoted literal, or a second
+quoted literal of a write tool's name, appears anywhere in the script's code.
 
 ```bash
 # Full dev smoke: discovery → registration → consent (opens the browser) → token →
