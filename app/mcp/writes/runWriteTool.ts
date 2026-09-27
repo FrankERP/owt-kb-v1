@@ -117,8 +117,9 @@ export type ReportRead<T> = { ok: true; value: T } | { ok: false };
  * the read-back behind a fresh observation or `freshRevs`, the repeat hint —
  * and catches its throw HERE, so it never reaches `runWriteTool`'s catch and a
  * committed write is never reported as an unknown outcome. The caller degrades
- * only the field this read feeds (a name marked unresolved, `observation:
- * null` with «vuelve a leer con get_service», the hint left out).
+ * only the field this read feeds (a name marked unresolved, `observations:
+ * null` or `freshRevs: null` with «vuelve a leer con get_service», the hint
+ * left out).
  *
  * `label` must be a fixed string naming the read; it is logged with a fixed
  * tag, and nothing else is — never the error.

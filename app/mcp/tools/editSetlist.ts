@@ -37,12 +37,13 @@
 //      `invalid` refuses with the editor's own copy, imported. After 4–5, so a
 //      stale observation is reported as stale first, as the route orders it.
 //   7. E4: every new `songId` must be a published `post`.
-//   Then the translation (E3, E5, E6, E-key, F6) and E7: every lead id the body
-//   sends, carried or explicit, must be a canonical member. E7 runs BEFORE an
-//   explicit leader list on a service that is not a worship night is forwarded,
-//   so a leader who does not exist is named as such; a list whose members all
-//   exist then reaches the writer, whose `validateSongLeads` refuses the whole
-//   request, and the tool words that refusal itself (F6).
+//   Then the translation (E3, E5, E6, E-key, F6) and, on a worship night only,
+//   E7: every lead id the body sends, carried or explicit, must be a canonical
+//   member. On any other service E7 is skipped (ruling P3-R24): an explicit
+//   leader list there is forwarded whatever it names, the writer's
+//   `validateSongLeads` refuses the whole request, and the tool words that
+//   refusal itself (F6). Checking membership first would name a missing member
+//   and advise changing `leads`, a fix F6 refuses as well.
 //
 // THE CALL. `{ week, type, roleId?, observed: { state, id?, rev? }, songs }`,
 // with `roleId` only for a special, as `/admin` passes it. It goes through
@@ -211,7 +212,9 @@ export const EDIT_SETLIST_DESCRIPTION =
   "asignados a un servicio publicado esa semana, y encola un correo agrupado a los participantes (después de " +
   "la ventana de agrupación); un borrador no avisa a nadie. /, /schedule y las páginas de canciones se " +
   "actualizan. La respuesta trae las canciones repetidas en las últimas semanas y, si el setlist quedó tal cual " +
-  "se escribió, la observación nueva (observations) para la próxima escritura.";
+  "se escribió, la observación nueva (observations) para la próxima escritura; si cambió otra vez justo después de " +
+  "guardar, trae changedAgainAfterSave y current en su lugar: setlist es lo que se escribió; current.setlist es lo " +
+  "que hay ahora.";
 
 // ── Copy ────────────────────────────────────────────────────────────────────
 
@@ -240,7 +243,8 @@ export const READ_BACK_FAILED_TEXT =
   "No se pudo releer el setlist después de guardar; vuelve a leer con get_service antes de otra escritura.";
 
 export const CHANGED_AGAIN_TEXT =
-  "El setlist o el servicio cambió otra vez después de guardar; vuelve a leer con get_service antes de otra escritura.";
+  "El setlist o el servicio cambió otra vez después de guardar (setlist es lo que se escribió; current.setlist es " +
+  "lo que hay ahora); vuelve a leer con get_service antes de otra escritura.";
 
 const FRESH_OBSERVATION_TEXT = "La observación nueva va en observations, para la próxima escritura.";
 
@@ -514,7 +518,10 @@ export async function editSetlistResult(args: EditSetlistArgs): Promise<CallTool
     if (!translated.ok) return rowRefusal(translated.refusal, titles);
 
     // ── E7: every lead id the body sends is a canonical member ─────────────
-    const leadIds = [...new Set(translated.songs.flatMap((row) => row.leadIds ?? []))];
+    // A worship night only. Anywhere else a row carries `leadIds` only when it
+    // names leaders explicitly, which the writer refuses whoever they are (F6):
+    // checking membership first would advise a fix F6 refuses too (P3-R24).
+    const leadIds = worshipNight ? [...new Set(translated.songs.flatMap((row) => row.leadIds ?? []))] : [];
     if (leadIds.length) {
       const members = await loadCanonicalMemberIds(leadIds);
       for (const [index, row] of translated.songs.entries()) {
@@ -670,11 +677,10 @@ async function freshObservation(context: EditContext, effects: SetlistSaveEffect
   const { server, record } = load.target;
   // A special's role IS its setlist document: the loader's own copy of it.
   const specialRole: StoredRole | null = "role" in load.target ? (load.target.role as StoredRole) : null;
-  const songsNow: readonly unknown[] | null = Array.isArray(record?.songs)
-    ? (record.songs as unknown[])
-    : server.state === "none"
-      ? []
-      : null;
+  // A loaded target has rows to report: a `single` setlist whose `songs` is not
+  // an array reads as `[]`, exactly as `get_service` reads it
+  // (`observeServiceSetlist`), never as `null` (ruling P3-R24).
+  const songsNow: readonly unknown[] = Array.isArray(record?.songs) ? (record.songs as unknown[]) : [];
 
   if (server.state !== "single" || server.id !== effects.setlistId || !rowsMatchWrite(effects.songs, record?.songs)) {
     return { kind: "changed", role: roleNow, songs: songsNow };

@@ -562,6 +562,8 @@ describe("registerEditSetlist", () => {
     expect(config.inputSchema).toBe(EDIT_SETLIST_INPUT);
     expect((config.title as string).length).toBeGreaterThan(0);
     expect((config.description as string).length).toBeGreaterThan(0);
+    // Ruling P3-R24 (m1): the description says which setlist is which on a changed read-back.
+    expect(config.description).toContain("setlist es lo que se escribió; current.setlist es lo que hay ahora");
   });
 
   it("publishes ONE object with top-level additionalProperties:false (I13)", () => {
@@ -1161,6 +1163,26 @@ describe("edit_setlist — refusal replay, inherited rows", () => {
     expect(noop.run.response.isError).toBeUndefined();
   });
 
+  it("explicit leads naming NO member, on a service that is not a worship night: still F6's words, never lead_not_member (E7 skipped)", async () => {
+    // Ruling P3-R24 (m2): membership is irrelevant where no leader may be named
+    // at all, and advising «cámbialo con leads» would point at a fix F6 refuses too.
+    const observed = single(SUN_SETLIST);
+    const { tool } = await expectInherited(
+      edit(SUN, observed, [{ rowKey: "s1", leads: ["mem-nobody"] }, { rowKey: "s2" }, { rowKey: "s3" }]),
+      editorBody(SUN, observed, [
+        { songId: "song-1", play_key: "G", medley_tag: "mx", leadIds: ["mem-nobody"] },
+        { songId: "song-2", play_key: "D", medley_tag: "mx" },
+        { songId: "song-3", play_key: "E" },
+      ]),
+      "invalid_request",
+    );
+    expect(sc(tool.response)).toEqual({ refused: true, code: "invalid_request", issues: ["songs[0].leadIds"] });
+    expect(textOf(tool.response)).toBe(`${NOT_WORSHIP_NIGHT_TEXT} ${NOTHING_WRITTEN}`);
+    expect(tool.transactions).toEqual([]);
+    // E7's member read never ran: nothing asked whether the id is a member.
+    expect(tool.reads.filter((read) => read.label === "members by id")).toEqual([]);
+  });
+
   it("an over-long stored medley_tag carried by a key-only edit: the writer's own refusal", async () => {
     const observed = single(LONGTAG_SETLIST);
     const { tool } = await expectInherited(
@@ -1514,6 +1536,21 @@ describe("edit_setlist — the fresh observation (D8)", () => {
     expect(report.changedAgainAfterSave).toBe(true);
     expect((report.current as { setlist: { rows: Obj[] } }).setlist.rows[2]).toMatchObject({ key: "G" });
     expect(textOf(run.response)).toContain(CHANGED_AGAIN_TEXT);
+    // Ruling P3-R24 (m1): the text says which of the two setlists is which.
+    expect(textOf(run.response)).toContain("setlist es lo que se escribió; current.setlist es lo que hay ahora");
+  });
+
+  it("reports a single read-back with no songs array as an EMPTY setlist, as get_service does — never null", async () => {
+    // Ruling P3-R24 (m4): `servicePresenter.ts` reads a single weekend setlist
+    // without a `songs` array as `[]`; `current` is the read-back in that shape.
+    const queries_ = afterCommit("setlist target", (rows) => {
+      rows[0].songs = null;
+    });
+    const { run } = await toolRun(keyEdit, { ...OPTIONS, queries: queries_ });
+    const report = sc<Obj>(run.response);
+    expect(report).toMatchObject({ ok: true, changedAgainAfterSave: true });
+    expect(report).not.toHaveProperty("observations");
+    expect((report.current as Obj).setlist).toEqual({ rows: [], runs: [] });
   });
 
   it("is withheld when a row differs only in a leader's _key (a worship night)", async () => {
