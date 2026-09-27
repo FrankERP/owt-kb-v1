@@ -520,8 +520,9 @@ async function swapReport(args: SwapAssignmentArgs, effects: RoleSwapEffects): P
     const Label = capitalize(labelOf.get(orphan.serviceId) as string);
     const song = orphan.songTitle ? `«${orphan.songTitle}»` : `la canción ${orphan.position}`;
     const who = orphan.leaders.map(memberLabel).join(" y ");
+    const plural = orphan.leaders.length > 1;
     lines.push(
-      `${Label}: ${song} todavía nombra como líder a ${who}, que ya no está en Lead; ${SONG_LEADS_ORPHANED_NOTE}.`,
+      `${Label}: ${song} todavía nombra como ${plural ? "líderes" : "líder"} a ${who}, que ya no ${plural ? "están" : "está"} en Lead; ${SONG_LEADS_ORPHANED_NOTE}.`,
     );
   }
 
@@ -547,8 +548,14 @@ async function swapReport(args: SwapAssignmentArgs, effects: RoleSwapEffects): P
         );
       }
     }
-    if (freshRevs.every((entry) => "rev" in entry)) {
+    const freshOnes = freshRevs.filter((entry) => "rev" in entry);
+    if (freshOnes.length === freshRevs.length) {
       lines.push("Las revisiones nuevas de los dos servicios van en freshRevs, para la próxima escritura.");
+    } else if (freshOnes.length === 1) {
+      // Every label starts «el …»: «de el» contracts to «del».
+      const label = labelOf.get(freshOnes[0].serviceId) as string;
+      const ofLabel = label.startsWith("el ") ? `del ${label.slice(3)}` : `de ${label}`;
+      lines.push(`La revisión nueva ${ofLabel} va en freshRevs, para la próxima escritura.`);
     }
   }
 

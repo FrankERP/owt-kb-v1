@@ -257,6 +257,14 @@ function lockFor(r: TwinDoc, ownerId: string = String(r._id)): TwinDoc {
   return { ...lock, _rev: `${lock._id}-rev` };
 }
 
+/** The same lock, vacated: no owner, no nonce, the generation advanced. */
+function vacantLockFor(r: TwinDoc): TwinDoc {
+  const lock: TwinDoc = { ...lockFor(r), state: "vacant", generation: 1 };
+  delete lock.roleId;
+  delete lock.claimNonce;
+  return lock;
+}
+
 function lockIdOf(r: TwinDoc): string {
   return roleTargetLockId(roleTargetKey(r)) as string;
 }
@@ -343,6 +351,14 @@ const DANGLING = sunday("role-sun-dangling", "2028-10-02", true, {
 const BLANK_SP = special("role-sp-blank", "2028-10-03", "   ", true, { Lead: [ref("lbl", "mem-ana")] });
 const NO_LOCK = sunday("role-sun-nolock", "2028-10-04", true, { Lead: [ref("lnl", "mem-caro")] });
 const WRONG_LOCK = sunday("role-sun-wronglock", "2028-10-05", true, { Lead: [ref("lwl", "mem-dani")] });
+// A VACANT lock (no roleId) at an occupied weekend target: readiness reports no
+// lock issue, so admission admits it, and the domain's `planOwnedLock` refuses
+// it (`lock_vacant`) before any write — an inherited row.
+const VACANT_LOCK = sunday("role-sun-vacantlock", "2028-10-13", true, { Lead: [ref("lvl", "mem-eli")] });
+// A lock whose `generation` is not an integer: readiness files `malformed_lock`
+// (S2g refuses it), while the domain's `lockShapeIssue` never reads
+// `generation` — so the route alone asserts the lock and commits.
+const MALFORMED_LOCK = sunday("role-sun-badlock", "2028-10-16", true, { Lead: [ref("lbk", "mem-beto")] });
 
 // Reports.
 const WN_A = special("role-wn-a", "2028-10-10", "Noche de alabanza", true, {
@@ -362,6 +378,27 @@ const WN_A = special("role-wn-a", "2028-10-10", "Noche de alabanza", true, {
 const WN_B = special("role-wn-b", "2028-10-11", "Noche de alabanza II", true, {
   format: "worship_night",
   Lead: [ref("lwb", "mem-lalo")],
+});
+// A song with TWO leaders, both of whom leave Lead on a Lead swap with WN_D.
+const WN_C = special("role-wn-c", "2028-10-17", "Noche de alabanza III", true, {
+  format: "worship_night",
+  Lead: [ref("lwc1", "mem-kike"), ref("lwc2", "mem-lalo")],
+  songs: [
+    {
+      _key: "wc1",
+      play_key: "E",
+      medley_tag: null,
+      song: { _type: "reference", _ref: "song-1" },
+      leads: [
+        { _key: "wcl1", _type: "reference", _ref: "mem-kike" },
+        { _key: "wcl2", _type: "reference", _ref: "mem-lalo" },
+      ],
+    },
+  ],
+});
+const WN_D = special("role-wn-d", "2028-10-18", "Noche de alabanza IV", true, {
+  format: "worship_night",
+  Lead: [ref("lwd", "mem-juan")],
 });
 const SAME_A = sunday("role-sun-same-a", "2028-10-06", true, { Lead: [ref("lsa", "mem-ana")] });
 const SAME_B = sunday("role-sun-same-b", "2028-10-09", true, { Lead: [ref("lsb", "mem-ana")] });
@@ -391,7 +428,10 @@ function fixture(): TwinDoc[] {
     BLANK_SP,
     NO_LOCK, // deliberately no lock: a legacy weekend role (S2g)
     WRONG_LOCK, lockFor(WRONG_LOCK, "role-sun-b"), // claimed by a role that owns another target
+    VACANT_LOCK, vacantLockFor(VACANT_LOCK),
+    MALFORMED_LOCK, { ...lockFor(MALFORMED_LOCK), generation: "x" },
     WN_A, WN_B,
+    WN_C, WN_D,
     SAME_A, lockFor(SAME_A),
     SAME_B, lockFor(SAME_B),
   ];
@@ -914,6 +954,25 @@ describe("swap_assignment — refusal replay, inherited rows", () => {
     }
   });
 
+  it("a VACANT lock (no roleId) at an occupied weekend target: admitted, then lock_vacant from the domain on both sides, zero transactions", async () => {
+    const { route, tool } = await expectInherited(section("Lead", VACANT_LOCK, SUN_B), "integrity_conflict");
+    expect(route.response).toMatchObject({
+      status: 409,
+      body: { error: "integrity_conflict", details: { detail: "lock_vacant" } },
+    });
+    expect(sc(tool.response)).toEqual({ refused: true, code: "integrity_conflict", detail: "lock_vacant" });
+    expect(textOf(tool.response)).toBe(
+      "Los datos guardados del servicio no pasan una verificación de integridad; revísalo en /admin o en Studio. " +
+        "El dato de coordinación del fin de semana está libre aunque el servicio existe; /admin no puede repararlo, corrígelo en Studio. " +
+        NOTHING_WRITTEN,
+    );
+    // The refusal is the domain's (its lock read ran), not an admission gate.
+    expect(domainReads(tool)).toContain("locks by id");
+    expect(route.transactions).toEqual([]);
+    expect(tool.transactions).toEqual([]);
+    expect(doc(tool.store, lockIdOf(VACANT_LOCK)).state).toBe("vacant");
+  });
+
   it("a retry with the revs the first call consumed is stale_revision, never a second swap", async () => {
     const first = await t.runTool(OPTIONS, call(section("Lead", SUN_A, SUN_B)));
     expect(first.response.isError).toBeUndefined();
@@ -1027,7 +1086,10 @@ describe("swap_assignment — refusal replay, mirror rows (§ «Admin surface ga
       detail: "raw_draft",
       serviceId: "role-sun-ghosted",
     });
-    expect(textOf(tool.response)).toContain("borrador de Studio");
+    // The exact text pins WHICH stage refused it, so a stage change cannot pass silently.
+    expect(textOf(tool.response)).toBe(
+      `El domingo 2028-10-29: hay un borrador de Studio en ese mismo lugar del calendario, y /admin → Servicios no lo deja intercambiar; descártalo o publícalo en Studio y vuelve a leer. ${NOTHING_WRITTEN}`,
+    );
     expectRouteCommits(route);
   });
 
@@ -1097,6 +1159,20 @@ describe("swap_assignment — refusal replay, mirror rows (§ «Admin surface ga
     expect(route.transactions).toEqual([]);
   });
 
+  it("S2g (malformed_lock): a lock whose generation is not an integer — the route alone asserts it and commits", async () => {
+    const { tool, route } = await mirror(section("Lead", MALFORMED_LOCK, SUN_B));
+    expect(sc(tool.response)).toEqual({
+      refused: true,
+      code: "integrity_conflict",
+      detail: "lock:malformed_lock",
+      serviceId: "role-sun-badlock",
+    });
+    expect(textOf(tool.response)).toBe(
+      `El domingo 2028-10-16: su dato de coordinación del fin de semana está mal formado, y /admin → Servicios no lo deja intercambiar; revísalo ahí. ${NOTHING_WRITTEN}`,
+    );
+    expectRouteCommits(route);
+  });
+
   it("S4: the members source is not ready — «no se pudo comprobar»; the route alone (whose reads work) commits", async () => {
     const unready = queries({
       "members by id": () => {
@@ -1131,6 +1207,27 @@ describe("swap_assignment — the report", () => {
     );
     // The songs themselves were not touched.
     expect(doc(tool.store, "role-wn-a").songs).toEqual(WN_A.songs);
+  });
+
+  it("two orphaned leaders of one song are named in the plural («líderes … que ya no están»)", async () => {
+    const { route, tool } = await twinOf(section("Lead", WN_C, WN_D));
+    expectCommittedParity(route, tool);
+    const report = sc<{ songLeadsOrphaned: OrphanedSongLeads[] }>(tool.response);
+    expect(report.songLeadsOrphaned).toEqual([
+      {
+        serviceId: "role-wn-c",
+        position: 1,
+        songId: "song-1",
+        songTitle: "Cuán grande es Él",
+        leaders: [
+          { memberId: "mem-kike", name: "Kike" },
+          { memberId: "mem-lalo", name: "Lalo" },
+        ],
+      },
+    ]);
+    expect(textOf(tool.response)).toContain(
+      `El especial «Noche de alabanza III» del 2028-10-17: «Cuán grande es Él» todavía nombra como líderes a Kike y Lalo, que ya no están en Lead; ${SONG_LEADS_ORPHANED_NOTE}.`,
+    );
   });
 
   it("a non-Lead swap on a worship night orphans nobody", async () => {
@@ -1199,6 +1296,21 @@ describe("swap_assignment — the report", () => {
       expect(textOf(run.response)).toContain(
         "El domingo 2028-10-01 cambió otra vez después del intercambio; vuelve a leer con get_service antes de otra escritura.",
       );
+      // Only one service is fresh: the text names it, and never claims both.
+      expect(textOf(run.response)).toContain(
+        "La revisión nueva del domingo 2028-10-08 va en freshRevs, para la próxima escritura.",
+      );
+      expect(textOf(run.response)).not.toContain("Las revisiones nuevas de los dos servicios");
+    });
+
+    it("says nothing about a new revision when neither service's read-back is exact", async () => {
+      const queries_ = readBackEdited((rows) => {
+        for (const row of rows) row.published = false;
+      });
+      const run = await t.runTool({ ...OPTIONS, queries: queries_ }, call(section("Lead", SUN_A, SUN_B)));
+      const fresh = sc<{ freshRevs: FreshRev[] }>(run.response).freshRevs;
+      expect(fresh.every((entry) => "changedAgainAfterSave" in entry)).toBe(true);
+      expect(textOf(run.response)).not.toMatch(/revisi(ón|ones) nuevas? .*freshRevs/);
     });
 
     it("is withheld when the read-back differs only in a field the swap did not write: a special's time", async () => {

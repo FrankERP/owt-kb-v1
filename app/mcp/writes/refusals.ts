@@ -129,7 +129,10 @@ const DETAIL_COPY: Readonly<Record<string, string>> = {
   unexpected_type: "El documento no es un servicio que se pueda publicar u ocultar.",
   // The weekend coordination token (`planOwnedLock`).
   not_a_weekend_target: "El dato de coordinación no corresponde a un servicio de fin de semana.",
-  lock_vacant: "El dato de coordinación del fin de semana está libre; guárdalo una vez desde /admin.",
+  // `/admin`'s planner marks such a role `invalid_lock` and read-only, and its
+  // edit path runs the same coordination, so only Studio can repair it.
+  lock_vacant:
+    "El dato de coordinación del fin de semana está libre aunque el servicio existe; /admin no puede repararlo, corrígelo en Studio.",
   claimed_without_role: "El dato de coordinación del fin de semana no indica a qué servicio pertenece.",
   lock_wrong_owner: "El dato de coordinación del fin de semana pertenece a otro servicio.",
 };
