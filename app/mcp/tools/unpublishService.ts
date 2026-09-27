@@ -46,7 +46,7 @@ import { z } from "zod";
 import { isCanonicalDocumentId, isRevisionString } from "@/app/utils/roleWriteRequest";
 import { unpublishRoles } from "@/app/utils/roleUnpublishCommit";
 import { admissionRefusal, refusalFor } from "../writes/refusals";
-import { runWriteTool } from "../writes/runWriteTool";
+import { runWriteTool, WRITE_REREAD_RULE } from "../writes/runWriteTool";
 
 const SERVICE_ID_MESSAGE = "serviceId no es un id de servicio válido; usa el que devuelve get_service.";
 const REV_MESSAGE = "rev no es una revisión válida; usa la que devuelve get_service.";
@@ -65,11 +65,13 @@ export const UNPUBLISH_SERVICE_DESCRIPTION =
   "Servicios. Es una acción de seguridad aparte de publicar: no usa la verificación de publicación ni acepta " +
   "bloqueos reconocidos, así que un servicio puede ocultarse aunque su equipo, disponibilidad, setlist o " +
   "propuesta estén incompletos, en conflicto o sean inválidos — para eso sirve. No notifica a nadie: ocultar " +
-  "es silencioso por diseño, y /schedule y /me dejan de mostrar el servicio de inmediato. serviceId y rev deben " +
-  "venir tal cual de get_service o list_services; si rev ya no coincide con la revisión guardada, se rechaza " +
-  "(stale_revision) para nunca ocultar por accidente un servicio que cambió desde que lo leíste. Si el servicio " +
-  "ya era un borrador y la revisión sigue vigente, no se escribe nada y la respuesta lo dice sin dar la " +
-  "impresión de que algo se aplicó.";
+  "es silencioso por diseño, y /schedule y /me dejan de mostrar el servicio de inmediato. serviceId y rev son " +
+  "observaciones (observations.roleId y observations.roleRev de get_service, o serviceId y roleRev de " +
+  "list_services): pásalas SIN CAMBIOS, tal como llegaron; nunca las construyas a mano. Si rev ya no coincide " +
+  "con la revisión guardada, se rechaza (stale_revision) para nunca ocultar por accidente un servicio que cambió " +
+  "desde que lo leíste. Si el servicio ya era un borrador y la revisión sigue vigente, no se escribe nada y la " +
+  "respuesta lo dice sin dar la impresión de que algo se aplicó. " +
+  WRITE_REREAD_RULE;
 
 /** The tool's whole behaviour, callable without a server (the route registers it below). */
 export async function unpublishServiceResult(args: UnpublishServiceArgs): Promise<CallToolResult> {

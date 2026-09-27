@@ -54,6 +54,14 @@ export const WRITE_PRE_FAILURE_MESSAGE =
 export const WRITE_UNKNOWN_OUTCOME_MESSAGE =
   "No se pudo confirmar si el cambio se guardó. Antes de reintentar, vuelve a leer el servicio con get_service.";
 
+/**
+ * The half of spec I7 every write tool's description states after naming the
+ * observations it takes: an observation is never reused past a refusal or an
+ * unknown outcome. One sentence, so the tool-list test can pin it on all four.
+ */
+export const WRITE_REREAD_RULE =
+  "Después de cualquier rechazo o de un resultado desconocido, vuelve a leer con get_service antes de reintentar.";
+
 export type WritePhase = "pre" | "domain";
 
 /** Calls a `*Commit` domain function, marking the call as having reached the domain first. */

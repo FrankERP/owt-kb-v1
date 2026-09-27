@@ -32,10 +32,10 @@ const h = await vi.hoisted(async () => {
 vi.mock("@/app/utils/authGuards", () => ({ requireActiveSession: () => h.requireActiveSession() }));
 vi.mock("@/app/utils/memberAccess", () => ({ getMemberAccess: (id: string) => h.getMemberAccess(id) }));
 vi.mock("@/sanity/lib/serverClient", () => ({ writeClient: h.writeClient, serverClient: { fetch: vi.fn() } }));
-// Every read tool's import of `operationalClient`/`rawIntegrityClient` must
-// never reach `sanity/env.ts`, which throws when `NEXT_PUBLIC_SANITY_*` is
-// unset (as it is under vitest). This chain only calls `ping` (step 5 below),
-// so nothing here calls `fetch` even though all eight tools are registered.
+// Every tool's import of `operationalClient`/`rawIntegrityClient` must never
+// reach `sanity/env.ts`, which throws when `NEXT_PUBLIC_SANITY_*` is unset (as
+// it is under vitest). This chain only calls `ping` (step 5 below), so nothing
+// here calls `fetch` even though all twelve tools are registered.
 vi.mock("@/sanity/lib/operationalClient", () => ({ operationalClient: { fetch: vi.fn() }, rawIntegrityClient: { fetch: vi.fn() } }));
 
 import nextConfig from "../../../next.config.mjs";
@@ -56,6 +56,7 @@ import { GRANT_CACHE_TTL_MS, __clearGrantCache } from "@/app/mcp/oauth/grantStor
 import { mcpRoutePreflight } from "@/app/mcp/oauth/guard";
 import { PREVIEW_ORIGIN } from "@/app/mcp/oauth/origin";
 import { verifyAccessToken } from "@/app/mcp/oauth/tokens";
+import { EXPECTED_TOOLS } from "@/scripts/mcp-dev-smoke.mjs";
 
 const SECRET = "s".repeat(32);
 const MEMBER = "frank";
@@ -307,16 +308,9 @@ describe("the connector handshake, end to end on preview (discovery → ping →
     expect(negotiated).toBe(PROTOCOL);
 
     const list = await rpcResult(await mcp(tokens.access_token, "tools/list", undefined, negotiated));
-    expect((list.tools as { name: string }[]).map((t) => t.name)).toEqual([
-      "ping",
-      "get_service",
-      "list_services",
-      "search_songs",
-      "get_song",
-      "get_member_availability",
-      "get_participation",
-      "list_proposals",
-    ]);
+    // The dev smoke's own pinned registration (twelve tools since P3), imported
+    // rather than re-typed, as `mcpRoute.test.ts` does.
+    expect((list.tools as { name: string }[]).map((t) => t.name)).toEqual(EXPECTED_TOOLS);
 
     const ping = (token: string) => mcp(token, "tools/call", { name: "ping", arguments: {} }, negotiated);
     const first = await rpcResult(await ping(tokens.access_token));

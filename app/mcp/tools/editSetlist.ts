@@ -92,7 +92,7 @@ import { serviceKindOf, setlistContent, type ServiceKind, type SetlistRow, type 
 import { loadSongTitles, type SongTitleLookup } from "../reads/songTitles";
 import { loadRecentSetlists } from "../reads/recentSetlists";
 import { admissionRefusal, NOTHING_WRITTEN, refusalFor, STALE_COPY, type RefusalContent } from "../writes/refusals";
-import { runWriteTool, safeReportRead } from "../writes/runWriteTool";
+import { runWriteTool, safeReportRead, WRITE_REREAD_RULE } from "../writes/runWriteTool";
 import {
   OUTBOX_SWEEP_NOTE,
   audienceMember,
@@ -205,16 +205,20 @@ export const EDIT_SETLIST_DESCRIPTION =
   "envías se quita. No se puede añadir una canción que ya está en el setlist. key admite hasta 24 caracteres. " +
   "Un enlace de medley solo une canciones contiguas: envía la misma medleyTag en filas vecinas; un enlace que no " +
   "puede quedar junto se rechaza. Solo una Noche de alabanza lleva líderes por canción (uno o dos, que tienen " +
-  "que estar en Lead). serviceId, roleRev (observations.roleRev) y observed (observations.setlist) deben venir " +
-  "tal cual de get_service; si el servicio o el setlist cambió desde entonces, o el setlist guardado tiene " +
-  "canciones inválidas, no escribe nada y lo explica. En un servicio publicado avisa de inmediato, sin " +
+  "que estar en Lead). Necesita dos observaciones de get_service: roleRev (observations.roleRev) y observed " +
+  "(observations.setlist), con serviceId (observations.roleId); pásalas SIN CAMBIOS, tal como llegaron; nunca " +
+  "las construyas a mano. Rechaza cualquier setlist que /admin no abriría: solo escribe sobre uno en estado none " +
+  "o single, nunca sobre ambiguous, draft_overlay, invalid o unknown, ni sobre uno con filas guardadas inválidas " +
+  "(sin _key, con _key repetida o con una canción que no existe). Si el servicio o el setlist cambió desde que lo " +
+  "leíste, no escribe nada y lo explica. En un servicio publicado avisa de inmediato, sin " +
   "confirmación, por push «Setlist de la semana» a los miembros con preferencia de setlist «todos» y a los " +
   "asignados a un servicio publicado esa semana, y encola un correo agrupado a los participantes (después de " +
   "la ventana de agrupación); un borrador no avisa a nadie. /, /schedule y las páginas de canciones se " +
   "actualizan. La respuesta trae las canciones repetidas en las últimas semanas y, si el setlist quedó tal cual " +
   "se escribió, la observación nueva (observations) para la próxima escritura; si cambió otra vez justo después de " +
   "guardar, trae changedAgainAfterSave y current en su lugar: setlist es lo que se escribió; current.setlist es lo " +
-  "que hay ahora.";
+  "que hay ahora. " +
+  WRITE_REREAD_RULE;
 
 // ── Copy ────────────────────────────────────────────────────────────────────
 

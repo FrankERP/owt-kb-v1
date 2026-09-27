@@ -77,7 +77,7 @@ import type { CanonicalMember } from "@/app/utils/serviceReadModel";
 import type { MemberNameLookup } from "../reads/serviceSnapshot";
 import { loadSongTitles } from "../reads/songTitles";
 import { admissionRefusal, refusalFor } from "../writes/refusals";
-import { runWriteTool, safeReportRead } from "../writes/runWriteTool";
+import { runWriteTool, safeReportRead, WRITE_REREAD_RULE } from "../writes/runWriteTool";
 import {
   OUTBOX_SWEEP_NOTE,
   audienceMember,
@@ -129,16 +129,19 @@ export const SWAP_ASSIGNMENT_DESCRIPTION =
   "/admin → Servicios: una sección completa (kind: \"section\" con path \"Lead\", \"BGVs\", \"Chorus\", " +
   "\"instruments\" o \"foh_team\") o el equipo completo (kind: \"team\", sin path, las cinco secciones). Nunca " +
   "mueve un solo asiento. Se intercambian los arreglos guardados tal cual (con sus claves, instrumentos y " +
-  "etiquetas de FOH); nada más del servicio cambia. Antes de escribir comprueba, como el planner, que los dos " +
-  "servicios sean del mismo mes, que cada uno sea un único documento sin borradores de Studio encima, sin " +
-  "asignaciones a personas que ya no existen, con su dato de coordinación de fin de semana válido y, si es " +
-  "especial, con nombre propio; si algo falla, no escribe nada y explica por qué. Cada servicio publicado avisa " +
+  "etiquetas de FOH); nada más del servicio cambia. Solo intercambia dos servicios del MISMO mes que el planner " +
+  "de /admin dejaría intercambiar: antes de escribir comprueba, como el planner, que cada uno sea un único " +
+  "documento sin borradores de Studio encima, sin asignaciones a personas que ya no existen, con su dato de " +
+  "coordinación de fin de semana válido y, si es especial, con nombre propio; si algo falla, no escribe nada y " +
+  "explica por qué. Cada servicio publicado avisa " +
   "por push «Servicio actualizado» a quien entra nuevo y encola un correo agrupado a quien estaba antes y a " +
   "quien está después (después de la ventana de agrupación); un borrador no avisa a nadie. /, /schedule, /me y " +
   "las páginas de canciones se actualizan. Informa, sin rechazar, a quien quedó en un día que marcó como no " +
-  "disponible y, en una Noche de alabanza, las canciones cuyos líderes ya no están en Lead. serviceId y rev " +
-  "deben venir tal cual de get_service o list_services; un intercambio mueve las dos revisiones, así que para " +
-  "otra escritura usa freshRevs o vuelve a leer.";
+  "disponible y, en una Noche de alabanza, las canciones cuyos líderes ya no están en Lead. serviceId y rev de " +
+  "cada servicio son observaciones (observations.roleId y observations.roleRev de get_service, o serviceId y " +
+  "roleRev de list_services): pásalas SIN CAMBIOS, tal como llegaron; nunca las construyas a mano. Un intercambio " +
+  "mueve las dos revisiones, así que para otra escritura usa freshRevs o vuelve a leer. " +
+  WRITE_REREAD_RULE;
 
 /** The Spanish label of each seat path. */
 export const SWAP_PATH_LABEL: Readonly<Record<SeatPath, string>> = {

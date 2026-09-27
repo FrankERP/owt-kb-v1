@@ -1,7 +1,8 @@
 // app/api/mcp/route.ts
 //
 // The MCP endpoint (P0 plan step 9, spec I6/O2/E1): Streamable HTTP through
-// `mcp-handler`, stateless, tools registered below. Ungated by the session
+// `mcp-handler`, stateless, tools registered below: `ping`, the seven P1 reads
+// and the four P3 writes. Ungated by the session
 // middleware (`api/mcp(?:/|$)` in `app/utils/routeMatcher.ts`, P0 step 5), so
 // it authenticates EVERY request itself, on every method, and nothing reaches
 // the MCP server — no `initialize`, no `tools/list`, no tool — until all of
@@ -46,6 +47,10 @@ import { registerListProposals } from "@/app/mcp/tools/listProposals";
 import { registerListServices } from "@/app/mcp/tools/listServices";
 import { registerPing } from "@/app/mcp/tools/ping";
 import { registerSearchSongs } from "@/app/mcp/tools/searchSongs";
+import { registerUnpublishService } from "@/app/mcp/tools/unpublishService";
+import { registerPublishService } from "@/app/mcp/tools/publishService";
+import { registerSwapAssignment } from "@/app/mcp/tools/swapAssignment";
+import { registerEditSetlist } from "@/app/mcp/tools/editSetlist";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -85,6 +90,12 @@ const mcpHandler = createMcpHandler(
     registerGetMemberAvailability(server);
     registerGetParticipation(server);
     registerListProposals(server);
+    // The four writes (P3), after the reads. Each calls its admin counterpart's
+    // own `*Commit` module (ADR-0043) and declares itself destructive (I14).
+    registerUnpublishService(server);
+    registerPublishService(server);
+    registerSwapAssignment(server);
+    registerEditSetlist(server);
   },
   {
     serverInfo: SERVER_INFO,

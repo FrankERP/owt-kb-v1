@@ -52,7 +52,7 @@ import { z } from "zod";
 import { isCanonicalDocumentId, isRevisionString } from "@/app/utils/roleWriteRequest";
 import { publishReady } from "@/app/utils/publishReadyCommit";
 import { admissionRefusal, refusalFor } from "../writes/refusals";
-import { runWriteTool } from "../writes/runWriteTool";
+import { runWriteTool, WRITE_REREAD_RULE } from "../writes/runWriteTool";
 import { OUTBOX_SWEEP_NOTE, publishNotifications, resolveNotifications } from "../writes/reports";
 
 const SERVICE_ID_MESSAGE = "serviceId no es un id de servicio válido; usa el que devuelve get_service.";
@@ -78,8 +78,11 @@ export const PUBLISH_SERVICE_DESCRIPTION =
   "después de publicar también se rechaza, porque la revisión ya cambió. Al publicar: cada asignado actual recibe " +
   "una notificación push «Nuevo servicio asignado» y un correo de asignación consolidado; si el servicio tiene " +
   "canciones también se encola, de inmediato, un aviso «Setlist listo» a sus participantes (eso se decide después " +
-  "de responder); y /, /schedule y /me se actualizan. serviceId y rev deben venir tal cual de get_service o " +
-  "list_services. Solo publica: no acepta ningún modo de forzar ni de recuperar un resultado.";
+  "de responder); y /, /schedule y /me se actualizan. serviceId y rev son observaciones (observations.roleId y " +
+  "observations.roleRev de get_service, o serviceId y roleRev de list_services): pásalas SIN CAMBIOS, tal como " +
+  "llegaron; nunca las construyas a mano. Solo publica: no acepta ningún modo de forzar ni de recuperar un " +
+  "resultado. " +
+  WRITE_REREAD_RULE;
 
 /** The exact domain body this tool ever sends — `ready` mode, one role, nothing else. */
 export function publishServiceBody(args: PublishServiceArgs) {

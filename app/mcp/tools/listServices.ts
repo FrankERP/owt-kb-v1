@@ -37,8 +37,9 @@ export const LIST_SERVICES_DESCRIPTION =
   "blockers: lo que hoy impide publicarlo, en español (hard: problemas de datos; workflow: pendientes que un admin puede " +
   "aceptar). failedSources " +
   "aparece si alguna lectura falló; si no se pudo leer el catálogo, la herramienta responde con un error, nunca con una " +
-  "lista vacía. serviceId y roleRev son observaciones: pásalos SIN CAMBIOS, tal como llegaron, a una escritura posterior; " +
-  "nunca los construyas a mano. Para asientos, setlist y el resto de observations usa get_service. Solo lee: no cambia nada.";
+  "lista vacía. serviceId y roleRev son observaciones: son el serviceId y el rev de publish_service, unpublish_service " +
+  "y swap_assignment; pásalos SIN CAMBIOS, tal como llegaron, y nunca los construyas a mano. Para edit_setlist, y para " +
+  "asientos, setlist y el resto de observations, usa get_service. Solo lee: no cambia nada.";
 
 /** The tool's whole behaviour, callable without a server (the route registers it below). */
 export async function listServicesResult(args: ListServicesArgs): Promise<CallToolResult> {

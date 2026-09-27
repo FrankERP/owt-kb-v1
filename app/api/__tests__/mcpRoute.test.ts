@@ -1,6 +1,9 @@
 // `/api/mcp` — P0 plan step 9 (the endpoint and its one tool, `ping`) plus P1's
 // seven read tools (steps 4-7): `get_service`, `list_services`, `search_songs`,
-// `get_song`, `get_member_availability`, `get_participation`, `list_proposals`.
+// `get_song`, `get_member_availability`, `get_participation`, `list_proposals`,
+// and P3's four write tools (step 12): `unpublish_service`, `publish_service`,
+// `swap_assignment`, `edit_setlist` — registered, listed as destructive, and
+// refused by the SDK's own schema validation before their handlers run.
 // Ungated by the session middleware, so it authenticates itself: every request
 // passes the preflight and the whole bearer check before anything reaches the
 // MCP server (spec I6), on every method.
@@ -34,6 +37,13 @@ const h = await vi.hoisted(async () => {
     /** The read tools' Sanity clients; the read-tool tests wire them to the fixture responder. */
     operationalFetch: vi.fn(),
     rawFetch: vi.fn(),
+    /** The four write tools' domain functions (`*Commit`), stubbed: nothing here may reach one. */
+    domain: {
+      saveSetlist: vi.fn(),
+      swapRoles: vi.fn(),
+      publishReady: vi.fn(),
+      unpublishRoles: vi.fn(),
+    },
   };
 });
 
@@ -47,6 +57,14 @@ vi.mock("@/sanity/lib/operationalClient", () => ({
   operationalClient: { fetch: (...a: unknown[]) => h.operationalFetch(...a) },
   rawIntegrityClient: { fetch: (...a: unknown[]) => h.rawFetch(...a) },
 }));
+// The write tools' `*Commit` modules (ADR-0043), replaced by spies. The route
+// test proves the REGISTERED path: the SDK validates a write's input before its
+// handler runs, so a schema-invalid call must reach none of these. Each tool's
+// own suite drives the real module; here a call would be the bug.
+vi.mock("@/app/utils/setlistSaveCommit", () => ({ saveSetlist: h.domain.saveSetlist }));
+vi.mock("@/app/utils/roleSwapCommit", () => ({ swapRoles: h.domain.swapRoles }));
+vi.mock("@/app/utils/publishReadyCommit", () => ({ publishReady: h.domain.publishReady }));
+vi.mock("@/app/utils/roleUnpublishCommit", () => ({ unpublishRoles: h.domain.unpublishRoles }));
 
 // The REAL mcp-handler, observed: the wrapper records every request the route
 // forwards (so a refusal can assert the handler was never called at all), and
@@ -93,7 +111,8 @@ import { songResponder } from "@/app/mcp/reads/__tests__/songFixtures";
 // The dev-smoke script's own expectation of the route's registration — imported,
 // never re-typed, so the two can't drift apart silently (a 9th tool would fail
 // THIS test, not just surface on Frank's next `--reads` run).
-import { EXPECTED_TOOLS } from "@/scripts/mcp-dev-smoke.mjs";
+import { EXPECTED_TOOLS, WRITE_TOOL_NAMES, expectedAnnotations } from "@/scripts/mcp-dev-smoke.mjs";
+import { WRITE_REREAD_RULE } from "@/app/mcp/writes/runWriteTool";
 import * as mcpRoute from "@/app/api/mcp/route";
 import { buildGrantDocument, newGrantId } from "@/app/mcp/oauth/grantDocument";
 import { __clearGrantCache, createGrant, revokeGrant } from "@/app/mcp/oauth/grantStore";
@@ -595,7 +614,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
   });
 
-  it("tools/list shows exactly ping, get_service, list_services, search_songs, get_song, get_member_availability, get_participation and list_proposals: all read-only, strict, described in Spanish", async () => {
+  it("tools/list shows exactly the twelve tools — ping, the seven reads, then the four writes — each with its own annotations (I14), strict (I13), described in Spanish", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const tools = result.tools as Record<string, unknown>[];
@@ -603,9 +622,20 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     // re-derived from this very `tools/list` result, so a drift between the
     // route's registration and the script's expectation fails HERE.
     expect(tools.map((t) => t.name)).toEqual(EXPECTED_TOOLS);
+    expect(tools.slice(-4).map((t) => t.name)).toEqual(WRITE_TOOL_NAMES);
+    // The same per-tool annotations the smoke checks on dev. Written out here as
+    // well, so a change to the smoke's own map cannot quietly redefine what a
+    // read or a destructive write declares.
     for (const tool of tools) {
-      expect(tool.annotations, String(tool.name)).toEqual({ readOnlyHint: true, openWorldHint: false });
-      expect(tool.inputSchema, String(tool.name)).toMatchObject({ type: "object", additionalProperties: false });
+      const name = String(tool.name);
+      const write = (WRITE_TOOL_NAMES as string[]).includes(name);
+      expect(tool.annotations, name).toEqual(
+        write
+          ? { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
+          : { readOnlyHint: true, openWorldHint: false },
+      );
+      expect(tool.annotations, name).toEqual(expectedAnnotations(name));
+      expect(tool.inputSchema, name).toMatchObject({ type: "object", additionalProperties: false });
     }
     const [ping, getService, listServices, searchSongs, getSong, getMemberAvailability, getParticipation, listProposals] =
       tools;
@@ -644,9 +674,61 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(getParticipation!.description).toMatch(/borradores incluidos/);
     expect(listProposals!.description).toMatch(/truncated/);
     expect(listProposals!.description).toMatch(/leído/);
+    // The reads that hand out observations name the writes that take them.
+    for (const tool of [getService!, listServices!]) {
+      for (const write of WRITE_TOOL_NAMES) expect(tool.description, `${tool.name} → ${write}`).toContain(write);
+    }
   });
 
-  it("refuses an unknown extra argument to EVERY read tool (I13), never reaching a read", async () => {
+  it("describes every write tool with I7's rule and its notification audience, in Spanish", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
+    const byName = new Map((result.tools as Record<string, unknown>[]).map((t) => [String(t.name), t]));
+    const descriptionOf = (name: string) => String(byName.get(name)!.description);
+    for (const name of WRITE_TOOL_NAMES) {
+      // Pass the observations unchanged, never build them, re-read after any refusal or unknown outcome.
+      expect(descriptionOf(name), name).toMatch(/SIN CAMBIOS/);
+      expect(descriptionOf(name), name).toMatch(/nunca las construyas a mano/);
+      expect(descriptionOf(name), name).toContain(WRITE_REREAD_RULE);
+    }
+    // The notification audience of each.
+    expect(descriptionOf("unpublish_service")).toMatch(/No notifica a nadie/);
+    expect(descriptionOf("publish_service")).toMatch(/«Nuevo servicio asignado»/);
+    expect(descriptionOf("publish_service")).toMatch(/«Setlist listo»/);
+    expect(descriptionOf("swap_assignment")).toMatch(/«Servicio actualizado»/);
+    expect(descriptionOf("edit_setlist")).toMatch(/«Setlist de la semana»/);
+    for (const name of ["swap_assignment", "edit_setlist"]) {
+      expect(descriptionOf(name), name).toMatch(/un borrador no avisa a nadie/);
+    }
+    // edit_setlist names both observations it needs, and refuses what /admin will not open.
+    expect(descriptionOf("edit_setlist")).toContain("roleRev (observations.roleRev)");
+    expect(descriptionOf("edit_setlist")).toContain("observed (observations.setlist)");
+    expect(descriptionOf("edit_setlist")).toContain("Rechaza cualquier setlist que /admin no abriría");
+    // swap_assignment swaps only what the planner would.
+    expect(descriptionOf("swap_assignment")).toContain("Solo intercambia dos servicios del MISMO mes que el planner");
+    // publish_service exposes no override.
+    expect(descriptionOf("publish_service")).toContain("no acepta ningún modo de forzar");
+  });
+
+  it("advertises the write tools' bounds up front in their JSON Schema (P3-R24)", async () => {
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
+    const tools = result.tools as { name: string; inputSchema: { properties: Record<string, Record<string, unknown>> } }[];
+    const schemaOf = (name: string) => tools.find((t) => t.name === name)!.inputSchema;
+    // More than 60 rows, a key over 24 characters and three leaders are visible
+    // to the client before it calls, and refused by the SDK before the handler.
+    const rows = schemaOf("edit_setlist").properties.rows!;
+    expect(rows).toMatchObject({ type: "array", maxItems: 60 });
+    expect(JSON.stringify(rows)).toContain('"maxLength":24');
+    expect(JSON.stringify(rows)).toContain('"maxItems":2');
+    expect(schemaOf("swap_assignment").properties.services).toMatchObject({ type: "array", minItems: 2, maxItems: 2 });
+    expect(schemaOf("swap_assignment").properties.kind).toMatchObject({ enum: ["section", "team"] });
+    for (const name of ["publish_service", "unpublish_service"]) {
+      expect(Object.keys(schemaOf(name).properties).sort(), name).toEqual(["rev", "serviceId"]);
+    }
+  });
+
+  it("refuses an unknown extra argument to EVERY tool, reads and writes alike (I13), never reaching a read", async () => {
     const token = await accessToken(await liveGrant());
     const list = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const names = (list.tools as { name: string }[]).map((t) => t.name);
@@ -659,6 +741,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     }
     expect(h.operationalFetch).not.toHaveBeenCalled();
     expect(h.rawFetch).not.toHaveBeenCalled();
+    for (const fn of Object.values(h.domain)) expect(fn).not.toHaveBeenCalled();
   });
 
   it("tools/call ping returns { ok, server, version, now } with now in Mexico City time", async () => {
@@ -1088,6 +1171,82 @@ describe("/api/mcp — list_proposals, end to end", () => {
     expect(result.isError).toBe(true);
     expect(h.operationalFetch).not.toHaveBeenCalled();
   });
+});
+
+// ── the write tools, registered (P3 step 12, ruling P3-R24) ─────────────────
+//
+// Once registered, the SDK validates a tool's `inputSchema` BEFORE its handler
+// runs, so a shape error never reaches the tool's own Spanish `shapeRefusal`
+// (that stays as the defence for a direct call, which every tool suite makes).
+// One schema-invalid call per write, through the real route: an error result
+// carrying the SDK's own validation text, and nothing downstream — no domain
+// call, no read, no write to the dataset.
+
+describe("/api/mcp — a schema-invalid write is refused by the SDK before its handler (P3-R24)", () => {
+  const SDK_PREFIX = (name: string) => `Input validation error: Invalid arguments for tool ${name}:`;
+
+  const INVALID_CALLS: { name: string; bound: string; args: Record<string, unknown> }[] = [
+    {
+      name: "unpublish_service",
+      bound: "a rev with whitespace (isRevisionString)",
+      args: { serviceId: "role-sun-1004", rev: "rev with spaces" },
+    },
+    {
+      name: "publish_service",
+      bound: "a drafts.* id (isCanonicalDocumentId)",
+      args: { serviceId: "drafts.role-sun-1004", rev: "rev-1" },
+    },
+    {
+      name: "swap_assignment",
+      bound: "three services where exactly two are allowed",
+      args: {
+        kind: "section",
+        path: "Lead",
+        services: [
+          { serviceId: "role-a", rev: "rev-a" },
+          { serviceId: "role-b", rev: "rev-b" },
+          { serviceId: "role-c", rev: "rev-c" },
+        ],
+      },
+    },
+    {
+      name: "edit_setlist",
+      bound: "61 rows where 60 is the writer's limit",
+      args: {
+        serviceId: "role-sun-1004",
+        roleRev: "rev-1",
+        observed: { state: "none" },
+        rows: Array.from({ length: 61 }, (_, i) => ({ songId: `song-${i}` })),
+      },
+    },
+  ];
+
+  it("covers exactly the four write tools", () => {
+    expect(INVALID_CALLS.map((c) => c.name).sort()).toEqual([...WRITE_TOOL_NAMES].sort());
+  });
+
+  for (const { name, bound, args } of INVALID_CALLS) {
+    it(`${name}: ${bound} — the SDK's error, zero domain calls, zero reads, zero writes`, async () => {
+      const token = await accessToken(await liveGrant());
+      const createsBefore = h.creates.length;
+      const patchesBefore = h.patches.length;
+      const result = await rpcResult(await POST(mcpRequest(rpc("tools/call", { name, arguments: args }), { token })));
+
+      expect(result.isError).toBe(true);
+      const content = result.content as { type: string; text: string }[];
+      expect(content).toHaveLength(1);
+      // The SDK's own text, not the handler's: the tool's `shapeRefusal` /
+      // admission refusal would carry `structuredContent: { refused: true, … }`.
+      expect(content[0]!.text.startsWith(SDK_PREFIX(name)), content[0]!.text).toBe(true);
+      expect(result.structuredContent).toBeUndefined();
+
+      for (const fn of Object.values(h.domain)) expect(fn).not.toHaveBeenCalled();
+      expect(h.operationalFetch).not.toHaveBeenCalled();
+      expect(h.rawFetch).not.toHaveBeenCalled();
+      expect(h.creates).toHaveLength(createsBefore);
+      expect(h.patches).toHaveLength(patchesBefore);
+    });
+  }
 });
 
 // ── the 2026-07-28 era ─────────────────────────────────────────────────────

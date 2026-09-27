@@ -33,6 +33,7 @@ import {
   decodeJwtPayloadUnsafe,
   DEFAULT_BASE,
   EXPECTED_TOOLS,
+  expectedAnnotations,
   failureGrantLines,
   formEncode,
   formatReadCheckLine,
@@ -44,6 +45,7 @@ import {
   parseArgs,
   parseSseMessages,
   PRODUCTION_BASE,
+  READ_ONLY_ANNOTATIONS,
   READ_TOOL_NAMES,
   readCheckArguments,
   readCheckDetail,
@@ -55,6 +57,8 @@ import {
   SmokeError,
   songIdFromSearchResult,
   summarizeReadChecks,
+  WRITE_ANNOTATIONS,
+  WRITE_TOOL_NAMES,
 } from "../mcp-dev-smoke.mjs";
 
 const KEY = new TextEncoder().encode("a".repeat(MIN_SECRET_BYTES));
@@ -381,29 +385,79 @@ describe("rpc", () => {
 
 describe("checkToolList", () => {
   const readOnly = { readOnlyHint: true, openWorldHint: false };
+  const destructive = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
+  /** A tools/list result exactly as the P3 route registers it. */
+  const registered = () =>
+    EXPECTED_TOOLS.map((name) => ({ name, annotations: WRITE_TOOL_NAMES.includes(name) ? destructive : readOnly }));
 
-  it("accepts the exact eight names, in order, all annotated readOnlyHint/openWorldHint", () => {
-    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: readOnly }));
-    expect(checkToolList(tools)).toEqual({ ok: true });
+  it("pins twelve tools: ping, the seven reads, then the four writes, in registration order", () => {
+    expect(EXPECTED_TOOLS).toEqual([
+      "ping",
+      "get_service",
+      "list_services",
+      "search_songs",
+      "get_song",
+      "get_member_availability",
+      "get_participation",
+      "list_proposals",
+      "unpublish_service",
+      "publish_service",
+      "swap_assignment",
+      "edit_setlist",
+    ]);
+    expect(WRITE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(-4));
   });
 
-  it("refuses a wrong count or a wrong order", () => {
-    const tooFew = EXPECTED_TOOLS.slice(0, 1).map((name) => ({ name, annotations: readOnly }));
+  it("per-tool annotations: every read read-only, every write destructive (I14)", () => {
+    expect(READ_ONLY_ANNOTATIONS).toEqual(readOnly);
+    expect(WRITE_ANNOTATIONS).toEqual(destructive);
+    for (const name of EXPECTED_TOOLS) {
+      expect(expectedAnnotations(name), name).toEqual(WRITE_TOOL_NAMES.includes(name) ? destructive : readOnly);
+    }
+  });
+
+  it("accepts the exact twelve names, in order, each with its own annotations", () => {
+    expect(checkToolList(registered())).toEqual({ ok: true });
+  });
+
+  it("refuses a wrong count or a wrong order — a P1-only deployment (the eight reads) included", () => {
+    const tooFew = registered().slice(0, 8);
     expect(checkToolList(tooFew).ok).toBe(false);
-
-    const reordered = [...EXPECTED_TOOLS].reverse().map((name) => ({ name, annotations: readOnly }));
-    expect(checkToolList(reordered).ok).toBe(false);
+    expect(checkToolList([...registered()].reverse()).ok).toBe(false);
   });
 
-  it("refuses a tool missing openWorldHint: false (a stale registration)", () => {
-    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: { readOnlyHint: true } }));
+  it("refuses a read missing openWorldHint: false (a stale registration)", () => {
+    const tools = registered().map((t, i) => (i === 0 ? { ...t, annotations: { readOnlyHint: true } } : t));
     const result = checkToolList(tools);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain(EXPECTED_TOOLS[0]);
   });
 
-  it("refuses a tool declared writable", () => {
-    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: { readOnlyHint: false, openWorldHint: false } }));
+  it("refuses a read declared writable", () => {
+    const tools = registered().map((t) =>
+      t.name === "get_service" ? { ...t, annotations: { readOnlyHint: false, openWorldHint: false } } : t,
+    );
+    expect(checkToolList(tools).ok).toBe(false);
+  });
+
+  it("refuses a write that is not declared destructive, or declared read-only, or declared idempotent", () => {
+    for (const name of WRITE_TOOL_NAMES) {
+      for (const annotations of [
+        { ...destructive, destructiveHint: false },
+        { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+        readOnly,
+        { ...destructive, idempotentHint: true },
+      ]) {
+        const tools = registered().map((t) => (t.name === name ? { ...t, annotations } : t));
+        const result = checkToolList(tools);
+        expect(result.ok, `${name} ${JSON.stringify(annotations)}`).toBe(false);
+        if (!result.ok) expect(result.message).toContain(name);
+      }
+    }
+  });
+
+  it("refuses a tool carrying an annotation it does not expect", () => {
+    const tools = registered().map((t) => (t.name === "ping" ? { ...t, annotations: { ...readOnly, destructiveHint: true } } : t));
     expect(checkToolList(tools).ok).toBe(false);
   });
 });
@@ -415,7 +469,7 @@ describe("checkPingRegistered", () => {
     expect(checkPingRegistered([{ name: "ping", annotations: readOnly }])).toEqual({ ok: true });
   });
 
-  it("accepts ping alongside the full P1 set too — order and the other names don't matter", () => {
+  it("accepts ping alongside the full registered set too — order and the other names don't matter", () => {
     const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: readOnly }));
     expect(checkPingRegistered(tools)).toEqual({ ok: true });
     expect(checkPingRegistered([...tools].reverse())).toEqual({ ok: true });

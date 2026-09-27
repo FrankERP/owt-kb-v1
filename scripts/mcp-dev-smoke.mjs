@@ -295,7 +295,14 @@ export function rpc(method, params, id = 1) {
   return { jsonrpc: "2.0", id, method, ...(params !== undefined ? { params } : {}) };
 }
 
-// ── tools/list check (P1 step 8) ────────────────────────────────────────────
+// ── tools/list check (P1 step 8; per-tool annotations since P3 step 12) ──────
+
+/**
+ * The four P3 write tools, in registration order. This script NEVER calls one
+ * (DV1): dev writes the production dataset. They appear here only so the
+ * `tools/list` check can prove they are listed and declared destructive.
+ */
+export const WRITE_TOOL_NAMES = ["unpublish_service", "publish_service", "swap_assignment", "edit_setlist"];
 
 /** The registration this deployment is expected to carry (`app/api/mcp/route.ts`), in order. */
 export const EXPECTED_TOOLS = [
@@ -307,13 +314,31 @@ export const EXPECTED_TOOLS = [
   "get_member_availability",
   "get_participation",
   "list_proposals",
+  ...WRITE_TOOL_NAMES,
 ];
+
+/** What `ping` and every read tool declare (spec I14). */
+export const READ_ONLY_ANNOTATIONS = Object.freeze({ readOnlyHint: true, openWorldHint: false });
+
+/** What every write tool declares (spec I14: every write is destructive). */
+export const WRITE_ANNOTATIONS = Object.freeze({
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: false,
+  openWorldHint: false,
+});
+
+/** The annotations `name` must declare: a write's, or a read's. Pure. */
+export function expectedAnnotations(name) {
+  return WRITE_TOOL_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
+}
 
 /**
  * Checks a `tools/list` result against `EXPECTED_TOOLS`: the exact names, in
- * order, each declared `readOnlyHint: true, openWorldHint: false` — the same
- * assertion `mcpRoute.test.ts`'s own tools/list test makes. Pure — takes the
- * already-parsed `tools` array, never the network response.
+ * order, each declaring exactly its own annotations (`expectedAnnotations`) —
+ * the same assertion `mcpRoute.test.ts`'s own tools/list test makes. On dev
+ * this is the ONLY proof the four writes get: listed, `destructiveHint: true`.
+ * Pure — takes the already-parsed `tools` array, never the network response.
  */
 export function checkToolList(tools) {
   const names = Array.isArray(tools) ? tools.map((t) => (t && typeof t.name === "string" ? t.name : null)) : [];
@@ -321,12 +346,11 @@ export function checkToolList(tools) {
     return { ok: false, message: `expected tools ${JSON.stringify(EXPECTED_TOOLS)}, got ${JSON.stringify(names)}` };
   }
   for (const tool of tools) {
-    const a = tool && tool.annotations;
-    if (!a || a.readOnlyHint !== true || a.openWorldHint !== false) {
-      return {
-        ok: false,
-        message: `${tool && tool.name} is not annotated { readOnlyHint: true, openWorldHint: false }`,
-      };
+    const expected = expectedAnnotations(tool.name);
+    const actual = tool.annotations && typeof tool.annotations === "object" ? tool.annotations : {};
+    const keys = new Set([...Object.keys(expected), ...Object.keys(actual)]);
+    if ([...keys].some((key) => actual[key] !== expected[key])) {
+      return { ok: false, message: `${tool.name} is not annotated ${JSON.stringify(expected)}` };
     }
   }
   return { ok: true };
