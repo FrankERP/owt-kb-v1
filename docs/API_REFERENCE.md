@@ -231,7 +231,10 @@ production 2026-09-24** (PR #95, `main` `c2ca5f7c`; see `docs/MCP.md`'s
 `get_participation`, `list_proposals`): released to production 2026-09-25** (PR #98, `main`
 `a04edb43`; Frank's phone acceptance is still pending — see `docs/MCP.md`'s
 [P1 release record](MCP.md#release-record-p1-2026-09-25)) — see `docs/MCP.md`'s
-[P1 release checklist](MCP.md#p1-release-checklist-released-2026-09-25). Every route here is excluded from `proxy.ts`
+[P1 release checklist](MCP.md#p1-release-checklist-released-2026-09-25). **P3 status (four write
+tools — `edit_setlist`, `swap_assignment`, `publish_service`, `unpublish_service`): implemented on
+branch `claude/mcp-p3-writes`, not released** — see `docs/MCP.md`'s
+[write tools](MCP.md#write-tools-p3-implemented-on-the-branch-not-released). Every route here is excluded from `proxy.ts`
 except the two marked **gated**. None of the excluded ones reads a session cookie; what enforces
 each is named in its Auth cell — the discovery documents are **public by design**, registration
 is bounded by the **redirect-URI allowlist** and hands out a **signed client id**, the token
@@ -246,7 +249,7 @@ endpoint needs a **signed code plus its PKCE verifier** (or a signed refresh tok
 | `/oauth/authorize` | GET | **gated** — `requireActiveSession` + live `super-admin` | The consent screen. Streams (`app/(client)/loading.tsx`); a foreign host or refused request never redirects the caller anywhere it didn't come from. |
 | `/api/oauth/authorize` | POST, GET | **gated**, same as above, plus same-origin check | The ONLY thing that mints an authorization code (303 to the verified `redirect_uri`). GET is 405 — a code is never minted by a link, prefetch or redirect. |
 | `/api/oauth/token` | POST | public — the signed code plus its PKCE verifier (or a signed refresh token and its live grant), and the signed client id | `authorization_code` and `refresh_token` grants. Public clients only (`token_endpoint_auth_method: "none"`), so client authentication is `invalid_client`: a `client_secret` in the body is a **400**; an `Authorization: Basic` header is a **401** with `WWW-Authenticate: Basic realm="owt-backstage"` (RFC 6749 §5.2). Creates the `mcpOauthGrant` and rotates its refresh `jti` on every use; a reused refresh token revokes the whole grant. |
-| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live super-admin lookup — gate every request before it reaches the MCP server; see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. Eight tools, all released to production: `ping` (P0, 2026-09-24) plus seven read tools (P1, 2026-09-25 — see [`docs/MCP.md`](MCP.md#tools)). Every tool declares `readOnlyHint: true, openWorldHint: false` and a strict input schema. |
+| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live super-admin lookup — gate every request before it reaches the MCP server; see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. Released to production: eight tools, `ping` (P0, 2026-09-24) plus seven read tools (P1, 2026-09-25 — see [`docs/MCP.md`](MCP.md#tools)), each declaring `readOnlyHint: true, openWorldHint: false`. On the P3 branch, not released: four write tools after them (twelve in all), each declaring `readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false` and calling the admin route's own `*Commit` module (ADR-0043). Every tool has a strict input schema, which the SDK validates before the tool runs. Every SSE response is read to its end before the route returns, so a tool's revalidation and `after()` work finish inside the handler. |
 
 ---
 
@@ -332,6 +335,17 @@ protection (spec 2026-09-20 decision D2).
 - **`GET /api/admin/songs`** — `?q=` prefix search on song title, ≤25 results.
 
 ### Setlists & services (roles)
+
+**Four of these routes are authorization plus one call.** `PUT /api/admin/setlists`,
+`POST /api/admin/roles/swap`, `POST /api/admin/roles/publish-ready` and
+`POST /api/admin/roles/unpublish` check the session and parse the JSON, then hand the raw body to
+their domain module — `app/utils/setlistSaveCommit.ts`, `roleSwapCommit.ts`,
+`publishReadyCommit.ts`, `roleUnpublishCommit.ts` — and send back exactly what it returns. The MCP
+write tools call the same modules with the same bodies, after `/api/mcp`'s bearer check, so the
+responses, refusals, notices and revalidations below are theirs too
+([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md);
+`serviceCommitCallers.test.ts` pins every caller).
+
 | Route | Methods | Notes |
 |-------|---------|-------|
 | `/api/admin/setlists` | GET, PUT | GET `?week=&type=sunday\|saturday\|special&roleId=` → additive canonical read: always `{setlistId, songs, recentSongs}` (recentSongs = songId→most-recent past use, 8-week window) **plus** `targetState: none\|single\|duplicate\|draft_conflict\|invalid`. `single` adds `contentState` (`empty\|incomplete\|ready\|invalid`) + `observed {state,id,rev}` (special uses the special-role id/rev); conflict branches add `conflictingIds`/`draftIds`/`canonicalIds`/`reason`+`recordIds` and return `setlistId: null`, `songs: []`. For `type=special` the response also carries `format` (`"worship_night"` or `null`) and `leadRoster` (`{id,name}[]`, the role's own `Lead`), and each `songs[]` row carries `leadIds` (`leads[]._ref`). Request identity (`type`, valid `YYYY-MM-DD` `week`, special `roleId` resolving to one `special_role` on that date) is validated **before** any target read → 400, never `targetState: "none"`. Read failure → 500, never an empty clean result. **PUT** submits the unchanged `observed` state from that GET (see below) → one guarded transaction → `revalidateServiceViews()` + push to setlist subscribers **only when the service is published** (`subject.published !== false`); a draft save is silent, matching the debounced email. Rows may carry `leadIds` (0–2 distinct canonical member ids) — see below. |

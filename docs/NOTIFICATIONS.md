@@ -425,6 +425,43 @@ supersede what Child A §1 named as accepted gaps:
 - A pre-deploy client that deliberately CLEARS the note textarea is ignored,
   which retires a signal that used to fire. Unchanged by slice 1.
 
+## The MCP write tools — the same writers
+
+P3's four MCP write tools (`edit_setlist`, `swap_assignment`, `publish_service`,
+`unpublish_service`) notify exactly as `/admin` does, because they ARE the same writers. They are
+implemented on branch `claude/mcp-p3-writes` and not released. Each admin write route keeps only
+its authorization and calls an `app/utils/*Commit.ts` module, and the tool calls the same module
+with the same body ([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md)). So the same
+helpers queue the same notices from the same pre-commit `before`, under the same debounce, sweeps,
+preferences, `EMAIL_ALLOWLIST` and `EMAIL_REDIRECT_TO`. Nothing else in this document changes for
+an MCP write, and there is no MCP-specific notification path to operate. The per-tool audiences
+are tabled in [MCP.md](MCP.md#notification-audiences-the-write-tools).
+
+**The side-effect helpers return what they queued.** So that a tool can report its audience
+without re-deriving it (P3 step 2), the post-commit helpers in `serviceMutationSideEffects.ts`
+return a descriptor instead of nothing:
+
+| Helper | Returns | Describes |
+|---|---|---|
+| `notifyRoleAssignments` | `RoleAssignmentPushDescriptor` | the assignment push |
+| `notifyRolePublished` | `RolePublishedDescriptor \| null` | the publish push and the consolidated email batch |
+| `queueRoleNotices` | `RoleNoticesDescriptor \| null` | the role outbox notices |
+| `queueSetlistNotice` | `SetlistNoticeDescriptor \| null` | a setlist outbox notice |
+| `queuePublishedSetlistNotices` | `PublishedSetlistNoticesDescriptor \| null` | «Setlist listo» |
+| `notifySetlistSaved` | `SetlistPushDescriptor \| null` | the setlist push audience |
+
+The rules:
+- A descriptor means QUEUED, never delivered: device tokens, preferences, the allowlist and the
+  redirect still apply downstream.
+- Its id lists are copies, so a caller cannot change what the deferred send will read.
+- An empty list means the helper ran and notified nobody. `null` means it failed silently or
+  skipped.
+- The helpers still never throw into the write they follow.
+
+The admin routes ignore the return value. The MCP tools turn it into their `notifications[]`
+report, worded «encolada», never «enviada». **Unpublish queues nothing and runs no sweep**, from
+`/admin` or from the MCP alike (`roleUnpublishCommit.ts`).
+
 ## The liveness alarm
 
 The daily cron reports the oldest `firstQueuedAt` across notices in **either**

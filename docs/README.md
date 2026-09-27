@@ -39,9 +39,11 @@ Also in this repo root:
 - [`../CLAUDE.md`](../CLAUDE.md) / [`../AGENTS.md`](../AGENTS.md) — the terse "don't-break-these" briefing (the same invariants, condensed). **Read one of these before touching code.**
 - [`MOBILE.md`](MOBILE.md) — native iOS/Android setup & handoff runbook.
 - [`MCP.md`](MCP.md) — the MCP connector operator runbook: endpoints, [tools](MCP.md#tools),
-  adding/revoking the Claude connector, the kill switch, the WAF rule, the dev smoke procedure.
-  **P0 (`ping`) released to production 2026-09-24; P1 (seven read tools) released to production
-  2026-09-25 (PR #98, `main` `a04edb43`); Frank's phone acceptance is still pending.**
+  adding/revoking the Claude connector, the kill switch, the WAF rule, the dev smoke procedure,
+  and for the write tools their notification audiences, admin-surface gates and live-proof
+  runbook. **P0 (`ping`) released to production 2026-09-24; P1 (seven read tools) released to
+  production 2026-09-25 (PR #98, `main` `a04edb43`); Frank's phone acceptance is still pending.
+  P3 (four write tools) implemented on branch `claude/mcp-p3-writes`, not released.**
 - [`superpowers/`](superpowers/) — dated design **specs** and **plans** for every shipped feature (the "why" behind each subsystem). Great for archaeology.
 
 ---

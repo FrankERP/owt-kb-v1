@@ -19,8 +19,9 @@ the same write:
 | `unpublish_service` | `POST /api/admin/roles/unpublish` | `app/utils/roleUnpublishCommit.ts` |
 
 The first row lands with this record; `swap_assignment` follows the same template as of task 4,
-`publish_service` as of task 5, and `unpublish_service` as of task 6 — all four domain writers now
-exist, each with exactly one caller. The publish writer's per-service verdict moved one step
+`publish_service` as of task 5, and `unpublish_service` as of task 6. Each domain writer then had
+exactly one caller, its route. Steps 8–11 added the second, its tool, and step 12 registered the
+four tools on `/api/mcp`. The publish writer's per-service verdict moved one step
 further, into the neutral `app/utils/publishVerdict.ts`, which the MCP reads call too (ADR-0040's
 amendment).
 
@@ -128,7 +129,7 @@ two services of the opened month whose admission is `approved`. Two halves cover
   `mirror`, `mirror (behaviour)`, `structural`, `inherited` or `declared narrowing`. The full
   table is § «Admin surface gates» of
   `docs/superpowers/plans/2026-09-25-owt-mcp-p3-writes.md`. Its condensed form (gate →
-  disposition) goes into `docs/MCP.md` when the write tools are documented there.
+  disposition) is `docs/MCP.md` § «Admin-surface gates (I15)».
 
 **The SR-verification gap on `/api/mcp` is stated, not excepted (D15).** `/api/mcp` reaches
 delivery **transitively**: route → `app/mcp/tools/*` → `*Commit` → the side-effect helpers. The
