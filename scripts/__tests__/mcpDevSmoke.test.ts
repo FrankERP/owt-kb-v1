@@ -4,17 +4,22 @@
 // the `--reads` pass added at P1 plan step 8): the dev-smoke client's pure
 // helpers — base-URL validation (including the production refusal), PKCE,
 // authorize-URL building, form encoding, SSE-frame parsing, token redaction,
-// unverified JWT decoding, the tools/list check and the `--reads` pass'
-// arguments/detail/summary helpers. None of this touches the network; the
-// live handshake against dev is Frank's own run (see the task-11a report for
-// the exact commands and their output).
+// unverified JWT decoding, the tools/list check (per-tool annotations since
+// P3 step 12), the `--reads` pass' arguments/detail/summary helpers, and the
+// DV1 guard: the one `tools/call` builder can never name a write tool. None
+// of this touches the network; the live handshake against dev is Frank's own
+// run (see the task-11a report for the exact commands and their output).
 //
 // Several groups cross-check the script's duplicated logic against the real
 // server modules it talks to, so a drift in either fails here instead of
 // silently producing a client that can no longer complete the handshake.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { SignJWT } from "jose";
 import { describe, expect, it } from "vitest";
+import { stripComments } from "../lib/strip-comments.mjs";
 
 import { BYPASS_HEADER as SERVER_BYPASS_HEADER } from "@/e2e/service-readiness/lib/bypass";
 import { LOCAL_ORIGIN, MIN_SECRET_BYTES, PREVIEW_ORIGIN, PRODUCTION_ORIGIN, resourceFor } from "@/app/mcp/oauth/origin";
@@ -26,6 +31,7 @@ import { validateAuthorizeRequest } from "@/app/mcp/oauth/authorizeRequest";
 import {
   BYPASS_HEADER,
   buildAuthorizeUrl,
+  CALLABLE_TOOLS,
   bypassHeaderFor,
   checkPingRegistered,
   checkToolList,
@@ -57,6 +63,7 @@ import {
   SmokeError,
   songIdFromSearchResult,
   summarizeReadChecks,
+  toolCallRequest,
   WRITE_ANNOTATIONS,
   WRITE_TOOL_NAMES,
 } from "../mcp-dev-smoke.mjs";
@@ -484,6 +491,70 @@ describe("checkPingRegistered", () => {
   it("refuses a ping missing openWorldHint: false or declared writable", () => {
     expect(checkPingRegistered([{ name: "ping", annotations: { readOnlyHint: true } }]).ok).toBe(false);
     expect(checkPingRegistered([{ name: "ping", annotations: { readOnlyHint: false, openWorldHint: false } }]).ok).toBe(false);
+  });
+});
+
+describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () => {
+  const SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../mcp-dev-smoke.mjs");
+  const code = stripComments(readFileSync(SCRIPT, "utf8"));
+
+  it("refuses each of the four write tools by name, in any argument shape", () => {
+    expect(WRITE_TOOL_NAMES).toHaveLength(4);
+    for (const name of WRITE_TOOL_NAMES) {
+      expect(() => toolCallRequest(name, {}), name).toThrow(/DV1/);
+      expect(() => toolCallRequest(name, { serviceId: "role-1", rev: "rev-1" }, 9), name).toThrow(/DV1/);
+    }
+  });
+
+  it("refuses any name it was not given leave to call — an allowlist, not a deny-list", () => {
+    for (const name of ["", "probe", "delete_service", "EDIT_SETLIST", "edit_setlist ", undefined, null]) {
+      expect(() => toolCallRequest(name as string, {}), String(name)).toThrow(/refusing/);
+    }
+  });
+
+  it("builds the JSON-RPC envelope for ping and each read tool", () => {
+    expect(CALLABLE_TOOLS).toEqual(["ping", ...READ_TOOL_NAMES]);
+    for (const name of CALLABLE_TOOLS) {
+      expect(toolCallRequest(name, { month: "2026-10" }, 3)).toEqual({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name, arguments: { month: "2026-10" } },
+      });
+    }
+  });
+
+  it("classifies every registered tool: callable or a write, never both, nothing left over", () => {
+    expect(CALLABLE_TOOLS.filter((name) => WRITE_TOOL_NAMES.includes(name))).toEqual([]);
+    expect([...CALLABLE_TOOLS, ...WRITE_TOOL_NAMES].sort()).toEqual([...EXPECTED_TOOLS].sort());
+  });
+
+  it("the --reads pass has no arguments for a write tool either", () => {
+    for (const name of WRITE_TOOL_NAMES) expect(() => readCheckArguments(name, {}), name).toThrow();
+  });
+
+  it("is the ONLY place the script builds a tools/call: one \"tools/call\" literal, inside toolCallRequest", () => {
+    // Comments are stripped first: prose may say `tools/call`, code may not.
+    const literals = [...code.matchAll(/["'`]tools\/call["'`]/g)];
+    expect(literals).toHaveLength(1);
+    const builder = code.slice(code.indexOf("export function toolCallRequest("));
+    const body = builder.slice(0, builder.indexOf("\n}\n"));
+    expect(body).toContain('rpc("tools/call"');
+    // main() routes every call through it: ping twice (steps 7 and 8) and the --reads loop.
+    expect([...code.matchAll(/toolCallRequest\(/g)].length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("names each write tool exactly once in code — in WRITE_TOOL_NAMES — so nothing else can reach one", () => {
+    for (const name of WRITE_TOOL_NAMES) {
+      expect([...code.matchAll(new RegExp(`["'\`]${name}["'\`]`, "g"))], name).toHaveLength(1);
+    }
+    expect(code).toMatch(/export const WRITE_TOOL_NAMES = \["unpublish_service", "publish_service", "swap_assignment", "edit_setlist"\];/);
+  });
+
+  it("control: a second tools/call planted in the script is caught", () => {
+    const planted = `${code}\nconst x = rpc("tools/call", { name: "edit_setlist", arguments: {} });\n`;
+    expect([...planted.matchAll(/["'`]tools\/call["'`]/g)]).toHaveLength(2);
+    expect([...planted.matchAll(/["'`]edit_setlist["'`]/g)]).toHaveLength(2);
   });
 });
 

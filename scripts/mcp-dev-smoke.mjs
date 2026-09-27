@@ -39,8 +39,8 @@
  *       search_songs, get_song (using the first song search_songs found),
  *       get_member_availability, get_participation, list_proposals — with no
  *       arguments or a trivial one, printing one PASS/FAIL line per tool and
- *       a counts-only summary (never a name or any other personal data). No
- *       write tool exists (DV1); this remains a read-only smoke.
+ *       a counts-only summary (never a name or any other personal data). It
+ *       calls no write tool (DV1); this remains a read-only smoke.
  *   node --env-file=.env.local scripts/mcp-dev-smoke.mjs --await-revocation
  *     … same, then pauses for Enter after printing the revoke command — run
  *       `revoke-mcp-grant.mjs --id <id> --apply` in another terminal, press
@@ -58,11 +58,17 @@
  * prefix plus its length.
  *
  * The smoke calls `ping` always, and — only with `--reads` — the seven P1
- * read tools once each (DV1: reads only). It calls no write tool; none exist.
- * The plain smoke's own `tools/list` check (`checkPingRegistered`) requires
- * ONLY `ping`, so it passes against a P0-only deployment (production today)
- * as well as a P1 one; `--reads` requires the full eight (`checkToolList`),
- * since it is about to call the other seven.
+ * read tools once each. It NEVER calls a write tool, in any mode (DV1): dev
+ * writes the production dataset, and its mail redirect covers email only.
+ * That is structural, not a convention: every `tools/call` this script sends
+ * is built by `toolCallRequest`, which refuses any name outside
+ * `CALLABLE_TOOLS` (`ping` and the seven reads), and the smoke's unit test
+ * fails if a second `tools/call` appears anywhere in this file. The plain
+ * smoke's own `tools/list` check (`checkPingRegistered`) requires ONLY
+ * `ping`, so it passes against any deployment from P0 on; `--reads` requires
+ * the full twelve (`checkToolList`), each with its own annotations — which
+ * is the only proof on dev that the four P3 writes are registered: listed,
+ * with `destructiveHint: true`.
  *
  * Every exported function below is pure — no network, no filesystem, no
  * `process`/env access — and is what `scripts/__tests__/mcpDevSmoke.test.ts`
@@ -300,7 +306,8 @@ export function rpc(method, params, id = 1) {
 /**
  * The four P3 write tools, in registration order. This script NEVER calls one
  * (DV1): dev writes the production dataset. They appear here only so the
- * `tools/list` check can prove they are listed and declared destructive.
+ * `tools/list` check can prove they are listed and declared destructive, and
+ * so `toolCallRequest` can refuse them by name.
  */
 export const WRITE_TOOL_NAMES = ["unpublish_service", "publish_service", "swap_assignment", "edit_setlist"];
 
@@ -387,8 +394,8 @@ export function checkPingRegistered(tools) {
 
 /**
  * The seven read tools the `--reads` pass exercises, in this order, always
- * after `ping` and before any refresh/revocation step — never a write tool,
- * because none exist (DV1).
+ * after `ping` and before any refresh/revocation step — never a write tool
+ * (DV1).
  */
 export const READ_TOOL_NAMES = [
   "list_services",
@@ -399,6 +406,30 @@ export const READ_TOOL_NAMES = [
   "get_participation",
   "list_proposals",
 ];
+
+/**
+ * Every tool this script may call, and the only names `toolCallRequest`
+ * accepts: `ping` and the seven reads. A write tool is never here (DV1).
+ */
+export const CALLABLE_TOOLS = Object.freeze(["ping", ...READ_TOOL_NAMES]);
+
+/**
+ * The ONE builder of a `tools/call` request in this script — `main()` sends
+ * no other. It refuses, by throwing, any tool it is not allowed to call: a
+ * write tool by name (DV1: the dev smoke calls no write, in any mode), and any
+ * other name outside `CALLABLE_TOOLS`. An allowlist, so a tool added to the
+ * route tomorrow is refused here until someone decides this smoke may call it.
+ * Pure.
+ */
+export function toolCallRequest(name, args, id = 1) {
+  if (WRITE_TOOL_NAMES.includes(name)) {
+    throw new Error(`refusing to call the write tool "${name}": the dev smoke never calls a write tool (DV1)`);
+  }
+  if (!CALLABLE_TOOLS.includes(name)) {
+    throw new Error(`refusing to call "${name}": the dev smoke calls only ${CALLABLE_TOOLS.join(", ")}`);
+  }
+  return rpc("tools/call", { name, arguments: args }, id);
+}
 
 /** Every read check's fixed arguments except `get_song`'s and `get_service`'s (see `readCheckArguments`). `search_songs` runs a short, one-letter query on purpose — the SUBSTRING path (`libraryIndex.ts`), not the fuzzy one — sure to match something in a real Spanish song catalogue. */
 const FIXED_READ_ARGS = {
@@ -765,12 +796,13 @@ async function main() {
     }
     const listResult = await mcpRpc(tokens.access_token, rpc("tools/list"), LEGACY_PROTOCOL_VERSION);
     const tools = listResult.tools ?? [];
-    // The plain smoke only needs ping (so it passes against a P0-only
-    // deployment); --reads needs the full eight, since it is about to call
-    // the other seven.
+    // The plain smoke only needs ping (so it passes against any deployment
+    // from P0 on); --reads needs the full twelve with their annotations: it is
+    // about to call the seven reads, and the listing is the only proof the four
+    // writes get on dev (DV1: none is ever called).
     const toolsCheck = args.reads ? checkToolList(tools) : checkPingRegistered(tools);
     if (!toolsCheck.ok) throw new Error(toolsCheck.message);
-    const callResult = await mcpRpc(tokens.access_token, rpc("tools/call", { name: "ping", arguments: {} }), LEGACY_PROTOCOL_VERSION);
+    const callResult = await mcpRpc(tokens.access_token, toolCallRequest("ping", {}), LEGACY_PROTOCOL_VERSION);
     const payload = JSON.parse(callResult.content[0].text);
     pass(`ping → ${JSON.stringify(payload)}`);
 
@@ -788,7 +820,7 @@ async function main() {
           const toolArgs = readCheckArguments(name, { songId, serviceId });
           const readResult = await mcpRpc(
             tokens.access_token,
-            rpc("tools/call", { name, arguments: toolArgs }),
+            toolCallRequest(name, toolArgs),
             LEGACY_PROTOCOL_VERSION,
           );
           if (readResult.isError) {
@@ -835,7 +867,7 @@ async function main() {
           ["client_id", clientId],
         ]),
       });
-      const callResult2 = await mcpRpc(refreshed.access_token, rpc("tools/call", { name: "ping", arguments: {} }), LEGACY_PROTOCOL_VERSION);
+      const callResult2 = await mcpRpc(refreshed.access_token, toolCallRequest("ping", {}), LEGACY_PROTOCOL_VERSION);
       const payload2 = JSON.parse(callResult2.content[0].text);
       pass(`new access_token=${redact(refreshed.access_token)}, ping → ${JSON.stringify(payload2)}`);
       tokens = refreshed;
