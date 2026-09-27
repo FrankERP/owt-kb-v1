@@ -111,9 +111,18 @@ would be silently dropped. Two changes close this:
 
 Evidence: `app/api/__tests__/mcpToolCompletion.test.ts` failed without buffering in both the
 legacy case and the modern notification case: nothing had run when `POST` resolved. It passes
-with buffering. The local `next build && next start` spike (ruling P3-R9) must also show the
-`pending revalidates promise finished` log line with buffering and its absence without.
-**That output is still owed and is recorded here when it is run.**
+with buffering.
+
+The real runtime confirms it (the local spike, ruling P3-R9, run 2026-09-26 at `9dc749f2`).
+
+- **Setup.** A temporary route patch, never committed, did three things:
+  - it skipped authentication;
+  - it registered one stand-in tool that waits 200 ms (a macrotask) and then calls `revalidatePath("/spike-probe")`;
+  - it switched `completeResponse` off through an environment variable.
+- **Build and calls.** The patched tree was built with `next build` and served with `next start`, with `NEXT_PRIVATE_DEBUG_CACHE=1`. Each run sent one 2025-06-18 `tools/call`.
+- **With buffering.** The server logged `[spike] revalidatePath called`, then `DefaultCacheHandler: updateTags { tags: [ '_N_T_/spike-probe' ] }`, then `pending revalidates promise finished for: /api/mcp`.
+- **Without buffering.** The server logged `[spike] revalidatePath called` and nothing else. No tag update, no pending-revalidates line, no error.
+- **Both runs answered the client identically:** 200, `text/event-stream`, the tool's `ok`, in about 240 ms. So the dropped revalidation is invisible to the caller and to the logs. Only buffering prevents it.
 
 Cost: a legacy-era client no longer receives early SSE bytes (keep-alive comments, progress
 notifications) before the result. They now arrive together with the result. The ceiling on a
