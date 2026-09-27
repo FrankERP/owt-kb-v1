@@ -46,6 +46,7 @@ import { SERVICE_ERROR_CODES, type ServiceErrorCode } from "@/app/utils/serviceM
 import type { CommitOutcome } from "@/app/utils/commitOutcome";
 import { PUBLISH_SKIP_COPY } from "@/app/components/admin/serviceCardModel";
 import type { PublishSkipReason } from "@/app/components/admin/publishSelection";
+import type { PublishVerdictReason } from "@/app/utils/publishVerdict";
 import { refusalCopy } from "../reads/publishRefusal";
 import { WRITE_UNKNOWN_OUTCOME_MESSAGE } from "./runWriteTool";
 
@@ -227,39 +228,80 @@ function blockerCopy(codes: readonly string[]): string {
 }
 
 /**
+ * Every reason `publishRowText` handles: `publishVerdict`'s own reasons plus
+ * `not_found` (a missing service can appear as a row too, F10). A `Record`, not
+ * a `Set` literal: a `PublishVerdictReason` this object is MISSING a key for
+ * fails `tsc` here, so a new verdict reason cannot silently fall through to the
+ * empty-parts fallback below without a human adding its branch first.
+ */
+type PublishRowReason = PublishVerdictReason | "not_found";
+const HANDLED_PUBLISH_ROW_REASON: Record<PublishRowReason, true> = {
+  not_found: true,
+  hard_integrity_blocker: true,
+  unusable_observation: true,
+  already_published: true,
+  stale_revision: true,
+  not_ready: true,
+  blocker_set_changed: true,
+};
+
+/**
  * The text for one service's publish refusal. Order: «ya está publicado»
  * first (a retry of a publish that landed reads as that, not as a conflict),
- * then the blockers with no retry advice, then a bare stale revision.
+ * then the blockers, then a bare stale revision.
+ *
+ * ALREADY PUBLISHED CHANGES WHAT THE OTHER REASONS MEAN. A live service is not
+ * waiting to be published, so beside `already_published` every other blocker is
+ * reported as INFORMATION ONLY — never with a "cannot publish (yet)" lead-in,
+ * and never with `PUBLISH_OVERRIDE_NOTE` (there is nothing to override: this
+ * service is not blocked from publishing, it already published).
  */
 function publishRowText(row: PublishServiceRefusal): string[] {
-  const reasons = new Set(row.reasons);
+  const reasons = new Set(
+    row.reasons.filter((r): r is PublishRowReason => r in HANDLED_PUBLISH_ROW_REASON),
+  );
   const parts: string[] = [];
+  const alreadyPublished = reasons.has("already_published");
+
   // One wording for a missing service, whether it arrives as a row or as the 404.
   if (reasons.has("not_found")) parts.push(CODE_COPY.not_found);
-  if (reasons.has("already_published")) parts.push(sentence(refusalCopy("already_published")));
+  if (alreadyPublished) parts.push(sentence(refusalCopy("already_published")));
 
   let blocked = false;
   if (reasons.has("hard_integrity_blocker")) {
     const list = blockerCopy(row.hardBlockers ?? []);
-    parts.push(
-      list
-        ? `No se puede publicar por un problema de integridad: ${list}.`
-        : sentence(refusalCopy("hard_integrity_blocker")),
-    );
-    blocked = true;
+    if (alreadyPublished) {
+      parts.push(list ? `Además, hay un problema de integridad: ${list}.` : `Además, ${refusalCopy("hard_integrity_blocker")}.`);
+    } else {
+      parts.push(
+        list
+          ? `No se puede publicar por un problema de integridad: ${list}.`
+          : sentence(refusalCopy("hard_integrity_blocker")),
+      );
+      blocked = true;
+    }
   }
   if (reasons.has("unusable_observation")) {
-    parts.push(sentence(refusalCopy("unusable_observation")));
-    blocked = true;
+    parts.push(
+      alreadyPublished
+        ? `Además, ${refusalCopy("unusable_observation")}.`
+        : sentence(refusalCopy("unusable_observation")),
+    );
+    if (!alreadyPublished) blocked = true;
   }
   if (reasons.has("not_ready")) {
     const list = blockerCopy(row.workflowBlockers ?? []);
-    parts.push(list ? `No se puede publicar todavía: ${list}.` : sentence(refusalCopy("not_ready")));
-    blocked = true;
+    if (alreadyPublished) {
+      parts.push(list ? `Además, sigue con pendientes de flujo: ${list}.` : `Además, ${refusalCopy("not_ready")}.`);
+    } else {
+      parts.push(list ? `No se puede publicar todavía: ${list}.` : sentence(refusalCopy("not_ready")));
+      blocked = true;
+    }
   }
   if (reasons.has("blocker_set_changed")) {
     parts.push("Los bloqueos cambiaron desde que los revisaste; vuelve a leer con get_service.");
   }
+  // Overriding a live service makes no sense: never on an already-published row.
   if (blocked) parts.push(PUBLISH_OVERRIDE_NOTE);
 
   if (reasons.has("stale_revision")) {
@@ -314,7 +356,10 @@ export function refusalFor(outcome: DomainRefusal): CallToolResult {
   if (rows) {
     content.services = rows;
     const parts = rows.length === 1 ? publishRowText(rows[0]) : rows.flatMap(publishRowText);
-    return refusalResult(withNothingWritten(parts), content);
+    // Every row's reasons were unrecognized (a future verdict reason this file
+    // has not yet grown a branch for): never fall through to a bare «No se
+    // escribió nada.» — fall back to the top-level code's own copy.
+    return refusalResult(withNothingWritten(parts.length ? parts : [CODE_COPY[code]]), content);
   }
 
   // 2. The publish commit race: the guard bundle lost to a concurrent edit.

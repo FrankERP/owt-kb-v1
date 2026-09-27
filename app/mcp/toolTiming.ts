@@ -33,12 +33,14 @@ const SAFE_CODE = /^[a-z][a-z0-9_]{0,63}$/;
 /**
  * The outcome and code a returned result reports: `refused` for a tool error
  * the handler returned on purpose (`isError: true`), `ok` otherwise. The code is
- * `structuredContent.code` when the result carries one (the write refusals do),
- * else `-`.
+ * `structuredContent.code` when the result IS a refusal (the write refusals
+ * carry one there); a success result's `structuredContent` is never read for
+ * this, so a tool that happens to name one of its own fields `code` never rides
+ * along in the timing line.
  */
 export function resultOutcome(result: CallToolResult): { outcome: ToolOutcome; code: string } {
   const outcome: ToolOutcome = result.isError ? "refused" : "ok";
-  const content: unknown = result.structuredContent;
+  const content: unknown = result.isError ? result.structuredContent : undefined;
   const raw = content && typeof content === "object" ? (content as Record<string, unknown>).code : undefined;
   const code = typeof raw === "string" && SAFE_CODE.test(raw) ? raw : "-";
   return { outcome, code };

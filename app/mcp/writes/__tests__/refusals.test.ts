@@ -253,6 +253,59 @@ describe("refusalFor — a publish refusal is keyed on its per-service reasons (
     );
     expect(text.startsWith("Ya está publicado.")).toBe(true);
     expect(text).toBe(`Ya está publicado. Además, el servicio cambió desde que lo leíste. ${NOTHING_WRITTEN}`);
+    expect(text).not.toContain(PUBLISH_OVERRIDE_NOTE);
+  });
+
+  it("already_published beside a real blocker: the blocker is informational, never a retry-advice lead-in, and never PUBLISH_OVERRIDE_NOTE", () => {
+    const notReady = textOf(
+      refusalFor(
+        publishRefusalBody("stale_revision", [
+          {
+            id: "role-sun-1115-live",
+            reasons: ["already_published", "not_ready"],
+            hardBlockers: [],
+            workflowBlockers: ["incomplete_setlist"],
+          },
+        ]),
+      ),
+    );
+    expect(notReady.startsWith("Ya está publicado.")).toBe(true);
+    expect(notReady).not.toContain("No se puede publicar todavía");
+    expect(notReady).not.toContain(PUBLISH_OVERRIDE_NOTE);
+    expect(notReady).toContain(PUBLISH_SKIP_COPY.incomplete_setlist);
+
+    const hardBlocker = textOf(
+      refusalFor(
+        refusal("integrity_conflict", {
+          mode: "ready",
+          services: [
+            {
+              id: "role-x",
+              reasons: ["already_published", "hard_integrity_blocker"],
+              hardBlockers: ["setlist_draft_conflict"],
+              workflowBlockers: [],
+            },
+          ],
+        }),
+      ),
+    );
+    expect(hardBlocker.startsWith("Ya está publicado.")).toBe(true);
+    expect(hardBlocker).not.toContain("No se puede publicar por un problema de integridad");
+    expect(hardBlocker).not.toContain(PUBLISH_OVERRIDE_NOTE);
+    expect(hardBlocker).toContain(PUBLISH_SKIP_COPY.setlist_draft_conflict);
+  });
+
+  it("a publish row whose reasons are all unrecognized falls back to the top-level code's copy, never a bare NOTHING_WRITTEN", () => {
+    const result = refusalFor(
+      publishRefusalBody("integrity_conflict", [
+        { id: "role-x", reasons: ["some_future_reason"], hardBlockers: [], workflowBlockers: [] },
+      ]),
+    );
+    const text = textOf(result);
+    expect(text).not.toBe(NOTHING_WRITTEN);
+    expect(text).toBe(
+      `Los datos guardados del servicio no pasan una verificación de integridad; revísalo en /admin o en Studio. ${NOTHING_WRITTEN}`,
+    );
   });
 
   it("stale_revision ALONE in the reasons is the re-read instruction", () => {

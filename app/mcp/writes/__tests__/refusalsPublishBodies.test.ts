@@ -182,6 +182,24 @@ describe("refusalFor over publishReady's real refusal bodies", () => {
     const text = textOf(outcome);
     expect(text.startsWith("Ya está publicado.")).toBe(true);
     expect(text).not.toContain("vuelve a leer");
+    expect(text).not.toContain(PUBLISH_OVERRIDE_NOTE);
+  });
+
+  it("a published service that ALSO has workflow blockers: informational only, never PUBLISH_OVERRIDE_NOTE", async () => {
+    // role-sun-1115-live is live, locked and clean, but has no setlist document
+    // for its week — a real `not_ready` blocker beside a real `already_published`.
+    const outcome = await publishOne("role-sun-1115-live");
+    const reasons = (refusalFor(outcome).structuredContent as { services: { reasons: string[] }[] }).services[0]
+      .reasons;
+    expect(reasons).toEqual(["already_published", "not_ready"]);
+    const text = textOf(outcome);
+    expect(text.startsWith("Ya está publicado.")).toBe(true);
+    // Never the "cannot publish yet" lead-in, and never the override note —
+    // there is nothing to override on a service that already published.
+    expect(text).not.toContain("No se puede publicar todavía");
+    expect(text).not.toContain(PUBLISH_OVERRIDE_NOTE);
+    expect(text).not.toContain("vuelve a leer");
+    expect(text).toContain(PUBLISH_SKIP_COPY.incomplete_setlist);
   });
 
   it("a hard integrity blocker reads as the integrity blockers, top-level integrity_conflict", async () => {

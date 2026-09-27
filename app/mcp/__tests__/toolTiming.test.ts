@@ -46,6 +46,20 @@ describe("resultOutcome", () => {
     ).toEqual({ outcome: "refused", code: "-" });
     expect(resultOutcome({ content: [], structuredContent: { code: 42 } })).toEqual({ outcome: "ok", code: "-" });
   });
+
+  it("never reads structuredContent.code on a SUCCESS, even when it looks like a bare token", () => {
+    // A success payload that happens to carry a field named `code` (e.g. a tool
+    // whose own domain returns a `code`) must never ride along in the timing
+    // line: the code is refusal-only vocabulary.
+    expect(resultOutcome({ content: [], structuredContent: { code: "not_found" } })).toEqual({
+      outcome: "ok",
+      code: "-",
+    });
+    expect(resultOutcome({ content: [], structuredContent: { ok: true, code: "stale_revision" } })).toEqual({
+      outcome: "ok",
+      code: "-",
+    });
+  });
 });
 
 describe("logToolTiming", () => {
