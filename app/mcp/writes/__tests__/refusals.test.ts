@@ -357,6 +357,20 @@ describe("refusalFor — a publish refusal is keyed on its per-service reasons (
     );
   });
 
+  it("blocker_set_changed ALONE is the exact re-read instruction, with no override note", () => {
+    const text = textOf(
+      refusalFor(
+        publishRefusalBody("stale_revision", [
+          { id: "role-sat-1003", reasons: ["blocker_set_changed"], hardBlockers: [], workflowBlockers: [] },
+        ]),
+      ),
+    );
+    expect(text).toBe(
+      `Los bloqueos cambiaron desde que los revisaste; vuelve a leer con get_service. ${NOTHING_WRITTEN}`,
+    );
+    expect(text).not.toContain(PUBLISH_OVERRIDE_NOTE);
+  });
+
   it("stale_revision ALONE in the reasons is the re-read instruction", () => {
     const text = textOf(
       refusalFor(

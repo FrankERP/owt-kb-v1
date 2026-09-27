@@ -59,6 +59,7 @@ import {
   type TwinStore,
 } from "../../writes/__tests__/twinRun";
 import { NOTHING_WRITTEN, PUBLISH_OVERRIDE_NOTE, STALE_COPY } from "../../writes/refusals";
+import { PUBLISH_SKIP_COPY } from "@/app/components/admin/serviceCardModel";
 import { WRITE_UNKNOWN_OUTCOME_MESSAGE } from "../../writes/runWriteTool";
 import { assembleService } from "@/app/utils/publishReadyBundle";
 import { loadServiceSnapshot } from "../../reads/serviceSnapshot";
@@ -275,6 +276,37 @@ const EMPTY_TEAM: TwinDoc = role({
   songs: [songRow("r1", "song-v", "E")],
 });
 
+// A duplicate target — two canonical Sundays sharing one week — with a full
+// team, a real setlist and one owned lock: `hard_integrity_blocker`
+// (`role_target_duplicate`) ALONE, since the observation stays usable
+// (`target.lock` and the setlist apply to both roles at the shared target) and
+// the team/setlist are otherwise complete (no `not_ready`). Mirrors the P1
+// matrix's own `role-sun-1122-a`/`-b` pair, minus the missing-setlist gap that
+// gives THAT pair `not_ready` too.
+const HARD_ALONE_A: TwinDoc = role({
+  _id: "role-sun-hardalone-a",
+  _rev: "role-sun-hardalone-a-rev",
+  _type: "sunday_role",
+  week: "2027-06-06",
+  published: false,
+  Lead: [ref("l1", MEM_A)],
+});
+const HARD_ALONE_B: TwinDoc = role({
+  _id: "role-sun-hardalone-b",
+  _rev: "role-sun-hardalone-b-rev",
+  _type: "sunday_role",
+  week: "2027-06-06",
+  published: false,
+  Lead: [ref("l1", MEM_A)],
+});
+const HARD_ALONE_SETLIST: TwinDoc = {
+  _id: "set-sun-hardalone",
+  _rev: "set-sun-hardalone-rev",
+  _type: "featuredSongs",
+  week: "2027-06-06",
+  songs: [songRow("r1", "song-hardalone", "G")],
+};
+
 const MEMBER_A: TwinDoc = {
   _id: MEM_A,
   _rev: `${MEM_A}-rev`,
@@ -298,6 +330,10 @@ function fixture(): TwinDoc[] {
     lockFor(DANGLING),
     DANGLING_SETLIST,
     EMPTY_TEAM,
+    HARD_ALONE_A,
+    HARD_ALONE_B,
+    lockFor(HARD_ALONE_A),
+    HARD_ALONE_SETLIST,
     MEMBER_A,
   ];
 }
@@ -560,6 +596,25 @@ describe("publish_service — refusal replay", () => {
     expect(sc.services[0].reasons).toContain("unusable_observation");
     const text = (tool.response.content as { text: string }[])[0].text;
     expect(text).toContain(PUBLISH_OVERRIDE_NOTE);
+    expect(route.transactions).toEqual([]);
+    expect(tool.transactions).toEqual([]);
+  });
+
+  it("hard_integrity_blocker ALONE: a duplicate target with an otherwise-usable, otherwise-ready observation, rendered copy pinned", async () => {
+    const { route, tool } = await t.twin(
+      OPTIONS,
+      { handler: publishReadyPOST, body: { mode: "ready", roles: [{ id: "role-sun-hardalone-a", rev: "role-sun-hardalone-a-rev" }] } },
+      call("role-sun-hardalone-a", "role-sun-hardalone-a-rev"),
+    );
+    expect(route.response).toMatchObject({ status: 409 });
+    const sc = tool.response.structuredContent as { refused: true; code: string; services: { reasons: string[] }[] };
+    expect(sc.services).toEqual([
+      { id: "role-sun-hardalone-a", reasons: ["hard_integrity_blocker"], hardBlockers: ["role_target_duplicate"], workflowBlockers: [] },
+    ]);
+    const text = (tool.response.content as { text: string }[])[0].text;
+    expect(text).toBe(
+      `No se puede publicar por un problema de integridad: ${PUBLISH_SKIP_COPY.role_target_duplicate}. ${PUBLISH_OVERRIDE_NOTE} ${NOTHING_WRITTEN}`,
+    );
     expect(route.transactions).toEqual([]);
     expect(tool.transactions).toEqual([]);
   });
