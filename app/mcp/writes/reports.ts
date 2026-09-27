@@ -416,7 +416,8 @@ const CHANNEL_LABEL: Record<NotificationChannel, string> = {
   outbox_email: "Correo agrupado",
 };
 
-function memberLabel(member: AudienceMember): string {
+/** A member as a text names them: the name, or the id marked unresolved / missing. */
+export function memberLabel(member: AudienceMember): string {
   if (member.name) return member.name;
   if (member.unresolved) return `${member.memberId} (nombre no resuelto)`;
   return `${member.memberId} (miembro inexistente)`;

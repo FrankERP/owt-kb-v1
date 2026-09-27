@@ -42,7 +42,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
 const EXPECTED_CALLERS: Record<string, string[]> = {
   publishReadyCommit: ["app/api/admin/roles/publish-ready/route.ts", "app/mcp/tools/publishService.ts"],
   publishVerdict: ["app/mcp/reads/publishRefusal.ts", "app/utils/publishReadyCommit.ts"],
-  roleSwapCommit: ["app/api/admin/roles/swap/route.ts"],
+  roleSwapCommit: ["app/api/admin/roles/swap/route.ts", "app/mcp/tools/swapAssignment.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts"],
 };
