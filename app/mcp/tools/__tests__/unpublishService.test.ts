@@ -56,8 +56,10 @@ import {
   BOOTSTRAP_COMPLETED_RELOAD_MESSAGE,
   NOTHING_WRITTEN,
   STALE_COPY,
+  refusalFor,
 } from "../../writes/refusals";
 import { WRITE_UNKNOWN_OUTCOME_MESSAGE } from "../../writes/runWriteTool";
+import { serviceError } from "@/app/utils/serviceMutation";
 import {
   UNPUBLISH_SERVICE_INPUT,
   registerUnpublishService,
@@ -259,6 +261,81 @@ describe("UNPUBLISH_SERVICE_INPUT", () => {
     expect(UNPUBLISH_SERVICE_INPUT.safeParse({ serviceId: "", rev: "role-sun-1004-rev" }).success).toBe(false);
     expect(UNPUBLISH_SERVICE_INPUT.safeParse({ serviceId: "role-sun-1004", rev: "" }).success).toBe(false);
   });
+
+  // Review round 1, IMPORTANT: a schema-VALID (by the old min/max-only rule)
+  // input still reached the domain and rendered an untranslated refusal. The
+  // schema now runs the domain's own predicates.
+  it("rejects a serviceId that is a drafts.* overlay id, with the get_service-pointing message", () => {
+    const result = UNPUBLISH_SERVICE_INPUT.safeParse({ serviceId: "drafts.role-sun-1004", rev: "role-sun-1004-rev" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe(
+        "serviceId no es un id de servicio válido; usa el que devuelve get_service.",
+      );
+    }
+  });
+
+  it("rejects a rev containing whitespace, with the get_service-pointing message", () => {
+    const result = UNPUBLISH_SERVICE_INPUT.safeParse({ serviceId: "role-sun-1004", rev: "a b" });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe("rev no es una revisión válida; usa la que devuelve get_service.");
+    }
+  });
+});
+
+// ── Admission replay: malformed input never reaches the domain ─────────────
+
+describe("unpublish_service — malformed input is refused before the domain call", () => {
+  it("a drafts.* serviceId: zero domain calls, zero transactions", async () => {
+    const run = await t.runTool(OPTIONS, call("drafts.role-sun-1004", "role-sun-1004-rev"));
+    expect(run.response.structuredContent).toEqual({
+      refused: true,
+      code: "invalid_request",
+      detail: "invalid_service_id",
+    });
+    expect((run.response.content as { text: string }[])[0].text).toBe(
+      `serviceId no es un id de servicio válido; usa el que devuelve get_service. ${NOTHING_WRITTEN}`,
+    );
+    expect(run.transactions).toEqual([]);
+    expect(run.reads).toEqual([]);
+  });
+
+  it("a rev with whitespace: zero domain calls, zero transactions", async () => {
+    const run = await t.runTool(OPTIONS, call("role-sun-1004", "role sun 1004 rev"));
+    expect(run.response.structuredContent).toEqual({
+      refused: true,
+      code: "invalid_request",
+      detail: "invalid_revision",
+    });
+    expect((run.response.content as { text: string }[])[0].text).toBe(
+      `rev no es una revisión válida; usa la que devuelve get_service. ${NOTHING_WRITTEN}`,
+    );
+    expect(run.transactions).toEqual([]);
+    expect(run.reads).toEqual([]);
+  });
+});
+
+// ── If a malformed shape ever DID reach the domain, the translation holds ──
+
+describe("unpublish_service — the domain's own invalid_request tokens never render a raw token", () => {
+  // `parseUnpublishRequest` (`publishReadyBundle.ts`) emits exactly these for a
+  // malformed `roles[].id`/`roles[].rev` — what the tool's own admission check
+  // above now intercepts first, but the translation must hold on its own too
+  // (`issueCopyCoverage.test.ts` drives the real parser to the same tokens).
+  it('issues: ["role_id"] renders Spanish, never the bare token', () => {
+    const outcome = { ok: false as const, ...serviceError("invalid_request", { details: { issues: ["role_id"] } }) };
+    const text = (refusalFor(outcome).content as { text: string }[])[0].text;
+    expect(text).not.toContain("Detalle técnico");
+    expect(text).toContain("El id de un servicio en la solicitud no es válido.");
+  });
+
+  it('issues: ["role_rev"] renders Spanish, never the bare token', () => {
+    const outcome = { ok: false as const, ...serviceError("invalid_request", { details: { issues: ["role_rev"] } }) };
+    const text = (refusalFor(outcome).content as { text: string }[])[0].text;
+    expect(text).not.toContain("Detalle técnico");
+    expect(text).toContain("La revisión de un servicio en la solicitud no es válida.");
+  });
 });
 
 // ── Twin runs: route and tool over one fixture ──────────────────────────────
@@ -448,7 +525,7 @@ describe("unpublish_service — refusal replay", () => {
       });
       expect(typeof lockDoc.claimNonce).toBe("string");
       expect((lockDoc.claimNonce as string).length).toBeGreaterThan(0);
-      // No published:false patch anywhere — the business write never ran.
+      // No published:false patch anywhere — the business write never landed.
       expect(roleIn(run.store, "role-sun-2206").published).toBe(true);
     }
   });

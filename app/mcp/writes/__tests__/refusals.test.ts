@@ -163,9 +163,58 @@ describe("refusalFor — details.issues", () => {
     expect(text).toContain("Noche de alabanza");
   });
 
+  // The four write parsers' own vocabulary — a schema-valid but domain-invalid
+  // request (or a future write tool with a looser schema) reaches these.
+  // `issueCopyCoverage.test.ts` drives the REAL parsers to prove this list is
+  // complete; these pin the exact copy for a representative sample.
+  it.each([
+    ["payload", "no tiene el formato esperado"],
+    ["mode", "El modo de la solicitud no es válido."],
+    ["role_id", "El id de un servicio"],
+    ["duplicate_role_id", "repite el mismo servicio"],
+    ["role_rev", "La revisión de un servicio"],
+    ["batch_size", "demasiados servicios"],
+    ["kind", "El tipo de intercambio"],
+    ["path", "La posición del asiento en la solicitud"],
+    ["type", "El tipo de servicio"],
+    ["roleId", "El id del servicio en la solicitud"],
+    ["observed", "no tiene un formato válido"],
+    ["observed.state", "El estado observado"],
+    ["observed.id", "El id observado"],
+    ["observed.rev", "La revisión observada"],
+    ["songs", "La lista de canciones"],
+  ])("%s (a write parser's own token)", (issue, expected) => {
+    const result = refusalFor(refusal("invalid_request", { issues: [issue] }));
+    const text = textOf(result);
+    expect(text).toContain(expected);
+    expect(text).not.toContain("Detalle técnico");
+  });
+
+  it.each([
+    ["songs[0].songId", "El id de la canción 1"],
+    ["songs[3].play_key", "El tono de la canción 4"],
+    ["songs[1].medley_tag", "La etiqueta de medley de la canción 2"],
+    ["songs[0]", "La canción en la posición 1"],
+    ["roles[0].id", "El id del servicio en la posición 1"],
+    ["roles[1].rev", "La revisión del servicio en la posición 2"],
+    ["roles[1]", "El servicio en la posición 2"],
+    ["source.roleId", "El id del servicio de origen"],
+    ["target.rev", "La revisión observada del servicio de destino"],
+    ["source.path", "La posición del asiento de origen"],
+    ["target.itemKey", "La clave del asiento de destino"],
+    ["source", "El asiento de origen"],
+    ["target", "El asiento de destino"],
+  ])("%s (a parameterized parser token)", (issue, expected) => {
+    const text = textOf(refusalFor(refusal("invalid_request", { issues: [issue] })));
+    expect(text).toContain(expected);
+    expect(text).not.toContain("Detalle técnico");
+  });
+
   it("an issue with no copy is listed as a technical detail, never dropped", () => {
-    const text = textOf(refusalFor(refusal("invalid_request", { issues: ["songs[0].medley_tag", "observed.rev"] })));
-    expect(text).toContain("Detalle técnico: songs[0].medley_tag, observed.rev.");
+    // Genuinely unmapped tokens: not in ISSUE_COPY and matching none of the
+    // parameterized families in issueSentences (songs[N]/roles[N]/source|target).
+    const text = textOf(refusalFor(refusal("invalid_request", { issues: ["widget_count", "flux_capacitor"] })));
+    expect(text).toContain("Detalle técnico: widget_count, flux_capacitor.");
     expect(text.endsWith(NOTHING_WRITTEN)).toBe(true);
   });
 });

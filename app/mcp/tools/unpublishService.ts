@@ -7,11 +7,25 @@
 // not use publish readiness and accepts no blocker acknowledgements. A
 // published service may be hidden even when its team, availability, setlist or
 // proposal is unsafe, incomplete, conflicted or invalid — that is precisely
-// when hiding it matters. So this tool makes NO admission read of its own
-// before calling the domain: the strict input schema is the only gate, and
-// `serviceId`/`rev` (from `get_service` or `list_services`) become the
-// counterpart's own request body, unchanged. `mode: "recover"` is never sent —
-// this tool always performs the write, never a read-only outcome check.
+// when hiding it matters. So this tool makes NO admission READ of its own
+// before calling the domain, and `serviceId`/`rev` (from `get_service` or
+// `list_services`) become the counterpart's own request body, unchanged.
+// `mode: "recover"` is never sent — this tool always performs the write,
+// never a read-only outcome check.
+//
+// SHAPE, twice (review round 1, IMPORTANT). `isCanonicalDocumentId`/
+// `isRevisionString` are the exact predicates `unpublishRoles`'s own parser
+// checks `serviceId`/`rev` against (bounded, no whitespace, never `drafts.*`).
+// Both the exported zod schema AND `unpublishServiceResult` itself check them:
+// the schema so the SDK's own validation refuses a `drafts.*` id or a
+// whitespace-containing rev before this function is even called in
+// production, and the function's own `pre`-phase check so calling it directly
+// — every test in this repo does, and any future caller might — still refuses
+// cleanly, in Spanish, with ZERO domain calls, rather than reaching
+// `unpublishRoles`'s parser and rendering its `invalid_request` /
+// `issues: ["role_id" | "role_rev"]` (which needs its own translation in
+// `refusals.ts`'s `ISSUE_COPY` regardless, since a request can still reach the
+// domain with a shape only the domain's OWN, slightly different rules reject).
 //
 // NO NOTIFICATIONS (F1): hiding a service notifies nobody, by design (A2 §7,
 // `roleUnpublishCommit.ts`'s header) — there is no `after()` block to describe,
@@ -29,14 +43,18 @@
 
 import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
+import { isCanonicalDocumentId, isRevisionString } from "@/app/utils/roleWriteRequest";
 import { unpublishRoles } from "@/app/utils/roleUnpublishCommit";
-import { refusalFor } from "../writes/refusals";
+import { admissionRefusal, refusalFor } from "../writes/refusals";
 import { runWriteTool } from "../writes/runWriteTool";
+
+const SERVICE_ID_MESSAGE = "serviceId no es un id de servicio válido; usa el que devuelve get_service.";
+const REV_MESSAGE = "rev no es una revisión válida; usa la que devuelve get_service.";
 
 export const UNPUBLISH_SERVICE_INPUT = z
   .object({
-    serviceId: z.string().min(1).max(200),
-    rev: z.string().min(1).max(200),
+    serviceId: z.string().refine(isCanonicalDocumentId, { message: SERVICE_ID_MESSAGE }),
+    rev: z.string().refine(isRevisionString, { message: REV_MESSAGE }),
   })
   .strict();
 
@@ -56,6 +74,17 @@ export const UNPUBLISH_SERVICE_DESCRIPTION =
 /** The tool's whole behaviour, callable without a server (the route registers it below). */
 export async function unpublishServiceResult(args: UnpublishServiceArgs): Promise<CallToolResult> {
   return runWriteTool("unpublish_service", async ({ callDomain }) => {
+    // The schema already checks this (the SDK refuses malformed input before
+    // this function runs at all), but this function is also called directly —
+    // every test in this file's own suite does — so it re-checks itself: zero
+    // domain calls for a shape the domain would refuse anyway.
+    if (!isCanonicalDocumentId(args.serviceId)) {
+      return admissionRefusal("invalid_request", "invalid_service_id", SERVICE_ID_MESSAGE);
+    }
+    if (!isRevisionString(args.rev)) {
+      return admissionRefusal("invalid_request", "invalid_revision", REV_MESSAGE);
+    }
+
     const outcome = await callDomain(() =>
       unpublishRoles({ roles: [{ id: args.serviceId, rev: args.rev }] }),
     );

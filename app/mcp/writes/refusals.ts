@@ -134,7 +134,21 @@ const DETAIL_COPY: Readonly<Record<string, string>> = {
   lock_wrong_owner: "El dato de coordinación del fin de semana pertenece a otro servicio.",
 };
 
-/** Machine issue codes the writers' parsers and guards emit, in Spanish. */
+/**
+ * Machine issue codes the writers' parsers and guards emit, in Spanish.
+ *
+ * The STATIC tokens below (`payload`, `mode`, `roles`, …) are the request
+ * PARSERS' own vocabulary (`publishReadyBundle.ts`'s `parseUnpublishRequest`/
+ * `parsePublishReadyRequest`, `roleWriteRequest.ts`'s `parseSwapRequest`,
+ * `setlistWriteRequest.ts`'s `parseSetlistWriteRequest`) — every fixed string
+ * their `fail([...])` calls can return. A schema-valid but domain-invalid
+ * request (e.g. a `serviceId` the tool's own schema check missed) reaches one
+ * of these; without an entry it would read as a bare, untranslated token
+ * (`issueCopyCoverage.test.ts` fails if a parser gains one this map has no
+ * entry for). The PARAMETERIZED families just below (`roles[0].id`, a swap's
+ * `source.rev`, a setlist's `songs[2].songId`, …) cannot be exact keys here —
+ * they are translated by regex in `issueSentences`, below.
+ */
 const ISSUE_COPY: Readonly<Record<string, string>> = {
   incompatible_team_topology:
     "No se puede intercambiar el equipo completo entre un sábado y un servicio que no es sábado.",
@@ -145,9 +159,52 @@ const ISSUE_COPY: Readonly<Record<string, string>> = {
   _type: "El documento no es un servicio de alabanza.",
   date: "El servicio no tiene una fecha válida.",
   week: "La fecha del servicio no es válida.",
+  // The publish/unpublish request parsers.
+  payload: "La solicitud no tiene el formato esperado.",
+  mode: "El modo de la solicitud no es válido.",
+  published: "El valor de «published» en la solicitud no es válido.",
+  acknowledged_blockers: "Los bloqueos reconocidos en la solicitud no son válidos.",
+  roles: "La lista de servicios de la solicitud no es válida.",
+  batch_size: "La solicitud incluye demasiados servicios a la vez.",
+  role_id: "El id de un servicio en la solicitud no es válido.",
+  duplicate_role_id: "La solicitud repite el mismo servicio más de una vez.",
+  role_rev: "La revisión de un servicio en la solicitud no es válida.",
+  // The swap request parser.
+  kind: "El tipo de intercambio en la solicitud no es válido.",
+  path: "La posición del asiento en la solicitud no es válida.",
+  // The setlist-save request parser.
+  type: "El tipo de servicio en la solicitud no es válido.",
+  roleId: "El id del servicio en la solicitud no es válido.",
+  observed: "El estado observado en la solicitud no tiene un formato válido.",
+  "observed.state": "El estado observado en la solicitud no es válido.",
+  "observed.id": "El id observado en la solicitud no es válido.",
+  "observed.rev": "La revisión observada en la solicitud no es válida.",
+  songs: "La lista de canciones de la solicitud no es válida.",
 };
 
 const SONG_LEADS_ISSUE = /^songs\[(\d+)\]\.leadIds$/;
+/** A malformed song row itself (not one of its fields). */
+const SONG_ROW_ISSUE = /^songs\[(\d+)\]$/;
+const SONG_FIELD_LABEL: Readonly<Record<string, string>> = {
+  songId: "El id",
+  play_key: "El tono",
+  medley_tag: "La etiqueta de medley",
+};
+const SONG_FIELD_ISSUE = /^songs\[(\d+)\]\.(songId|play_key|medley_tag)$/;
+/** A malformed role selection itself, in a swap's `roles` pair (not one of its fields). */
+const ROLE_SELECTION_ISSUE = /^roles\[(\d+)\]$/;
+const ROLE_SELECTION_FIELD_LABEL: Readonly<Record<string, string>> = { id: "El id", rev: "La revisión" };
+const ROLE_SELECTION_FIELD_ISSUE = /^roles\[(\d+)\]\.(id|rev)$/;
+/** A malformed seat selection itself, in a swap's `source`/`target` (not one of its fields). */
+const SEAT_SIDE_ISSUE = /^(source|target)$/;
+const SEAT_SIDE_LABEL: Readonly<Record<string, string>> = { source: "de origen", target: "de destino" };
+const SEAT_SIDE_FIELD_LABEL: Readonly<Record<string, string>> = {
+  roleId: "El id del servicio",
+  rev: "La revisión observada del servicio",
+  path: "La posición del asiento",
+  itemKey: "La clave del asiento",
+};
+const SEAT_SIDE_FIELD_ISSUE = /^(source|target)\.(roleId|rev|path|itemKey)$/;
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
@@ -184,10 +241,30 @@ function issueSentences(issues: readonly string[]): string[] {
   const untranslated: string[] = [];
   for (const issue of issues) {
     const lead = SONG_LEADS_ISSUE.exec(issue);
+    const songField = SONG_FIELD_ISSUE.exec(issue);
+    const songRow = SONG_ROW_ISSUE.exec(issue);
+    const roleField = ROLE_SELECTION_FIELD_ISSUE.exec(issue);
+    const roleRow = ROLE_SELECTION_ISSUE.exec(issue);
+    const seatField = SEAT_SIDE_FIELD_ISSUE.exec(issue);
+    const seatSide = SEAT_SIDE_ISSUE.exec(issue);
     if (lead) {
       out.push(
         `Los líderes de la canción ${Number(lead[1]) + 1} no son válidos: solo una Noche de alabanza lleva líderes por canción, y cada uno tiene que estar en Lead.`,
       );
+    } else if (songField) {
+      out.push(`${SONG_FIELD_LABEL[songField[2]]} de la canción ${Number(songField[1]) + 1} no tiene un valor válido.`);
+    } else if (songRow) {
+      out.push(`La canción en la posición ${Number(songRow[1]) + 1} no tiene un formato válido.`);
+    } else if (roleField) {
+      out.push(
+        `${ROLE_SELECTION_FIELD_LABEL[roleField[2]]} del servicio en la posición ${Number(roleField[1]) + 1} no tiene un valor válido.`,
+      );
+    } else if (roleRow) {
+      out.push(`El servicio en la posición ${Number(roleRow[1]) + 1} no tiene un formato válido.`);
+    } else if (seatField) {
+      out.push(`${SEAT_SIDE_FIELD_LABEL[seatField[2]]} ${SEAT_SIDE_LABEL[seatField[1]]} no tiene un valor válido.`);
+    } else if (seatSide) {
+      out.push(`El asiento ${SEAT_SIDE_LABEL[seatSide[1]]} no tiene un formato válido.`);
     } else if (ISSUE_COPY[issue]) {
       out.push(ISSUE_COPY[issue]);
     } else {
@@ -228,14 +305,17 @@ function blockerCopy(codes: readonly string[]): string {
 }
 
 /**
- * Every reason `publishRowText` handles: `publishVerdict`'s own reasons plus
- * `not_found` (a missing service can appear as a row too, F10). A `Record`, not
- * a `Set` literal: a `PublishVerdictReason` this object is MISSING a key for
- * fails `tsc` here, so a new verdict reason cannot silently fall through to the
- * empty-parts fallback below without a human adding its branch first.
+ * Every reason `publishRowText` recognizes on the wire at all: `publishVerdict`'s
+ * own reasons plus `not_found` (a missing service can appear as a row too,
+ * F10). Used only to FILTER `row.reasons: string[]` down to known tokens before
+ * anything else runs — an unrecognized wire token contributes nothing (never a
+ * crash, never invented copy). A `Record`, not a `Set` literal: a
+ * `PublishVerdictReason` this object is MISSING a key for fails `tsc` here. That
+ * alone is NOT the exhaustiveness guarantee, though — see `LOOP_REASON_ORDER`
+ * and the `switch` below, which is what actually forces a branch.
  */
 type PublishRowReason = PublishVerdictReason | "not_found";
-const HANDLED_PUBLISH_ROW_REASON: Record<PublishRowReason, true> = {
+const KNOWN_PUBLISH_ROW_REASONS: Record<PublishRowReason, true> = {
   not_found: true,
   hard_integrity_blocker: true,
   unusable_observation: true,
@@ -244,6 +324,36 @@ const HANDLED_PUBLISH_ROW_REASON: Record<PublishRowReason, true> = {
   not_ready: true,
   blocker_set_changed: true,
 };
+
+/**
+ * Every reason `publishRowText`'s loop below switches over, in the order it
+ * emits copy for — every recognized reason EXCEPT `stale_revision`, which the
+ * function always handles last (outside the loop), after the conditional
+ * override note: its own wording depends on whether anything else was already
+ * said, a fact about the whole row rather than a blocker of its own.
+ *
+ * This is ALSO a `Record`, so a new `PublishVerdictReason` member is a missing
+ * key here too — but unlike `KNOWN_PUBLISH_ROW_REASONS` above, that is not
+ * where the guarantee ends: the loop's `switch` ends in
+ * `default: assertNeverPublishRowReason(reason)`, so adding the key here
+ * WITHOUT adding a matching `case` in the switch still fails `tsc`, on that
+ * line. A `Record`'s missing-key check alone only proves a key exists; the
+ * switch is what proves it has real copy.
+ */
+const LOOP_REASON_ORDER: Record<Exclude<PublishRowReason, "stale_revision">, true> = {
+  not_found: true,
+  already_published: true,
+  hard_integrity_blocker: true,
+  unusable_observation: true,
+  not_ready: true,
+  blocker_set_changed: true,
+};
+const ORDERED_LOOP_REASONS = Object.keys(LOOP_REASON_ORDER) as Exclude<PublishRowReason, "stale_revision">[];
+
+/** Unreachable as long as every `LOOP_REASON_ORDER` member has a `case` below. */
+function assertNeverPublishRowReason(reason: never): never {
+  throw new Error(`publishRowText: reason without copy: ${String(reason)}`);
+}
 
 /**
  * The text for one service's publish refusal. Order: «ya está publicado»
@@ -258,48 +368,64 @@ const HANDLED_PUBLISH_ROW_REASON: Record<PublishRowReason, true> = {
  */
 function publishRowText(row: PublishServiceRefusal): string[] {
   const reasons = new Set(
-    row.reasons.filter((r): r is PublishRowReason => r in HANDLED_PUBLISH_ROW_REASON),
+    row.reasons.filter((r): r is PublishRowReason => r in KNOWN_PUBLISH_ROW_REASONS),
   );
   const parts: string[] = [];
   const alreadyPublished = reasons.has("already_published");
-
-  // One wording for a missing service, whether it arrives as a row or as the 404.
-  if (reasons.has("not_found")) parts.push(CODE_COPY.not_found);
-  if (alreadyPublished) parts.push(sentence(refusalCopy("already_published")));
-
   let blocked = false;
-  if (reasons.has("hard_integrity_blocker")) {
-    const list = blockerCopy(row.hardBlockers ?? []);
-    if (alreadyPublished) {
-      parts.push(list ? `Además, hay un problema de integridad: ${list}.` : `Además, ${refusalCopy("hard_integrity_blocker")}.`);
-    } else {
-      parts.push(
-        list
-          ? `No se puede publicar por un problema de integridad: ${list}.`
-          : sentence(refusalCopy("hard_integrity_blocker")),
-      );
-      blocked = true;
+
+  for (const reason of ORDERED_LOOP_REASONS) {
+    if (!reasons.has(reason)) continue;
+    switch (reason) {
+      case "not_found":
+        // One wording for a missing service, whether it arrives as a row or as the 404.
+        parts.push(CODE_COPY.not_found);
+        break;
+      case "already_published":
+        parts.push(sentence(refusalCopy("already_published")));
+        break;
+      case "hard_integrity_blocker": {
+        const list = blockerCopy(row.hardBlockers ?? []);
+        if (alreadyPublished) {
+          parts.push(
+            list
+              ? `Además, hay un problema de integridad: ${list}.`
+              : `Además, ${refusalCopy("hard_integrity_blocker")}.`,
+          );
+        } else {
+          parts.push(
+            list
+              ? `No se puede publicar por un problema de integridad: ${list}.`
+              : sentence(refusalCopy("hard_integrity_blocker")),
+          );
+          blocked = true;
+        }
+        break;
+      }
+      case "unusable_observation":
+        parts.push(
+          alreadyPublished
+            ? `Además, ${refusalCopy("unusable_observation")}.`
+            : sentence(refusalCopy("unusable_observation")),
+        );
+        if (!alreadyPublished) blocked = true;
+        break;
+      case "not_ready": {
+        const list = blockerCopy(row.workflowBlockers ?? []);
+        if (alreadyPublished) {
+          parts.push(list ? `Además, sigue con pendientes de flujo: ${list}.` : `Además, ${refusalCopy("not_ready")}.`);
+        } else {
+          parts.push(list ? `No se puede publicar todavía: ${list}.` : sentence(refusalCopy("not_ready")));
+          blocked = true;
+        }
+        break;
+      }
+      case "blocker_set_changed":
+        parts.push("Los bloqueos cambiaron desde que los revisaste; vuelve a leer con get_service.");
+        break;
+      default:
+        assertNeverPublishRowReason(reason);
     }
-  }
-  if (reasons.has("unusable_observation")) {
-    parts.push(
-      alreadyPublished
-        ? `Además, ${refusalCopy("unusable_observation")}.`
-        : sentence(refusalCopy("unusable_observation")),
-    );
-    if (!alreadyPublished) blocked = true;
-  }
-  if (reasons.has("not_ready")) {
-    const list = blockerCopy(row.workflowBlockers ?? []);
-    if (alreadyPublished) {
-      parts.push(list ? `Además, sigue con pendientes de flujo: ${list}.` : `Además, ${refusalCopy("not_ready")}.`);
-    } else {
-      parts.push(list ? `No se puede publicar todavía: ${list}.` : sentence(refusalCopy("not_ready")));
-      blocked = true;
-    }
-  }
-  if (reasons.has("blocker_set_changed")) {
-    parts.push("Los bloqueos cambiaron desde que los revisaste; vuelve a leer con get_service.");
   }
   // Overriding a live service makes no sense: never on an already-published row.
   if (blocked) parts.push(PUBLISH_OVERRIDE_NOTE);
