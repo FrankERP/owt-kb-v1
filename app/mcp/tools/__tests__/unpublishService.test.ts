@@ -6,9 +6,11 @@
 // The twin harness (`../writes/__tests__/twinRun.ts`) runs the real admin
 // route handler and this tool's own result function over ONE fixture
 // definition, each on its own fresh store, answered by the real canonical
-// query builders. `unpublish_service` makes no admission read of its own — its
-// whole pre-domain step is the strict schema — so the query table is exactly
-// `unpublishRoles`'s own reads.
+// query builders. `unpublish_service` makes no admission READ of its own — its
+// pre-domain step is the strict schema plus the two shape predicates
+// (`isCanonicalDocumentId`/`isRevisionString`) the tool re-checks itself, no
+// read among them — so the query table is exactly `unpublishRoles`'s own
+// reads.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
