@@ -27,8 +27,8 @@ import re
 import sys
 import time
 from collections import defaultdict
-from dataclasses import dataclass
-from typing import Dict, List, Sequence, Set, Tuple
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Sequence, Set, Tuple
 
 from ortools.sat.python import cp_model
 
@@ -80,6 +80,19 @@ VALID_PATTERNS = (
 SUNDAY_SERVICE = "Sunday"
 SATURDAY_SERVICE = "Saturday"
 
+# pin_violations' service token. It matches the `pinned.role` prefixes a reader compares
+# an entry against (`Sun.Lead`, `Sat.BGV`), not unfilled_seats' Sunday/Saturday — so it
+# is MAPPED from the service constants, never interpolated (pinned-assignments spec §4).
+SERVICE_TOKEN = {SUNDAY_SERVICE: "Sun", SATURDAY_SERVICE: "Sat"}
+
+# Longest `pinned` array accepted. Over it the request is REFUSED, never truncated: a
+# dropped pin is a seat the admin asked to keep (spec §6). Rows grow to fit their pins,
+# so this is what bounds what one request can make the solver allocate.
+PINNED_CAP = 100
+
+# (person, role, week) — one seat already decided on the board.
+Pin = Tuple[str, str, int]
+
 # History decay: most-recent entry gets weight 10, then 6, then 3 (oldest).
 HISTORY_DECAY_WEIGHTS = [10, 6, 3]
 
@@ -119,6 +132,9 @@ class ScheduleConfig:
     # once exceeded, return the best schedule found so far instead of grinding.
     solver_total_budget_seconds: int = 40
     discourage_consecutive_role_repeats: bool = True
+    # Seats already on the board that the solver must keep (pinned-assignments spec,
+    # 2026-09-15). The raw request array; validate_config parses and checks it.
+    pinned: List[Dict] | None = None
 
 
 @dataclass(frozen=True)
@@ -177,6 +193,14 @@ class SolveResult:
     # objective at all (Stage A, or the ladder's optimize=False passes). Reported so
     # a fairness-free month is never silent.
     objective_skipped: bool = False
+    # Pinned assignments. The per-pass values are derived from THIS pass's assignment —
+    # never echoed from the request, never read off a violation boolean.
+    pinned_honored: int = 0
+    pin_violations: List[str] = field(default_factory=list)
+    violations_used: int | None = None    # n_viol's value; None when no pins
+    # Set by solve_schedule, not by a pass: did solve 0 prove its minimum? None on a
+    # pinless request, where the response omits the field.
+    violation_ceiling_proven: bool | None = None
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -239,6 +263,94 @@ def resolve_dsl_templates(config: ScheduleConfig) -> ScheduleConfig:
 
 def is_eligible(person: str, role_type: str, pools: Dict[str, Set[str]], forbidden: Dict[str, Set[str]]) -> bool:
     return person in pools[role_type] and role_type not in forbidden[person]
+
+
+def service_of(role_type: str) -> str:
+    return SATURDAY_SERVICE if role_type in SATURDAY_ROLES else SUNDAY_SERVICE
+
+
+def relaxation_enabled(pins: Sequence[Pin]) -> bool:
+    """
+    Whether this request's contradictable constraints go soft (pinned-assignments spec
+    §5.2). Only a pin can contradict a rule, so a pinless request builds today's model
+    exactly. A function rather than an inline bool(pins) so the rules-stay-hard control
+    in test_pinned_assignments can switch it off and watch the pinned cases fail.
+    """
+    return bool(pins)
+
+
+def pin_slack(pins: Sequence[Pin], spread_role: str | None) -> Dict[str, int]:
+    """
+    Per-person slack a pin earns on one HARD spread (pinned-assignments spec §5.1).
+    `None` is the global spread, where every pin counts. Otherwise the person's pins in
+    the SERVICE that `spread_role` belongs to — the service, not the role: one seat per
+    service means a pin in any Sunday role zeroes the person in every other Sunday role
+    that week, so a role-keyed count gave a lead-pool member pinned into Choir no slack
+    on the very spread the pin tightens, and the month fell through to the fairness-free
+    stage_a with a member on zero services (measured on four seeds).
+
+    Slack, not subtraction: `t <= max + n`, `t >= min - n` lets the pins count as service
+    already performed, where `t - n` bounded by max/min would demand a full share on top
+    of them (a member pinned three times took 7 services against a 4-5 baseline).
+    """
+    counts: Dict[str, int] = defaultdict(int)
+    for person, role, _week in pins:
+        if spread_role is None or service_of(role) == service_of(spread_role):
+            counts[person] += 1
+    return dict(counts)
+
+
+def parse_pins(raw, weeks: int, weekends_w_sat: Sequence[int]) -> List[Pin]:
+    """
+    Shape- and range-check the request's `pinned` array (spec §6). Every refusal is a
+    ValueError, because solve_from_dict turns those into `ok: false`; a TypeError or
+    KeyError would escape it and reach the admin as an HTTP 500.
+
+    Exact duplicates collapse (the pin set is a set). Two DIFFERENT pins for one person
+    in one service are refused: the one-seat-per-service limit makes them unsatisfiable
+    together, and two `== 1` constraints against it would fail the month instead.
+    """
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError("pinned must be a list of {week, role, person} objects.")
+    if len(raw) > PINNED_CAP:
+        raise ValueError(
+            f"pinned has {len(raw)} entries; at most {PINNED_CAP} are accepted.")
+    sat_weeks = set(normalize_weekend_indexes(weeks, weekends_w_sat))
+    pins: List[Pin] = []
+    seen: Set[Pin] = set()
+    seat_in_service: Dict[Tuple[str, int, str], str] = {}
+    for i, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise ValueError(f"pinned[{i}] must be an object with week, role and person.")
+        week, role, person = entry.get("week"), entry.get("role"), entry.get("person")
+        if isinstance(week, bool) or not isinstance(week, int):
+            raise ValueError(f"pinned[{i}].week must be an integer, got {week!r}.")
+        if not isinstance(role, str) or role not in ALL_ROLE_TYPES:
+            raise ValueError(
+                f"pinned[{i}] names an unknown role {role!r}; roles are {ROLE_ORDER}.")
+        if not isinstance(person, str) or not person.strip():
+            raise ValueError(f"pinned[{i}].person must be a non-empty name, got {person!r}.")
+        if not 1 <= week <= weeks:
+            raise ValueError(
+                f"pinned[{i}] references week {week}, but the month has {weeks} weeks.")
+        if role in SATURDAY_ROLES and week not in sat_weeks:
+            raise ValueError(
+                f"pinned[{i}] pins {role} in week {week}, which has no Saturday service.")
+        key = (person, role, week)
+        if key in seen:
+            continue
+        service = service_of(role)
+        other = seat_in_service.get((person, week, service))
+        if other is not None:
+            raise ValueError(
+                f"pinned seats {person} twice in week {week}'s {service} service "
+                f"({other} and {role}); one person holds one seat per service.")
+        seat_in_service[(person, week, service)] = role
+        seen.add(key)
+        pins.append(key)
+    return pins
 
 
 # ─── DSL parsing ──────────────────────────────────────────────────────────────
@@ -464,7 +576,9 @@ def parse_dsl_rules(
 
 # ─── Validation ───────────────────────────────────────────────────────────────
 
-def validate_config(config: ScheduleConfig) -> Tuple[List[str], Dict[str, Set[str]]]:
+def validate_config(
+    config: ScheduleConfig,
+) -> Tuple[List[str], Dict[str, Set[str]], List[Pin], Set[str]]:
     if not 3 <= config.weeks <= 6:
         raise ValueError(f"weeks must be 3–6. Got {config.weeks}.")
 
@@ -482,9 +596,37 @@ def validate_config(config: ScheduleConfig) -> Tuple[List[str], Dict[str, Set[st
         "Sun.Choir": set(all_people),
     }
 
+    # Pins join all_people only AFTER pools exist: three of the five pools are
+    # set(all_people), so an earlier union would make a pinned person a BGV and Choir
+    # candidate in every service of the month (spec §5.1 — reproduced: one pin became
+    # four services). They join no pool; the pin itself grants candidacy, only where it
+    # points. The exclusivity guard above compares the three lists and is untouched.
+    pins = parse_pins(config.pinned, config.weeks, config.weekends_w_sat)
+    pinned_only = {p for p, _, _ in pins} - set(all_people)
+    if pinned_only:
+        # A pinned-only name that differs from another name only in capitalisation or
+        # surrounding spaces is a misspelling, not a new person: it would sit beside the
+        # real one — " Hugo" took a second seat in Hugo's service — and parse_dsl_rules'
+        # case-insensitive lookup would attach that person's rules to either spelling
+        # depending on set iteration order, which varies between processes. Refused,
+        # never silently mapped. Only a PINNED-ONLY spelling is refused: a pin on a pool
+        # member's exact name is always accepted, trailing space and all (Studio does
+        # not trim member_name), and a pool that already holds variants is untouched.
+        spellings: Dict[str, List[str]] = defaultdict(list)
+        for name in sorted(set(all_people) | pinned_only):
+            spellings[name.strip().lower()].append(name)
+        for names in spellings.values():
+            if len(names) > 1 and any(n in pinned_only for n in names):
+                raise ValueError(
+                    f"pinned names {names} differ only in capitalisation or spacing; "
+                    "pins must use the member's exact name.")
+        all_people = sorted(set(all_people) | pinned_only)
+
+    # After the union, so a DSL clause may name a pinned-only person and both
+    # parse_dsl_rules call sites see the same set.
     known = set(all_people)
     parse_dsl_rules(config.dsl_restrictions, known)
-    return all_people, pools
+    return all_people, pools, pins, pinned_only
 
 
 # ─── History with weighted decay ──────────────────────────────────────────────
@@ -563,19 +705,39 @@ def compute_absence_slack(
 
 # ─── Slot building ────────────────────────────────────────────────────────────
 
-def build_slots(config: ScheduleConfig) -> List[Slot]:
+def build_slots(config: ScheduleConfig, pins: Sequence[Pin] = ()) -> List[Slot]:
+    """
+    Every seat of the month. A row holds max(default, pins in that row): pin three leads
+    where there are two seats and the row grows to three, so over-pinning is never an
+    infeasibility; it never shrinks (pinned-assignments spec §5.1).
+
+    Sun.BGV and Sun.Choir are emitted INTERLEAVED, in one loop to the larger count, each
+    row appending only while its own count allows. The pinless inertness fingerprint
+    depends on it: slot order is x's insertion order, which the seeded tie-break reads,
+    so rewriting this per role would change the board of every un-pinned month.
+    """
+    per_row: Dict[Tuple[str, int], int] = defaultdict(int)
+    for _person, role, week in pins:
+        per_row[(role, week)] += 1
+
+    def seats(role: str, week: int, default: int) -> int:
+        return max(default, per_row.get((role, week), 0))
+
     slots: List[Slot] = []
     sat_weeks = set(normalize_weekend_indexes(config.weeks, config.weekends_w_sat))
     for week in range(1, config.weeks + 1):
-        for i in range(1, 3):
+        for i in range(1, seats("Sun.Lead", week, 2) + 1):
             slots.append(Slot(week, SUNDAY_SERVICE, "Sun.Lead", i))
-        for i in range(1, 4):
-            slots.append(Slot(week, SUNDAY_SERVICE, "Sun.BGV", i))
-            slots.append(Slot(week, SUNDAY_SERVICE, "Sun.Choir", i))
+        n_bgv, n_choir = seats("Sun.BGV", week, 3), seats("Sun.Choir", week, 3)
+        for i in range(1, max(n_bgv, n_choir) + 1):
+            if i <= n_bgv:
+                slots.append(Slot(week, SUNDAY_SERVICE, "Sun.BGV", i))
+            if i <= n_choir:
+                slots.append(Slot(week, SUNDAY_SERVICE, "Sun.Choir", i))
         if week in sat_weeks:
-            for i in range(1, 3):
+            for i in range(1, seats("Sat.Lead", week, 2) + 1):
                 slots.append(Slot(week, SATURDAY_SERVICE, "Sat.Lead", i))
-            for i in range(1, 4):
+            for i in range(1, seats("Sat.BGV", week, 3) + 1):
                 slots.append(Slot(week, SATURDAY_SERVICE, "Sat.BGV", i))
     return slots
 
@@ -586,13 +748,25 @@ def build_candidate_map(
     forbidden: Dict[str, Set[str]],
     slots: Sequence[Slot],
     seed: int | None,
+    pins: Sequence[Pin] = (),
 ) -> Dict[str, List[str]]:
     rng = random.Random(seed)
     people = list(all_people)
     rng.shuffle(people)
+    # A pin grants candidacy in its own (role, week) and nowhere else, so a pinned person
+    # in no pool — or whose Tipo was cleared (ADR-0029) — is seated exactly where the
+    # admin seated them. APPENDED after the shuffled eligibles, sorted, and only when not
+    # already eligible: inserting into the shuffle would move other people's draws, and a
+    # second entry for one person would be counted twice by `filled`.
+    granted: Dict[Tuple[str, int], List[str]] = defaultdict(list)
+    for person, role, week in pins:
+        granted[(role, week)].append(person)
     result: Dict[str, List[str]] = {}
     for slot in slots:
         eligible = [p for p in people if is_eligible(p, slot.role_type, pools, forbidden)]
+        for p in sorted(granted.get((slot.role_type, slot.week), ())):
+            if p not in eligible:
+                eligible.append(p)
         # An empty candidate list is allowed: optional seats (BGV/Choir, or the
         # 2nd Lead) simply go unfilled. A mandatory-lead shortfall is caught later
         # by the per-service ">= 1 lead" constraint and reported by the diagnostic.
@@ -702,6 +876,11 @@ def create_model_and_solve(
     empty_target: int | None = None,
     max_time_override: float | None = None,
     pass_info: Dict[str, object] | None = None,
+    pins: Sequence[Pin] = (),
+    soft: bool = False,
+    violation_objective_only: bool = False,
+    violation_target: int | None = None,
+    hint: Dict[str, List[Slot]] | None = None,
 ) -> SolveResult | None:
     """
     Build and solve one pass. Returns None on any status but OPTIMAL/FEASIBLE.
@@ -742,12 +921,57 @@ def create_model_and_solve(
             model.Add(f == 0)
         filled[slot.key] = f
 
+    pin_set = set(pins)
+    if hint is not None:
+        # Start from a month already known to be legal (solve 0's, under pins). Without
+        # it, a board with dozens of pinned people in one row timed Stage A out, and the
+        # month came back ok:false with the mandatory-lead diagnostic — the wrong cause.
+        # A hint steers the search; it constrains nothing.
+        hinted = {(person, s.key) for person, held in hint.items() for s in held}
+        for key, var in x.items():
+            model.AddHint(var, 1 if key in hinted else 0)
+    # A pin is a fixed variable, not a removed seat (pinned-assignments spec §5): every
+    # mechanism below that counts people or iterates slots — totals, role counts, DSL
+    # caps, the Saturday anchor, weekly presence, `filled`, occupancy, the consecutive
+    # penalty, the response view — sees it with no further code.
+    for person, role, week in pins:
+        model.Add(sum(x[(person, s.key)] for s in slots
+                      if s.week == week and s.role_type == role) == 1)
+
+    # Under pins, every constraint a pin could contradict goes SOFT (spec §5.2): one
+    # boolean per constraint INSTANCE — per week, and per service where the rule has one
+    # — that may be 1 only while that instance is broken, and their count is bounded by
+    # the ceiling solve 0 found. `relaxable` pairs each instance with the x-keys it sums
+    # and the predicate that sum must meet: the report is re-evaluated against the
+    # returned assignment, never read off the booleans, which are one-directional and
+    # may sit at 1 on a constraint that holds. Without pins none of this is built.
+    violations: List[cp_model.IntVar] = []
+    relaxable: List[Tuple[str, List[Tuple[str, str]], Callable[[int], bool]]] = []
+
+    def relaxed(entry: str, keys: Sequence[Tuple[str, str]],
+                holds: Callable[[int], bool]) -> cp_model.IntVar:
+        v = model.NewBoolVar(f"viol[{len(violations)}]")
+        violations.append(v)
+        relaxable.append((entry, list(keys), holds))
+        return v
+
     # At least one Lead per service — never zero leads.
     for week in range(1, config.weeks + 1):
         for _service, lead_role in (("Sunday", "Sun.Lead"), ("Saturday", "Sat.Lead")):
             lead_slots = [s for s in slots if s.week == week and s.role_type == lead_role]
             if lead_slots:
-                model.Add(sum(filled[s.key] for s in lead_slots) >= 1)
+                if soft:
+                    # E3 honestly: an admin who pinned every lead-pool member elsewhere
+                    # built a leaderless service; it comes back as a «Sin cubrir» seat
+                    # and this marker instead of failing the whole month.
+                    v = relaxed(
+                        f"builtin:mandatory_lead:W{week}:"
+                        f"{SERVICE_TOKEN[service_of(lead_role)]}",
+                        [(p, s.key) for s in lead_slots for p in candidates[s.key]],
+                        lambda n: n >= 1)
+                    model.Add(sum(filled[s.key] for s in lead_slots) >= 1 - v)
+                else:
+                    model.Add(sum(filled[s.key] for s in lead_slots) >= 1)
 
     # Empty-seat penalties, tiered so degradation goes Choir -> BGV -> 2nd Lead.
     choir_empty = [1 - filled[s.key] for s in slots if s.role_type in CHOIR_ROLES]
@@ -776,27 +1000,40 @@ def create_model_and_solve(
             )
         for slot in slots:
             if slot.week == rule.week and slot.role_type in rule.role_types:
+                # Not applied to a pinned person's own row: the pin overrides their
+                # unavailability there and only there. Every other slot that week stays
+                # excluded, so a Sunday pin does not free them for Saturday (spec §5.2).
+                if (rule.person, slot.role_type, slot.week) in pin_set:
+                    continue
                 if (rule.person, slot.key) in x:
                     model.Add(x[(rule.person, slot.key)] == 0)
 
     # Saturday lead constraint: exactly one dedicated lead (when available)
     for week in sat_weeks:
         sat_lead_slots = [s for s in slots if s.week == week and s.role_type == "Sat.Lead"]
-        dedicated_terms = [
-            x[(p, s.key)]
+        dedicated_keys = [
+            (p, s.key)
             for s in sat_lead_slots
             for p in candidates[s.key]
             if p in dedicated_sat_leads
         ]
+        dedicated_terms = [x[k] for k in dedicated_keys]
+        # A dedicated lead who is unavailable that week but pinned to lead it still
+        # anchors it — the pin overrides the exclusion on that row (spec §5.2).
         available_dedicated = {
             p for p in dedicated_sat_leads
             if not any(r.person == p and r.week == week for r in dsl_week_exclusion_rules)
+            or (p, "Sat.Lead", week) in pin_set
         }
         if dedicated_terms and available_dedicated:
             # At least one dedicated Saturday lead anchors each Saturday (when any
             # is available). Previously "== 1", which made the model infeasible
             # whenever the only remaining lead options were all dedicated.
-            model.Add(sum(dedicated_terms) >= 1)
+            if soft:
+                v = relaxed(f"builtin:sat_anchor:W{week}", dedicated_keys, lambda n: n >= 1)
+                model.Add(sum(dedicated_terms) >= 1 - v)
+            else:
+                model.Add(sum(dedicated_terms) >= 1)
 
     # Pair exclusion: A and B not in same week/service for matching roles
     for rule in dsl_pair_rules:
@@ -805,11 +1042,21 @@ def create_model_and_solve(
             for slot in slots:
                 if slot.week == week and slot.role_type in rule.role_types:
                     by_service[slot.service].append(slot)
-            for svc_slots in by_service.values():
-                lt = [x[(rule.left,  s.key)] for s in svc_slots if (rule.left,  s.key) in x]
-                rt = [x[(rule.right, s.key)] for s in svc_slots if (rule.right, s.key) in x]
+            for service, svc_slots in by_service.items():
+                lt_keys = [(rule.left,  s.key) for s in svc_slots if (rule.left,  s.key) in x]
+                rt_keys = [(rule.right, s.key) for s in svc_slots if (rule.right, s.key) in x]
+                lt = [x[k] for k in lt_keys]
+                rt = [x[k] for k in rt_keys]
                 if lt and rt:
-                    model.Add(sum(lt) + sum(rt) <= 1)
+                    if soft:
+                        # Big-M from this instance's own lists; too small would be a
+                        # silent infeasibility on a pinned month.
+                        n = len(lt) + len(rt) - 1
+                        v = relaxed(f"W{week} {SERVICE_TOKEN[service]}: {rule.source}",
+                                    lt_keys + rt_keys, lambda c: c <= 1)
+                        model.Add(sum(lt) + sum(rt) <= 1 + n * v)
+                    else:
+                        model.Add(sum(lt) + sum(rt) <= 1)
 
     # Weekly presence: at least one from group each week. A person week-excluded
     # for the matching role that week can't satisfy it, so we enforce only over
@@ -821,25 +1068,44 @@ def create_model_and_solve(
     }
     for rule in dsl_weekly_presence_rules:
         for week in range(1, config.weeks + 1):
-            terms = [
-                x[(p, s.key)]
+            keys = [
+                (p, s.key)
                 for p in rule.people
                 for s in slots
                 if s.week == week and s.role_type in rule.role_types
-                and (p, s.key) in x and (p, week, s.role_type) not in excluded_pwr
+                and (p, s.key) in x
+                # A pinned member satisfies the rule even while unavailable — the pin
+                # overrides the exclusion on that row — so they stay in the terms. The
+                # tuple orders differ on purpose: excluded_pwr is (person, week, role),
+                # pin_set is (person, role, week).
+                and ((p, week, s.role_type) not in excluded_pwr
+                     or (p, s.role_type, week) in pin_set)
             ]
+            terms = [x[k] for k in keys]
             if terms:
-                model.Add(sum(terms) >= 1)
+                if soft:
+                    v = relaxed(f"W{week}: {rule.source}", keys, lambda n: n >= 1)
+                    model.Add(sum(terms) >= 1 - v)
+                else:
+                    model.Add(sum(terms) >= 1)
 
     # Consecutive hard constraint (NEW): person not in same role pattern in consecutive weeks
     for rule in dsl_consecutive_rules:
         for week in range(1, config.weeks):
-            w1 = [x[(rule.person, s.key)] for s in slots
+            k1 = [(rule.person, s.key) for s in slots
                   if s.week == week and s.role_type in rule.role_types and (rule.person, s.key) in x]
-            w2 = [x[(rule.person, s.key)] for s in slots
+            k2 = [(rule.person, s.key) for s in slots
                   if s.week == week + 1 and s.role_type in rule.role_types and (rule.person, s.key) in x]
+            w1 = [x[k] for k in k1]
+            w2 = [x[k] for k in k2]
             if w1 and w2:
-                model.Add(sum(w1) + sum(w2) <= 1)
+                if soft:
+                    n = len(w1) + len(w2) - 1   # its own lists, not the pair rule's
+                    v = relaxed(f"W{week}-{week + 1} {rule.person}: {rule.source}",
+                                k1 + k2, lambda c: c <= 1)
+                    model.Add(sum(w1) + sum(w2) <= 1 + n * v)
+                else:
+                    model.Add(sum(w1) + sum(w2) <= 1)
 
     # One slot per service per week per person
     for person in all_people:
@@ -875,12 +1141,14 @@ def create_model_and_solve(
     if len(global_fairness_people) >= 2:
         gmax = model.NewIntVar(0, total_slots, "g_max")
         gmin = model.NewIntVar(0, total_slots, "g_min")
+        g_pins = pin_slack(pins, None)
         for p in global_fairness_people:
-            model.Add(total_vars[p] <= gmax)
-            model.Add(total_vars[p] >= gmin)
+            model.Add(total_vars[p] <= gmax + g_pins.get(p, 0))
+            model.Add(total_vars[p] >= gmin - g_pins.get(p, 0))
         for p, slack in global_fairness_slack.items():
-            model.Add(total_vars[p] <= gmax + slack)
-            model.Add(total_vars[p] >= gmin - slack)
+            # A pin's slack ADDS to their absence / authored slack; it does not replace it.
+            model.Add(total_vars[p] <= gmax + slack + g_pins.get(p, 0))
+            model.Add(total_vars[p] >= gmin - slack - g_pins.get(p, 0))
         model.Add(gmax - gmin <= fairness_limit)
         model.Add(cur_spread == gmax - gmin)
     else:
@@ -940,6 +1208,7 @@ def create_model_and_solve(
     if len(sun_lead_constrained) >= 2 and sun_lead_slots_n > 0:
         sl_max = model.NewIntVar(0, sun_lead_slots_n, "sl_max")
         sl_min = model.NewIntVar(0, sun_lead_slots_n, "sl_min")
+        sl_pins = pin_slack(pins, "Sun.Lead")
         for p in sun_lead_constrained:
             sl_terms = [x[(p, s.key)] for s in slots if s.role_type == "Sun.Lead" and (p, s.key) in x]
             if sl_terms:
@@ -948,7 +1217,7 @@ def create_model_and_solve(
             else:
                 pv = model.NewIntVar(0, 0, f"cur_sl[{p}]")
                 model.Add(pv == 0)
-            rslack = role_fairness_slack.get((p, "Sun.Lead"), 0)
+            rslack = role_fairness_slack.get((p, "Sun.Lead"), 0) + sl_pins.get(p, 0)
             model.Add(pv <= sl_max + rslack)
             model.Add(pv >= sl_min - rslack)
         model.Add(cur_sun_lead_spread == sl_max - sl_min)
@@ -964,8 +1233,9 @@ def create_model_and_solve(
     if len(sun_bgv_constrained) >= 2 and sun_bgv_slots_n > 0:
         sb_max = model.NewIntVar(0, sun_bgv_slots_n, "sb_max")
         sb_min = model.NewIntVar(0, sun_bgv_slots_n, "sb_min")
+        sb_pins = pin_slack(pins, "Sun.BGV")
         for p in sun_bgv_constrained:
-            rslack = role_fairness_slack.get((p, "Sun.BGV"), 0)
+            rslack = role_fairness_slack.get((p, "Sun.BGV"), 0) + sb_pins.get(p, 0)
             model.Add(role_vars[(p, "Sun.BGV")] <= sb_max + rslack)
             model.Add(role_vars[(p, "Sun.BGV")] >= sb_min - rslack)
         model.Add(cur_sun_bgv_spread == sb_max - sb_min)
@@ -979,17 +1249,52 @@ def create_model_and_solve(
         if not terms:
             raise ValueError(f"DSL count rule has no matching roles: '{rule.source}'")
         expr = terms[0] if len(terms) == 1 else sum(terms)
-        if rule.operator == "==":
+        if soft:
+            # One boolean per RULE: role_vars are month totals, so the rule has exactly
+            # one instance — and one for both halves of an `==`, so it reports as one
+            # relaxed rule. `bound` covers `>=`, whose value can exceed the slot count.
+            bound = max(rule.value, total_slots)
+            keys = [(rule.person, s.key) for s in slots
+                    if s.role_type in rule.role_types and (rule.person, s.key) in x]
+            holds = {"==": lambda n, t=rule.value: n == t,
+                     ">=": lambda n, t=rule.value: n >= t,
+                     "<=": lambda n, t=rule.value: n <= t}[rule.operator]
+            v = relaxed(f"{rule.person}: {rule.source}", keys, holds)
+            if rule.operator in ("==", ">="):
+                model.Add(expr >= rule.value - bound * v)
+            if rule.operator in ("==", "<="):
+                model.Add(expr <= rule.value + bound * v)
+        elif rule.operator == "==":
             model.Add(expr == rule.value)
         elif rule.operator == ">=":
             model.Add(expr >= rule.value)
         else:
             model.Add(expr <= rule.value)
 
-    if empty_objective_only:
+    n_viol = None
+    if soft:
+        # ONLY under pins. Built unconditionally it would add a variable and an equality
+        # to the pinless Stage A model and redden the inertness fingerprint (spec §5.2).
+        n_viol = model.NewIntVar(0, len(violations), "n_viol")
+        _eq(model, n_viol, violations)
+        if violation_target is not None:
+            # The ceiling solve 0 found. A constraint, never an objective term: half the
+            # ladder runs optimize=False with no objective at all, and a tier above
+            # Sun.Lead would multiply the weight ladder past int64 (spec §5.2).
+            model.Add(n_viol <= violation_target)
+
+    if violation_objective_only:
+        # Solve 0: the fewest rules the pins force, and nothing else.
+        model.Minimize(n_viol)
+    elif empty_objective_only:
         # Stage A: fill as many seats as possible (availability-limited), in the
-        # Choir -> BGV -> 2nd-Lead degradation order, ignoring fairness.
-        model.Minimize(weighted_empty)
+        # Choir -> BGV -> 2nd-Lead degradation order, ignoring fairness. Under pins,
+        # breaking one fewer rule beats filling any number of seats — belt and braces
+        # inside the box solve 0 already fixed.
+        if soft:
+            model.Minimize((max_weighted_empty + 1) * n_viol + weighted_empty)
+        else:
+            model.Minimize(weighted_empty)
     elif optimize:
         # Soft consecutive discouragement
         consec_penalties: List[cp_model.BoolVar] = []
@@ -1117,6 +1422,16 @@ def create_model_and_solve(
         if solver.Value(var):
             assignments[person].append(slot_by_key[slot_key])
 
+    # Derived from the solved assignment, never echoed from the request: a pin counts
+    # only if the person really holds a slot of that role that week (spec §4).
+    pinned_honored = sum(
+        1 for person, role, week in pins
+        if any(s.role_type == role and s.week == week for s in assignments[person]))
+    pin_violations = [
+        entry for entry, keys, holds in relaxable
+        if not holds(sum(solver.Value(x[k]) for k in keys))
+    ]
+
     total_counts = {p: solver.Value(total_vars[p]) for p in all_people}
     rc = {p: {rt: solver.Value(role_vars[(p, rt)]) for rt in ROLE_ORDER} for p in all_people}
 
@@ -1136,6 +1451,9 @@ def create_model_and_solve(
         weighted_empty_used=int(solver.Value(weighted_empty)),
         objective_skipped=objective_skipped,
         unfilled=unfilled,
+        pinned_honored=pinned_honored,
+        pin_violations=pin_violations,
+        violations_used=int(solver.Value(n_viol)) if n_viol is not None else None,
     )
 
 
@@ -1189,7 +1507,7 @@ def diagnose_infeasibility(
 
 def solve_schedule(config: ScheduleConfig) -> SolveResult:
     config = resolve_dsl_templates(config)
-    all_people, pools = validate_config(config)
+    all_people, pools, pins, pinned_only = validate_config(config)
 
     (forbidden, count_rules, pair_rules, fairness_exempt, fairness_slack,
      weekly_presence, week_exclusions, role_fairness_exempt, role_fairness_slack,
@@ -1202,19 +1520,26 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
     absence_slack = compute_absence_slack(week_exclusions, config.weeks, sat_weeks, all_people)
     combined_slack = {p: fairness_slack.get(p, 0) + absence_slack.get(p, 0) for p in all_people}
 
-    # Global fairness groups
-    strict = [p for p in all_people if p not in fairness_exempt and combined_slack.get(p, 0) == 0]
-    relaxed = {p: combined_slack[p] for p in all_people
+    # Global fairness groups. Pinned-only people are outside every one of them: the
+    # solver cannot choose them anywhere, so letting one set gmin would cap everyone else
+    # (pinned-assignments spec §5.1). That holds in `relaxed` — an absence exclusion
+    # would put them there — and in the collapse rebuild, which would otherwise read them
+    # back in from all_people on exactly the thin months where it fires. The per-role
+    # groups need nothing: they go through is_eligible, which reads the pools.
+    fairness_people = [p for p in all_people if p not in pinned_only]
+    strict = [p for p in fairness_people
+              if p not in fairness_exempt and combined_slack.get(p, 0) == 0]
+    relaxed = {p: combined_slack[p] for p in fairness_people
                if p not in fairness_exempt and combined_slack.get(p, 0) > 0}
     if len(strict) < 2:
-        strict = [p for p in all_people if p not in fairness_exempt]
+        strict = [p for p in fairness_people if p not in fairness_exempt]
         relaxed = {}
     global_people = strict
     global_slack = relaxed
 
     hist_total, hist_role, hist_runs = build_history_offsets(config.history, all_people)
-    slots = build_slots(config)
-    candidates = build_candidate_map(all_people, pools, forbidden, slots, config.seed)
+    slots = build_slots(config, pins)
+    candidates = build_candidate_map(all_people, pools, forbidden, slots, config.seed, pins)
 
     common = dict(
         config=config, all_people=all_people,
@@ -1226,6 +1551,7 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
         role_fairness_exempt=role_fairness_exempt, role_fairness_slack=role_fairness_slack,
         slots=slots, candidates=candidates,
         hist_total=hist_total, hist_role=hist_role, hist_runs=hist_runs,
+        pins=pins, soft=relaxation_enabled(pins),
     )
 
     big = len(slots) + 1  # a fairness limit so loose it never binds
@@ -1238,12 +1564,42 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
     def solve_time() -> float:
         return min(config.solver_max_time_seconds, max(1.0, deadline - time.monotonic()))
 
+    # Solve 0 (pinned-assignments spec §5.2), under pins only: the fewest rules the pins
+    # force, found FIRST and with nothing inherited — no empty_target, loose fairness
+    # limits, no objective but the count. Its value is a hard ceiling on every later
+    # stage, Stage A and the stage_a fall-through included, so no stage can buy fill or
+    # fairness with one more broken rule. It ranks nothing by fairness, which is how
+    # ADR-0010's requirement holds: the NUMBER of rules set aside is never increased for
+    # fairness. (Which instance gives, among sets of the same minimal size, still is.)
+    violation_target: int | None = None
+    ceiling_proven: bool | None = None
+    solve0: SolveResult | None = None
+    if common["soft"]:
+        solve0_info: Dict[str, object] = {}
+        solve0 = create_model_and_solve(
+            **common, fairness_limit=big, sun_lead_limit=big, sun_bgv_limit=big,
+            optimize=False, violation_objective_only=True,
+            max_time_override=solve_time(), pass_info=solve0_info,
+        )
+        # A FEASIBLE solve 0 still sets a ceiling, possibly with slack; only OPTIMAL
+        # proves it minimal. No solution at all — reachable at 1 s on the production
+        # container — leaves Stage A without a ceiling; Stage B still gets one, below.
+        if solve0 is not None:
+            violation_target = solve0.violations_used
+        ceiling_proven = solve0_info.get("status") == cp_model.OPTIMAL
+    common["violation_target"] = violation_target
+
+    def finish(result: SolveResult) -> SolveResult:
+        result.violation_ceiling_proven = ceiling_proven
+        return result
+
     # Stage A: fill as many seats as availability allows (Choir → BGV → 2nd-Lead
     # degradation), ignoring fairness entirely. This decouples seat-filling from
     # fairness so a tight fairness cap can never force a seat empty.
     stage_a = create_model_and_solve(
         **common, fairness_limit=big, sun_lead_limit=big, sun_bgv_limit=big,
         optimize=False, empty_objective_only=True, max_time_override=solve_time(),
+        hint=solve0.assignments if common["soft"] and solve0 is not None else None,
     )
     if stage_a is None:
         # The only true infeasibility: a service can't field its mandatory lead
@@ -1252,6 +1608,17 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
             diagnose_infeasibility(config, slots, week_exclusions, pools, forbidden))
     empty_target = stage_a.weighted_empty_used
 
+    # Stage A's own count is a valid ceiling too: its solution meets both
+    # weighted_empty <= empty_target and n_viol <= its count, so the two bounds never
+    # conflict (a pass can still rule out a fairness tier — that is the ceiling's job).
+    # It matters when solve 0 left no ceiling (or a slack one):
+    # measured, Stage B then broke three or four rules in weeks nobody pinned while
+    # Stage A had needed one — exactly what ADR-0010 forbids. violation_ceiling_proven
+    # still reports solve 0 alone: Stage A's count is minimal only if Stage A proved it.
+    if common["soft"] and stage_a.violations_used is not None and (
+            violation_target is None or stage_a.violations_used < violation_target):
+        common["violation_target"] = stage_a.violations_used
+
     # Stage B: among the max-fill solutions, optimize fairness via the relaxation
     # loop (Sun.Lead → Sun.BGV → global). empty_target keeps the fill maximal.
     for sl_limit in (1, 2):
@@ -1259,7 +1626,7 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
             for g_limit in (1, 2):
                 for opt in (True, False):
                     if deadline - time.monotonic() < 1.0:
-                        return stage_a  # out of budget — return the max-fill solution
+                        return finish(stage_a)  # out of budget — the max-fill solution
                     pass_info: Dict[str, object] = {}
                     result = create_model_and_solve(
                         **common, fairness_limit=g_limit,
@@ -1268,7 +1635,7 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
                         max_time_override=solve_time(), pass_info=pass_info,
                     )
                     if result is not None:
-                        return result
+                        return finish(result)
                     if (opt and pass_info.get("objective_skipped")
                             and pass_info.get("status") == cp_model.INFEASIBLE):
                         # With its objective skipped, this pass admits exactly the
@@ -1282,7 +1649,7 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
 
     # Every fairness tier was infeasible even at max fill — return the max-fill
     # solution rather than failing. (Fairness simply couldn't be tightened.)
-    return stage_a
+    return finish(stage_a)
 
 
 # ─── Schedule view / output ───────────────────────────────────────────────────
@@ -1359,6 +1726,7 @@ def solve_from_dict(data: Dict) -> Dict:
             discourage_consecutive_role_repeats=bool(
                 data.get("discourage_consecutive", True)
             ),
+            pinned=data.get("pinned"),
         )
         result = solve_schedule(config)
     except (ValueError, RuntimeError) as e:
@@ -1367,7 +1735,7 @@ def solve_from_dict(data: Dict) -> Dict:
     sat_weeks = normalize_weekend_indexes(config.weeks, config.weekends_w_sat)
     schedule_view = build_schedule_view(result, config.weeks, sat_weeks)
 
-    return {
+    response = {
         "ok": True,
         "schedule": {str(w): v for w, v in schedule_view.items()},
         "fairness_relaxed": result.fairness_limit_used > 1,
@@ -1383,7 +1751,16 @@ def solve_from_dict(data: Dict) -> Dict:
         "total_counts": result.total_counts,
         "role_counts": result.role_counts,
         "unfilled_seats": result.unfilled or [],
+        # Emitted on EVERY response, 0 without pins: its PRESENCE is how the client and the
+        # deploy check tell this solver from one that silently ignores `pinned` (§4, §9).
+        "pinned_honored": result.pinned_honored,
+        # The rules the pins forced aside, in the spec's §4 grammar. Empty without pins.
+        "pin_violations": list(result.pin_violations),
     }
+    # Absent without pins: solve 0 never ran, so there is nothing to prove.
+    if result.violation_ceiling_proven is not None:
+        response["violation_ceiling_proven"] = result.violation_ceiling_proven
+    return response
 
 
 # ─── JSON interface (CLI / subprocess mode) ───────────────────────────────────

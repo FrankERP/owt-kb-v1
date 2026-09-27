@@ -94,7 +94,7 @@ plan decision D2). **D2 is superseded; D1 is unchanged.**
 - **One predicate.** The per-service verdict is now `publishVerdict`
   (`app/utils/publishVerdict.ts`, neutral). It is called by both the publish writer — `publishReady`
   in `app/utils/publishReadyCommit.ts`, the domain body the publish-ready route delegates to
-  (ADR-0041) — and `publishRefusalFor`, which is now a thin read adapter. The read passes the
+  (ADR-0043) — and `publishRefusalFor`, which is now a thin read adapter. The read passes the
   snapshot's own `roleRev` and `mode: "ready"`, so `stale_revision` and `blocker_set_changed` are
   unreachable there, and a compile-time narrowing turns the result into `PublishRefusalCode`. The
   body is the route's former inline verdict, moved verbatim.

@@ -28,7 +28,10 @@ jobs:
   gates:
     name: gates
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 25, not 15: the pinned-assignments solver suite took the job to ~11.5 minutes on
+    # ubuntu-latest (solver step 6m34s, run 36174302390), too thin a margin for runner
+    # variance. If it crowds this again, split the workflow — never drop the solver step.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 

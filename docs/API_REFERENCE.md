@@ -1,6 +1,6 @@
 # API Reference — `app/api/`
 
-60 route handlers (`route.ts` files). Most talk to Sanity through `serverClient` (read) /
+61 route handlers (`route.ts` files). Most talk to Sanity through `serverClient` (read) /
 `writeClient` (write). Exceptions: `/api/practice-playlist` uses the CDN `client`, and
 `/api/admin/solve` touches no Sanity at all (it calls the external solver / spawns a subprocess).
 
@@ -451,6 +451,23 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   `app/utils/solverConfigWriteRequest.ts` — the same module the seed script uses. **No
   `revalidate*` call applies**: the document backs no ISR surface, it is read only through this
   route inside the dynamic admin tree.
+- **`GET /api/admin/solver-history?month=YYYY-MM[&evidence=1]`** — the server-derived
+  fairness history (MCP P2): three calendar months before `month`, oldest first, from
+  canonical `sunday_role`/`saturday_role` documents — a `special_role` is never counted
+  (ADR-0010 Decision 3; ADR-0042). Gated **exactly like `solver-config`**: no session or a
+  **content-editor** → `403`; a missing or malformed `month` (not `^\d{4}-(0[1-9]|1[0-2])$`)
+  → `400 { error: "invalid_request" }`. **`evidence=1` is super-admin only** — a plain
+  worship admin asking for it gets `403` before the builder runs — because the evidence
+  payload's `members` list names every team member, kids-only members included; without
+  `evidence`, the response names only members seated in the window's weekend roles. `200`
+  carries `Cache-Control: no-store`. Any failure to read (including one that could not
+  complete) is `500 { error: "history_unavailable", message: "No se pudo leer el historial
+  de equidad." }` with **no `entries` key**, so a client can never read a failed read as an
+  empty history. **Dormant as of this writing**: nothing calls this route yet — the planner
+  still reads/writes `owt_solver_history_v2` in `localStorage`
+  (`SOLVER_HISTORY_SOURCE === "local"`) until Frank runs the R11 diff and decides to cut
+  over. See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and
+  [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
 
 ---
 

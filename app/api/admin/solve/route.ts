@@ -22,6 +22,18 @@ export interface SolveRequest {
   solver_max_time_seconds?: number;
   solver_num_search_workers?: number;
   discourage_consecutive?: boolean;
+  /**
+   * Seats already occupied on the board that the solver must treat as settled.
+   * Optional and absent-means-empty, so a request without it behaves exactly as
+   * it does today. One entry per person per role per week; at most 100 (the
+   * solver refuses more rather than dropping any). See
+   * docs/superpowers/specs/2026-09-15-solver-pinned-assignments-design.md §4.
+   */
+  pinned?: Array<{
+    week: number;                 // 1-based, from weekForColumn
+    role: "Sun.Lead" | "Sat.Lead" | "Sun.BGV" | "Sat.BGV" | "Sun.Choir";
+    person: string;               // resolved member_name, as every other name in the request
+  }>;
 }
 
 export interface SolveResponse {
@@ -48,6 +60,26 @@ export interface SolveResponse {
   role_counts?: Record<string, Record<string, number>>;
   /** Seats the solver left unfilled when short-staffed, e.g. "W2 Sunday Sun.Choir #2". */
   unfilled_seats?: string[];
+  /**
+   * How many `pinned` entries the returned schedule actually holds — derived from
+   * the solved assignment, never echoed. A pin-aware solver emits it on EVERY
+   * response (0 without pins), so its PRESENCE is the handshake that tells it from
+   * a solver that silently ignores `pinned`.
+   */
+  pinned_honored?: number;
+  /**
+   * The rules the solver set aside to honour the pins, one entry per relaxed
+   * instance, in the solver spec's §4 grammar: `<person>: <source>`,
+   * `W<n>: <source>`, `W<n> <Sun|Sat>: <source>`, `W<n>-<n+1> <person>: <source>`,
+   * `builtin:mandatory_lead:W<n>:<Sun|Sat>`, `builtin:sat_anchor:W<n>`. Empty
+   * without pins.
+   */
+  pin_violations?: string[];
+  /**
+   * True iff the violation-only solve proved its minimum — the relaxations are
+   * exactly as many as the pins force. Absent when the request had no pins.
+   */
+  violation_ceiling_proven?: boolean;
 }
 
 // ── Production path: call remote solver (GCF or any HTTP endpoint) ────────────

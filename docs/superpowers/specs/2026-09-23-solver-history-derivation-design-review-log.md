@@ -78,6 +78,21 @@ applied after approval (below). None declined.
 11. The H3 narrowing has its own Decisions row, owned by Frank at the diff.
 12. Status line and terminal state record the approval.
 
-**Suggested, not done:** open a GitHub issue for the objective-ceiling follow-on (Frank's
-decision 3), so it is tracked beyond the ADR — creating it publishes to the repository and
-needs Frank's go-ahead.
+**Suggested, done 2026-09-24:** the objective-ceiling follow-on (Frank's decision 3) is now
+tracked as **issue #94** ("Solver: the fairness objective is skipped in most real months, so
+history has no effect"), filed 2026-09-24 and OPEN as of 2026-09-25, with Frank's go-ahead to
+publish it. The ADR (R16) records the same follow-on; see the dated note below.
+
+## 2026-09-25 — R17 known-limitation note (P2 task 7, Delivery 1 docs step)
+
+R17 requires this log and the P2 plan's own review log to record the known limitation: the
+derived history changes the solver's schedule only when the fairness objective is not
+skipped. ADR-0038 shows most real months with history already run unoptimised
+(`objective_skipped: true`) on `main`, before this change — history offsets alone can push
+the ladder's weights past CP-SAT's integer ceiling. Fixing the ceiling is issue #94 (above),
+out of scope for P2 by Frank's decision 3 (2026-09-23). **ADR-0041** (renumbered 0042 at release)
+("The solver's fairness history is derived from stored role documents, not `localStorage`",
+`docs/adr/0041-the-fairness-history-is-derived-from-stored-services.md` — now
+`docs/adr/0042-the-fairness-history-is-derived-from-stored-services.md`) records the same
+limitation as one of its Consequences and amends ADR-0010. This is a documentation note
+only — no spec text is edited by it.

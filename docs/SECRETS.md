@@ -482,9 +482,102 @@ suspect a missing secret.
   characters (`"local"` when the variable is absent), so Frank can tell from the phone which
   deployment answered a `ping` call. Not sensitive — the repository is public.
 
+## `OWT_SOLVER_API_KEY` (Secret Manager: `owt-solver-api-key`)
+
+**Needed in: Vercel Preview AND Production (the SAME value — both environments call the one
+Cloud Function) and GCP Secret Manager `owt-solver-api-key` (project `eloquent-figure-421401`).
+Not needed in:** `.env.local` (with `OWT_SOLVER_URL` unset, local dev spawns
+`gcf/owt_solver_v2.py` directly and no key is involved), GitHub Actions, the iOS build.
+`OWT_SOLVER_URL`, its companion, is ordinary config (Vercel Preview and Production), not a
+secret.
+
+| Platform | Role |
+|---|---|
+| Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header |
+| Secret Manager `owt-solver-api-key` | Cloud Build deploys the function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest` (`cloudbuild.yaml`, and `scripts/deploy-solver-gcf.sh` for a manual deploy) |
+
+**Purpose.** The only barrier on a publicly invokable function (`allUsers` holds
+`run.invoker`). Without it on the function, `gcf/main.py` answers **503** to every call (fails
+closed); with a value that differs from Vercel's, **401** — either way «Generar mes» fails with
+"Solver service returned HTTP …" in both environments.
+
+**Where the value came from.** The Secret Manager entry was created 2026-06-30, when the
+function moved to GitHub continuous deployment, but the value itself was carried over from an
+older plaintext env var (`cloudbuild.yaml` still removes it on every deploy), and how that one was
+generated is not recorded. No external issuer, so any high-entropy string works for a rotation:
+`openssl rand -hex 32`.
+
+**How to rotate** (from a checkout linked to `owt-backstage`, with `gcloud` on the solver
+project; the value is only ever piped — never an argument, never printed, never in `gcloud`'s
+logs). **The outage window opens at step 2, not at a redeploy:** the function reads
+`owt-solver-api-key:latest` when an instance starts and scales to zero, so the first cold start
+after the new version is written already serves the new key while Vercel still sends the old one.
+Run steps 2–4 back to back, and **push nothing to `preview`, `main` or `verify/service-readiness`
+from step 1 until step 4 is done** (and, on a rollback, until its redeploys finish): a Vercel build
+in that gap bakes a key in that the function may not be serving yet.
+
+1. **Vercel first** — a changed env var does nothing until a redeploy, so this opens no window:
+   ```bash
+   SECRET=$(openssl rand -hex 32) && \
+     printf '%s' "$SECRET" | npx vercel env add OWT_SOLVER_API_KEY production,preview \
+       --force --sensitive --non-interactive
+   ```
+   (Vercel CLI 60.1.1 flags; not yet run against this project. Without `--git-branch` a Preview
+   variable applies to every preview branch, which is what this one needs. If the CLI prompts
+   anyway, answer: every Preview branch, Sensitive — nothing is live yet, so stopping here is
+   safe. Keep this shell open: step 2 reuses `$SECRET`.)
+2. **Secret Manager** — this opens the window:
+   ```bash
+   printf '%s' "$SECRET" | CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true \
+     gcloud secrets versions add owt-solver-api-key --data-file=- --format="value(name)" && \
+     unset SECRET
+   ```
+3. **Redeploy the function** so no warm instance keeps the old key (`gcf/main.py` reads it once,
+   at import): re-run the Cloud Build trigger `owt-solver-deploy` on `main` (console → Cloud Build
+   → Triggers → Run), or, **from the fetched tip of `main`** (`git fetch && git switch --detach
+   origin/main` — the script deploys whatever `gcf/` is on disk, to the one function production
+   uses, so a stale or feature checkout would ship old or unreviewed solver code),
+   `GCP_PROJECT=eloquent-figure-421401 bash scripts/deploy-solver-gcf.sh`.
+4. **Redeploy Vercel Production and Preview** (dashboard → Deployments → ⋯ → Redeploy on the
+   current production deployment and on the current `preview` one): env vars bind at build time.
+5. Verify with the smoke request in `docs/SOLVER_AND_INFRA.md` ("Verifying a Cloud Function
+   deploy"), which reads the new value from Secret Manager — then one «Generar mes» on dev.
+
+**Blast radius of rotation.** From step 2 until each Vercel environment's redeploy (step 4)
+completes, any request that reaches a freshly started function instance fails with HTTP 401 —
+«Generar mes» fails in both environments, intermittently at first (warm instances still hold the
+old key) and then always. Nothing is written — Auto only proposes; «Guardar» writes — so the cost
+is minutes of Auto unavailable. **If the rotation stalls between steps 2 and 4, finish it forward** —
+that is almost always the shortest way out. A real rollback must NOT disable the new version:
+`:latest` names the most recently created version even when it is disabled, so the function could
+no longer start. Instead write the previous value back as a NEWER version and restore Vercel to
+match. Find the previous version's number first (the newest `ENABLED` one created before this
+rotation):
+```bash
+gcloud secrets versions list owt-solver-api-key --format="table(name.basename(),state,createTime)"
+```
+Then, with that number in place of `N` (a bare number — typing `<N-1>` literally would be read by
+the shell as a redirect), buffer it once and write both stores. The value goes through a shell
+variable on purpose: the Vercel CLI gives stdin only ~500 ms before treating it as empty, and a
+gcloud call piped straight into it can lose that race and leave Secret Manager rolled back with
+Vercel still new:
+```bash
+PREV=$(CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true gcloud secrets versions access N --secret=owt-solver-api-key) && \
+  [ -n "$PREV" ] && \
+  printf '%s' "$PREV" | CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true \
+    gcloud secrets versions add owt-solver-api-key --data-file=- --format="value(name)" && \
+  printf '%s' "$PREV" | npx vercel env add OWT_SOLVER_API_KEY production,preview \
+    --force --sensitive --non-interactive && \
+  unset PREV
+```
+Then redeploy exactly as steps 3 (function) and 4 (Vercel) — warm instances and any Vercel
+deployment built in between may hold the new key — and verify as in step 5.
+
+---
+
 ## Not yet documented
 
-Other variables in use — `NEXTAUTH_*`, `EMAIL_ALLOWLIST`, FCM push credentials, the solver's Secret Manager key — predate this file. Add each one here as it is next touched or rotated.
+Other variables in use — `NEXTAUTH_*`, `EMAIL_ALLOWLIST`, FCM push credentials — predate this file. Add each one here as it is next touched or rotated.
 
 Notification-outbox tuning knobs (`NOTIFY_DEBOUNCE_MINUTES`, `NOTIFY_MAX_WINDOW_MINUTES`, `NOTIFY_CLAIM_TTL_MINUTES`, `NOTIFY_SEND_BUDGET_MS`, `NOTIFY_FLUSH_EMAIL_LIMIT`, `NOTIFY_STALE_ALERT_HOURS`) are configuration, not secrets, and all have code defaults. They are specified in `docs/superpowers/specs/2026-07-27-service-notification-emails-design.md` §9. Two are currently overridden in Vercel and recorded in this file: `NOTIFY_FLUSH_EMAIL_LIMIT` (above) and `NOTIFY_DEBOUNCE_MINUTES` (below).
 

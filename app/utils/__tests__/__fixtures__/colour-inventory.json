@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 318,
-    "filesScanned": 401,
+    "filesScanned": 409,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
@@ -271,7 +271,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 503,
+      "line": 509,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -283,7 +283,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 515,
+      "line": 521,
       "disposition": "B",
       "reason": null
     },
@@ -295,7 +295,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 635,
+      "line": 641,
       "disposition": "B",
       "reason": null
     },
@@ -307,7 +307,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 646,
+      "line": 652,
       "disposition": "B",
       "reason": null
     },
@@ -319,7 +319,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 766,
+      "line": 772,
       "disposition": "B",
       "reason": null
     },
@@ -331,7 +331,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 874,
+      "line": 880,
       "disposition": "B",
       "reason": null
     },
@@ -343,7 +343,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 942,
+      "line": 948,
       "disposition": "B",
       "reason": null
     },
@@ -355,7 +355,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 951,
+      "line": 957,
       "disposition": "B",
       "reason": null
     },
@@ -367,7 +367,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 959,
+      "line": 965,
       "disposition": "B",
       "reason": null
     },
@@ -379,7 +379,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 968,
+      "line": 974,
       "disposition": "B",
       "reason": null
     },
@@ -2659,7 +2659,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 464,
+      "line": 510,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2671,7 +2671,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 570,
+      "line": 616,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2683,19 +2683,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 1911,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "disabled:hover:bg",
-      "carrier": null,
-      "line": 1151,
+      "line": 2130,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2707,7 +2695,19 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1301,
+      "line": 1197,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "disabled:hover:bg",
+      "carrier": null,
+      "line": 1347,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2719,7 +2719,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2373,
+      "line": 2381,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2731,7 +2731,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3156,
+      "line": 3164,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

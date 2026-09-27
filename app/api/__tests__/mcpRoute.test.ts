@@ -1204,7 +1204,7 @@ describe("/api/mcp — a server failure is a fixed 500 and never echoes (E1)", (
 // delivery-capable name directly and is not wrapped. A delivery-capable import
 // added here fails this test (and the scan), so it has to come with a wrapper
 // decision. The gap itself is stated in docs/MCP.md («Known behaviours») and
-// ADR-0041. Comments are stripped first: prose may name a module, code may not.
+// ADR-0043. Comments are stripped first: prose may name a module, code may not.
 
 const ROUTE_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../mcp/route.ts");
 

@@ -1,14 +1,10 @@
-# ADR-0041: Admin write routes delegate to `*Commit` domain modules, and the MCP calls the same modules
+# ADR-0043: Admin write routes delegate to `*Commit` domain modules, and the MCP calls the same modules
 
 **Date:** 2026-09-26 · **Status:** Accepted
 
-> **The number is provisional.** ADR numbers follow the order in which records reach `main`.
-> Two other branches claim 0041: P2's solver-history delivery and PR #102 (solver pins). P3 is
-> meant to follow them, as 0042 (ruling P3-R13). It is written as 0041 on this branch because
-> `adrIndex.test.ts` requires consecutive numbers and nothing numbered 0041 is on `main` yet
-> (checked 2026-09-26: `origin/main` `a4bfbb19` ends at 0040; PR #102 is open). Whichever of
-> these lands later renumbers in one commit: the file, its title, the index row, and every
-> literal that cites it.
+> **Numbering.** ADR numbers follow the order records reach `main`. This record was written as
+> 0041 on its branch. It became 0043 when `main` merged PR #102 (ADR-0041, solver pins) and MCP P2
+> (ADR-0042) first (rulings P3-R13, P3-R14, P3-R23).
 
 ## Context
 

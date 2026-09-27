@@ -593,7 +593,7 @@ A few things that look like bugs at first glance and are not:
   how the P1 latency figure and P3's live-proof durations are measured. It goes to
   `console.info`; `ping` does not run through `runReadTool`, so it logs nothing.
 - **`/api/mcp` reaches outbound delivery transitively, and is deliberately NOT wrapped in
-  `withVerificationRunContext`** (P3 plan D15; ADR-0041). The SR-verification coverage scan in
+  `withVerificationRunContext`** (P3 plan D15; ADR-0043). The SR-verification coverage scan in
   `srVerificationRunContext.test.ts` marks a route delivery-capable only when the route's OWN
   source names a delivery-capable module, and follows no import. `/api/mcp` names none: its reach
   is route → the tool modules → the `*Commit` domain modules → the side-effect helpers (push,

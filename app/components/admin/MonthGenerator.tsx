@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 import {
   personNameOptions,
@@ -32,6 +32,7 @@ import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
 import Button from "@/app/components/ui/Button";
+import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
@@ -41,6 +42,10 @@ import {
   type SolverConfigController,
   type SolverConfigSource,
 } from "./solverConfigSource";
+import { SOLVER_HISTORY_SOURCE } from "./solverHistorySource";
+import { fetchDerivedHistory, type DerivedHistoryFetchResult } from "./derivedHistoryClient";
+import { useDerivedSolverHistory, type DerivedHistoryHandle } from "./useDerivedSolverHistory";
+import type { SolverHistoryDiagnostics, SolverHistoryMonth } from "@/app/utils/solverHistory";
 import {
   buildColumns,
   buildRows,
@@ -305,6 +310,47 @@ const PAT_LABEL: Record<string, string> = {
 
 const HISTORY_KEY   = "owt_solver_history_v2";
 const MAX_HISTORY   = 6;
+
+/**
+ * R15's dual-write, for DERIVED mode only (`SOLVER_HISTORY_SOURCE`): a confirm
+ * still records its month in `owt_solver_history_v2`, so switching back to
+ * `"local"` finds the browser history exactly where it would have been — that is
+ * what makes the rollback a flip rather than a data recovery.
+ *
+ * **Built from `localStorage`'s OWN contents, never from `solverHistory`.** In
+ * derived mode the in-memory history is never loaded from the browser, and if it
+ * ever held derived entries, writing it back would quietly replace the rollback
+ * target with the derived history. So this reads the key, drops the entry with
+ * the same month key, appends, keeps the last `MAX_HISTORY` — the same rules as
+ * `saveHistoryEntry`, the same entry shape — and never touches React state.
+ *
+ * A value that is not an array is left alone rather than overwritten: the
+ * rollback target is not this function's to destroy. Lives here beside
+ * `HISTORY_KEY` on purpose (plan decision D12), so the per-browser literal the
+ * guard tests look for stays in this one file until the dual-write ends.
+ */
+function appendLocalHistoryEntry(entry: SolverHistoryEntry): void {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    const stored: unknown = raw === null ? [] : JSON.parse(raw);
+    if (!Array.isArray(stored)) return;
+    const key = `${entry.year}-${entry.month}`;
+    const next = [
+      ...(stored as SolverHistoryEntry[]).filter(h => h?.key !== key),
+      { key, year: entry.year, month: entry.month, total_counts: entry.total_counts, role_counts: entry.role_counts },
+    ].slice(-MAX_HISTORY);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  } catch {}
+}
+
+/**
+ * Auto's ceiling on the solve-time history read (derived mode). A timeout is a
+ * failed read and takes the same pre-flight refusal, so a hung route can never
+ * leave Auto on «Calculando...».
+ */
+const DERIVED_HISTORY_AUTO_TIMEOUT_MS = 20_000;
+const DERIVED_HISTORY_AUTO_REFUSAL = "No se pudo leer el historial de equidad. Auto no corrió; reintenta.";
+const DERIVED_HISTORY_READ_ERROR = "No se pudo leer el historial de equidad.";
 
 /** 56 days — matches the historical candidate-load window used by Servicios. */
 const SAVED_WINDOW_DAYS = 56;
@@ -1379,7 +1425,140 @@ function SolverConfigReloadNotice({ source, onReload }: {
   );
 }
 
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month }: {
+// ─── Derived fairness history (the switch is `"local"` until the cutover) ─────
+//
+// Everything in this section renders only when `SOLVER_HISTORY_SOURCE` is
+// `"derived"` (R14). The rule all of it follows is the spec's Failure clause: a
+// read that failed or has not answered is SAID, never drawn as an empty history.
+// That matters most for the lead pool — `priorMonthLeadVisibility` reads a
+// missing month as "nobody led", so handing a panel `[]` while the read is out
+// would list every leader as «sin Lead».
+
+/** The read failed: the failure, and the retry. */
+function DerivedHistoryReadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <p role="alert" className="font-body text-xs text-negative-fg mr-auto">{DERIVED_HISTORY_READ_ERROR}</p>
+      <Button variant="secondary" size="sm" onClick={onRetry}>Reintentar</Button>
+    </div>
+  );
+}
+
+/**
+ * A `LeadPoolHistoryPanel` mount in derived mode: the leader lists appear only
+ * once the history is `ready`, and the panel is told which window months had no
+ * services so it can say so instead of «Sin historial guardado…».
+ */
+function DerivedLeadPoolHistory({ config, members, history, year, month }: {
+  config: SolverConfig;
+  members: MemberOption[];
+  history: DerivedHistoryHandle;
+  year: number;
+  month: number;
+}) {
+  if (history.status === "ready") {
+    return (
+      <LeadPoolHistoryPanel
+        config={config}
+        members={members}
+        history={history.data.entries}
+        year={year}
+        month={month}
+        emptyMonthKeys={history.data.months.filter(m => m.services === 0).map(m => m.key)}
+      />
+    );
+  }
+  if (history.status === "error") return <DerivedHistoryReadError onRetry={history.reload} />;
+  return (
+    <SkeletonGroup label="Cargando el historial de equidad…" className="grid gap-3 md:grid-cols-2">
+      <Skeleton className="h-20 w-full" rounded="lg" />
+      <Skeleton className="h-20 w-full" rounded="lg" />
+    </SkeletonGroup>
+  );
+}
+
+const SEAT_LABEL: Record<"Lead" | "BGVs" | "Chorus", string> = { Lead: "Líder", BGVs: "BGV", Chorus: "Coro" };
+const WEEKEND_LABEL: Record<"sunday_role" | "saturday_role", string> = { sunday_role: "Domingo", saturday_role: "Sábado" };
+const dayMonth = (day: string) =>
+  new Date(day.slice(0, 10) + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+
+/**
+ * R7's diagnostics, ALWAYS beside the history (never behind a toggle): each is a
+ * seat or a service the derived history silently does not count, which is
+ * exactly what an admin cannot see from the chips alone.
+ */
+function DerivedHistoryDiagnostics({ diagnostics }: { diagnostics: SolverHistoryDiagnostics }) {
+  const { danglingSeats, duplicateNames, duplicateTargets, unnamedMembers } = diagnostics;
+  if (!danglingSeats.length && !duplicateNames.length && !duplicateTargets.length && !unnamedMembers.length) return null;
+  return (
+    <ul className="space-y-1 font-body text-[11px] text-warning-strong">
+      {danglingSeats.length > 0 && (
+        <li>
+          Lugares asignados a miembros eliminados — no cuentan:{" "}
+          {danglingSeats.map(s => `${dayMonth(s.day)} (${SEAT_LABEL[s.path]})`).join(", ")}
+        </li>
+      )}
+      {duplicateNames.length > 0 && (
+        <li>
+          Nombres repetidos — el solver los confunde:{" "}
+          {duplicateNames.map(d => `${d.name} (${d.memberIds.length})`).join(", ")}
+        </li>
+      )}
+      {duplicateTargets.length > 0 && (
+        <li>
+          Servicios duplicados en una fecha — no cuenta ninguno:{" "}
+          {duplicateTargets.map(t => `${WEEKEND_LABEL[t.type]} ${dayMonth(t.day)}`).join(", ")}
+        </li>
+      )}
+      {unnamedMembers.length > 0 && (
+        <li>Miembros asignados sin nombre — no cuentan: {unnamedMembers.length}</li>
+      )}
+    </ul>
+  );
+}
+
+/**
+ * The «Historial» block in derived mode. The chips are READ-ONLY — a month
+ * derived from stored services cannot be deleted from the history (R14; Frank
+ * gives up the manual exclusion at the cutover) — and there is always exactly
+ * one per window month, oldest first, marked when the month had no services.
+ */
+function DerivedHistoryBlock({ history }: { history: DerivedHistoryHandle }) {
+  return (
+    <div className="space-y-1.5">
+      <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
+        Historial de equidad — derivado de los servicios guardados
+      </p>
+      {history.status === "ready" ? (
+        <>
+          <ul className="flex flex-wrap gap-1.5">
+            {history.data.months.map(m => (
+              <li key={m.key} className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-accent/20 bg-accent/5 text-accent/70">
+                {MONTHS[m.month - 1].slice(0, 3)} {m.year}{m.services === 0 ? " · sin servicios" : ""}
+              </li>
+            ))}
+          </ul>
+          <DerivedHistoryDiagnostics diagnostics={history.data.diagnostics} />
+        </>
+      ) : history.status === "error" ? (
+        <DerivedHistoryReadError onRetry={history.reload} />
+      ) : (
+        <SkeletonGroup label="Cargando el historial de equidad…">
+          <Skeleton className="h-5 w-56" rounded="full" />
+        </SkeletonGroup>
+      )}
+    </div>
+  );
+}
+
+/** `PlannerGrid`'s «Historial: ago · sep (sin servicios) · oct» — the months a derived solve actually used. */
+function historyMonthsLabel(months: SolverHistoryMonth[]): string {
+  return months
+    .map(m => `${MONTHS[m.month - 1].slice(0, 3).toLowerCase()}${m.services === 0 ? " (sin servicios)" : ""}`)
+    .join(" · ");
+}
+
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived }: {
   members: MemberOption[];
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
@@ -1388,6 +1567,13 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
   onRemoveHistory: (key: string) => void;
   year: number;
   month: number;
+  /**
+   * Derived mode only (`SOLVER_HISTORY_SOURCE === "derived"`). When present, the
+   * lead pool and the «Historial» block read THIS — and its entries only once it
+   * is `ready` — and `history`/`onRemoveHistory` are not read at all. Absent, the
+   * panel is exactly the per-browser one.
+   */
+  derived?: DerivedHistoryHandle;
 }) {
   const [searches, setSearches] = useState<Record<string, string>>({});
 
@@ -1490,13 +1676,17 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         </div>
       )}
 
-      <LeadPoolHistoryPanel
-        config={config}
-        members={members}
-        history={history}
-        year={year}
-        month={month}
-      />
+      {derived ? (
+        <DerivedLeadPoolHistory config={config} members={members} history={derived} year={year} month={month} />
+      ) : (
+        <LeadPoolHistoryPanel
+          config={config}
+          members={members}
+          history={history}
+          year={year}
+          month={month}
+        />
+      )}
 
       <RuleBuilder
         config={config}
@@ -1514,7 +1704,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
       <SolverConfigSaveBar config={config} rules={rules} />
 
       {/* Solver history indicator */}
-      {history.length > 0 && (
+      {derived ? <DerivedHistoryBlock history={derived} /> : history.length > 0 && (
         <div>
           <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mb-1">
             Historial ({history.length})
@@ -1552,6 +1742,15 @@ export default function MonthGenerator({
   const [step, setStep]           = useState<"config" | "grid">(storedMode ? "grid" : "config");
   const [year, setYear]           = useState(initialMonthMatch ? Number(initialMonthMatch[1]) : now.getFullYear());
   const [month, setMonth]         = useState(initialMonthMatch ? Number(initialMonthMatch[2]) : now.getMonth() + 1);
+  /**
+   * R14's display copy of the DERIVED fairness history, read for the month on
+   * screen — in both modes, because stored mode also mounts the grid's lead-pool
+   * panel. Dormant while `SOLVER_HISTORY_SOURCE` is `"local"`: the hook fetches
+   * nothing and nothing reads it. Never what a solve sends — `handleAutoDerived`
+   * re-reads for its own month at solve time.
+   */
+  const derivedMode = SOLVER_HISTORY_SOURCE === "derived";
+  const derivedHistory = useDerivedSolverHistory(year, month, derivedMode);
   /**
    * E1's per-date Sunday picker, stored as DESELECTIONS rather than as the
    * selected dates. Two reasons, both bugs the other shape invites:
@@ -1880,15 +2079,33 @@ export default function MonthGenerator({
     // load order — different on a cold load than on a re-render — would have
     // decided which rule set won.
     //
-    // `owt_solver_history_v2` below stays per-browser on purpose (ADR-0010):
+    // `owt_solver_history_v2` below stays per-browser on purpose (ADR-0010,
+    // amended by ADR-0042; derived history behind the switch):
     // P6 shares the RULES, not the fairness history.
+    //
+    // Derived mode (R14) never READS it: the history comes from the stored
+    // services, and `localStorage` is only written, as R15's rollback target
+    // (`appendLocalHistoryEntry`).
+    if (SOLVER_HISTORY_SOURCE !== "local") return;
     try {
       const hist = localStorage.getItem(HISTORY_KEY);
       if (hist) setSolverHistory(JSON.parse(hist) as SolverHistoryEntry[]);
     } catch {}
   }, []);
 
+  /**
+   * Local-mode only. `solverHistory` React state stays `[]` for the lifetime
+   * of a derived-mode mount (the load effect above never hydrates it), so
+   * `prev` here is always empty and a write would stamp `HISTORY_KEY` back to
+   * `[]` — destroying R15's rollback target, which `appendLocalHistoryEntry`
+   * maintains separately by reading `localStorage` fresh. No current call site
+   * reaches this function in derived mode (`handleConfirm` branches on the
+   * switch before calling either writer), so the guard is currently dead code
+   * on that branch — kept anyway so a future call site cannot resurrect the
+   * I-4 failure mode by mistake.
+   */
   function saveHistoryEntry(y: number, m: number, total_counts: Record<string, number>, role_counts: Record<string, Record<string, number>>) {
+    if (SOLVER_HISTORY_SOURCE !== "local") return;
     const key = `${y}-${m}`;
     setSolverHistory(prev => {
       const next = [
@@ -1900,7 +2117,9 @@ export default function MonthGenerator({
     });
   }
 
+  /** Local-mode only — see `saveHistoryEntry`'s comment; the same danger applies. */
   function removeHistoryEntry(key: string) {
+    if (SOLVER_HISTORY_SOURCE !== "local") return;
     setSolverHistory(prev => {
       const next = prev.filter(h => h.key !== key);
       try { localStorage.setItem(HISTORY_KEY, JSON.stringify(next)); } catch {}
@@ -3115,6 +3334,13 @@ export default function MonthGenerator({
       setAutoError("No se pudieron cargar las reglas compartidas. Recárgalas antes de usar Auto.");
       return;
     }
+    // Derived mode (R14) solves on the history read for THIS month at THIS
+    // moment — its own path, below. Everything after this line is the
+    // per-browser path, unchanged.
+    if (SOLVER_HISTORY_SOURCE === "derived") {
+      await handleAutoDerived();
+      return;
+    }
     const built = buildSolveRequest({
       config,
       members,
@@ -3198,6 +3424,139 @@ export default function MonthGenerator({
       setAutoPending(false);
     }
   }
+
+  /**
+   * Auto in DERIVED mode (R14): the history is read for the handler's own
+   * target, at call time — never the display's copy, which can be stale under an
+   * edit to a prior month, and never a month the admin moves to meanwhile.
+   *
+   * The pending flag goes up BEFORE the read (the per-browser path raises it
+   * only after its synchronous pre-flight, because it has nothing to wait for),
+   * and this `try/finally` covers the read AND the solve, so no exit — a
+   * failure, a throw, the 20 s ceiling — can leave Auto on «Calculando...».
+   * The ceiling is an abort: `fetchDerivedHistory` then answers `{ ok: false }`
+   * at once, whatever the transport is doing, and a timeout takes the same
+   * refusal as any other failed read.
+   */
+  async function handleAutoDerived() {
+    const target = { year, month };
+    setAutoPending(true);
+    setAutoError(null);
+    try {
+      const controller = new AbortController();
+      const ceiling = setTimeout(() => controller.abort(), DERIVED_HISTORY_AUTO_TIMEOUT_MS);
+      let history: DerivedHistoryFetchResult;
+      try {
+        history = await fetchDerivedHistory(target.year, target.month, controller.signal);
+      } finally {
+        clearTimeout(ceiling);
+      }
+      await solveWithDerivedHistoryRef.current(target, history);
+    } finally {
+      setAutoPending(false);
+    }
+  }
+
+  /**
+   * The rest of a derived Auto, run AFTER the history read — through
+   * `solveWithDerivedHistoryRef`, so it is the version from the LATEST render.
+   *
+   * **Why a ref, and not the closure `handleAutoDerived` was called with.** In
+   * create mode nothing locks the grid while Auto is pending: `mutationLocked`
+   * is stored-mode only (`storedMutationLocked`), and `autoPending` disables the
+   * Auto button and nothing else, so cells stay editable during the read. The
+   * closure captured at the press would solve and fill from the cells as they
+   * were then, and `applySpecialFill` would write that snapshot back — silently
+   * dropping a seat typed during the read. Reading the latest render instead
+   * takes `cells`, `solverConfig` and everything `applySpecialFill` closes over
+   * (`rows`, `columns`, the skip set) from ONE render, the current one, so the
+   * solve never mixes two moments. From here on it matches the per-browser path
+   * exactly, including its known window: an edit made during the SOLVE request
+   * itself is overwritten, as it is there.
+   *
+   * @param target the month `handleAutoDerived` read the history FOR. If the
+   *   admin has since gone back and picked another month, this history is not
+   *   that month's and solving it would be exactly R14's failure — so nothing
+   *   is solved or filled.
+   */
+  async function solveWithDerivedHistory(target: { year: number; month: number }, history: DerivedHistoryFetchResult) {
+    if (target.year !== year || target.month !== month) return;
+    const config = solverConfig;
+    if (!config) {
+      setAutoError("No se pudieron cargar las reglas compartidas. Recárgalas antes de usar Auto.");
+      return;
+    }
+    if (!history.ok) {
+      // Pre-flight refusal (spec, Failure): a history that could not be read is
+      // never solved as an empty one. The specials never needed it (E5).
+      setAutoError(DERIVED_HISTORY_AUTO_REFUSAL);
+      applySpecialFill(config, cells);
+      return;
+    }
+    const built = buildSolveRequest({
+      config,
+      members,
+      sundayDates: sundayDatesFull,
+      activeSatDates,
+      historyEntries: history.data.entries,
+      year,
+      month,
+    });
+    if (!built.ok) {
+      setAutoError(built.reason);
+      applySpecialFill(config, cells);
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/solve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(built.request),
+      });
+      let response: SolveResponse | null = null;
+      if (res.ok) {
+        response = await res.json();
+      }
+      if (!res.ok || !response || !response.ok || !response.schedule) {
+        setAutoError(response?.error ?? "El solver no encontró solución.");
+        applySpecialFill(config, cells);
+        return;
+      }
+      const applied = applySolveResponse({
+        response,
+        previousCells: cells,
+        columns,
+        rows,
+        sundayDates: sundayDatesFull,
+        activeSatDates,
+        members,
+      });
+      setUnresolvedNames(applied.unresolvedNames);
+      // No `history_runs_used`: it is always 3 on a derived history (R4). The
+      // months THIS solve read are what the admin needs to see.
+      setDiagnostics({
+        fairness_relaxed: response.fairness_relaxed,
+        sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
+        sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
+        history_months: historyMonthsLabel(history.data.months),
+      });
+      applySpecialFill(
+        config,
+        applied.cells,
+        mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
+      );
+    } catch {
+      setAutoError("Error de red al llamar al solver.");
+      applySpecialFill(config, cells);
+    }
+  }
+  const solveWithDerivedHistoryRef = useRef(solveWithDerivedHistory);
+  // Commit-time, so the ref is current before any later event or resolved
+  // promise can read it; assigned in an effect because writing a ref during
+  // render is a `react-hooks/refs` error.
+  useLayoutEffect(() => {
+    solveWithDerivedHistoryRef.current = solveWithDerivedHistory;
+  });
 
   async function handleConfirm(publish: boolean) {
     // Confirmation re-check: a source that failed since the preview blocks the
@@ -3345,7 +3704,12 @@ export default function MonthGenerator({
       (created.has(d.localId) || createdTargets.current.has(draftTargetKey(d._type, d.date))),
     );
     const entry = historyEntryFromDrafts(historyDrafts, members, year, month);
-    if (entry) saveHistoryEntry(entry.year, entry.month, entry.total_counts, entry.role_counts);
+    if (entry) {
+      // Derived mode still WRITES the browser history — R15's rollback target —
+      // but builds the write from `localStorage` itself, never from state.
+      if (SOLVER_HISTORY_SOURCE === "derived") appendLocalHistoryEntry(entry);
+      else saveHistoryEntry(entry.year, entry.month, entry.total_counts, entry.role_counts);
+    }
     // Refresh so the list reflects whatever actually got created.
     onCreated();
     if (result.failed.length === 0) {
@@ -3498,6 +3862,7 @@ export default function MonthGenerator({
           onRemoveHistory={removeHistoryEntry}
           year={year}
           month={month}
+          derived={derivedMode ? derivedHistory : undefined}
         />
       ) : (
         <SolverConfigUnavailable source={rules.source} onReload={rules.reload} />
@@ -3770,7 +4135,14 @@ export default function MonthGenerator({
         </div>
       </div>}
 
-      {solverConfig && (
+      {/*
+        Rendered in BOTH modes on this step. In derived mode it is the stored
+        editor's only view of the history (there is no «Historial» block beside
+        it), so the same rule holds: no leader list until the read is `ready`.
+      */}
+      {solverConfig && (derivedMode ? (
+        <DerivedLeadPoolHistory config={solverConfig} members={members} history={derivedHistory} year={year} month={month} />
+      ) : (
         <LeadPoolHistoryPanel
           config={solverConfig}
           members={members}
@@ -3778,7 +4150,7 @@ export default function MonthGenerator({
           year={year}
           month={month}
         />
-      )}
+      ))}
 
       {viewMode === "edit" && (
         <div className="flex flex-wrap items-center gap-2">

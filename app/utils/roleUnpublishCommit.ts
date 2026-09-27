@@ -44,7 +44,7 @@
 // `app/utils/roleUnpublishCommit.ts#module`), its callers are pinned by
 // `serviceCommitCallers.test.ts`, and it is a delivery-capable import for the
 // SR-verification run-context scan. Adding a caller means touching that pin.
-// Why the writers live here and not in their routes: ADR-0041.
+// Why the writers live here and not in their routes: ADR-0043.
 
 import "server-only";
 
