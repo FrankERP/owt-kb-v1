@@ -326,6 +326,10 @@ const SAT_HIDDEN = saturday("role-sat-hidden", "2028-10-14", true, {
 const SUN_NOV = sunday("role-sun-nov", "2028-11-05", true, { Lead: [ref("ln1", "mem-juan")] });
 const DUP_A = sunday("role-sun-dup-a", "2028-10-22", true, { Lead: [ref("lda", "mem-dani")] });
 const DUP_B = sunday("role-sun-dup-b", "2028-10-22", true, { Lead: [ref("ldb", "mem-eli")] });
+// A Studio draft of the role's OWN id: readiness files it as the target's
+// `draft_conflict` (stage 1), which the route refuses too (`loadRoleForWrite`).
+const OVERLAID = sunday("role-sun-overlaid", "2028-10-12", true, { Lead: [ref("lov", "mem-juan")] });
+const OVERLAY_DRAFT: TwinDoc = sunday("drafts.role-sun-overlaid", "2028-10-12", true);
 const GHOSTED = sunday("role-sun-ghosted", "2028-10-29", true, { Lead: [ref("lg1", "mem-hugo")] });
 const GHOST_DRAFT: TwinDoc = sunday("drafts.role-ghost", "2028-10-29", true);
 const SP_X = special("role-sp-x", "2028-10-28", "Retiro de jóvenes", true, { Lead: [ref("lx1", "mem-kike")] });
@@ -379,6 +383,7 @@ function fixture(): TwinDoc[] {
     SAT_HIDDEN, lockFor(SAT_HIDDEN),
     SUN_NOV, lockFor(SUN_NOV),
     DUP_A, DUP_B, lockFor(DUP_A),
+    OVERLAID, lockFor(OVERLAID), OVERLAY_DRAFT,
     GHOSTED, lockFor(GHOSTED), GHOST_DRAFT,
     SP_X, SP_X2,
     SP_VIGILIA, VIGILIA_COPY,
@@ -994,6 +999,24 @@ describe("swap_assignment — refusal replay, mirror rows (§ «Admin surface ga
       "El especial «Retiro de jóvenes» del 2028-10-28: hay otro servicio especial ese mismo día con el mismo nombre",
     );
     expectRouteCommits(route);
+  });
+
+  it("S2c: a raw draft of the role's OWN id (readiness draft_conflict) — the route alone refuses too", async () => {
+    const { tool, route } = await mirror(section("Lead", OVERLAID, SUN_B));
+    expect(sc(tool.response)).toEqual({
+      refused: true,
+      code: "integrity_conflict",
+      detail: "raw_draft",
+      serviceId: "role-sun-overlaid",
+    });
+    expect(textOf(tool.response)).toBe(
+      `El domingo 2028-10-12: hay un borrador de Studio sobre ese servicio, y /admin → Servicios no lo deja intercambiar; descártalo o publícalo en Studio y vuelve a leer. ${NOTHING_WRITTEN}`,
+    );
+    expect(route.response).toMatchObject({
+      status: 409,
+      body: { error: "integrity_conflict", details: { rawDrafts: ["drafts.role-sun-overlaid"] } },
+    });
+    expect(route.transactions).toEqual([]);
   });
 
   it("S2c: a raw draft of ANOTHER id at a weekend target — the route alone commits", async () => {
