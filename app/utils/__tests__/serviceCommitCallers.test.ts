@@ -40,7 +40,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..
  * Adding a caller is a reviewed change to this table, never a loosening of the scan.
  */
 const EXPECTED_CALLERS: Record<string, string[]> = {
-  publishReadyCommit: ["app/api/admin/roles/publish-ready/route.ts"],
+  publishReadyCommit: ["app/api/admin/roles/publish-ready/route.ts", "app/mcp/tools/publishService.ts"],
   publishVerdict: ["app/mcp/reads/publishRefusal.ts", "app/utils/publishReadyCommit.ts"],
   roleSwapCommit: ["app/api/admin/roles/swap/route.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
