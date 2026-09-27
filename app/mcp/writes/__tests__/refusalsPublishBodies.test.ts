@@ -10,6 +10,7 @@
 //
 //   not_ready / already_published / hard / unusable  → per-service reasons
 //   a retry of a publish that landed                  → already_published + stale
+//   already_published beside a REAL workflow blocker  → informational, no override note (P3-R20)
 //   a commit race                                     → details.guard
 //   the assertion stage                               → assertionIssues
 //   a missing service                                 → 404 not_found
