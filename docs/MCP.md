@@ -501,6 +501,8 @@ The refusals that are the tool's own (every other one is the route's):
 | `unknown_row_key`, `duplicate_row_key`, `duplicate_song`, `key_too_long`, `stored_key_too_long`, `medley_not_adjacent` | `invalid_request` | the row translation (E3, E5, E-key) |
 | `lead_not_member` | `invalid_request` | a worship-night leader with no member document (E7) |
 | `song_lookup_failed` | `integrity_conflict` | the song check itself could not be read |
+| `date` | `integrity_conflict` | the role has no valid stored date |
+| `invalid_input` | `invalid_request` | an argument the schema refuses, when the handler runs it. A registered call is refused by the SDK first; see «Known behaviour» |
 
 #### `swap_assignment`
 
@@ -521,9 +523,11 @@ Swaps a whole section, or the whole team, between two services, as the stored pl
   | the record is valid | `integrity_conflict` / `invalid_record` |
   | S2a: one weekend role at its target | `ambiguous_target` / `duplicate_weekend_target` |
   | S2c: no Studio draft at the target | `integrity_conflict` / `raw_draft` |
+  | the service resolves to a single document (any other target status) | `integrity_conflict` / `role_target_<status>` |
   | S2d: no seat names a member who is gone | `integrity_conflict` / `dangling_assignment` |
   | S2g: the weekend coordination lock is sound | `integrity_conflict` / `lock:<kind>`, e.g. `lock:missing_lock` |
   | S2f: a special has a name | `integrity_conflict` / `invalid_special_name` |
+  | the service has a valid stored date | `integrity_conflict` / `date` |
   | S1: both services in one `YYYY-MM` | `invalid_request` / `cross_month` |
   | S2a/S2b/S2c again, from the occupancy reads (S2b: no other special with that date and name) | `ambiguous_target` / `duplicate_special_identity`, and the codes above |
 
@@ -931,7 +935,7 @@ A few things that look like bugs at first glance and are not:
   **Not observed to be invoked during the step-13 live acceptance** (2026-09-24) — whether
   claude.ai's iOS app called `subscriptions/listen` was not directly confirmed; what was observed
   is that the authorization and `ping` flow completed with no visible effect from this refusal.
-- **Every tool call logs one `[mcp]` timing line, and that is the only duration there is.**
+- **Every tool call that reaches its handler logs one `[mcp]` timing line, and that is the only duration there is.**
   Vercel's runtime logs on this plan carry no request duration (observed 2026-09-25: no duration
   field from the logs API or from `vercel logs --json`, and the Observability API answers 404 on
   Hobby). So `runReadTool` (`app/mcp/reads/errors.ts`) and the write runner `runWriteTool`
@@ -942,7 +946,9 @@ A few things that look like bugs at first glance and are not:
   never carries an argument, an id, a member or service name, a payload or an error message.
   Read it with `vercel logs <deployment> --json`: each record's `logs[].message` holds it. It is
   how the P1 latency figure and P3's live-proof durations are measured. It goes to
-  `console.info`; `ping` does not run through `runReadTool`, so it logs nothing.
+  `console.info`. Two kinds of call log nothing:
+  - `ping`, which does not run through `runReadTool`;
+  - a call the SDK refuses on its input schema (a strict-schema or bound violation). That call never reaches `runReadTool` or `runWriteTool`, so it is missing from the durations.
 - **`/api/mcp` reaches outbound delivery transitively, and is deliberately NOT wrapped in
   `withVerificationRunContext`** (P3 plan D15; ADR-0043). The SR-verification coverage scan in
   `srVerificationRunContext.test.ts` marks a route delivery-capable only when the route's OWN
