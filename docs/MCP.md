@@ -11,7 +11,7 @@
 >
 > **P1 status: released to production 2026-09-25** (PR
 > [#98](https://github.com/FrankERP/owt-kb-v1/pull/98), `main` `a04edb43`), **phone acceptance
-> complete 7/7** (items 1–4 on 2026-09-25, items 5–7 on 2026-09-28, production latency recorded).
+> complete 7/7** (four asks on 2026-09-25, three on 2026-09-28, production latency recorded).
 > The seven read tools below (`get_service`, `list_services`, `search_songs`, `get_song`,
 > `get_member_availability`, `get_participation`, `list_proposals`) exist in the [Tools](#tools)
 > section and production exposes them. See the
@@ -1007,7 +1007,8 @@ notifications as `/admin` (roadmap acceptance). It is condensed from step 14 of
 **One PP0 condition could not be met, and the run went on under ruling P3-R27 rather than skipping
 it:** production has no registered push device, so «with no push device, stop» would have ended the
 run. The ruling made email the delivery proof, and push is verified as the tool's reported
-audience only.
+audience only. The debounce window was taken as 5 minutes from `SECRETS.md` rather than confirmed
+by Frank; the run bore it out (a swap at 11:57 was flushed at 12:05).
 
 Every write below is made through the claude.ai connector on Frank's explicit instruction at that
 moment, or by Frank in `/admin`. **The agent does not go past a parking point (PP) without Frank.**
@@ -1170,9 +1171,10 @@ grant is not revoked as a routine release check, since revocation was already pr
 above). The [P1 release checklist](#p1-release-checklist-released-2026-09-25) below reflects
 this — it carries no "revoke the production grant" step.
 
-**Phone acceptance — complete, 7/7.** It ran from the phone, read-only, against production. Items 1–4 (next
-service, the month's services, a song, participation) were verified 2026-09-25 at about 09:55.
-Items 5–7 were verified 2026-09-28 at about 10:45:
+**Acceptance — complete, 7/7.** Frank asked through his claude.ai connector, and each answer was
+checked read-only against production. The first four asks (next service, the month's services, a
+song, participation) were verified 2026-09-25 at about 09:55. The remaining three were verified
+2026-09-28 at about 10:45:
 - **availability**, next Sunday: exactly one worship member unavailable, the pattern correct;
 - **song search**, by the theme tag `gracia`: 19 songs, and every title, key and tempo grouping the
   answer cited matched. A plain-text query fuzzy-matches titles, so the tag filter is the precise
@@ -1180,8 +1182,8 @@ Items 5–7 were verified 2026-09-28 at about 10:45:
 - **proposal threads**: 0 open, 0 for October, and six September proposals all approved. Both
   threads compared matched message by message.
 
-**Latency (checklist item 9).** The phone's end-to-end time, which includes the model's own, was 3–10
-s per call. The server-side figures, from the `[mcp]` timing line, are: `get_service` 348–718 ms,
+**Latency (checklist item 9).** The end-to-end time Frank measured on the connector, which includes
+the model's own, was 3–10 s per call. The server-side figures, from the `[mcp]` timing line, are: `get_service` 348–718 ms,
 `list_services` 389–403 ms, `search_songs` 666 ms. The tool's own share is therefore far below the
 plan's 10 s stop condition.
 
@@ -1247,8 +1249,8 @@ are server-side milliseconds from the `[mcp]` timing line.
 - **A first L5b attempt does not count as the twin.** Swapping by seat edits and «Guardar» produced
   a new seat key and two separate revs, because that is the roles PATCH path, not the swap route.
   The twin is the «Intercambiar sección» run in the table.
-- **Stop conditions: none tripped.** Every email in the window (flushes at 11:53, 12:05, 12:45,
-  13:00 and 13:15) had `recipientCount` 1, Frank. The write calls took 1.2–2.4 s server-side, against
+- **Stop conditions: none tripped.** Every email in the window (L3a's publish-time sends, then the
+  flushes at 12:05, 12:45, 13:00 and 13:15) had `recipientCount` 1, Frank. The write calls took 1.2–2.4 s server-side, against
   the 20 s limit.
 - **Push delivery could not be proven, for any path (ruling P3-R27).** Production has 0 members with
   `deviceTokens`: web push was never built, and the native iOS app awaits Apple enrollment. A push
@@ -1353,22 +1355,23 @@ the production alias on 2026-09-25, and phone acceptance (items 8–9) on 2026-0
 7. ✅ Merged 07:37 (`main` `a04edb43`) — the production release. Production alias verified —
    deployment `dpl_DsGcCQNyZWkv5JpPqsg3aBL4TMvR`, alias includes `owt-backstage.vercel.app`,
    `githubCommitSha` `a04edb43`.
-8. ✅ **Acceptance from the phone**, on production — complete 7/7. Frank asked for:
+8. ✅ **Acceptance from the claude.ai connector**, on production — complete 7/7. Frank asked for:
    - next Sunday's service;
    - this month's services;
-   - a song search;
    - a song;
-   - his own availability;
    - this month's participation;
+   - a song search;
+   - his own availability;
    - a proposal thread.
 
-   Each answer was compared with `/admin` (Servicios, Disponibilidad) and the song page. Items 1–4
-   were verified 2026-09-25 (about 09:55); items 5–7 on 2026-09-28 (about 10:45). Every answer
+   Each answer was compared with `/admin` (Servicios, Disponibilidad) and the song page. The first four
+   (service, month, song, participation) were verified 2026-09-25 (about 09:55); the last three
+   (song search, availability, proposal thread) on 2026-09-28 (about 10:45). Every answer
    matched `/admin` or the song page. See the
    [P1 release record](#release-record-p1-2026-09-25) for the detail.
 9. ✅ **Observed latency** of `get_service` and `list_services` on production, recorded
    2026-09-28. The plan's stop condition is **10 s**. From the `[mcp]` timing line (server side):
-   `get_service` 348–718 ms, `list_services` 389–403 ms (and `search_songs` 666 ms). From the phone,
+   `get_service` 348–718 ms, `list_services` 389–403 ms (and `search_songs` 666 ms). On the connector, as Frank measured it,
    end to end and including the model's own time: 3–10 s per call. **The 870 ms real-data probe in
    the [release record](#release-record-p1-2026-09-25) above does NOT satisfy this item** — it was
    measured laptop→Sanity through direct calls, not through Vercel; these figures are the ones that

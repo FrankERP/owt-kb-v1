@@ -9,8 +9,8 @@
 
 - **Document status:** Implemented on branch `claude/mcp-p1-reads` 2026-09-25, with Frank's
   go-ahead of 2026-09-24, and **released to production 2026-09-25** (PR #98, `main` `a04edb43`).
-  **Phone acceptance complete 2026-09-28** (7/7; items 1–4 on 2026-09-25, items 5–7 on
-  2026-09-28), production latency recorded — see the P1 release record in
+  **Acceptance complete 2026-09-28** (7/7; service, month, song and participation on
+  2026-09-25; song search, availability and proposal thread on 2026-09-28), production latency recorded — see the P1 release record in
   [`docs/MCP.md`](../../MCP.md#release-record-p1-2026-09-25). **Risk tier: STANDARD** (the
   roadmap's P1 row). The work reads only, touches no audit registry, and changes **no existing export** of a module a
   production writer imports. The one edit to such a module is a header comment (A13). By
@@ -358,7 +358,8 @@ Every step leaves the four gates green. Nothing deploys until step 9.
    - Each answer is compared with `/admin` (Servicios, Disponibilidad) and the song page.
    - Record the observed latency of `get_service` and `list_services`.
 
-   **Done:** items 1–4 on 2026-09-25 and items 5–7 on 2026-09-28, 7/7 matched; server-side
+   **Done:** service, month, song and participation on 2026-09-25; song search, availability
+   and proposal thread on 2026-09-28; 7/7 matched; server-side
    `get_service` 348–718 ms and `list_services` 389–403 ms. The evidence is in
    [`docs/MCP.md`](../../MCP.md#release-record-p1-2026-09-25).
 
