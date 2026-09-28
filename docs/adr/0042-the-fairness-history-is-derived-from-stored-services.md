@@ -7,6 +7,17 @@
 > 0042 during release prep. Delivery 1 (`claude/mcp-p2-solver-history`) reached `main`
 > 2026-09-26 (PR #104, `24209e11`), carrying this file as 0042 — dormant behind
 > `SOLVER_HISTORY_SOURCE = "local"`; production behaviour is unchanged until Frank cuts over.
+>
+> **2026-09-28 — cutover landed (Delivery 2), not yet released.** Frank decided to cut over
+> (Gate C) after Gate B: an independent recount from Sanity (ruling P2-G1) matched production's
+> derivation exactly for July, August and September 2026 (same per-month hash; 6/7/6 services,
+> every diagnostic 0). Gate A found the planning browser's store empty, and the other devices
+> could not be exported. `SOLVER_HISTORY_SOURCE` is `"derived"` on branch
+> `claude/mcp-p2-cutover`: the chips are read-only, Auto re-reads the history for its own month
+> at solve time, and `localStorage` is written but never read. Until that branch reaches `main`
+> production still runs the dormant `"local"` build, and the rollback stays a flip of the
+> constant until Delivery 3 (Gate D) removes the dual-write. The staged plan is
+> `docs/superpowers/plans/2026-09-25-owt-mcp-p2-solver-history.md`, step 9.
 
 ## Context
 

@@ -91,18 +91,32 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   visibility only and does not change the objective. The pool ids are filtered by
   live «Tipo» first, the same rule `buildSolveRequest` applies, so a stale tick
   cannot present an unschedulable member as an available lead (ADR-0029).
-- **The history's source is moving, in stages (MCP P2, ADR-0042) — dormant today.** The
-  browser is still the source: `MonthGenerator` reads and writes `owt_solver_history_v2` in
-  `localStorage`, per browser profile, exactly as before. A server-side derivation over
-  canonical `sunday_role`/`saturday_role` documents now exists in parallel
-  (`app/utils/solverHistory.ts`'s `deriveSolverHistory`, loaded by
+- **The history is derived from the stored services, not read from the browser (MCP P2 cutover,
+  2026-09-28 — ADR-0042).** A server-side derivation over canonical `sunday_role`/`saturday_role`
+  documents (`app/utils/solverHistory.ts`'s `deriveSolverHistory`, loaded by
   `app/utils/solverHistoryRead.ts`'s `loadSolverHistory` and exposed at
-  `GET /api/admin/solver-history` — see [API_REFERENCE.md](API_REFERENCE.md#solver)) and
-  produces the same entry shape, but it is **not yet used**: the deployment-wide constant
-  `SOLVER_HISTORY_SOURCE` (`app/components/admin/solverHistorySource.ts`) is `"local"`, so
-  every planner path is unchanged. The cutover to `"derived"` is Frank's decision, made after
-  reading the R11 diff report (below); until then, [DATA_MODEL.md](DATA_MODEL.md)'s
-  per-browser note still holds. See
+  `GET /api/admin/solver-history` — see [API_REFERENCE.md](API_REFERENCE.md#solver)) produces
+  the same entry shape the browser history used to, and the deployment-wide constant
+  `SOLVER_HISTORY_SOURCE` (`app/components/admin/solverHistorySource.ts`) is `"derived"`.
+  Three properties to hold together:
+  - **Derived for the target month at solve time, never cached across a solve.** The planner
+    loads the three months before the month on screen to draw the Historial block and the
+    lead-pool panel, but **every Auto re-reads the history for its own month** — never the
+    display's copy, and the `cells`/`config` it solves with are read after that await. A month
+    switched to mid-read cannot leak another month's history into a solve.
+  - **A failed read is said, never an empty history.** Auto refuses before solving («No se pudo
+    leer el historial de equidad. Auto no corrió; reintenta.»), the specials still fill (E5),
+    and the lead-pool panel shows the failure and «Reintentar» instead of listing every leader
+    as «sin Lead».
+  - **The Historial chips are read-only.** The history is a fact about the stored services, so
+    there is no manual month exclusion (no ×) any more; a window month with no services is
+    marked «· sin servicios», and the diagnostics (seats pointing at deleted members, repeated
+    names, duplicate services on a date) are always shown.
+
+  Every admin now solves against the same history, which closes the two-admins gap ADR-0010
+  left open. `owt_solver_history_v2` in `localStorage` is still **written** on each confirm (R15's
+  rollback target) and never read; rolling back is flipping the constant to `"local"`, until
+  the dual-write is removed (D3, after Gate D). See [DATA_MODEL.md](DATA_MODEL.md),
   [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and
   `docs/superpowers/specs/2026-09-23-solver-history-derivation-design.md`.
 

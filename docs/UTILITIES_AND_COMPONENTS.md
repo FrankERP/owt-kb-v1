@@ -106,7 +106,7 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   leaders to the current Lead; `sortedLeadIds` is the one snapshot-id normalizer shared by
   the outbox queue and flush sides.
 
-### Solver fairness history (MCP P2, dormant — ADR-0042)
+### Solver fairness history (MCP P2, cut over 2026-09-28 — ADR-0042)
 - **`historyWindow(target)`, `DERIVED_HISTORY_ROLE_KEYS`, `deriveSolverHistory({ target, roles,
   members })`** ([solverHistory.ts](../app/utils/solverHistory.ts)) — the ONE derivation:
   three calendar months before `target`, oldest first (empty entries allowed), summed from
@@ -120,8 +120,8 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   include the id of a member seated NOWHERE in the window — only their `member_name` collided
   with a member who was counted — so a consumer only ever sees that other member's id, never
   their name, on the strength of a name collision alone. `historyEntryFromDrafts` (`plannerModel.ts`) is the
-  pre-existing, per-browser equivalent this is proven equal to (R12) and will replace at the
-  dual-write stop point.
+  pre-existing, per-browser equivalent this is proven equal to (R12); it still feeds the
+  dual-write (below) and is deleted at the dual-write stop point (D3).
 - **`SolverHistoryResult`, `SolverHistoryEvidence`, …** ([solverHistoryTypes.ts](../app/utils/solverHistoryTypes.ts))
   — neutral, type-only exports shared by the loader and its evidence, kept out of
   `solverHistory.ts` so that module's source never has to name `published`.
@@ -138,7 +138,9 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   on a failed read** — it throws a fixed, Sanity-text-free error instead, so a transient read
   failure can never be mistaken for "this month has no history." This is what
   `GET /api/admin/solver-history` calls (see [API_REFERENCE.md](API_REFERENCE.md#solver)), and
-  what P4's `solve_month` will call directly later (bearer auth, never the admin route).
+  what P4's `solve_month` will call directly later (bearer auth, never the admin route). **The
+  planner's history is derived for the target month at solve time; it is never read from
+  `localStorage` and never cached across a solve** — the display's copy is for drawing only.
 - **`canonicalWeekendRolesInRangeQuery`, `canonicalMemberNamesQuery`,
   `weekendRoleCreationReceiptsQuery`, `ROLE_CREATION_RECEIPT_EVIDENCE_PROJECTION`** (additions
   to [serviceReadQueries.ts](../app/utils/serviceReadQueries.ts)) — the three **new** read
@@ -149,8 +151,9 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   file is already exempt. Purely additive; every prior export is byte-identical.
 - **`SOLVER_HISTORY_SOURCE: "local" | "derived"`**
   ([solverHistorySource.ts](../app/components/admin/solverHistorySource.ts)) — the
-  deployment-wide cutover switch, one constant in every bundle, shipped `"local"`. Flipping it
-  is Delivery 2, gated on Frank reading the R11 diff report and deciding to cut over (Gate C).
+  deployment-wide cutover switch, one constant in every bundle, now **`"derived"`** (Delivery 2:
+  Frank's Gate C decision, 2026-09-28). Flipping it back to `"local"` is the rollback, through
+  the normal pipeline, until D3 deletes the local path and the switch module.
 - **`fetchDerivedHistory(year, month, signal?)`**
   ([derivedHistoryClient.ts](../app/components/admin/derivedHistoryClient.ts)) — a checked,
   never-throwing client for the route above: validates the response has exactly three entries
@@ -158,12 +161,13 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   signal), and is what a hung route cannot leave pending.
 - **`useDerivedSolverHistory(year, month, enabled)`**
   ([useDerivedSolverHistory.ts](../app/components/admin/useDerivedSolverHistory.ts),
-  `"use client"`) — the display-side load behind the switch: `idle` (switch is `"local"`) /
-  `loading` / `ready{data}` / `error`, plus `reload`. Keyed by `(year, month)` with an
+  `"use client"`) — the display-side load behind the switch: `idle` (switch is `"local"`, the
+  rollback value) / `loading` / `ready{data}` / `error`, plus `reload`. Keyed by `(year, month)` with an
   `AbortController`, a request counter and a result stored with its own key, so a month switch
   reads `loading` on the very render that switches rather than showing stale data.
 - **`appendLocalHistoryEntry`** (module-level in `MonthGenerator.tsx`, beside `HISTORY_KEY`) —
-  in derived mode, `handleConfirm` calls this instead of `saveHistoryEntry`. It reads
+  the shipped (derived) mode's dual-write: `handleConfirm` calls this instead of
+  `saveHistoryEntry`, so the browser key is still WRITTEN (the rollback target) but never read. It reads
   `localStorage` **fresh**, merges the new entry into what is already there, and never touches
   the `solverHistory` React state — which in derived mode stays `[]` for the life of the mount
   (the load effect that hydrates it from `localStorage` returns early on the switch), never a
@@ -171,17 +175,19 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   R15 requires the rollback target to be built from `localStorage`'s own contents, never from
   `solverHistory`, which is why `saveHistoryEntry`/`removeHistoryEntry` — the local-mode
   writers — both also open with `if (SOLVER_HISTORY_SOURCE !== "local") return;`: neither is
-  reachable from derived mode's UI today, but either would stamp `HISTORY_KEY` back to `[]` or
+  reachable from derived mode's UI, but either would stamp `HISTORY_KEY` back to `[]` or
   a strict subset of it if it ran against that always-empty state.
 - The diff tool that consumes all of the above — `scripts/solver-history-diff.ts` +
   `scripts/lib/solverHistoryDiff.ts` (the pure R11 classifier) — is documented in
   [SOLVER_AND_INFRA.md §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops), not
   here, because it is tooling Frank runs by hand, never app code.
 
-**All of the above ships dormant.** Every existing planner path (`MonthGenerator`,
-`LeadPoolHistoryPanel`, `PlannerGrid`'s Historial diagnostics) behaves exactly as before while
-`SOLVER_HISTORY_SOURCE === "local"`; the new machinery only activates once Frank flips the
-switch. See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md).
+**The switch is `"derived"`.** The planner (`MonthGenerator`, `LeadPoolHistoryPanel`,
+`PlannerGrid`'s Historial diagnostics) runs on the derived history; the pre-cutover per-browser
+paths stay compiled, and tested (`MonthGenerator.create.test.tsx` pins `"local"`), only as the
+rollback until D3 deletes them. The Historial chips are **read-only** — the derivation is a
+fact about the stored services, so there is no manual month exclusion (no ×); an empty month
+reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md).
 
 ### Dates & schedule
 - **`daysUntil(dateStr, now?)`**, **`formatCountdown(days)`** ([daysUntil.ts](../app/utils/daysUntil.ts))
@@ -640,7 +646,7 @@ behaviour of each, and the guards that pin them.
 | `candidateRanking` | Seat candidates ordered by availability, existing assignment and recent load. Pure; never calls the solver. |
 | `plannerModel` | Pure month-grid rows/columns/cells plus create-solver translations (`buildSolveRequest`/`applySolveResponse`) and participant/draft projections. Stored columns use role-ID `columnId` and keyed occupants; stored admission/translation lives in `storedRoleReadModel`. Owns Saturday↔week adjacency (never position) and the Sunday-only Coro row. |
 | `PlannerGrid` | Renders the month grid `plannerModel` computes — dates across and seats down. Applicable admitted cells are editable; integrity-defective stored columns stay visible and read-only. An occupant whose «Tipo» no longer fits the seat is tinted amber and named under the cell, and the picker gives them a removal-only row — `rankCandidates` filters them out, so that row is their only exit (ADR-0029). `MonthGenerator` owns `cells`/`counts` and mutations. Owns the **three-column workspace**: Participaciones (216px), grid, and candidate picker (240px while a cell is active). The chart width is a content floor derived from `ParticipationSidebar`. **Pantalla completa** manages focus, traps Tab, locks body scroll, `inert`s the rest of `<body>`, applies safe-area padding, and portals to `document.body` for Safari. The grid scrolls horizontally rather than squeezing its `minmax(150px, 1fr)` date columns; row labels remain sticky. Its `planner-wide` root lets `app/brand.css` lift the admin frame cap through `:has()`. |
-| `MonthGenerator` | Owns create-planning and stored editing in the shared three-part `PlannerGrid`. Create mode retains solver preview/Auto and fairness history. Stored mode owns create-one, explicit full-roster save, date/name edits, team/seat swaps, frozen attempts, and roles/integrity readback reconciliation. Since 2026-09-22, stored mode's toolbar also offers **«Llenar especiales…»**: an inline picker over the month's approved specials (ticked by default, published ones marked «· publicado») whose «Llenar vacíos» fills the ticked group's empty Lead/BGV/instrument seats locally with load scoped to the group alone (`groupFill.ts`) — never the solver, nothing written before «Guardar». On a worship night the fill leaves **Lead** to the admin: `hasTarget` gives that row no target there (the block's Lead holds every song's leaders instead), and `fillColumn` only fills rows that have one — BGV and instruments still fill normally. `ServicesPanel` loads it through `next/dynamic({ ssr: false, loading: PanelSkeleton })` (R5 Task 6) — it already only mounted once `showGenerator`/`monthEditor` went true (D10's full-width panel replaces the whole tab rather than opening in a dialog), so `dynamic` turns that existing on-open MOUNT into an on-open FETCH: the planner/solver code never reaches the initial Servicios chunk. |
+| `MonthGenerator` | Owns create-planning and stored editing in the shared three-part `PlannerGrid`. Create mode retains solver preview/Auto; the fairness history it solves with is **derived from the stored weekend services** (`SOLVER_HISTORY_SOURCE === "derived"`, ADR-0042): the display reads it through `useDerivedSolverHistory`, and **every Auto re-reads it for its own month at solve time** through `fetchDerivedHistory` (never the display copy, never cached across a solve) — a failed read refuses the solve («No se pudo leer el historial de equidad. Auto no corrió; reintenta.»), the specials still fill, and an empty history is never substituted. The Historial block's chips are **read-only** (no × month exclusion any more); diagnostics are always shown. `localStorage`'s `owt_solver_history_v2` is only WRITTEN on confirm (the rollback target), never read. Stored mode owns create-one, explicit full-roster save, date/name edits, team/seat swaps, frozen attempts, and roles/integrity readback reconciliation. Since 2026-09-22, stored mode's toolbar also offers **«Llenar especiales…»**: an inline picker over the month's approved specials (ticked by default, published ones marked «· publicado») whose «Llenar vacíos» fills the ticked group's empty Lead/BGV/instrument seats locally with load scoped to the group alone (`groupFill.ts`) — never the solver, nothing written before «Guardar». On a worship night the fill leaves **Lead** to the admin: `hasTarget` gives that row no target there (the block's Lead holds every song's leaders instead), and `fillColumn` only fills rows that have one — BGV and instruments still fill normally. `ServicesPanel` loads it through `next/dynamic({ ssr: false, loading: PanelSkeleton })` (R5 Task 6) — it already only mounted once `showGenerator`/`monthEditor` went true (D10's full-width panel replaces the whole tab rather than opening in a dialog), so `dynamic` turns that existing on-open MOUNT into an on-open FETCH: the planner/solver code never reaches the initial Servicios chunk. |
 | `SetlistEditor` | Inline setlist builder (reorder/remove, play-key, medley via `normalizeMedleyTags`). |
 | `SongFormModal` | Song create/edit form. Exports `SongForm`, `blankForm`, `songToForm`, `buildPayload`. Its own `Modal` wrapper was removed in M0b-1 — dead export, no JSX caller (`AdminPanel`/`ServicesPanel` each own a local `Modal`); every caller mounts `SongForm` inside its own `CueDialog`. Charts are edited via `ChordChartsFields` ([ADR-0018](adr/0018-lyrics-and-charts-are-independent.md)). Repeatable rows (reference links here, links **and** tutorials in `EditSongButton`) hold a client `id` from `app/utils/songFormRows.ts` and are keyed by it, never by array position — deleting a middle row otherwise hands its DOM node, and the caret, to the row that slides up (issue #69). `rowsToPayload` strips the id, DROPS a row with neither label nor URL (the blank «Agregar» row used to 400 the whole save — see `linkRowWrite.ts`), and passes a stored `_key` through defensively — both write routes re-mint a key for every row on every save and no projection reads these arrays' keys back, unlike chords. |
 | `ContentPanel` | Song-library CRUD (via `SongForm`). Since R5 Task 5 every control is a primitive: `Button` for «Agregar», the row actions and the delete confirm; `Skeleton` for the loading list. **Row actions are visible by default and only fade behind hover from `sm` up** (`opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100`) — the old hover-only spelling hid Editar/Eliminar from every touch admin permanently and from the keyboard at every width; they are `Button variant="icon" size="lg"` for a 44 px target. Both dialogs (the shared add/edit song sheet and the delete confirm) are mounted always and opened by `modalOpen` + `modalKind`, with the song and the kind held in state that outlives the close so nothing blanks during the exit, and each body keyed on `modalSeq` so a reopen starts from a fresh form. Guards: `adminPanelsPolish.test.tsx`, `cueDialogMount.test.ts` (baseline 8→6), `songFormRowIdentity.test.tsx`. |

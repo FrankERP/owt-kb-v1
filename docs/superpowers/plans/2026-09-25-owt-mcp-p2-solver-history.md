@@ -17,7 +17,14 @@
   the server-side builder and evidence, the admin route, the dormant planner machinery
   (`SOLVER_HISTORY_SOURCE === "local"`), the diff CLI, and the ADR/docs step. **Step 8 (Release
   Delivery 1) ran 2026-09-26**: PR #104 merged to `main` at `24209e11`, `preview` and production
-  aliases both verified — see "Release record (Delivery 1)" below. **Risk tier: STANDARD**. The
+  aliases both verified — see "Release record (Delivery 1)" below. **Gates A–C ran 2026-09-28.**
+  Gate A: the planning Chrome's store was empty (`null`), and the other devices (Safari, phone)
+  could not be exported. Gate B ran as an **independent recount** from Sanity (ruling P2-G1):
+  July, August and September 2026 matched production's derivation exactly (same per-month
+  hash; 6, 7 and 6 services), every diagnostic 0. **Gate C: Frank decided to cut over on
+  2026-09-28.** **Delivery 2 (step 9, the flip) is implemented on branch
+  `claude/mcp-p2-cutover` and is not released** — `SOLVER_HISTORY_SOURCE = "derived"`. **Risk
+  tier: STANDARD**. The
   roadmap's review handoff says that P2's *spec* is critical, and it is approved, but its
   *implementation plan* is standard. The roadmap gives it no adversarial plan review, but
   Frank asked for one on 2026-09-25, at standard tier: one fresh cold approval. Its log is
@@ -786,6 +793,16 @@ It is saved only into the private folder (Q2), **never into the repository**.
   - `solverConfigSource.test.ts:304-313` is rewritten from "per-browser, on purpose" to
     "**written, never read**". It asserts that the literal is still present (the
     dual-write target) **and** that the switch is `derived`.
+  - **Implementation note (2026-09-28).** The flip broke 68 tests in five files, not one:
+    besides `MonthGenerator.create.test.tsx`, four suites that count `fetch` calls
+    (`MonthCalendar`, `MonthGenerator.stored`, `MonthGenerator.storedMove`,
+    `localFill.wiring`) saw the planner's new `GET /api/admin/solver-history`. Only the create
+    suite is pinned to `local` (it is the rollback harness). The other four run on the shipped
+    `derived` default through `__tests__/derivedHistoryHarness.ts`'s `stubFetchWithHistory`,
+    which answers the history route with a valid empty window ahead of the test's own mock, so
+    the mock's call count still counts only what the test is about. What the planner does with
+    a real history stays pinned in `MonthGenerator.derivedHistory.test.tsx`, which keeps its own
+    `derived` pin so a rollback flip breaks only the two switch-value assertions.
 - **Docs:**
   - `DATA_MODEL.md:376-378`: the history is derived and shared, and the browser key is
     written only as the rollback target until the stop point.
