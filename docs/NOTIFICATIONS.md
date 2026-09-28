@@ -428,14 +428,23 @@ supersede what Child A §1 named as accepted gaps:
 ## The MCP write tools — the same writers
 
 P3's four MCP write tools (`edit_setlist`, `swap_assignment`, `publish_service`,
-`unpublish_service`) notify exactly as `/admin` does, because they ARE the same writers. They are
-implemented on branch `claude/mcp-p3-writes` and not released. Each admin write route keeps only
+`unpublish_service`) notify exactly as `/admin` does, because they ARE the same writers. They were
+released to production on 2026-09-28 (PR #106, `main` `7c65f2eb`) and proven there the same day
+against two throwaway services whose only audience was Frank; the results are in MCP.md's
+[P3 release record](MCP.md#release-record-p3-2026-09-28). Each admin write route keeps only
 its authorization and calls an `app/utils/*Commit.ts` module, and the tool calls the same module
 with the same body ([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md)). So the same
 helpers queue the same notices from the same pre-commit `before`, under the same debounce, sweeps,
 preferences, `EMAIL_ALLOWLIST` and `EMAIL_REDIRECT_TO`. Nothing else in this document changes for
 an MCP write, and there is no MCP-specific notification path to operate. The per-tool audiences
 are tabled in [MCP.md](MCP.md#notification-audiences-the-write-tools).
+
+**What the live proof could and could not show.** Email delivery was proven: every email in the
+window went to Frank alone, and he confirmed the assignment, «Setlist listo» and grouped-swap emails
+arrived. **Push delivery could not be proven for any path**, `/admin`'s included: production has no
+member with `deviceTokens` (web push was never built, and the native iOS app awaits Apple
+enrollment), so a push from `/admin` or from the MCP reaches nobody today. The push was verified
+only as the tool's reported audience.
 
 **The side-effect helpers return what they queued.** So that a tool can report its audience
 without re-deriving it (P3 step 2), the post-commit helpers in `serviceMutationSideEffects.ts`
