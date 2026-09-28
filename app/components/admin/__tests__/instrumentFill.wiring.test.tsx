@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MonthGenerator from "../MonthGenerator";
 import { readyRules } from "./rulesHarness";
 import type { SolverConfigController } from "../solverConfigSource";
+import { stubFetchWithHistory } from "./derivedHistoryHarness";
 
 /**
  * `MonthGenerator` with the shared rule set supplied.
@@ -122,7 +123,10 @@ function stubFetch(solve: () => unknown) {
     }
     throw new Error(`unexpected fetch to ${url}`);
   });
-  vi.stubGlobal("fetch", fetchMock);
+  // The derived history read is answered ahead of this mock (the shipped
+  // default since the P2 cutover); an unknown URL still throws, so without the
+  // harness the history read would fail and Auto would never reach the solve.
+  stubFetchWithHistory(fetchMock);
   return { fetchMock, calls };
 }
 
@@ -152,9 +156,12 @@ describe("Auto fills instrument seats on every exit", () => {
   }
 
   it("seats the drummers alternating even when the solver refuses the month", async () => {
-    const { container } = setup(refusal);
+    const { container, fetchMock } = setup(refusal);
     runAuto();
     await waitFor(() => expect(cellAt(container, "instrumento:Drums", SUNDAYS[0]).textContent).toContain("Paco"));
+    // The exit under test is the SOLVER's refusal (D15), not a history-read refusal.
+    expect(fetchMock.mock.calls.some(([url]) => url === "/api/admin/solve")).toBe(true);
+    expect(screen.getByText(/El solver no encontró solución/)).toBeTruthy();
     expect(cellAt(container, "instrumento:Drums", SUNDAYS[1]).textContent).toContain("Rodri");
     expect(cellAt(container, "instrumento:Drums", SUNDAYS[2]).textContent).toContain("Paco");
   });

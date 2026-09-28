@@ -19,7 +19,11 @@
   Delivery 1) ran 2026-09-26**: PR #104 merged to `main` at `24209e11`, `preview` and production
   aliases both verified — see "Release record (Delivery 1)" below. **Gates A–C ran 2026-09-28.**
   Gate A: the planning Chrome's store was empty (`null`), and the other devices (Safari, phone)
-  could not be exported. Gate B ran as an **independent recount** from Sanity (ruling P2-G1):
+  could not be exported. Gate B could not run as written — the R11 diff needs a browser export, and none existed — so it
+  ran as an **independent recount** from Sanity instead (ruling P2-G1, the coordinator's, at
+  Frank's request): a separate read-only script, importing nothing from `solverHistory.ts`,
+  recounted the window's seats per person and role and compared per-month hashes, names never
+  leaving the script. Result:
   July, August and September 2026 matched production's derivation exactly (same per-month
   hash; 6, 7 and 6 services), every diagnostic 0. **Gate C: Frank decided to cut over on
   2026-09-28.** **Delivery 2 (step 9, the flip) is implemented on branch
@@ -1004,6 +1008,6 @@ confirmation are human gates B, C and D above. The spec assigns them to him expl
 (round 2). Changes made after that approval are listed as un-reviewed in
 [the review log](2026-09-25-owt-mcp-p2-solver-history-review-log.md). **Delivery 1 (steps
 1–8) is implemented and released** (PR #104, `main` `24209e11`, merged 2026-09-26; see
-"Release record (Delivery 1)" above). **Next state: parked at Gate A/B, Frank's** — Gate A
-(the export) and Gate B (the diff) are next, followed by Gate C (verdicts and the cutover
-decision), then Delivery 2 (the flip) and Delivery 3.
+"Release record (Delivery 1)" above). Gates A–C ran 2026-09-28 (see the status line). **Next state: Delivery 2 (the flip)
+implemented on branch `claude/mcp-p2-cutover`, then its release, Gate D (one real month on
+the derived history) and Delivery 3.**

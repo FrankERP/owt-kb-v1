@@ -11,8 +11,9 @@ import {
  * `GET /api/admin/solver-history?month=YYYY-MM[&evidence=1]` — the read-only
  * admin route for the month solver's DERIVED fairness history (R8; MCP P2
  * plan `docs/superpowers/plans/2026-09-25-owt-mcp-p2-solver-history.md`, task
- * 4). Nothing calls this route yet — P4's `solve_month` reads
- * `loadSolverHistory` directly, because the MCP authenticates with a bearer
+ * 4). The planner calls it at solve time since the P2 cutover (Delivery 2,
+ * `SOLVER_HISTORY_SOURCE = "derived"`). P4's `solve_month` reads
+ * `loadSolverHistory` directly instead, because the MCP authenticates with a bearer
  * token and cannot use a session-gated route.
  *
  * ─── Two gates, not one ───────────────────────────────────────────────────

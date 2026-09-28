@@ -1107,8 +1107,9 @@ function RuleBuilder({ config, onChange, members, source }: {
         1. THE CUTOVER LANDED. The rules are one Sanity document
            (`sanity/schemas/solverConfig.ts`), read through `useSolverConfig`,
            shared by every admin and by both surfaces. `localStorage` is no
-           longer read or written for them — only `owt_solver_history_v2`, the
-           fairness history, stays per-browser (ADR-0010).
+           longer read or written for them. The fairness history is derived from
+           the stored services since the P2 cutover (ADR-0042); its browser key
+           `owt_solver_history_v2` is written only as the rollback target.
         2. The saved document is what other planner sessions enforce; the edits
            on this screen are not, until "Guardar reglas" lands them. That gap is the
            price of an explicit save (a POST per keystroke would thrash the

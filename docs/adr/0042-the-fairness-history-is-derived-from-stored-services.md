@@ -9,7 +9,9 @@
 > `SOLVER_HISTORY_SOURCE = "local"`; production behaviour is unchanged until Frank cuts over.
 >
 > **2026-09-28 — cutover landed (Delivery 2), not yet released.** Frank decided to cut over
-> (Gate C) after Gate B: an independent recount from Sanity (ruling P2-G1) matched production's
+> (Gate C) after Gate B, which ran as an independent recount from Sanity because no browser export
+> existed to diff against (ruling P2-G1: a separate script, importing nothing from the derivation,
+> recounted the window per person and role). The recount matched production's
 > derivation exactly for July, August and September 2026 (same per-month hash; 6/7/6 services,
 > every diagnostic 0). Gate A found the planning browser's store empty, and the other devices
 > could not be exported. `SOLVER_HISTORY_SOURCE` is `"derived"` on branch
