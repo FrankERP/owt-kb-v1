@@ -4,17 +4,26 @@
 // the `--reads` pass added at P1 plan step 8): the dev-smoke client's pure
 // helpers — base-URL validation (including the production refusal), PKCE,
 // authorize-URL building, form encoding, SSE-frame parsing, token redaction,
-// unverified JWT decoding, the tools/list check and the `--reads` pass'
-// arguments/detail/summary helpers. None of this touches the network; the
-// live handshake against dev is Frank's own run (see the task-11a report for
-// the exact commands and their output).
+// unverified JWT decoding, the tools/list check (per-tool annotations since
+// P3 step 12), the `--reads` pass' arguments/detail/summary helpers, and the
+// DV1 guard (P3-R25: structural, not just lexical): the one `tools/call`
+// builder can never name a write tool, AND the one function that actually
+// sends anything to `/api/mcp` refuses a write's name too, before any
+// `fetch` — a body built any other way is caught there. None of this
+// touches the network (the sender's own test stubs `fetch`); the live
+// handshake against dev is Frank's own run (see the task-11a report for the
+// exact commands and their output).
 //
 // Several groups cross-check the script's duplicated logic against the real
 // server modules it talks to, so a drift in either fails here instead of
 // silently producing a client that can no longer complete the handshake.
 
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { SignJWT } from "jose";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { stripComments } from "../lib/strip-comments.mjs";
 
 import { BYPASS_HEADER as SERVER_BYPASS_HEADER } from "@/e2e/service-readiness/lib/bypass";
 import { LOCAL_ORIGIN, MIN_SECRET_BYTES, PREVIEW_ORIGIN, PRODUCTION_ORIGIN, resourceFor } from "@/app/mcp/oauth/origin";
@@ -26,13 +35,16 @@ import { validateAuthorizeRequest } from "@/app/mcp/oauth/authorizeRequest";
 import {
   BYPASS_HEADER,
   buildAuthorizeUrl,
+  CALLABLE_TOOLS,
   bypassHeaderFor,
   checkPingRegistered,
   checkToolList,
   codeChallengeFromVerifier,
+  createMcpRequest,
   decodeJwtPayloadUnsafe,
   DEFAULT_BASE,
   EXPECTED_TOOLS,
+  expectedAnnotations,
   failureGrantLines,
   formEncode,
   formatReadCheckLine,
@@ -44,6 +56,7 @@ import {
   parseArgs,
   parseSseMessages,
   PRODUCTION_BASE,
+  READ_ONLY_ANNOTATIONS,
   READ_TOOL_NAMES,
   readCheckArguments,
   readCheckDetail,
@@ -55,6 +68,10 @@ import {
   SmokeError,
   songIdFromSearchResult,
   summarizeReadChecks,
+  toolCallRequest,
+  TOOLS_CALL_METHOD,
+  WRITE_ANNOTATIONS,
+  WRITE_TOOL_NAMES,
 } from "../mcp-dev-smoke.mjs";
 
 const KEY = new TextEncoder().encode("a".repeat(MIN_SECRET_BYTES));
@@ -381,29 +398,79 @@ describe("rpc", () => {
 
 describe("checkToolList", () => {
   const readOnly = { readOnlyHint: true, openWorldHint: false };
+  const destructive = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false };
+  /** A tools/list result exactly as the P3 route registers it. */
+  const registered = () =>
+    EXPECTED_TOOLS.map((name) => ({ name, annotations: WRITE_TOOL_NAMES.includes(name) ? destructive : readOnly }));
 
-  it("accepts the exact eight names, in order, all annotated readOnlyHint/openWorldHint", () => {
-    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: readOnly }));
-    expect(checkToolList(tools)).toEqual({ ok: true });
+  it("pins twelve tools: ping, the seven reads, then the four writes, in registration order", () => {
+    expect(EXPECTED_TOOLS).toEqual([
+      "ping",
+      "get_service",
+      "list_services",
+      "search_songs",
+      "get_song",
+      "get_member_availability",
+      "get_participation",
+      "list_proposals",
+      "unpublish_service",
+      "publish_service",
+      "swap_assignment",
+      "edit_setlist",
+    ]);
+    expect(WRITE_TOOL_NAMES).toEqual(EXPECTED_TOOLS.slice(-4));
   });
 
-  it("refuses a wrong count or a wrong order", () => {
-    const tooFew = EXPECTED_TOOLS.slice(0, 1).map((name) => ({ name, annotations: readOnly }));
+  it("per-tool annotations: every read read-only, every write destructive (I14)", () => {
+    expect(READ_ONLY_ANNOTATIONS).toEqual(readOnly);
+    expect(WRITE_ANNOTATIONS).toEqual(destructive);
+    for (const name of EXPECTED_TOOLS) {
+      expect(expectedAnnotations(name), name).toEqual(WRITE_TOOL_NAMES.includes(name) ? destructive : readOnly);
+    }
+  });
+
+  it("accepts the exact twelve names, in order, each with its own annotations", () => {
+    expect(checkToolList(registered())).toEqual({ ok: true });
+  });
+
+  it("refuses a wrong count or a wrong order — a P1-only deployment (the eight reads) included", () => {
+    const tooFew = registered().slice(0, 8);
     expect(checkToolList(tooFew).ok).toBe(false);
-
-    const reordered = [...EXPECTED_TOOLS].reverse().map((name) => ({ name, annotations: readOnly }));
-    expect(checkToolList(reordered).ok).toBe(false);
+    expect(checkToolList([...registered()].reverse()).ok).toBe(false);
   });
 
-  it("refuses a tool missing openWorldHint: false (a stale registration)", () => {
-    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: { readOnlyHint: true } }));
+  it("refuses a read missing openWorldHint: false (a stale registration)", () => {
+    const tools = registered().map((t, i) => (i === 0 ? { ...t, annotations: { readOnlyHint: true } } : t));
     const result = checkToolList(tools);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain(EXPECTED_TOOLS[0]);
   });
 
-  it("refuses a tool declared writable", () => {
-    const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: { readOnlyHint: false, openWorldHint: false } }));
+  it("refuses a read declared writable", () => {
+    const tools = registered().map((t) =>
+      t.name === "get_service" ? { ...t, annotations: { readOnlyHint: false, openWorldHint: false } } : t,
+    );
+    expect(checkToolList(tools).ok).toBe(false);
+  });
+
+  it("refuses a write that is not declared destructive, or declared read-only, or declared idempotent", () => {
+    for (const name of WRITE_TOOL_NAMES) {
+      for (const annotations of [
+        { ...destructive, destructiveHint: false },
+        { readOnlyHint: false, idempotentHint: false, openWorldHint: false },
+        readOnly,
+        { ...destructive, idempotentHint: true },
+      ]) {
+        const tools = registered().map((t) => (t.name === name ? { ...t, annotations } : t));
+        const result = checkToolList(tools);
+        expect(result.ok, `${name} ${JSON.stringify(annotations)}`).toBe(false);
+        if (!result.ok) expect(result.message).toContain(name);
+      }
+    }
+  });
+
+  it("refuses a tool carrying an annotation it does not expect", () => {
+    const tools = registered().map((t) => (t.name === "ping" ? { ...t, annotations: { ...readOnly, destructiveHint: true } } : t));
     expect(checkToolList(tools).ok).toBe(false);
   });
 });
@@ -415,7 +482,7 @@ describe("checkPingRegistered", () => {
     expect(checkPingRegistered([{ name: "ping", annotations: readOnly }])).toEqual({ ok: true });
   });
 
-  it("accepts ping alongside the full P1 set too — order and the other names don't matter", () => {
+  it("accepts ping alongside the full registered set too — order and the other names don't matter", () => {
     const tools = EXPECTED_TOOLS.map((name) => ({ name, annotations: readOnly }));
     expect(checkPingRegistered(tools)).toEqual({ ok: true });
     expect(checkPingRegistered([...tools].reverse())).toEqual({ ok: true });
@@ -430,6 +497,127 @@ describe("checkPingRegistered", () => {
   it("refuses a ping missing openWorldHint: false or declared writable", () => {
     expect(checkPingRegistered([{ name: "ping", annotations: { readOnlyHint: true } }]).ok).toBe(false);
     expect(checkPingRegistered([{ name: "ping", annotations: { readOnlyHint: false, openWorldHint: false } }]).ok).toBe(false);
+  });
+});
+
+describe("toolCallRequest — DV1: the dev smoke never calls a write tool", () => {
+  const SCRIPT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../mcp-dev-smoke.mjs");
+  const code = stripComments(readFileSync(SCRIPT, "utf8"));
+
+  it("refuses each of the four write tools by name, in any argument shape", () => {
+    expect(WRITE_TOOL_NAMES).toHaveLength(4);
+    for (const name of WRITE_TOOL_NAMES) {
+      expect(() => toolCallRequest(name, {}), name).toThrow(/DV1/);
+      expect(() => toolCallRequest(name, { serviceId: "role-1", rev: "rev-1" }, 9), name).toThrow(/DV1/);
+    }
+  });
+
+  it("refuses any name it was not given leave to call — an allowlist, not a deny-list", () => {
+    for (const name of ["", "probe", "delete_service", "EDIT_SETLIST", "edit_setlist ", undefined, null]) {
+      expect(() => toolCallRequest(name as string, {}), String(name)).toThrow(/refusing/);
+    }
+  });
+
+  it("builds the JSON-RPC envelope for ping and each read tool", () => {
+    expect(CALLABLE_TOOLS).toEqual(["ping", ...READ_TOOL_NAMES]);
+    for (const name of CALLABLE_TOOLS) {
+      expect(toolCallRequest(name, { month: "2026-10" }, 3)).toEqual({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: { name, arguments: { month: "2026-10" } },
+      });
+    }
+  });
+
+  it("classifies every registered tool: callable or a write, never both, nothing left over", () => {
+    expect(CALLABLE_TOOLS.filter((name) => WRITE_TOOL_NAMES.includes(name))).toEqual([]);
+    expect([...CALLABLE_TOOLS, ...WRITE_TOOL_NAMES].sort()).toEqual([...EXPECTED_TOOLS].sort());
+  });
+
+  it("the --reads pass has no arguments for a write tool either", () => {
+    for (const name of WRITE_TOOL_NAMES) expect(() => readCheckArguments(name, {}), name).toThrow();
+  });
+
+  it("is the ONLY place the script builds a tools/call: one \"tools/call\" quoted literal, shared via TOOLS_CALL_METHOD", () => {
+    // Comments are stripped first: prose may say `tools/call`, code may not.
+    const literals = [...code.matchAll(/["'`]tools\/call["'`]/g)];
+    expect(literals).toHaveLength(1);
+    expect(code).toMatch(/export const TOOLS_CALL_METHOD = "tools\/call";/);
+    const builder = code.slice(code.indexOf("export function toolCallRequest("));
+    const body = builder.slice(0, builder.indexOf("\n}\n"));
+    expect(body).toContain("rpc(TOOLS_CALL_METHOD");
+    // Exactly the constant's own definition plus its two consumers (toolCallRequest
+    // and createMcpRequest's guard) — never a second "tools/call" string of their own.
+    expect([...code.matchAll(/\bTOOLS_CALL_METHOD\b/g)]).toHaveLength(3);
+    // main() routes every call through it: ping twice (steps 7 and 8) and the --reads loop.
+    expect([...code.matchAll(/toolCallRequest\(/g)].length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("names each write tool exactly once in code — in WRITE_TOOL_NAMES — so nothing else can reach one", () => {
+    for (const name of WRITE_TOOL_NAMES) {
+      expect([...code.matchAll(new RegExp(`["'\`]${name}["'\`]`, "g"))], name).toHaveLength(1);
+    }
+    expect(code).toMatch(/export const WRITE_TOOL_NAMES = \["unpublish_service", "publish_service", "swap_assignment", "edit_setlist"\];/);
+  });
+
+  it("control: a second tools/call planted in the script is caught", () => {
+    const planted = `${code}\nconst x = rpc("tools/call", { name: "edit_setlist", arguments: {} });\n`;
+    expect([...planted.matchAll(/["'`]tools\/call["'`]/g)]).toHaveLength(2);
+    expect([...planted.matchAll(/["'`]edit_setlist["'`]/g)]).toHaveLength(2);
+  });
+});
+
+describe("createMcpRequest — DV1 is structural, not only lexical (P3-R25)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("refuses a write tool's name at the send path itself, before any fetch — even a body toolCallRequest never built", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const send = createMcpRequest({ origin: "https://example.test", bypass: {} });
+    for (const name of WRITE_TOOL_NAMES) {
+      // Built by hand with `rpc`, never through `toolCallRequest` — which would
+      // throw first and so could never prove THIS guard exists on its own.
+      const body = rpc(TOOLS_CALL_METHOD, { name, arguments: {} });
+      await expect(send("token", body), name).rejects.toThrow(/DV1/);
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses any other name outside CALLABLE_TOOLS the same way", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const send = createMcpRequest({ origin: "https://example.test", bypass: {} });
+    const body = rpc(TOOLS_CALL_METHOD, { name: "probe", arguments: {} });
+    await expect(send("token", body)).rejects.toThrow(/CALLABLE_TOOLS/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still sends a tools/call naming a callable tool", async () => {
+    const fetchMock = vi.fn(async (_url: string) => ({
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      text: async () => "{}",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const send = createMcpRequest({ origin: "https://example.test", bypass: {} });
+    const body = rpc(TOOLS_CALL_METHOD, { name: "ping", arguments: {} });
+    await send("token", body);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]![0]).toBe("https://example.test/api/mcp");
+  });
+
+  it("passes a non-tools/call request straight through untouched", async () => {
+    const fetchMock = vi.fn(async () => ({
+      status: 200,
+      headers: new Headers({ "content-type": "application/json" }),
+      text: async () => "{}",
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const send = createMcpRequest({ origin: "https://example.test", bypass: {} });
+    // `tools/list`, `initialize`, … — the guard only inspects a `tools/call`.
+    await send("token", rpc("tools/list"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

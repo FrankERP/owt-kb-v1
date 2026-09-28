@@ -3,11 +3,55 @@
 // model or the log; `refusalResult`/`successResult` are covered for their own
 // contract, matched against `ping.ts`'s established shape.
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { READ_TOOL_FAILURE_MESSAGE, refusalResult, runReadTool, successResult } from "../errors";
+
+let info: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => {
+  // The timing line (`../../toolTiming.ts`) goes to console.info on every call.
+  info = vi.spyOn(console, "info").mockImplementation(() => {});
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+/** The one timing line, with only the millisecond count left free. */
+function timingLine(tool: string, outcome: string): RegExp {
+  return new RegExp(`^\\[mcp\\] tool=${tool} outcome=${outcome} code=- ms=\\d+$`);
+}
+
+describe("runReadTool — the timing line", () => {
+  it("logs exactly one line per call, in the pinned shape, for ok, refused and error", async () => {
+    await runReadTool("get_service", () => successResult({ ok: true }));
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info.mock.calls[0]).toHaveLength(1);
+    expect(info.mock.calls[0][0]).toMatch(timingLine("get_service", "ok"));
+
+    info.mockClear();
+    await runReadTool("get_member_availability", () =>
+      refusalResult("El nombre es ambiguo.", { candidates: [{ id: "mem-ana", name: "Ana" }] }),
+    );
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info.mock.calls[0][0]).toMatch(timingLine("get_member_availability", "refused"));
+
+    info.mockClear();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await runReadTool("search_songs", async () => {
+      throw new Error("Request error https://xyz.api.sanity.io token=abc");
+    });
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info.mock.calls[0][0]).toMatch(timingLine("search_songs", "error"));
+  });
+
+  it("carries no argument, id, name or payload — only the fixed fields", async () => {
+    await runReadTool("get_member_availability", () =>
+      refusalResult("Ana María no coincide.", { candidates: [{ id: "mem-ana", name: "Ana María" }] }),
+    );
+    const line = String(info.mock.calls[0][0]);
+    for (const fragment of ["mem-ana", "Ana", "candidates", "coincide"]) expect(line).not.toContain(fragment);
+  });
 });
 
 describe("runReadTool", () => {

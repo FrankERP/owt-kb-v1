@@ -1,7 +1,8 @@
 // app/api/mcp/route.ts
 //
 // The MCP endpoint (P0 plan step 9, spec I6/O2/E1): Streamable HTTP through
-// `mcp-handler`, stateless, tools registered below. Ungated by the session
+// `mcp-handler`, stateless, tools registered below: `ping`, the seven P1 reads
+// and the four P3 writes. Ungated by the session
 // middleware (`api/mcp(?:/|$)` in `app/utils/routeMatcher.ts`, P0 step 5), so
 // it authenticates EVERY request itself, on every method, and nothing reaches
 // the MCP server — no `initialize`, no `tools/list`, no tool — until all of
@@ -37,6 +38,7 @@ import { resourceMetadataUrl } from "@/app/mcp/oauth/origin";
 import { jsonNoStore, mcpUnauthorizedResponse } from "@/app/mcp/oauth/responses";
 import { verifyAccessToken } from "@/app/mcp/oauth/tokens";
 import { MCP_SERVER_NAME, mcpServerVersion } from "@/app/mcp/serverInfo";
+import { completeResponse } from "@/app/mcp/transport/completeResponse";
 import { registerGetMemberAvailability } from "@/app/mcp/tools/getMemberAvailability";
 import { registerGetParticipation } from "@/app/mcp/tools/getParticipation";
 import { registerGetService } from "@/app/mcp/tools/getService";
@@ -45,6 +47,10 @@ import { registerListProposals } from "@/app/mcp/tools/listProposals";
 import { registerListServices } from "@/app/mcp/tools/listServices";
 import { registerPing } from "@/app/mcp/tools/ping";
 import { registerSearchSongs } from "@/app/mcp/tools/searchSongs";
+import { registerUnpublishService } from "@/app/mcp/tools/unpublishService";
+import { registerPublishService } from "@/app/mcp/tools/publishService";
+import { registerSwapAssignment } from "@/app/mcp/tools/swapAssignment";
+import { registerEditSetlist } from "@/app/mcp/tools/editSetlist";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -67,6 +73,12 @@ const SERVER_INFO = { name: MCP_SERVER_NAME, version: mcpServerVersion() };
  * answer a completed JSON-RPC error instead, and `listChanged: false` stops
  * advertising a notification this server never sends (the tool list is fixed
  * per deployment). The capability MERGES with what `registerTool` sets up.
+ *
+ * NO WORK AFTER THE RESPONSE, either. The SDK can answer with an SSE stream
+ * while a tool is still running (always in the 2025-06-18 era; after a
+ * mid-call notification in 2026-07-28), and Next drops a `revalidatePath`
+ * pushed after the handler returned. `handle()` therefore reads every SSE
+ * response to its end before returning it (`completeResponse`, finding F2).
  */
 const mcpHandler = createMcpHandler(
   (server) => {
@@ -78,6 +90,12 @@ const mcpHandler = createMcpHandler(
     registerGetMemberAvailability(server);
     registerGetParticipation(server);
     registerListProposals(server);
+    // The four writes (P3), after the reads. Each calls its admin counterpart's
+    // own `*Commit` module (ADR-0043) and declares itself destructive (I14).
+    registerUnpublishService(server);
+    registerPublishService(server);
+    registerSwapAssignment(server);
+    registerEditSetlist(server);
   },
   {
     serverInfo: SERVER_INFO,
@@ -159,13 +177,24 @@ const FORWARDED_HEADER_PREFIX = "mcp-param-";
  * the request it received as `ctx.http.req`, so the allowlist here is what
  * keeps the raw bearer, the session cookie and the bypass secret out of every
  * tool. The body moves to the copy; the original is not read again.
+ *
+ * DETACHED FROM THE CLIENT'S ABORT SIGNAL (`signal: null`). Next aborts the
+ * incoming request's signal when the socket closes, and a copy made without
+ * `signal` follows it. The SDK treats that abort as the end of the exchange:
+ * the legacy leg tears its stream down, and the 2026-07-28 leg closes and
+ * answers 499. Either way `handle()` would return while the tool was still
+ * running, and a disconnecting client would drop that tool's `revalidatePath`
+ * and `after()` (F2 again). Detached, every tool call runs to completion
+ * inside the 60 s ceiling, and the response goes to a closed socket. For the
+ * write tools: never check an abort signal (`ctx.mcpReq.signal`) between a
+ * Sanity commit and its revalidate/after.
  */
 function forwardedRequest(request: Request, authInfo: AuthInfo): Request {
   const headers = new Headers();
   for (const [name, value] of request.headers) {
     if (FORWARDED_HEADERS.has(name) || name.startsWith(FORWARDED_HEADER_PREFIX)) headers.append(name, value);
   }
-  const forwarded = new Request(request, { headers });
+  const forwarded = new Request(request, { headers, signal: null });
   forwarded.auth = authInfo;
   return forwarded;
 }
@@ -252,7 +281,12 @@ async function handle(request: Request): Promise<Response> {
     // as `ctx.http.authInfo` — what its own `withMcpAuth` does, on the
     // original request. Here it rides on the allowlisted copy, built only
     // after every check has passed.
-    return await mcpHandler(forwardedRequest(request, auth.authInfo));
+    const response = await mcpHandler(forwardedRequest(request, auth.authInfo));
+    // F2: an SSE response is read to its end before it is returned, so the
+    // tool behind it — its `revalidatePath`, its `after()` — finishes while
+    // this handler is still running. `await`ed inside the `try`, so a stream
+    // that errors lands in the catch below.
+    return await completeResponse(response);
   } catch {
     // Never echo or log the error: it may carry request data.
     return serverError("unexpected");

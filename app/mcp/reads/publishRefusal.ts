@@ -1,44 +1,53 @@
-// Would publishing refuse this service, and why? (P1, Decision D2 — spec I4.)
+// Would publishing refuse this service, and why? (P1, spec I4.)
 //
-// WHY A COPY — ADR-0040 (docs/adr/0040-mcp-reads-mirror-the-readiness-loader-and-publish-check.md).
-// `POST /api/admin/roles/publish-ready` decides each service inline
-// (`route.ts:173-216`), in a writer route P1 may not modify (the roadmap's
-// additive-only rule). This is a second copy of that per-service verdict for READ
-// tools, and it is only safe while it is provably the same thing:
-// `__tests__/publishRefusalParity.test.ts` runs the REAL route handler, one
-// ready-mode POST per fixture service, and demands equality. A change to the
-// route's verdict must be mirrored here in the same commit.
+// ONE PREDICATE — ADR-0040, amended by P3 (docs/adr/0040-mcp-reads-mirror-the-readiness-loader-and-publish-check.md).
+// The per-service verdict is `publishVerdict` (`app/utils/publishVerdict.ts`),
+// the very function the publish writer (`publishReady` in
+// `app/utils/publishReadyCommit.ts`, behind `POST /api/admin/roles/publish-ready`)
+// calls for each requested entry. This module is a thin READ adapter over it: it
+// supplies the arguments a read has, narrows the result to the codes a read can
+// observe, and adds Spanish copy. It decides nothing itself — never add a
+// refusal here; add it to `publishVerdict`, and both surfaces get it.
 //
-// THE PARITY IS BEHAVIOURAL, OVER FIXTURES — there is no text pin on the route.
-// A refusal the route gains that no fixture service triggers passes the parity
-// test untouched. So a new route refusal must be added in TWO places: here, and
-// to the fixture matrix (`__tests__/serviceFixtures.ts`) as a service that
-// triggers it — plus the code list the parity file's matrix test demands to
-// occur, so the new code cannot go unexercised.
+// Until P3 this was a second copy of the verdict, held equal by
+// `__tests__/publishRefusalParity.test.ts`. That test still runs the REAL route
+// handler, one ready-mode POST per fixture service, and now proves the WIRING:
+// the route, through its writer, still refuses exactly what this adapter
+// reports. `app/utils/__tests__/publishVerdictSingleSource.test.ts` fails if
+// either side grows its own copy again.
 //
-// HOW IT ENDS. P3 consolidates this with the publish-ready route into one
-// predicate, at CRITICAL tier (plan D2) — the route is a production writer. Until
-// then, never merge the two in a routine cleanup or a `/improve`
-// "deduplication": that edits the writer route without the review it requires.
-//
-// The route, for each `{ id, rev }` entry of a ready-mode request:
+// WHAT A READ PASSES. A read has no request revision, so it passes the
+// snapshot's own `roleRev` and `mode: "ready"`:
 //
 //   service = assembleService(sources, id)       → null: `not_found`, nothing else
-//   { hard, workflow } = classifyPublishBlockers(service.readiness)
-//   hard.length > 0                               → hard_integrity_blocker
-//   !observation || observation.unsafe.length > 0 → unusable_observation
-//   readiness.publishState !== "draft"            → already_published
-//   observation.roleRev !== entry.rev             → stale_revision   (not modelled)
-//   workflow.length > 0                           → not_ready
+//   publishVerdict(service, { mode: "ready", rev: observation.roleRev })
+//     → hard_integrity_blocker, unusable_observation, already_published, not_ready
 //
-// It ACCUMULATES: every reason that applies is reported, in that order; only a
-// missing service stops early. `stale_revision` (and override mode's
-// `blocker_set_changed`) exist only relative to what a POST asserts, so a read
-// cannot report them — P3's writes assert revisions and are refused then.
+// `stale_revision` needs an observation whose rev differs from the one passed,
+// and `blocker_set_changed` needs `override` mode, so neither can come back
+// here. They exist only relative to what a POST asserts; P3's write tools assert
+// revisions and are refused then. The narrowing below is compile-time: a reason
+// `publishVerdict` gains fails `tsc` here until this adapter says what a read
+// shows for it.
+//
+// THE VERDICT IS NOT THE WHOLE REFUSAL SET. After it, the writer builds the
+// revision guard bundle (`buildPublishAssertion` → `planPublishReadyAssertions`,
+// then `mergeAssertionOps` and `withPublishedTrue`) and can still refuse
+// `integrity_conflict` there. A read sees only the `unsafe` part of that stage,
+// as `unusable_observation`, so `ready: true` does not promise that the publish
+// succeeds (ADR-0040's amendment).
+//
+// Its INPUT is still assembled two ways: the writer from
+// `loadServiceReadinessSources`, the reads from P1's snapshot mirror
+// (`serviceSnapshot.ts`, D1), pinned by `serviceSnapshotMirror.test.ts` and
+// `serviceSnapshotParity.test.ts`.
+//
+// It ACCUMULATES: every reason that applies is reported, in the verdict's
+// order; only a missing service stops early.
 //
 // Two outputs, deliberately separate:
-//  - `refusals` — the route's verdict above. Empty means publishing would go
-//    through now (`ready`).
+//  - `refusals` — the verdict above. Empty means publishing would go through
+//    now (`ready`), up to the guard-bundle stage.
 //  - `blockers` — the FULL readiness classification, never cut short by a
 //    refusal, so a live service that lost its setlist still shows the gap.
 //
@@ -52,11 +61,8 @@
 // import from the server-only bundle; the caller hands the assembly in.
 
 import type { AssembledService } from "@/app/utils/publishReadyBundle";
-import {
-  classifyPublishBlockers,
-  type PublishBlockers,
-  type PublishSkipReason,
-} from "@/app/components/admin/publishSelection";
+import { publishVerdict, type PublishVerdictReason } from "@/app/utils/publishVerdict";
+import type { PublishBlockers, PublishSkipReason } from "@/app/components/admin/publishSelection";
 import { PUBLISH_SKIP_COPY } from "@/app/components/admin/serviceCardModel";
 
 /** The route's ready-mode refusal codes a read can observe, in the route's order. */
@@ -78,14 +84,32 @@ const ROUTE_ONLY_COPY: Record<Exclude<PublishRefusalCode, PublishSkipReason>, st
   unusable_observation: "no se pudo leer el servicio con seguridad para publicarlo",
 };
 
-function refusalCopy(code: PublishRefusalCode): string {
+/**
+ * The Spanish text for one refusal code — the admin's own `PUBLISH_SKIP_COPY`
+ * where it has one, the route-only copy above otherwise. Exported so a write
+ * tool that reports the same code shows the same words as `get_service`; never
+ * retype these strings.
+ */
+export function refusalCopy(code: PublishRefusalCode): string {
   return code === "already_published" || code === "not_ready"
     ? PUBLISH_SKIP_COPY[code]
     : ROUTE_ONLY_COPY[code];
 }
 
+/** The verdict codes that exist only relative to what a POST asserts (see the header). */
+type RequestOnlyReason = "stale_revision" | "blocker_set_changed";
+
+/**
+ * Narrows a verdict reason to what a read can observe. By construction (own
+ * `roleRev`, `mode: "ready"`) it never removes anything; it exists so the result
+ * TYPES as `PublishRefusalCode`, and so a new verdict reason fails `tsc` below.
+ */
+function isReadObservable(reason: PublishVerdictReason): reason is Exclude<PublishVerdictReason, RequestOnlyReason> {
+  return reason !== "stale_revision" && reason !== "blocker_set_changed";
+}
+
 export interface PublishRefusal {
-  /** True only when the route would publish this service now: `refusals` is empty. */
+  /** True only when the route would publish this service now: `refusals` is empty — up to the guard-bundle stage (ADR-0040's amendment). */
   ready: boolean;
   /** Why a ready-mode publish would be refused, in the route's own order. */
   refusals: PublishRefusalCode[];
@@ -112,14 +136,12 @@ export function publishRefusalFor(assembled: AssembledService | null): PublishRe
     };
   }
 
-  const blockers = classifyPublishBlockers(assembled.readiness);
-  const refusals: PublishRefusalCode[] = [];
-  if (blockers.hard.length > 0) refusals.push("hard_integrity_blocker");
-  if (!assembled.observation || assembled.observation.unsafe.length > 0) {
-    refusals.push("unusable_observation");
-  }
-  if (assembled.readiness.publishState !== "draft") refusals.push("already_published");
-  if (blockers.workflow.length > 0) refusals.push("not_ready");
+  const verdict = publishVerdict(assembled, {
+    mode: "ready",
+    rev: assembled.observation?.roleRev ?? "",
+  });
+  const refusals: PublishRefusalCode[] = verdict.reasons.filter(isReadObservable);
+  const blockers: PublishBlockers = { workflow: verdict.workflow, hard: verdict.hard };
 
   return {
     ready: refusals.length === 0,
