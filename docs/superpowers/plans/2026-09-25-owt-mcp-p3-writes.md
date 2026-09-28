@@ -21,7 +21,9 @@ parent requirement and is quoted verbatim.
 - **Document status:** Approved at critical tier (two sequential fresh approvals on digest
   `643c8786…`); changes made after that approval are listed as un-reviewed in its review log,
   [`2026-09-25-owt-mcp-p3-writes-review-log.md`](2026-09-25-owt-mcp-p3-writes-review-log.md).
-  **Risk tier: CRITICAL.** The plan covers production writers, a
+  **Implemented and released to production 2026-09-28** (PR #106, `main` `7c65f2eb`); **the live
+  proof (step 14) passed the same day**, and step 15's record is in `docs/MCP.md` (see «Release
+  record» below). **Risk tier: CRITICAL.** The plan covers production writers, a
   notification audience, and multi-document concurrency (roadmap «Review handoff»). It needs two
   sequential fresh `APPROVED` verdicts on byte-identical text, plus a committed review log beside
   this file.
@@ -39,7 +41,9 @@ parent requirement and is quoted verbatim.
   1. P1 is fully accepted. Items 8 and 9 of the P1 checklist are still **pending** at `963cd736`
      (`docs/MCP.md:742-763`): phone acceptance, and a production latency figure against the 10 s
      stop condition. `publish_service` runs the same whole-catalogue load, so its budget (§ «The
-     60 s ceiling») depends on that number.
+     60 s ceiling») depends on that number. **Met 2026-09-28:** P1's acceptance was completed at
+     about 10:45, before the P3 merge (10:50) and before any write ran on production. The latency
+     figures are in `docs/MCP.md`: server-side `get_service` 348–718 ms, `list_services` 389–403 ms.
   2. This plan is approved at critical tier.
   3. Frank gives the go-ahead to implement, and answers Q6 (live `/admin` twins, the default, or
      tests-only parity), because Q6 decides how a parent acceptance criterion is proven.
@@ -1407,6 +1411,38 @@ mid-`after()` loses notifications silently, exactly as in `/admin`. That is why 
   byte-identical text. Prior findings are never exposed. The churn cap is binding.
 - **Implementation authorization: not granted by this plan.**
 
+## Release record
+
+Completed 2026-09-28, all times America/Mexico_City. The full record, with the per-step table, is
+[`docs/MCP.md`'s P3 release record](../../MCP.md#release-record-p3-2026-09-28); this is its summary.
+
+- **PR #106** ([FrankERP/owt-kb-v1#106](https://github.com/FrankERP/owt-kb-v1/pull/106)), merged
+  10:50; `main` at `7c65f2eb`, tree `41afe16b`. The implementation branch's final commit is
+  `05d8c154`, the same tree. The final whole-branch code review returned READY TO RELEASE (0
+  Critical, 0 Important); its three minors were fixed in `05d8c154` and re-verified.
+- **Preview first:** merged into `preview` as `7353a8e0` (tree identical to the reviewed one); dev
+  alias verified — deployment `dpl_5SsX7AFH7Lpf7wTcZLreqYq3VTxf`. The dev smoke
+  `--await-revocation --reads` passed 10/10 at 10:49, its own grant revoked and the `401
+  invalid_token` observed.
+- **Production alias verified** — deployment `dpl_Cj4pEswB8fKtmrRuboHCjW16Kswo`,
+  `owt-backstage.vercel.app`, `githubCommitSha` `7c65f2eb`.
+- **Gates:** `gates` on #106 passed (12m22s). On the released tree: `tsc` 0 errors; vitest 412
+  files / 7500 tests; eslint 0 errors.
+- **Step 14 passed** (11:53–13:35), on two throwaway specials with Frank as the only audience,
+  cleaned up by Frank in `/admin`. L1–L8 all ran, with the live `/admin` twins (Q6's default: L5b,
+  L6b, L7b, and L3b for publish). No stop condition tripped; every email in the window had one
+  recipient; write calls took 1.2–2.4 s server-side against the 20 s limit. L3r showed I4 live.
+- **What the plan could not deliver:** push delivery. PP0 required a working push device and
+  production has none (0 members with `deviceTokens`), so the run went on under ruling P3-R27 with
+  email as the delivery proof and push verified only as the tool's reported audience. The weekend
+  create, patch and lock-heartbeat paths stay proven by the twin-run tests, as Q5's default
+  provides.
+- **One Minor follow-up, open:** a publish refused as not ready logs `code=stale_revision` on the
+  `[mcp]` timing line (the writer's top-level 409, F10) while the tool's text uses the per-service
+  reasons.
+- **Roadmap:** P3's exit criteria are met, including the live proof P4's entry requires. P4's
+  other entry conditions (P2's cutover, P4's own plan) are outside this record.
+
 ## Terminal state
 
 **APPROVED at critical tier.** Changes made after that approval are listed as un-reviewed in its
@@ -1414,3 +1450,6 @@ review log, [`2026-09-25-owt-mcp-p3-writes-review-log.md`](2026-09-25-owt-mcp-p3
 Approval is not authorization to implement. The plan is self-contained with no blocking unknowns.
 Q1–Q8 have defaults and none blocks review; Frank answers Q6 at step 0, before implementation.
 Step 0's P1 acceptance is an entry gate for implementation, not a review blocker.
+
+**Implemented and released 2026-09-28** (PR #106, `main` `7c65f2eb`); the live proof passed the
+same day. See «Release record» above.

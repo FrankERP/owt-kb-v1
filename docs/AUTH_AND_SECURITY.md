@@ -162,7 +162,7 @@ revocation path — documented in full in [`docs/MCP.md`](MCP.md) (the operator 
 stateless). **Status: released to production 2026-09-24** (PR #95, `main` `c2ca5f7c`) — see
 `docs/MCP.md`'s [release record](MCP.md#release-record-p0-2026-09-24).
 
-The P3 write tools (implemented on branch `claude/mcp-p3-writes`, not released) never pass
+The P3 write tools (released to production 2026-09-28, PR #106, `main` `7c65f2eb`) never pass
 through the admin guards: `requireActiveManager()` reads a session cookie a bearer caller does not
 have. Each admin write route instead keeps only its authorization and hands the rest to an
 `app/utils/*Commit.ts` domain module, and the tool calls that module after `/api/mcp`'s own
