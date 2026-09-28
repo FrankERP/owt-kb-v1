@@ -229,7 +229,7 @@ production 2026-09-24** (PR #95, `main` `c2ca5f7c`; see `docs/MCP.md`'s
 [release record](MCP.md#release-record-p0-2026-09-24)). **P1 status (seven read tools —
 `get_service`, `list_services`, `search_songs`, `get_song`, `get_member_availability`,
 `get_participation`, `list_proposals`): released to production 2026-09-25** (PR #98, `main`
-`a04edb43`; phone acceptance complete 7/7 on 2026-09-28 — see `docs/MCP.md`'s
+`a04edb43`; acceptance complete 7/7 on 2026-09-28 — see `docs/MCP.md`'s
 [P1 release record](MCP.md#release-record-p1-2026-09-25)) — see `docs/MCP.md`'s
 [P1 release checklist](MCP.md#p1-release-checklist-released-2026-09-25). **P3 status (four write
 tools — `edit_setlist`, `swap_assignment`, `publish_service`, `unpublish_service`): released to

@@ -10,7 +10,7 @@
 > [release checklist](#p0-release-checklist-steps-1213) for how it shipped.
 >
 > **P1 status: released to production 2026-09-25** (PR
-> [#98](https://github.com/FrankERP/owt-kb-v1/pull/98), `main` `a04edb43`), **phone acceptance
+> [#98](https://github.com/FrankERP/owt-kb-v1/pull/98), `main` `a04edb43`), **acceptance
 > complete 7/7** (four asks on 2026-09-25, three on 2026-09-28, production latency recorded).
 > The seven read tools below (`get_service`, `list_services`, `search_songs`, `get_song`,
 > `get_member_availability`, `get_participation`, `list_proposals`) exist in the [Tools](#tools)
@@ -30,7 +30,7 @@
 > be proven for any path**, `/admin`'s included, because production has no registered device (see
 > the record); email is the delivery proof.
 >
-> **Summary: P0 released 2026-09-24; P1 released 2026-09-25 (PR #98, `main` `a04edb43`), phone
+> **Summary: P0 released 2026-09-24; P1 released 2026-09-25 (PR #98, `main` `a04edb43`),
 > acceptance complete 2026-09-28; P3 (four write tools) released 2026-09-28 (PR #106, `main`
 > `7c65f2eb`), live proof passed.**
 
@@ -1182,7 +1182,7 @@ song, participation) were verified 2026-09-25 at about 09:55. The remaining thre
 - **proposal threads**: 0 open, 0 for October, and six September proposals all approved. Both
   threads compared matched message by message.
 
-**Latency (checklist item 9).** The end-to-end time Frank measured on the connector, which includes
+**Latency (checklist item 9).** The end-to-end time Frank reported from the connector, which includes
 the model's own, was 3–10 s per call. The server-side figures, from the `[mcp]` timing line, are: `get_service` 348–718 ms,
 `list_services` 389–403 ms, `search_songs` 666 ms. The tool's own share is therefore far below the
 plan's 10 s stop condition.
@@ -1325,7 +1325,7 @@ steps of the P1 plan are implemented and gate-green:
 8. registration, the tool-list test, the dev smoke's `--reads` and these docs.
 
 The plan's step 9, the release, is the checklist below — every step is done: the release through
-the production alias on 2026-09-25, and phone acceptance (items 8–9) on 2026-09-28. See the
+the production alias on 2026-09-25, and acceptance (items 8–9) on 2026-09-28. See the
 [P1 release record](#release-record-p1-2026-09-25) above for the full evidence behind every ✅.
 
 1. ✅ A fresh code review on the merge range (this repo's release rule: a merge to `main` needs a
@@ -1361,7 +1361,7 @@ the production alias on 2026-09-25, and phone acceptance (items 8–9) on 2026-0
    - a song;
    - this month's participation;
    - a song search;
-   - his own availability;
+   - availability for next Sunday;
    - a proposal thread.
 
    Each answer was compared with `/admin` (Servicios, Disponibilidad) and the song page. The first four
@@ -1371,7 +1371,7 @@ the production alias on 2026-09-25, and phone acceptance (items 8–9) on 2026-0
    [P1 release record](#release-record-p1-2026-09-25) for the detail.
 9. ✅ **Observed latency** of `get_service` and `list_services` on production, recorded
    2026-09-28. The plan's stop condition is **10 s**. From the `[mcp]` timing line (server side):
-   `get_service` 348–718 ms, `list_services` 389–403 ms (and `search_songs` 666 ms). On the connector, as Frank measured it,
+   `get_service` 348–718 ms, `list_services` 389–403 ms (and `search_songs` 666 ms). On the connector, as Frank reported it,
    end to end and including the model's own time: 3–10 s per call. **The 870 ms real-data probe in
    the [release record](#release-record-p1-2026-09-25) above does NOT satisfy this item** — it was
    measured laptop→Sanity through direct calls, not through Vercel; these figures are the ones that
