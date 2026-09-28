@@ -21,8 +21,20 @@
 //
 // Buttons are matched by their REAL computed labels (`Crear ${n} borrador(es)`
 // pluralised, and the literal "Crear y publicar"): a bare /Crear/ matches both.
+//
+// THE ROLLBACK HARNESS (MCP P2 D2, plan step 9). Since the cutover the shipped
+// fairness-history source is `"derived"` (`solverHistorySource.ts`); this suite
+// pins `"local"` so the per-browser path — `owt_solver_history_v2` read on
+// mount, written by `saveHistoryEntry`, the chips' × — stays tested for as long
+// as flipping the constant back is the rollback (R15, until D3 deletes the local
+// path). Several of its cases assert on that key. The derived path's own suite
+// is `MonthGenerator.derivedHistory.test.tsx`, and the other planner suites
+// (stored, storedMove, calendar, localFill) run on the shipped default. When D3
+// removes the local path this pin and the cases that need it go with it.
 import { cleanup, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../solverHistorySource", () => ({ SOLVER_HISTORY_SOURCE: "local" }));
 
 import MonthGenerator from "../MonthGenerator";
 import { absentRules, failedRules, loadingRules, readyRules } from "./rulesHarness";

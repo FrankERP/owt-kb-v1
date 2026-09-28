@@ -1425,7 +1425,7 @@ function SolverConfigReloadNotice({ source, onReload }: {
   );
 }
 
-// ─── Derived fairness history (the switch is `"local"` until the cutover) ─────
+// ─── Derived fairness history (the shipped source since the cutover) ──────────
 //
 // Everything in this section renders only when `SOLVER_HISTORY_SOURCE` is
 // `"derived"` (R14). The rule all of it follows is the spec's Failure clause: a
@@ -1745,9 +1745,10 @@ export default function MonthGenerator({
   /**
    * R14's display copy of the DERIVED fairness history, read for the month on
    * screen — in both modes, because stored mode also mounts the grid's lead-pool
-   * panel. Dormant while `SOLVER_HISTORY_SOURCE` is `"local"`: the hook fetches
-   * nothing and nothing reads it. Never what a solve sends — `handleAutoDerived`
-   * re-reads for its own month at solve time.
+   * panel. Live while `SOLVER_HISTORY_SOURCE` is `"derived"` (the shipped
+   * value); on the rollback value `"local"` the hook fetches nothing and nothing
+   * reads it. Never what a solve sends — `handleAutoDerived` re-reads for its own
+   * month at solve time.
    */
   const derivedMode = SOLVER_HISTORY_SOURCE === "derived";
   const derivedHistory = useDerivedSolverHistory(year, month, derivedMode);
@@ -2079,13 +2080,15 @@ export default function MonthGenerator({
     // load order — different on a cold load than on a re-render — would have
     // decided which rule set won.
     //
-    // `owt_solver_history_v2` below stays per-browser on purpose (ADR-0010,
-    // amended by ADR-0042; derived history behind the switch):
-    // P6 shares the RULES, not the fairness history.
+    // `owt_solver_history_v2` below is the PRE-CUTOVER, per-browser history
+    // (ADR-0010, superseded for the solver by ADR-0042): P6 shares the RULES, and
+    // since the cutover the fairness history is derived from the stored services
+    // too.
     //
-    // Derived mode (R14) never READS it: the history comes from the stored
-    // services, and `localStorage` is only written, as R15's rollback target
-    // (`appendLocalHistoryEntry`).
+    // Derived mode (R14 — the shipped one) never READS it: `localStorage` is only
+    // written, as R15's rollback target (`appendLocalHistoryEntry`). This read
+    // is the rollback path and runs only when the switch is flipped back to
+    // `"local"`.
     if (SOLVER_HISTORY_SOURCE !== "local") return;
     try {
       const hist = localStorage.getItem(HISTORY_KEY);
