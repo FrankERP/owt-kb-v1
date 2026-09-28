@@ -486,7 +486,12 @@ function rowLeads(leads: unknown): (string | null)[] {
   return out;
 }
 
-function setlistContent(
+/**
+ * A setlist's rows (title, key, medley tag, a worship night's leaders by name)
+ * and its medley runs. Exported so `edit_setlist` reports the rows it wrote in
+ * exactly the shape `get_service` reads them — one presenter, no drift.
+ */
+export function setlistContent(
   songs: readonly unknown[],
   worshipNight: boolean,
   members: MemberNameLookup,

@@ -277,6 +277,10 @@ several exist precisely to stop a plausible-looking change.
   on NextAuth's DEFAULT `redirect` callback preserving its query** — never add a custom
   `redirect` callback without keeping that. `authRedirectCallback.test.ts` is the guard. See
   [`docs/MCP.md`](docs/MCP.md).
+- **The four admin write routes (setlists PUT, swap, publish-ready, unpublish) delegate
+  everything after authorization to `app/utils/*Commit.ts`; `serviceCommitCallers.test.ts` pins
+  their callers and `publishVerdict`'s; MCP writes go only through them; `/api/mcp` buffers SSE so
+  a tool finishes inside the handler.**
 
 ## Reusable utils (don't reinvent)
 `normalizeText` (accent-insensitive search), `assignedMemberRefsQuery`,
@@ -284,7 +288,8 @@ several exist precisely to stop a plausible-looking change.
 (medley grouping), `extractYouTubeId`, `computeParticipation`,
 `summarizeUnfilledSeats`, `paintsDayCard` (whether a `DayCard` will paint
 anything rather than render `null` — the home page asks it instead of copying
-the guard), `isMemberActive` (30s-TTL auth gate),
+the guard), `publishVerdict` (`app/utils/publishVerdict.ts` — the ONLY per-service publish
+predicate), `isMemberActive` (30s-TTL auth gate),
 `requireActiveSession`/`requireActiveManager`, `wantsNotification` (the ONLY
 per-type email-preference resolver — nothing reads `notifPrefs` directly),
 `sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette),

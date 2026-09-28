@@ -32,6 +32,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// Importing any of these puts an outbound transport within reach of the handler.
+import { DELIVERY_CAPABLE_IMPORTS } from "./__fixtures__/deliveryCapableImports";
+
 vi.mock("server-only", () => ({}));
 
 import {
@@ -615,15 +618,6 @@ describe("delivery evidence carries the in-flight run's markers", () => {
 // unproven absence is not proof.
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-
-/** Importing any of these puts an outbound transport within reach of the handler. */
-const DELIVERY_CAPABLE_IMPORTS = [
-  "serviceMutationSideEffects",
-  "utils/push",
-  "utils/email",
-  "assignmentEmail",
-  "proposalNotify",
-];
 
 const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 

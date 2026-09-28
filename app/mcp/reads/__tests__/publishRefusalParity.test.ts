@@ -1,9 +1,13 @@
-// The I4 agreement test: what an MCP read reports as blocking a publish is what
-// the publish-ready route actually refuses on (Decision D2).
+// The I4 WIRING test: what an MCP read reports as blocking a publish is what
+// the publish-ready route actually refuses on (ADR-0040, D2 as amended by P3).
 //
-// `publishRefusalFor` is a second copy of the per-service verdict inside
-// `POST /api/admin/roles/publish-ready` (`route.ts:173-216`). A copy is safe only
-// while it is provably the same thing, so this file runs the REAL route handler,
+// There is one per-service verdict, `publishVerdict` (`app/utils/publishVerdict.ts`):
+// the publish writer behind `POST /api/admin/roles/publish-ready` calls it, and
+// `publishRefusalFor` is a thin read adapter over it. So this file no longer
+// proves that a mirror is equal — `publishVerdictSingleSource.test.ts` proves
+// there is nothing to mirror. It proves the WIRING: the route, the writer it
+// delegates to, and the read adapter's arguments (its own `roleRev`, `mode:
+// "ready"`) still add up to the same answer. It runs the REAL route handler,
 // one isolated ready-mode POST per fixture service, and demands:
 //
 //   - `refusals` equals the route's own per-service reasons, in the route's order;

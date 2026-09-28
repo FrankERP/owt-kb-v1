@@ -51,9 +51,11 @@ export const GET_SERVICE_DESCRIPTION =
   "Selecciona con UNO de: { serviceId }; { date, kind: \"sunday\" | \"saturday\" } (date es el día del servicio, YYYY-MM-DD; " +
   "el de un sábado es la fecha del sábado); { date, kind: \"special\", name? }; { date } si ese día hay un solo servicio; o {} " +
   "para el próximo servicio desde hoy en America/Mexico_City, INCLUIDOS los borradores (los miembros no los ven). Un " +
-  "selector ambiguo se rechaza y lista los candidatos. observations (roleId, roleRev, seatItemKeys y setlist) es lo que una " +
-  "escritura posterior necesita: pásalo SIN CAMBIOS, tal como llegó; nunca lo construyas ni lo edites a mano. Un setlist en " +
-  "estado \"ambiguous\", \"draft_overlay\", \"invalid\" o \"unknown\" es uno en el que el editor de setlist no escribiría. " +
+  "selector ambiguo se rechaza y lista los candidatos. observations (roleId, roleRev, seatItemKeys y setlist) es lo que " +
+  "piden las herramientas de escritura: roleId y roleRev son el serviceId y el rev de publish_service, " +
+  "unpublish_service y swap_assignment, y roleRev y setlist son el roleRev y el observed de edit_setlist. Pásalo SIN " +
+  "CAMBIOS, tal como llegó; nunca lo construyas ni lo edites a mano. Un setlist en estado \"ambiguous\", " +
+  "\"draft_overlay\", \"invalid\" o \"unknown\" es uno en el que ni el editor de setlist ni edit_setlist escriben. " +
   "Solo lee: no cambia nada.";
 
 /** The tool's whole behaviour, callable without a server (the route registers it below). */

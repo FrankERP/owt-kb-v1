@@ -211,24 +211,24 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the publish surface itself)",
   },
   {
-    file: "app/api/admin/roles/publish-ready/route.ts",
-    operation: "POST",
+    file: "app/utils/publishReadyCommit.ts",
+    operation: "module",
     reason:
-      "guarded readiness-aware publish (Plan B item 3): reloads the five A1 read domains, recomputes the shared readiness predicate, and commits ONE transaction whose every op asserts an observed revision — role, weekend lock, setlist singleton, proposal singleton and every assigned member — with `published: true` folded into each role's own assertion",
+      "guarded readiness-aware publish (Plan B item 3): reloads the five A1 read domains, recomputes the shared readiness predicate, and commits ONE transaction whose every op asserts an observed revision — role, weekend lock, setlist singleton, proposal singleton and every assigned member — with `published: true` folded into each role's own assertion. The domain body of `POST /api/admin/roles/publish-ready`, moved here so the MCP `publish_service` tool calls the same writer; the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the ready/override publish surface itself)",
   },
   {
-    file: "app/api/admin/roles/unpublish/route.ts",
-    operation: "POST",
+    file: "app/utils/roleUnpublishCommit.ts",
+    operation: "module",
     reason:
-      "guarded narrow unpublish (Plan B item 3): proves canonical singleton identity, raw-draft absence, observed revision, target occupancy and weekend lock ownership, then patches `published: false` under that revision and heartbeats each token; deliberately consults no readiness or blocker acknowledgement",
+      "guarded narrow unpublish (Plan B item 3): proves canonical singleton identity, raw-draft absence, observed revision, target occupancy and weekend lock ownership, then patches `published: false` under that revision and heartbeats each token; deliberately consults no readiness or blocker acknowledgement. The domain body of `POST /api/admin/roles/unpublish`, moved here so the MCP `unpublish_service` tool calls the same writer; the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the hide-a-service safety surface itself)",
   },
   {
-    file: "app/api/admin/roles/swap/route.ts",
-    operation: "POST",
+    file: "app/utils/roleSwapCommit.ts",
+    operation: "module",
     reason:
-      "guarded atomic swap: one transaction exchanges stored seat/team assignments across both roles under both observed revisions (A2 §4)",
+      "guarded atomic swap: one transaction exchanges stored seat/team assignments across both roles under both observed revisions (A2 §4). The domain body of `POST /api/admin/roles/swap`, moved here so the MCP `swap_assignment` tool calls the same writer; the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the swap surface itself)",
   },
   {
@@ -239,10 +239,10 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the copy surface itself)",
   },
   {
-    file: "app/api/admin/setlists/route.ts",
-    operation: "PUT",
+    file: "app/utils/setlistSaveCommit.ts",
+    operation: "module",
     reason:
-      "guarded live setlist writer: one transaction creates/patches featuredSongs/saturdarSongs at the deterministic id, or patches special_role songs, under the client-observed target state (A2 §5)",
+      "guarded live setlist writer: one transaction creates/patches featuredSongs/saturdarSongs at the deterministic id, or patches special_role songs, under the client-observed target state (A2 §5). The domain body of `PUT /api/admin/setlists`, moved here so the MCP `edit_setlist` tool calls the same writer; the route keeps only authorization, and `serviceCommitCallers.test.ts` pins who may import this module",
     removalOwner: "permanent runtime writer (never removed — the setlist save surface itself)",
   },
   {

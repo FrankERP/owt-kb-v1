@@ -96,3 +96,10 @@ Made after `7e42909f` was approved; **not covered by that approval**.
 10. P1's code review checks that `_rev`s and row `_key`s come from the same snapshot as
     the content Frank acts on.
 11. Terminal state records the approval.
+12. P3's Rollback cell (made at P3 step 12, before P3 releases; the P3 plan's Handoff and finding
+    F4). Under the P3 plan's D1/D10 the protected-write registry entries belong to the extracted
+    `*Commit` modules, which stay, so the old wording ("remove the tools and their registry
+    entries") could not be followed: those entries must stay while the modules do, or the audit
+    fails. Rolling P3 back now removes the tools, their
+    registration lines and their caller-pin entries in one commit; the registry entries stay and the
+    audit stays green. The coverage table is unaffected.

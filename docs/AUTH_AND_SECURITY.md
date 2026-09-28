@@ -162,6 +162,13 @@ revocation path — documented in full in [`docs/MCP.md`](MCP.md) (the operator 
 stateless). **Status: released to production 2026-09-24** (PR #95, `main` `c2ca5f7c`) — see
 `docs/MCP.md`'s [release record](MCP.md#release-record-p0-2026-09-24).
 
+The P3 write tools (implemented on branch `claude/mcp-p3-writes`, not released) never pass
+through the admin guards: `requireActiveManager()` reads a session cookie a bearer caller does not
+have. Each admin write route instead keeps only its authorization and hands the rest to an
+`app/utils/*Commit.ts` domain module, and the tool calls that module after `/api/mcp`'s own
+bearer check, which admits only a live super-admin
+([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md)).
+
 The one point of contact with the code above this section: `/oauth/authorize` (the consent
 screen) reuses `requireActiveSession()` and `getMemberAccess()` like any other gated page, and
 relies on the middleware's `redirect` callback staying NextAuth's default — the invariant in
