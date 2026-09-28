@@ -10,29 +10,29 @@
 > [release checklist](#p0-release-checklist-steps-1213) for how it shipped.
 >
 > **P1 status: released to production 2026-09-25** (PR
-> [#98](https://github.com/FrankERP/owt-kb-v1/pull/98), `main` `a04edb43`). The seven read tools
-> below (`get_service`, `list_services`, `search_songs`, `get_song`, `get_member_availability`,
-> `get_participation`, `list_proposals`) exist in the [Tools](#tools) section, the route registers
-> them, the full gate set (`tsc`, `vitest`, `eslint`) is green, and production now exposes all
-> eight tools. **Frank's phone acceptance is still pending** — Frank runs it later; checklist
-> steps 8–9 (the answers compared against `/admin` and the song page, and
-> production latency recorded against the 10 s stop condition) are not done. See the
+> [#98](https://github.com/FrankERP/owt-kb-v1/pull/98), `main` `a04edb43`), **phone acceptance
+> complete 7/7** (items 1–4 on 2026-09-25, items 5–7 on 2026-09-28, production latency recorded).
+> The seven read tools below (`get_service`, `list_services`, `search_songs`, `get_song`,
+> `get_member_availability`, `get_participation`, `list_proposals`) exist in the [Tools](#tools)
+> section and production exposes them. See the
 > [P1 release record](#release-record-p1-2026-09-25) for the evidence and the
-> [P1 release checklist](#p1-release-checklist-released-2026-09-25) for how it shipped and what's
-> still open.
+> [P1 release checklist](#p1-release-checklist-released-2026-09-25) for how it shipped.
 >
-> **P3 status: implemented on branch `claude/mcp-p3-writes`, not released.** The four write tools
-> (`edit_setlist`, `swap_assignment`, `publish_service`, `unpublish_service`, see
-> [Write tools](#write-tools-p3-implemented-on-the-branch-not-released)) are registered on
-> `/api/mcp` on that branch only; dev and production still expose the eight tools above. Release is
-> P3 plan step 13: a fresh whole-branch code review, then this repo's push order. The live proof on
-> production is step 14, and it stops for Frank at every parking point; see the
-> [P3 live-proof runbook](#p3-live-proof-runbook-step-14-not-yet-run). A write tool that is released
-> but not yet proven on production is never used on a real service.
+> **P3 status: released to production 2026-09-28** (PR
+> [#106](https://github.com/FrankERP/owt-kb-v1/pull/106), `main` `7c65f2eb`), **live proof passed
+> the same day.** The four write tools (`edit_setlist`, `swap_assignment`, `publish_service`,
+> `unpublish_service`, see [Write tools](#write-tools-p3-released-2026-09-28)) are registered on
+> `/api/mcp` on dev and production, so both expose all twelve tools. Step 14, the live proof on
+> production against two throwaway specials with Frank as the only audience, ran 2026-09-28 on
+> Frank's explicit go; see the
+> [P3 live-proof runbook](#p3-live-proof-runbook-step-14-executed-2026-09-28) and the
+> [P3 release record](#release-record-p3-2026-09-28). One limit stands: **push delivery could not
+> be proven for any path**, `/admin`'s included, because production has no registered device (see
+> the record); email is the delivery proof.
 >
-> **Summary: P0 released 2026-09-24; P1 released to production 2026-09-25 (PR #98, `main`
-> `a04edb43`); phone acceptance pending. P3 (four write tools) implemented on its branch, not
-> released.**
+> **Summary: P0 released 2026-09-24; P1 released 2026-09-25 (PR #98, `main` `a04edb43`), phone
+> acceptance complete 2026-09-28; P3 (four write tools) released 2026-09-28 (PR #106, `main`
+> `7c65f2eb`), live proof passed.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
@@ -40,8 +40,8 @@ connector is OAuth-gated end to end: only a super-admin can authorize it, and on
 tools are exposed — P0 shipped one health check (`ping`); P1 adds seven read-only tools over the
 same service/song/member/proposal data `/admin` shows (released to production 2026-09-25); P3 adds
 four write tools that make the same changes `/admin` makes, through the same domain writers
-([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md); implemented on its branch, not
-released). See the status banner above. See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
+([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md); released to production
+2026-09-28). See the status banner above. See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
 registration is stateless, and [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#mcp--oauth) /
 [API_REFERENCE.md](API_REFERENCE.md) for the route-level contract.
 
@@ -104,10 +104,10 @@ response therefore means Frank reconnects from Claude; there is no partial-recov
 
 ### Tools
 
-Twelve tools on the P3 branch: `ping` (P0, released to production 2026-09-24), seven read tools
+Twelve tools: `ping` (P0, released to production 2026-09-24), seven read tools
 (P1, **released to production 2026-09-25** — PR #98, `main` `a04edb43`), and four write tools
-(P3, **implemented on branch `claude/mcp-p3-writes`, not released** — dev and production still
-expose the first eight; see the status banner at the top of this document). Every tool is
+(P3, **released to production 2026-09-28** — PR #106, `main` `7c65f2eb`; dev and production both
+expose all twelve). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `app/api/mcp/route.ts` calls inside its handler
 init, the writes after the reads. `ping` and every read declare
@@ -122,7 +122,7 @@ carries no internals** — no Sanity error message, no stack, no query (`runRead
 `runWriteTool`, spec E1); the one documented exception is the SDK's OWN schema-violation message
 for a malformed call, which starts in English (see [Known behaviours](#known-behaviours)). `ping` and the reads write
 nothing; the four writes are under
-[Write tools](#write-tools-p3-implemented-on-the-branch-not-released).
+[Write tools](#write-tools-p3-released-2026-09-28).
 
 Four conventions the seven read tools share:
 
@@ -357,10 +357,12 @@ America/Mexico_City, independent of `status`. **Unread state is never reported**
 document stores a read-mark
 ([ADR-0024](adr/0024-read-state-belongs-on-neither-document.md)), so this tool cannot invent one.
 
-### Write tools (P3, implemented on the branch, not released)
+### Write tools (P3, released 2026-09-28)
 
 Four tools write. Each makes exactly the change its `/admin` counterpart makes, through the same
-code. **None of them is on dev or production yet** (see the status banner).
+code. All four are on dev and production since 2026-09-28 (PR #106, `main` `7c65f2eb`) and were
+proven live on production the same day (see the
+[P3 release record](#release-record-p3-2026-09-28)).
 
 | Tool | `/admin` counterpart | Route | Domain module |
 |---|---|---|---|
@@ -389,8 +391,9 @@ What the four share:
   before retrying.
 - **Annotations and schema.** `{ readOnlyHint: false, destructiveHint: true, idempotentHint: false,
   openWorldHint: false }` (I14) — a hint, not a guarantee: claude.ai is expected to ask before
-  running a destructive tool, unless the user has chosen «Always allow» for that tool. Step 14
-  (PP0/L1) is where that prompt is confirmed on the live connector, not merely assumed. The strict
+  running a destructive tool, unless the user has chosen «Always allow» for that tool. Step 14's
+  PP0/L1 was meant to record that prompt on the live connector; the
+  [P3 release record](#release-record-p3-2026-09-28) says what was and was not observed. The strict
   input schemas (I13) carry the writer's own bounds: `isCanonicalDocumentId`, `isRevisionString`,
   at most 60 rows, a key of at most 24 characters, at most 2 leaders. So `tools/list` advertises
   them up front, and the SDK refuses a violation before the handler runs (see
@@ -502,7 +505,7 @@ The refusals that are the tool's own (every other one is the route's):
 | `lead_not_member` | `invalid_request` | a worship-night leader with no member document (E7) |
 | `song_lookup_failed` | `integrity_conflict` | the song check itself could not be read |
 | `date` | `integrity_conflict` | the role has no valid stored date |
-| `invalid_input` | `invalid_request` | an argument the schema refuses, when the handler runs it. A registered call is refused by the SDK first; see «Known behaviour» |
+| `invalid_input` | `invalid_request` | an argument the schema refuses, when the handler runs it. A registered call is refused by the SDK first; see [Known behaviours](#known-behaviours) |
 
 #### `swap_assignment`
 
@@ -792,12 +795,13 @@ creates a real grant document in the shared production Sanity dataset** — revo
 By default the smoke calls only `ping`, and its `tools/list` check requires only that `ping` be
 registered — it passes against BOTH a P0-only deployment and a P1 one (production and dev have
 both carried P1 since 2026-09-25), since the plain smoke's job is proving the handshake and
-`ping`, not P1's registration. **`--reads`** adds a sub-step right after `ping` and before
+`ping`, not P1's or P3's registration. **`--reads`** adds a sub-step right after `ping` and before
 refresh. Its OWN `tools/list` check (`checkToolList`) requires the full twelve tools, in order,
 each with its own annotations: it is about to call the seven reads, and that listing is the ONLY
 proof the four P3 writes get on dev — present, with `destructiveHint: true`. **So `--reads` passes
-only against a deployment that carries P3**; against one that carries only P1 (dev and production
-until P3 is released) it fails at that check, by design. The sub-step makes one call each to `list_services`, `get_service` (selected BY ID from `list_services`'s own first
+only against a deployment that carries P3** (dev has carried it since 2026-09-28; it passed there
+10/10, see the [P3 release record](#release-record-p3-2026-09-28)); against one that carries only
+P1 it fails at that check, by design. The sub-step makes one call each to `list_services`, `get_service` (selected BY ID from `list_services`'s own first
 result, the same way `get_song` below uses `search_songs`'s — never `{}`, so it never hits its own
 same-day-tie refusal; an empty month, with no service to select by id, falls back to `{}`, and if
 THAT refuses on a tie the pass logs it as an EXPECTED pass, "ambiguous (expected)", not a failure),
@@ -820,7 +824,7 @@ quoted literal of a write tool's name, appears anywhere in the script's code.
 node --env-file=.env.local scripts/mcp-dev-smoke.mjs
 
 # Same, plus one call to each of the seven P1 read tools after ping, and a tools/list check that
-# pins all twelve tools with their annotations (so the target must carry P3) — see the Tools
+# pins all twelve tools with their annotations (so the target must carry P3, as dev does) — see the Tools
 # section above for what each one returns. It calls no write tool (DV1).
 node --env-file=.env.local scripts/mcp-dev-smoke.mjs --reads
 
@@ -992,12 +996,18 @@ A few things that look like bugs at first glance and are not:
 
 ---
 
-## P3 live-proof runbook (step 14, not yet run)
+## P3 live-proof runbook (step 14, executed 2026-09-28)
 
-**Status: not yet run. It runs only after P3's release (plan step 13).** This is the proof, on
-production, that each write tool makes the same document diff and sends the same notifications
-as `/admin` (roadmap acceptance). It is condensed from step 14 of
+**Status: executed 2026-09-28 (11:53–13:35) and passed.** No stop condition tripped. The results,
+step by step, are in the [P3 release record](#release-record-p3-2026-09-28); the text below is the
+runbook as it was run and stays as the procedure for any later live proof of a write tool. This is
+the proof, on production, that each write tool makes the same document diff and sends the same
+notifications as `/admin` (roadmap acceptance). It is condensed from step 14 of
 [the P3 plan](superpowers/plans/2026-09-25-owt-mcp-p3-writes.md), which has the full evidence.
+**One PP0 condition could not be met, and the run went on under ruling P3-R27 rather than skipping
+it:** production has no registered push device, so «with no push device, stop» would have ended the
+run. The ruling made email the delivery proof, and push is verified as the tool's reported
+audience only.
 
 Every write below is made through the claude.ai connector on Frank's explicit instruction at that
 moment, or by Frank in `/admin`. **The agent does not go past a parking point (PP) without Frank.**
@@ -1006,7 +1016,7 @@ Only throwaway specials are used:
 - a weekend setlist, once created, would stop `/admin` from deleting the throwaway.
 
 So the weekend create/patch and lock-heartbeat paths are proven by `edit_setlist`'s twin-run tests,
-not live. The release record must say so.
+not live. The [release record](#release-record-p3-2026-09-28) says so.
 
 **Before any write:**
 - **PP0.**
@@ -1058,6 +1068,8 @@ things:
 **Twin comparisons** (Frank's Q6 default): publish L3a vs L3b, unpublish L6a vs L6b, swap L4 vs
 L5b, setlist edit L1/L2/L7 vs L7b. If Frank opts out of L5b and L7b, identity with `/admin` for
 `swap_assignment` and `edit_setlist` rests on the twin-run tests, and the release record says so.
+Frank did not opt out: L5b and L7b ran live in his browser on production `/admin`, and the record
+holds their results.
 
 **Stop conditions.** On any of these, stop, report, and decide with Frank. `MCP_DISABLED=1` is the
 kill switch, and it needs a redeploy.
@@ -1158,8 +1170,112 @@ grant is not revoked as a routine release check, since revocation was already pr
 above). The [P1 release checklist](#p1-release-checklist-released-2026-09-25) below reflects
 this — it carries no "revoke the production grant" step.
 
-**Not yet done.** Frank's phone acceptance (checklist items 8 and 9) is still pending; Frank runs
-it later. Both are marked pending, not done, below.
+**Phone acceptance — complete, 7/7.** It ran from the phone, read-only, against production. Items 1–4 (next
+service, the month's services, a song, participation) were verified 2026-09-25 at about 09:55.
+Items 5–7 were verified 2026-09-28 at about 10:45:
+- **availability**, next Sunday: exactly one worship member unavailable, the pattern correct;
+- **song search**, by the theme tag `gracia`: 19 songs, and every title, key and tempo grouping the
+  answer cited matched. A plain-text query fuzzy-matches titles, so the tag filter is the precise
+  path; that is how the search works, not a defect;
+- **proposal threads**: 0 open, 0 for October, and six September proposals all approved. Both
+  threads compared matched message by message.
+
+**Latency (checklist item 9).** The phone's end-to-end time, which includes the model's own, was 3–10
+s per call. The server-side figures, from the `[mcp]` timing line, are: `get_service` 348–718 ms,
+`list_services` 389–403 ms, `search_songs` 666 ms. The tool's own share is therefore far below the
+plan's 10 s stop condition.
+
+---
+
+## Release record (P3, 2026-09-28)
+
+All times America/Mexico_City.
+
+**Code on the branch.** P3 was implemented on `claude/mcp-p3-writes`, final `05d8c154` (tree
+`41afe16b`). The final whole-branch code review returned READY TO RELEASE, with no Critical and no
+Important finding. Its three minors (the timing-line scope, the refusal tables, the publish
+wording) were fixed in `05d8c154` and re-verified, so the last review before the merge is a
+verification, not a fix. The local `next start` spike behind the transport gate is recorded in
+[ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md). Gates on the released tree,
+re-measured while writing this record: `tsc` 0 errors, vitest 412 files / 7500 tests, eslint 0
+errors.
+
+**Preview.** Merged into `preview` as `7353a8e0`, a tree identical to the reviewed one. Dev alias
+verified — deployment `dpl_5SsX7AFH7Lpf7wTcZLreqYq3VTxf`.
+
+**Dev smoke.** `node --env-file=.env.local scripts/mcp-dev-smoke.mjs --await-revocation --reads`
+passed 10/10 at 10:49. That run included the `tools/list` check that pins all twelve tools with
+their annotations. Reads 7/7: `list_services` (6 services), `get_service` (1), `search_songs` (20
+songs), `get_song` (1), `get_member_availability` (36 members), `get_participation` (24 members /
+6 services), `list_proposals` (6 proposals). The smoke calls no write tool, in any mode (DV1). Its
+own dev grant was revoked afterward — a dry run, then `--apply` — and a `401 invalid_token` was
+observed.
+
+**Production.** PR [#106](https://github.com/FrankERP/owt-kb-v1/pull/106), `gates` passed in
+12m22s, merged 10:50 (`main` `7c65f2eb`, tree `41afe16b`: the reviewed tree, and the one on
+`preview`). Deployment `dpl_Cj4pEswB8fKtmrRuboHCjW16Kswo` — alias includes
+`owt-backstage.vercel.app`, `githubCommitSha` `7c65f2eb`.
+
+**Revocation policy for this release.** As for P1: the revoke-and-401 proof ran only on dev,
+against the dev smoke's own grant. Frank's production connector grant was not revoked; it is the
+grant the live proof below used.
+
+**Live proof on production (step 14) — passed, 11:53–13:35.** Two throwaway specials, both created
+by Frank in `/admin` and both deleted by him at the end: **A**, «PRUEBA MCP A — ignorar»
+(2026-10-13, Frank alone in Lead) and **B**, «PRUEBA MCP B — ignorar» (2026-10-14, empty). The MCP
+writes went through the claude.ai connector (the same OAuth grant), driven from Claude Code, on
+Frank's explicit go. The `/admin` twin steps L6b and L7b were performed in Frank's own browser on
+production `/admin`, with his permission; L3b, L5b and L8 were done by Frank himself. Durations
+are server-side milliseconds from the `[mcp]` timing line.
+
+| Step | Action | Result | ms |
+|---|---|---|---|
+| L1 | `edit_setlist` A (draft): three songs, each with a key | notifications none («ninguna (servicio en borrador)») | 1666 |
+| L2 | `edit_setlist` A: a reorder, one key change, two rows linked as a medley | none; `get_service` matched the tool's report exactly (D8) | 1691 |
+| L3a | `publish_service` A | reported audience Frank only: push «Nuevo servicio asignado», the assignment email, «Setlist listo» (immediate). The logs show 2 SMTP sends, `recipientCount` 1 each; Frank confirmed both emails arrived | 1528 |
+| L3r | `publish_service` B (not ready) | refused, listing «el setlist está incompleto o falta; no hay equipo asignado», no override offered, «No se escribió nada.» (I4 shown live) | 402 |
+| L3b | Frank publishes B in `/admin` with the override | B published | — |
+| L4 | `swap_assignment` section `Lead`, A↔B | the seat key travelled, one shared rev on both roles; reported audience Frank only. The cron flush at 12:05 claimed 2 notices and sent 1 grouped email (one email per recipient, by design: `outboxSweep.ts`, step 6); Frank confirmed | not itemized |
+| L5 | `swap_assignment` team, A↔B | the grouped email «Novedades de tus servicios» arrived 12:45 («Ya no participas — Miércoles 14 oct», «Nueva asignación — Martes 13 oct, Sirves como Líder»), Frank only | 2416 |
+| L5b | **`/admin` twin of L4**: the stored planner's «Intercambiar sección», Lead, A↔B | the seat key travelled B→A, one shared rev: the same shape as L4. Its email was not awaited: swap delivery was already proven twice, and the `/admin` swap runs the same `roleSwapCommit` | — |
+| L6a | `unpublish_service` A | published → draft; notifications none | 1245 |
+| L6b | **`/admin` twin of L6a**: «Ocultar» on B | the same shape: only `published` changed | — |
+| L7 | `edit_setlist` A with `rows: []` | songs `[]`; none | 1749 |
+| L7b | **`/admin` twin of L1, L2 and L7**: the setlist editor on B, three saves | (1) equals L1 row for row; (2) equals L2 (same order and keys, medley run at positions 2–3); (3) songs `[]` equals L7. Only the opaque row `_key`s and the medley tag values differ, by design | — |
+| L8 | Frank deletes A and B in `/admin` | cleanup check: `list_services` for October lists neither, `notificationOutbox` is empty, and no document references either | — |
+
+- **A first L5b attempt does not count as the twin.** Swapping by seat edits and «Guardar» produced
+  a new seat key and two separate revs, because that is the roles PATCH path, not the swap route.
+  The twin is the «Intercambiar sección» run in the table.
+- **Stop conditions: none tripped.** Every email in the window (flushes at 11:53, 12:05, 12:45,
+  13:00 and 13:15) had `recipientCount` 1, Frank. The write calls took 1.2–2.4 s server-side, against
+  the 20 s limit.
+- **Push delivery could not be proven, for any path (ruling P3-R27).** Production has 0 members with
+  `deviceTokens`: web push was never built, and the native iOS app awaits Apple enrollment. A push
+  from `/admin` and one from the MCP therefore reach nobody today. Push was verified only as the
+  tool's reported audience; email is the delivery proof.
+- **claude.ai's confirmation prompt was not recorded.** PP0/L1 asked Frank to note whether claude.ai
+  asked him to confirm the first write. The writes were driven from Claude Code, each on Frank's
+  explicit go, so this run does not say how the claude.ai app treats `destructiveHint: true`; it
+  stays a hint, as the [Write tools](#write-tools-p3-released-2026-09-28) section says.
+- **The weekend paths are proven by tests, not live.** The throwaways were specials only, as the
+  plan requires (a real Sunday or Saturday is a target the team plans against). `edit_setlist`'s
+  deterministic weekend create, its `ifRevisionId` patch and its lock heartbeat are covered by the
+  twin-run tests, which run the same domain function over the same body on one store.
+- **The live `/admin` twins ran.** Frank did not opt out (Q6): publish L3a/L3b, unpublish L6a/L6b,
+  swap L4/L5b and setlist L1·L2·L7/L7b were all compared against a real `/admin` action.
+- **The transport gate changed what a legacy-era client receives.** A 2025-06-18 `tools/call` now
+  gets its whole SSE event stream at once, when the tool finishes; the early keep-alive and progress
+  bytes are no longer streamed ahead of the result (see
+  [Known behaviours](#known-behaviours)).
+- **Observability follow-up (Minor, open).** For a publish refused as not ready, the timing line
+  logs `code=stale_revision`, the publish writer's top-level 409 (plan F10), while the tool's text is
+  built from the per-service reasons. Logging the per-service reason instead would make durations
+  and outcomes easier to read. Nothing depends on it.
+
+**Live state.** Both throwaways are gone and nothing about them is pending. The connector exposes
+twelve tools on production. The kill switch and rollback are as the
+[runbook](#p3-live-proof-runbook-step-14-executed-2026-09-28) records them.
 
 ---
 
@@ -1206,9 +1322,8 @@ steps of the P1 plan are implemented and gate-green:
 7. `list_proposals`;
 8. registration, the tool-list test, the dev smoke's `--reads` and these docs.
 
-The plan's step 9, the release, is the checklist below — all release steps through the production
-alias are done; **phone acceptance (items 8–9) is still pending**, deliberately — Frank runs it
-later. See the
+The plan's step 9, the release, is the checklist below — every step is done: the release through
+the production alias on 2026-09-25, and phone acceptance (items 8–9) on 2026-09-28. See the
 [P1 release record](#release-record-p1-2026-09-25) above for the full evidence behind every ✅.
 
 1. ✅ A fresh code review on the merge range (this repo's release rule: a merge to `main` needs a
@@ -1238,7 +1353,7 @@ later. See the
 7. ✅ Merged 07:37 (`main` `a04edb43`) — the production release. Production alias verified —
    deployment `dpl_DsGcCQNyZWkv5JpPqsg3aBL4TMvR`, alias includes `owt-backstage.vercel.app`,
    `githubCommitSha` `a04edb43`.
-8. ☐ **PENDING — acceptance from the phone**, on production. Frank asks for:
+8. ✅ **Acceptance from the phone**, on production — complete 7/7. Frank asked for:
    - next Sunday's service;
    - this month's services;
    - a song search;
@@ -1247,17 +1362,19 @@ later. See the
    - this month's participation;
    - a proposal thread.
 
-   Compare each answer with `/admin` (Servicios, Disponibilidad) and the song page. Any
-   disagreement that is not one of the named departures in [Tools](#tools) is a stop condition.
-   So is any `isError` on a valid request. Frank runs this later — do not mark it done until he
-   has.
-9. ☐ **PENDING — record the observed latency** of `get_service` and `list_services` on
-   production, here, once Frank runs item 8. The plan's stop condition is **10 s**: a slower
-   answer stops the release. **The 870 ms real-data probe in the
-   [release record](#release-record-p1-2026-09-25) above does NOT satisfy this item** — it was
-   measured laptop→Sanity through direct calls, not through Vercel, so it is not a production
-   latency measurement. The remedy for a genuine latency failure is a follow-up plan that narrows
-   the load (a month-scoped snapshot plus a parity proof, plan A1/D3), never an ad hoc change.
+   Each answer was compared with `/admin` (Servicios, Disponibilidad) and the song page. Items 1–4
+   were verified 2026-09-25 (about 09:55); items 5–7 on 2026-09-28 (about 10:45). Every answer
+   matched `/admin` or the song page. See the
+   [P1 release record](#release-record-p1-2026-09-25) for the detail.
+9. ✅ **Observed latency** of `get_service` and `list_services` on production, recorded
+   2026-09-28. The plan's stop condition is **10 s**. From the `[mcp]` timing line (server side):
+   `get_service` 348–718 ms, `list_services` 389–403 ms (and `search_songs` 666 ms). From the phone,
+   end to end and including the model's own time: 3–10 s per call. **The 870 ms real-data probe in
+   the [release record](#release-record-p1-2026-09-25) above does NOT satisfy this item** — it was
+   measured laptop→Sanity through direct calls, not through Vercel; these figures are the ones that
+   do. The remedy for a genuine latency failure would have been a follow-up plan that narrows the
+   load (a month-scoped snapshot plus a parity proof, plan A1/D3), never an ad hoc change; none is
+   needed.
 10. ✅ Updated this document's status banner, the [Tools](#tools) section's per-tool markers, and
     `docs/API_REFERENCE.md` / `docs/README.md` to say released, with the PR number and commit
     (this change).
