@@ -229,12 +229,13 @@ production 2026-09-24** (PR #95, `main` `c2ca5f7c`; see `docs/MCP.md`'s
 [release record](MCP.md#release-record-p0-2026-09-24)). **P1 status (seven read tools —
 `get_service`, `list_services`, `search_songs`, `get_song`, `get_member_availability`,
 `get_participation`, `list_proposals`): released to production 2026-09-25** (PR #98, `main`
-`a04edb43`; Frank's phone acceptance is still pending — see `docs/MCP.md`'s
+`a04edb43`; acceptance complete 7/7 on 2026-09-28 — see `docs/MCP.md`'s
 [P1 release record](MCP.md#release-record-p1-2026-09-25)) — see `docs/MCP.md`'s
 [P1 release checklist](MCP.md#p1-release-checklist-released-2026-09-25). **P3 status (four write
-tools — `edit_setlist`, `swap_assignment`, `publish_service`, `unpublish_service`): implemented on
-branch `claude/mcp-p3-writes`, not released** — see `docs/MCP.md`'s
-[write tools](MCP.md#write-tools-p3-implemented-on-the-branch-not-released). Every route here is excluded from `proxy.ts`
+tools — `edit_setlist`, `swap_assignment`, `publish_service`, `unpublish_service`): released to
+production 2026-09-28** (PR #106, `main` `7c65f2eb`; live proof on production passed the same day —
+see `docs/MCP.md`'s [P3 release record](MCP.md#release-record-p3-2026-09-28) and its
+[write tools](MCP.md#write-tools-p3-released-2026-09-28)). Every route here is excluded from `proxy.ts`
 except the two marked **gated**. None of the excluded ones reads a session cookie; what enforces
 each is named in its Auth cell — the discovery documents are **public by design**, registration
 is bounded by the **redirect-URI allowlist** and hands out a **signed client id**, the token
@@ -249,7 +250,7 @@ endpoint needs a **signed code plus its PKCE verifier** (or a signed refresh tok
 | `/oauth/authorize` | GET | **gated** — `requireActiveSession` + live `super-admin` | The consent screen. Streams (`app/(client)/loading.tsx`); a foreign host or refused request never redirects the caller anywhere it didn't come from. |
 | `/api/oauth/authorize` | POST, GET | **gated**, same as above, plus same-origin check | The ONLY thing that mints an authorization code (303 to the verified `redirect_uri`). GET is 405 — a code is never minted by a link, prefetch or redirect. |
 | `/api/oauth/token` | POST | public — the signed code plus its PKCE verifier (or a signed refresh token and its live grant), and the signed client id | `authorization_code` and `refresh_token` grants. Public clients only (`token_endpoint_auth_method: "none"`), so client authentication is `invalid_client`: a `client_secret` in the body is a **400**; an `Authorization: Basic` header is a **401** with `WWW-Authenticate: Basic realm="owt-backstage"` (RFC 6749 §5.2). Creates the `mcpOauthGrant` and rotates its refresh `jti` on every use; a reused refresh token revokes the whole grant. |
-| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live super-admin lookup — gate every request before it reaches the MCP server; see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. Released to production: eight tools, `ping` (P0, 2026-09-24) plus seven read tools (P1, 2026-09-25 — see [`docs/MCP.md`](MCP.md#tools)), each declaring `readOnlyHint: true, openWorldHint: false`. On the P3 branch, not released: four write tools after them (twelve in all), each declaring `readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false` and calling the admin route's own `*Commit` module (ADR-0043). Every tool has a strict input schema, which the SDK validates before the tool runs. Every SSE response is read to its end before the route returns, so a tool's revalidation and `after()` work finish inside the handler. |
+| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live super-admin lookup — gate every request before it reaches the MCP server; see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. Released to production: twelve tools, `ping` (P0, 2026-09-24), seven read tools (P1, 2026-09-25 — see [`docs/MCP.md`](MCP.md#tools)), each declaring `readOnlyHint: true, openWorldHint: false`, and four write tools after them (P3, 2026-09-28), each declaring `readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false` and calling the admin route's own `*Commit` module (ADR-0043). Every tool has a strict input schema, which the SDK validates before the tool runs. Every SSE response is read to its end before the route returns, so a tool's revalidation and `after()` work finish inside the handler. |
 
 ---
 
