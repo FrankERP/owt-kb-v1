@@ -19,6 +19,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
+import { stubFetchWithHistory } from "./derivedHistoryHarness";
 import { readyRules } from "./rulesHarness";
 import type { SolverConfigController } from "../solverConfigSource";
 
@@ -148,7 +149,7 @@ function stubFetch(solve: () => unknown) {
     }
     throw new Error(`unexpected fetch to ${url}`);
   });
-  vi.stubGlobal("fetch", fetchMock);
+  stubFetchWithHistory(fetchMock);
   return { fetchMock, calls };
 }
 

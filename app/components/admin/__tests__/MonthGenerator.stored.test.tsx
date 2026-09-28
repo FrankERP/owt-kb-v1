@@ -76,6 +76,7 @@ vi.mock("../PlannerGrid", () => ({
 }));
 
 import MonthGenerator from "../MonthGenerator";
+import { stubFetchWithHistory } from "./derivedHistoryHarness";
 import { readyRules } from "./rulesHarness";
 
 const members = [
@@ -253,7 +254,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("enables explicit save after one cell changes and PATCHes complete five-field arrays", async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role()]);
 
     expect((screen.getByRole("button", { name: "Guardar 0 servicios" }) as HTMLButtonElement).disabled).toBe(true);
@@ -299,7 +300,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("treats a semantically identical reorder as a no-op and sends no PATCH", () => {
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role({
       leads: [member("lead-a", "lead-key-a"), member("lead-b", "lead-key-b")],
     })]);
@@ -317,7 +318,7 @@ describe("MonthGenerator — stored mode", () => {
       if (attempt === 1) throw new Error("connection lost");
       return response();
     });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const { storedSource } = renderStored([], { openComposerInitially: true });
 
     fireEvent.click(screen.getByRole("button", { name: "Crear vacío" }));
@@ -343,7 +344,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("creates a «Noche de alabanza» as a special_role carrying format: worship_night", async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role()], { openComposerInitially: true });
 
     fireEvent.change(screen.getByLabelText("Tipo"), { target: { value: "worship_night" } });
@@ -362,7 +363,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("creates an «Especial» with no format key at all", async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role()], { openComposerInitially: true });
 
     fireEvent.change(screen.getByLabelText("Tipo"), { target: { value: "special_role" } });
@@ -377,7 +378,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("treats a 500 with a pre-write-looking create code as unknown", async () => {
     const fetchMock = vi.fn(async () => response(500, { error: "invalid_request" }));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const { storedSource } = renderStored([], { openComposerInitially: true });
 
     fireEvent.click(screen.getByRole("button", { name: "Crear vacío" }));
@@ -390,7 +391,7 @@ describe("MonthGenerator — stored mode", () => {
   it("keeps the exact create retry disabled until unknown-outcome reload reconciliation finishes", async () => {
     let finishReload: ((value: boolean) => void) | undefined;
     const fetchMock = vi.fn(async () => { throw new Error("connection lost"); });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const { storedSource } = renderStored([], { openComposerInitially: true });
     storedSource.reload.mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishReload = resolve; }));
 
@@ -422,7 +423,7 @@ describe("MonthGenerator — stored mode", () => {
   });
 
   it("does not verify a lost create from an unrelated empty role at the same target", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("lost"); }));
+    stubFetchWithHistory(vi.fn(async () => { throw new Error("lost"); }));
     const onCreated = vi.fn();
     const firstSource = source([]);
     const common = {
@@ -455,7 +456,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("keeps a cross-month date move on the source role ID and PATCHes the destination date", async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role()]);
 
     fireEvent.click(screen.getByRole("button", { name: "Mover a marzo" }));
@@ -488,7 +489,7 @@ describe("MonthGenerator — stored mode", () => {
     });
     const first = role({ date: "2026-08-02" });
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([first, second], { initialMonth: "2026-08" });
 
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
@@ -519,7 +520,7 @@ describe("MonthGenerator — stored mode", () => {
       bgvs: [member("bgv-b", "bgv-key-b")],
     });
     const firstSource = source([first, second]);
-    vi.stubGlobal("fetch", vi.fn(async () => response()));
+    stubFetchWithHistory(vi.fn(async () => response()));
     const common = {
       mode: "stored" as const,
       members,
@@ -620,7 +621,7 @@ describe("MonthGenerator — stored mode", () => {
     const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-08-09", ...secondPatch });
     const firstSource = source([first, second]);
     const fetchMock = vi.fn(async () => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const common = {
       mode: "stored" as const,
       members,
@@ -664,7 +665,7 @@ describe("MonthGenerator — stored mode", () => {
     });
     const firstSource = source([first, second]);
     const fetchMock = vi.fn(async () => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const common = {
       mode: "stored" as const,
       members,
@@ -736,7 +737,7 @@ describe("MonthGenerator — stored mode", () => {
     });
     const firstSource = source([first, second]);
     const fetchMock = vi.fn(async () => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const common = {
       mode: "stored" as const,
       members,
@@ -774,7 +775,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("retains section selections after a proven refusal", async () => {
     const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" });
-    vi.stubGlobal("fetch", vi.fn(async () => response(400, { error: "invalid_request" })));
+    stubFetchWithHistory(vi.fn(async () => response(400, { error: "invalid_request" })));
     renderStored([role(), second]);
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
@@ -789,7 +790,7 @@ describe("MonthGenerator — stored mode", () => {
   it("treats a 500 with a pre-write-looking swap code as unknown", async () => {
     const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" });
     const fetchMock = vi.fn(async () => response(500, { error: "invalid_request" }));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const { storedSource } = renderStored([role(), second]);
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
@@ -804,7 +805,7 @@ describe("MonthGenerator — stored mode", () => {
   it("retains section selections after an unknown transport outcome", async () => {
     const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" });
     const fetchMock = vi.fn(async () => { throw new Error("connection lost"); });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role(), second]);
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-b" } });
@@ -818,7 +819,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("disables a section swap when both service choices are the same role", () => {
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role()]);
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
     fireEvent.change(screen.getByLabelText("Segundo servicio"), { target: { value: "role-a" } });
@@ -833,7 +834,7 @@ describe("MonthGenerator — stored mode", () => {
     const second = role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" });
     let finishRequest: ((value: ReturnType<typeof response>) => void) | undefined;
     const fetchMock = vi.fn(() => new Promise<ReturnType<typeof response>>((resolve) => { finishRequest = resolve; }));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const { container, storedSource, onClose } = renderStored([role(), second]);
     const initialRowCount = screen.getByTestId("stored-row-count").textContent;
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
@@ -865,7 +866,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("disables section swaps while local grid changes are dirty", () => {
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role(), role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" })]);
 
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
@@ -878,7 +879,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("does not start a stored write behind an open discard confirmation", () => {
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role()]);
 
     fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
@@ -893,7 +894,7 @@ describe("MonthGenerator — stored mode", () => {
 
   it("treats an added empty row as unresolved work before a swap", () => {
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const { container } = renderStored([role(), role({ _id: "role-b", _rev: "rev-b", date: "2026-02-08" })]);
 
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
@@ -949,7 +950,7 @@ describe("MonthGenerator — stored mode", () => {
       chorus: [],
     });
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role(), saturday]);
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "Chorus" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
@@ -971,7 +972,7 @@ describe("MonthGenerator — stored mode", () => {
       chorus: [],
     });
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const { container } = renderStored([role(), saturday]);
     const swapButtons = container.querySelectorAll<HTMLButtonElement>("[data-swap-date]");
 
@@ -1035,7 +1036,7 @@ describe("MonthGenerator — «Limpiar mes»", () => {
 
   it("deletes the month's DRAFTS one by one with their observed revisions, then reports and closes", async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const onCleared = vi.fn();
     const roles = [
       role({ _id: "draft-b", _rev: "rev-b", date: "2026-02-08" }),
@@ -1069,7 +1070,7 @@ describe("MonthGenerator — «Limpiar mes»", () => {
         ? response(409, { error: "role_has_dependencies", details: { dependencies: [{ type: "setlist" }] } })
         : response(),
     );
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const onCleared = vi.fn();
     const roles = [
       role({ _id: "draft-a", _rev: "rev-a", date: "2026-02-01" }),
@@ -1096,7 +1097,7 @@ describe("MonthGenerator — «Limpiar mes»", () => {
 
   it("offers nothing to delete for a published-only month until published are included, and Cancelar backs out", () => {
     const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role({ published: true })], { storedCapabilities: clearGate });
 
     fireEvent.click(screen.getByRole("button", { name: "Limpiar mes" }));
@@ -1139,7 +1140,7 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
       if (url.endsWith("/draft-b")) return { ok: false, status: 502, json: async () => { throw new Error("html"); } };
       return response();
     });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const onCleared = vi.fn();
     const roles = [
       role({ _id: "draft-a", _rev: "rev-a", date: "2026-02-01" }),
@@ -1211,7 +1212,7 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
 
   it("still sends the observed _rev while a grid edit is unsaved, and warns that the edit is discarded", async () => {
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const { onClose } = renderStored([role()], { storedCapabilities: clearGate });
 
     fireEvent.click(screen.getByRole("button", { name: "Cambiar una celda" }));
@@ -1348,7 +1349,7 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
 
   it("lists the month's specials all ticked, fills their empty seats locally, and writes nothing until Guardar", () => {
     const fetchMock = vi.fn(async () => response());
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     renderStored([role(), emptySet("set-a", "09:00"), emptySet("set-b", "12:30")], { members: voz });
 
     fireEvent.click(screen.getByRole("button", { name: "Llenar especiales…" }));

@@ -26,6 +26,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { DEFAULT_SOLVER_CONFIG } from "../solverConfigDefaults";
+import { SOLVER_HISTORY_SOURCE } from "../solverHistorySource";
 import {
   READ_FAILED_MESSAGE,
   SAVE_ABSENT_MESSAGE,
@@ -301,10 +302,18 @@ describe("the localStorage rule set is RETIRED", () => {
     expect(tracked).not.toContain("solverConfigStorage.ts");
   });
 
-  it("keeps `owt_solver_history_v2` per-browser, on purpose", () => {
-    // P6 shares the RULES, not the fairness history (ADR-0010). Two admins
-    // still solve against different history — narrower than "shared rules"
-    // sounds, and deliberately out of scope.
+  it("`owt_solver_history_v2` is written, never read — the rollback target, until D3 deletes it", () => {
+    // Since the cutover (MCP P2 D2, ADR-0042) the fairness history is DERIVED
+    // from the stored services, so two admins solve against the same history.
+    // The per-browser key survives for one reason: each confirm still WRITES it
+    // (`appendLocalHistoryEntry`), so flipping the switch back finds the browser
+    // history exactly where it would have been — R15's rollback target.
+    // Both halves are pinned. The literal must still be in the planner (the
+    // dual-write target — losing it silently strands the rollback), AND the
+    // switch must be `derived` (with it `local`, the key would be READ again and
+    // the two-admins gap would be back). D3 deletes both and inverts this to
+    // `not.toContain`.
+    expect(SOLVER_HISTORY_SOURCE).toBe("derived");
     const generator = readFileSync(
       path.join(process.cwd(), "app/components/admin/MonthGenerator.tsx"),
       "utf8",
