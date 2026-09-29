@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import Presence from "@/app/components/ui/Presence";
 
 const BANNER_CLASS = "impersonating";
-/** Read by `.impersonating .brand-navbar` in brand.css. */
+/** Read by `.impersonating .brand-navbar` in brand.css, and by `html.impersonating`,
+ *  which hands it to `--impersonation-offset` for everything sticky under the navbar. */
 const BANNER_H_VAR = "--impersonation-h";
 
 export default function ImpersonationBanner() {

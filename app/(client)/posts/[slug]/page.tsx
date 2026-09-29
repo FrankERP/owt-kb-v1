@@ -311,7 +311,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Ensayo */}
         {hasRehearsal && (
-          <section id="ensayo" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
+          <section id="ensayo" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
             <SectionHeader>Ensayo</SectionHeader>
             <RehearsalPlayer
               mixes={post.rehearsalMixes!}
@@ -325,7 +325,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Audio */}
         {hasAudio && (
-          <section id="audio" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
+          <section id="audio" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
             <SectionHeader>Audio</SectionHeader>
             <SongAudioSection
               tracks={post.audioTracks!}
@@ -337,7 +337,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Tutoriales */}
         {hasTutorials && (
-          <section id="tutoriales" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
+          <section id="tutoriales" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
             <SectionHeader>Tutoriales</SectionHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               {post.tutorials2!.filter((tutorial) => tutorial.url).map((tutorial, i) => (
@@ -364,7 +364,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Reference Links */}
         {hasRefLinks && (
-          <section id="referencia" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
+          <section id="referencia" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
             <SectionHeader>Versión de referencia</SectionHeader>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto">
               {(post.musicalReferenceUrl || (post.referenceLinks?.[0]?.url)) && (
@@ -399,7 +399,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Letra / Body */}
         {hasLyrics && (
-          <section id="letra" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
+          <section id="letra" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
             <SectionHeader action={<LyricsAutoscroll targetId="letra" bpm={bpm} lines={lyricLines} />}>Letra</SectionHeader>
             <div className="brand-facet-panel">
               {hasInlineChords ? (
@@ -419,7 +419,7 @@ const Page = async ({ params }: Params) => {
 
         {/* Historial */}
         {hasHistory && (
-          <section id="historial" className="scroll-mt-[calc(8rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top))]">
+          <section id="historial" className="scroll-mt-[calc(8rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(10rem+env(safe-area-inset-top)+var(--impersonation-offset))]">
             <SectionHeader>Última vez tocada</SectionHeader>
             <div className="flex flex-col gap-4 max-w-xl mx-auto">
               {history.map((entry, i) => (

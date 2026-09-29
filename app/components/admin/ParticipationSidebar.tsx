@@ -34,8 +34,10 @@ const DEFAULT_PLACEMENT = "lg:sticky lg:top-4";
  * cards scroll the PAGE. The top is the admin rail's own sticky top — the navbar
  * is `lg:h-24`, so `top-4` would park the chart UNDER it — and
  * `servicesBoard.test.tsx` reads `AdminRail.tsx` to keep the two identical. The
- * height cap is that same offset plus a 1.5rem breath, so a month with many
- * members scrolls inside the chart instead of pushing its bottom off-screen.
+ * height cap is that same offset — `--impersonation-offset` included, subtracted
+ * in the same term order the test derives — plus a 1.5rem breath, so a month
+ * with many members scrolls inside the chart instead of pushing its bottom
+ * off-screen.
  * Only `lg`: below it the board is one column and the chart simply stacks.
  * Exported so the Servicios fallback `<aside>` shares the spelling.
  *
@@ -49,8 +51,8 @@ const DEFAULT_PLACEMENT = "lg:sticky lg:top-4";
  * shrinks to nothing and its rows are out of reach. Accepted — no real window is
  * 1024px wide and that short.
  */
-export const BOARD_STICKY = "lg:sticky lg:top-[calc(6rem+env(safe-area-inset-top))]";
-const BOARD_PLACEMENT = `${BOARD_STICKY} lg:flex lg:flex-col lg:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-1.5rem)] lg:overflow-y-auto`;
+export const BOARD_STICKY = "lg:sticky lg:top-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))]";
+const BOARD_PLACEMENT = `${BOARD_STICKY} lg:flex lg:flex-col lg:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-var(--impersonation-offset)-1.5rem)] lg:overflow-y-auto`;
 
 // The rows' scroller. The planner renders `LIST_BASE` alone, unchanged —
 // `participationAlongside.test.tsx` reads its `pr-0.5` into the column's width
