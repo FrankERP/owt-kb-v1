@@ -44,7 +44,8 @@ type PutReply = { status: number; body: unknown };
 
 /**
  * GET setlist → `read`; tags → []; authors → `authors`; song search → `found`;
- * PUT → `put` (captured). POST author → echoes a new author; POST song → captured.
+ * PUT → `put` (captured). POST author → the existing doc for a known name (the
+ * route is idempotent by slug), else a new author; POST song → captured.
  */
 function stubFetch(
   read: unknown,

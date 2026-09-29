@@ -39,6 +39,14 @@ describe("SongForm catalogue", () => {
     expect(screen.getByRole("button", { name: "#Adoración" })).not.toBeNull();
   });
 
+  // A parent appends whatever the idempotent create POST returns, so after a
+  // «+ Crear» on an existing name it holds that `_id` twice — and a REOPENED
+  // form has created nothing yet, so only de-duping the catalogue itself helps.
+  it("lists a catalogue entry once even when the parent holds it twice", () => {
+    render(form({ allAuthors: [entry("a1", "Un Corazón"), entry("a1", "Un Corazón"), entry("a2", "Hillsong")] }));
+    expect(screen.getAllByRole("button", { name: "Un Corazón" })).toHaveLength(1);
+  });
+
   it("«+ Crear» on a name that already exists selects it once and lists it once", async () => {
     const existing = entry("a1", "Un Corazón");
     // The authors POST is idempotent by slug: it answers with the existing doc.
