@@ -174,6 +174,8 @@ export interface SolveDiagnostics {
 export interface AutoState {
   pending: boolean;
   error: string | null;
+  /** A non-blocking note about the last Auto run, e.g. a rule it did not apply. */
+  notice?: string | null;
   disabledReason: string | null;
 }
 
@@ -2037,6 +2039,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <p className="font-body text-xs text-warning-strong">{autoState.disabledReason}</p>
         )}
         {mode === "create" && autoState.error && <p className="font-body text-xs text-negative-fg">{autoState.error}</p>}
+        {mode === "create" && autoState.notice && (
+          <p className="font-body text-xs text-warning-strong">{autoState.notice}</p>
+        )}
       </div>
 
       {mode === "create" && confirmingAuto && (

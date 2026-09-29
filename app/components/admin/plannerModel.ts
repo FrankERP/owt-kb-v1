@@ -584,26 +584,78 @@ export function memberIdToName(id: string, members: RankMember[]): string {
   return members.find((m) => m._id === id)?.member_name ?? id;
 }
 
+/** Patterns whose every role is a Saturday role (`expand_pattern` in the solver). */
+const SATURDAY_ONLY_PATTERNS = new Set(["Sat.*", "Sat.Lead", "Sat.BGV"]);
+
+/** A cap as the solver's DSL spells it, e.g. `Sat.* == 1` or `Sat.BGV >= {weeks-2}`. */
+export function capText(cap: RestrictionCap): string {
+  const val = cap.relative ? `{weeks-${cap.relOffset}}` : String(cap.value);
+  return `${cap.pattern} ${cap.op} ${val}`;
+}
+
+/**
+ * The same cap as the rules card shows it (`MonthGenerator`'s cap chip), e.g. `Sat.* == 1` or
+ * `Sat.BGV >= sem−2` — what the admin reads in a notice has to match what they can find.
+ */
+export function capLabel(cap: RestrictionCap): string {
+  const val = cap.relative ? `sem−${cap.relOffset}` : String(cap.value);
+  return `${cap.pattern} ${cap.op} ${val}`;
+}
+
+/**
+ * Whether a cap asks for AT LEAST ONE Saturday seat: a pattern made only of Saturday
+ * roles, with `==` or `>=` and a value of 1 or more. A relative value resolves the way
+ * the solver's `resolve_dsl_templates` does, `max(0, weeks - offset)`.
+ *
+ * In a month with no Saturday Auto can staff, such a cap is unsatisfiable by
+ * construction — the solver builds no Saturday seats, so the person's Saturday count
+ * is fixed at 0 — and one of them made the WHOLE month infeasible, Sundays included.
+ * That is how October 2026 came back «El solver no encontró solución.» with three
+ * `Sat.* == 1` rules saved: its only Saturday SERVICE was the 31st, the eve of 1 Nov,
+ * so the admin deselected 3/10/17/24 and left Auto no Saturday (Frank, 2026-09-29: in
+ * such a month the Saturday minimum is simply not applied).
+ */
+export function isSaturdayFloor(cap: RestrictionCap, weeks: number): boolean {
+  if (!SATURDAY_ONLY_PATTERNS.has(cap.pattern) || cap.op === "<=") return false;
+  const value = cap.relative ? Math.max(0, weeks - cap.relOffset) : cap.value;
+  return value >= 1;
+}
+
+/** A cap `buildSolveRequest` left out of the request, for the admin to be told. */
+export interface OmittedCap {
+  person: string;
+  cap: string;
+}
+
 function restrictionToDs(r: PersonRestriction): string | null {
   if (!r.person) return null;
   const clauses: string[] = [];
   for (const pat of r.excludedPatterns) clauses.push(`!in ${pat}`);
   for (const we of r.weekExclusions) clauses.push(`!in week ${we.week} ${we.pattern}`);
-  for (const cap of r.caps) {
-    const val = cap.relative ? `{weeks-${cap.relOffset}}` : String(cap.value);
-    clauses.push(`${cap.pattern} ${cap.op} ${val}`);
-  }
+  for (const cap of r.caps) clauses.push(capText(cap));
   if (r.fairness === "exempt") clauses.push("fairness_exempt");
   if (r.fairness === "slack" && r.fairnessSlack > 0) clauses.push(`fairness_slack ${r.fairnessSlack}`);
   if (clauses.length === 0) return null;
   return `${r.person} ${clauses.join(" & ")}`;
 }
 
-function allRulesToDs(config: SolverConfig, members: RankMember[]): string[] {
+function allRulesToDs(
+  config: SolverConfig,
+  members: RankMember[],
+  dropCap: (cap: RestrictionCap) => boolean = () => false,
+  omitted: OmittedCap[] = [],
+): string[] {
   const res = (name: string) => resolvedNameOrRaw(name, members);
   const out: string[] = [];
   for (const r of config.restrictions) {
-    const resolved: PersonRestriction = { ...r, person: res(r.person) };
+    const kept = r.caps.filter((cap) => {
+      if (!dropCap(cap)) return true;
+      // Reported under the name the rules panel shows (the rule's own text), since
+      // that is where the admin would go to look at it.
+      if (r.person) omitted.push({ person: r.person, cap: capLabel(cap) });
+      return false;
+    });
+    const resolved: PersonRestriction = { ...r, caps: kept, person: res(r.person) };
     const ds = restrictionToDs(resolved);
     if (ds) out.push(ds);
   }
@@ -704,11 +756,29 @@ export function buildSolveRequest(input: {
   historyEntries: SolverHistoryEntry[];
   year: number;
   month: number;
-}): { ok: true; request: SolveRequest } | { ok: false; reason: string } {
+}):
+  | {
+      ok: true;
+      request: SolveRequest;
+      /**
+       * Saturday minimums left out because the month has no Saturday Auto can staff
+       * (`isSaturdayFloor`). Empty in any month with one. The caller shows them, so a
+       * rule that stopped applying is never silent.
+       */
+      omittedCaps: OmittedCap[];
+    }
+  | { ok: false; reason: string } {
   const { config, members, sundayDates, activeSatDates, historyEntries, year, month } = input;
 
   const weeks = sundayDates.length;
   const weekendsWithSaturday = weekendWeekIndexes(sundayDates, activeSatDates);
+  // No Saturday for Auto this month (none selected, or only an unaddressable one like
+  // 31 Oct 2026): a Saturday MINIMUM cannot be met and would sink the whole month, so
+  // it is not applied this month. Maximums stay — they hold trivially.
+  const omittedCaps: OmittedCap[] = [];
+  const dropCap = weekendsWithSaturday.length === 0
+    ? (cap: RestrictionCap) => isSaturdayFloor(cap, weeks)
+    : () => false;
 
   const idToName = (id: string) => memberIdToName(id, members);
 
@@ -826,7 +896,7 @@ export function buildSolveRequest(input: {
     sunday_leads: sundayLeadNames,
     saturday_leads: saturdayLeadNames,
     support: [...supportNames, ...extraSupport],
-    dsl_rules: [...allRulesToDs(config, members), ...availabilityRules],
+    dsl_rules: [...allRulesToDs(config, members, dropCap, omittedCaps), ...availabilityRules],
     history: historyForRequest(historyEntries, year, month).map((h) => ({
       total_counts: h.total_counts,
       role_counts: h.role_counts,
@@ -837,7 +907,39 @@ export function buildSolveRequest(input: {
     return { ok: false, reason: "Debes seleccionar al menos un líder de domingo." };
   }
 
-  return { ok: true, request };
+  return { ok: true, request, omittedCaps };
+}
+
+/** What Auto says when the solver refuses and gives no reason of its own. */
+export const SOLVER_REFUSAL = "El solver no encontró solución.";
+
+/**
+ * The refusal line under Auto. The route answers a solver `ok: false` with a 422 whose
+ * body carries the solver's own reason; before this the client parsed a body only on a
+ * 2xx, so every refusal — an impossible rule, a pinned-seat error, a bad request —
+ * read as the same generic sentence and the reason was lost.
+ */
+export function solverRefusalMessage(error: string | null | undefined): string {
+  const detail = error?.trim();
+  if (!detail || detail === SOLVER_REFUSAL) return SOLVER_REFUSAL;
+  return `${SOLVER_REFUSAL} Motivo del solver: ${detail}`;
+}
+
+function joinEs(items: string[]): string {
+  return items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
+}
+
+/** The notice for caps `buildSolveRequest` left out, grouped by rule; null when none. */
+export function omittedCapsNotice(omitted: OmittedCap[]): string | null {
+  if (omitted.length === 0) return null;
+  const byCap = new Map<string, string[]>();
+  for (const o of omitted) {
+    const people = byCap.get(o.cap) ?? [];
+    if (!people.includes(o.person)) people.push(o.person);
+    byCap.set(o.cap, people);
+  }
+  const parts = [...byCap].map(([cap, people]) => `«${cap}» a ${joinEs(people)}`);
+  return `Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó ${joinEs(parts)}.`;
 }
 
 // ─── Response mapping ─────────────────────────────────────────────────────────
