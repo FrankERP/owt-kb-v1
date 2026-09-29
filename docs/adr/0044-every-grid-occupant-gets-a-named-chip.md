@@ -1,11 +1,11 @@
-# ADR-0045: Every planner-grid occupant gets a named chip — no `+N`
+# ADR-0044: Every planner-grid occupant gets a named chip — no `+N`
 
 **Date:** 2026-09-28 · **Status:** Accepted
 
-> **Numbering.** ADR numbers follow the order records reach `main`. 0044 was
-> already held on `preview` by PR #109 (the Servicios board's vertical scroll)
-> when this record was written, so it takes 0045. If this reaches `main` first,
-> the two swap.
+> **Numbering.** ADR numbers follow the order records reach `main`, and 0044 is
+> the next free number there. PR #109 (the Servicios board's vertical scroll)
+> also holds 0044, already on `preview`. Whichever of the two reaches `main`
+> second renumbers to 0045 in its merge of `main`.
 
 ## Context
 

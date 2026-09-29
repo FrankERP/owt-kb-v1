@@ -517,7 +517,7 @@ describe("a pending pick takes over the target cell's activation", () => {
 // ─── Acceptance 12 — the over-target occupant, out again ─────────────────────
 //
 // Written when the seat past the target sat behind a `+N` with no chip, so the
-// picker-row anchor was its ONLY handle. ADR-0045 gave it a chip; the anchor
+// picker-row anchor was its ONLY handle. ADR-0044 gave it a chip; the anchor
 // stays as the touch/keyboard route, and these cases keep proving it works for
 // exactly that occupant.
 
@@ -545,7 +545,7 @@ describe("an occupant over the target can be moved out (acceptance 12)", () => {
     const afterDrop = onCellsChange.mock.calls[0][0] as GridCell[];
     expect(occupantsOf(afterDrop, "lead", "col-1")).toEqual(["frank", "liu", "gaby"]);
 
-    // 2. She is past the target — and, since ADR-0045, still on a named chip
+    // 2. She is past the target — and, since ADR-0044, still on a named chip
     //    marked as the extra seat, so a drag can reach her too.
     rerenderWith({ ...props, cells: afterDrop });
     const herChip = cellAt(container, "lead", "col-1").querySelector('[data-occupant="gaby"]');

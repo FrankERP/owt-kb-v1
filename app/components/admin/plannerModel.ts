@@ -397,7 +397,7 @@ export function isSolvable(row: GridRow, column: Pick<GridColumn, "type">): bool
  * precisely a solvable one there — and diverge on a special, which must keep
  * the warning while being unsolvable. Overloading `isSolvable` for both would
  * have silently dropped it on every special column. (It gated D7's cap and
- * `+N` too, until ADR-0045 put every occupant on a chip.)
+ * `+N` too, until ADR-0044 put every occupant on a chip.)
  */
 export function hasTarget(row: GridRow, column: Pick<GridColumn, "type" | "format">): boolean {
   if (!rowAppliesTo(row, column)) return false;
