@@ -1629,9 +1629,10 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
     # infeasible and returned Stage A — no fairness band at all, a lead could take
     # all five Sundays — which is what production's November 2026 did (7/7).
     # Level 3 is tried after 1 and 2 within each Sun.Lead level, so a month whose
-    # first feasible pass had sb <= 2 returns as before. One that fell to sl=2
-    # ONLY because sb stopped at 2 now returns at sl=1, sb=3: Sun.Lead stays the
-    # higher priority, as the loop order says (SunBgvLadderReachesThree).
+    # first feasible pass had sb <= 2 returns as before. One of ANY length that fell
+    # to sl=2 ONLY because sb stopped at 2 now returns at sl=1, sb=3 — and its global
+    # band may widen to 2. That is the ladder's existing priority one rung further:
+    # Sun.Lead fairness first (SunBgvLadderReachesThree pins both cases).
     for sl_limit in (1, 2):
         for sb_limit in (1, 2, 3):
             for g_limit in (1, 2):

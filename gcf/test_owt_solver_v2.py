@@ -771,6 +771,31 @@ class SunBgvLadderReachesThree(unittest.TestCase):
                 self.assertEqual(bgv["Hugo"] + bgv["Jakey"], 5)
                 self.assertLessEqual(max(bgv.values()) - min(bgv.values()), 3)
 
+    def test_a_four_week_month_trades_bgv_balance_for_lead_balance(self):
+        """
+        Level 3 is not a five-Sunday special case. This four-week month (the default
+        rules, absences found by the review's randomized search) used to return at
+        Sun.Lead 2 / Sun.BGV 2 — several people leading twice — because Sun.BGV 1-2 was
+        infeasible at Sun.Lead 1. It now returns at Sun.Lead 1 / Sun.BGV 3: the
+        ladder's own priority, Sun.Lead fairness first. Pinned so the trade stays a
+        decision, not a surprise.
+        """
+        rules = list(BASE_RULES) + (
+            out_rules(["Hugo"], 1) + out_rules(["Hugo"], 2) + out_rules(["Hugo"], 4) + out_rules(["Niza"], 4))
+        for seed in (1, 2, 3):
+            with self.subTest(seed=seed):
+                cfg = make_config(rules=rules, sat_weeks=(1, 3, 4), weeks=4, seed=seed)
+                cfg["solver_max_time_seconds"] = 3
+                res = solve_from_dict(cfg)
+                self.assertTrue(res["ok"], res.get("error"))
+                self.assertFalse(res["sun_lead_fairness_relaxed"])
+                self.assertTrue(res["sun_bgv_fairness_relaxed"])
+                leads = {}
+                for services in res["schedule"].values():
+                    for p in services["Sunday"]["Lead"]:
+                        leads[p] = leads.get(p, 0) + 1
+                self.assertLessEqual(max(leads.values()), 1)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
