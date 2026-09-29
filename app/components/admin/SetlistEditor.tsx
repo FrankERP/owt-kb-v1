@@ -150,6 +150,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
   const [draggingIdx, setDraggingIdx]   = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx]   = useState<number | null>(null);
   const [allTags, setAllTags]           = useState<SongTag[]>([]);
+  const [allAuthors, setAllAuthors]     = useState<SongTag[]>([]);
   const [createOpen, setCreateOpen]     = useState(false);
   const [createSaving, setCreateSaving] = useState(false);
   const [createError, setCreateError]   = useState<string | null>(null);
@@ -170,9 +171,10 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
       const params = new URLSearchParams({ type, week });
       if (roleId) params.set("roleId", roleId);
       try {
-        const [setlistRes, tagsRes] = await Promise.all([
+        const [setlistRes, tagsRes, authorsRes] = await Promise.all([
           fetch(`/api/admin/setlists?${params}`),
           fetch("/api/content/tags"),
+          fetch("/api/content/authors"),
         ]);
         if (!alive) return;
         if (!setlistRes.ok) {
@@ -208,6 +210,7 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
         setRecentSongs(data.recentSongs);
         setObserved(data.observed);
         if (tagsRes.ok) setAllTags(await tagsRes.json());
+        if (authorsRes.ok) setAllAuthors(await authorsRes.json());
       } catch {
         if (alive) setLoadError(SETLIST_READ_ISSUE_COPY.http);
       } finally {
@@ -365,6 +368,29 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
       return tag;
     } catch {
       setCreateError("No se pudo crear el tag.");
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function handleCreateAuthor(name: string): Promise<SongTag | null> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), MUTATION_TIMEOUT_MS);
+    try {
+      const res = await fetch("/api/content/authors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error();
+      const author = await res.json();
+      setAllAuthors(prev => [...prev, author].sort((a, b) => a.name.localeCompare(b.name)));
+      setCreateError(null);
+      return author;
+    } catch {
+      setCreateError("No se pudo crear el artista.");
       return null;
     } finally {
       clearTimeout(timer);
@@ -685,10 +711,12 @@ export function SetlistEditor({ week, type, roleId, onClose, onSaved, onBusyChan
           <SongForm
             initial={{ title: searchQ }}
             allTags={allTags}
+            allAuthors={allAuthors}
             onSubmit={handleCreateSong}
             onClose={() => { setCreateError(null); setCreateOpen(false); }}
             loading={createSaving}
             canCreateTag={handleCreateTag}
+            canCreateAuthor={handleCreateAuthor}
           />
           </div>
         </CueDialog>
