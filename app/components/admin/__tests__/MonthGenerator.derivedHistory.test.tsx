@@ -3,10 +3,15 @@
 // `docs/superpowers/specs/2026-09-23-solver-history-derivation-design.md`; plan
 // `docs/superpowers/plans/2026-09-25-owt-mcp-p2-solver-history.md`, step 5).
 //
-// Production ships with the switch at "local", so every OTHER MonthGenerator
-// suite exercises the per-browser path unchanged; this file is the only place
-// the derived path runs, and it runs against the REAL grid (no PlannerGrid
-// mock) because the Auto button lives there.
+// The derived path is what ships (`solverHistorySource.ts` has been "derived"
+// since the cutover, 2026-09-28), and this is the suite that pins its history
+// behaviour: the solve-time read, the race, the failed read, the dual-write, the
+// read-only chips. It still names the mode with `vi.mock` — the same way
+// `MonthGenerator.create.test.tsx` pins "local" for the rollback path — so that
+// flipping the constant back (the rollback) breaks only the two assertions that
+// name its value (`solverHistorySource.test.ts`, `solverConfigSource.test.ts`),
+// not this suite. It runs against the REAL grid (no PlannerGrid mock) because
+// the Auto button lives there.
 //
 // The fetch mock routes by URL and only CAPTURES — no `expect()` inside it: the
 // component wraps every fetch in try/catch, so an assertion thrown there would

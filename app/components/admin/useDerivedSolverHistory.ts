@@ -40,7 +40,7 @@ import type { DerivedSolverHistory } from "@/app/utils/solverHistory";
 import { fetchDerivedHistory, type DerivedHistoryFetchResult } from "./derivedHistoryClient";
 
 export type DerivedHistoryState =
-  /** The switch is `local`: nothing is fetched and nothing should read this. */
+  /** The switch is `local` (the rollback value): nothing is fetched and nothing should read this. */
   | { status: "idle" }
   | { status: "loading" }
   | { status: "ready"; data: DerivedSolverHistory }

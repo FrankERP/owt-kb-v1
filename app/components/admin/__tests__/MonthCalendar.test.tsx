@@ -19,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthCalendar, { refuseSpecialOn, refuseWeekendOn } from "../MonthCalendar";
 import MonthGenerator from "../MonthGenerator";
+import { stubFetchWithHistory } from "./derivedHistoryHarness";
 import { readyRules } from "./rulesHarness";
 import type { SolverConfigController } from "../solverConfigSource";
 
@@ -337,7 +338,7 @@ describe("MonthGenerator + calendar — E21: the week spine stays the FULL month
       }
       throw new Error(`unexpected fetch to ${url}`);
     });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     return { captured, fetchMock };
   }
 
@@ -418,7 +419,7 @@ describe("MonthGenerator + calendar — a specials-only month", () => {
       calls.push(JSON.parse(init.body) as Record<string, unknown>);
       return { ok: true, status: 200, json: async () => ({}) };
     });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
 
     const members = [{ _id: "ana", member_name: "Ana", memberType: ["voz"] }];
     const { container } = render(
@@ -483,7 +484,7 @@ describe("MonthGenerator + calendar — picks are scoped to one month", () => {
       calls.push(JSON.parse(init.body) as Record<string, unknown>);
       return { ok: true, status: 200, json: async () => ({}) };
     });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
 
     const { container } = render(
       <Gen members={[]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,

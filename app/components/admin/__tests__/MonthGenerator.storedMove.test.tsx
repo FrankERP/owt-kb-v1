@@ -29,6 +29,7 @@ import { cleanup, createEvent, fireEvent, render, screen, waitFor } from "@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
+import { stubFetchWithHistory } from "./derivedHistoryHarness";
 import { readyRules } from "./rulesHarness";
 import type { RoleDomainSummary, RoleTarget } from "@/app/utils/serviceReadSummary";
 import type { ServiceRole } from "../serviceCardModel";
@@ -251,7 +252,7 @@ beforeEach(() => {
 describe("MonthGenerator — a cross-service drag, saved (acceptance 9)", () => {
   it("PATCHes exactly the two services the drag touched, and nothing else", async () => {
     const fetchMock = vi.fn(async () => response(200));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const { container } = renderStored([{ role: ROLE_A }, { role: ROLE_B }, { role: ROLE_C }]);
 
     // Ana, Feb 1's Lead, dragged onto Feb 8's BGV row — one gesture, two
@@ -308,7 +309,7 @@ describe("MonthGenerator — a cross-service drag, saved (acceptance 9)", () => 
 
   it("writes nothing at all when the gate refuses the drop", async () => {
     const fetchMock = vi.fn(async () => response(200));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     // role-b carries a dangling reference, so its integrity observation is
     // `assignment_mismatch` → `admission: "readOnly"` → `serializeStoredColumn`
     // refuses it → P2. The inventory stays coherent, so role-a and role-c remain
@@ -362,7 +363,7 @@ describe("MonthGenerator — a cross-service drag, saved (acceptance 9)", () => 
       url === "/api/admin/roles/role-b"
         ? response(409, { error: "stale_revision" })
         : response(200));
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetchWithHistory(fetchMock);
     const { container, storedSource, reloadWith } = renderStored([{ role: ROLE_A }, { role: ROLE_B }]);
 
     drag(chipIn(container, "lead", "role-a", "ana"), cellAt(container, "bgv", "role-b"));

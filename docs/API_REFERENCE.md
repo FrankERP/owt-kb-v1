@@ -478,10 +478,11 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   carries `Cache-Control: no-store`. Any failure to read (including one that could not
   complete) is `500 { error: "history_unavailable", message: "No se pudo leer el historial
   de equidad." }` with **no `entries` key**, so a client can never read a failed read as an
-  empty history. **Dormant as of this writing**: nothing calls this route yet — the planner
-  still reads/writes `owt_solver_history_v2` in `localStorage`
-  (`SOLVER_HISTORY_SOURCE === "local"`) until Frank runs the R11 diff and decides to cut
-  over. See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and
+  empty history. **The planner calls it** since the cutover (2026-09-28,
+  `SOLVER_HISTORY_SOURCE === "derived"`): once for the display of the month on screen, and
+  again at the start of every Auto run for that run's own month (`cache: "no-store"`, a 20 s
+  ceiling) — the solve never reuses the display's copy, and `owt_solver_history_v2` in
+  `localStorage` is no longer read. See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and
   [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
 
 ---
