@@ -1141,7 +1141,11 @@ describe("the planner's chart column is at least the chart's content floor", () 
     const bar = px(/style=\{\{ width: (\d+), background:/, "the bar's inline width");
     const gap = px(/className="flex items-center gap-([\d.]+)/, "the row gap", 4);
     const count = px(/min-w-\[(\d+)px\]/, "the count column");
-    const pad = px(/<aside className="[^"]*\bp-(\d+)\b/, "the aside padding", 4);
+    // The aside's box lives in `ASIDE_BASE` since the Servicios board gave it a
+    // second placement (ADR-0044); the aside must still be built from it, or the
+    // padding read here would describe a string nothing renders.
+    expect(sidebarSrc, "the aside is built from ASIDE_BASE").toMatch(/<aside className=\{`\$\{ASIDE_BASE\} /);
+    const pad = px(/const ASIDE_BASE = "[^"]*\bp-(\d+)\b/, "the aside padding", 4);
     // The rows do not sit directly in the aside: they sit in the
     // `max-h-[60vh] overflow-y-auto pr-0.5` scroller, whose right padding is 2px
     // the row never gets. Left out of the arithmetic, the derived floor comes to
@@ -1149,7 +1153,7 @@ describe("the planner's chart column is at least the chart's content floor", () 
     // reading, which is the whole argument for deriving this from the source
     // instead of restating a number.
     const scrollerPad = px(/max-h-\[60vh\] overflow-y-auto pr-([\d.]+)/, "the scroller's right padding", 4);
-    const asideClasses = sidebarSrc.match(/<aside className="([^"]*)"/)![1].split(/\s+/);
+    const asideClasses = sidebarSrc.match(/const ASIDE_BASE = "([^"]*)"/)![1].split(/\s+/);
     // The 1px border either side is part of the box too, and was left out of the
     // 208 the rail's header used to state.
     expect(asideClasses, "the aside's border is part of the floor").toContain("border");

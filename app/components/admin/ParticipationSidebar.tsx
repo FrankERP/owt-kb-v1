@@ -19,7 +19,39 @@ const COLORS = {
 };
 type View = "voces" | "instrumentos";
 
-export function ParticipationSidebar({ roles, monthLabel }: { roles: ParticipantRole[]; monthLabel: string }) {
+// The box, whoever places it. A const rather than inline because the placement
+// half below differs by caller — and `participationAlongside.test.tsx` derives
+// the planner column's width floor from THIS string's padding and border.
+const ASIDE_BASE = "rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 self-start";
+
+// The planner's placement, unchanged: it sits in `PlannerGrid`'s left column
+// (or stacked under the day cards in «Vista»), where `top-4` was always the
+// offset and nothing asked it to stay on screen.
+const DEFAULT_PLACEMENT = "lg:sticky lg:top-4";
+
+/**
+ * The Servicios board's placement (ADR-0044): the chart stays in view while the
+ * cards scroll the PAGE. The top is the admin rail's own sticky top — the navbar
+ * is `lg:h-24`, so `top-4` would park the chart UNDER it — and
+ * `servicesBoard.test.tsx` reads `AdminRail.tsx` to keep the two identical. The
+ * height cap is that same offset plus a 1.5rem breath, so a month with many
+ * members scrolls inside the chart instead of pushing its bottom off-screen.
+ * Only `lg`: below it the board is one column and the chart simply stacks.
+ * Exported so the Servicios fallback `<aside>` shares the spelling.
+ */
+export const BOARD_STICKY = "lg:sticky lg:top-[calc(6rem+env(safe-area-inset-top))]";
+const BOARD_PLACEMENT = `${BOARD_STICKY} lg:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-1.5rem)] lg:overflow-y-auto`;
+
+export function ParticipationSidebar({
+  roles,
+  monthLabel,
+  placement = "default",
+}: {
+  roles: ParticipantRole[];
+  monthLabel: string;
+  /** `"board"` only from `ServicesPanel`; the planner keeps the default. */
+  placement?: "default" | "board";
+}) {
   const [view, setView] = useState<View>("voces");
   const all = useMemo(() => computeParticipation(roles), [roles]);
 
@@ -41,7 +73,7 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
     : [["Instr", COLORS.instr], ["FOH", COLORS.foh]];
 
   return (
-    <aside className="rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 lg:sticky lg:top-4 self-start">
+    <aside className={`${ASIDE_BASE} ${placement === "board" ? BOARD_PLACEMENT : DEFAULT_PLACEMENT}`}>
       {/*
         The header is a COLUMN, not a row. That is still load-bearing for the
         gutter placement, not styling.

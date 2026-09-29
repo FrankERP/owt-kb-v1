@@ -269,9 +269,9 @@ several exist precisely to stop a plausible-looking change.
 - **`app/(client)/template.tsx` renders a fragment, never a wrapper.** A transformed
   ancestor is a containing block for every `position: fixed` descendant (FAB, audio
   transport, toasts). `reveal.test.ts` is the guard.
-- **`/admin` has no shell and no page-level horizontal scroll** — the planner grid, the
-  Servicios board and the availability matrix are the only horizontal scrollers, each in
-  its own `overflow-x-auto` box (ADR-0035).
+- **`/admin` has no shell and no page-level horizontal scroll** — the planner grid and the
+  availability matrix are the only horizontal scrollers, each in its own `overflow-x-auto`
+  box (ADR-0035). The Servicios board is a vertical grid the PAGE scrolls (ADR-0044).
 - **A theme-gallery fixture hosts PRESENTATIONAL halves only** — never a component that
   reads a session, a cookie, the network or an env var. The gallery route is public and
   prerendered (ADR-0017), so `useSession` there breaks both; that is why the `nav` fixture
@@ -429,7 +429,9 @@ one component, two layouts (a sticky vertical rail at `lg+`, the underline strip
 both in the DOM with CSS picking one and a DIFFERENT `SlidingIndicator` id each, or the
 marker would fly across the page at the breakpoint; `ADMIN_TAB_ICON` is the one
 glyph-per-tab map and every item carries an explicit `aria-label`, because the labels are
-`display: none` — and so out of the a11y tree — while the planner is open),
+`display: none` — and so out of the a11y tree — while the planner is open; the `lg+` rail
+is also user-collapsible to those icons, persisted per browser in `owt_admin_rail_collapsed`,
+and the planner's forced collapse wins and hides the toggle — ADR-0044),
 `useIntegrityQueue` (`app/components/admin/useIntegrityQueue.ts` — the ONLY integrity
 fetch; `AdminPanel` calls it once and the panel AND the rail dot read that one state.
 Gated on the role actually having a Servicios tab (`enabled`), re-read on ENTERING

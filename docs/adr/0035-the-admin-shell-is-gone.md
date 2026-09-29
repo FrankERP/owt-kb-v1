@@ -1,6 +1,6 @@
 # ADR-0035: The Control Room is the page — the admin shell is gone, and horizontal scroll is explicit
 
-**Date:** 2026-09-17 · **Status:** Accepted
+**Date:** 2026-09-17 · **Status:** Accepted, amended by [ADR-0044](0044-the-servicios-board-scrolls-vertically.md) (2026-09-28: the Servicios board no longer scrolls horizontally)
 
 ## Context
 
@@ -36,7 +36,10 @@ between them; the cards inside a panel are the only frames left.
 **Horizontal scroll is explicit and local.** `/admin` has no page-level
 horizontal scroll at any width. The planner grid, the Servicios board and the
 availability matrix are the only horizontal scrollers, each inside its own
-`overflow-x-auto` box, with its own scrollbar and its own bounds.
+`overflow-x-auto` box, with its own scrollbar and its own bounds. [Since
+[ADR-0044](0044-the-servicios-board-scrolls-vertically.md), 2026-09-28, the Servicios
+board is a vertical grid scrolled by the page; the planner grid and the availability
+matrix are the only horizontal scrollers.]
 
 `brand-admin-frame` stays: the planner's `:has(.planner-wide)` widening hangs off
 it (with `[data-route-main]`, the layout's own cap), and its `padding-inline:

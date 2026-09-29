@@ -1,15 +1,18 @@
 /** @vitest-environment jsdom */
 //
-// Servicios is a board (R5 ruling 5, Task 4).
+// Servicios is a board that scrolls VERTICALLY (ADR-0044, reversing R5 ruling 5).
 //
 // What this pins, and why each one is a fact rather than a preference:
 //
-//  1. The cards container is a SNAP TRACK from `lg` and scrolls ITSELF
-//     (`lg:overflow-x-auto`), with `lg:snap-start` on every card. The board is
-//     the only horizontal scroller this panel introduces; a card that stops
-//     carrying `snap-start`, or a container that stops carrying its own
-//     `overflow-x-auto`, is how a fixed-width track starts widening the page
-//     instead (ADR-0035).
+//  1. The cards container is a GRID that wraps into 360px-minimum columns and
+//     leaves the scroll to the page. It carries none of the old snap track's
+//     classes and no card carries a fixed width or a snap stop — a track that
+//     crept back would reintroduce the horizontal scroll Frank asked to remove.
+//     The loading skeleton is laid out from the same two consts.
+//  1b. The Participaciones chart is PINNED on the board: sticky at the admin
+//     rail's own top (read from `AdminRail.tsx`, so the two cannot drift) and
+//     capped to the viewport with its own scroll. The planner renders the same
+//     component with the default placement, which must not pick any of it up.
 //  2. The month filter stays MULTI-select and says so through `aria-pressed`.
 //     The pills look like a one-of-N control and are not one: pressing a second
 //     month must leave the first pressed. A `SegmentedControl`-shaped
@@ -25,7 +28,11 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import ServicePrimaryAction from "../ServicePrimaryAction";
+import { BOARD_STICKY, ParticipationSidebar } from "../ParticipationSidebar";
 import ServicesPanel from "../ServicesPanel";
 import { ToastProvider } from "../../ui/Toast";
 import { CueDialogProvider } from "../../ui/CueDialogProvider";
@@ -110,30 +117,48 @@ describe("the Servicios board", () => {
     stubFetch();
   });
 
-  it("scrolls itself: the cards container is the snap track, not the page", async () => {
+  it("is a vertical grid, never a horizontal track: the page carries the scroll", async () => {
     const { container } = mount();
     await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
 
-    const track = board(container);
+    const grid = board(container);
+    const classes = grid.className.split(/\s+/);
     for (const cls of ["lg:flex", "lg:snap-x", "lg:snap-mandatory", "lg:overflow-x-auto", "lg:scroll-px-6"]) {
-      expect(track.className, cls).toContain(cls);
+      expect(classes, cls).not.toContain(cls);
     }
-    // The track is a `min-w-0` child, so its fixed-width cards size the SCROLLER
-    // and never the column that holds it.
-    expect(track.className).toContain("min-w-0");
+    expect(grid.className).not.toMatch(/overflow-x-(auto|scroll)/);
+    expect(classes).toContain("grid");
+    expect(classes).toContain("lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]");
+    // A grid column must never be sized by its content.
+    expect(classes).toContain("min-w-0");
   });
 
-  it("gives every card a snap stop and a fixed desktop width", async () => {
+  it("lets the grid size every card: no fixed width, no snap stop", async () => {
     const { container } = mount();
     await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
 
     for (const card of container.querySelectorAll("[data-card-id]")) {
-      expect(card.className).toContain("lg:snap-start");
-      expect(card.className).toContain("lg:shrink-0");
-      expect(card.className).toContain("lg:w-[380px]");
+      expect(card.className).not.toContain("snap-start");
+      expect(card.className).not.toContain("shrink-0");
+      expect(card.className).not.toContain("w-[380px]");
       // Route reveal, capped stagger — the cards arrive, they do not pop.
       expect(card.getAttribute("data-reveal")).toBe("");
     }
+  });
+
+  it("pins the Participaciones chart under the navbar, capped to the viewport", async () => {
+    const { container } = mount();
+    await waitFor(() => expect(container.querySelectorAll("[data-card-id]").length).toBe(2));
+
+    const aside = container.querySelector("aside:has([data-rail-header])") as HTMLElement;
+    expect(aside, "the Participaciones chart").toBeTruthy();
+    const classes = aside.className.split(/\s+/);
+    expect(classes).toContain("lg:sticky");
+    expect(classes).toContain(`lg:${adminRailTop()}`);
+    expect(classes).toContain("lg:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-1.5rem)]");
+    expect(classes).toContain("lg:overflow-y-auto");
+    // The planner's offset would park it under the lg:h-24 navbar.
+    expect(classes).not.toContain("lg:top-4");
   });
 
   it("keeps the month filter multi-select, and says so with aria-pressed", async () => {
@@ -180,6 +205,11 @@ describe("the Servicios board", () => {
     const reasons = [...container.querySelectorAll("p.text-ink-dim")].map((p) => p.textContent ?? "");
     expect(reasons).toHaveLength(1);
     expect(reasons[0].length).toBeGreaterThan(0);
+    // No chart from partial membership — and the fallback sits where the chart
+    // would, pinned the same way, so its «Reintentar carga» stays in reach.
+    const fallback = container.querySelector("aside") as HTMLElement;
+    expect(fallback.querySelector("[data-rail-header]")).toBeNull();
+    for (const cls of BOARD_STICKY.split(/\s+/)) expect(fallback.className.split(/\s+/), cls).toContain(cls);
   });
 
   it("draws skeletons while the sources load, never a bare pulsing block", () => {
@@ -188,8 +218,50 @@ describe("the Servicios board", () => {
     const { container } = mount();
 
     const group = screen.getByRole("status", { name: "Cargando servicios" });
-    expect(group.querySelectorAll(".brand-skeleton").length).toBe(6);
+    // Seven: the chart's column plus six cards — the loaded board's shape, laid
+    // out by the same consts, so nothing jumps when the data lands.
+    expect(group.querySelectorAll(".brand-skeleton").length).toBe(7);
+    expect(group.className).toContain("lg:grid-cols-[320px_1fr]");
+    const cards = group.children[1] as HTMLElement;
+    expect(cards.className).toContain("lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]");
+    expect(cards.querySelectorAll(".brand-skeleton").length).toBe(6);
     expect(container.querySelectorAll(".animate-pulse").length).toBe(0);
+  });
+});
+
+/**
+ * The sticky top of the admin rail's `lg` nav, read from its source. The chart
+ * and the rail sit side by side under the same navbar; if one moved and the
+ * other did not, they would stop lining up — or one would slide under the bar.
+ */
+function adminRailTop(): string {
+  const src = readFileSync(join(process.cwd(), "app/components/admin/AdminRail.tsx"), "utf8");
+  const at = src.indexOf("data-admin-rail=");
+  expect(at, "AdminRail's nav carries data-admin-rail").toBeGreaterThan(-1);
+  const tag = src.slice(at, src.indexOf(">", at));
+  const cls = tag.match(/className="([^"]*)"/);
+  expect(cls, "the rail nav's className").toBeTruthy();
+  const top = cls![1].split(/\s+/).find((c) => /^top-\[[^\]]+\]$/.test(c));
+  expect(top, "the rail nav's sticky top").toBeTruthy();
+  return top!;
+}
+
+describe("the Participaciones chart's placement", () => {
+  it("shares the admin rail's sticky top, byte for byte", () => {
+    // Non-vacuity: an arbitrary-value top was found, whatever it says.
+    expect(adminRailTop()).toMatch(/^top-\[.+\]$/);
+    expect(BOARD_STICKY.split(/\s+/)).toContain(`lg:${adminRailTop()}`);
+  });
+
+  it("keeps the planner's placement when no placement is asked for", () => {
+    const { container } = render(<ParticipationSidebar roles={[]} monthLabel="Marzo" />);
+    const classes = (container.querySelector("aside") as HTMLElement).className.split(/\s+/);
+    expect(classes).toContain("lg:sticky");
+    expect(classes).toContain("lg:top-4");
+    expect(classes).toContain("self-start");
+    expect(classes).not.toContain(`lg:${adminRailTop()}`);
+    expect(classes).not.toContain("lg:overflow-y-auto");
+    expect(classes.some((c) => c.startsWith("lg:max-h-"))).toBe(false);
   });
 });
 
