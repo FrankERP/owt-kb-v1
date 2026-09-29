@@ -698,7 +698,9 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               type="number" min={1} max={5}
               className={`${rbIn} w-12`}
               value={slack}
-              onChange={e => setSlack(Number(e.target.value))}
+              // Whole services only: the solver's DSL parses `fairness_slack \d+`,
+              // so a typed 0.5 would reach it as a clause it cannot read.
+              onChange={e => setSlack(Math.trunc(Number(e.target.value)))}
             />
           )}
         </div>
@@ -714,7 +716,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
           <p className="font-body text-[11px] text-mono-500 mt-1">
             En Auto de fin de semana no se compara su carga total del mes con la del resto, pero sigue contando
             para la equidad de cada rol que puede cubrir (por ejemplo, Lead de domingo). Al llenar especiales se
-            le ordena con la carga media.
+            le ordena con la carga mediana del resto.
           </p>
         )}
         {fairness === "slack" && (

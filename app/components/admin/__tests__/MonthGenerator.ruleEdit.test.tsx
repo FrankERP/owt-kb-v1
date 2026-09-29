@@ -124,6 +124,12 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
     fireEvent.change(allowance, { target: { value: "" } });
     expect(screen.getByText(/con 0 no tiene efecto/i)).toBeTruthy();
     expect(screen.queryByText(/puede alejarse hasta 0/)).toBeNull();
+
+    // Whole services only — the solver's DSL reads `fairness_slack \d+`.
+    fireEvent.change(allowance, { target: { value: "2.5" } });
+    expect(screen.getByText(/puede alejarse hasta 2 servicios de la del resto/)).toBeTruthy();
+    fireEvent.change(allowance, { target: { value: "0.5" } });
+    expect(screen.getByText(/con 0 no tiene efecto/i)).toBeTruthy();
   });
 
   it("edits a conflict rule in place", () => {
