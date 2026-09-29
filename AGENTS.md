@@ -21,7 +21,10 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   pushes; CI runs there too, but does not block. Protection applies to admins as
   well, so there is no silent bypass: an emergency override means deliberately
   turning protection off, doing the push, and turning it back on. See
-  `docs/CI.md`.
+  `docs/CI.md`. **Auto-merge is allowed** (repo setting, since 2026-09-29):
+  `gh pr merge <n> --auto --merge` lands a PR the moment `gates` goes green, so
+  nobody has to watch CI — but turn it on only AFTER the dev check below; it
+  merges on green, not on a human's look.
 - **A MERGE TO `main` IS A RELEASE, SO IT NEEDS A FRESH CODE REVIEW FIRST.** Not the
   plan review — a review of the *diff*. Children E and F were both adversarially reviewed
   as plans (19 rounds and 2), merged, and deployed; the code review ran afterwards and

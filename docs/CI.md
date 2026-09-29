@@ -110,6 +110,18 @@ Applied to **`main` only**, via the GitHub API:
 - Force pushes and branch deletion: blocked.
 - Conversation resolution: not required.
 
+**Auto-merge is allowed** (`allow_auto_merge: true`, a REPOSITORY setting, since
+2026-09-29 — Frank asked for it after enabling it on PR #111 was refused while
+that PR's `gates` re-ran against a moved `main`). It does not loosen anything above: GitHub merges an auto-merge PR
+only once `gates` is green on a branch that is up to date with `main`. What it
+removes is the wait — nobody has to watch CI. Because it merges on green and not
+on anyone's look, it is enabled only AFTER the dev check in the release flow
+below (`gh pr merge <n> --auto --merge`; the history uses merge commits). It is
+not part of `scripts/apply-branch-protection.sh`, which sets BRANCH protection:
+the emergency `DELETE …/protection` does not touch it, and re-applying
+protection does not restore it — `gh api -X PATCH repos/FrankERP/owt-kb-v1 -F
+allow_auto_merge=true` does.
+
 **`preview` is deliberately NOT protected.** It is the rehearsal branch and
 takes direct pushes; CI still runs there, so a failure is visible fast, but it
 does not block. Slowing down the dev rehearsal is the opposite of the point.
@@ -137,6 +149,7 @@ feature branch (local gates green)
   → merge the feature branch into preview, push preview
   → VERIFY the dev alias moved (alias array + githubCommitSha)
   → open a PR from the feature branch to main, WAIT for `gates`
+    (or, once dev has been looked at, `gh pr merge <n> --auto --merge`)
   → merge the PR — that IS the production release
   → VERIFY the production alias the same way
 ```
