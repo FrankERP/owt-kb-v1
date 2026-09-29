@@ -11,8 +11,10 @@
 //     The loading skeleton is laid out from the same two consts.
 //  1b. The Participaciones chart is PINNED on the board: sticky at the admin
 //     rail's own top (read from `AdminRail.tsx`, so the two cannot drift) and
-//     capped to the viewport with its own scroll. The planner renders the same
-//     component with the default placement, which must not pick any of it up.
+//     capped to the viewport by that same offset, a flex column whose rows list
+//     is the one scroller, so the header never scrolls away. The planner
+//     renders the same component with the default placement, which must not
+//     pick any of it up — and only `ServicesPanel` may ask for the board's.
 //  2. The month filter stays MULTI-select and says so through `aria-pressed`.
 //     The pills look like a one-of-N control and are not one: pressing a second
 //     month must leave the first pressed. A `SegmentedControl`-shaped
@@ -111,6 +113,21 @@ function mount() {
 const board = (container: HTMLElement) =>
   container.querySelector("[data-card-id]")?.parentElement as HTMLElement;
 
+/**
+ * Any class on the cards container that would turn it back into a horizontal
+ * track, whatever variant it hides behind (`lg:`, `xl:`, `!`): a column flow,
+ * implicit columns, or a container that scrolls itself.
+ */
+function trackClasses(el: HTMLElement): string[] {
+  return el.className
+    .split(/\s+/)
+    .filter((cls) =>
+      /^(?:grid-flow-col|auto-cols-|overflow-(?:x-)?(?:auto|scroll)$)/.test(
+        cls.replace(/^(?:[a-z0-9-]+:)+/, "").replace(/^!/, ""),
+      ),
+    );
+}
+
 describe("the Servicios board", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
@@ -127,6 +144,7 @@ describe("the Servicios board", () => {
       expect(classes, cls).not.toContain(cls);
     }
     expect(grid.className).not.toMatch(/overflow-x-(auto|scroll)/);
+    expect(trackClasses(grid)).toEqual([]);
     expect(classes).toContain("grid");
     expect(classes).toContain("lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]");
     // A grid column must never be sized by its content.
@@ -155,10 +173,36 @@ describe("the Servicios board", () => {
     const classes = aside.className.split(/\s+/);
     expect(classes).toContain("lg:sticky");
     expect(classes).toContain(`lg:${adminRailTop()}`);
-    expect(classes).toContain("lg:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-1.5rem)]");
+    // The cap subtracts the SAME offset the sticky top adds, derived from the
+    // rail's top rather than restated: a navbar-height change that moves the
+    // top and forgets the cap would push the chart's bottom off-screen.
+    const offset = adminRailTop().match(/^top-\[calc\((.+)\)\]$/);
+    expect(offset, "the rail's sticky top is a calc()").toBeTruthy();
+    const terms = offset![1].split("+").map((t) => t.trim());
+    expect(terms.length, "the offset's terms").toBeGreaterThan(0);
+    const cap = classes.find((c) => c.startsWith("lg:max-h-["));
+    expect(cap, "the chart's viewport cap").toBeTruthy();
+    expect(cap).toContain(`[calc(100dvh-${terms.join("-")}-`);
+    // A flex column, still scrollable itself only as the fallback for a
+    // viewport too short for the header and legend alone.
+    expect(classes).toContain("lg:flex");
+    expect(classes).toContain("lg:flex-col");
     expect(classes).toContain("lg:overflow-y-auto");
     // The planner's offset would park it under the lg:h-24 navbar.
     expect(classes).not.toContain("lg:top-4");
+
+    // The rows list is the ONE scroller, a direct child filling what the header
+    // and legend leave: it drops its own 60vh cap from `lg`, or two scrollers
+    // nest and the header scrolls away inside the aside on a short viewport.
+    const list = aside.lastElementChild as HTMLElement;
+    const listClasses = list.className.split(/\s+/);
+    expect(listClasses, "the rows list (it carries the scroller's pr-0.5)").toContain("pr-0.5");
+    for (const cls of ["overflow-y-auto", "lg:min-h-0", "lg:flex-1", "lg:max-h-none"]) {
+      expect(listClasses, cls).toContain(cls);
+    }
+    for (const child of [...aside.children].slice(0, -1)) {
+      expect(child.className, "only the rows list scrolls inside the aside").not.toMatch(/overflow-/);
+    }
   });
 
   it("keeps the month filter multi-select, and says so with aria-pressed", async () => {
@@ -224,6 +268,7 @@ describe("the Servicios board", () => {
     expect(group.className).toContain("lg:grid-cols-[320px_1fr]");
     const cards = group.children[1] as HTMLElement;
     expect(cards.className).toContain("lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]");
+    expect(trackClasses(cards)).toEqual([]);
     expect(cards.querySelectorAll(".brand-skeleton").length).toBe(6);
     expect(container.querySelectorAll(".animate-pulse").length).toBe(0);
   });
@@ -255,13 +300,36 @@ describe("the Participaciones chart's placement", () => {
 
   it("keeps the planner's placement when no placement is asked for", () => {
     const { container } = render(<ParticipationSidebar roles={[]} monthLabel="Marzo" />);
-    const classes = (container.querySelector("aside") as HTMLElement).className.split(/\s+/);
+    const aside = container.querySelector("aside") as HTMLElement;
+    const classes = aside.className.split(/\s+/);
     expect(classes).toContain("lg:sticky");
     expect(classes).toContain("lg:top-4");
     expect(classes).toContain("self-start");
     expect(classes).not.toContain(`lg:${adminRailTop()}`);
     expect(classes).not.toContain("lg:overflow-y-auto");
+    expect(classes).not.toContain("lg:flex");
+    expect(classes).not.toContain("lg:flex-col");
     expect(classes.some((c) => c.startsWith("lg:max-h-"))).toBe(false);
+    // The planner's rows list, byte for byte: `participationAlongside.test.tsx`
+    // derives the planner column's width floor from its `pr-0.5`.
+    expect((aside.lastElementChild as HTMLElement).className).toBe("space-y-0 max-h-[60vh] overflow-y-auto pr-0.5");
+  });
+
+  it("is asked for by ServicesPanel alone: the planner's charts pass no placement", () => {
+    const read = (file: string) => readFileSync(join(process.cwd(), file), "utf8");
+    // Whole JSX elements only — MonthGenerator's prose mentions a retired
+    // `placement="panel"`, which a whole-file search would trip over.
+    const elements = (src: string) => [...src.matchAll(/<ParticipationSidebar\b[\s\S]*?\/>/g)].map((m) => m[0]);
+
+    const planner = elements(read("app/components/admin/MonthGenerator.tsx"));
+    expect(planner.length, "MonthGenerator renders the chart").toBeGreaterThan(0);
+    for (const el of planner) expect(el).not.toMatch(/\bplacement\s*=/);
+
+    const panelSrc = read("app/components/admin/ServicesPanel.tsx");
+    const board = elements(panelSrc);
+    expect(board, "ServicesPanel renders the chart once").toHaveLength(1);
+    expect(panelSrc.match(/placement="board"/g) ?? []).toHaveLength(1);
+    expect(board[0]).toContain('placement="board"');
   });
 });
 

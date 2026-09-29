@@ -38,9 +38,23 @@ const DEFAULT_PLACEMENT = "lg:sticky lg:top-4";
  * members scrolls inside the chart instead of pushing its bottom off-screen.
  * Only `lg`: below it the board is one column and the chart simply stacks.
  * Exported so the Servicios fallback `<aside>` shares the spelling.
+ *
+ * Under the cap the aside is a flex COLUMN and the rows list (`BOARD_LIST`) is
+ * the one scroller that takes whatever height the header and legend leave, so
+ * those stay in view and only the members move. Two nested scrollers — the
+ * aside's and the list's own `max-h-[60vh]` — let the header scroll away inside
+ * the aside on any viewport shorter than ~640px. The aside's `overflow-y-auto`
+ * stays as the fallback for a viewport too short for the header and legend alone.
  */
 export const BOARD_STICKY = "lg:sticky lg:top-[calc(6rem+env(safe-area-inset-top))]";
-const BOARD_PLACEMENT = `${BOARD_STICKY} lg:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-1.5rem)] lg:overflow-y-auto`;
+const BOARD_PLACEMENT = `${BOARD_STICKY} lg:flex lg:flex-col lg:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-1.5rem)] lg:overflow-y-auto`;
+
+// The rows' scroller. The planner renders `LIST_BASE` alone, unchanged —
+// `participationAlongside.test.tsx` reads its `pr-0.5` into the column's width
+// floor. On the board, from `lg`, it drops its own 60vh cap and fills the capped
+// aside instead (`min-h-0` so a flex item may shrink below its rows).
+const LIST_BASE = "space-y-0 max-h-[60vh] overflow-y-auto pr-0.5";
+const BOARD_LIST = `${LIST_BASE} lg:min-h-0 lg:flex-1 lg:max-h-none`;
 
 export function ParticipationSidebar({
   roles,
@@ -131,7 +145,7 @@ export function ParticipationSidebar({
         </p>
       )}
 
-      <div className="space-y-0 max-h-[60vh] overflow-y-auto pr-0.5">
+      <div className={placement === "board" ? BOARD_LIST : LIST_BASE}>
         {rows.map(r => <Row key={r.id} r={r} max={max} view={view} />)}
       </div>
     </aside>

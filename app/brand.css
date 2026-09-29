@@ -981,7 +981,9 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
  * the frame belongs to `.planner-wide` alone, because the derivation above is
  * the planner's arithmetic; a collapsed rail on any other tab just hands its
  * 144px back to the workspace inside the ordinary 1280 cap.
- * `adminRail.test.tsx` guards that this block never reaches the frame's width.
+ * `adminRail.test.tsx` guards that this block never reaches the frame's width,
+ * and that its `--admin-rail-w` equals the planner's: the two blocks share no
+ * rule, so nothing but that test keeps the two 56s together.
  *
  * Where both apply (the planner open at ≥ 1280), they state the same thing, and
  * the planner's block hides the toggle — its collapse is not the user's to undo.
@@ -1028,9 +1030,11 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
    */
   .brand-admin-frame:has(.planner-wide) {
     /*
-     * The ONE declaration of the collapsed rail width; `AdminPanel`'s grid
+     * The PLANNER's declaration of the collapsed rail width; `AdminPanel`'s grid
      * reads it as `lg:grid-cols-[var(--admin-rail-w,200px)_1fr]`, so the column
-     * and the rail can never state two different numbers.
+     * never repeats the number. The user's collapse (the lg block above) mirrors
+     * it with a declaration of its own, and `adminRail.test.tsx` fails if the
+     * two values ever differ.
      */
     --admin-rail-w: 56px;
     max-width: none;

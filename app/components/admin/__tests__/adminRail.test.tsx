@@ -17,7 +17,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import AdminRail, { ADMIN_TAB_ICON, type IntegrityTone } from "../AdminRail";
@@ -261,6 +263,52 @@ describe("the user can collapse the rail", () => {
     const items = railItems(rail);
     expect(items.map((i) => i.getAttribute("title"))).toEqual(TABS.map((t) => t.label));
   });
+
+  it("renders EXPANDED on the server whatever storage says, then hydrates into the stored choice", () => {
+    // The server snapshot `useSyncExternalStore` is handed is the only thing
+    // keeping the server render and the hydrating one in agreement. This file
+    // runs in jsdom, so `window.localStorage` exists while `renderToString`
+    // runs: a `useState(readStoredCollapsed)` rewrite would read the "1" below
+    // straight into the SERVER markup and fail the first half of this test — and
+    // on a real server, where `window` is missing, it would render expanded and
+    // then hydrate collapsed, which is a hydration mismatch on `/admin`.
+    window.localStorage.setItem(KEY, "1");
+    const element = (
+      <AdminRail tabs={TABS} active="services" onChange={vi.fn()} integrityTone="clean" integrityCount={0} />
+    );
+
+    const host = document.createElement("div");
+    host.innerHTML = renderToString(element);
+    const serverRail = host.querySelector("[data-admin-rail]");
+    expect(serverRail, "the server markup carries the rail nav").not.toBeNull();
+    expect(serverRail!.hasAttribute("data-collapsed")).toBe(false);
+    const serverToggle = serverRail!.querySelector("[data-rail-toggle]");
+    expect(serverToggle, "the server markup carries the toggle").not.toBeNull();
+    expect(serverToggle!.getAttribute("aria-expanded")).toBe("true");
+    expect(serverToggle!.getAttribute("aria-label")).toBe("Contraer menú");
+
+    // The stored choice arrives AFTER hydration, as an update — never as a
+    // mismatch React has to recover from.
+    document.body.appendChild(host);
+    const errors = vi.spyOn(console, "error");
+    const recoverable = vi.fn();
+    let root: Root | undefined;
+    try {
+      act(() => {
+        root = hydrateRoot(host, element, { onRecoverableError: recoverable });
+      });
+      expect(recoverable).not.toHaveBeenCalled();
+      expect(errors).not.toHaveBeenCalled();
+
+      const rail = host.querySelector("[data-admin-rail]") as HTMLElement;
+      expect(rail.hasAttribute("data-collapsed")).toBe(true);
+      expect(toggleOf(rail).getAttribute("aria-expanded")).toBe("false");
+      expect(toggleOf(rail).getAttribute("aria-label")).toBe("Expandir menú");
+    } finally {
+      act(() => root?.unmount());
+      host.remove();
+    }
+  });
 });
 
 /**
@@ -291,10 +339,15 @@ describe("brand.css keys the user's collapse without touching the planner's fram
     return out;
   })();
 
-  /** `selector { declarations }` pairs inside a block body (no nesting there). */
+  /**
+   * `selector { declarations }` pairs inside a block body (no nesting there).
+   * `[data-collapsed=""]` matches exactly what `[data-collapsed]` does for the
+   * empty value `AdminRail` writes, so it is folded into one spelling — a
+   * rewrite to the other form must not slip every rule past the filters below.
+   */
   const rulesIn = (body: string) =>
     [...body.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((r) => ({
-      selector: r[1].trim(),
+      selector: r[1].trim().replace(/\[data-collapsed=(?:""|'')\]/g, "[data-collapsed]"),
       decls: r[2],
     }));
 
@@ -326,9 +379,32 @@ describe("brand.css keys the user's collapse without touching the planner's fram
     ).toBe(true);
   });
 
+  it("collapses to the planner's width: the two --admin-rail-w values are one number", () => {
+    // The two blocks share no rule — the planner's 56 is pinned literally by
+    // `participationAlongside.test.tsx` against the widened-frame derivation —
+    // so this is the only thing that keeps the user's 56 from drifting off it.
+    const railWidth = (selector: string) => {
+      const values = allRules
+        .filter((r) => r.selector === selector)
+        .flatMap((r) => [...r.decls.matchAll(/--admin-rail-w:\s*([^;]+)/g)].map((m) => m[1].trim()));
+      expect(values, `${selector} declares --admin-rail-w exactly once`).toHaveLength(1);
+      return values[0];
+    };
+    const user = railWidth(USER);
+    const planner = railWidth(".brand-admin-frame:has(.planner-wide)");
+    expect(planner).toMatch(/^\d+px$/);
+    expect(user).toBe(planner);
+  });
+
   it("never widens the frame or changes its padding — that is the planner's alone", () => {
-    for (const r of allRules.filter((r) => r.selector.includes("[data-collapsed]"))) {
+    const collapsed = allRules.filter((r) => r.selector.includes("[data-collapsed]"));
+    // Non-vacuity: the user's four rules were found.
+    expect(collapsed.length).toBeGreaterThanOrEqual(4);
+    for (const r of collapsed) {
       expect(r.decls, r.selector).not.toMatch(/max-width/);
+      // `inline-size` covers `max-inline-size` / `min-inline-size` too, and
+      // `padding` every longhand, `padding-inline` included.
+      expect(r.decls, r.selector).not.toMatch(/inline-size/);
       expect(r.decls, r.selector).not.toMatch(/padding/);
     }
     // …and every rule that DOES lift a cap or re-pad the frame is scoped to the

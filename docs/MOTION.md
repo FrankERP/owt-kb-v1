@@ -1303,8 +1303,9 @@ one (`hidden lg:flex` / `lg:hidden`) — a JS media query would paint the wrong 
 and the two indicator ids are deliberately different, or the shared `layoutId` would fly
 the marker across the page at the breakpoint. While the planner is open the rail collapses
 to icons: `app/brand.css` sets `--admin-rail-w: 56px` on `.brand-admin-frame:has(.planner-wide)`
-(the grid reads it as `lg:grid-cols-[var(--admin-rail-w,200px)_1fr]`, so 56 is written
-once) and hides `[data-rail-label]`, which is why every item carries its own `aria-label`
+(the grid reads it as `lg:grid-cols-[var(--admin-rail-w,200px)_1fr]`, so the grid never
+repeats 56; ADR-0044's user collapse later mirrored it in a block of its own) and hides
+`[data-rail-label]`, which is why every item carries its own `aria-label`
 — a `display: none` label is out of the accessibility tree too. The widened-frame
 arithmetic was re-derived WITH the rail: `1512 − 24 = 1488`,
 `56 + 32 + 1400 = 1488`, `216 + 12 + 920 + 12 + 240 = 1400`.

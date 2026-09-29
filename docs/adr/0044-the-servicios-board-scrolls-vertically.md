@@ -28,8 +28,8 @@ Participaciones always in view while the services scroll.
    never pushes its bottom off-screen. The behaviour is opt-in from `ServicesPanel`; the
    planner's copy of the sidebar is unchanged.
 3. **The `lg+` rail is user-collapsible** to the 56 px icons-only state the planner
-   already forces at ≥1280 via `.brand-admin-frame:has(.planner-wide)` — one state, not a
-   second one. The choice is persisted per browser in `localStorage` key
+   already forces at ≥1280 via `.brand-admin-frame:has(.planner-wide)` — one visual state,
+   not a second one, reached by a rule set of its own (see Consequences). The choice is persisted per browser in `localStorage` key
    `owt_admin_rail_collapsed`, read after mount (hydration-safe; one expanded→collapsed
    flip on first paint is accepted), every read and write in `try/catch`. While the
    planner forces the collapse the planner wins and the toggle is hidden. Below `lg` the
@@ -55,7 +55,12 @@ Participaciones always in view while the services scroll.
   «No page-level horizontal scroll» is unchanged.
 - `servicesBoard.test.tsx` now pins the OPPOSITE of what it pinned under ruling 5: no
   horizontal track. Restoring the track fails the suite.
-- The collapsed width is still declared once, in `app/brand.css`; the user toggle and the
-  planner's forced collapse land on the same rule.
+- The user's collapse is its own `lg+` rule set in `app/brand.css`
+  (`.brand-admin-frame:has([data-admin-rail][data-collapsed])`) that MIRRORS the planner's
+  forced collapse — the same 56 px `--admin-rail-w`, hidden labels, the integrity dot as a
+  badge — and shares no rule with it. The planner's ≥1280 block keeps its own literal
+  `--admin-rail-w: 56px` and `width: 56px`, which `participationAlongside.test.tsx` pins
+  against the widened-frame derivation. Nothing in CSS ties the two 56s together;
+  `adminRail.test.tsx` does, by failing when the two `--admin-rail-w` values differ.
 - The preference is a per-browser convenience, not shared state: another device, or a
   cleared storage, starts expanded.

@@ -1057,9 +1057,10 @@ describe("the planner's three column widths agree wherever they are written", ()
     const columns = cssSrc.match(/\(chart\) \+ 12 \+ \d+ \(grid\) \+ 12 \+ \d+ \(picker\)\s+= (\d+)/);
     expect(columns![1]).toBe(rail![3]);
 
-    // The collapsed width is declared ONCE, as the custom property the layout
-    // class reads — a second literal in `AdminPanel` is exactly the drift this
-    // whole describe block exists to catch.
+    // The planner's collapsed width is declared as the custom property the
+    // layout class reads — a second literal in `AdminPanel` is exactly the drift
+    // this whole describe block exists to catch. (The user's collapse declares
+    // its own 56 in a separate block; `adminRail.test.tsx` holds the two equal.)
     const railVar = cssSrc.match(
       /\.brand-admin-frame:has\(\.planner-wide\)\s*\{[^}]*--admin-rail-w:\s*(\d+)px;/,
     );
