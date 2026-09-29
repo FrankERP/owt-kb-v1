@@ -108,6 +108,24 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
     expect(screen.getByText(/sigue contando para la equidad de cada rol/i)).toBeTruthy();
   });
 
+  it("«Holgura» states its allowance, and a cleared allowance says it does nothing", () => {
+    renderGen(CONFIG);
+
+    openEditor(/Mkz/);
+    fireEvent.click(screen.getByText("Holgura"));
+    const row = screen.getByText("Holgura").closest("div") as HTMLElement;
+    const allowance = row.querySelector('input[type="number"]') as HTMLInputElement;
+
+    fireEvent.change(allowance, { target: { value: "2" } });
+    expect(screen.getByText(/puede alejarse hasta 2 servicios de la del resto/)).toBeTruthy();
+
+    // `restrictionToDs` emits nothing for a slack of 0, so the sentence must not
+    // promise a band of 0 — the person is simply «Normal» once saved.
+    fireEvent.change(allowance, { target: { value: "" } });
+    expect(screen.getByText(/con 0 no tiene efecto/i)).toBeTruthy();
+    expect(screen.queryByText(/puede alejarse hasta 0/)).toBeNull();
+  });
+
   it("edits a conflict rule in place", () => {
     const { container } = renderGen(CONFIG);
 

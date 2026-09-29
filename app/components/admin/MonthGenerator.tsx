@@ -702,20 +702,26 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
             />
           )}
         </div>
-        {/* What the solver actually does with `fairness_exempt` / `fairness_slack N`
-            (gcf/owt_solver_v2.py: the bare forms only touch the GLOBAL total-load
-            band; the Sun.Lead and Sun.BGV bands and every per-role spread still
-            count the person). The labels were bare English words with no
-            explanation, and «Exempt» read as "out of every fairness rule". */}
+        {/* One restriction drives TWO engines, and each reads the mode its own way.
+            The weekend solver (gcf/owt_solver_v2.py): the bare `fairness_exempt` /
+            `fairness_slack N` only touch the GLOBAL total-load band — the Sun.Lead
+            and Sun.BGV bands and every per-role spread still count the person.
+            The specials filler (`orderByEffectiveLoad`, localFill.ts): exempt ranks
+            at the median load, slack N ranks as `load + N`. A slack of 0 is no rule
+            at all in either (`restrictionToDs`, `fairnessByMemberId`). The labels
+            were bare English words, and «Exempt» read as "out of every rule". */}
         {fairness === "exempt" && (
           <p className="font-body text-[11px] text-mono-500 mt-1">
-            No se compara su carga total del mes con la del resto. Sigue contando para la equidad de cada rol
-            que puede cubrir (por ejemplo, Lead de domingo).
+            En Auto de fin de semana no se compara su carga total del mes con la del resto, pero sigue contando
+            para la equidad de cada rol que puede cubrir (por ejemplo, Lead de domingo). Al llenar especiales se
+            le ordena con la carga media.
           </p>
         )}
         {fairness === "slack" && (
           <p className="font-body text-[11px] text-mono-500 mt-1">
-            Su carga total del mes puede alejarse hasta {slack} servicio{slack === 1 ? "" : "s"} de la del resto.
+            {slack >= 1
+              ? `En Auto de fin de semana su carga total del mes puede alejarse hasta ${slack} servicio${slack === 1 ? "" : "s"} de la del resto. Al llenar especiales cuenta como si llevara ${slack} más.`
+              : "Con 0 no tiene efecto: escribe un número del 1 al 5."}
           </p>
         )}
       </div>

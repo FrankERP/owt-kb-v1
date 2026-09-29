@@ -66,7 +66,11 @@ Parsed by `parse_dsl_rules()`; clauses `&`-chainable. Forms include:
   So an «Exenta» Sunday leader still competes for Sunday-lead fairness — which is the intent for
   lead-only members who play an instrument every week (confirmed 2026-09-29): lead constantly, never BGV or
   Coro (that is their `!in` patterns, not the fairness mode). Slack also drops the person from
-  the global soft pull, not just widens their band.
+  the global soft pull, not just widens their band; absence slack (`compute_absence_slack`) adds
+  on top of it; and if fewer than two people are left without slack, every non-exempt person
+  goes back into the strict band and the slack is ignored. The same restriction also drives
+  the specials filler, which reads it differently: exempt ranks at the median load, slack N as
+  `load + N` (`orderByEffectiveLoad`, `localFill.ts`). A slack of 0 is no rule in either.
 
 Patterns: exact roles, `Sun.*`, `Sat.*`, `*.*`, `*.LeadBGV`, `*.Lead/BGV/Choir`, plus legacy
 aliases. Templates like `{weeks-2}` resolve against month length. Names match case-insensitively.
@@ -92,12 +96,16 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   tiers, so a uniform over-estimate is exponential in it and the objective's upper bound
   crossed CP-SAT's integer-objective ceiling (INT64_MAX / 2) on ordinary months. Months
   whose history still pushes it over run without the objective and say so with
-  `objective_skipped: true` — see ADR-0038 for that trade-off. **In production that is every
-  Auto run today:** the derived history always sends three months, and measured on the real
-  October 2026 request every optimising pass overflowed (240/240 runs), so the roster is a
-  legal but arbitrary draw — history, lead rotation and the back-to-back penalty do nothing.
-  The planner shows it (since 2026-09-29) as «Sin optimizar», marks the «Historial» line
-  «(no aplicado)» and says so in a sentence under the banners. Lead rotation uses seeded random weights on Sun.Lead
+  `objective_skipped: true` — see ADR-0038 for that trade-off. **Expect it routinely in
+  production.** Whether a month overflows depends on the SIZE of its weighted history (the
+  `[3, 6, 10]` offsets feed `overall_limit` and every per-role cap), not only on the derived
+  history always sending three months; a thin quarter can still optimise. But the real
+  October 2026 request — a full roster, three derived months — came back `objective_skipped`
+  on every run of an offline reproduction (2026-09-29, 240 runs, the pinned ortools), and its
+  weight ladder bounds at ~4.9e19 against the 4.6e18 ceiling. Such a roster is a legal but
+  arbitrary draw — history, lead rotation and the back-to-back penalty do nothing. The planner
+  shows it (since 2026-09-29) as «Sin optimizar», marks the «Historial» line «(no aplicado)»
+  and says so in a sentence under the banners. Lead rotation uses seeded random weights on Sun.Lead
   assignments (monthly and per-week terms). The planner UI surfaces, separately for
   Sunday and Saturday, which lead-pool members did not hold that lead role in the
   calendar month before the month being planned (`LeadPoolHistoryPanel`); that is
