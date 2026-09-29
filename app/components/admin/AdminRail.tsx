@@ -124,7 +124,7 @@ export default function AdminRail({
         aria-label="Secciones"
         data-admin-rail=""
         data-collapsed={collapsed ? "" : undefined}
-        className="brand-admin-rail sticky top-[calc(6rem+env(safe-area-inset-top))] hidden flex-col gap-1 self-start lg:flex"
+        className="brand-admin-rail sticky top-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))] hidden flex-col gap-1 self-start lg:flex"
       >
         {tabs.map((tab) => (
           <button
