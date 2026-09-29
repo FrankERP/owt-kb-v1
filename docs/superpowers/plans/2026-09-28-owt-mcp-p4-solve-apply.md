@@ -38,7 +38,7 @@ The coordinating agent requested this plan for cycle `2026-09-28-mcp-p4-plan`, w
   platform setting for every function (Fluid compute: a concurrency change for all of them, and —
   because every function that declares no `maxDuration` is re-capped at its old 10 s — a duration
   change for none), and ends in an irreversible remote release action. It needs two sequential fresh `APPROVED` verdicts on byte-identical text, plus a committed
-  review log beside this file. Proposed committed path:
+  review log beside this file. Committed path:
   `docs/superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply.md`, with
   `2026-09-28-owt-mcp-p4-solve-apply-review-log.md` beside it.
 - **Accepted requirement sources:** the spec
@@ -87,7 +87,7 @@ The coordinating agent requested this plan for cycle `2026-09-28-mcp-p4-plan`, w
 
 ## Post-approval changes — un-reviewed (after digest 93c4e227…)
 
-These ten changes were made after the two approving rounds (7 and 8) on digest `93c4e227…` and are
+These eleven changes were made after the two approving rounds (7 and 8) on digest `93c4e227…` and are
 **outside that approval**. Each is applied inline where it belongs and marked there «post-approval
 change N», so every un-reviewed sentence is greppable. The coordinator decides which need a review.
 
