@@ -8,6 +8,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { CueDialogProvider } from "../../ui/CueDialogProvider";
 import { SetlistEditor } from "../SetlistEditor";
 
 const ROSTER = [
@@ -41,27 +42,48 @@ function singleRead(over: Record<string, unknown> = {}) {
 
 type PutReply = { status: number; body: unknown };
 
-/** GET setlist → `read`; tags → []; song search → `found`; PUT → `put` (captured). */
-function stubFetch(read: unknown, put: PutReply = { status: 200, body: { ok: true } }, found: unknown[] = []) {
+/**
+ * GET setlist → `read`; tags → []; authors → `authors`; song search → `found`;
+ * PUT → `put` (captured). POST author → echoes a new author; POST song → captured.
+ */
+function stubFetch(
+  read: unknown,
+  put: PutReply = { status: 200, body: { ok: true } },
+  found: unknown[] = [],
+  authors: unknown[] = [],
+) {
   const puts: unknown[] = [];
+  const posts: { url: string; body: unknown }[] = [];
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (init?.method === "PUT") {
       puts.push(JSON.parse(String(init.body)));
       return { ok: put.status < 400, status: put.status, json: async () => put.body };
     }
+    if (init?.method === "POST") {
+      const body = JSON.parse(String(init.body)) as { name?: string; title?: string };
+      posts.push({ url, body });
+      if (url === "/api/content/authors") return { ok: true, status: 201, json: async () => ({ _id: "a-new", name: body.name }) };
+      if (url === "/api/content/posts") return { ok: true, status: 201, json: async () => ({ _id: "s-new", title: body.title }) };
+      throw new Error(`unexpected POST ${url}`);
+    }
     if (url.startsWith("/api/admin/setlists?")) return { ok: true, status: 200, json: async () => read };
     if (url === "/api/content/tags") return { ok: true, status: 200, json: async () => [] };
+    if (url === "/api/content/authors") return { ok: true, status: 200, json: async () => authors };
     if (url.startsWith("/api/admin/songs?")) return { ok: true, status: 200, json: async () => found };
     throw new Error(`unexpected fetch ${url}`);
   });
   vi.stubGlobal("fetch", fetchMock);
-  return { fetchMock, puts };
+  return { fetchMock, puts, posts };
 }
 
 function mount() {
   const onSaved = vi.fn();
   const onClose = vi.fn();
-  render(<SetlistEditor week="2026-10-03" type="special" roleId="role-sp" onClose={onClose} onSaved={onSaved} />);
+  render(
+    <CueDialogProvider>
+      <SetlistEditor week="2026-10-03" type="special" roleId="role-sp" onClose={onClose} onSaved={onSaved} />
+    </CueDialogProvider>,
+  );
   return { onSaved, onClose };
 }
 
@@ -205,5 +227,62 @@ describe("SetlistEditor — «Dirige» on a worship night", () => {
 
     await screen.findByText("Canción 1");
     expect(screen.queryByText(/Nadie está en Lead todavía/)).toBeNull();
+  });
+});
+
+// «Nueva canción» opened from the setlist editor is the same `SongForm` the
+// Canciones tab mounts, and it must offer the same catalogue of artists. It was
+// once mounted with no `allAuthors` and no `canCreateAuthor`: the list was empty
+// and «+ Crear» on an artist silently did nothing.
+describe("SetlistEditor — «Nueva canción» offers the existing artists", () => {
+  const AUTHORS = [
+    { _id: "a1", name: "Un Corazón" },
+    { _id: "a2", name: "Hillsong" },
+  ];
+
+  async function openCreate() {
+    await screen.findByText("Canción 1");
+    fireEvent.click(screen.getByRole("button", { name: /\+ Crear/ }));
+    return (await screen.findByLabelText("Artista")) as HTMLInputElement;
+  }
+
+  it("lists existing artists, filters them, and sends the picked one with the song", async () => {
+    const { posts } = stubFetch(singleRead({ format: null, leadRoster: [] }), undefined, [], AUTHORS);
+    mount();
+    const artist = await openCreate();
+
+    // Unfiltered, every artist is a chip.
+    expect(screen.getByRole("button", { name: "Un Corazón" })).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Hillsong" })).not.toBeNull();
+
+    fireEvent.change(artist, { target: { value: "coraz" } });
+    expect(screen.getByRole("button", { name: "Un Corazón" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Hillsong" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Un Corazón" }));
+
+    fireEvent.change(screen.getByLabelText("Título *"), { target: { value: "Solo Dios" } });
+    fireEvent.click(screen.getByRole("button", { name: "Guardar" }));
+    await waitFor(() => expect(posts.some((p) => p.url === "/api/content/posts")).toBe(true));
+    const song = posts.find((p) => p.url === "/api/content/posts")!.body as { authorIds: string[] };
+    expect(song.authorIds).toEqual(["a1"]);
+  });
+
+  it("creates a new artist from «+ Crear» and selects it", async () => {
+    const { posts } = stubFetch(singleRead({ format: null, leadRoster: [] }), undefined, [], AUTHORS);
+    mount();
+    const artist = await openCreate();
+
+    fireEvent.change(artist, { target: { value: "Nuevo Artista" } });
+    const createArtist = screen
+      .getAllByRole("button", { name: /\+ Crear/ })
+      .find((b) => b.textContent?.includes("Nuevo Artista"))!;
+    fireEvent.click(createArtist);
+
+    await waitFor(() =>
+      expect(posts.find((p) => p.url === "/api/content/authors")?.body).toEqual({ name: "Nuevo Artista" }),
+    );
+    // The search clears and the new artist shows as a selected chip.
+    await waitFor(() => expect(artist.value).toBe(""));
+    expect(screen.getByRole("button", { name: "Nuevo Artista" }).className).toContain("bg-accent/15");
   });
 });

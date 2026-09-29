@@ -92,21 +92,24 @@ export function buildPayload(form: FormState) {
 export function SongForm({
   initial,
   allTags,
-  allAuthors = [],
+  allAuthors,
   onSubmit,
   onClose,
   loading,
   canCreateTag,
-  canCreateAuthor = async () => null,
+  canCreateAuthor,
 }: {
   initial?: Partial<FormState>;
   allTags: SongTag[];
-  allAuthors?: SongTag[];
+  // Required, not defaulted: `SetlistEditor` once mounted this form without
+  // them, and a default of `[]` / `async () => null` rendered an artist picker
+  // with nothing in it and a «+ Crear» that silently did nothing.
+  allAuthors: SongTag[];
   onSubmit: (form: FormState) => void;
   onClose: () => void;
   loading: boolean;
   canCreateTag: (name: string) => Promise<SongTag | null>;
-  canCreateAuthor?: (name: string) => Promise<SongTag | null>;
+  canCreateAuthor: (name: string) => Promise<SongTag | null>;
 }) {
   const [form, setForm]                   = useState<FormState>(() => initial ? { ...blankForm(), ...initial } : blankForm());
   const [creatingTag, setCreatingTag]     = useState(false);
