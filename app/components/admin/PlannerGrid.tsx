@@ -13,7 +13,7 @@
 //     and `load` from `[...savedWindow, ...inGridDrafts]`, the other supplies
 //     `recent` from `savedWindow` alone. A single concatenated call would make
 //     `recent`'s `slice(-4)` return the grid's own future weeks.
-//  2. Every occupant renders as a named chip, on every row (ADR-0044). Rows
+//  2. Every occupant renders as a named chip, on every row (ADR-0045). Rows
 //     that carry a `target` tint the chips past it amber and say so in words;
 //     they no longer hide them behind a `+N`, which named nobody and could not
 //     be dragged. Never a `title` hover hint either — the iOS build is a web
@@ -2619,7 +2619,7 @@ function GridCellView({
   minWClass: string;
 }) {
   // Every occupant gets a chip — a name and a drag handle — on every row
-  // (ADR-0044, which retired D7's cap-at-`target`-then-`+N`). A row that
+  // (ADR-0045, which retired D7's cap-at-`target`-then-`+N`). A row that
   // CARRIES a target still warns when it is exceeded: the cell goes amber, says
   // so in words, and the chips past the target take the amber tint the `+N`
   // used to wear, so the admin can see WHICH seats are the extra ones. Rows
@@ -2775,11 +2775,16 @@ function GridCellView({
             const pickChip = () => {
               if (pick.enabled) pick.onPickOccupant(source);
             };
+            // DD10 lets a member sit twice in one cell, and every occupant now
+            // renders (ADR-0045), so the bare id is not a unique key. Counting
+            // earlier copies keeps it stable when a copy ahead of it leaves —
+            // an index key would remount every chip after it.
+            const occurrence = memberIds.slice(0, index).filter((m) => m === id).length;
             return (
               <span
-                key={id}
+                key={`${id}#${occurrence}`}
                 // T4 — the drag SOURCE, and T5's pick source — for EVERY
-                // occupant, the ones past `target` included (ADR-0044). DD11's
+                // occupant, the ones past `target` included (ADR-0045). DD11's
                 // picker-row anchor stays as the touch route, not as the only
                 // handle an over-target occupant has.
                 //
@@ -2834,17 +2839,19 @@ function GridCellView({
                 // the smallest type on the surface. One step up, to `text-xs`.
                 //
                 // Precedence: a conflict (red) outranks a Tipo mismatch, which
-                // outranks being past the target — the `+N`'s own amber palette,
-                // text colour included, so the extra seat reads as the warning
-                // it is rather than as one more ordinary name.
-                className={`rounded-full border px-1.5 py-0.5 font-label text-xs ${CARD_STYLE.longText} ${
+                // outranks being past the target — the `+N`'s old amber border
+                // and fill, so the extra seat reads as the warning it is. The
+                // TEXT stays `text-ink-muted`: the `+N`'s `text-warning-strong`
+                // is ~3.5:1 on that fill in the light theme, and the name is the
+                // point (ADR-0045).
+                className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-ink-muted ${CARD_STYLE.longText} ${
                   isDuplicate || ruleBroken
-                    ? "border-negative-strong/50 bg-negative-strong/10 text-ink-muted"
+                    ? "border-negative-strong/50 bg-negative-strong/10"
                     : tipoMismatch
-                      ? "border-warning-strong/50 bg-warning-strong/10 text-ink-muted"
+                      ? "border-warning-strong/50 bg-warning-strong/10"
                       : overTarget
-                        ? "border-warning-fg/40 bg-warning-fg/10 text-warning-strong"
-                        : "border-accent/25 bg-accent/10 text-ink-muted"
+                        ? "border-warning-fg/40 bg-warning-fg/10"
+                        : "border-accent/25 bg-accent/10"
                 } ${drag.enabled ? "cursor-grab" : "cursor-not-allowed"} ${dragging ? "opacity-30" : ""} ${
                   marked ? "ring-2 ring-accent" : ""
                 }`}
@@ -3069,7 +3076,7 @@ function CandidateRow({
         DD11 — the source anchor: the touch and keyboard route to moving a
         seated member, since the ~20px chip is not a 44px touch target. (It was
         once also the ONLY handle an over-target occupant had, while the cell
-        showed `slice(0, target)` behind a `+N` — ADR-0044 gave those a chip.)
+        showed `slice(0, target)` behind a `+N` — ADR-0045 gave those a chip.)
 
         **Deliberately OUTSIDE the `blocked` guard above.** `blocked` answers
         "may this member be SEATED here", which is a question about the target

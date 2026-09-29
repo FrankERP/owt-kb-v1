@@ -641,7 +641,7 @@ describe("dropping onto a date the member marked unavailable (acceptance 11)", (
 // ─── Scope guards ────────────────────────────────────────────────────────────
 
 describe("the drag's anchors", () => {
-  it("gives an occupant PAST the target a draggable chip of its own (ADR-0044)", () => {
+  it("gives an occupant PAST the target a draggable chip of its own (ADR-0045)", () => {
     // Lead targets 2, so the third occupant is the extra one. It used to sit
     // behind a `+1` that named nobody and could not be dragged.
     const cells = [cell("lead", "col-1", ["frank", "liu", "gaby"])];

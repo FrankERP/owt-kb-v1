@@ -1319,7 +1319,7 @@ describe("a special column HAS a Coro row (E18)", () => {
   });
 });
 
-describe("a special is never solvable, but keeps its target cap (E4/E5, P5)", () => {
+describe("a special is never solvable, but keeps its over-target warning (E4/E5, P5)", () => {
   const rows = buildRows();
   const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
   const special: GridColumn = { date: "2026-02-11", type: "special_role", serviceName: "Vigilia" };

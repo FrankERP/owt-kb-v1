@@ -1,14 +1,21 @@
-# ADR-0044: Every planner-grid occupant gets a named chip — no `+N`
+# ADR-0045: Every planner-grid occupant gets a named chip — no `+N`
 
 **Date:** 2026-09-28 · **Status:** Accepted
+
+> **Numbering.** ADR numbers follow the order records reach `main`. 0044 was
+> already held on `preview` by PR #109 (the Servicios board's vertical scroll)
+> when this record was written, so it takes 0045. If this reaches `main` first,
+> the two swap.
 
 ## Context
 
 The planner grid's D7 (`docs/superpowers/plans/2026-07-29-planner-grid.md:84`)
 capped a row that carries a `target` — Lead, BGV and Coro — at that target and
 put everyone past it behind a focusable `+N` button. The button named nobody,
-and by design it had no drag handle: ADR-0012's DD11 made the picker-row anchor
-the "only handle a `+N`-hidden occupant has".
+and by design it had no drag handle: DD11 of the drag-and-drop plan
+(`docs/superpowers/plans/2026-08-06-grid-drag-and-drop.md:144`) made the
+picker-row anchor "the **only** anchor for occupants hidden behind `+N`",
+restated in ADR-0012's DD8.
 
 A same-day camp month (October 2026, five special sets) put a third Lead on four
 of the five columns. The admin saw `Lali, Marianne +1` and the amber «Por encima
@@ -34,9 +41,12 @@ The over-target warning stays and gets more specific. `hasTarget`
 
 - the cell keeps its amber border and its «Por encima del objetivo — se acepta
   de todos modos» line;
-- each chip at an index past `target` takes the `+N`'s old amber palette, carries
-  `data-over-target="true"`, and adds «(por encima del objetivo)» to its
-  accessible name.
+- each chip at an index past `target` takes the `+N`'s old amber border and
+  fill, carries `data-over-target="true"`, and adds «(por encima del objetivo)»
+  to its accessible name. Its text stays `text-ink-muted`, like every other
+  chip: the `+N`'s `text-warning-strong` measured about 3.5:1 on that fill in the
+  light theme, under AA for 12px text, and the name is the thing this change
+  exists to show.
 
 A conflict (duplicate or unwaived rule, red) outranks a Tipo mismatch, which
 outranks the over-target tint.
@@ -61,6 +71,8 @@ the only handle an over-target occupant has.
 - An over-target cell grows by a chip. At the narrowest track (full screen,
   `minmax(0, 1fr)`) a three-Lead cell may wrap to a second line of chips.
   Vertical space is the cheap axis in this grid, which D7 itself noted.
+- A member seated twice in one cell (DD10 allows it) now renders twice, so chip
+  keys count occurrences (`id#n`) rather than using the bare id.
 - Which occupant counts as "extra" follows array order, meaning the ones past the
   first `target`. That is the order the solver and manual appends produce. It is
   a display cue, not a ranking, and nothing is ever evicted (D6).

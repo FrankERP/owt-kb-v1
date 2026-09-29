@@ -234,7 +234,7 @@ describe("PlannerGrid — Domingos unchecked (D9)", () => {
   });
 });
 
-describe("PlannerGrid — cell density (D7, amended by ADR-0044)", () => {
+describe("PlannerGrid — cell density (D7, amended by ADR-0045)", () => {
   it("a normally-staffed Sunday (L2/B3/C3) shows every name, none of them flagged", () => {
     // Eight DISTINCT people, matching the solver's own invariant that nobody
     // holds two voice slots on one service (fact 4) — the fixture would be
@@ -254,7 +254,7 @@ describe("PlannerGrid — cell density (D7, amended by ADR-0044)", () => {
     }
   });
 
-  it("above target, EVERY occupant is a named, draggable chip — no +N — and the extra one is marked (ADR-0044)", () => {
+  it("above target, EVERY occupant is a named, draggable chip — no +N — and the extra one is marked (ADR-0045)", () => {
     // The shipped `+N` named nobody and had no drag handle: the admin could see
     // that Lead held one too many, but not who, and could not drag them out.
     const cells: InputGridCell[] = [
@@ -273,8 +273,11 @@ describe("PlannerGrid — cell density (D7, amended by ADR-0044)", () => {
     // in the accessible name — the amber cell alone says "one too many", this
     // says which.
     expect(chips.map((c) => c.getAttribute("data-over-target"))).toEqual([null, null, "true"]);
-    expect(chips[2].className).toContain("text-warning-strong");
-    expect(chips[0].className).not.toContain("text-warning-strong");
+    expect(chips[2].className).toContain("bg-warning-fg/10");
+    expect(chips[0].className).not.toContain("bg-warning-fg/10");
+    // The name stays legible: the `+N`'s amber TEXT is ~3.5:1 in light.
+    expect(chips[2].className).toContain("text-ink-muted");
+    expect(chips[2].className).not.toContain("text-warning-strong");
     expect(chips[2].getAttribute("aria-label")).toMatch(/Liu.*\(por encima del objetivo\)/);
     expect(chips[0].getAttribute("aria-label")).not.toMatch(/objetivo/);
 
@@ -692,7 +695,7 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     expect(queryByText(/Vacía la fila/)).toBeFalsy();
   });
 
-  it("flags a duplicate sitting PAST the target on its own chip (Finding 2, ADR-0044)", () => {
+  it("flags a duplicate sitting PAST the target on its own chip (Finding 2, ADR-0045)", () => {
     // Lead's target is 2. Three occupants means the third (m1) is the extra
     // one. m1 is ALSO in BGV the same date, a real same-category duplicate —
     // the over-target state is exactly where one hides. It once sat behind a
@@ -707,7 +710,28 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     expect(chip.getAttribute("data-over-target")).toBe("true");
     expect(chip.textContent).toBe("Frank ⚠");
     expect(chip.className).toContain("border-negative-strong/50");
-    expect(chip.className).not.toContain("text-warning-strong");
+    expect(chip.className).not.toContain("bg-warning-fg/10");
+  });
+
+  it("renders a member seated twice across the target as two chips, and reconciles when one copy leaves", () => {
+    // DD10 allows the same member twice in one cell (Studio or legacy data).
+    // Keyed by the bare id, the two chips collided, and React kept a stale
+    // chip on screen after the first copy was removed.
+    const twice: InputGridCell[] = [
+      { date: "2026-08-09", rowId: "lead", memberIds: ["m1", "m2", "m1"], origin: "auto" },
+    ];
+    const { container, rerender } = render(<PlannerGrid {...baseProps({ cells: twice })} />);
+    const names = () =>
+      [...cellFor(container, "lead", "2026-08-09").querySelectorAll("[data-occupant]")].map((c) =>
+        c.textContent?.replace(" ⚠", ""),
+      );
+    expect(names()).toEqual(["Frank", "Gaby", "Frank"]);
+
+    const once: InputGridCell[] = [
+      { date: "2026-08-09", rowId: "lead", memberIds: ["m2", "m1"], origin: "auto" },
+    ];
+    rerender(<PlannerGrid {...baseProps({ cells: once })} />);
+    expect(names()).toEqual(["Gaby", "Frank"]);
   });
 });
 
