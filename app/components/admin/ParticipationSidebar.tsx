@@ -19,7 +19,56 @@ const COLORS = {
 };
 type View = "voces" | "instrumentos";
 
-export function ParticipationSidebar({ roles, monthLabel }: { roles: ParticipantRole[]; monthLabel: string }) {
+// The box, whoever places it. A const rather than inline because the placement
+// half below differs by caller — and `participationAlongside.test.tsx` derives
+// the planner column's width floor from THIS string's padding and border.
+const ASIDE_BASE = "rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 self-start";
+
+// The planner's placement, unchanged: it sits in `PlannerGrid`'s left column
+// (or stacked under the day cards in «Vista»), where `top-4` was always the
+// offset and nothing asked it to stay on screen.
+const DEFAULT_PLACEMENT = "lg:sticky lg:top-4";
+
+/**
+ * The Servicios board's placement (ADR-0044): the chart stays in view while the
+ * cards scroll the PAGE. The top is the admin rail's own sticky top — the navbar
+ * is `lg:h-24`, so `top-4` would park the chart UNDER it — and
+ * `servicesBoard.test.tsx` reads `AdminRail.tsx` to keep the two identical. The
+ * height cap is that same offset plus a 1.5rem breath, so a month with many
+ * members scrolls inside the chart instead of pushing its bottom off-screen.
+ * Only `lg`: below it the board is one column and the chart simply stacks.
+ * Exported so the Servicios fallback `<aside>` shares the spelling.
+ *
+ * Under the cap the aside is a flex COLUMN and the rows list (`BOARD_LIST`) is
+ * the one scroller that takes whatever height the header and legend leave, so
+ * those stay in view and only the members move. Two nested scrollers — the
+ * aside's and the list's own `max-h-[60vh]` — let the header scroll away inside
+ * the aside on any viewport shorter than ~640px. The aside keeps its own
+ * `overflow-y-auto` only so the header and legend stay reachable when the cap is
+ * shorter than they are (a viewport ≤ ~260px tall at `lg`): there the list
+ * shrinks to nothing and its rows are out of reach. Accepted — no real window is
+ * 1024px wide and that short.
+ */
+export const BOARD_STICKY = "lg:sticky lg:top-[calc(6rem+env(safe-area-inset-top))]";
+const BOARD_PLACEMENT = `${BOARD_STICKY} lg:flex lg:flex-col lg:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-1.5rem)] lg:overflow-y-auto`;
+
+// The rows' scroller. The planner renders `LIST_BASE` alone, unchanged —
+// `participationAlongside.test.tsx` reads its `pr-0.5` into the column's width
+// floor. On the board, from `lg`, it drops its own 60vh cap and fills the capped
+// aside instead (`min-h-0` so a flex item may shrink below its rows).
+const LIST_BASE = "space-y-0 max-h-[60vh] overflow-y-auto pr-0.5";
+const BOARD_LIST = `${LIST_BASE} lg:min-h-0 lg:flex-1 lg:max-h-none`;
+
+export function ParticipationSidebar({
+  roles,
+  monthLabel,
+  placement = "default",
+}: {
+  roles: ParticipantRole[];
+  monthLabel: string;
+  /** `"board"` only from `ServicesPanel`; the planner keeps the default. */
+  placement?: "default" | "board";
+}) {
   const [view, setView] = useState<View>("voces");
   const all = useMemo(() => computeParticipation(roles), [roles]);
 
@@ -41,7 +90,7 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
     : [["Instr", COLORS.instr], ["FOH", COLORS.foh]];
 
   return (
-    <aside className="rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 lg:sticky lg:top-4 self-start">
+    <aside className={`${ASIDE_BASE} ${placement === "board" ? BOARD_PLACEMENT : DEFAULT_PLACEMENT}`}>
       {/*
         The header is a COLUMN, not a row. That is still load-bearing for the
         gutter placement, not styling.
@@ -99,7 +148,7 @@ export function ParticipationSidebar({ roles, monthLabel }: { roles: Participant
         </p>
       )}
 
-      <div className="space-y-0 max-h-[60vh] overflow-y-auto pr-0.5">
+      <div className={placement === "board" ? BOARD_LIST : LIST_BASE}>
         {rows.map(r => <Row key={r.id} r={r} max={max} view={view} />)}
       </div>
     </aside>

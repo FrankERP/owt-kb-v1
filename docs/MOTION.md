@@ -1281,9 +1281,10 @@ dropped — the `SlidingIndicator` underline is the affordance) and one body
 rather than keeping the outgoing one alive beside it (ruling 2 — these panels are
 thousands of lines each). No per-tab `brand-surface` box: the cards inside a panel are
 the only frames left. `/admin` now has no page-level horizontal scroll — the planner
-grid, the Servicios board and the availability matrix are the only horizontal scrollers,
-each in its own `overflow-x-auto` box, which is what closes finding 4's silent 128 px
-shift. The planner's full-screen portal and `MonthGenerator`'s hand-centring STAY, and
+grid and the availability matrix are the only horizontal scrollers, each in its own
+`overflow-x-auto` box, which is what closes finding 4's silent 128 px shift (the
+Servicios board was the third until [ADR-0044](adr/0044-the-servicios-board-scrolls-vertically.md)
+made it vertical, 2026-09-28). The planner's full-screen portal and `MonthGenerator`'s hand-centring STAY, and
 the comments that used to name the shell now name `[data-route-main]`: see
 [ADR-0035](adr/0035-the-admin-shell-is-gone.md). `NavLinks` lost its `schedule`/`tags`
 props in the same task (ruling 9) — Calendario and Biblioteca show for every worship
@@ -1302,8 +1303,9 @@ one (`hidden lg:flex` / `lg:hidden`) — a JS media query would paint the wrong 
 and the two indicator ids are deliberately different, or the shared `layoutId` would fly
 the marker across the page at the breakpoint. While the planner is open the rail collapses
 to icons: `app/brand.css` sets `--admin-rail-w: 56px` on `.brand-admin-frame:has(.planner-wide)`
-(the grid reads it as `lg:grid-cols-[var(--admin-rail-w,200px)_1fr]`, so 56 is written
-once) and hides `[data-rail-label]`, which is why every item carries its own `aria-label`
+(the grid reads it as `lg:grid-cols-[var(--admin-rail-w,200px)_1fr]`, so the grid never
+repeats 56; ADR-0044's user collapse later mirrored it in a block of its own) and hides
+`[data-rail-label]`, which is why every item carries its own `aria-label`
 — a `display: none` label is out of the accessibility tree too. The widened-frame
 arithmetic was re-derived WITH the rail: `1512 − 24 = 1488`,
 `56 + 32 + 1400 = 1488`, `216 + 12 + 920 + 12 + 240 = 1400`.
@@ -1352,7 +1354,10 @@ gradient (`rawMotionLiterals` `transitionAll` 7 → 6) — and the search input 
 confirm, one PATCH on confirm and none on cancel, no hover-only strip, no kill-switch
 checkbox).
 
-**Task 4 (Servicios is a board).** From `lg` the cards are a horizontal snap track —
+**Task 4 (Servicios is a board).** *Superseded 2026-09-28 by
+[ADR-0044](adr/0044-the-servicios-board-scrolls-vertically.md): the track is now a vertical
+auto-fill grid the page scrolls; the rest of this entry is the R5 record.* From `lg` the
+cards are a horizontal snap track —
 `lg:flex lg:snap-x lg:snap-mandatory lg:overflow-x-auto lg:scroll-px-6` on the container,
 `lg:w-[380px] lg:shrink-0 lg:snap-start` on each card — instead of a 2/3-column grid that
 squeezed a card to ~260 px on a month with a full roster (ruling 5). The phone keeps the
