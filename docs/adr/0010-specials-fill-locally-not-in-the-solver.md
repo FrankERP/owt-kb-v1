@@ -123,9 +123,9 @@ A rule the user described as hard cannot depend on which browser is open.
   **2026-09-25 amendment:** ADR-0042 closes this gap — the history moves to a
   server-side derivation, shared rather than per-browser, shipped dormant behind
   a switch. See ADR-0042.
-  **2026-09-28:** the cutover landed on branch `claude/mcp-p2-cutover` (not yet
-  released) — the switch is `"derived"`, so two admins solve against the same
-  history, and the browser key is written but never read.
+  **2026-09-28:** the cutover is released (PR #108, `main` `98aa67a9`) — the
+  switch is `"derived"`, so two admins solve against the same history, and the
+  browser key is written but never read.
 - **Caps and presence rules are enforced by CP-SAT only.** They reach the solver
   for Sundays and Saturdays and are checked nowhere else — not on a special, not
   on a manual pick. `ruleEnforcement.ts` lists both as deliberate non-goals and
