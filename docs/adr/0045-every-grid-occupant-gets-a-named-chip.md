@@ -3,9 +3,8 @@
 **Date:** 2026-09-28 · **Status:** Accepted
 
 > **Numbering.** ADR numbers follow the order records reach `main`. This record
-> carries 0044 on its own branch (PR to `main`), and 0045 here on `preview`,
-> where PR #109's Servicios-board record already held 0044. Provisional until
-> both reach `main`; `preview` is then reconciled from `main`.
+> was written as 0044 on its branch. It became 0045 when `main` merged PR #109
+> (ADR-0044, the Servicios board's vertical scroll) first, on 2026-09-28.
 
 ## Context
 
