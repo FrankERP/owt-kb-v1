@@ -26,14 +26,16 @@ import { useToast } from "./ui/Toast";
 export type LibraryIndexProps = { posts: Post[]; tags: Tag[]; authors: Author[]; initial: LibraryFiltersState };
 
 // The navbar is `sticky top-0` with a fixed h-20/lg:h-24 body under the safe-area
-// inset, and publishes no `--navbar-h`; this is the same offset SectionNav uses.
+// inset, and publishes no `--navbar-h`; this is the same offset SectionNav uses,
+// plus `--impersonation-offset` (0 unless the banner pushes the navbar down).
 const UNDER_NAVBAR =
-  "top-[calc(5rem+env(safe-area-inset-top))] lg:top-[calc(6rem+env(safe-area-inset-top))] " +
-  "scroll-mt-[calc(5rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(6rem+env(safe-area-inset-top))]";
+  "top-[calc(5rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:top-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))] " +
+  "scroll-mt-[calc(5rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:scroll-mt-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))]";
 
 // Where the "which letter is in view" band starts, in px from the top of the
 // viewport. Deliberately ABOVE the sticky offset above (80 px on a phone, 96 on
-// a desktop, plus the inset) — `rootMargin` takes no `env()`, and a band that
+// a desktop, plus the inset, plus the banner while impersonating — which only
+// ever widens the gap) — `rootMargin` takes no `env()`, and a band that
 // began exactly at the offset would leave the pinned heading on its edge.
 const BAND_TOP_PX = 64;
 

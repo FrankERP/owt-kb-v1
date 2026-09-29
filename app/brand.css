@@ -36,6 +36,11 @@
      wraps to two lines on a phone. Not a colour. */
   --impersonation-h: 3.5rem;
 
+  /* What everything sticky or scroll-margined UNDER the navbar adds to its
+     offset for the banner: 0 normally, the banner's measured height only while
+     `.impersonating` is on <html> (set with the navbar rule below). Not a colour. */
+  --impersonation-offset: 0px;
+
   /* Height of the bottom nav on phones, so a toast's bottom offset clears it.
      0 while the bar is off screen; BottomNav publishes the measured value over
      it (same pattern as --impersonation-h above). Not a colour. */
@@ -627,6 +632,21 @@
  */
 .impersonating .brand-navbar {
   top: var(--impersonation-h);
+}
+
+/*
+ * The navbar moves down by the banner, so everything that sticks or scroll-snaps
+ * UNDER the navbar has to move with it — the song page's section bar and its
+ * sections' scroll margins, the library's letter headings, the admin rail and
+ * the Participaciones chart. Those offsets cannot add --impersonation-h: it is
+ * never 0 (the :root default is the banner's stand-in height), so it would push
+ * every one of them down for every member. This second variable is 0 unless the
+ * class is on, and every under-navbar calc adds it; impersonationOffsetSync.test.ts
+ * sweeps app/** for a calc that forgets. (0,1,1) beats :root's (0,1,0), so
+ * source order against the :root default does not matter.
+ */
+html.impersonating {
+  --impersonation-offset: var(--impersonation-h);
 }
 
 /* The page pads for the tab bar only while the bar is on screen: BottomNav adds
