@@ -726,5 +726,51 @@ class ObjectiveWeightLadder(unittest.TestCase):
         self.assertNotIsInstance(ObjectiveTooLarge("x"), ValueError)
 
 
+class SunBgvLadderReachesThree(unittest.TestCase):
+    """
+    A five-Sunday month whose rules force a Sun.BGV spread of 3 must still return
+    from Stage B, not Stage A.
+
+    `any_of(Hugo,Jakey) on Sun.BGV each_week` plus `Jakey !with Hugo on *.BGV`
+    puts exactly one of the two on BGV every week, so over five Sundays one of
+    them carries at least 3. With more BGV-eligible people than BGV seats someone
+    carries 0, so no pass with `sun_bgv_limit <= 2` is feasible. While the ladder
+    stopped at 2, every Stage B pass was infeasible and the month came back from
+    Stage A: max-fill only, no fairness band at all (one of the pair could take
+    all five), all three `*_relaxed` flags up and `objective_skipped`. Measured
+    on production's real November 2026 request the same way (7/7 runs).
+    """
+
+    LEADS = ["Ana", "Beto", "Caro", "Dani", "Eli"]
+    SUPPORT = ["Hugo", "Jakey"] + [f"S{i:02d}" for i in range(1, 15)]
+
+    def _config(self, seed):
+        return dict(
+            weeks=5, weekends_with_saturday=[],
+            sunday_leads=self.LEADS, saturday_leads=[], support=self.SUPPORT,
+            dsl_rules=[f"{p} !in Sun.BGV & !in Sun.Choir" for p in self.LEADS] + [
+                "Jakey !with Hugo on *.BGV",
+                "any_of(Hugo,Jakey) on Sun.BGV each_week",
+            ],
+            history=[], seed=seed, solver_max_time_seconds=10,
+        )
+
+    def test_returns_from_stage_b_with_the_bgv_band_at_three(self):
+        for seed in (1, 2, 42):
+            with self.subTest(seed=seed):
+                res = solve_from_dict(self._config(seed))
+                self.assertTrue(res["ok"], res.get("error"))
+                # Stage A reports every limit as relaxed; Stage B holds Sun.Lead at 1.
+                self.assertFalse(res["sun_lead_fairness_relaxed"])
+                self.assertTrue(res["sun_bgv_fairness_relaxed"])
+                self.assertFalse(res["objective_skipped"])
+                bgv = {p: 0 for p in self.SUPPORT}
+                for services in res["schedule"].values():
+                    for p in services["Sunday"]["BGV"]:
+                        bgv[p] += 1
+                self.assertEqual(bgv["Hugo"] + bgv["Jakey"], 5)
+                self.assertLessEqual(max(bgv.values()) - min(bgv.values()), 3)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

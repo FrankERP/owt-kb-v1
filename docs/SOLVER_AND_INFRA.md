@@ -85,7 +85,15 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   available lead (an **honest** diagnostic, not an opaque failure). Stage B locks
   `weighted_empty <= empty_target` and loops over tightening fairness tiers, returning the first
   feasible result; a wall-clock budget bounds total time (returns the max-fill solution rather
-  than timing out).
+  than timing out). The loop is Sun.Lead spread 1→2, then Sun.BGV **1→3**, then global 1→2.
+  **When every Stage B pass is infeasible the month comes back from Stage A** — max-fill with no
+  fairness band at all, all three `*_relaxed` flags up — so a missing ladder level is not "a bit
+  less fair", it is no fairness. Sun.BGV reached only 2 until 2026-09-29, and a five-Sunday
+  month can force 3: `any_of(A,B) on Sun.BGV each_week` + `A !with B on *.BGV` seats exactly one
+  of the pair every week (one carries ≥3) while more BGV-eligible people than seats leaves
+  someone at 0. Production's real November 2026 request hit it on every run (leads up to 5 of 5
+  Sundays for one person); with level 3 it holds Sun.Lead at 1. October's request, which fits
+  at Sun.BGV 2, returns exactly as before (+~0.06 s). Guard: `SunBgvLadderReachesThree`.
 - **Absence-aware fairness:** `compute_absence_slack()` gives fairness slack proportional to how
   many full services a person is unavailable for, so legitimately-away people aren't flagged as
   under-served. History uses weighted decay (3 recent months weighted `[10, 6, 3]`).
