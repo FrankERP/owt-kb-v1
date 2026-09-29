@@ -382,7 +382,8 @@ describe("brand.css keys the user's collapse without touching the planner's fram
   it("collapses to the planner's width: the two --admin-rail-w values are one number", () => {
     // The two blocks share no rule — the planner's 56 is pinned literally by
     // `participationAlongside.test.tsx` against the widened-frame derivation —
-    // so this is the only thing that keeps the user's 56 from drifting off it.
+    // so this is what makes the user's value follow the planner's if it moves.
+    // (The user's 56 is also pinned literally by the "lives only under" test.)
     const railWidth = (selector: string) => {
       const values = allRules
         .filter((r) => r.selector === selector)

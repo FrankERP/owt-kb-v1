@@ -43,8 +43,11 @@ const DEFAULT_PLACEMENT = "lg:sticky lg:top-4";
  * the one scroller that takes whatever height the header and legend leave, so
  * those stay in view and only the members move. Two nested scrollers — the
  * aside's and the list's own `max-h-[60vh]` — let the header scroll away inside
- * the aside on any viewport shorter than ~640px. The aside's `overflow-y-auto`
- * stays as the fallback for a viewport too short for the header and legend alone.
+ * the aside on any viewport shorter than ~640px. The aside keeps its own
+ * `overflow-y-auto` only so the header and legend stay reachable when the cap is
+ * shorter than they are (a viewport ≤ ~260px tall at `lg`): there the list
+ * shrinks to nothing and its rows are out of reach. Accepted — no real window is
+ * 1024px wide and that short.
  */
 export const BOARD_STICKY = "lg:sticky lg:top-[calc(6rem+env(safe-area-inset-top))]";
 const BOARD_PLACEMENT = `${BOARD_STICKY} lg:flex lg:flex-col lg:max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-1.5rem)] lg:overflow-y-auto`;

@@ -983,7 +983,8 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
  * 144px back to the workspace inside the ordinary 1280 cap.
  * `adminRail.test.tsx` guards that this block never reaches the frame's width,
  * and that its `--admin-rail-w` equals the planner's: the two blocks share no
- * rule, so nothing but that test keeps the two 56s together.
+ * rule, so that equality is what makes the user's 56 follow the planner's if it
+ * ever moves (the user's 56 is also pinned literally, beside it).
  *
  * Where both apply (the planner open at ≥ 1280), they state the same thing, and
  * the planner's block hides the toggle — its collapse is not the user's to undo.
