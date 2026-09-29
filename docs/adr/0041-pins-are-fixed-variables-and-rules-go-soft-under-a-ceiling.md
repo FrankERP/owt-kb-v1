@@ -79,7 +79,11 @@ solver**, not by argument; rejection 7 is Frank's ruling on E3. Spec: `docs/supe
 - **What a pin does not promise.** Nothing bounds the pinned person's own total
   (`t <= gmax + n` permits a full share on top; `fairness_exempt` removes the soft pull — Rachel
   exempt came back with 8 against a baseline of 6). An un-pinned exempt member is outside every
-  bound; one pin cost one a service in review.
+  bound; one pin cost one a service in review. *(Corrected 2026-09-29: the bare
+  `fairness_exempt` — the only form the planner emits — lifts only the GLOBAL total-load band
+  and soft term; the member stays inside the `Sun.Lead`/`Sun.BGV` bands, which only
+  `fairness_exempt on <pattern>` lifts (`gcf/owt_solver_v2.py` role bands vs. the global
+  grouping). See `docs/SOLVER_AND_INFRA.md`.)*
 - **The violation count is unweighted**, so one leaderless service costs the same as one relaxed
   cap. Any weighting would be a judgement about which rule matters more.
 - **Measured 2026-09-25** (laptop, 1 worker, 5 s cap): solve 0 `OPTIMAL` on every blocking-
