@@ -15,6 +15,7 @@ import MonthGenerator from "../MonthGenerator";
 import { readyRules } from "./rulesHarness";
 import type { SolverConfigController } from "../solverConfigSource";
 import { stubFetchWithHistory } from "./derivedHistoryHarness";
+import { DEFAULT_SOLVER_CONFIG } from "../solverConfigDefaults";
 
 /**
  * `MonthGenerator` with the shared rule set supplied.
@@ -181,5 +182,59 @@ describe("Auto fills instrument seats on every exit", () => {
     runAuto();
     await waitFor(() => expect(screen.getByText("Lugares sin cubrir (faltó gente): 5")).toBeTruthy());
     expect(cellAt(container, "instrumento:Bass", SUNDAYS[0]).textContent).not.toContain("Sin cubrir");
+  });
+});
+
+describe("Auto says why the solver refused, and which rule it did not apply", () => {
+  function setup(solve: () => unknown, rules = DEFAULT_RULES) {
+    const { fetchMock } = stubFetch(solve);
+    const view = render(
+      <Gen rules={rules} members={[ANA, LUCIA, NIZA, BETO, RODRI, PACO, ZOE]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
+    );
+    setMonthYear(view.container, 3, 2026);
+    deselectAll(view.container, "saturday");
+    selectSundayLead(view.container, "Ana");
+    preview();
+    return { ...view, fetchMock };
+  }
+
+  it("shows the solver's own reason from the 422 body, not only the generic line", async () => {
+    // The route answers a solver `ok: false` with a 422 (route.ts). The client used to
+    // read a body only on a 2xx, so this reason never reached the admin.
+    const { container } = setup(() => ({
+      ok: false,
+      status: 422,
+      json: async () => ({ ok: false, error: "weekends_w_sat must use 1-based indexes 1..5." }),
+    }));
+    runAuto();
+    await waitFor(() =>
+      expect(screen.getByText("El solver no encontró solución. Motivo del solver: weekends_w_sat must use 1-based indexes 1..5.")).toBeTruthy(),
+    );
+    // Still the refusal exit: instruments fill, as on every exit.
+    expect(cellAt(container, "instrumento:Drums", SUNDAYS[0]).textContent).toContain("Paco");
+  });
+
+  it("leaves a Saturday minimum out of a month with no Saturday for Auto, and says so", async () => {
+    const rules = readyRules({
+      ...DEFAULT_SOLVER_CONFIG,
+      restrictions: [
+        ...DEFAULT_SOLVER_CONFIG.restrictions,
+        {
+          id: "beto-sat", person: "Beto", excludedPatterns: [], fairness: "none", fairnessSlack: 0,
+          weekExclusions: [],
+          caps: [{ id: "c1", pattern: "Sat.*", op: "==", value: 1, relative: false, relOffset: 2 }],
+        },
+      ],
+    });
+    const { fetchMock } = setup(refusal, rules);
+    runAuto();
+    await waitFor(() =>
+      expect(screen.getByText("Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó «Sat.* == 1» a Beto.")).toBeTruthy(),
+    );
+    const solveCall = fetchMock.mock.calls.find(([url]) => url === "/api/admin/solve");
+    expect(solveCall).toBeTruthy();
+    const body = JSON.parse((solveCall![1] as { body: string }).body) as { dsl_rules: string[]; weekends_with_saturday: number[] };
+    expect(body.weekends_with_saturday).toEqual([]);
+    expect(body.dsl_rules.join("\n")).not.toContain("Sat.* == 1");
   });
 });

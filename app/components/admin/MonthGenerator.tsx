@@ -61,6 +61,8 @@ import {
   memberFitsPool,
   poolTipoMismatch,
   unaddressableDates as computeUnaddressableDates,
+  omittedCapsNotice,
+  solverRefusalMessage,
   type DraftCard,
   type GridCell,
   type GridColumn,
@@ -1904,6 +1906,8 @@ export default function MonthGenerator({
   const [diagnostics, setDiagnostics] = useState<SolveDiagnostics | null>(null);
   const [autoPending, setAutoPending] = useState(false);
   const [autoError, setAutoError]     = useState<string | null>(null);
+  /** A rule Auto did not apply this month (`omittedCapsNotice`); shown, never silent. */
+  const [autoNotice, setAutoNotice]   = useState<string | null>(null);
 
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
@@ -2719,6 +2723,7 @@ export default function MonthGenerator({
     setUnfilled([]);
     setDiagnostics(null);
     setAutoError(null);
+    setAutoNotice(null);
     setDrafts(cellsToDrafts([], columns, new Set(), [], existingRoles));
     setStep("grid");
   }
@@ -3345,6 +3350,7 @@ export default function MonthGenerator({
       await handleAutoDerived();
       return;
     }
+    setAutoNotice(null);
     const built = buildSolveRequest({
       config,
       members,
@@ -3365,6 +3371,7 @@ export default function MonthGenerator({
 
     setAutoPending(true);
     setAutoError(null);
+    setAutoNotice(omittedCapsNotice(built.omittedCaps));
     try {
       const res = await fetch("/api/admin/solve", {
         method: "POST",
@@ -3374,11 +3381,14 @@ export default function MonthGenerator({
       let response: SolveResponse | null = null;
       if (res.ok) {
         response = await res.json();
+      } else if (res.status === 422) {
+        // The solver's refusal — its body carries the reason (`solverRefusalMessage`).
+        response = await res.json().catch(() => null);
       }
       if (!res.ok || !response || !response.ok || !response.schedule) {
         // EXIT 2 — the solver answered, and said no. A short-staffed month is
         // the solver's NORMAL failure (D15); the specials still fill.
-        setAutoError(response?.error ?? "El solver no encontró solución.");
+        setAutoError(solverRefusalMessage(response?.error));
         applySpecialFill(config, cells);
         return;
       }
@@ -3446,6 +3456,7 @@ export default function MonthGenerator({
     const target = { year, month };
     setAutoPending(true);
     setAutoError(null);
+    setAutoNotice(null);
     try {
       const controller = new AbortController();
       const ceiling = setTimeout(() => controller.abort(), DERIVED_HISTORY_AUTO_TIMEOUT_MS);
@@ -3511,6 +3522,7 @@ export default function MonthGenerator({
       applySpecialFill(config, cells);
       return;
     }
+    setAutoNotice(omittedCapsNotice(built.omittedCaps));
     try {
       const res = await fetch("/api/admin/solve", {
         method: "POST",
@@ -3520,9 +3532,12 @@ export default function MonthGenerator({
       let response: SolveResponse | null = null;
       if (res.ok) {
         response = await res.json();
+      } else if (res.status === 422) {
+        // The solver's refusal — its body carries the reason (`solverRefusalMessage`).
+        response = await res.json().catch(() => null);
       }
       if (!res.ok || !response || !response.ok || !response.schedule) {
-        setAutoError(response?.error ?? "El solver no encontró solución.");
+        setAutoError(solverRefusalMessage(response?.error));
         applySpecialFill(config, cells);
         return;
       }
@@ -3781,7 +3796,7 @@ export default function MonthGenerator({
     return draftByTarget.get(key)?.isExisting ? "existing" : null;
   };
 
-  const autoState: AutoState = { pending: autoPending, error: autoError, disabledReason: gateBlocked };
+  const autoState: AutoState = { pending: autoPending, error: autoError, notice: autoNotice, disabledReason: gateBlocked };
 
   // ── Step 1: Configure ────────────────────────────────────────────────────────
   if (step === "config") return (
