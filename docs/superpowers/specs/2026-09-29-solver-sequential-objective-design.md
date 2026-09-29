@@ -260,7 +260,8 @@ mapping (two call sites, around lines 3435 and 3588) and the `PlannerGrid` diagn
 is no preview rehearsal.
 
 1. **Offline re-run of the implementation.** Use the real October and November 2026 requests,
-   kept outside the repo. Run seeds 1–20 at production parameters, idle and throttled, and record
+   kept outside the repo. If the 2026-09-29 copies are gone, rebuild them with the planner's own
+   request builder against the live dataset, read-only. Run seeds 1–20 at production parameters, idle and throttled, and record
    the same metrics as §1 (top-8 against the reference, `objective_skipped`, Sunday-lead
    distribution, median and max time). Also run a trailing-Saturday shape if that change is on
    `main`.
@@ -308,7 +309,8 @@ window in which a partial optimisation goes unannounced. Either order is safe.
 - **ADR-0042's issue-#94 note** is updated, and issue #94 is closed by D1.
 - **`docs/SOLVER_AND_INFRA.md`:** the «Lexicographic objective» paragraph, including the stale
   «Expect it routinely in production». Restate the tier order from `PRIORITY_ORDER`; today's
-  prose ordering is loose. Also the output field list and the deploy check.
+  prose ordering is loose. Also the input keys (the new `solver_tail_time_seconds` knob), the
+  output field list, and the deploy check.
 - **`docs/CI.md`:** the `LADDER_FINGERPRINTS` row, since the peel loop and tail now feed it, the
   widened preconditions, and the re-capture record.
 
@@ -340,7 +342,7 @@ absence meaning unknown. Partial-peel UI only below 8 tiers.
 | **Q1.** Sequential (P8) rather than F2 + AUTOMATIC_SEARCH? | Fidelity versus about 40% less wall time plus a search change | P8. It is exact by construction and degrades stage by stage; F2 falls back to the status-quo roster | Yes, before implementation | P8 with the flip rule |
 | **Q2.** Is E10 the intended outcome (the zero-history lead takes 2 Sunday leads every run, the exempt lead-only member mostly 0–1)? | It is what the board will show. The Sun.Lead tier is a max−min spread, so it moves the extremes, and lower tiers set the rest | Accept: it is the current priorities solved correctly. A different outcome means changing tiers, in a separate spec | No, but Frank should see it before release | Accept |
 | **Q3.** Partial-optimisation copy and threshold | What the admin reads on a rare, deadline-cut month | §6 table: label only below 8 tiers | No (D2) | §6 as written |
-| **Q4.** Run the temporary private rehearsal function (§8.2 step 3)? | It is the only real-container number, and it needs Frank's gcloud and key | Yes. It is deleted afterwards | Yes, before the D1 merge | None; D1 does not merge without it or an explicit waiver |
+| **Q4.** Run the temporary private rehearsal function (§8.2 step 3)? | It is the only real-container number, and it needs Frank's gcloud and key | Yes. It is deleted afterwards | Yes, before the D1 merge | Run it (the recommendation). D1 does not merge without it or an explicit waiver from Frank |
 | **Q5.** Order of step zero: the trailing session lands it first, or Fix B adds it and that session appends its shapes | Two sessions editing one test file | Whichever PR is ready first | No | Step zero first |
 
 ## 12. Terminal state
