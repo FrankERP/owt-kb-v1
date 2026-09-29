@@ -112,15 +112,21 @@ Applied to **`main` only**, via the GitHub API:
 
 **Auto-merge is allowed** (`allow_auto_merge: true`, a REPOSITORY setting, since
 2026-09-29 — Frank asked for it after enabling it on PR #111 was refused while
-that PR's `gates` re-ran against a moved `main`). It does not loosen anything above: GitHub merges an auto-merge PR
-only once `gates` is green on a branch that is up to date with `main`. What it
-removes is the wait — nobody has to watch CI. Because it merges on green and not
-on anyone's look, it is enabled only AFTER the dev check in the release flow
-below (`gh pr merge <n> --auto --merge`; the history uses merge commits). It is
-not part of `scripts/apply-branch-protection.sh`, which sets BRANCH protection:
-the emergency `DELETE …/protection` does not touch it, and re-applying
-protection does not restore it — `gh api -X PATCH repos/FrankERP/owt-kb-v1 -F
-allow_auto_merge=true` does.
+that PR's `gates` re-ran against a moved `main`). It does not loosen anything
+above: GitHub merges an auto-merge PR only once `gates` is green on a branch
+that is up to date with `main`. What it removes is the wait on CI — not the
+catch-up: with `strict` and no merge queue, a PR that another merge leaves
+behind waits, out of date, until someone brings `main` into it. Because it
+merges on green and not on anyone's look, it approves a COMMIT, not a PR: it is
+armed LAST, on the exact commit that was reviewed, re-verified and seen on dev
+in the release flow below (`gh pr merge <n> --auto --merge`; the history uses
+merge commits). GitHub keeps it armed across later pushes, so it is disarmed
+(`gh pr merge <n> --disable-auto`) before anything else is pushed to that branch
+— a review fix or a catch-up merge — and re-armed only once that commit is
+verified too. It is not part of `scripts/apply-branch-protection.sh`, which sets
+BRANCH protection: the emergency `DELETE …/protection` does not touch it, and
+re-applying protection does not restore it — `gh api -X PATCH
+repos/FrankERP/owt-kb-v1 -F allow_auto_merge=true` does.
 
 **`preview` is deliberately NOT protected.** It is the rehearsal branch and
 takes direct pushes; CI still runs there, so a failure is visible fast, but it
@@ -138,6 +144,10 @@ The escape hatch is deliberate friction rather than a silent flag:
 gh api -X DELETE repos/FrankERP/owt-kb-v1/branches/main/protection
 ```
 
+Disarm any auto-merge PR FIRST (`gh pr list --json number,autoMergeRequest`, then
+`gh pr merge <n> --disable-auto`): with no required check left, an armed PR has
+nothing to wait for and merges the moment protection comes off.
+
 …do the emergency push, then re-apply with `scripts/apply-branch-protection.sh`.
 Turning protection off is an explicit act that leaves a trace in the audit log;
 `--no-verify` on a local hook is not.
@@ -149,7 +159,8 @@ feature branch (local gates green)
   → merge the feature branch into preview, push preview
   → VERIFY the dev alias moved (alias array + githubCommitSha)
   → open a PR from the feature branch to main, WAIT for `gates`
-    (or, once dev has been looked at, `gh pr merge <n> --auto --merge`)
+    (or arm `gh pr merge <n> --auto --merge` on the commit that was
+    reviewed, re-verified AND seen on dev — never before)
   → merge the PR — that IS the production release
   → VERIFY the production alias the same way
 ```

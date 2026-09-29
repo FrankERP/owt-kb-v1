@@ -22,9 +22,14 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
   well, so there is no silent bypass: an emergency override means deliberately
   turning protection off, doing the push, and turning it back on. See
   `docs/CI.md`. **Auto-merge is allowed** (repo setting, since 2026-09-29):
-  `gh pr merge <n> --auto --merge` lands a PR the moment `gates` goes green, so
-  nobody has to watch CI — but turn it on only AFTER the dev check below; it
-  merges on green, not on a human's look.
+  `gh pr merge <n> --auto --merge` lands a PR once `gates` is green on a branch
+  up to date with `main`, so nobody has to watch CI. It merges on green, not on a
+  human's look, so it approves a COMMIT: arm it LAST, on the exact commit that
+  was reviewed, re-verified and seen on dev. It stays armed across later pushes —
+  `gh pr merge <n> --disable-auto` BEFORE pushing anything else to that branch (a
+  review fix, a catch-up merge of `main`), and re-arm only once that commit is
+  verified too. If another PR lands first, `strict` leaves it waiting out of
+  date; nothing here updates it for you (no merge queue).
 - **A MERGE TO `main` IS A RELEASE, SO IT NEEDS A FRESH CODE REVIEW FIRST.** Not the
   plan review — a review of the *diff*. Children E and F were both adversarially reviewed
   as plans (19 rounds and 2), merged, and deployed; the code review ran afterwards and
