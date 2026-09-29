@@ -129,6 +129,7 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
     fireEvent.change(allowance, { target: { value: "2.5" } });
     expect(screen.getByText(/puede alejarse hasta 2 servicios de la del resto/)).toBeTruthy();
     fireEvent.change(allowance, { target: { value: "0.5" } });
+    expect(allowance.value).toBe("0");
     expect(screen.getByText(/con 0 no tiene efecto/i)).toBeTruthy();
   });
 
