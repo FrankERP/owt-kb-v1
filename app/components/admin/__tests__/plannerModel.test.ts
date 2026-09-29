@@ -1333,7 +1333,7 @@ describe("a special is never solvable, but keeps its target cap (E4/E5, P5)", ()
     expect(isSolvable(byId["coro"], sunday)).toBe(true);
   });
 
-  it("hasTarget still holds on a special's voice rows — the D7 cap and the amber +N survive", () => {
+  it("hasTarget still holds on a special's voice rows — the amber over-target warning survives", () => {
     expect(hasTarget(byId["lead"], special)).toBe(true);
     expect(hasTarget(byId["bgv"], special)).toBe(true);
     expect(hasTarget(byId["coro"], special)).toBe(true);
@@ -1357,7 +1357,7 @@ describe("a special is never solvable, but keeps its target cap (E4/E5, P5)", ()
     }
   });
 
-  it("hasTarget is false for Lead on a worship night — no cap, no +N — and BGV keeps its target", () => {
+  it("hasTarget is false for Lead on a worship night — no over-target warning — and BGV keeps its target", () => {
     expect(hasTarget(byId["lead"], { type: "special_role" })).toBe(true);
     expect(hasTarget(byId["lead"], { type: "special_role", format: "worship_night" })).toBe(false);
     expect(hasTarget(byId["bgv"], { type: "special_role" })).toBe(true);

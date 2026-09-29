@@ -388,19 +388,21 @@ export function isSolvable(row: GridRow, column: Pick<GridColumn, "type">): bool
 }
 
 /**
- * Whether D7's `target` cap and the amber over-target `+N` apply to this cell.
+ * Whether this cell has a `target` to warn about — the amber over-target
+ * treatment (`PlannerGrid.tsx`'s `GridCellView`: the cell's border, its «Por
+ * encima del objetivo» line, and the tint on the chips past the target).
  *
- * Separated from `isSolvable`, whose name hid this second, unrelated consumer
- * (`PlannerGrid.tsx`'s `GridCellView`). They agree exactly on weekend columns —
- * a voice row carrying a `target` is precisely a solvable one there — and
- * diverge on a special, which must keep the cap and the `+N` while being
- * unsolvable. Overloading `isSolvable` for both would have silently dropped
- * both on every special column.
+ * Separated from `isSolvable`, whose name hid this second, unrelated consumer.
+ * They agree exactly on weekend columns — a voice row carrying a `target` is
+ * precisely a solvable one there — and diverge on a special, which must keep
+ * the warning while being unsolvable. Overloading `isSolvable` for both would
+ * have silently dropped it on every special column. (It gated D7's cap and
+ * `+N` too, until ADR-0044 put every occupant on a chip.)
  */
 export function hasTarget(row: GridRow, column: Pick<GridColumn, "type" | "format">): boolean {
   if (!rowAppliesTo(row, column)) return false;
   // A worship night's Lead holds every song leader of the block, so it has no
-  // target and no «+N». `fillColumn` skips rows without a target, which is how
+  // target and no over-target warning. `fillColumn` skips rows without a target, which is how
   // the group fill leaves Lead to the admin (spec 2026-09-22 worship-night §5).
   if (row.id === "lead" && column.format === WORSHIP_NIGHT_FORMAT) return false;
   if (row.category !== "voz") return false;

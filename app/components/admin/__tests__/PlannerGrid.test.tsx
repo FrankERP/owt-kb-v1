@@ -234,8 +234,8 @@ describe("PlannerGrid — Domingos unchecked (D9)", () => {
   });
 });
 
-describe("PlannerGrid — cell density (D7)", () => {
-  it("a normally-staffed Sunday (L2/B3/C3) shows every name with no +N", () => {
+describe("PlannerGrid — cell density (D7, amended by ADR-0044)", () => {
+  it("a normally-staffed Sunday (L2/B3/C3) shows every name, none of them flagged", () => {
     // Eight DISTINCT people, matching the solver's own invariant that nobody
     // holds two voice slots on one service (fact 4) — the fixture would be
     // self-contradictory (and would trip the duplicate-surfacing flag,
@@ -245,37 +245,56 @@ describe("PlannerGrid — cell density (D7)", () => {
       { date: "2026-08-09", rowId: "bgv", memberIds: ["v3", "v4", "v5"], origin: "auto" },
       { date: "2026-08-09", rowId: "coro", memberIds: ["v6", "v7", "v8"], origin: "auto" },
     ];
-    render(<PlannerGrid {...baseProps({ cells })} />);
+    const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
     expect(screen.queryByText(/^\+\d/)).toBeNull();
+    expect(container.querySelector("[data-over-target]")).toBeNull();
+    expect(screen.queryByText(/por encima del objetivo/i)).toBeNull();
     for (const id of ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"]) {
       expect(screen.getByText(id)).toBeTruthy(); // falls back to the bare id (not in `members`)
     }
   });
 
-  it("+N appears only above target on a solvable row, is keyboard-reachable, and carries no title", () => {
+  it("above target, EVERY occupant is a named, draggable chip — no +N — and the extra one is marked (ADR-0044)", () => {
+    // The shipped `+N` named nobody and had no drag handle: the admin could see
+    // that Lead held one too many, but not who, and could not drag them out.
     const cells: InputGridCell[] = [
-      { date: "2026-08-09", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "auto" }, // target 2, +1
+      { date: "2026-08-09", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "auto" }, // target 2
     ];
     const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
     const cellRoot = cellFor(container, "lead", "2026-08-09");
-    const plusButton = within(cellRoot).getByRole("button", { name: /ver 1 más/i }) as HTMLButtonElement;
-    expect(plusButton.tagName).toBe("BUTTON");
-    expect(plusButton.getAttribute("title")).toBeNull();
+    expect(within(cellRoot).queryByText(/^\+\d/)).toBeNull();
+    expect(within(cellRoot).queryByRole("button", { name: /ver \d+ más/i })).toBeNull();
+
+    const chips = [...cellRoot.querySelectorAll<HTMLElement>("[data-occupant]")];
+    expect(chips.map((c) => c.textContent)).toEqual(["Frank", "Gaby", "Liu"]);
+    for (const chip of chips) expect(chip.getAttribute("draggable")).toBe("true");
+
+    // Only the seat PAST the target wears the over-target mark, in the tint and
+    // in the accessible name — the amber cell alone says "one too many", this
+    // says which.
+    expect(chips.map((c) => c.getAttribute("data-over-target"))).toEqual([null, null, "true"]);
+    expect(chips[2].className).toContain("text-warning-strong");
+    expect(chips[0].className).not.toContain("text-warning-strong");
+    expect(chips[2].getAttribute("aria-label")).toMatch(/Liu.*\(por encima del objetivo\)/);
+    expect(chips[0].getAttribute("aria-label")).not.toMatch(/objetivo/);
+
+    // Still never a `title` hover hint — the iOS build is a web wrap.
     expect(cellRoot.getAttribute("title")).toBeNull();
-    fireEvent.click(plusButton);
-    expect(screen.getByText(/Candidatos para Lead/)).toBeTruthy();
+    for (const chip of chips) expect(chip.getAttribute("title")).toBeNull();
   });
 
-  it("a SPECIAL column keeps the target cap and the +N — the P5 outcome `hasTarget` exists to protect", () => {
-    // `isSolvable` is false for every row on a special (E4/E5). Gating the cap
-    // on it — as this component used to — would silently drop both the cap and
-    // the amber over-target warning on every special column.
+  it("a SPECIAL column keeps the over-target warning — the P5 outcome `hasTarget` exists to protect", () => {
+    // `isSolvable` is false for every row on a special (E4/E5). Gating the
+    // warning on it — as this component once did — would silently drop the
+    // amber over-target treatment on every special column.
     const cells: InputGridCell[] = [
-      { date: "2026-08-12", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "manual" }, // target 2, +1
+      { date: "2026-08-12", rowId: "lead", memberIds: ["m1", "m2", "m3"], origin: "manual" }, // target 2
     ];
     const { container } = render(<PlannerGrid {...baseProps({ columns: SPECIAL_ONLY, cells })} />);
     const cellRoot = cellFor(container, "lead", "2026-08-12");
-    expect(within(cellRoot).getByRole("button", { name: /ver 1 más/i })).toBeTruthy();
+    expect(within(cellRoot).getByText(/por encima del objetivo/i)).toBeTruthy();
+    expect(cellRoot.querySelectorAll("[data-occupant]")).toHaveLength(3);
+    expect(cellRoot.querySelector('[data-occupant="m3"]')!.getAttribute("data-over-target")).toBe("true");
   });
 
   it("a special column renders an interactive Coro cell, unlike a Saturday (E18)", () => {
@@ -292,6 +311,9 @@ describe("PlannerGrid — cell density (D7)", () => {
     expect(within(cellRoot).getByText("Samo")).toBeTruthy();
     expect(within(cellRoot).getByText("Tony")).toBeTruthy();
     expect(within(cellRoot).queryByText(/^\+\d/)).toBeNull();
+    // `target: 1` is not a real threshold on an instrument row: nobody is "extra".
+    expect(cellRoot.querySelector("[data-over-target]")).toBeNull();
+    expect(within(cellRoot).queryByText(/por encima del objetivo/i)).toBeNull();
   });
 
   it("above target, a solvable cell still accepts a new occupant (D6) — no cell ever replaces", () => {
@@ -300,7 +322,9 @@ describe("PlannerGrid — cell density (D7)", () => {
     ];
     const onCellsChange = vi.fn();
     const { container, unmount } = render(<PlannerGrid {...baseProps({ cells, onCellsChange })} />);
-    fireEvent.click(within(cellFor(container, "lead", "2026-08-09")).getByRole("button", { name: /ver 1 más/i }));
+    fireEvent.click(
+      within(cellFor(container, "lead", "2026-08-09")).getByRole("button", { name: /Candidatos para Lead/ }),
+    );
     fireEvent.click(screen.getByText("Mkz"));
     expect(onCellsChange).toHaveBeenCalledTimes(1);
     const next: GridCell[] = onCellsChange.mock.calls[0][0];
@@ -308,8 +332,8 @@ describe("PlannerGrid — cell density (D7)", () => {
     expect(lead.occupants.map((o) => o.memberId).sort()).toEqual(["m1", "m2", "m3", "m4"].sort());
 
     // Extended (T1, acceptance 3): the SAME invariant from the OTHER side of
-    // the threshold — a cell exactly AT target (2/2, no +N yet, opened by a
-    // plain click rather than the "ver N más" button) must still ADD rather
+    // the threshold — a cell exactly AT target (2/2, nothing flagged yet, opened
+    // by a plain click on the cell) must still ADD rather
     // than replace, and crossing into over-target for the FIRST time must
     // still render the existing amber "por encima del objetivo" treatment —
     // not a fresh code path that could silently skip it.
@@ -668,20 +692,22 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     expect(queryByText(/Vacía la fila/)).toBeFalsy();
   });
 
-  it("surfaces a duplicate hidden behind +N — the over-target state +N exists for (Finding 2)", () => {
-    // Lead's target is 2. Three occupants means the third (m1) is hidden
-    // behind "+1". m1 is ALSO in BGV the same date, a real same-category
-    // duplicate — but the old code only ever checked `visibleIds`, so a
-    // duplicate sitting in the hidden tail was invisible exactly when +N
-    // exists (an over-target cell).
+  it("flags a duplicate sitting PAST the target on its own chip (Finding 2, ADR-0044)", () => {
+    // Lead's target is 2. Three occupants means the third (m1) is the extra
+    // one. m1 is ALSO in BGV the same date, a real same-category duplicate —
+    // the over-target state is exactly where one hides. It once sat behind a
+    // bare "+1"; now it has a chip, and the conflict outranks the amber tint.
     const cells: InputGridCell[] = [
       { date: "2026-08-09", rowId: "lead", memberIds: ["m2", "m3", "m1"], origin: "auto" },
       { date: "2026-08-09", rowId: "bgv", memberIds: ["m1"], origin: "auto" },
     ];
     const { container } = render(<PlannerGrid {...baseProps({ cells })} />);
     const leadCell = cellFor(container, "lead", "2026-08-09");
-    const plusButton = within(leadCell).getByRole("button", { name: /ver 1 más/i });
-    expect(plusButton.textContent).toMatch(/⚠/);
+    const chip = leadCell.querySelector('[data-occupant="m1"]') as HTMLElement;
+    expect(chip.getAttribute("data-over-target")).toBe("true");
+    expect(chip.textContent).toBe("Frank ⚠");
+    expect(chip.className).toContain("border-negative-strong/50");
+    expect(chip.className).not.toContain("text-warning-strong");
   });
 });
 
@@ -1524,15 +1550,16 @@ describe("PlannerGrid — E13 re-checks what is already seated", () => {
     expect(within(cellFor(container, "lead", SPECIAL_DATE)).getByText(/⚠ Gaby/)).toBeTruthy();
   });
 
-  it("surfaces a violation hidden behind +N, like a duplicate", () => {
+  it("flags a violation sitting PAST the target on its own chip, like a duplicate", () => {
     const cells: InputGridCell[] = [
       { date: SPECIAL_DATE, rowId: "lead", memberIds: ["m3", "m1", "m2"], origin: "auto" },
     ];
     const { container } = render(<PlannerGrid {...specialProps({ cells })} />);
     const cell = cellFor(container, "lead", SPECIAL_DATE);
-    // Lead's target is 2, so Gaby sits in the hidden tail.
-    const more = within(cell).getByRole("button", { name: /Ver 1 más/ });
-    expect(more.textContent).toContain("⚠");
+    // Lead's target is 2, so Gaby is the extra one — and she has a chip.
+    const chip = cell.querySelector('[data-occupant="m2"]') as HTMLElement;
+    expect(chip.getAttribute("data-over-target")).toBe("true");
+    expect(chip.textContent).toContain("⚠");
   });
 
   it("does not flag an unrelated pairing", () => {
