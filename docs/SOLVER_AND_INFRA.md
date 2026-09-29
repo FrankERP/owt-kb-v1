@@ -187,6 +187,30 @@ ADR-0041. The client that sends pins («Solo llenar vacíos») is a separate del
   (python from `OWT_SOLVER_PYTHON`, default a local miniforge `owt-roles` env), SIGKILL after
   120s.
 
+**Before the request leaves the planner** (`buildSolveRequest`, `app/components/admin/plannerModel.ts`):
+- **A month with no Saturday Auto can staff drops its Saturday MINIMUMS.** Auto staffs a
+  Saturday only when an in-month Sunday follows it (D16), and it staffs only the Saturdays the
+  admin keeps selected (all of the month's are preselected). So a month sends
+  `weekends_with_saturday: []` when every Saturday is deselected, or when the only one kept is
+  a month-end Saturday — the eve of next month's first Sunday (31 Oct 2026, 31 Jan and 28 Feb
+  2026). October 2026 was the second case: its only Saturday service was the 31st, so 3/10/17/24
+  were deselected. A rule cap on a Saturday-only pattern (`Sat.*`, `Sat.Lead`,
+  `Sat.BGV`) with `==`/`>=` and a value of at least 1 (`isSaturdayFloor`, relative values
+  resolved as the solver does) is then unsatisfiable, and one of them made the whole month
+  infeasible — Sundays included. Such caps are left out of that month's request and Auto
+  shows which (`omittedCapsNotice`); maximums stay, and in any month with a Saturday nothing
+  changes (Frank's decision, 2026-09-29). **Still hard:** a Saturday minimum for someone
+  unavailable on every Saturday the month does have — that month still refuses.
+- **The solver's own reason reaches the admin.** A solver `ok: false` comes back as a 422 whose
+  body carries the reason; Auto now reads it and shows «El solver no encontró solución. Motivo
+  del solver: …» (`solverRefusalMessage`) instead of the generic line alone. The solver's
+  diagnostic text is English and, for an over-constrained month, blames "a mandatory Lead
+  seat" generically — a known weakness of `diagnose_infeasibility`.
+- **A month-end Saturday is manual-only.** The planner of the NEXT month offers only its own
+  Saturdays, so its week 1 never gets the previous month's last Saturday: Auto can staff
+  31 Oct 2026 from neither October nor November. The grid labels it «Fuera del alcance de
+  Auto» in the month it belongs to.
+
 ### HTTP handler ([`gcf/main.py`](../gcf/main.py))
 `functions_framework.http`-decorated `solve(request)`. Handles CORS `OPTIONS`, rejects non-POST
 (405). **Fails closed on auth:** `OWT_SOLVER_API_KEY` unset → 503; wrong/missing `X-Api-Key` →
