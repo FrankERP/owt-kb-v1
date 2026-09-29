@@ -59,6 +59,14 @@ Parsed by `parse_dsl_rules()`; clauses `&`-chainable. Forms include:
 - `any_of(A,B,...) on <pattern> each_week` — weekly-presence requirement.
 - `<name> !consecutive on <pattern>` — hard no-back-to-back.
 - `<name> fairness_exempt` / `fairness_slack <n>` (+ `on <pattern>` role-scoped variants).
+  **The bare forms are GLOBAL only** — the only forms the planner emits («Exenta» / «Holgura»).
+  They take the person out of the month's total-load band (`gmax − gmin`) and the global soft
+  term, nothing else: the `Sun.Lead` and `Sun.BGV` bands read only the role-scoped
+  `fairness_exempt on <pattern>`, and every per-role objective spread counts everyone eligible.
+  So an «Exenta» Sunday leader still competes for Sunday-lead fairness — which is the intent for
+  lead-only members who play an instrument every week (confirmed 2026-09-29): lead constantly, never BGV or
+  Coro (that is their `!in` patterns, not the fairness mode). Slack also drops the person from
+  the global soft pull, not just widens their band.
 
 Patterns: exact roles, `Sun.*`, `Sat.*`, `*.*`, `*.LeadBGV`, `*.Lead/BGV/Choir`, plus legacy
 aliases. Templates like `{weeks-2}` resolve against month length. Names match case-insensitively.
@@ -84,7 +92,12 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   tiers, so a uniform over-estimate is exponential in it and the objective's upper bound
   crossed CP-SAT's integer-objective ceiling (INT64_MAX / 2) on ordinary months. Months
   whose history still pushes it over run without the objective and say so with
-  `objective_skipped: true` — see ADR-0038 for that trade-off. Lead rotation uses seeded random weights on Sun.Lead
+  `objective_skipped: true` — see ADR-0038 for that trade-off. **In production that is every
+  Auto run today:** the derived history always sends three months, and measured on the real
+  October 2026 request every optimising pass overflowed (240/240 runs), so the roster is a
+  legal but arbitrary draw — history, lead rotation and the back-to-back penalty do nothing.
+  The planner shows it (since 2026-09-29) as «Sin optimizar», marks the «Historial» line
+  «(no aplicado)» and says so in a sentence under the banners. Lead rotation uses seeded random weights on Sun.Lead
   assignments (monthly and per-week terms). The planner UI surfaces, separately for
   Sunday and Saturday, which lead-pool members did not hold that lead role in the
   calendar month before the month being planned (`LeadPoolHistoryPanel`); that is
@@ -175,7 +188,8 @@ ADR-0041. The client that sends pins («Solo llenar vacíos») is a separate del
   of one weekend under `!consecutive on *.Lead` reports the W(n-1)–W(n) and W(n)–W(n+1) pairs,
   because each pair sums both weeks' services and the rule already forbade a same-weekend double.
 - **What it does not promise:** nothing bounds the pinned person's own total, and an un-pinned
-  `fairness_exempt` member is outside every bound (a single pin can cost them a service). The
+  `fairness_exempt` member is outside the global total-load bound (a single pin can cost them a
+  service) — though not the `Sun.Lead`/`Sun.BGV` bands, which only the role-scoped form lifts. The
   three `*_fairness_relaxed` flags keep their literal meaning — "the ladder loosened a limit" —
   over slack-adjusted counts. A timed-out pinned month looks like a fairness-free month.
 

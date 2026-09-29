@@ -92,7 +92,20 @@ describe("RuleBuilder — editing a rule keeps its id, so the edit survives", ()
 
     expect(container.textContent).toContain("!Sat.*");
     expect(container.textContent).toContain("!Sun.BGV");
-    expect(container.textContent).toContain("fairness_exempt");
+    expect(container.textContent).toContain("exenta de carga total");
+  });
+
+  it("names the fairness modes in Spanish and says what «Exenta» does", () => {
+    renderGen(CONFIG);
+
+    openEditor(/Mkz/);
+    expect(screen.getByText("Equidad")).toBeTruthy();
+    expect(screen.getByText("Exenta")).toBeTruthy();
+    expect(screen.getByText("Holgura")).toBeTruthy();
+    // Mkz is exempt in CONFIG, so the explanation is already on screen — and it
+    // must say he still counts for each role's fairness, which is what the
+    // solver does with a bare `fairness_exempt`.
+    expect(screen.getByText(/sigue contando para la equidad de cada rol/i)).toBeTruthy();
   });
 
   it("edits a conflict rule in place", () => {

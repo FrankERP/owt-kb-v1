@@ -143,4 +143,7 @@ and chose not to build an explicit floating-point objective in this change.
 - Anything that froze a solver output as a golden must re-capture it; the model
   construction is unchanged, so a Stage A model fingerprint is not affected.
 - `objective_skipped` is a new response field. No client reads it yet; surfacing it in the
-  planner is worth doing and is not in this change.
+  planner is worth doing and is not in this change. *(2026-09-29: the planner now reads it —
+  «Sin optimizar», with the «Historial» line marked «(no aplicado)». Measured the same day on
+  the real October 2026 request: every optimising pass overflowed, so with derived history
+  this is every production Auto run, not an edge case.)*
