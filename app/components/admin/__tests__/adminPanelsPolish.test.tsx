@@ -220,7 +220,9 @@ describe("Contenido", () => {
     expect(screen.getByText("Cuán grande es Él")).not.toBeNull();
     expect(screen.queryByText("Santo")).toBeNull();
 
-    fireEvent.change(search, { target: { value: "sánto" } });
+    // The trailing space must fall where the match ENDS, or an untrimmed query
+    // still matches («cuan grande » is inside «cuan grande es el»).
+    fireEvent.change(search, { target: { value: "sánto " } });
     expect(screen.getByText("Santo")).not.toBeNull();
   });
 });
