@@ -77,7 +77,7 @@ export default function SectionNav({ sections, practice }: { sections: Section[]
   }, [sections]);
 
   return (
-    <div ref={barRef} className="sticky top-[calc(5rem+env(safe-area-inset-top))] lg:top-[calc(6rem+env(safe-area-inset-top))] z-40 bg-surface-base/90 backdrop-blur-sm border-b border-edge-accent-subtle">
+    <div ref={barRef} className="sticky top-[calc(5rem+env(safe-area-inset-top)+var(--impersonation-offset))] lg:top-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))] z-40 bg-surface-base/90 backdrop-blur-sm border-b border-edge-accent-subtle">
       <div className="max-w-7xl mx-auto px-6 flex items-center">
         <div className="flex gap-1 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
           {sections.map((s) => (

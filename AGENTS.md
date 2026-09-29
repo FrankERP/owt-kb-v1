@@ -240,7 +240,10 @@ several exist precisely to stop a plausible-looking change.
   offsets `.brand-navbar` by that variable. Nothing but a comment connects the
   two halves, so they must move together — `impersonationOffsetSync.test.ts` is
   the guard. The height is measured, not a constant, because the banner wraps
-  to two lines on a phone.
+  to two lines on a phone. Everything sticky or scroll-margined UNDER the navbar
+  also adds `var(--impersonation-offset)` to its calc — 0 unless impersonating,
+  never `--impersonation-h` itself, which is never 0 — and the same test sweeps
+  `app/**` for an under-navbar calc that forgets it.
 - **The phone tab bar publishes its MEASURED height as `--bottom-nav-h` (px) on `<html>`**
   plus a `has-bottom-nav` class; `brand.css` pads the route main under that class. Fixed-bottom
   elements must clear either the inset (when the bar is absent) or the bar's own height
