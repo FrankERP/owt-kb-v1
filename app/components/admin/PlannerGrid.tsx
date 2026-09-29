@@ -2776,9 +2776,10 @@ function GridCellView({
               if (pick.enabled) pick.onPickOccupant(source);
             };
             // DD10 lets a member sit twice in one cell, and every occupant now
-            // renders (ADR-0044), so the bare id is not a unique key. Counting
-            // earlier copies keeps it stable when a copy ahead of it leaves —
-            // an index key would remount every chip after it.
+            // renders (ADR-0044), so the bare id is not a unique key — two
+            // chips sharing one left a stale copy on screen after one left.
+            // Counting earlier copies of the SAME id, not the index, keeps
+            // every other member's chip on its own element when a copy leaves.
             const occurrence = memberIds.slice(0, index).filter((m) => m === id).length;
             return (
               <span
