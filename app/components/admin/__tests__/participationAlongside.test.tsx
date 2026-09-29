@@ -28,6 +28,7 @@ import { buildColumns, plannerParticipationRoles, type GridCell, type SavedRole 
 import { computeParticipation, type ParticipantRole } from "@/app/utils/computeParticipation";
 import type { RankMember } from "../candidateRanking";
 import { readyRules } from "./rulesHarness";
+import { AdminProviders } from "./providersHarness";
 
 afterEach(() => {
   cleanup();
@@ -302,7 +303,7 @@ function goToGrid(
       onClose={vi.fn()}
       onCreated={vi.fn()}
     />,
-    options.container ? { container: options.container } : undefined,
+    { container: options.container, wrapper: AdminProviders },
   );
   const { container } = view;
   fireEvent.change(container.querySelector("select") as HTMLSelectElement, { target: { value: "2" } });
@@ -611,6 +612,7 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
         onClose={onClose}
         onCreated={vi.fn()}
       />,
+      { wrapper: AdminProviders },
     );
     fireEvent.change(container.querySelector("select") as HTMLSelectElement, { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
