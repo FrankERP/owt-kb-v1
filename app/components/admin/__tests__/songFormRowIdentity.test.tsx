@@ -18,10 +18,12 @@ function mountForm() {
   return render(
     <SongForm
       allTags={[]}
+      allAuthors={[]}
       onSubmit={vi.fn()}
       onClose={vi.fn()}
       loading={false}
       canCreateTag={async () => null}
+      canCreateAuthor={async () => null}
     />,
   );
 }
