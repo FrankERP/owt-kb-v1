@@ -946,14 +946,20 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
  * take 88px off the usable width before the planner's own three columns are
  * budgeted. The rail COLLAPSES to 56px (icons only) while the planner is open —
  * that is what the `--admin-rail-w` override in the frame rule below is for, and
- * 56 is written once, there, not repeated in the layout class.
+ * the layout class (`AdminPanel`'s grid) never repeats the number: it reads the
+ * variable. The planner's two collapse rules state 56 literally because the
+ * width guard (`participationAlongside.test.tsx`) pins each of them against the
+ * derivation above; the user's collapse (the next block) declares it once more,
+ * as the same variable, and the rail reads it through `var()`.
  *
  * Full-bleed (a `100vw` block with a negative margin) is still rejected, and the
  * reason is no longer the shell's `overflow: hidden`: it over-runs by the
  * scrollbar width on any platform that reserves one, and `/admin` must have no
- * page-level horizontal scroll — the planner grid, the Servicios board and the
- * availability matrix are the only horizontal scrollers, each in its own
- * `overflow-x-auto` box (ADR-0035 again).
+ * page-level horizontal scroll — the planner grid and the availability matrix
+ * are the only horizontal scrollers, each in its own `overflow-x-auto` box
+ * (ADR-0035 again). The Servicios board USED to be the third; it now flows in a
+ * grid and scrolls vertically with the page (ADR-0044,
+ * `docs/adr/0044-the-servicios-board-scrolls-vertically.md`).
  *
  * `max-width: none` rather than a larger fixed cap: on a wider monitor the extra
  * width all goes to the grid, which is the only thing here that can use it.
@@ -964,6 +970,48 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
  * the first version, and it left the title visibly off the navbar's centre line
  * whenever the planner was open.
  */
+
+/*
+ * The USER's collapse: `AdminRail`'s toggle marks the rail `data-collapsed`
+ * (persisted per browser) and the rail goes to the same icons-only state the
+ * planner forces below. From `lg` (1024px), because that is where the rail
+ * exists at all — below it the phone strip stands in and has no toggle.
+ *
+ * It narrows the rail and NOTHING ELSE: no `max-width`, no `padding`. Widening
+ * the frame belongs to `.planner-wide` alone, because the derivation above is
+ * the planner's arithmetic; a collapsed rail on any other tab just hands its
+ * 144px back to the workspace inside the ordinary 1280 cap.
+ * `adminRail.test.tsx` guards that this block never reaches the frame's width,
+ * and that its `--admin-rail-w` equals the planner's: the two blocks share no
+ * rule, so that equality is what makes the user's 56 follow the planner's if it
+ * ever moves (the user's 56 is also pinned literally, beside it).
+ *
+ * Where both apply (the planner open at ≥ 1280), they state the same thing, and
+ * the planner's block hides the toggle — its collapse is not the user's to undo.
+ */
+@media (min-width: 1024px) {
+  .brand-admin-frame:has([data-admin-rail][data-collapsed]) {
+    --admin-rail-w: 56px;
+  }
+
+  .brand-admin-frame:has([data-admin-rail][data-collapsed]) .brand-admin-rail {
+    width: var(--admin-rail-w);
+  }
+
+  /* Same reason as the planner's rule below: the labels leave the a11y tree,
+     so every item keeps its own `aria-label` (and gains a `title`). */
+  .brand-admin-frame:has([data-admin-rail][data-collapsed]) .brand-admin-rail [data-rail-label] {
+    display: none;
+  }
+
+  .brand-admin-frame:has([data-admin-rail][data-collapsed]) .brand-admin-rail [data-integrity] {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    margin: 0;
+  }
+}
+
 @media (min-width: 1280px) {
   /*
    * TWO caps, not one. `app/(client)/layout.tsx` wraps every page in
@@ -983,9 +1031,11 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
    */
   .brand-admin-frame:has(.planner-wide) {
     /*
-     * The ONE declaration of the collapsed rail width; `AdminPanel`'s grid
+     * The PLANNER's declaration of the collapsed rail width; `AdminPanel`'s grid
      * reads it as `lg:grid-cols-[var(--admin-rail-w,200px)_1fr]`, so the column
-     * and the rail can never state two different numbers.
+     * never repeats the number. The user's collapse (the lg block above) mirrors
+     * it with a declaration of its own, and `adminRail.test.tsx` fails if the
+     * two values ever differ.
      */
     --admin-rail-w: 56px;
     max-width: none;
@@ -1019,6 +1069,16 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
     top: 4px;
     right: 4px;
     margin: 0;
+  }
+
+  /*
+   * The planner's collapse WINS: while it forces the rail to icons, the user's
+   * toggle has nothing honest to offer — «Expandir» would do nothing — so it is
+   * not shown. Between 1024 and 1279 the planner forces nothing and the toggle
+   * stays.
+   */
+  .brand-admin-frame:has(.planner-wide) .brand-admin-rail [data-rail-toggle] {
+    display: none;
   }
 
 }
