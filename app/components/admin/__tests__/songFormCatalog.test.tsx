@@ -62,4 +62,30 @@ describe("SongForm catalogue", () => {
     expect(chips).toHaveLength(1);
     expect(chips[0].className).toContain("bg-accent/15");
   });
+
+  // Members type Spanish without accents: «un corazon» must find «Un Corazón»,
+  // and an accented query must still find a name stored without one.
+  it("filters artists and tags ignoring accents and case, both ways", () => {
+    render(
+      form({
+        allAuthors: [entry("a1", "Un Corazón"), entry("a2", "Hillsong")],
+        allTags: [entry("t1", "Adoración"), entry("t2", "Gozo")],
+      }),
+    );
+
+    const artist = screen.getByLabelText("Artista");
+    fireEvent.change(artist, { target: { value: "un corazon" } });
+    expect(screen.getByRole("button", { name: "Un Corazón" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Hillsong" })).toBeNull();
+    // The other direction, plus a trailing space.
+    fireEvent.change(artist, { target: { value: "hillsóng " } });
+    expect(screen.getByRole("button", { name: "Hillsong" })).not.toBeNull();
+
+    const tags = screen.getByPlaceholderText("Filtrar o crear tag...");
+    fireEvent.change(tags, { target: { value: "ADORACION" } });
+    expect(screen.getByRole("button", { name: "#Adoración" })).not.toBeNull();
+    fireEvent.change(tags, { target: { value: "gózo " } });
+    expect(screen.getByRole("button", { name: "#Gozo" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "#Adoración" })).toBeNull();
+  });
 });

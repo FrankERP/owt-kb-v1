@@ -3,6 +3,7 @@
 import { useState, useRef, useId } from "react";
 import type { PortableTextBody } from "@/app/utils/interface";
 import { bodyToLyrics } from "@/app/utils/lyrics";
+import { normalizeText } from "@/app/utils/normalizeText";
 import { chartsFromSong, chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
 import { addRow, newRowId, removeRow, rowsFromStored, rowsToPayload, updateRow, type RowDraft } from "@/app/utils/songFormRows";
 import { ChordChartsFields } from "@/app/components/admin/ChordChartsFields";
@@ -249,7 +250,7 @@ export function SongForm({
         {authorSearch.trim() ? (
           <div className="rounded-lg border border-accent/20 divide-y divide-accent/10 max-h-48 overflow-y-auto">
             {localAuthors
-              .filter((a) => a.name.toLowerCase().includes(authorSearch.toLowerCase()))
+              .filter((a) => normalizeText(a.name).includes(normalizeText(authorSearch.trim())))
               .map((author) => {
                 const active = form.authorIds.includes(author._id);
                 return (
@@ -430,7 +431,7 @@ export function SongForm({
         {tagSearch.trim() ? (
           <div className="rounded-lg border border-accent/20 divide-y divide-accent/10 max-h-48 overflow-y-auto">
             {localTags
-              .filter((t) => t.name.toLowerCase().includes(tagSearch.toLowerCase()))
+              .filter((t) => normalizeText(t.name).includes(normalizeText(tagSearch.trim())))
               .map((tag) => {
                 const active = form.tagIds.includes(tag._id);
                 return (

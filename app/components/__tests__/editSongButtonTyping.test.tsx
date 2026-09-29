@@ -188,3 +188,41 @@ describe("a failed save shows what the route said", () => {
     expect(await screen.findByText(/No se pudo guardar/)).toBeTruthy();
   });
 });
+
+// The song page's editor filters the same catalogue the admin form does, and
+// must ignore accents the same way: «un corazon» finds «Un Corazón».
+describe("EditSongButton filters artists and tags ignoring accents", () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () =>
+          url === "/api/content/authors"
+            ? [{ _id: "a1", name: "Un Corazón", slug: { current: "un-corazon" } }, { _id: "a2", name: "Hillsong", slug: { current: "hillsong" } }]
+            : [{ _id: "t1", name: "Adoración", slug: { current: "adoracion" } }, { _id: "t2", name: "Gozo", slug: { current: "gozo" } }],
+      })),
+    );
+  });
+
+  it("finds an accented name from an unaccented query and the reverse", async () => {
+    openEditor();
+    await screen.findByRole("button", { name: "Un Corazón" });
+
+    const artist = screen.getByPlaceholderText("Filtrar artistas…");
+    fireEvent.change(artist, { target: { value: "un corazon" } });
+    expect(screen.getByRole("button", { name: "Un Corazón" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Hillsong" })).toBeNull();
+    // The other direction, plus a trailing space.
+    fireEvent.change(artist, { target: { value: "hillsóng " } });
+    expect(screen.getByRole("button", { name: "Hillsong" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Un Corazón" })).toBeNull();
+
+    const tags = screen.getByPlaceholderText("Filtrar tags…");
+    fireEvent.change(tags, { target: { value: "ADORACION" } });
+    expect(screen.getByRole("button", { name: "#Adoración" })).not.toBeNull();
+    fireEvent.change(tags, { target: { value: "gózo " } });
+    expect(screen.getByRole("button", { name: "#Gozo" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "#Adoración" })).toBeNull();
+  });
+});

@@ -15,6 +15,7 @@ import CueDialogStatus from "../ui/CueDialogStatus";
 import Skeleton, { SkeletonGroup } from "../ui/Skeleton";
 import { useToast } from "../ui/Toast";
 import { writeErrorMessage } from "@/app/utils/writeError";
+import { normalizeText } from "@/app/utils/normalizeText";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -184,9 +185,11 @@ export default function ContentPanel({ canDelete = false }: { canDelete?: boolea
     }
   };
 
+  // Accent- and case-insensitive, like the song form's artist picker.
+  const query = normalizeText(search.trim());
   const filtered = songs.filter((s) =>
-    s.title.toLowerCase().includes(search.toLowerCase()) ||
-    (s.author ?? "").toLowerCase().includes(search.toLowerCase())
+    normalizeText(s.title).includes(query) ||
+    normalizeText(s.author).includes(query)
   );
 
   // For edit modal: convert Song to the partial form shape SongForm expects
