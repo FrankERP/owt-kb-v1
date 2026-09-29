@@ -87,37 +87,60 @@ export function buildPayload(form: FormState) {
   };
 }
 
+/**
+ * The parent's catalogue plus what this form created, each `_id` once, sorted by
+ * name when the form added something. The catalogue itself is de-duplicated too:
+ * the create routes are idempotent by slug and answer with the EXISTING doc, and
+ * both parents append whatever the POST returns.
+ */
+function withCreated(catalogue: SongTag[], created: SongTag[]): SongTag[] {
+  const byId = new Map<string, SongTag>();
+  for (const t of catalogue) if (!byId.has(t._id)) byId.set(t._id, t);
+  const known = byId.size;
+  for (const t of created) if (!byId.has(t._id)) byId.set(t._id, t);
+  const merged = [...byId.values()];
+  return byId.size > known ? merged.sort((a, b) => a.name.localeCompare(b.name)) : merged;
+}
+
 // ─── SongForm ─────────────────────────────────────────────────────────────────
 
 export function SongForm({
   initial,
   allTags,
-  allAuthors = [],
+  allAuthors,
   onSubmit,
   onClose,
   loading,
   canCreateTag,
-  canCreateAuthor = async () => null,
+  canCreateAuthor,
 }: {
   initial?: Partial<FormState>;
   allTags: SongTag[];
-  allAuthors?: SongTag[];
+  // Required, not defaulted: `SetlistEditor` once mounted this form without
+  // them, and a default of `[]` / `async () => null` rendered an artist picker
+  // with nothing in it and a «+ Crear» that silently did nothing.
+  allAuthors: SongTag[];
   onSubmit: (form: FormState) => void;
   onClose: () => void;
   loading: boolean;
   canCreateTag: (name: string) => Promise<SongTag | null>;
-  canCreateAuthor?: (name: string) => Promise<SongTag | null>;
+  canCreateAuthor: (name: string) => Promise<SongTag | null>;
 }) {
   const [form, setForm]                   = useState<FormState>(() => initial ? { ...blankForm(), ...initial } : blankForm());
   const [creatingTag, setCreatingTag]     = useState(false);
-  const [localTags, setLocalTags]         = useState<SongTag[]>(allTags);
+  // Only what THIS form created is state; the catalogue stays a prop. A copy
+  // taken at mount froze an empty picker when the form opened before the
+  // parent's fetch answered.
+  const [createdTags, setCreatedTags]     = useState<SongTag[]>([]);
   const [tagSearch, setTagSearch]         = useState("");
-  const [localAuthors, setLocalAuthors]   = useState<SongTag[]>(allAuthors);
+  const [createdAuthors, setCreatedAuthors] = useState<SongTag[]>([]);
   const [authorSearch, setAuthorSearch]   = useState("");
   const [creatingAuthor, setCreatingAuthor] = useState(false);
   const lyricsRef                         = useRef<HTMLTextAreaElement>(null);
   const ids = useId();
   const fid = (name: string) => `${ids}-${name}`;
+  const localTags    = withCreated(allTags, createdTags);
+  const localAuthors = withCreated(allAuthors, createdAuthors);
 
   const set = (key: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
@@ -154,8 +177,8 @@ export function SongForm({
     setCreatingTag(true);
     const tag = await canCreateTag(tagSearch.trim());
     if (tag) {
-      setLocalTags((prev) => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)));
-      setForm((f) => ({ ...f, tagIds: [...f.tagIds, tag._id] }));
+      setCreatedTags((prev) => [...prev, tag]);
+      setForm((f) => (f.tagIds.includes(tag._id) ? f : { ...f, tagIds: [...f.tagIds, tag._id] }));
       setTagSearch("");
     }
     setCreatingTag(false);
@@ -166,8 +189,10 @@ export function SongForm({
     setCreatingAuthor(true);
     const author = await canCreateAuthor(authorSearch.trim());
     if (author) {
-      setLocalAuthors((prev) => [...prev, author].sort((a, b) => a.name.localeCompare(b.name)));
-      setForm((f) => ({ ...f, authorIds: [...f.authorIds, author._id] }));
+      setCreatedAuthors((prev) => [...prev, author]);
+      // The POST is idempotent by slug, so «+ Crear» on a name that exists
+      // answers with that author — which may already be selected.
+      setForm((f) => (f.authorIds.includes(author._id) ? f : { ...f, authorIds: [...f.authorIds, author._id] }));
       setAuthorSearch("");
     }
     setCreatingAuthor(false);

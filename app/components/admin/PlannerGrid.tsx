@@ -13,10 +13,11 @@
 //     and `load` from `[...savedWindow, ...inGridDrafts]`, the other supplies
 //     `recent` from `savedWindow` alone. A single concatenated call would make
 //     `recent`'s `slice(-4)` return the grid's own future weeks.
-//  2. Density differs by row kind (D7): solvable rows cap at `target` then a
-//     focusable `+N` (never a `title` — the iOS build is a web wrap and
-//     `title` never fires on touch); non-solvable rows always render every
-//     occupant.
+//  2. Every occupant renders as a named chip, on every row (ADR-0045). Rows
+//     that carry a `target` tint the chips past it amber and say so in words;
+//     they no longer hide them behind a `+N`, which named nobody and could not
+//     be dragged. Never a `title` hover hint either — the iOS build is a web
+//     wrap and `title` never fires on touch.
 //  3. No cell ever refuses an occupant for reasons of count, and none ever
 //     replaces one (D6) — replacement is what evicted a drummer in a shipped
 //     bug, on 18 services running two drummers on one Drums seat. A manual pick
@@ -1766,8 +1767,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
       <div className="space-y-2">
         {/*
           T5's pending pick, said out loud: WHO is marked and WHERE from, since
-          the source cell may be scrolled off screen (or hidden behind `+N`) by
-          the time the admin picks a target. Beside it, the way out that is not a
+          the source cell may be scrolled off screen by the time the admin
+          picks a target. Beside it, the way out that is not a
           key — full screen has no Escape on a phone, and DD8 routes the whole iOS
           wrap through this path.
         */}
@@ -2617,39 +2618,32 @@ function GridCellView({
   pick: CellPickHandlers;
   minWClass: string;
 }) {
-  // D7: rows that CARRY a target cap at it, then a focusable `+N`. Rows that
-  // do not always render every occupant and never show `+N` — two people on
-  // one Drums seat is the normal case on 18 of 27 services, and `target: 1` is
-  // not a real threshold there.
+  // Every occupant gets a chip — a name and a drag handle — on every row
+  // (ADR-0045, which retired D7's cap-at-`target`-then-`+N`). A row that
+  // CARRIES a target still warns when it is exceeded: the cell goes amber, says
+  // so in words, and the chips past the target take the amber tint the `+N`
+  // used to wear, so the admin can see WHICH seats are the extra ones. Rows
+  // without one never warn — two people on one Drums seat is the normal case on
+  // 18 of 27 services, and `target: 1` is not a real threshold there.
   //
   // Gated on `hasTarget`, NOT on `isSolvable`: the two agree on every weekend
   // column, but a special is deliberately unsolvable (E4/E5) while still being
   // a voice row with a real target. Reading `isSolvable` here would silently
-  // drop both the cap and the amber `+N` on every special column.
+  // drop the over-target warning on every special column.
   const target = hasTarget(row, column) ? row.target : null;
   const overflow = target != null && memberIds.length > target;
-  const visibleIds = overflow ? memberIds.slice(0, target!) : memberIds;
-  const hiddenIds = overflow ? memberIds.slice(target!) : [];
-  const hiddenCount = hiddenIds.length;
-  // Finding 2: the `⚠` used to apply only to `visibleIds`, so a duplicate
-  // sitting in the hidden `+N` tail — exactly the over-target state `+N`
-  // exists for — was never surfaced at all. Checked here regardless of
-  // whether the occupant is currently visible.
-  const hiddenHasDuplicate = hiddenIds.some((id) => duplicates.get(id)?.includes(row.id));
   const mismatchedSet = new Set(mismatched);
   const undeclaredSet = new Set(undeclared);
 
   // E13 + P10, split. A violation the admin overrode renders as a NAMED
   // exception; one they did not renders as a refusal still to be fixed. Both are
-  // computed over every occupant, `+N`'s hidden tail included — the same
-  // Finding-2 hole the duplicate flag once had.
+  // computed over every occupant.
   const ruleOf = (id: string) => violations.get(violationKey(row.id, id)) ?? null;
   const seatedRules = memberIds
     .map((id) => ({ id, v: ruleOf(id) }))
     .filter((x): x is { id: string; v: SeatedViolation } => x.v !== null);
   const flagged = seatedRules.filter((x) => !x.v.overridden);
   const overridden = seatedRules.filter((x) => x.v.overridden);
-  const hiddenHasViolation = hiddenIds.some((id) => ruleOf(id)?.overridden === false);
 
   const endpoint: MoveOccupantEndpoint = { rowId: row.id, columnId: column.columnId };
   const isDropTarget = drag.activeDropKey === cellKey(column.columnId, row.id);
@@ -2676,8 +2670,8 @@ function GridCellView({
     <div
       // NOT `role="button"` any more, and that is what T5 needed.
       //
-      // A cell holds interactive children — `+N`, "Copiar a todo el mes", and
-      // now a focusable chip per occupant. `button` takes presentational
+      // A cell holds interactive children — "Copiar a todo el mes" and a
+      // focusable chip per occupant. `button` takes presentational
       // children, so all of those were being flattened away by assistive tech,
       // and a chip's Enter was swallowed by this element's own key handler
       // before it could ever mean "marcar para mover". A `group` labelled with
@@ -2721,7 +2715,7 @@ function GridCellView({
       {/*
         The cell's activation, as a real button — invisible, full bleed, and
         BEHIND everything else. It changes nothing visually (the content sits on
-        top of it, so a pointer still hits chips and `+N` first) and it is what
+        top of it, so a pointer still hits the chips first) and it is what
         puts the cell in the tab order with a name and a role instead of a bare
         focusable div.
       */}
@@ -2753,10 +2747,10 @@ function GridCellView({
       */}
       <div className="relative">
         <div className="flex flex-wrap gap-1">
-          {visibleIds.length === 0 && memberIds.length === 0 && (
+          {memberIds.length === 0 && (
             <span className="font-body text-xs italic text-mono-600">Sin asignar</span>
           )}
-          {visibleIds.map((id) => {
+          {memberIds.map((id, index) => {
             // Finding 1: `duplicates` is keyed by member alone across the whole
             // date, so a member flagged for a same-category conflict (e.g.
             // Lead+BGV) must NOT also light up on an unrelated row (e.g. Bass)
@@ -2767,6 +2761,8 @@ function GridCellView({
             const isDuplicate = duplicates.get(id)?.includes(row.id) ?? false;
             const tipoMismatch = mismatchedSet.has(id);
             const ruleBroken = ruleOf(id)?.overridden === false;
+            // Past the target: one of the seats the amber warning below is about.
+            const overTarget = target != null && index >= target;
             const dragging =
               drag.source?.memberId === id &&
               drag.source.rowId === row.id &&
@@ -2779,13 +2775,19 @@ function GridCellView({
             const pickChip = () => {
               if (pick.enabled) pick.onPickOccupant(source);
             };
+            // DD10 lets a member sit twice in one cell, and every occupant now
+            // renders (ADR-0045), so the bare id is not a unique key — two
+            // chips sharing one left a stale copy on screen after one left.
+            // Counting earlier copies of the SAME id, not the index, keeps
+            // every other member's chip on its own element when a copy leaves.
+            const occurrence = memberIds.slice(0, index).filter((m) => m === id).length;
             return (
               <span
-                key={id}
-                // T4 — the drag SOURCE, and T5's pick source. Occupants past
-                // `target` are behind `+N` and have no chip, so both reach visible
-                // occupants only; `+N` deliberately gets no second handle (DD11's
-                // picker-row anchor is the hidden tail's route).
+                key={`${id}#${occurrence}`}
+                // T4 — the drag SOURCE, and T5's pick source — for EVERY
+                // occupant, the ones past `target` included (ADR-0045). DD11's
+                // picker-row anchor stays as the touch route, not as the only
+                // handle an over-target occupant has.
                 //
                 // A `role="button"` SPAN, not a `<button>`, and the difference is
                 // the drag: this element carries `draggable` + `onDragStart`, and
@@ -2807,7 +2809,7 @@ function GridCellView({
                   isDuplicate || ruleBroken ? " (conflicto)" : ""
                 }${tipoMismatch ? " (Tipo no permitido)" : ""}${
                   undeclaredSet.has(id) ? " (instrumento no declarado)" : ""
-                }`}
+                }${overTarget ? " (por encima del objetivo)" : ""}`}
                 // NO `onClick`, deliberately (user ruling, 2026-08-06). A pointer
                 // click on a name keeps doing exactly what it always has: it
                 // falls through to the cell, which opens the picker — or places
@@ -2831,16 +2833,26 @@ function GridCellView({
                 }}
                 onDragEnd={drag.onOccupantDragEnd}
                 data-occupant={id}
+                data-over-target={overTarget ? "true" : undefined}
                 data-picked={marked ? "true" : undefined}
                 // Legibility pass — the member chip is the thing the admin
                 // actually reads across the whole month, and `text-[10px]` was
                 // the smallest type on the surface. One step up, to `text-xs`.
+                //
+                // Precedence: a conflict (red) outranks a Tipo mismatch, which
+                // outranks being past the target — the `+N`'s old amber border
+                // and fill, so the extra seat reads as the warning it is. The
+                // TEXT stays `text-ink-muted`: the `+N`'s `text-warning-strong`
+                // is ~3.5:1 on that fill in the light theme, and the name is the
+                // point (ADR-0045).
                 className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-ink-muted ${CARD_STYLE.longText} ${
                   isDuplicate || ruleBroken
                     ? "border-negative-strong/50 bg-negative-strong/10"
                     : tipoMismatch
                       ? "border-warning-strong/50 bg-warning-strong/10"
-                      : "border-accent/25 bg-accent/10"
+                      : overTarget
+                        ? "border-warning-fg/40 bg-warning-fg/10"
+                        : "border-accent/25 bg-accent/10"
                 } ${drag.enabled ? "cursor-grab" : "cursor-not-allowed"} ${dragging ? "opacity-30" : ""} ${
                   marked ? "ring-2 ring-accent" : ""
                 }`}
@@ -2850,30 +2862,6 @@ function GridCellView({
               </span>
             );
           })}
-          {overflow && (
-            <button
-              type="button"
-              // DELIBERATELY NOT routed through `activate`: this is a disclosure,
-              // not the cell's action, and it is the only way to SEE the hidden
-              // tail — which is where DD11's source anchor lives. Suppressing it
-              // during a pick would make the `+N` occupant unreachable exactly
-              // when the admin is already moving somebody else.
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpen();
-              }}
-              aria-label={`Ver ${hiddenCount} más en ${row.label}`}
-              // Sized with the member chips it stands in for.
-              className={`rounded-full border px-1.5 py-0.5 font-label text-xs ${
-                hiddenHasDuplicate || hiddenHasViolation
-                  ? "border-negative-strong/50 bg-negative-strong/10 text-negative-fg"
-                  : "border-warning-fg/40 bg-warning-fg/10 text-warning-strong"
-              }`}
-            >
-              +{hiddenCount}
-              {(hiddenHasDuplicate || hiddenHasViolation) && " ⚠"}
-            </button>
-          )}
         </div>
         {/* Finding 6: the brief says a solvable cell over target "warns and
             still accepts" — an amber border alone carries no words, so make
@@ -2989,7 +2977,7 @@ function CandidateRow({
         // and runs the row's action instead. For a SEATED member that action is
         // the REMOVAL branch of `onToggle`, so Enter on "Marcar para mover"
         // un-seated the person it was meant to mark — a destructive keyboard
-        // path on the only anchor a `+N`-hidden occupant has. Guarded here
+        // path on the anchor touch and keyboard users move people with. Guarded here
         // rather than with a `stopPropagation` on each button so the whole class
         // is closed, including "Asignar de todos modos" (safe today only because
         // it renders exclusively while `blocked` short-circuits this handler).
@@ -3086,17 +3074,17 @@ function CandidateRow({
         </button>
       )}
       {/*
-        DD11 — the source anchor, and the ONLY handle a `+N`-hidden occupant has.
-        A drop onto an at-target cell appends (`withUpdatedCell`) and the cell
-        shows `slice(0, target)`, so the person just placed there has no chip at
-        all; this row is where they are still reachable.
+        DD11 — the source anchor: the touch and keyboard route to moving a
+        seated member, since the ~20px chip is not a 44px touch target. (It was
+        once also the ONLY handle an over-target occupant had, while the cell
+        showed `slice(0, target)` behind a `+N` — ADR-0045 gave those a chip.)
 
         **Deliberately OUTSIDE the `blocked` guard above.** `blocked` answers
         "may this member be SEATED here", which is a question about the target
         and belongs to `moveGate`. A source has no eligibility question — and the
         occupant who most needs relocating is precisely the one `blocked` refuses:
-        someone in the `+N` tail who also holds a same-category double would
-        otherwise have no anchor anywhere in this UI. `mutationLocked` is the one
+        someone over the target who also holds a same-category double would
+        otherwise have no touch anchor anywhere in this UI. `mutationLocked` is the one
         condition that does disable it, because nothing may be written at all
         while it holds.
 

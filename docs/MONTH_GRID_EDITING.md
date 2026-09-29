@@ -132,8 +132,11 @@ save, and participate in the close warning.
 Two ways to relocate one already-seated occupant to a different cell, before
 Guardar: dragging the occupant's chip (desktop, HTML5 `draggable` — `dragstart`
 never fires from a touch), or a keyboard/touch pick-then-place — "Marcar para
-mover" on a focusable chip (Enter/Space) or on the picker-row anchor, the only
-route for occupants hidden behind `+N` — then activating a target cell. Both
+mover" on a focusable chip (Enter/Space) or on the picker-row anchor, the
+touch route — then activating a target cell. Every occupant has a chip,
+including the ones past a row's target, which are tinted amber and named
+«(por encima del objetivo)» rather than folded into a `+N`
+([ADR-0045](adr/0045-every-grid-occupant-gets-a-named-chip.md)). Both
 compose the same move primitive (`moveOccupant.ts`) through the same gate
 (`moveGate.ts`), so they can never diverge on what is allowed. See
 [ADR 0012](adr/0012-grid-drag-excludes-swap-touch-and-auto-scroll.md) for what
