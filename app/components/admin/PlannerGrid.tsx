@@ -171,10 +171,12 @@ export interface SolveDiagnostics {
   history_months?: string;
   /**
    * No lexicographic objective ran (ADR-0038): the roster is legal but arbitrary —
-   * history, lead rotation and the back-to-back penalty had no effect. Production's
-   * three derived history months push the weight ladder past CP-SAT's ceiling, so
-   * this is the steady state until that is fixed, not a rare edge. Without it the
-   * «Historial» line claims an influence that did not happen.
+   * history, lead rotation and the back-to-back penalty had no effect. Whether a
+   * month overflows depends on the SIZE of its weighted history, not only on
+   * having three months; the real October 2026 request (a full roster, three
+   * derived months) skipped it on every run measured, so expect it routinely
+   * until that is fixed. Without it the «Historial» line claims an influence
+   * that did not happen.
    */
   objective_skipped?: boolean;
 }
@@ -2114,7 +2116,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
       {diagnostics?.objective_skipped && (
         <p className="font-body text-xs text-warning-strong">
           Este acomodo cumple las reglas, pero el solver no pudo optimizar la equidad: no tomó en
-          cuenta el historial, la rotación de líderes ni los domingos seguidos. Revísalo antes de crear.
+          cuenta el historial, la rotación de líderes ni que alguien repita el mismo rol en semanas
+          seguidas. Revísalo antes de crear.
         </p>
       )}
 
