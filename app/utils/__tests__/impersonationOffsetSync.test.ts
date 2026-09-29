@@ -13,7 +13,14 @@
 // on, and every under-navbar calc adds it. The sweep below finds those calcs by
 // shape across app/**, so a NEW sticky-under-navbar element joins automatically:
 // it fails here until it adds the offset, rather than shipping one banner-height
-// short.
+// short. Two readers are OUT of the sweep's reach because they read the computed
+// offset in JS rather than spelling it: `SectionNav`'s hero hand-off and
+// `LyricsAutoscroll` (both `getComputedStyle`, measured at mount).
+//
+// No class string in THIS file may interpolate inside its brackets. Tailwind's
+// `content` glob reads `app/**` tests included, so a `var(${…})` written here
+// would become a real CSS rule — invalid syntax that fails `next build`
+// (lightningcss). The literals below are spelled out on purpose.
 
 import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
@@ -68,18 +75,21 @@ describe("impersonation banner ↔ navbar offset", () => {
 /**
  * Every under-navbar offset in one source: a `top-[calc(`, `scroll-mt-[calc(` or
  * `max-h-[calc(100dvh` arbitrary value — any variant prefix — whose calc reads
- * `env(safe-area-inset-top)`, which is what anchoring to the navbar's top edge
- * looks like here (the navbar pads by that inset). The lookbehind keeps
- * `bottom-[calc(` and `pt-[env(…)]` out.
+ * `env(safe-area-inset-top` — with or without a fallback argument — which is what
+ * anchoring to the navbar's top edge looks like here (the navbar pads by that
+ * inset). The lookbehind keeps `bottom-[calc(` and `pt-[env(…)]` out.
  */
 const UNDER_NAVBAR = /(?<![\w-])(?:top|scroll-mt|max-h)-\[calc\([^\]]*\]/g;
 
 function underNavbarOffsets(src: string): string[] {
   return [...src.matchAll(UNDER_NAVBAR)]
     .map((m) => m[0])
-    .filter((v) => v.includes("env(safe-area-inset-top)"))
+    .filter((v) => /env\(safe-area-inset-top\b/.test(v))
     .filter((v) => !v.startsWith("max-h-") || v.startsWith("max-h-[calc(100dvh"));
 }
+
+/** The offset term an under-navbar value must carry: added to a top or margin, subtracted from a cap. */
+const signed = (value: string) => `${value.startsWith("max-h-") ? "-" : "+"}var(${OFFSET_VAR})`;
 
 function appSources(): string[] {
   const out: string[] = [];
@@ -101,7 +111,9 @@ describe("impersonation banner ↔ everything sticky under the navbar", () => {
   it(`brand.css declares ${OFFSET_VAR} as 0 on :root and gates it on the component's class`, () => {
     // The FIRST :root block, the one brandCss.test.ts and motionTokens.test.ts read.
     const root = css.match(/:root\s*\{([^}]*)\}/)?.[1] ?? "";
-    expect(root).toMatch(new RegExp(`${OFFSET_VAR}:\\s*0(?:px)?\\s*;`));
+    // `0px`, never a bare `0`: inside calc() a unitless 0 is a <number>, so
+    // `<length> + 0` fails type-checking and every under-navbar offset drops.
+    expect(root).toMatch(new RegExp(`${OFFSET_VAR}:\\s*0px\\s*;`));
     // Keyed off the SAME class the component adds, as a rule of its own (a `{`
     // right after the class, so the navbar's descendant rule cannot satisfy it),
     // and set to the SAME property the component measures.
@@ -134,8 +146,11 @@ describe("impersonation banner ↔ everything sticky under the navbar", () => {
       expect(found.some((f) => f.value.startsWith(kind)), kind).toBe(true);
     }
 
+    // The SIGN matters: an offset pushes a top or a scroll margin DOWN (`+`) and
+    // shortens a viewport-height cap (`-`). A copied term order that flips it
+    // would move the element up under the navbar with the offset still present.
     const missing = found
-      .filter((f) => !f.value.includes(`var(${OFFSET_VAR})`))
+      .filter((f) => !f.value.includes(signed(f.value)))
       .map((f) => `${f.file}: ${f.value}`);
     expect(
       missing,
@@ -144,17 +159,48 @@ describe("impersonation banner ↔ everything sticky under the navbar", () => {
   });
 
   it("FIRE-PROOF: the sweep reports an offset that forgot the banner, and nothing else", () => {
+    // Spelled out, never `${OFFSET_VAR}` inside the brackets — see the header.
     const synthetic = [
-      `className="sticky top-[calc(5rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(6rem+env(safe-area-inset-top)+var(${OFFSET_VAR}))]"`,
+      `className="sticky top-[calc(5rem+env(safe-area-inset-top))] lg:scroll-mt-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))]"`,
+      `className="top-[calc(6rem+env(safe-area-inset-top,0px))] lg:top-[calc(6rem+env(safe-area-inset-top,_0px))]"`,
+      `className="scroll-mt-[calc(6rem+env(safe-area-inset-top)-var(--impersonation-offset))] max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-var(--impersonation-offset)-1.5rem)]"`,
       `className="bottom-[calc(1rem+env(safe-area-inset-top))] pt-[env(safe-area-inset-top)] top-4 max-h-[calc(100vh-2rem)]"`,
     ].join("\n");
     const offsets = underNavbarOffsets(synthetic);
     expect(offsets).toEqual([
       "top-[calc(5rem+env(safe-area-inset-top))]",
-      `scroll-mt-[calc(6rem+env(safe-area-inset-top)+var(${OFFSET_VAR}))]`,
+      "scroll-mt-[calc(6rem+env(safe-area-inset-top)+var(--impersonation-offset))]",
+      "top-[calc(6rem+env(safe-area-inset-top,0px))]",
+      "top-[calc(6rem+env(safe-area-inset-top,_0px))]",
+      "scroll-mt-[calc(6rem+env(safe-area-inset-top)-var(--impersonation-offset))]",
+      "max-h-[calc(100dvh-6rem-env(safe-area-inset-top)-var(--impersonation-offset)-1.5rem)]",
     ]);
-    expect(offsets.filter((v) => !v.includes(`var(${OFFSET_VAR})`))).toEqual([
+    // Forgot it, forgot it behind a fallback argument (twice), or flipped its sign.
+    expect(offsets.filter((v) => !v.includes(signed(v)))).toEqual([
       "top-[calc(5rem+env(safe-area-inset-top))]",
+      "top-[calc(6rem+env(safe-area-inset-top,0px))]",
+      "top-[calc(6rem+env(safe-area-inset-top,_0px))]",
+      "scroll-mt-[calc(6rem+env(safe-area-inset-top)-var(--impersonation-offset))]",
     ]);
+  });
+
+  it("no class string in app/** interpolates inside a var() arbitrary value", () => {
+    // Tailwind extracts candidates from the raw text of every app/** file, tests
+    // included, so `var(${x})` inside brackets is emitted verbatim as
+    // `var(${x})` — invalid CSS that lightningcss refuses, failing `next build`.
+    // Built from pieces so this file does not contain the pattern it bans.
+    const banned = new RegExp(["-\\[[^\\]\\s]*var\\(", "\\$", "\\{"].join(""));
+    const all: string[] = [];
+    const walk = (dir: string) => {
+      for (const e of readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
+        const rel = path.join(dir, e.name);
+        if (e.isDirectory()) walk(rel);
+        else if (/\.(?:[jt]sx?|mdx)$/.test(e.name)) all.push(rel);
+      }
+    };
+    walk("app");
+    expect(all.length).toBeGreaterThan(100);
+    expect(all.filter((f) => banned.test(read(f)))).toEqual([]);
+    expect(banned.test(["top-[calc(1rem+var(", "$", "{X}))]"].join(""))).toBe(true);
   });
 });
