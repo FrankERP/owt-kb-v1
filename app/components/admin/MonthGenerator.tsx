@@ -564,12 +564,12 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
           ))}
           {r.fairness === "exempt" && (
             <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-recency-fg/15 text-recency-strong border border-recency-fg/30">
-              fairness_exempt
+              exenta de carga total
             </span>
           )}
           {r.fairness === "slack" && (
             <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-recency-fg/15 text-recency-strong border border-recency-fg/30">
-              slack {r.fairnessSlack}
+              holgura {r.fairnessSlack}
             </span>
           )}
         </div>
@@ -683,13 +683,13 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
 
       {/* Fairness */}
       <div>
-        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Fairness</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Equidad</p>
         <div className="flex items-center gap-3 flex-wrap">
           {(["none", "exempt", "slack"] as const).map(f => (
             <label key={f} className="flex items-center gap-1.5 cursor-pointer">
               <input type="radio" name={`fairness-${person}`} value={f} checked={fairness === f} onChange={() => setFairness(f)} className="accent-accent" />
               <span className="font-body text-xs text-mono-400">
-                {f === "none" ? "Normal" : f === "exempt" ? "Exempt" : "Slack"}
+                {f === "none" ? "Normal" : f === "exempt" ? "Exenta" : "Holgura"}
               </span>
             </label>
           ))}
@@ -702,6 +702,22 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
             />
           )}
         </div>
+        {/* What the solver actually does with `fairness_exempt` / `fairness_slack N`
+            (gcf/owt_solver_v2.py: the bare forms only touch the GLOBAL total-load
+            band; the Sun.Lead and Sun.BGV bands and every per-role spread still
+            count the person). The labels were bare English words with no
+            explanation, and «Exempt» read as "out of every fairness rule". */}
+        {fairness === "exempt" && (
+          <p className="font-body text-[11px] text-mono-500 mt-1">
+            No se compara su carga total del mes con la del resto. Sigue contando para la equidad de cada rol
+            que puede cubrir (por ejemplo, Lead de domingo).
+          </p>
+        )}
+        {fairness === "slack" && (
+          <p className="font-body text-[11px] text-mono-500 mt-1">
+            Su carga total del mes puede alejarse hasta {slack} servicio{slack === 1 ? "" : "s"} de la del resto.
+          </p>
+        )}
       </div>
 
       {/* Week exclusions */}
@@ -3408,6 +3424,7 @@ export default function MonthGenerator({
         sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
         sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
         history_runs_used: response.history_runs_used,
+        objective_skipped: response.objective_skipped,
       });
       // EXIT 3 — success. `applied.cells`, never the pre-solve `cells`: the
       // latter would throw away the weekend roster this call just produced.
@@ -3552,12 +3569,15 @@ export default function MonthGenerator({
       });
       setUnresolvedNames(applied.unresolvedNames);
       // No `history_runs_used`: it is always 3 on a derived history (R4). The
-      // months THIS solve read are what the admin needs to see.
+      // months THIS solve read are what the admin needs to see — and whether
+      // they did anything: with three months of history the objective is
+      // skipped (ADR-0038), and the months were read for nothing.
       setDiagnostics({
         fairness_relaxed: response.fairness_relaxed,
         sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
         sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
         history_months: historyMonthsLabel(history.data.months),
+        objective_skipped: response.objective_skipped,
       });
       applySpecialFill(
         config,

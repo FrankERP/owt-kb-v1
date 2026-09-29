@@ -169,6 +169,14 @@ export interface SolveDiagnostics {
    * which is always 3 on a derived history (R4) and so says nothing.
    */
   history_months?: string;
+  /**
+   * No lexicographic objective ran (ADR-0038): the roster is legal but arbitrary —
+   * history, lead rotation and the back-to-back penalty had no effect. Production's
+   * three derived history months push the weight ladder past CP-SAT's ceiling, so
+   * this is the steady state until that is fixed, not a rare edge. Without it the
+   * «Historial» line claims an influence that did not happen.
+   */
+  objective_skipped?: boolean;
 }
 
 export interface AutoState {
@@ -2086,15 +2094,28 @@ export default function PlannerGrid(props: PlannerGridProps) {
 
       {diagnostics && (
         <div className="flex flex-wrap gap-2 font-label text-[11px] uppercase tracking-widest text-warning-strong">
+          {diagnostics.objective_skipped && <span>Sin optimizar</span>}
           {diagnostics.fairness_relaxed && <span>Equidad relajada</span>}
           {diagnostics.sun_lead_fairness_relaxed && <span>Equidad de líderes de domingo relajada</span>}
           {diagnostics.sun_bgv_fairness_relaxed && <span>Equidad de BGV de domingo relajada</span>}
           {typeof diagnostics.history_months === "string" ? (
-            <span>Historial: {diagnostics.history_months}</span>
+            <span>
+              Historial: {diagnostics.history_months}
+              {diagnostics.objective_skipped && " (no aplicado)"}
+            </span>
           ) : typeof diagnostics.history_runs_used === "number" && (
-            <span>Historial usado: {diagnostics.history_runs_used}</span>
+            <span>
+              Historial usado: {diagnostics.history_runs_used}
+              {diagnostics.objective_skipped && " (no aplicado)"}
+            </span>
           )}
         </div>
+      )}
+      {diagnostics?.objective_skipped && (
+        <p className="font-body text-xs text-warning-strong">
+          Este acomodo cumple las reglas, pero el solver no pudo optimizar la equidad: no tomó en
+          cuenta el historial, la rotación de líderes ni los domingos seguidos. Revísalo antes de crear.
+        </p>
       )}
 
       {unresolvedNames.length > 0 && (

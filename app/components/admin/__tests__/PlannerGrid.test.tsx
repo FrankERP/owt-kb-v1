@@ -873,6 +873,26 @@ describe("PlannerGrid — diagnostics", () => {
     expect(screen.getByText(/bgv de domingo relajada/i)).toBeTruthy();
     expect(screen.getByText(/historial usado: 2/i)).toBeTruthy();
   });
+
+  it("says «Sin optimizar» and marks the history as not applied when the objective was skipped", () => {
+    const diagnostics: SolveDiagnostics = {
+      sun_lead_fairness_relaxed: true,
+      history_months: "jul · ago · sep",
+      objective_skipped: true,
+    };
+    render(<PlannerGrid {...baseProps({ diagnostics })} />);
+    expect(screen.getByText("Sin optimizar")).toBeTruthy();
+    expect(screen.getByText("Historial: jul · ago · sep (no aplicado)")).toBeTruthy();
+    expect(screen.getByText(/no pudo optimizar la equidad/i)).toBeTruthy();
+  });
+
+  it("says nothing about optimisation when the objective ran", () => {
+    const diagnostics: SolveDiagnostics = { history_months: "jul · ago · sep", objective_skipped: false };
+    render(<PlannerGrid {...baseProps({ diagnostics })} />);
+    expect(screen.queryByText("Sin optimizar")).toBeNull();
+    expect(screen.getByText("Historial: jul · ago · sep")).toBeTruthy();
+    expect(screen.queryByText(/no pudo optimizar la equidad/i)).toBeNull();
+  });
 });
 
 describe("PlannerGrid — per-column skip control (D18)", () => {

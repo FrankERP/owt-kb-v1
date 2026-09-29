@@ -311,6 +311,55 @@ describe("derived history — the solve reads its OWN month's history at solve t
   });
 });
 
+// ─── The solver's own «no objective ran» flag reaches the grid (ADR-0038) ────
+
+describe("derived history — a solve that skipped its objective says so", () => {
+  it("objective_skipped from the solver marks the grid «Sin optimizar» and the history as not applied", async () => {
+    const november = payload(2026, 11, { counts: { "2026-10": { "Beto Ficticio": { "Sun.Lead": 1 } } } });
+    const skipped = () =>
+      respond(200, {
+        ok: true,
+        schedule: { "1": { Sunday: { Lead: ["Ana Ficticia"], BGV: [], Choir: [] } } },
+        total_counts: { "Ana Ficticia": 1 },
+        role_counts: { "Ana Ficticia": { "Sun.Lead": 1 } },
+        unfilled_seats: [],
+        objective_skipped: true,
+      });
+    const { solveBodies } = stubFetch({ history: () => respond(200, november), solve: skipped });
+
+    const { container } = renderCreate("2026-11");
+    await waitFor(() =>
+      expect(within(leadColumn("Domingo", "Octubre 2026")).getByText("Ana Ficticia")).toBeTruthy(),
+    );
+    deselectAll(container, "saturday");
+    preview();
+    runAuto();
+    await waitFor(() => expect(solveBodies).toHaveLength(1));
+
+    await waitFor(() => expect(screen.getByText("Sin optimizar")).toBeTruthy());
+    expect(screen.getByText(/^Historial: .* \(no aplicado\)$/)).toBeTruthy();
+    expect(screen.getByText(/no pudo optimizar la equidad/i)).toBeTruthy();
+  });
+
+  it("a solve whose objective ran shows no such warning", async () => {
+    const november = payload(2026, 11, { counts: { "2026-10": { "Beto Ficticio": { "Sun.Lead": 1 } } } });
+    const { solveBodies } = stubFetch({ history: () => respond(200, november) });
+
+    const { container } = renderCreate("2026-11");
+    await waitFor(() =>
+      expect(within(leadColumn("Domingo", "Octubre 2026")).getByText("Ana Ficticia")).toBeTruthy(),
+    );
+    deselectAll(container, "saturday");
+    preview();
+    runAuto();
+    await waitFor(() => expect(solveBodies).toHaveLength(1));
+
+    await waitFor(() => expect(screen.getByText(/^Historial: /)).toBeTruthy());
+    expect(screen.queryByText("Sin optimizar")).toBeNull();
+    expect(screen.queryByText(/no aplicado/)).toBeNull();
+  });
+});
+
 // ─── 3: a failed read at Auto is a pre-flight refusal ────────────────────────
 
 describe("derived history — a failed read at Auto never solves (spec, Failure)", () => {
