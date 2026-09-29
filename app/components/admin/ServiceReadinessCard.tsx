@@ -102,8 +102,10 @@ export interface ServiceReadinessCardProps {
   onCopyPick: () => void;
   /**
    * Additive layout utilities for the card ROOT, supplied by whoever lays the
-   * cards out (the Servicios board sizes and snaps them). Never colour: the
-   * root's border/ring/shadow are decided here, from the card's own state.
+   * cards out. The Servicios board passes none since it went vertical
+   * (ADR-0044): its grid sizes each card, where the old snap track needed a
+   * fixed width and a snap stop on every one. Never colour: the root's
+   * border/ring/shadow are decided here, from the card's own state.
    */
   className?: string;
   /** Route-reveal attributes (`{...revealProps(i)}`), spread on the root. */

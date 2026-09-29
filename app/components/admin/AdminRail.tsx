@@ -19,19 +19,30 @@
 // `SlidingIndicator` positioned inside it and a tone that reads as a selected
 // section rather than as a control. `Button`'s six variants carry none of that,
 // and the nav's own `ITEM`/`ITEM_TONE` pair is the one spelling both layouts
-// share. This is the documented exception; a new ACTION on this page still uses
-// `Button`.
+// share. This is the documented exception, and it covers the NAVIGATION items
+// only: the rail's collapse toggle is an action, so it IS a `Button`.
 //
-// The rail COLLAPSES to icons while the planner is open (`app/brand.css`,
-// `.brand-admin-frame:has(.planner-wide)`): the labels go `display: none`, which
-// takes them out of the accessibility tree too — so every item carries an
-// explicit `aria-label`, collapsed or not, and the label is also where the
-// Servicios item states its integrity count for a screen reader. The visible
-// dot is decoration (`aria-hidden`).
+// The rail COLLAPSES to icons in TWO cases (`app/brand.css`):
+//   - FORCED while the planner is open, at ≥ 1280px
+//     (`.brand-admin-frame:has(.planner-wide)`), pure CSS — JS never knows;
+//   - by the USER's toggle at the foot of the rail, at ≥ lg, persisted per
+//     browser (`owt_admin_rail_collapsed`) and marked on the nav as
+//     `data-collapsed`, which the stylesheet reads through `:has()`.
+// The planner's forced collapse WINS: the toggle is hidden while it holds,
+// because «Expandir» could not honestly expand anything. Below lg the strip has
+// no toggle and never collapses.
+// Either way the labels go `display: none`, which takes them out of the
+// accessibility tree too — so every item carries an explicit `aria-label`,
+// collapsed or not, and the label is also where the Servicios item states its
+// integrity count for a screen reader. The visible dot is decoration
+// (`aria-hidden`). A user-collapsed item also carries a native `title`, the only
+// way a pointer user can still read the label; the planner's CSS-only collapse
+// cannot add one.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import type { AdminTabId } from "./proposalHandoff";
+import Button from "../ui/Button";
 import SlidingIndicator, { useActiveIntoView } from "../ui/SlidingIndicator";
 import { haptic } from "@/app/utils/haptics";
 
@@ -88,6 +99,7 @@ export default function AdminRail({
 }) {
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const more = useScrollableRight(scrollerRef, tabs.length);
+  const [collapsed, toggleCollapsed] = useRailCollapsed();
 
   const select = (id: AdminTabId) => {
     void haptic("selection");
@@ -111,6 +123,7 @@ export default function AdminRail({
       <nav
         aria-label="Secciones"
         data-admin-rail=""
+        data-collapsed={collapsed ? "" : undefined}
         className="brand-admin-rail sticky top-[calc(6rem+env(safe-area-inset-top))] hidden flex-col gap-1 self-start lg:flex"
       >
         {tabs.map((tab) => (
@@ -119,6 +132,7 @@ export default function AdminRail({
             type="button"
             aria-current={active === tab.id ? "page" : undefined}
             aria-label={nameOf(tab)}
+            title={collapsed ? tab.label : undefined}
             onClick={() => select(tab.id)}
             className={`${ITEM} ${ITEM_TONE(active === tab.id)}`}
           >
@@ -132,6 +146,20 @@ export default function AdminRail({
             {dotOf(tab)}
           </button>
         ))}
+        {/* An ACTION, so the house `Button`. `mt-4` is the separation from the
+            items above; `ml-1` puts its 44px box's centre on the items' icon
+            column (16px padding + half a 20px glyph = 26 = 4 + 22). */}
+        <Button
+          variant="icon"
+          size="lg"
+          data-rail-toggle=""
+          aria-label={collapsed ? "Expandir menú" : "Contraer menú"}
+          aria-expanded={!collapsed}
+          onClick={toggleCollapsed}
+          className="ml-1 mt-4 self-start"
+        >
+          {collapsed ? CHEVRONS_RIGHT : CHEVRONS_LEFT}
+        </Button>
       </nav>
 
       {/* < lg: today's underline strip, unchanged in behaviour. */}
@@ -157,6 +185,45 @@ export default function AdminRail({
       </div>
     </>
   );
+}
+
+const RAIL_COLLAPSED_KEY = "owt_admin_rail_collapsed";
+
+/** Nothing outside this component writes the key, so there is nothing to hear. */
+const noSubscribe = () => () => {};
+
+function readStoredCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(RAIL_COLLAPSED_KEY) === "1";
+  } catch {
+    return false; // storage blocked (private mode, policy): start expanded
+  }
+}
+
+/**
+ * The user's rail choice. The STORED value comes through
+ * `useSyncExternalStore` with an «expanded» server snapshot, so the server
+ * render and the hydrating one agree and a stored «collapsed» lands one render
+ * later — the accepted one-frame flip, without a `setState` in an effect. The
+ * in-session CHOICE is plain state layered on top: a write that throws (quota,
+ * blocked storage) still flips the rail for this visit, it just is not
+ * remembered.
+ */
+function useRailCollapsed(): [boolean, () => void] {
+  const stored = useSyncExternalStore(noSubscribe, readStoredCollapsed, () => false);
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const collapsed = chosen ?? stored;
+  const toggle = () => {
+    const next = !collapsed;
+    setChosen(next);
+    try {
+      if (next) window.localStorage.setItem(RAIL_COLLAPSED_KEY, "1");
+      else window.localStorage.removeItem(RAIL_COLLAPSED_KEY);
+    } catch {
+      // Not persisted; the in-memory choice above still holds.
+    }
+  };
+  return [collapsed, toggle];
 }
 
 /**
@@ -248,6 +315,19 @@ const ICON_PROPS = {
   strokeLinecap: "round",
   strokeLinejoin: "round",
 } as const;
+
+/** The collapse toggle's glyph: it points where the rail will go. */
+const CHEVRONS_LEFT = (
+  <svg {...ICON_PROPS} aria-hidden="true">
+    <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
+  </svg>
+);
+
+const CHEVRONS_RIGHT = (
+  <svg {...ICON_PROPS} aria-hidden="true">
+    <path d="M13 17l5-5-5-5M6 17l5-5-5-5" />
+  </svg>
+);
 
 /**
  * One glyph per tab, declared once. House glyphs: the same 24-viewBox stroked

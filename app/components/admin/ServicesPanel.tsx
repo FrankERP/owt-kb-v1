@@ -86,7 +86,7 @@ import type {
   RoleDomainSummary,
   SetlistDomainSummary,
 } from "@/app/utils/serviceReadSummary";
-import { ParticipationSidebar } from "@/app/components/admin/ParticipationSidebar";
+import { BOARD_STICKY, ParticipationSidebar } from "@/app/components/admin/ParticipationSidebar";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import CueDialog from "../ui/CueDialog";
 import CueDialogStatus from "../ui/CueDialogStatus";
@@ -108,6 +108,21 @@ import { SetlistEditor } from "./SetlistEditor";
 
 /** Long Spanish date, parsed at local noon (never a bare `new Date(iso)`). */
 const formatDate = (iso: string) => formatServiceDate(iso, "es-MX");
+
+// ─── Board layout (ADR-0044) ──────────────────────────────────────────────────
+//
+// Declared once so the loading skeleton and the loaded board are the SAME shape:
+// a skeleton laid out differently from what replaces it is a layout jump.
+//
+// The chart column is 320px; the cards take the rest in `minmax(360px,1fr)`
+// columns and the PAGE scrolls vertically. `min-w-0` keeps that column from ever
+// being sized by its content. Inside the admin frame's 1232px (`max-w-7xl` less
+// `px-6`) that comes to ONE column beside an expanded rail (1232 − 232 − 344 =
+// 656) and TWO beside a collapsed one (1232 − 88 − 344 = 800), never three — the
+// 1280 cap stays; lifting it is the planner's `:has(.planner-wide)` arithmetic.
+// `items-start` lets each card be its own height instead of the row's tallest.
+const BOARD_LAYOUT = "grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start";
+const BOARD_CARDS = "grid min-w-0 grid-cols-1 gap-4 items-start lg:grid-cols-[repeat(auto-fill,minmax(360px,1fr))]";
 
 // Spanish message for a rejected mutation. A 409 always means "your view is
 // stale": the modal/mode stays open and the operator is told to reload.
@@ -1250,8 +1265,11 @@ export default function ServicesPanel() {
 
       {/* Loading */}
       {view === "loading" && (
-        <SkeletonGroup label="Cargando servicios" className="grid grid-cols-1 gap-4 sm:grid-cols-2 2xl:grid-cols-3">
-          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-40 w-full" rounded="lg" />)}
+        <SkeletonGroup label="Cargando servicios" className={BOARD_LAYOUT}>
+          <Skeleton className="h-96 w-full" rounded="lg" />
+          <div className={BOARD_CARDS}>
+            {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-40 w-full" rounded="lg" />)}
+          </div>
         </SkeletonGroup>
       )}
 
@@ -1268,42 +1286,42 @@ export default function ServicesPanel() {
 
       {/* Board */}
       {view === "cards" && (
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
+        <div className={BOARD_LAYOUT}>
           {participationGate.enabled ? (
             <ParticipationSidebar
               roles={visibleCards.map(c => c.role) as ParticipantRole[]}
               monthLabel={monthLabel}
+              placement="board"
             />
           ) : (
-            // Never compute participation from partial membership.
-            <aside className="rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 space-y-2">
+            // Never compute participation from partial membership. Pinned where
+            // the chart would be, so its «Reintentar carga» stays in reach too.
+            <aside className={`rounded-xl border border-accent/20 bg-surface-ink-l40-d100-base p-3 space-y-2 self-start ${BOARD_STICKY}`}>
               <p className="font-label text-xs uppercase tracking-widest text-accent">Participaciones</p>
               <p className="font-body text-xs text-mono-400">{participationGate.reason}</p>
               <Button variant="secondary" size="sm" onClick={retryLoad}>Reintentar carga</Button>
             </aside>
           )}
           {/*
-            The board (R5 ruling 5). Phone keeps the vertical list; from `lg` the
-            cards become a horizontal snap track — one fixed-width card per snap
-            stop, `scroll-px-6` so a stop lands clear of the rail. It is the ONLY
-            horizontal scroller this panel introduces and it scrolls ITSELF: the
-            `min-w-0` keeps the grid column from being sized by the track, so the
-            page never grows wider (ADR-0035).
+            The board scrolls VERTICALLY (ADR-0044, reversing R5 ruling 5's
+            horizontal snap track). The cards wrap into as many 360px-minimum
+            columns as the width holds and the page carries the scroll, so there
+            is no horizontal scroller here at all — and none at page level
+            either (ADR-0035). The chart beside it is sticky, so it stays in view
+            while the cards go by.
           */}
-          <div className="relative min-w-0">
-          <div className="grid min-w-0 grid-cols-1 gap-4 lg:flex lg:snap-x lg:snap-mandatory lg:items-start lg:overflow-x-auto lg:scroll-px-6 lg:pb-4">
+          <div className={BOARD_CARDS}>
           {counters.upcoming === 0 && selectedMonths.size === 0 && (
-            <p className="font-body text-sm text-mono-500 text-center py-12">No hay servicios próximos.</p>
+            <p className="col-span-full font-body text-sm text-mono-500 text-center py-12">No hay servicios próximos.</p>
           )}
           {selectedMonths.size === 1 && visibleCards.length === 0 && (
-            <p className="font-body text-sm text-mono-500 text-center py-12">
+            <p className="col-span-full font-body text-sm text-mono-500 text-center py-12">
               No hay servicios en {monthLabel}. «+ Nuevo» crea el primero en este mes.
             </p>
           )}
           {visibleCards.map((card, i) => (
             <ServiceReadinessCard
               key={card.cardId}
-              className="lg:w-[380px] lg:shrink-0 lg:snap-start"
               revealAttrs={revealProps(i)}
               card={card}
               sources={sources}
@@ -1329,9 +1347,6 @@ export default function ServicesPanel() {
               onCopyPick={() => copyInstrumentsTo(card.role._id)}
             />
           ))}
-          </div>
-          {/* Scroll-fade hint at the board's right edge (desktop, where it scrolls). */}
-          <div className="pointer-events-none absolute bottom-4 right-0 top-0 hidden w-8 bg-gradient-to-l from-surface-base to-transparent lg:block" />
           </div>
         </div>
       )}

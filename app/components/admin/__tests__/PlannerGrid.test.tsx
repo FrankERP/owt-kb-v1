@@ -234,7 +234,7 @@ describe("PlannerGrid — Domingos unchecked (D9)", () => {
   });
 });
 
-describe("PlannerGrid — cell density (D7, amended by ADR-0044)", () => {
+describe("PlannerGrid — cell density (D7, amended by ADR-0045)", () => {
   it("a normally-staffed Sunday (L2/B3/C3) shows every name, none of them flagged", () => {
     // Eight DISTINCT people, matching the solver's own invariant that nobody
     // holds two voice slots on one service (fact 4) — the fixture would be
@@ -254,7 +254,7 @@ describe("PlannerGrid — cell density (D7, amended by ADR-0044)", () => {
     }
   });
 
-  it("above target, EVERY occupant is a named, draggable chip — no +N — and the extra one is marked (ADR-0044)", () => {
+  it("above target, EVERY occupant is a named, draggable chip — no +N — and the extra one is marked (ADR-0045)", () => {
     // The shipped `+N` named nobody and had no drag handle: the admin could see
     // that Lead held one too many, but not who, and could not drag them out.
     const cells: InputGridCell[] = [
@@ -695,7 +695,7 @@ describe("PlannerGrid — duplicate surfacing after Auto (fact 27)", () => {
     expect(queryByText(/Vacía la fila/)).toBeFalsy();
   });
 
-  it("flags a duplicate sitting PAST the target on its own chip (Finding 2, ADR-0044)", () => {
+  it("flags a duplicate sitting PAST the target on its own chip (Finding 2, ADR-0045)", () => {
     // Lead's target is 2. Three occupants means the third (m1) is the extra
     // one. m1 is ALSO in BGV the same date, a real same-category duplicate —
     // the over-target state is exactly where one hides. It once sat behind a

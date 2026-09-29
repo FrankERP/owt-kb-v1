@@ -26,7 +26,7 @@ on 2026-08-06 as DD7, DD8 and DD9
   focusable occupant chip via Enter/Space, or the picker-row anchor for
   `+N`-hidden occupants), which runs the same `moveOccupant`/`moveGate`
   primitives as the drag. *(Since
-  [ADR-0044](0044-every-grid-occupant-gets-a-named-chip.md) there are no
+  [ADR-0045](0045-every-grid-occupant-gets-a-named-chip.md) there are no
   `+N`-hidden occupants: every occupant has a chip, and the picker-row anchor
   is the touch route for all of them. DD8 itself is unchanged.)*
 - **DD9 — no edge auto-scroll.** The native HTML5 drag scrolls nothing on its
