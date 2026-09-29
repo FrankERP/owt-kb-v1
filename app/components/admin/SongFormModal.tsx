@@ -87,11 +87,19 @@ export function buildPayload(form: FormState) {
   };
 }
 
-/** The parent's catalogue plus what this form created, once each, by name. */
+/**
+ * The parent's catalogue plus what this form created, each `_id` once, sorted by
+ * name when the form added something. The catalogue itself is de-duplicated too:
+ * the create routes are idempotent by slug and answer with the EXISTING doc, and
+ * both parents append whatever the POST returns.
+ */
 function withCreated(catalogue: SongTag[], created: SongTag[]): SongTag[] {
-  if (created.length === 0) return catalogue;
-  const known = new Set(catalogue.map((t) => t._id));
-  return [...catalogue, ...created.filter((t) => !known.has(t._id))].sort((a, b) => a.name.localeCompare(b.name));
+  const byId = new Map<string, SongTag>();
+  for (const t of catalogue) if (!byId.has(t._id)) byId.set(t._id, t);
+  const known = byId.size;
+  for (const t of created) if (!byId.has(t._id)) byId.set(t._id, t);
+  const merged = [...byId.values()];
+  return byId.size > known ? merged.sort((a, b) => a.name.localeCompare(b.name)) : merged;
 }
 
 // ─── SongForm ─────────────────────────────────────────────────────────────────

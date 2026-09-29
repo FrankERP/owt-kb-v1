@@ -62,7 +62,13 @@ function stubFetch(
     if (init?.method === "POST") {
       const body = JSON.parse(String(init.body)) as { name?: string; title?: string };
       posts.push({ url, body });
-      if (url === "/api/content/authors") return { ok: true, status: 201, json: async () => ({ _id: "a-new", name: body.name }) };
+      if (url === "/api/content/authors") {
+        // Idempotent by slug, like the real route: an existing name answers with that doc.
+        const hit = (authors as { _id: string; name: string }[]).find((a) => a.name === body.name);
+        return hit
+          ? { ok: true, status: 200, json: async () => hit }
+          : { ok: true, status: 201, json: async () => ({ _id: "a-new", name: body.name }) };
+      }
       if (url === "/api/content/posts") return { ok: true, status: 201, json: async () => ({ _id: "s-new", title: body.title }) };
       throw new Error(`unexpected POST ${url}`);
     }
@@ -284,5 +290,22 @@ describe("SetlistEditor — «Nueva canción» offers the existing artists", () 
     // The search clears and the new artist shows as a selected chip.
     await waitFor(() => expect(artist.value).toBe(""));
     expect(screen.getByRole("button", { name: "Nuevo Artista" }).className).toContain("bg-accent/15");
+  });
+
+  it("«+ Crear» on an artist that already exists lists and selects it once", async () => {
+    stubFetch(singleRead({ format: null, leadRoster: [] }), undefined, [], AUTHORS);
+    mount();
+    const artist = await openCreate();
+
+    fireEvent.change(artist, { target: { value: "Un Corazón" } });
+    const createArtist = screen
+      .getAllByRole("button", { name: /\+ Crear/ })
+      .find((b) => b.textContent?.includes("Un Corazón"))!;
+    fireEvent.click(createArtist);
+
+    await waitFor(() => expect(artist.value).toBe(""));
+    const chips = screen.getAllByRole("button", { name: "Un Corazón" });
+    expect(chips).toHaveLength(1);
+    expect(chips[0].className).toContain("bg-accent/15");
   });
 });
