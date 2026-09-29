@@ -567,8 +567,9 @@ export function resolveToMemberName(name: string, members: RankMember[]): NameRe
  * omitting it is a documented 422. So the two paths deliberately share this one
  * fallback and can never disagree about an unknown DSL person. Pinned in
  * `plannerModel.test.ts` ("a rule naming a member absent from `members` …").
+ * Also the spelling `pinViolations.ts` maps solver sources back through — the request wrote them with it.
  */
-function resolvedNameOrRaw(name: string, members: RankMember[]): string {
+export function resolvedNameOrRaw(name: string, members: RankMember[]): string {
   const r = resolveToMemberName(name, members);
   return "resolved" in r ? r.resolved : r.unresolved;
 }
@@ -602,6 +603,11 @@ export function capLabel(cap: RestrictionCap): string {
   return `${cap.pattern} ${cap.op} ${val}`;
 }
 
+/** A cap's value as the solver resolves it: `max(0, weeks - offset)` for a relative cap. */
+export function resolvedCapValue(cap: RestrictionCap, weeks: number): number {
+  return cap.relative ? Math.max(0, weeks - cap.relOffset) : cap.value;
+}
+
 /**
  * Whether a cap asks for AT LEAST ONE Saturday seat: a pattern made only of Saturday
  * roles, with `==` or `>=` and a value of 1 or more. A relative value resolves the way
@@ -617,8 +623,7 @@ export function capLabel(cap: RestrictionCap): string {
  */
 export function isSaturdayFloor(cap: RestrictionCap, weeks: number): boolean {
   if (!SATURDAY_ONLY_PATTERNS.has(cap.pattern) || cap.op === "<=") return false;
-  const value = cap.relative ? Math.max(0, weeks - cap.relOffset) : cap.value;
-  return value >= 1;
+  return resolvedCapValue(cap, weeks) >= 1;
 }
 
 /** A cap `buildSolveRequest` left out of the request, for the admin to be told. */
@@ -748,38 +753,20 @@ export function poolTipoMismatch(
   return out;
 }
 
-export function buildSolveRequest(input: {
-  config: SolverConfig;
-  members: RankMember[];
-  sundayDates: string[];
-  activeSatDates: string[];
-  historyEntries: SolverHistoryEntry[];
-  year: number;
-  month: number;
-}):
-  | {
-      ok: true;
-      request: SolveRequest;
-      /**
-       * Saturday minimums left out because the month has no Saturday Auto can staff
-       * (`isSaturdayFloor`). Empty in any month with one. The caller shows them, so a
-       * rule that stopped applying is never silent.
-       */
-      omittedCaps: OmittedCap[];
-    }
-  | { ok: false; reason: string } {
-  const { config, members, sundayDates, activeSatDates, historyEntries, year, month } = input;
+/** The pool names a solve request sends, and who else it names. See `buildSolveRequest`. */
+export interface SolverPools {
+  sundayLeadNames: string[];
+  saturdayLeadNames: string[];
+  supportNames: string[];
+  /** DSL-named people absent from every pool, appended to `support`. */
+  extraSupport: string[];
+  /** Every member id the request names, in the order availability rules are emitted. */
+  requestMemberIds: Set<string>;
+  /** Rule persons with NO Tipo at all — `buildSolveRequest` refuses when non-empty. */
+  dslBlockedByTipo: string[];
+}
 
-  const weeks = sundayDates.length;
-  const weekendsWithSaturday = weekendWeekIndexes(sundayDates, activeSatDates);
-  // No Saturday for Auto this month (none selected, or only an unaddressable one like
-  // 31 Oct 2026): a Saturday MINIMUM cannot be met and would sink the whole month, so
-  // it is not applied this month. Maximums stay — they hold trivially.
-  const omittedCaps: OmittedCap[] = [];
-  const dropCap = weekendsWithSaturday.length === 0
-    ? (cap: RestrictionCap) => isSaturdayFloor(cap, weeks)
-    : () => false;
-
+export function solverPools(config: SolverConfig, members: RankMember[]): SolverPools {
   const idToName = (id: string) => memberIdToName(id, members);
 
   // The stored pools are ids, ticked at some point in the past; "Tipo" is the
@@ -817,18 +804,19 @@ export function buildSolveRequest(input: {
   // …which quietly UNDID the Tipo filter above, and cost the member their
   // availability into the bargain. Dropping someone from a pool for having no
   // Tipo, while a rule still names them, put them straight back into `support`
-  // — where the solver seats BGV and Coro — and `allPoolIds` below, built from
-  // the FILTERED ids alone as it then was, generated none of their week
+  // — where the solver seats BGV and Coro — and `requestMemberIds` below, built
+  // from the FILTERED ids alone as it then was, generated none of their week
   // exclusions. Worse than before the filter existed. It now unions
   // `injectedMemberIds`, closing that half for everyone the request names.
   //
   // Removing the name instead is not available: the solver 422s on a DSL clause
-  // naming someone in no pool. So this refuses, naming the person, and the
-  // generator's "en un pool sin el Tipo que ese pool pide" banner offers the
-  // one-click cleanup. NO Tipo at all is the deliberate "not schedulable"
-  // signal (ADR-0029); a member who merely lacks a POOL subtype — `voz` alone,
-  // say — is still injected, since nobody has said they cannot serve, and
-  // `injectedMemberIds` below keeps their availability exclusions with them.
+  // naming someone in no pool. So the caller refuses (`dslBlockedByTipo`), naming
+  // the person, and the generator's "en un pool sin el Tipo que ese pool pide"
+  // banner offers the one-click cleanup. NO Tipo at all is the deliberate "not
+  // schedulable" signal (ADR-0029); a member who merely lacks a POOL subtype —
+  // `voz` alone, say — is still injected, since nobody has said they cannot
+  // serve, and `injectedMemberIds` below keeps their availability exclusions
+  // with them.
   const dslBlockedByTipo: string[] = [];
   /** Ids of real members whose NAME reaches the request via `extraSupport`. */
   const injectedMemberIds = new Set<string>();
@@ -850,6 +838,51 @@ export function buildSolveRequest(input: {
     if (!extraSupport.includes(resolved)) extraSupport.push(resolved);
     if (named) injectedMemberIds.add(named._id);
   }
+
+  const requestMemberIds = new Set([
+    ...inPool(config.sundayLeads, "sunday_lead"),
+    ...inPool(config.saturdayLeads, "saturday_lead"),
+    ...inPool(config.support, "support"),
+    ...injectedMemberIds,
+  ]);
+
+  return { sundayLeadNames, saturdayLeadNames, supportNames, extraSupport, requestMemberIds, dslBlockedByTipo };
+}
+
+export function buildSolveRequest(input: {
+  config: SolverConfig;
+  members: RankMember[];
+  sundayDates: string[];
+  activeSatDates: string[];
+  historyEntries: SolverHistoryEntry[];
+  year: number;
+  month: number;
+}):
+  | {
+      ok: true;
+      request: SolveRequest;
+      /**
+       * Saturday minimums left out because the month has no Saturday Auto can staff
+       * (`isSaturdayFloor`). Empty in any month with one. The caller shows them, so a
+       * rule that stopped applying is never silent.
+       */
+      omittedCaps: OmittedCap[];
+    }
+  | { ok: false; reason: string } {
+  const { config, members, sundayDates, activeSatDates, historyEntries, year, month } = input;
+
+  const weeks = sundayDates.length;
+  const weekendsWithSaturday = weekendWeekIndexes(sundayDates, activeSatDates);
+  // No Saturday for Auto this month (none selected, or only an unaddressable one like
+  // 31 Oct 2026): a Saturday MINIMUM cannot be met and would sink the whole month, so
+  // it is not applied this month. Maximums stay — they hold trivially.
+  const omittedCaps: OmittedCap[] = [];
+  const dropCap = weekendsWithSaturday.length === 0
+    ? (cap: RestrictionCap) => isSaturdayFloor(cap, weeks)
+    : () => false;
+
+  const { sundayLeadNames, saturdayLeadNames, supportNames, extraSupport, requestMemberIds, dslBlockedByTipo } =
+    solverPools(config, members);
   if (dslBlockedByTipo.length > 0) {
     return {
       ok: false,
@@ -860,11 +893,11 @@ export function buildSolveRequest(input: {
   }
 
   // Auto-generate week-exclusion DSL rules from member unavailableDates. The
-  // rules loop `allPoolIds` (fact 15): a member the request never names is
+  // rules loop `requestMemberIds` (fact 15): a member the request never names is
   // schedulable while unavailable — that is a documented consequence, not a bug
   // to "fix" here.
   //
-  // `injectedMemberIds` is part of that set and must be: the Tipo filter above
+  // `solverPools` unions `injectedMemberIds` into that set, and must: the Tipo filter
   // can drop a member from a pool while a rule still names them, which puts
   // their name into `extraSupport` — so the request DOES name them, and the
   // solver can seat them BGV or Coro. Looping the filtered pool ids alone
@@ -872,13 +905,7 @@ export function buildSolveRequest(input: {
   // filtering at all: seated anyway, availability ignored. Anyone the request
   // names carries their exclusions.
   const availabilityRules: string[] = [];
-  const allPoolIds = new Set([
-    ...inPool(config.sundayLeads, "sunday_lead"),
-    ...inPool(config.saturdayLeads, "saturday_lead"),
-    ...inPool(config.support, "support"),
-    ...injectedMemberIds,
-  ]);
-  for (const memberId of allPoolIds) {
+  for (const memberId of requestMemberIds) {
     const m = members.find((x) => x._id === memberId);
     if (!m?.unavailableDates?.length) continue;
     const unavailable = new Set(m.unavailableDates);
