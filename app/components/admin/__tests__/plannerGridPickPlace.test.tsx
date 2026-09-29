@@ -12,9 +12,9 @@
 // The mutations these tests are written to catch, each named at its assertion:
 //   • the place applying without judging (every refusal case below writes);
 //   • the picker-row source anchor dropped inside `CandidateRow`'s `blocked`
-//     guard — the `+N`-hidden occupant who also holds a same-category double
-//     then has NO anchor at all, and acceptance 12's plain round trip would not
-//     notice;
+//     guard — the over-target occupant who also holds a same-category double
+//     then has NO touch anchor at all, and acceptance 12's plain round trip
+//     would not notice;
 //   • the pick surviving Escape, or the cell's shipped "open the picker" action
 //     surviving a pending pick;
 //   • a pick left armed after its source has vanished from the grid.
@@ -145,7 +145,7 @@ function candidateLi(name: string): HTMLLIElement {
   return li;
 }
 
-/** DD11's source anchor on a SEATED member's row — the `+N` tail's only handle. */
+/** DD11's source anchor on a SEATED member's row — the touch and keyboard route. */
 function pickerAnchorFor(name: string): HTMLButtonElement {
   return within(candidateLi(name)).getByRole("button", {
     name: /marcar para mover|cancelar el movimiento/i,
@@ -514,9 +514,14 @@ describe("a pending pick takes over the target cell's activation", () => {
   });
 });
 
-// ─── Acceptance 12 — the `+N` tail, out again ────────────────────────────────
+// ─── Acceptance 12 — the over-target occupant, out again ─────────────────────
+//
+// Written when the seat past the target sat behind a `+N` with no chip, so the
+// picker-row anchor was its ONLY handle. ADR-0045 gave it a chip; the anchor
+// stays as the touch/keyboard route, and these cases keep proving it works for
+// exactly that occupant.
 
-describe("an occupant hidden behind +N can be moved out (acceptance 12)", () => {
+describe("an occupant over the target can be moved out (acceptance 12)", () => {
   it("round trip: dropped onto an at-target cell, then out again via the picker row", () => {
     // NOT full coverage, and the gap is structural: `rankCandidates` filters on
     // `memberType` before it maps (`candidateRanking.ts:184-185`), so an occupant
@@ -540,12 +545,15 @@ describe("an occupant hidden behind +N can be moved out (acceptance 12)", () => 
     const afterDrop = onCellsChange.mock.calls[0][0] as GridCell[];
     expect(occupantsOf(afterDrop, "lead", "col-1")).toEqual(["frank", "liu", "gaby"]);
 
-    // 2. She is in the hidden tail: no chip, so no drag can reach her.
+    // 2. She is past the target — and, since ADR-0045, still on a named chip
+    //    marked as the extra seat, so a drag can reach her too.
     rerenderWith({ ...props, cells: afterDrop });
-    expect(cellAt(container, "lead", "col-1").querySelector('[data-occupant="gaby"]')).toBeNull();
+    const herChip = cellAt(container, "lead", "col-1").querySelector('[data-occupant="gaby"]');
+    expect(herChip).not.toBeNull();
+    expect(herChip!.getAttribute("data-over-target")).toBe("true");
 
-    // 3. The picker row is the anchor — DD11's whole point — and it is reached
-    //    BY KEYBOARD, which is the only reason this path exists at all.
+    // 3. The picker row is the touch/keyboard anchor — DD11's whole point — and
+    //    it is reached BY KEYBOARD here.
     fireEvent.click(cellActionIn(container, "lead", "col-1"));
     activateAnchorWithKeyboard(pickerAnchorFor("Gaby"));
     expect(pickBannerText(container)).toContain("Gaby");
@@ -568,7 +576,7 @@ describe("an occupant hidden behind +N can be moved out (acceptance 12)", () => 
     // controls inside it (`e.target !== e.currentTarget`); without that guard
     // Enter on "Marcar para mover" un-seats the occupant, marks the column
     // touched and arms no pick — the destructive opposite of the action's name,
-    // on the ONLY route a `+N`-hidden occupant has.
+    // on the anchor touch and keyboard users move people with.
     const onCellsChange = vi.fn();
     const cells = [cell("lead", "col-1", ["gaby"]), cell("lead", "col-2", [])];
     const { container } = renderGrid(baseProps({ cells, onCellsChange }));
@@ -606,9 +614,9 @@ describe("an occupant hidden behind +N can be moved out (acceptance 12)", () => 
     expect(occupantsOf(next, "lead", "col-1")).toEqual([]);
   });
 
-  it("keeps the anchor for a hidden occupant who ALSO holds a same-category double", () => {
+  it("keeps the anchor for an over-target occupant who ALSO holds a same-category double", () => {
     // THE MUTATION THIS CATCHES: the anchor rendered inside `CandidateRow`'s
-    // `blocked` guard. Gaby is in the `+N` tail of Lead AND in BGV of the same
+    // `blocked` guard. Gaby is past the target in Lead AND in BGV of the same
     // date, so her row is `aria-disabled` — exactly the person an admin most
     // needs to relocate, and the plain round trip above would not notice her
     // losing every anchor she has. Eligibility is a question about the TARGET.
@@ -619,7 +627,9 @@ describe("an occupant hidden behind +N can be moved out (acceptance 12)", () => 
     ];
     const { container } = renderGrid(baseProps({ cells, onCellsChange }));
 
-    expect(cellAt(container, "lead", "col-1").querySelector('[data-occupant="gaby"]')).toBeNull();
+    expect(
+      cellAt(container, "lead", "col-1").querySelector('[data-occupant="gaby"]')!.getAttribute("data-over-target"),
+    ).toBe("true");
     fireEvent.click(cellActionIn(container, "lead", "col-1"));
     expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBe("true");
 

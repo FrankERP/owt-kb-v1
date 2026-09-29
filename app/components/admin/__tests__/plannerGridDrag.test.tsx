@@ -641,17 +641,30 @@ describe("dropping onto a date the member marked unavailable (acceptance 11)", (
 // ─── Scope guards ────────────────────────────────────────────────────────────
 
 describe("the drag's anchors", () => {
-  it("gives `+N` no second handle — DD11's picker row is where the tail is reached", () => {
-    // Lead targets 2, so a third occupant is hidden behind `+1`.
+  it("gives an occupant PAST the target a draggable chip of its own (ADR-0045)", () => {
+    // Lead targets 2, so the third occupant is the extra one. It used to sit
+    // behind a `+1` that named nobody and could not be dragged.
     const cells = [cell("lead", "col-1", ["frank", "liu", "gaby"])];
     const { container } = renderGrid(baseProps({ cells }));
 
     const cellEl = cellAt(container, "lead", "col-1");
-    const more = cellEl.querySelector("button[aria-label^='Ver ']");
-    expect(more).toBeTruthy();
-    expect(more!.getAttribute("draggable")).toBeNull();
-    // Only the visible occupants are draggable.
-    expect(cellEl.querySelectorAll("[data-occupant]")).toHaveLength(2);
+    expect(cellEl.querySelector("button[aria-label^='Ver ']")).toBeNull();
+    const chips = cellEl.querySelectorAll("[data-occupant]");
+    expect(chips).toHaveLength(3);
+    for (const chip of chips) expect(chip.getAttribute("draggable")).toBe("true");
+  });
+
+  it("drags the over-target occupant out of its cell like any other", () => {
+    const onCellsChange = vi.fn();
+    const cells = [cell("lead", "col-1", ["frank", "liu", "gaby"]), cell("lead", "col-2", [])];
+    const { container } = renderGrid(baseProps({ cells, onCellsChange }));
+
+    dragChipToCell(chipIn(container, "lead", "col-1", "gaby"), cellAt(container, "lead", "col-2"));
+
+    expect(onCellsChange).toHaveBeenCalledTimes(1);
+    const next = onCellsChange.mock.calls[0][0] as GridCell[];
+    expect(occupantsOf(next, "lead", "col-1")).toEqual(["frank", "liu"]);
+    expect(occupantsOf(next, "lead", "col-2")).toEqual(["gaby"]);
   });
 
   it("does not open the picker or write anything on a bare dragover", () => {
