@@ -26,8 +26,9 @@
   leaving the script. Result:
   July, August and September 2026 matched production's derivation exactly (same per-month
   hash; 6, 7 and 6 services), every diagnostic 0. **Gate C: Frank decided to cut over on
-  2026-09-28.** **Delivery 2 (step 9, the flip) is implemented on branch
-  `claude/mcp-p2-cutover` and is not released** — `SOLVER_HISTORY_SOURCE = "derived"`. **Risk
+  2026-09-28.** **Delivery 2 (step 9, the flip) is RELEASED 2026-09-28** — PR #108, `main`
+  `98aa67a9`, production alias verified — `SOLVER_HISTORY_SOURCE = "derived"`. **Next: Gate D**
+  (one real month created with Auto on the derived history), then Delivery 3. **Risk
   tier: STANDARD**. The
   roadmap's review handoff says that P2's *spec* is critical, and it is approved, but its
   *implementation plan* is standard. The roadmap gives it no adversarial plan review, but
@@ -1008,6 +1009,6 @@ confirmation are human gates B, C and D above. The spec assigns them to him expl
 (round 2). Changes made after that approval are listed as un-reviewed in
 [the review log](2026-09-25-owt-mcp-p2-solver-history-review-log.md). **Delivery 1 (steps
 1–8) is implemented and released** (PR #104, `main` `24209e11`, merged 2026-09-26; see
-"Release record (Delivery 1)" above). Gates A–C ran 2026-09-28 (see the status line). **Next state: Delivery 2 (the flip)
-implemented on branch `claude/mcp-p2-cutover`, then its release, Gate D (one real month on
-the derived history) and Delivery 3.**
+"Release record (Delivery 1)" above). Gates A–C ran 2026-09-28 (see the status line). **Delivery 2 (the flip) is released**
+(PR #108, `main` `98aa67a9`, merged 2026-09-28, production alias verified). **Next state:
+Gate D (one real month created with Auto on the derived history), then Delivery 3.**
