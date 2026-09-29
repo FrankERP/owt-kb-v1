@@ -32,7 +32,12 @@
 >
 > **Summary: P0 released 2026-09-24; P1 released 2026-09-25 (PR #98, `main` `a04edb43`),
 > acceptance complete 2026-09-28; P3 (four write tools) released 2026-09-28 (PR #106, `main`
-> `7c65f2eb`), live proof passed.**
+> `7c65f2eb`), live proof passed; P2 (the solver's fairness history, derived from stored
+> services) cut over 2026-09-28 (PR #108, `main` `98aa67a9`), Gate D pending; P4 (`solve_month`,
+> `revise_proposal`, `apply_schedule`) plan approved at critical tier 2026-09-28
+> ([plan](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply.md),
+> [review log](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply-review-log.md)), not
+> implemented.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
