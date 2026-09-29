@@ -15,7 +15,8 @@
 // it fails here until it adds the offset, rather than shipping one banner-height
 // short. Two readers are OUT of the sweep's reach because they read the computed
 // offset in JS rather than spelling it: `SectionNav`'s hero hand-off and
-// `LyricsAutoscroll` (both `getComputedStyle`, measured at mount).
+// `LyricsAutoscroll` (both `getComputedStyle` — SectionNav at mount, LyricsAutoscroll
+// at mount and on resize).
 //
 // No class string in THIS file may interpolate inside its brackets. Tailwind's
 // `content` glob reads `app/**` tests included, so a `var(${…})` written here
