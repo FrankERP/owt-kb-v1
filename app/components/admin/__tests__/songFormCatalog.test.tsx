@@ -73,9 +73,13 @@ describe("SongForm catalogue", () => {
       }),
     );
 
-    fireEvent.change(screen.getByLabelText("Artista"), { target: { value: "un corazon" } });
+    const artist = screen.getByLabelText("Artista");
+    fireEvent.change(artist, { target: { value: "un corazon" } });
     expect(screen.getByRole("button", { name: "Un Corazón" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Hillsong" })).toBeNull();
+    // The other direction, plus a trailing space.
+    fireEvent.change(artist, { target: { value: "hillsóng " } });
+    expect(screen.getByRole("button", { name: "Hillsong" })).not.toBeNull();
 
     const tags = screen.getByPlaceholderText("Filtrar o crear tag...");
     fireEvent.change(tags, { target: { value: "ADORACION" } });

@@ -196,6 +196,33 @@ describe("Contenido", () => {
     // A ≥44px target, now that a finger can reach them.
     expect(screen.getByRole("button", { name: "Eliminar" }).className).toContain("min-h-[44px]");
   });
+
+  // The song search sits beside the song form's artist picker, which ignores
+  // accents; the two must agree: «un corazon» finds that artist's songs.
+  it("searches titles and artists ignoring accents, case and a trailing space", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+      String(url).includes("/posts")
+        ? ok([
+            { _id: "s1", title: "Cuán grande es Él", author: "Hillsong", slug: { current: "cuan" } },
+            { _id: "s2", title: "Santo", author: "Un Corazón", slug: { current: "santo" } },
+          ])
+        : ok([]),
+    ));
+    mountContent();
+    await waitFor(() => expect(screen.getByText("Santo")).not.toBeNull());
+    const search = screen.getByPlaceholderText("Buscar canción o artista...");
+
+    fireEvent.change(search, { target: { value: "un corazon" } });
+    expect(screen.getByText("Santo")).not.toBeNull();
+    expect(screen.queryByText("Cuán grande es Él")).toBeNull();
+
+    fireEvent.change(search, { target: { value: "CUAN GRANDE " } });
+    expect(screen.getByText("Cuán grande es Él")).not.toBeNull();
+    expect(screen.queryByText("Santo")).toBeNull();
+
+    fireEvent.change(search, { target: { value: "sánto" } });
+    expect(screen.getByText("Santo")).not.toBeNull();
+  });
 });
 
 describe("Propuestas", () => {

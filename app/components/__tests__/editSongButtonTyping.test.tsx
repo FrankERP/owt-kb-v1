@@ -209,9 +209,14 @@ describe("EditSongButton filters artists and tags ignoring accents", () => {
     openEditor();
     await screen.findByRole("button", { name: "Un Corazón" });
 
-    fireEvent.change(screen.getByPlaceholderText("Filtrar artistas…"), { target: { value: "un corazon" } });
+    const artist = screen.getByPlaceholderText("Filtrar artistas…");
+    fireEvent.change(artist, { target: { value: "un corazon" } });
     expect(screen.getByRole("button", { name: "Un Corazón" })).not.toBeNull();
     expect(screen.queryByRole("button", { name: "Hillsong" })).toBeNull();
+    // The other direction, plus a trailing space.
+    fireEvent.change(artist, { target: { value: "hillsóng " } });
+    expect(screen.getByRole("button", { name: "Hillsong" })).not.toBeNull();
+    expect(screen.queryByRole("button", { name: "Un Corazón" })).toBeNull();
 
     const tags = screen.getByPlaceholderText("Filtrar tags…");
     fireEvent.change(tags, { target: { value: "ADORACION" } });
