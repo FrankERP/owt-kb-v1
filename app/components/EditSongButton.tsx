@@ -12,6 +12,7 @@ import { chartsToPayload, type ChartDraft } from "@/app/utils/songFormCharts";
 import { addRow, newRowId, removeRow, rowsFromStored, rowsToPayload, updateRow, type RowDraft } from "@/app/utils/songFormRows";
 import { Post } from "@/app/utils/interface";
 import { useToast } from "@/app/components/ui/Toast";
+import { normalizeText } from "@/app/utils/normalizeText";
 import { writeErrorMessage } from "@/app/utils/writeError";
 
 interface SongTag { _id: string; name: string; slug: { current: string }; }
@@ -222,8 +223,11 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
   const canEdit = ["super-admin", "admin", "content-editor"].includes((session?.user?.role as string) ?? "");
   if (!canEdit) return null;
 
-  const filteredAuthors = authors.filter((a) => a.name.toLowerCase().includes(authorSearch.toLowerCase()));
-  const filteredTags = tags.filter((t) => t.name.toLowerCase().includes(tagSearch.toLowerCase()));
+  // Accent- and case-insensitive: «un corazon» finds «Un Corazón».
+  const authorQuery = normalizeText(authorSearch.trim());
+  const tagQuery = normalizeText(tagSearch.trim());
+  const filteredAuthors = authors.filter((a) => normalizeText(a.name).includes(authorQuery));
+  const filteredTags = tags.filter((t) => normalizeText(t.name).includes(tagQuery));
 
   return (
     <>
