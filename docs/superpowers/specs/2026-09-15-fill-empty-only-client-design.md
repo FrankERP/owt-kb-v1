@@ -1,5 +1,8 @@
 # «Solo llenar vacíos» — the switch, the clears and the notices — design spec (client half)
 
+> **Superseded 2026-09-29** by `2026-09-29-planner-trailing-saturday-and-fill-empty-design.md` (delivery 3), after an audit found 25 drifts between this spec and the code. Its decisions (E1–E7) are carried forward there; its mechanics are replaced. Kept as the record of the reasoning.
+
+
 **Date:** 2026-09-15 · **Status:** split out of `2026-09-10-solver-fill-empty-only-design.md`
 after eleven adversarial review rounds · **Risk tier:** **standard**
 
