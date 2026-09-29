@@ -587,9 +587,18 @@ export function memberIdToName(id: string, members: RankMember[]): string {
 /** Patterns whose every role is a Saturday role (`expand_pattern` in the solver). */
 const SATURDAY_ONLY_PATTERNS = new Set(["Sat.*", "Sat.Lead", "Sat.BGV"]);
 
-/** A cap as the rules panel writes it, e.g. `Sat.* == 1` or `Sat.BGV >= {weeks-2}`. */
+/** A cap as the solver's DSL spells it, e.g. `Sat.* == 1` or `Sat.BGV >= {weeks-2}`. */
 export function capText(cap: RestrictionCap): string {
   const val = cap.relative ? `{weeks-${cap.relOffset}}` : String(cap.value);
+  return `${cap.pattern} ${cap.op} ${val}`;
+}
+
+/**
+ * The same cap as the rules card shows it (`MonthGenerator`'s cap chip), e.g. `Sat.* == 1` or
+ * `Sat.BGV >= sem−2` — what the admin reads in a notice has to match what they can find.
+ */
+export function capLabel(cap: RestrictionCap): string {
+  const val = cap.relative ? `sem−${cap.relOffset}` : String(cap.value);
   return `${cap.pattern} ${cap.op} ${val}`;
 }
 
@@ -601,9 +610,10 @@ export function capText(cap: RestrictionCap): string {
  * In a month with no Saturday Auto can staff, such a cap is unsatisfiable by
  * construction — the solver builds no Saturday seats, so the person's Saturday count
  * is fixed at 0 — and one of them made the WHOLE month infeasible, Sundays included.
- * That is how October 2026 (Sundays 4–25, its only Saturday the eve of 1 Nov) came
- * back «El solver no encontró solución.» with three `Sat.* == 1` rules saved (Frank,
- * 2026-09-29: in such a month the Saturday minimum is simply not applied).
+ * That is how October 2026 came back «El solver no encontró solución.» with three
+ * `Sat.* == 1` rules saved: its only Saturday SERVICE was the 31st, the eve of 1 Nov,
+ * so the admin deselected 3/10/17/24 and left Auto no Saturday (Frank, 2026-09-29: in
+ * such a month the Saturday minimum is simply not applied).
  */
 export function isSaturdayFloor(cap: RestrictionCap, weeks: number): boolean {
   if (!SATURDAY_ONLY_PATTERNS.has(cap.pattern) || cap.op === "<=") return false;
@@ -642,7 +652,7 @@ function allRulesToDs(
       if (!dropCap(cap)) return true;
       // Reported under the name the rules panel shows (the rule's own text), since
       // that is where the admin would go to look at it.
-      if (r.person) omitted.push({ person: r.person, cap: capText(cap) });
+      if (r.person) omitted.push({ person: r.person, cap: capLabel(cap) });
       return false;
     });
     const resolved: PersonRestriction = { ...r, caps: kept, person: res(r.person) };

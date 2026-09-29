@@ -189,9 +189,12 @@ ADR-0041. The client that sends pins («Solo llenar vacíos») is a separate del
 
 **Before the request leaves the planner** (`buildSolveRequest`, `app/components/admin/plannerModel.ts`):
 - **A month with no Saturday Auto can staff drops its Saturday MINIMUMS.** Auto staffs a
-  Saturday only when an in-month Sunday follows it (D16), so a month whose only Saturday is
-  the eve of next month's first Sunday — 31 Oct 2026, 31 Jan and 28 Feb 2026 — sends
-  `weekends_with_saturday: []`. A rule cap on a Saturday-only pattern (`Sat.*`, `Sat.Lead`,
+  Saturday only when an in-month Sunday follows it (D16), and it staffs only the Saturdays the
+  admin keeps selected (all of the month's are preselected). So a month sends
+  `weekends_with_saturday: []` when every Saturday is deselected, or when the only one kept is
+  a month-end Saturday — the eve of next month's first Sunday (31 Oct 2026, 31 Jan and 28 Feb
+  2026). October 2026 was the second case: its only Saturday service was the 31st, so 3/10/17/24
+  were deselected. A rule cap on a Saturday-only pattern (`Sat.*`, `Sat.Lead`,
   `Sat.BGV`) with `==`/`>=` and a value of at least 1 (`isSaturdayFloor`, relative values
   resolved as the solver does) is then unsatisfiable, and one of them made the whole month
   infeasible — Sundays included. Such caps are left out of that month's request and Auto

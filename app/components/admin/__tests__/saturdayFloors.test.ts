@@ -14,6 +14,7 @@ import type { RankMember } from "../candidateRanking";
 import {
   SOLVER_REFUSAL,
   buildSolveRequest,
+  capLabel,
   capText,
   isSaturdayFloor,
   omittedCapsNotice,
@@ -127,16 +128,19 @@ describe("buildSolveRequest in a month with no Saturday for Auto", () => {
     expect(built.omittedCaps).toEqual([{ person: "Tay", cap: "Sat.Lead >= 1" }]);
   });
 
-  it("reports a relative minimum in the template form the rules panel shows", () => {
+  it("reports a relative minimum the way the rules card shows it, not in DSL template form", () => {
     const built = solve([restriction("Andy", [cap("Sat.BGV", "==", 0, 2)])], []);
-    expect(built.omittedCaps).toEqual([{ person: "Andy", cap: "Sat.BGV == {weeks-2}" }]);
+    expect(built.omittedCaps).toEqual([{ person: "Andy", cap: "Sat.BGV == sem−2" }]);
+    expect(built.request.dsl_rules.join("\n")).not.toContain("Sat.BGV");
   });
 });
 
-describe("capText", () => {
-  it("writes a cap as the rules panel does", () => {
+describe("capText / capLabel", () => {
+  it("capText writes the solver's DSL; capLabel writes what the rules card shows", () => {
     expect(capText(cap("Sat.*", "==", 1))).toBe("Sat.* == 1");
     expect(capText(cap("Sun.BGV", "<=", 0, 2))).toBe("Sun.BGV <= {weeks-2}");
+    expect(capLabel(cap("Sat.*", "==", 1))).toBe("Sat.* == 1");
+    expect(capLabel(cap("Sun.BGV", "<=", 0, 2))).toBe("Sun.BGV <= sem−2");
   });
 });
 
