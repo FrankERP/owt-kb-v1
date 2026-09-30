@@ -726,5 +726,76 @@ class ObjectiveWeightLadder(unittest.TestCase):
         self.assertNotIsInstance(ObjectiveTooLarge("x"), ValueError)
 
 
+class SunBgvLadderReachesThree(unittest.TestCase):
+    """
+    A five-Sunday month whose rules force a Sun.BGV spread of 3 must still return
+    from Stage B, not Stage A.
+
+    `any_of(Hugo,Jakey) on Sun.BGV each_week` plus `Jakey !with Hugo on *.BGV`
+    puts exactly one of the two on BGV every week, so over five Sundays one of
+    them carries at least 3. With more BGV-eligible people than BGV seats someone
+    carries 0, so no pass with `sun_bgv_limit <= 2` is feasible. While the ladder
+    stopped at 2, every Stage B pass was infeasible and the month came back from
+    Stage A: max-fill only, no fairness band at all (one of the pair could take
+    all five), all three `*_relaxed` flags up and `objective_skipped`. Measured
+    on production's real November 2026 request the same way (7/7 runs).
+    """
+
+    LEADS = ["Ana", "Beto", "Caro", "Dani", "Eli"]
+    SUPPORT = ["Hugo", "Jakey"] + [f"S{i:02d}" for i in range(1, 15)]
+
+    def _config(self, seed):
+        return dict(
+            weeks=5, weekends_with_saturday=[],
+            sunday_leads=self.LEADS, saturday_leads=[], support=self.SUPPORT,
+            dsl_rules=[f"{p} !in Sun.BGV & !in Sun.Choir" for p in self.LEADS] + [
+                "Jakey !with Hugo on *.BGV",
+                "any_of(Hugo,Jakey) on Sun.BGV each_week",
+            ],
+            history=[], seed=seed, solver_max_time_seconds=10,
+        )
+
+    def test_returns_from_stage_b_with_the_bgv_band_at_three(self):
+        for seed in (1, 2, 42):
+            with self.subTest(seed=seed):
+                res = solve_from_dict(self._config(seed))
+                self.assertTrue(res["ok"], res.get("error"))
+                # Stage A reports every limit as relaxed; Stage B holds Sun.Lead at 1.
+                self.assertFalse(res["sun_lead_fairness_relaxed"])
+                self.assertTrue(res["sun_bgv_fairness_relaxed"])
+                self.assertFalse(res["objective_skipped"])
+                bgv = {p: 0 for p in self.SUPPORT}
+                for services in res["schedule"].values():
+                    for p in services["Sunday"]["BGV"]:
+                        bgv[p] += 1
+                self.assertEqual(bgv["Hugo"] + bgv["Jakey"], 5)
+                self.assertLessEqual(max(bgv.values()) - min(bgv.values()), 3)
+
+    def test_a_four_week_month_trades_bgv_balance_for_lead_balance(self):
+        """
+        Level 3 is not a five-Sunday special case. This four-week month (the default
+        rules, absences found by the review's randomized search) used to return at
+        Sun.Lead 2 / Sun.BGV 2 — several people leading twice — because Sun.BGV 1-2 was
+        infeasible at Sun.Lead 1. It now returns at Sun.Lead 1 / Sun.BGV 3: the
+        ladder's own priority, Sun.Lead fairness first. Pinned so the trade stays a
+        decision, not a surprise.
+        """
+        rules = list(BASE_RULES) + (
+            out_rules(["Hugo"], 1) + out_rules(["Hugo"], 2) + out_rules(["Hugo"], 4) + out_rules(["Niza"], 4))
+        for seed in (1, 2, 3):
+            with self.subTest(seed=seed):
+                cfg = make_config(rules=rules, sat_weeks=(1, 3, 4), weeks=4, seed=seed)
+                cfg["solver_max_time_seconds"] = 1  # the first solution arrives in ~0.25 s
+                res = solve_from_dict(cfg)
+                self.assertTrue(res["ok"], res.get("error"))
+                self.assertFalse(res["sun_lead_fairness_relaxed"])
+                self.assertTrue(res["sun_bgv_fairness_relaxed"])
+                leads = {}
+                for services in res["schedule"].values():
+                    for p in services["Sunday"]["Lead"]:
+                        leads[p] = leads.get(p, 0) + 1
+                self.assertLessEqual(max(leads.values()), 1)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
