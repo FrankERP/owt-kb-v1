@@ -21,6 +21,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
 import { readyRules, type RulesHarness } from "./rulesHarness";
+import { AdminProviders } from "./providersHarness";
 import type { SolverConfig } from "../plannerModel";
 
 afterEach(cleanup);
@@ -55,6 +56,7 @@ function renderGen(config: SolverConfig, rules: RulesHarness = readyRules(config
       onCreated={vi.fn()}
       rules={rules}
     />,
+    { wrapper: AdminProviders },
   );
 }
 

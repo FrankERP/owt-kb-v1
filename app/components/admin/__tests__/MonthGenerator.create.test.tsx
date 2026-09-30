@@ -38,6 +38,7 @@ vi.mock("../solverHistorySource", () => ({ SOLVER_HISTORY_SOURCE: "local" }));
 
 import MonthGenerator from "../MonthGenerator";
 import { absentRules, failedRules, loadingRules, readyRules } from "./rulesHarness";
+import { AdminProviders } from "./providersHarness";
 import {
   READ_FAILED_MESSAGE,
   SAVE_STALE_MESSAGE,
@@ -66,7 +67,11 @@ function Gen({
 }: Omit<React.ComponentProps<typeof MonthGenerator>, "rules"> & {
   rules?: SolverConfigController;
 }) {
-  return <MonthGenerator {...props} rules={rules} />;
+  return (
+    <AdminProviders>
+      <MonthGenerator {...props} rules={rules} />
+    </AdminProviders>
+  );
 }
 import type { TargetPreflight, TargetPreflightState } from "../serviceReadiness";
 
@@ -1594,7 +1599,9 @@ describe("MonthGenerator — create path", () => {
 
     // The composer refuses, on the spot, in the calendar's own notice line —
     // and in the SAME words the grid uses for this state.
-    const notice = screen.getByRole("status");
+    // `ToastProvider` mounts app-wide live regions (role status/alert), as in
+    // production, so the component's own status/alert is queried inside its container.
+    const notice = within(container).getByRole("status");
     expect(notice.textContent).toMatch(/^El 11 de febrero ya tiene un servicio especial\./);
     expect(notice.textContent).toMatch(/Ya lo creaste en esta sesión\.$/);
 
@@ -1957,10 +1964,12 @@ describe("MonthGenerator — saving the rule set", () => {
     const rules = readyRules(DEFAULT_SOLVER_CONFIG, {
       save: async () => ({ ok: false, message: "Se rompió al guardar.", stale: false }),
     });
-    render(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />);
+    const { container } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
+    );
     fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
     fireEvent.click(saveButton());
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Se rompió al guardar."));
+    await waitFor(() => expect(within(container).getByRole("alert").textContent).toContain("Se rompió al guardar."));
     // The loading flag was reset (a `finally`), the edit survived, and the
     // button still offers to retry rather than reading as saved.
     expect(saveButton().textContent).toMatch(/Guardar reglas/);
@@ -1974,10 +1983,12 @@ describe("MonthGenerator — saving the rule set", () => {
     const rules = readyRules(DEFAULT_SOLVER_CONFIG, {
       save: async () => ({ ok: false, message: SAVE_STALE_MESSAGE, stale: true }),
     });
-    render(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />);
+    const { container } = render(
+      <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
+    );
     fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
     fireEvent.click(saveButton());
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(SAVE_STALE_MESSAGE));
+    await waitFor(() => expect(within(container).getByRole("alert").textContent).toBe(SAVE_STALE_MESSAGE));
     fireEvent.click(screen.getByRole("button", { name: "Recargar reglas" }));
     expect(rules.reload).toHaveBeenCalledTimes(1);
   });
@@ -1991,12 +2002,12 @@ describe("MonthGenerator — saving the rule set", () => {
       save: async () => ({ ok: false, message: SAVE_STALE_MESSAGE, stale: true }),
     });
     const members2 = members;
-    const { rerender } = render(
+    const { container, rerender } = render(
       <Gen members={members2} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
     );
     fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
     fireEvent.click(saveButton());
-    await waitFor(() => expect(screen.getByRole("alert")).toBeTruthy());
+    await waitFor(() => expect(within(container).getByRole("alert")).toBeTruthy());
     // The reload lands: a new source carrying a new config OBJECT, which is what
     // the hook always produces (`solverConfigFromDocument` builds a fresh one per
     // read) and what the panel's identity-keyed sync is keyed on.
@@ -2004,7 +2015,7 @@ describe("MonthGenerator — saving the rule set", () => {
     rerender(
       <Gen members={members2} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={reloaded} />,
     );
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(within(container).queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("button", { name: "Recargar reglas" })).toBeNull();
     // And the reloaded document, not the discarded edit, is what is on screen —
     // which is why the conflict message says "vuelve a aplicar tu cambio".
@@ -2027,7 +2038,7 @@ describe("MonthGenerator — the rules failed to load", () => {
     const { container } = render(
       <Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} rules={rules} />,
     );
-    expect(screen.getByRole("alert").textContent).toBe(READ_FAILED_MESSAGE);
+    expect(within(container).getByRole("alert").textContent).toBe(READ_FAILED_MESSAGE);
     // The seeded sample rules must not be on screen at all: rendering them is
     // the collapse, whether or not a save follows.
     expect(container.textContent).not.toMatch(/Reglas \(/);
@@ -2053,7 +2064,7 @@ describe("MonthGenerator — the rules failed to load", () => {
     );
     expect(container.textContent).toContain("Cargando las reglas compartidas");
     expect(container.textContent).not.toMatch(/Reglas \(/);
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(within(container).queryByRole("alert")).toBeNull();
     expect((screen.getByRole("button", { name: /Previsualizar/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
@@ -2145,7 +2156,7 @@ describe("MonthGenerator — the rules failed to RELOAD", () => {
     );
     fireEvent.click(screen.getByRole("checkbox", { name: "Ana" }));
     fireEvent.click(saveButton());
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe(SAVE_STALE_MESSAGE));
+    await waitFor(() => expect(within(container).getByRole("alert").textContent).toBe(SAVE_STALE_MESSAGE));
     fireEvent.click(screen.getByRole("button", { name: "Recargar reglas" }));
     expect(rules.reload).toHaveBeenCalledTimes(1);
 
@@ -2158,7 +2169,7 @@ describe("MonthGenerator — the rules failed to RELOAD", () => {
     // a document we no longer hold. What must not happen is it going quiet:
     // with nothing in its place the failed reload reads as a successful one.
     expect(container.textContent).not.toContain(SAVE_STALE_MESSAGE);
-    expect(screen.getByRole("alert").textContent).toBe(READ_FAILED_MESSAGE);
+    expect(within(container).getByRole("alert").textContent).toBe(READ_FAILED_MESSAGE);
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));
     expect(failed.reload).toHaveBeenCalledTimes(1);
     // And the draft is still on screen: the notice is what this state owes the
@@ -2215,7 +2226,7 @@ describe("MonthGenerator — the rules failed to RELOAD", () => {
     expect(container.textContent).not.toMatch(/Todavía no hay reglas compartidas en el servidor/);
     expect(container.textContent).not.toMatch(/ejemplo/);
     // A reload in flight is not a failure: no alert, no retry to press.
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(within(container).queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
   });
 

@@ -78,6 +78,7 @@ vi.mock("../PlannerGrid", () => ({
 import MonthGenerator from "../MonthGenerator";
 import { stubFetchWithHistory } from "./derivedHistoryHarness";
 import { readyRules } from "./rulesHarness";
+import { AdminProviders } from "./providersHarness";
 
 const members = [
   "lead-a",
@@ -209,6 +210,7 @@ function renderStored(roles: ServiceRole[], options: {
       onCleared={options.onCleared}
       focusRoleId={options.focusRoleId}
     />,
+    { wrapper: AdminProviders },
   );
   return { ...result, storedSource, onClose };
 }
@@ -437,7 +439,7 @@ describe("MonthGenerator — stored mode", () => {
       onClose: vi.fn(),
       onCreated,
     };
-    const { rerender } = render(<MonthGenerator {...common} storedSource={firstSource} />);
+    const { rerender } = render(<MonthGenerator {...common} storedSource={firstSource} />, { wrapper: AdminProviders });
     fireEvent.click(screen.getByRole("button", { name: "Crear vacío" }));
     await waitFor(() => expect(firstSource.reload).toHaveBeenCalledTimes(1));
 
@@ -531,6 +533,7 @@ describe("MonthGenerator — stored mode", () => {
     };
     const { rerender } = render(
       <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
+      { wrapper: AdminProviders },
     );
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
@@ -632,6 +635,7 @@ describe("MonthGenerator — stored mode", () => {
     };
     const { rerender } = render(
       <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
+      { wrapper: AdminProviders },
     );
 
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: path } });
@@ -676,6 +680,7 @@ describe("MonthGenerator — stored mode", () => {
     };
     const { rerender } = render(
       <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
+      { wrapper: AdminProviders },
     );
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "BGVs" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
@@ -748,6 +753,7 @@ describe("MonthGenerator — stored mode", () => {
     };
     const { rerender } = render(
       <MonthGenerator {...common} existingRoles={[first, second]} allRoles={[first, second]} storedSource={firstSource} />,
+      { wrapper: AdminProviders },
     );
     fireEvent.change(screen.getByLabelText("Sección"), { target: { value: "instruments" } });
     fireEvent.change(screen.getByLabelText("Primer servicio"), { target: { value: "role-a" } });
@@ -919,7 +925,7 @@ describe("MonthGenerator — stored mode", () => {
       onClose: vi.fn(),
       onCreated: vi.fn(),
     };
-    const { rerender } = render(<MonthGenerator {...common} storedSource={firstSource} />);
+    const { rerender } = render(<MonthGenerator {...common} storedSource={firstSource} />, { wrapper: AdminProviders });
     const initialCount = Number(screen.getByTestId("stored-row-count").textContent);
 
     fireEvent.click(screen.getByRole("button", { name: "Añadir fila simulada" }));
@@ -1204,6 +1210,7 @@ describe("MonthGenerator — «Limpiar mes» edge paths", () => {
         onClose={vi.fn()}
         onCreated={vi.fn()}
       />,
+      { wrapper: AdminProviders },
     );
     const trigger = screen.getByRole("button", { name: "Limpiar mes" }) as HTMLButtonElement;
     expect(trigger.disabled).toBe(true);
@@ -1275,6 +1282,7 @@ describe("MonthGenerator — «Llenar especiales…»", () => {
         onClose={vi.fn()}
         onCreated={vi.fn()}
       />,
+      { wrapper: AdminProviders },
     );
     // The read-only set is still a column of the grid — it is excluded by
     // admission, not by absence.

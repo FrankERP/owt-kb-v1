@@ -31,6 +31,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import MonthGenerator from "../MonthGenerator";
 import { stubFetchWithHistory } from "./derivedHistoryHarness";
 import { readyRules } from "./rulesHarness";
+import { AdminProviders } from "./providersHarness";
 import type { RoleDomainSummary, RoleTarget } from "@/app/utils/serviceReadSummary";
 import type { ServiceRole } from "../serviceCardModel";
 import type { SolverConfig } from "../plannerModel";
@@ -153,7 +154,7 @@ function renderStored(entries: { role: ServiceRole; danglingRefs?: string[] }[])
     onClose: vi.fn(),
     onCreated: vi.fn(),
   };
-  const view = render(<MonthGenerator {...props} storedSource={storedSource} />);
+  const view = render(<MonthGenerator {...props} storedSource={storedSource} />, { wrapper: AdminProviders });
   return {
     ...view,
     storedSource,
