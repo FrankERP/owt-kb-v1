@@ -785,7 +785,7 @@ class SunBgvLadderReachesThree(unittest.TestCase):
         for seed in (1, 2, 3):
             with self.subTest(seed=seed):
                 cfg = make_config(rules=rules, sat_weeks=(1, 3, 4), weeks=4, seed=seed)
-                cfg["solver_max_time_seconds"] = 3
+                cfg["solver_max_time_seconds"] = 1  # the first solution arrives in ~0.25 s
                 res = solve_from_dict(cfg)
                 self.assertTrue(res["ok"], res.get("error"))
                 self.assertFalse(res["sun_lead_fairness_relaxed"])

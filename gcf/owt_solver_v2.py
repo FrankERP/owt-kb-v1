@@ -1620,14 +1620,15 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
         common["violation_target"] = stage_a.violations_used
 
     # Stage B: among the max-fill solutions, optimize fairness via the relaxation
-    # loop (Sun.Lead → Sun.BGV → global). empty_target keeps the fill maximal.
+    # loop — nested Sun.Lead ⊃ Sun.BGV ⊃ global, so global relaxes first and
+    # Sun.Lead last. empty_target keeps the fill maximal.
     #
     # Sun.BGV goes to 3 because a five-Sunday month can FORCE a spread of 3:
     # `any_of(A,B) on Sun.BGV each_week` plus `A !with B on *.BGV` seats exactly
     # one of the pair every week, so one carries >= 3, while more BGV-eligible
     # people than BGV seats leaves someone at 0. Stopping at 2 made every pass
     # infeasible and returned Stage A — no fairness band at all, a lead could take
-    # all five Sundays — which is what production's November 2026 did (7/7).
+    # all five Sundays — which is what production's November 2026 did (8/8).
     # Level 3 is tried after 1 and 2 within each Sun.Lead level, so a month whose
     # first feasible pass had sb <= 2 returns as before. One of ANY length that fell
     # to sl=2 ONLY because sb stopped at 2 now returns at sl=1, sb=3 — and its global
