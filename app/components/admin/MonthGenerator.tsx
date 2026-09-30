@@ -32,6 +32,7 @@ import {
   collectPins,
   droppedPinNotices,
   emptyVoiceSeats,
+  pinConflicts,
   pinHandshakeHolds,
   pinRefusal,
   type CollectedPins,
@@ -72,6 +73,7 @@ import {
   poolTipoMismatch,
   unaddressableDates as computeUnaddressableDates,
   omittedCapsNotice,
+  solverPools,
   solverRefusalMessage,
   type DraftCard,
   type GridCell,
@@ -2240,6 +2242,12 @@ export default function MonthGenerator({
     || clearPending
     || clearing
   );
+  /**
+   * Spec §3.2 «Locking»: with «Solo llenar vacíos» on, an edit landing during the solve would
+   * break «Auto respeta lo que ya está puesto», so the create grid is read-only while Auto is
+   * pending. The switch itself and every «Borrar» are disabled on `autoPending` alone.
+   */
+  const createAutoLocked = !storedMode && autoPending && fillEmptyOnly;
   const storedSpecialColumns = storedMode
     ? orderGroup(storedColumns.filter((c) => c.type === "special_role" && c.admission === "approved"))
     : [];
@@ -2488,6 +2496,19 @@ export default function MonthGenerator({
     () => savedWindowFor(year, month, allRoles ?? []),
     [year, month, allRoles],
   );
+
+  /** Spec §3.3 — what the board says about each seat that will be pinned; only with the switch on. */
+  const pinBoard = useMemo(() => {
+    if (storedMode || !fillEmptyOnly || !solverConfig) return undefined;
+    const collected = collectPins({ cells, columns, rows, members, sundayDates: sundayDatesFull });
+    const p = solverPools(solverConfig, members);
+    return pinConflicts({
+      collected,
+      columns,
+      members,
+      pools: { sundayLeads: p.sundayLeadNames, saturdayLeads: p.saturdayLeadNames, support: [...p.supportNames, ...p.extraSupport] },
+    });
+  }, [storedMode, fillEmptyOnly, solverConfig, cells, columns, rows, members, sundayDatesFull]);
 
   /**
    * The SAVED half of the participation rail: everything stored in the month
@@ -2765,7 +2786,7 @@ export default function MonthGenerator({
   }
 
   function handleCellsChange(next: GridCell[]) {
-    if (storedMutationLocked) return;
+    if (storedMutationLocked || createAutoLocked) return;
     if (storedMode) {
       const changedRoleIds = new Set<string>();
       const allColumnIds = new Set([...cells.map((cell) => cell.columnId), ...next.map((cell) => cell.columnId)]);
@@ -3635,9 +3656,9 @@ export default function MonthGenerator({
    * `solveWithDerivedHistoryRef`, so it is the version from the LATEST render.
    *
    * **Why a ref, and not the closure `handleAutoDerived` was called with.** In
-   * create mode nothing locks the grid while Auto is pending: `mutationLocked`
-   * is stored-mode only (`storedMutationLocked`), and `autoPending` disables the
-   * Auto button and nothing else, so cells stay editable during the read. The
+   * create mode with «Solo llenar vacíos» off nothing locks the grid while Auto
+   * is pending (`createAutoLocked` is the switch-on lock): `autoPending` alone
+   * disables Auto's own controls and never a cell, so cells stay editable during the read. The
    * closure captured at the press would solve and fill from the cells as they
    * were then, and `applySpecialFill` would write that snapshot back — silently
    * dropping a seat typed during the read. Reading the latest render instead
@@ -4383,7 +4404,7 @@ export default function MonthGenerator({
           onToggleSkip={handleToggleSkip}
           onStoredHeaderChange={handleStoredHeaderChange}
           storedDateBlockedReason={storedDateBlocked}
-          mutationLocked={storedMutationLocked}
+          mutationLocked={storedMutationLocked || createAutoLocked}
           onAuto={handleAuto}
           autoState={autoState}
           diagnostics={diagnostics}
@@ -4438,6 +4459,7 @@ export default function MonthGenerator({
             onChange: (next) => { if (!autoPending) setFillEmptyOnly(next); },
             emptyVoiceSeats: emptyVoiceSeats({ cells, columns, rows, sundayDates: sundayDatesFull }),
           }}
+          pinConflicts={pinBoard}
         />
       ) : !storedMode ? (
         // D17/D10: this used to be `max-h-[50vh] overflow-y-auto` — a keyhole

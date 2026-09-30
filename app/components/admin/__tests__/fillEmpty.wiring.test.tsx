@@ -160,3 +160,56 @@ describe("«Solo llenar vacíos» — what the admin is told", () => {
     expect(cellAt(container, "lead", SUNDAYS[1]).textContent).toContain("Sin cubrir");
   });
 });
+
+describe("«Solo llenar vacíos» — locked while Auto is pending", () => {
+  it("disables the switch and every cell during the history read, and a click there cannot change the pins sent", async () => {
+    const { bodies } = stubSolve((body, call) => (call === 1 ? firstRoster(body, call) : echoPins(body)));
+    // Hold the NEXT history read open (the Auto one), then let it through.
+    const answered = globalThis.fetch;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let hold = false;
+    vi.stubGlobal("fetch", async (input: unknown, init?: unknown) => {
+      if (hold && typeof input === "string" && input.startsWith("/api/admin/solver-history?")) await gate;
+      return (answered as (i: unknown, n?: unknown) => Promise<unknown>)(input, init);
+    });
+    const view = render(<Gen members={MEMBERS} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+    setMonthYear(view.container, 3, 2026);
+    deselectAll(view.container, "saturday");
+    selectSundayLead(view.container, "Ana");
+    preview();
+    runAuto();
+    await waitFor(() => expect(cellAt(view.container, "lead", SUNDAYS[0]).textContent).toContain("Ana"));
+
+    fireEvent.click(fillEmptySwitch());
+    hold = true;
+    runAuto();
+    await waitFor(() => expect(screen.getByText("Calculando...")).toBeTruthy());
+    expect((fillEmptySwitch() as HTMLButtonElement).disabled).toBe(true);
+    expect((cellAt(view.container, "bgv", SUNDAYS[3]).querySelector("[data-cell-action]") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(fillEmptySwitch()); // disabled: nothing happens
+
+    release();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1].pinned).toEqual([
+      { week: 1, role: "Sun.Lead", person: "Ana Karen Villalobos" },
+      { week: 2, role: "Sun.BGV", person: "María Lucía Estrada" },
+    ]);
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+    expect(fillEmptySwitch().getAttribute("aria-checked")).toBe("true");
+  });
+});
+
+describe("«Solo llenar vacíos» — pin conflicts on the board", () => {
+  it("names an unavailable pinned occupant on the chip and under the cell, only while the switch is on", async () => {
+    const away = { ...LUCIA, unavailableDates: [SUNDAYS[1]] };
+    const { container } = setup(firstRoster, [ANA, away, BETO, RODRI, PACO]);
+    runAuto();
+    await waitFor(() => expect(cellAt(container, "bgv", SUNDAYS[1]).textContent).toContain("Lucía"));
+    const chip = () => cellAt(container, "bgv", SUNDAYS[1]).querySelector('[data-occupant="lucia"]') as HTMLElement;
+    expect(chip().getAttribute("aria-label")).not.toContain("fijo");
+    fireEvent.click(fillEmptySwitch());
+    expect(chip().getAttribute("aria-label")).toContain("(fijo: no disponible ese día)");
+    expect(cellAt(container, "bgv", SUNDAYS[1]).textContent).toContain("Lucía: marcó este día como no disponible");
+  });
+});

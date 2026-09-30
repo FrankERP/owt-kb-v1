@@ -129,6 +129,7 @@ import {
   type SeatCategory,
 } from "./seatModel";
 import { renderableUnfilled } from "./instrumentFill";
+import { pinSeatKey, type PinConflictKind } from "./pinModel";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import { WORSHIP_NIGHT_FORMAT } from "@/app/utils/serviceFormat";
 import type { TargetPreflight } from "./serviceReadiness";
@@ -296,6 +297,8 @@ export interface PlannerGridProps {
    * owns the state (E2: per run, never persisted); this renders it and words the confirm.
    */
   fillEmpty?: { enabled: boolean; onChange: (next: boolean) => void; emptyVoiceSeats: number };
+  /** «Solo llenar vacíos»: conflicts of each seat that will be pinned, by `pinSeatKey` (spec §3.3). */
+  pinConflicts?: ReadonlyMap<string, PinConflictKind[]>;
 }
 
 /**
@@ -594,6 +597,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     participation,
     monthLabel,
     fillEmpty,
+    pinConflicts,
   } = props;
 
   const [openCell, setOpenCell] = useState<{ rowId: string; columnId: string } | null>(null);
@@ -1738,6 +1742,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             violationsByColumnId={(columnId) =>
               violationsByColumnId.get(columnId) ?? emptyViolations
             }
+            pinConflicts={pinConflicts}
             memberName={memberName}
             seatMismatch={seatMismatch}
             instrumentUndeclared={instrumentUndeclared}
@@ -2088,8 +2093,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
       {mode === "create" && confirmingAuto && (
         <div className="space-y-2 rounded-lg border border-warning-fg/30 bg-warning-fg/10 px-3 py-2">
           <p className="font-body text-xs text-warning-soft">
-            Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en
-            este mes. Las asignaciones manuales de instrumentos y FOH no se tocan.
+            {fillEmpty?.enabled
+              ? `Solo se llenarán los ${fillEmpty.emptyVoiceSeats} lugar${fillEmpty.emptyVoiceSeats !== 1 ? "es" : ""} de voz vacío${fillEmpty.emptyVoiceSeats !== 1 ? "s" : ""} (Lead, BGV, Coro); lo que ya está puesto se respeta y se envía al solver como fijo. Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca.`
+              : "Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes. Las asignaciones manuales de instrumentos y FOH no se tocan."}
             {unaddressableDates.length > 0 &&
               ` ${unaddressableDates.length} sábado(s) fuera del alcance de Auto no se tocarán.`}
           </p>
@@ -2508,6 +2514,7 @@ function RowGroup({
   unfilledByKey,
   duplicatesByColumnId,
   violationsByColumnId,
+  pinConflicts,
   memberName,
   seatMismatch,
   instrumentUndeclared,
@@ -2530,6 +2537,8 @@ function RowGroup({
   duplicatesByColumnId: (columnId: string) => Map<string, string[]>;
   /** E13, by `violationKey(rowId, memberId)` — that service column only. */
   violationsByColumnId: (columnId: string) => Map<string, SeatedViolation>;
+  /** «Solo llenar vacíos», by `pinSeatKey` — see the main component. */
+  pinConflicts?: ReadonlyMap<string, PinConflictKind[]>;
   memberName: (id: string) => string;
   /** Seated but no longer carrying this seat's «Tipo» — see the main component. */
   seatMismatch: (memberId: string, category: SeatCategory) => boolean;
@@ -2614,6 +2623,7 @@ function RowGroup({
             undeclared={undeclared}
             duplicates={duplicates}
             violations={violationsByColumnId(column.columnId)}
+            pinConflicts={pinConflicts}
             unfilled={unfilledByKey.has(cellKey(column.columnId, row.id))}
             onOpen={() => onOpen(column.columnId)}
             onCopy={onCopy ? () => onCopy(column.columnId) : undefined}
@@ -2640,6 +2650,17 @@ const TYPE_LABEL: Record<SeatCategory, string> = {
   foh: "FOH",
 };
 
+const PIN_CONFLICT_ARIA: Record<PinConflictKind, string> = {
+  unavailable: " (fijo: no disponible ese día)",
+  outsidePool: " (fijo: fuera de los grupos del solver)",
+  duplicate: " (repetido en este servicio: no se fija)",
+};
+const PIN_CONFLICT_LINE: Record<PinConflictKind, (seat: string) => string> = {
+  unavailable: () => "marcó este día como no disponible — Auto lo respetará como fijo",
+  outsidePool: (seat) => `no está en los grupos del solver para ${seat} — Auto lo respetará como fijo`,
+  duplicate: () => "ya está en otro lugar de este servicio — no se fija aquí",
+};
+
 function GridCellView({
   row,
   column,
@@ -2649,6 +2670,7 @@ function GridCellView({
   undeclared,
   duplicates,
   violations,
+  pinConflicts,
   unfilled,
   onOpen,
   onCopy,
@@ -2668,6 +2690,8 @@ function GridCellView({
   undeclared: string[];
   duplicates: Map<string, string[]>;
   violations: Map<string, SeatedViolation>;
+  /** «Solo llenar vacíos», by `pinSeatKey` — shown, never blocking (spec §3.3). */
+  pinConflicts?: ReadonlyMap<string, PinConflictKind[]>;
   unfilled: boolean;
   onOpen: () => void;
   onCopy?: () => void;
@@ -2841,6 +2865,7 @@ function GridCellView({
             // Counting earlier copies of the SAME id, not the index, keeps
             // every other member's chip on its own element when a copy leaves.
             const occurrence = memberIds.slice(0, index).filter((m) => m === id).length;
+            const pinKinds = pinConflicts?.get(pinSeatKey({ columnId: column.columnId, rowId: row.id, memberId: id, occurrence })) ?? [];
             return (
               <span
                 key={`${id}#${occurrence}`}
@@ -2867,7 +2892,7 @@ function GridCellView({
                 // the one assistive tech performs.
                 aria-label={`${marked ? "Cancelar el movimiento de" : "Marcar para mover a"} ${memberName(id)}${
                   isDuplicate || ruleBroken ? " (conflicto)" : ""
-                }${tipoMismatch ? " (Tipo no permitido)" : ""}${
+                }${tipoMismatch ? " (Tipo no permitido)" : ""}${pinKinds.map((k) => PIN_CONFLICT_ARIA[k]).join("")}${
                   undeclaredSet.has(id) ? " (instrumento no declarado)" : ""
                 }${overTarget ? " (por encima del objetivo)" : ""}`}
                 // NO `onClick`, deliberately (user ruling, 2026-08-06). A pointer
@@ -2900,6 +2925,7 @@ function GridCellView({
                 // the smallest type on the surface. One step up, to `text-xs`.
                 //
                 // Precedence: a conflict (red) outranks a Tipo mismatch, which
+                // shares its tint with a pin conflict («Solo llenar vacíos»), which
                 // outranks being past the target — the `+N`'s old amber border
                 // and fill, so the extra seat reads as the warning it is. The
                 // TEXT stays `text-ink-muted`: the `+N`'s `text-warning-strong`
@@ -2908,7 +2934,7 @@ function GridCellView({
                 className={`rounded-full border px-1.5 py-0.5 font-label text-xs text-ink-muted ${CARD_STYLE.longText} ${
                   isDuplicate || ruleBroken
                     ? "border-negative-strong/50 bg-negative-strong/10"
-                    : tipoMismatch
+                    : tipoMismatch || pinKinds.length > 0
                       ? "border-warning-strong/50 bg-warning-strong/10"
                       : overTarget
                         ? "border-warning-fg/40 bg-warning-fg/10"
@@ -2965,6 +2991,17 @@ function GridCellView({
             ⚠ {memberName(id)}: no declara {row.label} — revísalo en Miembros
           </p>
         ))}
+        {/* «Solo llenar vacíos» (spec §3.3): what a seat about to be pinned contradicts. The pin
+            wins, so this informs and never blocks (E3). */}
+        {memberIds.flatMap((id, index) => {
+          const occurrence = memberIds.slice(0, index).filter((x) => x === id).length;
+          const kinds = pinConflicts?.get(pinSeatKey({ columnId: column.columnId, rowId: row.id, memberId: id, occurrence })) ?? [];
+          return kinds.map((k) => (
+            <p key={`pin-${id}-${occurrence}-${k}`} className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>
+              ⚠ {memberName(id)}: {PIN_CONFLICT_LINE[k](row.label)}
+            </p>
+          ));
+        })}
         {unfilled && (
           <p className="font-label text-[9px] uppercase tracking-widest text-warning-strong">Sin cubrir</p>
         )}

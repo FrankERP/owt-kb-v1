@@ -1739,3 +1739,23 @@ describe("declared instruments on the planner (spec §7, §6.3)", () => {
     expect(container.querySelector(`[data-row-id="coro"]`)!.textContent).toContain("Sin cubrir");
   });
 });
+
+describe("«Solo llenar vacíos» — the confirm copy", () => {
+  it("says what Auto will do with the switch on, and today's copy with it off", () => {
+    const { rerender } = render(<PlannerGrid {...baseProps({ fillEmpty: { enabled: false, onChange: vi.fn(), emptyVoiceSeats: 7 } })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar/ }));
+    expect(screen.getByText(/Esto reemplazará toda asignación de voz/)).toBeTruthy();
+    rerender(<PlannerGrid {...baseProps({ fillEmpty: { enabled: true, onChange: vi.fn(), emptyVoiceSeats: 7 } })} />);
+    expect(screen.getByText(/Solo se llenarán los 7 lugares de voz vacíos/)).toBeTruthy();
+    expect(screen.getByText(/Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca/)).toBeTruthy();
+    expect(screen.queryByText(/Esto reemplazará toda asignación de voz/)).toBeNull();
+  });
+
+  it("disables the switch while Auto is pending", () => {
+    render(<PlannerGrid {...baseProps({
+      autoState: { pending: true, error: null, disabledReason: null },
+      fillEmpty: { enabled: false, onChange: vi.fn(), emptyVoiceSeats: 0 },
+    })} />);
+    expect((screen.getByRole("switch", { name: "Solo llenar vacíos" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
