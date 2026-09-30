@@ -143,7 +143,7 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
 
 ### Pinned assignments (`pinned`)
 Spec `docs/superpowers/specs/2026-09-15-solver-pinned-assignments-design.md`, decision record
-ADR-0041. The client that sends pins («Solo llenar vacíos») is a separate delivery.
+ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Before the request leaves the planner».
 
 - **A pin is a fixed variable, not a removed seat:** `sum(x[P, slots of (R, W)]) == 1`. Every
   mechanism that counts people or iterates slots — totals, role counts, DSL caps, the Saturday
@@ -232,6 +232,18 @@ ADR-0041. The client that sends pins («Solo llenar vacíos») is a separate del
   Saturdays, so its week 1 never gets the previous month's last Saturday: Auto can staff
   31 Oct 2026 from neither October nor November. The grid labels it «Fuera del alcance de
   Auto» in the month it belongs to.
+- **«Solo llenar vacíos» sends the board as pins** (`pinModel.ts`; spec
+  `2026-09-29-planner-trailing-saturday-and-fill-empty-design.md` §3). With the switch on, every
+  occupied Lead/BGV/Coro seat on a column Auto writes is a pin `{ week, role, person }`, by exact
+  `member_name` — one per person per service (Lead before BGV before Coro; the solver refuses
+  two), at most 100. What the solver would refuse in English (an occupant who is no longer a
+  member, an empty `member_name`, more than 100, a Saturday week not sent, a pinned-only spelling
+  that differs from a pool name only in case or spaces) is refused first in Spanish, naming the
+  cell. **Off, or with nothing on the board, the request has no `pinned` key** and is exactly
+  what it was before. A success is applied only if `pinned_honored` equals the pins sent and the
+  schedule shows every pin by exact name; otherwise Auto says «El solver no respetó los lugares
+  fijados; no se aplicó nada.». `pin_violations` are named as the rules card names them
+  (`pinViolations.ts`); `violation_ceiling_proven: false` adds one caveat.
 
 ### HTTP handler ([`gcf/main.py`](../gcf/main.py))
 `functions_framework.http`-decorated `solve(request)`. Handles CORS `OPTIONS`, rejects non-POST

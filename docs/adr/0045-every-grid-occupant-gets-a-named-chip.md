@@ -79,3 +79,21 @@ the only handle an over-target occupant has.
   The tests that pin this — `PlannerGrid.test.tsx` «cell density»,
   `plannerGridDrag.test.tsx` «the drag's anchors» and `plannerGridPickPlace.test.tsx`
   «acceptance 12» — fail if the tail loses its chip.
+
+## Amendment 2026-09-30 — «Solo llenar vacíos» adds a fourth rung
+
+The precedence above gains one rung. With «Solo llenar vacíos» on, a seat that will be pinned —
+or is left out as a same-service duplicate — and contradicts something gets a pin-conflict
+treatment: the person is unavailable that day, is outside the solver's pools for that seat, or
+already sits elsewhere in the same service and so is not sent.
+
+- **Where it sits.** Between Tipo mismatch and over-target: a conflict (red) still outranks it,
+  and it outranks the over-target tint. It shares the Tipo-mismatch tint, so the visible order is
+  conflict, then Tipo mismatch or pin conflict, then over-target.
+- **What it adds.** Its own suffix on the chip's `aria-label` and a words line under the cell,
+  so the reason is named rather than only tinted.
+- **It is shown and never blocks (E3).** The pin wins; the chip informs the admin and nothing
+  refuses the seat.
+
+Source: `PIN_CONFLICT_ARIA` / `PIN_CONFLICT_LINE` in `app/components/admin/PlannerGrid.tsx`; spec
+`docs/superpowers/specs/2026-09-29-planner-trailing-saturday-and-fill-empty-design.md` §3.3.
