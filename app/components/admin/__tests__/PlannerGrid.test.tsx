@@ -96,7 +96,6 @@ function baseProps(overrides: PlannerGridTestOverrides = {}): PlannerGridProps {
     // create-blocked column built from the real `cellsToDrafts` authority.
     canReceive: () => true,
     skipped: new Set(),
-    unaddressableDates: [],
     unresolvedNames: [],
     unfilled: [],
     onCellsChange: vi.fn(),
@@ -788,11 +787,12 @@ describe("PlannerGrid — Auto contract (D15)", () => {
 describe("PlannerGrid — Auto confirms first (D2)", () => {
   it("shows a confirmation naming the replace scope before calling onAuto, and only calls onAuto on confirm", () => {
     const onAuto = vi.fn();
-    render(<PlannerGrid {...baseProps({ onAuto, unaddressableDates: ["2026-08-01"] })} />);
+    render(<PlannerGrid {...baseProps({ onAuto })} />);
     fireEvent.click(screen.getByRole("button", { name: /auto-asignar/i }));
     expect(onAuto).not.toHaveBeenCalled();
     expect(screen.getByText(/reemplazar/i)).toBeTruthy();
-    expect(screen.getByText(/1 sábado\(s\) fuera del alcance/i)).toBeTruthy();
+    // ADR-00NN (T1) removed the «N sábado(s) fuera del alcance» clause with the prop that fed it.
+    expect(screen.queryByText(/fuera del alcance/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^confirmar$/i }));
     expect(onAuto).toHaveBeenCalledTimes(1);
   });
@@ -822,7 +822,7 @@ describe("PlannerGrid — instrument/FOH manual label (D5)", () => {
   });
 });
 
-describe("PlannerGrid — preflight and unaddressable markers", () => {
+describe("PlannerGrid — preflight markers, and no unaddressable one", () => {
   it("shows each date column's TargetPreflight state and reasons", () => {
     const preflight: TargetPreflight = {
       targetKey: "sunday_role:2026-08-09",
@@ -835,9 +835,10 @@ describe("PlannerGrid — preflight and unaddressable markers", () => {
     expect(screen.getByText("Bloqueado")).toBeTruthy();
   });
 
-  it("renders an explicit 'fuera del alcance de Auto' marker for an unaddressable date", () => {
-    render(<PlannerGrid {...baseProps({ columns: WEEKEND, unaddressableDates: ["2026-08-08"] })} />);
-    expect(screen.getByText(/fuera del alcance de auto/i)).toBeTruthy();
+  // ADR-00NN (T1): every in-month Saturday has a solver week, so the badge (and its prop) is gone.
+  it("renders no 'fuera del alcance de Auto' marker on any column", () => {
+    render(<PlannerGrid {...baseProps({ columns: WEEKEND })} />);
+    expect(screen.queryByText(/fuera del alcance de auto/i)).toBeNull();
   });
 });
 

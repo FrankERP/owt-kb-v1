@@ -551,19 +551,6 @@ export function saturdayForWeek(n: number, sundayDates: string[]): string | null
   return sunDate ? subtractDay(sunDate) : null;
 }
 
-/**
- * Selected Saturdays no solver week resolves to (`weekForColumn` is `null`).
- * Since T1 the trailing Saturday is week `weeks + 1`, so on a calendar month's
- * spine this is always empty.
- *
- * Removed in Task 3, with the «Fuera del alcance de Auto» surface that reads it.
- */
-export function unaddressableDates(sundayDates: string[], activeSatDates: string[]): string[] {
-  return [...activeSatDates]
-    .sort()
-    .filter((d) => weekForColumn({ type: "saturday_role", date: d }, sundayDates) == null);
-}
-
 // ─── Request construction ─────────────────────────────────────────────────────
 
 export type NameResolution = { resolved: string } | { unresolved: string };
@@ -1246,16 +1233,6 @@ export function omittedCapsNotices(omitted: OmittedCap[]): string[] {
     const group = omitted.filter((o) => o.reason === reason);
     return group.length > 0 ? [OMIT_NOTICE[reason](capsByRule(group))] : [];
   });
-}
-
-/**
- * @deprecated Every line of `omittedCapsNotices`, joined, or `null`. Kept only so
- * `MonthGenerator` compiles until Task 3 of plan 2026-09-30-planner-trailing-saturday
- * switches it to the list; removed there.
- */
-export function omittedCapsNotice(omitted: OmittedCap[]): string | null {
-  const lines = omittedCapsNotices(omitted);
-  return lines.length > 0 ? lines.join(" ") : null;
 }
 
 /** The notice for a trailing Saturday T5 did not send; `null` when it was sent. */

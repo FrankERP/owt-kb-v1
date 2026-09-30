@@ -1167,6 +1167,12 @@ describe("MonthGenerator — create path", () => {
   // was deselected and the signal would have been indistinguishable from the
   // bug. Since ADR-00NN (T1) the 28th is February's trailing Saturday, week 5
   // (see the second half of the test below).
+  //
+  // Since ADR-00NN (T1) the «Fuera del alcance de Auto» surface and its
+  // `computeUnaddressableDates` consumer are gone. The badge/clause assertions
+  // below stay as the "appears nowhere" check; the spine pin they carried moved
+  // to the «Solo llenar vacíos» count, whose `emptyVoiceSeats` also takes the
+  // full spine and stops counting the 14th's seats over a spine missing the 15th.
 
   it("E21: deselecting a Sunday does not make its adjacent Saturday 'fuera del alcance de Auto'", () => {
     const { container, unmount } = render(
@@ -1178,12 +1184,8 @@ describe("MonthGenerator — create path", () => {
     // request either way, because the request is built from the full spine.
     fireEvent.click(container.querySelector('[data-date="2026-03-15"]')!);
     // Then drop a Saturday that is addressable on any reading (2026-03-28 sits
-    // beside Sunday the 29th). This is ordinary month setup, and it is also
-    // what makes the assertion below load-bearing: `unaddressableDatesList` is
-    // a `useMemo` keyed on [sundayDatesFull, activeSatDates], so a regression
-    // that swapped the ARGUMENT alone would sit behind a stale memo and never
-    // recompute after a Sunday toggle. Touching a Saturday invalidates the
-    // memo, so the wrong spine — however it got there — has to show itself.
+    // beside Sunday the 29th). This is ordinary month setup. (It used to also
+    // invalidate the `unaddressableDatesList` memo, deleted under ADR-00NN, T1.)
     fireEvent.click(container.querySelector('[data-date="2026-03-28"]')!);
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
 
@@ -1191,12 +1193,17 @@ describe("MonthGenerator — create path", () => {
     expect(container.querySelector('[data-date="2026-03-14"]')).toBeTruthy();
     // ...and carries no scope warning, on the header badge...
     expect(screen.queryByText("Fuera del alcance de Auto")).toBeNull();
-    // ...nor in the Auto confirmation banner, whose sentence only grows the
-    // "N sábado(s) fuera del alcance" clause when the list is non-empty.
+    // ...nor in the Auto confirmation banner (the clause is gone since ADR-00NN, T1).
     fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
-    expect(screen.getByText(/Esto reemplazará toda asignación de voz/).textContent).not.toMatch(
-      /fuera del alcance de Auto/,
-    );
+    const banner = screen.getByText(/Esto reemplazará toda asignación de voz/);
+    expect(banner.textContent).not.toMatch(/fuera del alcance de Auto/);
+    fireEvent.click(within(banner.closest("div") as HTMLElement).getByRole("button", { name: "Cancelar" }));
+    // The spine pin (see above): Auto counts the 14th as its own. Four Sundays
+    // (1, 8, 22, 29) × (2 Lead + 3 BGV + 3 Coro) + three Saturdays (7, 14, 21)
+    // × (2 Lead + 3 BGV) = 47; over a spine missing the 15th the 14th drops to 42.
+    fireEvent.click(screen.getByRole("switch", { name: "Solo llenar vacíos" }));
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    expect(screen.getByText(/Solo se llenarán/).textContent).toContain("los 47 lugares de voz vacíos");
     unmount();
 
     // D16 amended by ADR-00NN (T1): the trailing Saturday is week weeks + 1.
@@ -1204,10 +1211,8 @@ describe("MonthGenerator — create path", () => {
     // Sunday, March 1, is outside the spine) was unaddressable and had to show
     // the badge and the clause. It is now the trailing Saturday, week 5, so
     // neither appears — no calendar month has an unaddressable Saturday left,
-    // and Task 3 removes the surface. That the badge is renderable at all is
-    // still pinned by `PlannerGrid.test.tsx`, which passes the prop directly;
-    // and the half above still fails on the wrong spine, because 2026-03-14
-    // resolves to no week over one missing the 15th.
+    // and the surface itself is removed (Task 3). The half above still fails
+    // on the wrong spine, through the «Solo llenar vacíos» count.
     const second = render(
       <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
