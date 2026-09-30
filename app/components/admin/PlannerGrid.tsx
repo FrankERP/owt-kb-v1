@@ -1499,6 +1499,10 @@ export default function PlannerGrid(props: PlannerGridProps) {
       // it is the one thing here that must stay live; `CueDialog` runs its own
       // focus trap and its own `inert` for the layers below it.
       if (child.hasAttribute("data-cue-dialog-root")) continue;
+      // `ToastProvider`'s stack is a body child too, and a layer ABOVE every modal surface
+      // (`z-[95]`, over `CueDialog`). A «Borrar» raised from a header menu in full screen, or just
+      // before entering it, puts «Deshacer» there — inerted, it would show and never click.
+      if (child.hasAttribute("data-toast-root")) continue;
       if (child.hasAttribute("inert")) continue;
       child.setAttribute("inert", "");
       inerted.push(child);

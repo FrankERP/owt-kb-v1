@@ -60,6 +60,32 @@ describe("«Borrar» this service", () => {
     expect(cellAt(container, "bgv", SUNDAYS[0]).textContent).toContain("Sin cubrir");
   });
 
+  it("keeps one «Deshacer» per service when two same-size clears land together, each naming its service", async () => {
+    // Two Sundays with 2 voice seats each: before R13 both toasts read «Se borraron 2
+    // asignaciones.» and the toast stack replaced the first with the second.
+    const { container } = await setup((body, call) => {
+      const answer = roster(body, call);
+      answer.schedule!["2"].Sunday.Choir = ["María Lucía Estrada"];
+      return answer;
+    });
+    // Each item is scoped to its own menu: the first panel is still in its exit animation.
+    for (const date of [SUNDAYS[0], SUNDAYS[1]]) {
+      fireEvent.click(screen.getByRole("button", { name: `Borrar en ${date}` }));
+      fireEvent.click(within(screen.getByRole("menu", { name: `Borrar en ${date}` })).getByRole("menuitem", { name: "Voces (2)" }));
+    }
+    expect(screen.getByText("Voces · domingo 1 mar: se borraron 2 asignaciones.")).toBeTruthy();
+    expect(screen.getByText("Voces · domingo 8 mar: se borraron 2 asignaciones.")).toBeTruthy();
+    const undos = screen.getAllByRole("button", { name: "Deshacer" });
+    expect(undos).toHaveLength(2);
+    fireEvent.click(undos[0]);
+    expect(cellAt(container, "lead", SUNDAYS[0]).textContent).toContain("Ana");
+    expect(cellAt(container, "bgv", SUNDAYS[0]).textContent).toContain("Lucía");
+    expect(cellAt(container, "bgv", SUNDAYS[1]).textContent).toContain("Sin asignar");
+    expect(cellAt(container, "coro", SUNDAYS[1]).textContent).toContain("Sin asignar");
+    // Residual (not fixed): the SAME service cleared of the SAME kind twice within 10 s still
+    // repeats a message, so the second toast replaces the first.
+  });
+
   it("withdraws «Deshacer» once Auto has run", async () => {
     await setup();
     fireEvent.click(screen.getByRole("button", { name: `Borrar en ${SUNDAYS[0]}` }));

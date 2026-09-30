@@ -30,11 +30,13 @@ import { fillSpecialGroup, orderGroup } from "./groupFill";
 import {
   PIN_HANDSHAKE_REFUSAL,
   collectPins,
+  dayLabel,
   droppedPinNotices,
   emptyVoiceSeats,
   pinConflicts,
   pinHandshakeHolds,
   pinRefusal,
+  serviceDayLabel,
   type CollectedPins,
 } from "./pinModel";
 import { pinViolationNotices } from "./pinViolations";
@@ -2837,17 +2839,20 @@ export default function MonthGenerator({
     setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
   }
 
-  /** Applies a planned clear through `handleCellsChange` and drops the cleared cells' markers. */
-  function applyPlannedClear(plan: ClearPlan, offerUndo: boolean) {
+  /**
+   * Applies a planned clear through `handleCellsChange` and drops the cleared cells' markers.
+   * `undoMessage` offers «Deshacer» (service scope); `null` offers none (month scope).
+   */
+  function applyPlannedClear(plan: ClearPlan, undoMessage: string | null) {
     const key = (c: { columnId: string; rowId: string }) => `${c.columnId}|${c.rowId}`;
     const prior = cells.filter((c) => plan.cellKeys.has(key(c)));
     const markers = unfilled.filter((u) => plan.cellKeys.has(key(u)));
     handleCellsChange(applyClear(cells, plan));
     setUnfilled((prev) => dropClearedMarkers(prev, plan));
-    if (!offerUndo) return;
+    if (undoMessage === null) return;
     const generation = undoGeneration.current;
     const id = toast({
-      message: `Se borraron ${plan.seats} asignaci${plan.seats !== 1 ? "ones" : "ón"}.`,
+      message: undoMessage,
       tone: "info",
       duration: 10_000,
       action: {
@@ -2876,7 +2881,20 @@ export default function MonthGenerator({
       return;
     }
     const plan = planClear({ cells, rows, columns, scope, what });
-    if (plan.seats > 0) applyPlannedClear(plan, true);
+    if (plan.seats === 0) return;
+    // R13: the toast names what was cleared and where. `useToast` replaces a toast whose message
+    // repeats, so a bare «Se borraron 2 asignaciones.» from a second service took the first
+    // service's «Deshacer» with it.
+    const column = columns.find((c) => c.columnId === scope.columnId);
+    const service = !column
+      ? ""
+      : column.type === "special_role"
+        ? `${column.serviceName ?? "Especial"} ${dayLabel(column.date)}`
+        : serviceDayLabel(column.type, column.date);
+    applyPlannedClear(
+      plan,
+      `${CLEAR_WHAT_LABEL[what]} · ${service}: se borraron ${plan.seats} asignaci${plan.seats !== 1 ? "ones" : "ón"}.`,
+    );
   }
 
   /** Re-planned against the LIVE cells at confirm, never the plan the dialog opened with. */
@@ -2884,7 +2902,7 @@ export default function MonthGenerator({
     setMonthClearOpen(false);
     if (autoPending) return;
     const plan = planClear({ cells, rows, columns, scope: { kind: "month" }, what: monthClearWhat });
-    if (plan.seats > 0) applyPlannedClear(plan, false);
+    if (plan.seats > 0) applyPlannedClear(plan, null);
   }
 
   function openGroupFill() {
