@@ -18,6 +18,8 @@ const board: GridCell[] = [
   cell(SUN1, "foh:Console", ["zoe"], "manual"),
   cell(SUN2, "bgv", ["beto"], "manual"),
   cell(SPECIAL, "lead", ["ana"]),
+  cell(SPECIAL, "coro", ["lu"]),
+  cell(SPECIAL, "instrumento:Drums", ["paco"]),
 ];
 
 describe("planClear", () => {
@@ -34,6 +36,20 @@ describe("planClear", () => {
     const month = planClear({ cells: board, rows, columns: cols, scope: { kind: "month" }, what: "voices" });
     expect(month.seats).toBe(5);
     expect(month.handPlacedApprox).toBe(2);
+  });
+
+  it("month scope leaves a special's Coro and instruments alone — nothing refills them", () => {
+    const month = planClear({ cells: board, rows, columns: cols, scope: { kind: "month" }, what: "both" });
+    expect([...month.cellKeys]).not.toContain(`${SPECIAL}|coro`);
+    expect([...month.cellKeys]).not.toContain(`${SPECIAL}|instrumento:Drums`);
+    expect([...month.cellKeys]).toContain(`${SPECIAL}|lead`);
+  });
+
+  it("service scope on a special still clears its Coro and instruments — it has undo", () => {
+    const service = planClear({ cells: board, rows, columns: cols, scope: { kind: "service", columnId: SPECIAL }, what: "both" });
+    expect([...service.cellKeys]).toContain(`${SPECIAL}|coro`);
+    expect([...service.cellKeys]).toContain(`${SPECIAL}|instrumento:Drums`);
+    expect([...service.cellKeys]).toContain(`${SPECIAL}|lead`);
   });
 });
 

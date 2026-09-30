@@ -45,11 +45,14 @@ export function planClear(input: {
   const { cells, rows, scope, what } = input;
   const { columns } = input;
   const rowById = new Map(rows.map((r) => [r.id, r]));
+  const columnById = new Map(columns.map((c) => [c.columnId, c]));
   const inScope = scope.kind === "month" ? new Set(columns.map((c) => c.columnId)) : new Set([scope.columnId]);
   const plan: ClearPlan = { cellKeys: new Set(), seats: 0, handPlacedApprox: 0 };
   for (const cell of cells) {
     const row = rowById.get(cell.rowId);
     if (!row || !inScope.has(cell.columnId) || !clears(row, what) || cell.occupants.length === 0) continue;
+    // Month scope: special columns keep their Coro and instruments — nothing refills them. Service scope clears everything.
+    if (scope.kind === "month" && columnById.get(cell.columnId)?.type === "special_role" && cell.rowId !== "lead" && cell.rowId !== "bgv") continue;
     plan.cellKeys.add(keyOf(cell));
     plan.seats += cell.occupants.length;
     if (cell.origin === "manual") plan.handPlacedApprox += cell.occupants.length;
