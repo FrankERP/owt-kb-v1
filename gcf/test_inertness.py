@@ -159,7 +159,28 @@ def _search_fingerprint(solver, model):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def _record(config):
+def _identity_fingerprint(solver, model):
+    """
+    _search_fingerprint without the model's `solution_hint`, for the identity class. Under
+    pins Stage A is hinted with Solve 0's solution, and OPTIMAL proves Solve 0's violation
+    COUNT minimal, not WHICH minimal solution it returned: among ties the search decides,
+    so the hint is the machine's choice and would make that Stage A fingerprint
+    platform-dependent. It only steers Stage A's search — it constrains nothing — so the
+    model, objective and search parameters stay hashed; and Solve 0's own fingerprint,
+    which carries no hint, stays guarded. A model with no hint hashes exactly as
+    _search_fingerprint does (so w4-some still equals the STAGE_A and LADDER literals).
+    """
+    proto = model.Proto()
+    shape = type(proto)()        # ortools 9.15's proto wrapper: copy_from/clear_*, not CopyFrom
+    shape.copy_from(proto)
+    shape.clear_solution_hint()  # and never READ shape.solution_hint after: that prints an empty block
+    params = "\n".join(line for line in str(solver.parameters).splitlines()
+                        if not line.startswith(_TIME_LIMIT))
+    text = str(shape) + "\n--- solver parameters ---\n" + params
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _record(config, fingerprint_of=_search_fingerprint):
     """
     One request, solved: the response, and per solve its (fingerprint, status name,
     whether it carried an objective), in order. Every solve is recorded, because the
@@ -169,7 +190,7 @@ def _record(config):
     solves = []
 
     def record(solver_self, model):
-        fingerprint = _search_fingerprint(solver_self, model)
+        fingerprint = fingerprint_of(solver_self, model)
         status = original(solver_self, model)
         solves.append((fingerprint, solver_self.StatusName(status), model.HasObjective()))
         return status
@@ -302,6 +323,12 @@ class PinlessOutputGolden(unittest.TestCase):
 # bounds the solves before it proved, so every solve BEFORE the ladder must prove OPTIMAL
 # — asserted per shape, not assumed. That is Stage A, and under pins also Solve 0, whose
 # violation count is the ceiling Stage A and the ladder inherit.
+#
+# One thing is NOT hashed, and it is the reason these use _identity_fingerprint and not
+# _search_fingerprint: under pins Stage A's model carries `solution_hint`, Solve 0's own
+# solution. OPTIMAL proves that solve's violation count minimal, not WHICH minimal solution
+# it returned — a tie the machine breaks — so the hint is stripped. It only steers Stage
+# A's search; Solve 0's own fingerprint, which has no hint, stays guarded.
 def _history():
     """
     Three months of counts for six of the twelve names, in the shape buildSolveRequest
@@ -359,8 +386,10 @@ IDENTITY_SHAPES = {
 }
 
 # Captured 2026-09-30 on the solver as it stood before the trailing change (macOS arm64,
-# ortools 9.15.6755). Setting it to None is capture mode: the test then fails with the
-# literal to paste, and a literal left at None never passes the required gate.
+# ortools 9.15.6755). The Stage A entry of each pinned shape was re-captured, still before
+# any solver change, when the solution hint was left out of these hashes (see above).
+# Setting it to None is capture mode: the test then fails with the literal to paste, and
+# a literal left at None never passes the required gate.
 IDENTITY_FINGERPRINTS = {
     "w4-none": [
         "6dbb17da42338427b4a435f666666e5c174883657e5d9663dfe90aa064dc299b",
@@ -404,12 +433,12 @@ IDENTITY_FINGERPRINTS = {
     ],
     "w4-pinned": [
         "2f666dbdbcfd45db95dab3851b2e0d4c7c164ec73edbe9e85df3f35b654bb011",
-        "95367113c2ea74a8bb8ff470973b6c1462326cd5bc4fd50fe324939ae58e8f82",
+        "993c8889ec87af9b1e3c8afe772bd4cd4540293caa767d99ba682105b299aeee",
         "436ef91d34e1dda4b9bb1f431a5be460f4300b65f809ad5371756349c9241fa1",
     ],
     "w4-pinned-history": [
         "50ecfbe42c501ff11c068e91f66cc4a141a159fb96ee861a594d69a3b0a15be5",
-        "6f388184bc9ed696bccdebc317acb477123e6df5ab5d45e117b1fb1fb933139c",
+        "0de9f9a83b535ca7416c6bf45f42b254a20ecdecaec0a384d2240f52054dc7db",
         "449858c032f6e817ef3a60fc502c2c321871e2fa1460929740d501b6075facc0",
     ],
 }
@@ -420,7 +449,7 @@ _SHAPE_RUNS = {}
 def _run_shape(name):
     """IDENTITY_SHAPES[name](), solved once per process (see _record)."""
     if name not in _SHAPE_RUNS:
-        _SHAPE_RUNS[name] = _record(IDENTITY_SHAPES[name]())
+        _SHAPE_RUNS[name] = _record(IDENTITY_SHAPES[name](), _identity_fingerprint)
     return _SHAPE_RUNS[name]
 
 
@@ -469,6 +498,44 @@ class NonTrailingModelIsUnchanged(unittest.TestCase):
                     "model, search or pass sequence — a FINDING to explain in a PR that "
                     "claims non-trailing requests unchanged, never a literal to re-capture "
                     "(see the governance note above IDENTITY_SHAPES)")
+
+    def test_stage_a_fingerprint_ignores_solve_0s_tie_break(self):
+        """
+        Stage A's identity fingerprint does not follow Solve 0's tie-break.
+
+        What _identity_fingerprint is for. Solve 0's OPTIMAL proves its violation count, not
+        which minimal solution it returned, and Stage A is hinted with that solution. Re-solve
+        w4-pinned with Solve 0's search randomized, which can return another minimal
+        solution and so hint Stage A differently: Stage A's and the ladder's identity
+        fingerprints must not move. (Hashed WITH the hint, Stage A's moved on 4 of the 5
+        seeds tried, this one included.) Only the invariance is asserted, not that the
+        hint differs, so the test cannot go red merely because a platform breaks the tie
+        the same way twice.
+        """
+        if IDENTITY_FINGERPRINTS is None:
+            self.skipTest("capture mode")
+        original = cp_model.CpSolver.Solve
+        seen = []       # per solve: (fingerprint with the hint, fingerprint without it)
+
+        def with_solve_0_randomized(solver_self, model):
+            if not seen:
+                solver_self.parameters.search_branching = cp_model.RANDOMIZED_SEARCH
+                solver_self.parameters.random_seed = 7      # measured: moves the hint
+            seen.append((_search_fingerprint(solver_self, model),
+                         _identity_fingerprint(solver_self, model)))
+            return original(solver_self, model)
+
+        cp_model.CpSolver.Solve = with_solve_0_randomized
+        try:
+            mod.solve_from_dict(IDENTITY_SHAPES["w4-pinned"]())
+        finally:
+            cp_model.CpSolver.Solve = original
+        self.assertNotEqual(seen[1][0], seen[1][1], "Stage A under pins carries Solve 0's hint")
+        self.assertEqual(
+            [identity for _hinted, identity in seen[1:]], IDENTITY_FINGERPRINTS["w4-pinned"][1:],
+            "Stage A's or the ladder's identity fingerprint followed Solve 0's tie-break "
+            "instead of the model — the hint is back in the hash, or a pass now reads "
+            "Solve 0's solution")
 
     def test_w4_some_is_the_seed_1_fixture(self):
         """
