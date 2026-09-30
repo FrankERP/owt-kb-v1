@@ -121,7 +121,8 @@ export function collectPins(input: {
           out.unresolved.push(seat);
           return;
         }
-        if (!member.member_name.trim()) {
+        // The Studio schema does not require `member_name`: null or absent is unnamed, not a crash.
+        if (!member.member_name?.trim()) {
           out.unnamed.push(seat);
           return;
         }

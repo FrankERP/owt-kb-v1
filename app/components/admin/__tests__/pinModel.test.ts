@@ -124,6 +124,16 @@ describe("pinRefusal", () => {
     );
   });
 
+  it("refuses, never throws, when member_name is null — the Studio schema does not require it", () => {
+    const who = [ANA, BETO, { ...LU, member_name: null as unknown as string }];
+    const collected = collect([cell(SUN1, "bgv", ["lu"])], who);
+    expect(collected.unnamed).toEqual([{ columnId: SUN1, rowId: "bgv", memberId: "lu", occurrence: 0 }]);
+    expect(collected.pins).toEqual([]);
+    expect(pinRefusal({ ...base, members: who, collected })).toBe(
+      "No se puede usar «Solo llenar vacíos»: Lucía (en BGV del domingo 1 mar) no tiene nombre en su ficha. Complétalo en Miembros o quítalo de ese lugar.",
+    );
+  });
+
   it("refuses more than PINNED_CAP distinct pins rather than dropping any", () => {
     const many = Array.from({ length: PINNED_CAP + 1 }, (_, i) => m(`p${i}`, `Persona ${i}`));
     const cols = buildColumns({ sundayDates: SUNDAYS, activeSatDates: [], specials: [] });
