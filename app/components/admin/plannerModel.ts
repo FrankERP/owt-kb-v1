@@ -19,7 +19,7 @@
 //  2. The positional Saturday fallback is GONE (D16) — a Saturday is never
 //     assigned a week by index. The one Saturday with no Sunday after it in
 //     the month, the trailing Saturday, is week `weeks + 1` by DEFINITION
-//     (`trailingSaturday`, ADR-00NN T1), not by position.
+//     (`trailingSaturday`, ADR-0048 T1), not by position.
 //  3. The rendered column set is an EXPLICIT input (D9) — never inferred from
 //     `sundayDates`, so unchecking Domingos can never leak a Sunday draft.
 //  4. Every cell is multi-occupant (D3) — voice, instrument and FOH alike.
@@ -501,7 +501,7 @@ function subtractDay(iso: string): string {
 }
 
 /**
- * The trailing Saturday (T1, ADR-00NN): the last Sunday of `sundayDates` + 6
+ * The trailing Saturday (T1, ADR-0048): the last Sunday of `sundayDates` + 6
  * days, when that date is still in the same calendar month — Sat 31 Oct 2026,
  * whose Sunday is 1 Nov. `null` when it falls in the next month (Nov 2026: 29 +
  * 6 is 5 Dec) and for an empty spine. It is staffed as solver week `weeks + 1`,
@@ -934,7 +934,7 @@ export function solverPools(config: SolverConfig, members: RankMember[]): Solver
   return { sundayLeadNames, saturdayLeadNames, supportNames, extraSupport, requestMemberIds, dslBlockedByTipo };
 }
 
-// ─── The trailing Saturday and Saturday minimums (T3–T5, ADR-00NN) ──────────
+// ─── The trailing Saturday and Saturday minimums (T3–T5, ADR-0048) ──────────
 
 type SaturdayRole = "Sat.Lead" | "Sat.BGV";
 const isSaturdayRole = (role: SolverRole): role is SaturdayRole => role === "Sat.Lead" || role === "Sat.BGV";

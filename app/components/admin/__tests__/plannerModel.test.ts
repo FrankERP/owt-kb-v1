@@ -133,7 +133,7 @@ const FEB_SATURDAYS = ["2026-02-07", "2026-02-14", "2026-02-21", "2026-02-28"];
 
 // October 2026: Sundays 4/11/18/25. Oct 31 is a Saturday with no Sunday of its
 // own in October (the following Sunday, Nov 1, is out of month) — D16's fixture,
-// and since ADR-00NN (T1) the trailing Saturday, solver week `weeks + 1`.
+// and since ADR-0048 (T1) the trailing Saturday, solver week `weeks + 1`.
 const OCT_SUNDAYS = ["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25"];
 
 // Fully-qualified for every pool. `buildSolveRequest` re-filters the stored pool
@@ -464,7 +464,7 @@ describe("the column set (D9)", () => {
 // ─── Saturday mapping — adjacency, not position (fact 10) ────────────────────
 
 describe("Saturday↔week mapping", () => {
-  // D16 amended by ADR-00NN (T1): the trailing Saturday is week weeks + 1.
+  // D16 amended by ADR-0048 (T1): the trailing Saturday is week weeks + 1.
   // Feb 28 used to be unaddressable (`unaddressableDates` -> [2026-02-28]); it
   // is the last Sunday (22) + 6, still in February, so it is week 5 — by that
   // definition, never by position. `unaddressableDates` goes with its UI in
@@ -481,7 +481,7 @@ describe("Saturday↔week mapping", () => {
     expect(weekendWeekIndexes(FEB_SUNDAYS, shuffled)).toEqual(weekendWeekIndexes(FEB_SUNDAYS, FEB_SATURDAYS));
   });
 
-  // D16 amended by ADR-00NN (T1): the trailing Saturday is week weeks + 1.
+  // D16 amended by ADR-0048 (T1): the trailing Saturday is week weeks + 1.
   // Still no positional fallback: the 31st is week 5 (4 Sundays + 1), never
   // week 1, whose Saturday is the 3rd. It used to be `[]` and unaddressable.
   it("October 2026, only Oct 31 selected: weekendWeekIndexes -> [5] (T1), never [1] (D16 — no positional fallback)", () => {
@@ -489,7 +489,7 @@ describe("Saturday↔week mapping", () => {
     expect(weekForColumn({ type: "saturday_role", date: "2026-10-31" }, OCT_SUNDAYS)).toBe(5);
   });
 
-  // D16 amended by ADR-00NN (T1): the trailing Saturday is week weeks + 1.
+  // D16 amended by ADR-0048 (T1): the trailing Saturday is week weeks + 1.
   it("the three functions agree: October's deselected-Saturday shape produces no draft", () => {
     const activeSatDates = ["2026-10-31"];
     const weekIdx = weekendWeekIndexes(OCT_SUNDAYS, activeSatDates);
@@ -509,7 +509,7 @@ describe("Saturday↔week mapping", () => {
     expect(drafts.map((d) => d.date)).toContain("2026-10-31");
   });
 
-  // D16 amended by ADR-00NN (T1): the trailing Saturday is week weeks + 1.
+  // D16 amended by ADR-0048 (T1): the trailing Saturday is week weeks + 1.
   // `weeks + 1` is no longer out of range in a month that has one (February
   // 2026 does: the 28th); past it, and in a month without one, it still is.
   it("saturdayForWeek resolves weeks + 1 to the trailing Saturday, and returns null (not a crash) past it", () => {
@@ -665,7 +665,7 @@ describe("buildSolveRequest", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
-    // D16 amended by ADR-00NN (T1/T5): the 28th is week 5, sent because Frank can lead it.
+    // D16 amended by ADR-0048 (T1/T5): the 28th is week 5, sent because Frank can lead it.
     expect(result.request.weekends_with_saturday).toEqual([2, 3, 4, 5]);
     expect(Object.prototype.hasOwnProperty.call(result.request, "weekends_with_saturday")).toBe(true);
   });
@@ -727,7 +727,7 @@ describe("buildSolveRequest", () => {
     const again = requestJson({ ...r10BaseInput, members: activeMembers });
     expect(again).toBe(pin);
     // Pinned snapshot — must not change unless buildSolveRequest semantics change.
-    // They did once: D16 amended by ADR-00NN (T1/T5) — the 28th is week 5, sent because
+    // They did once: D16 amended by ADR-0048 (T1/T5) — the 28th is week 5, sent because
     // Frank can lead it, so `weekends_with_saturday` gained the 5.
     expect(pin).toMatchSnapshot();
   });

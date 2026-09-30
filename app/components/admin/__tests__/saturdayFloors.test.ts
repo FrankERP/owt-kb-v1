@@ -8,7 +8,7 @@
  * Frank's decision (2026-09-29): in such a month the Saturday minimum is simply not
  * applied — and the admin is told it was not.
  *
- * Since ADR-00NN (T1/T5) the 31st is week 5 and IS sent whenever a lead can take it, so
+ * Since ADR-0048 (T1/T5) the 31st is week 5 and IS sent whenever a lead can take it, so
  * "no Saturday for Auto" now means: none selected, or only the 31st with no lead able to
  * lead it. The per-person reasons (T3/T4) are pinned in `trailingSaturday.test.ts`.
  */
@@ -120,7 +120,7 @@ describe("buildSolveRequest in a month with no Saturday for Auto", () => {
     expect(omittedCaps.every((o) => o.reason === "noSaturday")).toBe(true);
   });
 
-  // D16 amended by ADR-00NN (T1/T5): the 31st is week 5, sent when a lead can take it.
+  // D16 amended by ADR-0048 (T1/T5): the 31st is week 5, sent when a lead can take it.
   it("keeps the minimums when the 31st is the only Saturday and a lead can take it", () => {
     const built = solve(rules, ["2026-10-31"]);
     expect(built.request.weekends_with_saturday).toEqual([5]);
@@ -132,7 +132,7 @@ describe("buildSolveRequest in a month with no Saturday for Auto", () => {
 
   it("keeps the minimums untouched in a month that has a Saturday Auto can staff", () => {
     const built = solve(rules, ["2026-10-17", "2026-10-31"]);
-    // D16 amended by ADR-00NN (T1/T5): the 31st is week 5 and Frank can lead it.
+    // D16 amended by ADR-0048 (T1/T5): the 31st is week 5 and Frank can lead it.
     expect(built.request.weekends_with_saturday).toEqual([3, 5]);
     expect(built.request.dsl_rules).toContain("Andy !in Sun.BGV & Sun.* == 1 & Sat.* == 1 & fairness_slack 3");
     expect(built.request.dsl_rules).toContain("Tay Sat.* == 1 & Sun.* == 1");

@@ -2223,7 +2223,7 @@ export default function MonthGenerator({
    * screen. All three spine consumers keep receiving `sundayDatesFull`:
    * `buildSolveRequest`, `applySolveResponse` and `mapUnfilledSeats`' 2nd
    * argument. (A fourth, `computeUnaddressableDates`, was removed with the
-   * «Fuera del alcance de Auto» surface — ADR-00NN, T1. `ruleEnforcement` used
+   * «Fuera del alcance de Auto» surface — ADR-0048, T1. `ruleEnforcement` used
    * to be named here and never belonged: it is reached only from
    * `candidateRanking`, is not imported by this file, and takes no Sunday list
    * at all.)

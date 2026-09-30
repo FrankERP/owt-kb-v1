@@ -791,7 +791,7 @@ describe("PlannerGrid — Auto confirms first (D2)", () => {
     fireEvent.click(screen.getByRole("button", { name: /auto-asignar/i }));
     expect(onAuto).not.toHaveBeenCalled();
     expect(screen.getByText(/reemplazar/i)).toBeTruthy();
-    // ADR-00NN (T1) removed the «N sábado(s) fuera del alcance» clause with the prop that fed it.
+    // ADR-0048 (T1) removed the «N sábado(s) fuera del alcance» clause with the prop that fed it.
     expect(screen.queryByText(/fuera del alcance/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^confirmar$/i }));
     expect(onAuto).toHaveBeenCalledTimes(1);
@@ -835,7 +835,7 @@ describe("PlannerGrid — preflight markers, and no unaddressable one", () => {
     expect(screen.getByText("Bloqueado")).toBeTruthy();
   });
 
-  // ADR-00NN (T1): every in-month Saturday has a solver week, so the badge (and its prop) is gone.
+  // ADR-0048 (T1): every in-month Saturday has a solver week, so the badge (and its prop) is gone.
   it("renders no 'fuera del alcance de Auto' marker on any column", () => {
     render(<PlannerGrid {...baseProps({ columns: WEEKEND })} />);
     expect(screen.queryByText(/fuera del alcance de auto/i)).toBeNull();

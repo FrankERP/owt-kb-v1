@@ -65,8 +65,8 @@ violation_ceiling_proven? }`. On error: `{ ok: false, error }`.
   extra diagnostic line suggesting it be deselected; the `ValueError` refusals above do not.
   **A request that does not name it
   builds the model it built before, byte for byte** — frozen by `gcf/test_inertness.py`
-  (`docs/CI.md`). **The planner does not send `weeks + 1` yet** (see «Before the request leaves the
-  planner»).
+  (`docs/CI.md`). **The planner sends `weeks + 1`** when the trailing Saturday is selected and some
+  lead can take it (see «Before the request leaves the planner», ADR-0048).
 
 Also a **CLI mode**: `echo '<json>' | python3 owt_solver_v2.py --json-mode` (stdin→stdout);
 no-args runs a built-in demo roster.
@@ -258,33 +258,82 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   120s.
 
 **Before the request leaves the planner** (`buildSolveRequest`, `app/components/admin/plannerModel.ts`):
-- **A month with no Saturday Auto can staff drops its Saturday MINIMUMS.** Auto staffs a
-  Saturday only when an in-month Sunday follows it (D16), and it staffs only the Saturdays the
-  admin keeps selected (all of the month's are preselected). So a month sends
-  `weekends_with_saturday: []` when every Saturday is deselected, or when the only one kept is
-  a month-end Saturday — the eve of next month's first Sunday (31 Oct 2026, 31 Jan and 28 Feb
-  2026). October 2026 was the second case: its only Saturday service was the 31st, so 3/10/17/24
-  were deselected. A rule cap on a Saturday-only pattern (`Sat.*`, `Sat.Lead`,
-  `Sat.BGV`) with `==`/`>=` and a value of at least 1 (`isSaturdayFloor`, relative values
-  resolved as the solver does) is then unsatisfiable, and one of them made the whole month
-  infeasible — Sundays included. Such caps are left out of that month's request and Auto
-  shows which (`omittedCapsNotice`); maximums stay, and in any month with a Saturday nothing
-  changes (Frank's decision, 2026-09-29). **Still hard:** a Saturday minimum for someone
-  unavailable on every Saturday the month does have — that month still refuses.
+- **The trailing Saturday is Auto's (T1–T5,
+  [ADR-0048](adr/0048-the-saturday-after-the-last-sunday-belongs-to-its-calendar-month.md)).**
+  `trailingSaturday(sundayDatesFull)` returns the last Sunday + 6 days if that date is still in
+  the month (31 Oct 2026, 31 Jan and 28 Feb 2026, 31 Jul 2027). That date is solver week
+  `weeks + 1`.
+  - One definition: `saturdayForWeek`, `weekForColumn` and `weekendWeekIndexes` resolve the date
+    through it, so its column, seats, unfilled markers, draft and pins always agree on the week.
+  - The grid's rule context (`ruleContextForTarget`) judges it as week `weeks + 1` of its own
+    month, never as the next month's week 1.
+  - It is preselected like every Saturday. Deselected, it is not sent (T2).
+  - **T5:** a selected trailing Saturday is sent only if some member of the request's Sunday or
+    Saturday lead pools can lead it (`saturdayAccess`). A lead cannot if they are unavailable that
+    day, or if a `!in` pattern or a week exclusion for `weeks + 1` covers `Sat.Lead`. Patterns
+    expand through `rolesOfPattern`, which mirrors the solver's `expand_pattern`; the guard is
+    `patternRolesSync.test.ts`.
+  - If no lead can, `weeks + 1` is left out and the Sundays are still solved. Auto says «El
+    sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles o
+    excluidos). Llénalo a mano.» (`trailingNotice`). The check is advisory; the solver stays the
+    authority.
+  - If it is sent, each request member unavailable that day gets
+    `<name> !in week <weeks+1> Sat.*`. Nothing is derived from the next month's Sunday.
+  - If T5 withholds it, week exclusions that name `weeks + 1` are not sent, because the solver
+    refuses a rule for a week the request does not have. A «Sem 5» exclusion in a four-Sunday
+    month is still sent, and still refused with a 422 that names the rule, when the month has no
+    trailing Saturday or it is deselected. That is deliberate (ADR-0048).
+  - An older solver refuses `weeks + 1` with `ok: false`, so this needs delivery 1 deployed
+    first.
+  - Before this change it was manual-only (D16: a week came only from an in-month Sunday after
+    the Saturday), and the grid marked it «Fuera del alcance de Auto». That badge, its confirm
+    clause and `unaddressableDates` are gone.
+- **Saturday minimums are judged per person (T3/T4).** A Saturday minimum is a cap on a
+  Saturday-only pattern (`Sat.*`, `Sat.Lead`, `Sat.BGV`) with `==` or `>=` and a value of at least
+  1 (`isSaturdayFloor`; relative values resolve as the solver resolves them).
+  `buildSolveRequest` drops a minimum from that person's DSL line in three cases and returns it in
+  `omittedCaps` with a reason. Auto shows one line per reason (`omittedCapsNotices`), naming each
+  rule as the rules card names it (`capLabel`):
+  - `noSaturday`: the request sends no Saturday at all, so every minimum is dropped. The line
+    reads «Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó …».
+  - `unreachable`: the minimum asks for more Saturdays than the person can take among those sent.
+    A Saturday does not count if they are unavailable that day, or if a `!in` pattern or a week
+    exclusion for that week covers the minimum's roles. For `Sat.Lead`, they must also be in a
+    lead pool. The line reads «No se aplicó «X» a A y B: los sábados que Auto llena este mes no
+    alcanzan para cumplirlo (por disponibilidad, exclusiones o rol).»
+  - `capacity`: the remaining minimums cannot all get a seat. The line reads «No caben todos los
+    mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó …».
+
+  **The seat model** (`floorsFitSeats`) decides `capacity`:
+  - Each sent Saturday has the solver's 2 Lead and 3 BGV seats, one seat per person.
+  - A `Sat.Lead` minimum takes only a Lead seat, a `Sat.BGV` minimum only a BGV seat, and `Sat.*`
+    either, but only where that person can take that role that week. A minimum of v needs v
+    different Saturdays.
+  - It is a max flow, so any set it accepts comes with a real seat assignment.
+  - If the minimums do not all fit, they are sorted by the person's Saturday count in the
+    request's history, fewest first, ties by name. Under ADR-0046's `history: []`, that is by
+    name. Each one is kept only if the kept set plus it still fits.
+  - A person with two Saturday minimums is judged conservatively: demand is the larger value,
+    and seats are limited to the classes both allow. So one person's `Sat.Lead >= 1` plus
+    `Sat.BGV >= 1` never fits, and the second is dropped.
+
+  Maximums always stay. The solver stays the authority for what the model leaves out: the
+  dedicated Saturday-lead anchor, zero maximums that bar `Sat.Lead`, rows grown by pins, and the
+  one-Lead-per-Saturday rule when the only possible lead has a `Sat.BGV` minimum they can reach
+  only that week.
+
+  October 2026 is why this exists: its only Saturday service was the 31st, so the admin
+  deselected 3/10/17/24, the request sent no Saturday, and three saved `Sat.* == 1` minimums made
+  the whole month infeasible, Sundays included. PR #116 then dropped such minimums month-wide.
+
+  A request stays byte-identical to before this change when no trailing Saturday is selected and
+  no minimum is dropped. ADR-0048 names the one case where a dropped minimum is one the solver
+  could have met: the two-minimum rule above.
 - **The solver's own reason reaches the admin.** A solver `ok: false` comes back as a 422 whose
   body carries the reason; Auto now reads it and shows «El solver no encontró solución. Motivo
   del solver: …» (`solverRefusalMessage`) instead of the generic line alone. The solver's
   diagnostic text is English and, for an over-constrained month, blames "a mandatory Lead
   seat" generically — a known weakness of `diagnose_infeasibility`.
-- **A month-end Saturday is still manual-only: the planner does NOT send `weeks + 1` yet.** The
-  solver accepts it since delivery 1 of the trailing-Saturday change (see «Input / output»), but
-  `buildSolveRequest` builds its indexes only from the month's Sundays (`weekendWeekIndexes`:
-  `1..weeks`), and the planner of the NEXT month offers only its own Saturdays, so its week 1 never
-  gets the previous month's last Saturday: Auto can staff 31 Oct 2026 from neither October nor
-  November. The grid labels it «Fuera del alcance de Auto» in the month it belongs to. Sending
-  `weeks + 1` is delivery 2 (spec `2026-09-29-planner-trailing-saturday-and-fill-empty-design.md`),
-  and only after the solver carrying it is deployed and its deploy check has passed: an older solver
-  refuses `weeks + 1` with `ok: false`.
 - **«Solo llenar vacíos» sends the board as pins** (`pinModel.ts`; spec
   `2026-09-29-planner-trailing-saturday-and-fill-empty-design.md` §3). With the switch on, every
   occupied Lead/BGV/Coro seat on a column Auto writes is a pin `{ week, role, person }`, by exact
@@ -292,7 +341,10 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   two), at most 100. What the solver would refuse in English (an occupant who is no longer a
   member, an empty `member_name`, more than 100, a Saturday week not sent, a pinned-only spelling
   that differs only in case or spaces from a pool name or from another pinned-only spelling) is
-  refused first in Spanish, naming the cell. **Off, or with nothing on the board, the request has
+  refused first in Spanish, naming the cell. A trailing Saturday that T5 withheld is not a column
+  Auto writes (`weekendsWithSaturday` on `collectPins`/`emptyVoiceSeats`). Its seats are never
+  pinned, so they are never refused, and the confirm's empty-seat count leaves them out.
+  **Off, or with nothing on the board, the request has
   no `pinned` key** and is exactly what it was before. A success is applied only if `pinned_honored` equals the pins sent and the
   schedule shows every pin by exact name; otherwise Auto says «El solver no respetó los lugares
   fijados; no se aplicó nada.». `pin_violations` are named as the rules card names them
@@ -397,7 +449,7 @@ problem found later is **not** a function revert: revert the app half (it stops 
 `pinned`, and a pinless request builds today's model). Reverting the function while a pinned
 app is live makes every Auto fail the handshake. If a pinless regression ever reaches
 production, revert **the app first**, then re-deploy the previous function revision. The same order
-holds for the trailing Saturday once the planner sends `weeks + 1`: the planner stops sending it
+holds for the trailing Saturday, now that the planner sends `weeks + 1`: the planner stops sending it
 first (the solver's non-trailing path is unchanged by the invariant), then the function if ever
 both — an old function refuses a request that names it.
 

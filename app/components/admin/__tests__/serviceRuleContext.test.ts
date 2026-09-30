@@ -18,7 +18,7 @@ describe("serviceRuleContext", () => {
     expect(completeSundaySpine("invalid")).toEqual([]);
   });
 
-  // D16 amended by ADR-00NN (T1): the trailing Saturday is week weeks + 1.
+  // D16 amended by ADR-0048 (T1): the trailing Saturday is week weeks + 1.
   // Feb 28 2026 used to resolve through the Sunday after it, 1 March, to
   // March's week 1 — a rule derived from the NEXT month's spine, which the
   // solver, the request and every other helper no longer agree with. It is

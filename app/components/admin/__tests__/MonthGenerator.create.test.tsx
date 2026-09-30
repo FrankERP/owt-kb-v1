@@ -899,7 +899,7 @@ describe("MonthGenerator — create path", () => {
 
     // The fix, at the request level, asserted AFTER the solve call settled:
     // the request names week 5 — the selected Oct 31, sent because Ana can
-    // lead it (T1/T5, ADR-00NN amending D16) — and never week 1, whose
+    // lead it (T1/T5, ADR-0048 amending D16) — and never week 1, whose
     // Saturday (Oct 3) was deselected. A mismatch here fails the test
     // directly — nothing catches or swallows it.
     expect(captured.solveRequest?.weekends_with_saturday).toEqual([5]);
@@ -1165,10 +1165,10 @@ describe("MonthGenerator — create path", () => {
   // rest. February 2026 could not serve here before T1 — it ends on Saturday
   // the 28th, whose Sunday is in March, so it WAS unaddressable before anything
   // was deselected and the signal would have been indistinguishable from the
-  // bug. Since ADR-00NN (T1) the 28th is February's trailing Saturday, week 5
+  // bug. Since ADR-0048 (T1) the 28th is February's trailing Saturday, week 5
   // (see the second half of the test below).
   //
-  // Since ADR-00NN (T1) the «Fuera del alcance de Auto» surface and its
+  // Since ADR-0048 (T1) the «Fuera del alcance de Auto» surface and its
   // `computeUnaddressableDates` consumer are gone. The badge/clause assertions
   // below stay as the "appears nowhere" check; the spine pin they carried moved
   // to the «Solo llenar vacíos» count, whose `emptyVoiceSeats` also takes the
@@ -1185,7 +1185,7 @@ describe("MonthGenerator — create path", () => {
     fireEvent.click(container.querySelector('[data-date="2026-03-15"]')!);
     // Then drop a Saturday that is addressable on any reading (2026-03-28 sits
     // beside Sunday the 29th). This is ordinary month setup. (It used to also
-    // invalidate the `unaddressableDatesList` memo, deleted under ADR-00NN, T1.)
+    // invalidate the `unaddressableDatesList` memo, deleted under ADR-0048, T1.)
     fireEvent.click(container.querySelector('[data-date="2026-03-28"]')!);
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
 
@@ -1193,7 +1193,7 @@ describe("MonthGenerator — create path", () => {
     expect(container.querySelector('[data-date="2026-03-14"]')).toBeTruthy();
     // ...and carries no scope warning, on the header badge...
     expect(screen.queryByText("Fuera del alcance de Auto")).toBeNull();
-    // ...nor in the Auto confirmation banner (the clause is gone since ADR-00NN, T1).
+    // ...nor in the Auto confirmation banner (the clause is gone since ADR-0048, T1).
     fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
     const banner = screen.getByText(/Esto reemplazará toda asignación de voz/);
     expect(banner.textContent).not.toMatch(/fuera del alcance de Auto/);
@@ -1206,7 +1206,7 @@ describe("MonthGenerator — create path", () => {
     expect(screen.getByText(/Solo se llenarán/).textContent).toContain("los 47 lugares de voz vacíos");
     unmount();
 
-    // D16 amended by ADR-00NN (T1): the trailing Saturday is week weeks + 1.
+    // D16 amended by ADR-0048 (T1): the trailing Saturday is week weeks + 1.
     // This half used to be the CONTROL: February 2026's Saturday the 28th (its
     // Sunday, March 1, is outside the spine) was unaddressable and had to show
     // the badge and the clause. It is now the trailing Saturday, week 5, so

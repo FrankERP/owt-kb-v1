@@ -26,7 +26,7 @@
 //     just solvability. (A special DOES have one — E18.)
 //  5. Unchecking Domingos still enables Auto and renders no Sunday column.
 //  6. (Retired.) An `unaddressableDates` prop drove a «Fuera del alcance de
-//     Auto» badge; since ADR-00NN (T1) every in-month Saturday has a solver
+//     Auto» badge; since ADR-0048 (T1) every in-month Saturday has a solver
 //     week, so the prop, the badge and the confirm clause are gone.
 //  7. Auto has a failure and pending contract (D15) — the component does not
 //     own the fetch (`onAuto` does), but it owns rendering `autoState`

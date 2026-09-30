@@ -43,7 +43,7 @@ export function completeSundaySpine(month: string): string[] {
 
 /**
  * Resolve week-exclusion context from the service target itself. A Saturday is
- * owned by its following Sunday — except the trailing Saturday (T1, ADR-00NN:
+ * owned by its following Sunday — except the trailing Saturday (T1, ADR-0048:
  * the last Sunday + 6, still in the month, e.g. Sat 31 Oct 2026), whose Sunday
  * is in the next month. It is week `weeks + 1` of its OWN month, over its own
  * month's spine, exactly as `trailingSaturday`/`weekForColumn` and the solver

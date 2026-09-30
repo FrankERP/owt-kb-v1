@@ -21,9 +21,15 @@
 - **T4:** when the floors cannot all fit the month's Saturday seats, keep them in ascending order of the person's Saturday count in the history entries the request is built with, ties broken by name, while the kept set still fits. Leave the rest out and name them. (ADR-0046 made Auto send `history: []`, so today every count is 0 and the order is by name. See ruling Q2.)
 - **T5:** if nobody in the Sunday-lead ∪ Saturday-lead pools can lead the trailing Saturday, it is not sent, and the notice says why. The reasons that count: unavailable that day, excluded by a `!in` rule, or excluded by a week exclusion for that week.
 - **T6:** `{weeks-N}` counts Sundays: `weeks = sundayDatesFull.length`, unchanged.
-- **A request without a trailing Saturday is byte-identical to today's.**
+- **A request without a trailing Saturday is byte-identical to today's.** (post-implementation) This
+  holds only when no Saturday minimum is left out: every floor is reachable, and `floorsFitSeats`
+  seats them all. T3/T4 apply in every month. Without pins, they change a request only by leaving
+  out a floor the old request could not meet. The exception is a person with two Saturday floors,
+  whom the seat model judges conservatively (ADR-0048).
 - Notices, in order: floors left out (grouped by reason and named as the rules card names them, with `capLabel`), then the trailing Saturday not sent, then delivery 3's notices.
 - The four gates must pass: `npx tsc --noEmit`, `npm test`, `npx eslint .` with 0 errors. No `gcf/**` change.
+  (post-implementation) This plan's commits change no `gcf/**` file. The branch does carry
+  delivery 1's `gcf/**` changes, through the merge `f4846169`, so the Python gate runs on it too.
 - Spanish UI copy; conventional commits. **Never** add a Co-Authored-By or AI-attribution trailer.
 - `CueDialog` literal-`open` baseline 5, `Button` only, `motion` only under `ui/` (house rules, CLAUDE.md).
 
@@ -76,7 +82,7 @@
   - `cellsToDrafts` produces the 31st's `saturday_role` draft with its voices.
   - `collectPins` with `weekendsWithSaturday: []` skips the 31st's column; with `[5]` it pins it as `Sat.*` week 5.
   - A month with no trailing Saturday (Nov 2026): all these helpers answer exactly as before. Assert against today's values.
-- [ ] **Step 2: Amend the D16 tests** in `plannerModel.test.ts` that pin the 31st as unaddressable or «no week». Rewrite each to assert the new mapping, and add a comment `// D16 amended by ADR-00NN (T1): the trailing Saturday is week weeks + 1.` Do not delete them silently.
+- [ ] **Step 2: Amend the D16 tests** in `plannerModel.test.ts` that pin the 31st as unaddressable or «no week». Rewrite each to assert the new mapping, and add a comment `// D16 amended by ADR-0048 (T1): the trailing Saturday is week weeks + 1.` Do not delete them silently.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run the tests.** `npx vitest run app/components/admin/__tests__/trailingSaturday.test.ts app/components/admin/__tests__/plannerModel.test.ts app/components/admin/__tests__/pinModel.test.ts`, then `npx tsc --noEmit`.
 - [ ] **Step 5: Commit.** `feat(planner): one definition of the Saturday after the last Sunday, resolved to week weeks + 1`
@@ -114,11 +120,20 @@
    - Else if `resolvedCapValue(cap, weeks)` > reachable → omitted with `unreachable`.
    - Then capacity. Let `S` = the number of sent Saturdays. Seats are `Sat.Lead` 2·S, `Sat.BGV` 3·S, total 5·S. Demand is each remaining floor's value, counted as Lead for `Sat.Lead`, BGV for `Sat.BGV`, and total-only for `Sat.*`.
    - If any class exceeds its seats, sort the remaining floors by (the person's Saturday count summed over `historyForRequest(historyEntries, year, month)` `role_counts[person]["Sat.Lead"] + ["Sat.BGV"]`, then `r.person`). Keep them greedily while every class still fits. Omit the rest with `capacity`.
+   - (post-implementation, ruling Q10) The pooled count above kept sets the solver cannot seat, so it was replaced by a seat assignment, `floorsFitSeats`:
+     - each sent Saturday has 2 Lead + 3 BGV seats and one seat per person;
+     - `Sat.Lead` takes only a Lead seat, `Sat.BGV` only a BGV seat, `Sat.*` either, and only where that person can take that role that week;
+     - a floor of value v needs v distinct Saturdays;
+     - it is solved as a max flow;
+     - a person with several floors is judged conservatively: demand is the largest value, and seats are limited to the classes every floor allows.
+
+     The greedy keeps a floor iff the kept set plus it can still all be seated. See ADR-0048.
    - Omitted floors are dropped from that person's DSL line exactly as today; maximums always stay.
 
 **Copy:**
 - `noSaturday`: today's sentence, unchanged.
 - `unreachable`: «No se aplicó «X» a A y B: no pueden cubrir ningún sábado de los que Auto llena este mes (no disponibles, excluidos o fuera de los líderes).» Group by cap, with `joinEs`.
+  (post-implementation, ruling Q6) The shipped sentence is number-neutral. It is true whether the person reaches no Saturday or too few: «No se aplicó «X» a A y B: los sábados que Auto llena este mes no alcanzan para cumplirlo (por disponibilidad, exclusiones o rol).»
 - `capacity`: «No caben todos los mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó «X» a A.»
 - trailing `noLead`: «El sábado <d> <mes> no se mandó al solver: ningún líder puede dirigirlo (no disponibles o excluidos). Llénalo a mano.» The date uses `dayLabel` from `pinModel.ts` (move `dayLabel` to `plannerModel.ts` if the import would create a cycle; `pinModel` imports `plannerModel`, so `plannerModel` must not import `pinModel`).
 
