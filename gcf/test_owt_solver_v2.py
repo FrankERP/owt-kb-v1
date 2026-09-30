@@ -897,5 +897,267 @@ class ExactCountLeavesTheBand(unittest.TestCase):
                 self.assertGreaterEqual(self._leads(res).get("Mkz"), 2)
 
 
+def _pin(person, role, week):
+    return {"person": person, "role": role, "week": week}
+
+
+class TrailingSaturday(unittest.TestCase):
+    """
+    The trailing Saturday (docs/superpowers/specs/2026-09-29-solver-trailing-saturday-design.md):
+    `weekends_with_saturday` may name `weeks + 1`, the month-end Saturday whose Sunday falls in
+    the next month. It is a week with a Saturday service and NO Sunday one, and every per-week
+    mechanism runs over it (D3). A four-Sunday month throughout, so week 5 is the trailing one.
+
+    Fictitious names on a small roster: four Sunday leads and one dedicated Saturday lead, so
+    pinning every possible Saturday lead elsewhere takes five pins, not twelve.
+    """
+
+    LEADS = ["Ana", "Beto", "Caro", "Dani"]
+    DEDICATED = ["Tere"]
+    SUPPORT = ["Eli", "Fer", "Gil", "Ines", "Joel", "Kari", "Luis"]
+    EVERYONE = LEADS + DEDICATED + SUPPORT
+    HINT = ("The Saturday after the last Sunday (week 5) is part of this request; "
+            "if it cannot be staffed, deselect it and fill it by hand.")
+    _cache = {}
+
+    def config(self, sat_weeks=(5,), rules=(), pinned=None, seed=42):
+        data = dict(
+            weeks=4, weekends_with_saturday=list(sat_weeks),
+            sunday_leads=list(self.LEADS), saturday_leads=list(self.DEDICATED),
+            support=list(self.SUPPORT), dsl_rules=list(rules), history=[], seed=seed,
+            # The model is small; these are about its shape, not about search quality.
+            solver_max_time_seconds=3, solver_total_budget_seconds=20,
+        )
+        if pinned is not None:
+            data["pinned"] = pinned
+        return data
+
+    def week5(self, res):
+        sat = res["schedule"]["5"]["Saturday"]
+        return sat["Lead"] + sat["BGV"]
+
+    def only_ana_and_eli_on_the_31st(self):
+        """Everyone but one lead and one support member is away on week 5 (solved once)."""
+        if "ana_eli" not in self._cache:
+            away = [f"{p} !in week 5 *.*" for p in self.EVERYONE if p not in ("Ana", "Eli")]
+            self._cache["ana_eli"] = solve_from_dict(self.config(rules=away))
+        return self._cache["ana_eli"]
+
+    # 1
+    def test_the_trailing_saturday_is_a_week_with_no_sunday(self):
+        for sats in ((5,), (2, 4, 5)):
+            with self.subTest(saturdays=sats):
+                res = solve_from_dict(self.config(sat_weeks=sats))
+                self.assertTrue(res["ok"], res.get("error"))
+                schedule = res["schedule"]
+                self.assertEqual(set(schedule), {"1", "2", "3", "4", "5"})
+                self.assertEqual(set(schedule["5"]), {"Saturday"}, "a phantom Sunday in week 5")
+                self.assertEqual(len(schedule["5"]["Saturday"]["Lead"]), 2)
+                self.assertEqual(len(schedule["5"]["Saturday"]["BGV"]), 3)
+                for week in range(1, 5):
+                    expected = {"Sunday", "Saturday"} if week in sats else {"Sunday"}
+                    self.assertEqual(set(schedule[str(week)]), expected, f"week {week}")
+
+    # 2
+    def test_only_the_week_after_the_last_sunday_is_legal(self):
+        res = solve_from_dict(self.config(sat_weeks=(6,)))
+        self.assertFalse(res["ok"])
+        self.assertIn("1..5", res["error"])
+        self.assertIn("4 Sundays", res["error"])
+        self.assertNotIn("5 weeks", res["error"])
+        # A pin's range message counts Sundays too, named or not.
+        for sats, week in (((5,), 6), ((2, 4), 5)):
+            with self.subTest(saturdays=sats, week=week):
+                err = solve_from_dict(self.config(
+                    sat_weeks=sats, pinned=[_pin("Tere", "Sat.Lead", week)]))["error"]
+                self.assertIn(f"week {week}", err)
+                self.assertIn("4 Sundays", err)
+                self.assertNotIn("5 weeks", err)
+
+    # 3
+    def test_a_week_5_exclusion_needs_the_trailing_saturday(self):
+        refused = solve_from_dict(self.config(sat_weeks=(2, 4), rules=["Tere !in week 5 *.*"]))
+        self.assertFalse(refused["ok"])
+        self.assertIn("week 5", refused["error"])
+        self.assertIn("4 Sundays", refused["error"])
+        self.assertNotIn("5 weeks", refused["error"])
+        # Named, it binds the 31st: every Saturday lead but Ana is away, so Ana leads alone
+        # (support members are not Saturday leads) and Tere, the anchor, is not there.
+        away = [f"{p} !in week 5 *.*" for p in ("Beto", "Caro", "Dani", "Tere")]
+        res = solve_from_dict(self.config(rules=away))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["schedule"]["5"]["Saturday"]["Lead"], ["Ana"])
+        self.assertNotIn("Tere", self.week5(res))
+
+    # 4
+    def test_a_week_5_pin_must_be_a_saturday_role(self):
+        refused = solve_from_dict(self.config(pinned=[_pin("Ana", "Sun.Lead", 5)]))
+        self.assertFalse(refused["ok"])
+        self.assertIn("no Sunday service", refused["error"])
+        res = solve_from_dict(self.config(pinned=[_pin("Eli", "Sat.Lead", 5)]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["pinned_honored"], 1)
+        self.assertIn("Eli", res["schedule"]["5"]["Saturday"]["Lead"])
+        self.assertEqual(res["pin_violations"], [])
+
+    # 5
+    def test_a_saturday_minimum_is_met_by_the_trailing_saturday_alone(self):
+        rules = ["Eli Sat.* == 1", "Fer Sat.* == 1"]
+        res = solve_from_dict(self.config(sat_weeks=(5,), rules=rules))
+        self.assertTrue(res["ok"], res.get("error"))
+        for person in ("Eli", "Fer"):
+            self.assertIn(person, self.week5(res))
+            counts = res["role_counts"][person]
+            self.assertEqual(counts["Sat.Lead"] + counts["Sat.BGV"], 1)
+        # Control: with no Saturday at all the same minimums cannot be met.
+        self.assertFalse(solve_from_dict(self.config(sat_weeks=(), rules=rules))["ok"])
+
+    # 6
+    def test_a_pair_rule_binds_the_trailing_saturday(self):
+        rule = "Eli !with Fer on *.*"
+        # Week 5 is the only Saturday: both minimums put the pair on it together.
+        both = ["Eli Sat.* == 1", "Fer Sat.* == 1", rule]
+        self.assertFalse(solve_from_dict(self.config(rules=both))["ok"])
+        res = solve_from_dict(self.config(
+            rules=[rule], pinned=[_pin("Eli", "Sat.BGV", 5), _pin("Fer", "Sat.BGV", 5)]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["pin_violations"], [f"W5 Sat: {rule}"])
+
+    # 7
+    def test_a_presence_rule_binds_the_trailing_saturday(self):
+        rule = "any_of(Eli,Fer) on Sat.BGV each_week"
+        for seed in (1, 2):
+            with self.subTest(seed=seed):
+                res = solve_from_dict(self.config(rules=[rule], seed=seed))
+                self.assertTrue(res["ok"], res.get("error"))
+                self.assertTrue({"Eli", "Fer"} & set(res["schedule"]["5"]["Saturday"]["BGV"]))
+        # Three others pinned into the row leave the pair no Saturday BGV seat on the 31st.
+        res = solve_from_dict(self.config(
+            rules=[rule], pinned=[_pin(p, "Sat.BGV", 5) for p in ("Gil", "Ines", "Joel")]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["pin_violations"], [f"W5: {rule}"])
+
+    # 8
+    def test_a_consecutive_rule_binds_weeks_4_and_5(self):
+        rule = "Ana !consecutive on *.Lead"
+        # Ana is away weeks 1-3 and must lead once on each day: week 4's Sunday, week 5's Saturday.
+        forced = [f"Ana !in week {w} *.*" for w in (1, 2, 3)] + [
+            "Ana Sun.Lead == 1", "Ana Sat.Lead == 1"]
+        res = solve_from_dict(self.config(rules=forced))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertIn("Ana", res["schedule"]["4"]["Sunday"]["Lead"])
+        self.assertIn("Ana", res["schedule"]["5"]["Saturday"]["Lead"])
+        self.assertFalse(solve_from_dict(self.config(rules=forced + [rule]))["ok"])
+        res = solve_from_dict(self.config(
+            rules=[rule], pinned=[_pin("Ana", "Sun.Lead", 4), _pin("Ana", "Sat.Lead", 5)]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["pinned_honored"], 2)
+        self.assertEqual(res["pin_violations"], [f"W4-5 Ana: {rule}"])
+
+    # 9
+    def test_one_seat_per_person_on_the_trailing_saturday(self):
+        # Two people for five seats: without the limit Stage A would fill all five with them.
+        res = self.only_ana_and_eli_on_the_31st()
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(sorted(self.week5(res)), ["Ana", "Eli"])
+
+    # 10
+    def test_the_dedicated_saturday_lead_anchors_the_trailing_saturday(self):
+        for seed in (1, 2):
+            with self.subTest(seed=seed):
+                res = solve_from_dict(self.config(sat_weeks=(2, 4, 5), seed=seed))
+                self.assertTrue(res["ok"], res.get("error"))
+                for week in ("2", "4", "5"):
+                    self.assertIn("Tere", res["schedule"][week]["Saturday"]["Lead"], week)
+
+    # 11
+    def test_a_full_week_5_absence_earns_one_service_of_slack(self):
+        from owt_solver_v2 import compute_absence_slack
+        exclusions = _parse_week_exclusions(
+            ["Eli !in week 5 *.*", "Fer !in week 4 *.*"], self.EVERYONE)
+        slack = compute_absence_slack(exclusions, weeks=4, sat_weeks=[2, 4, 5],
+                                      all_people=self.EVERYONE)
+        self.assertEqual(slack["Eli"], 1, "the 31st has no Sunday to miss")
+        self.assertEqual(slack["Fer"], 2, "control: an in-month weekend is two services")
+
+    # 12
+    def test_under_pins_the_trailing_saturday_reports_its_builtin_markers(self):
+        # Every possible Saturday lead pinned into the 31st's BGV row: nobody is left to lead.
+        leads_in_bgv = [_pin(p, "Sat.BGV", 5) for p in self.LEADS + self.DEDICATED]
+        res = solve_from_dict(self.config(pinned=leads_in_bgv))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["pinned_honored"], 5)
+        self.assertCountEqual(res["pin_violations"],
+                              ["builtin:mandatory_lead:W5:Sat", "builtin:sat_anchor:W5"])
+        # Only the dedicated lead moved: the anchor gives, the mandatory lead does not.
+        res = solve_from_dict(self.config(pinned=[_pin("Tere", "Sat.BGV", 5)]))
+        self.assertTrue(res["ok"], res.get("error"))
+        self.assertEqual(res["pin_violations"], ["builtin:sat_anchor:W5"])
+
+    # 13
+    def test_no_sunday_variable_exists_for_the_trailing_week(self):
+        import re
+        from ortools.sat.python import cp_model
+
+        models = []
+        original = cp_model.CpSolver.Solve
+
+        def record(solver_self, model):
+            models.append([v.name for v in model.Proto().variables])
+            return original(solver_self, model)
+
+        data = self.config(sat_weeks=(2, 4, 5))
+        data["discourage_consecutive"] = True
+        cp_model.CpSolver.Solve = record
+        try:
+            res = solve_from_dict(data)
+        finally:
+            cp_model.CpSolver.Solve = original
+        self.assertTrue(res["ok"], res.get("error"))
+        phantom = re.compile(r"^asgn\[.*,Sun\.\w+,W5\]$|^rep\[.*,Sun\.\w+,W4\]$|W5\.Sun\.")
+        for i, names in enumerate(models):
+            self.assertEqual([n for n in names if phantom.search(n)], [], f"solve {i}")
+        # Not vacuous: an optimising pass built the penalty and reached the 31st.
+        self.assertTrue(any("asgn[Tere,Sat.Lead,W5]" in names for names in models))
+        self.assertTrue(any("rep[Tere,Sat.Lead,W4]" in names for names in models))
+        self.assertTrue(any("asgn[Tere,Sun.Lead,W4]" in names for names in models))
+
+    # 14
+    def test_a_refused_trailing_request_suggests_deselecting_it(self):
+        nobody_leads = [f"{p} !in week 5 *.*" for p in self.LEADS + self.DEDICATED]
+        err = solve_from_dict(self.config(rules=nobody_leads))["error"]
+        self.assertIn("Week 5 Saturday: no one available to lead (Sat.Lead)", err)
+        self.assertNotIn("Week 5 Sunday", err)
+        self.assertIn(self.HINT, err)
+        # A refusal that is not about a lead gets it too: a minimum only the 31st could meet.
+        generic = solve_from_dict(self.config(rules=["Eli Sat.* == 1", "Eli !in week 5 *.*"]))
+        self.assertFalse(generic["ok"])
+        self.assertIn("Leads are available", generic["error"])
+        self.assertIn(self.HINT, generic["error"])
+        # Not named, not suggested.
+        plain = solve_from_dict(self.config(
+            sat_weeks=(2,), rules=["Eli Sat.* == 1", "Eli !in week 2 *.*"]))
+        self.assertFalse(plain["ok"])
+        self.assertNotIn("Saturday after the last Sunday", plain["error"])
+
+    # 15
+    def test_week_5_seats_are_reported_and_counted(self):
+        import re
+        res = self.only_ana_and_eli_on_the_31st()
+        self.assertTrue(res["ok"], res.get("error"))
+        w5 = [s for s in res["unfilled_seats"] if s.startswith("W5 ")]
+        for seat in w5:
+            self.assertRegex(seat, re.compile(r"^W5 Saturday Sat\.(Lead|BGV) #\d+$"))
+        self.assertEqual(sorted(s.split()[2] for s in w5), ["Sat.BGV", "Sat.BGV", "Sat.Lead"])
+        full = solve_from_dict(self.config(sat_weeks=(5,)))
+        self.assertTrue(full["ok"], full.get("error"))
+        seated = sum(len(names) for services in full["schedule"].values()
+                     for roles in services.values() for names in roles.values())
+        self.assertEqual(sum(full["total_counts"].values()), seated)
+        # Week 5 is the only Saturday, so every Saturday count is a week-5 seat.
+        self.assertEqual(sum(rc["Sat.Lead"] for rc in full["role_counts"].values()), 2)
+        self.assertEqual(sum(rc["Sat.BGV"] for rc in full["role_counts"].values()), 3)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
