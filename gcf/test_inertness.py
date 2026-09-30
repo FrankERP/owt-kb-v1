@@ -20,6 +20,8 @@ GOVERNANCE — the literals move for different reasons (spec §7; docs/CI.md has
   IDENTITY_FINGERPRINTS the LADDER's causes, over eight request shapes (the trailing-
                         Saturday guard, below): the same re-capture, and a red one in a PR
                         that claims non-trailing requests unchanged is a finding.
+  TRAILING_FINGERPRINTS the LADDER's causes, over one request that names the trailing
+                        Saturday (below): the same re-capture.
   GOLDEN_SCHEDULE       also moves with how ortools breaks a tie on the runner. The
                         above, plus a runner-image change — check the CI log's "Runner
                         Image" group against CAPTURED_ON before calling a red a finding.
@@ -547,6 +549,86 @@ class NonTrailingModelIsUnchanged(unittest.TestCase):
         if IDENTITY_FINGERPRINTS is not None:
             self.assertEqual(IDENTITY_FINGERPRINTS["w4-some"],
                              [STAGE_A_FINGERPRINTS[1]] + LADDER_FINGERPRINTS[1])
+
+
+# ─── The trailing-Saturday fixture (trailing-Saturday spec §7) ────────────────
+#
+# The other side of the guard above: one request that DOES name the trailing Saturday — seed
+# 1's fixture with week 5 added to its Saturdays — frozen on the solver that first staffed it,
+# so a later change to that path is measured against it rather than against itself. Every
+# solve, in order, Stage A included. Pinless, so it carries no solution hint and
+# _identity_fingerprint hashes it exactly as _search_fingerprint would.
+#
+# Same governance as LADDER_FINGERPRINTS: it moves with Stage A's model or search parameters,
+# or the objective, or the ladder's pass sequence. Legitimate re-capture: an ortools pin bump,
+# or a deliberate, reviewed objective change, in a PR that changes nothing else. Anything else
+# that reddens it is a finding. Machine-independent behind the same precondition: Stage A
+# proves OPTIMAL, asserted.
+TRAILING_SHAPES = {
+    "w4-trailing": lambda: _shaped([2, 4, 5]),
+}
+
+# Captured 2026-09-30 on the solver that first staffed the trailing Saturday (macOS arm64,
+# ortools 9.15.6755), statuses OPTIMAL, INFEASIBLE, INFEASIBLE, OPTIMAL. Setting it to None is
+# capture mode, as for IDENTITY_FINGERPRINTS: the test then fails with the literal to paste.
+TRAILING_FINGERPRINTS = {
+    "w4-trailing": [
+        "5fb7bc578b11c719b06d50d76f3240ba5031767b4e7c1b1acfaa230839bc0dfe",
+        "46d8a9fa57574bba96b37471f7dd06fede0659310d6bbb1868b188b932da30a5",
+        "66c54681baf8382f06ae8c23d95c7bb86a1a4613701b133d5872e2769fc0668c",
+        "c31308cc8dc123640f7ab6d1f05719ff9891632e97ab8359a62449db7af59e24",
+    ],
+}
+
+
+def _run_trailing(name):
+    """TRAILING_SHAPES[name](), solved once per process (see _record)."""
+    if name not in _SHAPE_RUNS:
+        _SHAPE_RUNS[name] = _record(TRAILING_SHAPES[name](), _identity_fingerprint)
+    return _SHAPE_RUNS[name]
+
+
+class TrailingModelIsFrozen(unittest.TestCase):
+    """The trailing Saturday's own frozen fixture: its model, search and pass sequence."""
+
+    def test_stage_a_proves_optimal(self):
+        for name in TRAILING_SHAPES:
+            with self.subTest(shape=name):
+                res, solves = _run_trailing(name)
+                self.assertTrue(res["ok"], res.get("error"))
+                self.assertEqual(set(res["schedule"]["5"]), {"Saturday"})
+                self.assertEqual(
+                    solves[0][1], "OPTIMAL",
+                    "precondition: Stage A must prove OPTIMAL for its bound on the ladder to be "
+                    "machine-independent — raise INERTNESS_BUDGET_SECONDS, never drop this. "
+                    f"Statuses: {[status for _fp, status, _obj in solves]}")
+
+    def test_trailing_fingerprints(self):
+        captured = {name: [fingerprint for fingerprint, _status, _obj in _run_trailing(name)[1]]
+                    for name in TRAILING_SHAPES}
+        if TRAILING_FINGERPRINTS is None:
+            body = "".join(
+                f'    "{name}": [\n' + "".join(f'        "{fp}",\n' for fp in fingerprints) + "    ],\n"
+                for name, fingerprints in captured.items())
+            statuses = {name: [status for _fp, status, _obj in _run_trailing(name)[1]]
+                        for name in TRAILING_SHAPES}
+            self.fail(f"capture mode — paste as TRAILING_FINGERPRINTS:\nTRAILING_FINGERPRINTS = {{\n"
+                      f"{body}}}\nstatuses: {statuses}\n"
+                      "Commit it only with test_stage_a_proves_optimal green.")
+        self.assertEqual(set(TRAILING_FINGERPRINTS), set(TRAILING_SHAPES),
+                         "a shape and its literal must be added together")
+        for name, expected in TRAILING_FINGERPRINTS.items():
+            with self.subTest(shape=name):
+                self.assertEqual(
+                    captured[name], expected,
+                    "a request naming the trailing Saturday built a different model, search or "
+                    "pass sequence — a finding unless this PR is an ortools pin bump or a "
+                    "deliberate, reviewed objective change (see the note above TRAILING_SHAPES)")
+
+    def test_the_trailing_shape_is_not_the_seed_1_fixture(self):
+        """Not inert by construction: naming week 5 must change Stage A's model."""
+        _res, solves = _run_trailing("w4-trailing")
+        self.assertNotEqual(solves[0][0], STAGE_A_FINGERPRINTS[1])
 
 
 if __name__ == "__main__":
