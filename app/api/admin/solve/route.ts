@@ -3,8 +3,8 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import { spawn } from "child_process";
 import path from "path";
 
-// The solver runs on a fractional-vCPU Cloud Run instance and can take tens of
-// seconds on hard months. Allow the request to wait rather than timing out (504).
+// The solver runs on a 1-vCPU Cloud Run instance (cloudbuild.yaml; 0.33 until
+// 2026-09-30) and can take tens of seconds on a hard month with a cold start. Allow the request to wait rather than timing out (504).
 export const maxDuration = 60;
 
 export interface SolveRequest {

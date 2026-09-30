@@ -7,6 +7,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// What ships: derived source, NO history sent (ADR-0046). The two cases about
+// the solve-time history read — which only exists when history is sent — flip
+// the switch for themselves; MonthGenerator reads it at call time.
+const switches = vi.hoisted(() => ({ SOLVER_HISTORY_SOURCE: "derived", SOLVER_SENDS_HISTORY: false }));
+vi.mock("../solverHistorySource", () => switches);
+
 import { DEFAULT_SOLVER_CONFIG } from "../solverConfigDefaults";
 import { PIN_HANDSHAKE_REFUSAL } from "../pinModel";
 import { solverRefusalMessage } from "../plannerModel";
@@ -17,7 +23,7 @@ import {
 } from "./plannerWiringHarness";
 import { readyRules } from "./rulesHarness";
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); switches.SOLVER_SENDS_HISTORY = false; });
 beforeEach(() => { localStorage.clear(); });
 
 const MEMBERS = [ANA, LUCIA, BETO, RODRI, PACO];
@@ -149,7 +155,8 @@ describe("«Solo llenar vacíos» — every failure exit completes instruments w
       fireEvent.click(fillEmptySwitch());
       const seatedDays = SUNDAYS.slice(0, 4);
       const before = seatedDays.map((d) => drums(d).outerHTML);
-      if (exit.historyFails) failHistoryReads();
+      // A failed history read is an exit only when a history is read at all.
+      if (exit.historyFails) { switches.SOLVER_SENDS_HISTORY = true; failHistoryReads(); }
       runAuto();
       await waitFor(() => expect(screen.getByText(exit.message)).toBeTruthy());
       await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
@@ -253,6 +260,7 @@ describe("«Solo llenar vacíos» — what the admin is told", () => {
 
 describe("«Solo llenar vacíos» — locked while Auto is pending", () => {
   it("disables the switch and every cell during the history read, and a click there cannot change the pins sent", async () => {
+    switches.SOLVER_SENDS_HISTORY = true; // the read window exists only when history is sent
     const { bodies } = stubSolve((body, call) => (call === 1 ? firstRoster(body, call) : echoPins(body)));
     // Hold the NEXT history read open (the Auto one), then let it through.
     const answered = globalThis.fetch;

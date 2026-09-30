@@ -2209,8 +2209,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
       {diagnostics?.objective_skipped && (
         <p className="font-body text-xs text-warning-strong">
           Este acomodo cumple las reglas, pero el solver no pudo optimizar la equidad: no tomó en
-          cuenta el historial, la rotación de líderes ni que alguien repita el mismo rol en semanas
-          seguidas. Revísalo antes de crear.
+          cuenta la rotación de líderes ni que alguien repita el mismo rol en semanas seguidas.
+          Revísalo antes de crear.
         </p>
       )}
 

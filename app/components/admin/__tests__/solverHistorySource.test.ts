@@ -13,10 +13,16 @@
 
 import { describe, expect, it } from "vitest";
 
-import { SOLVER_HISTORY_SOURCE } from "../solverHistorySource";
+import { SOLVER_HISTORY_SOURCE, SOLVER_SENDS_HISTORY } from "../solverHistorySource";
 
 describe("SOLVER_HISTORY_SOURCE", () => {
   it("ships \"derived\" — the cutover flipped this constant; rolling back flips it, and this assertion, in the same change", () => {
     expect(SOLVER_HISTORY_SOURCE).toBe("derived");
+  });
+});
+
+describe("SOLVER_SENDS_HISTORY", () => {
+  it("ships false — Auto balances within the month only (ADR-0046); restoring history flips it, and this assertion, in the same change", () => {
+    expect(SOLVER_SENDS_HISTORY).toBe(false);
   });
 });

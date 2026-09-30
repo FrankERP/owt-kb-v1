@@ -375,8 +375,9 @@ browser that held them (they differed from the shipped defaults in two material 
 deleted restrictions and three non-empty pools), and authoritative since the cutover. The
 browser key `owt_solver_config_v3` is no longer read or written; the stale values still in
 admins' browsers are inert. **The solver's fairness history is no longer per-browser:** since the
-MCP P2 cutover (2026-09-28) the planner derives it from the stored weekend services at solve
-time, so every admin solves against the same history
+MCP P2 cutover (2026-09-28) the planner derives it from the stored weekend services — and since
+2026-09-30 Auto sends none of it to the solver (`SOLVER_SENDS_HISTORY = false`, ADR-0046); with the
+switch back on it is derived at solve time, so every admin solves against the same history
 ([ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md), which amends
 [ADR-0010](adr/0010-specials-fill-locally-not-in-the-solver.md)). The browser key
 `owt_solver_history_v2` is still **written** on every confirm — only as the rollback target,

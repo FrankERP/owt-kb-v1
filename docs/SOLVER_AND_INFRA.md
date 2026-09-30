@@ -65,7 +65,10 @@ Parsed by `parse_dsl_rules()`; clauses `&`-chainable. Forms include:
   `fairness_exempt on <pattern>`, and every per-role objective spread counts everyone eligible.
   So an «Exenta» Sunday leader still competes for Sunday-lead fairness — which is the intent for
   lead-only members who play an instrument every week (confirmed 2026-09-29): lead constantly, never BGV or
-  Coro (that is their `!in` patterns, not the fairness mode). Slack also drops the person from
+  Coro (that is their `!in` patterns, not the fairness mode). **An exact count leaves the band:**
+  a person with `== N` on a single role (`Sun.Lead == 2`) is outside that role's Sun.Lead/Sun.BGV
+  band (ADR-0046) — their count is decided by the rule, and inside the band a fixed 2 let anyone
+  lead twice. A `>=` floor stays in the band. Slack also drops the person from
   the global soft pull, not just widens their band; absence slack (`compute_absence_slack`) adds
   on top of it; and if fewer than two people are left without slack, every non-exempt person
   goes back into the strict band and the slack is ignored. The same restriction also drives
@@ -110,8 +113,10 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   tiers, so a uniform over-estimate is exponential in it and the objective's upper bound
   crossed CP-SAT's integer-objective ceiling (INT64_MAX / 2) on ordinary months. Months
   whose history still pushes it over run without the objective and say so with
-  `objective_skipped: true` — see ADR-0038 for that trade-off. **Expect it routinely in
-  production.** Whether a month overflows depends on the SIZE of its weighted history (the
+  `objective_skipped: true` — see ADR-0038 for that trade-off. **Since 2026-09-30 the planner
+  sends no history** (`SOLVER_SENDS_HISTORY = false`, ADR-0046), so the ladder fits and the
+  objective runs; what follows describes a history-bearing request (the rollback, or a direct
+  caller). **With history, expect it routinely.** Whether a month overflows depends on the SIZE of its weighted history (the
   `[3, 6, 10]` offsets feed `overall_limit` and every per-role cap), not only on the derived
   history always sending three months; a thin quarter can still optimise. But the real
   October 2026 request — a full roster, three derived months — came back `objective_skipped`
@@ -133,7 +138,11 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   `GET /api/admin/solver-history` — see [API_REFERENCE.md](API_REFERENCE.md#solver)) produces
   the same entry shape the browser history used to, and the deployment-wide constant
   `SOLVER_HISTORY_SOURCE` (`app/components/admin/solverHistorySource.ts`) is `"derived"`.
-  Three properties to hold together:
+  **Since 2026-09-30 Auto sends none of it** (`SOLVER_SENDS_HISTORY = false`, ADR-0046): the
+  derivation still draws the Historial block and the lead-pool panel, but the solve gets
+  `history: []`, makes no read of its own and never refuses over a failed read. The first two
+  properties below hold only when that switch is `true` (the rollback). Three properties to
+  hold together:
   - **Derived for the target month at solve time, never cached across a solve.** The planner
     loads the three months before the month on screen to draw the Historial block and the
     lead-pool panel, but **every Auto re-reads the history for its own month** — never the
@@ -148,8 +157,8 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
     marked «· sin servicios», and the diagnostics (seats pointing at deleted members, repeated
     names, duplicate services on a date) are always shown.
 
-  Every admin now solves against the same history, which closes the two-admins gap ADR-0010
-  left open. `owt_solver_history_v2` in `localStorage` is still **written** on each confirm (R15's
+  With history sent, every admin solves against the same history, which closes the two-admins
+  gap ADR-0010 left open (with none sent there is no history to disagree about). `owt_solver_history_v2` in `localStorage` is still **written** on each confirm (R15's
   rollback target) and never read; rolling back is flipping the constant to `"local"`, until
   the dual-write is removed (D3, after Gate D). See [DATA_MODEL.md](DATA_MODEL.md),
   [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and
@@ -296,10 +305,11 @@ picks stay. Spec: `docs/superpowers/specs/2026-09-09-member-instruments-auto-fil
 
 ## 2. CI/CD ([`cloudbuild.yaml`](../cloudbuild.yaml))
 
-A Cloud Build **trigger** (GitHub, branch `main`, file filter `gcf/**`) runs on every push
-touching the solver. One step: `gcloud functions deploy owt-solver --gen2 --region=us-central1
---runtime=python312 --source=gcf --entry-point=solve --trigger-http --memory=512MB
---timeout=120s`, with `--remove-env-vars=OWT_SOLVER_API_KEY` then
+A Cloud Build **trigger** (GitHub, branch `main`, file filter `gcf/**` and `cloudbuild.yaml`)
+runs on every push touching the solver. One step: `gcloud functions deploy owt-solver --gen2
+--region=us-central1 --runtime=python312 --source=gcf --entry-point=solve --trigger-http
+--memory=512MB --cpu=1 --timeout=120s` (**1 vCPU since 2026-09-30** — 512MB alone gives 0.33,
+measured ~4× a Mac core, plus 11–19 s cold starts; ADR-0046), with `--remove-env-vars=OWT_SOLVER_API_KEY` then
 `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest` (key from **Secret Manager**;
 Cloud Run rejects a name that's both a plain env var and a secret). It intentionally does **not**
 pass `--allow-unauthenticated` (public `run.invoker` is already set and persists; the build SA

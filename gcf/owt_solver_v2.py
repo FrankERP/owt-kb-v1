@@ -122,11 +122,11 @@ class ScheduleConfig:
     history: List[Dict]             # pre-loaded history entries (oldest first)
     seed: int | None = None
     random_tie_break_weight_max: int = 9
-    # Per-solve cap. Kept small because the production function runs on a
-    # fractional vCPU (~0.33) — CP-SAT finds good solutions fast there but proves
-    # optimality slowly, so a short cap returns near-identical quality much sooner.
+    # Per-solve cap. Kept small because the production function runs on ONE vCPU
+    # (0.33 until 2026-09-30, ADR-0046) — CP-SAT finds good solutions fast there but
+    # proves optimality slowly, so a short cap returns near-identical quality sooner.
     solver_max_time_seconds: int = 5
-    # 1 worker beats 8 on a sub-1-vCPU container (8 threads thrash one core).
+    # 1 worker beats 8 on a <=1-vCPU container (8 threads thrash one core; ADR-0004).
     solver_num_search_workers: int = 1
     # Wall-clock ceiling across ALL internal solves (stage A + relaxation loop);
     # once exceeded, return the best schedule found so far instead of grinding.
@@ -263,6 +263,34 @@ def resolve_dsl_templates(config: ScheduleConfig) -> ScheduleConfig:
 
 def is_eligible(person: str, role_type: str, pools: Dict[str, Set[str]], forbidden: Dict[str, Set[str]]) -> bool:
     return person in pools[role_type] and role_type not in forbidden[person]
+
+
+def exact_count_roles(
+    count_rules: Sequence[DslCountRule],
+    pools: Dict[str, Set[str]],
+    forbidden: Dict[str, Set[str]],
+) -> Dict[str, Set[str]]:
+    """
+    role type -> the people whose count for that role is FIXED by an exact rule.
+
+    Such a person leaves that role's Sun.Lead / Sun.BGV hard band (ADR-0046): their
+    count is decided by the rule, not by fairness, and kept inside the band a fixed 2
+    widened it for EVERYONE — with more leaders than seats someone sits at 0, so a
+    fixed 2 forces a spread of 2 and lets anyone lead twice while others lead none
+    (production's October 2026). Only `==`, and only when it pins ONE role the person
+    can actually hold: `*.Lead == 2` on a member barred from `Sat.*` fixes their
+    Sun.Lead exactly as `Sun.Lead == 2` does (the Saturday term is always 0), so it
+    counts; on a member eligible for both it fixes only the sum, so it does not. A
+    `>=` is a floor, and leaving the band would lift its ceiling.
+    """
+    out: Dict[str, Set[str]] = defaultdict(set)
+    for rule in count_rules:
+        if rule.operator != "==":
+            continue
+        held = [rt for rt in rule.role_types if is_eligible(rule.person, rt, pools, forbidden)]
+        if len(held) == 1:
+            out[held[0]].add(rule.person)
+    return out
 
 
 def service_of(role_type: str) -> str:
@@ -1200,11 +1228,15 @@ def create_model_and_solve(
         model.Add(sv == rmax - rmin)
         role_spread_vars[role_type] = sv
 
+    exact_count_people = exact_count_roles(dsl_count_rules, pools, forbidden)
+
     # Sun.Lead hard fairness guard (current month)
     sun_lead_eligible = [p for p in all_people if is_eligible(p, "Sun.Lead", pools, forbidden)]
     sun_lead_slots_n = sum(1 for s in slots if s.role_type == "Sun.Lead")
     cur_sun_lead_spread = model.NewIntVar(0, sun_lead_slots_n, "cur_sl_spread")
-    sun_lead_constrained = [p for p in sun_lead_eligible if p not in role_fairness_exempt.get("Sun.Lead", set())]
+    sun_lead_constrained = [p for p in sun_lead_eligible
+                            if p not in role_fairness_exempt.get("Sun.Lead", set())
+                            and p not in exact_count_people["Sun.Lead"]]
     if len(sun_lead_constrained) >= 2 and sun_lead_slots_n > 0:
         sl_max = model.NewIntVar(0, sun_lead_slots_n, "sl_max")
         sl_min = model.NewIntVar(0, sun_lead_slots_n, "sl_min")
@@ -1229,7 +1261,9 @@ def create_model_and_solve(
     sun_bgv_eligible = [p for p in all_people if is_eligible(p, "Sun.BGV", pools, forbidden)]
     sun_bgv_slots_n = sum(1 for s in slots if s.role_type == "Sun.BGV")
     cur_sun_bgv_spread = model.NewIntVar(0, sun_bgv_slots_n, "cur_sb_spread")
-    sun_bgv_constrained = [p for p in sun_bgv_eligible if p not in role_fairness_exempt.get("Sun.BGV", set())]
+    sun_bgv_constrained = [p for p in sun_bgv_eligible
+                           if p not in role_fairness_exempt.get("Sun.BGV", set())
+                           and p not in exact_count_people["Sun.BGV"]]
     if len(sun_bgv_constrained) >= 2 and sun_bgv_slots_n > 0:
         sb_max = model.NewIntVar(0, sun_bgv_slots_n, "sb_max")
         sb_min = model.NewIntVar(0, sun_bgv_slots_n, "sb_min")
@@ -1556,8 +1590,8 @@ def solve_schedule(config: ScheduleConfig) -> SolveResult:
 
     big = len(slots) + 1  # a fairness limit so loose it never binds
 
-    # Global wall-clock budget across all internal solves. On a fractional-vCPU
-    # container each solve is slow, so we cap total time and return the best
+    # Global wall-clock budget across all internal solves. On a single-vCPU
+    # container (0.33 until 2026-09-30) each solve is slow, so we cap total time and return the best
     # schedule found so far rather than letting the HTTP request time out.
     deadline = time.monotonic() + max(1, config.solver_total_budget_seconds)
 
