@@ -32,8 +32,10 @@ Frank reported Auto giving two Sundays to two lead-only members while others led
    Lead en …» panel) and the confirm-time `localStorage` dual-write are unchanged. The solver
    balances **within the month**; who leads across months is Frank's pool checkboxes.
 2. **A person whose count for one role is fixed by an exact rule (`X Sun.Lead == 2`) leaves that
-   role's Sun.Lead / Sun.BGV band** (`gcf/owt_solver_v2.py`, `exact_count_people`). Only `==`
-   on a single role: a `>=` is a floor, and leaving the band would lift its ceiling.
+   role's Sun.Lead / Sun.BGV band** (`gcf/owt_solver_v2.py`, `exact_count_roles`). Only `==`, and
+   only when exactly one of the rule's roles is one the person can hold (so `*.Lead == 2` counts
+   for a member barred from Saturdays); a `>=` is a floor, and leaving the band would lift its
+   ceiling.
 3. **The solver function gets 1 vCPU** (`cloudbuild.yaml`, `scripts/deploy-solver-gcf.sh`).
    With the objective now running, a solve is a few seconds on a Mac; production measured ~4×
    the Mac at 0.33 vCPU plus 11–19 s cold starts, against the route's 60 s.

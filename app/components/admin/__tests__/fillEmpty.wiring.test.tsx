@@ -296,6 +296,43 @@ describe("«Solo llenar vacíos» — locked while Auto is pending", () => {
     await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
     expect(fillEmptySwitch().getAttribute("aria-checked")).toBe("true");
   });
+
+  it("with no history sent (what ships), stays locked for the whole solve request", async () => {
+    // The only pending window on the shipped path is the POST itself: nothing is
+    // read first (ADR-0046). An Auto that stopped awaiting the solve would drop
+    // «Calculando...» and unlock the switch and the cells mid-solve.
+    const { bodies } = stubSolve((body, call) => (call === 1 ? firstRoster(body, call) : echoPins(body)));
+    const answered = globalThis.fetch;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let hold = false;
+    vi.stubGlobal("fetch", async (input: unknown, init?: unknown) => {
+      if (hold && input === "/api/admin/solve") await gate;
+      return (answered as (i: unknown, n?: unknown) => Promise<unknown>)(input, init);
+    });
+    const view = render(<Gen members={MEMBERS} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+    setMonthYear(view.container, 3, 2026);
+    deselectAll(view.container, "saturday");
+    selectSundayLead(view.container, "Ana");
+    preview();
+    runAuto();
+    await waitFor(() => expect(cellAt(view.container, "lead", SUNDAYS[0]).textContent).toContain("Ana"));
+
+    fireEvent.click(fillEmptySwitch());
+    hold = true;
+    runAuto();
+    await waitFor(() => expect(screen.getByText("Calculando...")).toBeTruthy());
+    // Give a non-awaiting Auto every chance to settle before asserting the lock.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByText("Calculando...")).toBeTruthy();
+    expect((fillEmptySwitch() as HTMLButtonElement).disabled).toBe(true);
+    expect((cellAt(view.container, "bgv", SUNDAYS[3]).querySelector("[data-cell-action]") as HTMLButtonElement).disabled).toBe(true);
+
+    release();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1].history).toEqual([]);
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+  });
 });
 
 describe("«Solo llenar vacíos» — pin conflicts on the board", () => {
