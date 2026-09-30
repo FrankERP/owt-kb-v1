@@ -834,12 +834,16 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     // controls, because it holds focusable chips — and `group` does not support
     // `aria-expanded` in ARIA 1.2, so the property sits on the control that
     // actually opens the picker.
+    //
+    // Menu buttons are excluded: a `Menu` trigger («Borrar», spec 2026-09-29 §3.2) is a real
+    // `aria-haspopup="menu"` disclosure and always carries `aria-expanded`, as ARIA wants.
+    const disclosures = '[aria-expanded]:not([aria-haspopup="menu"])';
     stubWideViewport();
     const { container } = goToGrid([]);
-    expect(container.querySelectorAll("[aria-expanded]").length).toBe(0);
+    expect(container.querySelectorAll(disclosures).length).toBe(0);
 
     fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
-    const expanded = container.querySelectorAll("[aria-expanded]");
+    const expanded = container.querySelectorAll(disclosures);
     expect(expanded.length).toBe(1);
     expect(expanded[0].getAttribute("aria-expanded")).toBe("true");
     expect(expanded[0].hasAttribute("data-cell-action")).toBe(true);

@@ -141,9 +141,12 @@ import {
   describePreflightReason,
 } from "./serviceCardModel";
 import CueDialog from "../ui/CueDialog";
+import Button from "@/app/components/ui/Button";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
+import Menu, { MenuHeader, MenuItem } from "@/app/components/ui/Menu";
 import Switch from "@/app/components/ui/Switch";
+import { CLEAR_WHAT_LABEL, type ClearScope, type ClearWhat } from "./clearCells";
 // T4 of the drag-and-drop plan. `moveOccupant` imports `withUpdatedCell` back
 // out of this file, so these two modules are a cycle — a deliberate one: T2's
 // whole point is that the move composes THIS file's single write helper twice
@@ -299,6 +302,32 @@ export interface PlannerGridProps {
   fillEmpty?: { enabled: boolean; onChange: (next: boolean) => void; emptyVoiceSeats: number };
   /** «Solo llenar vacíos»: conflicts of each seat that will be pinned, by `pinSeatKey` (spec §3.3). */
   pinConflicts?: ReadonlyMap<string, PinConflictKind[]>;
+  /**
+   * «Borrar» (create mode, E6). Omitted ⇒ no menus. Counts are LIVE — `MonthGenerator` computes
+   * them from the current cells on every render. `disabled` is true while Auto is pending.
+   */
+  clear?: {
+    countFor: (scope: ClearScope, what: ClearWhat) => number;
+    onClear: (scope: ClearScope, what: ClearWhat) => void;
+    disabled: boolean;
+  };
+}
+
+const CLEAR_ITEMS: ClearWhat[] = ["voices", "instruments", "both"];
+
+function ClearItems({ clear, scope }: { clear: NonNullable<PlannerGridProps["clear"]>; scope: ClearScope }) {
+  return (
+    <>
+      {CLEAR_ITEMS.map((what) => {
+        const n = clear.countFor(scope, what);
+        return (
+          <MenuItem key={what} danger disabled={clear.disabled || n === 0} onSelect={() => clear.onClear(scope, what)}>
+            {`${CLEAR_WHAT_LABEL[what]} (${n})`}
+          </MenuItem>
+        );
+      })}
+    </>
+  );
 }
 
 /**
@@ -598,6 +627,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     monthLabel,
     fillEmpty,
     pinConflicts,
+    clear,
   } = props;
 
   const [openCell, setOpenCell] = useState<{ rowId: string; columnId: string } | null>(null);
@@ -1726,6 +1756,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             storedDateBlockedReason={storedDateBlockedReason}
             mutationLocked={mutationLocked}
             minWClass={cellMinW}
+            clear={clear}
           />
         ))}
 
@@ -2059,6 +2090,27 @@ export default function PlannerGrid(props: PlannerGridProps) {
             </span>
           </span>
         )}
+        {/* «Este servicio» is the open picker's column (plan deviation 3); each header has its own menu. */}
+        {mode === "create" && clear && (
+          <Menu
+            label="Borrar"
+            align="start"
+            trigger={<Button variant="ghost" size="md" disabled={clear.disabled}>Borrar</Button>}
+          >
+            <MenuHeader><span className="font-label text-[10px] uppercase tracking-widest text-mono-500">Todo el mes</span></MenuHeader>
+            <ClearItems clear={clear} scope={{ kind: "month" }} />
+            {openCell && (
+              <>
+                <MenuHeader>
+                  <span className="font-label text-[10px] uppercase tracking-widest text-mono-500">
+                    Este servicio · {columnById.get(openCell.columnId)?.date ?? ""}
+                  </span>
+                </MenuHeader>
+                <ClearItems clear={clear} scope={{ kind: "service", columnId: openCell.columnId }} />
+              </>
+            )}
+          </Menu>
+        )}
         {/*
           "Sometimes I need to take a screenshot of the whole month." Neither the
           page nor the three columns can show a ten-column month at 1512, and a
@@ -2371,6 +2423,7 @@ function ColumnHeader({
   storedDateBlockedReason,
   mutationLocked,
   minWClass,
+  clear,
 }: {
   column: GridColumn;
   preflight: TargetPreflight | null;
@@ -2385,6 +2438,8 @@ function ColumnHeader({
   mutationLocked: boolean;
   /** `min-w-[150px]` in the page, `min-w-0` in full screen — see `dateTrack`. */
   minWClass: string;
+  /** «Borrar» for THIS service (create mode only). */
+  clear?: PlannerGridProps["clear"];
 }) {
   const date = new Date(column.date.slice(0, 10) + "T12:00:00");
   const day = date.getDate();
@@ -2474,6 +2529,19 @@ function ColumnHeader({
         >
           Omitir
         </Checkbox>
+      )}
+      {!stored && clear && (
+        <Menu
+          label={`Borrar en ${column.date}`}
+          align="start"
+          trigger={
+            <Button variant="ghost" size="sm" disabled={clear.disabled} aria-label={`Borrar en ${column.date}`}>
+              Borrar
+            </Button>
+          }
+        >
+          <ClearItems clear={clear} scope={{ kind: "service", columnId: column.columnId }} />
+        </Menu>
       )}
       {!stored && blockCopy && (
         <p className={`font-body text-[10px] text-warning-strong ${CARD_STYLE.longText}`}>{blockCopy}</p>

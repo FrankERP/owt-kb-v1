@@ -38,15 +38,27 @@ import {
   type CollectedPins,
 } from "./pinModel";
 import { pinViolationNotices } from "./pinViolations";
+import {
+  CLEAR_WHAT_LABEL,
+  applyClear,
+  dropClearedMarkers,
+  planClear,
+  restoreCleared,
+  type ClearPlan,
+  type ClearScope,
+  type ClearWhat,
+} from "./clearCells";
 import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
 import Button from "@/app/components/ui/Button";
+import CueDialog from "@/app/components/ui/CueDialog";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
+import { useToast } from "@/app/components/ui/Toast";
 import {
   editableConfig,
   sameSolverConfig,
@@ -1946,6 +1958,24 @@ export default function MonthGenerator({
   const [autoNotices, setAutoNotices] = useState<string[]>([]);
   /** E2 — «Solo llenar vacíos»: off by default, per run, never persisted. */
   const [fillEmptyOnly, setFillEmptyOnly] = useState(false);
+  const { toast, dismiss } = useToast();
+  /** «Borrar» todo el mes: open flag, and the payload that outlives the close (CueDialog exit). */
+  const [monthClearOpen, setMonthClearOpen] = useState(false);
+  const [monthClearWhat, setMonthClearWhat] = useState<ClearWhat>("voices");
+  /**
+   * «Deshacer» is withdrawn once Auto runs (spec §3.2), when the month changes, and when the
+   * step changes — a stale undo would write another grid's cells into this one («← Volver» then
+   * «Previsualizar» rebuilds the grid from nothing, even for the same month). The generation
+   * makes a click that races the withdrawal a no-op.
+   */
+  const undoGeneration = useRef(0);
+  const undoToastIds = useRef<string[]>([]);
+  const withdrawUndos = useCallback(() => {
+    undoGeneration.current += 1;
+    for (const id of undoToastIds.current) dismiss(id);
+    undoToastIds.current = [];
+  }, [dismiss]);
+  useEffect(() => withdrawUndos, [year, month, step, withdrawUndos]);
 
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
@@ -2807,6 +2837,56 @@ export default function MonthGenerator({
     setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
   }
 
+  /** Applies a planned clear through `handleCellsChange` and drops the cleared cells' markers. */
+  function applyPlannedClear(plan: ClearPlan, offerUndo: boolean) {
+    const key = (c: { columnId: string; rowId: string }) => `${c.columnId}|${c.rowId}`;
+    const prior = cells.filter((c) => plan.cellKeys.has(key(c)));
+    const markers = unfilled.filter((u) => plan.cellKeys.has(key(u)));
+    handleCellsChange(applyClear(cells, plan));
+    setUnfilled((prev) => dropClearedMarkers(prev, plan));
+    if (!offerUndo) return;
+    const generation = undoGeneration.current;
+    const id = toast({
+      message: `Se borraron ${plan.seats} asignaci${plan.seats !== 1 ? "ones" : "ón"}.`,
+      tone: "info",
+      duration: 10_000,
+      action: {
+        label: "Deshacer",
+        onClick: () => {
+          if (generation !== undoGeneration.current) return;
+          undoClearRef.current(prior, markers);
+        },
+      },
+    });
+    undoToastIds.current.push(id);
+  }
+
+  /** «Deshacer» — onto the LIVE cells of the latest render (through `undoClearRef`). */
+  function undoClear(prior: GridCell[], markers: { columnId: string; rowId: string }[]) {
+    if (autoPending) return;
+    handleCellsChange(restoreCleared(cells, prior, columns));
+    setUnfilled((prev) => [...prev, ...markers]);
+  }
+
+  function handleClear(scope: ClearScope, what: ClearWhat) {
+    if (storedMode || autoPending) return;
+    if (scope.kind === "month") {
+      setMonthClearWhat(what);
+      setMonthClearOpen(true);
+      return;
+    }
+    const plan = planClear({ cells, rows, columns, scope, what });
+    if (plan.seats > 0) applyPlannedClear(plan, true);
+  }
+
+  /** Re-planned against the LIVE cells at confirm, never the plan the dialog opened with. */
+  function confirmMonthClear() {
+    setMonthClearOpen(false);
+    if (autoPending) return;
+    const plan = planClear({ cells, rows, columns, scope: { kind: "month" }, what: monthClearWhat });
+    if (plan.seats > 0) applyPlannedClear(plan, false);
+  }
+
   function openGroupFill() {
     if (groupFillOpen) { groupFillRegionRef.current?.focus(); return; }
     if (groupFillBlocked) return;
@@ -3601,6 +3681,9 @@ export default function MonthGenerator({
       setAutoError("No se pudieron cargar las reglas compartidas. Recárgalas antes de usar Auto.");
       return;
     }
+    // A «Borrar» undo is withdrawn once Auto runs (spec §3.2): restoring after a solve would
+    // write the pre-solve seats over the solver's answer.
+    withdrawUndos();
     // Derived mode (R14) solves on the history read for THIS month at THIS
     // moment — its own path, below. Everything after this line is the
     // per-browser path, unchanged.
@@ -3697,6 +3780,12 @@ export default function MonthGenerator({
   // render is a `react-hooks/refs` error.
   useLayoutEffect(() => {
     solveWithDerivedHistoryRef.current = solveWithDerivedHistory;
+  });
+  // «Deshacer» fires from a toast up to 10 s later: the ref hands it the LATEST render's
+  // `undoClear`, so it restores onto the live cells rather than the ones the clear saw.
+  const undoClearRef = useRef(undoClear);
+  useLayoutEffect(() => {
+    undoClearRef.current = undoClear;
   });
 
   async function handleConfirm(publish: boolean) {
@@ -4460,6 +4549,11 @@ export default function MonthGenerator({
             emptyVoiceSeats: emptyVoiceSeats({ cells, columns, rows, sundayDates: sundayDatesFull }),
           }}
           pinConflicts={pinBoard}
+          clear={storedMode ? undefined : {
+            countFor: (scope, what) => planClear({ cells, rows, columns, scope, what }).seats,
+            onClear: handleClear,
+            disabled: autoPending,
+          }}
         />
       ) : !storedMode ? (
         // D17/D10: this used to be `max-h-[50vh] overflow-y-auto` — a keyhole
@@ -4475,6 +4569,39 @@ export default function MonthGenerator({
           })}
         </div>
       ) : null}
+
+      {/*
+        «Borrar» todo el mes — mounted for the whole create-mode grid step, `open` drives it. The
+        count is LIVE: an edit made while it is open changes it, and the confirm re-plans against
+        the grid as it is then (R8: a month clear leaves the specials' Coro and instruments).
+      */}
+      {!storedMode && (() => {
+        const live = planClear({ cells, rows, columns, scope: { kind: "month" }, what: monthClearWhat });
+        const label = CLEAR_WHAT_LABEL[monthClearWhat].toLowerCase();
+        return (
+          <CueDialog
+            open={monthClearOpen}
+            title={`Borrar ${label} de todo el mes`}
+            label={`Borrar ${label} de todo el mes`}
+            size="sm"
+            onDismiss={() => setMonthClearOpen(false)}
+          >
+            <div className="space-y-3 p-6">
+              <p className="font-body text-sm text-ink-muted">
+                Se quitarán {live.seats} asignaci{live.seats !== 1 ? "ones" : "ón"} de {label} en todo el mes.
+                {live.handPlacedApprox > 0 && ` Aproximadamente ${live.handPlacedApprox} se pusieron a mano.`}
+              </p>
+              <p className="font-body text-xs text-ink-muted/70">
+                FOH no se toca. Los especiales conservan su Coro e instrumentos. Nada se guarda hasta que presiones «Crear {toCreate.length} borrador{toCreate.length !== 1 ? "es" : ""}».
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="danger" onClick={confirmMonthClear} disabled={live.seats === 0}>Borrar</Button>
+                <Button variant="secondary" onClick={() => setMonthClearOpen(false)}>Cancelar</Button>
+              </div>
+            </div>
+          </CueDialog>
+        );
+      })()}
 
       {/*
         In "Vista" mode there is no `PlannerGrid` to hold the chart's column, so

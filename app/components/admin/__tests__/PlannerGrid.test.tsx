@@ -1759,3 +1759,35 @@ describe("«Solo llenar vacíos» — the confirm copy", () => {
     expect((screen.getByRole("switch", { name: "Solo llenar vacíos" }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe("«Borrar» menus", () => {
+  const clear = (over: Partial<{ disabled: boolean }> = {}) => ({
+    countFor: (scope: { kind: string }, what: string) => (scope.kind === "month" ? 10 : 2) + (what === "both" ? 1 : 0),
+    onClear: vi.fn(),
+    disabled: false,
+    ...over,
+  });
+
+  it("offers the month's three items with live counts from the toolbar", () => {
+    const c = clear();
+    render(<PlannerGrid {...baseProps({ clear: c })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Borrar" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Voces e instrumentos (11)" }));
+    expect(c.onClear).toHaveBeenCalledWith({ kind: "month" }, "both");
+  });
+
+  it("puts a service-scoped menu in each column header", () => {
+    const c = clear();
+    const props = baseProps({ clear: c });
+    render(<PlannerGrid {...props} />);
+    const column = props.columns[0];
+    fireEvent.click(screen.getByRole("button", { name: `Borrar en ${column.date}` }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Instrumentos (2)" }));
+    expect(c.onClear).toHaveBeenCalledWith({ kind: "service", columnId: column.columnId }, "instruments");
+  });
+
+  it("disables every «Borrar» while Auto is pending", () => {
+    render(<PlannerGrid {...baseProps({ clear: clear({ disabled: true }) })} />);
+    for (const b of screen.getAllByRole("button", { name: /^Borrar/ })) expect((b as HTMLButtonElement).disabled).toBe(true);
+  });
+});
