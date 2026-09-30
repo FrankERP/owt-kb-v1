@@ -336,6 +336,26 @@ describe("a move blocked by a rule conflict (acceptance 5)", () => {
   });
 });
 
+describe("full screen leaves the toast stack live («Borrar» → «Deshacer»)", () => {
+  it("inerts the page behind but never the toast root", () => {
+    // `ToastProvider` appends `[data-toast-root]` to `body`; a «Deshacer» raised from a header
+    // menu in full screen lives there, so it must stay clickable. A plain sibling is the control.
+    const toastRoot = document.createElement("div");
+    toastRoot.setAttribute("data-toast-root", "");
+    const sibling = document.createElement("div");
+    document.body.append(toastRoot, sibling);
+    try {
+      renderGrid(baseProps());
+      fireEvent.click(screen.getByText("⛶ Pantalla completa"));
+      expect(sibling.hasAttribute("inert")).toBe(true);
+      expect(toastRoot.hasAttribute("inert")).toBe(false);
+    } finally {
+      toastRoot.remove();
+      sibling.remove();
+    }
+  });
+});
+
 // ─── DD2 — the three refusals never offer a force ────────────────────────────
 
 describe("refusals surface inline and are never forceable (DD2)", () => {

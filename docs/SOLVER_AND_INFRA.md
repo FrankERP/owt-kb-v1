@@ -157,7 +157,7 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
 
 ### Pinned assignments (`pinned`)
 Spec `docs/superpowers/specs/2026-09-15-solver-pinned-assignments-design.md`, decision record
-ADR-0041. The client that sends pins («Solo llenar vacíos») is a separate delivery.
+ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Before the request leaves the planner».
 
 - **A pin is a fixed variable, not a removed seat:** `sum(x[P, slots of (R, W)]) == 1`. Every
   mechanism that counts people or iterates slots — totals, role counts, DSL caps, the Saturday
@@ -246,6 +246,19 @@ ADR-0041. The client that sends pins («Solo llenar vacíos») is a separate del
   Saturdays, so its week 1 never gets the previous month's last Saturday: Auto can staff
   31 Oct 2026 from neither October nor November. The grid labels it «Fuera del alcance de
   Auto» in the month it belongs to.
+- **«Solo llenar vacíos» sends the board as pins** (`pinModel.ts`; spec
+  `2026-09-29-planner-trailing-saturday-and-fill-empty-design.md` §3). With the switch on, every
+  occupied Lead/BGV/Coro seat on a column Auto writes is a pin `{ week, role, person }`, by exact
+  `member_name` — one per person per service (Lead before BGV before Coro; the solver refuses
+  two), at most 100. What the solver would refuse in English (an occupant who is no longer a
+  member, an empty `member_name`, more than 100, a Saturday week not sent, a pinned-only spelling
+  that differs only in case or spaces from a pool name or from another pinned-only spelling) is
+  refused first in Spanish, naming the cell. **Off, or with nothing on the board, the request has
+  no `pinned` key** and is exactly what it was before. A success is applied only if `pinned_honored` equals the pins sent and the
+  schedule shows every pin by exact name; otherwise Auto says «El solver no respetó los lugares
+  fijados; no se aplicó nada.». `pin_violations` are named as the rules card names them
+  (`pinViolations.ts`); `violation_ceiling_proven: false` adds one caveat, and only when at least
+  one rule was set aside — with nothing named there is nothing to have ceded too much of.
 
 ### HTTP handler ([`gcf/main.py`](../gcf/main.py))
 `functions_framework.http`-decorated `solve(request)`. Handles CORS `OPTIONS`, rejects non-POST
@@ -265,15 +278,19 @@ members who DECLARE the instrument (`teamMembers.instruments`). Ordering: fewest
 seats this month **per member, all instruments** → did not play the previous weekend
 service → name. Guarantee: per-member total balance in the month; for instruments whose
 players declare only that instrument this is the «difference ≤ 1» rule. A two-instrument
-member is balanced as a person, not per instrument (confirmed 2026-09-09). Its own previous
-`origin: "auto"` picks are vacated once, before counting; manual picks are never touched.
+member is balanced as a person, not per instrument (confirmed 2026-09-09). With «Solo llenar
+vacíos» off, its own previous `origin: "auto"` picks are vacated once, before counting; manual
+picks are never touched.
 Rows nobody declares are skipped with no marker; custom planner rows are outside the
 vocabulary and never filled. Rows whose stored label doesn't match the current seat vocabulary
 (`instrumentSeatDef(label).id !== row.id` — legacy-spelled rows) are likewise never filled and
-produce no marker. With `fillColumns` set (stored-mode group fill, `groupFill.ts`, spec
-`2026-09-22-camp-group-fill-design.md`) it fills exactly the given columns — specials
-included — in that order, and vacates nothing: the "vacate this run's own previous auto picks"
-step above only runs in the default (no `fillColumns`) weekend path. Spec: `docs/superpowers/specs/2026-09-09-member-instruments-auto-fill-design.md`.
+produce no marker. With `fillColumns` set it fills exactly the given columns in that order and
+vacates nothing: the "vacate this run's own previous auto picks" step above only runs in the
+default (no `fillColumns`) weekend path. Two callers set it: the stored-mode group fill
+(`groupFill.ts`, spec `2026-09-22-camp-group-fill-design.md`; the ticked specials, specials
+included), and create-mode Auto with «Solo llenar vacíos» on (`applySpecialFill` in
+`MonthGenerator.tsx` passes the weekend columns in date order), so an earlier Auto's instrument
+picks stay. Spec: `docs/superpowers/specs/2026-09-09-member-instruments-auto-fill-design.md`.
 
 ---
 

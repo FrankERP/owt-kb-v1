@@ -1739,3 +1739,64 @@ describe("declared instruments on the planner (spec §7, §6.3)", () => {
     expect(container.querySelector(`[data-row-id="coro"]`)!.textContent).toContain("Sin cubrir");
   });
 });
+
+describe("«Solo llenar vacíos» — the confirm copy", () => {
+  it("says what Auto will do with the switch on, and today's copy with it off", () => {
+    const { rerender } = render(<PlannerGrid {...baseProps({ fillEmpty: { enabled: false, onChange: vi.fn(), emptyVoiceSeats: 7 } })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar/ }));
+    expect(screen.getByText(/Esto reemplazará toda asignación de voz/)).toBeTruthy();
+    rerender(<PlannerGrid {...baseProps({ fillEmpty: { enabled: true, onChange: vi.fn(), emptyVoiceSeats: 7 } })} />);
+    expect(screen.getByText(/Solo se llenarán los 7 lugares de voz vacíos/)).toBeTruthy();
+    expect(screen.getByText(/Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca/)).toBeTruthy();
+    expect(screen.queryByText(/Esto reemplazará toda asignación de voz/)).toBeNull();
+  });
+
+  it("says «Solo se llenará 1 lugar de voz vacío» at one seat — singular verb, no article (R11)", () => {
+    render(<PlannerGrid {...baseProps({ fillEmpty: { enabled: true, onChange: vi.fn(), emptyVoiceSeats: 1 } })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar/ }));
+    expect(screen.getByText(
+      /^Solo se llenará 1 lugar de voz vacío \(Lead, BGV, Coro\); lo que ya está puesto se respeta y se envía al solver como fijo\. Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca\./,
+    )).toBeTruthy();
+    expect(screen.queryByText(/llenarán|los 1/)).toBeNull();
+  });
+
+  it("disables the switch while Auto is pending", () => {
+    render(<PlannerGrid {...baseProps({
+      autoState: { pending: true, error: null, disabledReason: null },
+      fillEmpty: { enabled: false, onChange: vi.fn(), emptyVoiceSeats: 0 },
+    })} />);
+    expect((screen.getByRole("switch", { name: "Solo llenar vacíos" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("«Borrar» menus", () => {
+  const clear = (over: Partial<{ disabled: boolean }> = {}) => ({
+    countFor: (scope: { kind: string }, what: string) => (scope.kind === "month" ? 10 : 2) + (what === "both" ? 1 : 0),
+    onClear: vi.fn(),
+    disabled: false,
+    ...over,
+  });
+
+  it("offers the month's three items with live counts from the toolbar", () => {
+    const c = clear();
+    render(<PlannerGrid {...baseProps({ clear: c })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Borrar" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Voces e instrumentos (11)" }));
+    expect(c.onClear).toHaveBeenCalledWith({ kind: "month" }, "both");
+  });
+
+  it("puts a service-scoped menu in each column header", () => {
+    const c = clear();
+    const props = baseProps({ clear: c });
+    render(<PlannerGrid {...props} />);
+    const column = props.columns[0];
+    fireEvent.click(screen.getByRole("button", { name: `Borrar en ${column.date}` }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Instrumentos (2)" }));
+    expect(c.onClear).toHaveBeenCalledWith({ kind: "service", columnId: column.columnId }, "instruments");
+  });
+
+  it("disables every «Borrar» while Auto is pending", () => {
+    render(<PlannerGrid {...baseProps({ clear: clear({ disabled: true }) })} />);
+    for (const b of screen.getAllByRole("button", { name: /^Borrar/ })) expect((b as HTMLButtonElement).disabled).toBe(true);
+  });
+});

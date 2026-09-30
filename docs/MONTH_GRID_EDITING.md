@@ -70,6 +70,27 @@ for stored service rosters:
   not be listed yet). Pure selection and summary
   wording: `clearMonthModel.ts`; rejection wording shared with the card flows:
   `serviceMutationErrors.ts`.
+- **«Solo llenar vacíos»** (create mode, next to Auto; off by default, never remembered) makes
+  Auto keep everything already on the board: occupied voice seats go to the solver as fixed,
+  empty ones are filled around them, instruments are completed without moving anyone, FOH is
+  untouched. While Auto runs with the switch on, the grid is read-only; the switch itself and
+  every «Borrar» are disabled while Auto is pending, switch on or off. Seats that contradict
+  something are named on the chip. A person who marked the day unavailable, or is outside the
+  solver's groups for that seat, is still fixed there and the seat wins (E3). A person already
+  seated elsewhere in the same service is named as left out of that seat, not fixed: Auto keeps
+  them in one seat only (Lead before BGV before Coro). Auto's confirm states how many empty
+  voice seats it will fill, and what the solver had to give up is listed under Auto.
+- **«Borrar»** (create mode, next to Auto and in each column header) clears Voces, Instrumentos
+  or both, for one service or the whole month. FOH is never cleared in bulk. A service clear
+  applies at once with «Deshacer» — the toast names what was cleared and where («Voces ·
+  domingo 1 mar: se borraron 2 asignaciones.») — and the undo is withdrawn once Auto runs, when
+  the month or year changes, and when the step changes. A month clear asks first, with a live
+  count and an approximate count of hand-placed seats, and writes nothing until «Crear N
+  borradores». A month clear leaves a special service's Coro and instruments alone, because
+  nothing refills them in create mode («Los especiales conservan su Coro e instrumentos.»); a
+  service clear on a special still clears them. In full screen only the per-column «Borrar»
+  menus appear (the month clear, like Auto, is not on the full-screen bar), and «Deshacer»
+  still works there because the toast stack is exempt from the grid's inert sweep.
 
 Services with integrity defects stay visible as **Solo lectura** instead of
 disappearing or being normalized into apparently valid editable columns.
