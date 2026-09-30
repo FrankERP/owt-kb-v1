@@ -20,7 +20,7 @@ describe("«Solo llenar vacíos» on the per-browser path", () => {
   it("refuses in Spanish, naming the cell, and never calls the solver", async () => {
     const { bodies } = stubSolve((body) => {
       const schedule = emptySchedule(body);
-      schedule["1"].Sunday.BGV = ["Alberto Ruiz Cano"];
+      schedule["1"].Sunday!.BGV = ["Alberto Ruiz Cano"];
       return { ok: true, schedule, unfilled_seats: [] };
     });
     const props = { existingRoles: [], onClose: vi.fn(), onCreated: vi.fn() };

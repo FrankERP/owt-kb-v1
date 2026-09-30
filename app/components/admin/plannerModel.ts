@@ -16,8 +16,10 @@
 // one of these was verified, not guessed:
 //
 //  1. Saturday↔week is ADJACENCY on Sundays, never position (fact 10).
-//  2. The positional Saturday fallback is GONE (D16) — an unaddressable
-//     Saturday stays unaddressable rather than being assigned a week by index.
+//  2. The positional Saturday fallback is GONE (D16) — a Saturday is never
+//     assigned a week by index. The one Saturday with no Sunday after it in
+//     the month, the trailing Saturday, is week `weeks + 1` by DEFINITION
+//     (`trailingSaturday`, ADR-00NN T1), not by position.
 //  3. The rendered column set is an EXPLICIT input (D9) — never inferred from
 //     `sundayDates`, so unchecking Domingos can never leak a Sunday draft.
 //  4. Every cell is multi-occupant (D3) — voice, instrument and FOH alike.
@@ -488,17 +490,42 @@ export function solvableWindow(sundayDates: string[]): { weeks: number; solvable
 
 // ─── Saturday↔week mapping — adjacency, never position (fact 10, D16) ────────
 
-function subtractDay(iso: string): string {
+function addDays(iso: string, days: number): string {
   const d = new Date(iso.slice(0, 10) + "T12:00:00");
-  d.setDate(d.getDate() - 1);
+  d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function subtractDay(iso: string): string {
+  return addDays(iso, -1);
+}
+
+/**
+ * The trailing Saturday (T1, ADR-00NN): the last Sunday of `sundayDates` + 6
+ * days, when that date is still in the same calendar month — Sat 31 Oct 2026,
+ * whose Sunday is 1 Nov. `null` when it falls in the next month (Nov 2026: 29 +
+ * 6 is 5 Dec) and for an empty spine. It is staffed as solver week `weeks + 1`,
+ * and this is the ONLY definition: `saturdayForWeek`, `weekForColumn` and
+ * `weekendWeekIndexes` resolve it through here, so a column, a seat, an
+ * unfilled marker and a pin cannot disagree about its week.
+ *
+ * `sundayDates` is the FULL month spine (`sundayDatesFull`), in order.
+ */
+export function trailingSaturday(sundayDates: string[]): string | null {
+  const last = sundayDates[sundayDates.length - 1];
+  if (!last) return null;
+  const sat = addDays(last, 6);
+  return sat.slice(0, 7) === last.slice(0, 7) ? sat : null;
 }
 
 /**
  * 1-based week indexes whose Saturday (the day before that week's Sunday) is
- * in `activeSatDates`. No positional fallback (D16): a Saturday not adjacent
- * to any Sunday in `sundayDates` simply contributes no index, however many
- * Saturdays are selected.
+ * in `activeSatDates`, then `weeks + 1` when the trailing Saturday is. No
+ * positional fallback (D16): any other Saturday not adjacent to a Sunday in
+ * `sundayDates` contributes no index, however many Saturdays are selected.
+ *
+ * This is the CANDIDATE list. `buildSolveRequest` decides whether `weeks + 1`
+ * is actually sent (T5).
  */
 export function weekendWeekIndexes(sundayDates: string[], activeSatDates: string[]): number[] {
   const active = new Set(activeSatDates);
@@ -506,30 +533,35 @@ export function weekendWeekIndexes(sundayDates: string[], activeSatDates: string
   sundayDates.forEach((sunDate, i) => {
     if (active.has(subtractDay(sunDate))) out.push(i + 1);
   });
+  const trailing = trailingSaturday(sundayDates);
+  if (trailing && active.has(trailing)) out.push(sundayDates.length + 1);
   return out;
 }
 
 /**
- * The Saturday adjacent to week `n`'s Sunday — regardless of selection.
- * Returns `null` for an out-of-range `n` (`sundayDates[n-1]` undefined)
- * rather than throwing. Unreachable today because callers only ever pass a
- * week number the solver derived from `weeks === sundayDates.length`, but
- * `mapUnfilledSeats` calls this with a solver-supplied week number, so it
- * must degrade instead of crashing if that ever stops holding.
+ * The Saturday adjacent to week `n`'s Sunday — regardless of selection — and
+ * for `n === weeks + 1` the trailing Saturday (`null` in a month without one).
+ * Returns `null` for any other out-of-range `n` rather than throwing:
+ * `mapUnfilledSeats` calls this with a solver-supplied week number, so it must
+ * degrade instead of crashing if that is ever not one the request sent.
  */
 export function saturdayForWeek(n: number, sundayDates: string[]): string | null {
+  if (n === sundayDates.length + 1) return trailingSaturday(sundayDates);
   const sunDate = sundayDates[n - 1];
   return sunDate ? subtractDay(sunDate) : null;
 }
 
 /**
- * Selected Saturdays with no adjacent Sunday in `sundayDates` — a request
- * would never staff them and a response would never resolve to them. Labelled
- * explicitly rather than silently dropped or (worse) positionally reassigned.
+ * Selected Saturdays no solver week resolves to (`weekForColumn` is `null`).
+ * Since T1 the trailing Saturday is week `weeks + 1`, so on a calendar month's
+ * spine this is always empty.
+ *
+ * Removed in Task 3, with the «Fuera del alcance de Auto» surface that reads it.
  */
 export function unaddressableDates(sundayDates: string[], activeSatDates: string[]): string[] {
-  const adjacent = new Set(sundayDates.map(subtractDay));
-  return [...activeSatDates].sort().filter((d) => !adjacent.has(d));
+  return [...activeSatDates]
+    .sort()
+    .filter((d) => weekForColumn({ type: "saturday_role", date: d }, sundayDates) == null);
 }
 
 // ─── Request construction ─────────────────────────────────────────────────────
@@ -872,7 +904,9 @@ export function buildSolveRequest(input: {
   const { config, members, sundayDates, activeSatDates, historyEntries, year, month } = input;
 
   const weeks = sundayDates.length;
-  const weekendsWithSaturday = weekendWeekIndexes(sundayDates, activeSatDates);
+  // The trailing Saturday (`weeks + 1`) is a candidate only: until Task 2 decides
+  // whether it is sent (T5), the request stays exactly what it was.
+  const weekendsWithSaturday = weekendWeekIndexes(sundayDates, activeSatDates).filter((w) => w <= weeks);
   // No Saturday for Auto this month (none selected, or only an unaddressable one like
   // 31 Oct 2026): a Saturday MINIMUM cannot be met and would sink the whole month, so
   // it is not applied this month. Maximums stay — they hold trivially.
@@ -975,7 +1009,8 @@ const ROLE_FIELD: Record<string, "Lead" | "BGV" | "Choir"> = { lead: "Lead", bgv
 
 /**
  * The 1-based solver week a column belongs to, or `null` for a column the
- * solver has no concept of.
+ * solver has no concept of. A Saturday is the week of the Sunday after it; the
+ * trailing Saturday (`trailingSaturday`, T1) is week `weeks + 1`.
  *
  * **A special is ALWAYS `null`** (E4). Without this it would fall into the
  * Saturday branch below and — for a weekday special dated the day before a
@@ -998,6 +1033,7 @@ export function weekForColumn(
   for (let i = 0; i < sundayDates.length; i++) {
     if (subtractDay(sundayDates[i]) === column.date) return i + 1;
   }
+  if (column.date === trailingSaturday(sundayDates)) return sundayDates.length + 1;
   return null;
 }
 

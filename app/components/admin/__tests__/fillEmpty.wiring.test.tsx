@@ -32,8 +32,8 @@ const TODAY_KEYS = ["weeks", "weekends_with_saturday", "sunday_leads", "saturday
 /** The first Auto of a test: Ana leads week 1, Lucía sings BGV in week 2. */
 const firstRoster: Respond = (body) => {
   const schedule = emptySchedule(body);
-  schedule["1"].Sunday.Lead = ["Ana Karen Villalobos"];
-  schedule["2"].Sunday.BGV = ["María Lucía Estrada"];
+  schedule["1"].Sunday!.Lead = ["Ana Karen Villalobos"];
+  schedule["2"].Sunday!.BGV = ["María Lucía Estrada"];
   return { ok: true, schedule, pinned_honored: 0, pin_violations: [], unfilled_seats: [] };
 };
 
@@ -86,7 +86,7 @@ describe("«Solo llenar vacíos» — the handshake", () => {
     (body, call) => {
       if (call === 1) return firstRoster(body, call);
       const r = patch(echoPins(body));
-      r.schedule!["3"].Sunday.Lead = ["Alberto Ruiz Cano"]; // what must NOT be applied
+      r.schedule!["3"].Sunday!.Lead = ["Alberto Ruiz Cano"]; // what must NOT be applied
       return r;
     };
 
@@ -94,7 +94,7 @@ describe("«Solo llenar vacíos» — the handshake", () => {
     ["pinned_honored is missing", liar((r) => ({ ...r, pinned_honored: undefined }))],
     ["pinned_honored is short", liar((r) => ({ ...r, pinned_honored: 1 }))],
     ["a pinned name is missing from the schedule", liar((r) => {
-      r.schedule!["2"].Sunday.BGV = [];
+      r.schedule!["2"].Sunday!.BGV = [];
       return r;
     })],
   ] as const) {

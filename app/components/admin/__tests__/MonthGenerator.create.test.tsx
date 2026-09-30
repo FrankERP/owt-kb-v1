@@ -1196,20 +1196,25 @@ describe("MonthGenerator — create path", () => {
     );
     unmount();
 
-    // CONTROL — the badge and the clause are not simply unrenderable. February
-    // 2026's Saturday the 28th is genuinely unaddressable (its Sunday, March 1,
-    // is outside the month's spine), so both must appear with nothing
-    // deselected at all. Without this half, a `unaddressableDates` that always
-    // returned [] would pass the assertions above.
+    // D16 amended by ADR-00NN (T1): the trailing Saturday is week weeks + 1.
+    // This half used to be the CONTROL: February 2026's Saturday the 28th (its
+    // Sunday, March 1, is outside the spine) was unaddressable and had to show
+    // the badge and the clause. It is now the trailing Saturday, week 5, so
+    // neither appears — no calendar month has an unaddressable Saturday left,
+    // and Task 3 removes the surface. That the badge is renderable at all is
+    // still pinned by `PlannerGrid.test.tsx`, which passes the prop directly;
+    // and the half above still fails on the wrong spine, because 2026-03-14
+    // resolves to no week over one missing the 15th.
     const second = render(
       <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(second.container, 2, 2026);
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
-    expect(screen.getByText("Fuera del alcance de Auto")).toBeTruthy();
+    expect(second.container.querySelector('[data-date="2026-02-28"]')).toBeTruthy();
+    expect(screen.queryByText("Fuera del alcance de Auto")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
-    expect(screen.getByText(/Esto reemplazará toda asignación de voz/).textContent).toMatch(
-      /1 sábado\(s\) fuera del alcance de Auto/,
+    expect(screen.getByText(/Esto reemplazará toda asignación de voz/).textContent).not.toMatch(
+      /fuera del alcance de Auto/,
     );
   });
 

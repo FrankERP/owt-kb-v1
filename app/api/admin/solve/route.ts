@@ -40,7 +40,8 @@ export interface SolveResponse {
   ok: boolean;
   error?: string;
   schedule?: Record<string, {
-    Sunday: { Lead: string[]; BGV: string[]; Choir: string[] };
+    /** Absent for week `weeks + 1`, the trailing Saturday, which has no Sunday. */
+    Sunday?: { Lead: string[]; BGV: string[]; Choir: string[] };
     Saturday?: { Lead: string[]; BGV: string[] };
   }>;
   fairness_relaxed?: boolean;
