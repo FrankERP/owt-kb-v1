@@ -3,7 +3,8 @@
 //
 // Since the cutover (MCP P2 D2) `SOLVER_HISTORY_SOURCE` is `"derived"`, so a
 // mounted `MonthGenerator` reads `GET /api/admin/solver-history?month=YYYY-MM`
-// on its own: once for the display, and once more at the start of every Auto
+// on its own: once for the display, and — only while `SOLVER_SENDS_HISTORY` is
+// true (it ships `false` since ADR-0046) — once more at the start of every Auto
 // run (R14). The suites that are ABOUT something else — the create path, the
 // stored editor, the calendar, the special filler — stub `fetch` with a mock
 // whose CALL COUNT is the assertion ("exactly one POST", "nothing was

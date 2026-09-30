@@ -138,7 +138,11 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
   `GET /api/admin/solver-history` — see [API_REFERENCE.md](API_REFERENCE.md#solver)) produces
   the same entry shape the browser history used to, and the deployment-wide constant
   `SOLVER_HISTORY_SOURCE` (`app/components/admin/solverHistorySource.ts`) is `"derived"`.
-  Three properties to hold together:
+  **Since 2026-09-30 Auto sends none of it** (`SOLVER_SENDS_HISTORY = false`, ADR-0046): the
+  derivation still draws the Historial block and the lead-pool panel, but the solve gets
+  `history: []`, makes no read of its own and never refuses over a failed read. The first two
+  properties below hold only when that switch is `true` (the rollback). Three properties to
+  hold together:
   - **Derived for the target month at solve time, never cached across a solve.** The planner
     loads the three months before the month on screen to draw the Historial block and the
     lead-pool panel, but **every Auto re-reads the history for its own month** — never the
@@ -153,8 +157,8 @@ aliases. Templates like `{weeks-2}` resolve against month length. Names match ca
     marked «· sin servicios», and the diagnostics (seats pointing at deleted members, repeated
     names, duplicate services on a date) are always shown.
 
-  Every admin now solves against the same history, which closes the two-admins gap ADR-0010
-  left open. `owt_solver_history_v2` in `localStorage` is still **written** on each confirm (R15's
+  With history sent, every admin solves against the same history, which closes the two-admins
+  gap ADR-0010 left open (with none sent there is no history to disagree about). `owt_solver_history_v2` in `localStorage` is still **written** on each confirm (R15's
   rollback target) and never read; rolling back is flipping the constant to `"local"`, until
   the dual-write is removed (D3, after Gate D). See [DATA_MODEL.md](DATA_MODEL.md),
   [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and

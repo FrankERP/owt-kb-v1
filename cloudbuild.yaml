@@ -1,6 +1,7 @@
 # Cloud Build config for continuous deployment of the OWT solver.
 #
-# A Cloud Build trigger (connected to GitHub, branch main, file filter gcf/**)
+# A Cloud Build trigger (connected to GitHub, branch main, file filter gcf/** and
+# cloudbuild.yaml)
 # runs this on every push that touches the solver. It deploys the self-contained
 # gcf/ directory as the Gen 2 Cloud Function `owt-solver`.
 #

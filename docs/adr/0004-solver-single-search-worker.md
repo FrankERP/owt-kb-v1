@@ -1,6 +1,6 @@
 # ADR-0004: Solve with 1 search worker to stay on free-tier CPU
 
-**Date:** 2026-06-30 · **Status:** Accepted
+**Date:** 2026-06-30 · **Status:** Accepted, amended by ADR-0046 (the function runs on 1 vCPU; 1 worker, the 5 s cap and the 40 s budget stand)
 
 ## Context
 
@@ -40,3 +40,8 @@ Related, same date: the dedicated-Saturday-lead constraint was relaxed from
 every remaining lead option was dedicated, and a two-stage solve was added so a
 short-staffed month degrades seats (Choir → BGV → 2nd Lead, always ≥1 Lead)
 instead of failing outright.
+
+*Amended 2026-09-30 (ADR-0046):* "Raising the function's CPU" is no longer rejected — the
+function runs on 1 vCPU. The reason changed, not the measurement: with no history sent the
+fairness objective runs again, and at 0.33 vCPU production measured ~4× a Mac core plus 11–19 s
+cold starts against the route's 60 s. One worker is still right on one core.

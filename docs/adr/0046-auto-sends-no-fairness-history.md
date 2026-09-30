@@ -4,7 +4,8 @@
 
 > **Numbering.** ADR numbers follow the order records reach `main`; this is the next free
 > number on `main` when written. Amends ADR-0042 (the history is still derived and shown, but
-> no longer sent) and ADR-0038 (its deferred follow-on — a sequential objective — is not built).
+> no longer sent), ADR-0038 (its deferred follow-on — a sequential objective — is not built) and
+> ADR-0004 (it rejected raising the function's CPU; the 1-worker setting stands).
 
 ## Context
 
@@ -56,7 +57,12 @@ Frank reported Auto giving two Sundays to two lead-only members while others led
   November. The «sin Lead en …» panel and the checkboxes are the tools for that.
 - `objective_skipped` should become rare; «Sin optimizar» stays wired for when it happens.
 - A `>=` count on a role still widens that role's band (by design) — use `==` for a member
-  whose count is decided. Frank's `Sun.Lead >= 2` becomes `== 2` in the rules.
+  whose count is decided. Frank's `Sun.Lead >= 2` becomes `== 2` in the rules: in the member's
+  rule, the cap «Dom Lead» (`Sun.Lead`) with «=» 2. «Lead (ambos)» (`*.Lead`) also counts, but
+  only for a member barred from Saturdays — for one who can lead both days it fixes the sum,
+  not the Sunday count (`exact_count_roles`).
+- Known limit, not reproduced: under pins the count rules go soft; if an excluded member's `==`
+  is the rule the pins force to break, nothing else bounds their count that month.
 - Undoing: flip `SOLVER_SENDS_HISTORY` to `true` (the ADR-0042 path, still tested) — and expect
   `objective_skipped` on every history-bearing month again unless the sequential objective ships.
 - MCP P4's `solve_month` mirrors Auto, so it sends no history either (P4 plan, post-approval

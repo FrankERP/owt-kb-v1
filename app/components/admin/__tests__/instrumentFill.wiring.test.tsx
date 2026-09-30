@@ -124,9 +124,9 @@ function stubFetch(solve: () => unknown) {
     }
     throw new Error(`unexpected fetch to ${url}`);
   });
-  // The derived history read is answered ahead of this mock (the shipped
-  // default since the P2 cutover); an unknown URL still throws, so without the
-  // harness the history read would fail and Auto would never reach the solve.
+  // The derived history read is answered ahead of this mock (the display reads
+  // it; Auto re-reads it only while `SOLVER_SENDS_HISTORY` is true — ADR-0046);
+  // an unknown URL still throws, so the harness keeps the display's read quiet.
   stubFetchWithHistory(fetchMock);
   return { fetchMock, calls };
 }

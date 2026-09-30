@@ -465,12 +465,15 @@ per row behind a ⋯ `Button variant="icon"`, never hover-only buttons, and taki
 away asks first through a confirm `CueDialog` that stays open on a refused PATCH
 (decision O). Giving access back needs no confirm), `loadSolverHistory`
 (`app/utils/solverHistoryRead.ts` — the ONE server-callable fairness-history builder;
-P4's `solve_month` must call it directly, never the admin route), `deriveSolverHistory`/
+P4's `solve_month` calls it directly, never the admin route — only if `SOLVER_SENDS_HISTORY`
+is flipped back, ADR-0046), `deriveSolverHistory`/
 `historyWindow` (`app/utils/solverHistory.ts` — the ONE derivation; neutral),
 `fetchDerivedHistory` (`app/components/admin/derivedHistoryClient.ts` — the planner's ONE
-read of that history: checked, never throws, `{ ok: false }` on any failure, used by both the
-display hook and every Auto), `SOLVER_HISTORY_SOURCE` (`app/components/admin/solverHistorySource.ts`
-— the deployment-wide switch, `"derived"`; `"local"` is the rollback until D3).
+read of that history: checked, never throws, `{ ok: false }` on any failure, used by the display
+hook, and by every Auto only while `SOLVER_SENDS_HISTORY` is true), `SOLVER_HISTORY_SOURCE`
+(`app/components/admin/solverHistorySource.ts` — the deployment-wide switch, `"derived"`; `"local"`
+is the rollback until D3), `SOLVER_SENDS_HISTORY` (same file — `false`: Auto sends `history: []`,
+ADR-0046; `true` is the rollback).
 Motion tokens are `--motion-*` /
 `--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and
