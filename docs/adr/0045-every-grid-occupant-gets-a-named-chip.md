@@ -92,8 +92,11 @@ already sits elsewhere in the same service and so is not sent.
   conflict, then Tipo mismatch or pin conflict, then over-target.
 - **What it adds.** Its own suffix on the chip's `aria-label` and a words line under the cell,
   so the reason is named rather than only tinted.
-- **It is shown and never blocks (E3).** The pin wins; the chip informs the admin and nothing
-  refuses the seat.
+- **It is shown and never blocks (E3).** For an unavailable person or one outside the pools the
+  seat is still pinned: the pin wins, the chip informs the admin, and nothing refuses the seat.
+  The duplicate case is not a pin. That seat is left out of the request, and Auto keeps the
+  person in the one seat that is pinned (Lead before BGV before Coro), because the solver holds
+  one seat per person per service.
 
 Source: `PIN_CONFLICT_ARIA` / `PIN_CONFLICT_LINE` in `app/components/admin/PlannerGrid.tsx`; spec
 `docs/superpowers/specs/2026-09-29-planner-trailing-saturday-and-fill-empty-design.md` §3.3.

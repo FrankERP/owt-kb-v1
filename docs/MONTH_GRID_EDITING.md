@@ -75,10 +75,11 @@ for stored service rosters:
   empty ones are filled around them, instruments are completed without moving anyone, FOH is
   untouched. While Auto runs with the switch on, the grid is read-only; the switch itself and
   every «Borrar» are disabled while Auto is pending, switch on or off. Seats that contradict
-  something — the person marked the day unavailable, is outside the solver's groups for that
-  seat, or already sits elsewhere in the same service — are named on the chip; the seat still
-  wins (E3). Auto's confirm states how many empty voice seats it will fill, and what the solver
-  had to give up is listed under Auto.
+  something are named on the chip. A person who marked the day unavailable, or is outside the
+  solver's groups for that seat, is still fixed there and the seat wins (E3). A person already
+  seated elsewhere in the same service is named as left out of that seat, not fixed: Auto keeps
+  them in one seat only (Lead before BGV before Coro). Auto's confirm states how many empty
+  voice seats it will fill, and what the solver had to give up is listed under Auto.
 - **«Borrar»** (create mode, next to Auto and in each column header) clears Voces, Instrumentos
   or both, for one service or the whole month. FOH is never cleared in bulk. A service clear
   applies at once with «Deshacer» — the toast names what was cleared and where («Voces ·
