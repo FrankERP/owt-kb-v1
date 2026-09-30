@@ -17,6 +17,9 @@ GOVERNANCE — the literals move for different reasons (spec §7; docs/CI.md has
   LADDER_FINGERPRINTS   also moves with the OBJECTIVE (compute_priority_weights feeds it;
                         Stage A never enters that branch). Legitimate re-capture: the
                         above, plus a deliberate, reviewed objective change.
+  IDENTITY_FINGERPRINTS the LADDER's causes, over eight request shapes (the trailing-
+                        Saturday guard, below): the same re-capture, and a red one in a PR
+                        that claims non-trailing requests unchanged is a finding.
   GOLDEN_SCHEDULE       also moves with how ortools breaks a tie on the runner. The
                         above, plus a runner-image change — check the CI log's "Runner
                         Image" group against CAPTURED_ON before calling a red a finding.
@@ -156,30 +159,36 @@ def _search_fingerprint(solver, model):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+def _record(config):
+    """
+    One request, solved: the response, and per solve its (fingerprint, status name,
+    whether it carried an objective), in order. Every solve is recorded, because the
+    fingerprints cover the whole ladder, not only the solve that returned the month.
+    """
+    original = cp_model.CpSolver.Solve
+    solves = []
+
+    def record(solver_self, model):
+        fingerprint = _search_fingerprint(solver_self, model)
+        status = original(solver_self, model)
+        solves.append((fingerprint, solver_self.StatusName(status), model.HasObjective()))
+        return status
+
+    cp_model.CpSolver.Solve = record
+    try:
+        res = mod.solve_from_dict(config)
+    finally:
+        cp_model.CpSolver.Solve = original
+    return res, solves
+
+
 _RUNS = {}
 
 
 def _run(seed):
-    """
-    frozen_config(seed), solved once per process: the response, and per solve its
-    (fingerprint, status name, whether it carried an objective), in order.
-    """
+    """frozen_config(seed), solved once per process (see _record)."""
     if seed not in _RUNS:
-        original = cp_model.CpSolver.Solve
-        solves = []
-
-        def record(solver_self, model):
-            fingerprint = _search_fingerprint(solver_self, model)
-            status = original(solver_self, model)
-            solves.append((fingerprint, solver_self.StatusName(status), model.HasObjective()))
-            return status
-
-        cp_model.CpSolver.Solve = record
-        try:
-            res = mod.solve_from_dict(frozen_config(seed))
-        finally:
-            cp_model.CpSolver.Solve = original
-        _RUNS[seed] = (res, solves)
+        _RUNS[seed] = _record(frozen_config(seed))
     return _RUNS[seed]
 
 
@@ -272,6 +281,205 @@ class PinlessOutputGolden(unittest.TestCase):
         self.assertEqual(self.res["pinned_honored"], 0)
         self.assertEqual(self.res["pin_violations"], [])
         self.assertNotIn("violation_ceiling_proven", self.res)
+
+
+# ─── The non-trailing identity guard (trailing-Saturday spec §5) ──────────────
+#
+# The trailing Saturday lets `weekends_with_saturday` name week `weeks + 1`. A request
+# that does not name it must build the model it builds today, byte for byte — pinned or
+# not, with or without history. STAGE_A and LADDER above prove that for one shape (the
+# history-free, pinless seed fixture); these prove it for the shapes a real request can
+# take, and were frozen from the solver BEFORE the trailing change, in their own commit,
+# so the change is measured against the past rather than against itself.
+#
+# Each entry is every solve of one request, in order, Stage A included (and Solve 0
+# first under pins). Same governance as LADDER_FINGERPRINTS: they move with Stage A's
+# model or search parameters, or the objective — an ortools pin bump, or a deliberate,
+# reviewed objective change, in a PR that changes nothing else. A red literal in a PR that
+# claims non-trailing requests unchanged is a FINDING, never a re-capture.
+#
+# Machine-independent for the same reason the ladder is: each later pass carries the
+# bounds the solves before it proved, so every solve BEFORE the ladder must prove OPTIMAL
+# — asserted per shape, not assumed. That is Stage A, and under pins also Solve 0, whose
+# violation count is the ceiling Stage A and the ladder inherit.
+def _history():
+    """
+    Three months of counts for six of the twelve names, in the shape buildSolveRequest
+    sends: {total_counts, role_counts}. Role keys are ROLE_ORDER's — build_history_offsets
+    ignores any other, and a history that named none would leave the model untouched.
+    """
+    def entry(roles_by_person):
+        return {
+            "total_counts": {p: sum(roles.values()) for p, roles in roles_by_person.items()},
+            "role_counts": {p: dict(roles) for p, roles in roles_by_person.items()},
+        }
+
+    return [
+        entry({"Rachel": {"Sun.Lead": 1, "Sun.Choir": 1}, "Hugo": {"Sun.BGV": 2},
+               "Jakey": {"Sun.BGV": 1, "Sun.Choir": 1}, "Lali": {"Sun.Choir": 2},
+               "Lucía": {"Sat.Lead": 1}}),
+        entry({"Marianne": {"Sun.Lead": 2}, "Rachel": {"Sun.BGV": 1, "Sun.Choir": 1},
+               "Hugo": {"Sun.Choir": 2}, "Lali": {"Sun.BGV": 1, "Sat.BGV": 1},
+               "Lucía": {"Sat.Lead": 2}}),
+        entry({"Marianne": {"Sun.Lead": 1, "Sun.BGV": 1}, "Rachel": {"Sun.Lead": 1},
+               "Jakey": {"Sun.Choir": 2}, "Hugo": {"Sun.BGV": 1, "Sat.BGV": 1},
+               "Lucía": {"Sat.Lead": 1, "Sat.BGV": 1}}),
+    ]
+
+
+def _pins():
+    return [{"week": 1, "role": "Sun.Lead", "person": "Rachel"},
+            {"week": 2, "role": "Sat.BGV", "person": "Hugo"}]
+
+
+def _shaped(saturdays, weeks=4, rules=(), history=False, pinned=False):
+    """frozen_config(1), varied in one request's worth of ways; a fresh dict every call."""
+    config = frozen_config(1)
+    config["weeks"] = weeks
+    config["weekends_with_saturday"] = list(saturdays)
+    config["dsl_rules"] = config["dsl_rules"] + list(rules)
+    if history:
+        config["history"] = _history()
+    if pinned:
+        config["pinned"] = _pins()
+    return config
+
+
+_WEEK_EXCLUSIONS = ("Rachel !in week 3 *.*", "Liu !in week 2 Sat.*")
+
+IDENTITY_SHAPES = {
+    "w4-none": lambda: _shaped([]),
+    "w4-some": lambda: _shaped([2, 4]),
+    "w4-all": lambda: _shaped([1, 2, 3, 4]),
+    "w5-all": lambda: _shaped([1, 2, 3, 4, 5], weeks=5),
+    "w4-weekexcl": lambda: _shaped([2, 4], rules=_WEEK_EXCLUSIONS),
+    "w4-history": lambda: _shaped([2, 4], history=True),
+    "w4-pinned": lambda: _shaped([2, 4], pinned=True),
+    "w4-pinned-history": lambda: _shaped([2, 4], history=True, pinned=True),
+}
+
+# Captured 2026-09-30 on the solver as it stood before the trailing change (macOS arm64,
+# ortools 9.15.6755). Setting it to None is capture mode: the test then fails with the
+# literal to paste, and a literal left at None never passes the required gate.
+IDENTITY_FINGERPRINTS = {
+    "w4-none": [
+        "6dbb17da42338427b4a435f666666e5c174883657e5d9663dfe90aa064dc299b",
+        "a1124f786297f1f4ca706b3a4880050d220c5b9361f907132199a575ec6f473b",
+    ],
+    "w4-some": [
+        "43870d582112e547492fbb22f24dbd53857125d8e428425e3c0165ae5d29aefb",
+        "5a34a77fd24fbc2b2947335464e597b236532aed85abddfd804599d129f9679e",
+        "453c6d4373c5df96c75ead6ceec82cda2779b7557921b583699ed94258b72a64",
+        "eedcc8ba327c7f53d799aab3d9dd8d492e30ea8f30705ed7dbd7a960619acbf8",
+    ],
+    "w4-all": [
+        "dfe256316e2475ffad3e7a82c8cb86f87dfb0b2cb5e57d2bd2917177b8fe7e50",
+        "3dbf5f8e582059408a27f210a342e3ac340bedb8cdc1970cdd849c2ceca5a402",
+        "fa08e8a4b112be87a1066f8d7b591828a44eea66b8a604858f2dfa6df7a99bce",
+        "0bb136b497a387644ba46d0132871ebdf5c28c14881994e375aacaa9747f2235",
+        "59c65f8eca9582a784206195692b9831fee305e629f91385801678cd26711e37",
+        "2d3a77056c60ff07bb99160ab7aa5f940a3ef20a0a4e0edb60e1aa1954d6f590",
+        "b67e064ffcdd5207697f96f6f014796d41a13560f937c673c9c3f8132b5ba77c",
+        "626fc821777a35a0ccde8284fbb6336747df598c12eb37099f22cd2d57ee7e52",
+    ],
+    "w5-all": [
+        "0a2ed66e7fdc4c8d80e33324a5983c537c02b9b351bc1d50ab775345db4fa4c1",
+        "be510b5a85052e8a270755f685231b49f16381d7a1b737940e35f2b8db8ea9bc",
+        "1fd41a1b7bf575ff2f3f24c7a62f9445192fd346a35e461e01d070b0dcbf92fa",
+        "b9a0138cf4e6dfaada2a99f064f0d7a5357c17c5956e730840a739a33a4de704",
+        "308643ab48170db1f0e782cd630dc475be87ff30d0fb544dd51858e29b10143f",
+        "f58960f340c7df06e87a3dedc9b907320391f7a5e0fecb3fce407b8a45d973e0",
+        "8530725d228a402bf6245b29ae73874369bcd90d5db427f0badcc305847aad35",
+        "3623bd6795beb0d301307aab9ff0fbf95a2bb2d859a8650ddf22cf1c860fc5ee",
+    ],
+    "w4-weekexcl": [
+        "db2108d4a90834a935f9a87c6a966cfe86263a66a9a4d8a0176f68919cc3ed65",
+        "ecafe673df39fe53878db435c4ea85a88f4add919d8d5f2fc0f85e752e24d47c",
+    ],
+    "w4-history": [
+        "4dd623fd14ed77118204583d723b4caeefccc10db14490e27211a3a3ec04dbd1",
+        "2d1b984d1661d464548e828a3494ebf555a39e92351d73c52306fba246821527",
+        "92bd07a20670244b84268d05e4d3eee95afec6020ceadeccaaec9c71591590ca",
+        "cd6f727b923be3a0bbce12319de316972f51840ce2408522b681ee3a6b1e2d31",
+    ],
+    "w4-pinned": [
+        "2f666dbdbcfd45db95dab3851b2e0d4c7c164ec73edbe9e85df3f35b654bb011",
+        "95367113c2ea74a8bb8ff470973b6c1462326cd5bc4fd50fe324939ae58e8f82",
+        "436ef91d34e1dda4b9bb1f431a5be460f4300b65f809ad5371756349c9241fa1",
+    ],
+    "w4-pinned-history": [
+        "50ecfbe42c501ff11c068e91f66cc4a141a159fb96ee861a594d69a3b0a15be5",
+        "6f388184bc9ed696bccdebc317acb477123e6df5ab5d45e117b1fb1fb933139c",
+        "449858c032f6e817ef3a60fc502c2c321871e2fa1460929740d501b6075facc0",
+    ],
+}
+
+_SHAPE_RUNS = {}
+
+
+def _run_shape(name):
+    """IDENTITY_SHAPES[name](), solved once per process (see _record)."""
+    if name not in _SHAPE_RUNS:
+        _SHAPE_RUNS[name] = _record(IDENTITY_SHAPES[name]())
+    return _SHAPE_RUNS[name]
+
+
+def _leading_solves(name):
+    """How many solves come before the ladder and must prove OPTIMAL: Stage A, and
+    Solve 0 ahead of it when the request pins (relaxation_enabled)."""
+    return 2 if IDENTITY_SHAPES[name]().get("pinned") else 1
+
+
+class NonTrailingModelIsUnchanged(unittest.TestCase):
+    """The guard for the trailing Saturday: non-trailing requests build the model they did."""
+
+    def test_the_solves_before_the_ladder_prove_optimal(self):
+        for name in IDENTITY_SHAPES:
+            with self.subTest(shape=name):
+                _res, solves = _run_shape(name)
+                statuses = [status for _fingerprint, status, _obj in solves]
+                lead = _leading_solves(name)
+                self.assertEqual(
+                    statuses[:lead], ["OPTIMAL"] * lead,
+                    "precondition: Stage A (and Solve 0 under pins) must prove OPTIMAL for "
+                    "the bounds they hand the ladder to be machine-independent — simplify "
+                    "this shape, or on a slow runner raise INERTNESS_BUDGET_SECONDS; never "
+                    f"drop the assertion. Statuses: {statuses}")
+
+    def test_identity_fingerprints(self):
+        captured = {name: [fingerprint for fingerprint, _status, _obj in _run_shape(name)[1]]
+                    for name in IDENTITY_SHAPES}
+        if IDENTITY_FINGERPRINTS is None:
+            body = "".join(
+                f'    "{name}": [\n' + "".join(f'        "{fp}",\n' for fp in fingerprints) + "    ],\n"
+                for name, fingerprints in captured.items())
+            statuses = {name: [status for _fp, status, _obj in _run_shape(name)[1]]
+                        for name in IDENTITY_SHAPES}
+            self.fail(f"capture mode — paste as IDENTITY_FINGERPRINTS:\nIDENTITY_FINGERPRINTS = {{\n"
+                      f"{body}}}\nstatuses: {statuses}\n"
+                      "Commit it only from the solver as it stood BEFORE the trailing change, "
+                      "with test_the_solves_before_the_ladder_prove_optimal green.")
+        self.assertEqual(set(IDENTITY_FINGERPRINTS), set(IDENTITY_SHAPES),
+                         "a shape and its literal must be added together")
+        for name, expected in IDENTITY_FINGERPRINTS.items():
+            with self.subTest(shape=name):
+                self.assertEqual(
+                    captured[name], expected,
+                    "a request that does not name the trailing Saturday built a different "
+                    "model, search or pass sequence — a FINDING to explain in a PR that "
+                    "claims non-trailing requests unchanged, never a literal to re-capture "
+                    "(see the governance note above IDENTITY_SHAPES)")
+
+    def test_w4_some_is_the_seed_1_fixture(self):
+        """
+        w4-some is frozen_config(1) and nothing else, so its literal must be the seed-1
+        literals above: a recorder or a shape that drifted from them would show here
+        before it showed anywhere else.
+        """
+        self.assertEqual(IDENTITY_SHAPES["w4-some"](), frozen_config(1))
+        if IDENTITY_FINGERPRINTS is not None:
+            self.assertEqual(IDENTITY_FINGERPRINTS["w4-some"],
+                             [STAGE_A_FINGERPRINTS[1]] + LADDER_FINGERPRINTS[1])
 
 
 if __name__ == "__main__":
