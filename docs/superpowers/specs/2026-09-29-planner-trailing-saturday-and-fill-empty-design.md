@@ -1,6 +1,7 @@
 # The planner: the trailing Saturday and «Solo llenar vacíos» — design spec (deliveries 2 and 3)
 
-**Date:** 2026-09-29 · **Status:** draft for Frank's review · **Risk tier: standard** — client
+**Date:** 2026-09-29 · **Status:** approved by Frank 2026-09-29; delivery 3 implemented on
+`claude/fill-empty-only`; delivery 2 waits for delivery 1 to deploy · **Risk tier: standard** — client
 consumers of solver contracts that are released (ADR-0041) or reviewed at critical tier in the
 companion. Pipeline: this spec (self-reviewed, then Frank's review) → implement → four gates →
 fresh diff review → re-verify fixes → `preview` → PR → `main`.

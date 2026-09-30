@@ -252,9 +252,9 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   `member_name` — one per person per service (Lead before BGV before Coro; the solver refuses
   two), at most 100. What the solver would refuse in English (an occupant who is no longer a
   member, an empty `member_name`, more than 100, a Saturday week not sent, a pinned-only spelling
-  that differs from a pool name only in case or spaces) is refused first in Spanish, naming the
-  cell. **Off, or with nothing on the board, the request has no `pinned` key** and is exactly
-  what it was before. A success is applied only if `pinned_honored` equals the pins sent and the
+  that differs only in case or spaces from a pool name or from another pinned-only spelling) is
+  refused first in Spanish, naming the cell. **Off, or with nothing on the board, the request has
+  no `pinned` key** and is exactly what it was before. A success is applied only if `pinned_honored` equals the pins sent and the
   schedule shows every pin by exact name; otherwise Auto says «El solver no respetó los lugares
   fijados; no se aplicó nada.». `pin_violations` are named as the rules card names them
   (`pinViolations.ts`); `violation_ceiling_proven: false` adds one caveat, and only when at least

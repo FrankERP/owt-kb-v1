@@ -1,6 +1,6 @@
 # ADR-0045: Every planner-grid occupant gets a named chip — no `+N`
 
-**Date:** 2026-09-28 · **Status:** Accepted
+**Date:** 2026-09-28 · **Status:** Accepted; amended 2026-09-30 (see the end)
 
 > **Numbering.** ADR numbers follow the order records reach `main`. This record
 > was written as 0044 on its branch. It became 0045 when `main` merged PR #109
