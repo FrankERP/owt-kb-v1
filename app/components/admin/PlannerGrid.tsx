@@ -184,8 +184,12 @@ export interface SolveDiagnostics {
 export interface AutoState {
   pending: boolean;
   error: string | null;
-  /** A non-blocking note about the last Auto run, e.g. a rule it did not apply. */
-  notice?: string | null;
+  /**
+   * Non-blocking notes about the last Auto run, rendered IN ORDER and never replaced by a
+   * later write in the same run (spec 2026-09-29 §2.3): Saturday floors left out, then the
+   * trailing Saturday (delivery 2), then «Solo llenar vacíos» (duplicates, give-ups, caveat).
+   */
+  notices?: string[];
   disabledReason: string | null;
 }
 
@@ -2049,8 +2053,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <p className="font-body text-xs text-warning-strong">{autoState.disabledReason}</p>
         )}
         {mode === "create" && autoState.error && <p className="font-body text-xs text-negative-fg">{autoState.error}</p>}
-        {mode === "create" && autoState.notice && (
-          <p className="font-body text-xs text-warning-strong">{autoState.notice}</p>
+        {mode === "create" && (autoState.notices ?? []).length > 0 && (
+          <div className="basis-full space-y-1" data-auto-notices="">
+            {(autoState.notices ?? []).map((line, i) => (
+              <p key={i} className="font-body text-xs text-warning-strong">{line}</p>
+            ))}
+          </div>
         )}
       </div>
 

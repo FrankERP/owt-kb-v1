@@ -5,7 +5,7 @@ import { useTransientValue } from "@/app/utils/useTransientValue";
 import {
   personNameOptions,
 } from "@/app/utils/memberRuleNames";
-import type { SolveResponse } from "@/app/api/admin/solve/route";
+import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
 import { draftCreateBody, newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
@@ -1930,8 +1930,8 @@ export default function MonthGenerator({
   const [diagnostics, setDiagnostics] = useState<SolveDiagnostics | null>(null);
   const [autoPending, setAutoPending] = useState(false);
   const [autoError, setAutoError]     = useState<string | null>(null);
-  /** A rule Auto did not apply this month (`omittedCapsNotice`); shown, never silent. */
-  const [autoNotice, setAutoNotice]   = useState<string | null>(null);
+  /** Notes about the last Auto run, in order (`AutoState.notices`); shown, never silent. */
+  const [autoNotices, setAutoNotices] = useState<string[]>([]);
 
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
@@ -2747,7 +2747,7 @@ export default function MonthGenerator({
     setUnfilled([]);
     setDiagnostics(null);
     setAutoError(null);
-    setAutoNotice(null);
+    setAutoNotices([]);
     setDrafts(cellsToDrafts([], columns, new Set(), [], existingRoles));
     setStep("grid");
   }
@@ -3336,6 +3336,138 @@ export default function MonthGenerator({
     setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
   }
 
+  /** What `prepareSolve` hands `runSolve`: the request, and the notices already shown. */
+  interface PreparedSolve {
+    request: SolveRequest;
+    /** Shown before the fetch; `runSolve` appends, never replaces (spec §2.3). */
+    notices: string[];
+  }
+
+  /**
+   * THE seam both Auto paths share, first half (spec 2026-09-29 §3.2 «One seam, both paths»):
+   * everything synchronous before the fetch. Reads `cells`, `columns`, `rows` and the rest from
+   * the render it was defined in — for the derived path that is the latest render, because it
+   * is reached through `solveWithDerivedHistoryRef`. Runs every pre-fetch refusal exit itself
+   * (each calls `applySpecialFill` once) and returns `null` for them.
+   *
+   * Owns no `autoPending`: the per-browser path raises it only AFTER this returns (it has
+   * nothing to wait for), the derived path before its history read. Keep that asymmetry.
+   */
+  function prepareSolve(config: SolverConfig, historyEntries: SolverHistoryEntry[]): PreparedSolve | null {
+    setAutoError(null);
+    setAutoNotices([]);
+    const built = buildSolveRequest({
+      config,
+      members,
+      sundayDates: sundayDatesFull,
+      activeSatDates,
+      historyEntries,
+      year,
+      month,
+    });
+    if (!built.ok) {
+      // Pre-flight refusal (fact 14) — never reaches the network. EXIT 1, and
+      // the one E5 names outright: "a month with no Sunday leads must still
+      // fill its specials". The specials never needed the solver.
+      setAutoError(built.reason);
+      applySpecialFill(config, cells);
+      return null;
+    }
+    const notices: string[] = [];
+    const floors = omittedCapsNotice(built.omittedCaps);
+    if (floors) notices.push(floors);
+    setAutoNotices(notices);
+    return { request: built.request, notices };
+  }
+
+  /**
+   * The seam's second half: the fetch and every exit after it. Owns the fetch per CLAUDE.md's
+   * client-mutation invariant (try/catch, check `res.ok`, never close-as-success on failure);
+   * the caller owns `autoPending` and its `finally`. A short-staffed month returning `ok:false`
+   * is the solver's NORMAL failure (D15), not an edge case.
+   *
+   * @param historyMonths the derived path's window label (R14). Absent ⇒ the per-browser path,
+   *   whose diagnostics carry `history_runs_used` instead.
+   */
+  async function runSolve(config: SolverConfig, prepared: PreparedSolve, historyMonths?: string) {
+    try {
+      const res = await fetch("/api/admin/solve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prepared.request),
+      });
+      let response: SolveResponse | null = null;
+      if (res.ok) {
+        response = await res.json();
+      } else if (res.status === 422) {
+        // The solver's refusal — its body carries the reason (`solverRefusalMessage`).
+        response = await res.json().catch(() => null);
+      }
+      if (!res.ok || !response || !response.ok || !response.schedule) {
+        // EXIT 2 — the solver answered, and said no. A short-staffed month is
+        // the solver's NORMAL failure (D15); the specials still fill.
+        setAutoError(solverRefusalMessage(response?.error));
+        applySpecialFill(config, cells);
+        return;
+      }
+
+      const applied = applySolveResponse({
+        response,
+        previousCells: cells,
+        columns,
+        rows,
+        sundayDates: sundayDatesFull,
+        activeSatDates,
+        members,
+      });
+      setUnresolvedNames(applied.unresolvedNames);
+      setDiagnostics(historyMonths === undefined
+        ? {
+            fairness_relaxed: response.fairness_relaxed,
+            sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
+            sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
+            history_runs_used: response.history_runs_used,
+            objective_skipped: response.objective_skipped,
+          }
+        : {
+            // No `history_runs_used`: it is always 3 on a derived history (R4). The
+            // months THIS solve read are what the admin needs to see — and whether
+            // they did anything: with three months of history the objective is
+            // skipped (ADR-0038), and the months were read for nothing.
+            fairness_relaxed: response.fairness_relaxed,
+            sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
+            sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
+            history_months: historyMonths,
+            objective_skipped: response.objective_skipped,
+          });
+      // EXIT 3 — success. `applied.cells`, never the pre-solve `cells`: the
+      // latter would throw away the weekend roster this call just produced.
+      // `applySpecialFill` owns all three of `setCells`/`setUnfilled`/`setDrafts`
+      // from here, so the special seats and the solver's own cannot diverge.
+      //
+      // `sundayDatesFull` resolves the solver's positional week number (E21);
+      // `selectedSundays` then filters the result down to columns that exist —
+      // otherwise an unfilled marker from a week that was never staffed renders
+      // on a date the admin deselected, or on a column that is now a special.
+      applySpecialFill(
+        config,
+        applied.cells,
+        mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
+      );
+      // Fairness history is NOT persisted here — a solve merely proposes a
+      // schedule. Recording it now would count services that may never be
+      // created (close the panel without confirming and next month's solve
+      // would still be penalised for them). `handleConfirm` below persists it
+      // instead, derived from whatever the create batch actually committed.
+    } catch {
+      // EXIT 4 — the network threw. A throw is a solve failure like any other,
+      // and E5 says the specials fill even when the solve fails; exits 1 and 2
+      // both satisfy a loosely-written test and neither reaches this line.
+      setAutoError("Error de red al llamar al solver.");
+      applySpecialFill(config, cells);
+    }
+  }
+
   /**
    * Auto — the ONLY caller of `/api/admin/solve` (D13). Owns the fetch per
    * CLAUDE.md's client-mutation invariant: try/catch/finally, check `res.ok`,
@@ -3343,8 +3475,9 @@ export default function MonthGenerator({
    * short-staffed month returning `ok:false` is the solver's NORMAL failure
    * (D15), not an edge case.
    *
-   * It is also the only caller of `applySpecialFill`, which runs at EVERY exit
-   * — the solve failing has no bearing on a special, which was never sent.
+   * Through `prepareSolve`/`runSolve` it is, with the derived path, the only caller of
+   * `applySpecialFill`, which runs at EVERY exit — the solve failing has no bearing on a
+   * special, which was never sent.
    */
   async function handleAuto() {
     // The rules must be LOADED before anything solves or fills.
@@ -3374,91 +3507,11 @@ export default function MonthGenerator({
       await handleAutoDerived();
       return;
     }
-    setAutoNotice(null);
-    const built = buildSolveRequest({
-      config,
-      members,
-      sundayDates: sundayDatesFull,
-      activeSatDates,
-      historyEntries: solverHistory,
-      year,
-      month,
-    });
-    if (!built.ok) {
-      // Pre-flight refusal (fact 14) — never reaches the network. EXIT 1, and
-      // the one E5 names outright: "a month with no Sunday leads must still
-      // fill its specials". The specials never needed the solver.
-      setAutoError(built.reason);
-      applySpecialFill(config, cells);
-      return;
-    }
-
+    const prepared = prepareSolve(config, solverHistory);
+    if (!prepared) return;
     setAutoPending(true);
-    setAutoError(null);
-    setAutoNotice(omittedCapsNotice(built.omittedCaps));
     try {
-      const res = await fetch("/api/admin/solve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(built.request),
-      });
-      let response: SolveResponse | null = null;
-      if (res.ok) {
-        response = await res.json();
-      } else if (res.status === 422) {
-        // The solver's refusal — its body carries the reason (`solverRefusalMessage`).
-        response = await res.json().catch(() => null);
-      }
-      if (!res.ok || !response || !response.ok || !response.schedule) {
-        // EXIT 2 — the solver answered, and said no. A short-staffed month is
-        // the solver's NORMAL failure (D15); the specials still fill.
-        setAutoError(solverRefusalMessage(response?.error));
-        applySpecialFill(config, cells);
-        return;
-      }
-
-      const applied = applySolveResponse({
-        response,
-        previousCells: cells,
-        columns,
-        rows,
-        sundayDates: sundayDatesFull,
-        activeSatDates,
-        members,
-      });
-      setUnresolvedNames(applied.unresolvedNames);
-      setDiagnostics({
-        fairness_relaxed: response.fairness_relaxed,
-        sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
-        sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
-        history_runs_used: response.history_runs_used,
-        objective_skipped: response.objective_skipped,
-      });
-      // EXIT 3 — success. `applied.cells`, never the pre-solve `cells`: the
-      // latter would throw away the weekend roster this call just produced.
-      // `applySpecialFill` owns all three of `setCells`/`setUnfilled`/`setDrafts`
-      // from here, so the special seats and the solver's own cannot diverge.
-      //
-      // `sundayDatesFull` resolves the solver's positional week number (E21);
-      // `selectedSundays` then filters the result down to columns that exist —
-      // otherwise an unfilled marker from a week that was never staffed renders
-      // on a date the admin deselected, or on a column that is now a special.
-      applySpecialFill(
-        config,
-        applied.cells,
-        mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
-      );
-      // Fairness history is NOT persisted here — a solve merely proposes a
-      // schedule. Recording it now would count services that may never be
-      // created (close the panel without confirming and next month's solve
-      // would still be penalised for them). `handleConfirm` below persists it
-      // instead, derived from whatever the create batch actually committed.
-    } catch {
-      // EXIT 4 — the network threw. A throw is a solve failure like any other,
-      // and E5 says the specials fill even when the solve fails; exits 1 and 2
-      // both satisfy a loosely-written test and neither reaches this line.
-      setAutoError("Error de red al llamar al solver.");
-      applySpecialFill(config, cells);
+      await runSolve(config, prepared);
     } finally {
       setAutoPending(false);
     }
@@ -3481,7 +3534,7 @@ export default function MonthGenerator({
     const target = { year, month };
     setAutoPending(true);
     setAutoError(null);
-    setAutoNotice(null);
+    setAutoNotices([]);
     try {
       const controller = new AbortController();
       const ceiling = setTimeout(() => controller.abort(), DERIVED_HISTORY_AUTO_TIMEOUT_MS);
@@ -3533,69 +3586,9 @@ export default function MonthGenerator({
       applySpecialFill(config, cells);
       return;
     }
-    const built = buildSolveRequest({
-      config,
-      members,
-      sundayDates: sundayDatesFull,
-      activeSatDates,
-      historyEntries: history.data.entries,
-      year,
-      month,
-    });
-    if (!built.ok) {
-      setAutoError(built.reason);
-      applySpecialFill(config, cells);
-      return;
-    }
-    setAutoNotice(omittedCapsNotice(built.omittedCaps));
-    try {
-      const res = await fetch("/api/admin/solve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(built.request),
-      });
-      let response: SolveResponse | null = null;
-      if (res.ok) {
-        response = await res.json();
-      } else if (res.status === 422) {
-        // The solver's refusal — its body carries the reason (`solverRefusalMessage`).
-        response = await res.json().catch(() => null);
-      }
-      if (!res.ok || !response || !response.ok || !response.schedule) {
-        setAutoError(solverRefusalMessage(response?.error));
-        applySpecialFill(config, cells);
-        return;
-      }
-      const applied = applySolveResponse({
-        response,
-        previousCells: cells,
-        columns,
-        rows,
-        sundayDates: sundayDatesFull,
-        activeSatDates,
-        members,
-      });
-      setUnresolvedNames(applied.unresolvedNames);
-      // No `history_runs_used`: it is always 3 on a derived history (R4). The
-      // months THIS solve read are what the admin needs to see — and whether
-      // they did anything: with three months of history the objective is
-      // skipped (ADR-0038), and the months were read for nothing.
-      setDiagnostics({
-        fairness_relaxed: response.fairness_relaxed,
-        sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
-        sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
-        history_months: historyMonthsLabel(history.data.months),
-        objective_skipped: response.objective_skipped,
-      });
-      applySpecialFill(
-        config,
-        applied.cells,
-        mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
-      );
-    } catch {
-      setAutoError("Error de red al llamar al solver.");
-      applySpecialFill(config, cells);
-    }
+    const prepared = prepareSolve(config, history.data.entries);
+    if (!prepared) return;
+    await runSolve(config, prepared, historyMonthsLabel(history.data.months));
   }
   const solveWithDerivedHistoryRef = useRef(solveWithDerivedHistory);
   // Commit-time, so the ref is current before any later event or resolved
@@ -3824,7 +3817,7 @@ export default function MonthGenerator({
     return draftByTarget.get(key)?.isExisting ? "existing" : null;
   };
 
-  const autoState: AutoState = { pending: autoPending, error: autoError, notice: autoNotice, disabledReason: gateBlocked };
+  const autoState: AutoState = { pending: autoPending, error: autoError, notices: autoNotices, disabledReason: gateBlocked };
 
   // ── Step 1: Configure ────────────────────────────────────────────────────────
   if (step === "config") return (
