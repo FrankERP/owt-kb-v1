@@ -153,9 +153,10 @@ shapes' Stage A entries re-captured in `eaa62893` after the hash left out Solve 
 - A differential identity check over a spread of request shapes WITHOUT a trailing Saturday —
   pinned and pinless, with and without history, with a week exclusion, with no, some and all
   Saturdays: every solve's model and parameters identical to the pre-change solver. **Mechanism
-  (post-approval):** the per-shape fingerprints are frozen as literals in the step-zero PR, captured
-  from the pre-change solver under `test_inertness.py`'s governance — never a vendored copy of the
-  old solver under `gcf/`, which Cloud Build would deploy (`--source=gcf`).
+  (post-approval):** the per-shape fingerprints are frozen as literals in this delivery's first
+  commits, on the unchanged solver (plan ruling P1), captured from the pre-change solver under
+  `test_inertness.py`'s governance — never a vendored copy of the old solver under `gcf/`, which
+  Cloud Build would deploy (`--source=gcf`).
 - Trailing seats exist with no Sunday; `schedule["5"]` has only `Saturday`; unfilled seats map.
 - `weeks + 2` refused; a week-5 exclusion refused without the trailing Saturday and applied with it;
   a Sunday pin in week 5 refused and a Saturday pin honoured.

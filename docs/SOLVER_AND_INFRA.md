@@ -60,8 +60,10 @@ violation_ceiling_proven? }`. On error: `{ ok: false, error }`.
   `{weeks-N}` still counts the Sundays. **Refusals** (`ValueError` → `ok: false` → 422): `weeks + 2` or more
   («weekends_w_sat must use 1-based indexes 1..5: 4 Sundays, and 5 = the Saturday after the last
   one. Received [6].»); a week exclusion or a pin naming `weeks + 1` when `weekends_with_saturday`
-  does not; a Sunday-role pin in it («which has no Sunday service»). A refused request that does name
-  it carries one extra diagnostic line suggesting it be deselected. **A request that does not name it
+  does not; a Sunday-role pin in it («which has no Sunday service»). An **infeasible** request that
+  does name it (a `RuntimeError` from `diagnose_infeasibility`, also `ok: false` → 422) carries one
+  extra diagnostic line suggesting it be deselected; the `ValueError` refusals above do not.
+  **A request that does not name it
   builds the model it built before, byte for byte** — frozen by `gcf/test_inertness.py`
   (`docs/CI.md`). **The planner does not send `weeks + 1` yet** (see «Before the request leaves the
   planner»).
@@ -349,9 +351,9 @@ vars to set).
 ### Verifying a Cloud Function deploy
 The Vercel rule (alias + `githubCommitSha`) has no analogue here, so the check is:
 
-1. `gcloud functions describe owt-solver --gen2 --region=us-central1 --format='value(updateTime)'`
-   — the active revision's `updateTime` must be after the merge. This is the analogue of reading
-   the alias, not the build.
+1. `gcloud functions describe owt-solver --gen2 --region=us-central1 --format='value(state,updateTime)'`
+   — the state must be `ACTIVE` and the active revision's `updateTime` must be after the merge.
+   This is the analogue of reading the alias, not the build.
 2. One **pinless** smoke request, asserting `ok: true` and the **presence** of `pinned_honored`.
    Presence is the discriminator: an old revision answers the same request successfully and
    without the field. It needs the API key, which is Frank's to supply — never paste its value

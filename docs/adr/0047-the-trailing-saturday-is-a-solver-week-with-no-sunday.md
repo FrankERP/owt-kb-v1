@@ -43,11 +43,13 @@ inert for every request that does not use it.
    rule or objective term. The soft consecutive penalty skips the Sunday roles in that week only,
    so there is no `asgn[p,Sun.*,W5]` and no `rep[p,Sun.*,W4]`; `build_schedule_view` gives the week a
    `Saturday` entry and no `Sunday` key. A `Sun.*` rule has no terms there and is skipped.
-5. **Refusals stay `ValueError` → `ok: false` → 422.** `weeks + 2` or more in
-   `weekends_with_saturday`; a week exclusion or a pin naming `weeks + 1` when the request does not
-   name the trailing Saturday; a Sunday-role pin in week `weeks + 1` («which has no Sunday service»).
-   Every week-range message counts Sundays («the month has 4 Sundays»), never «5 weeks». A refused
-   request that names `weeks + 1` adds one line suggesting it be deselected.
+5. **Refusals stay `ValueError` or `RuntimeError` → `ok: false` → 422.** The `ValueError`s: `weeks + 2`
+   or more in `weekends_with_saturday`; a week exclusion or a pin naming `weeks + 1` when the request
+   does not name the trailing Saturday; a Sunday-role pin in week `weeks + 1` («which has no Sunday
+   service»). Every week-range message counts Sundays («the month has 4 Sundays»), never «5 weeks».
+   The `RuntimeError` is an INFEASIBLE request, raised from `diagnose_infeasibility`; when that
+   request names `weeks + 1` the diagnostic adds one line suggesting it be deselected. The
+   `ValueError` refusals carry no such line.
 
 **The invariant.** A request that does not name the trailing Saturday builds the model it built
 before, byte for byte, pinned or not, with or without history. It is proven by frozen literals in
