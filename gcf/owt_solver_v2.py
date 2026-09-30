@@ -1200,11 +1200,24 @@ def create_model_and_solve(
         model.Add(sv == rmax - rmin)
         role_spread_vars[role_type] = sv
 
+    # A person whose count for ONE role is fixed by an exact rule (`X Sun.Lead == 2`)
+    # has that count decided by the rule, not by fairness, so they leave that role's
+    # band. Kept in, their fixed 2 widened the band for EVERYONE: with more leaders
+    # than seats someone sits at 0, so a fixed 2 forces a spread of 2 and lets anyone
+    # lead twice while others lead none (production's October 2026). Only `==` on a
+    # single role: a `>=` is a floor, and leaving the band would lift its ceiling.
+    exact_count_people: Dict[str, Set[str]] = defaultdict(set)
+    for rule in dsl_count_rules:
+        if rule.operator == "==" and len(rule.role_types) == 1:
+            exact_count_people[next(iter(rule.role_types))].add(rule.person)
+
     # Sun.Lead hard fairness guard (current month)
     sun_lead_eligible = [p for p in all_people if is_eligible(p, "Sun.Lead", pools, forbidden)]
     sun_lead_slots_n = sum(1 for s in slots if s.role_type == "Sun.Lead")
     cur_sun_lead_spread = model.NewIntVar(0, sun_lead_slots_n, "cur_sl_spread")
-    sun_lead_constrained = [p for p in sun_lead_eligible if p not in role_fairness_exempt.get("Sun.Lead", set())]
+    sun_lead_constrained = [p for p in sun_lead_eligible
+                            if p not in role_fairness_exempt.get("Sun.Lead", set())
+                            and p not in exact_count_people["Sun.Lead"]]
     if len(sun_lead_constrained) >= 2 and sun_lead_slots_n > 0:
         sl_max = model.NewIntVar(0, sun_lead_slots_n, "sl_max")
         sl_min = model.NewIntVar(0, sun_lead_slots_n, "sl_min")
@@ -1229,7 +1242,9 @@ def create_model_and_solve(
     sun_bgv_eligible = [p for p in all_people if is_eligible(p, "Sun.BGV", pools, forbidden)]
     sun_bgv_slots_n = sum(1 for s in slots if s.role_type == "Sun.BGV")
     cur_sun_bgv_spread = model.NewIntVar(0, sun_bgv_slots_n, "cur_sb_spread")
-    sun_bgv_constrained = [p for p in sun_bgv_eligible if p not in role_fairness_exempt.get("Sun.BGV", set())]
+    sun_bgv_constrained = [p for p in sun_bgv_eligible
+                           if p not in role_fairness_exempt.get("Sun.BGV", set())
+                           and p not in exact_count_people["Sun.BGV"]]
     if len(sun_bgv_constrained) >= 2 and sun_bgv_slots_n > 0:
         sb_max = model.NewIntVar(0, sun_bgv_slots_n, "sb_max")
         sb_min = model.NewIntVar(0, sun_bgv_slots_n, "sb_min")

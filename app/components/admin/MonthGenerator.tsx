@@ -42,7 +42,7 @@ import {
   type SolverConfigController,
   type SolverConfigSource,
 } from "./solverConfigSource";
-import { SOLVER_HISTORY_SOURCE } from "./solverHistorySource";
+import { SOLVER_HISTORY_SOURCE, SOLVER_SENDS_HISTORY } from "./solverHistorySource";
 import { fetchDerivedHistory, type DerivedHistoryFetchResult } from "./derivedHistoryClient";
 import { useDerivedSolverHistory, type DerivedHistoryHandle } from "./useDerivedSolverHistory";
 import type { SolverHistoryDiagnostics, SolverHistoryMonth } from "@/app/utils/solverHistory";
@@ -3380,7 +3380,7 @@ export default function MonthGenerator({
       members,
       sundayDates: sundayDatesFull,
       activeSatDates,
-      historyEntries: solverHistory,
+      historyEntries: SOLVER_SENDS_HISTORY ? solverHistory : [],
       year,
       month,
     });
@@ -3431,7 +3431,7 @@ export default function MonthGenerator({
         fairness_relaxed: response.fairness_relaxed,
         sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
         sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
-        history_runs_used: response.history_runs_used,
+        history_runs_used: SOLVER_SENDS_HISTORY ? response.history_runs_used : undefined,
         objective_skipped: response.objective_skipped,
       });
       // EXIT 3 — success. `applied.cells`, never the pre-solve `cells`: the
@@ -3483,6 +3483,13 @@ export default function MonthGenerator({
     setAutoError(null);
     setAutoNotice(null);
     try {
+      // No history is sent (ADR-0046): nothing to read, and so nothing to refuse
+      // over — a failed or slow history read must not block a solve that never
+      // uses it. `null` tells the solve step exactly that.
+      if (!SOLVER_SENDS_HISTORY) {
+        await solveWithDerivedHistoryRef.current(target, null);
+        return;
+      }
       const controller = new AbortController();
       const ceiling = setTimeout(() => controller.abort(), DERIVED_HISTORY_AUTO_TIMEOUT_MS);
       let history: DerivedHistoryFetchResult;
@@ -3518,15 +3525,21 @@ export default function MonthGenerator({
    *   admin has since gone back and picked another month, this history is not
    *   that month's and solving it would be exactly R14's failure — so nothing
    *   is solved or filled.
+   * @param history the read, or `null` when no history is sent
+   *   (`SOLVER_SENDS_HISTORY`, ADR-0046): then the request carries `history: []`
+   *   and the diagnostics name no months.
    */
-  async function solveWithDerivedHistory(target: { year: number; month: number }, history: DerivedHistoryFetchResult) {
+  async function solveWithDerivedHistory(
+    target: { year: number; month: number },
+    history: DerivedHistoryFetchResult | null,
+  ) {
     if (target.year !== year || target.month !== month) return;
     const config = solverConfig;
     if (!config) {
       setAutoError("No se pudieron cargar las reglas compartidas. Recárgalas antes de usar Auto.");
       return;
     }
-    if (!history.ok) {
+    if (history && !history.ok) {
       // Pre-flight refusal (spec, Failure): a history that could not be read is
       // never solved as an empty one. The specials never needed it (E5).
       setAutoError(DERIVED_HISTORY_AUTO_REFUSAL);
@@ -3538,7 +3551,7 @@ export default function MonthGenerator({
       members,
       sundayDates: sundayDatesFull,
       activeSatDates,
-      historyEntries: history.data.entries,
+      historyEntries: history ? history.data.entries : [],
       year,
       month,
     });
@@ -3584,7 +3597,7 @@ export default function MonthGenerator({
         fairness_relaxed: response.fairness_relaxed,
         sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
         sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
-        history_months: historyMonthsLabel(history.data.months),
+        history_months: history ? historyMonthsLabel(history.data.months) : undefined,
         objective_skipped: response.objective_skipped,
       });
       applySpecialFill(

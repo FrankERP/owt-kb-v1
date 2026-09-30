@@ -1,6 +1,6 @@
 # ADR-0038: The lexicographic objective's weights use per-tier maxima
 
-**Date:** 2026-09-16 · **Status:** Accepted · **Amended 2026-09-23** — before release, a review found this record's account of `main` partly false; the ceiling moved to CP-SAT's real one, and the trade-off Frank accepted is recorded below
+**Date:** 2026-09-16 · **Status:** Accepted, amended by ADR-0046 (Auto sends no history, so the ladder fits; the sequential follow-on is not built) · **Amended 2026-09-23** — before release, a review found this record's account of `main` partly false; the ceiling moved to CP-SAT's real one, and the trade-off Frank accepted is recorded below
 
 ## Context
 

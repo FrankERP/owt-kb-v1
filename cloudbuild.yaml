@@ -28,6 +28,11 @@ steps:
       # build SA (roles/editor) can't do. Auth is enforced at the app layer via the
       # X-Api-Key header. To change public access, edit the IAM binding directly.
       - --memory=512MB
+      # One full vCPU: at 512MB alone Cloud Run gives 0.33, where a solve ran ~4x the
+      # Mac's time (13.9 s for October 2026 incl. an 11 s cold start). With the
+      # fairness objective actually running (no history, ADR-0046) that pushed
+      # a hard month toward the route's 60 s. A few solves a month: cost is cents.
+      - --cpu=1
       - --timeout=120s
       # Drop any plaintext OWT_SOLVER_API_KEY left over from the old deploy script;
       # the key now comes only from Secret Manager. Cloud Run rejects a name that is

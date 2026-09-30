@@ -214,7 +214,13 @@ several exist precisely to stop a plausible-looking change.
 - **Cache:** admin/API routes that mutate content must call the matching
   `revalidate*` util in `app/utils/revalidate.ts` (or `revalidatePath`), or the
   ISR page stays stale.
-- **The solver's history is derived for the target month at solve time; never read from
+- **Auto sends the solver NO fairness history** (`SOLVER_SENDS_HISTORY = false` since
+  2026-09-30, ADR-0046): `history: []`, no read at solve time, no refusal over a failed read, no
+  «Historial» line — the solver balances within the month and the pool checkboxes decide across
+  months. A member whose count for ONE role is fixed by an exact rule (`Sun.Lead == 2`) leaves
+  that role's band in the solver; a `>=` floor stays in. Everything below applies only when the
+  switch is flipped back to `true` (the rollback, still tested):
+  **the solver's history is derived for the target month at solve time; never read from
   `localStorage`, never cached across a solve** (`SOLVER_HISTORY_SOURCE = "derived"` since the
   2026-09-28 cutover, ADR-0042). `handleAutoDerived` re-reads `fetchDerivedHistory` for its OWN
   month on every Auto — never the display copy `useDerivedSolverHistory` holds — and a failed

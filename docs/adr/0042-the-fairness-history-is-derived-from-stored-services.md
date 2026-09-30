@@ -1,6 +1,6 @@
 # ADR-0042: The solver's fairness history is derived from stored role documents, not `localStorage`
 
-**Date:** 2026-09-25 · **Status:** Accepted
+**Date:** 2026-09-25 · **Status:** Accepted, amended by ADR-0046 (the history is still derived and shown, but Auto no longer sends it)
 
 > **The number is final.** ADR numbers follow the order in which records reach `main`. PR #102
 > ("solver-pinned-assignments") merged first and took 0041, so this record was renumbered to

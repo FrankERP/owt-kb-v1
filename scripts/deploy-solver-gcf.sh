@@ -27,6 +27,7 @@ REGION="us-central1"
 FUNCTION_NAME="owt-solver"
 RUNTIME="python312"
 MEMORY="512MB"
+CPU="1"   # must match cloudbuild.yaml — 0.33 vCPU (the 512MB default) is ~4x slower
 TIMEOUT="120s"
 # The gcf/ directory is self-contained (main.py + owt_solver_v2.py + requirements.txt),
 # so it deploys as-is. This is the same source GitHub continuous deployment builds.
@@ -42,6 +43,7 @@ gcloud functions deploy "$FUNCTION_NAME" \
   --source="$SOURCE_DIR" \
   --entry-point=solve \
   --memory="$MEMORY" \
+  --cpu="$CPU" \
   --timeout="$TIMEOUT" \
   --set-secrets="OWT_SOLVER_API_KEY=owt-solver-api-key:latest"
 
