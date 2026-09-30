@@ -4,11 +4,12 @@
 // «Solo llenar vacíos» WIRED, on the shipped derived path (spec 2026-09-29 §3.4). The pure
 // halves are pinned in pinModel/pinViolations; this proves MonthGenerator sends the pins,
 // checks the handshake, keeps instruments and names what the solver gave up.
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_SOLVER_CONFIG } from "../solverConfigDefaults";
 import { PIN_HANDSHAKE_REFUSAL } from "../pinModel";
+import { solverRefusalMessage } from "../plannerModel";
 import { echoPins, emptySchedule, stubSolve, type Respond } from "./pinSolveHarness";
 import {
   ANA, BETO, Gen, LUCIA, PACO, RODRI, SUNDAYS, cellAt, deselectAll, fillEmptySwitch, preview, runAuto,
@@ -104,6 +105,95 @@ describe("«Solo llenar vacíos» — the handshake", () => {
       expect(screen.queryByText(/Motivo del solver/)).toBeNull();
     });
   }
+});
+
+describe("«Solo llenar vacíos» — every failure exit completes instruments with the switch's flag", () => {
+  const HISTORY_ROUTE = "/api/admin/solver-history?";
+  /** From the next call on, the fairness-history read answers 500 (the Auto one, not the display's). */
+  function failHistoryReads() {
+    const answered = globalThis.fetch as (i: unknown, n?: unknown) => Promise<unknown>;
+    vi.stubGlobal("fetch", async (input: unknown, init?: unknown) => {
+      if (typeof input === "string" && input.startsWith(HISTORY_ROUTE)) return { ok: false, status: 500, json: async () => ({}) };
+      return answered(input, init);
+    });
+  }
+
+  const exits: { name: string; second: Respond; message: string; historyFails?: boolean }[] = [
+    { name: "the handshake refusal", second: (body) => ({ ...echoPins(body), pinned_honored: undefined }), message: PIN_HANDSHAKE_REFUSAL },
+    { name: "a 422 solver refusal", second: () => ({ ok: false, error: "INFEASIBLE", status: 422 }), message: solverRefusalMessage("INFEASIBLE") },
+    { name: "a thrown fetch", second: () => { throw new Error("offline"); }, message: "Error de red al llamar al solver." },
+    {
+      name: "a failed history read", second: echoPins, historyFails: true,
+      message: "No se pudo leer el historial de equidad. Auto no corrió; reintenta.",
+    },
+  ];
+
+  for (const exit of exits) {
+    it(`${exit.name}: fills the empty drum seat and leaves every seated one byte-identical`, async () => {
+      // Nobody can drum the last Sunday on the first Auto, so that seat is left empty.
+      const drummers = [RODRI, PACO].map((x) => ({ ...x, unavailableDates: [SUNDAYS[4]] }));
+      const { container, rerender, bodies } = setup(
+        (body, call) => (call === 1 ? firstRoster(body, call) : exit.second(body, call)),
+        [ANA, LUCIA, BETO, ...drummers],
+      );
+      runAuto();
+      await waitFor(() => expect(cellAt(container, "lead", SUNDAYS[0]).textContent).toContain("Ana"));
+      const drums = (date: string) => cellAt(container, "instrumento:Drums", date);
+      expect(drums(SUNDAYS[4]).textContent).not.toMatch(/Paco|Rodri/);
+      const seated = (drums(SUNDAYS[2]).textContent ?? "").includes("Paco") ? PACO : RODRI;
+      // Both can now drum the last Sunday, and week 3's drummer can no longer come. An exit that
+      // skips `applySpecialFill` leaves the last Sunday empty; one that drops the flag takes the
+      // vacate path, which re-seats week 3 with the other drummer.
+      const members = MEMBERS.map((x) => (x._id === seated._id ? { ...x, unavailableDates: [SUNDAYS[2]] } : x));
+      rerender(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+      fireEvent.click(fillEmptySwitch());
+      const seatedDays = SUNDAYS.slice(0, 4);
+      const before = seatedDays.map((d) => drums(d).outerHTML);
+      if (exit.historyFails) failHistoryReads();
+      runAuto();
+      await waitFor(() => expect(screen.getByText(exit.message)).toBeTruthy());
+      await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+      expect(bodies).toHaveLength(exit.historyFails ? 1 : 2);
+      expect(drums(SUNDAYS[4]).textContent).toMatch(/Paco|Rodri/);
+      expect(seatedDays.map((d) => drums(d).outerHTML)).toEqual(before);
+    });
+  }
+});
+
+describe("«Solo llenar vacíos» — a hand-placed waiver survives the pinned Auto", () => {
+  it("keeps the override's manual origin and its «Regla anulada» marker when the solver hands the pin back", async () => {
+    const rules = readyRules({
+      ...DEFAULT_SOLVER_CONFIG,
+      restrictions: [
+        ...DEFAULT_SOLVER_CONFIG.restrictions,
+        { id: "beto-bgv", person: "Beto", excludedPatterns: ["Sun.BGV"], fairness: "none", fairnessSlack: 0, weekExclusions: [], caps: [] },
+      ],
+    });
+    const { container } = setup((body, call) => (call === 1 ? firstRoster(body, call) : echoPins(body)), MEMBERS, rules);
+    runAuto();
+    await waitFor(() => expect(cellAt(container, "lead", SUNDAYS[0]).textContent).toContain("Ana"));
+    // Beto is rule-blocked from Sunday BGV: seat him in week 3 through the override.
+    fireEvent.click(cellAt(container, "bgv", SUNDAYS[2]).querySelector("[data-cell-action]") as HTMLElement);
+    const picker = screen.getByRole("region", { name: `Candidatos para BGV — ${SUNDAYS[2]}` });
+    // Scoped to Beto's row: the default rules also block Lucía in week 3.
+    const beto = within(picker).getByText("Beto").closest("li") as HTMLElement;
+    fireEvent.click(within(beto).getByRole("button", { name: "Asignar de todos modos" }));
+    const waiver = () => within(cellAt(container, "bgv", SUNDAYS[2])).queryByText(/^Regla anulada — Beto: /);
+    expect(waiver()).toBeTruthy();
+
+    fireEvent.click(fillEmptySwitch());
+    runAuto();
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+    expect(screen.queryByText(PIN_HANDSHAKE_REFUSAL)).toBeNull();
+    expect(cellAt(container, "bgv", SUNDAYS[2]).textContent).toContain("Beto");
+    expect(waiver()).toBeTruthy();
+    // `origin` has one reader on screen: «Borrar»'s month dialog counts the hand-placed seats.
+    // Beto's is the only one — Ana's and Lucía's came from the first Auto.
+    fireEvent.click(screen.getByRole("button", { name: "Borrar" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Voces (3)" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText(/Aproximadamente 1 se pusieron a mano\./)).toBeTruthy();
+  });
 });
 
 describe("«Solo llenar vacíos» — instruments are completed, never re-seated", () => {
