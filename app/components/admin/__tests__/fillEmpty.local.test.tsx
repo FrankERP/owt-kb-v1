@@ -6,7 +6,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../solverHistorySource", () => ({ SOLVER_HISTORY_SOURCE: "local" }));
+vi.mock("../solverHistorySource", () => ({ SOLVER_HISTORY_SOURCE: "local", SOLVER_SENDS_HISTORY: true }));
 
 import { emptySchedule, stubSolve } from "./pinSolveHarness";
 import {

@@ -797,5 +797,105 @@ class SunBgvLadderReachesThree(unittest.TestCase):
                 self.assertLessEqual(max(leads.values()), 1)
 
 
+class ExactCountLeavesTheBand(unittest.TestCase):
+    """
+    A person whose Sun.Lead count is fixed by an exact rule leaves the Sun.Lead
+    band. With 11 Sunday leads for 8 seats someone sits at 0, so a fixed 2 kept
+    inside the band forced a spread of 2 and let ANYONE lead twice while others
+    led none — production's October 2026 (Mkz `>= 2`, several leads on 2 Sundays).
+    A `>=` floor stays in the band: leaving it would lift its ceiling.
+    """
+
+    def _leads(self, res):
+        leads = {}
+        for services in res["schedule"].values():
+            for p in services["Sunday"]["Lead"]:
+                leads[p] = leads.get(p, 0) + 1
+        return leads
+
+    def _config(self, cap, seed):
+        rules = [r.replace("fairness_exempt", f"Sun.Lead {cap} 2 & fairness_exempt") if r.startswith("Mkz ") else r
+                 for r in BASE_RULES]
+        cfg = make_config(rules=rules, seed=seed)
+        cfg["solver_max_time_seconds"] = 2
+        return cfg
+
+    def test_an_exact_count_holds_everyone_else_at_one(self):
+        for seed in (1, 2, 3):
+            with self.subTest(seed=seed):
+                res = solve_from_dict(self._config("==", seed))
+                self.assertTrue(res["ok"], res.get("error"))
+                self.assertFalse(res["sun_lead_fairness_relaxed"])
+                leads = self._leads(res)
+                self.assertEqual(leads.get("Mkz"), 2)
+                self.assertLessEqual(max(n for p, n in leads.items() if p != "Mkz"), 1)
+
+    def test_which_rules_fix_a_single_role(self):
+        from collections import defaultdict
+        from owt_solver_v2 import DslCountRule, exact_count_roles
+
+        pools = {"Sun.Lead": {"A", "B"}, "Sat.Lead": {"B"}, "Sun.BGV": {"A", "B"},
+                 "Sat.BGV": set(), "Sun.Choir": {"A", "B"}}
+        forbidden = defaultdict(set, {"A": {"Sun.BGV", "Sun.Choir"}})
+
+        def rule(person, roles, op="=="):
+            return DslCountRule(person=person, role_types=set(roles), operator=op, value=2, source="t")
+
+        cases = [
+            ("single role", rule("A", ["Sun.Lead"]), {"Sun.Lead": {"A"}}),
+            # A holds no BGV/Choir and no Saturday, so `Sun.*` / `*.Lead` pin Sun.Lead alone.
+            ("pattern, one held role", rule("A", ["Sun.Lead", "Sun.BGV", "Sun.Choir"]), {"Sun.Lead": {"A"}}),
+            ("*.Lead, Sunday-only", rule("A", ["Sun.Lead", "Sat.Lead"]), {"Sun.Lead": {"A"}}),
+            # B can lead both days: the rule fixes only the SUM, so B stays in both bands.
+            ("*.Lead, both days", rule("B", ["Sun.Lead", "Sat.Lead"]), {}),
+            ("a floor", rule("A", ["Sun.Lead"], ">="), {}),
+            ("a ceiling", rule("A", ["Sun.Lead"], "<="), {}),
+        ]
+        for name, r, expected in cases:
+            with self.subTest(name):
+                got = {k: v for k, v in exact_count_roles([r], pools, forbidden).items() if v}
+                self.assertEqual(got, expected)
+
+    def test_an_exact_bgv_count_leaves_the_bgv_band(self):
+        """
+        The Sun.BGV half. A support member fixed at 4 BGVs over five Sundays, with more
+        BGV-eligible people than seats (someone at 0): inside the band that is a spread
+        of 4, past the ladder's last level, so the month fell to Stage A. Outside it,
+        everyone else holds at 1. A `>=` floor stays in and still falls.
+        """
+        leads = ["Ana", "Beto", "Caro", "Dani", "Eli"]
+        support = [f"S{i:02d}" for i in range(1, 17)]
+
+        def solve(op, seed):
+            return solve_from_dict(dict(
+                weeks=5, weekends_with_saturday=[], sunday_leads=leads, saturday_leads=[], support=support,
+                dsl_rules=[f"{p} !in Sun.BGV & !in Sun.Choir" for p in leads]
+                + [f"S01 Sun.BGV {op} 4 & fairness_exempt"],
+                history=[], seed=seed, solver_max_time_seconds=2))
+
+        for seed in (1, 2):
+            with self.subTest(seed=seed):
+                res = solve("==", seed)
+                self.assertTrue(res["ok"], res.get("error"))
+                self.assertFalse(res["sun_bgv_fairness_relaxed"])
+                bgv = {}
+                for services in res["schedule"].values():
+                    for p in services["Sunday"]["BGV"]:
+                        bgv[p] = bgv.get(p, 0) + 1
+                self.assertEqual(bgv.get("S01"), 4)
+                self.assertLessEqual(max(n for p, n in bgv.items() if p != "S01"), 1)
+                floor = solve(">=", seed)
+                self.assertTrue(floor["sun_bgv_fairness_relaxed"])
+
+    def test_a_floor_stays_in_the_band(self):
+        for seed in (1, 2, 3):
+            with self.subTest(seed=seed):
+                res = solve_from_dict(self._config(">=", seed))
+                self.assertTrue(res["ok"], res.get("error"))
+                # The floor's 2 sits inside the band, so the band must widen to 2.
+                self.assertTrue(res["sun_lead_fairness_relaxed"])
+                self.assertGreaterEqual(self._leads(res).get("Mkz"), 2)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

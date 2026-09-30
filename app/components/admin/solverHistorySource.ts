@@ -34,3 +34,21 @@
 export type SolverHistorySource = "local" | "derived";
 
 export const SOLVER_HISTORY_SOURCE: SolverHistorySource = "derived";
+
+/**
+ * Whether Auto sends a fairness history to the solver at all — `false` since
+ * 2026-09-30 (Frank's decision, ADR-0046). The solver then balances WITHIN the
+ * month only; who leads across months is Frank's call through the pool
+ * checkboxes (occasional leaders are ticked some months and not others, which a
+ * history-weighted objective read as "owed" leads). It also keeps the objective
+ * under CP-SAT's ceiling: with three history months it was skipped on every real
+ * month (ADR-0038), so the history never shaped a roster anyway.
+ *
+ * `false`: Auto reads no history at solve time, never refuses over a failed read,
+ * sends `history: []`, and shows no «Historial» line. The display read
+ * (`useDerivedSolverHistory`, the «sin Lead en …» panel) and the confirm-time
+ * dual-write are unchanged. `true` restores the ADR-0042 behaviour exactly —
+ * the rollback, through the normal pipeline, like `SOLVER_HISTORY_SOURCE`.
+ * Explicitly `boolean`, for the same TS2367 reason as the constant above.
+ */
+export const SOLVER_SENDS_HISTORY: boolean = false;

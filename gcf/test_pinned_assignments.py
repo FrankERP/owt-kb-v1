@@ -653,7 +653,7 @@ class ViolationCeiling(unittest.TestCase):
         """
         Earlier drafts said the fall-through escaped the ceiling. Solve 0 runs before
         Stage A, so it does not — and the fall-through is the path production reaches
-        (0.33 vCPU, a 40 s budget) and CI does not by accident. Forced here by making
+        (1 vCPU — 0.33 until 2026-09-30 — and a 40 s budget) and CI does not by accident. Forced here by making
         every Stage B pass come back empty, which is "every tier infeasible" without
         depending on how fast the runner is.
         """

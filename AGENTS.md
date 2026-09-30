@@ -214,7 +214,13 @@ several exist precisely to stop a plausible-looking change.
 - **Cache:** admin/API routes that mutate content must call the matching
   `revalidate*` util in `app/utils/revalidate.ts` (or `revalidatePath`), or the
   ISR page stays stale.
-- **The solver's history is derived for the target month at solve time; never read from
+- **Auto sends the solver NO fairness history** (`SOLVER_SENDS_HISTORY = false` since
+  2026-09-30, ADR-0046): `history: []`, no read at solve time, no refusal over a failed read, no
+  «Historial» line — the solver balances within the month and the pool checkboxes decide across
+  months. A member whose count for ONE role is fixed by an exact rule (`Sun.Lead == 2`) leaves
+  that role's band in the solver; a `>=` floor stays in. Everything below applies only when the
+  switch is flipped back to `true` (the rollback, still tested):
+  **the solver's history is derived for the target month at solve time; never read from
   `localStorage`, never cached across a solve** (`SOLVER_HISTORY_SOURCE = "derived"` since the
   2026-09-28 cutover, ADR-0042). `handleAutoDerived` re-reads `fetchDerivedHistory` for its OWN
   month on every Auto — never the display copy `useDerivedSolverHistory` holds — and a failed
@@ -462,12 +468,15 @@ per row behind a ⋯ `Button variant="icon"`, never hover-only buttons, and taki
 away asks first through a confirm `CueDialog` that stays open on a refused PATCH
 (decision O). Giving access back needs no confirm), `loadSolverHistory`
 (`app/utils/solverHistoryRead.ts` — the ONE server-callable fairness-history builder;
-P4's `solve_month` must call it directly, never the admin route), `deriveSolverHistory`/
+P4's `solve_month` calls it directly, never the admin route — only if `SOLVER_SENDS_HISTORY`
+is flipped back, ADR-0046), `deriveSolverHistory`/
 `historyWindow` (`app/utils/solverHistory.ts` — the ONE derivation; neutral),
 `fetchDerivedHistory` (`app/components/admin/derivedHistoryClient.ts` — the planner's ONE
-read of that history: checked, never throws, `{ ok: false }` on any failure, used by both the
-display hook and every Auto), `SOLVER_HISTORY_SOURCE` (`app/components/admin/solverHistorySource.ts`
-— the deployment-wide switch, `"derived"`; `"local"` is the rollback until D3).
+read of that history: checked, never throws, `{ ok: false }` on any failure, used by the display
+hook, and by every Auto only while `SOLVER_SENDS_HISTORY` is true), `SOLVER_HISTORY_SOURCE`
+(`app/components/admin/solverHistorySource.ts` — the deployment-wide switch, `"derived"`; `"local"`
+is the rollback until D3), `SOLVER_SENDS_HISTORY` (same file — `false`: Auto sends `history: []`,
+ADR-0046; `true` is the rollback).
 Motion tokens are `--motion-*` /
 `--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and

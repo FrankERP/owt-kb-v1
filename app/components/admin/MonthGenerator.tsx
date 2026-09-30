@@ -67,7 +67,7 @@ import {
   type SolverConfigController,
   type SolverConfigSource,
 } from "./solverConfigSource";
-import { SOLVER_HISTORY_SOURCE } from "./solverHistorySource";
+import { SOLVER_HISTORY_SOURCE, SOLVER_SENDS_HISTORY } from "./solverHistorySource";
 import { fetchDerivedHistory, type DerivedHistoryFetchResult } from "./derivedHistoryClient";
 import { useDerivedSolverHistory, type DerivedHistoryHandle } from "./useDerivedSolverHistory";
 import type { SolverHistoryDiagnostics, SolverHistoryMonth } from "@/app/utils/solverHistory";
@@ -1553,7 +1553,9 @@ function DerivedHistoryDiagnostics({ diagnostics }: { diagnostics: SolverHistory
       )}
       {duplicateNames.length > 0 && (
         <li>
-          Nombres repetidos — el solver los confunde:{" "}
+          {/* With no history sent (ADR-0046) the solver never sees these counts;
+              the derivation still merges them by name, which is what this names. */}
+          {SOLVER_SENDS_HISTORY ? "Nombres repetidos — el solver los confunde:" : "Nombres repetidos — el historial los junta:"}{" "}
           {duplicateNames.map(d => `${d.name} (${d.memberIds.length})`).join(", ")}
         </li>
       )}
@@ -1580,7 +1582,9 @@ function DerivedHistoryBlock({ history }: { history: DerivedHistoryHandle }) {
   return (
     <div className="space-y-1.5">
       <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-        Historial de equidad — derivado de los servicios guardados
+        {SOLVER_SENDS_HISTORY
+          ? "Historial de equidad — derivado de los servicios guardados"
+          : "Historial — derivado de los servicios guardados · solo referencia, Auto no lo usa"}
       </p>
       {history.status === "ready" ? (
         <>
@@ -3611,7 +3615,9 @@ export default function MonthGenerator({
             fairness_relaxed: response.fairness_relaxed,
             sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
             sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
-            history_runs_used: response.history_runs_used,
+            // None sent (ADR-0046) ⇒ nothing to report: the solver answers 0, and
+            // «Historial usado: 0» would still read as a history that was weighed.
+            history_runs_used: SOLVER_SENDS_HISTORY ? response.history_runs_used : undefined,
             objective_skipped: response.objective_skipped,
           }
         : {
@@ -3703,13 +3709,14 @@ export default function MonthGenerator({
     // write the pre-solve seats over the solver's answer.
     withdrawUndos();
     // Derived mode (R14) solves on the history read for THIS month at THIS
-    // moment — its own path, below. Everything after this line is the
-    // per-browser path, unchanged.
+    // moment — its own path, below — or, with `SOLVER_SENDS_HISTORY` off (what
+    // ships, ADR-0046), on none at all. Everything after this line is the
+    // per-browser path, unchanged but for the same switch.
     if (SOLVER_HISTORY_SOURCE === "derived") {
       await handleAutoDerived();
       return;
     }
-    const prepared = prepareSolve(config, solverHistory);
+    const prepared = prepareSolve(config, SOLVER_SENDS_HISTORY ? solverHistory : []);
     if (!prepared) return;
     setAutoPending(true);
     try {
@@ -3738,6 +3745,13 @@ export default function MonthGenerator({
     setAutoError(null);
     setAutoNotices([]);
     try {
+      // No history is sent (ADR-0046): nothing to read, and so nothing to refuse
+      // over — a failed or slow history read must not block a solve that never
+      // uses it. `null` tells the solve step exactly that.
+      if (!SOLVER_SENDS_HISTORY) {
+        await solveWithDerivedHistoryRef.current(target, null);
+        return;
+      }
       const controller = new AbortController();
       const ceiling = setTimeout(() => controller.abort(), DERIVED_HISTORY_AUTO_TIMEOUT_MS);
       let history: DerivedHistoryFetchResult;
@@ -3773,24 +3787,30 @@ export default function MonthGenerator({
    *   admin has since gone back and picked another month, this history is not
    *   that month's and solving it would be exactly R14's failure — so nothing
    *   is solved or filled.
+   * @param history the read, or `null` when no history is sent
+   *   (`SOLVER_SENDS_HISTORY`, ADR-0046): then the request carries `history: []`
+   *   and the diagnostics name no history at all.
    */
-  async function solveWithDerivedHistory(target: { year: number; month: number }, history: DerivedHistoryFetchResult) {
+  async function solveWithDerivedHistory(
+    target: { year: number; month: number },
+    history: DerivedHistoryFetchResult | null,
+  ) {
     if (target.year !== year || target.month !== month) return;
     const config = solverConfig;
     if (!config) {
       setAutoError("No se pudieron cargar las reglas compartidas. Recárgalas antes de usar Auto.");
       return;
     }
-    if (!history.ok) {
+    if (history && !history.ok) {
       // Pre-flight refusal (spec, Failure): a history that could not be read is
       // never solved as an empty one. The specials never needed it (E5).
       setAutoError(DERIVED_HISTORY_AUTO_REFUSAL);
       applySpecialFill(config, cells, undefined, fillEmptyOnly);
       return;
     }
-    const prepared = prepareSolve(config, history.data.entries);
+    const prepared = prepareSolve(config, history ? history.data.entries : []);
     if (!prepared) return;
-    await runSolve(config, prepared, history.data.months);
+    await runSolve(config, prepared, history ? history.data.months : undefined);
   }
   const solveWithDerivedHistoryRef = useRef(solveWithDerivedHistory);
   // Commit-time, so the ref is current before any later event or resolved

@@ -22,7 +22,12 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../solverHistorySource", () => ({ SOLVER_HISTORY_SOURCE: "derived" }));
+// `SOLVER_SENDS_HISTORY` ships `false` (ADR-0046); every case here is about the
+// history path it switches off, kept as the rollback. One mutable object, so the
+// «no history» describe below can flip it per test (MonthGenerator reads it at
+// call time).
+const switches = vi.hoisted(() => ({ SOLVER_HISTORY_SOURCE: "derived", SOLVER_SENDS_HISTORY: true }));
+vi.mock("../solverHistorySource", () => switches);
 
 import MonthGenerator from "../MonthGenerator";
 import { readyRules } from "./rulesHarness";
@@ -360,6 +365,64 @@ describe("derived history — a solve that skipped its objective says so", () =>
     await waitFor(() => expect(screen.getByText(/^Historial: /)).toBeTruthy());
     expect(screen.queryByText("Sin optimizar")).toBeNull();
     expect(screen.queryByText(/no aplicado/)).toBeNull();
+  });
+});
+
+// ─── What ships: Auto sends no history at all (ADR-0046) ─────────────────────
+
+describe("no history sent (SOLVER_SENDS_HISTORY = false, what ships)", () => {
+  beforeEach(() => {
+    switches.SOLVER_SENDS_HISTORY = false;
+  });
+  afterEach(() => {
+    switches.SOLVER_SENDS_HISTORY = true;
+  });
+
+  it("sends `history: []` and reads no history at solve time — only the display's own read", async () => {
+    const november = payload(2026, 11, { counts: { "2026-10": { "Beto Ficticio": { "Sun.Lead": 1 } } } });
+    const relaxed = () =>
+      respond(200, {
+        ok: true,
+        schedule: { "1": { Sunday: { Lead: ["Ana Ficticia"], BGV: [], Choir: [] } } },
+        total_counts: { "Ana Ficticia": 1 },
+        role_counts: { "Ana Ficticia": { "Sun.Lead": 1 } },
+        unfilled_seats: [],
+        sun_bgv_fairness_relaxed: true,
+        objective_skipped: false,
+        // The real solver always answers it — 0 when no history was sent. Without
+        // the suppression the grid would print «Historial usado: 0».
+        history_runs_used: 0,
+      });
+    const { historyCalls, solveBodies } = stubFetch({ history: () => respond(200, november), solve: relaxed });
+
+    const { container } = renderCreate("2026-11");
+    await waitFor(() =>
+      expect(within(leadColumn("Domingo", "Octubre 2026")).getByText("Ana Ficticia")).toBeTruthy(),
+    );
+    expect(historyCalls).toEqual(["2026-11"]);
+    deselectAll(container, "saturday");
+    preview();
+    runAuto();
+    await waitFor(() => expect(solveBodies).toHaveLength(1));
+
+    expect(solveBodies[0].history).toEqual([]);
+    expect(historyCalls).toEqual(["2026-11"]);
+    // The diagnostics rendered (the BGV banner) — and name no history months.
+    await waitFor(() => expect(screen.getByText("Equidad de BGV de domingo relajada")).toBeTruthy());
+    expect(screen.queryByText(/^Historial/)).toBeNull();
+  });
+
+  it("a history endpoint that fails does not stop Auto — the solve never needed it", async () => {
+    const { solveBodies } = stubFetch({ history: () => UNAVAILABLE() });
+
+    const { container } = renderCreate("2026-11");
+    deselectAll(container, "saturday");
+    preview();
+    runAuto();
+
+    await waitFor(() => expect(solveBodies).toHaveLength(1));
+    expect(solveBodies[0].history).toEqual([]);
+    expect(screen.queryByText(/No se pudo leer el historial de equidad. Auto no corrió/)).toBeNull();
   });
 });
 
