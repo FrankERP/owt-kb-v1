@@ -257,7 +257,8 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   what it was before. A success is applied only if `pinned_honored` equals the pins sent and the
   schedule shows every pin by exact name; otherwise Auto says «El solver no respetó los lugares
   fijados; no se aplicó nada.». `pin_violations` are named as the rules card names them
-  (`pinViolations.ts`); `violation_ceiling_proven: false` adds one caveat.
+  (`pinViolations.ts`); `violation_ceiling_proven: false` adds one caveat, and only when at least
+  one rule was set aside — with nothing named there is nothing to have ceded too much of.
 
 ### HTTP handler ([`gcf/main.py`](../gcf/main.py))
 `functions_framework.http`-decorated `solve(request)`. Handles CORS `OPTIONS`, rejects non-POST

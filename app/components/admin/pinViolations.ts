@@ -67,7 +67,7 @@ function patternBindsRole(pattern: string, role: Pin["role"]): boolean {
 
 export function pinViolationNotices(input: {
   violations: string[];
-  /** `violation_ceiling_proven`; `false` adds one caveat line. */
+  /** `violation_ceiling_proven`; `false` adds one caveat line, and only when a rule was set aside. */
   ceilingProven: boolean | undefined;
   config: SolverConfig;
   members: RankMember[];
@@ -144,6 +144,6 @@ export function pinViolationNotices(input: {
       }
     }
   });
-  if (ceilingProven === false) lines.push(CAVEAT);
+  if (ceilingProven === false && violations.length > 0) lines.push(CAVEAT);
   return lines;
 }

@@ -86,10 +86,12 @@ describe("pinViolationNotices", () => {
     expect(line).not.toContain("seguidas");
   });
 
-  it("adds one caveat line when the ceiling was not proven, and none when there is nothing to report", () => {
-    expect(notices([], [], false)).toEqual([
+  it("adds one caveat line when the ceiling was not proven AND a rule was set aside — never on its own (R6)", () => {
+    expect(notices(["builtin:mandatory_lead:W2:Sun"], [], false)).toEqual([
+      "El domingo 11 oct quedó sin líder — lo cedió el solver para acomodar lo que ya estaba puesto.",
       "Puede que el solver haya cedido más reglas de las necesarias: no alcanzó a comprobarlo.",
     ]);
+    expect(notices([], [], false)).toEqual([]);
     expect(notices([], [], true)).toEqual([]);
     expect(notices([], [], undefined)).toEqual([]);
   });
