@@ -72,8 +72,14 @@ streak) and then adopted as below. **Every adoption is a post-approval change: u
 - During round 2 a parallel session («Auto-solver servicios especiales fairness») began a Stage B
   ladder change in the same solver file (`for sb_limit in (1, 2, 3)`), disjoint from this spec's
   regions. Delivery 1 rebases onto whatever lands first; the step-zero history fixture is shared.
+- **Step zero amended at implementation time (2026-09-30, not a review finding).** Delivery 1's
+  plan (ruling P1) captured the identity fingerprints in the branch's first commits, on the
+  unchanged solver, instead of in a separate PR, because ADR-0046 (#120) had made production
+  requests history-free. The spec's §7 says so under a «(post-approval)» paragraph; ADR-0047
+  records it. Like the items above it is outside the approved digest.
 
 ## Approved digest
 
 `d7c4b0dd5e654788d7561b1187fe86ea42d1c79244c4c745b9a7dddbb723841a` (commit `6a8a3bdd`). The spec's
-current bytes differ from it only by the post-approval changes listed above.
+current bytes differ from it only by the post-approval changes listed above and the step-zero
+amendment in the process notes.

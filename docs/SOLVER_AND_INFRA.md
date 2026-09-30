@@ -17,7 +17,8 @@ Files: [`gcf/main.py`](../gcf/main.py) (HTTP handler), [`gcf/owt_solver_v2.py`](
 ### What it optimizes
 Per month (3–6 weeks), it assigns people to service seats:
 - **Sunday** every week: `Sun.Lead` ×2, `Sun.BGV` ×3, `Sun.Choir` ×3.
-- **Saturday** on selected weeks only: `Sat.Lead` ×2, `Sat.BGV` ×3.
+- **Saturday** on selected weeks only: `Sat.Lead` ×2, `Sat.BGV` ×3. The selection may include
+  the Saturday after the last Sunday, which has no Sunday of its own (see below).
 
 ### Input / output (JSON)
 Entry point `solve_from_dict(data)`. Input keys: `weeks`, `weekends_with_saturday`,
@@ -27,7 +28,7 @@ below), `history` (prior months, oldest first), `seed`, and solver knobs
 `discourage_consecutive`), and optionally `pinned` — seats already on the board that the solver
 must keep, `[{week, role, person}]`, at most 100 (see *Pinned assignments* below).
 
-Output: `{ ok, schedule: {"<week>": {Sunday:{Lead[],BGV[],Choir[]}, Saturday?:{...}}},
+Output: `{ ok, schedule: {"<week>": {Sunday?:{Lead[],BGV[],Choir[]}, Saturday?:{...}}},
 fairness_relaxed, sun_lead_fairness_relaxed, sun_bgv_fairness_relaxed,
 objective_skipped, history_runs_used,
 total_counts, role_counts, unfilled_seats[], pinned_honored, pin_violations[],
@@ -46,6 +47,24 @@ violation_ceiling_proven? }`. On error: `{ ok: false, error }`.
   name on every clause after the first. `[]` without pins.
 - **`violation_ceiling_proven`** — `true` iff the violation-only solve proved its minimum, i.e.
   the relaxations are exactly as many as the pins force. **Absent** on a pinless request.
+- **The trailing Saturday — `weekends_with_saturday` may name `weeks + 1`** (spec
+  `2026-09-29-solver-trailing-saturday-design.md`, ADR-0047). It is the month-end Saturday whose
+  Sunday falls in the next month (31 Oct 2026). `weeks` keeps its meaning — the number of Sundays,
+  `3..6` — and `weeks + 1` is the ONLY index above it that is accepted. The week is a real week of
+  the same model with a Saturday service and **no Sunday one**: `schedule["<weeks+1>"]` holds
+  `Saturday` alone (`Lead` ×2, `BGV` ×3, grown by pins) and no `Sunday` key; `unfilled_seats` read
+  `W5 Saturday Sat.Lead #1` (the existing format); `total_counts`/`role_counts` include it.
+  Every per-week rule binds it — the mandatory lead, pair rules, weekly presence, consecutive rules
+  (against the last Sunday's week, `W4-5 <person>: <source>` under pins), one seat per service, week
+  exclusions and the Saturday-lead anchor — and a `Sat.* == 1` minimum can be met by it alone, while
+  `{weeks-N}` still counts the Sundays. **Refusals** (`ValueError` → `ok: false` → 422): `weeks + 2` or more
+  («weekends_w_sat must use 1-based indexes 1..5: 4 Sundays, and 5 = the Saturday after the last
+  one. Received [6].»); a week exclusion or a pin naming `weeks + 1` when `weekends_with_saturday`
+  does not; a Sunday-role pin in it («which has no Sunday service»). A refused request that does name
+  it carries one extra diagnostic line suggesting it be deselected. **A request that does not name it
+  builds the model it built before, byte for byte** — frozen by `gcf/test_inertness.py`
+  (`docs/CI.md`). **The planner does not send `weeks + 1` yet** (see «Before the request leaves the
+  planner»).
 
 Also a **CLI mode**: `echo '<json>' | python3 owt_solver_v2.py --json-mode` (stdin→stdout);
 no-args runs a built-in demo roster.
@@ -53,7 +72,8 @@ no-args runs a built-in demo roster.
 ### The DSL (constraint language)
 Parsed by `parse_dsl_rules()`; clauses `&`-chainable. Forms include:
 - `<name> !in <pattern>` — forbid a person from a role class.
-- `!in week <n> <pattern>` — week-specific absence.
+- `!in week <n> <pattern>` — week-specific absence. `n` may be `weeks + 1` only when the request
+  names the trailing Saturday; otherwise it is refused.
 - `<name> <pattern> ==|>=|<= <n>` — count rule.
 - `<A> !with <B> on <pattern>` — pair-exclusion (not same week/service).
 - `any_of(A,B,...) on <pattern> each_week` — weekly-presence requirement.
@@ -76,7 +96,8 @@ Parsed by `parse_dsl_rules()`; clauses `&`-chainable. Forms include:
   `load + N` (`orderByEffectiveLoad`, `localFill.ts`). A slack of 0 is no rule in either.
 
 Patterns: exact roles, `Sun.*`, `Sat.*`, `*.*`, `*.LeadBGV`, `*.Lead/BGV/Choir`, plus legacy
-aliases. Templates like `{weeks-2}` resolve against month length. Names match case-insensitively.
+aliases. Templates like `{weeks-2}` resolve against `weeks`, the number of Sundays — the trailing
+Saturday (`weeks + 1`) does not count (D2). Names match case-insensitively.
 
 ### Key behaviors (these are documented invariants — see the memory notes)
 - **Graceful seat degradation:** BGV, Choir, and even the **2nd** Lead seat are optional; only
@@ -209,10 +230,12 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   soft for the whole month: a lead shortfall from absences alone comes back as the
   `builtin:mandatory_lead` marker and a «Sin cubrir» seat instead of `ok: false`.
 - **Refusals** (all `ValueError` → `ok: false`): a malformed entry, more than 100 entries (never
-  truncated), an unknown role, a week outside the month, a `Sat.*` pin on a week with no
-  Saturday, two different pins for one person in one service, and a pinned-only name that differs
-  from another name only in capitalisation or surrounding spaces (a misspelling: it would sit
-  beside the real person and could take their DSL rules). A pin on a pool member's exact name is
+  truncated), an unknown role, a week outside the month (`1..weeks`, or `1..weeks + 1` when the
+  request names the trailing Saturday), a `Sat.*` pin on a week with no Saturday, a Sunday-role pin
+  in week `weeks + 1` (which has no Sunday service), two different pins for one person in one
+  service, and a pinned-only name that differs from another name only in capitalisation or
+  surrounding spaces (a misspelling: it would sit beside the real person and could take their DSL
+  rules). A pin on a pool member's exact name is
   always accepted — Studio does not trim `member_name`, so that can include a trailing space.
   Exact duplicates collapse.
 - **A consecutive-rule quirk for whoever writes the copy:** pinning someone into both services
@@ -251,10 +274,15 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   del solver: …» (`solverRefusalMessage`) instead of the generic line alone. The solver's
   diagnostic text is English and, for an over-constrained month, blames "a mandatory Lead
   seat" generically — a known weakness of `diagnose_infeasibility`.
-- **A month-end Saturday is manual-only.** The planner of the NEXT month offers only its own
-  Saturdays, so its week 1 never gets the previous month's last Saturday: Auto can staff
-  31 Oct 2026 from neither October nor November. The grid labels it «Fuera del alcance de
-  Auto» in the month it belongs to.
+- **A month-end Saturday is still manual-only: the planner does NOT send `weeks + 1` yet.** The
+  solver accepts it since delivery 1 of the trailing-Saturday change (see «Input / output»), but
+  `buildSolveRequest` builds its indexes only from the month's Sundays (`weekendWeekIndexes`:
+  `1..weeks`), and the planner of the NEXT month offers only its own Saturdays, so its week 1 never
+  gets the previous month's last Saturday: Auto can staff 31 Oct 2026 from neither October nor
+  November. The grid labels it «Fuera del alcance de Auto» in the month it belongs to. Sending
+  `weeks + 1` is delivery 2 (spec `2026-09-29-planner-trailing-saturday-and-fill-empty-design.md`),
+  and only after the solver carrying it is deployed and its deploy check has passed: an older solver
+  refuses `weeks + 1` with `ok: false`.
 - **«Solo llenar vacíos» sends the board as pins** (`pinModel.ts`; spec
   `2026-09-29-planner-trailing-saturday-and-fill-empty-design.md` §3). With the switch on, every
   occupied Lead/BGV/Coro seat on a column Auto writes is a pin `{ week, role, person }`, by exact
@@ -340,14 +368,36 @@ The Vercel rule (alias + `githubCommitSha`) has no analogue here, so the check i
    unset KEY
    ```
 
+3. One **trailing-Saturday** smoke request (fictitious names), which names week `weeks + 1`,
+   asserting `ok: true` and that `schedule["5"]` exists and holds only `Saturday`. Same key
+   handling as step 2; only the request and the assertion change:
+
+   ```bash
+   URL=$(gcloud functions describe owt-solver --gen2 --region=us-central1 --format='value(serviceConfig.uri)')
+   KEY=$(CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true gcloud secrets versions access latest --secret=owt-solver-api-key)
+   printf 'X-Api-Key: %s\n' "$KEY" | curl -s -X POST "$URL" -H @- -H "Content-Type: application/json" \
+     -d '{"weeks":4,"weekends_with_saturday":[2,4,5],"sunday_leads":["A","B","C"],"saturday_leads":[],"support":["D","E","F","G"],"dsl_rules":[],"history":[],"seed":1}' \
+     | python3 -c 'import json,sys; r=json.load(sys.stdin); print("ok", r["ok"], list(r.get("schedule", {}).get("5", {})), r.get("error"))'
+   unset KEY
+   ```
+
+   Landed: `ok True ['Saturday'] None`. An old revision refuses `weeks + 1` and prints
+   `ok False [] weekends_w_sat must use 1-based indexes 1..4. Received [5].` — the new code is not
+   serving, so the deploy did not land: **redeploy**. Unlike step 2's failure this is not a revert
+   signal. (Both outputs were checked offline: the pre-change solver, `8408e3de`, gives exactly that
+   refusal, and this branch gives the first line.)
+
 Never a bare HTTP reachability check, never a grep loop over build logs.
 
-**The one revert trigger** is the smoke request failing or coming back without
+**The one revert trigger** is the pinless smoke request (step 2) failing or coming back without
 `pinned_honored` — the deploy did not land; re-deploy the previous revision. A behavioural
 problem found later is **not** a function revert: revert the app half (it stops sending
 `pinned`, and a pinless request builds today's model). Reverting the function while a pinned
 app is live makes every Auto fail the handshake. If a pinless regression ever reaches
-production, revert **the app first**, then re-deploy the previous function revision.
+production, revert **the app first**, then re-deploy the previous function revision. The same order
+holds for the trailing Saturday once the planner sends `weeks + 1`: the planner stops sending it
+first (the solver's non-trailing path is unchanged by the invariant), then the function if ever
+both — an old function refuses a request that names it.
 
 ---
 

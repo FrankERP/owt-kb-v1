@@ -136,6 +136,16 @@ change, a separate PR adds a history-bearing frozen fixture (fictitious names) t
 (`docs/CI.md`). The «Auto-solver servicios especiales fairness» session plans the same fixture for
 its objective work; whichever lands first, the other reuses it.
 
+**(post-approval)** Step zero is amended, not dropped. ADR-0046 (#120) made production requests
+history-free (`history: []`), so the history-free literals already match the shape production
+sends. What step zero must guarantee is that the fingerprints come from the pre-change solver, and
+a fixture committed first in the delivery's own branch, on the unchanged solver, gives that
+guarantee and is auditable from commit order; a separate PR would only add a Cloud Build redeploy
+of identical code. So the identity fingerprints — eight shapes, **with and without history**,
+pinned and pinless — were captured in this branch's first commits (`8408e3de`; the two pinned
+shapes' Stage A entries re-captured in `eaa62893` after the hash left out Solve 0's
+`solution_hint`), both before the first solver change (`70b6cc87`). Plan ruling P1.
+
 **Required tests (python, in the `gates` job):**
 - All existing `STAGE_A_FINGERPRINTS`, `LADDER_FINGERPRINTS` and `GOLDEN_SCHEDULE` literals stay
   green, plus the new history-bearing one. A red one inside this PR is a finding, never a
