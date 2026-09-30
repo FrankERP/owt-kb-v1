@@ -1,6 +1,7 @@
 import { trailingSaturday } from "./plannerModel";
 import type { ServiceType } from "./serviceCardModel";
 
+/** `sundayDates` is what the grid reads, and `week` must equal `weekForColumn` over it. */
 export interface WeekendRuleContext {
   /**
    * The Sunday whose week this service is. `null` for the trailing Saturday

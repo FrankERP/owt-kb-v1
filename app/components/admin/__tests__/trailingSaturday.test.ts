@@ -247,8 +247,9 @@ function build(opts: {
   return built;
 }
 
+// Ruling Q6: number-neutral, so it is true whether the person reaches no Saturday or too few.
 const UNREACHABLE_TAIL =
-  "no pueden cubrir ningún sábado de los que Auto llena este mes (no disponibles, excluidos o fuera de los líderes).";
+  "los sábados que Auto llena este mes no alcanzan para cumplirlo (por disponibilidad, exclusiones o rol).";
 
 describe("October 2026, only the 31st selected (spec §2.4)", () => {
   const FRANK = person("frank", "Francisco Rocha", "Frank");
@@ -386,7 +387,10 @@ describe("T3: a Saturday minimum is judged per person against the Saturdays sent
 });
 
 describe("T4: minimums that do not all fit the Saturday seats", () => {
-  // One Saturday sent (the 31st): 2 Lead + 3 BGV = 5 seats.
+  // One Saturday sent (the 31st): 2 Lead + 3 BGV, and one seat per person. The six below are
+  // support only, so they compete for the THREE BGV seats: the two Lead seats are for leads.
+  // (Fix round 1, ruling Q10: these fixtures used to count all five seats for them, a check
+  // the solver's own seats could not honour — it refused the whole month, Sundays included.)
   const names = ["Fer", "Ana", "Eli", "Beto", "Dani", "Caro"]; // config order is NOT name order
   const members = [person("lead", "Líder Uno", "Lider"), ...names.map((n) => person(n.toLowerCase(), `${n} Apellido`, n))];
   const config: Partial<SolverConfig> = {
@@ -397,19 +401,27 @@ describe("T4: minimums that do not all fit the Saturday seats", () => {
   const satCount = (name: string, n: number, key = "2026-9", month = 9): SolverHistoryEntry => ({
     key, year: 2026, month, total_counts: { [name]: n }, role_counts: { [name]: { "Sat.BGV": n, "Sun.BGV": 7 } },
   });
+  const capacity = (...who: string[]) => who.map((p) => ({ person: p, cap: "Sat.* == 1", reason: "capacity" }));
 
-  it("six `Sat.* == 1` on five seats: with no history the order is by name, so the last name is left out", () => {
+  it("six support `Sat.* == 1` on three BGV seats: with no history the order is by name, so the last three are left out", () => {
+    // Was «one left out of six on five seats»: that kept five non-leads on three BGV seats.
     const built = build({ members, config, activeSatDates: ["2026-10-31"] });
     expect(built.request.weekends_with_saturday).toEqual([5]);
-    expect(built.omittedCaps).toEqual([{ person: "Fer", cap: "Sat.* == 1", reason: "capacity" }]);
-    expect(built.request.dsl_rules.filter((r) => r.includes("Sat.* == 1"))).toHaveLength(5);
-    expect(built.request.dsl_rules.some((r) => r.startsWith("Fer "))).toBe(false);
+    // Kept by name: Ana, Beto, Caro. Left out: Dani, Eli, Fer — reported in config order.
+    expect(built.omittedCaps).toEqual(capacity("Fer", "Eli", "Dani"));
+    expect(built.request.dsl_rules.filter((r) => r.includes("Sat.* == 1"))).toEqual([
+      "Ana Apellido Sat.* == 1", "Beto Apellido Sat.* == 1", "Caro Apellido Sat.* == 1",
+    ]);
     expect(omittedCapsNotices(built.omittedCaps)).toEqual([
-      "No caben todos los mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó «Sat.* == 1» a Fer.",
+      "No caben todos los mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó «Sat.* == 1» a Fer, Eli y Dani.",
     ]);
   });
 
-  it("the person with the most Saturdays in the request's history is left out first; this month's own entry does not count", () => {
+  it("the people with the most Saturdays in the request's history are left out first; this month's own entry does not count", () => {
+    // Order: the zero counts by name (Caro, Dani, Eli, Fer), then Ana (1), then Beto (2).
+    // Three BGV seats go to Caro, Dani and Eli, so Ana and Beto — kept on name alone — are
+    // left out for their history. Caro's 9 is this month's own run and does not count (D14).
+    // (Was one left out, Beto: the old check counted five seats for support-only people.)
     const built = build({
       members, config, activeSatDates: ["2026-10-31"],
       historyEntries: [
@@ -418,12 +430,77 @@ describe("T4: minimums that do not all fit the Saturday seats", () => {
         satCount("Caro Apellido", 9, "2026-10", 10), // this month's own run: excluded (D14)
       ],
     });
-    expect(built.omittedCaps).toEqual([{ person: "Beto", cap: "Sat.* == 1", reason: "capacity" }]);
+    expect(built.omittedCaps).toEqual(capacity("Fer", "Ana", "Beto")); // config order
   });
 
-  it("five minimums on five seats all fit", () => {
+  it("five support minimums on the 31st: only three BGV seats, so two are left out", () => {
+    // Was «five minimums on five seats all fit»: all five were non-leads, and a non-lead
+    // cannot take a Lead seat — the solver found no seat for two of them.
     const five = { ...config, restrictions: names.slice(0, 5).map((n) => rule(n, [floor()])) };
-    expect(build({ members, config: five, activeSatDates: ["2026-10-31"] }).omittedCaps).toEqual([]);
+    expect(build({ members, config: five, activeSatDates: ["2026-10-31"] }).omittedCaps).toEqual(capacity("Fer", "Eli"));
+  });
+
+  it("a lead's `Sat.*` floor can use a Lead seat: 2 leads + 3 support all fit the 31st", () => {
+    const people = ["Ana", "Beto", "Caro", "Dani", "Eli"].map((n) => person(n.toLowerCase(), `${n} Apellido`, n));
+    const built = build({
+      members: people,
+      config: {
+        sundayLeads: ["ana"], saturdayLeads: ["beto"], support: ["caro", "dani", "eli"],
+        restrictions: ["Ana", "Beto", "Caro", "Dani", "Eli"].map((n) => rule(n, [floor()])),
+      },
+      activeSatDates: ["2026-10-31"],
+    });
+    expect(built.omittedCaps).toEqual([]);
+  });
+
+  it("Failure A: one lead and four support `Sat.* == 1` on the 31st — exactly one left out, by name", () => {
+    const people = [person("frank", "Francisco Rocha", "Frank"), ...["Dani", "Beto", "Ana", "Caro"].map((n) => person(n.toLowerCase(), `${n} Apellido`, n))];
+    const built = build({
+      members: people,
+      config: {
+        sundayLeads: ["frank"], support: ["dani", "beto", "ana", "caro"],
+        restrictions: ["Dani", "Beto", "Ana", "Caro"].map((n) => rule(n, [floor()])),
+      },
+      activeSatDates: ["2026-10-31"],
+    });
+    expect(built.request.weekends_with_saturday).toEqual([5]);
+    expect(built.omittedCaps).toEqual(capacity("Dani"));
+  });
+
+  it("Failure B: seats are per Saturday, never pooled across the month", () => {
+    // The 24th and the 31st sent. Ana–Dani can only take the 31st (away on the 24th); Zoe can
+    // take either. Pooled, six BGV seats hold five people; per Saturday, the 31st holds three.
+    // Dani — fourth of the 31st-only people by name — is left out, not Zoe, who sorts last
+    // but still has the 24th.
+    const away = { unavailableDates: ["2026-10-24"] };
+    const people = [
+      person("frank", "Francisco Rocha", "Frank"),
+      ...["Ana", "Beto", "Caro", "Dani"].map((n) => person(n.toLowerCase(), `${n} Apellido`, n, away)),
+      person("zoe", "Zoe Apellido", "Zoe"),
+    ];
+    const built = build({
+      members: people,
+      config: {
+        sundayLeads: ["frank"], support: ["ana", "beto", "caro", "dani", "zoe"],
+        restrictions: ["Zoe", "Dani", "Caro", "Beto", "Ana"].map((n) => rule(n, [floor()])),
+      },
+      activeSatDates: ["2026-10-24", "2026-10-31"],
+    });
+    expect(built.request.weekends_with_saturday).toEqual([4, 5]);
+    expect(built.omittedCaps).toEqual(capacity("Dani"));
+  });
+
+  it("a person with two Saturday floors is judged conservatively: every seat must satisfy both", () => {
+    // Documented limitation (ruling Q10): Lead one Saturday and BGV the other would meet both
+    // of Ana's floors, but her seats are held to the classes EVERY floor allows — none here —
+    // so the later floor is left out. `Sat.*` + `Sat.Lead` share the Lead class and both stay.
+    const ANA = person("ana", "Ana Apellido", "Ana");
+    const both = (caps: RestrictionCap[]) =>
+      build({ members: [ANA], config: { sundayLeads: ["ana"], restrictions: [rule("Ana", caps)] }, activeSatDates: ["2026-10-24", "2026-10-31"] });
+    expect(both([floor(1, "Sat.Lead", ">="), floor(1, "Sat.BGV", ">=")]).omittedCaps).toEqual([
+      { person: "Ana", cap: "Sat.BGV >= 1", reason: "capacity" },
+    ]);
+    expect(both([floor(1, "Sat.*"), floor(1, "Sat.Lead")]).omittedCaps).toEqual([]);
   });
 
   it("keeps each minimum that still fits: a Lead floor over the Lead seats does not push out a BGV floor after it", () => {
@@ -442,10 +519,12 @@ describe("T4: minimums that do not all fit the Saturday seats", () => {
   });
 
   it("an unreachable floor is judged first and takes no seat", () => {
+    // Three support minimums fill the 31st's three BGV seats exactly; Tay's, unreachable, must
+    // not cost any of them a seat. (Was five support minimums: two of those never had a seat.)
     const withTay = [...members, person("tay", "Tay Apellido", "Tay", { unavailableDates: ["2026-10-31"] })];
     const built = build({
       members: withTay,
-      config: { ...config, support: [...(config.support ?? []), "tay"], restrictions: [rule("Tay", [floor()]), ...names.slice(0, 5).map((n) => rule(n, [floor()]))] },
+      config: { ...config, support: [...(config.support ?? []), "tay"], restrictions: [rule("Tay", [floor()]), ...names.slice(0, 3).map((n) => rule(n, [floor()]))] },
       activeSatDates: ["2026-10-31"],
     });
     expect(built.omittedCaps).toEqual([{ person: "Tay", cap: "Sat.* == 1", reason: "unreachable" }]);
@@ -483,22 +562,85 @@ describe("T5: the trailing Saturday is sent only if someone can lead it", () => 
 
   it("a `!in` pattern or a week-5 exclusion covering Sat.Lead counts as unable, through the rule's alias", () => {
     const free = [person("frank", "Francisco Rocha", "Frank"), person("gaby", "Gabriela Díaz", "Gaby"), ANDY];
-    const withheld = (restrictions: PersonRestriction[]) =>
-      build({ members: free, config: { ...config, restrictions }, activeSatDates: ["2026-10-31"] }).trailing;
-    expect(withheld([
+    const verdict = (restrictions: PersonRestriction[]) => {
+      const built = build({ members: free, config: { ...config, restrictions }, activeSatDates: ["2026-10-31"] });
+      return { trailing: built.trailing, weeks: built.request.weekends_with_saturday, dsl: built.request.dsl_rules };
+    };
+    expect(verdict([
       rule("Frank", [], { excludedPatterns: ["Sat.*"] }),
       rule("Gaby", [], { excludedPatterns: ["Lead.*"] }),
-    ])).toEqual({ date: "2026-10-31", sent: false, reason: "noLead" });
-    expect(withheld([
+    ])).toEqual({
+      trailing: { date: "2026-10-31", sent: false, reason: "noLead" },
+      weeks: [],
+      dsl: ["Francisco Rocha !in Sat.*", "Gabriela Díaz !in Lead.*"],
+    });
+    // Withheld BY its week-5 exclusion: the exclusion binds no seat, so it is not sent — the
+    // solver refuses a week the request does not have (fix round 1, I1). Frank's rule had no
+    // other clause, so his line goes.
+    expect(verdict([
       rule("Frank", [], { weekExclusions: [{ id: "w", week: 5, pattern: "Sat.Lead" }] }),
       rule("Gaby", [], { excludedPatterns: ["*.Lead"] }),
-    ])).toEqual({ date: "2026-10-31", sent: false, reason: "noLead" });
+    ])).toEqual({
+      trailing: { date: "2026-10-31", sent: false, reason: "noLead" },
+      weeks: [],
+      dsl: ["Gabriela Díaz !in *.Lead"],
+    });
     // Counter-cases: a BGV-only exclusion, another week, or one lead left free — sent.
-    expect(withheld([
+    expect(verdict([
       rule("Frank", [], { excludedPatterns: ["Sat.BGV"] }),
       rule("Gaby", [], { weekExclusions: [{ id: "w", week: 4, pattern: "Sat.*" }] }),
-    ])).toEqual({ date: "2026-10-31", sent: true });
-    expect(withheld([rule("Frank", [], { excludedPatterns: ["Sat.*"] })])).toEqual({ date: "2026-10-31", sent: true });
+    ])).toEqual({
+      trailing: { date: "2026-10-31", sent: true },
+      weeks: [5],
+      dsl: ["Francisco Rocha !in Sat.BGV", "Gabriela Díaz !in week 4 Sat.*"],
+    });
+    expect(verdict([rule("Frank", [], { excludedPatterns: ["Sat.*"] })])).toEqual({
+      trailing: { date: "2026-10-31", sent: true },
+      weeks: [5],
+      dsl: ["Francisco Rocha !in Sat.*"],
+    });
+  });
+
+  it("withheld for availability: nobody's week-5 exclusion is sent, and every other clause stays", () => {
+    const built = build({
+      members,
+      config: {
+        ...config,
+        restrictions: [rule("Andy", [], {
+          excludedPatterns: ["Sun.Choir"],
+          weekExclusions: [{ id: "w2", week: 2, pattern: "Sat.BGV" }, { id: "w5", week: 5, pattern: "Sat.*" }],
+        })],
+      },
+      activeSatDates: ["2026-10-10", "2026-10-31"],
+    });
+    expect(built.trailing).toEqual({ date: "2026-10-31", sent: false, reason: "noLead" });
+    expect(built.request.weekends_with_saturday).toEqual([2]);
+    expect(built.request.dsl_rules).toEqual(["Andrés Ortega !in Sun.Choir & !in week 2 Sat.BGV"]);
+    expect(built.request.dsl_rules.join("\n")).not.toContain("week 5");
+  });
+
+  it("sent: a week-5 exclusion is still emitted", () => {
+    const built = build({
+      members: [FRANK, person("gaby", "Gabriela Díaz", "Gaby"), ANDY],
+      config: { ...config, restrictions: [rule("Andy", [], { weekExclusions: [{ id: "w", week: 5, pattern: "Sat.*" }] })] },
+      activeSatDates: ["2026-10-31"],
+    });
+    expect(built.trailing).toEqual({ date: "2026-10-31", sent: true });
+    expect(built.request.dsl_rules).toEqual(["Andrés Ortega !in week 5 Sat.*", "Francisco Rocha !in week 5 Sat.*"]);
+  });
+
+  it("never widened: a week-5 exclusion with the 31st deselected, or in a month with no trailing Saturday, is sent as today", () => {
+    // Today's behaviour, kept on purpose (ruling Q9): the solver refuses it with a 422 naming
+    // the rule. Only a trailing Saturday that T5 withheld drops its week's exclusions.
+    const sem5 = { ...config, restrictions: [rule("Andy", [], { weekExclusions: [{ id: "w", week: 5, pattern: "Sat.*" }] })] };
+    const deselected = build({ members, config: sem5, activeSatDates: OCT_SATS });
+    expect(deselected.trailing).toBeNull();
+    expect(deselected.request.dsl_rules).toContain("Andrés Ortega !in week 5 Sat.*");
+    // September 2026: Sundays 6/13/20/27, and 27 + 6 is 3 Oct — four weeks, no trailing Saturday.
+    const SEP = ["2026-09-06", "2026-09-13", "2026-09-20", "2026-09-27"];
+    const september = build({ members, config: sem5, sundayDates: SEP, activeSatDates: ["2026-09-05"], month: 9 });
+    expect(september.trailing).toBeNull();
+    expect(september.request.dsl_rules).toContain("Andrés Ortega !in week 5 Sat.*");
   });
 
   it("one lead free on the 31st is enough, and a member unavailable there is kept off it", () => {

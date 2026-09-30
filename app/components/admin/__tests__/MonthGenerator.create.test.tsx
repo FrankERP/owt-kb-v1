@@ -852,11 +852,11 @@ describe("MonthGenerator — create path", () => {
           ok: true,
           json: async () => ({
             ok: true,
-            // Even a (hypothetically buggy, or simply a solver that ignores
-            // an empty `weekends_with_saturday`) response carrying Saturday
-            // data for week 1 must never reach a draft: `applySolveResponse`
-            // only ever writes cells for columns actually in the column set,
-            // and week 1's Saturday (Oct 3) never is.
+            // Even a (hypothetically buggy) response carrying Saturday data
+            // for week 1 — which the request never names; it asks for week 5,
+            // the 31st — must never reach a draft: `applySolveResponse` only
+            // ever writes cells for columns actually in the column set, and
+            // week 1's Saturday (Oct 3) never is.
             schedule: {
               "1": { Sunday: { Lead: ["Ana"], BGV: [], Choir: [] }, Saturday: { Lead: ["Ana"], BGV: [] } },
             },
@@ -898,10 +898,10 @@ describe("MonthGenerator — create path", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/admin/solve", expect.anything()));
 
     // The fix, at the request level, asserted AFTER the solve call settled:
-    // week 1's Saturday (Oct 3) is never addressed, because it isn't the
-    // selected Oct 31. A mismatch here fails the test directly — nothing
-    // catches or swallows it.
-    // D16 amended by ADR-00NN (T1/T5): the 31st is week 5, sent because Ana can lead it.
+    // the request names week 5 — the selected Oct 31, sent because Ana can
+    // lead it (T1/T5, ADR-00NN amending D16) — and never week 1, whose
+    // Saturday (Oct 3) was deselected. A mismatch here fails the test
+    // directly — nothing catches or swallows it.
     expect(captured.solveRequest?.weekends_with_saturday).toEqual([5]);
 
     // Even with the (hypothetically buggy) solver having been asked about

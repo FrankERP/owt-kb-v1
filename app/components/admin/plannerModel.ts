@@ -612,8 +612,11 @@ type SolverRole = "Sun.Lead" | "Sat.Lead" | "Sun.BGV" | "Sat.BGV" | "Sun.Choir";
 /** The solver's `ROLE_ORDER` (`gcf/owt_solver_v2.py`); `rolesOfPattern` answers in this order. */
 const ROLE_ORDER: readonly SolverRole[] = ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"];
 
-/** The solver's `LEGACY_PATTERN_ALIASES`. A `Map`, so `"constructor"` is not an alias. */
-const LEGACY_PATTERN_ALIASES: ReadonlyMap<string, string> = new Map([
+/**
+ * The solver's `LEGACY_PATTERN_ALIASES`. A `Map`, so `"constructor"` is not an alias. Exported
+ * only for `patternRolesSync.test.ts`, which compares it with the solver's table both ways.
+ */
+export const LEGACY_PATTERN_ALIASES: ReadonlyMap<string, string> = new Map([
   ["Lead.*", "*.Lead"],
   ["BGV.*", "*.BGV"],
   ["Choir.*", "*.Choir"],
@@ -716,12 +719,19 @@ function restrictionToDs(r: PersonRestriction): string | null {
 /**
  * `omit` is keyed by `capKey` (restriction index, cap index), never by the cap object: two
  * rules may share one cap object, and only one of them may be the person left out.
+ *
+ * `withheldWeek` is the trailing Saturday's week when T5 withheld it, else `null`. Its week
+ * exclusions bind no seat, and the solver refuses a rule naming a week the request does not
+ * have — refusing the whole month, Sundays included. So they are not sent. Only that week, only
+ * then: a week-5 exclusion in a month with no trailing Saturday (or with it deselected) is
+ * still sent, and the solver still names it in its refusal (fix round 1, ruling Q9).
  */
 function allRulesToDs(
   config: SolverConfig,
   members: RankMember[],
   omit: ReadonlyMap<string, OmitReason> = new Map(),
   omitted: OmittedCap[] = [],
+  withheldWeek: number | null = null,
 ): string[] {
   const res = (name: string) => resolvedNameOrRaw(name, members);
   const out: string[] = [];
@@ -734,7 +744,8 @@ function allRulesToDs(
       if (r.person) omitted.push({ person: r.person, cap: capLabel(cap), reason });
       return false;
     });
-    const resolved: PersonRestriction = { ...r, caps: kept, person: res(r.person) };
+    const weekExclusions = withheldWeek === null ? r.weekExclusions : r.weekExclusions.filter((we) => we.week !== withheldWeek);
+    const resolved: PersonRestriction = { ...r, caps: kept, weekExclusions, person: res(r.person) };
     const ds = restrictionToDs(resolved);
     if (ds) out.push(ds);
   });
@@ -985,17 +996,129 @@ function trailingVerdict(
     : { date, sent: false, reason: "noLead" };
 }
 
+/** A Saturday minimum as T3/T4 judge it: whose, which pattern, and its resolved value. */
+interface SaturdayFloor {
+  key: string;
+  /** The rule's own text — what the notice and the tie-break use. */
+  person: string;
+  /** The canonical `member_name` — what `canTake` and the history use. */
+  name: string;
+  pattern: string;
+  value: number;
+}
+
+/**
+ * Max flow by BFS augmenting paths (Edmonds–Karp). Arcs are stored in pairs — forward at an
+ * even index, its residual at the next odd one — so `e ^ 1` is the partner and `to[e ^ 1]`
+ * the tail. The graphs `floorsFitSeats` builds are tiny (≤ ~30 people, ≤ 5 Saturdays).
+ */
+function maxFlow(nodeCount: number, arcs: ReadonlyArray<readonly [number, number, number]>, source: number, sink: number): number {
+  const head: number[] = new Array(nodeCount).fill(-1);
+  const to: number[] = [];
+  const cap: number[] = [];
+  const next: number[] = [];
+  const link = (u: number, v: number, c: number) => {
+    to.push(v); cap.push(c); next.push(head[u]); head[u] = to.length - 1;
+  };
+  for (const [u, v, c] of arcs) {
+    link(u, v, c);
+    link(v, u, 0);
+  }
+  let flow = 0;
+  for (;;) {
+    const via: number[] = new Array(nodeCount).fill(-1);
+    const seen: boolean[] = new Array(nodeCount).fill(false);
+    seen[source] = true;
+    const queue = [source];
+    for (let q = 0; q < queue.length && !seen[sink]; q++) {
+      for (let e = head[queue[q]]; e !== -1; e = next[e]) {
+        if (cap[e] > 0 && !seen[to[e]]) {
+          seen[to[e]] = true;
+          via[to[e]] = e;
+          queue.push(to[e]);
+        }
+      }
+    }
+    if (!seen[sink]) return flow;
+    let push = Infinity;
+    for (let v = sink; v !== source; v = to[via[v] ^ 1]) push = Math.min(push, cap[via[v]]);
+    for (let v = sink; v !== source; v = to[via[v] ^ 1]) {
+      cap[via[v]] -= push;
+      cap[via[v] ^ 1] += push;
+    }
+    flow += push;
+  }
+}
+
+/**
+ * T4's seat model (ruling Q10): can every floor in `floors` be given a REAL Saturday seat?
+ * The solver's seats, not a pooled count: each sent Saturday holds 2 Lead + 3 BGV seats and one
+ * seat per person; a `Sat.Lead` unit takes only a Lead seat, `Sat.BGV` only a BGV seat,
+ * `Sat.*` either, and only where `canTake` says that person can take that role that week. A
+ * floor of value v needs v DISTINCT sent Saturdays. Solved as a max flow — source → person
+ * (their demand) → (person, Saturday) (1) → (Saturday, Lead 2 | BGV 3) → sink — and it fits
+ * iff every unit of demand flows. A flow IS a seat assignment, so a set this accepts is never
+ * seat-infeasible.
+ *
+ * A person with more than one Saturday floor is judged conservatively: every one of their
+ * seats must count for ALL their floors at once, so their seats are held to the classes every
+ * floor allows and their demand is the largest value. `Sat.Lead >= 1` with `Sat.BGV >= 1`
+ * therefore never fits one person — though a Lead one Saturday and a BGV another would — and
+ * the later floor in keep order is left out as `capacity`. A documented limitation.
+ *
+ * Outside the model (the solver stays the authority): the one-Lead-per-Saturday anchor, a
+ * zero maximum that bars `Sat.Lead`, and rows grown by pins.
+ */
+function floorsFitSeats(
+  floors: readonly SaturdayFloor[],
+  sentWeeks: readonly number[],
+  sundayDates: string[],
+  canTake: SaturdayAccess,
+): boolean {
+  const people = new Map<string, { demand: number; classes: SaturdayRole[] }>();
+  for (const f of floors) {
+    const classes = rolesOfPattern(f.pattern).filter(isSaturdayRole);
+    const p = people.get(f.name);
+    if (!p) people.set(f.name, { demand: f.value, classes });
+    else people.set(f.name, { demand: Math.max(p.demand, f.value), classes: p.classes.filter((c) => classes.includes(c)) });
+  }
+
+  const source = 0;
+  const sink = 1;
+  const seatNode = (i: number, role: SaturdayRole) => 2 + 2 * i + (role === "Sat.Lead" ? 0 : 1);
+  let nodes = 2 + 2 * sentWeeks.length;
+  const arcs: Array<[number, number, number]> = [];
+  sentWeeks.forEach((_, i) => {
+    arcs.push([seatNode(i, "Sat.Lead"), sink, SATURDAY_SEATS.lead], [seatNode(i, "Sat.BGV"), sink, SATURDAY_SEATS.bgv]);
+  });
+  let demand = 0;
+  for (const [name, p] of people) {
+    const personNode = nodes++;
+    arcs.push([source, personNode, p.demand]);
+    demand += p.demand;
+    sentWeeks.forEach((w, i) => {
+      const date = saturdayForWeek(w, sundayDates);
+      const roles = date === null ? [] : p.classes.filter((role) => canTake(name, w, date, role));
+      if (roles.length === 0) return;
+      const weekNode = nodes++;
+      arcs.push([personNode, weekNode, 1]);
+      for (const role of roles) arcs.push([weekNode, seatNode(i, role), 1]);
+    });
+  }
+  return maxFlow(nodes, arcs, source, sink) === demand;
+}
+
 /**
  * T3/T4: which Saturday minimums (`isSaturdayFloor`) the request leaves out, and why, keyed
  * by `capKey`. Maximums are never touched.
  *
  * 1. No Saturday sent: every floor is `noSaturday` (PR #116's month-level rule).
  * 2. A floor above the Saturdays its person can reach among those sent is `unreachable`.
- * 3. If what is left overflows the Saturday seats (Lead against 2 per Saturday, BGV against
- *    3, all against 5), the floors are taken in ascending order of the person's Saturdays in
- *    the request's own history (`historyForRequest`), ties by the rule's name, and each one is
- *    kept if it still fits; the rest are `capacity`. Under ADR-0046 that history is `[]`, so
- *    the order is by name (ruling Q2) — which is why no notice claims a history reason.
+ * 3. If what is left cannot all be seated (`floorsFitSeats`), the floors are taken in
+ *    ascending order of the person's Saturdays in the request's own history
+ *    (`historyForRequest`), ties by the rule's name, and each one is kept iff the kept set plus
+ *    it can still all be seated; the rest are `capacity`. Under ADR-0046 that history is `[]`,
+ *    so the order is by name (ruling Q2) — which is why no notice claims a history reason.
  */
 function saturdayFloorOmissions(input: {
   config: SolverConfig;
@@ -1010,7 +1133,7 @@ function saturdayFloorOmissions(input: {
   const { config, members, sundayDates, sentWeeks, canTake } = input;
   const weeks = sundayDates.length;
   const omit = new Map<string, OmitReason>();
-  const floors: Array<{ key: string; person: string; name: string; pattern: string; value: number }> = [];
+  const floors: SaturdayFloor[] = [];
   config.restrictions.forEach((r, ri) => {
     if (!r.person) return; // no line is written for it anyway
     r.caps.forEach((cap, ci) => {
@@ -1041,20 +1164,8 @@ function saturdayFloorOmissions(input: {
     return false;
   });
 
-  const seats = {
-    lead: SATURDAY_SEATS.lead * sentWeeks.length,
-    bgv: SATURDAY_SEATS.bgv * sentWeeks.length,
-    total: (SATURDAY_SEATS.lead + SATURDAY_SEATS.bgv) * sentWeeks.length,
-  };
-  type Demand = typeof seats;
-  const add = (d: Demand, f: (typeof floors)[number]): Demand => ({
-    lead: d.lead + (f.pattern === "Sat.Lead" ? f.value : 0),
-    bgv: d.bgv + (f.pattern === "Sat.BGV" ? f.value : 0),
-    total: d.total + f.value,
-  });
-  const fits = (d: Demand) => d.lead <= seats.lead && d.bgv <= seats.bgv && d.total <= seats.total;
-  const none: Demand = { lead: 0, bgv: 0, total: 0 };
-  if (fits(reachable.reduce(add, none))) return omit;
+  const fit = (set: readonly SaturdayFloor[]) => floorsFitSeats(set, sentWeeks, sundayDates, canTake);
+  if (fit(reachable)) return omit;
 
   const history = historyForRequest(input.historyEntries, input.year, input.month);
   const saturdaysServed = (name: string) =>
@@ -1062,10 +1173,10 @@ function saturdayFloorOmissions(input: {
   const ordered = [...reachable].sort(
     (a, b) => saturdaysServed(a.name) - saturdaysServed(b.name) || a.person.localeCompare(b.person, "es"),
   );
-  let kept = none;
+  // Every floor kept is checked with the whole kept set, so the final set is always seatable.
+  const kept: SaturdayFloor[] = [];
   for (const f of ordered) {
-    const next = add(kept, f);
-    if (fits(next)) kept = next;
+    if (fit([...kept, f])) kept.push(f);
     else omit.set(f.key, "capacity");
   }
   return omit;
@@ -1161,7 +1272,10 @@ export function buildSolveRequest(input: {
     sunday_leads: sundayLeadNames,
     saturday_leads: saturdayLeadNames,
     support: [...supportNames, ...extraSupport],
-    dsl_rules: [...allRulesToDs(config, members, omit, omittedCaps), ...availabilityRules],
+    dsl_rules: [
+      ...allRulesToDs(config, members, omit, omittedCaps, trailing?.sent === false ? weeks + 1 : null),
+      ...availabilityRules,
+    ],
     history: historyForRequest(historyEntries, year, month).map((h) => ({
       total_counts: h.total_counts,
       role_counts: h.role_counts,
@@ -1217,8 +1331,9 @@ const OMIT_REASON_ORDER: readonly OmitReason[] = ["noSaturday", "unreachable", "
 
 const OMIT_NOTICE: Record<OmitReason, (rules: string) => string> = {
   noSaturday: (rules) => `Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó ${rules}.`,
+  // Number-neutral (ruling Q6): true whether the person reaches no Saturday or too few.
   unreachable: (rules) =>
-    `No se aplicó ${rules}: no pueden cubrir ningún sábado de los que Auto llena este mes (no disponibles, excluidos o fuera de los líderes).`,
+    `No se aplicó ${rules}: los sábados que Auto llena este mes no alcanzan para cumplirlo (por disponibilidad, exclusiones o rol).`,
   capacity: (rules) =>
     `No caben todos los mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó ${rules}.`,
 };
