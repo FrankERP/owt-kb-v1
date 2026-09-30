@@ -665,7 +665,8 @@ describe("buildSolveRequest", () => {
     });
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
-    expect(result.request.weekends_with_saturday).toEqual([2, 3, 4]);
+    // D16 amended by ADR-00NN (T1/T5): the 28th is week 5, sent because Frank can lead it.
+    expect(result.request.weekends_with_saturday).toEqual([2, 3, 4, 5]);
     expect(Object.prototype.hasOwnProperty.call(result.request, "weekends_with_saturday")).toBe(true);
   });
 
@@ -726,6 +727,8 @@ describe("buildSolveRequest", () => {
     const again = requestJson({ ...r10BaseInput, members: activeMembers });
     expect(again).toBe(pin);
     // Pinned snapshot — must not change unless buildSolveRequest semantics change.
+    // They did once: D16 amended by ADR-00NN (T1/T5) — the 28th is week 5, sent because
+    // Frank can lead it, so `weekends_with_saturday` gained the 5.
     expect(pin).toMatchSnapshot();
   });
 

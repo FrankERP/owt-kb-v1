@@ -2,11 +2,15 @@
  * A Saturday MINIMUM in a month with no Saturday Auto can staff.
  *
  * October 2026 has Sundays 4/11/18/25 and one Saturday service, the 31st — the eve of
- * 1 Nov, so outside Auto's reach (D16). Three saved rules said `Sat.* == 1`, the solver
- * got no Saturday seats, fixed each person's Saturday count at 0, and refused the whole
- * month: Sundays empty, «El solver no encontró solución.». Frank's decision
- * (2026-09-29): in such a month the Saturday minimum is simply not applied — and the
- * admin is told it was not.
+ * 1 Nov, which was outside Auto's reach (D16) when this was written. Three saved rules
+ * said `Sat.* == 1`, the solver got no Saturday seats, fixed each person's Saturday count
+ * at 0, and refused the whole month: Sundays empty, «El solver no encontró solución.».
+ * Frank's decision (2026-09-29): in such a month the Saturday minimum is simply not
+ * applied — and the admin is told it was not.
+ *
+ * Since ADR-00NN (T1/T5) the 31st is week 5 and IS sent whenever a lead can take it, so
+ * "no Saturday for Auto" now means: none selected, or only the 31st with no lead able to
+ * lead it. The per-person reasons (T3/T4) are pinned in `trailingSaturday.test.ts`.
  */
 import { describe, expect, it } from "vitest";
 
@@ -17,7 +21,7 @@ import {
   capLabel,
   capText,
   isSaturdayFloor,
-  omittedCapsNotice,
+  omittedCapsNotices,
   solverRefusalMessage,
   type PersonRestriction,
   type RestrictionCap,
@@ -50,14 +54,16 @@ const restriction = (person: string, caps: RestrictionCap[], extra: Partial<Pers
 });
 
 const members = [m("andy", "Andy"), m("tay", "Tay"), m("frank", "Frank")];
+/** Frank, the only lead, cannot take the 31st — so T5 withholds it and Auto has no Saturday. */
+const frankAwayOn31 = [m("andy", "Andy"), m("tay", "Tay"), { ...m("frank", "Frank"), unavailableDates: ["2026-10-31"] }];
 
-function solve(restrictions: PersonRestriction[], activeSatDates: string[]) {
+function solve(restrictions: PersonRestriction[], activeSatDates: string[], people: RankMember[] = members) {
   const config: SolverConfig = {
     sundayLeads: ["frank"], saturdayLeads: [], support: ["andy", "tay"],
     restrictions, conflicts: [], presence: [],
   };
   const built = buildSolveRequest({
-    config, members, sundayDates: OCT_SUNDAYS, activeSatDates, historyEntries: [], year: 2026, month: 10,
+    config, members: people, sundayDates: OCT_SUNDAYS, activeSatDates, historyEntries: [], year: 2026, month: 10,
   });
   if (!built.ok) throw new Error(`refused: ${built.reason}`);
   return built;
@@ -94,25 +100,40 @@ describe("buildSolveRequest in a month with no Saturday for Auto", () => {
   ];
 
   it("leaves the Saturday minimums out, keeps every other clause, and says which it left", () => {
-    // Frank's grid: the only Saturday selected is 31 Oct, which no October Sunday follows.
-    const built = solve(rules, ["2026-10-31"]);
+    // Frank's grid: the only Saturday selected is 31 Oct, and its only lead is away that
+    // day, so T5 withholds it and Auto has no Saturday this month.
+    const built = solve(rules, ["2026-10-31"], frankAwayOn31);
     expect(built.request.weekends_with_saturday).toEqual([]);
+    expect(built.trailing).toEqual({ date: "2026-10-31", sent: false, reason: "noLead" });
     expect(built.request.dsl_rules).toContain("Andy !in Sun.BGV & Sun.* == 1 & fairness_slack 3");
     expect(built.request.dsl_rules).toContain("Tay Sun.* == 1");
     expect(built.request.dsl_rules.join("\n")).not.toContain("Sat.* == 1");
     expect(built.omittedCaps).toEqual([
-      { person: "Andy", cap: "Sat.* == 1" },
-      { person: "Tay", cap: "Sat.* == 1" },
+      { person: "Andy", cap: "Sat.* == 1", reason: "noSaturday" },
+      { person: "Tay", cap: "Sat.* == 1", reason: "noSaturday" },
     ]);
   });
 
   it("does the same with no Saturday selected at all", () => {
-    expect(solve(rules, []).omittedCaps).toHaveLength(2);
+    const { omittedCaps } = solve(rules, []);
+    expect(omittedCaps).toHaveLength(2);
+    expect(omittedCaps.every((o) => o.reason === "noSaturday")).toBe(true);
+  });
+
+  // D16 amended by ADR-00NN (T1/T5): the 31st is week 5, sent when a lead can take it.
+  it("keeps the minimums when the 31st is the only Saturday and a lead can take it", () => {
+    const built = solve(rules, ["2026-10-31"]);
+    expect(built.request.weekends_with_saturday).toEqual([5]);
+    expect(built.trailing).toEqual({ date: "2026-10-31", sent: true });
+    expect(built.request.dsl_rules).toContain("Andy !in Sun.BGV & Sun.* == 1 & Sat.* == 1 & fairness_slack 3");
+    expect(built.request.dsl_rules).toContain("Tay Sat.* == 1 & Sun.* == 1");
+    expect(built.omittedCaps).toEqual([]);
   });
 
   it("keeps the minimums untouched in a month that has a Saturday Auto can staff", () => {
     const built = solve(rules, ["2026-10-17", "2026-10-31"]);
-    expect(built.request.weekends_with_saturday).toEqual([3]);
+    // D16 amended by ADR-00NN (T1/T5): the 31st is week 5 and Frank can lead it.
+    expect(built.request.weekends_with_saturday).toEqual([3, 5]);
     expect(built.request.dsl_rules).toContain("Andy !in Sun.BGV & Sun.* == 1 & Sat.* == 1 & fairness_slack 3");
     expect(built.request.dsl_rules).toContain("Tay Sat.* == 1 & Sun.* == 1");
     expect(built.omittedCaps).toEqual([]);
@@ -125,12 +146,12 @@ describe("buildSolveRequest in a month with no Saturday for Auto", () => {
     ], []);
     expect(built.request.dsl_rules).toContain("Andy Sat.* <= 1");
     expect(built.request.dsl_rules.some((r) => r.startsWith("Tay "))).toBe(false);
-    expect(built.omittedCaps).toEqual([{ person: "Tay", cap: "Sat.Lead >= 1" }]);
+    expect(built.omittedCaps).toEqual([{ person: "Tay", cap: "Sat.Lead >= 1", reason: "noSaturday" }]);
   });
 
   it("reports a relative minimum the way the rules card shows it, not in DSL template form", () => {
     const built = solve([restriction("Andy", [cap("Sat.BGV", "==", 0, 2)])], []);
-    expect(built.omittedCaps).toEqual([{ person: "Andy", cap: "Sat.BGV == sem−2" }]);
+    expect(built.omittedCaps).toEqual([{ person: "Andy", cap: "Sat.BGV == sem−2", reason: "noSaturday" }]);
     expect(built.request.dsl_rules.join("\n")).not.toContain("Sat.BGV");
   });
 });
@@ -144,21 +165,28 @@ describe("capText / capLabel", () => {
   });
 });
 
-describe("omittedCapsNotice", () => {
-  it("is null when nothing was left out", () => {
-    expect(omittedCapsNotice([])).toBeNull();
+describe("omittedCapsNotices (noSaturday)", () => {
+  it("is empty when nothing was left out", () => {
+    expect(omittedCapsNotices([])).toEqual([]);
   });
 
-  it("groups people under each rule, in Spanish", () => {
-    expect(omittedCapsNotice([
-      { person: "Andy", cap: "Sat.* == 1" },
-      { person: "Tay", cap: "Sat.* == 1" },
-      { person: "Vale 𑣲⋆", cap: "Sat.* == 1" },
-    ])).toBe("Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó «Sat.* == 1» a Andy, Tay y Vale 𑣲⋆.");
-    expect(omittedCapsNotice([
-      { person: "Andy", cap: "Sat.* == 1" },
-      { person: "Tay", cap: "Sat.Lead >= 1" },
-    ])).toBe("Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó «Sat.* == 1» a Andy y «Sat.Lead >= 1» a Tay.");
+  it("groups people under each rule, in Spanish — today's sentence, unchanged", () => {
+    expect(omittedCapsNotices([
+      { person: "Andy", cap: "Sat.* == 1", reason: "noSaturday" },
+      { person: "Tay", cap: "Sat.* == 1", reason: "noSaturday" },
+      { person: "Vale 𑣲⋆", cap: "Sat.* == 1", reason: "noSaturday" },
+    ])).toEqual(["Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó «Sat.* == 1» a Andy, Tay y Vale 𑣲⋆."]);
+    expect(omittedCapsNotices([
+      { person: "Andy", cap: "Sat.* == 1", reason: "noSaturday" },
+      { person: "Tay", cap: "Sat.Lead >= 1", reason: "noSaturday" },
+    ])).toEqual(["Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó «Sat.* == 1» a Andy y «Sat.Lead >= 1» a Tay."]);
+  });
+
+  it("names a person once per rule, however many times they were left out under it", () => {
+    expect(omittedCapsNotices([
+      { person: "Andy", cap: "Sat.* == 1", reason: "noSaturday" },
+      { person: "Andy", cap: "Sat.* == 1", reason: "noSaturday" },
+    ])).toEqual(["Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó «Sat.* == 1» a Andy."]);
   });
 });
 

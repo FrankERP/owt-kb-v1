@@ -901,7 +901,8 @@ describe("MonthGenerator — create path", () => {
     // week 1's Saturday (Oct 3) is never addressed, because it isn't the
     // selected Oct 31. A mismatch here fails the test directly — nothing
     // catches or swallows it.
-    expect(captured.solveRequest?.weekends_with_saturday).toEqual([]);
+    // D16 amended by ADR-00NN (T1/T5): the 31st is week 5, sent because Ana can lead it.
+    expect(captured.solveRequest?.weekends_with_saturday).toEqual([5]);
 
     // Even with the (hypothetically buggy) solver having been asked about
     // week 1's Saturday, publish and confirm nothing is ever posted for it.
