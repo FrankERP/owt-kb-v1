@@ -5,7 +5,7 @@ import { useTransientValue } from "@/app/utils/useTransientValue";
 import {
   personNameOptions,
 } from "@/app/utils/memberRuleNames";
-import type { SolveResponse } from "@/app/api/admin/solve/route";
+import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { DayCard } from "@/app/components/DayCard";
 import { draftToDayCardProps } from "@/app/utils/draftToDayCardProps";
 import { draftCreateBody, newCreationRequestId, runDraftCreateBatch } from "@/app/utils/monthDraftCreate";
@@ -27,15 +27,40 @@ import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import { fillColumn } from "./localFill";
 import { fillInstruments, isInstrumentRowId } from "./instrumentFill";
 import { fillSpecialGroup, orderGroup } from "./groupFill";
+import {
+  PIN_HANDSHAKE_REFUSAL,
+  collectPins,
+  dayLabel,
+  droppedPinNotices,
+  emptyVoiceSeats,
+  pinConflicts,
+  pinHandshakeHolds,
+  pinRefusal,
+  serviceDayLabel,
+  type CollectedPins,
+} from "./pinModel";
+import { pinViolationNotices } from "./pinViolations";
+import {
+  CLEAR_WHAT_LABEL,
+  applyClear,
+  dropClearedMarkers,
+  planClear,
+  restoreCleared,
+  type ClearPlan,
+  type ClearScope,
+  type ClearWhat,
+} from "./clearCells";
 import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
 import Button from "@/app/components/ui/Button";
+import CueDialog from "@/app/components/ui/CueDialog";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
+import { useToast } from "@/app/components/ui/Toast";
 import {
   editableConfig,
   sameSolverConfig,
@@ -62,6 +87,7 @@ import {
   poolTipoMismatch,
   unaddressableDates as computeUnaddressableDates,
   omittedCapsNotice,
+  solverPools,
   solverRefusalMessage,
   type DraftCard,
   type GridCell,
@@ -1527,7 +1553,9 @@ function DerivedHistoryDiagnostics({ diagnostics }: { diagnostics: SolverHistory
       )}
       {duplicateNames.length > 0 && (
         <li>
-          Nombres repetidos — el solver los confunde:{" "}
+          {/* With no history sent (ADR-0046) the solver never sees these counts;
+              the derivation still merges them by name, which is what this names. */}
+          {SOLVER_SENDS_HISTORY ? "Nombres repetidos — el solver los confunde:" : "Nombres repetidos — el historial los junta:"}{" "}
           {duplicateNames.map(d => `${d.name} (${d.memberIds.length})`).join(", ")}
         </li>
       )}
@@ -1554,7 +1582,9 @@ function DerivedHistoryBlock({ history }: { history: DerivedHistoryHandle }) {
   return (
     <div className="space-y-1.5">
       <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">
-        Historial de equidad — derivado de los servicios guardados
+        {SOLVER_SENDS_HISTORY
+          ? "Historial de equidad — derivado de los servicios guardados"
+          : "Historial — derivado de los servicios guardados · solo referencia, Auto no lo usa"}
       </p>
       {history.status === "ready" ? (
         <>
@@ -1930,8 +1960,28 @@ export default function MonthGenerator({
   const [diagnostics, setDiagnostics] = useState<SolveDiagnostics | null>(null);
   const [autoPending, setAutoPending] = useState(false);
   const [autoError, setAutoError]     = useState<string | null>(null);
-  /** A rule Auto did not apply this month (`omittedCapsNotice`); shown, never silent. */
-  const [autoNotice, setAutoNotice]   = useState<string | null>(null);
+  /** Notes about the last Auto run, in order (`AutoState.notices`); shown, never silent. */
+  const [autoNotices, setAutoNotices] = useState<string[]>([]);
+  /** E2 — «Solo llenar vacíos»: off by default, per run, never persisted. */
+  const [fillEmptyOnly, setFillEmptyOnly] = useState(false);
+  const { toast, dismiss } = useToast();
+  /** «Borrar» todo el mes: open flag, and the payload that outlives the close (CueDialog exit). */
+  const [monthClearOpen, setMonthClearOpen] = useState(false);
+  const [monthClearWhat, setMonthClearWhat] = useState<ClearWhat>("voices");
+  /**
+   * «Deshacer» is withdrawn once Auto runs (spec §3.2), when the month changes, and when the
+   * step changes — a stale undo would write another grid's cells into this one («← Volver» then
+   * «Previsualizar» rebuilds the grid from nothing, even for the same month). The generation
+   * makes a click that races the withdrawal a no-op.
+   */
+  const undoGeneration = useRef(0);
+  const undoToastIds = useRef<string[]>([]);
+  const withdrawUndos = useCallback(() => {
+    undoGeneration.current += 1;
+    for (const id of undoToastIds.current) dismiss(id);
+    undoToastIds.current = [];
+  }, [dismiss]);
+  useEffect(() => withdrawUndos, [year, month, step, withdrawUndos]);
 
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
@@ -2228,6 +2278,12 @@ export default function MonthGenerator({
     || clearPending
     || clearing
   );
+  /**
+   * Spec §3.2 «Locking»: with «Solo llenar vacíos» on, an edit landing during the solve would
+   * break «Auto respeta lo que ya está puesto», so the create grid is read-only while Auto is
+   * pending. The switch itself and every «Borrar» are disabled on `autoPending` alone.
+   */
+  const createAutoLocked = !storedMode && autoPending && fillEmptyOnly;
   const storedSpecialColumns = storedMode
     ? orderGroup(storedColumns.filter((c) => c.type === "special_role" && c.admission === "approved"))
     : [];
@@ -2476,6 +2532,19 @@ export default function MonthGenerator({
     () => savedWindowFor(year, month, allRoles ?? []),
     [year, month, allRoles],
   );
+
+  /** Spec §3.3 — what the board says about each seat that will be pinned; only with the switch on. */
+  const pinBoard = useMemo(() => {
+    if (storedMode || !fillEmptyOnly || !solverConfig) return undefined;
+    const collected = collectPins({ cells, columns, rows, members, sundayDates: sundayDatesFull });
+    const p = solverPools(solverConfig, members);
+    return pinConflicts({
+      collected,
+      columns,
+      members,
+      pools: { sundayLeads: p.sundayLeadNames, saturdayLeads: p.saturdayLeadNames, support: [...p.supportNames, ...p.extraSupport] },
+    });
+  }, [storedMode, fillEmptyOnly, solverConfig, cells, columns, rows, members, sundayDatesFull]);
 
   /**
    * The SAVED half of the participation rail: everything stored in the month
@@ -2747,13 +2816,13 @@ export default function MonthGenerator({
     setUnfilled([]);
     setDiagnostics(null);
     setAutoError(null);
-    setAutoNotice(null);
+    setAutoNotices([]);
     setDrafts(cellsToDrafts([], columns, new Set(), [], existingRoles));
     setStep("grid");
   }
 
   function handleCellsChange(next: GridCell[]) {
-    if (storedMutationLocked) return;
+    if (storedMutationLocked || createAutoLocked) return;
     if (storedMode) {
       const changedRoleIds = new Set<string>();
       const allColumnIds = new Set([...cells.map((cell) => cell.columnId), ...next.map((cell) => cell.columnId)]);
@@ -2772,6 +2841,72 @@ export default function MonthGenerator({
       return;
     }
     setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
+  }
+
+  /**
+   * Applies a planned clear through `handleCellsChange` and drops the cleared cells' markers.
+   * `undoMessage` offers «Deshacer» (service scope); `null` offers none (month scope).
+   */
+  function applyPlannedClear(plan: ClearPlan, undoMessage: string | null) {
+    const key = (c: { columnId: string; rowId: string }) => `${c.columnId}|${c.rowId}`;
+    const prior = cells.filter((c) => plan.cellKeys.has(key(c)));
+    const markers = unfilled.filter((u) => plan.cellKeys.has(key(u)));
+    handleCellsChange(applyClear(cells, plan));
+    setUnfilled((prev) => dropClearedMarkers(prev, plan));
+    if (undoMessage === null) return;
+    const generation = undoGeneration.current;
+    const id = toast({
+      message: undoMessage,
+      tone: "info",
+      duration: 10_000,
+      action: {
+        label: "Deshacer",
+        onClick: () => {
+          if (generation !== undoGeneration.current) return;
+          undoClearRef.current(prior, markers);
+        },
+      },
+    });
+    undoToastIds.current.push(id);
+  }
+
+  /** «Deshacer» — onto the LIVE cells of the latest render (through `undoClearRef`). */
+  function undoClear(prior: GridCell[], markers: { columnId: string; rowId: string }[]) {
+    if (autoPending) return;
+    handleCellsChange(restoreCleared(cells, prior, columns));
+    setUnfilled((prev) => [...prev, ...markers]);
+  }
+
+  function handleClear(scope: ClearScope, what: ClearWhat) {
+    if (storedMode || autoPending) return;
+    if (scope.kind === "month") {
+      setMonthClearWhat(what);
+      setMonthClearOpen(true);
+      return;
+    }
+    const plan = planClear({ cells, rows, columns, scope, what });
+    if (plan.seats === 0) return;
+    // R13: the toast names what was cleared and where. `useToast` replaces a toast whose message
+    // repeats, so a bare «Se borraron 2 asignaciones.» from a second service took the first
+    // service's «Deshacer» with it.
+    const column = columns.find((c) => c.columnId === scope.columnId);
+    const service = !column
+      ? ""
+      : column.type === "special_role"
+        ? `${column.serviceName ?? "Especial"} ${dayLabel(column.date)}`
+        : serviceDayLabel(column.type, column.date);
+    applyPlannedClear(
+      plan,
+      `${CLEAR_WHAT_LABEL[what]} · ${service}: se borraron ${plan.seats} asignaci${plan.seats !== 1 ? "ones" : "ón"}.`,
+    );
+  }
+
+  /** Re-planned against the LIVE cells at confirm, never the plan the dialog opened with. */
+  function confirmMonthClear() {
+    setMonthClearOpen(false);
+    if (autoPending) return;
+    const plan = planClear({ cells, rows, columns, scope: { kind: "month" }, what: monthClearWhat });
+    if (plan.seats > 0) applyPlannedClear(plan, null);
   }
 
   function openGroupFill() {
@@ -3288,11 +3423,14 @@ export default function MonthGenerator({
    *   path only. Absent ⇒ this is a failure exit, and the previous run's
    *   special entries are dropped (by date) before the new ones are appended, so
    *   pressing Auto twice cannot double-count the same empty seat.
+   * @param fillEmpty «Solo llenar vacíos»: instruments are completed on the weekend columns in
+   *   date order and nothing is vacated — `fillInstruments`' `fillColumns` path, no second flag.
    */
   function applySpecialFill(
     config: SolverConfig,
     baseCells: GridCell[],
     solverUnfilled?: { columnId: string; rowId: string }[],
+    fillEmpty = false,
   ) {
     const specialColumnIds = new Set(
       columns.filter(c => c.type === "special_role").map(c => c.columnId),
@@ -3319,7 +3457,18 @@ export default function MonthGenerator({
     // Instrument seats (spec 2026-09-09 §6.3): after the specials, before the
     // three setters, on the accumulated cells — so it runs on EVERY exit exactly
     // as the specials do, and there is still one owner of the setters.
-    const instr = fillInstruments({ columns, rows, cells: next, members, savedWindow, config });
+    const weekendInDateOrder = columns
+      .filter(c => c.type === "sunday_role" || c.type === "saturday_role")
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const instr = fillInstruments({
+      columns,
+      ...(fillEmpty ? { fillColumns: weekendInDateOrder } : {}),
+      rows,
+      cells: next,
+      members,
+      savedWindow,
+      config,
+    });
     next = instr.cells;
     filled.push(...instr.unfilled);
 
@@ -3336,6 +3485,194 @@ export default function MonthGenerator({
     setDrafts(prev => cellsToDrafts(next, columns, skippedColumnIds, prev, existingRoles));
   }
 
+  /** What `prepareSolve` hands `runSolve`: the request, and the notices already shown. */
+  interface PreparedSolve {
+    request: SolveRequest;
+    /** Shown before the fetch; `runSolve` appends, never replaces (spec §2.3). */
+    notices: string[];
+    /** The pins sent, or `null` when the switch is off or the board had none (no `pinned` key). */
+    pinned: CollectedPins | null;
+    /** The switch as it stood in THIS render — the same one `cells` came from. */
+    fillEmpty: boolean;
+  }
+
+  /**
+   * THE seam both Auto paths share, first half (spec 2026-09-29 §3.2 «One seam, both paths»):
+   * everything synchronous before the fetch. Reads `cells`, `columns`, `rows` and the rest from
+   * the render it was defined in — for the derived path that is the latest render, because it
+   * is reached through `solveWithDerivedHistoryRef`. Runs every pre-fetch refusal exit itself
+   * (each calls `applySpecialFill` once) and returns `null` for them.
+   *
+   * Owns no `autoPending`: the per-browser path raises it only AFTER this returns (it has
+   * nothing to wait for), the derived path before its history read. Keep that asymmetry.
+   */
+  function prepareSolve(config: SolverConfig, historyEntries: SolverHistoryEntry[]): PreparedSolve | null {
+    const fillEmpty = fillEmptyOnly;
+    setAutoError(null);
+    setAutoNotices([]);
+    const built = buildSolveRequest({
+      config,
+      members,
+      sundayDates: sundayDatesFull,
+      activeSatDates,
+      historyEntries,
+      year,
+      month,
+    });
+    if (!built.ok) {
+      // Pre-flight refusal (fact 14) — never reaches the network. EXIT 1, and
+      // the one E5 names outright: "a month with no Sunday leads must still
+      // fill its specials". The specials never needed the solver.
+      setAutoError(built.reason);
+      applySpecialFill(config, cells, undefined, fillEmpty);
+      return null;
+    }
+    const notices: string[] = [];
+    const floors = omittedCapsNotice(built.omittedCaps);
+    if (floors) notices.push(floors);
+    let pinned: CollectedPins | null = null;
+    if (fillEmpty) {
+      const collected = collectPins({ cells, columns, rows, members, sundayDates: sundayDatesFull });
+      const refusal = pinRefusal({
+        collected,
+        columns,
+        rows,
+        members,
+        weekendsWithSaturday: built.request.weekends_with_saturday,
+        poolNames: [...built.request.sunday_leads, ...built.request.saturday_leads, ...built.request.support],
+      });
+      if (refusal) {
+        // Refused before the fetch, in Spanish, naming the cell (spec §3.2).
+        setAutoError(refusal);
+        applySpecialFill(config, cells, undefined, fillEmpty);
+        return null;
+      }
+      notices.push(...droppedPinNotices({ dropped: collected.dropped, columns, rows, members }));
+      // Zero pins OMITS `pinned`: the request is byte-identical to the switch off (MCP P4).
+      if (collected.pins.length > 0) pinned = collected;
+    }
+    setAutoNotices(notices);
+    return {
+      request: pinned ? { ...built.request, pinned: pinned.pins } : built.request,
+      notices,
+      pinned,
+      fillEmpty,
+    };
+  }
+
+  /**
+   * The seam's second half: the fetch and every exit after it. Owns the fetch per CLAUDE.md's
+   * client-mutation invariant (try/catch, check `res.ok`, never close-as-success on failure);
+   * the caller owns `autoPending` and its `finally`. A short-staffed month returning `ok:false`
+   * is the solver's NORMAL failure (D15), not an edge case.
+   *
+   * @param historyMonths the months the derived path's history covers (R14), labelled only on
+   *   success. Absent ⇒ the per-browser path, whose diagnostics carry `history_runs_used` instead.
+   */
+  async function runSolve(config: SolverConfig, prepared: PreparedSolve, historyMonths?: SolverHistoryMonth[]) {
+    try {
+      const res = await fetch("/api/admin/solve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(prepared.request),
+      });
+      let response: SolveResponse | null = null;
+      if (res.ok) {
+        response = await res.json();
+      } else if (res.status === 422) {
+        // The solver's refusal — its body carries the reason (`solverRefusalMessage`).
+        response = await res.json().catch(() => null);
+      }
+      if (!res.ok || !response || !response.ok || !response.schedule) {
+        // EXIT 2 — the solver answered, and said no. A short-staffed month is
+        // the solver's NORMAL failure (D15); the specials still fill.
+        setAutoError(solverRefusalMessage(response?.error));
+        applySpecialFill(config, cells, undefined, prepared.fillEmpty);
+        return;
+      }
+      if (prepared.pinned && !pinHandshakeHolds(response, prepared.pinned.pins)) {
+        // E8: nothing of the solver's result is applied. Set directly — never through
+        // `solverRefusalMessage`; the two are exclusive per run. Specials and instruments
+        // still complete, as on every exit (spec §0).
+        setAutoError(PIN_HANDSHAKE_REFUSAL);
+        applySpecialFill(config, cells, undefined, prepared.fillEmpty);
+        return;
+      }
+
+      const applied = applySolveResponse({
+        response,
+        previousCells: cells,
+        columns,
+        rows,
+        sundayDates: sundayDatesFull,
+        activeSatDates,
+        members,
+        pinnedCellKeys: prepared.pinned?.pinnedCellKeys,
+      });
+      setUnresolvedNames(applied.unresolvedNames);
+      setDiagnostics(historyMonths === undefined
+        ? {
+            fairness_relaxed: response.fairness_relaxed,
+            sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
+            sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
+            // None sent (ADR-0046) ⇒ nothing to report: the solver answers 0, and
+            // «Historial usado: 0» would still read as a history that was weighed.
+            history_runs_used: SOLVER_SENDS_HISTORY ? response.history_runs_used : undefined,
+            objective_skipped: response.objective_skipped,
+          }
+        : {
+            // No `history_runs_used`: it is always 3 on a derived history (R4). The
+            // months THIS solve read are what the admin needs to see — and whether
+            // they did anything: with three months of history the objective is
+            // skipped (ADR-0038), and the months were read for nothing.
+            fairness_relaxed: response.fairness_relaxed,
+            sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
+            sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
+            history_months: historyMonthsLabel(historyMonths),
+            objective_skipped: response.objective_skipped,
+          });
+      if (prepared.pinned) {
+        setAutoNotices([
+          ...prepared.notices,
+          ...pinViolationNotices({
+            violations: response.pin_violations ?? [],
+            ceilingProven: response.violation_ceiling_proven,
+            config,
+            members,
+            pins: prepared.pinned.pins,
+            sundayDates: sundayDatesFull,
+          }),
+        ]);
+      }
+      // EXIT 3 — success. `applied.cells`, never the pre-solve `cells`: the
+      // latter would throw away the weekend roster this call just produced.
+      // `applySpecialFill` owns all three of `setCells`/`setUnfilled`/`setDrafts`
+      // from here, so the special seats and the solver's own cannot diverge.
+      //
+      // `sundayDatesFull` resolves the solver's positional week number (E21);
+      // `selectedSundays` then filters the result down to columns that exist —
+      // otherwise an unfilled marker from a week that was never staffed renders
+      // on a date the admin deselected, or on a column that is now a special.
+      applySpecialFill(
+        config,
+        applied.cells,
+        mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
+        prepared.fillEmpty,
+      );
+      // Fairness history is NOT persisted here — a solve merely proposes a
+      // schedule. Recording it now would count services that may never be
+      // created (close the panel without confirming and next month's solve
+      // would still be penalised for them). `handleConfirm` below persists it
+      // instead, derived from whatever the create batch actually committed.
+    } catch {
+      // EXIT 4 — the network threw. A throw is a solve failure like any other,
+      // and E5 says the specials fill even when the solve fails; exits 1 and 2
+      // both satisfy a loosely-written test and neither reaches this line.
+      setAutoError("Error de red al llamar al solver.");
+      applySpecialFill(config, cells, undefined, prepared.fillEmpty);
+    }
+  }
+
   /**
    * Auto — the ONLY caller of `/api/admin/solve` (D13). Owns the fetch per
    * CLAUDE.md's client-mutation invariant: try/catch/finally, check `res.ok`,
@@ -3343,8 +3680,9 @@ export default function MonthGenerator({
    * short-staffed month returning `ok:false` is the solver's NORMAL failure
    * (D15), not an edge case.
    *
-   * It is also the only caller of `applySpecialFill`, which runs at EVERY exit
-   * — the solve failing has no bearing on a special, which was never sent.
+   * Through `prepareSolve`/`runSolve` it is, with the derived path, the only caller of
+   * `applySpecialFill`, which runs at EVERY exit — the solve failing has no bearing on a
+   * special, which was never sent.
    */
   async function handleAuto() {
     // The rules must be LOADED before anything solves or fills.
@@ -3367,98 +3705,22 @@ export default function MonthGenerator({
       setAutoError("No se pudieron cargar las reglas compartidas. Recárgalas antes de usar Auto.");
       return;
     }
+    // A «Borrar» undo is withdrawn once Auto runs (spec §3.2): restoring after a solve would
+    // write the pre-solve seats over the solver's answer.
+    withdrawUndos();
     // Derived mode (R14) solves on the history read for THIS month at THIS
-    // moment — its own path, below. Everything after this line is the
-    // per-browser path, unchanged.
+    // moment — its own path, below — or, with `SOLVER_SENDS_HISTORY` off (what
+    // ships, ADR-0046), on none at all. Everything after this line is the
+    // per-browser path, unchanged but for the same switch.
     if (SOLVER_HISTORY_SOURCE === "derived") {
       await handleAutoDerived();
       return;
     }
-    setAutoNotice(null);
-    const built = buildSolveRequest({
-      config,
-      members,
-      sundayDates: sundayDatesFull,
-      activeSatDates,
-      historyEntries: SOLVER_SENDS_HISTORY ? solverHistory : [],
-      year,
-      month,
-    });
-    if (!built.ok) {
-      // Pre-flight refusal (fact 14) — never reaches the network. EXIT 1, and
-      // the one E5 names outright: "a month with no Sunday leads must still
-      // fill its specials". The specials never needed the solver.
-      setAutoError(built.reason);
-      applySpecialFill(config, cells);
-      return;
-    }
-
+    const prepared = prepareSolve(config, SOLVER_SENDS_HISTORY ? solverHistory : []);
+    if (!prepared) return;
     setAutoPending(true);
-    setAutoError(null);
-    setAutoNotice(omittedCapsNotice(built.omittedCaps));
     try {
-      const res = await fetch("/api/admin/solve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(built.request),
-      });
-      let response: SolveResponse | null = null;
-      if (res.ok) {
-        response = await res.json();
-      } else if (res.status === 422) {
-        // The solver's refusal — its body carries the reason (`solverRefusalMessage`).
-        response = await res.json().catch(() => null);
-      }
-      if (!res.ok || !response || !response.ok || !response.schedule) {
-        // EXIT 2 — the solver answered, and said no. A short-staffed month is
-        // the solver's NORMAL failure (D15); the specials still fill.
-        setAutoError(solverRefusalMessage(response?.error));
-        applySpecialFill(config, cells);
-        return;
-      }
-
-      const applied = applySolveResponse({
-        response,
-        previousCells: cells,
-        columns,
-        rows,
-        sundayDates: sundayDatesFull,
-        activeSatDates,
-        members,
-      });
-      setUnresolvedNames(applied.unresolvedNames);
-      setDiagnostics({
-        fairness_relaxed: response.fairness_relaxed,
-        sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
-        sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
-        history_runs_used: SOLVER_SENDS_HISTORY ? response.history_runs_used : undefined,
-        objective_skipped: response.objective_skipped,
-      });
-      // EXIT 3 — success. `applied.cells`, never the pre-solve `cells`: the
-      // latter would throw away the weekend roster this call just produced.
-      // `applySpecialFill` owns all three of `setCells`/`setUnfilled`/`setDrafts`
-      // from here, so the special seats and the solver's own cannot diverge.
-      //
-      // `sundayDatesFull` resolves the solver's positional week number (E21);
-      // `selectedSundays` then filters the result down to columns that exist —
-      // otherwise an unfilled marker from a week that was never staffed renders
-      // on a date the admin deselected, or on a column that is now a special.
-      applySpecialFill(
-        config,
-        applied.cells,
-        mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
-      );
-      // Fairness history is NOT persisted here — a solve merely proposes a
-      // schedule. Recording it now would count services that may never be
-      // created (close the panel without confirming and next month's solve
-      // would still be penalised for them). `handleConfirm` below persists it
-      // instead, derived from whatever the create batch actually committed.
-    } catch {
-      // EXIT 4 — the network threw. A throw is a solve failure like any other,
-      // and E5 says the specials fill even when the solve fails; exits 1 and 2
-      // both satisfy a loosely-written test and neither reaches this line.
-      setAutoError("Error de red al llamar al solver.");
-      applySpecialFill(config, cells);
+      await runSolve(config, prepared);
     } finally {
       setAutoPending(false);
     }
@@ -3481,7 +3743,7 @@ export default function MonthGenerator({
     const target = { year, month };
     setAutoPending(true);
     setAutoError(null);
-    setAutoNotice(null);
+    setAutoNotices([]);
     try {
       // No history is sent (ADR-0046): nothing to read, and so nothing to refuse
       // over — a failed or slow history read must not block a solve that never
@@ -3509,9 +3771,9 @@ export default function MonthGenerator({
    * `solveWithDerivedHistoryRef`, so it is the version from the LATEST render.
    *
    * **Why a ref, and not the closure `handleAutoDerived` was called with.** In
-   * create mode nothing locks the grid while Auto is pending: `mutationLocked`
-   * is stored-mode only (`storedMutationLocked`), and `autoPending` disables the
-   * Auto button and nothing else, so cells stay editable during the read. The
+   * create mode with «Solo llenar vacíos» off nothing locks the grid while Auto
+   * is pending (`createAutoLocked` is the switch-on lock): `autoPending` alone
+   * disables Auto's own controls and never a cell, so cells stay editable during the read. The
    * closure captured at the press would solve and fill from the cells as they
    * were then, and `applySpecialFill` would write that snapshot back — silently
    * dropping a seat typed during the read. Reading the latest render instead
@@ -3527,7 +3789,7 @@ export default function MonthGenerator({
    *   is solved or filled.
    * @param history the read, or `null` when no history is sent
    *   (`SOLVER_SENDS_HISTORY`, ADR-0046): then the request carries `history: []`
-   *   and the diagnostics name no months.
+   *   and the diagnostics name no history at all.
    */
   async function solveWithDerivedHistory(
     target: { year: number; month: number },
@@ -3543,72 +3805,12 @@ export default function MonthGenerator({
       // Pre-flight refusal (spec, Failure): a history that could not be read is
       // never solved as an empty one. The specials never needed it (E5).
       setAutoError(DERIVED_HISTORY_AUTO_REFUSAL);
-      applySpecialFill(config, cells);
+      applySpecialFill(config, cells, undefined, fillEmptyOnly);
       return;
     }
-    const built = buildSolveRequest({
-      config,
-      members,
-      sundayDates: sundayDatesFull,
-      activeSatDates,
-      historyEntries: history ? history.data.entries : [],
-      year,
-      month,
-    });
-    if (!built.ok) {
-      setAutoError(built.reason);
-      applySpecialFill(config, cells);
-      return;
-    }
-    setAutoNotice(omittedCapsNotice(built.omittedCaps));
-    try {
-      const res = await fetch("/api/admin/solve", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(built.request),
-      });
-      let response: SolveResponse | null = null;
-      if (res.ok) {
-        response = await res.json();
-      } else if (res.status === 422) {
-        // The solver's refusal — its body carries the reason (`solverRefusalMessage`).
-        response = await res.json().catch(() => null);
-      }
-      if (!res.ok || !response || !response.ok || !response.schedule) {
-        setAutoError(solverRefusalMessage(response?.error));
-        applySpecialFill(config, cells);
-        return;
-      }
-      const applied = applySolveResponse({
-        response,
-        previousCells: cells,
-        columns,
-        rows,
-        sundayDates: sundayDatesFull,
-        activeSatDates,
-        members,
-      });
-      setUnresolvedNames(applied.unresolvedNames);
-      // No `history_runs_used`: it is always 3 on a derived history (R4). The
-      // months THIS solve read are what the admin needs to see — and whether
-      // they did anything: with three months of history the objective is
-      // skipped (ADR-0038), and the months were read for nothing.
-      setDiagnostics({
-        fairness_relaxed: response.fairness_relaxed,
-        sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
-        sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
-        history_months: history ? historyMonthsLabel(history.data.months) : undefined,
-        objective_skipped: response.objective_skipped,
-      });
-      applySpecialFill(
-        config,
-        applied.cells,
-        mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
-      );
-    } catch {
-      setAutoError("Error de red al llamar al solver.");
-      applySpecialFill(config, cells);
-    }
+    const prepared = prepareSolve(config, history ? history.data.entries : []);
+    if (!prepared) return;
+    await runSolve(config, prepared, history ? history.data.months : undefined);
   }
   const solveWithDerivedHistoryRef = useRef(solveWithDerivedHistory);
   // Commit-time, so the ref is current before any later event or resolved
@@ -3616,6 +3818,12 @@ export default function MonthGenerator({
   // render is a `react-hooks/refs` error.
   useLayoutEffect(() => {
     solveWithDerivedHistoryRef.current = solveWithDerivedHistory;
+  });
+  // «Deshacer» fires from a toast up to 10 s later: the ref hands it the LATEST render's
+  // `undoClear`, so it restores onto the live cells rather than the ones the clear saw.
+  const undoClearRef = useRef(undoClear);
+  useLayoutEffect(() => {
+    undoClearRef.current = undoClear;
   });
 
   async function handleConfirm(publish: boolean) {
@@ -3837,7 +4045,7 @@ export default function MonthGenerator({
     return draftByTarget.get(key)?.isExisting ? "existing" : null;
   };
 
-  const autoState: AutoState = { pending: autoPending, error: autoError, notice: autoNotice, disabledReason: gateBlocked };
+  const autoState: AutoState = { pending: autoPending, error: autoError, notices: autoNotices, disabledReason: gateBlocked };
 
   // ── Step 1: Configure ────────────────────────────────────────────────────────
   if (step === "config") return (
@@ -4323,7 +4531,7 @@ export default function MonthGenerator({
           onToggleSkip={handleToggleSkip}
           onStoredHeaderChange={handleStoredHeaderChange}
           storedDateBlockedReason={storedDateBlocked}
-          mutationLocked={storedMutationLocked}
+          mutationLocked={storedMutationLocked || createAutoLocked}
           onAuto={handleAuto}
           autoState={autoState}
           diagnostics={diagnostics}
@@ -4373,6 +4581,17 @@ export default function MonthGenerator({
             />
           }
           monthLabel={`${MONTHS[month - 1]} ${year}`}
+          fillEmpty={storedMode ? undefined : {
+            enabled: fillEmptyOnly,
+            onChange: (next) => { if (!autoPending) setFillEmptyOnly(next); },
+            emptyVoiceSeats: emptyVoiceSeats({ cells, columns, rows, sundayDates: sundayDatesFull }),
+          }}
+          pinConflicts={pinBoard}
+          clear={storedMode ? undefined : {
+            countFor: (scope, what) => planClear({ cells, rows, columns, scope, what }).seats,
+            onClear: handleClear,
+            disabled: autoPending,
+          }}
         />
       ) : !storedMode ? (
         // D17/D10: this used to be `max-h-[50vh] overflow-y-auto` — a keyhole
@@ -4388,6 +4607,39 @@ export default function MonthGenerator({
           })}
         </div>
       ) : null}
+
+      {/*
+        «Borrar» todo el mes — mounted for the whole create-mode grid step, `open` drives it. The
+        count is LIVE: an edit made while it is open changes it, and the confirm re-plans against
+        the grid as it is then (R8: a month clear leaves the specials' Coro and instruments).
+      */}
+      {!storedMode && (() => {
+        const live = planClear({ cells, rows, columns, scope: { kind: "month" }, what: monthClearWhat });
+        const label = CLEAR_WHAT_LABEL[monthClearWhat].toLowerCase();
+        return (
+          <CueDialog
+            open={monthClearOpen}
+            title={`Borrar ${label} de todo el mes`}
+            label={`Borrar ${label} de todo el mes`}
+            size="sm"
+            onDismiss={() => setMonthClearOpen(false)}
+          >
+            <div className="space-y-3 p-6">
+              <p className="font-body text-sm text-ink-muted">
+                Se quitarán {live.seats} asignaci{live.seats !== 1 ? "ones" : "ón"} de {label} en todo el mes.
+                {live.handPlacedApprox > 0 && ` Aproximadamente ${live.handPlacedApprox} se pusieron a mano.`}
+              </p>
+              <p className="font-body text-xs text-ink-muted/70">
+                FOH no se toca. Los especiales conservan su Coro e instrumentos. Nada se guarda hasta que presiones «Crear {toCreate.length} borrador{toCreate.length !== 1 ? "es" : ""}».
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="danger" onClick={confirmMonthClear} disabled={live.seats === 0}>Borrar</Button>
+                <Button variant="secondary" onClick={() => setMonthClearOpen(false)}>Cancelar</Button>
+              </div>
+            </div>
+          </CueDialog>
+        );
+      })()}
 
       {/*
         In "Vista" mode there is no `PlannerGrid` to hold the chart's column, so

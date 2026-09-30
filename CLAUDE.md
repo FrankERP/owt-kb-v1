@@ -409,6 +409,9 @@ filler: a ticked group of special services, Lead/BGV via `fillColumn` and instru
 `fillInstruments({ fillColumns })`, with `columns = group` and `savedWindow = []` so only
 load inside the group counts; empty seats only, nothing vacated, nothing written until
 «Guardar»),
+`collectPins`/`pinRefusal`/`pinHandshakeHolds` (`app/components/admin/pinModel.ts` — the ONLY
+board → solver-pins translation; exact `member_name`, one seat per person per service), `planClear`
+(`app/components/admin/clearCells.ts` — «Borrar»; FOH is never cleared in bulk),
 `upcomingMonthPills`/`addMonths` (`app/components/admin/monthPills.ts` — the Servicios panel's
 upcoming month pills: every month with services from the current one on, PLUS the current
 month and the next two even when empty, so a month opens in the stored editor without

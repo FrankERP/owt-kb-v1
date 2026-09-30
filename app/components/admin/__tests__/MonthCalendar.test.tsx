@@ -21,6 +21,7 @@ import MonthCalendar, { refuseSpecialOn, refuseWeekendOn } from "../MonthCalenda
 import MonthGenerator from "../MonthGenerator";
 import { stubFetchWithHistory } from "./derivedHistoryHarness";
 import { readyRules } from "./rulesHarness";
+import { AdminProviders } from "./providersHarness";
 import type { SolverConfigController } from "../solverConfigSource";
 
 /**
@@ -42,7 +43,11 @@ function Gen({
 }: Omit<React.ComponentProps<typeof MonthGenerator>, "rules"> & {
   rules?: SolverConfigController;
 }) {
-  return <MonthGenerator {...props} rules={rules} />;
+  return (
+    <AdminProviders>
+      <MonthGenerator {...props} rules={rules} />
+    </AdminProviders>
+  );
 }
 // The SHARED key builder, never a hand-rolled `${type}__${date}` — a second
 // copy in the tests could drift from the one both surfaces read.

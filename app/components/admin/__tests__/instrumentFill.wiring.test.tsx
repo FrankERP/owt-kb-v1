@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
 import { readyRules } from "./rulesHarness";
+import { AdminProviders } from "./providersHarness";
 import type { SolverConfigController } from "../solverConfigSource";
 import { stubFetchWithHistory } from "./derivedHistoryHarness";
 import { DEFAULT_SOLVER_CONFIG } from "../solverConfigDefaults";
@@ -36,7 +37,11 @@ function Gen({
 }: Omit<React.ComponentProps<typeof MonthGenerator>, "rules"> & {
   rules?: SolverConfigController;
 }) {
-  return <MonthGenerator {...props} rules={rules} />;
+  return (
+    <AdminProviders>
+      <MonthGenerator {...props} rules={rules} />
+    </AdminProviders>
+  );
 }
 
 afterEach(() => {

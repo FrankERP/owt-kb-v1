@@ -1717,3 +1717,42 @@ describe("cellsToParticipantRoles agrees with the write path about Coro", () => 
     expect(role.chorus.map((p) => p._id)).toEqual(["m1", "m2"]);
   });
 });
+
+describe("applySolveResponse under pins (spec §3.2 Waivers)", () => {
+  const sundays = ["2026-03-01", "2026-03-08", "2026-03-15", "2026-03-22"];
+  const cols = buildColumns({ sundayDates: sundays, activeSatDates: [], specials: [] });
+  const SUN1 = createColumnId("sunday_role", "2026-03-01");
+  const who = [
+    { _id: "ana", member_name: "Ana Karen Villalobos", alias: "Ana", memberType: ["voz", "sunday_lead"] },
+    { _id: "beto", member_name: "Alberto Ruiz Cano", alias: "Beto", memberType: ["voz", "support"] },
+  ] as RankMember[];
+  const previous: ModelGridCell[] = [{
+    columnId: SUN1, rowId: "lead", occupants: [{ memberId: "ana" }, { memberId: "beto" }], origin: "manual",
+    overrides: ["ana", "beto"], overrideReasons: { ana: "Regla: excluido de Sun.Lead", beto: "Regla: excluido de *.Lead" },
+  }];
+  const response: SolveResponse = {
+    ok: true,
+    schedule: { "1": { Sunday: { Lead: ["Ana Karen Villalobos"], BGV: [], Choir: [] } } },
+  };
+
+  it("keeps origin and the waivers of the occupants that came back, on a cell that sent a pin", () => {
+    const out = applySolveResponseModel({
+      response, previousCells: previous, columns: cols, rows: buildRows(), sundayDates: sundays,
+      activeSatDates: [], members: who, pinnedCellKeys: new Set([`${SUN1}|lead`]),
+    });
+    expect(out.cells.find((c) => c.columnId === SUN1 && c.rowId === "lead")).toEqual({
+      columnId: SUN1, rowId: "lead", occupants: [{ memberId: "ana" }], origin: "manual",
+      overrides: ["ana"], overrideReasons: { ana: "Regla: excluido de Sun.Lead" },
+    });
+  });
+
+  it("writes the cell exactly as today without pinnedCellKeys", () => {
+    const out = applySolveResponseModel({
+      response, previousCells: previous, columns: cols, rows: buildRows(), sundayDates: sundays,
+      activeSatDates: [], members: who,
+    });
+    expect(out.cells.find((c) => c.columnId === SUN1 && c.rowId === "lead")).toEqual({
+      columnId: SUN1, rowId: "lead", occupants: [{ memberId: "ana" }], origin: "auto",
+    });
+  });
+});

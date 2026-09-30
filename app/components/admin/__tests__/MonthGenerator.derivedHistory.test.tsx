@@ -31,6 +31,7 @@ vi.mock("../solverHistorySource", () => switches);
 
 import MonthGenerator from "../MonthGenerator";
 import { readyRules } from "./rulesHarness";
+import { AdminProviders } from "./providersHarness";
 import type { SolverConfig, SolverHistoryEntry } from "../plannerModel";
 import { historyWindow, type SolverHistoryDiagnostics } from "@/app/utils/solverHistory";
 
@@ -175,6 +176,7 @@ function renderCreate(initialMonth: string, props: Partial<ComponentProps<typeof
       initialMonth={initialMonth}
       {...props}
     />,
+    { wrapper: AdminProviders },
   );
 }
 
@@ -200,6 +202,7 @@ function renderStored(initialMonth: string) {
       onClose={vi.fn()}
       onCreated={vi.fn()}
     />,
+    { wrapper: AdminProviders },
   );
 }
 
