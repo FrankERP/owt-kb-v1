@@ -601,3 +601,12 @@ describe("November 2026 (no trailing Saturday): the request is byte-identical to
     expect(built.trailing).toBeNull();
   });
 });
+
+describe("trailingSaturday on 29- and 30-day months", () => {
+  it("is the 29th of a leap February and the 30th of a 30-day month", () => {
+    // Feb 2020: Sundays 2/9/16/23, and 23 + 6 is the 29th of a leap year.
+    expect(trailingSaturday(["2020-02-02", "2020-02-09", "2020-02-16", "2020-02-23"])).toBe("2020-02-29");
+    // Nov 2024: Sundays 3/10/17/24, and 24 + 6 is the 30th, still November.
+    expect(trailingSaturday(["2024-11-03", "2024-11-10", "2024-11-17", "2024-11-24"])).toBe("2024-11-30");
+  });
+});

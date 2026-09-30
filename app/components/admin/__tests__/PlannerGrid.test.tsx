@@ -19,6 +19,7 @@ import {
   type SolverConfig,
 } from "../plannerModel";
 import type { RankMember } from "../candidateRanking";
+import { ruleContextForTarget } from "../serviceRuleContext";
 import type { TargetPreflight } from "../serviceReadiness";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 
@@ -1385,6 +1386,61 @@ describe("PlannerGrid — E6 hard blocks on a manual pick", () => {
     expect(overrideButtons()).toHaveLength(0);
     fireEvent.click(gaby);
     expect(onCellsChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PlannerGrid — the trailing Saturday's week exclusions (T1)", () => {
+  // Sat 31 Oct 2026 is October's trailing Saturday: solver week 5 (4 Sundays +
+  // 1). The grid judges its rules over the spine `sundayDatesForColumn` hands
+  // it — in production `ruleContextForTarget`, wired exactly as below
+  // (`MonthGenerator.tsx`). It used to hand over NOVEMBER's spine (the Sunday
+  // after the 31st is 1 Nov), so `weekForColumn` answered week 1: a week-1
+  // exclusion blocked and a week-5 one did not, the opposite of the solver.
+  const OCT = ["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25"];
+  const columns = buildColumns({ sundayDates: OCT, activeSatDates: ["2026-10-31"] });
+  const sundayDatesForColumn = (column: GridColumn) =>
+    ruleContextForTarget(column.type, column.date)?.sundayDates ?? [];
+  const excludedIn = (week: number): SolverConfig => ({
+    sundayLeads: [], saturdayLeads: [], support: [], conflicts: [], presence: [],
+    restrictions: [{
+      id: "r1", person: "Gaby", excludedPatterns: [], fairness: "none", fairnessSlack: 0,
+      weekExclusions: [{ id: "w", week, pattern: "Sat.*" }], caps: [],
+    }],
+  });
+
+  it("a week-5 exclusion blocks Gaby on the 31st's Lead, and a week-1 exclusion does not", () => {
+    const week5 = render(
+      <PlannerGrid {...baseProps({ columns, sundayDates: OCT, sundayDatesForColumn, config: excludedIn(5) })} />,
+    );
+    fireEvent.click(cellFor(week5.container, "lead", "2026-10-31"));
+    const blocked = candidateLi("Gaby");
+    expect(blocked.getAttribute("aria-disabled")).toBe("true");
+    expect(within(blocked).getByText("Regla: excluido en la semana 5 (Sat.*)")).toBeTruthy();
+    week5.unmount();
+
+    const week1 = render(
+      <PlannerGrid {...baseProps({ columns, sundayDates: OCT, sundayDatesForColumn, config: excludedIn(1) })} />,
+    );
+    fireEvent.click(cellFor(week1.container, "lead", "2026-10-31"));
+    expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("the seated-rule re-check flags a week-5 exclusion on the 31st, and not a week-1 one", () => {
+    // `violationsByColumnId` — the check that runs over every seated occupant,
+    // after a fill as after a hand placement — reads the same per-column spine.
+    const seated = [{ date: "2026-10-31", rowId: "lead", memberIds: ["m2"], origin: "manual" as const }];
+    const week5 = render(
+      <PlannerGrid {...baseProps({ columns, cells: seated, sundayDates: OCT, sundayDatesForColumn, config: excludedIn(5) })} />,
+    );
+    expect(
+      within(cellFor(week5.container, "lead", "2026-10-31")).getByText(/Gaby: Regla: excluido en la semana 5 \(Sat\.\*\)/),
+    ).toBeTruthy();
+    week5.unmount();
+
+    const week1 = render(
+      <PlannerGrid {...baseProps({ columns, cells: seated, sundayDates: OCT, sundayDatesForColumn, config: excludedIn(1) })} />,
+    );
+    expect(within(cellFor(week1.container, "lead", "2026-10-31")).queryByText(/excluido en la semana/)).toBeNull();
   });
 });
 

@@ -1162,9 +1162,11 @@ describe("MonthGenerator — create path", () => {
   // March 2026 is the fixture for both: it starts on a Sunday (1, 8, 15, 22,
   // 29) and ends on a Tuesday, so EVERY Saturday (7, 14, 21, 28) has its
   // adjacent Sunday inside the month and the unaddressable set is empty at
-  // rest. February 2026 cannot serve here — it ends on Saturday the 28th,
-  // whose Sunday is in March, so it is unaddressable before anything is
-  // deselected and the signal would be indistinguishable from the bug.
+  // rest. February 2026 could not serve here before T1 — it ends on Saturday
+  // the 28th, whose Sunday is in March, so it WAS unaddressable before anything
+  // was deselected and the signal would have been indistinguishable from the
+  // bug. Since ADR-00NN (T1) the 28th is February's trailing Saturday, week 5
+  // (see the second half of the test below).
 
   it("E21: deselecting a Sunday does not make its adjacent Saturday 'fuera del alcance de Auto'", () => {
     const { container, unmount } = render(

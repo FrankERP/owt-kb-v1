@@ -512,7 +512,7 @@ describe("Saturday↔week mapping", () => {
   // D16 amended by ADR-00NN (T1): the trailing Saturday is week weeks + 1.
   // `weeks + 1` is no longer out of range in a month that has one (February
   // 2026 does: the 28th); past it, and in a month without one, it still is.
-  it("saturdayForWeek returns null (not a crash) for an out-of-range week number", () => {
+  it("saturdayForWeek resolves weeks + 1 to the trailing Saturday, and returns null (not a crash) past it", () => {
     // `mapUnfilledSeats` calls this with a solver-supplied week number —
     // `sundayDates[n-1]` is `undefined` for n=0 or n > sundayDates.length, and
     // `.slice` on `undefined` used to throw.
