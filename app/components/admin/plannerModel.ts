@@ -690,9 +690,11 @@ export function isSaturdayFloor(cap: RestrictionCap, weeks: number): boolean {
  * Why `buildSolveRequest` left a Saturday minimum out (T3/T4):
  * - `noSaturday`: the request sends no Saturday at all (PR #116's month-level rule);
  * - `unreachable`: more Saturdays than this person can take among those sent;
- * - `capacity`: the minimums that remained do not all fit the Saturday seats.
+ * - `combined`: the person already has a Saturday minimum this one cannot be merged with
+ *   (`mergeFloors`) — a limit of the seat model, never a verdict about the seats (ruling Q14);
+ * - `capacity`: the minimums that remained cannot all be given a seat.
  */
-export type OmitReason = "noSaturday" | "unreachable" | "capacity";
+export type OmitReason = "noSaturday" | "unreachable" | "combined" | "capacity";
 
 /** A cap `buildSolveRequest` left out of the request, for the admin to be told. */
 export interface OmittedCap {
@@ -996,7 +998,7 @@ function trailingVerdict(
     : { date, sent: false, reason: "noLead" };
 }
 
-/** A Saturday minimum as T3/T4 judge it: whose, which pattern, and its resolved value. */
+/** A Saturday minimum as T3/T4 judge it: whose, which pattern, its operator and resolved value. */
 interface SaturdayFloor {
   key: string;
   /** The rule's own text — what the notice and the tie-break use. */
@@ -1004,7 +1006,33 @@ interface SaturdayFloor {
   /** The canonical `member_name` — what `canTake` and the history use. */
   name: string;
   pattern: string;
+  /** `==` or `>=` (`isSaturdayFloor` never lets a `<=` through). */
+  op: RestrictionCap["op"];
   value: number;
+}
+
+/**
+ * One person's Saturday minimums as ONE seat demand, or `null` when the seat model cannot
+ * represent them together — which `saturdayFloorOmissions` reports as `combined`.
+ *
+ * Every seat the person is given must count for ALL their minimums at once, so their seats are
+ * held to the classes every minimum allows, and they get as many as the largest value. That is
+ * exact for each `>=` minimum. It is wrong for an `==` minimum below that largest value — the
+ * person would be seated more often than it allows (`Sat.* == 2` with `Sat.Lead == 1` becomes
+ * two Lead seats) — and impossible when no class is common to all (`Sat.Lead >= 1` with
+ * `Sat.BGV >= 1`). Both are `null`. Conservative: a Lead one Saturday and a BGV another would
+ * meet either pair, and the solver could find it; the seat model does not look for it.
+ */
+function mergeFloors(floors: readonly SaturdayFloor[]): { demand: number; classes: SaturdayRole[] } | null {
+  const demand = Math.max(...floors.map((f) => f.value));
+  let classes: SaturdayRole[] = ["Sat.Lead", "Sat.BGV"];
+  for (const f of floors) {
+    const own = rolesOfPattern(f.pattern).filter(isSaturdayRole);
+    classes = classes.filter((c) => own.includes(c));
+  }
+  if (classes.length === 0) return null;
+  if (floors.some((f) => f.op === "==" && f.value < demand)) return null;
+  return { demand, classes };
 }
 
 /**
@@ -1060,27 +1088,36 @@ function maxFlow(nodeCount: number, arcs: ReadonlyArray<readonly [number, number
  * iff every unit of demand flows. A flow IS a seat assignment, so a set this accepts is never
  * seat-infeasible.
  *
- * A person with more than one Saturday floor is judged conservatively: every one of their
- * seats must count for ALL their floors at once, so their seats are held to the classes every
- * floor allows and their demand is the largest value. `Sat.Lead >= 1` with `Sat.BGV >= 1`
- * therefore never fits one person — though a Lead one Saturday and a BGV another would — and
- * the later floor in keep order is left out as `capacity`. A documented limitation.
+ * A person's several floors are one demand (`mergeFloors`); a person whose floors cannot be
+ * merged does not fit.
  *
- * Outside the model (the solver stays the authority): the one-Lead-per-Saturday anchor, a
- * zero maximum that bars `Sat.Lead`, and rows grown by pins.
+ * `loneLeads[i]` is the ONE lead-pool member who can lead sent Saturday `i`, or `null` when
+ * there are none or several. The solver's `mandatory_lead` rule wants at least one Lead on
+ * every Saturday, and a person holds one seat per Saturday, so that member cannot take a BGV
+ * seat there: their node for that Saturday gets the Lead seat only. That removes only what the
+ * solver already forbids — no set it could seat is refused.
+ *
+ * Outside the model (the solver stays the authority):
+ * - `mandatory_lead` when two or more leads could lead a Saturday, but floors push them all onto BGV;
+ * - `sat_anchor`, the dedicated Saturday lead the solver wants on every Saturday that has one
+ *   available — no Lead seat is held back for them;
+ * - the upper side of an `==` minimum combined with `mandatory_lead`;
+ * - a zero maximum that bars `Sat.Lead`, and rows grown by pins.
  */
 function floorsFitSeats(
   floors: readonly SaturdayFloor[],
   sentWeeks: readonly number[],
   sundayDates: string[],
   canTake: SaturdayAccess,
+  loneLeads: ReadonlyArray<string | null>,
 ): boolean {
+  const byName = new Map<string, SaturdayFloor[]>();
+  for (const f of floors) byName.set(f.name, [...(byName.get(f.name) ?? []), f]);
   const people = new Map<string, { demand: number; classes: SaturdayRole[] }>();
-  for (const f of floors) {
-    const classes = rolesOfPattern(f.pattern).filter(isSaturdayRole);
-    const p = people.get(f.name);
-    if (!p) people.set(f.name, { demand: f.value, classes });
-    else people.set(f.name, { demand: Math.max(p.demand, f.value), classes: p.classes.filter((c) => classes.includes(c)) });
+  for (const [name, own] of byName) {
+    const merged = mergeFloors(own);
+    if (!merged) return false;
+    people.set(name, merged);
   }
 
   const source = 0;
@@ -1098,7 +1135,9 @@ function floorsFitSeats(
     demand += p.demand;
     sentWeeks.forEach((w, i) => {
       const date = saturdayForWeek(w, sundayDates);
-      const roles = date === null ? [] : p.classes.filter((role) => canTake(name, w, date, role));
+      const roles = date === null ? [] : p.classes.filter(
+        (role) => canTake(name, w, date, role) && (loneLeads[i] !== name || role === "Sat.Lead"),
+      );
       if (roles.length === 0) return;
       const weekNode = nodes++;
       arcs.push([personNode, weekNode, 1]);
@@ -1116,9 +1155,11 @@ function floorsFitSeats(
  * 2. A floor above the Saturdays its person can reach among those sent is `unreachable`.
  * 3. If what is left cannot all be seated (`floorsFitSeats`), the floors are taken in
  *    ascending order of the person's Saturdays in the request's own history
- *    (`historyForRequest`), ties by the rule's name, and each one is kept iff the kept set plus
- *    it can still all be seated; the rest are `capacity`. Under ADR-0046 that history is `[]`,
- *    so the order is by name (ruling Q2) — which is why no notice claims a history reason.
+ *    (`historyForRequest`), ties by the rule's name, then config order. A floor that cannot be
+ *    merged with the ones its person already keeps (`mergeFloors`) is `combined`, decided
+ *    before any seat is counted (ruling Q14). Otherwise it is kept iff the kept set plus it can
+ *    still all be seated, and the rest are `capacity`. Under ADR-0046 that history is `[]`, so
+ *    the order is by name (ruling Q2) — which is why no notice claims a history reason.
  */
 function saturdayFloorOmissions(input: {
   config: SolverConfig;
@@ -1126,6 +1167,8 @@ function saturdayFloorOmissions(input: {
   sundayDates: string[];
   sentWeeks: number[];
   canTake: SaturdayAccess;
+  /** The Sunday ∪ Saturday lead pools, as the request names them. */
+  leadNames: readonly string[];
   historyEntries: SolverHistoryEntry[];
   year: number;
   month: number;
@@ -1143,6 +1186,7 @@ function saturdayFloorOmissions(input: {
         person: r.person,
         name: resolvedNameOrRaw(r.person, members),
         pattern: cap.pattern,
+        op: cap.op,
         value: resolvedCapValue(cap, weeks),
       });
     });
@@ -1164,7 +1208,13 @@ function saturdayFloorOmissions(input: {
     return false;
   });
 
-  const fit = (set: readonly SaturdayFloor[]) => floorsFitSeats(set, sentWeeks, sundayDates, canTake);
+  // The one lead-pool member who can lead each sent Saturday, if exactly one can.
+  const loneLeads = sentWeeks.map((w) => {
+    const date = saturdayForWeek(w, sundayDates);
+    const able = date === null ? [] : input.leadNames.filter((n) => canTake(n, w, date, "Sat.Lead"));
+    return able.length === 1 ? able[0] : null;
+  });
+  const fit = (set: readonly SaturdayFloor[]) => floorsFitSeats(set, sentWeeks, sundayDates, canTake, loneLeads);
   if (fit(reachable)) return omit;
 
   const history = historyForRequest(input.historyEntries, input.year, input.month);
@@ -1176,7 +1226,9 @@ function saturdayFloorOmissions(input: {
   // Every floor kept is checked with the whole kept set, so the final set is always seatable.
   const kept: SaturdayFloor[] = [];
   for (const f of ordered) {
-    if (fit([...kept, f])) kept.push(f);
+    const own = kept.filter((k) => k.name === f.name);
+    if (own.length > 0 && mergeFloors([...own, f]) === null) omit.set(f.key, "combined");
+    else if (fit([...kept, f])) kept.push(f);
     else omit.set(f.key, "capacity");
   }
   return omit;
@@ -1233,7 +1285,7 @@ export function buildSolveRequest(input: {
   // they hold trivially.
   const omittedCaps: OmittedCap[] = [];
   const omit = saturdayFloorOmissions({
-    config, members, sundayDates, sentWeeks: weekendsWithSaturday, canTake, historyEntries, year, month,
+    config, members, sundayDates, sentWeeks: weekendsWithSaturday, canTake, leadNames, historyEntries, year, month,
   });
 
   // Auto-generate week-exclusion DSL rules from member unavailableDates. The
@@ -1327,21 +1379,23 @@ function capsByRule(omitted: OmittedCap[]): string {
 }
 
 /** The order the notices are shown in, whatever order the caps were left out in. */
-const OMIT_REASON_ORDER: readonly OmitReason[] = ["noSaturday", "unreachable", "capacity"];
+const OMIT_REASON_ORDER: readonly OmitReason[] = ["noSaturday", "unreachable", "combined", "capacity"];
 
 const OMIT_NOTICE: Record<OmitReason, (rules: string) => string> = {
   noSaturday: (rules) => `Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó ${rules}.`,
   // Number-neutral (ruling Q6): true whether the person reaches no Saturday or too few.
   unreachable: (rules) =>
     `No se aplicó ${rules}: los sábados que Auto llena este mes no alcanzan para cumplirlo (por disponibilidad, exclusiones o rol).`,
+  // A limit of the seat model, not of the seats (ruling Q14) — so it never says they ran out.
+  combined: (rules) => `No se aplicó ${rules}: Auto no combina dos mínimos de sábado de la misma persona.`,
   capacity: (rules) =>
     `No caben todos los mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó ${rules}.`,
 };
 
 /**
  * The notices for caps `buildSolveRequest` left out: one line per reason, in the order
- * `noSaturday`, `unreachable`, `capacity`, people grouped under each rule as the rules card
- * names it. Empty when nothing was left out.
+ * `noSaturday`, `unreachable`, `combined`, `capacity`, people grouped under each rule as the
+ * rules card names it. Empty when nothing was left out.
  */
 export function omittedCapsNotices(omitted: OmittedCap[]): string[] {
   return OMIT_REASON_ORDER.flatMap((reason) => {

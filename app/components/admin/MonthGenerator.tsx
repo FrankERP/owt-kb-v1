@@ -2220,22 +2220,36 @@ export default function MonthGenerator({
    * filter, never a spine. Exactly one consumer takes them as its Sunday list
    * — `buildColumns` — plus `mapUnfilledSeats`, which takes them as a separate
    * FOURTH argument purely to discard markers for columns that aren't on
-   * screen. All three spine consumers keep receiving `sundayDatesFull`:
-   * `buildSolveRequest`, `applySolveResponse` and `mapUnfilledSeats`' 2nd
-   * argument. (A fourth, `computeUnaddressableDates`, was removed with the
-   * «Fuera del alcance de Auto» surface — ADR-0048, T1. `ruleEnforcement` used
-   * to be named here and never belonged: it is reached only from
-   * `candidateRanking`, is not imported by this file, and takes no Sunday list
-   * at all.)
+   * screen. Every spine consumer receives `sundayDatesFull`, and each is pinned
+   * by the test named beside it — swapping it for `selectedSundays` fails that
+   * test (checked by mutation, 2026-09-30):
+   *
+   * - `buildSolveRequest` in `prepareSolve` — `MonthCalendar.test.tsx` («deselecting
+   *   a Sunday renumbers no week in the solve request»);
+   * - `applySolveResponse` — `MonthCalendar.test.tsx` («week 3's roster lands on the
+   *   month's third Sunday even with the first deselected»);
+   * - `mapUnfilledSeats`' 2nd argument — `MonthGenerator.create.test.tsx` («E21: an
+   *   unfilled seat for week 3 lands on the THIRD Sunday …»);
+   * - `emptyVoiceSeats` (the confirm's count) — `MonthGenerator.create.test.tsx`
+   *   («E21: deselecting a Sunday does not make its adjacent Saturday …»);
+   * - the `requestSaturdayWeeks` memo, `pinBoard`'s `collectPins` and
+   *   `prepareSolve`'s `collectPins` — `trailingSaturday.wiring.test.tsx` («with
+   *   25 Oct deselected, the 31st is still week 5 …»): over the calendar's spine the
+   *   trailing Saturday would be the 24th.
+   *
+   * Two are NOT pinned, and a swap stays green: `pinViolationNotices`' spine (the
+   * date a pin-violation notice names), and `PlannerGrid`'s `sundayDates` prop,
+   * which `sundayDatesForColumn` shadows for every column here. (A former
+   * consumer, `computeUnaddressableDates`, went with the «Fuera del alcance de
+   * Auto» surface — ADR-0048, T1. `ruleEnforcement` used to be named here and never
+   * belonged: it is reached only from `candidateRanking`, is not imported by this
+   * file, and takes no Sunday list at all.)
    *
    * The reason is that the week number is POSITIONAL over the full month's
    * Sunday list. Feed the selected subset to the spine and week 3 stops meaning
    * the third Sunday: the seeded week-1/week-3 exclusions land on the wrong
    * dates and produce rosters that silently violate stated rules, or the solve
    * 400s outright below three Sundays.
-   *
-   * All three are pinned in `MonthGenerator.create.test.tsx` — swapping any one
-   * of them for `selectedSundays` fails a test there.
    */
   const selectedSundays = useMemo(
     () => sundayDatesFull.filter(d => !deselectedSundays.includes(d)),

@@ -25,7 +25,8 @@
   holds only when no Saturday minimum is left out: every floor is reachable, and `floorsFitSeats`
   seats them all. T3/T4 apply in every month. Without pins, they change a request only by leaving
   out a floor the old request could not meet. The exception is a person with two Saturday floors,
-  whom the seat model judges conservatively (ADR-0048).
+  whom the seat model judges conservatively (ADR-0048). (post-implementation, ruling Q14) When
+  those floors cannot be merged, the later one is left out as `combined`, in every month.
 - Notices, in order: floors left out (grouped by reason and named as the rules card names them, with `capLabel`), then the trailing Saturday not sent, then delivery 3's notices.
 - The four gates must pass: `npx tsc --noEmit`, `npm test`, `npx eslint .` with 0 errors. No `gcf/**` change.
   (post-implementation) This plan's commits change no `gcf/**` file. The branch does carry
@@ -96,8 +97,10 @@
 **Interfaces (produces):**
 - `rolesOfPattern(pattern: string): Array<"Sun.Lead" | "Sat.Lead" | "Sun.BGV" | "Sat.BGV" | "Sun.Choir">`. It mirrors `expand_pattern` (`gcf/owt_solver_v2.py`, around :208) and `LEGACY_PATTERN_ALIASES`, and returns `[]` for an unknown pattern. `patternRolesSync.test.ts` reads the solver file and checks the alias table and the special cases (`*.*`, `Sun.*`, `Sat.*`, `*.LeadBGV`, `*.<role>`) against `rolesOfPattern`, in the style of `serviceTimeSchemaSync.test.ts`.
 - `type OmitReason = "noSaturday" | "unreachable" | "capacity"`, and `OmittedCap` gains `reason: OmitReason`.
+  (post-implementation, ruling Q14) A fourth reason, `"combined"`, was added: a floor its person's other floors cannot be merged with.
 - `buildSolveRequest(...)`'s ok result gains `trailing: { date: string; sent: boolean; reason?: "noLead" } | null`. It is `null` when the month has no trailing Saturday or it is not selected.
 - `omittedCapsNotices(omitted: OmittedCap[]): string[]` replaces `omittedCapsNotice`: one line per reason group, in the order `noSaturday`, `unreachable`, `capacity`. Keep the old wording exactly for `noSaturday`.
+  (post-implementation, ruling Q14) The shipped order is `noSaturday`, `unreachable`, `combined`, `capacity`.
 - `trailingNotice(t: NonNullable<ok["trailing"]>): string | null`.
 
 **Behaviour, in order inside `buildSolveRequest`:**
@@ -128,6 +131,9 @@
      - a person with several floors is judged conservatively: demand is the largest value, and seats are limited to the classes every floor allows.
 
      The greedy keeps a floor iff the kept set plus it can still all be seated. See ADR-0048.
+   - (post-implementation, fix round 2, ruling Q14) Two corrections to that model:
+     - the merge also refuses an `==` floor below the largest value. `Sat.* == 2` plus `Sat.Lead == 1` was seated as Lead twice, and the solver refused a month the model called a fit. A floor that cannot be merged with its person's kept floors (no common class, or that `==` rule) is omitted as `combined` before any seat is counted. Only a failed seat assignment is `capacity`;
+     - a Saturday's lone lead: when exactly one lead-pool member can lead a sent Saturday, they may take only its Lead seat there (the solver's `mandatory_lead`, one seat per person per Saturday).
    - Omitted floors are dropped from that person's DSL line exactly as today; maximums always stay.
 
 **Copy:**
@@ -135,6 +141,7 @@
 - `unreachable`: «No se aplicó «X» a A y B: no pueden cubrir ningún sábado de los que Auto llena este mes (no disponibles, excluidos o fuera de los líderes).» Group by cap, with `joinEs`.
   (post-implementation, ruling Q6) The shipped sentence is number-neutral. It is true whether the person reaches no Saturday or too few: «No se aplicó «X» a A y B: los sábados que Auto llena este mes no alcanzan para cumplirlo (por disponibilidad, exclusiones o rol).»
 - `capacity`: «No caben todos los mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó «X» a A.»
+- (post-implementation, ruling Q14) `combined`: «No se aplicó «X» a A y B: Auto no combina dos mínimos de sábado de la misma persona.» Group by cap, with `joinEs`.
 - trailing `noLead`: «El sábado <d> <mes> no se mandó al solver: ningún líder puede dirigirlo (no disponibles o excluidos). Llénalo a mano.» The date uses `dayLabel` from `pinModel.ts` (move `dayLabel` to `plannerModel.ts` if the import would create a cycle; `pinModel` imports `plannerModel`, so `plannerModel` must not import `pinModel`).
 
 - [ ] **Step 1: Failing tests.** The spec §2.4 cases, in `trailingSaturday.test.ts`, with October 2026 fixtures:

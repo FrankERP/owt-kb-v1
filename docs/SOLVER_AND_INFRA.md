@@ -291,9 +291,9 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
 - **Saturday minimums are judged per person (T3/T4).** A Saturday minimum is a cap on a
   Saturday-only pattern (`Sat.*`, `Sat.Lead`, `Sat.BGV`) with `==` or `>=` and a value of at least
   1 (`isSaturdayFloor`; relative values resolve as the solver resolves them).
-  `buildSolveRequest` drops a minimum from that person's DSL line in three cases and returns it in
-  `omittedCaps` with a reason. Auto shows one line per reason (`omittedCapsNotices`), naming each
-  rule as the rules card names it (`capLabel`):
+  `buildSolveRequest` drops a minimum from that person's DSL line in four cases and returns it in
+  `omittedCaps` with a reason. Auto shows one line per reason (`omittedCapsNotices`), in this
+  order, naming each rule as the rules card names it (`capLabel`):
   - `noSaturday`: the request sends no Saturday at all, so every minimum is dropped. The line
     reads «Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó …».
   - `unreachable`: the minimum asks for more Saturdays than the person can take among those sent.
@@ -301,6 +301,10 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
     exclusion for that week covers the minimum's roles. For `Sat.Lead`, they must also be in a
     lead pool. The line reads «No se aplicó «X» a A y B: los sábados que Auto llena este mes no
     alcanzan para cumplirlo (por disponibilidad, exclusiones o rol).»
+  - `combined`: the person already keeps a Saturday minimum this one cannot be merged with (see
+    the seat model below). This is decided before any seat is counted, so it is a limit of the
+    model, not a shortage of seats. The line reads «No se aplicó «X» a A y B: Auto no combina dos
+    mínimos de sábado de la misma persona.»
   - `capacity`: the remaining minimums cannot all get a seat. The line reads «No caben todos los
     mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó …».
 
@@ -313,14 +317,21 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   - If the minimums do not all fit, they are sorted by the person's Saturday count in the
     request's history, fewest first, ties by name. Under ADR-0046's `history: []`, that is by
     name. Each one is kept only if the kept set plus it still fits.
-  - A person with two Saturday minimums is judged conservatively: demand is the larger value,
-    and seats are limited to the classes both allow. So one person's `Sat.Lead >= 1` plus
-    `Sat.BGV >= 1` never fits, and the second is dropped.
+  - A person with two or more Saturday minimums is judged conservatively (`mergeFloors`): one
+    demand, the largest value, on seats of a class every minimum allows. It cannot be merged
+    when no class is common to all (`Sat.Lead >= 1` plus `Sat.BGV >= 1`), or when an `==`
+    minimum is below the largest value (`Sat.* == 2` plus `Sat.Lead == 1`, which means one Lead
+    and one BGV). Then the later minimum is dropped as `combined`, in every month.
+  - A Saturday's lone lead: when exactly one lead-pool member can lead a sent Saturday, they may
+    take only its Lead seat there, because the solver needs a Lead on every Saturday and seats a
+    person once per Saturday. Their own `Sat.BGV` minimum on that Saturday is therefore
+    `capacity`.
 
   Maximums always stay. The solver stays the authority for what the model leaves out: the
-  dedicated Saturday-lead anchor, zero maximums that bar `Sat.Lead`, rows grown by pins, and the
-  one-Lead-per-Saturday rule when the only possible lead has a `Sat.BGV` minimum they can reach
-  only that week.
+  dedicated Saturday-lead anchor (`sat_anchor`), zero maximums that bar `Sat.Lead`, rows grown by
+  pins, and the one-Lead-per-Saturday rule (`mandatory_lead`) beyond the lone lead: two or more
+  leads whose minimums all push them onto BGV, and the upper side of an `==` minimum combined
+  with that rule.
 
   October 2026 is why this exists: its only Saturday service was the 31st, so the admin
   deselected 3/10/17/24, the request sent no Saturday, and three saved `Sat.* == 1` minimums made
@@ -328,7 +339,8 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
 
   A request stays byte-identical to before this change when no trailing Saturday is selected and
   no minimum is dropped. ADR-0048 names the one case where a dropped minimum is one the solver
-  could have met: the two-minimum rule above.
+  may have met: `combined`, which applies in every month whenever one person's minimums cannot be
+  merged.
 - **The solver's own reason reaches the admin.** A solver `ok: false` comes back as a 422 whose
   body carries the reason; Auto now reads it and shows «El solver no encontró solución. Motivo
   del solver: …» (`solverRefusalMessage`) instead of the generic line alone. The solver's

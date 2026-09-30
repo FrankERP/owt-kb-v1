@@ -95,9 +95,22 @@ planner's half: when it sends that week, and what that does to Saturday minimums
      first, ties broken by the rule's name. Each floor is kept only if the kept set plus that
      floor still fits. The rest are omitted as `capacity`: «No caben todos los mínimos de sábado
      en los lugares de sábado de este mes, así que no se aplicó «X» a A.»
-   - A person with several Saturday floors is judged conservatively. Their demand is the largest
-     value, and their seats are limited to the classes every one of their floors allows. So
-     `Sat.Lead >= 1` plus `Sat.BGV >= 1` never fits one person, and the later floor is omitted.
+   - A person with several Saturday floors is judged conservatively (`mergeFloors`). Their
+     floors become one demand: the largest value, on seats of a class every one of their floors
+     allows. That is exact for `>=` floors. It cannot be used in two cases:
+     - no class is common to all of them (`Sat.Lead >= 1` plus `Sat.BGV >= 1`);
+     - an `==` floor is below the largest value (`Sat.* == 2` plus `Sat.Lead == 1`, which really
+       means one Lead and one BGV; merged, it would seat the person as Lead twice).
+
+     Then the later floor in keep order is omitted as `combined`, decided before any seat is
+     counted (ruling Q14): «No se aplicó «X» a A y B: Auto no combina dos mínimos de sábado de la
+     misma persona.» Only a failed seat assignment is `capacity`, so that line never claims the
+     seats ran out when they did not.
+   - A Saturday's lone lead. The solver needs at least one Lead on every Saturday
+     (`mandatory_lead`), and it seats a person once per Saturday. So when exactly one lead-pool
+     member can lead a sent Saturday, the seat model lets that member take only its Lead seat.
+     This removes only what the solver already forbids. A lone lead whose floor is `Sat.BGV` is
+     therefore `capacity`, as the solver refuses it.
    - Maximums always stay.
 8. **Q2.** The history is `[]` under ADR-0046, so today T4's order is by name alone. No notice
    gives the history as a reason.
@@ -110,7 +123,7 @@ planner's half: when it sends that week, and what that does to Saturday minimums
      the preview and the request always agree.
    - `pinRefusal`'s Saturday-week refusal stays as the backstop.
 10. **Notice order.** First the floors left out, one line per reason (`noSaturday`, then
-    `unreachable`, then `capacity`), each naming the rules as the rules card names them
+    `unreachable`, then `combined`, then `capacity`), each naming the rules as the rules card names them
     (`capLabel`, via `omittedCapsNotices`). Then the trailing Saturday not sent
     (`trailingNotice`). Then delivery 3's notices. **T6:** `{weeks-N}` still counts Sundays
     (ADR-0047 D2).
@@ -121,9 +134,10 @@ planner's half: when it sends that week, and what that does to Saturday minimums
 
 T3 and T4 run in every month, so any other month's request can change, but only by omitting
 floors. Without pins, an omitted floor is one the old request could not meet: it made the month
-infeasible. There is one exception, the conservative rule in 7. It can omit a floor the solver
-could have met, for example `Sat.Lead >= 1` and `Sat.BGV >= 1` for one person when the month sends
-two Saturdays. A hand-written November 2026 request pins the identity (`trailingSaturday.test.ts`).
+infeasible. There is one exception, the `combined` rule in 7. It omits a floor the solver may
+have met, in every month, whenever one person's Saturday floors cannot be merged: for example
+`Sat.Lead >= 1` and `Sat.BGV >= 1` when the month sends two Saturdays, or `Sat.* == 2` and
+`Sat.Lead == 1`. A hand-written November 2026 request pins the identity (`trailingSaturday.test.ts`).
 
 ## Rejected
 
@@ -149,6 +163,14 @@ two Saturdays. A hand-written November 2026 request pins the identity (`trailing
   - Pooling across the month let a floor use another Saturday's seats. With the 24th and the
     31st sent and four support members who can reach only the 31st, it passed.
   - Both cases are now tests, «Failure A» and «Failure B».
+- **Merging one person's floors by their largest value whatever their operator** (the first
+  Q10 commit). It reported a fit for sets the solver refuses. With the 24th and the 31st sent,
+  Pau (`Sat.* == 2` plus `Sat.Lead == 1`) was seated Lead twice, while her rule needs one Lead and
+  one BGV and the BGV seats were full. The request came back `[]` and the solver answered
+  `ok: false`. The merge now refuses an `==` floor below the largest value (test «I-A»).
+- **Calling an unmergeable floor `capacity`.** The seats had not run out, and the solver proved
+  November 2026 solvable with both of a person's `Sat.Lead >= 1` and `Sat.BGV >= 1`. It is
+  `combined`, with a line that names the model's limit instead (ruling Q14).
 - **A second copy of T5 for the board preview.** It could drift from the request.
   `requestSaturdayWeeks` reads the verdict from `buildSolveRequest` instead.
 - **A Sunday as the 31st's `owningSunday`.** 1 Nov belongs to the next month, which spec §2.2
@@ -168,10 +190,11 @@ two Saturdays. A hand-written November 2026 request pins the identity (`trailing
   - **Rows grown by pins.** `buildSolveRequest` never sees the pins. Rows that pins grow
     (ADR-0041), and seats that pins take, are not in the seat count. Under pins the count rules
     are soft anyway.
-  - **The solver's rule of at least one Lead per Saturday.** Suppose a Saturday's only possible
-    lead has a `Sat.BGV` floor they can reach only that week. The seat model seats them as BGV
-    and accepts. The solver needs them in the Lead seat and refuses. So the code promises
-    «never seat-infeasible», not «never solver-infeasible».
+  - **The solver's rule of at least one Lead per Saturday** (`mandatory_lead`), except for a
+    lone lead. The seat model keeps a Saturday's only possible lead in its Lead seat (decision
+    7). It does not see two or more leads who could lead a Saturday but whose floors all push
+    them onto BGV, nor the upper side of an `==` floor combined with that rule. So the code
+    promises «never seat-infeasible», not «never solver-infeasible».
 - **The preview can count a withheld 31st.** `requestSaturdayWeeks` is `undefined`, meaning no
   filter, when there are no rules yet or the request would be refused before it is sent (no
   Sunday lead, or a rule blocked by Tipo). In that state the confirm's count and the board treat

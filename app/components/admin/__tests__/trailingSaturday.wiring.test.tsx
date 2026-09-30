@@ -174,6 +174,79 @@ describe("the trailing Saturday — «Solo llenar vacíos» (Q1)", () => {
   });
 });
 
+describe("the trailing Saturday — the Sunday list is the month's, not the calendar's (E21)", () => {
+  // 25 Oct deselected: the grid shows three Sundays, but the 31st is still the trailing Saturday
+  // of the month's FULL spine (4/11/18/25), week 5. Fed `selectedSundays` (4/11/18) instead, the
+  // trailing Saturday would be the 24th, and the 31st no Saturday of any week. Three consumers
+  // read that spine and nothing else pinned them: the `requestSaturdayWeeks` memo (the confirm's
+  // count), `pinBoard`'s `collectPins` (the chip's «fijo») and `prepareSolve`'s `collectPins`
+  // (the pins Auto sends). Swapping any one of them for `selectedSundays` fails this test.
+  it("with 25 Oct deselected, the 31st is still week 5: counted, marked fijo, and pinned as week 5", async () => {
+    const { bodies, container } = (() => {
+      const stub = stubSolve(echoPins);
+      const view = render(<Gen members={[ANA, LUCIA, BETO] as never} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+      setMonthYear(view.container, 10, 2026);
+      deselectAll(view.container, "saturday");
+      fireEvent.click(view.container.querySelector(`[data-date="${OCT_31}"]`)!);
+      fireEvent.click(view.container.querySelector('[data-date="2026-10-25"]')!);
+      selectSundayLead(view.container, "Ana");
+      preview();
+      return { ...view, ...stub };
+    })();
+    expect(container.querySelector('[data-row-id="lead"][data-date="2026-10-25"]')).toBeNull();
+
+    fireEvent.click(fillEmptySwitch());
+    fireEvent.click(cellAt(container, "bgv", OCT_31).querySelector("[data-cell-action]") as HTMLElement);
+    const picker = screen.getByRole("region", { name: `Candidatos para BGV — ${OCT_31}` });
+    fireEvent.click(within(picker).getByRole("button", { name: /Beto/ }));
+
+    // Beto — in no pool, since no rule names him — is a pin on the 31st, and the chip says so.
+    const chip = cellAt(container, "bgv", OCT_31).querySelector('[data-occupant="beto"]') as HTMLElement;
+    expect(chip.getAttribute("aria-label")).toContain("fijo");
+
+    // Three Sundays (4, 11, 18) × (2 Lead + 3 BGV + 3 Coro) = 24, plus the 31st's 2 Lead + 3 BGV
+    // = 29 seats, one of them Beto's: 28 empty. Over the calendar's spine the 31st drops out: 24.
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar/ }));
+    const banner = screen.getByText(/Solo se llenarán/);
+    expect(banner.textContent).toContain("los 28 lugares de voz vacíos");
+    fireEvent.click(within(banner.closest("div") as HTMLElement).getByRole("button", { name: "Confirmar" }));
+
+    await waitFor(() => expect(bodies).toHaveLength(1));
+    expect(bodies[0].weeks).toBe(4);
+    expect(bodies[0].weekends_with_saturday).toEqual([5]);
+    expect(bodies[0].pinned).toContainEqual({ week: 5, role: "Sat.BGV", person: "Alberto Ruiz Cano" });
+  });
+});
+
+describe("the trailing Saturday — notice order", () => {
+  it("the trailing-Saturday line comes before delivery 3's dropped-pin lines", async () => {
+    // The first Auto (switch off) seats Lucía twice on the first Sunday, BGV and Coro — the
+    // picker refuses that by hand («Ya asignado en Bgv»), a solve does not. The second Auto,
+    // with «Solo llenar vacíos» on, pins her once and says so; Ana is away on the 31st, so T5
+    // withholds it both times.
+    const twice: Respond = (body, call) => {
+      if (call !== 1) return echoPins(body);
+      const schedule = emptySchedule(body);
+      schedule["1"].Sunday = { Lead: ["Ana Karen Villalobos"], BGV: ["María Lucía Estrada"], Choir: ["María Lucía Estrada"] };
+      return { ok: true, schedule, pinned_honored: 0, pin_violations: [], unfilled_seats: [] };
+    };
+    const { bodies, container } = setup(twice, [ANA_AWAY, LUCIA, BETO]);
+    runAuto();
+    await waitFor(() => expect(cellAt(container, "coro", OCT_SUNDAYS[0]).textContent).toContain("Lucía"));
+    expect(cellAt(container, "bgv", OCT_SUNDAYS[0]).textContent).toContain("Lucía");
+
+    fireEvent.click(fillEmptySwitch());
+    runAuto();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1].weekends_with_saturday).toEqual([]);
+    await waitFor(() => expect(noticeLines(container)).toHaveLength(2));
+    expect(noticeLines(container)).toEqual([
+      "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles o excluidos). Llénalo a mano.",
+      "Lucía estaba en dos lugares del domingo 4 oct; se fijó solo en BGV.",
+    ]);
+  });
+});
+
 describe("the trailing Saturday — the grid judges its rules as week 5", () => {
   // MonthGenerator hands the grid `sundayDatesForColumn = ruleContextForTarget(...)?.sundayDates`;
   // `PlannerGrid.test.tsx` copies that lambda, and this renders the real one. Over November's

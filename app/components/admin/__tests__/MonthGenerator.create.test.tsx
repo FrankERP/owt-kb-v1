@@ -1149,15 +1149,18 @@ describe("MonthGenerator — create path", () => {
 
   // ── Task 5 fix pass, Findings 1 & 2: the two UNPINNED E21 call sites ────────
   //
-  // `MonthGenerator` feeds FOUR consumers the full month's Sunday spine
+  // `MonthGenerator` feeds every spine consumer the full month's Sunday list
   // (`sundayDatesFull`), never the calendar's selection, because the solver's
-  // week number is POSITIONAL over that spine. Two of the four were already
-  // pinned above — `buildSolveRequest` (the Oct-31 `weekends_with_saturday`
-  // test) and `applySolveResponse` (the same test's "no Oct 3 draft"). The
-  // other two were not: swapping `sundayDatesFull` for `selectedSundays` at
-  // either of them left the WHOLE suite green, because `plannerModel.test.ts`
-  // pins the pure functions given correct arguments and nothing pinned that
-  // the component supplies them.
+  // week number is POSITIONAL over that spine. The two tests below pin
+  // `mapUnfilledSeats`' spine argument and `emptyVoiceSeats` (the confirm's
+  // count). `buildSolveRequest` and `applySolveResponse` are pinned in
+  // `MonthCalendar.test.tsx`; the `requestSaturdayWeeks` memo and both
+  // `collectPins` calls in `trailingSaturday.wiring.test.tsx`. The full list,
+  // with the two consumers nothing pins, is on `selectedSundays` in
+  // `MonthGenerator.tsx`. Each was checked by swapping it for `selectedSundays`
+  // (2026-09-30): before these tests, a swap at either of the two below left the
+  // WHOLE suite green, because `plannerModel.test.ts` pins the pure functions
+  // given correct arguments and nothing pinned that the component supplies them.
   //
   // March 2026 is the fixture for both: it starts on a Sunday (1, 8, 15, 22,
   // 29) and ends on a Tuesday, so EVERY Saturday (7, 14, 21, 28) has its
