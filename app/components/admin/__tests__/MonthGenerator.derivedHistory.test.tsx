@@ -389,6 +389,9 @@ describe("no history sent (SOLVER_SENDS_HISTORY = false, what ships)", () => {
         unfilled_seats: [],
         sun_bgv_fairness_relaxed: true,
         objective_skipped: false,
+        // The real solver always answers it — 0 when no history was sent. Without
+        // the suppression the grid would print «Historial usado: 0».
+        history_runs_used: 0,
       });
     const { historyCalls, solveBodies } = stubFetch({ history: () => respond(200, november), solve: relaxed });
 
