@@ -1029,8 +1029,15 @@ export function applySolveResponse(input: {
    */
   activeSatDates: string[];
   members: RankMember[];
+  /**
+   * «Solo llenar vacíos» (spec 2026-09-29 §3.2): the cells that sent at least one pin, by
+   * `${columnId}|${rowId}` (`CollectedPins.pinnedCellKeys`). Such a cell keeps its `origin`,
+   * `overrides` and `overrideReasons`, pruned to the occupants that came back. Absent ⇒
+   * every solvable cell is rewritten as `origin: "auto"`, exactly as before pins existed.
+   */
+  pinnedCellKeys?: ReadonlySet<string>;
 }): AppliedSolveResult {
-  const { response, previousCells, columns, rows, sundayDates, members } = input;
+  const { response, previousCells, columns, rows, sundayDates, members, pinnedCellKeys } = input;
   assertGridIdentity(columns, previousCells);
 
   const nameToId = (name: string): string | null => {
@@ -1071,12 +1078,29 @@ export function applySolveResponse(input: {
         if (id) ids.push(id);
         else unresolved.add(name);
       }
-      byKey.set(`${column.columnId}|${row.id}`, {
+      const key = `${column.columnId}|${row.id}`;
+      const next: GridCell = {
         columnId: column.columnId,
         rowId: row.id,
         occupants: ids.map((memberId) => ({ memberId })),
         origin: "auto",
-      });
+      };
+      const prev = byKey.get(key);
+      if (prev && pinnedCellKeys?.has(key)) {
+        next.origin = prev.origin;
+        const back = new Set(ids);
+        const overrides = (prev.overrides ?? []).filter((id) => back.has(id));
+        if (overrides.length > 0) {
+          next.overrides = overrides;
+          const reasons: Record<string, string> = {};
+          for (const id of overrides) {
+            const reason = prev.overrideReasons?.[id];
+            if (reason !== undefined) reasons[id] = reason;
+          }
+          if (Object.keys(reasons).length > 0) next.overrideReasons = reasons;
+        }
+      }
+      byKey.set(key, next);
     }
   }
 
