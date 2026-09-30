@@ -90,6 +90,7 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -141,6 +142,7 @@ import {
 import CueDialog from "../ui/CueDialog";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
+import Switch from "@/app/components/ui/Switch";
 // T4 of the drag-and-drop plan. `moveOccupant` imports `withUpdatedCell` back
 // out of this file, so these two modules are a cycle — a deliberate one: T2's
 // whole point is that the move composes THIS file's single write helper twice
@@ -289,6 +291,11 @@ export interface PlannerGridProps {
   participation?: ReactNode;
   /** Named on the full-screen bar, where the page's own month header is gone. */
   monthLabel?: string;
+  /**
+   * «Solo llenar vacíos» (create mode, spec 2026-09-29 §3). Omitted ⇒ no switch. `MonthGenerator`
+   * owns the state (E2: per run, never persisted); this renders it and words the confirm.
+   */
+  fillEmpty?: { enabled: boolean; onChange: (next: boolean) => void; emptyVoiceSeats: number };
 }
 
 /**
@@ -586,6 +593,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     sundayDatesForColumn,
     participation,
     monthLabel,
+    fillEmpty,
   } = props;
 
   const [openCell, setOpenCell] = useState<{ rowId: string; columnId: string } | null>(null);
@@ -599,6 +607,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // close so reopening (even the same cell) recomputes the order fresh.
   const [openOrder, setOpenOrder] = useState<string[] | null>(null);
   const [confirmingAuto, setConfirmingAuto] = useState(false);
+  const fillEmptyLabelId = useId();
   const [removeError, setRemoveError] = useState<{ rowId: string; message: string } | null>(null);
   const [fullScreen, setFullScreen] = useState(false);
   // ── Drag state (T4) ────────────────────────────────────────────────────────
@@ -2030,6 +2039,20 @@ export default function PlannerGrid(props: PlannerGridProps) {
           >
             {autoState.pending ? "Calculando..." : "🤖 Auto-asignar con Solver"}
           </button>
+        )}
+        {mode === "create" && fillEmpty && (
+          <span className="inline-flex items-center gap-2">
+            <Switch
+              size="sm"
+              checked={fillEmpty.enabled}
+              onChange={fillEmpty.onChange}
+              disabled={autoState.pending}
+              aria-labelledby={fillEmptyLabelId}
+            />
+            <span id={fillEmptyLabelId} className="font-label text-xs uppercase tracking-widest text-ink-muted">
+              Solo llenar vacíos
+            </span>
+          </span>
         )}
         {/*
           "Sometimes I need to take a screenshot of the whole month." Neither the

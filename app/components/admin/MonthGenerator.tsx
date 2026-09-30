@@ -27,6 +27,16 @@ import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
 import { fillColumn } from "./localFill";
 import { fillInstruments, isInstrumentRowId } from "./instrumentFill";
 import { fillSpecialGroup, orderGroup } from "./groupFill";
+import {
+  PIN_HANDSHAKE_REFUSAL,
+  collectPins,
+  droppedPinNotices,
+  emptyVoiceSeats,
+  pinHandshakeHolds,
+  pinRefusal,
+  type CollectedPins,
+} from "./pinModel";
+import { pinViolationNotices } from "./pinViolations";
 import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
@@ -1932,6 +1942,8 @@ export default function MonthGenerator({
   const [autoError, setAutoError]     = useState<string | null>(null);
   /** Notes about the last Auto run, in order (`AutoState.notices`); shown, never silent. */
   const [autoNotices, setAutoNotices] = useState<string[]>([]);
+  /** E2 — «Solo llenar vacíos»: off by default, per run, never persisted. */
+  const [fillEmptyOnly, setFillEmptyOnly] = useState(false);
 
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
@@ -3288,11 +3300,14 @@ export default function MonthGenerator({
    *   path only. Absent ⇒ this is a failure exit, and the previous run's
    *   special entries are dropped (by date) before the new ones are appended, so
    *   pressing Auto twice cannot double-count the same empty seat.
+   * @param fillEmpty «Solo llenar vacíos»: instruments are completed on the weekend columns in
+   *   date order and nothing is vacated — `fillInstruments`' `fillColumns` path, no second flag.
    */
   function applySpecialFill(
     config: SolverConfig,
     baseCells: GridCell[],
     solverUnfilled?: { columnId: string; rowId: string }[],
+    fillEmpty = false,
   ) {
     const specialColumnIds = new Set(
       columns.filter(c => c.type === "special_role").map(c => c.columnId),
@@ -3319,7 +3334,18 @@ export default function MonthGenerator({
     // Instrument seats (spec 2026-09-09 §6.3): after the specials, before the
     // three setters, on the accumulated cells — so it runs on EVERY exit exactly
     // as the specials do, and there is still one owner of the setters.
-    const instr = fillInstruments({ columns, rows, cells: next, members, savedWindow, config });
+    const weekendInDateOrder = columns
+      .filter(c => c.type === "sunday_role" || c.type === "saturday_role")
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const instr = fillInstruments({
+      columns,
+      ...(fillEmpty ? { fillColumns: weekendInDateOrder } : {}),
+      rows,
+      cells: next,
+      members,
+      savedWindow,
+      config,
+    });
     next = instr.cells;
     filled.push(...instr.unfilled);
 
@@ -3341,6 +3367,10 @@ export default function MonthGenerator({
     request: SolveRequest;
     /** Shown before the fetch; `runSolve` appends, never replaces (spec §2.3). */
     notices: string[];
+    /** The pins sent, or `null` when the switch is off or the board had none (no `pinned` key). */
+    pinned: CollectedPins | null;
+    /** The switch as it stood in THIS render — the same one `cells` came from. */
+    fillEmpty: boolean;
   }
 
   /**
@@ -3354,6 +3384,7 @@ export default function MonthGenerator({
    * nothing to wait for), the derived path before its history read. Keep that asymmetry.
    */
   function prepareSolve(config: SolverConfig, historyEntries: SolverHistoryEntry[]): PreparedSolve | null {
+    const fillEmpty = fillEmptyOnly;
     setAutoError(null);
     setAutoNotices([]);
     const built = buildSolveRequest({
@@ -3370,14 +3401,40 @@ export default function MonthGenerator({
       // the one E5 names outright: "a month with no Sunday leads must still
       // fill its specials". The specials never needed the solver.
       setAutoError(built.reason);
-      applySpecialFill(config, cells);
+      applySpecialFill(config, cells, undefined, fillEmpty);
       return null;
     }
     const notices: string[] = [];
     const floors = omittedCapsNotice(built.omittedCaps);
     if (floors) notices.push(floors);
+    let pinned: CollectedPins | null = null;
+    if (fillEmpty) {
+      const collected = collectPins({ cells, columns, rows, members, sundayDates: sundayDatesFull });
+      const refusal = pinRefusal({
+        collected,
+        columns,
+        rows,
+        members,
+        weekendsWithSaturday: built.request.weekends_with_saturday,
+        poolNames: [...built.request.sunday_leads, ...built.request.saturday_leads, ...built.request.support],
+      });
+      if (refusal) {
+        // Refused before the fetch, in Spanish, naming the cell (spec §3.2).
+        setAutoError(refusal);
+        applySpecialFill(config, cells, undefined, fillEmpty);
+        return null;
+      }
+      notices.push(...droppedPinNotices({ dropped: collected.dropped, columns, rows, members }));
+      // Zero pins OMITS `pinned`: the request is byte-identical to the switch off (MCP P4).
+      if (collected.pins.length > 0) pinned = collected;
+    }
     setAutoNotices(notices);
-    return { request: built.request, notices };
+    return {
+      request: pinned ? { ...built.request, pinned: pinned.pins } : built.request,
+      notices,
+      pinned,
+      fillEmpty,
+    };
   }
 
   /**
@@ -3386,10 +3443,10 @@ export default function MonthGenerator({
    * the caller owns `autoPending` and its `finally`. A short-staffed month returning `ok:false`
    * is the solver's NORMAL failure (D15), not an edge case.
    *
-   * @param historyMonths the derived path's window label (R14). Absent ⇒ the per-browser path,
-   *   whose diagnostics carry `history_runs_used` instead.
+   * @param historyMonths the months the derived path's history covers (R14), labelled only on
+   *   success. Absent ⇒ the per-browser path, whose diagnostics carry `history_runs_used` instead.
    */
-  async function runSolve(config: SolverConfig, prepared: PreparedSolve, historyMonths?: string) {
+  async function runSolve(config: SolverConfig, prepared: PreparedSolve, historyMonths?: SolverHistoryMonth[]) {
     try {
       const res = await fetch("/api/admin/solve", {
         method: "POST",
@@ -3407,7 +3464,15 @@ export default function MonthGenerator({
         // EXIT 2 — the solver answered, and said no. A short-staffed month is
         // the solver's NORMAL failure (D15); the specials still fill.
         setAutoError(solverRefusalMessage(response?.error));
-        applySpecialFill(config, cells);
+        applySpecialFill(config, cells, undefined, prepared.fillEmpty);
+        return;
+      }
+      if (prepared.pinned && !pinHandshakeHolds(response, prepared.pinned.pins)) {
+        // E8: nothing of the solver's result is applied. Set directly — never through
+        // `solverRefusalMessage`; the two are exclusive per run. Specials and instruments
+        // still complete, as on every exit (spec §0).
+        setAutoError(PIN_HANDSHAKE_REFUSAL);
+        applySpecialFill(config, cells, undefined, prepared.fillEmpty);
         return;
       }
 
@@ -3419,6 +3484,7 @@ export default function MonthGenerator({
         sundayDates: sundayDatesFull,
         activeSatDates,
         members,
+        pinnedCellKeys: prepared.pinned?.pinnedCellKeys,
       });
       setUnresolvedNames(applied.unresolvedNames);
       setDiagnostics(historyMonths === undefined
@@ -3437,9 +3503,22 @@ export default function MonthGenerator({
             fairness_relaxed: response.fairness_relaxed,
             sun_lead_fairness_relaxed: response.sun_lead_fairness_relaxed,
             sun_bgv_fairness_relaxed: response.sun_bgv_fairness_relaxed,
-            history_months: historyMonths,
+            history_months: historyMonthsLabel(historyMonths),
             objective_skipped: response.objective_skipped,
           });
+      if (prepared.pinned) {
+        setAutoNotices([
+          ...prepared.notices,
+          ...pinViolationNotices({
+            violations: response.pin_violations ?? [],
+            ceilingProven: response.violation_ceiling_proven,
+            config,
+            members,
+            pins: prepared.pinned.pins,
+            sundayDates: sundayDatesFull,
+          }),
+        ]);
+      }
       // EXIT 3 — success. `applied.cells`, never the pre-solve `cells`: the
       // latter would throw away the weekend roster this call just produced.
       // `applySpecialFill` owns all three of `setCells`/`setUnfilled`/`setDrafts`
@@ -3453,6 +3532,7 @@ export default function MonthGenerator({
         config,
         applied.cells,
         mapUnfilledSeats(response.unfilled_seats ?? [], sundayDatesFull, activeSatDates, selectedSundays),
+        prepared.fillEmpty,
       );
       // Fairness history is NOT persisted here — a solve merely proposes a
       // schedule. Recording it now would count services that may never be
@@ -3464,7 +3544,7 @@ export default function MonthGenerator({
       // and E5 says the specials fill even when the solve fails; exits 1 and 2
       // both satisfy a loosely-written test and neither reaches this line.
       setAutoError("Error de red al llamar al solver.");
-      applySpecialFill(config, cells);
+      applySpecialFill(config, cells, undefined, prepared.fillEmpty);
     }
   }
 
@@ -3583,12 +3663,12 @@ export default function MonthGenerator({
       // Pre-flight refusal (spec, Failure): a history that could not be read is
       // never solved as an empty one. The specials never needed it (E5).
       setAutoError(DERIVED_HISTORY_AUTO_REFUSAL);
-      applySpecialFill(config, cells);
+      applySpecialFill(config, cells, undefined, fillEmptyOnly);
       return;
     }
     const prepared = prepareSolve(config, history.data.entries);
     if (!prepared) return;
-    await runSolve(config, prepared, historyMonthsLabel(history.data.months));
+    await runSolve(config, prepared, history.data.months);
   }
   const solveWithDerivedHistoryRef = useRef(solveWithDerivedHistory);
   // Commit-time, so the ref is current before any later event or resolved
@@ -4353,6 +4433,11 @@ export default function MonthGenerator({
             />
           }
           monthLabel={`${MONTHS[month - 1]} ${year}`}
+          fillEmpty={storedMode ? undefined : {
+            enabled: fillEmptyOnly,
+            onChange: (next) => { if (!autoPending) setFillEmptyOnly(next); },
+            emptyVoiceSeats: emptyVoiceSeats({ cells, columns, rows, sundayDates: sundayDatesFull }),
+          }}
         />
       ) : !storedMode ? (
         // D17/D10: this used to be `max-h-[50vh] overflow-y-auto` — a keyhole
