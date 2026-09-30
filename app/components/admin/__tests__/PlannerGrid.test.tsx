@@ -1751,6 +1751,15 @@ describe("«Solo llenar vacíos» — the confirm copy", () => {
     expect(screen.queryByText(/Esto reemplazará toda asignación de voz/)).toBeNull();
   });
 
+  it("says «Solo se llenará 1 lugar de voz vacío» at one seat — singular verb, no article (R11)", () => {
+    render(<PlannerGrid {...baseProps({ fillEmpty: { enabled: true, onChange: vi.fn(), emptyVoiceSeats: 1 } })} />);
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar/ }));
+    expect(screen.getByText(
+      /^Solo se llenará 1 lugar de voz vacío \(Lead, BGV, Coro\); lo que ya está puesto se respeta y se envía al solver como fijo\. Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca\./,
+    )).toBeTruthy();
+    expect(screen.queryByText(/llenarán|los 1/)).toBeNull();
+  });
+
   it("disables the switch while Auto is pending", () => {
     render(<PlannerGrid {...baseProps({
       autoState: { pending: true, error: null, disabledReason: null },

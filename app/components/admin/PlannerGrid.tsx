@@ -2150,7 +2150,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
         <div className="space-y-2 rounded-lg border border-warning-fg/30 bg-warning-fg/10 px-3 py-2">
           <p className="font-body text-xs text-warning-soft">
             {fillEmpty?.enabled
-              ? `Solo se llenarán los ${fillEmpty.emptyVoiceSeats} lugar${fillEmpty.emptyVoiceSeats !== 1 ? "es" : ""} de voz vacío${fillEmpty.emptyVoiceSeats !== 1 ? "s" : ""} (Lead, BGV, Coro); lo que ya está puesto se respeta y se envía al solver como fijo. Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca.`
+              ? `${fillEmpty.emptyVoiceSeats === 1 ? "Solo se llenará 1 lugar de voz vacío" : `Solo se llenarán los ${fillEmpty.emptyVoiceSeats} lugares de voz vacíos`} (Lead, BGV, Coro); lo que ya está puesto se respeta y se envía al solver como fijo. Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca.`
               : "Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes. Las asignaciones manuales de instrumentos y FOH no se tocan."}
             {unaddressableDates.length > 0 &&
               ` ${unaddressableDates.length} sábado(s) fuera del alcance de Auto no se tocarán.`}
