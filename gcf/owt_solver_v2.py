@@ -226,15 +226,32 @@ def expand_pattern(pattern: str) -> Set[str]:
 
 
 def normalize_weekend_indexes(weeks: int, weekends_w_sat: Sequence[int]) -> List[int]:
+    """
+    1-based weeks with a Saturday service. `weeks + 1` is legal and means the TRAILING
+    Saturday: the month's last day, whose Sunday is in the next month. It is a week with
+    a Saturday service and no Sunday one. An older solver refuses that index here, which
+    is what makes a new client talking to an old solver fail loudly, never silently.
+    """
     if not weekends_w_sat:
         return []
     unique = sorted(set(weekends_w_sat))
-    invalid = [w for w in unique if w < 1 or w > weeks]
+    invalid = [w for w in unique if w < 1 or w > weeks + 1]
     if invalid:
         raise ValueError(
-            f"weekends_w_sat must use 1-based indexes 1..{weeks}. Received {invalid}."
+            f"weekends_w_sat must use 1-based indexes 1..{weeks + 1}: {weeks} Sundays, "
+            f"and {weeks + 1} = the Saturday after the last one. Received {invalid}."
         )
     return unique
+
+
+def last_week(weeks: int, sat_weeks: Sequence[int]) -> int:
+    """
+    The month's last solver week: `weeks` (one per Sunday), or `weeks + 1` when the
+    request names the trailing Saturday. Every per-week loop runs to this, so a request
+    WITHOUT a trailing Saturday iterates exactly the weeks it always did — the
+    inertness fingerprints depend on that.
+    """
+    return weeks + 1 if (weeks + 1) in set(sat_weeks) else weeks
 
 
 def resolve_dsl_templates(config: ScheduleConfig) -> ScheduleConfig:
@@ -346,6 +363,7 @@ def parse_pins(raw, weeks: int, weekends_w_sat: Sequence[int]) -> List[Pin]:
         raise ValueError(
             f"pinned has {len(raw)} entries; at most {PINNED_CAP} are accepted.")
     sat_weeks = set(normalize_weekend_indexes(weeks, weekends_w_sat))
+    last = last_week(weeks, sat_weeks)
     pins: List[Pin] = []
     seen: Set[Pin] = set()
     seat_in_service: Dict[Tuple[str, int, str], str] = {}
@@ -360,9 +378,15 @@ def parse_pins(raw, weeks: int, weekends_w_sat: Sequence[int]) -> List[Pin]:
                 f"pinned[{i}] names an unknown role {role!r}; roles are {ROLE_ORDER}.")
         if not isinstance(person, str) or not person.strip():
             raise ValueError(f"pinned[{i}].person must be a non-empty name, got {person!r}.")
-        if not 1 <= week <= weeks:
+        if not 1 <= week <= last:
             raise ValueError(
-                f"pinned[{i}] references week {week}, but the month has {weeks} weeks.")
+                f"pinned[{i}] references week {week}, but the month has {weeks} Sundays"
+                + (f" and week {last} is the Saturday after the last one." if last > weeks
+                   else "."))
+        if role not in SATURDAY_ROLES and week > weeks:
+            raise ValueError(
+                f"pinned[{i}] pins {role} in week {week}, which has no Sunday service "
+                f"(the Saturday after the last Sunday).")
         if role in SATURDAY_ROLES and week not in sat_weeks:
             raise ValueError(
                 f"pinned[{i}] pins {role} in week {week}, which has no Saturday service.")
@@ -767,6 +791,14 @@ def build_slots(config: ScheduleConfig, pins: Sequence[Pin] = ()) -> List[Slot]:
                 slots.append(Slot(week, SATURDAY_SERVICE, "Sat.Lead", i))
             for i in range(1, seats("Sat.BGV", week, 3) + 1):
                 slots.append(Slot(week, SATURDAY_SERVICE, "Sat.BGV", i))
+    trailing = config.weeks + 1
+    if trailing in sat_weeks:
+        # The trailing Saturday: Saturday seats only, appended last so every other
+        # slot keeps its position in x (the seeded tie-break reads insertion order).
+        for i in range(1, seats("Sat.Lead", trailing, 2) + 1):
+            slots.append(Slot(trailing, SATURDAY_SERVICE, "Sat.Lead", i))
+        for i in range(1, seats("Sat.BGV", trailing, 3) + 1):
+            slots.append(Slot(trailing, SATURDAY_SERVICE, "Sat.BGV", i))
     return slots
 
 
@@ -930,6 +962,10 @@ def create_model_and_solve(
     objective_skipped = not optimize or empty_objective_only
     dedicated_sat_leads = set(config.saturday_leads_pool)
     sat_weeks = set(normalize_weekend_indexes(config.weeks, config.weekends_w_sat))
+    # Every per-week loop below runs to this: `config.weeks`, or `config.weeks + 1` when
+    # the request names the trailing Saturday. Where a loop looks at services, that week
+    # shows only its Saturday — it has no Sunday slot.
+    max_week = last_week(config.weeks, sat_weeks)
 
     # Decision variables
     x: Dict[Tuple[str, str], cp_model.BoolVar] = {}
@@ -984,7 +1020,7 @@ def create_model_and_solve(
         return v
 
     # At least one Lead per service — never zero leads.
-    for week in range(1, config.weeks + 1):
+    for week in range(1, max_week + 1):
         for _service, lead_role in (("Sunday", "Sun.Lead"), ("Saturday", "Sat.Lead")):
             lead_slots = [s for s in slots if s.week == week and s.role_type == lead_role]
             if lead_slots:
@@ -1021,10 +1057,13 @@ def create_model_and_solve(
 
     # Week exclusion hard constraints
     for rule in dsl_week_exclusion_rules:
-        if rule.week > config.weeks:
+        if rule.week > max_week:
             raise ValueError(
                 f"DSL week exclusion references week {rule.week}, "
-                f"but month has {config.weeks} weeks: '{rule.source}'"
+                f"but the month has {config.weeks} Sundays"
+                + (f" and week {max_week} is the Saturday after the last one"
+                   if max_week > config.weeks else "")
+                + f": '{rule.source}'"
             )
         for slot in slots:
             if slot.week == rule.week and slot.role_type in rule.role_types:
@@ -1065,7 +1104,7 @@ def create_model_and_solve(
 
     # Pair exclusion: A and B not in same week/service for matching roles
     for rule in dsl_pair_rules:
-        for week in range(1, config.weeks + 1):
+        for week in range(1, max_week + 1):
             by_service: Dict[str, List[Slot]] = defaultdict(list)
             for slot in slots:
                 if slot.week == week and slot.role_type in rule.role_types:
@@ -1095,7 +1134,7 @@ def create_model_and_solve(
         for r in dsl_week_exclusion_rules for rt in r.role_types
     }
     for rule in dsl_weekly_presence_rules:
-        for week in range(1, config.weeks + 1):
+        for week in range(1, max_week + 1):
             keys = [
                 (p, s.key)
                 for p in rule.people
@@ -1119,7 +1158,7 @@ def create_model_and_solve(
 
     # Consecutive hard constraint (NEW): person not in same role pattern in consecutive weeks
     for rule in dsl_consecutive_rules:
-        for week in range(1, config.weeks):
+        for week in range(1, max_week):
             k1 = [(rule.person, s.key) for s in slots
                   if s.week == week and s.role_type in rule.role_types and (rule.person, s.key) in x]
             k2 = [(rule.person, s.key) for s in slots
@@ -1137,7 +1176,7 @@ def create_model_and_solve(
 
     # One slot per service per week per person
     for person in all_people:
-        for week in range(1, config.weeks + 1):
+        for week in range(1, max_week + 1):
             sun = [x[(person, s.key)] for s in slots
                    if s.week == week and s.service == SUNDAY_SERVICE and (person, s.key) in x]
             if sun:
@@ -1336,7 +1375,13 @@ def create_model_and_solve(
             for person in all_people:
                 for role_type in ROLE_ORDER:
                     assigned: Dict[int, cp_model.BoolVar] = {}
-                    for week in range(1, config.weeks + 1):
+                    for week in range(1, max_week + 1):
+                        # The trailing Saturday has no Sunday: no variable for a Sunday role
+                        # there, so no `rep` pairs it with the last Sunday either. Only that
+                        # week — a Saturday-less week keeps its (empty) Saturday-role
+                        # variables, which today's models carry (trailing-Saturday spec §5).
+                        if week > config.weeks and role_type in SERVICE_ROLES[SUNDAY_SERVICE]:
+                            continue
                         wslots = [s for s in slots if s.week == week and s.role_type == role_type]
                         av = model.NewBoolVar(f"asgn[{person},{role_type},W{week}]")
                         wterms = [x[(person, s.key)] for s in wslots if (person, s.key) in x]
@@ -1345,7 +1390,7 @@ def create_model_and_solve(
                         else:
                             model.Add(av == 0)
                         assigned[week] = av
-                    for week in range(1, config.weeks):
+                    for week in range(1, max_week):
                         if week not in assigned or week + 1 not in assigned:
                             continue
                         rv = model.NewBoolVar(f"rep[{person},{role_type},W{week}]")
@@ -1362,6 +1407,8 @@ def create_model_and_solve(
         if sun_lead_eligible:
             pw = {p: rng.randint(0, max(1, config.random_tie_break_weight_max)) for p in sun_lead_eligible}
             sun_lead_rotation = [pw[p] * role_vars[(p, "Sun.Lead")] for p in sun_lead_eligible]
+            # Sundays only, so `config.weeks` and not max_week: the trailing Saturday has no
+            # Sun.Lead seat, and a week without one draws nothing from rng.
             for week in range(1, config.weeks + 1):
                 ws = [s for s in slots if s.week == week and s.role_type == "Sun.Lead"]
                 if not ws:
@@ -1510,7 +1557,9 @@ def diagnose_infeasibility(
         for r in week_exclusions for rt in r.role_types
     }
     problems: List[str] = []
-    for week in range(1, config.weeks + 1):
+    max_week = last_week(config.weeks,
+                         normalize_weekend_indexes(config.weeks, config.weekends_w_sat))
+    for week in range(1, max_week + 1):
         for service, lead_role in (("Sunday", "Sun.Lead"), ("Saturday", "Sat.Lead")):
             lead_slots = [s for s in slots if s.week == week and s.role_type == lead_role]
             if not lead_slots:
@@ -1534,6 +1583,13 @@ def diagnose_infeasibility(
             "  Leads are available, so a hard restriction (a conflict, pairing, "
             "weekly-presence, or count rule) is over-constraining the model. "
             "Review the rules involved.")
+    if max_week > config.weeks:
+        # The anchor, a cap, a pair or a consecutive rule can sink a month that solves
+        # without the trailing Saturday, and the planner's pre-flight checks only who can
+        # lead it — so whatever the cause, name the way out (trailing-Saturday spec §6).
+        lines.append(
+            f" The Saturday after the last Sunday (week {config.weeks + 1}) is part of this "
+            "request; if it cannot be staffed, deselect it and fill it by hand.")
     return "\n".join(lines)
 
 
@@ -1707,7 +1763,8 @@ def build_schedule_view(result: SolveResult, weeks: int, sat_weeks: Sequence[int
         for w in range(1, weeks + 1)
     }
     for w in sat_weeks:
-        view[w][SATURDAY_SERVICE] = {"Lead": [], "BGV": []}
+        # setdefault: the trailing Saturday (weeks + 1) has no Sunday entry to extend.
+        view.setdefault(w, {})[SATURDAY_SERVICE] = {"Lead": [], "BGV": []}
 
     for person, pslots in result.assignments.items():
         for slot in pslots:
@@ -1861,11 +1918,12 @@ def run_interactive_mode() -> None:
 
     print(f"Solved (fairness limit used: {result.fairness_limit_used}, "
           f"history runs: {result.history_runs_used})\n")
-    for week in range(1, config.weeks + 1):
+    for week in range(1, last_week(config.weeks, sat_weeks) + 1):
         print(f"Week {week}:")
         sv = view[week]
-        sun = sv[SUNDAY_SERVICE]
-        print(f"  Sunday  — Lead: {sun['Lead']}, BGV: {sun['BGV']}, Choir: {sun['Choir']}")
+        if SUNDAY_SERVICE in sv:
+            sun = sv[SUNDAY_SERVICE]
+            print(f"  Sunday  — Lead: {sun['Lead']}, BGV: {sun['BGV']}, Choir: {sun['Choir']}")
         if SATURDAY_SERVICE in sv:
             sat = sv[SATURDAY_SERVICE]
             print(f"  Saturday — Lead: {sat['Lead']}, BGV: {sat['BGV']}")
