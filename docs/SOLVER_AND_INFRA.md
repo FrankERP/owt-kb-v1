@@ -34,6 +34,13 @@ objective_skipped, history_runs_used,
 total_counts, role_counts, unfilled_seats[], pinned_honored, pin_violations[],
 violation_ceiling_proven? }`. On error: `{ ok: false, error }`.
 
+- **`transport_error`** — never set by the solver. `POST /api/admin/solve` adds
+  `transport_error: true` to every `ok: false` it makes itself, when it could not get the solver's
+  answer: the service's HTTP status, the local timeout, a process that failed to start, no
+  output, or output that is not JSON. The solver's own answers, refusals included, pass through
+  without it. Auto reads it to decide whether a refusal may be retried without the trailing
+  Saturday (ruling Q19, «Before the request leaves the planner»); it never matches error text.
+
 - **`pinned_honored`** — how many pins the returned schedule actually holds, derived from the
   solved assignment and never echoed. Emitted on **every** response, `0` without pins: its
   presence is how the client (and the deploy check below) tells this solver from one that
@@ -63,6 +70,8 @@ violation_ceiling_proven? }`. On error: `{ ok: false, error }`.
   does not; a Sunday-role pin in it («which has no Sunday service»). An **infeasible** request that
   does name it (a `RuntimeError` from `diagnose_infeasibility`, also `ok: false` → 422) carries one
   extra diagnostic line suggesting it be deselected; the `ValueError` refusals above do not.
+  Auto now acts on any such refusal itself: it solves again without the week (ADR-0048,
+  decision 11).
   **A request that does not name it
   builds the model it built before, byte for byte** — frozen by `gcf/test_inertness.py`
   (`docs/CI.md`). **The planner sends `weeks + 1`** when the trailing Saturday is selected and some
@@ -256,6 +265,10 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
 - **Local dev:** if `OWT_SOLVER_URL` is unset, spawns `gcf/owt_solver_v2.py --json-mode`
   (python from `OWT_SOLVER_PYTHON`, default a local miniforge `owt-roles` env), SIGKILL after
   120s.
+- Every `ok: false` from a solve is answered with a 422 (the auth and body checks answer 403 and
+  400 before any solve). The ones the route makes when it could not get the solver's answer carry
+  `transport_error: true` (see Input / output); the solver's own never do. Guard:
+  `app/api/__tests__/solveRoute.test.ts`.
 
 **Before the request leaves the planner** (`buildSolveRequest`, `app/components/admin/plannerModel.ts`):
 - **The trailing Saturday is Auto's (T1–T5,
@@ -281,7 +294,25 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   - If no lead can, `weeks + 1` is left out and the Sundays are still solved. Auto says «El
     sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos
     o sin sábados libres en su regla). Llénalo a mano.» (`trailingNotice`). The check is
-    advisory; the solver stays the authority.
+    advisory; the solver stays the authority. Q17 is a cheap pre-filter: it misses some
+    refusals (the limits listed under the seat model below), and the retry catches them.
+  - **The retry without it (ruling Q19).** When the solver itself refuses a request that sent
+    `weeks + 1` (a 422 without `transport_error`), Auto (`runSolve`) rebuilds the request with
+    `buildSolveRequest({ withholdTrailing: { detail } })` and solves once more. That goes
+    through T5's own withhold path, `trailing = { sent: false, reason: "infeasible", detail }`:
+    no week `weeks + 1`, no exclusion or availability rule naming it, and the floors judged
+    again on the Saturdays left. Deselecting the date instead would keep its week exclusions,
+    which the solver refuses. The retry's notices replace the first attempt's, and its trailing
+    line is «El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución (motivo
+    del solver: …). Llénalo a mano.», with the solver's reason trimmed, and no parenthesis when it
+    is empty. With «Solo llenar vacíos» on, the pins are collected again over the retry's weeks,
+    so none names the 31st. Auto stays locked through both solves.
+    - Never retried: a transport failure (`transport_error`), a non-422 status, a thrown fetch,
+      a request that did not send the 31st, or a retry.
+    - A retry refused too shows its own refusal (`solverRefusalMessage`), which is what main
+      would have shown, plus its notices. The specials fill on every exit.
+    - The board's preview (`requestSaturdayWeeks`) still shows the first request, so the next
+      Auto sends the 31st again and may pay the extra solve again.
   - If it is sent, each request member unavailable that day gets
     `<name> !in week <weeks+1> Sat.*`. Nothing is derived from the next month's Sunday.
   - If T5 withholds it, week exclusions that name `weeks + 1` are not sent, because the solver
@@ -289,7 +320,9 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
     month is still sent, and still refused with a 422 that names the rule, when the month has no
     trailing Saturday or it is deselected. That is deliberate (ADR-0048).
   - An older solver refuses `weeks + 1` with `ok: false`, so this needs delivery 1 deployed
-    first.
+    first. Since Q19 that refusal is retried without the 31st, so the month still solves and
+    the infeasible line quotes the old solver's reason: only the deploy check proves delivery 1
+    is live.
   - Before this change it was manual-only (D16: a week came only from an in-month Sunday after
     the Saturday), and the grid marked it «Fuera del alcance de Auto». That badge, its confirm
     clause and `unaddressableDates` are gone.
@@ -322,8 +355,9 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
     different Saturdays.
   - It is a max flow, so any set it accepts comes with a real seat assignment.
   - It only ever sees one minimum per person (`combined` above), and it relies on that: each
-    minimum is one person node. For one minimum per person it is exact. It matched brute force on
-    17,227 cases, and 1,900 setups against the real solver gave no false `capacity`.
+    minimum is one person node. For one minimum per person it is exact. In the latest re-verify
+    (at `097d994d`) an independent re-implementation matched it on 25,500 scenarios. Real-solver
+    restorations found no false `capacity` in 2,529 and no false `unreachable` in 4,442.
   - If the minimums do not all fit, they are sorted by the person's Saturday count in the
     request's history, fewest first, ties by name. Under ADR-0046's `history: []`, that is by
     name. Each one is kept only if the kept set plus it still fits.
@@ -332,14 +366,24 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
     person once per Saturday. Their own `Sat.BGV` minimum on that Saturday is therefore
     `capacity`.
 
-  Maximums always stay. The solver stays the authority for what the model leaves out:
+  Maximums always stay. The solver stays the authority for what the model leaves out. In a
+  month that sends the trailing Saturday, each of these now costs one extra solve and a 31st
+  filled by hand (the retry above), never the month:
   - the dedicated Saturday-lead anchor (`sat_anchor`);
   - two or more leads whose minimums all push them onto BGV (the one-Lead-per-Saturday rule
     beyond the lone lead);
-  - on in-month Saturdays, a maximum combined with that rule: the upper side of an `==`
-    minimum, or a `<=`, zero included. Only T5 reads maximums, and only for the trailing
-    Saturday;
+  - a maximum combined with that rule: the upper side of an `==` minimum, or a `<=`, zero
+    included. Only T5 reads maximums, and only for the trailing Saturday. It does not count the
+    Sunday seats a `*.Lead`, `Lead.*` or `*.*` maximum also covers, nor several leads sharing too
+    few Saturdays, so it can send a 31st the solver then refuses;
   - rows grown by pins.
+
+  The latest re-verify (at `097d994d`) found 124 real-solver setups where this request was
+  refused and main's solved, every one with the 31st sent. Its mechanism counts: `sat_anchor`
+  71, a self-contradictory rule (a kept minimum above the same person's maximum) 43, minimums
+  pushing every possible lead of the 31st onto BGV 2, minimums plus a lead barred by a maximum
+  4, a maximum used up by Sundays 9, a Saturday pigeonhole without a lone lead 4, other 1. Each
+  is now a retry (ADR-0048, decision 11).
 
   October 2026 is why this exists: its only Saturday service was the 31st, so the admin
   deselected 3/10/17/24, the request sent no Saturday, and three saved `Sat.* == 1` minimums made
@@ -351,7 +395,8 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   after a person's first reachable one.
 - **The solver's own reason reaches the admin.** A solver `ok: false` comes back as a 422 whose
   body carries the reason; Auto now reads it and shows «El solver no encontró solución. Motivo
-  del solver: …» (`solverRefusalMessage`) instead of the generic line alone. The solver's
+  del solver: …» (`solverRefusalMessage`) instead of the generic line alone. A failure the route
+  made itself reads the same, and carries `transport_error: true` so that it is never retried. The solver's
   diagnostic text is English and, for an over-constrained month, blames "a mandatory Lead
   seat" generically — a known weakness of `diagnose_infeasibility`.
 - **«Solo llenar vacíos» sends the board as pins** (`pinModel.ts`; spec

@@ -723,7 +723,8 @@ function restrictionToDs(r: PersonRestriction): string | null {
  * `omit` is keyed by `capKey` (restriction index, cap index), never by the cap object: two
  * rules may share one cap object, and only one of them may be the person left out.
  *
- * `withheldWeek` is the trailing Saturday's week when T5 withheld it, else `null`. Its week
+ * `withheldWeek` is the trailing Saturday's week when the request withheld it (T5, or Auto's
+ * retry under ruling Q19), else `null`. Its week
  * exclusions bind no seat, and the solver refuses a rule naming a week the request does not
  * have — refusing the whole month, Sundays included. So they are not sent. Only that week, only
  * then: a week-5 exclusion in a month with no trailing Saturday (or with it deselected) is
@@ -946,13 +947,16 @@ const isSaturdayRole = (role: SolverRole): role is SaturdayRole => role === "Sat
 const SATURDAY_SEATS = { lead: 2, bgv: 3 } as const;
 
 /**
- * T5's verdict on the trailing Saturday. `sent: false` means no lead could take it, and
- * the request left week `weeks + 1` out.
+ * T5's verdict on the trailing Saturday. `sent: false` means the request left week `weeks + 1`
+ * out: `noLead` when no lead could take it (T5), `infeasible` when the solver refused the month
+ * with it and Auto is solving it again without it (`withholdTrailing`, ruling Q19). `detail` is
+ * the solver's own reason for that refusal, as it came back.
  */
 export interface TrailingVerdict {
   date: string;
   sent: boolean;
-  reason?: "noLead";
+  reason?: "noLead" | "infeasible";
+  detail?: string;
 }
 
 /** Can `name` (a canonical `member_name`) take `role` on Saturday week `week`, dated `date`? */
@@ -1011,6 +1015,10 @@ function loneLeadsOf(
  * October 2026 with Frank away on the 24th and the 31st and Andy's `Sat.* == 1`: main sent the
  * 24th alone and solved. A zero maximum bars them outright. Only the trailing Saturday is judged
  * this way, so a month without one is unchanged.
+ *
+ * A pre-filter, not a guarantee: it does not count the Sunday seats a `*.Lead`, `Lead.*` or `*.*`
+ * maximum also covers, nor several leads sharing too few Saturdays, nor `sat_anchor`. A refusal
+ * it misses is caught by Auto's retry without the 31st (`withholdTrailing`, ruling Q19).
  */
 function trailingVerdict(input: {
   config: SolverConfig;
@@ -1114,8 +1122,9 @@ function maxFlow(nodeCount: number, arcs: ReadonlyArray<readonly [number, number
  * person has two floors here. `saturdayFloorOmissions` guarantees it: every reachable floor
  * after a person's first reachable one is `combined` before this runs. Never hand this two
  * floors of one person — they would be two nodes, and could seat that person twice on one
- * Saturday. For one floor per person the flow is
- * exact (brute-forced on 17,227 cases; no false `capacity` in 1,900 real-solver setups).
+ * Saturday. For one floor per person the flow is exact (re-verify at `097d994d`: an independent
+ * re-implementation matched it on 25,500 scenarios; real-solver restorations found no false
+ * `capacity` in 2,529 and no false `unreachable` in 4,442).
  *
  * `loneLeads[i]` is the ONE lead-pool member who can lead sent Saturday `i`, or `null` when
  * there are none or several (`loneLeadsOf`). The solver's `mandatory_lead` rule wants at least
@@ -1128,8 +1137,11 @@ function maxFlow(nodeCount: number, arcs: ReadonlyArray<readonly [number, number
  * - `sat_anchor`, the dedicated Saturday lead the solver wants on every Saturday that has one
  *   available — no Lead seat is held back for them;
  * - maximums: the upper side of an `==` minimum, or a `<=` (zero included), combined with
- *   `mandatory_lead` on in-month Saturdays. On the trailing Saturday T5 reads them (ruling Q17);
+ *   `mandatory_lead`. Only T5 reads them, for the trailing Saturday alone and only in part
+ *   (ruling Q17);
  * - rows grown by pins.
+ * In a month that sent the trailing Saturday, a refusal any of these cause is retried without it
+ * (ruling Q19), so it costs one extra solve, not the month.
  */
 function floorsFitSeats(
   floors: readonly SaturdayFloor[],
@@ -1268,6 +1280,14 @@ export function buildSolveRequest(input: {
   historyEntries: SolverHistoryEntry[];
   year: number;
   month: number;
+  /**
+   * The retry (ruling Q19): the solver refused this month with the trailing Saturday in it, so
+   * withhold it as `infeasible`, carrying the solver's reason (`detail`). It goes through T5's own
+   * withhold path, so the week's exclusions are dropped (Q9), its availability rule is not
+   * emitted and the floors are judged on the Saturdays left. Ignored, byte for byte, when the
+   * request would not send the trailing Saturday anyway (none, deselected, or T5's `noLead`).
+   */
+  withholdTrailing?: { detail: string };
 }):
   | {
       ok: true;
@@ -1297,12 +1317,15 @@ export function buildSolveRequest(input: {
   }
 
   // T5: the trailing Saturday (`weeks + 1`) is a candidate; it is sent only if a lead can
-  // take it and still has a Saturday left under their maximums. Every other selected Saturday
-  // is sent as it always was.
+  // take it and still has a Saturday left under their maximums — and, on Auto's retry, not at
+  // all (`withholdTrailing`, ruling Q19). Every other selected Saturday is sent as it always was.
   const leadNames = [...sundayLeadNames, ...saturdayLeadNames];
   const canTake = saturdayAccess(config, members, new Set(leadNames));
   const candidates = weekendWeekIndexes(sundayDates, activeSatDates);
-  const trailing = trailingVerdict({ config, members, sundayDates, candidates, leadNames, canTake });
+  const verdict = trailingVerdict({ config, members, sundayDates, candidates, leadNames, canTake });
+  const trailing: TrailingVerdict | null = verdict?.sent && input.withholdTrailing
+    ? { date: verdict.date, sent: false, reason: "infeasible", detail: input.withholdTrailing.detail }
+    : verdict;
   const weekendsWithSaturday = trailing?.sent === false ? candidates.filter((w) => w !== weeks + 1) : candidates;
 
   // T3/T4: a Saturday MINIMUM nobody could meet sinks the whole month, Sundays included
@@ -1432,11 +1455,17 @@ export function omittedCapsNotices(omitted: OmittedCap[]): string[] {
 }
 
 /**
- * The notice for a trailing Saturday T5 did not send; `null` when it was sent. «sin sábados libres
- * en su regla» is a lead whose Saturday maximum the other Saturdays already use up (ruling Q17).
+ * The notice for a trailing Saturday the request did not send; `null` when it was sent. For
+ * `noLead`, «sin sábados libres en su regla» is a lead whose Saturday maximum the other Saturdays
+ * already use up (ruling Q17). For `infeasible` (Auto's retry, ruling Q19) it names the solver's
+ * reason, trimmed, and drops the parenthesis when the solver gave none.
  */
 export function trailingNotice(t: TrailingVerdict): string | null {
   if (t.sent) return null;
+  if (t.reason === "infeasible") {
+    const detail = t.detail?.trim();
+    return `El sábado ${dayLabel(t.date)} no se mandó al solver: con él, el mes no tenía solución${detail ? ` (motivo del solver: ${detail})` : ""}. Llénalo a mano.`;
+  }
   return `El sábado ${dayLabel(t.date)} no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.`;
 }
 

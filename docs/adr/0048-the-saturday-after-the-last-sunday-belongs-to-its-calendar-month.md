@@ -70,6 +70,8 @@ planner's half: when it sends that week, and what that does to Saturday minimums
      whole month, Sundays included. That happened in October 2026: Frank was away on the 24th and
      the 31st, Andy had `Sat.* == 1`, and the request sent `[4, 5]`. Main sent `[4]` and solved. A
      zero maximum bars the lead outright. Only the trailing Saturday is judged this way.
+   - Q17 is a cheap pre-filter, not a guarantee: it misses some refusals (Consequences). Since
+     ruling Q19, a refusal it misses costs one extra solve (decision 11), not the month.
    - If no lead can, `weeks + 1` is left out of `weekends_with_saturday` and the Sundays are
      still solved. `trailingNotice` says «El sábado 31 oct no se mandó al solver: ningún líder
      puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.»
@@ -109,8 +111,9 @@ planner's half: when it sends that week, and what that does to Saturday minimums
      sink. Any set it accepts comes with a real seat assignment.
    - It sees one floor per person (decision 6, Q16), and depends on that. Each floor is one
      person node, so one seat per person per Saturday holds only while nobody has two. For one
-     floor per person the flow is exact: it agreed with brute force on 17,227 cases, and 1,900
-     setups run against the real solver produced no false `capacity`.
+     floor per person the flow is exact. The latest re-verify (at `097d994d`) checked it two ways.
+     An independent re-implementation matched it on 25,500 scenarios. And real-solver
+     restorations found no false `capacity` in 2,529 and no false `unreachable` in 4,442.
    - If everything fits, nothing is left out. Otherwise the floors are sorted by the person's
      Saturday count in the history the request is built with (`historyForRequest`), fewest
      first, ties broken by the rule's name. Each floor is kept only if the kept set plus that
@@ -136,10 +139,44 @@ planner's half: when it sends that week, and what that does to Saturday minimums
 10. **Notice order.** First the floors left out, one line per reason (`noSaturday`, then
     `unreachable`, then `combined`, then `capacity`), each naming the rules as the rules card names them
     (`capLabel`, via `omittedCapsNotices`). Then the trailing Saturday not sent
-    (`trailingNotice`). Then delivery 3's notices. The floor lines and the trailing line also
+    (`trailingNotice`, for `noLead` or, on the retry, `infeasible`). Then delivery 3's notices.
+    The floor lines and the trailing line also
     show when «Solo llenar vacíos» is refused before the fetch (`pinRefusal`), because they
     describe the request either way.
     **T6:** `{weeks-N}` still counts Sundays (ADR-0047 D2).
+11. **Q19: if the solver refuses a month that sent the 31st, Auto solves it again without it.**
+    T5 and the seat check predict only part of what sending week `weeks + 1` adds (see
+    Consequences). Four review rounds each patched that prediction, and each next round found a
+    new case. Frank chose a structural fix (2026-09-30), so the planner no longer has to be right.
+    - **When.** The solver itself refused (a 422 the route did not tag `transport_error`) a
+      request whose `weekends_with_saturday` names `weeks + 1`. `runSolve` (`MonthGenerator.tsx`)
+      then rebuilds the request and solves once more. Both Auto paths go through it.
+    - **Never on a transport failure.** The route tags every `ok: false` it makes when it could
+      not get the solver's answer with `transport_error: true`: the service's HTTP status, the
+      local timeout, a process that failed to start, no output, and output that is not JSON. The solver's own answers never
+      carry it, and the client reads the flag, never the error text. A tagged failure, a non-422
+      status, a thrown fetch and a request without the 31st are never retried. Nor is a retry.
+    - **How.** `buildSolveRequest({ withholdTrailing: { detail } })`, where `detail` is the
+      solver's reason. It goes through T5's own withhold path: `trailing` becomes
+      `{ sent: false, reason: "infeasible", detail }`. So Q9 drops the week's exclusions (decision
+      5), no availability rule names the 31st, and the floors are judged again on the Saturdays
+      left. Deselecting the date would not do this: it keeps the week-5 exclusions, and the
+      solver refuses them. When the request would not send the 31st anyway (none, deselected,
+      T5's `noLead`), the input changes nothing, byte for byte.
+    - **What the admin sees.** The retry's notices replace the first attempt's: its floor lines,
+      then «El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución (motivo del
+      solver: …). Llénalo a mano.», then delivery 3's lines. The reason is the solver's error,
+      trimmed, and the parenthesis is left out when it is empty. With «Solo llenar vacíos» on,
+      the pins are collected again over the retry's weeks (Q1), so none names the 31st, and
+      `pinRefusal` judges them again with the same exits.
+    - **Auto stays locked for both solves.** The retry is awaited inside `runSolve`, under the
+      caller's `autoPending`. The specials fill on every exit.
+    - **A retry refused too** shows its own refusal through `solverRefusalMessage`, which is
+      what main would have shown, and still shows its notices, the infeasible line included.
+    - So the 31st never costs the month. The retry's request is the one this branch builds with
+      the 31st deselected, minus that week's exclusions. The re-verify found no case where this
+      branch's request without the 31st was refused and main's solved (October without the
+      31st, and November).
 
 **When a request stays byte-identical to before this change.** Both conditions must hold:
 - no trailing Saturday is selected (the month has none, or it is deselected);
@@ -155,6 +192,9 @@ Saturday floors today, and the pending restore adds a single `Sat.* == 1` for ea
 people, so nobody loses one. A hand-written November 2026 request pins the identity
 (`trailingSaturday.test.ts`).
 
+`withholdTrailing` (Q19) adds no exception: it changes only a request that would have sent the
+31st.
+
 ## Rejected
 
 - **The solver spec's §9 list**, which ADR-0047 also carries:
@@ -164,6 +204,17 @@ people, so nobody loses one. A hand-written November 2026 request pins the ident
   - folding the 31st into the next month's week 1. Frank chose the calendar month. The grid's
     rule context did exactly this until decision 2;
   - a client-side virtual week that discards a phantom Sunday. D16 removed exactly this.
+
+  Q19's retry is not «freeze and extend». It never solves the 31st on top of a frozen month: a
+  second solve runs only after a refusal, and it leaves the 31st out.
+- **A fifth predictive patch** (instead of Q19). Rulings Q16, Q17 and Q18 each closed the case
+  the previous review found, and the next review found another. The re-verify's 124 refusals
+  were mostly things no planner-side check models: `sat_anchor` alone was 71. A retry makes the
+  prediction optional; Q17 stays only as a pre-filter that saves the extra solve.
+- **Retrying on any `ok: false`, or matching the error text.** A transport failure says nothing
+  about the 31st, and a second call would only double the wait. The route knows which failures
+  are its own, so it tags them (`transport_error`). The client never parses the solver's
+  English.
 - **Dropping every week exclusion above `weeks`** (Q9's wide option). It would remove the «Sem 5»
   422 for months with no trailing Saturday.
   - It would also change requests in those months, which breaks the identity above.
@@ -205,9 +256,12 @@ people, so nobody loses one. A hand-written November 2026 request pins the ident
 
 ## Consequences
 
-- **Known limits, outside the seat model.** T5 and the seat check are advisory. The solver stays
-  the authority, and its refusal reaches the admin, with ADR-0047's deselect hint when the
-  request names `weeks + 1`. The check does not model:
+- **Known limits, outside the seat model, and what they cost now.** T5 and the seat check are
+  advisory, and the solver stays the authority. They do not model the items below. Before Q19,
+  each could make the solver refuse a month that sent the 31st, Sundays included, where main
+  solved it. Now that refusal makes Auto solve again without the 31st (decision 11). Each limit
+  costs one extra solve and a 31st filled by hand, never the month. A month that does not send
+  the 31st is refused as it was before this change, with the solver's reason.
   - **The dedicated Saturday-lead anchor** (`sat_anchor`). The solver wants a dedicated Saturday
     lead on every Saturday that has one available. Neither T5 nor the seat model holds a Lead
     seat back for them.
@@ -218,16 +272,33 @@ people, so nobody loses one. A hand-written November 2026 request pins the ident
     lone lead. The seat model keeps a Saturday's only possible lead in its Lead seat (decision
     7). It does not see two or more leads who could lead a Saturday but whose floors all push
     them onto BGV.
-  - **Maximums on in-month Saturdays.** T3 and the seat model do not read maximums. On in-month
-    Saturdays, the upper side of an `==` floor, or a `<=` (zero included), combined with
-    `mandatory_lead` is still the solver's to refuse, as it was before this change. Only T5
-    reads maximums, and only for the 31st (decision 4, Q17). Even there it counts only the other
-    Saturdays a lead is forced to lead. It does not count Sunday seats that a `*.Lead` or `*.*`
-    maximum also covers. And it reads every maximum in the config, including that of an `==`
-    floor the request later omits. Both of those err towards withholding the 31st, never
-    towards a refused month.
+  - **Maximums.** T3 and the seat model do not read maximums. The upper side of an `==` floor,
+    or a `<=` (zero included), combined with `mandatory_lead` is the solver's to refuse. Only T5
+    reads maximums, and only for the 31st (decision 4, Q17). It errs both ways:
+    - Towards sending the 31st, and so towards a refusal: it counts only the other Saturdays a
+      lead is forced to lead as their lone lead. It does not count the Sunday seats that a
+      `*.Lead`, `Lead.*` or `*.*` maximum also covers. Nor does it see several leads sharing too
+      few Saturdays between them (a pigeonhole). The retry catches both.
+    - Towards withholding it: it reads every maximum in the config, including that of an `==`
+      floor the request later omits.
 
-  So the code promises «never seat-infeasible», not «never solver-infeasible».
+  The latest re-verify (at `097d994d`) ran the real solver on planner-built requests and found
+  124 setups where this branch's request was refused and main's solved. Every one had sent the
+  31st. Its mechanism counts were: `sat_anchor` 71; a self-contradictory rule (a kept floor above
+  the same person's maximum) 43; floors pushing every possible lead of the 31st onto BGV 2;
+  floors plus a lead barred by a maximum 4; a `*.Lead`/`Lead.*`/`*.*` maximum used up by Sundays
+  9; a Saturday maximum used up without a lone lead (a pigeonhole) 4; other 1. Under Q19 each is
+  a retry. The restore shape is one of them: Andy and Tay are Sunday leads with `Sat.* == 1`,
+  Vale is support with `Sat.* == 1`, Frank is away on the 17th, 24th and 31st, and all three are
+  selected. Two leads cannot cover three Saturdays, so the solver refuses `[3, 4, 5]`. The
+  retry's `[3, 4]` solves.
+
+  So the code promises «never seat-infeasible», not «never solver-infeasible». Auto promises
+  that the 31st never costs the month.
+- **The preview still counts a 31st the retry withheld.** `requestSaturdayWeeks` previews the
+  FIRST request (Q17 included, no retry). So after a retry, the confirm's empty-seat count and the
+  board's pin marks still treat the 31st as Auto's. The next Auto sends it again and pays the
+  extra solve again. This is deliberate: the preview cannot know the solver's answer.
 - **The preview can count a withheld 31st.** `requestSaturdayWeeks` is `undefined`, meaning no
   filter, when there are no rules yet or the request would be refused before it is sent (no
   Sunday lead, or a rule blocked by Tipo). In that state the confirm's count and the board treat
@@ -241,8 +312,12 @@ people, so nobody loses one. A hand-written November 2026 request pins the ident
   so it inherits decision 2. It also mirrors `unaddressableDates`, which no longer exists. The
   amendment that planner spec §5 asks for is still owed before P4 is implemented.
 - **Release order.** Delivery 1 must be deployed, and pass its deploy check, before this reaches
-  `main`. An old solver refuses `weeks + 1` with `ok: false`, which the admin sees as a 422, so
-  the failure is never silent. Roll back the planner first.
+  `main`. An old solver refuses `weeks + 1` with `ok: false` («weekends_w_sat must use 1-based
+  indexes 1..4. Received [5].»). That is the solver's own answer, so since Q19 Auto retries
+  without the 31st: the month solves, and the infeasible line under Auto quotes that reason.
+  The failure is never silent, but it no longer looks like a refused month, so the deploy check
+  is what proves delivery 1 is live. Roll back the planner first.
 - **Undoing parts of this.** Undo T1 and no month's Auto staffs the Saturday again. Undo T3/T4
-  and one person's unreachable minimum sinks the month again. Whether to restore October's three
+  and one person's unreachable minimum sinks the month again. Undo Q19 and every limit above can
+  sink a month that sends the 31st again. Whether to restore October's three
   `Sat.* == 1` minimums is Frank's call.

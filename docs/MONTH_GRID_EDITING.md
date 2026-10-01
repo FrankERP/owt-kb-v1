@@ -81,7 +81,15 @@ for stored service rosters:
     31st to be filled by hand and says so under Auto: «El sábado 31 oct no se mandó al solver:
     ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla).
     Llénalo a mano.»
+  - If the solver refuses the month with the 31st in it, Auto solves it once more without it,
+    still showing «Calculando...», and the Sundays are filled. It says so under Auto, with the
+    solver's reason: «El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución
+    (motivo del solver: …). Llénalo a mano.» If the solver gave no reason, the parenthesis is
+    left out. If the second solve is refused too, Auto shows that refusal as usual. A failure to
+    reach the solver is never retried (ruling Q19).
   - A withheld 31st is not pinned by «Solo llenar vacíos» and is not counted in its confirm.
+    After a retry, the confirm still counts it: the preview shows what the next Auto sends
+    first.
   - Rule checks on that column judge it as that week, over its own month's Sundays, in both
     create and stored mode. That covers the picker, the warnings on seated members, and drag and
     pick-then-place. So a «Sem 5» rule applies to it.

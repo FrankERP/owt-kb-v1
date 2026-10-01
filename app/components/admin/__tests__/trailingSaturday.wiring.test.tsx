@@ -4,8 +4,9 @@
 // The trailing Saturday WIRED, on the shipped derived path (plan 2026-09-30-planner-trailing-saturday,
 // Task 3; spec 2026-09-29 §2). The pure halves are pinned in `trailingSaturday.test.ts`; this proves
 // MonthGenerator sends Sat 31 Oct 2026 as week 5, applies what comes back to its column, says so when
-// T5 withholds it, keeps a withheld 31st out of the pins (Q1) and out of the confirm's count, and
-// that the «Fuera del alcance de Auto» surface is gone.
+// T5 withholds it, keeps a withheld 31st out of the pins (Q1) and out of the confirm's count,
+// solves the month again without it when the solver refuses it with the 31st (Q19), and that the
+// «Fuera del alcance de Auto» surface is gone.
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -43,7 +44,12 @@ const roster: Respond = (body) => {
 };
 
 /** October 2026 with ONLY the 31st of its Saturdays selected, Ana ticked as Sunday lead, grid open. */
-function setup(respond: Respond, members: object[] = [ANA, LUCIA, BETO], rules?: ReturnType<typeof readyRules>) {
+function setup(
+  respond: Respond,
+  members: object[] = [ANA, LUCIA, BETO],
+  rules?: ReturnType<typeof readyRules>,
+  beforePreview?: (container: HTMLElement) => void,
+) {
   const stub = stubSolve(respond);
   const view = render(
     <Gen rules={rules} members={members as never} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
@@ -52,6 +58,7 @@ function setup(respond: Respond, members: object[] = [ANA, LUCIA, BETO], rules?:
   deselectAll(view.container, "saturday");
   fireEvent.click(view.container.querySelector(`[data-date="${OCT_31}"]`)!);
   selectSundayLead(view.container, "Ana");
+  beforePreview?.(view.container);
   preview();
   return { ...view, ...stub };
 }
@@ -279,6 +286,148 @@ describe("the trailing Saturday — a pin refusal still shows the floor and trai
       "Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó «Sat.* == 1» a Lucía.",
       "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.",
     ]);
+  });
+});
+
+describe("Q19: a month the solver refuses with the 31st is solved again without it", () => {
+  // Frank's decision (2026-09-30): sending the 31st can make the solver refuse the WHOLE month,
+  // Sundays included, where main (which never sent it) solved it. So when the solver itself
+  // refuses a request that sent week 5, Auto re-solves once without it and says so.
+  const INFEASIBLE_X = "El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución (motivo del solver: x). Llénalo a mano.";
+  const refused = (error: string) => ({ status: 422, ok: false, error });
+  /** Beto may not sing the 31st: a week-5 exclusion the first request sends and the retry must not (Q9). */
+  const betoOff31 = readyRules({
+    ...DEFAULT_SOLVER_CONFIG,
+    restrictions: [
+      ...DEFAULT_SOLVER_CONFIG.restrictions,
+      {
+        id: "beto-w5", person: "Beto", excludedPatterns: [], fairness: "none", fairnessSlack: 0,
+        weekExclusions: [{ id: "w", week: 5, pattern: "Sat.*" }], caps: [],
+      },
+    ],
+  });
+  const solveCount = (fetchMock: ReturnType<typeof stubSolve>["fetchMock"]) =>
+    fetchMock.mock.calls.filter(([url]) => url === "/api/admin/solve").length;
+  /** A weekday special, added through the real composer on the config step. */
+  const addVigil = (container: HTMLElement) => {
+    fireEvent.click(container.querySelector('[data-date="2026-10-14"]')!);
+    fireEvent.change(screen.getByLabelText("Nombre del servicio especial"), { target: { value: "Vigilia" } });
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
+  };
+
+  it("a solver refusal of [5] is retried once without week 5 or any rule naming it, and the Sundays are filled", async () => {
+    const { bodies, container, fetchMock } = setup(
+      (body, call) => (call === 1 ? refused("x") : roster(body, call)), undefined, betoOff31,
+    );
+    runAuto();
+    await waitFor(() => expect(cellAt(container, "lead", OCT_SUNDAYS[0]).textContent).toContain("Ana"));
+    expect(solveCount(fetchMock)).toBe(2);
+    expect(bodies[0].weekends_with_saturday).toEqual([5]);
+    expect(bodies[0].dsl_rules).toContain("Alberto Ruiz Cano !in week 5 Sat.*");
+    expect(bodies[1].weekends_with_saturday).toEqual([]);
+    expect(bodies[1].dsl_rules.join("\n")).not.toMatch(/\bweek 5\b/);
+    expect(noticeLines(container)).toEqual([INFEASIBLE_X]);
+    expect(screen.queryByText(/El solver no encontró solución/)).toBeNull();
+    // Nothing came back for the 31st, so it is the admin's to fill.
+    expect(cellAt(container, "lead", OCT_31).textContent).not.toContain("Ana");
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+  });
+
+  for (const [name, answer, message] of [
+    [
+      "a refusal the route made itself (transport_error)",
+      { status: 422, ok: false, error: "Solver service returned HTTP 503", transport_error: true as const },
+      "El solver no encontró solución. Motivo del solver: Solver service returned HTTP 503",
+    ],
+    ["a non-422 status", { status: 500, ok: false, error: "boom" }, "El solver no encontró solución."],
+  ] as const) {
+    it(`${name} is never retried: one fetch, and its error shown`, async () => {
+      const { bodies, fetchMock } = setup(() => answer);
+      runAuto();
+      await waitFor(() => expect(screen.getByText(message)).toBeTruthy());
+      await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+      expect(solveCount(fetchMock)).toBe(1);
+      expect(bodies[0].weekends_with_saturday).toEqual([5]);
+    });
+  }
+
+  it("a refused request that did not send the 31st is not retried", async () => {
+    const { bodies, container, fetchMock } = setup(() => refused("x"), [ANA_AWAY, LUCIA, BETO]);
+    runAuto();
+    await waitFor(() => expect(screen.getByText("El solver no encontró solución. Motivo del solver: x")).toBeTruthy());
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+    expect(solveCount(fetchMock)).toBe(1);
+    expect(bodies[0].weekends_with_saturday).toEqual([]);
+    expect(noticeLines(container)).toEqual([
+      "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.",
+    ]);
+  });
+
+  it("a retry refused too: two fetches, the retry's refusal and its notices shown, and the special still filled", async () => {
+    const { container, fetchMock } = setup(
+      (_body, call) => refused(call === 1 ? "x" : "y"), undefined, undefined, addVigil,
+    );
+    runAuto();
+    await waitFor(() => expect(screen.getByText("El solver no encontró solución. Motivo del solver: y")).toBeTruthy());
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+    expect(solveCount(fetchMock)).toBe(2);
+    expect(screen.queryByText("El solver no encontró solución. Motivo del solver: x")).toBeNull();
+    expect(noticeLines(container)).toEqual([INFEASIBLE_X]);
+    // E5: the special never needed the solver, and fills on this exit too.
+    expect(cellAt(container, "lead", "2026-10-14").textContent).toContain("Ana");
+    expect(cellAt(container, "lead", OCT_SUNDAYS[0]).textContent).not.toContain("Ana");
+  });
+
+  it("«Solo llenar vacíos»: the retry sends no week-5 pin, and Auto stays locked until the second answer", async () => {
+    const { bodies, container } = setup((body, call) => (call === 1 ? refused("x") : echoPins(body)));
+    // Lucía on the 31st's BGV, Beto on the first Sunday's BGV, both by hand.
+    const seat = (date: string, who: RegExp) => {
+      fireEvent.click(cellAt(container, "bgv", date).querySelector("[data-cell-action]") as HTMLElement);
+      const picker = screen.getByRole("region", { name: `Candidatos para BGV — ${date}` });
+      fireEvent.click(within(picker).getByRole("button", { name: who }));
+    };
+    seat(OCT_31, /Lucía/);
+    seat(OCT_SUNDAYS[0], /Beto/);
+    // Hold the SECOND solve open once it has been sent.
+    const answered = globalThis.fetch as (i: unknown, n?: unknown) => Promise<unknown>;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let solves = 0;
+    vi.stubGlobal("fetch", async (input: unknown, init?: unknown) => {
+      const out = answered(input, init);
+      if (input === "/api/admin/solve" && ++solves === 2) await gate;
+      return out;
+    });
+
+    fireEvent.click(fillEmptySwitch());
+    runAuto();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[0].weekends_with_saturday).toEqual([5]);
+    expect(bodies[0].pinned).toContainEqual({ week: 5, role: "Sat.BGV", person: "María Lucía Estrada" });
+    expect(bodies[1].weekends_with_saturday).toEqual([]);
+    expect(bodies[1].pinned).toEqual([{ week: 1, role: "Sun.BGV", person: "Alberto Ruiz Cano" }]);
+    // The first answer has landed and the second has not: still locked, for the WHOLE of both.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByText("Calculando...")).toBeTruthy();
+    expect((fillEmptySwitch() as HTMLButtonElement).disabled).toBe(true);
+    expect((cellAt(container, "bgv", OCT_SUNDAYS[1]).querySelector("[data-cell-action]") as HTMLButtonElement).disabled).toBe(true);
+
+    release();
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+    expect((fillEmptySwitch() as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.queryByText(REFUSED)).toBeNull();
+    // The 31st stays exactly as the admin left it, and the pinned Sunday seat holds.
+    expect(cellAt(container, "bgv", OCT_31).textContent).toContain("Lucía");
+    expect(cellAt(container, "bgv", OCT_SUNDAYS[0]).textContent).toContain("Beto");
+    expect(noticeLines(container)).toEqual([INFEASIBLE_X]);
+  });
+
+  it("a network throw on the first fetch is not retried", async () => {
+    const { fetchMock } = setup(() => { throw new Error("offline"); });
+    runAuto();
+    await waitFor(() => expect(screen.getByText("Error de red al llamar al solver.")).toBeTruthy());
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+    expect(solveCount(fetchMock)).toBe(1);
   });
 });
 

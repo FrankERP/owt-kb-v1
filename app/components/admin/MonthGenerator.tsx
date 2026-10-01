@@ -3526,6 +3526,10 @@ export default function MonthGenerator({
     pinned: CollectedPins | null;
     /** The switch as it stood in THIS render — the same one `cells` came from. */
     fillEmpty: boolean;
+    /** The history the request was built with, so the retry is rebuilt from the same entries. */
+    historyEntries: SolverHistoryEntry[];
+    /** This is the retry without the trailing Saturday (ruling Q19): a retry is never retried. */
+    isRetry: boolean;
   }
 
   /**
@@ -3537,9 +3541,19 @@ export default function MonthGenerator({
    *
    * Owns no `autoPending`: the per-browser path raises it only AFTER this returns (it has
    * nothing to wait for), the derived path before its history read. Keep that asymmetry.
+   *
+   * @param retry `runSolve`'s retry without the trailing Saturday (ruling Q19): the request is
+   *   rebuilt with it withheld as `infeasible`, carrying the solver's reason, under the FIRST
+   *   attempt's switch. Everything below runs again for it — its notices replace the first
+   *   attempt's, its pins are collected over its own `weekends_with_saturday` (Q1, so no pin on
+   *   the 31st) and `pinRefusal` judges them, with the same exits.
    */
-  function prepareSolve(config: SolverConfig, historyEntries: SolverHistoryEntry[]): PreparedSolve | null {
-    const fillEmpty = fillEmptyOnly;
+  function prepareSolve(
+    config: SolverConfig,
+    historyEntries: SolverHistoryEntry[],
+    retry?: { detail: string; fillEmpty: boolean },
+  ): PreparedSolve | null {
+    const fillEmpty = retry ? retry.fillEmpty : fillEmptyOnly;
     setAutoError(null);
     setAutoNotices([]);
     const built = buildSolveRequest({
@@ -3550,6 +3564,7 @@ export default function MonthGenerator({
       historyEntries,
       year,
       month,
+      ...(retry ? { withholdTrailing: { detail: retry.detail } } : {}),
     });
     if (!built.ok) {
       // Pre-flight refusal (fact 14) — never reaches the network. EXIT 1, and
@@ -3599,6 +3614,8 @@ export default function MonthGenerator({
       notices,
       pinned,
       fillEmpty,
+      historyEntries,
+      isRetry: !!retry,
     };
   }
 
@@ -3607,6 +3624,14 @@ export default function MonthGenerator({
    * client-mutation invariant (try/catch, check `res.ok`, never close-as-success on failure);
    * the caller owns `autoPending` and its `finally`. A short-staffed month returning `ok:false`
    * is the solver's NORMAL failure (D15), not an edge case.
+   *
+   * **The retry without the trailing Saturday (ruling Q19, ADR-0048).** Sending week
+   * `weeks + 1` adds constraints the planner cannot fully predict, so the solver can refuse the
+   * whole month, Sundays included, where a request without it would solve. When the SOLVER
+   * refused (a 422 the route did not tag `transport_error`) a request that sent that week, this
+   * rebuilds it withheld (`prepareSolve`'s `retry`) and solves once more — awaited, so the
+   * caller's `autoPending` covers both solves. A retry is never retried; a transport failure or
+   * a throw never retries. No `applySpecialFill` before the retry: its own exit fills.
    *
    * @param historyMonths the months the derived path's history covers (R14), labelled only on
    *   success. Absent ⇒ the per-browser path, whose diagnostics carry `history_runs_used` instead.
@@ -3626,6 +3651,23 @@ export default function MonthGenerator({
         response = await res.json().catch(() => null);
       }
       if (!res.ok || !response || !response.ok || !response.schedule) {
+        const { request } = prepared;
+        if (
+          !prepared.isRetry
+          && res.status === 422
+          && response?.ok === false
+          && response.transport_error !== true
+          && request.weekends_with_saturday.includes(request.weeks + 1)
+        ) {
+          // Q19: the solver refused a month that included the trailing Saturday. Solve it again
+          // without it; a pre-fetch refusal of the retry has already filled and said why.
+          const retry = prepareSolve(config, prepared.historyEntries, {
+            detail: response.error ?? "",
+            fillEmpty: prepared.fillEmpty,
+          });
+          if (retry) await runSolve(config, retry, historyMonths);
+          return;
+        }
         // EXIT 2 — the solver answered, and said no. A short-staffed month is
         // the solver's NORMAL failure (D15); the specials still fill.
         setAutoError(solverRefusalMessage(response?.error));

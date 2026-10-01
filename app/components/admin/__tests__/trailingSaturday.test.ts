@@ -233,6 +233,7 @@ function build(opts: {
   sundayDates?: string[];
   historyEntries?: SolverHistoryEntry[];
   month?: number;
+  withholdTrailing?: { detail: string };
 }) {
   const built = buildSolveRequest({
     config: { sundayLeads: [], saturdayLeads: [], support: [], restrictions: [], conflicts: [], presence: [], ...opts.config },
@@ -242,6 +243,7 @@ function build(opts: {
     historyEntries: opts.historyEntries ?? [],
     year: 2026,
     month: opts.month ?? 10,
+    ...(opts.withholdTrailing ? { withholdTrailing: opts.withholdTrailing } : {}),
   });
   if (!built.ok) throw new Error(`refused: ${built.reason}`);
   return built;
@@ -879,6 +881,99 @@ describe("T5 / Q17: a lead whose Saturday maximum is used up by the other Saturd
   it("a relative maximum resolves as the solver does: `Sat.* <= {weeks-3}` is 1 in a four-Sunday month", () => {
     expect(month([{ ...floor(0, "Sat.*", "<="), relative: true, relOffset: 3 }]).trailing).toEqual(WITHHELD);
     expect(month([{ ...floor(0, "Sat.*", "<="), relative: true, relOffset: 2 }]).trailing).toEqual(SENT);
+  });
+});
+
+describe("Q19: the retry without the trailing Saturday (`withholdTrailing`)", () => {
+  // The restore shape the re-verify found (October 2026; the 17th, 24th and 31st selected). Frank
+  // is away on all three, so Andy and Tay are the only possible leads, each with `Sat.* == 1`:
+  // two of them for three Saturdays that each need a Lead. Q17 sees no lone lead, so the 31st is
+  // sent, and the solver refuses the whole month. Auto then rebuilds the request through this
+  // input, as main would have sent it: no week 5, and nothing that names it.
+  const FRANK = person("frank", "Francisco Rocha", "Frank", { unavailableDates: ["2026-10-17", "2026-10-24", "2026-10-31"] });
+  const ANDY = person("andy", "Andrés Ortega", "Andy");
+  const TAY = person("tay", "Taylor Ruiz", "Tay");
+  const VALE = person("vale", "Valeria Soto", "Vale");
+  const members = [FRANK, ANDY, TAY, VALE];
+  const config: Partial<SolverConfig> = {
+    sundayLeads: ["frank", "andy", "tay"],
+    support: ["vale"],
+    restrictions: [
+      rule("Andy", [floor()]),
+      rule("Tay", [floor()]),
+      // A week-5 exclusion: sent with the 31st, and the solver would refuse it without it (Q9).
+      rule("Vale", [floor()], { weekExclusions: [{ id: "w5", week: 5, pattern: "Sat.BGV" }] }),
+    ],
+  };
+  const SELECTED = ["2026-10-17", "2026-10-24", "2026-10-31"];
+  const DETAIL = "The schedule is infeasible: a mandatory Lead seat cannot be filled.";
+
+  it("the first request sends the 31st, its exclusion and its availability rule", () => {
+    const first = build({ members, config, activeSatDates: SELECTED });
+    expect(first.request.weekends_with_saturday).toEqual([3, 4, 5]);
+    expect(first.trailing).toEqual({ date: "2026-10-31", sent: true });
+    expect(first.request.dsl_rules).toEqual([
+      "Andrés Ortega Sat.* == 1",
+      "Taylor Ruiz Sat.* == 1",
+      "Valeria Soto !in week 5 Sat.BGV & Sat.* == 1",
+      "Francisco Rocha !in week 3 Sat.*",
+      "Francisco Rocha !in week 4 Sat.*",
+      "Francisco Rocha !in week 5 Sat.*",
+    ]);
+  });
+
+  it("withheld as infeasible: no week 5, no rule naming it, no availability rule for the 31st, and the floors kept on the 17th and 24th", () => {
+    const retry = build({ members, config, activeSatDates: SELECTED, withholdTrailing: { detail: DETAIL } });
+    expect(retry.request.weekends_with_saturday).toEqual([3, 4]);
+    expect(retry.trailing).toEqual({ date: "2026-10-31", sent: false, reason: "infeasible", detail: DETAIL });
+    expect(retry.request.dsl_rules).toEqual([
+      "Andrés Ortega Sat.* == 1",
+      "Taylor Ruiz Sat.* == 1",
+      "Valeria Soto Sat.* == 1",
+      "Francisco Rocha !in week 3 Sat.*",
+      "Francisco Rocha !in week 4 Sat.*",
+    ]);
+    expect(retry.request.dsl_rules.join("\n")).not.toMatch(/\bweek 5\b/);
+    expect(retry.omittedCaps).toEqual([]);
+    expect(trailingNotice(retry.trailing!)).toBe(
+      "El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución (motivo del solver: The schedule is infeasible: a mandatory Lead seat cannot be filled.). Llénalo a mano.",
+    );
+  });
+
+  it("the floors are judged again on what is left: with only the 31st selected, nothing is sent and every floor is `noSaturday`", () => {
+    const retry = build({ members, config, activeSatDates: ["2026-10-31"], withholdTrailing: { detail: "x" } });
+    expect(retry.request.weekends_with_saturday).toEqual([]);
+    expect(retry.trailing).toEqual({ date: "2026-10-31", sent: false, reason: "infeasible", detail: "x" });
+    expect(retry.omittedCaps.map((o) => [o.person, o.reason])).toEqual([
+      ["Andy", "noSaturday"], ["Tay", "noSaturday"], ["Vale", "noSaturday"],
+    ]);
+    // Only the in-month availability rules are left, emitted for every week as they always were.
+    expect(retry.request.dsl_rules).toEqual(["Francisco Rocha !in week 3 Sat.*", "Francisco Rocha !in week 4 Sat.*"]);
+  });
+
+  it("ignores the input, byte for byte, when the request would not send the 31st anyway", () => {
+    const same = (opts: Parameters<typeof build>[0]) =>
+      expect(JSON.stringify(build({ ...opts, withholdTrailing: { detail: "x" } }))).toBe(JSON.stringify(build(opts)));
+    // A month with no trailing Saturday (November 2026).
+    same({ members, config, sundayDates: NOV, activeSatDates: NOV_SATS, month: 11 });
+    // The 31st deselected: the week-5 exclusion is still sent, as before (Q9 never widens).
+    same({ members, config, activeSatDates: ["2026-10-17", "2026-10-24"] });
+    // T5 already withheld it: the reason stays `noLead`, which is why it was not sent.
+    const away = members.map((x) => (x === ANDY || x === TAY ? { ...x, unavailableDates: ["2026-10-31"] } : x));
+    same({ members: away, config, activeSatDates: SELECTED });
+    expect(build({ members: away, config, activeSatDates: SELECTED, withholdTrailing: { detail: "x" } }).trailing)
+      .toEqual({ date: "2026-10-31", sent: false, reason: "noLead" });
+  });
+
+  it("trailingNotice for `infeasible`: the solver's reason trimmed, and no parenthesis when it gave none", () => {
+    expect(trailingNotice({ date: "2026-01-31", sent: false, reason: "infeasible", detail: "  x \n" })).toBe(
+      "El sábado 31 ene no se mandó al solver: con él, el mes no tenía solución (motivo del solver: x). Llénalo a mano.",
+    );
+    for (const detail of ["", "   ", undefined]) {
+      expect(trailingNotice({ date: "2026-10-31", sent: false, reason: "infeasible", detail })).toBe(
+        "El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución. Llénalo a mano.",
+      );
+    }
   });
 });
 
