@@ -85,8 +85,8 @@ import {
   plannerParticipationRoles,
   memberFitsPool,
   poolTipoMismatch,
-  unaddressableDates as computeUnaddressableDates,
-  omittedCapsNotice,
+  omittedCapsNotices,
+  trailingNotice,
   solverPools,
   solverRefusalMessage,
   type DraftCard,
@@ -2220,20 +2220,39 @@ export default function MonthGenerator({
    * filter, never a spine. Exactly one consumer takes them as its Sunday list
    * — `buildColumns` — plus `mapUnfilledSeats`, which takes them as a separate
    * FOURTH argument purely to discard markers for columns that aren't on
-   * screen. All four spine consumers keep receiving `sundayDatesFull`:
-   * `buildSolveRequest`, `applySolveResponse`, `computeUnaddressableDates` and
-   * `mapUnfilledSeats`' 2nd argument. (`ruleEnforcement` used to be named here
-   * and never belonged: it is reached only from `candidateRanking`, is not
-   * imported by this file, and takes no Sunday list at all.)
+   * screen. Every spine consumer receives `sundayDatesFull`, and each is pinned
+   * by the test named beside it — swapping it for `selectedSundays` fails that
+   * test (checked by mutation, 2026-09-30):
+   *
+   * - `buildSolveRequest` in `prepareSolve` — `MonthCalendar.test.tsx` («deselecting
+   *   a Sunday renumbers no week in the solve request»);
+   * - `applySolveResponse` — `MonthCalendar.test.tsx` («week 3's roster lands on the
+   *   month's third Sunday even with the first deselected»);
+   * - `mapUnfilledSeats`' 2nd argument — `MonthGenerator.create.test.tsx` («E21: an
+   *   unfilled seat for week 3 lands on the THIRD Sunday …»);
+   * - `emptyVoiceSeats` (the confirm's count) — `MonthGenerator.create.test.tsx`
+   *   («E21: deselecting a Sunday does not make its adjacent Saturday …»);
+   * - the `requestSaturdayWeeks` memo, `pinBoard`'s `collectPins` and
+   *   `prepareSolve`'s `collectPins` — `trailingSaturday.wiring.test.tsx` («with
+   *   25 Oct deselected, the 31st is still week 5 …»): over the calendar's spine the
+   *   trailing Saturday would be the 24th;
+   * - `pinViolationNotices` (the day a pin-violation notice names) —
+   *   `fillEmpty.wiring.test.tsx` («names a pin violation's day over the month's
+   *   FULL Sunday list …»): over the calendar's spine, with 1 Mar deselected, week 3
+   *   would read 22 mar instead of 15 mar.
+   *
+   * One is NOT pinned, and a swap stays green: `PlannerGrid`'s `sundayDates` prop,
+   * which `sundayDatesForColumn` shadows for every column here. (A former
+   * consumer, `computeUnaddressableDates`, went with the «Fuera del alcance de
+   * Auto» surface — ADR-0048, T1. `ruleEnforcement` used to be named here and never
+   * belonged: it is reached only from `candidateRanking`, is not imported by this
+   * file, and takes no Sunday list at all.)
    *
    * The reason is that the week number is POSITIONAL over the full month's
    * Sunday list. Feed the selected subset to the spine and week 3 stops meaning
    * the third Sunday: the seeded week-1/week-3 exclusions land on the wrong
    * dates and produce rosters that silently violate stated rules, or the solve
    * 400s outright below three Sundays.
-   *
-   * All four are pinned in `MonthGenerator.create.test.tsx` — swapping any one
-   * of them for `selectedSundays` fails a test there.
    */
   const selectedSundays = useMemo(
     () => sundayDatesFull.filter(d => !deselectedSundays.includes(d)),
@@ -2523,10 +2542,21 @@ export default function MonthGenerator({
     onCreated();
   }, [onCreated, storedGenerationKey, storedInventory.coherent, storedMode, storedSource?.roles]);
 
-  const unaddressableDatesList = useMemo(
-    () => computeUnaddressableDates(sundayDatesFull, activeSatDates),
-    [sundayDatesFull, activeSatDates],
-  );
+  /**
+   * The Saturday weeks the request WOULD send (`weekends_with_saturday`), for the board's two
+   * previews of Auto — the pin conflicts and the confirm's empty-seat count (Q1: a trailing
+   * Saturday T5 withholds is not a column Auto writes). Read off `buildSolveRequest` itself
+   * rather than a second copy of T5, so the preview and the request cannot disagree; no
+   * history touches `weekends_with_saturday`, hence `[]`. `undefined` (no filter) when the
+   * request would be refused pre-flight or there are no rules yet — Auto sends nothing then.
+   */
+  const requestSaturdayWeeks = useMemo(() => {
+    if (storedMode || !solverConfig) return undefined;
+    const built = buildSolveRequest({
+      config: solverConfig, members, sundayDates: sundayDatesFull, activeSatDates, historyEntries: [], year, month,
+    });
+    return built.ok ? built.request.weekends_with_saturday : undefined;
+  }, [storedMode, solverConfig, members, sundayDatesFull, activeSatDates, year, month]);
 
   const savedWindow = useMemo(
     () => savedWindowFor(year, month, allRoles ?? []),
@@ -2536,7 +2566,9 @@ export default function MonthGenerator({
   /** Spec §3.3 — what the board says about each seat that will be pinned; only with the switch on. */
   const pinBoard = useMemo(() => {
     if (storedMode || !fillEmptyOnly || !solverConfig) return undefined;
-    const collected = collectPins({ cells, columns, rows, members, sundayDates: sundayDatesFull });
+    const collected = collectPins({
+      cells, columns, rows, members, sundayDates: sundayDatesFull, weekendsWithSaturday: requestSaturdayWeeks,
+    });
     const p = solverPools(solverConfig, members);
     return pinConflicts({
       collected,
@@ -2544,7 +2576,7 @@ export default function MonthGenerator({
       members,
       pools: { sundayLeads: p.sundayLeadNames, saturdayLeads: p.saturdayLeadNames, support: [...p.supportNames, ...p.extraSupport] },
     });
-  }, [storedMode, fillEmptyOnly, solverConfig, cells, columns, rows, members, sundayDatesFull]);
+  }, [storedMode, fillEmptyOnly, solverConfig, cells, columns, rows, members, sundayDatesFull, requestSaturdayWeeks]);
 
   /**
    * The SAVED half of the participation rail: everything stored in the month
@@ -3494,6 +3526,10 @@ export default function MonthGenerator({
     pinned: CollectedPins | null;
     /** The switch as it stood in THIS render — the same one `cells` came from. */
     fillEmpty: boolean;
+    /** The history the request was built with, so the retry is rebuilt from the same entries. */
+    historyEntries: SolverHistoryEntry[];
+    /** This is the retry without the trailing Saturday (ruling Q19): a retry is never retried. */
+    isRetry: boolean;
   }
 
   /**
@@ -3505,9 +3541,18 @@ export default function MonthGenerator({
    *
    * Owns no `autoPending`: the per-browser path raises it only AFTER this returns (it has
    * nothing to wait for), the derived path before its history read. Keep that asymmetry.
+   *
+   * @param retry `runSolve`'s retry without the trailing Saturday (ruling Q19): the request is
+   *   rebuilt with it withheld as `infeasible`, under the FIRST attempt's switch. Everything below runs again for it — its notices replace the first
+   *   attempt's, its pins are collected over its own `weekends_with_saturday` (Q1, so no pin on
+   *   the 31st) and `pinRefusal` judges them, with the same exits.
    */
-  function prepareSolve(config: SolverConfig, historyEntries: SolverHistoryEntry[]): PreparedSolve | null {
-    const fillEmpty = fillEmptyOnly;
+  function prepareSolve(
+    config: SolverConfig,
+    historyEntries: SolverHistoryEntry[],
+    retry?: { fillEmpty: boolean },
+  ): PreparedSolve | null {
+    const fillEmpty = retry ? retry.fillEmpty : fillEmptyOnly;
     setAutoError(null);
     setAutoNotices([]);
     const built = buildSolveRequest({
@@ -3518,6 +3563,7 @@ export default function MonthGenerator({
       historyEntries,
       year,
       month,
+      ...(retry ? { withholdTrailing: true } : {}),
     });
     if (!built.ok) {
       // Pre-flight refusal (fact 14) — never reaches the network. EXIT 1, and
@@ -3527,12 +3573,19 @@ export default function MonthGenerator({
       applySpecialFill(config, cells, undefined, fillEmpty);
       return null;
     }
-    const notices: string[] = [];
-    const floors = omittedCapsNotice(built.omittedCaps);
-    if (floors) notices.push(floors);
+    // Spec §2.3's order: the Saturday minimums left out, then the trailing Saturday T5 did
+    // not send, then delivery 3's lines.
+    const notices: string[] = [...omittedCapsNotices(built.omittedCaps)];
+    const trailing = built.trailing && trailingNotice(built.trailing);
+    if (trailing) notices.push(trailing);
     let pinned: CollectedPins | null = null;
     if (fillEmpty) {
-      const collected = collectPins({ cells, columns, rows, members, sundayDates: sundayDatesFull });
+      // Q1: a trailing Saturday the request does not send is not a column Auto writes, so
+      // its seats are the admin's — never pinned, and so never refused below.
+      const collected = collectPins({
+        cells, columns, rows, members, sundayDates: sundayDatesFull,
+        weekendsWithSaturday: built.request.weekends_with_saturday,
+      });
       const refusal = pinRefusal({
         collected,
         columns,
@@ -3542,8 +3595,11 @@ export default function MonthGenerator({
         poolNames: [...built.request.sunday_leads, ...built.request.saturday_leads, ...built.request.support],
       });
       if (refusal) {
-        // Refused before the fetch, in Spanish, naming the cell (spec §3.2).
+        // Refused before the fetch, in Spanish, naming the cell (spec §3.2). The floor and
+        // trailing lines still show: they describe the request the next Auto will send, as on a
+        // solver refusal. No dropped-pin line — no pins went anywhere.
         setAutoError(refusal);
+        setAutoNotices(notices);
         applySpecialFill(config, cells, undefined, fillEmpty);
         return null;
       }
@@ -3557,6 +3613,8 @@ export default function MonthGenerator({
       notices,
       pinned,
       fillEmpty,
+      historyEntries,
+      isRetry: !!retry,
     };
   }
 
@@ -3565,6 +3623,14 @@ export default function MonthGenerator({
    * client-mutation invariant (try/catch, check `res.ok`, never close-as-success on failure);
    * the caller owns `autoPending` and its `finally`. A short-staffed month returning `ok:false`
    * is the solver's NORMAL failure (D15), not an edge case.
+   *
+   * **The retry without the trailing Saturday (ruling Q19, ADR-0048).** Sending week
+   * `weeks + 1` adds constraints the planner cannot fully predict, so the solver can refuse the
+   * whole month, Sundays included, where a request without it would solve. When the SOLVER
+   * refused (a 422 the route did not tag `transport_error`) a request that sent that week, this
+   * rebuilds it withheld (`prepareSolve`'s `retry`) and solves once more — awaited, so the
+   * caller's `autoPending` covers both solves. A retry is never retried; a transport failure or
+   * a throw never retries. No `applySpecialFill` before the retry: its own exit fills.
    *
    * @param historyMonths the months the derived path's history covers (R14), labelled only on
    *   success. Absent ⇒ the per-browser path, whose diagnostics carry `history_runs_used` instead.
@@ -3584,6 +3650,20 @@ export default function MonthGenerator({
         response = await res.json().catch(() => null);
       }
       if (!res.ok || !response || !response.ok || !response.schedule) {
+        const { request } = prepared;
+        if (
+          !prepared.isRetry
+          && res.status === 422
+          && response?.ok === false
+          && response.transport_error !== true
+          && request.weekends_with_saturday.includes(request.weeks + 1)
+        ) {
+          // Q19: the solver refused a month that included the trailing Saturday. Solve it again
+          // without it; a pre-fetch refusal of the retry has already filled and said why.
+          const retry = prepareSolve(config, prepared.historyEntries, { fillEmpty: prepared.fillEmpty });
+          if (retry) await runSolve(config, retry, historyMonths);
+          return;
+        }
         // EXIT 2 — the solver answered, and said no. A short-staffed month is
         // the solver's NORMAL failure (D15); the specials still fill.
         setAutoError(solverRefusalMessage(response?.error));
@@ -4523,7 +4603,6 @@ export default function MonthGenerator({
           */
           canReceive={canReceiveDrop}
           skipped={skippedColumnIds}
-          unaddressableDates={unaddressableDatesList}
           unresolvedNames={allUnresolvedNames}
           unfilled={unfilled}
           onCellsChange={handleCellsChange}
@@ -4584,7 +4663,9 @@ export default function MonthGenerator({
           fillEmpty={storedMode ? undefined : {
             enabled: fillEmptyOnly,
             onChange: (next) => { if (!autoPending) setFillEmptyOnly(next); },
-            emptyVoiceSeats: emptyVoiceSeats({ cells, columns, rows, sundayDates: sundayDatesFull }),
+            emptyVoiceSeats: emptyVoiceSeats({
+              cells, columns, rows, sundayDates: sundayDatesFull, weekendsWithSaturday: requestSaturdayWeeks,
+            }),
           }}
           pinConflicts={pinBoard}
           clear={storedMode ? undefined : {

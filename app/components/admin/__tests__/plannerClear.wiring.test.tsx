@@ -16,9 +16,9 @@ beforeEach(() => { localStorage.clear(); });
 
 const roster: Respond = (body) => {
   const schedule = emptySchedule(body);
-  schedule["1"].Sunday.Lead = ["Ana Karen Villalobos"];
-  schedule["1"].Sunday.BGV = ["María Lucía Estrada"];
-  schedule["2"].Sunday.BGV = ["Alberto Ruiz Cano"];
+  schedule["1"].Sunday!.Lead = ["Ana Karen Villalobos"];
+  schedule["1"].Sunday!.BGV = ["María Lucía Estrada"];
+  schedule["2"].Sunday!.BGV = ["Alberto Ruiz Cano"];
   return { ok: true, schedule, unfilled_seats: [] };
 };
 
@@ -65,7 +65,7 @@ describe("«Borrar» this service", () => {
     // asignaciones.» and the toast stack replaced the first with the second.
     const { container } = await setup((body, call) => {
       const answer = roster(body, call);
-      answer.schedule!["2"].Sunday.Choir = ["María Lucía Estrada"];
+      answer.schedule!["2"].Sunday!.Choir = ["María Lucía Estrada"];
       return answer;
     });
     // Each item is scoped to its own menu: the first panel is still in its exit animation.

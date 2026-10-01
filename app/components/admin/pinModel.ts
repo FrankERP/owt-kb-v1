@@ -9,7 +9,11 @@
 
 import type { SolveRequest, SolveResponse } from "@/app/api/admin/solve/route";
 import { displayName, type RankMember } from "./candidateRanking";
-import { isSolvable, weekForColumn, type GridCell, type GridColumn, type GridRow } from "./plannerModel";
+import { dayLabel, isSolvable, weekForColumn, type GridCell, type GridColumn, type GridRow } from "./plannerModel";
+
+// Lives in `plannerModel` (its trailing-Saturday notice needs it, and `plannerModel` cannot
+// import this module back); re-exported so this module's surface is unchanged.
+export { dayLabel };
 
 export type PinRole = NonNullable<SolveRequest["pinned"]>[number]["role"];
 
@@ -63,19 +67,12 @@ const ROLE_FOR: Record<"sunday_role" | "saturday_role", Partial<Record<string, P
   saturday_role: { lead: "Sat.Lead", bgv: "Sat.BGV" },
 };
 
-const SHORT_MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-
 const cellKeyOf = (columnId: string, rowId: string) => `${columnId}|${rowId}`;
 
 export const serviceOfRole = (role: PinRole): "Sun" | "Sat" => (role.startsWith("Sun") ? "Sun" : "Sat");
 
 export function pinSeatKey(seat: Pick<PinSeat, "columnId" | "rowId" | "memberId" | "occurrence">): string {
   return `${seat.columnId}|${seat.rowId}|${seat.memberId}#${seat.occurrence}`;
-}
-
-/** `2026-10-04` → `4 oct`. String arithmetic on the ISO date — no `Date`, no Intl. */
-export function dayLabel(iso: string): string {
-  return `${Number(iso.slice(8, 10))} ${SHORT_MONTHS[Number(iso.slice(5, 7)) - 1]}`;
 }
 
 export function serviceDayLabel(type: "sunday_role" | "saturday_role", iso: string): string {
@@ -90,6 +87,23 @@ export function seatLabel(seat: Pick<PinSeat, "columnId" | "rowId">, columns: Gr
   return `${label} del ${serviceDayLabel(column.type, column.date)}`;
 }
 
+/**
+ * Whether Auto writes this column: a weekend column the solver has a week for, and — when the
+ * request's `weekends_with_saturday` is given — a Saturday whose week the request sends (Q1:
+ * a trailing Saturday withheld by T5 is filled by hand, never pinned and refused).
+ */
+function autoWrites(
+  column: GridColumn,
+  sundayDates: string[],
+  weekendsWithSaturday: number[] | undefined,
+): boolean {
+  if (column.type === "special_role") return false;
+  const week = weekForColumn(column, sundayDates);
+  if (week == null) return false;
+  if (column.type === "saturday_role" && weekendsWithSaturday && !weekendsWithSaturday.includes(week)) return false;
+  return true;
+}
+
 export function collectPins(input: {
   cells: GridCell[];
   columns: GridColumn[];
@@ -97,16 +111,22 @@ export function collectPins(input: {
   members: RankMember[];
   /** The FULL month spine (`sundayDatesFull`) — week numbers are positional over it (E21). */
   sundayDates: string[];
+  /**
+   * The request's `weekends_with_saturday`. When given, a Saturday column whose week is not
+   * in it is not a column Auto writes, so it sends no pin (Q1). Absent ⇒ no such filter.
+   */
+  weekendsWithSaturday?: number[];
 }): CollectedPins {
-  const { cells, columns, rows, members, sundayDates } = input;
+  const { cells, columns, rows, members, sundayDates, weekendsWithSaturday } = input;
   const byKey = new Map(cells.map((c) => [cellKeyOf(c.columnId, c.rowId), c]));
   const out: CollectedPins = { pins: [], seats: [], pinnedCellKeys: new Set(), dropped: [], unresolved: [], unnamed: [] };
   const keptInService = new Map<string, PinSeat>(); // `${person}|${week}|${Sun|Sat}` → kept seat
 
   for (const column of columns) {
     if (column.type === "special_role") continue;
+    if (!autoWrites(column, sundayDates, weekendsWithSaturday)) continue;
     const week = weekForColumn(column, sundayDates);
-    if (week == null) continue; // not a column Auto writes
+    if (week == null) continue; // unreachable after `autoWrites`; narrows `week`
     for (const rowId of VOICE_ROW_ORDER) {
       const row = rows.find((r) => r.id === rowId);
       const role = ROLE_FOR[column.type][rowId];
@@ -280,12 +300,14 @@ export function emptyVoiceSeats(input: {
   columns: GridColumn[];
   rows: GridRow[];
   sundayDates: string[];
+  /** The request's `weekends_with_saturday`, as in `collectPins` (Q1). Absent ⇒ no such filter. */
+  weekendsWithSaturday?: number[];
 }): number {
-  const { cells, columns, rows, sundayDates } = input;
+  const { cells, columns, rows, sundayDates, weekendsWithSaturday } = input;
   const byKey = new Map(cells.map((c) => [cellKeyOf(c.columnId, c.rowId), c]));
   let n = 0;
   for (const column of columns) {
-    if (column.type === "special_role" || weekForColumn(column, sundayDates) == null) continue;
+    if (!autoWrites(column, sundayDates, weekendsWithSaturday)) continue;
     for (const row of rows) {
       if (!isSolvable(row, column) || row.target == null) continue;
       n += Math.max(0, row.target - (byKey.get(cellKeyOf(column.columnId, row.id))?.occupants.length ?? 0));

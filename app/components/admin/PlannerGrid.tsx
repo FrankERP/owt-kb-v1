@@ -25,8 +25,9 @@
 //  4. A Saturday column has no Coro row at all — gated by `rowAppliesTo`, not
 //     just solvability. (A special DOES have one — E18.)
 //  5. Unchecking Domingos still enables Auto and renders no Sunday column.
-//  6. `unaddressableDates` is a prop computed from `sundayDates`, never
-//     derived here from `columns` (D9's columns can hold zero Sundays).
+//  6. (Retired.) An `unaddressableDates` prop drove a «Fuera del alcance de
+//     Auto» badge; since ADR-0048 (T1) every in-month Saturday has a solver
+//     week, so the prop, the badge and the confirm clause are gone.
 //  7. Auto has a failure and pending contract (D15) — the component does not
 //     own the fetch (`onAuto` does), but it owns rendering `autoState`
 //     honestly: pending, error, and disabled-with-reason.
@@ -245,12 +246,6 @@ export interface PlannerGridProps {
   canReceive: (c: GridColumn) => boolean;
   /** By opaque column id. */
   skipped: Set<string>;
-  /**
-   * Computed from `sundayDates`, NOT from `columns` — under D9 `columns` can
-   * hold zero Sunday dates, and deriving this from `columns` would mark every
-   * Saturday unaddressable.
-   */
-  unaddressableDates: string[];
   unresolvedNames: string[];
   /** `mapUnfilledSeats` output. */
   unfilled: { columnId: string; rowId: string }[];
@@ -608,7 +603,6 @@ export default function PlannerGrid(props: PlannerGridProps) {
     createBlockFor,
     canReceive,
     skipped,
-    unaddressableDates,
     unresolvedNames,
     unfilled,
     onCellsChange,
@@ -743,8 +737,6 @@ export default function PlannerGrid(props: PlannerGridProps) {
     for (const u of visibleUnfilled) set.add(cellKey(u.columnId, u.rowId));
     return set;
   }, [visibleUnfilled]);
-
-  const unaddressableSet = useMemo(() => new Set(unaddressableDates), [unaddressableDates]);
 
   /** Whether Auto will run the LOCAL filler at all (E5) — see the confirm copy. */
   const hasSpecialColumn = useMemo(
@@ -1752,7 +1744,6 @@ export default function PlannerGrid(props: PlannerGridProps) {
             preflight={preflightFor(column)}
             createBlock={createBlockFor(column)}
             skipped={skipped.has(column.columnId)}
-            unaddressable={unaddressableSet.has(column.date)}
             onToggleSkip={() => onToggleSkip(column.columnId)}
             stored={mode === "stored"}
             readOnly={mode === "stored" && "admission" in column && column.admission === "readOnly"}
@@ -2152,8 +2143,6 @@ export default function PlannerGrid(props: PlannerGridProps) {
             {fillEmpty?.enabled
               ? `${fillEmpty.emptyVoiceSeats === 1 ? "Solo se llenará 1 lugar de voz vacío" : `Solo se llenarán los ${fillEmpty.emptyVoiceSeats} lugares de voz vacíos`} (Lead, BGV, Coro); lo que ya está puesto se respeta y se envía al solver como fijo. Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca.`
               : "Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes. Las asignaciones manuales de instrumentos y FOH no se tocan."}
-            {unaddressableDates.length > 0 &&
-              ` ${unaddressableDates.length} sábado(s) fuera del alcance de Auto no se tocarán.`}
           </p>
           {/* E5: a special never goes to the solver, so its fill is a DIFFERENT
               mechanism and has to be named as one — greedy, local, rules-first,
@@ -2419,7 +2408,6 @@ function ColumnHeader({
   preflight,
   createBlock,
   skipped,
-  unaddressable,
   onToggleSkip,
   stored,
   readOnly,
@@ -2433,7 +2421,6 @@ function ColumnHeader({
   preflight: TargetPreflight | null;
   createBlock: "existing" | "created" | null;
   skipped: boolean;
-  unaddressable: boolean;
   onToggleSkip: () => void;
   stored: boolean;
   readOnly: boolean;
@@ -2567,11 +2554,6 @@ function ColumnHeader({
             </p>
           )}
         </div>
-      )}
-      {!stored && unaddressable && (
-        <p className="font-label text-[10px] uppercase tracking-widest text-negative-fg">
-          Fuera del alcance de Auto
-        </p>
       )}
     </div>
   );
