@@ -75,9 +75,12 @@ for stored service rosters:
   Some months end on a Saturday whose Sunday is in the next month, such as Sat 31 Oct 2026. That
   Saturday's column is a column Auto writes, as solver week `weeks + 1` of its own month. It is
   preselected like every Saturday.
-  - If no lead can take it (everyone is unavailable or excluded), Auto still solves the Sundays.
-    It leaves the 31st to be filled by hand and says so under Auto: «El sábado 31 oct no se mandó
-    al solver: ningún líder puede dirigirlo (no disponibles o excluidos). Llénalo a mano.»
+  - If no lead can take it, Auto still solves the Sundays. A lead cannot when they are
+    unavailable, when a rule excludes them, or when their rule has no Saturday left. For
+    example, Andy has `Sat.* == 1` and is the only lead who can take the 24th. Auto leaves the
+    31st to be filled by hand and says so under Auto: «El sábado 31 oct no se mandó al solver:
+    ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla).
+    Llénalo a mano.»
   - A withheld 31st is not pinned by «Solo llenar vacíos» and is not counted in its confirm.
   - Rule checks on that column judge it as that week, over its own month's Sundays, in both
     create and stored mode. That covers the picker, the warnings on seated members, and drag and

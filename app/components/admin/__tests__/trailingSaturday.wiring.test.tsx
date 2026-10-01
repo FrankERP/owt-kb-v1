@@ -82,7 +82,7 @@ describe("the trailing Saturday — T5 withholds it when nobody can lead it", ()
     expect(bodies[0].dsl_rules.some((r) => r.includes("week 5"))).toBe(false);
     await waitFor(() => expect(cellAt(container, "lead", OCT_SUNDAYS[0]).textContent).toContain("Ana"));
     expect(noticeLines(container)).toEqual([
-      "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles o excluidos). Llénalo a mano.",
+      "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.",
     ]);
     // Nothing came back for the 31st, so nothing was written there.
     expect(cellAt(container, "lead", OCT_31).textContent).not.toContain("Ana");
@@ -241,8 +241,43 @@ describe("the trailing Saturday — notice order", () => {
     expect(bodies[1].weekends_with_saturday).toEqual([]);
     await waitFor(() => expect(noticeLines(container)).toHaveLength(2));
     expect(noticeLines(container)).toEqual([
-      "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles o excluidos). Llénalo a mano.",
+      "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.",
       "Lucía estaba en dos lugares del domingo 4 oct; se fijó solo en BGV.",
+    ]);
+  });
+});
+
+describe("the trailing Saturday — a pin refusal still shows the floor and trailing lines", () => {
+  it("refuses before the fetch, and lists the minimums left out and the withheld 31st under Auto", async () => {
+    // Final review m3: `prepareSolve` returned on a pin refusal before it set the notices, so
+    // these two lines — true of the request either way — were never shown.
+    const rules = readyRules({
+      ...DEFAULT_SOLVER_CONFIG,
+      restrictions: [
+        ...DEFAULT_SOLVER_CONFIG.restrictions,
+        {
+          id: "lucia-sat", person: "Lucía", excludedPatterns: [], fairness: "none", fairnessSlack: 0, weekExclusions: [],
+          caps: [{ id: "c1", pattern: "Sat.*", op: "==", value: 1, relative: false, relOffset: 2 }],
+        },
+      ],
+    });
+    const { bodies, container, rerender } = setup(echoPins, [ANA_AWAY, LUCIA, BETO], rules);
+    // Beto on the first Sunday's BGV by hand; then he leaves the members list, so his seat no
+    // longer resolves and «Solo llenar vacíos» refuses.
+    fireEvent.click(cellAt(container, "bgv", OCT_SUNDAYS[0]).querySelector("[data-cell-action]") as HTMLElement);
+    const picker = screen.getByRole("region", { name: `Candidatos para BGV — ${OCT_SUNDAYS[0]}` });
+    fireEvent.click(within(picker).getByRole("button", { name: /Beto/ }));
+    rerender(<Gen rules={rules} members={[ANA_AWAY, LUCIA] as never} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+
+    fireEvent.click(fillEmptySwitch());
+    runAuto();
+    await waitFor(() => expect(screen.getByText(
+      "No se puede usar «Solo llenar vacíos»: en BGV del domingo 4 oct hay alguien que ya no está en la lista de miembros. Quítalo de ese lugar y vuelve a intentarlo.",
+    )).toBeTruthy());
+    expect(bodies).toHaveLength(0);
+    expect(noticeLines(container)).toEqual([
+      "Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó «Sat.* == 1» a Lucía.",
+      "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.",
     ]);
   });
 });

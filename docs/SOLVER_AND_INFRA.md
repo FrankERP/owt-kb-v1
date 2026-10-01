@@ -273,10 +273,15 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
     day, or if a `!in` pattern or a week exclusion for `weeks + 1` covers `Sat.Lead`. Patterns
     expand through `rolesOfPattern`, which mirrors the solver's `expand_pattern`; the guard is
     `patternRolesSync.test.ts`.
+  - A lead also cannot when they have no Saturday left under their rule (ruling Q17). That
+    means a maximum (`==` or `<=`) on a pattern covering `Sat.Lead`, at most the number of other
+    sent Saturdays on which they are the only possible lead. The solver's one-Lead-per-Saturday
+    rule puts them on each of those, so with Frank away on the 24th and the 31st, Andy's
+    `Sat.* == 1` is used up by the 24th. A zero maximum bars them outright.
   - If no lead can, `weeks + 1` is left out and the Sundays are still solved. Auto says «El
-    sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles o
-    excluidos). Llénalo a mano.» (`trailingNotice`). The check is advisory; the solver stays the
-    authority.
+    sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos
+    o sin sábados libres en su regla). Llénalo a mano.» (`trailingNotice`). The check is
+    advisory; the solver stays the authority.
   - If it is sent, each request member unavailable that day gets
     `<name> !in week <weeks+1> Sat.*`. Nothing is derived from the next month's Sunday.
   - If T5 withholds it, week exclusions that name `weeks + 1` are not sent, because the solver
@@ -301,10 +306,12 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
     exclusion for that week covers the minimum's roles. For `Sat.Lead`, they must also be in a
     lead pool. The line reads «No se aplicó «X» a A y B: los sábados que Auto llena este mes no
     alcanzan para cumplirlo (por disponibilidad, exclusiones o rol).»
-  - `combined`: the person already keeps a Saturday minimum this one cannot be merged with (see
-    the seat model below). This is decided before any seat is counted, so it is a limit of the
-    model, not a shortage of seats. The line reads «No se aplicó «X» a A y B: Auto no combina dos
-    mínimos de sábado de la misma persona.»
+  - `combined`: the minimum is not the person's first Saturday minimum in the rules card's order
+    (ruling Q16). Only one per person goes on to the seats. This is decided after `unreachable`
+    and before any seat is counted, so it is a limit of the planner, not a shortage of seats.
+    "First" is by position: a person whose first minimum is unreachable keeps none. The line
+    reads «No se aplicó «X» a A y B: Auto no combina dos mínimos de sábado de la misma
+    persona.»
   - `capacity`: the remaining minimums cannot all get a seat. The line reads «No caben todos los
     mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó …».
 
@@ -314,24 +321,25 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
     either, but only where that person can take that role that week. A minimum of v needs v
     different Saturdays.
   - It is a max flow, so any set it accepts comes with a real seat assignment.
+  - It only ever sees one minimum per person (`combined` above), and it relies on that: each
+    minimum is one person node. For one minimum per person it is exact. It matched brute force on
+    17,227 cases, and 1,900 setups against the real solver gave no false `capacity`.
   - If the minimums do not all fit, they are sorted by the person's Saturday count in the
     request's history, fewest first, ties by name. Under ADR-0046's `history: []`, that is by
     name. Each one is kept only if the kept set plus it still fits.
-  - A person with two or more Saturday minimums is judged conservatively (`mergeFloors`): one
-    demand, the largest value, on seats of a class every minimum allows. It cannot be merged
-    when no class is common to all (`Sat.Lead >= 1` plus `Sat.BGV >= 1`), or when an `==`
-    minimum is below the largest value (`Sat.* == 2` plus `Sat.Lead == 1`, which means one Lead
-    and one BGV). Then the later minimum is dropped as `combined`, in every month.
   - A Saturday's lone lead: when exactly one lead-pool member can lead a sent Saturday, they may
     take only its Lead seat there, because the solver needs a Lead on every Saturday and seats a
     person once per Saturday. Their own `Sat.BGV` minimum on that Saturday is therefore
     `capacity`.
 
-  Maximums always stay. The solver stays the authority for what the model leaves out: the
-  dedicated Saturday-lead anchor (`sat_anchor`), zero maximums that bar `Sat.Lead`, rows grown by
-  pins, and the one-Lead-per-Saturday rule (`mandatory_lead`) beyond the lone lead: two or more
-  leads whose minimums all push them onto BGV, and the upper side of an `==` minimum combined
-  with that rule.
+  Maximums always stay. The solver stays the authority for what the model leaves out:
+  - the dedicated Saturday-lead anchor (`sat_anchor`);
+  - two or more leads whose minimums all push them onto BGV (the one-Lead-per-Saturday rule
+    beyond the lone lead);
+  - on in-month Saturdays, a maximum combined with that rule: the upper side of an `==`
+    minimum, or a `<=`, zero included. Only T5 reads maximums, and only for the trailing
+    Saturday;
+  - rows grown by pins.
 
   October 2026 is why this exists: its only Saturday service was the 31st, so the admin
   deselected 3/10/17/24, the request sent no Saturday, and three saved `Sat.* == 1` minimums made
@@ -339,8 +347,8 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
 
   A request stays byte-identical to before this change when no trailing Saturday is selected and
   no minimum is dropped. ADR-0048 names the one case where a dropped minimum is one the solver
-  may have met: `combined`, which applies in every month whenever one person's minimums cannot be
-  merged.
+  may have met: `combined`, which applies in every month to every Saturday minimum after a
+  person's first.
 - **The solver's own reason reaches the admin.** A solver `ok: false` comes back as a 422 whose
   body carries the reason; Auto now reads it and shows «El solver no encontró solución. Motivo
   del solver: …» (`solverRefusalMessage`) instead of the generic line alone. The solver's

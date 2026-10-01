@@ -1155,9 +1155,10 @@ describe("MonthGenerator — create path", () => {
   // `mapUnfilledSeats`' spine argument and `emptyVoiceSeats` (the confirm's
   // count). `buildSolveRequest` and `applySolveResponse` are pinned in
   // `MonthCalendar.test.tsx`; the `requestSaturdayWeeks` memo and both
-  // `collectPins` calls in `trailingSaturday.wiring.test.tsx`. The full list,
-  // with the two consumers nothing pins, is on `selectedSundays` in
-  // `MonthGenerator.tsx`. Each was checked by swapping it for `selectedSundays`
+  // `collectPins` calls in `trailingSaturday.wiring.test.tsx`; `pinViolationNotices`
+  // in `fillEmpty.wiring.test.tsx`. The full list, with the one consumer nothing
+  // pins, is on `selectedSundays` in `MonthGenerator.tsx`. Each was checked by
+  // swapping it for `selectedSundays`
   // (2026-09-30): before these tests, a swap at either of the two below left the
   // WHOLE suite green, because `plannerModel.test.ts` pins the pure functions
   // given correct arguments and nothing pinned that the component supplies them.

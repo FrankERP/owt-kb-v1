@@ -490,29 +490,32 @@ describe("T4: minimums that do not all fit the Saturday seats", () => {
     expect(built.omittedCaps).toEqual(capacity("Dani"));
   });
 
-  it("a person with two Saturday floors is judged conservatively: every seat must satisfy both", () => {
-    // Documented limitation (rulings Q10, Q14): Lead one Saturday and BGV the other would meet
-    // both of Ana's floors, but her seats are held to the classes EVERY floor allows — none here —
-    // so the later floor is left out as `combined`, not `capacity`: the seats did not run out.
-    // `Sat.*` + `Sat.Lead` share the Lead class and both stay. Frank is a second lead, so each
-    // Saturday has someone to lead it. (Fix round 2, M3: with Ana the only lead, one of the two
-    // Saturdays had no lead at all, which the solver refuses whatever the minimums.)
+  it("a person with two Saturday floors keeps only the first; the second is `combined`, before any seat", () => {
+    // Ruling Q16: one Saturday floor per person is judged — the first in the rules card's order —
+    // and every later one is `combined`. Lead one Saturday and BGV the other would meet both of
+    // Ana's floors, and the solver could find that; the planner does not look for it. Frank is a
+    // second lead, so each Saturday has someone to lead it. (Fix round 2, M3: with Ana the only
+    // lead, one of the two Saturdays had no lead at all, which the solver refuses regardless.)
     const people = [person("ana", "Ana Apellido", "Ana"), person("frank", "Francisco Rocha", "Frank")];
     const both = (caps: RestrictionCap[]) =>
       build({ members: people, config: { sundayLeads: ["ana", "frank"], restrictions: [rule("Ana", caps)] }, activeSatDates: ["2026-10-24", "2026-10-31"] });
     expect(both([floor(1, "Sat.Lead", ">="), floor(1, "Sat.BGV", ">=")]).omittedCaps).toEqual([
       { person: "Ana", cap: "Sat.BGV >= 1", reason: "combined" },
     ]);
-    expect(both([floor(1, "Sat.*"), floor(1, "Sat.Lead")]).omittedCaps).toEqual([]);
+    // Moved by Q16: was `[]`, when the two shared the Lead class and were merged and both kept.
+    const twoLead = both([floor(1, "Sat.*"), floor(1, "Sat.Lead")]);
+    expect(twoLead.omittedCaps).toEqual([{ person: "Ana", cap: "Sat.Lead == 1", reason: "combined" }]);
+    expect(twoLead.request.dsl_rules).toEqual(["Ana Apellido Sat.* == 1"]);
   });
 
-  it("I-A: an `==` minimum below the person's other one cannot be merged, and is `combined`", () => {
+  it("I-A: Pau's `Sat.* == 2` and `Sat.Lead == 1` — the second is `combined`", () => {
     // The 24th and the 31st sent (November: the 21st and the 28th). Pau, a Sunday lead, has
-    // `Sat.* == 2` and `Sat.Lead == 1`: really one Lead and one BGV. Merged into «two seats of
-    // a class both allow» she would be seated Lead twice, which breaks `Sat.Lead == 1`, and the
-    // BGV seats are full (A1–A3 on one Saturday, B1–B3 on the other) — the solver refused this
-    // month (ok: false) while the pooled merge reported that everything fit. Frank, a lead with
-    // no minimum, leads the other seat.
+    // `Sat.* == 2` and `Sat.Lead == 1`: really one Lead and one BGV, and the BGV seats are full
+    // (A1–A3 on one Saturday, B1–B3 on the other). Merged into «two seats of a class both allow»
+    // she was seated Lead twice and the model called it a fit; the solver refused the month
+    // (ok: false). Same expectation as fix round 2, for a new reason (Q16): `Sat.Lead == 1` is
+    // her second floor, so it is `combined` by position — no merge rule is consulted. Frank, a
+    // lead with no minimum, leads the other seat.
     const shapes = [
       { sundayDates: OCT, sats: ["2026-10-24", "2026-10-31"], month: 10 },
       { sundayDates: NOV, sats: ["2026-11-21", "2026-11-28"], month: 11 },
@@ -538,6 +541,80 @@ describe("T4: minimums that do not all fit the Saturday seats", () => {
       expect(built.omittedCaps, String(month)).toEqual([{ person: "Pau", cap: "Sat.Lead == 1", reason: "combined" }]);
       expect(built.request.dsl_rules, String(month)).toContain("Paulina Reyes Sat.* == 2");
     }
+  });
+
+  it("the final review's I1 (Nov 21/28): Ana's second floor is `combined`, and Beto, Caro and Dani all keep theirs", () => {
+    // Ana, Beto, Caro and Dani are Sunday leads; S0–S2 are support. Ana has `Sat.* >= 2` then a
+    // `Sat.Lead` floor; the others one `Sat.Lead` each. Merged, Ana's two became two Lead seats,
+    // so with Beto and Caro the four Lead seats were full and Dani was left out as `capacity` —
+    // falsely: main kept all four and the solver seated them (W4 Lead Caro and Dani with Ana on
+    // BGV, W5 Lead Ana and Beto). Judged one per person (Q16), Ana's `Sat.* >= 2` can take BGV.
+    // The `==` shapes too: the final review saw the same false `capacity` with them.
+    const variants: Array<{ ana: RestrictionCap[]; op: RestrictionCap["op"] }> = [
+      { ana: [floor(2, "Sat.*", ">="), floor(1, "Sat.Lead", ">=")], op: ">=" },
+      { ana: [floor(2), floor(1, "Sat.Lead", ">=")], op: "==" },
+      { ana: [floor(2), floor(1, "Sat.Lead")], op: "==" },
+    ];
+    const leads = ["Ana", "Beto", "Caro", "Dani"].map((n) => person(n.toLowerCase(), `${n} Apellido`, n));
+    const support = ["S0", "S1", "S2"].map((n) => person(n.toLowerCase(), `${n} Apellido`, n));
+    for (const { ana, op } of variants) {
+      const built = build({
+        members: [...leads, ...support],
+        config: {
+          sundayLeads: leads.map((p) => p._id),
+          support: support.map((p) => p._id),
+          restrictions: [rule("Ana", ana), ...["Beto", "Caro", "Dani"].map((n) => rule(n, [floor(1, "Sat.Lead", op)]))],
+        },
+        sundayDates: NOV,
+        activeSatDates: ["2026-11-21", "2026-11-28"],
+        month: 11,
+      });
+      const shape = `${ana.map((c) => c.op).join(",")} / ${op}`;
+      expect(built.request.weekends_with_saturday, shape).toEqual([4, 5]);
+      expect(built.omittedCaps, shape).toEqual([{ person: "Ana", cap: `Sat.Lead ${ana[1].op} 1`, reason: "combined" }]);
+      expect(built.request.dsl_rules, shape).toEqual([
+        `Ana Apellido Sat.* ${ana[0].op} 2`,
+        `Beto Apellido Sat.Lead ${op} 1`,
+        `Caro Apellido Sat.Lead ${op} 1`,
+        `Dani Apellido Sat.Lead ${op} 1`,
+      ]);
+    }
+  });
+
+  it("Q16's order: `unreachable` is judged on every floor first, and «first» is by position, not by reach", () => {
+    // Andy is support, in no lead pool, so a `Sat.Lead` floor is unreachable for him wherever it stands.
+    const judge = (caps: RestrictionCap[]) => build({
+      members: [person("frank", "Francisco Rocha", "Frank"), person("andy", "Andrés Ortega", "Andy")],
+      config: { sundayLeads: ["frank"], support: ["andy"], restrictions: [rule("Andy", caps)] },
+      activeSatDates: ["2026-10-31"],
+    });
+    // His second floor, and unreachable: reported as `unreachable` — the stronger reason, true
+    // even alone — never as `combined`. His first floor stays.
+    const second = judge([floor(), floor(1, "Sat.Lead", ">=")]);
+    expect(second.omittedCaps).toEqual([{ person: "Andy", cap: "Sat.Lead >= 1", reason: "unreachable" }]);
+    expect(second.request.dsl_rules).toEqual(["Andrés Ortega Sat.* == 1"]);
+    // His first floor, and unreachable: the reachable second one is still not his first, so it is
+    // `combined`, and Andy keeps no Saturday floor at all.
+    const first = judge([floor(1, "Sat.Lead", ">="), floor()]);
+    expect(first.omittedCaps).toEqual([
+      { person: "Andy", cap: "Sat.Lead >= 1", reason: "unreachable" },
+      { person: "Andy", cap: "Sat.* == 1", reason: "combined" },
+    ]);
+    expect(first.request.dsl_rules).toEqual([]);
+  });
+
+  it("Q16 counts every rule that names the person: a later rule's floor, by member_name, is `combined`", () => {
+    const built = build({
+      members: [person("frank", "Francisco Rocha", "Frank"), person("andy", "Andrés Ortega", "Andy")],
+      config: {
+        sundayLeads: ["frank"],
+        support: ["andy"],
+        restrictions: [rule("Andy", [floor()]), { ...rule("Andrés Ortega", [floor(1, "Sat.BGV", ">=")]), id: "r2" }],
+      },
+      activeSatDates: ["2026-10-31"],
+    });
+    expect(built.omittedCaps).toEqual([{ person: "Andrés Ortega", cap: "Sat.BGV >= 1", reason: "combined" }]);
+    expect(built.request.dsl_rules).toEqual(["Andrés Ortega Sat.* == 1"]);
   });
 
   it("I-B: a Saturday's only possible lead cannot sit in its BGV seat for their own minimum", () => {
@@ -618,7 +695,8 @@ describe("T5: the trailing Saturday is sent only if someone can lead it", () => 
     sundayLeads: ["frank"], saturdayLeads: ["gaby"], support: ["andy"],
     restrictions: [rule("Andy", [floor()])],
   };
-  const NOTICE = "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles o excluidos). Llénalo a mano.";
+  // Ruling Q17 extended the parenthesis with «o sin sábados libres en su regla».
+  const NOTICE = "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.";
 
   it("every lead unavailable on the 31st: week 5 is not sent, and the notice says why", () => {
     const built = build({ members, config, activeSatDates: ["2026-10-31"] });
@@ -733,6 +811,75 @@ describe("T5: the trailing Saturday is sent only if someone can lead it", () => 
   });
 });
 
+describe("T5 / Q17: a lead whose Saturday maximum is used up by the other Saturdays cannot lead the 31st", () => {
+  // October 2026, the 24th and the 31st selected (the final review's m1). Frank is away on both, so
+  // Andy, a Sunday lead, is the only possible lead on each. The solver puts him on the 24th
+  // (`mandatory_lead`), and with `Sat.* == 1` he cannot lead the 31st too: sending it refused the
+  // whole month, Sundays included. Main sent the 24th alone and solved.
+  const FRANK = person("frank", "Francisco Rocha", "Frank", { unavailableDates: ["2026-10-24", "2026-10-31"] });
+  const ANDY = person("andy", "Andrés Ortega", "Andy");
+  const TAY = person("tay", "Taylor Ruiz", "Tay");
+  const OCT_24_31 = ["2026-10-24", "2026-10-31"];
+  const WITHHELD = { date: "2026-10-31", sent: false, reason: "noLead" };
+  const SENT = { date: "2026-10-31", sent: true };
+  const month = (andyCaps: RestrictionCap[], opts: { gaby?: RankMember; activeSatDates?: string[] } = {}) => build({
+    members: [FRANK, ANDY, TAY, ...(opts.gaby ? [opts.gaby] : [])],
+    config: {
+      sundayLeads: ["frank", "andy"],
+      saturdayLeads: opts.gaby ? ["gaby"] : [],
+      support: ["tay"],
+      restrictions: [rule("Andy", andyCaps)],
+    },
+    activeSatDates: opts.activeSatDates ?? OCT_24_31,
+  });
+
+  it("m1: Andy's `Sat.* == 1` is used up by the 24th, so only week 4 is sent, and the notice says why", () => {
+    const built = month([floor()]);
+    expect(built.request.weekends_with_saturday).toEqual([4]);
+    expect(built.trailing).toEqual(WITHHELD);
+    expect(trailingNotice(built.trailing!)).toBe(
+      "El sábado 31 oct no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.",
+    );
+    // His minimum is met on the 24th and stays; nothing names week 5.
+    expect(built.omittedCaps).toEqual([]);
+    expect(built.request.dsl_rules).toEqual(["Andrés Ortega Sat.* == 1", "Francisco Rocha !in week 4 Sat.*"]);
+  });
+
+  it("a second possible lead on the 24th leaves Andy his Saturday: the 31st is sent", () => {
+    // Gaby, a Saturday lead, is free on the 24th and away on the 31st.
+    const GABY = person("gaby", "Gabriela Díaz", "Gaby", { unavailableDates: ["2026-10-31"] });
+    const built = month([floor()], { gaby: GABY });
+    expect(built.request.weekends_with_saturday).toEqual([4, 5]);
+    expect(built.trailing).toEqual(SENT);
+  });
+
+  it("a zero maximum bars the only lead outright, through every pattern that covers Sat.Lead", () => {
+    const only31 = { activeSatDates: ["2026-10-31"] };
+    for (const cap of [floor(0, "Sat.Lead", "<="), floor(0, "Sat.*", "<="), floor(0, "*.Lead", "=="), floor(0, "Lead.*", "<="), floor(0, "*.*", "<=")]) {
+      const built = month([cap], only31);
+      expect(built.trailing, cap.id).toEqual(WITHHELD);
+      expect(built.request.weekends_with_saturday, cap.id).toEqual([]);
+    }
+    // Not a maximum on `Sat.Lead`, or not a maximum at all: Andy can still lead it.
+    for (const cap of [floor(0, "Sat.BGV", "<="), floor(1, "Sat.Lead", ">=")]) {
+      expect(month([cap], only31).trailing, cap.id).toEqual(SENT);
+    }
+  });
+
+  it("a maximum above the Saturdays he is forced to lead leaves room: `<= 2` and `== 2` send the 31st", () => {
+    for (const cap of [floor(2, "Sat.*", "<="), floor(2, "Sat.Lead", "==")]) {
+      const built = month([cap]);
+      expect(built.request.weekends_with_saturday, cap.id).toEqual([4, 5]);
+      expect(built.trailing, cap.id).toEqual(SENT);
+    }
+  });
+
+  it("a relative maximum resolves as the solver does: `Sat.* <= {weeks-3}` is 1 in a four-Sunday month", () => {
+    expect(month([{ ...floor(0, "Sat.*", "<="), relative: true, relOffset: 3 }]).trailing).toEqual(WITHHELD);
+    expect(month([{ ...floor(0, "Sat.*", "<="), relative: true, relOffset: 2 }]).trailing).toEqual(SENT);
+  });
+});
+
 describe("omittedCapsNotices / trailingNotice", () => {
   it("is empty when nothing was left out", () => {
     expect(omittedCapsNotices([])).toEqual([]);
@@ -772,7 +919,7 @@ describe("omittedCapsNotices / trailingNotice", () => {
 
   it("trailingNotice names the day with dayLabel, and is null for a sent Saturday", () => {
     expect(trailingNotice({ date: "2026-01-31", sent: false, reason: "noLead" })).toBe(
-      "El sábado 31 ene no se mandó al solver: ningún líder puede dirigirlo (no disponibles o excluidos). Llénalo a mano.",
+      "El sábado 31 ene no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.",
     );
     expect(trailingNotice({ date: "2026-10-31", sent: true })).toBeNull();
   });

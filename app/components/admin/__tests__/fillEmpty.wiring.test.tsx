@@ -256,6 +256,37 @@ describe("«Solo llenar vacíos» — what the admin is told", () => {
     ]);
     expect(cellAt(container, "lead", SUNDAYS[1]).textContent).toContain("Sin cubrir");
   });
+
+  it("names a pin violation's day over the month's FULL Sunday list, even with the first Sunday deselected (E21)", async () => {
+    // 1 Mar deselected: the grid shows 8/15/22/29, but the solver's week 3 is still the month's
+    // third Sunday, 15 mar. Read over the calendar's list (`selectedSundays`) it would be 22 mar.
+    const { bodies } = stubSolve((body, call) => {
+      if (call === 1) {
+        const schedule = emptySchedule(body);
+        schedule["2"].Sunday!.Lead = ["Ana Karen Villalobos"];
+        return { ok: true, schedule, pinned_honored: 0, pin_violations: [], unfilled_seats: [] };
+      }
+      return { ...echoPins(body), pin_violations: ["builtin:mandatory_lead:W3:Sun"], violation_ceiling_proven: true };
+    });
+    const view = render(<Gen members={MEMBERS} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+    setMonthYear(view.container, 3, 2026);
+    deselectAll(view.container, "saturday");
+    fireEvent.click(view.container.querySelector(`[data-date="${SUNDAYS[0]}"]`)!);
+    selectSundayLead(view.container, "Ana");
+    preview();
+    expect(cellAt(view.container, "lead", SUNDAYS[0])).toBeNull();
+    runAuto();
+    await waitFor(() => expect(cellAt(view.container, "lead", SUNDAYS[1]).textContent).toContain("Ana"));
+
+    fireEvent.click(fillEmptySwitch());
+    runAuto();
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies[1].pinned).toEqual([{ week: 2, role: "Sun.Lead", person: "Ana Karen Villalobos" }]);
+    await waitFor(() => expect(screen.getByText(/quedó sin líder/)).toBeTruthy());
+    expect(Array.from(view.container.querySelectorAll("[data-auto-notices] p")).map((p) => p.textContent)).toEqual([
+      "El domingo 15 mar quedó sin líder — lo cedió el solver para acomodar lo que ya estaba puesto.",
+    ]);
+  });
 });
 
 describe("«Solo llenar vacíos» — locked while Auto is pending", () => {

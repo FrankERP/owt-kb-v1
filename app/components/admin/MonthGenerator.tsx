@@ -2235,10 +2235,13 @@ export default function MonthGenerator({
    * - the `requestSaturdayWeeks` memo, `pinBoard`'s `collectPins` and
    *   `prepareSolve`'s `collectPins` — `trailingSaturday.wiring.test.tsx` («with
    *   25 Oct deselected, the 31st is still week 5 …»): over the calendar's spine the
-   *   trailing Saturday would be the 24th.
+   *   trailing Saturday would be the 24th;
+   * - `pinViolationNotices` (the day a pin-violation notice names) —
+   *   `fillEmpty.wiring.test.tsx` («names a pin violation's day over the month's
+   *   FULL Sunday list …»): over the calendar's spine, with 1 Mar deselected, week 3
+   *   would read 22 mar instead of 15 mar.
    *
-   * Two are NOT pinned, and a swap stays green: `pinViolationNotices`' spine (the
-   * date a pin-violation notice names), and `PlannerGrid`'s `sundayDates` prop,
+   * One is NOT pinned, and a swap stays green: `PlannerGrid`'s `sundayDates` prop,
    * which `sundayDatesForColumn` shadows for every column here. (A former
    * consumer, `computeUnaddressableDates`, went with the «Fuera del alcance de
    * Auto» surface — ADR-0048, T1. `ruleEnforcement` used to be named here and never
@@ -3578,8 +3581,11 @@ export default function MonthGenerator({
         poolNames: [...built.request.sunday_leads, ...built.request.saturday_leads, ...built.request.support],
       });
       if (refusal) {
-        // Refused before the fetch, in Spanish, naming the cell (spec §3.2).
+        // Refused before the fetch, in Spanish, naming the cell (spec §3.2). The floor and
+        // trailing lines still show: they describe the request the next Auto will send, as on a
+        // solver refusal. No dropped-pin line — no pins went anywhere.
         setAutoError(refusal);
+        setAutoNotices(notices);
         applySpecialFill(config, cells, undefined, fillEmpty);
         return null;
       }
