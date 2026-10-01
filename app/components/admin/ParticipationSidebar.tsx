@@ -22,9 +22,6 @@ type View = "voces" | "instrumentos";
 
 const INCLUDE_SPECIALS_KEY = "owt_participation_include_specials";
 
-/** Nothing outside this component writes the key, so there is nothing to hear. */
-const noSubscribe = () => () => {};
-
 function readStoredIncludeSpecials(): boolean {
   try {
     return window.localStorage.getItem(INCLUDE_SPECIALS_KEY) === "true";
@@ -34,29 +31,70 @@ function readStoredIncludeSpecials(): boolean {
 }
 
 /**
+ * One panel's copy of the setting, as an external store for `useSyncExternalStore`.
+ *
+ * THE RULE: the value changes on exactly two things — the user flipping the
+ * switch HERE (`set`), and a `storage` event for this key (or a `clear()`,
+ * `key === null`), which means another tab wrote it. Nothing else moves it, and
+ * in particular a render never re-reads storage: `getSnapshot` serves the cached
+ * value, read once on the client. A getter that read `localStorage` live would
+ * let another tab's write surface on whatever unrelated re-render came next,
+ * with no event and no user action — a switch that flips on its own.
+ *
+ * Last write wins, per browser: another tab's event replaces this tab's choice,
+ * because the setting is the browser's, not the tab's. The cache is also what
+ * holds a flip whose WRITE failed (quota, blocked storage): it flips for this
+ * visit and is simply not remembered.
+ *
+ * Built per mounted panel (`useState` initialiser) so nothing outlives the
+ * component. A same-tab write fires no `storage` event, which is why `set`
+ * notifies its own subscribers.
+ */
+function createIncludeSpecialsStore() {
+  let value: boolean | null = null; // null: storage not read yet
+  const listeners = new Set<() => void>();
+  const notify = () => listeners.forEach(l => l());
+  return {
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      const onStorage = (e: StorageEvent) => {
+        if (e.key !== INCLUDE_SPECIALS_KEY && e.key !== null) return;
+        value = readStoredIncludeSpecials();
+        notify();
+      };
+      window.addEventListener("storage", onStorage);
+      return () => {
+        listeners.delete(listener);
+        window.removeEventListener("storage", onStorage);
+      };
+    },
+    getSnapshot: () => (value ??= readStoredIncludeSpecials()),
+    set(next: boolean) {
+      value = next;
+      try {
+        window.localStorage.setItem(INCLUDE_SPECIALS_KEY, String(next));
+      } catch {
+        // Not persisted; the cached value above still holds for this visit.
+      }
+      notify();
+    },
+  };
+}
+
+/**
  * Whether specials are part of the picture. OFF by default: the solver balances
  * weekend services only, so a CAMP set or a vigil in the count skews who looks
- * like they served. Remembered per browser.
+ * like they served. Remembered per browser (see the store above for the rule).
  *
- * The STORED value comes through `useSyncExternalStore` with an «off» server
- * snapshot — the same idiom as `AdminRail`'s collapsed flag — so the server
- * render and the hydrating one agree and a stored «on» lands one render later,
- * without a `setState` in an effect. The in-session CHOICE is plain state
- * layered on top: a write that throws (quota, blocked storage) still flips the
- * panel for this visit, it just is not remembered.
+ * Read through `useSyncExternalStore` with an «off» server snapshot — the same
+ * family as `AdminRail`'s collapsed flag — so the server render and the
+ * hydrating one agree and a stored «on» lands one render later, without a
+ * `setState` in an effect.
  */
 function useIncludeSpecials(): [boolean, (next: boolean) => void] {
-  const stored = useSyncExternalStore(noSubscribe, readStoredIncludeSpecials, () => false);
-  const [chosen, setChosen] = useState<boolean | null>(null);
-  const set = (next: boolean) => {
-    setChosen(next);
-    try {
-      window.localStorage.setItem(INCLUDE_SPECIALS_KEY, String(next));
-    } catch {
-      // Not persisted; the in-memory choice above still holds.
-    }
-  };
-  return [chosen ?? stored, set];
+  const [store] = useState(createIncludeSpecialsStore);
+  const value = useSyncExternalStore(store.subscribe, store.getSnapshot, () => false);
+  return [value, store.set];
 }
 
 // The box, whoever places it. A const rather than inline because the placement

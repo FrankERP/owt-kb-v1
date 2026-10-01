@@ -102,6 +102,9 @@ describe("registration", () => {
     expect(tool.config.description).toMatch(/America\/Mexico_City/);
     expect(tool.config.description).toMatch(/borradores incluidos/);
     expect(tool.config.description).toMatch(/especial/);
+    // The sidebar leaves specials out by default; the tool never does, so the
+    // «igual que la barra lateral» claim must say when it holds.
+    expect(tool.config.description).toContain("«Incluir especiales» encendido; la barra los omite por defecto");
   });
 
   it("types month strictly", () => {

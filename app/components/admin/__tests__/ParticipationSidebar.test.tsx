@@ -9,7 +9,9 @@
 // Fixtures are chosen so each assertion has ONE way to pass: every special-only
 // member is absent when the switch is off, and the member who serves both kinds
 // has a different count on each side of the switch.
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ParticipationSidebar } from "../ParticipationSidebar";
@@ -176,6 +178,149 @@ describe("a localStorage that throws", () => {
     fireEvent.click(switchEl());
     expect(switchEl().getAttribute("aria-checked")).toBe("true");
     await waitFor(() => expect(total("Frank")).toBe(2));
+  });
+
+  it("still flips when only the WRITE fails (a readable, full storage)", () => {
+    // A write-only failure is the quota case: reads work, `setItem` throws. An
+    // unguarded `setItem` would throw out of the click handler — which vitest
+    // reports as an unhandled error, not as this test failing, so the click is
+    // wrapped and asserted on explicitly.
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("The quota has been exceeded.", "QuotaExceededError");
+    });
+    mount();
+    expect(() => fireEvent.click(switchEl())).not.toThrow();
+    expect(switchEl().getAttribute("aria-checked")).toBe("true");
+    expect(total("Frank")).toBe(2);
+    // Not remembered, and the panel does not pretend it was.
+    expect(window.localStorage.getItem(KEY)).toBeNull();
+    expect(() => fireEvent.click(switchEl())).not.toThrow();
+    expect(switchEl().getAttribute("aria-checked")).toBe("false");
+  });
+});
+
+/** What another tab does to this one: write the key, then the browser fires `storage` HERE. */
+function otherTabWrites(value: string | null, key: string | null = KEY) {
+  if (key !== null) {
+    if (value === null) window.localStorage.removeItem(key);
+    else window.localStorage.setItem(key, value);
+  } else {
+    window.localStorage.clear();
+  }
+  act(() => {
+    window.dispatchEvent(new StorageEvent("storage", { key, newValue: value }));
+  });
+}
+
+describe("another tab's change", () => {
+  // The rule: the panel's value changes on exactly two things — the user's flip
+  // here, and a `storage` event for this key (or a `clear()`). A render never
+  // re-reads storage, so a change never shows up «on the next re-render».
+  it("shows up here immediately, with no user action and no re-render of our own", () => {
+    mount();
+    expect(switchEl().getAttribute("aria-checked")).toBe("false");
+    otherTabWrites("true");
+    expect(switchEl().getAttribute("aria-checked")).toBe("true");
+    expect(total("Frank")).toBe(2);
+    otherTabWrites("false");
+    expect(switchEl().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("is the last word, even over a choice made here earlier", () => {
+    mount();
+    fireEvent.click(switchEl()); // this tab: ON
+    expect(window.localStorage.getItem(KEY)).toBe("true");
+    otherTabWrites("false"); // the other tab, later: OFF
+    expect(switchEl().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("never flips the panel on a re-render that was not preceded by an event", () => {
+    const { rerender } = mount();
+    // Storage changes with NO `storage` event (nothing here announced it).
+    window.localStorage.setItem(KEY, "true");
+    // An unrelated re-render from the parent…
+    rerender(
+      <MotionProvider>
+        <ParticipationSidebar roles={[...roles]} monthLabel="Marzo 2026" />
+      </MotionProvider>,
+    );
+    expect(switchEl().getAttribute("aria-checked")).toBe("false");
+    // …and one from the panel's own state.
+    showInstruments();
+    expect(switchEl().getAttribute("aria-checked")).toBe("false");
+    // The event is what moves it.
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: KEY, newValue: "true" }));
+    });
+    expect(switchEl().getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("ignores another key's event, hears a storage.clear() (null key), and stops listening on unmount", () => {
+    const { unmount } = mount();
+    window.localStorage.setItem(KEY, "true");
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "owt_something_else", newValue: "x" }));
+    });
+    expect(switchEl().getAttribute("aria-checked")).toBe("false");
+
+    otherTabWrites("true");
+    expect(switchEl().getAttribute("aria-checked")).toBe("true");
+    otherTabWrites(null, null); // another tab called localStorage.clear()
+    expect(switchEl().getAttribute("aria-checked")).toBe("false");
+
+    const removed = vi.spyOn(window, "removeEventListener");
+    unmount();
+    expect(removed).toHaveBeenCalledWith("storage", expect.any(Function));
+  });
+});
+
+describe("the server render and the hydrating one agree", () => {
+  it("renders OFF on the server whatever storage says, then hydrates into the stored choice", () => {
+    // The server snapshot `useSyncExternalStore` is handed is the only thing
+    // keeping the server render and the hydrating one in agreement. This file
+    // runs in jsdom, so `window.localStorage` exists while `renderToString`
+    // runs: a server snapshot of `() => true` would render the SERVER markup ON
+    // and fail the first half — and on a real server, where `window` is
+    // missing, a `useState(read)` would render OFF and then hydrate ON, a
+    // hydration mismatch.
+    window.localStorage.setItem(KEY, "true");
+    const element = (
+      <MotionProvider>
+        <ParticipationSidebar roles={roles} monthLabel="Marzo 2026" />
+      </MotionProvider>
+    );
+
+    // Attached before it is queried: computing a name from `aria-labelledby`
+    // asks the node's root for `getElementById`, which a detached div lacks.
+    // Removed in `finally` so a failed assertion cannot leave it for the next test.
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    let root: Root | undefined;
+    try {
+      host.innerHTML = renderToString(element);
+      const serverSwitch = within(host).getByRole("switch", { name: "Incluir especiales" });
+      expect(serverSwitch.getAttribute("aria-checked")).toBe("false");
+      expect(host.textContent).not.toMatch(/Especial(?!es)/); // no «Especial» legend or caption
+      expect(within(host).queryByText("Gaby")).toBeNull(); // special-only member left out
+
+      // The stored choice arrives AFTER hydration, as an update — never as a
+      // mismatch React has to recover from.
+      const errors = vi.spyOn(console, "error");
+      const recoverable = vi.fn();
+      act(() => {
+        root = hydrateRoot(host, element, { onRecoverableError: recoverable });
+      });
+      expect(recoverable).not.toHaveBeenCalled();
+      expect(errors).not.toHaveBeenCalled();
+
+      const hydrated = within(host).getByRole("switch", { name: "Incluir especiales" });
+      expect(hydrated.getAttribute("aria-checked")).toBe("true");
+      expect(host.textContent).toMatch(/Especial 1/);
+      expect(within(host).getByText("Gaby")).toBeTruthy();
+    } finally {
+      act(() => root?.unmount());
+      host.remove();
+    }
   });
 });
 
