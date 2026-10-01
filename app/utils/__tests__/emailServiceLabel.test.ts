@@ -9,6 +9,12 @@ describe("formatServiceDate", () => {
     // A full timestamp is cut to its date: the day never flips on the UTC offset.
     expect(formatServiceDate("2026-10-04T05:30:00Z")).toBe("Domingo 4 oct");
   });
+
+  it("hands back an unreadable date as-is rather than throwing", () => {
+    expect(formatServiceDate("")).toBe("");
+    expect(formatServiceDate("not-a-date")).toBe("not-a-date");
+    expect(serviceLabel({ date: "", roleType: "special_role", serviceName: "CAMP - Set 2" })).toBe(" · CAMP - Set 2");
+  });
 });
 
 describe("serviceIdentity", () => {

@@ -1,7 +1,9 @@
 // app/utils/emailServiceLabel.ts
-// The ONE way an email names a service. A weekend service is its date
-// («Sábado 3 oct»); a special also carries its own name and time
-// («Sábado 3 oct · CAMP - Set 2 · 09:00»), the way the app's day cards show it.
+// How the outbox email and the publish email name a special service. A weekend
+// service is its date («Sábado 3 oct»); a special also carries its own name and
+// time («Sábado 3 oct · CAMP - Set 2 · 09:00»), the way the app's day cards show
+// it. Not yet used by the proposal emails (`proposalNotify.ts` and the outbox
+// «Mensajes de la propuesta» line), which still name a service by its date.
 // Without them, two specials on the same day read as identical lines in the
 // inbox — a camp's four Saturday sets all came out as «Setlist listo — Sábado 3
 // oct». Neutral module: plain text out, so every caller escapes it for HTML
@@ -38,6 +40,10 @@ export function serviceIdentity(role: { service_name?: unknown; time?: unknown }
 // string) so the result is stable regardless of locale literals ("de", ",").
 export function formatServiceDate(iso: string): string {
   const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
+  // `formatToParts` THROWS on an invalid date, and one throw inside the publish
+  // batch's loop would cost every member after it their email. Callers validate
+  // dates first; this is the floor under them, not a path anyone should reach.
+  if (Number.isNaN(d.getTime())) return iso;
   const parts = new Intl.DateTimeFormat("es-MX", { weekday: "long", day: "numeric", month: "short" }).formatToParts(d);
   const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   const text = `${part("weekday")} ${part("day")} ${part("month").replace(/\.$/, "")}`;

@@ -13,8 +13,9 @@ export interface ServiceBody {
   foh?: { role: string; personId: string }[];
 }
 
-const SERVICE_LABEL: Record<ServiceType, string> = {
-  sunday_role: "Domingo", saturday_role: "Sábado", special_role: "Servicio especial",
+// Weekend services only: a special names itself through `serviceLabel`.
+const SERVICE_LABEL: Record<Exclude<ServiceType, "special_role">, string> = {
+  sunday_role: "Domingo", saturday_role: "Sábado",
 };
 
 /** One service in a publish email: what it is, when, and — for a special — which one. */

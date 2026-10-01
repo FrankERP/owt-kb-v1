@@ -43,8 +43,9 @@ thread" below.
 **Key modules.** `outboxNotice.ts` (ids, snapshots, upsert builders) ·
 `outboxClassify.ts` (snapshot vs live → lines) · `setlistDiff.ts` (the standings
 table) · `notificationEmail.ts` + `emailShell.ts` (rendering) ·
-`emailServiceLabel.ts` (how every email names a service: a special adds its
-name and time, «Sábado 3 oct · CAMP - Set 2 · 09:00», read live from the role) ·
+`emailServiceLabel.ts` (how the role and setlist lines name a service: a special
+adds its name and time, «Sábado 3 oct · CAMP - Set 2 · 09:00», read live from the
+role; the proposal line does not use it yet) ·
 `outboxSweep.ts` (the one pipeline) · `outboxLiveness.ts` (the alarm) ·
 `notifyPrefs.ts` (the single preference resolver) ·
 `proposalNotifyQueries.ts` (the GROQ the proposal notifications read with — a
