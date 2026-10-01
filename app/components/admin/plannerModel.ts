@@ -690,9 +690,9 @@ export function isSaturdayFloor(cap: RestrictionCap, weeks: number): boolean {
  * Why `buildSolveRequest` left a Saturday minimum out (T3/T4):
  * - `noSaturday`: the request sends no Saturday at all (PR #116's month-level rule);
  * - `unreachable`: more Saturdays than this person can take among those sent;
- * - `combined`: not the person's first Saturday minimum in the rules card's order. Only one per
- *   person is judged (ruling Q16), so this is a limit of the planner, never a verdict about the
- *   seats;
+ * - `combined`: reachable, but not the person's first reachable Saturday minimum in the rules
+ *   card's order. Only one per person is judged (rulings Q16, Q18), so this is a limit of the
+ *   planner, never a verdict about the seats;
  * - `capacity`: the minimums that remained cannot all be given a seat.
  */
 export type OmitReason = "noSaturday" | "unreachable" | "combined" | "capacity";
@@ -1111,9 +1111,10 @@ function maxFlow(nodeCount: number, arcs: ReadonlyArray<readonly [number, number
  *
  * **One floor per person, always** (ruling Q16). Each floor is one person node, so the arc of 1
  * into each (person, Saturday) node is the solver's one-seat-per-person-per-Saturday only while no
- * person has two floors here. `saturdayFloorOmissions` guarantees it: a person's later floors are
- * `combined` before this runs. Never hand this two floors of one person — they would be two
- * nodes, and could seat that person twice on one Saturday. For one floor per person the flow is
+ * person has two floors here. `saturdayFloorOmissions` guarantees it: every reachable floor
+ * after a person's first reachable one is `combined` before this runs. Never hand this two
+ * floors of one person — they would be two nodes, and could seat that person twice on one
+ * Saturday. For one floor per person the flow is
  * exact (brute-forced on 17,227 cases; no false `capacity` in 1,900 real-solver setups).
  *
  * `loneLeads[i]` is the ONE lead-pool member who can lead sent Saturday `i`, or `null` when
@@ -1173,12 +1174,12 @@ function floorsFitSeats(
  * 1. No Saturday sent: every floor is `noSaturday` (PR #116's month-level rule).
  * 2. A floor above the Saturdays its person can reach among those sent is `unreachable`. This is
  *    judged for every floor, a person's first or not, so the admin is told the stronger reason.
- * 3. ONE floor per person goes on to the seats (ruling Q16): the first of their Saturday floors
- *    in the rules card's order (config order: the rule, then its caps), over every rule that names
- *    them (`resolvedNameOrRaw`). Every later reachable one is `combined`, before any seat is
- *    counted. "First" is by position, not by reach: a person whose first floor is `unreachable`
- *    keeps none. Merging a person's floors into one demand was tried three times (rulings Q10,
- *    Q14), and each version kept or dropped a floor the solver disagreed with.
+ * 3. ONE floor per person goes on to the seats (rulings Q16, Q18): the first of their REACHABLE
+ *    Saturday floors in the rules card's order (config order: the rule, then its caps), over
+ *    every rule that names them (`resolvedNameOrRaw`). Every other reachable one is `combined`,
+ *    before any seat is counted. A person whose first floor is `unreachable` still keeps the next
+ *    one that is not. Merging a person's floors into one demand was tried three times (rulings
+ *    Q10, Q14), and each version kept or dropped a floor the solver disagreed with.
  * 4. If what is left cannot all be seated (`floorsFitSeats`), the floors are taken in ascending
  *    order of the person's Saturdays in the request's own history (`historyForRequest`), ties by
  *    the rule's name, then config order. Each is kept iff the kept set plus it can still all be
@@ -1231,9 +1232,9 @@ function saturdayFloorOmissions(input: {
     return false;
   });
 
-  // Ruling Q16: the person's first Saturday floor, by position among ALL of theirs.
+  // Rulings Q16/Q18: the person's first Saturday floor that T3 let through.
   const firstFloor = new Map<string, string>();
-  for (const f of floors) if (!firstFloor.has(f.name)) firstFloor.set(f.name, f.key);
+  for (const f of reachable) if (!firstFloor.has(f.name)) firstFloor.set(f.name, f.key);
   const judged = reachable.filter((f) => {
     if (firstFloor.get(f.name) === f.key) return true;
     omit.set(f.key, "combined");

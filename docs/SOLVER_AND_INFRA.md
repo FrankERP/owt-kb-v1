@@ -306,12 +306,12 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
     exclusion for that week covers the minimum's roles. For `Sat.Lead`, they must also be in a
     lead pool. The line reads «No se aplicó «X» a A y B: los sábados que Auto llena este mes no
     alcanzan para cumplirlo (por disponibilidad, exclusiones o rol).»
-  - `combined`: the minimum is not the person's first Saturday minimum in the rules card's order
-    (ruling Q16). Only one per person goes on to the seats. This is decided after `unreachable`
-    and before any seat is counted, so it is a limit of the planner, not a shortage of seats.
-    "First" is by position: a person whose first minimum is unreachable keeps none. The line
-    reads «No se aplicó «X» a A y B: Auto no combina dos mínimos de sábado de la misma
-    persona.»
+  - `combined`: the minimum is reachable, but it is not the person's first reachable Saturday
+    minimum in the rules card's order (rulings Q16, Q18). Only one per person goes on to the
+    seats. This is decided after `unreachable` and before any seat is counted, so it is a limit
+    of the planner, not a shortage of seats. A person whose first minimum is unreachable still
+    keeps the next one that can be met. The line reads «No se aplicó «X» a A y B: Auto no combina
+    dos mínimos de sábado de la misma persona.»
   - `capacity`: the remaining minimums cannot all get a seat. The line reads «No caben todos los
     mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó …».
 
@@ -347,8 +347,8 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
 
   A request stays byte-identical to before this change when no trailing Saturday is selected and
   no minimum is dropped. ADR-0048 names the one case where a dropped minimum is one the solver
-  may have met: `combined`, which applies in every month to every Saturday minimum after a
-  person's first.
+  may have met: `combined`, which applies in every month to every reachable Saturday minimum
+  after a person's first reachable one.
 - **The solver's own reason reaches the admin.** A solver `ok: false` comes back as a 422 whose
   body carries the reason; Auto now reads it and shows «El solver no encontró solución. Motivo
   del solver: …» (`solverRefusalMessage`) instead of the generic line alone. The solver's

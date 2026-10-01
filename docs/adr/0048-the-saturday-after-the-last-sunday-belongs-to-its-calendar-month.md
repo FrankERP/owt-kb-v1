@@ -93,12 +93,13 @@ planner's half: when it sends that week, and what that does to Saturday minimums
      para cumplirlo (por disponibilidad, exclusiones o rol).» This is judged for every floor,
      whether or not it is the person's first.
    - T3 runs in every month, not only in months with a trailing Saturday.
-   - **Q16: one floor per person.** Only the person's first Saturday floor goes on to the seat
-     check: first in the rules card's order (config order, rule then cap), over every rule that
-     names them. Every later floor that is still reachable is omitted as `combined`, before any
-     seat is counted: «No se aplicó «X» a A y B: Auto no combina dos mínimos de sábado de la
-     misma persona.» "First" means first by position, not first that can be reached. A person
-     whose first floor is `unreachable` keeps no Saturday floor at all (test «Q16's order»).
+   - **Q16/Q18: one floor per person.** Only the person's first REACHABLE Saturday floor goes on
+     to the seat check: the first that T3 lets through, in the rules card's order (config order,
+     rule then cap), over every rule that names them. Every other reachable floor is omitted as
+     `combined`, before any seat is counted: «No se aplicó «X» a A y B: Auto no combina dos
+     mínimos de sábado de la misma persona.» A person whose first floor is `unreachable` still
+     keeps the next one that can be met, and the notices say why for each floor (ruling Q18; test
+     «Q16's order»).
 7. **T4 / Q10: then check the floors against the seats.** `floorsFitSeats` asks whether every
    remaining floor can get a real seat.
    - The seats: each sent Saturday has 2 Lead and 3 BGV seats, one per person. `Sat.Lead` takes a
@@ -146,9 +147,9 @@ planner's half: when it sends that week, and what that does to Saturday minimums
 
 T3 and T4 run in every month, so any other month's request can change, but only by omitting
 floors. Without pins, a floor omitted as `unreachable` or `capacity` is one the old request could
-not meet: it made the month infeasible. The one exception is `combined` (decision 6, Q16). It
-omits every Saturday floor after a person's first, in every month, and the solver may have met
-some of them. For example, `Sat.Lead >= 1` plus `Sat.BGV >= 1` can be met with two Saturdays
+not meet: it made the month infeasible. The one exception is `combined` (decision 6, Q16/Q18).
+It omits every reachable Saturday floor after a person's first reachable one, in every month,
+and the solver may have met some of them. For example, `Sat.Lead >= 1` plus `Sat.BGV >= 1` can be met with two Saturdays
 sent, and `Sat.* == 2` plus `Sat.Lead == 1` by one Lead and one BGV. Production has no
 Saturday floors today, and the pending restore adds a single `Sat.* == 1` for each of three
 people, so nobody loses one. A hand-written November 2026 request pins the identity
@@ -194,8 +195,8 @@ people, so nobody loses one. A hand-written November 2026 request pins the ident
   `Sat.Lead >= 1` the four Lead seats were full, so Dani's `Sat.Lead >= 1` was dropped as
   `capacity`. That was false: main kept all four and the solver seated them, with Ana on BGV one
   Saturday. The same happened with `==` floors. The fix was to remove the method, not to patch it
-  a fourth time. A person's later floors are `combined`, and the flow only ever sees one floor
-  per person (test «the final review's I1»).
+  a fourth time. A person's other reachable floors are `combined`, and the flow only ever sees one
+  floor per person (test «the final review's I1»).
 - **A second copy of T5 for the board preview.** It could drift from the request.
   `requestSaturdayWeeks` reads the verdict from `buildSolveRequest` instead.
 - **A Sunday as the 31st's `owningSunday`.** 1 Nov belongs to the next month, which spec §2.2

@@ -491,9 +491,10 @@ describe("T4: minimums that do not all fit the Saturday seats", () => {
   });
 
   it("a person with two Saturday floors keeps only the first; the second is `combined`, before any seat", () => {
-    // Ruling Q16: one Saturday floor per person is judged — the first in the rules card's order —
-    // and every later one is `combined`. Lead one Saturday and BGV the other would meet both of
-    // Ana's floors, and the solver could find that; the planner does not look for it. Frank is a
+    // Ruling Q16: one Saturday floor per person is judged — the first reachable one in the
+    // rules card's order (Q18) — and every other reachable one is `combined`. Lead one Saturday
+    // and BGV the other would meet both of Ana's floors, and the solver could find that; the
+    // planner does not look for it. Frank is a
     // second lead, so each Saturday has someone to lead it. (Fix round 2, M3: with Ana the only
     // lead, one of the two Saturdays had no lead at all, which the solver refuses regardless.)
     const people = [person("ana", "Ana Apellido", "Ana"), person("frank", "Francisco Rocha", "Frank")];
@@ -514,7 +515,7 @@ describe("T4: minimums that do not all fit the Saturday seats", () => {
     // (A1–A3 on one Saturday, B1–B3 on the other). Merged into «two seats of a class both allow»
     // she was seated Lead twice and the model called it a fit; the solver refused the month
     // (ok: false). Same expectation as fix round 2, for a new reason (Q16): `Sat.Lead == 1` is
-    // her second floor, so it is `combined` by position — no merge rule is consulted. Frank, a
+    // her second reachable floor, so it is `combined` — no merge rule is consulted. Frank, a
     // lead with no minimum, leads the other seat.
     const shapes = [
       { sundayDates: OCT, sats: ["2026-10-24", "2026-10-31"], month: 10 },
@@ -581,7 +582,7 @@ describe("T4: minimums that do not all fit the Saturday seats", () => {
     }
   });
 
-  it("Q16's order: `unreachable` is judged on every floor first, and «first» is by position, not by reach", () => {
+  it("Q16's order: `unreachable` is judged on every floor first, and «first» is the first REACHABLE floor (Q18)", () => {
     // Andy is support, in no lead pool, so a `Sat.Lead` floor is unreachable for him wherever it stands.
     const judge = (caps: RestrictionCap[]) => build({
       members: [person("frank", "Francisco Rocha", "Frank"), person("andy", "Andrés Ortega", "Andy")],
@@ -593,14 +594,15 @@ describe("T4: minimums that do not all fit the Saturday seats", () => {
     const second = judge([floor(), floor(1, "Sat.Lead", ">=")]);
     expect(second.omittedCaps).toEqual([{ person: "Andy", cap: "Sat.Lead >= 1", reason: "unreachable" }]);
     expect(second.request.dsl_rules).toEqual(["Andrés Ortega Sat.* == 1"]);
-    // His first floor, and unreachable: the reachable second one is still not his first, so it is
-    // `combined`, and Andy keeps no Saturday floor at all.
-    const first = judge([floor(1, "Sat.Lead", ">="), floor()]);
+    // His first floor, and unreachable: his first REACHABLE floor is the one judged, so he keeps
+    // `Sat.* == 1`, and only the reachable floor after it is `combined`. (Moved by ruling Q18: by
+    // position, `Sat.* == 1` was `combined` too and Andy kept no Saturday floor at all.)
+    const first = judge([floor(1, "Sat.Lead", ">="), floor(), floor(1, "Sat.BGV", ">=")]);
     expect(first.omittedCaps).toEqual([
       { person: "Andy", cap: "Sat.Lead >= 1", reason: "unreachable" },
-      { person: "Andy", cap: "Sat.* == 1", reason: "combined" },
+      { person: "Andy", cap: "Sat.BGV >= 1", reason: "combined" },
     ]);
-    expect(first.request.dsl_rules).toEqual([]);
+    expect(first.request.dsl_rules).toEqual(["Andrés Ortega Sat.* == 1"]);
   });
 
   it("Q16 counts every rule that names the person: a later rule's floor, by member_name, is `combined`", () => {
