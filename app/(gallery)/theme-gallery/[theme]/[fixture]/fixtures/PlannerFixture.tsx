@@ -84,7 +84,6 @@ export function PlannerFixture() {
         createBlockFor={() => null}
         canReceive={() => true}
         skipped={new Set()}
-        unaddressableDates={[]}
         unresolvedNames={[]}
         unfilled={[]}
         onCellsChange={noop}

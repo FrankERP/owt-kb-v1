@@ -1,7 +1,14 @@
+import { trailingSaturday } from "./plannerModel";
 import type { ServiceType } from "./serviceCardModel";
 
+/** `sundayDates` is what the grid reads, and `week` must equal `weekForColumn` over it. */
 export interface WeekendRuleContext {
-  owningSunday: string;
+  /**
+   * The Sunday whose week this service is. `null` for the trailing Saturday
+   * (T1): no Sunday of its month follows it, and the next month's Sunday must
+   * not own it — it is week `weeks + 1` of its own month.
+   */
+  owningSunday: string | null;
   month: string;
   sundayDates: string[];
   week: number | null;
@@ -36,13 +43,30 @@ export function completeSundaySpine(month: string): string[] {
 
 /**
  * Resolve week-exclusion context from the service target itself. A Saturday is
- * owned by its following Sunday, even when that crosses the displayed month.
+ * owned by its following Sunday — except the trailing Saturday (T1, ADR-0048:
+ * the last Sunday + 6, still in the month, e.g. Sat 31 Oct 2026), whose Sunday
+ * is in the next month. It is week `weeks + 1` of its OWN month, over its own
+ * month's spine, exactly as `trailingSaturday`/`weekForColumn` and the solver
+ * say; never a rule derived from the next month's Sunday.
  */
 export function ruleContextForTarget(
   type: ServiceType,
   date: string,
 ): WeekendRuleContext | null {
   if (type === "special_role") return null;
+  if (type === "saturday_role") {
+    const ownMonth = date.slice(0, 7);
+    const ownSpine = completeSundaySpine(ownMonth);
+    if (ownSpine.length > 0 && date === trailingSaturday(ownSpine)) {
+      return {
+        owningSunday: null,
+        month: ownMonth,
+        sundayDates: ownSpine,
+        week: ownSpine.length + 1,
+        addressable: true,
+      };
+    }
+  }
   const owningSunday = type === "saturday_role" ? addDay(date) : date;
   const month = owningSunday.slice(0, 7);
   const sundayDates = completeSundaySpine(month);

@@ -40,7 +40,8 @@ export interface SolveResponse {
   ok: boolean;
   error?: string;
   schedule?: Record<string, {
-    Sunday: { Lead: string[]; BGV: string[]; Choir: string[] };
+    /** Absent for week `weeks + 1`, the trailing Saturday, which has no Sunday. */
+    Sunday?: { Lead: string[]; BGV: string[]; Choir: string[] };
     Saturday?: { Lead: string[]; BGV: string[] };
   }>;
   fairness_relaxed?: boolean;
@@ -80,6 +81,15 @@ export interface SolveResponse {
    * exactly as many as the pins force. Absent when the request had no pins.
    */
   violation_ceiling_proven?: boolean;
+  /**
+   * Set by THIS route, never by the solver: the `ok: false` is the route's own failure to
+   * get an answer (the service's HTTP status, the local timeout, a process that failed to
+   * start, no output, output that is not JSON). Absent on every answer the solver gave,
+   * refusals included. Auto retries a month without its trailing Saturday only on the
+   * solver's own refusal, so it reads this flag rather than matching error text (ruling Q19,
+   * ADR-0048).
+   */
+  transport_error?: true;
 }
 
 // ── Production path: call remote solver (GCF or any HTTP endpoint) ────────────
@@ -100,7 +110,7 @@ async function callRemoteSolver(config: SolveRequest): Promise<SolveResponse> {
   });
 
   if (!res.ok && res.status !== 422) {
-    return { ok: false, error: `Solver service returned HTTP ${res.status}` };
+    return { ok: false, error: `Solver service returned HTTP ${res.status}`, transport_error: true };
   }
   return res.json() as Promise<SolveResponse>;
 }
@@ -120,7 +130,7 @@ function callLocalSolver(config: SolveRequest): Promise<SolveResponse> {
     // Hard kill after 120 s so the serverless function doesn't hang
     const killTimer = setTimeout(() => {
       child.kill("SIGKILL");
-      resolve({ ok: false, error: "Local solver timed out after 120 s" });
+      resolve({ ok: false, error: "Local solver timed out after 120 s", transport_error: true });
     }, 120_000);
 
     let stdout = "";
@@ -129,18 +139,18 @@ function callLocalSolver(config: SolveRequest): Promise<SolveResponse> {
     child.stderr.on("data", (c: Buffer) => { stderr += c.toString(); });
     child.on("error", (err) => {
       clearTimeout(killTimer);
-      resolve({ ok: false, error: `Failed to start solver: ${err.message}` });
+      resolve({ ok: false, error: `Failed to start solver: ${err.message}`, transport_error: true });
     });
     child.on("close", (code) => {
       clearTimeout(killTimer);
       if (!stdout.trim()) {
-        resolve({ ok: false, error: `Solver produced no output. ${stderr.trim() || `Exit code ${code}`}` });
+        resolve({ ok: false, error: `Solver produced no output. ${stderr.trim() || `Exit code ${code}`}`, transport_error: true });
         return;
       }
       try {
         resolve(JSON.parse(stdout) as SolveResponse);
       } catch {
-        resolve({ ok: false, error: `Solver output was not valid JSON: ${stdout.slice(0, 200)}` });
+        resolve({ ok: false, error: `Solver output was not valid JSON: ${stdout.slice(0, 200)}`, transport_error: true });
       }
     });
     child.stdin.write(JSON.stringify(config));

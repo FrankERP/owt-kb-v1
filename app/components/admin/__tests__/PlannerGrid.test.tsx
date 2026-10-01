@@ -19,6 +19,7 @@ import {
   type SolverConfig,
 } from "../plannerModel";
 import type { RankMember } from "../candidateRanking";
+import { ruleContextForTarget } from "../serviceRuleContext";
 import type { TargetPreflight } from "../serviceReadiness";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 
@@ -95,7 +96,6 @@ function baseProps(overrides: PlannerGridTestOverrides = {}): PlannerGridProps {
     // create-blocked column built from the real `cellsToDrafts` authority.
     canReceive: () => true,
     skipped: new Set(),
-    unaddressableDates: [],
     unresolvedNames: [],
     unfilled: [],
     onCellsChange: vi.fn(),
@@ -787,11 +787,12 @@ describe("PlannerGrid — Auto contract (D15)", () => {
 describe("PlannerGrid — Auto confirms first (D2)", () => {
   it("shows a confirmation naming the replace scope before calling onAuto, and only calls onAuto on confirm", () => {
     const onAuto = vi.fn();
-    render(<PlannerGrid {...baseProps({ onAuto, unaddressableDates: ["2026-08-01"] })} />);
+    render(<PlannerGrid {...baseProps({ onAuto })} />);
     fireEvent.click(screen.getByRole("button", { name: /auto-asignar/i }));
     expect(onAuto).not.toHaveBeenCalled();
     expect(screen.getByText(/reemplazar/i)).toBeTruthy();
-    expect(screen.getByText(/1 sábado\(s\) fuera del alcance/i)).toBeTruthy();
+    // ADR-0048 (T1) removed the «N sábado(s) fuera del alcance» clause with the prop that fed it.
+    expect(screen.queryByText(/fuera del alcance/i)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^confirmar$/i }));
     expect(onAuto).toHaveBeenCalledTimes(1);
   });
@@ -821,7 +822,7 @@ describe("PlannerGrid — instrument/FOH manual label (D5)", () => {
   });
 });
 
-describe("PlannerGrid — preflight and unaddressable markers", () => {
+describe("PlannerGrid — preflight markers, and no unaddressable one", () => {
   it("shows each date column's TargetPreflight state and reasons", () => {
     const preflight: TargetPreflight = {
       targetKey: "sunday_role:2026-08-09",
@@ -834,9 +835,10 @@ describe("PlannerGrid — preflight and unaddressable markers", () => {
     expect(screen.getByText("Bloqueado")).toBeTruthy();
   });
 
-  it("renders an explicit 'fuera del alcance de Auto' marker for an unaddressable date", () => {
-    render(<PlannerGrid {...baseProps({ columns: WEEKEND, unaddressableDates: ["2026-08-08"] })} />);
-    expect(screen.getByText(/fuera del alcance de auto/i)).toBeTruthy();
+  // ADR-0048 (T1): every in-month Saturday has a solver week, so the badge (and its prop) is gone.
+  it("renders no 'fuera del alcance de Auto' marker on any column", () => {
+    render(<PlannerGrid {...baseProps({ columns: WEEKEND })} />);
+    expect(screen.queryByText(/fuera del alcance de auto/i)).toBeNull();
   });
 });
 
@@ -1385,6 +1387,61 @@ describe("PlannerGrid — E6 hard blocks on a manual pick", () => {
     expect(overrideButtons()).toHaveLength(0);
     fireEvent.click(gaby);
     expect(onCellsChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PlannerGrid — the trailing Saturday's week exclusions (T1)", () => {
+  // Sat 31 Oct 2026 is October's trailing Saturday: solver week 5 (4 Sundays +
+  // 1). The grid judges its rules over the spine `sundayDatesForColumn` hands
+  // it — in production `ruleContextForTarget`, wired exactly as below
+  // (`MonthGenerator.tsx`). It used to hand over NOVEMBER's spine (the Sunday
+  // after the 31st is 1 Nov), so `weekForColumn` answered week 1: a week-1
+  // exclusion blocked and a week-5 one did not, the opposite of the solver.
+  const OCT = ["2026-10-04", "2026-10-11", "2026-10-18", "2026-10-25"];
+  const columns = buildColumns({ sundayDates: OCT, activeSatDates: ["2026-10-31"] });
+  const sundayDatesForColumn = (column: GridColumn) =>
+    ruleContextForTarget(column.type, column.date)?.sundayDates ?? [];
+  const excludedIn = (week: number): SolverConfig => ({
+    sundayLeads: [], saturdayLeads: [], support: [], conflicts: [], presence: [],
+    restrictions: [{
+      id: "r1", person: "Gaby", excludedPatterns: [], fairness: "none", fairnessSlack: 0,
+      weekExclusions: [{ id: "w", week, pattern: "Sat.*" }], caps: [],
+    }],
+  });
+
+  it("a week-5 exclusion blocks Gaby on the 31st's Lead, and a week-1 exclusion does not", () => {
+    const week5 = render(
+      <PlannerGrid {...baseProps({ columns, sundayDates: OCT, sundayDatesForColumn, config: excludedIn(5) })} />,
+    );
+    fireEvent.click(cellFor(week5.container, "lead", "2026-10-31"));
+    const blocked = candidateLi("Gaby");
+    expect(blocked.getAttribute("aria-disabled")).toBe("true");
+    expect(within(blocked).getByText("Regla: excluido en la semana 5 (Sat.*)")).toBeTruthy();
+    week5.unmount();
+
+    const week1 = render(
+      <PlannerGrid {...baseProps({ columns, sundayDates: OCT, sundayDatesForColumn, config: excludedIn(1) })} />,
+    );
+    fireEvent.click(cellFor(week1.container, "lead", "2026-10-31"));
+    expect(candidateLi("Gaby").getAttribute("aria-disabled")).toBeNull();
+  });
+
+  it("the seated-rule re-check flags a week-5 exclusion on the 31st, and not a week-1 one", () => {
+    // `violationsByColumnId` — the check that runs over every seated occupant,
+    // after a fill as after a hand placement — reads the same per-column spine.
+    const seated = [{ date: "2026-10-31", rowId: "lead", memberIds: ["m2"], origin: "manual" as const }];
+    const week5 = render(
+      <PlannerGrid {...baseProps({ columns, cells: seated, sundayDates: OCT, sundayDatesForColumn, config: excludedIn(5) })} />,
+    );
+    expect(
+      within(cellFor(week5.container, "lead", "2026-10-31")).getByText(/Gaby: Regla: excluido en la semana 5 \(Sat\.\*\)/),
+    ).toBeTruthy();
+    week5.unmount();
+
+    const week1 = render(
+      <PlannerGrid {...baseProps({ columns, cells: seated, sundayDates: OCT, sundayDatesForColumn, config: excludedIn(1) })} />,
+    );
+    expect(within(cellFor(week1.container, "lead", "2026-10-31")).queryByText(/excluido en la semana/)).toBeNull();
   });
 });
 

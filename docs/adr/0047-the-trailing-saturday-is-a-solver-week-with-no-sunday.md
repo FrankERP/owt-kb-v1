@@ -9,6 +9,13 @@
 > (critical tier, two fresh approvals); review log:
 > [`…-design-review-log.md`](../superpowers/specs/2026-09-29-solver-trailing-saturday-design-review-log.md).
 
+> **Amended 2026-09-30 (delivery 2):** the planner now sends `weeks + 1`. See
+> [ADR-0048](0048-the-saturday-after-the-last-sunday-belongs-to-its-calendar-month.md). It sends the
+> trailing Saturday when it is selected and some lead can take it (T5). A request member unavailable
+> that day gets `<name> !in week <weeks+1> Sat.*`. Saturday minimums are judged per person against
+> the Saturdays sent and their seats (T3/T4). The decision below is unchanged. «The planner does not
+> send `weeks + 1` yet» was true when this was written.
+
 ## Context
 
 A month-end Saturday whose Sunday falls in the next month — Sat 31 Oct 2026 (Sun 1 Nov), and
@@ -101,7 +108,8 @@ redeploy of identical code. The spec's §7 is amended to say so.
   each one. Real October 2026 has no such cap; the refusal's hint names the way out.
 - **The mandatory lead stays hard on the pinless path.** A trailing Saturday nobody can lead sinks
   the month, exactly like an in-month Saturday nobody can lead (under pins it goes soft:
-  `builtin:mandatory_lead:W5:Sat`). The planner's pre-flight (delivery 2) keeps it from sending one.
+  `builtin:mandatory_lead:W5:Sat`). The planner's pre-flight (delivery 2) keeps it from sending one:
+  that is T5 in ADR-0048. It is advisory: the dedicated-lead anchor and zero maximums are outside it.
 - **What the frozen history shapes do not reach:** neither history shape hits `objective_skipped`,
   so a month whose real history overflows the objective is not frozen by a literal. The spec's
   reviewers checked the real October 2026 request (28 shapes, 0 mismatches) with their own harness,

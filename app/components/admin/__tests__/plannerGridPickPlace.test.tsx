@@ -66,7 +66,6 @@ function baseProps(overrides: Partial<PlannerGridProps> = {}): PlannerGridProps 
     createBlockFor: () => null,
     canReceive: () => true,
     skipped: new Set(),
-    unaddressableDates: [],
     unresolvedNames: [],
     unfilled: [],
     onCellsChange: vi.fn(),
