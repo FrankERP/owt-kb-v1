@@ -852,11 +852,11 @@ describe("MonthGenerator — create path", () => {
           ok: true,
           json: async () => ({
             ok: true,
-            // Even a (hypothetically buggy, or simply a solver that ignores
-            // an empty `weekends_with_saturday`) response carrying Saturday
-            // data for week 1 must never reach a draft: `applySolveResponse`
-            // only ever writes cells for columns actually in the column set,
-            // and week 1's Saturday (Oct 3) never is.
+            // Even a (hypothetically buggy) response carrying Saturday data
+            // for week 1 — which the request never names; it asks for week 5,
+            // the 31st — must never reach a draft: `applySolveResponse` only
+            // ever writes cells for columns actually in the column set, and
+            // week 1's Saturday (Oct 3) never is.
             schedule: {
               "1": { Sunday: { Lead: ["Ana"], BGV: [], Choir: [] }, Saturday: { Lead: ["Ana"], BGV: [] } },
             },
@@ -898,10 +898,11 @@ describe("MonthGenerator — create path", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/admin/solve", expect.anything()));
 
     // The fix, at the request level, asserted AFTER the solve call settled:
-    // week 1's Saturday (Oct 3) is never addressed, because it isn't the
-    // selected Oct 31. A mismatch here fails the test directly — nothing
-    // catches or swallows it.
-    expect(captured.solveRequest?.weekends_with_saturday).toEqual([]);
+    // the request names week 5 — the selected Oct 31, sent because Ana can
+    // lead it (T1/T5, ADR-0048 amending D16) — and never week 1, whose
+    // Saturday (Oct 3) was deselected. A mismatch here fails the test
+    // directly — nothing catches or swallows it.
+    expect(captured.solveRequest?.weekends_with_saturday).toEqual([5]);
 
     // Even with the (hypothetically buggy) solver having been asked about
     // week 1's Saturday, publish and confirm nothing is ever posted for it.
@@ -1148,22 +1149,34 @@ describe("MonthGenerator — create path", () => {
 
   // ── Task 5 fix pass, Findings 1 & 2: the two UNPINNED E21 call sites ────────
   //
-  // `MonthGenerator` feeds FOUR consumers the full month's Sunday spine
+  // `MonthGenerator` feeds every spine consumer the full month's Sunday list
   // (`sundayDatesFull`), never the calendar's selection, because the solver's
-  // week number is POSITIONAL over that spine. Two of the four were already
-  // pinned above — `buildSolveRequest` (the Oct-31 `weekends_with_saturday`
-  // test) and `applySolveResponse` (the same test's "no Oct 3 draft"). The
-  // other two were not: swapping `sundayDatesFull` for `selectedSundays` at
-  // either of them left the WHOLE suite green, because `plannerModel.test.ts`
-  // pins the pure functions given correct arguments and nothing pinned that
-  // the component supplies them.
+  // week number is POSITIONAL over that spine. The two tests below pin
+  // `mapUnfilledSeats`' spine argument and `emptyVoiceSeats` (the confirm's
+  // count). `buildSolveRequest` and `applySolveResponse` are pinned in
+  // `MonthCalendar.test.tsx`; the `requestSaturdayWeeks` memo and both
+  // `collectPins` calls in `trailingSaturday.wiring.test.tsx`; `pinViolationNotices`
+  // in `fillEmpty.wiring.test.tsx`. The full list, with the one consumer nothing
+  // pins, is on `selectedSundays` in `MonthGenerator.tsx`. Each was checked by
+  // swapping it for `selectedSundays`
+  // (2026-09-30): before these tests, a swap at either of the two below left the
+  // WHOLE suite green, because `plannerModel.test.ts` pins the pure functions
+  // given correct arguments and nothing pinned that the component supplies them.
   //
   // March 2026 is the fixture for both: it starts on a Sunday (1, 8, 15, 22,
   // 29) and ends on a Tuesday, so EVERY Saturday (7, 14, 21, 28) has its
   // adjacent Sunday inside the month and the unaddressable set is empty at
-  // rest. February 2026 cannot serve here — it ends on Saturday the 28th,
-  // whose Sunday is in March, so it is unaddressable before anything is
-  // deselected and the signal would be indistinguishable from the bug.
+  // rest. February 2026 could not serve here before T1 — it ends on Saturday
+  // the 28th, whose Sunday is in March, so it WAS unaddressable before anything
+  // was deselected and the signal would have been indistinguishable from the
+  // bug. Since ADR-0048 (T1) the 28th is February's trailing Saturday, week 5
+  // (see the second half of the test below).
+  //
+  // Since ADR-0048 (T1) the «Fuera del alcance de Auto» surface and its
+  // `computeUnaddressableDates` consumer are gone. The badge/clause assertions
+  // below stay as the "appears nowhere" check; the spine pin they carried moved
+  // to the «Solo llenar vacíos» count, whose `emptyVoiceSeats` also takes the
+  // full spine and stops counting the 14th's seats over a spine missing the 15th.
 
   it("E21: deselecting a Sunday does not make its adjacent Saturday 'fuera del alcance de Auto'", () => {
     const { container, unmount } = render(
@@ -1175,12 +1188,8 @@ describe("MonthGenerator — create path", () => {
     // request either way, because the request is built from the full spine.
     fireEvent.click(container.querySelector('[data-date="2026-03-15"]')!);
     // Then drop a Saturday that is addressable on any reading (2026-03-28 sits
-    // beside Sunday the 29th). This is ordinary month setup, and it is also
-    // what makes the assertion below load-bearing: `unaddressableDatesList` is
-    // a `useMemo` keyed on [sundayDatesFull, activeSatDates], so a regression
-    // that swapped the ARGUMENT alone would sit behind a stale memo and never
-    // recompute after a Sunday toggle. Touching a Saturday invalidates the
-    // memo, so the wrong spine — however it got there — has to show itself.
+    // beside Sunday the 29th). This is ordinary month setup. (It used to also
+    // invalidate the `unaddressableDatesList` memo, deleted under ADR-0048, T1.)
     fireEvent.click(container.querySelector('[data-date="2026-03-28"]')!);
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
 
@@ -1188,28 +1197,36 @@ describe("MonthGenerator — create path", () => {
     expect(container.querySelector('[data-date="2026-03-14"]')).toBeTruthy();
     // ...and carries no scope warning, on the header badge...
     expect(screen.queryByText("Fuera del alcance de Auto")).toBeNull();
-    // ...nor in the Auto confirmation banner, whose sentence only grows the
-    // "N sábado(s) fuera del alcance" clause when the list is non-empty.
+    // ...nor in the Auto confirmation banner (the clause is gone since ADR-0048, T1).
     fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
-    expect(screen.getByText(/Esto reemplazará toda asignación de voz/).textContent).not.toMatch(
-      /fuera del alcance de Auto/,
-    );
+    const banner = screen.getByText(/Esto reemplazará toda asignación de voz/);
+    expect(banner.textContent).not.toMatch(/fuera del alcance de Auto/);
+    fireEvent.click(within(banner.closest("div") as HTMLElement).getByRole("button", { name: "Cancelar" }));
+    // The spine pin (see above): Auto counts the 14th as its own. Four Sundays
+    // (1, 8, 22, 29) × (2 Lead + 3 BGV + 3 Coro) + three Saturdays (7, 14, 21)
+    // × (2 Lead + 3 BGV) = 47; over a spine missing the 15th the 14th drops to 42.
+    fireEvent.click(screen.getByRole("switch", { name: "Solo llenar vacíos" }));
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    expect(screen.getByText(/Solo se llenarán/).textContent).toContain("los 47 lugares de voz vacíos");
     unmount();
 
-    // CONTROL — the badge and the clause are not simply unrenderable. February
-    // 2026's Saturday the 28th is genuinely unaddressable (its Sunday, March 1,
-    // is outside the month's spine), so both must appear with nothing
-    // deselected at all. Without this half, a `unaddressableDates` that always
-    // returned [] would pass the assertions above.
+    // D16 amended by ADR-0048 (T1): the trailing Saturday is week weeks + 1.
+    // This half used to be the CONTROL: February 2026's Saturday the 28th (its
+    // Sunday, March 1, is outside the spine) was unaddressable and had to show
+    // the badge and the clause. It is now the trailing Saturday, week 5, so
+    // neither appears — no calendar month has an unaddressable Saturday left,
+    // and the surface itself is removed (Task 3). The half above still fails
+    // on the wrong spine, through the «Solo llenar vacíos» count.
     const second = render(
       <Gen members={noMembers} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />,
     );
     setMonthYear(second.container, 2, 2026);
     fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
-    expect(screen.getByText("Fuera del alcance de Auto")).toBeTruthy();
+    expect(second.container.querySelector('[data-date="2026-02-28"]')).toBeTruthy();
+    expect(screen.queryByText("Fuera del alcance de Auto")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
-    expect(screen.getByText(/Esto reemplazará toda asignación de voz/).textContent).toMatch(
-      /1 sábado\(s\) fuera del alcance de Auto/,
+    expect(screen.getByText(/Esto reemplazará toda asignación de voz/).textContent).not.toMatch(
+      /fuera del alcance de Auto/,
     );
   });
 

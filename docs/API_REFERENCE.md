@@ -449,8 +449,11 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 - **`POST /api/admin/solve`** (`maxDuration=60`) — the auto-scheduler. If `OWT_SOLVER_URL` is
   set, calls the remote solver with `X-Api-Key`; else spawns the local Python subprocess
   (`gcf/owt_solver_v2.py --json-mode`, 120s hard kill). Body is a `SolveRequest`; requires
-  `sunday_leads`. Returns a `SolveResponse` — **200 if `ok`, else 422**. No Sanity writes. See
-  [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
+  `sunday_leads`. Returns a `SolveResponse` — **200 if `ok`, else 422**. An `ok: false` the route
+  made itself (the service's HTTP status, the local timeout, a failed start, no output, output
+  that is not JSON) carries `transport_error: true`; the solver's own refusals never do, and only
+  those may make Auto retry without the trailing Saturday (ADR-0048, ruling Q19). No Sanity
+  writes. See [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
 - **`GET /api/admin/solver-config`** — the shared planner rule set (`_id: solverConfig`).
   Returns `{ present, rev, config }`. **`present: false` with `config: null` means the document
   does not exist**, which is a different answer from a failed read (an HTTP error, no body):
