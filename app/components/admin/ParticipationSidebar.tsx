@@ -1,9 +1,10 @@
 // app/components/admin/ParticipationSidebar.tsx
 "use client";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState, useSyncExternalStore } from "react";
 import { computeParticipation, type ParticipantRole, type MemberParticipation } from "@/app/utils/computeParticipation";
 import { themeColour } from "@/app/utils/themeColour";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import Switch from "@/app/components/ui/Switch";
 import NumberRoll from "@/app/components/ui/NumberRoll";
 
 // Six CATEGORICAL hues, keyed by seat. These are consumed as inline `background:`
@@ -18,6 +19,45 @@ const COLORS = {
   foh:       themeColour("--chart-foh-rgb"),
 };
 type View = "voces" | "instrumentos";
+
+const INCLUDE_SPECIALS_KEY = "owt_participation_include_specials";
+
+/** Nothing outside this component writes the key, so there is nothing to hear. */
+const noSubscribe = () => () => {};
+
+function readStoredIncludeSpecials(): boolean {
+  try {
+    return window.localStorage.getItem(INCLUDE_SPECIALS_KEY) === "true";
+  } catch {
+    return false; // storage blocked (private mode, policy): start with the default
+  }
+}
+
+/**
+ * Whether specials are part of the picture. OFF by default: the solver balances
+ * weekend services only, so a CAMP set or a vigil in the count skews who looks
+ * like they served. Remembered per browser.
+ *
+ * The STORED value comes through `useSyncExternalStore` with an «off» server
+ * snapshot — the same idiom as `AdminRail`'s collapsed flag — so the server
+ * render and the hydrating one agree and a stored «on» lands one render later,
+ * without a `setState` in an effect. The in-session CHOICE is plain state
+ * layered on top: a write that throws (quota, blocked storage) still flips the
+ * panel for this visit, it just is not remembered.
+ */
+function useIncludeSpecials(): [boolean, (next: boolean) => void] {
+  const stored = useSyncExternalStore(noSubscribe, readStoredIncludeSpecials, () => false);
+  const [chosen, setChosen] = useState<boolean | null>(null);
+  const set = (next: boolean) => {
+    setChosen(next);
+    try {
+      window.localStorage.setItem(INCLUDE_SPECIALS_KEY, String(next));
+    } catch {
+      // Not persisted; the in-memory choice above still holds.
+    }
+  };
+  return [chosen ?? stored, set];
+}
 
 // The box, whoever places it. A const rather than inline because the placement
 // half below differs by caller — and `participationAlongside.test.tsx` derives
@@ -72,7 +112,16 @@ export function ParticipationSidebar({
   placement?: "default" | "board";
 }) {
   const [view, setView] = useState<View>("voces");
-  const all = useMemo(() => computeParticipation(roles), [roles]);
+  const [includeSpecials, setIncludeSpecials] = useIncludeSpecials();
+  const switchLabelId = useId();
+  // A special is `_type === "special_role"`, the same discriminator
+  // `computeParticipation` itself branches on. Dropping the ROLE (not just the
+  // `especial` bucket) is what keeps a special's instrument and FOH seats out
+  // of the week counts too.
+  const all = useMemo(
+    () => computeParticipation(includeSpecials ? roles : roles.filter(r => r._type !== "special_role")),
+    [roles, includeSpecials],
+  );
 
   const rows = useMemo(() => {
     if (view === "voces") {
@@ -88,7 +137,10 @@ export function ParticipationSidebar({
     : Math.max(1, ...rows.map(r => r.instrWeeks + r.fohWeeks));
 
   const legend: readonly (readonly [string, string])[] = view === "voces"
-    ? [["Líder", COLORS.lead], ["BGV", COLORS.bgv], ["Coro", COLORS.coro], ["Especial", COLORS.especial]]
+    ? [
+        ["Líder", COLORS.lead], ["BGV", COLORS.bgv], ["Coro", COLORS.coro],
+        ...(includeSpecials ? [["Especial", COLORS.especial] as const] : []),
+      ]
     : [["Instr", COLORS.instr], ["FOH", COLORS.foh]];
 
   return (
@@ -134,6 +186,27 @@ export function ParticipationSidebar({
             { value: "instrumentos", label: "Instrumentos" },
           ]}
         />
+        {/*
+          After the control, never before it: `participationAlongside.test.tsx`
+          pins that the SegmentedControl follows the header's opening tag. The
+          row's class deliberately does not begin `flex items-center gap-` —
+          that test reads the FIRST such class in this file as the member row's
+          gap, and this one is not it.
+
+          A <label>, so the whole row is the tap target on a phone — the
+          36x20 switch alone is a small thing to hit. The label's own click
+          never re-fires a click that began on the switch it wraps.
+        */}
+        <label className="mt-2 flex cursor-pointer items-center justify-between py-1">
+          <span id={switchLabelId} className="text-xs text-mono-500">Incluir especiales</span>
+          <Switch
+            size="sm"
+            aria-labelledby={switchLabelId}
+            checked={includeSpecials}
+            onChange={setIncludeSpecials}
+            className="ml-2"
+          />
+        </label>
       </div>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 py-2 border-b border-accent/15 mb-1">
@@ -151,13 +224,13 @@ export function ParticipationSidebar({
       )}
 
       <div className={placement === "board" ? BOARD_LIST : LIST_BASE}>
-        {rows.map(r => <Row key={r.id} r={r} max={max} view={view} />)}
+        {rows.map(r => <Row key={r.id} r={r} max={max} view={view} includeSpecials={includeSpecials} />)}
       </div>
     </aside>
   );
 }
 
-function Row({ r, max, view }: { r: MemberParticipation; max: number; view: View }) {
+function Row({ r, max, view, includeSpecials }: { r: MemberParticipation; max: number; view: View; includeSpecials: boolean }) {
   const value = view === "voces" ? r.total : r.instrWeeks + r.fohWeeks;
   const barW = Math.round((value / max) * 150);
   const u = value > 0 ? barW / value : 0;
@@ -170,12 +243,12 @@ function Row({ r, max, view }: { r: MemberParticipation; max: number; view: View
         <div className="text-[13px] font-medium text-ink-muted truncate">{r.name}</div>
         <div className="text-xs text-mono-500">
           {view === "voces"
-            ? <>Líder {r.sunLead}·{r.satLead}  ·  BGV {r.sunBGV}·{r.satBGV}  ·  Coro {r.coro}  ·  Especial {r.especial}</>
+            ? <>Líder {r.sunLead}·{r.satLead}  ·  BGV {r.sunBGV}·{r.satBGV}  ·  Coro {r.coro}{includeSpecials && <>  ·  Especial {r.especial}</>}</>
             : <>Instrumentos {r.instrWeeks} sem  ·  FOH {r.fohWeeks} sem</>}
         </div>
         <div className="mt-1 rounded overflow-hidden flex" style={{ width: 150, background: themeColour("--accent-rgb", 0.08) }}>
           {view === "voces"
-            ? <>{seg(r.sunLead + r.satLead, COLORS.lead)}{seg(r.sunBGV + r.satBGV, COLORS.bgv)}{seg(r.coro, COLORS.coro)}{seg(r.especial, COLORS.especial)}</>
+            ? <>{seg(r.sunLead + r.satLead, COLORS.lead)}{seg(r.sunBGV + r.satBGV, COLORS.bgv)}{seg(r.coro, COLORS.coro)}{includeSpecials && seg(r.especial, COLORS.especial)}</>
             : <>{seg(r.instrWeeks, COLORS.instr)}{seg(r.fohWeeks, COLORS.foh)}</>}
         </div>
       </div>
