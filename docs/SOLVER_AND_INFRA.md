@@ -298,15 +298,16 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
     refusals (the limits listed under the seat model below), and the retry catches them.
   - **The retry without it (ruling Q19).** When the solver itself refuses a request that sent
     `weeks + 1` (a 422 without `transport_error`), Auto (`runSolve`) rebuilds the request with
-    `buildSolveRequest({ withholdTrailing: { detail } })` and solves once more. That goes
-    through T5's own withhold path, `trailing = { sent: false, reason: "infeasible", detail }`:
-    no week `weeks + 1`, no exclusion or availability rule naming it, and the floors judged
-    again on the Saturdays left. Deselecting the date instead would keep its week exclusions,
-    which the solver refuses. The retry's notices replace the first attempt's, and its trailing
-    line is «El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución (motivo
-    del solver: …). Llénalo a mano.», with the solver's reason trimmed, and no parenthesis when it
-    is empty. With «Solo llenar vacíos» on, the pins are collected again over the retry's weeks,
-    so none names the 31st. Auto stays locked through both solves.
+    `buildSolveRequest({ withholdTrailing: true })` and solves once more. That goes through
+    T5's own withhold path, `trailing = { sent: false, reason: "infeasible" }`: no week
+    `weeks + 1`, no exclusion or availability rule naming it, and the floors judged again on
+    the Saturdays left. Deselecting the date instead would keep its week exclusions, which the
+    solver refuses. The retry's notices replace the first attempt's, and its trailing line is
+    «El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución. Llénalo a
+    mano.» It is Spanish only and does not quote the solver's reason (ruling Q20): that reason
+    already ends with the solver's own advice to deselect the date. With «Solo llenar vacíos»
+    on, the pins are collected again over the retry's weeks, so none names the 31st. Auto stays
+    locked through both solves.
     - Never retried: a transport failure (`transport_error`), a non-422 status, a thrown fetch,
       a request that did not send the 31st, or a retry.
     - A retry refused too shows its own refusal (`solverRefusalMessage`), which is what main
@@ -321,8 +322,8 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
     trailing Saturday or it is deselected. That is deliberate (ADR-0048).
   - An older solver refuses `weeks + 1` with `ok: false`, so this needs delivery 1 deployed
     first. Since Q19 that refusal is retried without the 31st, so the month still solves and
-    the infeasible line quotes the old solver's reason: only the deploy check proves delivery 1
-    is live.
+    only the infeasible line shows, which does not name the cause (Q20). Only the deploy check
+    proves delivery 1 is live.
   - Before this change it was manual-only (D16: a week came only from an in-month Sunday after
     the Saturday), and the grid marked it «Fuera del alcance de Auto». That badge, its confirm
     clause and `unaddressableDates` are gone.
@@ -379,11 +380,12 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   - rows grown by pins.
 
   The latest re-verify (at `097d994d`) found 124 real-solver setups where this request was
-  refused and main's solved, every one with the 31st sent. Its mechanism counts: `sat_anchor`
+  refused and main's solved, every one with the 31st sent. Its counts by cause: `sat_anchor`
   71, a self-contradictory rule (a kept minimum above the same person's maximum) 43, minimums
   pushing every possible lead of the 31st onto BGV 2, minimums plus a lead barred by a maximum
-  4, a maximum used up by Sundays 9, a Saturday pigeonhole without a lone lead 4, other 1. Each
-  is now a retry (ADR-0048, decision 11).
+  4, a maximum used up by Sundays 9, a Saturday pigeonhole without a lone lead 4, other 1.
+  Causes overlap; one case can have several, so the counts are not a split of the 124. Each
+  case is now a retry (ADR-0048, decision 11).
 
   October 2026 is why this exists: its only Saturday service was the 31st, so the admin
   deselected 3/10/17/24, the request sent no Saturday, and three saved `Sat.* == 1` minimums made

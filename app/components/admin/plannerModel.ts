@@ -949,14 +949,12 @@ const SATURDAY_SEATS = { lead: 2, bgv: 3 } as const;
 /**
  * T5's verdict on the trailing Saturday. `sent: false` means the request left week `weeks + 1`
  * out: `noLead` when no lead could take it (T5), `infeasible` when the solver refused the month
- * with it and Auto is solving it again without it (`withholdTrailing`, ruling Q19). `detail` is
- * the solver's own reason for that refusal, as it came back.
+ * with it and Auto is solving it again without it (`withholdTrailing`, ruling Q19).
  */
 export interface TrailingVerdict {
   date: string;
   sent: boolean;
   reason?: "noLead" | "infeasible";
-  detail?: string;
 }
 
 /** Can `name` (a canonical `member_name`) take `role` on Saturday week `week`, dated `date`? */
@@ -1282,12 +1280,12 @@ export function buildSolveRequest(input: {
   month: number;
   /**
    * The retry (ruling Q19): the solver refused this month with the trailing Saturday in it, so
-   * withhold it as `infeasible`, carrying the solver's reason (`detail`). It goes through T5's own
-   * withhold path, so the week's exclusions are dropped (Q9), its availability rule is not
-   * emitted and the floors are judged on the Saturdays left. Ignored, byte for byte, when the
-   * request would not send the trailing Saturday anyway (none, deselected, or T5's `noLead`).
+   * withhold it as `infeasible`. It goes through T5's own withhold path, so the week's exclusions
+   * are dropped (Q9), its availability rule is not emitted and the floors are judged on the
+   * Saturdays left. Ignored, byte for byte, when the request would not send the trailing Saturday
+   * anyway (none, deselected, or T5's `noLead`).
    */
-  withholdTrailing?: { detail: string };
+  withholdTrailing?: boolean;
 }):
   | {
       ok: true;
@@ -1324,7 +1322,7 @@ export function buildSolveRequest(input: {
   const candidates = weekendWeekIndexes(sundayDates, activeSatDates);
   const verdict = trailingVerdict({ config, members, sundayDates, candidates, leadNames, canTake });
   const trailing: TrailingVerdict | null = verdict?.sent && input.withholdTrailing
-    ? { date: verdict.date, sent: false, reason: "infeasible", detail: input.withholdTrailing.detail }
+    ? { date: verdict.date, sent: false, reason: "infeasible" }
     : verdict;
   const weekendsWithSaturday = trailing?.sent === false ? candidates.filter((w) => w !== weeks + 1) : candidates;
 
@@ -1457,14 +1455,14 @@ export function omittedCapsNotices(omitted: OmittedCap[]): string[] {
 /**
  * The notice for a trailing Saturday the request did not send; `null` when it was sent. For
  * `noLead`, «sin sábados libres en su regla» is a lead whose Saturday maximum the other Saturdays
- * already use up (ruling Q17). For `infeasible` (Auto's retry, ruling Q19) it names the solver's
- * reason, trimmed, and drops the parenthesis when the solver gave none.
+ * already use up (ruling Q17). `infeasible` is Auto's retry (ruling Q19), in Spanish only: the
+ * solver's English reason already ends with its own «deselect it» advice, so quoting it read twice
+ * (ruling Q20).
  */
 export function trailingNotice(t: TrailingVerdict): string | null {
   if (t.sent) return null;
   if (t.reason === "infeasible") {
-    const detail = t.detail?.trim();
-    return `El sábado ${dayLabel(t.date)} no se mandó al solver: con él, el mes no tenía solución${detail ? ` (motivo del solver: ${detail})` : ""}. Llénalo a mano.`;
+    return `El sábado ${dayLabel(t.date)} no se mandó al solver: con él, el mes no tenía solución. Llénalo a mano.`;
   }
   return `El sábado ${dayLabel(t.date)} no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.`;
 }

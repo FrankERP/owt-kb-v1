@@ -3543,15 +3543,14 @@ export default function MonthGenerator({
    * nothing to wait for), the derived path before its history read. Keep that asymmetry.
    *
    * @param retry `runSolve`'s retry without the trailing Saturday (ruling Q19): the request is
-   *   rebuilt with it withheld as `infeasible`, carrying the solver's reason, under the FIRST
-   *   attempt's switch. Everything below runs again for it — its notices replace the first
+   *   rebuilt with it withheld as `infeasible`, under the FIRST attempt's switch. Everything below runs again for it — its notices replace the first
    *   attempt's, its pins are collected over its own `weekends_with_saturday` (Q1, so no pin on
    *   the 31st) and `pinRefusal` judges them, with the same exits.
    */
   function prepareSolve(
     config: SolverConfig,
     historyEntries: SolverHistoryEntry[],
-    retry?: { detail: string; fillEmpty: boolean },
+    retry?: { fillEmpty: boolean },
   ): PreparedSolve | null {
     const fillEmpty = retry ? retry.fillEmpty : fillEmptyOnly;
     setAutoError(null);
@@ -3564,7 +3563,7 @@ export default function MonthGenerator({
       historyEntries,
       year,
       month,
-      ...(retry ? { withholdTrailing: { detail: retry.detail } } : {}),
+      ...(retry ? { withholdTrailing: true } : {}),
     });
     if (!built.ok) {
       // Pre-flight refusal (fact 14) — never reaches the network. EXIT 1, and
@@ -3661,10 +3660,7 @@ export default function MonthGenerator({
         ) {
           // Q19: the solver refused a month that included the trailing Saturday. Solve it again
           // without it; a pre-fetch refusal of the retry has already filled and said why.
-          const retry = prepareSolve(config, prepared.historyEntries, {
-            detail: response.error ?? "",
-            fillEmpty: prepared.fillEmpty,
-          });
+          const retry = prepareSolve(config, prepared.historyEntries, { fillEmpty: prepared.fillEmpty });
           if (retry) await runSolve(config, retry, historyMonths);
           return;
         }

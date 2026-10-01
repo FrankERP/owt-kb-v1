@@ -233,7 +233,7 @@ function build(opts: {
   sundayDates?: string[];
   historyEntries?: SolverHistoryEntry[];
   month?: number;
-  withholdTrailing?: { detail: string };
+  withholdTrailing?: boolean;
 }) {
   const built = buildSolveRequest({
     config: { sundayLeads: [], saturdayLeads: [], support: [], restrictions: [], conflicts: [], presence: [], ...opts.config },
@@ -906,7 +906,9 @@ describe("Q19: the retry without the trailing Saturday (`withholdTrailing`)", ()
     ],
   };
   const SELECTED = ["2026-10-17", "2026-10-24", "2026-10-31"];
-  const DETAIL = "The schedule is infeasible: a mandatory Lead seat cannot be filled.";
+  // Ruling Q20: the line is Spanish only. The solver's English reason already ends with its own
+  // «deselect it» advice, so quoting it read twice and ended in «.).».
+  const INFEASIBLE = "El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución. Llénalo a mano.";
 
   it("the first request sends the 31st, its exclusion and its availability rule", () => {
     const first = build({ members, config, activeSatDates: SELECTED });
@@ -923,9 +925,9 @@ describe("Q19: the retry without the trailing Saturday (`withholdTrailing`)", ()
   });
 
   it("withheld as infeasible: no week 5, no rule naming it, no availability rule for the 31st, and the floors kept on the 17th and 24th", () => {
-    const retry = build({ members, config, activeSatDates: SELECTED, withholdTrailing: { detail: DETAIL } });
+    const retry = build({ members, config, activeSatDates: SELECTED, withholdTrailing: true });
     expect(retry.request.weekends_with_saturday).toEqual([3, 4]);
-    expect(retry.trailing).toEqual({ date: "2026-10-31", sent: false, reason: "infeasible", detail: DETAIL });
+    expect(retry.trailing).toStrictEqual({ date: "2026-10-31", sent: false, reason: "infeasible" });
     expect(retry.request.dsl_rules).toEqual([
       "Andrés Ortega Sat.* == 1",
       "Taylor Ruiz Sat.* == 1",
@@ -935,15 +937,13 @@ describe("Q19: the retry without the trailing Saturday (`withholdTrailing`)", ()
     ]);
     expect(retry.request.dsl_rules.join("\n")).not.toMatch(/\bweek 5\b/);
     expect(retry.omittedCaps).toEqual([]);
-    expect(trailingNotice(retry.trailing!)).toBe(
-      "El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución (motivo del solver: The schedule is infeasible: a mandatory Lead seat cannot be filled.). Llénalo a mano.",
-    );
+    expect(trailingNotice(retry.trailing!)).toBe(INFEASIBLE);
   });
 
   it("the floors are judged again on what is left: with only the 31st selected, nothing is sent and every floor is `noSaturday`", () => {
-    const retry = build({ members, config, activeSatDates: ["2026-10-31"], withholdTrailing: { detail: "x" } });
+    const retry = build({ members, config, activeSatDates: ["2026-10-31"], withholdTrailing: true });
     expect(retry.request.weekends_with_saturday).toEqual([]);
-    expect(retry.trailing).toEqual({ date: "2026-10-31", sent: false, reason: "infeasible", detail: "x" });
+    expect(retry.trailing).toStrictEqual({ date: "2026-10-31", sent: false, reason: "infeasible" });
     expect(retry.omittedCaps.map((o) => [o.person, o.reason])).toEqual([
       ["Andy", "noSaturday"], ["Tay", "noSaturday"], ["Vale", "noSaturday"],
     ]);
@@ -953,7 +953,7 @@ describe("Q19: the retry without the trailing Saturday (`withholdTrailing`)", ()
 
   it("ignores the input, byte for byte, when the request would not send the 31st anyway", () => {
     const same = (opts: Parameters<typeof build>[0]) =>
-      expect(JSON.stringify(build({ ...opts, withholdTrailing: { detail: "x" } }))).toBe(JSON.stringify(build(opts)));
+      expect(JSON.stringify(build({ ...opts, withholdTrailing: true }))).toBe(JSON.stringify(build(opts)));
     // A month with no trailing Saturday (November 2026).
     same({ members, config, sundayDates: NOV, activeSatDates: NOV_SATS, month: 11 });
     // The 31st deselected: the week-5 exclusion is still sent, as before (Q9 never widens).
@@ -961,19 +961,15 @@ describe("Q19: the retry without the trailing Saturday (`withholdTrailing`)", ()
     // T5 already withheld it: the reason stays `noLead`, which is why it was not sent.
     const away = members.map((x) => (x === ANDY || x === TAY ? { ...x, unavailableDates: ["2026-10-31"] } : x));
     same({ members: away, config, activeSatDates: SELECTED });
-    expect(build({ members: away, config, activeSatDates: SELECTED, withholdTrailing: { detail: "x" } }).trailing)
+    expect(build({ members: away, config, activeSatDates: SELECTED, withholdTrailing: true }).trailing)
       .toEqual({ date: "2026-10-31", sent: false, reason: "noLead" });
   });
 
-  it("trailingNotice for `infeasible`: the solver's reason trimmed, and no parenthesis when it gave none", () => {
-    expect(trailingNotice({ date: "2026-01-31", sent: false, reason: "infeasible", detail: "  x \n" })).toBe(
-      "El sábado 31 ene no se mandó al solver: con él, el mes no tenía solución (motivo del solver: x). Llénalo a mano.",
+  it("trailingNotice for `infeasible` names the day with dayLabel and says it in Spanish only (ruling Q20)", () => {
+    expect(trailingNotice({ date: "2026-01-31", sent: false, reason: "infeasible" })).toBe(
+      "El sábado 31 ene no se mandó al solver: con él, el mes no tenía solución. Llénalo a mano.",
     );
-    for (const detail of ["", "   ", undefined]) {
-      expect(trailingNotice({ date: "2026-10-31", sent: false, reason: "infeasible", detail })).toBe(
-        "El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución. Llénalo a mano.",
-      );
-    }
+    expect(trailingNotice({ date: "2026-10-31", sent: false, reason: "infeasible" })).toBe(INFEASIBLE);
   });
 });
 

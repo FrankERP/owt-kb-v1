@@ -156,17 +156,16 @@ planner's half: when it sends that week, and what that does to Saturday minimums
       local timeout, a process that failed to start, no output, and output that is not JSON. The solver's own answers never
       carry it, and the client reads the flag, never the error text. A tagged failure, a non-422
       status, a thrown fetch and a request without the 31st are never retried. Nor is a retry.
-    - **How.** `buildSolveRequest({ withholdTrailing: { detail } })`, where `detail` is the
-      solver's reason. It goes through T5's own withhold path: `trailing` becomes
-      `{ sent: false, reason: "infeasible", detail }`. So Q9 drops the week's exclusions (decision
+    - **How.** `buildSolveRequest({ withholdTrailing: true })`. It goes through T5's own withhold
+      path: `trailing` becomes `{ sent: false, reason: "infeasible" }`. So Q9 drops the week's exclusions (decision
       5), no availability rule names the 31st, and the floors are judged again on the Saturdays
       left. Deselecting the date would not do this: it keeps the week-5 exclusions, and the
       solver refuses them. When the request would not send the 31st anyway (none, deselected,
       T5's `noLead`), the input changes nothing, byte for byte.
     - **What the admin sees.** The retry's notices replace the first attempt's: its floor lines,
-      then «El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución (motivo del
-      solver: …). Llénalo a mano.», then delivery 3's lines. The reason is the solver's error,
-      trimmed, and the parenthesis is left out when it is empty. With «Solo llenar vacíos» on,
+      then «El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución. Llénalo a
+      mano.», then delivery 3's lines. The line is Spanish only (ruling Q20): it does not quote
+      the solver's reason. With «Solo llenar vacíos» on,
       the pins are collected again over the retry's weeks (Q1), so none names the 31st, and
       `pinRefusal` judges them again with the same exits.
     - **Auto stays locked for both solves.** The retry is awaited inside `runSolve`, under the
@@ -211,6 +210,10 @@ people, so nobody loses one. A hand-written November 2026 request pins the ident
   the previous review found, and the next review found another. The re-verify's 124 refusals
   were mostly things no planner-side check models: `sat_anchor` alone was 71. A retry makes the
   prediction optional; Q17 stays only as a pre-filter that saves the extra solve.
+- **Quoting the solver's reason in the retry's line** (Q19's first commit, removed by ruling
+  Q20). The solver's English reason for a request that names the 31st already ends with its own
+  advice to deselect it and fill it by hand. Quoted, the line said that twice, in two languages,
+  and ended in «.).». The retry acts on that advice, so the line says so in Spanish only.
 - **Retrying on any `ok: false`, or matching the error text.** A transport failure says nothing
   about the 31st, and a second call would only double the wait. The route knows which failures
   are its own, so it tags them (`transport_error`). The client never parses the solver's
@@ -284,10 +287,11 @@ people, so nobody loses one. A hand-written November 2026 request pins the ident
 
   The latest re-verify (at `097d994d`) ran the real solver on planner-built requests and found
   124 setups where this branch's request was refused and main's solved. Every one had sent the
-  31st. Its mechanism counts were: `sat_anchor` 71; a self-contradictory rule (a kept floor above
+  31st. Its counts by cause were: `sat_anchor` 71; a self-contradictory rule (a kept floor above
   the same person's maximum) 43; floors pushing every possible lead of the 31st onto BGV 2;
   floors plus a lead barred by a maximum 4; a `*.Lead`/`Lead.*`/`*.*` maximum used up by Sundays
-  9; a Saturday maximum used up without a lone lead (a pigeonhole) 4; other 1. Under Q19 each is
+  9; a Saturday maximum used up without a lone lead (a pigeonhole) 4; other 1. Causes overlap;
+  one case can have several, so the counts are not a split of the 124. Under Q19 each case is
   a retry. The restore shape is one of them: Andy and Tay are Sunday leads with `Sat.* == 1`,
   Vale is support with `Sat.* == 1`, Frank is away on the 17th, 24th and 31st, and all three are
   selected. Two leads cannot cover three Saturdays, so the solver refuses `[3, 4, 5]`. The
@@ -314,9 +318,10 @@ people, so nobody loses one. A hand-written November 2026 request pins the ident
 - **Release order.** Delivery 1 must be deployed, and pass its deploy check, before this reaches
   `main`. An old solver refuses `weeks + 1` with `ok: false` («weekends_w_sat must use 1-based
   indexes 1..4. Received [5].»). That is the solver's own answer, so since Q19 Auto retries
-  without the 31st: the month solves, and the infeasible line under Auto quotes that reason.
-  The failure is never silent, but it no longer looks like a refused month, so the deploy check
-  is what proves delivery 1 is live. Roll back the planner first.
+  without the 31st: the month solves, and only the infeasible line shows under Auto. Since Q20
+  that line does not quote the reason, so nothing on screen names an old solver. It looks like
+  any other retry, so only the deploy check proves delivery 1 is live. Roll back the planner
+  first.
 - **Undoing parts of this.** Undo T1 and no month's Auto staffs the Saturday again. Undo T3/T4
   and one person's unreachable minimum sinks the month again. Undo Q19 and every limit above can
   sink a month that sends the 31st again. Whether to restore October's three

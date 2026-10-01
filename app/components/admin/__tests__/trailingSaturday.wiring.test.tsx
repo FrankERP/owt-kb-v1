@@ -293,7 +293,8 @@ describe("Q19: a month the solver refuses with the 31st is solved again without 
   // Frank's decision (2026-09-30): sending the 31st can make the solver refuse the WHOLE month,
   // Sundays included, where main (which never sent it) solved it. So when the solver itself
   // refuses a request that sent week 5, Auto re-solves once without it and says so.
-  const INFEASIBLE_X = "El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución (motivo del solver: x). Llénalo a mano.";
+  // Spanish only (ruling Q20): the solver's English reason is never quoted in this line.
+  const INFEASIBLE = "El sábado 31 oct no se mandó al solver: con él, el mes no tenía solución. Llénalo a mano.";
   const refused = (error: string) => ({ status: 422, ok: false, error });
   /** Beto may not sing the 31st: a week-5 exclusion the first request sends and the retry must not (Q9). */
   const betoOff31 = readyRules({
@@ -326,7 +327,8 @@ describe("Q19: a month the solver refuses with the 31st is solved again without 
     expect(bodies[0].dsl_rules).toContain("Alberto Ruiz Cano !in week 5 Sat.*");
     expect(bodies[1].weekends_with_saturday).toEqual([]);
     expect(bodies[1].dsl_rules.join("\n")).not.toMatch(/\bweek 5\b/);
-    expect(noticeLines(container)).toEqual([INFEASIBLE_X]);
+    expect(noticeLines(container)).toEqual([INFEASIBLE]);
+    expect(container.textContent).not.toMatch(/motivo del solver/i);
     expect(screen.queryByText(/El solver no encontró solución/)).toBeNull();
     // Nothing came back for the 31st, so it is the admin's to fill.
     expect(cellAt(container, "lead", OCT_31).textContent).not.toContain("Ana");
@@ -372,7 +374,7 @@ describe("Q19: a month the solver refuses with the 31st is solved again without 
     await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
     expect(solveCount(fetchMock)).toBe(2);
     expect(screen.queryByText("El solver no encontró solución. Motivo del solver: x")).toBeNull();
-    expect(noticeLines(container)).toEqual([INFEASIBLE_X]);
+    expect(noticeLines(container)).toEqual([INFEASIBLE]);
     // E5: the special never needed the solver, and fills on this exit too.
     expect(cellAt(container, "lead", "2026-10-14").textContent).toContain("Ana");
     expect(cellAt(container, "lead", OCT_SUNDAYS[0]).textContent).not.toContain("Ana");
@@ -419,7 +421,7 @@ describe("Q19: a month the solver refuses with the 31st is solved again without 
     // The 31st stays exactly as the admin left it, and the pinned Sunday seat holds.
     expect(cellAt(container, "bgv", OCT_31).textContent).toContain("Lucía");
     expect(cellAt(container, "bgv", OCT_SUNDAYS[0]).textContent).toContain("Beto");
-    expect(noticeLines(container)).toEqual([INFEASIBLE_X]);
+    expect(noticeLines(container)).toEqual([INFEASIBLE]);
   });
 
   it("a network throw on the first fetch is not retried", async () => {
