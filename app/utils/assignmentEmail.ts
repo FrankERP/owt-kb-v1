@@ -3,6 +3,8 @@ import { serverClient } from "@/sanity/lib/serverClient";
 import { sendEmail } from "./email";
 import { wantsNotification } from "./notifyPrefs";
 import { C, td, tr, shell } from "./emailShell";
+import { serviceLabel, type ServiceIdentity } from "./emailServiceLabel";
+import { compareServiceTime } from "./serviceTime";
 
 export type ServiceType = "sunday_role" | "saturday_role" | "special_role";
 export interface ServiceBody {
@@ -14,6 +16,19 @@ export interface ServiceBody {
 const SERVICE_LABEL: Record<ServiceType, string> = {
   sunday_role: "Domingo", saturday_role: "Sábado", special_role: "Servicio especial",
 };
+
+/** One service in a publish email: what it is, when, and — for a special — which one. */
+export type EmailService = { type: ServiceType; date: string } & ServiceIdentity;
+
+// Plain text; escape before it reaches HTML. A weekend service keeps the label it
+// always had («Sábado 3 oct»). A special names itself the way the outbox email
+// does («Sábado 3 oct · CAMP - Set 2 · 09:00»): «Servicio especial 3 oct» four
+// times over is what a camp's four Saturday sets used to look like.
+function whenLabel(s: EmailService): string {
+  if (s.type === "special_role") return serviceLabel({ date: s.date, roleType: s.type, serviceName: s.serviceName, serviceTime: s.serviceTime });
+  const dateFmt = new Date(s.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+  return `${SERVICE_LABEL[s.type]} ${dateFmt}`;
+}
 
 export function getAllowlist(): string[] {
   // Default is the whole team ("*"): the Resend test-mode era that needed a
@@ -75,17 +90,16 @@ export function appBaseUrl(): string {
   return (explicit ?? "").replace(/\/$/, "");
 }
 
-export function buildAssignmentEmail(o: { name: string; roles: string[]; type: ServiceType; date: string }): { subject: string; html: string } {
-  const svc = SERVICE_LABEL[o.type];
-  const dateFmt = new Date(o.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+export function buildAssignmentEmail(o: { name: string; roles: string[] } & EmailService): { subject: string; html: string } {
+  const when = whenLabel(o);
   const rolesText = escapeHtml(o.roles.length ? o.roles.join(", ") : "el equipo");
   const name = escapeHtml(o.name || "equipo");
   const link = `${appBaseUrl()}/me`;
-  const subject = `Asignación — ${svc} ${dateFmt}`;
+  const subject = `Asignación — ${when}`;
   const body =
     tr(td(
       `<p style="margin:0 0 4px;font:14px system-ui,sans-serif;color:${C.ink}">Hola ${name},</p>` +
-      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">Sirves como <strong style="color:${C.accent}">${rolesText}</strong> el <strong style="color:${C.ink}">${svc} ${dateFmt}</strong>.</p>`,
+      `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">Sirves como <strong style="color:${C.accent}">${rolesText}</strong> el <strong style="color:${C.ink}">${escapeHtml(when)}</strong>.</p>`,
       { style: "padding:0 24px 18px" },
     )) +
     tr(td(
@@ -99,10 +113,10 @@ export function buildAssignmentEmail(o: { name: string; roles: string[]; type: S
 // One email summarizing several services for a single member. A 1-item list
 // falls back to the normal single-service template, so members assigned to just
 // one of the published services get the familiar email.
-export function buildBatchAssignmentEmail(o: { name: string; items: { type: ServiceType; date: string; roles: string[] }[] }): { subject: string; html: string } {
+export function buildBatchAssignmentEmail(o: { name: string; items: ({ roles: string[] } & EmailService)[] }): { subject: string; html: string } {
   if (o.items.length === 1) {
     const it = o.items[0];
-    return buildAssignmentEmail({ name: o.name, roles: it.roles, type: it.type, date: it.date });
+    return buildAssignmentEmail({ ...it, name: o.name });
   }
   const name = escapeHtml(o.name || "equipo");
   const link = `${appBaseUrl()}/me`;
@@ -113,11 +127,9 @@ export function buildBatchAssignmentEmail(o: { name: string; items: { type: Serv
     { bg: C.surface, style: `padding:8px 8px;border-bottom:1px solid ${C.field}` },
   );
   const rows = o.items.map((it) => {
-    const svc = SERVICE_LABEL[it.type];
-    const dateFmt = new Date(it.date + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
     const rolesText = escapeHtml(it.roles.length ? it.roles.join(", ") : "el equipo");
     return tr(
-      td(`<span style="color:${C.ink};font:13px system-ui,sans-serif">${svc} ${dateFmt}</span>`, { style: "padding:8px 8px" }) +
+      td(`<span style="color:${C.ink};font:13px system-ui,sans-serif">${escapeHtml(whenLabel(it))}</span>`, { style: "padding:8px 8px" }) +
       td(`<strong style="color:${C.accent};font:13px system-ui,sans-serif">${rolesText}</strong>`, { style: "padding:8px 8px" }),
     );
   }).join("");
@@ -141,16 +153,16 @@ export function buildBatchAssignmentEmail(o: { name: string; items: { type: Serv
 // per service). Used when publishing several services at once. Same allowlist
 // gating and EMAIL_REDIRECT_TO override as the single-service path.
 export async function sendAssignmentEmailsBatch(
-  services: { type: ServiceType; date: string; body: ServiceBody }[],
+  services: ({ body: ServiceBody } & EmailService)[],
 ): Promise<void> {
   try {
-    const byMember = new Map<string, { type: ServiceType; date: string; roles: string[] }[]>();
-    for (const svc of services) {
-      for (const id of new Set(assigneesOf(svc.body))) {
-        const roles = rolesForMember(id, svc.body);
+    const byMember = new Map<string, ({ roles: string[] } & EmailService)[]>();
+    for (const { body, ...svc } of services) {
+      for (const id of new Set(assigneesOf(body))) {
+        const roles = rolesForMember(id, body);
         if (!roles.length) continue;
         const arr = byMember.get(id) ?? [];
-        arr.push({ type: svc.type, date: svc.date, roles });
+        arr.push({ ...svc, roles });
         byMember.set(id, arr);
       }
     }
@@ -165,7 +177,9 @@ export async function sendAssignmentEmailsBatch(
     for (const m of members) {
       const email = m.email?.trim().toLowerCase();
       if (!email || !isEmailAllowed(email, allow) || !wantsNotification(m.notifPrefs, "assigned")) continue;
-      const items = (byMember.get(m._id) ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
+      // Same-day specials in clock order, so a camp's sets read Set 1 → Set 4.
+      const items = (byMember.get(m._id) ?? []).slice()
+        .sort((a, b) => a.date.localeCompare(b.date) || compareServiceTime(a.serviceTime, b.serviceTime));
       if (!items.length) continue;
       const { subject, html } = buildBatchAssignmentEmail({ name: m.alias || m.member_name || "", items });
       const to = redirectTo || email;
@@ -188,7 +202,7 @@ export async function sendAssignmentEmailsBatch(
  */
 export async function sendAssignmentEmails(
   memberIds: string[],
-  service: { type: ServiceType; date: string; body: ServiceBody },
+  service: { body: ServiceBody } & EmailService,
 ): Promise<void> {
   try {
     const ids = [...new Set(memberIds)].filter(Boolean);
@@ -208,7 +222,7 @@ export async function sendAssignmentEmails(
       const email = m.email?.trim().toLowerCase();
       if (!email || !isEmailAllowed(email, allow) || !wantsNotification(m.notifPrefs, "assigned")) continue;
       const roles = rolesForMember(m._id, service.body);
-      const { subject, html } = buildAssignmentEmail({ name: m.alias || m.member_name || "", roles, type: service.type, date: service.date });
+      const { subject, html } = buildAssignmentEmail({ ...service, name: m.alias || m.member_name || "", roles });
       const to = redirectTo || email;
       const finalSubject = redirectTo ? `[→ ${email}] ${subject}` : subject;
       const res = await sendEmail({ to, subject: finalSubject, html });

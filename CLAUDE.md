@@ -320,6 +320,8 @@ predicate), `isMemberActive` (30s-TTL auth gate),
 `requireActiveSession`/`requireActiveManager`, `wantsNotification` (the ONLY
 per-type email-preference resolver — nothing reads `notifPrefs` directly),
 `sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette),
+`serviceLabel`/`serviceIdentity` (`app/utils/emailServiceLabel.ts` — the ONE way an email
+names a service; a special carries its `service_name` and `time`, so same-day sets read apart),
 `themeColour` (`app/utils/themeColour.ts`), `useTransientValue` (`[value, show, reset,
 hold]` — an inline, in-place flash next to the control that produced it, e.g.
 "Guardado ✓" beside a save button. A bare `setTimeout(() => setToast(null))` leaks its

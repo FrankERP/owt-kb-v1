@@ -642,6 +642,66 @@ describe("sweepOutbox — a worship night's song leaders", () => {
   });
 });
 
+describe("sweepOutbox — a special names itself", () => {
+  // A camp: two sets on one day, one member seated in both. Without the name,
+  // the sections of that member's one email read identically.
+  const special = (id: string, serviceName: string, time: string) => roleDoc({
+    _id: id, _type: "special_role", date: "2026-08-08", week: undefined,
+    service_name: serviceName, time, songs: [storedSong("song1")],
+  });
+
+  function camp(): void {
+    world.notices = [
+      roleNotice({ _id: "outbox.role.s1", subjectKey: "m1__r21", roleId: "r21", roleType: "special_role", serviceDate: "2026-08-08" }),
+      roleNotice({ _id: "outbox.role.s2", subjectKey: "m1__r22", roleId: "r22", roleType: "special_role", serviceDate: "2026-08-08" }),
+      setlistNotice({ _id: "outbox.setlist.s1", subjectKey: "r21", roleId: "r21", roleType: "special_role", serviceDate: "2026-08-08", knownRecipients: ["m1"] }),
+    ];
+    world.roles = { r21: special("r21", "CAMP - Set 1", "09:00"), r22: special("r22", "CAMP - Set 2", "12:30") };
+    world.recipients = { r21: ["m1"], r22: ["m1"] };
+    world.titles = { song1: "Santo" };
+    world.members = members(["m1"]);
+  }
+
+  it("heads every section with the set's own name and time", async () => {
+    camp();
+
+    const report = await sweepOutbox();
+
+    expect(report.emailed).toBe(1);
+    const sent = sendEmailMock.mock.calls[0][0] as { subject: string; html: string };
+    expect(sent.subject).toBe("Novedades de tus servicios");
+    expect(sent.html).toContain("Nueva asignación — Sábado 8 ago · CAMP - Set 1 · 09:00");
+    expect(sent.html).toContain("Nueva asignación — Sábado 8 ago · CAMP - Set 2 · 12:30");
+    expect(sent.html).toContain("Setlist listo — Sábado 8 ago · CAMP - Set 1 · 09:00");
+  });
+
+  it("asks Sanity for the name and time in the role read itself", async () => {
+    // The harness answers the role read with the whole fixture, so a projection
+    // that dropped the fields would still pass the test above. Run the query the
+    // sweep actually issued against that fixture, as Sanity would.
+    camp();
+
+    await sweepOutbox();
+
+    const roleRead = reads.find((r) => r.query.includes("foh_team") && !r.query.includes("array::unique"));
+    expect(roleRead).toBeDefined();
+    const projected = await runGroq(roleRead!.query, [world.roles.r21], roleRead!.params);
+    expect(projected).toMatchObject({ service_name: "CAMP - Set 1", time: "09:00" });
+  });
+
+  it("still marks a deleted special as a special", async () => {
+    world.notices = [
+      roleNotice({ subjectKey: "m1__r29", roleId: "r29", roleType: "special_role", serviceDate: "2026-08-08", before: { beforeRoles: ["Líder"] } }),
+    ];
+    world.members = members(["m1"]);
+
+    await sweepOutbox();
+
+    expect((sendEmailMock.mock.calls[0][0] as { subject: string }).subject)
+      .toBe("Ya no participas — Sábado 8 ago · Servicio especial");
+  });
+});
+
 describe("sweepOutbox — selection bounds the recipient union", () => {
   it("does not treat a 20-recipient setlist notice as oversized", async () => {
     // Regression for the 12-vs-20 defect: a Sunday service routinely has 12-20

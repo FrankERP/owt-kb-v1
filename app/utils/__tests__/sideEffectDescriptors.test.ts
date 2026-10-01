@@ -224,6 +224,30 @@ describe("notifyRolePublished → { pushes, emailBatch } | null", () => {
     expect(out!.emailBatch[0]).not.toHaveProperty("recipients");
   });
 
+  it("carries a special's name and time to the email, and leaves a weekend entry's shape alone", async () => {
+    const out = notifyRolePublished([
+      { recipients: ["mem-1"], type: "special_role", date: "2026-10-03", body: { leads: ["mem-1"] }, serviceName: "CAMP - Set 2", serviceTime: "09:00" },
+      { recipients: ["mem-9"], type: "saturday_role", date: "2026-10-03", body: { chorus: ["mem-9"] } },
+    ]);
+    await flushAfter();
+    const sent = sendAssignmentEmailsBatchMock.mock.calls[0][0];
+    expect(sent).toStrictEqual([
+      { type: "special_role", date: "2026-10-03", body: { leads: ["mem-1"] }, serviceName: "CAMP - Set 2", serviceTime: "09:00" },
+      { type: "saturday_role", date: "2026-10-03", body: { chorus: ["mem-9"] } },
+    ]);
+    expect(out!.emailBatch).toStrictEqual(sent);
+  });
+
+  it("hands the email only the keys it reads, whatever else a caller's object carries", async () => {
+    const stray = { recipients: ["mem-1"], type: "sunday_role" as const, date: "2026-08-09", body: { leads: ["mem-1"] }, internal: "x" };
+    const out = notifyRolePublished([stray]);
+    await flushAfter();
+    expect(sendAssignmentEmailsBatchMock.mock.calls[0][0]).toStrictEqual([
+      { type: "sunday_role", date: "2026-08-09", body: { leads: ["mem-1"] } },
+    ]);
+    expect(out!.emailBatch[0]).not.toHaveProperty("internal");
+  });
+
   it("is null — and registers nothing — for an empty batch", () => {
     expect(notifyRolePublished([])).toBeNull();
     expect(afterMock).not.toHaveBeenCalled();

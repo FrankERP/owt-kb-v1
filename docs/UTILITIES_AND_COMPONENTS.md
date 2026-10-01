@@ -51,6 +51,13 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   explicit `false` = no), `buildAssignmentEmail`/`buildBatchAssignmentEmail` (Spanish HTML;
   batch collapses N services into one email), `sendAssignmentEmails`/`sendAssignmentEmailsBatch`,
   `appBaseUrl` (NEXTAUTH_URL → Vercel var → localhost). All best-effort. Honors `EMAIL_REDIRECT_TO`.
+  A special is named by `serviceLabel` (below), never the bare «Servicio especial», and a
+  batch lists same-day specials in clock order.
+- **`serviceLabel`/`serviceIdentity`/`formatServiceDate`**
+  ([emailServiceLabel.ts](../app/utils/emailServiceLabel.ts)) — the ONE way an email names a
+  service: «Sábado 3 oct» for a weekend, «Sábado 3 oct · CAMP - Set 2 · 09:00» for a special
+  (name and time from `service_name`/`time`; «Servicio especial» when the name is unreadable).
+  Plain text — callers escape it. Neutral; both the outbox email and the publish email use it.
 - **`notifyProposalSubmitted(...)`**, **`buildProposalEmail(...)`**
   ([proposalNotify.ts](../app/utils/proposalNotify.ts)) — on proposal submit, fans out push to
   admins + co-leads and email to admins. The admin email includes the proposed setlist (same
