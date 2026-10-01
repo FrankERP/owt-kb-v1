@@ -380,12 +380,13 @@ ADR-0041. The planner sends pins when «Solo llenar vacíos» is on — see «Be
   - rows grown by pins.
 
   The latest re-verify (at `097d994d`) found 124 real-solver setups where this request was
-  refused and main's solved, every one with the 31st sent. Its counts by cause: `sat_anchor`
-  71, a self-contradictory rule (a kept minimum above the same person's maximum) 43, minimums
-  pushing every possible lead of the 31st onto BGV 2, minimums plus a lead barred by a maximum
-  4, a maximum used up by Sundays 9, a Saturday pigeonhole without a lone lead 4, other 1.
-  Causes overlap; one case can have several, so the counts are not a split of the 124. Each
-  case is now a retry (ADR-0048, decision 11).
+  refused and main's solved, every one with the 31st sent. One cause per case, summing to the
+  124: `sat_anchor` 71, a self-contradictory rule (a kept minimum above the same person's
+  maximum) 43, minimums pushing every possible lead of the 31st onto BGV 2, minimums plus a
+  lead barred by a maximum 4, a maximum used up by Sundays 3, other 1. Separately, hand-built
+  Q17 scenarios added 9 more (maximums that also cover Sundays, Saturday pigeonholes across
+  several leads, an anchor with a zero maximum). Each case is now a retry (ADR-0048,
+  decision 11).
 
   October 2026 is why this exists: its only Saturday service was the 31st, so the admin
   deselected 3/10/17/24, the request sent no Saturday, and three saved `Sat.* == 1` minimums made

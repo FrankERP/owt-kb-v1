@@ -287,12 +287,12 @@ people, so nobody loses one. A hand-written November 2026 request pins the ident
 
   The latest re-verify (at `097d994d`) ran the real solver on planner-built requests and found
   124 setups where this branch's request was refused and main's solved. Every one had sent the
-  31st. Its counts by cause were: `sat_anchor` 71; a self-contradictory rule (a kept floor above
-  the same person's maximum) 43; floors pushing every possible lead of the 31st onto BGV 2;
-  floors plus a lead barred by a maximum 4; a `*.Lead`/`Lead.*`/`*.*` maximum used up by Sundays
-  9; a Saturday maximum used up without a lone lead (a pigeonhole) 4; other 1. Causes overlap;
-  one case can have several, so the counts are not a split of the 124. Under Q19 each case is
-  a retry. The restore shape is one of them: Andy and Tay are Sunday leads with `Sat.* == 1`,
+  31st. One cause per case, summing to the 124: `sat_anchor` 71; a self-contradictory rule (a
+  kept floor above the same person's maximum) 43; floors pushing every possible lead of the
+  31st onto BGV 2; floors plus a lead barred by a maximum 4; a `*.Lead`/`Lead.*`/`*.*` maximum
+  used up by Sundays 3; other 1. Separately, hand-built Q17 scenarios added 9 more (maximums
+  that also cover Sundays, Saturday pigeonholes across several leads, an anchor with a zero
+  maximum). Under Q19 each case is a retry. The restore shape is one of them: Andy and Tay are Sunday leads with `Sat.* == 1`,
   Vale is support with `Sat.* == 1`, Frank is away on the 17th, 24th and 31st, and all three are
   selected. Two leads cannot cover three Saturdays, so the solver refuses `[3, 4, 5]`. The
   retry's `[3, 4]` solves.
