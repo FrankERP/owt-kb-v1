@@ -34,19 +34,26 @@ a local run — 0 errors, warnings tolerated.
 The Cloud Function deploys from `main` with no `preview` rehearsal and serves both
 environments, so a solver change is safe to ship only if a request with no `pinned` key builds
 the model **and runs the search** it did before. Three literals, frozen from the solver as it
-stood before pins existed, hold that. All three are captured on the file's own frozen copy of
-the fixture (`frozen_config`), not on `make_config`, so editing the shared test fixture for an
+stood before pins existed, hold that. A fourth, frozen before the trailing Saturday, holds the
+same for a request that does not name it, over eight shapes (no, some and all Saturdays; five
+Sundays; week exclusions; history; pins; pins with history). A fifth, frozen on the solver that
+first staffed the trailing Saturday, holds one request that does name it, so a later change to
+that path is measured against it. All five are captured on the file's own frozen copy of the
+fixture (`frozen_config`), not on `make_config`, so editing the shared test fixture for an
 unrelated test cannot redden them.
 
 | Literal | Moves when | Legitimate re-capture |
 |---|---|---|
 | `STAGE_A_FINGERPRINTS` — sha256 of Stage A's model proto plus its solver parameters (time limit stripped), three seeds | Stage A's model or search parameters change | an ortools pin bump, in a PR that changes nothing else — **not** a runner-image change: the fingerprints are machine-independent, so a new image is no excuse for a red one |
 | `LADDER_FINGERPRINTS` — the same for every solve after Stage A, in order, up to the pass that returns the month; behind a Stage A `OPTIMAL` precondition | the above, **or the objective** (`compute_priority_weights` feeds it; Stage A never enters that branch), or the ladder's pass sequence | the above, plus a deliberate, reviewed objective change |
+| `IDENTITY_FINGERPRINTS` — the same as `LADDER_FINGERPRINTS` plus Stage A, for each of eight non-trailing request shapes, hashed without Stage A's `solution_hint` (Solve 0's tie-broken solution under pins); behind an `OPTIMAL` precondition on every solve before the ladder (Stage A, and Solve 0 ahead of it under pins) | the same as `LADDER_FINGERPRINTS`: Stage A's model or search parameters, **or the objective**, or the ladder's pass sequence | the same: an ortools pin bump, plus a deliberate, reviewed objective change — never a PR that claims non-trailing requests unchanged |
+| `TRAILING_FINGERPRINTS` — the same as `IDENTITY_FINGERPRINTS`, for one request that names the trailing Saturday (`w4-trailing`: the seed-1 fixture with Saturdays `[2, 4, 5]`); behind a Stage A `OPTIMAL` precondition | the same as `LADDER_FINGERPRINTS`: Stage A's model or search parameters, **or the objective**, or the ladder's pass sequence | the same as `LADDER_FINGERPRINTS`: an ortools pin bump, plus a deliberate, reviewed objective change |
 | `GOLDEN_SCHEDULE` — the seed-42 schedule, behind an `OPTIMAL` precondition on the returning solve | the above, **or how ortools breaks a tie on the runner** | the above, plus a runner-image change |
 
 **A red fingerprint inside a PR that claims the pinless path unchanged — the pinned-assignments
-PR is one — is a finding, never a literal to update.** It means the pinless path moved, which is
-the one thing the preview-less release bets did not happen.
+PR is one — or that claims non-trailing requests unchanged — the trailing-Saturday PR is one — is
+a finding, never a literal to update.** It means that path moved, which is the one thing the
+preview-less release bets did not happen.
 
 **The output golden runs only on the platform that captured it.** `OPTIMAL` removes the wall
 clock, not every tie: on 2026-09-25 a Mac (arm64) and this runner both proved seed 42 optimal
@@ -58,7 +65,12 @@ fingerprints run everywhere. Stage A's is machine-independent unconditionally; t
 because Stage A proved `OPTIMAL`, which the test asserts. Both measured identical on the runner and
 on macOS, across budgets and `PYTHONHASHSEED` values. The intermediate passes' *statuses* are not
 frozen: an infeasibility proof may time out to `UNKNOWN` on a loaded runner and the ladder moves on
-identically. One blind spot by construction: a **zero-coefficient** objective term that adds no
+identically. The identity fingerprints add two cases for pinned requests. Solve 0 runs first and its
+violation count is a ceiling every later solve inherits, so those shapes assert Solve 0 **and** Stage A
+`OPTIMAL`. And Stage A is hinted with Solve 0's solution: `OPTIMAL` proves the count minimal, not
+*which* minimal solution came back, and ties are the machine's to break — so the identity
+fingerprints hash the model **without `solution_hint`**. The hint only steers Stage A's search;
+Solve 0's own fingerprint carries none and stays guarded. One blind spot by construction: a **zero-coefficient** objective term that adds no
 variable and no constraint is dropped from the proto and invisible to every guard here.
 
 **Captured on:** GitHub Actions `ubuntu-24.04`, runner image `20260920.314.1`, Python 3.12.14,
