@@ -2,12 +2,14 @@
 // How the outbox email and the publish email name a special service. A weekend
 // service is its date («Sábado 3 oct»); a special also carries its own name and
 // time («Sábado 3 oct · CAMP - Set 2 · 09:00»), the way the app's day cards show
-// it. Not yet used by the proposal emails (`proposalNotify.ts` and the outbox
-// «Mensajes de la propuesta» line), which still name a service by its date.
-// Without them, two specials on the same day read as identical lines in the
-// inbox — a camp's four Saturday sets all came out as «Setlist listo — Sábado 3
-// oct». Neutral module: plain text out, so every caller escapes it for HTML
-// (`service_name` is typed by an admin).
+// it. Without the name and time, two specials on the same day read as identical
+// lines in the inbox — a camp's four Saturday sets all came out as «Setlist
+// listo — Sábado 3 oct». Neutral module: plain text out, so every caller escapes
+// it for HTML (`service_name` is typed by an admin).
+//
+// The proposal emails do not name a special yet: `proposalNotify.ts` builds its
+// own label, and the outbox «Mensajes de la propuesta» line reaches
+// `serviceLabel` with no role type, so it shows only the date.
 
 import { isServiceTime } from "./serviceTime";
 
@@ -60,5 +62,7 @@ export function serviceLabel(s: { date: string; roleType?: string | null } & Ser
   const date = formatServiceDate(s.date);
   if (s.roleType !== "special_role") return date;
   const name = s.serviceName?.replace(/\s+/g, " ").trim() || SPECIAL_SERVICE_FALLBACK;
-  return isServiceTime(s.serviceTime) ? `${date} · ${name} · ${s.serviceTime}` : `${date} · ${name}`;
+  // An empty segment is dropped, never joined: an unreadable date (see
+  // `formatServiceDate`) must not leave a header starting with « · ».
+  return [date, name, isServiceTime(s.serviceTime) ? s.serviceTime : ""].filter(Boolean).join(" · ");
 }

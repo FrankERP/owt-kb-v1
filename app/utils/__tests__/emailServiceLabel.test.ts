@@ -13,7 +13,9 @@ describe("formatServiceDate", () => {
   it("hands back an unreadable date as-is rather than throwing", () => {
     expect(formatServiceDate("")).toBe("");
     expect(formatServiceDate("not-a-date")).toBe("not-a-date");
-    expect(serviceLabel({ date: "", roleType: "special_role", serviceName: "CAMP - Set 2" })).toBe(" · CAMP - Set 2");
+    // …and the label drops the empty segment rather than opening with « · ».
+    expect(serviceLabel({ date: "", roleType: "special_role", serviceName: "CAMP - Set 2", serviceTime: "09:00" }))
+      .toBe("CAMP - Set 2 · 09:00");
   });
 });
 
