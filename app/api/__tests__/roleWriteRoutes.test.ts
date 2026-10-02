@@ -2087,6 +2087,21 @@ describe("POST /api/admin/roles/publish", () => {
     expect(sendAssignmentEmailsBatchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("hands a special's name and time to the publish email", async () => {
+    store.roles.push(role({
+      _id: "role-sp", _rev: "rev-sp", _type: "special_role", week: undefined, date: "2026-10-03",
+      service_name: "CAMP - Set 2", time: "09:00",
+    }));
+    const res = await publishPOST(req({ roles: [{ id: "role-sp", rev: "rev-sp" }], published: true }));
+    expect(res.status).toBe(200);
+
+    await afterCallbacks[0]();
+    expect(sendAssignmentEmailsBatchMock).toHaveBeenCalledTimes(1);
+    expect(sendAssignmentEmailsBatchMock.mock.calls[0][0]).toEqual([
+      expect.objectContaining({ type: "special_role", date: "2026-10-03", serviceName: "CAMP - Set 2", serviceTime: "09:00" }),
+    ]);
+  });
+
   it("unpublishes without notifying", async () => {
     store.roles.push(role({ published: true }));
     store.locks.push(lock());

@@ -169,6 +169,9 @@ describe("publishReady — a committed publish", () => {
     expect(effects.notice).toBe(h.queuePublishedSetlistNotices.mock.results[0].value);
     expect(effects.push?.pushes.map((p) => p.date)).toEqual(["2026-10-24", "2026-10-03"]);
     expect(effects.push?.emailBatch.map((e) => e.date)).toEqual(["2026-10-24", "2026-10-03"]);
+    // The special's own name rides to the publish email; the Saturday carries none.
+    expect(effects.push?.emailBatch[0].serviceName).toBe("Noche de alabanza");
+    expect(effects.push?.emailBatch[1]).not.toHaveProperty("serviceName");
     expect(effects.notice).toEqual({
       kind: "publishedSetlist",
       subjects: subjects.map((s) => ({ roleId: s.roleId, knownRecipients: s.knownRecipients })),

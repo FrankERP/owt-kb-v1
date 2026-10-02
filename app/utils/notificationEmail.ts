@@ -5,6 +5,7 @@
 // rest. Dark table-and-inline-style shell shared with the assignment emails.
 
 import { escapeHtml, appBaseUrl } from "./assignmentEmail";
+import { serviceLabel } from "./emailServiceLabel";
 import { C, td, tr, shell } from "./emailShell";
 import type { Line, LineKind } from "./outboxClassify";
 import { buildSetlistTable, type TableRow } from "./setlistDiff";
@@ -22,19 +23,14 @@ export const SUBJECT: Record<LineKind, string> = {
   leadNotes: "Mensajes de la propuesta",
 };
 
-// Render at local noon per CLAUDE.md — a bare `new Date(iso)` flips the day in
-// America/Mexico_City. Parts are picked individually (not the raw formatted
-// string) so the result is stable regardless of locale literals ("de", ",").
-function formatDate(iso: string): string {
-  const d = new Date(`${iso.slice(0, 10)}T12:00:00`);
-  const parts = new Intl.DateTimeFormat("es-MX", { weekday: "long", day: "numeric", month: "short" }).formatToParts(d);
-  const part = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  const text = `${part("weekday")} ${part("day")} ${part("month").replace(/\.$/, "")}`;
-  return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-function headerLine(kind: LineKind, serviceDate: string): string {
-  return `${SUBJECT[kind]} — ${formatDate(serviceDate)}`;
+// Plain text: it is the subject line as-is, and escaped where it becomes HTML.
+function headerLine(line: Line): string {
+  return `${SUBJECT[line.kind]} — ${serviceLabel({
+    date: line.serviceDate,
+    roleType: line.roleType,
+    serviceName: line.serviceName,
+    serviceTime: line.serviceTime,
+  })}`;
 }
 
 function chip(text: string, bg: string, fg: string): string {
@@ -205,7 +201,7 @@ function setlistSection(line: Line, titles: Map<string, string>, leaders: Map<st
 
 function renderLine(line: Line, titles: Map<string, string>, leaders: Map<string, string>): string {
   const header = tr(td(
-    `<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">${escapeHtml(headerLine(line.kind, line.serviceDate))}</span>`,
+    `<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">${escapeHtml(headerLine(line))}</span>`,
     { style: "padding:18px 24px 8px" },
   ));
   switch (line.kind) {
@@ -227,7 +223,7 @@ export function buildGroupedEmail(
   leaders: Map<string, string> = new Map(),
 ): { subject: string; html: string } {
   const subject = o.lines.length === 1
-    ? headerLine(o.lines[0].kind, o.lines[0].serviceDate)
+    ? headerLine(o.lines[0])
     : "Novedades de tus servicios";
   const greeting = tr(td(
     `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}">Hola ${escapeHtml(o.name || "equipo")},</p>`,

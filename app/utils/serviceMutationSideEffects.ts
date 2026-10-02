@@ -79,6 +79,7 @@ import { sendPush } from "./push";
 import {
   rolesForMember,
   sendAssignmentEmailsBatch,
+  type EmailService,
   type ServiceBody,
   type ServiceType,
 } from "./assignmentEmail";
@@ -195,7 +196,7 @@ export interface RoleAssignmentPushDescriptor {
  */
 export interface RolePublishedDescriptor {
   pushes: { recipients: string[]; date: string }[];
-  emailBatch: { type: ServiceType; date: string; body: ServiceBody }[];
+  emailBatch: ({ body: ServiceBody } & EmailService)[];
 }
 
 /**
@@ -381,11 +382,9 @@ export function notifyRoleAssignments(
   };
 }
 
-export interface PublishedServiceNotice {
+export interface PublishedServiceNotice extends EmailService {
   /** Every CURRENT assignee of the newly published service. */
   recipients: string[];
-  type: ServiceType;
-  date: string;
   body: ServiceBody;
 }
 
@@ -405,14 +404,28 @@ export function notifyRolePublished(
       );
     }
     await attempt("publish email batch", () =>
-      sendAssignmentEmailsBatch(
-        services.map((s) => ({ type: s.type, date: s.date, body: s.body })),
-      ),
+      sendAssignmentEmailsBatch(services.map((s) => emailEntry(s, s.body))),
     );
   });
   return {
     pushes: services.map((s) => ({ recipients: [...s.recipients], date: s.date })),
-    emailBatch: services.map((s) => ({ type: s.type, date: s.date, body: copyServiceBody(s.body) })),
+    emailBatch: services.map((s) => emailEntry(s, copyServiceBody(s.body))),
+  };
+}
+
+/**
+ * The email half of a published notice — exactly the keys the batch reads, never
+ * `recipients` or anything else a caller's object happens to carry. A special's
+ * name and time are copied only when present, so a weekend entry keeps the
+ * `{ type, date, body }` shape it always had.
+ */
+function emailEntry(s: PublishedServiceNotice, body: ServiceBody): { body: ServiceBody } & EmailService {
+  return {
+    type: s.type,
+    date: s.date,
+    body,
+    ...(s.serviceName !== undefined ? { serviceName: s.serviceName } : {}),
+    ...(s.serviceTime !== undefined ? { serviceTime: s.serviceTime } : {}),
   };
 }
 

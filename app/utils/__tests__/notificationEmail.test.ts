@@ -243,3 +243,54 @@ describe("buildGroupedEmail — a worship night's song leaders", () => {
     expect(buildGroupedEmail({ name: "Ana", lines: [leaderLine([])] }, titles, leaders).html).toBe(today);
   });
 });
+
+describe("buildGroupedEmail — a special names itself", () => {
+  const special = (kind: Line["kind"], extra: Partial<Line> = {}): Line => ({
+    kind, serviceDate: "2026-10-03", roleType: "special_role", before: [], after: ["EG"],
+    ...(kind === "setlistReady" ? { beforeSongs: [], songs: [song("a", "G")] } : {}),
+    ...extra,
+  });
+
+  it("puts the special's name and time in a single line's subject", () => {
+    const { subject } = buildGroupedEmail({
+      name: "Frank",
+      lines: [special("setlistReady", { serviceName: "CAMP - Set 2", serviceTime: "09:00" })],
+    }, titles);
+    expect(subject).toBe("Setlist listo — Sábado 3 oct · CAMP - Set 2 · 09:00");
+  });
+
+  it("gives every same-day special its own header, so the sections can be told apart", () => {
+    const { html } = buildGroupedEmail({
+      name: "Frank",
+      lines: [
+        special("assigned", { serviceName: "CAMP - Set 2", serviceTime: "09:00" }),
+        special("assigned", { serviceName: "CAMP - Set 3", serviceTime: "12:30" }),
+        special("setlistReady", { serviceName: "CAMP - Set 2", serviceTime: "09:00" }),
+      ],
+    }, titles);
+    expect(html).toContain("Nueva asignación — Sábado 3 oct · CAMP - Set 2 · 09:00");
+    expect(html).toContain("Nueva asignación — Sábado 3 oct · CAMP - Set 3 · 12:30");
+    expect(html).toContain("Setlist listo — Sábado 3 oct · CAMP - Set 2 · 09:00");
+  });
+
+  it("escapes an admin-typed name in the body", () => {
+    const { html, subject } = buildGroupedEmail({
+      name: "Frank",
+      lines: [special("assigned", { serviceName: "Set <b>1</b> & co" })],
+    }, titles);
+    expect(html).toContain("Set &lt;b&gt;1&lt;/b&gt; &amp; co");
+    expect(html).not.toContain("<b>1</b>");
+    // The subject is a header, not HTML: it carries the name as typed.
+    expect(subject).toBe("Nueva asignación — Sábado 3 oct · Set <b>1</b> & co");
+  });
+
+  it("still marks a special whose name could not be read (a deleted role)", () => {
+    const { subject } = buildGroupedEmail({ name: "Frank", lines: [special("removed", { before: ["EG"], after: [] })] }, titles);
+    expect(subject).toBe("Ya no participas — Sábado 3 oct · Servicio especial");
+  });
+
+  it("leaves a weekend line exactly as it was", () => {
+    const { subject } = buildGroupedEmail({ name: "Ana", lines: [roleLine("assigned", [], ["Líder"])] }, titles);
+    expect(subject).toBe("Nueva asignación — Domingo 9 ago");
+  });
+});

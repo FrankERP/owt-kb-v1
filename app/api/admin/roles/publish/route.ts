@@ -7,6 +7,7 @@ export const maxDuration = 60;
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import type { ServiceType } from "@/app/utils/assignmentEmail";
+import { serviceIdentity } from "@/app/utils/emailServiceLabel";
 import {
   notifyRolePublished,
   queuePublishedSetlistNotices,
@@ -204,6 +205,7 @@ async function postHandler(req: NextRequest) {
       type: r._type as ServiceType,
       date: storedRoleDate(r) ?? "",
       body: seatBody(r),
+      ...serviceIdentity(r),
     })),
   );
   // Publishing must ANNOUNCE the setlist (§2): a service built as a draft and
