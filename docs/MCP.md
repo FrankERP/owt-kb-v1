@@ -335,7 +335,9 @@ includes `especial`, A6) plus `instrWeeks`/`fohWeeks`. A dangling seat reference
 flagged `missing: true`, never dropped; a member whose name could not be resolved (the bulk
 snapshot read or the supplementary lookup failed — the two can fail SEPARATELY) is flagged
 `unresolved: true` with a note, while every other member in the same result can still resolve
-normally. A member's `name` is the sidebar's display name: the `alias` when one is set, otherwise
+normally. The tool always counts specials; the sidebar leaves them out unless its «Incluir
+especiales» switch is on (off by default, 2026-10-01), so with the switch off the two differ by
+exactly the specials. A member's `name` is the sidebar's display name: the `alias` when one is set, otherwise
 `member_name`. This differs from the other tools (see the conventions above). `services[]` covers
 exactly the services the counts were computed from, under the same service rule and in the same
 order as `list_services` (date, then `compareServiceTime`, then id). Each entry reports
