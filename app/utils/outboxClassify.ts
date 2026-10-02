@@ -22,6 +22,9 @@ export const LINE_PREF: Record<LineKind, NotifyKind> = {
 export interface Line {
   kind: LineKind;
   serviceDate: string;
+  /** The service's role type. The classifiers leave it null on a proposal
+   * thread (`leadNotes`); the sweep sets `special_role` there when the proposal
+   * is for a special, so its header can name it. */
   roleType: string | null;
   before: string[];
   after: string[];
@@ -29,7 +32,8 @@ export interface Line {
   beforeSongs?: OutboxSongRow[];
   notes?: string;
   /** A special's name and time for the email header (`serviceIdentity`). Never
-   * set by the classifiers: the sweep attaches them from the live role. */
+   * set by the classifiers: the sweep attaches them from the live role, or, for a
+   * proposal thread, from the proposal's `service_ref`. */
   serviceName?: string;
   serviceTime?: string;
 }

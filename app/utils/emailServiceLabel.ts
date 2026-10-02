@@ -1,15 +1,16 @@
 // app/utils/emailServiceLabel.ts
-// How the outbox email and the publish email name a special service. A weekend
-// service is its date («Sábado 3 oct»); a special also carries its own name and
-// time («Sábado 3 oct · CAMP - Set 2 · 09:00»), the way the app's day cards show
-// it. Without the name and time, two specials on the same day read as identical
-// lines in the inbox — a camp's four Saturday sets all came out as «Setlist
-// listo — Sábado 3 oct». Neutral module: plain text out, so every caller escapes
-// it for HTML (`service_name` is typed by an admin).
+// How every notification email names a special service: the outbox email (role,
+// setlist and «Mensajes de la propuesta» lines), the publish email and the
+// «Nueva propuesta» email. A weekend service is its date («Sábado 3 oct»); a
+// special also carries its own name and time («Sábado 3 oct · CAMP - Set 2 ·
+// 09:00»), the way the app's day cards show it. Without the name and time, two
+// specials on the same day read as identical lines in the inbox — a camp's four
+// Saturday sets all came out as «Setlist listo — Sábado 3 oct». Neutral module:
+// plain text out, so every caller escapes it for HTML (`service_name` is typed
+// by an admin).
 //
-// The proposal emails do not name a special yet: `proposalNotify.ts` builds its
-// own label, and the outbox «Mensajes de la propuesta» line reaches
-// `serviceLabel` with no role type, so it shows only the date.
+// Weekend labels are not all built here: the publish and proposal emails keep
+// their own «Domingo 5 jul» (`SERVICE_LABEL` + date), unchanged.
 
 import { isServiceTime } from "./serviceTime";
 

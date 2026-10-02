@@ -54,17 +54,17 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   A special is named by `serviceLabel` (below), no longer «Servicio especial 3 oct»; a weekend
   keeps its own `SERVICE_LABEL` + date. A batch lists same-day specials in clock order.
 - **`serviceLabel`/`serviceIdentity`/`formatServiceDate`**
-  ([emailServiceLabel.ts](../app/utils/emailServiceLabel.ts)) — names a special in both the
-  outbox and the publish email, «Sábado 3 oct · CAMP - Set 2 · 09:00» (name and time from
-  `service_name`/`time`; «Servicio especial» when the name is unreadable), and every outbox
-  header's date («Sábado 3 oct»). Plain text — callers escape it. Neutral. The proposal emails
-  do not name a special yet: `proposalNotify.ts` builds its own label, and the outbox
-  «Mensajes de la propuesta» line reaches it with no role type, so it shows only the date.
+  ([emailServiceLabel.ts](../app/utils/emailServiceLabel.ts)) — names a special in every
+  notification email (outbox, publish, «Nueva propuesta»), «Sábado 3 oct · CAMP - Set 2 · 09:00»
+  (name and time from `service_name`/`time`; «Servicio especial» when the name is unreadable),
+  and every outbox header's date («Sábado 3 oct»). Plain text — callers escape it. Neutral.
 - **`notifyProposalSubmitted(...)`**, **`buildProposalEmail(...)`**
   ([proposalNotify.ts](../app/utils/proposalNotify.ts)) — on proposal submit, fans out push to
   admins + co-leads and email to admins. The admin email includes the proposed setlist (same
   table as "Setlist listo", no Mov. column) and lead notes when present; push stays one-line.
-  Every step swallowed so a notify never fails the write.
+  A special is named by `serviceLabel` from the canonical role the notify already reads
+  («Nueva propuesta — Sábado 3 oct · CAMP - Set 2 · 09:00», no longer «Especial 3 oct»); a
+  weekend keeps «Domingo 5 jul». Every step swallowed so a notify never fails the write.
 - **`firebaseAdmin.getMessaging()`** ([firebaseAdmin.ts](../app/utils/firebaseAdmin.ts)) — lazy
   singleton FCM init from `FIREBASE_SERVICE_ACCOUNT`.
 

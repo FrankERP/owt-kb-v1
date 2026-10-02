@@ -286,7 +286,8 @@ function routeRead(query: string, params: Doc): unknown {
   // classifier would have been fed a shape the query no longer returns.
   if (query.includes("setlistProposal")) {
     const doc = world.proposals[p.proposalId ?? ""];
-    return doc ? runGroq(query, [doc], params) : null;
+    // The roles ride along so `service_ref->` resolves the way Sanity resolves it.
+    return doc ? runGroq(query, [doc, ...Object.values(world.roles)], params) : null;
   }
   if (query.includes('_type == "post"')) {
     return (p.ids ?? [])
@@ -699,6 +700,74 @@ describe("sweepOutbox — a special names itself", () => {
 
     expect((sendEmailMock.mock.calls[0][0] as { subject: string }).subject)
       .toBe("Ya no participas — Sábado 8 ago · Servicio especial");
+  });
+
+  describe("a proposal thread («Mensajes de la propuesta»)", () => {
+    const threadNotice = (): Doc => ({
+      ...roleNotice(),
+      _id: "outbox.leadnotes.sp",
+      _rev: "rev-notes-sp",
+      kind: "leadNotes",
+      subjectKey: "p9",
+      memberId: null,
+      roleId: null,
+      roleType: null,
+      proposalId: "p9",
+      serviceDate: "2026-08-08",
+      before: { beforeNotes: "", beforeMessageCount: 0 },
+      knownRecipients: [],
+    });
+    const proposalFor = (over: Doc): Doc =>
+      proposalDoc({ _id: "p9", service_date: "2026-08-08", messages: [note("Ensayo 7pm")], ...over });
+
+    beforeEach(() => {
+      world.notices = [threadNotice()];
+      world.admins = ["a1"];
+      world.members = members(["a1"]);
+    });
+
+    const subject = () => (sendEmailMock.mock.calls[0][0] as { subject: string }).subject;
+
+    it("names the special the proposal is for, read through its service_ref", async () => {
+      world.roles = { r21: special("r21", "CAMP - Set 1", "09:00"), r22: special("r22", "CAMP - Set 2", "12:30") };
+      world.proposals = { p9: proposalFor({ service_type: "special", service_ref: { _type: "reference", _ref: "r22" } }) };
+
+      await sweepOutbox();
+
+      expect(subject()).toBe("Mensajes de la propuesta — Sábado 8 ago · CAMP - Set 2 · 12:30");
+    });
+
+    it("still marks a special proposal whose service cannot be read", async () => {
+      world.proposals = { p9: proposalFor({ service_type: "special", service_ref: { _type: "reference", _ref: "gone" } }) };
+
+      await sweepOutbox();
+
+      expect(subject()).toBe("Mensajes de la propuesta — Sábado 8 ago · Servicio especial");
+    });
+
+    it("trusts the referenced service over a stale service_type, both ways", async () => {
+      // The two cannot disagree today (service_type is rewritten from the role on
+      // every save); if they ever do, the document the proposal points at wins.
+      world.roles = { r21: special("r21", "CAMP - Set 1", "09:00"), r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+      world.proposals = { p9: proposalFor({ service_type: "sunday", service_ref: { _type: "reference", _ref: "r21" } }) };
+      await sweepOutbox();
+      expect(subject()).toBe("Mensajes de la propuesta — Sábado 8 ago · CAMP - Set 1 · 09:00");
+
+      sendEmailMock.mockClear();
+      world.notices = [threadNotice()];
+      world.proposals = { p9: proposalFor({ service_type: "special", service_ref: { _type: "reference", _ref: "r2" } }) };
+      await sweepOutbox();
+      expect(subject()).toBe("Mensajes de la propuesta — Sábado 8 ago");
+    });
+
+    it("leaves a weekend proposal's header exactly as it was", async () => {
+      world.roles = { r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+      world.proposals = { p9: proposalFor({ service_type: "saturday", service_ref: { _type: "reference", _ref: "r2" } }) };
+
+      await sweepOutbox();
+
+      expect(subject()).toBe("Mensajes de la propuesta — Sábado 8 ago");
+    });
   });
 });
 
