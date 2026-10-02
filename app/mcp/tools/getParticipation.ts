@@ -38,7 +38,7 @@ export type GetParticipationArgs = z.infer<typeof GET_PARTICIPATION_INPUT>;
 export const GET_PARTICIPATION_DESCRIPTION =
   "Calcula la participación del equipo de alabanza en un mes (month: \"YYYY-MM\"; por defecto el mes actual en " +
   "America/Mexico_City), a partir de TODOS los servicios con esa fecha propia, borradores incluidos — igual que la " +
-  "barra lateral de /admin → Servicios. Cada miembro con al menos un asiento aparece con memberId, name (o null si no " +
+  "barra lateral de /admin → Servicios (con «Incluir especiales» encendido; la barra los omite por defecto). Cada miembro con al menos un asiento aparece con memberId, name (o null si no " +
   "se pudo resolver), sunLead, satLead, sunBGV, satBGV, coro, especial (todo asiento de voz de un especial), total " +
   "(incluye especial), instrWeeks y fohWeeks (semanas distintas con ese asiento; un sábado cuenta en la semana del " +
   "domingo siguiente, un especial en la del domingo en curso o el que sigue). Un asiento cuyo miembro no tiene " +
