@@ -29,7 +29,8 @@ export interface Line {
   beforeSongs?: OutboxSongRow[];
   notes?: string;
   /** A special's name and time for the email header (`serviceIdentity`). Never
-   * set by the classifiers: the sweep attaches them from the live role. */
+   * set by the classifiers: the sweep attaches them from the live role, or, for a
+   * proposal thread, from the proposal's `service_ref`. */
   serviceName?: string;
   serviceTime?: string;
 }
