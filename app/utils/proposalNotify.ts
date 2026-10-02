@@ -23,12 +23,26 @@ import { C, td, tr, shell } from "./emailShell";
 import { songRowsFrom, type OutboxSongRow } from "./outboxNotice";
 import { buildSetlistTable } from "./setlistDiff";
 import { renderSetlistTable } from "./notificationEmail";
+import { serviceIdentity, serviceLabel, type ServiceIdentity } from "./emailServiceLabel";
 
+// Weekend services only: a special names itself through `serviceLabel`.
 const SERVICE_LABEL: Record<string, string> = {
   sunday: "Domingo",
   saturday: "Sábado",
-  special: "Especial",
 };
+
+// Plain text; escape before it reaches HTML. A weekend proposal keeps the label it
+// always had («Domingo 5 jul»). A special used to read «Especial 3 oct», which
+// cannot tell a camp's same-day sets apart; it now names itself the way the other
+// emails do («Sábado 3 oct · CAMP - Set 2 · 09:00»).
+function proposalServiceLabel(o: { serviceType: string; serviceDate: string } & ServiceIdentity): string {
+  if (o.serviceType === "special") {
+    return serviceLabel({ date: o.serviceDate, roleType: "special_role", serviceName: o.serviceName, serviceTime: o.serviceTime });
+  }
+  const svc = SERVICE_LABEL[o.serviceType] ?? "Servicio";
+  const dateFmt = new Date(o.serviceDate + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+  return `${svc} ${dateFmt}`;
+}
 
 // Restyled onto the shared dark shell (spec §6: "proposalNotify.ts's 'nueva
 // propuesta' admin email is restyled with them, for consistency"). Same shell
@@ -40,18 +54,17 @@ export function buildProposalEmail(o: {
   songs?: OutboxSongRow[];
   titles?: Map<string, string>;
   notes?: string;
-}): { subject: string; html: string } {
-  const svc = SERVICE_LABEL[o.serviceType] ?? "Servicio";
-  const dateFmt = new Date(o.serviceDate + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" });
+} & ServiceIdentity): { subject: string; html: string } {
+  const when = proposalServiceLabel(o);
   const lead = escapeHtml(o.leadName || "Un líder");
   const link = `${appBaseUrl()}/admin`;
-  const subject = `Nueva propuesta — ${svc} ${dateFmt}`;
+  const subject = `Nueva propuesta — ${when}`;
   const header = tr(td(
     `<span style="font:700 15px system-ui,sans-serif;color:${C.ink}">Nueva propuesta de setlist</span>`,
     { style: "padding:18px 24px 8px" },
   ));
   const intro = tr(td(
-    `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}"><strong style="color:${C.accent}">${lead}</strong> envió una propuesta para el <strong style="color:${C.ink}">${svc} ${dateFmt}</strong> y está lista para tu revisión.</p>`,
+    `<p style="margin:0;font:14px system-ui,sans-serif;color:${C.ink}"><strong style="color:${C.accent}">${lead}</strong> envió una propuesta para el <strong style="color:${C.ink}">${escapeHtml(when)}</strong> y está lista para tu revisión.</p>`,
     { style: "padding:0 24px 18px" },
   ));
   const songs = o.songs ?? [];
@@ -84,7 +97,7 @@ async function emailAdmins(
     songs: OutboxSongRow[];
     titles: Map<string, string>;
     notes: string;
-  },
+  } & ServiceIdentity,
 ): Promise<void> {
   if (!adminIds.length) return;
   const allow = getAllowlist();
@@ -196,7 +209,8 @@ export async function notifyProposalSubmitted(opts: {
     }
 
     // 3) Admins — email (inert without SMTP/Resend + allowlist)
-    await emailAdmins(admins, { leadName, serviceType, serviceDate, songs, titles, notes });
+    // The special's own name and time, from the canonical role already read above.
+    await emailAdmins(admins, { leadName, serviceType, serviceDate, songs, titles, notes, ...serviceIdentity(role) });
   } catch (err) {
     console.error("[proposalNotify] notifyProposalSubmitted failed:", err);
   }

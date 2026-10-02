@@ -499,7 +499,22 @@ async function classifyLeadNotesNotice(notice: StoredNotice, today: string): Pro
         });
   if (!line) return [];
   const recipients = await resolveRecipients(notice);
-  return recipients.map((recipientId) => ({ noticeId: notice._id, recipientId, line }));
+  const named = withProposalService(line, proposal);
+  return recipients.map((recipientId) => ({ noticeId: notice._id, recipientId, line: named }));
+}
+
+/**
+ * A proposal for a special names that special in the «Mensajes de la propuesta»
+ * header, read live through `service_ref` like the role notices read theirs. The
+ * classifiers leave `roleType` null on this line; it becomes `special_role` here
+ * whenever the proposal is for a special, so even an unresolvable reference
+ * reads «Servicio especial» rather than passing for a weekend service.
+ */
+function withProposalService(line: Line, proposal: Record<string, unknown> | null): Line {
+  const service = isObj(proposal?.service) ? proposal.service : null;
+  const special = service ? service._type === "special_role" : proposal?.service_type === "special";
+  if (!special) return line;
+  return withServiceIdentity({ ...line, roleType: "special_role" }, service);
 }
 
 function classifyNotice(notice: StoredNotice, today: string): Promise<Pair[]> {

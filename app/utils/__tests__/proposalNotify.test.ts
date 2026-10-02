@@ -66,6 +66,32 @@ describe("buildProposalEmail", () => {
     delete process.env.NEXTAUTH_URL;
   });
 
+  it("names a special and its time instead of «Especial 3 oct»", () => {
+    const e = buildProposalEmail({
+      leadName: "Frank", serviceType: "special", serviceDate: "2026-10-03",
+      serviceName: "CAMP - Set 2", serviceTime: "09:00",
+    });
+    expect(e.subject).toBe("Nueva propuesta — Sábado 3 oct · CAMP - Set 2 · 09:00");
+    expect(e.html).toContain("envió una propuesta para el <strong style=\"color:#10243A\">Sábado 3 oct · CAMP - Set 2 · 09:00</strong>");
+    expect(e.subject).not.toContain("Especial");
+  });
+
+  it("still marks a special whose name is unknown", () => {
+    const e = buildProposalEmail({ leadName: "Frank", serviceType: "special", serviceDate: "2026-10-03" });
+    expect(e.subject).toBe("Nueva propuesta — Sábado 3 oct · Servicio especial");
+  });
+
+  it("escapes an admin-typed special name", () => {
+    const e = buildProposalEmail({ leadName: "Frank", serviceType: "special", serviceDate: "2026-10-03", serviceName: "Set <1> & co" });
+    expect(e.html).toContain("Set &lt;1&gt; &amp; co");
+    expect(e.html).not.toContain("Set <1>");
+  });
+
+  it("keeps a weekend proposal's label exactly as it was", () => {
+    expect(buildProposalEmail({ leadName: "Frank", serviceType: "sunday", serviceDate: "2026-07-05" }).subject)
+      .toBe("Nueva propuesta — Domingo 5 jul");
+  });
+
   it("escapes HTML in the lead name", () => {
     const e = buildProposalEmail({ leadName: "A & <b>", serviceType: "saturday", serviceDate: "2026-07-11" });
     expect(e.html).toContain("A &amp; &lt;b&gt;");
@@ -159,6 +185,19 @@ describe("notifyProposalSubmitted", () => {
     expect(sendEmailMock.mock.calls[0][0].to).toBe("admin@x.com");
     expect(sendEmailMock.mock.calls[0][0].subject).toContain("Domingo");
     expect(sendEmailMock.mock.calls[0][0].html).not.toContain("Canción");
+  });
+
+  it("names a special in the admin email, from the canonical role it already read", async () => {
+    const { week: _week, ...base } = validRole(["lead1"]);
+    const special = { ...base, _type: "special_role", date: "2026-10-03", service_name: "CAMP - Set 2", time: "09:00" };
+    opFetchMock
+      .mockResolvedValueOnce([special])
+      .mockResolvedValueOnce({ admins: ["a1"], lead: { member_name: "Frank" }, proposal: null })
+      .mockResolvedValueOnce([{ _id: "a1", email: "admin@x.com" }]);
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await notifyProposalSubmitted(submit({ serviceType: "special", serviceDate: "2026-10-03" }));
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendEmailMock.mock.calls[0][0].subject).toBe("Nueva propuesta — Sábado 3 oct · CAMP - Set 2 · 09:00");
   });
 
   it("loads the proposal songs and notes into the admin email", async () => {

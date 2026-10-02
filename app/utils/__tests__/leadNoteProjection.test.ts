@@ -183,7 +183,10 @@ describe("PROPOSAL_QUERY", () => {
     // the thread, the legacy-tolerance branch included. Pinned as an exact key
     // set so re-adding the field — or dropping `status`/`service_date`, which
     // the classifier and the live-date-wins rule need — fails here.
-    expect(Object.keys(row).sort()).toEqual(["_id", "leadMessages", "service_date", "status"]);
+    // `service_type` and `service` name a special in the email header; this
+    // fixture has neither, so both come back null rather than absent.
+    expect(Object.keys(row).sort()).toEqual(["_id", "leadMessages", "service", "service_date", "service_type", "status"]);
+    expect(row.service).toBeNull();
     expect(row.status).toBe("changes_requested");
     expect(row.service_date).toBe("2026-09-06");
     // Pre-filtered by the ONE fragment, and narrowed. A consumer re-filtering
@@ -199,6 +202,17 @@ describe("PROPOSAL_QUERY", () => {
   it("selects by id and yields null for an unknown proposal", async () => {
     const row = await run(PROPOSAL_QUERY, [PROPOSAL], { proposalId: "nope" });
     expect(row).toBeNull();
+  });
+
+  it("resolves a special's name and time through service_ref, and only those", async () => {
+    const special = {
+      _id: "sp-1", _type: "special_role", date: "2026-10-03", service_name: "CAMP - Set 2", time: "09:00",
+      Lead: [{ _key: "l1", _type: "reference", _ref: "m1" }],
+    };
+    const proposal = { ...PROPOSAL, service_type: "special", service_ref: { _type: "reference", _ref: "sp-1" } };
+    const row = (await run(PROPOSAL_QUERY, [proposal, special], { proposalId: "prop-1" })) as Record<string, unknown>;
+    expect(row.service_type).toBe("special");
+    expect(row.service).toEqual({ _type: "special_role", service_name: "CAMP - Set 2", time: "09:00" });
   });
 });
 

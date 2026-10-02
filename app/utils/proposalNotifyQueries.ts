@@ -57,9 +57,15 @@ export const ADMIN_RECIPIENTS_QUERY = `*[_type == "teamMembers" && role in ["sup
  * that filters again over a `{kind, body}` narrowing would still match — until
  * someone narrows it to `{body}`, at which point nothing matches and the
  * debounced email dies silently.
+ *
+ * `service_type` and the dereferenced `service` name the service in the email
+ * header (`emailServiceLabel.ts`): a special's own `service_name` and `time`, so
+ * two same-day sets' proposal threads read apart. Display only — a missing or
+ * dangling `service_ref` yields no `service`, never a refusal.
  */
 export const PROPOSAL_QUERY = `*[_type == "setlistProposal" && _id == $proposalId][0]{
-  _id, status, service_date,
+  _id, status, service_date, service_type,
+  "service": service_ref->{ _type, service_name, time },
   "leadMessages": ${LEAD_NOTE_MESSAGES}
 }`;
 
