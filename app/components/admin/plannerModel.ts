@@ -16,8 +16,10 @@
 // one of these was verified, not guessed:
 //
 //  1. Saturday↔week is ADJACENCY on Sundays, never position (fact 10).
-//  2. The positional Saturday fallback is GONE (D16) — an unaddressable
-//     Saturday stays unaddressable rather than being assigned a week by index.
+//  2. The positional Saturday fallback is GONE (D16) — a Saturday is never
+//     assigned a week by index. The one Saturday with no Sunday after it in
+//     the month, the trailing Saturday, is week `weeks + 1` by DEFINITION
+//     (`trailingSaturday`, ADR-0048 T1), not by position.
 //  3. The rendered column set is an EXPLICIT input (D9) — never inferred from
 //     `sundayDates`, so unchecking Domingos can never leak a Sunday draft.
 //  4. Every cell is multi-occupant (D3) — voice, instrument and FOH alike.
@@ -488,17 +490,42 @@ export function solvableWindow(sundayDates: string[]): { weeks: number; solvable
 
 // ─── Saturday↔week mapping — adjacency, never position (fact 10, D16) ────────
 
-function subtractDay(iso: string): string {
+function addDays(iso: string, days: number): string {
   const d = new Date(iso.slice(0, 10) + "T12:00:00");
-  d.setDate(d.getDate() - 1);
+  d.setDate(d.getDate() + days);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function subtractDay(iso: string): string {
+  return addDays(iso, -1);
+}
+
+/**
+ * The trailing Saturday (T1, ADR-0048): the last Sunday of `sundayDates` + 6
+ * days, when that date is still in the same calendar month — Sat 31 Oct 2026,
+ * whose Sunday is 1 Nov. `null` when it falls in the next month (Nov 2026: 29 +
+ * 6 is 5 Dec) and for an empty spine. It is staffed as solver week `weeks + 1`,
+ * and this is the ONLY definition: `saturdayForWeek`, `weekForColumn` and
+ * `weekendWeekIndexes` resolve it through here, so a column, a seat, an
+ * unfilled marker and a pin cannot disagree about its week.
+ *
+ * `sundayDates` is the FULL month spine (`sundayDatesFull`), in order.
+ */
+export function trailingSaturday(sundayDates: string[]): string | null {
+  const last = sundayDates[sundayDates.length - 1];
+  if (!last) return null;
+  const sat = addDays(last, 6);
+  return sat.slice(0, 7) === last.slice(0, 7) ? sat : null;
 }
 
 /**
  * 1-based week indexes whose Saturday (the day before that week's Sunday) is
- * in `activeSatDates`. No positional fallback (D16): a Saturday not adjacent
- * to any Sunday in `sundayDates` simply contributes no index, however many
- * Saturdays are selected.
+ * in `activeSatDates`, then `weeks + 1` when the trailing Saturday is. No
+ * positional fallback (D16): any other Saturday not adjacent to a Sunday in
+ * `sundayDates` contributes no index, however many Saturdays are selected.
+ *
+ * This is the CANDIDATE list. `buildSolveRequest` decides whether `weeks + 1`
+ * is actually sent (T5).
  */
 export function weekendWeekIndexes(sundayDates: string[], activeSatDates: string[]): number[] {
   const active = new Set(activeSatDates);
@@ -506,30 +533,22 @@ export function weekendWeekIndexes(sundayDates: string[], activeSatDates: string
   sundayDates.forEach((sunDate, i) => {
     if (active.has(subtractDay(sunDate))) out.push(i + 1);
   });
+  const trailing = trailingSaturday(sundayDates);
+  if (trailing && active.has(trailing)) out.push(sundayDates.length + 1);
   return out;
 }
 
 /**
- * The Saturday adjacent to week `n`'s Sunday — regardless of selection.
- * Returns `null` for an out-of-range `n` (`sundayDates[n-1]` undefined)
- * rather than throwing. Unreachable today because callers only ever pass a
- * week number the solver derived from `weeks === sundayDates.length`, but
- * `mapUnfilledSeats` calls this with a solver-supplied week number, so it
- * must degrade instead of crashing if that ever stops holding.
+ * The Saturday adjacent to week `n`'s Sunday — regardless of selection — and
+ * for `n === weeks + 1` the trailing Saturday (`null` in a month without one).
+ * Returns `null` for any other out-of-range `n` rather than throwing:
+ * `mapUnfilledSeats` calls this with a solver-supplied week number, so it must
+ * degrade instead of crashing if that is ever not one the request sent.
  */
 export function saturdayForWeek(n: number, sundayDates: string[]): string | null {
+  if (n === sundayDates.length + 1) return trailingSaturday(sundayDates);
   const sunDate = sundayDates[n - 1];
   return sunDate ? subtractDay(sunDate) : null;
-}
-
-/**
- * Selected Saturdays with no adjacent Sunday in `sundayDates` — a request
- * would never staff them and a response would never resolve to them. Labelled
- * explicitly rather than silently dropped or (worse) positionally reassigned.
- */
-export function unaddressableDates(sundayDates: string[], activeSatDates: string[]): string[] {
-  const adjacent = new Set(sundayDates.map(subtractDay));
-  return [...activeSatDates].sort().filter((d) => !adjacent.has(d));
 }
 
 // ─── Request construction ─────────────────────────────────────────────────────
@@ -588,6 +607,47 @@ export function memberIdToName(id: string, members: RankMember[]): string {
 /** Patterns whose every role is a Saturday role (`expand_pattern` in the solver). */
 const SATURDAY_ONLY_PATTERNS = new Set(["Sat.*", "Sat.Lead", "Sat.BGV"]);
 
+type SolverRole = "Sun.Lead" | "Sat.Lead" | "Sun.BGV" | "Sat.BGV" | "Sun.Choir";
+
+/** The solver's `ROLE_ORDER` (`gcf/owt_solver_v2.py`); `rolesOfPattern` answers in this order. */
+const ROLE_ORDER: readonly SolverRole[] = ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"];
+
+/**
+ * The solver's `LEGACY_PATTERN_ALIASES`. A `Map`, so `"constructor"` is not an alias. Exported
+ * only for `patternRolesSync.test.ts`, which compares it with the solver's table both ways.
+ */
+export const LEGACY_PATTERN_ALIASES: ReadonlyMap<string, string> = new Map([
+  ["Lead.*", "*.Lead"],
+  ["BGV.*", "*.BGV"],
+  ["Choir.*", "*.Choir"],
+  ["LeadBGV.*", "*.LeadBGV"],
+]);
+
+/**
+ * The solver roles a rule pattern covers: `expand_pattern` in `gcf/owt_solver_v2.py`,
+ * legacy aliases included, restated because `app/` cannot call the solver (ruling Q3 of
+ * plan 2026-09-30-planner-trailing-saturday). T3 and T5 read it to decide whether a `!in`
+ * rule or a week exclusion keeps someone off a Saturday seat. `[]` for a pattern the solver
+ * refuses, never a guess.
+ *
+ * Not `ruleEnforcement.parsePattern`: that one maps a pattern to grid ROWS and a column's
+ * service half, and `ruleEnforcement` imports this module. `patternRolesSync.test.ts` reads
+ * the solver file and fails when the two drift.
+ */
+export function rolesOfPattern(pattern: string): SolverRole[] {
+  const p = LEGACY_PATTERN_ALIASES.get(pattern) ?? pattern;
+  if (p === "*.*") return [...ROLE_ORDER];
+  if (p === "Sun.*") return ["Sun.Lead", "Sun.BGV", "Sun.Choir"];
+  if (p === "Sat.*") return ["Sat.Lead", "Sat.BGV"];
+  if (p === "*.LeadBGV") return ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV"];
+  if (p.startsWith("*.")) {
+    const matches = ROLE_ORDER.filter((r) => r.endsWith(`.${p.slice(2)}`));
+    if (matches.length > 0) return matches;
+  }
+  const role = ROLE_ORDER.find((r) => r === p);
+  return role ? [role] : [];
+}
+
 /** A cap as the solver's DSL spells it, e.g. `Sat.* == 1` or `Sat.BGV >= {weeks-2}`. */
 export function capText(cap: RestrictionCap): string {
   const val = cap.relative ? `{weeks-${cap.relOffset}}` : String(cap.value);
@@ -626,11 +686,26 @@ export function isSaturdayFloor(cap: RestrictionCap, weeks: number): boolean {
   return resolvedCapValue(cap, weeks) >= 1;
 }
 
+/**
+ * Why `buildSolveRequest` left a Saturday minimum out (T3/T4):
+ * - `noSaturday`: the request sends no Saturday at all (PR #116's month-level rule);
+ * - `unreachable`: more Saturdays than this person can take among those sent;
+ * - `combined`: reachable, but not the person's first reachable Saturday minimum in the rules
+ *   card's order. Only one per person is judged (rulings Q16, Q18), so this is a limit of the
+ *   planner, never a verdict about the seats;
+ * - `capacity`: the minimums that remained cannot all be given a seat.
+ */
+export type OmitReason = "noSaturday" | "unreachable" | "combined" | "capacity";
+
 /** A cap `buildSolveRequest` left out of the request, for the admin to be told. */
 export interface OmittedCap {
   person: string;
   cap: string;
+  reason: OmitReason;
 }
+
+/** The key `buildSolveRequest` files a cap's omission under: its restriction's index, then its own. */
+const capKey = (restrictionIndex: number, capIndex: number) => `${restrictionIndex}:${capIndex}`;
 
 function restrictionToDs(r: PersonRestriction): string | null {
   if (!r.person) return null;
@@ -644,26 +719,40 @@ function restrictionToDs(r: PersonRestriction): string | null {
   return `${r.person} ${clauses.join(" & ")}`;
 }
 
+/**
+ * `omit` is keyed by `capKey` (restriction index, cap index), never by the cap object: two
+ * rules may share one cap object, and only one of them may be the person left out.
+ *
+ * `withheldWeek` is the trailing Saturday's week when the request withheld it (T5, or Auto's
+ * retry under ruling Q19), else `null`. Its week
+ * exclusions bind no seat, and the solver refuses a rule naming a week the request does not
+ * have — refusing the whole month, Sundays included. So they are not sent. Only that week, only
+ * then: a week-5 exclusion in a month with no trailing Saturday (or with it deselected) is
+ * still sent, and the solver still names it in its refusal (fix round 1, ruling Q9).
+ */
 function allRulesToDs(
   config: SolverConfig,
   members: RankMember[],
-  dropCap: (cap: RestrictionCap) => boolean = () => false,
+  omit: ReadonlyMap<string, OmitReason> = new Map(),
   omitted: OmittedCap[] = [],
+  withheldWeek: number | null = null,
 ): string[] {
   const res = (name: string) => resolvedNameOrRaw(name, members);
   const out: string[] = [];
-  for (const r of config.restrictions) {
-    const kept = r.caps.filter((cap) => {
-      if (!dropCap(cap)) return true;
+  config.restrictions.forEach((r, ri) => {
+    const kept = r.caps.filter((cap, ci) => {
+      const reason = omit.get(capKey(ri, ci));
+      if (!reason) return true;
       // Reported under the name the rules panel shows (the rule's own text), since
       // that is where the admin would go to look at it.
-      if (r.person) omitted.push({ person: r.person, cap: capLabel(cap) });
+      if (r.person) omitted.push({ person: r.person, cap: capLabel(cap), reason });
       return false;
     });
-    const resolved: PersonRestriction = { ...r, caps: kept, person: res(r.person) };
+    const weekExclusions = withheldWeek === null ? r.weekExclusions : r.weekExclusions.filter((we) => we.week !== withheldWeek);
+    const resolved: PersonRestriction = { ...r, caps: kept, weekExclusions, person: res(r.person) };
     const ds = restrictionToDs(resolved);
     if (ds) out.push(ds);
-  }
+  });
   for (const r of config.conflicts) out.push(`${res(r.personA)} !with ${res(r.personB)} on ${r.pattern}`);
   for (const r of config.presence)
     out.push(`any_of(${r.persons.map(res).join(",")}) on ${r.pattern} each_week`);
@@ -849,6 +938,338 @@ export function solverPools(config: SolverConfig, members: RankMember[]): Solver
   return { sundayLeadNames, saturdayLeadNames, supportNames, extraSupport, requestMemberIds, dslBlockedByTipo };
 }
 
+// ─── The trailing Saturday and Saturday minimums (T3–T5, ADR-0048) ──────────
+
+type SaturdayRole = "Sat.Lead" | "Sat.BGV";
+const isSaturdayRole = (role: SolverRole): role is SaturdayRole => role === "Sat.Lead" || role === "Sat.BGV";
+
+/** The solver's default seats per Saturday (`build_slots`): 2 Lead + 3 BGV, no Choir. */
+const SATURDAY_SEATS = { lead: 2, bgv: 3 } as const;
+
+/**
+ * T5's verdict on the trailing Saturday. `sent: false` means the request left week `weeks + 1`
+ * out: `noLead` when no lead could take it (T5), `infeasible` when the solver refused the month
+ * with it and Auto is solving it again without it (`withholdTrailing`, ruling Q19).
+ */
+export interface TrailingVerdict {
+  date: string;
+  sent: boolean;
+  reason?: "noLead" | "infeasible";
+}
+
+/** Can `name` (a canonical `member_name`) take `role` on Saturday week `week`, dated `date`? */
+type SaturdayAccess = (name: string, week: number, date: string, role: SaturdayRole) => boolean;
+
+/**
+ * The ONE eligibility check T5 and T3 share, so they cannot disagree about who can take a
+ * Saturday. A person cannot when they are unavailable that day, when a `!in` pattern or a
+ * week exclusion for that week covers the role — over EVERY rule that names them, resolved
+ * the way the request resolves them (`resolvedNameOrRaw`) — or, for a Lead seat, when they
+ * are in no lead pool (the solver's `Sat.Lead` pool is Sunday ∪ Saturday leads).
+ *
+ * Advisory: the solver stays the authority, and its refusal still reaches the admin.
+ */
+function saturdayAccess(config: SolverConfig, members: RankMember[], leadNames: ReadonlySet<string>): SaturdayAccess {
+  return (name, week, date, role) => {
+    if (role === "Sat.Lead" && !leadNames.has(name)) return false;
+    if (members.find((m) => m.member_name === name)?.unavailableDates?.includes(date)) return false;
+    return !config.restrictions.some(
+      (r) =>
+        !!r.person &&
+        resolvedNameOrRaw(r.person, members) === name &&
+        (r.excludedPatterns.some((p) => rolesOfPattern(p).includes(role)) ||
+          r.weekExclusions.some((we) => we.week === week && rolesOfPattern(we.pattern).includes(role))),
+    );
+  };
+}
+
+/**
+ * The ONE lead-pool member who can lead each Saturday in `saturdayWeeks` (`canTake`), or `null`
+ * where none or several can. The solver's `mandatory_lead` wants a Lead on every Saturday, so that
+ * member WILL lead it. T5 and the seat model both read this, so they agree on who that is.
+ */
+function loneLeadsOf(
+  saturdayWeeks: readonly number[],
+  sundayDates: string[],
+  leadNames: readonly string[],
+  canTake: SaturdayAccess,
+): Array<string | null> {
+  return saturdayWeeks.map((w) => {
+    const date = saturdayForWeek(w, sundayDates);
+    const able = date === null ? [] : leadNames.filter((n) => canTake(n, w, date, "Sat.Lead"));
+    return able.length === 1 ? able[0] : null;
+  });
+}
+
+/**
+ * T5: the trailing Saturday is sent only if some Sunday or Saturday lead can lead it.
+ * `null` when the month has none or it is not selected.
+ *
+ * A lead `canTake` allows can still have no Saturday left (ruling Q17). A maximum on a pattern
+ * that covers `Sat.Lead` (`==` or `<=`, its value resolved as the solver resolves it) is used up
+ * when it is at most the number of OTHER sent Saturdays on which they are the only possible lead
+ * (`loneLeadsOf`): `mandatory_lead` puts them on each of those, so leading the 31st as well would
+ * break the maximum, and the solver would refuse the whole month, Sundays included. That was
+ * October 2026 with Frank away on the 24th and the 31st and Andy's `Sat.* == 1`: main sent the
+ * 24th alone and solved. A zero maximum bars them outright. Only the trailing Saturday is judged
+ * this way, so a month without one is unchanged.
+ *
+ * A pre-filter, not a guarantee: it does not count the Sunday seats a `*.Lead`, `Lead.*` or `*.*`
+ * maximum also covers, nor several leads sharing too few Saturdays, nor `sat_anchor`. A refusal
+ * it misses is caught by Auto's retry without the 31st (`withholdTrailing`, ruling Q19).
+ */
+function trailingVerdict(input: {
+  config: SolverConfig;
+  members: RankMember[];
+  sundayDates: string[];
+  candidates: number[];
+  leadNames: string[];
+  canTake: SaturdayAccess;
+}): TrailingVerdict | null {
+  const { config, members, sundayDates, candidates, leadNames, canTake } = input;
+  const date = trailingSaturday(sundayDates);
+  const weeks = sundayDates.length;
+  const week = weeks + 1;
+  if (!date || !candidates.includes(week)) return null;
+  const lone = loneLeadsOf(candidates.filter((w) => w !== week), sundayDates, leadNames, canTake);
+  const noSaturdayLeft = (name: string) => {
+    const forced = lone.filter((n) => n === name).length;
+    return config.restrictions.some(
+      (r) =>
+        !!r.person &&
+        resolvedNameOrRaw(r.person, members) === name &&
+        r.caps.some(
+          (cap) =>
+            (cap.op === "==" || cap.op === "<=") &&
+            rolesOfPattern(cap.pattern).includes("Sat.Lead") &&
+            resolvedCapValue(cap, weeks) <= forced,
+        ),
+    );
+  };
+  return leadNames.some((name) => canTake(name, week, date, "Sat.Lead") && !noSaturdayLeft(name))
+    ? { date, sent: true }
+    : { date, sent: false, reason: "noLead" };
+}
+
+/** A Saturday minimum as T3/T4 judge it: whose, which pattern, and its resolved value. */
+interface SaturdayFloor {
+  key: string;
+  /** The rule's own text — what the notice and the tie-break use. */
+  person: string;
+  /** The canonical `member_name` — what `canTake` and the history use. */
+  name: string;
+  pattern: string;
+  value: number;
+}
+
+/**
+ * Max flow by BFS augmenting paths (Edmonds–Karp). Arcs are stored in pairs — forward at an
+ * even index, its residual at the next odd one — so `e ^ 1` is the partner and `to[e ^ 1]`
+ * the tail. The graphs `floorsFitSeats` builds are tiny (≤ ~30 people, ≤ 5 Saturdays).
+ */
+function maxFlow(nodeCount: number, arcs: ReadonlyArray<readonly [number, number, number]>, source: number, sink: number): number {
+  const head: number[] = new Array(nodeCount).fill(-1);
+  const to: number[] = [];
+  const cap: number[] = [];
+  const next: number[] = [];
+  const link = (u: number, v: number, c: number) => {
+    to.push(v); cap.push(c); next.push(head[u]); head[u] = to.length - 1;
+  };
+  for (const [u, v, c] of arcs) {
+    link(u, v, c);
+    link(v, u, 0);
+  }
+  let flow = 0;
+  for (;;) {
+    const via: number[] = new Array(nodeCount).fill(-1);
+    const seen: boolean[] = new Array(nodeCount).fill(false);
+    seen[source] = true;
+    const queue = [source];
+    for (let q = 0; q < queue.length && !seen[sink]; q++) {
+      for (let e = head[queue[q]]; e !== -1; e = next[e]) {
+        if (cap[e] > 0 && !seen[to[e]]) {
+          seen[to[e]] = true;
+          via[to[e]] = e;
+          queue.push(to[e]);
+        }
+      }
+    }
+    if (!seen[sink]) return flow;
+    let push = Infinity;
+    for (let v = sink; v !== source; v = to[via[v] ^ 1]) push = Math.min(push, cap[via[v]]);
+    for (let v = sink; v !== source; v = to[via[v] ^ 1]) {
+      cap[via[v]] -= push;
+      cap[via[v] ^ 1] += push;
+    }
+    flow += push;
+  }
+}
+
+/**
+ * T4's seat model (ruling Q10): can every floor in `floors` be given a REAL Saturday seat?
+ * The solver's seats, not a pooled count: each sent Saturday holds 2 Lead + 3 BGV seats and one
+ * seat per person; a `Sat.Lead` unit takes only a Lead seat, `Sat.BGV` only a BGV seat,
+ * `Sat.*` either, and only where `canTake` says that person can take that role that week. A
+ * floor of value v needs v DISTINCT sent Saturdays. Solved as a max flow — source → person
+ * (their demand) → (person, Saturday) (1) → (Saturday, Lead 2 | BGV 3) → sink — and it fits
+ * iff every unit of demand flows. A flow IS a seat assignment, so a set this accepts is never
+ * seat-infeasible.
+ *
+ * **One floor per person, always** (ruling Q16). Each floor is one person node, so the arc of 1
+ * into each (person, Saturday) node is the solver's one-seat-per-person-per-Saturday only while no
+ * person has two floors here. `saturdayFloorOmissions` guarantees it: every reachable floor
+ * after a person's first reachable one is `combined` before this runs. Never hand this two
+ * floors of one person — they would be two nodes, and could seat that person twice on one
+ * Saturday. For one floor per person the flow is exact (re-verify at `097d994d`: an independent
+ * re-implementation matched it on 25,500 scenarios; real-solver restorations found no false
+ * `capacity` in 2,529 and no false `unreachable` in 4,442).
+ *
+ * `loneLeads[i]` is the ONE lead-pool member who can lead sent Saturday `i`, or `null` when
+ * there are none or several (`loneLeadsOf`). The solver's `mandatory_lead` rule wants at least
+ * one Lead on every Saturday, and a person holds one seat per Saturday, so that member cannot take
+ * a BGV seat there: their node for that Saturday gets the Lead seat only. That removes only what
+ * the solver already forbids — no set it could seat is refused.
+ *
+ * Outside the model (the solver stays the authority):
+ * - `mandatory_lead` when two or more leads could lead a Saturday, but floors push them all onto BGV;
+ * - `sat_anchor`, the dedicated Saturday lead the solver wants on every Saturday that has one
+ *   available — no Lead seat is held back for them;
+ * - maximums: the upper side of an `==` minimum, or a `<=` (zero included), combined with
+ *   `mandatory_lead`. Only T5 reads them, for the trailing Saturday alone and only in part
+ *   (ruling Q17);
+ * - rows grown by pins.
+ * In a month that sent the trailing Saturday, a refusal any of these cause is retried without it
+ * (ruling Q19), so it costs one extra solve, not the month.
+ */
+function floorsFitSeats(
+  floors: readonly SaturdayFloor[],
+  sentWeeks: readonly number[],
+  sundayDates: string[],
+  canTake: SaturdayAccess,
+  loneLeads: ReadonlyArray<string | null>,
+): boolean {
+  const source = 0;
+  const sink = 1;
+  const seatNode = (i: number, role: SaturdayRole) => 2 + 2 * i + (role === "Sat.Lead" ? 0 : 1);
+  let nodes = 2 + 2 * sentWeeks.length;
+  const arcs: Array<[number, number, number]> = [];
+  sentWeeks.forEach((_, i) => {
+    arcs.push([seatNode(i, "Sat.Lead"), sink, SATURDAY_SEATS.lead], [seatNode(i, "Sat.BGV"), sink, SATURDAY_SEATS.bgv]);
+  });
+  let demand = 0;
+  for (const f of floors) {
+    const personNode = nodes++;
+    const classes = rolesOfPattern(f.pattern).filter(isSaturdayRole);
+    arcs.push([source, personNode, f.value]);
+    demand += f.value;
+    sentWeeks.forEach((w, i) => {
+      const date = saturdayForWeek(w, sundayDates);
+      const roles = date === null ? [] : classes.filter(
+        (role) => canTake(f.name, w, date, role) && (loneLeads[i] !== f.name || role === "Sat.Lead"),
+      );
+      if (roles.length === 0) return;
+      const weekNode = nodes++;
+      arcs.push([personNode, weekNode, 1]);
+      for (const role of roles) arcs.push([weekNode, seatNode(i, role), 1]);
+    });
+  }
+  return maxFlow(nodes, arcs, source, sink) === demand;
+}
+
+/**
+ * T3/T4: which Saturday minimums (`isSaturdayFloor`) the request leaves out, and why, keyed
+ * by `capKey`. Maximums are never touched. Each floor takes the first reason that applies, in
+ * the order the notices show them:
+ *
+ * 1. No Saturday sent: every floor is `noSaturday` (PR #116's month-level rule).
+ * 2. A floor above the Saturdays its person can reach among those sent is `unreachable`. This is
+ *    judged for every floor, a person's first or not, so the admin is told the stronger reason.
+ * 3. ONE floor per person goes on to the seats (rulings Q16, Q18): the first of their REACHABLE
+ *    Saturday floors in the rules card's order (config order: the rule, then its caps), over
+ *    every rule that names them (`resolvedNameOrRaw`). Every other reachable one is `combined`,
+ *    before any seat is counted. A person whose first floor is `unreachable` still keeps the next
+ *    one that is not. Merging a person's floors into one demand was tried three times (rulings
+ *    Q10, Q14), and each version kept or dropped a floor the solver disagreed with.
+ * 4. If what is left cannot all be seated (`floorsFitSeats`), the floors are taken in ascending
+ *    order of the person's Saturdays in the request's own history (`historyForRequest`), ties by
+ *    the rule's name, then config order. Each is kept iff the kept set plus it can still all be
+ *    seated, and the rest are `capacity`. Under ADR-0046 that history is `[]`, so the order is by
+ *    name (ruling Q2) — which is why no notice claims a history reason.
+ */
+function saturdayFloorOmissions(input: {
+  config: SolverConfig;
+  members: RankMember[];
+  sundayDates: string[];
+  sentWeeks: number[];
+  canTake: SaturdayAccess;
+  /** The Sunday ∪ Saturday lead pools, as the request names them. */
+  leadNames: readonly string[];
+  historyEntries: SolverHistoryEntry[];
+  year: number;
+  month: number;
+}): Map<string, OmitReason> {
+  const { config, members, sundayDates, sentWeeks, canTake } = input;
+  const weeks = sundayDates.length;
+  const omit = new Map<string, OmitReason>();
+  const floors: SaturdayFloor[] = [];
+  config.restrictions.forEach((r, ri) => {
+    if (!r.person) return; // no line is written for it anyway
+    r.caps.forEach((cap, ci) => {
+      if (!isSaturdayFloor(cap, weeks)) return;
+      floors.push({
+        key: capKey(ri, ci),
+        person: r.person,
+        name: resolvedNameOrRaw(r.person, members),
+        pattern: cap.pattern,
+        value: resolvedCapValue(cap, weeks),
+      });
+    });
+  });
+
+  if (sentWeeks.length === 0) {
+    for (const f of floors) omit.set(f.key, "noSaturday");
+    return omit;
+  }
+
+  const reachable = floors.filter((f) => {
+    const roles = rolesOfPattern(f.pattern).filter(isSaturdayRole);
+    const count = sentWeeks.filter((w) => {
+      const date = saturdayForWeek(w, sundayDates);
+      return date !== null && roles.some((role) => canTake(f.name, w, date, role));
+    }).length;
+    if (f.value <= count) return true;
+    omit.set(f.key, "unreachable");
+    return false;
+  });
+
+  // Rulings Q16/Q18: the person's first Saturday floor that T3 let through.
+  const firstFloor = new Map<string, string>();
+  for (const f of reachable) if (!firstFloor.has(f.name)) firstFloor.set(f.name, f.key);
+  const judged = reachable.filter((f) => {
+    if (firstFloor.get(f.name) === f.key) return true;
+    omit.set(f.key, "combined");
+    return false;
+  });
+
+  const loneLeads = loneLeadsOf(sentWeeks, sundayDates, input.leadNames, canTake);
+  const fit = (set: readonly SaturdayFloor[]) => floorsFitSeats(set, sentWeeks, sundayDates, canTake, loneLeads);
+  if (fit(judged)) return omit;
+
+  const history = historyForRequest(input.historyEntries, input.year, input.month);
+  const saturdaysServed = (name: string) =>
+    history.reduce((n, h) => n + (h.role_counts[name]?.["Sat.Lead"] ?? 0) + (h.role_counts[name]?.["Sat.BGV"] ?? 0), 0);
+  const ordered = [...judged].sort(
+    (a, b) => saturdaysServed(a.name) - saturdaysServed(b.name) || a.person.localeCompare(b.person, "es"),
+  );
+  // Every floor kept is checked with the whole kept set, so the final set is always seatable.
+  const kept: SaturdayFloor[] = [];
+  for (const f of ordered) {
+    if (fit([...kept, f])) kept.push(f);
+    else omit.set(f.key, "capacity");
+  }
+  return omit;
+}
+
 export function buildSolveRequest(input: {
   config: SolverConfig;
   members: RankMember[];
@@ -857,29 +1278,30 @@ export function buildSolveRequest(input: {
   historyEntries: SolverHistoryEntry[];
   year: number;
   month: number;
+  /**
+   * The retry (ruling Q19): the solver refused this month with the trailing Saturday in it, so
+   * withhold it as `infeasible`. It goes through T5's own withhold path, so the week's exclusions
+   * are dropped (Q9), its availability rule is not emitted and the floors are judged on the
+   * Saturdays left. Ignored, byte for byte, when the request would not send the trailing Saturday
+   * anyway (none, deselected, or T5's `noLead`).
+   */
+  withholdTrailing?: boolean;
 }):
   | {
       ok: true;
       request: SolveRequest;
       /**
-       * Saturday minimums left out because the month has no Saturday Auto can staff
-       * (`isSaturdayFloor`). Empty in any month with one. The caller shows them, so a
-       * rule that stopped applying is never silent.
+       * Saturday minimums left out, each with its reason (T3/T4, `OmitReason`). The caller
+       * shows them (`omittedCapsNotices`), so a rule that stopped applying is never silent.
        */
       omittedCaps: OmittedCap[];
+      /** T5's verdict on the trailing Saturday; `null` when the month has none or it is not selected. */
+      trailing: TrailingVerdict | null;
     }
   | { ok: false; reason: string } {
   const { config, members, sundayDates, activeSatDates, historyEntries, year, month } = input;
 
   const weeks = sundayDates.length;
-  const weekendsWithSaturday = weekendWeekIndexes(sundayDates, activeSatDates);
-  // No Saturday for Auto this month (none selected, or only an unaddressable one like
-  // 31 Oct 2026): a Saturday MINIMUM cannot be met and would sink the whole month, so
-  // it is not applied this month. Maximums stay — they hold trivially.
-  const omittedCaps: OmittedCap[] = [];
-  const dropCap = weekendsWithSaturday.length === 0
-    ? (cap: RestrictionCap) => isSaturdayFloor(cap, weeks)
-    : () => false;
 
   const { sundayLeadNames, saturdayLeadNames, supportNames, extraSupport, requestMemberIds, dslBlockedByTipo } =
     solverPools(config, members);
@@ -891,6 +1313,28 @@ export function buildSolveRequest(input: {
         + "Borra esas reglas (o devuélvele un Tipo) antes de generar el mes.",
     };
   }
+
+  // T5: the trailing Saturday (`weeks + 1`) is a candidate; it is sent only if a lead can
+  // take it and still has a Saturday left under their maximums — and, on Auto's retry, not at
+  // all (`withholdTrailing`, ruling Q19). Every other selected Saturday is sent as it always was.
+  const leadNames = [...sundayLeadNames, ...saturdayLeadNames];
+  const canTake = saturdayAccess(config, members, new Set(leadNames));
+  const candidates = weekendWeekIndexes(sundayDates, activeSatDates);
+  const verdict = trailingVerdict({ config, members, sundayDates, candidates, leadNames, canTake });
+  const trailing: TrailingVerdict | null = verdict?.sent && input.withholdTrailing
+    ? { date: verdict.date, sent: false, reason: "infeasible" }
+    : verdict;
+  const weekendsWithSaturday = trailing?.sent === false ? candidates.filter((w) => w !== weeks + 1) : candidates;
+
+  // T3/T4: a Saturday MINIMUM nobody could meet sinks the whole month, Sundays included
+  // (October 2026 before T1). So each is judged per person against the Saturdays actually
+  // sent, then against their seats, and left out — with its reason — when it cannot be
+  // met. With no Saturday sent at all that is every one of them, as before. Maximums stay:
+  // they hold trivially.
+  const omittedCaps: OmittedCap[] = [];
+  const omit = saturdayFloorOmissions({
+    config, members, sundayDates, sentWeeks: weekendsWithSaturday, canTake, leadNames, historyEntries, year, month,
+  });
 
   // Auto-generate week-exclusion DSL rules from member unavailableDates. The
   // rules loop `requestMemberIds` (fact 15): a member the request never names is
@@ -915,6 +1359,11 @@ export function buildSolveRequest(input: {
       const prevDay = subtractDay(sunDate);
       if (unavailable.has(prevDay)) availabilityRules.push(`${m.member_name} !in week ${weekNum} Sat.*`);
     });
+    // The trailing Saturday, only when it is sent. Nothing is derived from the next
+    // month's Sunday: that is next month's week 1.
+    if (trailing?.sent && unavailable.has(trailing.date)) {
+      availabilityRules.push(`${m.member_name} !in week ${weeks + 1} Sat.*`);
+    }
   }
 
   const request: SolveRequest = {
@@ -923,7 +1372,10 @@ export function buildSolveRequest(input: {
     sunday_leads: sundayLeadNames,
     saturday_leads: saturdayLeadNames,
     support: [...supportNames, ...extraSupport],
-    dsl_rules: [...allRulesToDs(config, members, dropCap, omittedCaps), ...availabilityRules],
+    dsl_rules: [
+      ...allRulesToDs(config, members, omit, omittedCaps, trailing?.sent === false ? weeks + 1 : null),
+      ...availabilityRules,
+    ],
     history: historyForRequest(historyEntries, year, month).map((h) => ({
       total_counts: h.total_counts,
       role_counts: h.role_counts,
@@ -934,7 +1386,7 @@ export function buildSolveRequest(input: {
     return { ok: false, reason: "Debes seleccionar al menos un líder de domingo." };
   }
 
-  return { ok: true, request, omittedCaps };
+  return { ok: true, request, omittedCaps, trailing };
 }
 
 /** What Auto says when the solver refuses and gives no reason of its own. */
@@ -956,17 +1408,63 @@ function joinEs(items: string[]): string {
   return items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;
 }
 
-/** The notice for caps `buildSolveRequest` left out, grouped by rule; null when none. */
-export function omittedCapsNotice(omitted: OmittedCap[]): string | null {
-  if (omitted.length === 0) return null;
+const SHORT_MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+
+/** `2026-10-04` → `4 oct`. String arithmetic on the ISO date — no `Date`, no Intl. */
+export function dayLabel(iso: string): string {
+  return `${Number(iso.slice(8, 10))} ${SHORT_MONTHS[Number(iso.slice(5, 7)) - 1]}`;
+}
+
+/** `«Sat.* == 1» a Andy y Tay y «Sat.Lead >= 1» a Vale` — people grouped under each rule. */
+function capsByRule(omitted: OmittedCap[]): string {
   const byCap = new Map<string, string[]>();
   for (const o of omitted) {
     const people = byCap.get(o.cap) ?? [];
     if (!people.includes(o.person)) people.push(o.person);
     byCap.set(o.cap, people);
   }
-  const parts = [...byCap].map(([cap, people]) => `«${cap}» a ${joinEs(people)}`);
-  return `Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó ${joinEs(parts)}.`;
+  return joinEs([...byCap].map(([cap, people]) => `«${cap}» a ${joinEs(people)}`));
+}
+
+/** The order the notices are shown in, whatever order the caps were left out in. */
+const OMIT_REASON_ORDER: readonly OmitReason[] = ["noSaturday", "unreachable", "combined", "capacity"];
+
+const OMIT_NOTICE: Record<OmitReason, (rules: string) => string> = {
+  noSaturday: (rules) => `Este mes no tiene sábados que Auto pueda cubrir, así que no se aplicó ${rules}.`,
+  // Number-neutral (ruling Q6): true whether the person reaches no Saturday or too few.
+  unreachable: (rules) =>
+    `No se aplicó ${rules}: los sábados que Auto llena este mes no alcanzan para cumplirlo (por disponibilidad, exclusiones o rol).`,
+  // One minimum per person is judged (ruling Q16): this names that limit, never a shortage of seats.
+  combined: (rules) => `No se aplicó ${rules}: Auto no combina dos mínimos de sábado de la misma persona.`,
+  capacity: (rules) =>
+    `No caben todos los mínimos de sábado en los lugares de sábado de este mes, así que no se aplicó ${rules}.`,
+};
+
+/**
+ * The notices for caps `buildSolveRequest` left out: one line per reason, in the order
+ * `noSaturday`, `unreachable`, `combined`, `capacity`, people grouped under each rule as the
+ * rules card names it. Empty when nothing was left out.
+ */
+export function omittedCapsNotices(omitted: OmittedCap[]): string[] {
+  return OMIT_REASON_ORDER.flatMap((reason) => {
+    const group = omitted.filter((o) => o.reason === reason);
+    return group.length > 0 ? [OMIT_NOTICE[reason](capsByRule(group))] : [];
+  });
+}
+
+/**
+ * The notice for a trailing Saturday the request did not send; `null` when it was sent. For
+ * `noLead`, «sin sábados libres en su regla» is a lead whose Saturday maximum the other Saturdays
+ * already use up (ruling Q17). `infeasible` is Auto's retry (ruling Q19), in Spanish only: the
+ * solver's English reason already ends with its own «deselect it» advice, so quoting it read twice
+ * (ruling Q20).
+ */
+export function trailingNotice(t: TrailingVerdict): string | null {
+  if (t.sent) return null;
+  if (t.reason === "infeasible") {
+    return `El sábado ${dayLabel(t.date)} no se mandó al solver: con él, el mes no tenía solución. Llénalo a mano.`;
+  }
+  return `El sábado ${dayLabel(t.date)} no se mandó al solver: ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla). Llénalo a mano.`;
 }
 
 // ─── Response mapping ─────────────────────────────────────────────────────────
@@ -975,7 +1473,8 @@ const ROLE_FIELD: Record<string, "Lead" | "BGV" | "Choir"> = { lead: "Lead", bgv
 
 /**
  * The 1-based solver week a column belongs to, or `null` for a column the
- * solver has no concept of.
+ * solver has no concept of. A Saturday is the week of the Sunday after it; the
+ * trailing Saturday (`trailingSaturday`, T1) is week `weeks + 1`.
  *
  * **A special is ALWAYS `null`** (E4). Without this it would fall into the
  * Saturday branch below and — for a weekday special dated the day before a
@@ -998,6 +1497,7 @@ export function weekForColumn(
   for (let i = 0; i < sundayDates.length; i++) {
     if (subtractDay(sundayDates[i]) === column.date) return i + 1;
   }
+  if (column.date === trailingSaturday(sundayDates)) return sundayDates.length + 1;
   return null;
 }
 

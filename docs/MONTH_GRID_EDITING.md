@@ -70,6 +70,32 @@ for stored service rosters:
   not be listed yet). Pure selection and summary
   wording: `clearMonthModel.ts`; rejection wording shared with the card flows:
   `serviceMutationErrors.ts`.
+- **The Saturday after the last Sunday is Auto's** (create mode;
+  [ADR-0048](adr/0048-the-saturday-after-the-last-sunday-belongs-to-its-calendar-month.md)).
+  Some months end on a Saturday whose Sunday is in the next month, such as Sat 31 Oct 2026. That
+  Saturday's column is a column Auto writes, as solver week `weeks + 1` of its own month. It is
+  preselected like every Saturday.
+  - If no lead can take it, Auto still solves the Sundays. A lead cannot when they are
+    unavailable, when a rule excludes them, or when their rule has no Saturday left. For
+    example, Andy has `Sat.* == 1` and is the only lead who can take the 24th. Auto leaves the
+    31st to be filled by hand and says so under Auto: «El sábado 31 oct no se mandó al solver:
+    ningún líder puede dirigirlo (no disponibles, excluidos o sin sábados libres en su regla).
+    Llénalo a mano.»
+  - If the solver refuses the month with the 31st in it, Auto solves it once more without it,
+    still showing «Calculando...», and the Sundays are filled. It says so under Auto: «El
+    sábado 31 oct no se mandó al solver: con él, el mes no tenía solución. Llénalo a mano.» If
+    the second solve is refused too, Auto shows that refusal as usual. A failure to reach the
+    solver is never retried (rulings Q19 and Q20).
+  - A withheld 31st is not pinned by «Solo llenar vacíos» and is not counted in its confirm.
+    After a retry, the confirm still counts it: the preview shows what the next Auto sends
+    first.
+  - Rule checks on that column judge it as that week, over its own month's Sundays, in both
+    create and stored mode. That covers the picker, the warnings on seated members, and drag and
+    pick-then-place. So a «Sem 5» rule applies to it.
+  - No column is labelled «Fuera del alcance de Auto» any more, and the confirm has no clause
+    about Saturdays Auto cannot reach.
+  - Saturday minimums that cannot be met are named under Auto before the 31st line, one line per
+    reason.
 - **«Solo llenar vacíos»** (create mode, next to Auto; off by default, never remembered) makes
   Auto keep everything already on the board: occupied voice seats go to the solver as fixed,
   empty ones are filled around them, instruments are completed without moving anyone, FOH is
@@ -274,7 +300,10 @@ with a toolbar fallback if the card is no longer visible.
 - `ServicesPanel.tsx`: sources, capabilities, entry points, focus restoration.
 - `storedRoleReadModel.ts`: inventory admission and lossless translation.
 - `plannerSaveModel.ts`: full serializer and semantic reconciliation.
-- `serviceRuleContext.ts`: owning-Sunday rule context.
+- `serviceRuleContext.ts`: per-target rule context (`ruleContextForTarget`). A Sunday is its own
+  week. Any other Saturday takes the week of the Sunday after it, in that Sunday's month. The
+  trailing Saturday (`trailingSaturday`) is week `weeks + 1` of its own month, over its own
+  month's spine, with `owningSunday: null`.
 - `roleWriteOps.ts` and role routes: canonical members, bootstrap, topology.
 - `specialIdentityCoordinator.ts`: serialized special identity.
 - `moveGate.ts`: pre-placement move judgement (P1–P3, C1–C4) shared by drag

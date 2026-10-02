@@ -11,7 +11,7 @@ import { stubFetchWithHistory } from "./derivedHistoryHarness";
 type Schedule = NonNullable<SolveResponse["schedule"]>;
 export type Respond = (body: SolveRequest, call: number) => SolveResponse & { status?: number };
 
-/** Every week of the request, every seat empty. */
+/** Every week of the request, every seat empty; week `weeks + 1` (the trailing Saturday) has no Sunday. */
 export function emptySchedule(body: SolveRequest): Schedule {
   const out: Schedule = {};
   for (let w = 1; w <= body.weeks; w++) {
@@ -19,6 +19,9 @@ export function emptySchedule(body: SolveRequest): Schedule {
       Sunday: { Lead: [], BGV: [], Choir: [] },
       ...(body.weekends_with_saturday.includes(w) ? { Saturday: { Lead: [], BGV: [] } } : {}),
     };
+  }
+  if (body.weekends_with_saturday.includes(body.weeks + 1)) {
+    out[String(body.weeks + 1)] = { Saturday: { Lead: [], BGV: [] } };
   }
   return out;
 }

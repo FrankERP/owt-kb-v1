@@ -479,7 +479,7 @@ read of that history: checked, never throws, `{ ok: false }` on any failure, use
 hook, and by every Auto only while `SOLVER_SENDS_HISTORY` is true), `SOLVER_HISTORY_SOURCE`
 (`app/components/admin/solverHistorySource.ts` — the deployment-wide switch, `"derived"`; `"local"`
 is the rollback until D3), `SOLVER_SENDS_HISTORY` (same file — `false`: Auto sends `history: []`,
-ADR-0046; `true` is the rollback).
+ADR-0046; `true` is the rollback), `trailingSaturday`/`rolesOfPattern` (`app/components/admin/plannerModel.ts` — the ONE definition of the Saturday after the last Sunday, solver week `weeks + 1`, ADR-0048; and the ONE pattern → solver-roles map, mirroring the solver's `expand_pattern`, guarded by `patternRolesSync.test.ts`).
 Motion tokens are `--motion-*` /
 `--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and
