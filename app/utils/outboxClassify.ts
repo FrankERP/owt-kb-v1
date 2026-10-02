@@ -22,6 +22,9 @@ export const LINE_PREF: Record<LineKind, NotifyKind> = {
 export interface Line {
   kind: LineKind;
   serviceDate: string;
+  /** The service's role type. The classifiers leave it null on a proposal
+   * thread (`leadNotes`); the sweep sets `special_role` there when the proposal
+   * is for a special, so its header can name it. */
   roleType: string | null;
   before: string[];
   after: string[];

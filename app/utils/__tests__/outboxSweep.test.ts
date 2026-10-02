@@ -745,6 +745,21 @@ describe("sweepOutbox — a special names itself", () => {
       expect(subject()).toBe("Mensajes de la propuesta — Sábado 8 ago · Servicio especial");
     });
 
+    it("trusts the referenced service over a stale service_type, both ways", async () => {
+      // The two cannot disagree today (service_type is rewritten from the role on
+      // every save); if they ever do, the document the proposal points at wins.
+      world.roles = { r21: special("r21", "CAMP - Set 1", "09:00"), r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+      world.proposals = { p9: proposalFor({ service_type: "sunday", service_ref: { _type: "reference", _ref: "r21" } }) };
+      await sweepOutbox();
+      expect(subject()).toBe("Mensajes de la propuesta — Sábado 8 ago · CAMP - Set 1 · 09:00");
+
+      sendEmailMock.mockClear();
+      world.notices = [threadNotice()];
+      world.proposals = { p9: proposalFor({ service_type: "special", service_ref: { _type: "reference", _ref: "r2" } }) };
+      await sweepOutbox();
+      expect(subject()).toBe("Mensajes de la propuesta — Sábado 8 ago");
+    });
+
     it("leaves a weekend proposal's header exactly as it was", async () => {
       world.roles = { r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
       world.proposals = { p9: proposalFor({ service_type: "saturday", service_ref: { _type: "reference", _ref: "r2" } }) };
