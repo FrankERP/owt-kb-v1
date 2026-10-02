@@ -42,6 +42,7 @@ import "server-only";
 
 import { writeClient } from "@/sanity/lib/serverClient";
 import type { ServiceType } from "@/app/utils/assignmentEmail";
+import { serviceIdentity } from "@/app/utils/emailServiceLabel";
 import {
   notifyRolePublished,
   queuePublishedSetlistNotices,
@@ -310,6 +311,7 @@ export async function publishReady(body: unknown): Promise<CommitOutcome<Publish
         type: observation.roleType as ServiceType,
         date: observation.serviceDate,
         body: normalizeStoredSeats(observation.role),
+        ...serviceIdentity(observation.role),
       }))
       .filter((notice) => notice.recipients.length > 0),
   );

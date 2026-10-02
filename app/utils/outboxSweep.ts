@@ -42,6 +42,7 @@ import { writeClient } from "@/sanity/lib/serverClient";
 import { getAllowlist, isEmailAllowed, rolesForMember } from "./assignmentEmail";
 import { isDeliveryBlocked } from "./deliveryFirewall";
 import { SEND_CONCURRENCY, SEND_TIMEOUT_MS, sendEmail } from "./email";
+import { serviceIdentity } from "./emailServiceLabel";
 import { buildGroupedEmail } from "./notificationEmail";
 import { wantsNotification } from "./notifyPrefs";
 import { assignedMemberRefsQuery } from "./notifyTargets";
@@ -231,9 +232,10 @@ const SETLIST_RECIPIENTS_QUERY = assignedMemberRefsQuery(
 );
 
 /** One projection for both role-shaped notices: seats for `role`, songs for a
- * special-service `setlist`, and the publication/date state both classify on. */
+ * special-service `setlist`, the publication/date state both classify on, and a
+ * special's name and time for the email header. */
 const ROLE_QUERY = `*[_type == $roleType && _id == $roleId][0]{
-  _id, _type, published, week, date, Lead, BGVs, Chorus, instruments, foh_team, songs
+  _id, _type, published, week, date, service_name, time, Lead, BGVs, Chorus, instruments, foh_team, songs
 }`;
 
 const WEEKEND_SONGS_QUERY = `*[_type == $setlistType && week == $week][0].songs`;
@@ -351,6 +353,17 @@ async function fetchRole(notice: StoredNotice): Promise<Record<string, unknown> 
   return value;
 }
 
+/**
+ * A special's name and time ride on its line, read live like the date, so the
+ * email can tell same-day sets apart. Weekend roles carry neither and pass
+ * through untouched; a vanished role has none, and the header says «Servicio
+ * especial».
+ */
+function withServiceIdentity(line: Line, role: Record<string, unknown> | null): Line {
+  if (line.roleType !== "special_role") return line;
+  return { ...line, ...serviceIdentity(role) };
+}
+
 async function classifyRoleNotice(notice: StoredNotice, today: string): Promise<Pair[]> {
   const memberId = notice.memberId;
   if (!memberId) return [];
@@ -371,7 +384,7 @@ async function classifyRoleNotice(notice: StoredNotice, today: string): Promise<
     // owes its assignees "Ya no participas".
     published: role ? role.published !== false : true,
   });
-  return line ? [{ noticeId: notice._id, recipientId: memberId, line }] : [];
+  return line ? [{ noticeId: notice._id, recipientId: memberId, line: withServiceIdentity(line, role) }] : [];
 }
 
 async function liveSetlistRows(
@@ -406,14 +419,16 @@ async function classifySetlistNotice(notice: StoredNotice, today: string): Promi
     dateMatches: liveDate === notice.serviceDate,
   };
 
-  const changed = classifySetlist({ ...common, before: normalizeSnapshotRows(notice.before?.beforeSongs) });
+  const classified = classifySetlist({ ...common, before: normalizeSnapshotRows(notice.before?.beforeSongs) });
   // Nothing changed for the subject → nothing to introduce anybody to either.
-  if (!changed) return [];
+  if (!classified) return [];
+  const changed = withServiceIdentity(classified, role);
   // A recipient absent from `knownRecipients` is new to the subject and is
   // INTRODUCED ("Setlist listo") rather than sent a diff against a list they
   // never saw. The `role` kind needs no equivalent (its snapshot is that one
   // member's own seats) and `leadNotes` renders no diff at all.
-  const introduced = classifySetlist({ ...common, before: [] });
+  const introducedLine = classifySetlist({ ...common, before: [] });
+  const introduced = introducedLine ? withServiceIdentity(introducedLine, role) : null;
   const known = new Set(notice.knownRecipients ?? []);
   // The AUTHORITATIVE recipient set, re-read after the claim: a member added
   // five minutes after the setlist changed still gets the email (§1). Stage 2's

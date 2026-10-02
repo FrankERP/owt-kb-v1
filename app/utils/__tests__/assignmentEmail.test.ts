@@ -74,6 +74,29 @@ describe("buildAssignmentEmail", () => {
   });
 });
 
+describe("buildAssignmentEmail — a special names itself", () => {
+  it("puts the special's name and time in the subject and the body", () => {
+    const e = buildAssignmentEmail({
+      name: "Raúl", roles: ["Keys"], type: "special_role", date: "2026-10-03",
+      serviceName: "CAMP - Set 2", serviceTime: "09:00",
+    });
+    expect(e.subject).toBe("Asignación — Sábado 3 oct · CAMP - Set 2 · 09:00");
+    expect(e.html).toContain("Sábado 3 oct · CAMP - Set 2 · 09:00");
+    expect(e.subject).not.toContain("Servicio especial");
+  });
+
+  it("escapes an admin-typed name", () => {
+    const e = buildAssignmentEmail({ name: "Raúl", roles: ["Keys"], type: "special_role", date: "2026-10-03", serviceName: "<i>Set</i>" });
+    expect(e.html).toContain("&lt;i&gt;Set&lt;/i&gt;");
+    expect(e.html).not.toContain("<i>Set</i>");
+  });
+
+  it("keeps a weekend service's label as it was", () => {
+    expect(buildAssignmentEmail({ name: "Ana", roles: ["Líder"], type: "sunday_role", date: "2026-07-05" }).subject)
+      .toBe("Asignación — Domingo 5 jul");
+  });
+});
+
 describe("sendAssignmentEmails gating", () => {
   beforeEach(() => { sendEmailMock.mockReset(); fetchMock.mockReset(); process.env.EMAIL_ALLOWLIST = "frank@x.com"; });
   afterEach(() => { delete process.env.EMAIL_ALLOWLIST; });
@@ -171,5 +194,39 @@ describe("sendAssignmentEmailsBatch", () => {
     await sendAssignmentEmailsBatch([svcA, svcB]);
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
     expect(sendEmailMock.mock.calls[0][0].to).toBe("gaby@y.com");
+  });
+});
+
+describe("sendAssignmentEmailsBatch — same-day specials", () => {
+  beforeEach(() => { sendEmailMock.mockReset(); fetchMock.mockReset(); process.env.EMAIL_ALLOWLIST = "*"; });
+  afterEach(() => { delete process.env.EMAIL_ALLOWLIST; });
+
+  const set = (serviceName: string, serviceTime: string) => ({
+    type: "special_role" as const, date: "2026-10-03", serviceName, serviceTime,
+    body: { instruments: [{ instrument: "EG", personId: "m1" }] },
+  });
+
+  it("names each set and lists them in clock order, whatever order they were published in", async () => {
+    fetchMock.mockResolvedValue([{ _id: "m1", member_name: "Frank", email: "frank@x.com" }]);
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await sendAssignmentEmailsBatch([set("CAMP - Set 4", "18:30"), set("CAMP - Set 2", "09:00"), set("CAMP - Set 3", "12:30")]);
+
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+    const { subject, html } = sendEmailMock.mock.calls[0][0] as { subject: string; html: string };
+    expect(subject).toBe("Nuevas asignaciones — 3 servicios");
+    const at = (label: string) => html.indexOf(label);
+    expect(at("Sábado 3 oct · CAMP - Set 2 · 09:00")).toBeGreaterThan(-1);
+    expect(at("Sábado 3 oct · CAMP - Set 3 · 12:30")).toBeGreaterThan(at("CAMP - Set 2"));
+    expect(at("Sábado 3 oct · CAMP - Set 4 · 18:30")).toBeGreaterThan(at("CAMP - Set 3"));
+    expect(html).not.toContain("Servicio especial");
+  });
+
+  it("escapes an admin-typed name in the table", async () => {
+    fetchMock.mockResolvedValue([{ _id: "m1", member_name: "Frank", email: "frank@x.com" }]);
+    sendEmailMock.mockResolvedValue({ ok: true });
+    await sendAssignmentEmailsBatch([set("A & <B>", "09:00"), set("C", "10:00")]);
+    const { html } = sendEmailMock.mock.calls[0][0] as { html: string };
+    expect(html).toContain("A &amp; &lt;B&gt;");
+    expect(html).not.toContain("<B>");
   });
 });

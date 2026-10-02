@@ -28,6 +28,10 @@ export interface Line {
   songs?: OutboxSongRow[];
   beforeSongs?: OutboxSongRow[];
   notes?: string;
+  /** A special's name and time for the email header (`serviceIdentity`). Never
+   * set by the classifiers: the sweep attaches them from the live role. */
+  serviceName?: string;
+  serviceTime?: string;
 }
 
 /** Calendar-day comparison; both sides are already America/Mexico_City dates. */
