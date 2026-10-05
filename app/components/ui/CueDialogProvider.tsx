@@ -74,51 +74,58 @@ export function CueDialogProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  useEffect(() => {
+  // The page lock: body scroll off, app root `aria-hidden` + `inert`. Both
+  // halves are idempotent and keep what they found, so a lock taken inside
+  // another lock (a planner opened from a dialog) is handed back intact.
+  const engageLocks = useCallback(() => {
     const root = appRootRef.current;
-    if (layers.length > 0) {
-      if (originalOverflow.current === null) originalOverflow.current = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
+    if (originalOverflow.current === null) originalOverflow.current = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
 
-      if (root && originalAppAttrs.current === null) {
-        originalAppAttrs.current = {
-          ariaHidden: root.getAttribute("aria-hidden"),
-          inert: root.inert,
-        };
-      }
-      if (root) {
-        root.setAttribute("aria-hidden", "true");
-        root.inert = true;
-      }
-      return;
+    if (root && originalAppAttrs.current === null) {
+      originalAppAttrs.current = {
+        ariaHidden: root.getAttribute("aria-hidden"),
+        inert: root.inert,
+      };
     }
+    if (root) {
+      root.setAttribute("aria-hidden", "true");
+      root.inert = true;
+    }
+  }, []);
 
+  const releaseLocks = useCallback(() => {
     if (originalOverflow.current !== null) {
       document.body.style.overflow = originalOverflow.current;
       originalOverflow.current = null;
     }
 
+    const root = appRootRef.current;
     if (root && originalAppAttrs.current) {
       if (originalAppAttrs.current.ariaHidden === null) root.removeAttribute("aria-hidden");
       else root.setAttribute("aria-hidden", originalAppAttrs.current.ariaHidden);
       root.inert = originalAppAttrs.current.inert;
       originalAppAttrs.current = null;
     }
-  }, [layers.length]);
+  }, []);
+
+  // Reconciles the lock with the registered layers after every change. The last
+  // close already released it synchronously (see `registerLayer`), so on that
+  // path this is a no-op; it is what re-takes the lock when a close and an open
+  // land in one batch, which leaves the COUNT unchanged — hence `[layers]`, not
+  // `[layers.length]`. It moves no focus.
+  useEffect(() => {
+    if (layersRef.current.length > 0) engageLocks();
+    else releaseLocks();
+  }, [layers, engageLocks, releaseLocks]);
 
   useEffect(() => {
     return () => {
-      if (originalOverflow.current !== null) document.body.style.overflow = originalOverflow.current;
-      const root = appRootRef.current;
-      if (root && originalAppAttrs.current) {
-        if (originalAppAttrs.current.ariaHidden === null) root.removeAttribute("aria-hidden");
-        else root.setAttribute("aria-hidden", originalAppAttrs.current.ariaHidden);
-        root.inert = originalAppAttrs.current.inert;
-      }
+      releaseLocks();
       layersRef.current = [];
       setLayers([]);
     };
-  }, []);
+  }, [releaseLocks]);
 
   const focusInsideLayer = useCallback((id: string) => {
     const layer = layersRef.current.find((item) => item.id === id);
@@ -138,6 +145,13 @@ export function CueDialogProvider({ children }: { children: React.ReactNode }) {
       const next = before.filter((item) => item.id !== layer.id);
       layersRef.current = next;
       setLayers(next.map((item) => item.id));
+      // The last layer out lifts the lock NOW, before the focus frame is
+      // scheduled. Left to the effect, the release waited on React's commit
+      // while the frame raced it, and when the frame won the app root was still
+      // `inert` — a browser ignores `focus()` there, so the opener never got
+      // focus back and it stayed on <body>. A nested close keeps the lock: the
+      // parent is still open, and its shell lives in the portal, outside the root.
+      if (next.length === 0) releaseLocks();
 
       const parent = next[next.length - 1];
       window.requestAnimationFrame(() => {
@@ -154,7 +168,12 @@ export function CueDialogProvider({ children }: { children: React.ReactNode }) {
         focusTarget(document.querySelector<HTMLElement>("main[data-route-main]"));
       });
     };
-  }, []);
+    // `releaseLocks` is stable (`useCallback` with no deps), so `registerLayer`
+    // keeps one identity for the provider's life. It must: CueDialog's layer
+    // registration depends on it, and a new identity would re-run that effect —
+    // whose cleanup is the unregister — and throw focus out of an open dialog
+    // (ADR-0034).
+  }, [releaseLocks]);
 
   const isTopLayer = useCallback((id: string) => layersRef.current[layersRef.current.length - 1]?.id === id, []);
 
