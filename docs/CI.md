@@ -181,6 +181,78 @@ feature branch (local gates green)
 pass; it says nothing about whether the change looks right to a human on dev.
 Those are different questions and the gate only answers one of them.
 
+### When the production build fails after the merge
+
+A green `gates` run and a green `preview` build do not guarantee the production
+build. If Vercel's build of the merge commit ends in `ERROR`, **production is
+not affected**: the alias never moves to a failed deployment, so
+`owt-backstage.vercel.app` keeps serving the previous release. That is also why
+the alias check in the flow above is the step that catches it — a merged PR is
+not a release until `alias` contains the production domain *and*
+`meta.githubCommitSha` is the merge commit.
+
+**The one seen so far: the Google font fetch (2026-10-05).** PR #127's merge
+(`095e5033`) failed in `next build` with
+
+```
+[next]/internal/font/google/urbanist_….module.css
+Module not found: Can't resolve '@vercel/turbopack-next/internal/font/google/font'
+next/font/google queries have exactly one entry
+```
+
+with the import trace ending in `./app/(admin)/layout.tsx` (Urbanist is declared
+in `app/brandFonts.ts`, which the layouts import). The diff touched only
+`CueDialogProvider.tsx` and its test, and the identical tree had built `READY` on
+`preview` 20 minutes earlier. `next/font/google` downloads the font files from
+Google at build time, so that step can fail on its own, whatever the commit
+contains. One redeploy of the failed deployment, same commit, went `READY` and
+the alias moved.
+
+**What caused it is not known, and the fix does not tell you.** The failed build
+had restored its build cache from a previous deployment; the redeploy that
+worked ran **without** cache — its log says *"Skipping build cache, deployment
+was triggered without cache"*. That redeploy was `POST /v13/deployments` with the
+failed `deploymentId`, `target: "production"` and the query `forceNew=1`; the
+cache skip most likely came from `forceNew=1`, which is what the CLI's `--force`
+sends, and Vercel documents `--force` as skipping the build cache (its
+`--with-cache` keeps it). So the retry changed two things at once — a fresh
+download and no cache — and either could have been the problem: a failed fetch
+from Google, or a bad font entry in the restored cache. Write it down if it
+happens again with a cache-backed retry succeeding or failing; that is the
+observation that separates the two.
+
+**Recognising it** — all of these, not some:
+
+- every error sits under `[next]/internal/font/google/`;
+- `git diff --stat <SHA production serves> <failed SHA>` — the release diff,
+  not the PR's, since production may be several merges behind — touches none of
+  `app/brandFonts.ts`, any `layout.tsx`, `next.config.mjs`, `package.json`,
+  `package-lock.json` (a `next` bump changes the font loader) or `vercel.json`;
+- the same tree built `READY` on `preview`.
+
+Anything less is a real failure until shown otherwise. A Vercel project-setting
+change (Node version, environment variables) never shows up in a diff, so check
+the project's recent settings too before calling it transient.
+
+**What to do:**
+
+1. Confirm production is still on the previous release (`get_deployment` on the
+   production domain: old SHA, `READY`) — then nothing is on fire.
+2. Read the failed deployment's build log (`list_deployment_events`); check the
+   signature above.
+3. **Only if the failed commit is still `main`'s HEAD**, redeploy that
+   deployment **once**, same commit, without build cache: the dashboard's
+   Redeploy with «Use existing Build Cache» unchecked, or the API call above
+   *including* `forceNew=1`. If a later merge has deployed, it already contains
+   this change — never redeploy an older commit to production. A production
+   redeploy is never skipped by the `ignoreCommand`: anything with
+   `VERCEL_ENV=production` builds (see below).
+4. Verify the alias and the SHA as usual. Treat a second failure as not
+   transient: stop and investigate.
+
+**Not** an empty commit or a revert-and-reapply to "kick" the build: on `main`
+each is a release of its own, and needs a PR and `gates` to get there.
+
 ## Which branches Vercel builds
 
 Only three refs spend a Vercel build: **`main`** (production), **`preview`**
