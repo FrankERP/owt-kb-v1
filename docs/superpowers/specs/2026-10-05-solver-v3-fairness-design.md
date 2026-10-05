@@ -1,7 +1,7 @@
 # Solver v3: cross-month fairness, cadence leads and 1–2-month runs — parent design (roadmap)
 
-**Date:** 2026-10-05 · **Status:** `DRAFT` (approved by Frank section by section in chat on 2026-10-05; the
-written text awaits his read) · **Risk tier of this parent:** standard (it owns the shared policy and
+**Date:** 2026-10-05 · **Status:** `APPROVED` by Frank (sections in chat, then the written text at
+`d497749f`, both on 2026-10-05) · **Risk tier of this parent:** standard (it owns the shared policy and
 the contracts between children; each child carries its own tier, §11).
 
 **Contracts, not prescriptions.** This document states what must be true and what must never happen.
