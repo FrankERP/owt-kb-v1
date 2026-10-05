@@ -295,19 +295,26 @@ describe("CueDialog motion", () => {
     // `requestAnimationFrame` and releases the lock in the `[layers.length]`
     // effect after `setLayers` commits — two macrotasks with no fixed order, so
     // under CI load the focus can land first (PR #125's `gates` run, 2026-10-02).
+    // In a browser that frame-first order also LOSES focus — the app root is
+    // still `inert` when the frame runs — but jsdom does not implement `inert`,
+    // so no test here can see it; it is a provider bug, not this test's to pin.
     await waitFor(() => expect(document.body.style.overflow).toBe(""));
   });
 
-  it("releases the scroll lock even when the focus-restore frame runs first", async () => {
+  it("releases the scroll lock and the app root even when the focus-restore frame runs first", async () => {
     // Forces the order CI hit by chance: the frame fires inside the unregister,
-    // before React commits the `setLayers` that releases the lock. The lock must
-    // still come off — what it may not do is depend on which task wins.
+    // before React commits the `setLayers` that releases the lock. The lock and
+    // the app root's `aria-hidden`/`inert` must still come off, whichever task
+    // wins. Focus is deliberately NOT asserted: in a browser this order leaves it
+    // on <body> (the root is still inert when the frame runs), and jsdom, which
+    // ignores `inert`, would report a restore that a real browser does not do.
     const { rerender } = render(<Harness open={false} />);
     await act(async () => {});
     screen.getByTestId("trigger").focus();
     rerender(<Harness open />);
     await act(async () => {});
     expect(document.body.style.overflow).toBe("hidden");
+    expect(document.querySelector("[data-cue-app-root]")!.getAttribute("aria-hidden")).toBe("true");
     const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
       cb(0);
       return 0;
@@ -315,8 +322,11 @@ describe("CueDialog motion", () => {
     try {
       rerender(<Harness open={false} />);
       await waitFor(() => expect(document.querySelector("[data-cue-layer]")).toBeNull());
-      await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("trigger")));
+      expect(raf).toHaveBeenCalled(); // the forced order actually happened
       await waitFor(() => expect(document.body.style.overflow).toBe(""));
+      const root = document.querySelector<HTMLElement & { inert?: boolean }>("[data-cue-app-root]")!;
+      await waitFor(() => expect(root.getAttribute("aria-hidden")).toBeNull());
+      expect(root.inert).toBeFalsy();
     } finally {
       raf.mockRestore();
     }
