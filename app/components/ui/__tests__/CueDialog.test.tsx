@@ -274,6 +274,27 @@ describe("CueDialog focus satellites", () => {
  * the next frame rather than after EXIT_MS — the assertions below pin the
  * ORDER (mounted → unregistered → focus restored), never the duration.
  */
+/**
+ * jsdom does not implement `inert`: `focus()` on an element inside an inert
+ * subtree succeeds there, while a browser ignores it. Restore the browser rule
+ * for the test that needs it, so a focus restore that would silently fail in
+ * production fails here too.
+ */
+function insideInert(el: HTMLElement): boolean {
+  for (let node: HTMLElement | null = el; node; node = node.parentElement) {
+    if (node.inert) return true;
+  }
+  return false;
+}
+
+function emulateInertFocus() {
+  const realFocus = HTMLElement.prototype.focus;
+  return vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (this: HTMLElement, options?: FocusOptions) {
+    if (insideInert(this)) return;
+    realFocus.call(this, options);
+  });
+}
+
 describe("CueDialog motion", () => {
   it("keeps the dialog mounted until the exit completes, then restores focus to the opener", async () => {
     const { rerender } = render(<Harness open={false} />);
@@ -292,29 +313,27 @@ describe("CueDialog motion", () => {
     await waitFor(() => expect(document.querySelector("[data-cue-layer]")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("trigger")));
     // Awaited, not asserted outright: the unregister restores focus in a
-    // `requestAnimationFrame` and releases the lock in the `[layers.length]`
-    // effect after `setLayers` commits — two macrotasks with no fixed order, so
-    // under CI load the focus can land first (PR #125's `gates` run, 2026-10-02).
-    // In a browser that frame-first order also LOSES focus — the app root is
-    // still `inert` when the frame runs — but jsdom does not implement `inert`,
-    // so no test here can see it; it is a provider bug, not this test's to pin.
+    // `requestAnimationFrame`, and the lock comes off in that frame or in the
+    // effect after `setLayers` commits, whichever runs first — two macrotasks
+    // with no fixed order, so under CI load the focus can land before the effect
+    // (PR #125's `gates` run, 2026-10-02). (That frame-first order used to LOSE
+    // focus in a browser, the app root still being `inert` when the frame ran;
+    // the frame now lifts the root before it moves focus. jsdom ignores `inert`,
+    // so the guard for it is the inert-emulating test below, not this one.)
     await waitFor(() => expect(document.body.style.overflow).toBe(""));
   });
 
-  it("releases the scroll lock and the app root even when the focus-restore frame runs first", async () => {
-    // Forces the order CI hit by chance: the frame fires inside the unregister,
-    // before React commits the `setLayers` that releases the lock. The lock and
-    // the app root's `aria-hidden`/`inert` must still come off, whichever task
-    // wins. Focus is deliberately NOT asserted: in a browser this order leaves it
-    // on <body> (the root is still inert when the frame runs), and jsdom, which
-    // ignores `inert`, would report a restore that a real browser does not do.
+  it("returns focus to the opener even when the focus-restore frame runs first, under browser inert rules", async () => {
+    // The production bug the forced order exposed: the frame fired while the app
+    // root was still `inert`, so a browser ignored every `focus()` the restore
+    // tried and focus stayed on <body>. With `inert` emulated, that is what this
+    // test sees unless the provider lifts the root before the frame runs.
     const { rerender } = render(<Harness open={false} />);
     await act(async () => {});
     screen.getByTestId("trigger").focus();
     rerender(<Harness open />);
     await act(async () => {});
-    expect(document.body.style.overflow).toBe("hidden");
-    expect(document.querySelector("[data-cue-app-root]")!.getAttribute("aria-hidden")).toBe("true");
+    const focus = emulateInertFocus();
     const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
       cb(0);
       return 0;
@@ -322,14 +341,153 @@ describe("CueDialog motion", () => {
     try {
       rerender(<Harness open={false} />);
       await waitFor(() => expect(document.querySelector("[data-cue-layer]")).toBeNull());
-      expect(raf).toHaveBeenCalled(); // the forced order actually happened
+      // Awaited: the layer leaves the DOM at commit, the unregister runs in the
+      // passive flush after it.
+      await waitFor(() => expect(raf).toHaveBeenCalled());
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("trigger")));
+    } finally {
+      raf.mockRestore();
+      focus.mockRestore();
+    }
+  });
+
+  it("releases the scroll lock and the app root even when the focus-restore frame runs first", async () => {
+    // Forces the order CI hit by chance: the frame fires inside the unregister,
+    // before React commits the `setLayers`. The lock and the app root's
+    // `aria-hidden`/`inert` must still come off, whichever task wins. Focus is
+    // asserted by the inert-emulating test above, not here: jsdom ignores
+    // `inert`, so a focus check in this test would pass whatever the root held.
+    const { rerender } = render(<Harness open={false} />);
+    await act(async () => {});
+    screen.getByTestId("trigger").focus();
+    rerender(<Harness open />);
+    await act(async () => {});
+    const root = document.querySelector<HTMLElement>("[data-cue-app-root]")!;
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(root.getAttribute("aria-hidden")).toBe("true");
+    expect(root.inert).toBe(true);
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    try {
+      rerender(<Harness open={false} />);
+      await waitFor(() => expect(document.querySelector("[data-cue-layer]")).toBeNull());
+      await waitFor(() => expect(raf).toHaveBeenCalled()); // the forced order actually happened
       await waitFor(() => expect(document.body.style.overflow).toBe(""));
-      const root = document.querySelector<HTMLElement & { inert?: boolean }>("[data-cue-app-root]")!;
       await waitFor(() => expect(root.getAttribute("aria-hidden")).toBeNull());
       expect(root.inert).toBeFalsy();
     } finally {
       raf.mockRestore();
     }
+  });
+
+  it("keeps the page locked when one dialog unmounts and another mounts in the same commit", async () => {
+    // A keyed swap: A's unregister and B's register land in one passive flush,
+    // so the layer COUNT goes 1 → 1 and B is registered before A's focus frame
+    // can run. The lock must hold throughout — the frame releases only with no
+    // layer registered — so A's restore, which aims at its opener behind B, is
+    // ignored by the inert root and focus stays in B. A's frame is held and run
+    // by hand AFTER the swap commits, the order a browser gives it, with `inert`
+    // emulated. "Throughout" is checked, not just the end state: `rerender` runs
+    // inside `act`, so a lock dropped in the swap's flush and re-taken by the
+    // provider's next render would look intact by the first assertion. An
+    // observer records every lock write; a re-take after a drop shows up as a
+    // write whose OLD value was unlocked.
+    function SwapHarness({ which }: { which: "a" | "b" }) {
+      return (
+        <MotionProvider>
+          <CueDialogProvider>
+            <button data-testid="trigger">Abrir</button>
+            <CueDialog key={which} open title={which === "a" ? "Primero" : "Segundo"} onDismiss={vi.fn()}>
+              <button>Aceptar</button>
+            </CueDialog>
+          </CueDialogProvider>
+        </MotionProvider>
+      );
+    }
+    const { rerender } = render(<SwapHarness which="a" />);
+    await act(async () => {});
+    const root = document.querySelector<HTMLElement>("[data-cue-app-root]")!;
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(root.inert).toBe(true);
+
+    const focus = emulateInertFocus();
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    const rootWrites: (string | null)[] = [];
+    const bodyWrites: (string | null)[] = [];
+    const record = (records: MutationRecord[]) => {
+      for (const r of records) (r.target === root ? rootWrites : bodyWrites).push(r.oldValue);
+    };
+    const observer = new MutationObserver(record);
+    observer.observe(root, { attributes: true, attributeOldValue: true, attributeFilter: ["aria-hidden"] });
+    observer.observe(document.body, { attributes: true, attributeOldValue: true, attributeFilter: ["style"] });
+    try {
+      rerender(<SwapHarness which="b" />);
+      await act(async () => {});
+      const second = screen.getByRole("dialog", { name: "Segundo" });
+      expect(screen.queryByRole("dialog", { name: "Primero" })).toBeNull();
+      await waitFor(() => expect(second.contains(document.activeElement)).toBe(true));
+      expect(frames.length).toBeGreaterThan(0); // A's focus frame is pending
+
+      act(() => {
+        for (const frame of frames.splice(0)) frame(0);
+      });
+      await act(async () => {});
+
+      expect(document.body.style.overflow).toBe("hidden");
+      expect(root.getAttribute("aria-hidden")).toBe("true");
+      expect(root.inert).toBe(true);
+      expect(second.contains(document.activeElement)).toBe(true);
+      record(observer.takeRecords());
+      expect(rootWrites).not.toContain(null);
+      expect(bodyWrites.every((old) => old?.includes("hidden"))).toBe(true);
+    } finally {
+      observer.disconnect();
+      raf.mockRestore();
+      focus.mockRestore();
+    }
+  });
+
+  it("re-takes the lock when a release lands between a swap's close and open", async () => {
+    // The forced frame-first order inside a swap: A's frame runs within its
+    // unregister, before B registers, and lifts the lock for an empty stack.
+    // B's register then lands in the same batch as A's unregister, so the layer
+    // COUNT never changes — only an effect keyed on the layers themselves, not
+    // on their count, puts the lock back for B.
+    function SwapHarness({ which }: { which: "a" | "b" }) {
+      return (
+        <MotionProvider>
+          <CueDialogProvider>
+            <CueDialog key={which} open title={which === "a" ? "Primero" : "Segundo"} onDismiss={vi.fn()}>
+              <button>Aceptar</button>
+            </CueDialog>
+          </CueDialogProvider>
+        </MotionProvider>
+      );
+    }
+    const { rerender } = render(<SwapHarness which="a" />);
+    await act(async () => {});
+    const root = document.querySelector<HTMLElement>("[data-cue-app-root]")!;
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    try {
+      rerender(<SwapHarness which="b" />);
+      await act(async () => {});
+      await waitFor(() => expect(raf).toHaveBeenCalled());
+    } finally {
+      raf.mockRestore();
+    }
+    expect(screen.getByRole("dialog", { name: "Segundo" })).toBeTruthy();
+    expect(document.body.style.overflow).toBe("hidden");
+    expect(root.getAttribute("aria-hidden")).toBe("true");
+    expect(root.inert).toBe(true);
   });
 
   it("renders no Cue eyebrow above the title", () => {
