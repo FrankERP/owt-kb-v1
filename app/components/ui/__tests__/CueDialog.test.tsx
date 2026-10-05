@@ -389,7 +389,11 @@ describe("CueDialog motion", () => {
     // layer registered — so A's restore, which aims at its opener behind B, is
     // ignored by the inert root and focus stays in B. A's frame is held and run
     // by hand AFTER the swap commits, the order a browser gives it, with `inert`
-    // emulated so a page that let go would show here as focus on the trigger.
+    // emulated. "Throughout" is checked, not just the end state: `rerender` runs
+    // inside `act`, so a lock dropped in the swap's flush and re-taken by the
+    // provider's next render would look intact by the first assertion. An
+    // observer records every lock write; a re-take after a drop shows up as a
+    // write whose OLD value was unlocked.
     function SwapHarness({ which }: { which: "a" | "b" }) {
       return (
         <MotionProvider>
@@ -414,6 +418,14 @@ describe("CueDialog motion", () => {
       frames.push(cb);
       return frames.length;
     });
+    const rootWrites: (string | null)[] = [];
+    const bodyWrites: (string | null)[] = [];
+    const record = (records: MutationRecord[]) => {
+      for (const r of records) (r.target === root ? rootWrites : bodyWrites).push(r.oldValue);
+    };
+    const observer = new MutationObserver(record);
+    observer.observe(root, { attributes: true, attributeOldValue: true, attributeFilter: ["aria-hidden"] });
+    observer.observe(document.body, { attributes: true, attributeOldValue: true, attributeFilter: ["style"] });
     try {
       rerender(<SwapHarness which="b" />);
       await act(async () => {});
@@ -431,7 +443,11 @@ describe("CueDialog motion", () => {
       expect(root.getAttribute("aria-hidden")).toBe("true");
       expect(root.inert).toBe(true);
       expect(second.contains(document.activeElement)).toBe(true);
+      record(observer.takeRecords());
+      expect(rootWrites).not.toContain(null);
+      expect(bodyWrites.every((old) => old?.includes("hidden"))).toBe(true);
     } finally {
+      observer.disconnect();
       raf.mockRestore();
       focus.mockRestore();
     }

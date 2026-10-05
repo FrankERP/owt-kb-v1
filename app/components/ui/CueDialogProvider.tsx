@@ -112,9 +112,10 @@ export function CueDialogProvider({ children }: { children: React.ReactNode }) {
 
   // Reconciles the lock with the registered layers after every change. It is the
   // release that does not wait on a frame (a hidden tab runs none), and it reads
-  // `layersRef`, so a close and an open that land in one batch — the COUNT
-  // unchanged — still leave the lock matching what is registered: hence
-  // `[layers]`, not `[layers.length]`. It moves no focus.
+  // `layersRef`. Keyed on `[layers]`, not `[layers.length]`: if a release lands
+  // between a close and an open whose state updates React batches together, the
+  // COUNT never changes, and only a run on the layers themselves re-takes the
+  // lock. It moves no focus.
   useEffect(() => {
     if (layersRef.current.length > 0) engageLocks();
     else releaseLocks();
