@@ -75,8 +75,9 @@ export function CueDialogProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // The page lock: body scroll off, app root `aria-hidden` + `inert`. Both
-  // halves are idempotent and keep what they found, so a lock taken inside
-  // another lock (a planner opened from a dialog) is handed back intact.
+  // halves are idempotent and keep what they found, so a dialog raised over a
+  // surface that already locked the body (the full-screen planner) hands that
+  // lock back intact.
   const engageLocks = useCallback(() => {
     const root = appRootRef.current;
     if (originalOverflow.current === null) originalOverflow.current = document.body.style.overflow;
@@ -109,11 +110,11 @@ export function CueDialogProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Reconciles the lock with the registered layers after every change. The last
-  // close already released it synchronously (see `registerLayer`), so on that
-  // path this is a no-op; it is what re-takes the lock when a close and an open
-  // land in one batch, which leaves the COUNT unchanged — hence `[layers]`, not
-  // `[layers.length]`. It moves no focus.
+  // Reconciles the lock with the registered layers after every change. It is the
+  // release that does not wait on a frame (a hidden tab runs none), and it reads
+  // `layersRef`, so a close and an open that land in one batch — the COUNT
+  // unchanged — still leave the lock matching what is registered: hence
+  // `[layers]`, not `[layers.length]`. It moves no focus.
   useEffect(() => {
     if (layersRef.current.length > 0) engageLocks();
     else releaseLocks();
@@ -145,16 +146,21 @@ export function CueDialogProvider({ children }: { children: React.ReactNode }) {
       const next = before.filter((item) => item.id !== layer.id);
       layersRef.current = next;
       setLayers(next.map((item) => item.id));
-      // The last layer out lifts the lock NOW, before the focus frame is
-      // scheduled. Left to the effect, the release waited on React's commit
-      // while the frame raced it, and when the frame won the app root was still
-      // `inert` — a browser ignores `focus()` there, so the opener never got
-      // focus back and it stayed on <body>. A nested close keeps the lock: the
-      // parent is still open, and its shell lives in the portal, outside the root.
-      if (next.length === 0) releaseLocks();
 
       const parent = next[next.length - 1];
       window.requestAnimationFrame(() => {
+        // With no layer left, the frame lifts the lock itself before it moves
+        // focus. The effect also releases it, after React commits `setLayers`,
+        // but nothing orders that commit against this frame: when the frame won,
+        // the app root was still `inert`, a browser ignored every `focus()`
+        // below, and focus fell to <body>. Checked HERE, not in the unregister:
+        // when one dialog unmounts and another mounts in the same commit, the
+        // newcomer registers in that same passive flush, before any frame — a
+        // release in the unregister would unlock the page under it until the
+        // provider re-rendered. A nested close keeps the lock: the parent is
+        // still registered, and its shell lives in the portal, outside the root.
+        if (layersRef.current.length === 0) releaseLocks();
+
         if (parent) {
           const parentFallback = parent.fallbackRef?.current ?? parent.shellRef?.current ?? null;
           if (focusTarget(parentFallback)) return;

@@ -313,13 +313,13 @@ describe("CueDialog motion", () => {
     await waitFor(() => expect(document.querySelector("[data-cue-layer]")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("trigger")));
     // Awaited, not asserted outright: the unregister restores focus in a
-    // `requestAnimationFrame` and releases the lock in the `[layers.length]`
-    // effect after `setLayers` commits — two macrotasks with no fixed order, so
-    // under CI load the focus can land first (PR #125's `gates` run, 2026-10-02).
-    // (That frame-first order used to LOSE focus in a browser, the app root
-    // still being `inert` when the frame ran; the provider now lifts the root
-    // first. jsdom ignores `inert`, so the guard for it is the inert-emulating
-    // test below, not this one.)
+    // `requestAnimationFrame`, and the lock comes off in that frame or in the
+    // effect after `setLayers` commits, whichever runs first — two macrotasks
+    // with no fixed order, so under CI load the focus can land before the effect
+    // (PR #125's `gates` run, 2026-10-02). (That frame-first order used to LOSE
+    // focus in a browser, the app root still being `inert` when the frame ran;
+    // the frame now lifts the root before it moves focus. jsdom ignores `inert`,
+    // so the guard for it is the inert-emulating test below, not this one.)
     await waitFor(() => expect(document.body.style.overflow).toBe(""));
   });
 
@@ -341,7 +341,9 @@ describe("CueDialog motion", () => {
     try {
       rerender(<Harness open={false} />);
       await waitFor(() => expect(document.querySelector("[data-cue-layer]")).toBeNull());
-      expect(raf).toHaveBeenCalled();
+      // Awaited: the layer leaves the DOM at commit, the unregister runs in the
+      // passive flush after it.
+      await waitFor(() => expect(raf).toHaveBeenCalled());
       await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("trigger")));
     } finally {
       raf.mockRestore();
@@ -371,7 +373,7 @@ describe("CueDialog motion", () => {
     try {
       rerender(<Harness open={false} />);
       await waitFor(() => expect(document.querySelector("[data-cue-layer]")).toBeNull());
-      expect(raf).toHaveBeenCalled(); // the forced order actually happened
+      await waitFor(() => expect(raf).toHaveBeenCalled()); // the forced order actually happened
       await waitFor(() => expect(document.body.style.overflow).toBe(""));
       await waitFor(() => expect(root.getAttribute("aria-hidden")).toBeNull());
       expect(root.inert).toBeFalsy();
@@ -381,11 +383,13 @@ describe("CueDialog motion", () => {
   });
 
   it("keeps the page locked when one dialog unmounts and another mounts in the same commit", async () => {
-    // A keyed swap: A's unregister and B's register land in one batch, so the
-    // layer COUNT goes 1 → 1. The last-layer-out release fires synchronously
-    // inside A's unregister, so only an effect keyed on the layers themselves
-    // re-takes the lock for B; one keyed on the count never re-runs and leaves B
-    // open over a scrollable, focusable page.
+    // A keyed swap: A's unregister and B's register land in one passive flush,
+    // so the layer COUNT goes 1 → 1 and B is registered before A's focus frame
+    // can run. The lock must hold throughout — the frame releases only with no
+    // layer registered — so A's restore, which aims at its opener behind B, is
+    // ignored by the inert root and focus stays in B. A's frame is held and run
+    // by hand AFTER the swap commits, the order a browser gives it, with `inert`
+    // emulated so a page that let go would show here as focus on the trigger.
     function SwapHarness({ which }: { which: "a" | "b" }) {
       return (
         <MotionProvider>
@@ -404,10 +408,67 @@ describe("CueDialog motion", () => {
     expect(document.body.style.overflow).toBe("hidden");
     expect(root.inert).toBe(true);
 
-    rerender(<SwapHarness which="b" />);
+    const focus = emulateInertFocus();
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
+      frames.push(cb);
+      return frames.length;
+    });
+    try {
+      rerender(<SwapHarness which="b" />);
+      await act(async () => {});
+      const second = screen.getByRole("dialog", { name: "Segundo" });
+      expect(screen.queryByRole("dialog", { name: "Primero" })).toBeNull();
+      await waitFor(() => expect(second.contains(document.activeElement)).toBe(true));
+      expect(frames.length).toBeGreaterThan(0); // A's focus frame is pending
+
+      act(() => {
+        for (const frame of frames.splice(0)) frame(0);
+      });
+      await act(async () => {});
+
+      expect(document.body.style.overflow).toBe("hidden");
+      expect(root.getAttribute("aria-hidden")).toBe("true");
+      expect(root.inert).toBe(true);
+      expect(second.contains(document.activeElement)).toBe(true);
+    } finally {
+      raf.mockRestore();
+      focus.mockRestore();
+    }
+  });
+
+  it("re-takes the lock when a release lands between a swap's close and open", async () => {
+    // The forced frame-first order inside a swap: A's frame runs within its
+    // unregister, before B registers, and lifts the lock for an empty stack.
+    // B's register then lands in the same batch as A's unregister, so the layer
+    // COUNT never changes — only an effect keyed on the layers themselves, not
+    // on their count, puts the lock back for B.
+    function SwapHarness({ which }: { which: "a" | "b" }) {
+      return (
+        <MotionProvider>
+          <CueDialogProvider>
+            <CueDialog key={which} open title={which === "a" ? "Primero" : "Segundo"} onDismiss={vi.fn()}>
+              <button>Aceptar</button>
+            </CueDialog>
+          </CueDialogProvider>
+        </MotionProvider>
+      );
+    }
+    const { rerender } = render(<SwapHarness which="a" />);
     await act(async () => {});
+    const root = document.querySelector<HTMLElement>("[data-cue-app-root]")!;
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    try {
+      rerender(<SwapHarness which="b" />);
+      await act(async () => {});
+      await waitFor(() => expect(raf).toHaveBeenCalled());
+    } finally {
+      raf.mockRestore();
+    }
     expect(screen.getByRole("dialog", { name: "Segundo" })).toBeTruthy();
-    expect(screen.queryByRole("dialog", { name: "Primero" })).toBeNull();
     expect(document.body.style.overflow).toBe("hidden");
     expect(root.getAttribute("aria-hidden")).toBe("true");
     expect(root.inert).toBe(true);
