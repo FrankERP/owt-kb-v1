@@ -291,7 +291,35 @@ describe("CueDialog motion", () => {
     expect(document.querySelector("[data-cue-layer]")).not.toBeNull();
     await waitFor(() => expect(document.querySelector("[data-cue-layer]")).toBeNull());
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("trigger")));
-    expect(document.body.style.overflow).toBe("");
+    // Awaited, not asserted outright: the unregister restores focus in a
+    // `requestAnimationFrame` and releases the lock in the `[layers.length]`
+    // effect after `setLayers` commits — two macrotasks with no fixed order, so
+    // under CI load the focus can land first (PR #125's `gates` run, 2026-10-02).
+    await waitFor(() => expect(document.body.style.overflow).toBe(""));
+  });
+
+  it("releases the scroll lock even when the focus-restore frame runs first", async () => {
+    // Forces the order CI hit by chance: the frame fires inside the unregister,
+    // before React commits the `setLayers` that releases the lock. The lock must
+    // still come off — what it may not do is depend on which task wins.
+    const { rerender } = render(<Harness open={false} />);
+    await act(async () => {});
+    screen.getByTestId("trigger").focus();
+    rerender(<Harness open />);
+    await act(async () => {});
+    expect(document.body.style.overflow).toBe("hidden");
+    const raf = vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
+      cb(0);
+      return 0;
+    });
+    try {
+      rerender(<Harness open={false} />);
+      await waitFor(() => expect(document.querySelector("[data-cue-layer]")).toBeNull());
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId("trigger")));
+      await waitFor(() => expect(document.body.style.overflow).toBe(""));
+    } finally {
+      raf.mockRestore();
+    }
   });
 
   it("renders no Cue eyebrow above the title", () => {
