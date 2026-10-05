@@ -1,7 +1,8 @@
 # Solver v3: cross-month fairness, cadence leads and 1–2-month runs — parent design (roadmap)
 
 **Date:** 2026-10-05 · **Status:** `APPROVED` by Frank (sections in chat, then the written text at
-`d497749f`, both on 2026-10-05) · **Risk tier of this parent:** standard (it owns the shared policy and
+`d497749f`, both on 2026-10-05); amendments A1–A26 (§3) added the same day after writing the
+children — technical contracts, no policy change · **Risk tier of this parent:** standard (it owns the shared policy and
 the contracts between children; each child carries its own tier, §11).
 
 **Contracts, not prescriptions.** This document states what must be true and what must never happen.
@@ -109,6 +110,41 @@ These change four sentences of the design approved in chat; each was tested on r
 | X2 | The compensation Saturday applies only in an «off» month **in which she led no Sunday** (e.g. a pinned Sunday in an off month cancels it). | A pinned off-month Sunday otherwise earned both (`f_final-stress.md` §1). |
 | X3 | «At most 1 Saturday lead per month» applies to **everyone**, cadence members included. | With D11 the cadence members are ordinary SL members; without the cap they led 2 Saturdays in a month 1–4 times a year (V5). |
 | X4 | Under the 3-month window, an excess that pins force is **forgiven when it leaves the window, not repaid**. Consequence of D4, accepted; the mitigation is transparency: the panel shows «Los pines tomaron N lugares» and the cumulative figure since the record began beside the 3-month «saldo». | `f_final-stress.md` §2. |
+
+### Amendments from writing the children (2026-10-05, after Frank's approval)
+
+Writing the eight children against this document exposed seams the parent left open. These rows
+settle them. **None changes a policy decision (D1–D15, X1–X4)**; each is a technical contract the
+children need to agree on. Where a row names a clause, the row wins over that clause's older wording.
+
+| ID | Clause | Amendment |
+|---|---|---|
+| A1 | E2, §11 | Ownership of the engine switch: **C1** creates `app/components/admin/solverEngine.ts` with the constant `SOLVER_ENGINE` only; **C2** adds the pure resolver of the effective engine, the Preview-only override `OWT_SOLVER_ENGINE` (honoured only on the `preview` branch deployment or when `VERCEL_ENV` is unset in local development — never on `verify/service-readiness` or production), its `docs/SECRETS.md` entry, and the fairness PUT's refusal `engine_not_v3`; **C6** adds the solve route's `409 solver_version_mismatch` and passes the server-resolved engine to the planner. |
+| A2 | L2 | The record's id is **`fairnessMonth.YYYY-MM`** (a dotted id is private in Sanity: the dataset answers unauthenticated published reads, and the record holds availability). The reader fails closed when the read token is absent — an unreadable record must never look like «sin registro». |
+| A3 | L2 | Per-person, per-role status vocabulary is `in` / `out` / `exact`. The record also stores the presence rules, date-scoped rule exclusions and resolved exact counts in force that month. |
+| A4 | L3, L6 | The reconstruction (C4) creates, replaces or **deletes** only records it wrote (`source: reconstructed`, content hash intact), under a revision check, through a neutral (non-`server-only`) executor of C2's writer with an injected client; that executor is pinned like the commit modules and its pin scans `scripts/` too. It writes past months only. A reconstructed record is stamped `engine: v2`. |
+| A5 | L3 | A record may be replaced only while its month has **no stored weekend services and no counted specials** (so a pre-created uncounted camp special does not freeze it). |
+| A6 | U2, L3 | A record **binds** a horizon month only when A5 would keep it (the month has stored services or counted specials at solve time); the solve then takes that month's statuses, exact counts, presence rules and exclusions from the record, and its pool checkboxes show read-only with the reason. Otherwise the on-screen pools and rules drive the solve, and the confirm replaces the record under its revision. |
+| A7 | §11 | **C2 owns the single v3 eligibility resolver** (on-screen pools + rules + members → per-person per-role statuses); C6 builds both S1's eligibility and the confirm's record body from its output. Every rule name it resolves must match exactly one member (C3's resolver); v2 keeps its current name matching. |
+| A8 | L4 | v2 inertness means the whole v2 solve request and the grid's rule verdicts are identical with or without `sundayCadence`, not only the rule strings. |
+| A9 | §14 | The «Mes por medio fuera de Líderes Domingo» warning is built by C3 and shown only when the effective engine is v3 (C6 passes it). |
+| A10 | F8, Q2 | Under v3, «Holgura N» has no effect on the solver; the uncounted-specials filler keeps today's Exenta/Holgura ordering. |
+| A11 | F7, S1 | A person with both «Mes por medio» and an exact `Sun.Lead` count is refused when the v3 request is built, naming the person. |
+| A12 | F5 | The floor seat applies only to a person who holds **no fixed seat** (exact or cadence) that month. For past months the threshold uses the stored-seat share before floor set-asides. |
+| A13 | F1, F4 | Populations by day class: a Sunday-dated service uses the `Sun.*` roles; any other day uses `Sat.*` (with `Sat.Choir` for Chorus). Presence and date-scoped rule exclusions bind weekend services only. Lines and protections count **counted** services only; rules see every weekend service. |
+| A14 | X1, S1 | A Sunday on which the person is rule-excluded from `Sun.Lead` is not an «available counted Sunday». The wire carries three states: `on`, `off`, and `out` (not eligible: no Sunday, no compensation Saturday). |
+| A15 | S1 | Pins are keyed by an opaque service id, with the date as a consistency check. `!in` patterns and week exclusions reach the solver only through per-service eligibility (no week-exclusion rule on the wire). The request adds per person `dl_since` (first recorded DL eligibility) and `prev_dl_leads` (Sunday leads in the month before the run), and `prior` (the previous month's stored services with their seats, built by C6 from `GET /api/admin/roles`). The caller resolves relative caps; the solver never sees `{weeks-N}`. |
+| A16 | F11 | Exact-count leads are excluded from the Saturday cap as they are from the Sunday cap. |
+| A17 | F14, U5 | Each person-line figure is rounded **once**, half away from zero, to hundredths on the wire; the panel shows **one decimal**, computed once from the exact value by C2's single formatter (es-MX uses a decimal point: «le deben 0.8»). |
+| A18 | F14 | Ledger cases in the golden fixture are asserted by both suites; cadence-state cases by TypeScript only (C5 consumes the states). Ties in a presence sub-line break by member-id order in both languages. |
+| A19 | S4, F12, F10 | The response reports both the planned and the realised share per person and line; «after» uses the realised one. The mandatory lead is a soft family with no instance where no lead is possible. DL capacity is computed once per run over the people whose floor the previous month has not already met. |
+| A20 | §11 C0 | C0 lands a minimal `gcf_v3/` scaffold (package `owt_v3`, requirements, one smoke test) that C5 takes over. Safe end state: the same tests plus that smoke test. |
+| A21 | §11 C4, L6 | October 2026's record is applied on or after 2026-11-01 (it must be past). Months confirmed under v2 are reconstructed as each becomes past; until then the current month reads «sin registro». Seats served may only **delay** the start of a line; they never make anyone eligible. |
+| A22 | §11 C7 | «Mes por medio» may be saved before C4's dry run (it is inert under v2, A8). The single flip step covers only moving the pools and flipping the constant. |
+| A23 | §11 C5 | C5's acceptance against «the real Nov+Dec request» uses a private converter outside the repo; C7's rehearsal re-checks it with C6's real request builder. |
+| A24 | U6 | Non-timeout transport errors get their own copy, distinct from «El solver tardó demasiado». Auto refuses a horizon that contains a past month. |
+| A25 | L1 | «A PATCH that carries the field and changes nothing a notice could report queues no notification.» Services in lookback months cannot be toggled from any surface (accepted; revisited at C7's look). |
+| A26 | C3 row | C3's rollback is UI-only, or a full revert only before C2 ships and after listing every stored setting; no «Mes por medio» is saved anywhere until the production alias serves C3. |
 
 ## 4. The fairness policy (the shared contract)
 
@@ -249,17 +285,17 @@ they disagree (F14).
   The ledger reads it through its own query; the readiness loader and the MCP snapshot loader (pinned
   to mirror each other, ADR-0040), `computeParticipation` and the sidebar's «Incluir especiales»
   switch do not change.
-- **L2 — The monthly eligibility record.** One document per calendar month, keyed by member `_id`
+- **L2 — The monthly eligibility record.** One document per calendar month (`fairnessMonth.YYYY-MM`, A2), keyed by member `_id`
   (names stored only as display text; array `_key`s are derived hashes, never a raw id containing
-  dots). It snapshots what the month was solved with: per person and role, eligible / out / exact; the
+  dots). It snapshots what the month was solved with: per person and role, `in` / `out` / `exact` (A3); the
   cadence setting (not the state, F7); exempt; the availability as it stood; the engine that wrote it.
   It never stores seats served — those stay derived from the role documents (ADR-0042). Hidden and
   read-only in Studio.
 - **L3 — Writing the record.** Written by Auto's confirm **under v3 only, before any draft** (C6), or
   by an explicit «Registrar elegibilidad de {mes}» offered only under v3. A concurrent writer is
   refused, never silently discarded. An existing record is replaced only while its month has no
-  stored services (re-checked at write time), except that the reconstruction (C4) may replace a record
-  it wrote itself, under a revision check. «Past» means before the current CDMX month; past months are
+  stored weekend services and no counted specials (A5; re-checked at write time), except that the
+  reconstruction (C4) may replace or delete a record it wrote itself (A4). «Past» means before the current CDMX month; past months are
   written only by the reconstruction. Records written from Preview are stamped as such.
 - **L4 — Cadence in the rules.** A per-person «Domingo: Normal / Mes por medio» on the `solverConfig`
   restriction, keyed like every other rule (by name); it is resolved to a member id when the record or
