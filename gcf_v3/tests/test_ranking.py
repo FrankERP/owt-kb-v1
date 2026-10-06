@@ -1,6 +1,7 @@
 """Ranking (spec §7.1, F12): each stage's protection wins over the next one's, on instances
-built for that purpose. The DL floor and the Sunday cap pull the same way (more distinct
-leaders), so no instance trades one for the other; every other neighbouring pair is here.
+built for that purpose. The DL floor and the Sunday cap look like they pull the same way, but they trade: fill is fixed
+at its maximum before the DL floor runs, and a count rule can span several role keys, so seating a
+DL-floor person can force another person into a second Lead. Every neighbouring pair is tested here.
 All names are fictitious; everyone is exempt and has no DL history unless the case needs it.
 """
 
@@ -70,6 +71,21 @@ class Ranking(unittest.TestCase):
         resp = solve(request(s, people))
         self.assertEqual(resp["assignments"]["s1"]["Lead"], ["m-ana"])
         self.assertEqual(missed(resp, "dl_floor_missed"), [("dl_floor_missed", "m-bea", "higher_priority")])
+
+    def test_dl_floor_over_sunday_cap(self):
+        # X's DL floor (Lead at s1) uses up Z's one-seat rule (Z must take BGV at s1), so Y has to lead
+        # s2 and s3: sunday_cap 1. Breaking X's floor would give cap 0 (W leads s1, X sings, Z leads s2).
+        s = [service("s1", S1, seats={"Lead": 1, "BGV": 1, "Choir": 0}), service("s2", S15, seats=dict(LEAD1)),
+             service("s3", S29, seats=dict(LEAD1))]
+        people = [p("m-xan", {"s1": ["Lead", "BGV"]}, dl_since="2026-01", prev=0),
+                  p("m-yul", {"s1": ["Lead"], "s2": ["Lead"], "s3": ["Lead"]}),
+                  p("m-zoe", {"s1": ["BGV"], "s2": ["Lead"], "s3": ["Lead"]}),
+                  p("m-wes", {"s1": ["Lead"]})]
+        rules = [{"id": "cap-z", "kind": "count", "person": "m-zoe", "roles": ["Sun.Lead", "Sun.BGV"], "op": "<=",
+                  "month": "2026-11", "value": 1}]
+        resp = solve(request(s, people, rules=rules))
+        self.assertIn("m-xan", resp["assignments"]["s1"]["Lead"])
+        self.assertEqual(missed(resp), [("sunday_cap_exceeded", "m-yul", "higher_priority")])
 
     def test_sunday_cap_over_saturday_cap(self):
         s = [service("s1", S1, seats=dict(LEAD1)), service("s2", S15, seats=dict(LEAD1)),
