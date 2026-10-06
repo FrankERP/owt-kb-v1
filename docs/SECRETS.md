@@ -469,14 +469,14 @@ else — no other route, page or data path reads this variable.
 
 ---
 
-## `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` / `VERCEL_GIT_COMMIT_REF` — read by the MCP/OAuth routes and the solver-engine resolver
+## `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` / `VERCEL_GIT_COMMIT_REF` — Vercel system variables the app and the build scripts read
 
 **Not secrets, and never configured by hand — Vercel sets all three automatically on every
 deployment (they are Vercel system variables).** Listed here, config-style, because the MCP/OAuth
-routes' and the solver-engine resolver's behavior depend on them and an operator debugging a 404,
-a stale `ping` version or an unexpected engine should know they exist rather than suspect a
-missing secret. Not needed in GitHub Actions, Cloud Scheduler, the iOS build or GCF; never set
-them in a Vercel dashboard "to be safe".
+routes', the solver-engine resolver's and the build scripts' behavior depend on them and an
+operator debugging a 404, a stale `ping` version, an unexpected engine or a skipped build should
+know they exist rather than suspect a missing secret. Not needed in GitHub Actions, Cloud
+Scheduler, the iOS build or GCF; never set them in a Vercel dashboard "to be safe".
 
 - **`VERCEL_ENV`** (`production` | `preview` | absent locally) selects this deployment's single
   canonical origin (`app/mcp/oauth/origin.ts`'s `canonicalOrigin`) — production →
@@ -486,23 +486,38 @@ them in a Vercel dashboard "to be safe".
   or empty) is not that case** — it selects the LOCAL origin, so on a Vercel deployment every
   request still 404s, but because no real `Host` there is `localhost:3000`, not because there is
   no origin. Either way it fails closed, never open. Never set or override this manually.
-  **`VERCEL_ENV` has three readers, with three different mappings** — do not assume one covers the
-  others: (1) `canonicalOrigin` (above); (2) `resolveSolverEngine`
+  **`VERCEL_ENV` is read in four places outside tests, with four different mappings** — do not
+  assume one covers the others: (1) `canonicalOrigin` (above); (2) `resolveSolverEngine`
   (`app/utils/solverDeployment.ts`), which honours `OWT_SOLVER_ENGINE` only when `VERCEL_ENV` is
   `preview` **and** `VERCEL_GIT_COMMIT_REF` is `preview`, or when `VERCEL_ENV` is absent or empty
   (local development) — `development`, `production` and any other value answer the
   `SOLVER_ENGINE` constant; (3) `fairnessRecordEnvironment` (same file), the `environment` stamp
   of a `fairnessMonth` record: `production` → `production`, `preview` → `preview`, **everything
   else, `development` included, → `local`** (so here `development` is not «unset» the way it is
-  for the resolver's local path, and not «the constant» either).
-- **`VERCEL_GIT_COMMIT_REF`** — the branch the deployment was built from. Read only by
-  `resolveSolverEngine`, to tell the `preview` branch's dev deployment from other Preview
-  deployments such as `verify/service-readiness` (also `VERCEL_ENV=preview`), which must never
-  honour the override. Set by Vercel; absent locally, which is fine because the local path keys on
-  `VERCEL_ENV` being unset. See the `OWT_SOLVER_ENGINE` entry below.
+  for the resolver's local path, and not «the constant» either); (4) `evaluateDeployPolicy`
+  (`scripts/lib/deploy-branch-policy.mjs`, run by `scripts/vercel-ignore-build.mjs` as
+  `vercel.json`'s `ignoreCommand`): `production` builds whatever ref it came from, any other value
+  (or none) falls through to the ref allow-list (`docs/CI.md`). The list is a snapshot of the
+  non-test readers, not a contract — a `git grep` for the variable name is the authority.
+- **`VERCEL_GIT_COMMIT_REF`** — the branch the deployment was built from. Read in several places
+  outside tests: `resolveSolverEngine`, to tell the `preview` branch's dev deployment from other
+  Preview deployments such as `verify/service-readiness` (also `VERCEL_ENV=preview`), which must
+  never honour the override; `evaluateDeployPolicy` (`scripts/lib/deploy-branch-policy.mjs`),
+  which checks it against the allow-list of refs that spend a build, and
+  `scripts/vercel-ignore-build.mjs`, which only quotes it in its log line;
+  `evaluateDeploymentCoherence` (`scripts/lib/deployment-coherence.mjs`, called from
+  `next.config.mjs` at build time), which holds `verify/service-readiness` to the isolated
+  verification dataset and every other ref off it; and `resolveVerificationEnvironment`
+  (`app/utils/srVerificationIdentity.ts`), which reports it as `gitRef` in the verification
+  identity. Set by Vercel; absent locally, where the build assertions skip (a build with no ref
+  asserts nothing) and the solver resolver's local path keys on `VERCEL_ENV` being unset. See the
+  `OWT_SOLVER_ENGINE` entry below. Like the `VERCEL_ENV` list, this one is a snapshot — a
+  `git grep` for the variable name is the authority.
 - **`VERCEL_GIT_COMMIT_SHA`** — the deployed commit. `ping`'s `version` field reports its first 7
   characters (`"local"` when the variable is absent), so Frank can tell from the phone which
-  deployment answered a `ping` call. Not sensitive — the repository is public.
+  deployment answered a `ping` call; `resolveVerificationEnvironment`
+  (`app/utils/srVerificationIdentity.ts`) also reads it, as the verification identity's
+  `gitCommitSha`. Not sensitive — the repository is public.
 
 ## `OWT_SOLVER_API_KEY` (Secret Manager: `owt-solver-api-key`)
 
