@@ -106,6 +106,44 @@ const PROTECTED_LOADER_HELPERS = [
 
 const PROTECTED_LOADER_RE = new RegExp(`\\b(${PROTECTED_LOADER_HELPERS.join("|")})\\s*\\(`);
 
+/**
+ * Protected WRITE EXECUTORS (solver v3 C2 GU-5) — the `PROTECTED_LOADER_HELPERS`
+ * precedent applied to writing. An executor mutates through a client its CALLER injects,
+ * so neither its declaring module nor a caller that only hands it a client shows a
+ * recognisable mutation: both would be invisible to every rule above. So a CALL to a
+ * registered executor, or its DECLARATION, is itself a `protected-write` site of the
+ * operation it sits in — detected whether or not the file imports or creates any Sanity
+ * client (the rule runs before the no-client early return) and whatever else the file
+ * mutates. It adds no read classification: the executor's injected reads are held by its
+ * own runtime assertion. An ALIASED import is not chased; the executor's caller pin
+ * (`serviceCommitCallers.test.ts`) pins its importers by module instead.
+ */
+export const PROTECTED_WRITE_EXECUTORS = ["executeFairnessMonthWrites"] as const;
+
+const PROTECTED_EXECUTOR_RE = new RegExp(`\\b(function\\s+)?(${PROTECTED_WRITE_EXECUTORS.join("|")})\\s*(?=[<(])`, "g");
+
+/** One `protected-write` site per operation that declares or calls a registered executor. */
+function executorSites(file: string, code: string, regions: Region[]): ProtectedSite[] {
+  const byOperation = new Map<string, ProtectedSite>();
+  PROTECTED_EXECUTOR_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = PROTECTED_EXECUTOR_RE.exec(code))) {
+    const operation = operationAt(regions, m.index);
+    if (byOperation.has(operation)) continue;
+    byOperation.set(operation, {
+      file,
+      operation,
+      kind: "protected-write",
+      client: "executor",
+      compliant: false,
+      evidence: m[1]
+        ? `declares the protected write executor ${m[2]}()`
+        : `calls the protected write executor ${m[2]}()`,
+    });
+  }
+  return [...byOperation.values()];
+}
+
 export type ProtectedSiteKind =
   | "protected-literal-read"
   | "generic-id-protected-read"
@@ -283,6 +321,13 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     reason:
       "the notification sweep: claims and consumes notificationOutbox documents through writeClient while reading protected role/setlist/proposal documents through operationalClient; never mutates protected content",
     removalOwner: "permanent runtime writer (never removed — the notification sweep itself)",
+  },
+  {
+    file: "app/utils/fairnessMonthWriteRequest.ts",
+    operation: "module",
+    reason:
+      "declares the one write executor of the monthly eligibility record (`fairnessMonth`, solver v3 C2 WR-16), which mutates through an INJECTED client for both actors: the route's create-by-collision and revision-asserted whole replace, and the reconstruction actor's guarded delete (a revision-asserting no-op patch and the delete in one transaction) — the only delete of the type. It never uses createOrReplace. A site through the executor rule (`PROTECTED_WRITE_EXECUTORS`); its importers are pinned by `serviceCommitCallers.test.ts`, over app/ and scripts/",
+    removalOwner: "permanent runtime writer (never removed — the eligibility record's only mutation path)",
   },
   {
     file: "app/utils/serviceMutationSideEffects.ts",
@@ -785,10 +830,13 @@ function condense(text: string): string {
 /** Every protected query site in one source file. */
 export function scanSource(file: string, source: string): ProtectedSite[] {
   const code = stripComments(source);
+  // GU-5: before the no-client early return — a caller of an injected-client executor
+  // may import no Sanity client at all.
+  const executors = executorSites(file, code, operationRegions(code));
   const info = sanityClientIdentifiers(code);
-  if (!info.clients.size && !info.rawSanityHttp) return [];
+  if (!info.clients.size && !info.rawSanityHttp) return executors;
   const regions = operationRegions(code);
-  const sites: ProtectedSite[] = [];
+  const sites: ProtectedSite[] = [...executors];
   const mutatingOperations = new Set<string>();
 
   const callRe = new RegExp(

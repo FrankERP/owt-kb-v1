@@ -900,6 +900,20 @@ export function memberFitsPool(
 }
 
 /**
+ * Does a member's CURRENT Tipo fit one of the six v3 role keys (solver v3 C2 WR-5, RES-1)?
+ * `Sun.Lead`: `voz` + `sunday_lead`; `Sat.Lead`: `voz` + `sunday_lead` or `saturday_lead`;
+ * every BGV and Choir key: `voz` + any of the three subtypes. Built on
+ * `memberFitsPoolSubtype`, the ONE pool predicate — the eligibility resolver and the
+ * record writer's `tipo_mismatch` check read this same function, so they cannot disagree.
+ */
+export function memberFitsRoleKey(member: { memberType?: string[] } | undefined, key: RoleKey): boolean {
+  const fits = (subtype: PoolSubtype) => memberFitsPoolSubtype(member, subtype);
+  if (key === "Sun.Lead") return fits("sunday_lead");
+  if (key === "Sat.Lead") return fits("sunday_lead") || fits("saturday_lead");
+  return fits("sunday_lead") || fits("saturday_lead") || fits("support");
+}
+
+/**
  * Stored pool ids whose member no longer carries the Tipo that pool requires —
  * including a member with no Tipo at all, which is how someone is made
  * unschedulable (ADR-0029). `buildSolveRequest` drops all of these from the

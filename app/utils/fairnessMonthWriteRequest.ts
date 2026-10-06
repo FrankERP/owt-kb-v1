@@ -16,6 +16,7 @@
 // `ruleKey` or other stored value — so an issue may be logged or returned safely.
 
 import { createHash } from "node:crypto";
+import type { SanityClient, Transaction } from "@sanity/client";
 
 import {
   ROLE_KEYS,
@@ -33,6 +34,11 @@ import {
   type Status,
 } from "./fairnessVocabulary";
 import { isValidServiceDate } from "./serviceReadModel";
+import { normalizeMinistries } from "@/app/ministries";
+import { memberFitsRoleKey } from "@/app/components/admin/plannerModel";
+import { displayMemberName } from "./memberRuleNames";
+import { sanityConflictKind } from "./roleWriteRequest";
+import { fairnessMembersByIdsQuery, fairnessMonthsByIdsQuery, serviceCountsInMonths } from "./serviceReadQueries";
 
 export const FAIRNESS_MONTH_TYPE = "fairnessMonth";
 export const FAIRNESS_SCHEMA_VERSION = 1;
@@ -831,4 +837,395 @@ export function decideFairnessMonth(input: {
   if (!stored.intact) return { refused: "record_edited" }; //                            row 6
   if (expectedRev !== stored.rev) return { refused: "stale_revision" }; //               row 7
   return "replace"; //                                                                   row 8
+}
+
+// ─── The write executor (IF2-22, WR-16) ──────────────────────────────────────
+//
+// THE ONLY mutation path of `fairnessMonth`, for both actors. The clients are INJECTED —
+// `fairnessMonthCommit.ts` hands it `operationalClient`/`writeClient`, C4's script its
+// own — so this module has no module-level client and the protected-read audit cannot
+// see its reads or writes by import. Two things hold it instead: the audit's executor
+// rule (`PROTECTED_WRITE_EXECUTORS` in `protectedReadAudit.ts`: every file that declares
+// or calls this function is a registered `protected-write` site) and the caller pin
+// (`serviceCommitCallers.test.ts`), plus the runtime read-client assertion below.
+//
+// No side effects (WR-13): no notification, no outbox, no `after()`, no `revalidate*`
+// — no ISR page reads this type. `createOrReplace` is never used: it cannot assert a
+// revision and would discard a concurrent writer's record (L3).
+
+/** C4's `recordedBy` — a fixed non-member marker naming the script (WR-14). */
+export const RECONSTRUCTION_RECORDED_BY = "script:reconstruct-fairness-months";
+
+export interface FairnessStamps {
+  /** The session's effective member `_id` (route) or {@link RECONSTRUCTION_RECORDED_BY}. */
+  recordedBy: string;
+  /** ISO-8601, the server's clock. */
+  now: string;
+  /** CDMX `YYYY-MM`. */
+  currentMonth: string;
+  environment: LogicalRecord["environment"];
+  /** Route: REQUIRED and `"v3"` (WR-6 already gated it). Reconstruction: absent or `"v2"`. */
+  engine?: "v2" | "v3";
+}
+
+export type FairnessDeleteEntry = { month: string; expectedRev: string };
+
+export type FairnessVerdict =
+  | "created"
+  | "replaced"
+  | "unchanged"
+  | "deleted"
+  | { refused: FairnessWriteRefusal; issues?: FairnessIssue[] };
+
+/**
+ * One month's result: IF2-22's `{ month, verdict, rev, contentHash }`, plus four fields
+ * this plan adds for the PUT's IF2-5 bodies (additive; C4 may ignore them):
+ * `ownVerdict` (this month's own decision or refusal — IF2-5 `details.months[].verdict`;
+ * `null` for a well-formed entry of a route request refused for another entry's body),
+ * `recordedAt` (IF2-5's 200), `memberIds` (with a member refusal) and `current` (the
+ * re-read record's summary, for `record_exists` details).
+ */
+export interface FairnessExecution {
+  month: string;
+  verdict: FairnessVerdict;
+  rev: string | null;
+  contentHash: string | null;
+  ownVerdict: "create" | "replace" | "unchanged" | "delete" | FairnessWriteRefusal | null;
+  recordedAt: string | null;
+  memberIds?: string[];
+  current?: { rev: string; source: string; recordedAt: string | null };
+  cause?: "commit_conflict";
+}
+
+const SYSTEM_FIELDS = new Set(["_id", "_type", "_createdAt", "_updatedAt", "_rev"]);
+
+function assertReadClient(read: SanityClient): void {
+  const config = read.config();
+  const tokenOk = typeof config.token === "string" && config.token.length > 0;
+  if (!tokenOk || config.perspective !== "published" || config.useCdn !== false) {
+    // A dotted id is private: without the token a read answers «no record» with no
+    // error, turning a replay into a refusal and a replace into a create (parent A2).
+    throw new Error(
+      "fairness executor: the read client must carry the read token, perspective \"published\" and useCdn: false",
+    );
+  }
+}
+
+async function readList(read: SanityClient, bound: { query: string; params: Record<string, unknown> }): Promise<unknown[]> {
+  const rows: unknown = await read.fetch(bound.query, bound.params);
+  if (!Array.isArray(rows)) throw new Error("fairness executor: a read answered no list");
+  return rows;
+}
+
+interface MemberRow {
+  _id: string;
+  member_name?: string;
+  alias?: string;
+  ministries?: unknown;
+  memberType?: string[];
+}
+
+interface Planned {
+  month: string;
+  id: string;
+  op: "write" | "delete";
+  body: FairnessMonthBody | null;
+  source: FairnessMonthWrite["source"] | null;
+  expectedRev: string | null;
+  bodyHash: string | null;
+  stored: Record<string, unknown> | null;
+  decision: FairnessDecision | null;
+  own: FairnessExecution["ownVerdict"];
+  issues?: FairnessIssue[];
+  memberIds?: string[];
+}
+
+function refusalOf(own: FairnessExecution["ownVerdict"]): FairnessWriteRefusal | null {
+  return own === null || own === "create" || own === "replace" || own === "unchanged" || own === "delete" ? null : own;
+}
+
+function currentSummary(stored: Record<string, unknown> | null): FairnessExecution["current"] {
+  if (!stored || typeof stored._rev !== "string") return undefined;
+  return {
+    rev: stored._rev,
+    source: typeof stored.source === "string" ? stored.source : "",
+    recordedAt: typeof stored.recordedAt === "string" ? stored.recordedAt : null,
+  };
+}
+
+/** WR-5 (route) and WR-14 row 9 (both actors): the live-member checks of a written month. */
+function memberRefusal(
+  actor: Actor,
+  body: FairnessMonthBody,
+  members: ReadonlyMap<string, MemberRow>,
+): { refusal: "member_unknown" | "member_not_worship" | "tipo_mismatch"; ids: string[] } | null {
+  const ids = body.people.map((p) => p.memberId);
+  const unknown = ids.filter((id) => {
+    const m = members.get(id);
+    // A member document that yields no display name is refused too: no item is ever
+    // written without a `name` (REC-3), and the reader would refuse it (RD-2).
+    return !m || displayMemberName({ member_name: m.member_name, alias: m.alias }) === "";
+  });
+  if (unknown.length > 0) return { refusal: "member_unknown", ids: unknown.sort(compareCodepoint) };
+  if (actor !== "route") return null;
+  const notWorship = ids.filter((id) => !normalizeMinistries(members.get(id)?.ministries).includes("worship"));
+  if (notWorship.length > 0) return { refusal: "member_not_worship", ids: notWorship.sort(compareCodepoint) };
+  const mismatch = body.people
+    .filter((p) => ROLE_KEYS.some((k) => p.roles[k] !== "out" && !memberFitsRoleKey(members.get(p.memberId), k)))
+    .map((p) => p.memberId);
+  if (mismatch.length > 0) return { refusal: "tipo_mismatch", ids: mismatch.sort(compareCodepoint) };
+  return null;
+}
+
+/**
+ * Write (or, for actor `reconstruction`, delete) 1+ months of `fairnessMonth`, returning
+ * one result per entry in input order. Throws — before any read — on a read client
+ * without the token, the `published` perspective and `useCdn: false`, and on a
+ * programming error (a route delete, a route without `stamps.engine === "v3"`, a
+ * reconstruction with another engine or another `recordedBy`). Throws after a read for
+ * a read that answers no list and for a commit error `sanityConflictKind` does not
+ * recognise. Everything else is a typed refusal.
+ *
+ * Actor `route`: all or nothing (WR-9) — every create and replace in ONE transaction,
+ * no transaction when nothing changes, and a refusal of any month writes nothing.
+ * Actor `reconstruction`: each month on its own, one guarded transaction per month
+ * (C4 R16).
+ */
+export async function executeFairnessMonthWrites(input: {
+  clients: { read: SanityClient; write: SanityClient };
+  actor: Actor;
+  op: "write" | "delete";
+  months: Array<FairnessMonthWrite | Omit<FairnessMonthWrite, "source"> | FairnessDeleteEntry>;
+  stamps: FairnessStamps;
+}): Promise<FairnessExecution[]> {
+  const { clients, actor, op, stamps } = input;
+  if (op === "delete" && actor !== "reconstruction") throw new Error("fairness executor: only the reconstruction actor deletes");
+  if (actor === "route" && stamps.engine !== "v3") throw new Error("fairness executor: the route actor writes under engine v3 only");
+  if (actor === "reconstruction") {
+    if (stamps.engine !== undefined && stamps.engine !== "v2") throw new Error("fairness executor: reconstruction stamps engine v2");
+    if (stamps.recordedBy !== RECONSTRUCTION_RECORDED_BY) throw new Error("fairness executor: reconstruction stamps the script marker");
+  }
+  if (!isMonthString(stamps.currentMonth)) throw new Error("fairness executor: currentMonth must be YYYY-MM");
+  assertReadClient(clients.read);
+
+  // ── 1. Validate every entry (IF2-18 on write entries; WR-4's month pattern on deletes).
+  const planned: Planned[] = input.months.map((entry) => {
+    const month = (entry as { month?: unknown }).month;
+    const base: Planned = {
+      month: typeof month === "string" ? month : "",
+      id: typeof month === "string" ? fairnessMonthId(month) : "",
+      op,
+      body: null,
+      source: null,
+      expectedRev: (entry as { expectedRev?: string | null }).expectedRev ?? null,
+      bodyHash: null,
+      stored: null,
+      decision: null,
+      own: null,
+    };
+    if (op === "delete") {
+      const rev = (entry as { expectedRev?: unknown }).expectedRev;
+      const issues: FairnessIssue[] = [];
+      if (!isMonthString(month)) issues.push({ path: "month", message: MSG.month });
+      if (typeof rev !== "string" || rev.length === 0 || rev.length > 64) issues.push({ path: "expectedRev", message: MSG.expectedRev });
+      return issues.length ? { ...base, own: "invalid_body", issues } : base;
+    }
+    const checked = validateFairnessMonthWrite(entry, actor, stamps.currentMonth);
+    if (!checked.ok) return { ...base, own: "invalid_body", issues: checked.issues };
+    const value = checked.value;
+    return {
+      ...base,
+      body: { month: value.month, people: value.people, presence: value.presence },
+      source: actor === "route" ? (value as FairnessMonthWrite).source : null,
+      expectedRev: value.expectedRev,
+      bodyHash: contentHashOfWrite(value.month, value),
+    };
+  });
+
+  if (actor === "route" && planned.some((p) => p.own === "invalid_body")) {
+    return planned.map((p) => ({
+      month: p.month,
+      verdict: { refused: "invalid_body", issues: p.issues ?? [] },
+      rev: null,
+      contentHash: null,
+      ownVerdict: p.own,
+      recordedAt: null,
+    }));
+  }
+  const live = planned.filter((p) => p.own === null);
+
+  // ── 2. Fresh state (WR-7): the records in full; for the route, the freezing services.
+  const storedRows = live.length ? await readList(clients.read, fairnessMonthsByIdsQuery(live.map((p) => p.id))) : [];
+  const storedById = new Map<string, Record<string, unknown>>();
+  for (const row of storedRows) {
+    if (row && typeof row === "object" && typeof (row as { _id?: unknown })._id === "string") {
+      storedById.set((row as { _id: string })._id, row as Record<string, unknown>);
+    }
+  }
+  const freezing = new Map<string, number>();
+  if (actor === "route" && live.length) {
+    for (const row of await readList(clients.read, serviceCountsInMonths(live.map((p) => p.month)))) {
+      const r = row as { month?: unknown; weekend?: unknown; countedSpecials?: unknown };
+      if (typeof r.month === "string") freezing.set(r.month, Number(r.weekend ?? 0) + Number(r.countedSpecials ?? 0));
+    }
+  }
+
+  // ── 3. Decide (IF2-21).
+  for (const p of live) {
+    p.stored = storedById.get(p.id) ?? null;
+    const facts: StoredRecordFacts | null = p.stored
+      ? {
+          rev: String(p.stored._rev ?? ""),
+          source: p.stored.source as LogicalRecord["source"],
+          contentHash: String(p.stored.contentHash ?? ""),
+          intact: isIntact(p.stored),
+        }
+      : null;
+    p.decision = decideFairnessMonth({
+      actor,
+      op,
+      month: p.month,
+      currentMonth: stamps.currentMonth,
+      expectedRev: p.expectedRev,
+      bodyHash: p.bodyHash,
+      stored: facts,
+      hasFreezingServices: (freezing.get(p.month) ?? 0) > 0,
+    });
+    p.own = typeof p.decision === "string" ? p.decision : p.decision.refused;
+  }
+
+  // ── 4. The live-member read and checks, on months decided create or replace (WR-5, WR-16).
+  const writing = live.filter((p) => p.own === "create" || p.own === "replace");
+  const memberIds = [...new Set(writing.flatMap((p) => p.body!.people.map((x) => x.memberId)))].sort(compareCodepoint);
+  const members = new Map<string, MemberRow>();
+  if (memberIds.length) {
+    for (const row of await readList(clients.read, fairnessMembersByIdsQuery(memberIds))) {
+      const m = row as MemberRow;
+      if (m && typeof m._id === "string") members.set(m._id, m);
+    }
+  }
+  for (const p of writing) {
+    const refused = memberRefusal(actor, p.body!, members);
+    if (refused) {
+      p.own = refused.refusal;
+      p.memberIds = refused.ids;
+    }
+  }
+
+  const names = new Map<string, string>();
+  for (const [id, m] of members) names.set(id, displayMemberName({ member_name: m.member_name, alias: m.alias }));
+
+  const docFor = (p: Planned) =>
+    buildFairnessMonthDocument({
+      body: p.body!,
+      source: actor === "route" ? p.source! : "reconstructed",
+      engine: actor === "route" ? "v3" : "v2",
+      environment: stamps.environment,
+      recordedAt: stamps.now,
+      recordedBy: stamps.recordedBy,
+      names,
+    });
+
+  const stage = (tx: Transaction, p: Planned): Transaction => {
+    if (p.own === "create") return tx.create(docFor(p));
+    if (p.own === "replace") {
+      const { _id: _ignoredId, _type: _ignoredType, ...fields } = docFor(p);
+      void _ignoredId;
+      void _ignoredType;
+      const stale = Object.keys(p.stored ?? {}).filter((k) => !SYSTEM_FIELDS.has(k) && !(k in fields));
+      const rev = p.expectedRev!;
+      return tx.patch(p.id, (patch) => {
+        const set = patch.ifRevisionId(rev).set(fields as unknown as Record<string, unknown>);
+        return stale.length ? set.unset(stale) : set;
+      });
+    }
+    // delete (reconstruction only): a revision-asserting no-op patch, then the delete, in
+    // ONE transaction — `delete` takes no revision precondition (roles/[id] precedent).
+    const rev = p.expectedRev!;
+    return tx.patch(p.id, (patch) => patch.ifRevisionId(rev).set({ month: p.month })).delete(p.id);
+  };
+
+  const unchangedResult = (p: Planned): FairnessExecution => ({
+    month: p.month,
+    verdict: "unchanged",
+    rev: typeof p.stored?._rev === "string" ? p.stored._rev : null,
+    contentHash: typeof p.stored?.contentHash === "string" ? p.stored.contentHash : null,
+    ownVerdict: "unchanged",
+    recordedAt: typeof p.stored?.recordedAt === "string" ? p.stored.recordedAt : null,
+  });
+  const refusedResult = (p: Planned, refusal: FairnessWriteRefusal, extra: Partial<FairnessExecution> = {}): FairnessExecution => ({
+    month: p.month,
+    verdict: p.issues ? { refused: refusal, issues: p.issues } : { refused: refusal },
+    rev: null,
+    contentHash: null,
+    ownVerdict: p.own,
+    recordedAt: null,
+    ...(p.memberIds ? { memberIds: p.memberIds } : {}),
+    ...(currentSummary(p.stored) ? { current: currentSummary(p.stored) } : {}),
+    ...extra,
+  });
+  const doneResult = (p: Planned, rev: string): FairnessExecution => ({
+    month: p.month,
+    verdict: p.own === "create" ? "created" : p.own === "replace" ? "replaced" : "deleted",
+    rev: p.own === "delete" ? null : rev,
+    contentHash: p.own === "delete" ? null : p.bodyHash,
+    ownVerdict: p.own,
+    recordedAt: p.own === "delete" ? null : stamps.now,
+  });
+  const commitRefusal = (err: unknown): { refusal: FairnessWriteRefusal; cause?: "commit_conflict" } => {
+    const kind = sanityConflictKind(err);
+    if (kind === null) throw err;
+    if (kind === "already_exists") return { refusal: "record_exists" };
+    return kind === "conflict" ? { refusal: "stale_revision", cause: "commit_conflict" } : { refusal: "stale_revision" };
+  };
+
+  // ── 5a. Actor route: all or nothing (WR-9).
+  if (actor === "route") {
+    const firstRefused = planned.find((p) => refusalOf(p.own) !== null);
+    if (firstRefused) {
+      const detail = refusalOf(firstRefused.own)!;
+      return planned.map((p) => refusedResult(p, refusalOf(p.own) ?? detail));
+    }
+    const writes = planned.filter((p) => p.own === "create" || p.own === "replace");
+    if (writes.length === 0) return planned.map(unchangedResult);
+    let tx = clients.write.transaction();
+    for (const p of writes) tx = stage(tx, p);
+    let transactionId: string;
+    try {
+      ({ transactionId } = await tx.commit());
+    } catch (err) {
+      const { refusal, cause } = commitRefusal(err);
+      // Content Lake does not say which mutation failed: every written month carries the
+      // one mapped verdict, every unchanged month stays unchanged (WR-9).
+      return planned.map((p) => {
+        if (p.own === "unchanged") return unchangedResult(p);
+        p.own = refusal;
+        return refusedResult(p, refusal, cause ? { cause } : {});
+      });
+    }
+    return planned.map((p) => (p.own === "unchanged" ? unchangedResult(p) : doneResult(p, transactionId)));
+  }
+
+  // ── 5b. Actor reconstruction: each month on its own, one guarded transaction each.
+  const results: FairnessExecution[] = [];
+  for (const p of planned) {
+    const refusal = refusalOf(p.own);
+    if (refusal) {
+      results.push(refusedResult(p, refusal));
+      continue;
+    }
+    if (p.own === "unchanged") {
+      results.push(unchangedResult(p));
+      continue;
+    }
+    try {
+      const { transactionId } = await stage(clients.write.transaction(), p).commit();
+      results.push(doneResult(p, transactionId));
+    } catch (err) {
+      const mapped = commitRefusal(err);
+      p.own = mapped.refusal;
+      results.push(refusedResult(p, mapped.refusal, mapped.cause ? { cause: mapped.cause } : {}));
+    }
+  }
+  return results;
 }
