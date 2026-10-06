@@ -3,7 +3,8 @@
 **Date:** 2026-10-05 · **Status:** `DRAFT` · **Parent:**
 [`2026-10-05-solver-v3-fairness-design.md`](2026-10-05-solver-v3-fairness-design.md) (`APPROVED` by
 Frank), which assigns this child L4 (§6), the F7/F8 settings it stores, Q2's default and §14
-assumption 4. · **Risk tier: critical** — it changes the validator, the serializer and the
+assumption 4; aligned with the parent's amendments A1–A26 (§3 there; A1, A6, A7, A8, A9, A10,
+A11, A14, A22 and A26 touch this child). · **Risk tier: critical** — it changes the validator, the serializer and the
 whole-document writer of `solverConfig`, the one document that drives the planner's hard blocks for
 every admin on production and on Preview alike. A field that an older writer drops silently is the
 failure class this spec exists to close. Requirement: two sequential fresh `APPROVED` verdicts on
@@ -52,13 +53,15 @@ And, approving the parent and opening the children:
   - Rule names resolve by the FIRST member that matches (`plannerModel.ts:572-578`); nothing detects
     a name that matches two members.
 - **Success measure.** A «Mes por medio» saved by a current tab survives every save path; a body from
-  an older tab is refused with nothing written; v2's solve request and grid verdicts are identical
-  with or without the setting; the resolver returns one id per cadence member or names the
-  refusal.
+  an older tab is refused with nothing written; v2's whole solve request and grid verdicts are
+  identical for a config and its v2 view (§6.4; parent A8); the resolver returns one id per cadence
+  member or names the refusal.
 
 ## 3. Evidence
 
-All paths are relative to the repository root; line numbers verified on `3dbc189b`.
+All paths are relative to the repository root; line numbers verified on `3dbc189b`, and no file
+under `app/`, `sanity/`, `scripts/`, `docs/DATA_MODEL.md` or `CLAUDE.md` changed between it and
+`2d90e4b3` (`git diff --stat 3dbc189b 2d90e4b3 -- …` is empty), so they hold there too.
 
 | # | Fact | Source | Implication |
 |---|---|---|---|
@@ -70,9 +73,9 @@ All paths are relative to the repository root; line numbers verified on `3dbc189
 | E6 | The edit form commits a freshly built restriction from its own state | `app/components/admin/MonthGenerator.tsx:646-676` | The form must carry every field, or editing drops it |
 | E7 | `saveFailure` maps `stale_revision` to «Alguien más cambió las reglas primero…» with `stale: true`, which shows «Recargar reglas»; `invalid_request` to «El servidor rechazó las reglas y no guardó nada.» with `stale: false`; anything else to «No se pudieron guardar las reglas. (error N)» | `app/components/admin/solverConfigSource.ts:104-111`; `MonthGenerator.tsx:1370-1378` | The refusal code decides what a pre-C3 tab says; `stale_revision` would loop through a reader that drops the field |
 | E8 | `restrictionToDs` emits nothing for a restriction with no clause; `allRulesToDs` spreads the restriction | `plannerModel.ts:710-721`, `:733-761` | v2 rule strings are unaffected by an extra field |
-| E9 | `solverPools` puts the `person` of **every** restriction — clauses or not — into the DSL-person list: absent from every pool ⇒ injected into `support` with their availability exclusions; resolved with no Tipo ⇒ `buildSolveRequest` refuses the month | `plannerModel.ts:887-927`, `:1308-1314` | A restriction carrying only the cadence would change v2's request; the inertness contract must cover the whole request, not only rule strings (Parent issue P1) |
+| E9 | `solverPools` puts the `person` of **every** restriction — clauses or not — into the DSL-person list: absent from every pool ⇒ injected into `support` with their availability exclusions; resolved with no Tipo ⇒ `buildSolveRequest` refuses the month | `plannerModel.ts:887-927`, `:1308-1314` | A restriction carrying only the cadence would change v2's request; the inertness contract must cover the whole request, not only rule strings (parent A8; §6.4) |
 | E10 | Other readers of `restrictions` read clause fields only: `saturdayAccess`, `trailingVerdict`, `saturdayFloorOmissions`, `fairnessByMemberId`, `pinViolations`, `isExcludedFromLead`, `evaluate` | `plannerModel.ts:976`, `:1037`, `:1215`; `localFill.ts:141-151`; `pinViolations.ts:95`; `leadPoolHistory.ts:37`; `ruleEnforcement.ts:355-374` | Unaffected by a field they never read; the equivalence test still covers them |
-| E11 | `unresolvedRuleNames` reports names matching nobody, over every restriction, conflict and presence person; it does not detect a name matching two members | `app/components/admin/ruleEnforcement.ts:225-249` | «The existing rule-name validation» covers zero matches only; exactly-one is new (Parent issue P2) |
+| E11 | `unresolvedRuleNames` reports names matching nobody, over every restriction, conflict and presence person; it does not detect a name matching two members | `app/components/admin/ruleEnforcement.ts:225-249` | «The existing rule-name validation» covers zero matches only; exactly-one is new, and is C3's resolver (parent A7; §6.5) |
 | E12 | The matching criterion is case-insensitive, trimmed equality with `member_name` or `alias` | `app/utils/memberRuleNames.ts:37-45`; `plannerModel.ts:572-578` | The resolver reuses it; only the count of matches is new |
 | E13 | The rule form's person list is the `voz`-filtered roster | `MonthGenerator.tsx:1751` | An ambiguity check fed that list could miss a namesake without `voz` |
 | E14 | Pool checkbox lists are built from Tipo (`memberFitsPool`); the stale-tick banner is the existing pattern for a pool warning | `MonthGenerator.tsx:1642-1651`, `:1708-1734`; `plannerModel.ts:813-818` | The «not ticked» warning reuses `memberFitsPool` and the banner style |
@@ -80,7 +83,7 @@ All paths are relative to the repository root; line numbers verified on `3dbc189
 | E16 | No MCP tool reads or writes `solverConfig`; `solve_month` (P4) is unbuilt | `grep -rln 'solverConfig\|SOLVER_CONFIG\|restrictions' app/mcp app/api/mcp` → no match; `docs/MCP.md:36` | The MCP solve path is untouched by construction |
 | E17 | `invalid_request` is HTTP 400 and non-conflict; `stale_revision` is 409 | `app/utils/serviceMutation.ts:17-47`, `:61-65` | Chooses the refusal's code (§6.2) |
 | E18 | Preview and production read and write the same `solverConfig` (one dataset); `preview` deploys before `main` | `CLAUDE.md` «Vercel safety»; parent E4 | For the length of the release window, production's pre-C3 route is a live writer of a document that dev may have extended (§11) |
-| E19 | The «Equidad» help text already says Exenta/Holgura act on the weekend total band and on the specials filler (exempt = median, slack = load + N) | `MonthGenerator.tsx:733-753`; `localFill.ts:117-151` | Holgura still acts on the filler; the v3 note must speak of the solver only (Parent issue P4) |
+| E19 | The «Equidad» help text already says Exenta/Holgura act on the weekend total band and on the specials filler (exempt = median, slack = load + N) | `MonthGenerator.tsx:733-753`; `localFill.ts:117-151` | Holgura still acts on the filler, and keeps doing so under v3 (parent A10; C6 CTL-2); the v3 note speaks of the solver only |
 
 ## 4. Requirements
 
@@ -88,10 +91,10 @@ All paths are relative to the repository root; line numbers verified on `3dbc189
 |---|---|---|---|
 | R1 | A restriction may carry `sundayCadence: "alternate"` («Mes por medio»); absence means «Normal». No other value is ever stored, and «Normal» is never stored explicitly | Parent canonical name; no migration; every existing document stays byte-identical | Parser, serializer and reader tests (§13 T1–T3) |
 | R2 | Every path that writes the whole document preserves the field, and a body from a client that predates it is refused before any read or write | E3–E6; parent L4 | Route tests T4–T5; client test T6; tripwire T7 |
-| R3 | v2 is inert to the setting: its solve request and its grid verdicts for a config equal those for the config's v2 view (§6.4) | Parent §9 «v2 path byte-identical»; E9 | Equivalence corpus T8; existing v2 suites unmodified and green |
-| R4 | The setting resolves to member ids through one function that returns exactly one id per cadence name or names why not (unresolved, ambiguous) | Parent L4; E11–E13 | Resolver tests T9 |
+| R3 | v2 is inert to the setting: its whole solve request and its grid verdicts for a config equal those for the config's v2 view (§6.4) | Parent §9 «v2 path byte-identical» and A8; E9 | Equivalence corpus T8; existing v2 suites unmodified and green |
+| R4 | The setting resolves to member ids through one function that returns exactly one id per cadence name or names why not (unresolved, ambiguous); the same exactly-one function resolves any single rule name for C2's v3 eligibility resolver | Parent L4 and A7; E11–E13 | Resolver tests T9 |
 | R5 | The rule UI offers «Domingo: Normal / Mes por medio», shows it on the card, allows a restriction that carries only it, and preserves it on edit | Parent U7, §6 L4 | UI tests T11 |
-| R6 | A pure predicate names every resolved cadence member outside the effective Sunday pool, with copy; it renders only when the engine is v3 (gate wired by C6) | Parent §14 assumption 4; Parent issue P3 | T10 |
+| R6 | A pure predicate names every resolved cadence member outside the effective Sunday pool, with copy; it renders only when the engine is v3 (gate wired by C6) | Parent §14 assumption 4 and A9 | T10 |
 | R7 | «Holgura» stays selectable and unchanged under v2; its card says «no aplica con el nuevo solver» | Parent Q2, F8 | T11 |
 | R8 | The seed script and the defaults handle the field without behaviour change | Task scope; E15 | T12 |
 | R9 | Documentation and the ADR land in the same delivery | `CLAUDE.md` Conventions, Decision records | Docs audit at code review |
@@ -118,19 +121,28 @@ All paths are relative to the repository root; line numbers verified on `3dbc189
 
 - The monthly record, the cadence STATE (X1) and the ledger — C2. This spec stores the setting, never
   the state (F7).
-- The v3 request, the engine resolution, any rendering decision keyed on the engine — C6. C3 never
-  imports `SOLVER_ENGINE` (an earlier child — C1 in the parent §11 order — creates the module) and never reads the
-  effective engine: every engine-dependent surface of C3 is either engine-neutral or behind an input
-  C6 drives with its server-resolved engine prop (C6 ENG-3/ENG-4).
+- The engine switch and any rendering decision keyed on the engine. Parent A1 splits it: C1 creates
+  `app/components/admin/solverEngine.ts` with the constant `SOLVER_ENGINE` only; C2 adds the pure
+  resolver of the effective engine and the Preview-only `OWT_SOLVER_ENGINE` override; C6 adds the
+  solve route's 409 and passes the server-resolved engine to the planner (C6 ENG-3/ENG-4). C3 never
+  imports `SOLVER_ENGINE` or C2's resolver and never reads the effective engine: every
+  engine-dependent surface of C3 is either engine-neutral or behind an input C6 drives with that
+  prop.
+- The v3 eligibility resolution (pools + rules + members → per-role statuses) — C2 (parent A7,
+  C2 RES-1–RES-7) — and the v3 request — C6.
 - The solver's handling of the cadence — C5.
-- Moving the cadence members into «Líderes Domingo», emptying «Líderes Sábado», saving their
-  «Mes por medio» on production — C7 / Frank. **No agent saves rules on production** (`CLAUDE.md`:
-  production Sanity writes need explicit consent).
-- Ambiguity checks for v2's other rules. v2 keeps first-match resolution (E12) unchanged.
+- Moving the cadence members into «Líderes Domingo» and emptying «Líderes Sábado» — C7's single flip
+  step (parent A22). Saving their «Mes por medio» on production — Frank, in the UI, once the
+  production alias serves C3 (parent A26) and before C4's dry run (parent A22; C4 A2). **No agent
+  saves rules on production** (`CLAUDE.md`: production Sanity writes need explicit consent).
+- Ambiguity checks for v2's other rules: v2 keeps first-match resolution (E12) unchanged (parent A7).
+  Under v3, every other rule name goes through `resolveRulePersonId` inside C2's resolver
+  (C2 RES-7); C3 provides the function, not that check.
 - Rule names becoming ids in storage (deferred ruling «D4 Reglas del solver por id»). Storage stays
   name-keyed like every other rule (parent L4).
 - MCP: no tool changes; `solve_month` stays unbuilt (parent §10).
-- Changing «Exenta» (D13: today's meaning) or the specials filler's use of Holgura (Parent issue P4).
+- Changing «Exenta» (D13: today's meaning) or the specials filler's use of Holgura, which keeps
+  today's Exenta/Holgura ordering for uncounted specials under v3 too (parent A10; C6 CTL-2).
 
 ## 6. Behaviour and invariants
 
@@ -212,10 +224,15 @@ as today).
   `C` and `v2View(C)`;
 - `allRulesToDs` produces the same strings in the same order.
 
+This is the parent's A8 («the whole v2 solve request and the grid's rule verdicts are identical with
+or without `sundayCadence`»), with «without» read as `v2View(C)`: removing only the field would leave a
+clause-less restriction that still reaches `solverPools` (E9), so the literal reading is satisfied
+by today's code and protects nothing (§14).
+
 **The one deliberate difference.** `unresolvedRuleNames` also reports the name of a cadence-only
 restriction that matches nobody. It is a warning, not part of the solve, and an unresolvable cadence
-name is a broken rule the admin must fix before v3 (it is «the existing rule-name validation» the
-parent cites).
+name is a broken rule the admin must fix before v3 (it is the zero-match half of «the existing
+rule-name validation» parent L4 cites; the exactly-one half is §6.5).
 
 **Why this needs code, not only a test** (E9): `solverPools` takes the `person` of every restriction,
 so a cadence-only restriction naming someone in no pool would inject them into v2's `support`, and one
@@ -233,10 +250,17 @@ applied; the equivalence corpus (T8) is the guard.
   a namesake and turn an ambiguous name into a resolved one.
 - Several restrictions may carry the cadence for the same member (different spellings, or two cards):
   the result is the union, each id once, in a stable order (by id).
-- **When it refuses** is the consumer's: C2's record writer and C6's v3 request builder refuse the
-  whole operation and name every refused `person` (parent L4). C3's save does **not** refuse: the
-  route holds no roster, and a later rename or new member can make a saved name ambiguous anyway, so
-  only a build-time check is sound. C3 warns at edit time instead (§6.6).
+- **The same function serves every v3 rule name** (parent A7): C2's single v3 eligibility resolver
+  resolves each restriction's `person`, both persons of each conflict and every presence person
+  through `resolveRulePersonId`, and the cadence setting through `cadenceMembers`, all over the same
+  unfiltered roster (C2 RES-5, RES-7). v2 keeps its first-match resolution (E12; A7).
+- **When it refuses** is the consumer's: C2's resolver refuses the whole build and names every
+  refused `person` (C2 RES-7), so «Registrar», Auto's confirm (C6 builds both S1's eligibility and
+  the record body from C2's output, A7) and C4's reconstruction (which calls the same resolver)
+  refuse with it; C6's Auto also refuses before any read on a `cadenceMembers` refusal (C6 WN-2).
+  C3's save does **not** refuse: the route holds no roster, and a later rename or new member can make
+  a saved name ambiguous anyway, so only a build-time check is sound. C3 warns at edit time instead
+  (§6.6).
 
 ### 6.6 The rule UI
 
@@ -245,9 +269,12 @@ All strings Spanish, as written here. Styling follows the existing chips and hou
 - **Form** (`PersonRestrictionForm`): below «Equidad», a `SegmentedControl` (CLAUDE.md: every
   one-of-N choice) labelled «Domingo» with «Normal» and «Mes por medio». Initialised from the edited
   restriction; «Normal» for a new one. With «Mes por medio» selected, help text:
-  «Si el mes anterior no dirigió domingo y está en Líderes Domingo, este mes le toca uno; si dirigió,
-  este mes descansa y, si se puede, dirige un sábado. Aplica con el nuevo solver; el solver actual no
-  lo usa.»
+  «Si el mes anterior no dirigió domingo, está en Líderes Domingo y puede al menos un domingo, ese mes
+  le toca uno; en otro caso descansa y, si no dirige domingo, de preferencia dirige un sábado. Fuera
+  de Líderes Domingo no le toca ni domingo ni sábado de compensación. Aplica con el nuevo solver; el
+  solver actual no lo usa.» It follows X1 (all three «on» conditions; a Sunday she is rule-excluded
+  from does not count, A14), X2 (the Saturday only in a month she leads no Sunday) and A14 (outside
+  the Sunday line the state is `out`: no Sunday, no compensation Saturday).
 - **`canAdd`**: true when a person is chosen and at least one of today's clauses is set **or**
   «Mes por medio» is selected. A restriction may carry the cadence alone.
 - **Edit preserves everything.** Saving the form without touching it returns a restriction deep-equal
@@ -272,26 +299,31 @@ All strings Spanish, as written here. Styling follows the existing chips and hou
   `name` is the display name (`displayMemberName`). Refused names are not in this list; they have
   their own surfaces.
 - Copy, under a heading «Mes por medio fuera de Líderes Domingo»:
-  - `not_ticked`: «{nombre} no está en Líderes Domingo: este mes cuenta como mes «no», sin domingo y
-    sin sábado de compensación.»
-  - `no_sunday_lead_tipo`: «{nombre} no tiene el Tipo «Líder Domingo»: este mes cuenta como mes «no»,
-    sin domingo y sin sábado de compensación.»
-  Both follow X1 (an ineligible month is «off» with no compensation Saturday).
+  - `not_ticked`: «{nombre} no está en Líderes Domingo: descansa este mes, sin domingo y sin sábado
+    de compensación.»
+  - `no_sunday_lead_tipo`: «{nombre} no tiene el Tipo «Líder Domingo»: descansa este mes, sin domingo
+    y sin sábado de compensación.»
+  Both describe the `out` wire state of parent A14 (not eligible: no Sunday, no compensation
+  Saturday), never `off`: either reason makes her `Sun.Lead` status `out` in C2's resolver (C2 RES-1:
+  `Sun.Lead` is `in` iff she is in the Sunday pool and her Tipo fits), and C6 maps that to `out`
+  (C6 RQ-4), which its panel reads «descansa: no está en la lista de Dom Lead» (C6 §7.7).
 - **It renders only when the engine is v3.** Until C7, the cadence members sit in «Líderes Sábado»
   by design (parent D9, E4); under v2 the warning would list them every month and invite the one
   action that changes v2's behaviour — ticking them into «Líderes Domingo» makes v2 schedule them as
   regular Sunday leads every month. C3 ships the predicate, the copy and the rendering behind an
   explicit input that defaults to **closed**; C6 opens it when its server-resolved
-  `effectiveEngine === "v3"` prop says so (C6 ENG-3/ENG-4, WN-1) — never by comparing the
-  `SOLVER_ENGINE` constant, which under a Preview override is not the effective engine (Parent issue
-  P3).
+  `effectiveEngine === "v3"` prop says so (parent A9; C6 ENG-3/ENG-4, WN-1) — never by comparing the
+  `SOLVER_ENGINE` constant, which under a Preview override is not the effective engine (parent A1).
+  The predicate reads the on-screen config only; C6 also leaves it closed for a record-bound month,
+  whose cadence setting and eligibility are the record's (parent A6; C6 WN-1).
 
 ### 6.8 «Holgura» (Q2)
 
 - Under v2: unchanged in storage, validation, request (`fairness_slack N`), filler and form.
-- Under v3: the solver ignores it (C5 sends/reads nothing for it; C6's request carries none). C3's
-  part is the copy of §6.6. Whether the specials filler keeps using it under v3 is C6's (Parent issue
-  P4).
+- Under v3: the solver ignores it (parent A10; C6 RQ-4 sends none). The uncounted-specials filler
+  keeps today's Exenta (median) / Holgura (load + N) ordering under v3 too (parent A10; C6 CTL-2;
+  E19), so the form's specials sentence stays true and stays. C3's part is the copy of §6.6, which
+  speaks of the solver only.
 
 ### 6.9 Seed and defaults
 
@@ -325,7 +357,8 @@ apply).
 | Pre-C3 tab saves after release | 400 `invalid_request`/`configVersion`; «El servidor rechazó las reglas y no guardó nada.»; stored document unchanged; reloading the page loads the C3 bundle |
 | C3 tab after a full rollback (§11) | GET lacks `configVersion` ⇒ save disabled with the reload notice; reload loads the reverted bundle |
 | Invalid cadence value in a body | 400 with `restrictions[i].sundayCadence`; nothing written |
-| Name unresolved / ambiguous | Saved as written; existing banner / ambiguity chip; C2 and C6 refuse at build time, naming it |
+| Name unresolved / ambiguous | Saved as written; existing banner / ambiguity chip; C2's resolver (and with it «Registrar», Auto's confirm and C4) and C6's Auto refuse at build time, naming it (§6.5) |
+| «Mes por medio» and an exact count covering `Sun.Lead` on one person | Saved as written, no warning in C3 (both are valid v2 data and the field is inert there); under v3 C6 refuses the request naming the person and the rule (parent A11; C6 WN-2), and C5 refuses such a request with `invalid_request` (C5 §5.3) |
 | Lost commit race | Unchanged: `stale_revision` |
 
 ## 7. Interfaces
@@ -347,7 +380,8 @@ code only: `rulePersonNamesMember` and `displayMemberName` (`app/utils/memberRul
    - refusal: HTTP 400 `{ error: "invalid_request", conflict: false, message: string,
      details: { issues: ["configVersion"], expected: number, received: unknown } }`.
 4. **Resolver** — `app/utils/sundayCadence.ts`, neutral (no `"use client"`, no `server-only`, no I/O),
-   so a server route (C2) and the planner (C6) import the same code:
+   so a server route (C2), the planner (C6) and C4's script (through C2's resolver) import the same
+   code:
    ```ts
    type RosterMember = { _id: string; member_name: string; alias?: string; memberType?: string[] };
    type NameRefusal = { person: string; reason: "unresolved" | "ambiguous"; matches: string[] };
@@ -369,18 +403,29 @@ code only: `rulePersonNamesMember` and `displayMemberName` (`app/utils/memberRul
 6. **The warning's gate**: an explicit boolean input on the config panel, default `false`. C6 passes
    `effectiveEngine === "v3"` (the server-resolved prop, C6 ENG-3/ENG-4; the prop's name is C6's — never the raw
    `SOLVER_ENGINE` constant), and C6 decides whether `CADENCE_V2_NOTE` hides under v3 on the same
-   prop (C6 CTL-1).
-7. **The v2-view guarantee** of §6.4: C6 and C7 may rely on «saving «Mes por medio» changes nothing
-   v2 does» — the reason C7 can set the cadence before the flip.
+   prop (C6 CTL-1). C6 also keeps the gate closed for a record-bound month (parent A6; C6 WN-1); the
+   predicate itself does not know about records.
+7. **The v2-view guarantee** of §6.4 (parent A8): C4, C6 and C7 may rely on «saving «Mes por medio»
+   changes nothing v2 does» — the reason it may be saved before C4's dry run and outside C7's flip
+   step (parent A22; C4 A2), once the production alias serves C3 (parent A26).
 
 **Obligations stated here, owned by the consumer:**
 
-- **C2** resolves the cadence setting it snapshots with `cadenceMembers` over the unfiltered roster,
-  and refuses to write a record while `refusals` is non-empty, naming each `person`. It stores the
-  setting by member id, never the state (F7).
-- **C6** builds the v3 request's cadence members with `cadenceMembers` over the same roster, refuses
-  to solve on any refusal (Spanish copy is C6's), and opens the §6.7 gate under v3.
-- **C5** receives cadence only as C2/C6 send it (ids and states); it never reads `solverConfig`.
+- **C2** (the single v3 eligibility resolver, parent A7) resolves every rule name it reads with
+  `resolveRulePersonId` and the cadence setting with `cadenceMembers`, over the unfiltered worship
+  roster, and refuses the whole build on any `unresolved`/`ambiguous` result or non-empty
+  `refusals`, naming each `person` (C2 RES-5, RES-7). It stores the setting per member id
+  (`sundayCadence: "alternate"` on the record's person), never the state (F7; C2 REC-3).
+- **C4** reaches the setting only through C2's resolver (C4 «Consumes from C3»), so the same
+  refusals apply to the reconstruction.
+- **C6** builds the request's cadence members with `cadenceMembers` over the same roster (C6 RQ-4)
+  and S1's eligibility and the confirm's record body from C2's resolver output (parent A7); refuses
+  Auto before any read on a `cadenceMembers` refusal and on «Mes por medio» together with an exact
+  count covering `Sun.Lead` (parent A11; C6 WN-2; Spanish copy is C6's); and opens the §6.7 gate
+  under v3 (parent A9; C6 WN-1).
+- **C5** receives cadence only as C6 sends it — a per-month `on` / `off` / `out` state per cadence
+  member (parent A14; C5 §5.3), derived from C2's function and mapped to the wire by C6 (RQ-4); it
+  never reads `solverConfig`.
 
 ## 8. Decisions
 
@@ -389,14 +434,17 @@ code only: `rulePersonNamesMember` and `displayMemberName` (`app/utils/memberRul
 | Field shape | Optional `"alternate"`, absence = Normal | Parent canonical; no migration; existing documents byte-identical | Required enum `"normal"\|"alternate"`: every stored restriction would change on the next save, for nothing | Parent (name); C3 (shape) |
 | Protecting the field | Refuse a body without the current `configVersion` | E3–E6: an old tab cannot hold the field at all | **Server-side merge** of fields the body lacks: indistinguishable from a deliberate «Normal», which is also absence. **Requiring the field on every restriction**: guards this one field only; a version guards the next one too | C3 |
 | Refusal code | `invalid_request` 400 with issue `configVersion` | E7: the only existing code a pre-C3 tab renders honestly without a dead-end reload | `stale_revision`: reload loop through a field-dropping reader. New code: «(error 409)» | C3 |
-| v2 inertness | Whole-request equivalence to `v2View`, not only rule strings | E9 | Parent's narrower «rule strings» wording (Parent issue P1) | C3 |
-| When names are refused | At record/request build (C2/C6), warned at edit | No roster on the save route; renames make any save-time check stale | Refusing at save: a roster read on a critical writer, still unsound later | C3 |
-| Ambiguity scope | Cadence restrictions only | v2's first-match resolution must not change (§6.4) | Extending to every rule is C6's call for v3 (Q-b) | C3 |
+| v2 inertness | Whole-request and grid-verdict equivalence to `v2View` (parent A8) | E9 | Equivalence with only the field stripped: holds trivially and lets a cadence-only restriction inject into `support` (§6.4, §14) | C3 |
+| When names are refused | At record/request build (C2's resolver; C6's Auto), warned at edit | No roster on the save route; renames make any save-time check stale | Refusing at save: a roster read on a critical writer, still unsound later | C3 |
+| Ambiguity chip scope | Cadence restrictions only; under v3 every rule name is checked at build time by C2's resolver with C3's function (parent A7) | Under v2 an ambiguous non-cadence name has a defined first-match meaning that must not change (§6.4, A7); a chip there would alarm about behaviour v2 handles | A chip on every card: a v2-visible warning about a v3-only refusal, which C6 already names at Auto | C3 |
 | «Not ticked» warning | Built in C3, rendered only under v3 | Under v2 it invites a v2-changing action (§6.7) | Rendering it under v2 with «don't tick yet» copy: noisy for months and easy to misread | C3; gate C6 |
-| Engine-dependent copy | Rendered unconditionally in C3; C6 adapts on its effective-engine prop | The effective engine is not resolvable before C6 (C6 ENG-2/ENG-3); v2 is the only engine meanwhile, so unconditional copy is true. Reading `SOLVER_ENGINE` instead would be one more constant comparison C6 must find and rewire (ENG-4) | Gating on `SOLVER_ENGINE` now (C1's choice for its note): equivalent until C6, wrong under a Preview override after | C3 / C6 |
+| Engine-dependent copy | Rendered unconditionally in C3; C6 adapts on its effective-engine prop | C3 lands before C2's resolver exists (parent A1, §13), and no server-resolved engine reaches the rules panel until C6 passes it (C6 ENG-3, CTL-1); v2 is the only engine meanwhile, so unconditional copy is true. Reading `SOLVER_ENGINE` instead would be one more constant comparison C6 must find and rewire (ENG-4) | Gating on `SOLVER_ENGINE` now (C1's choice for its note): equivalent until C6, wrong under a Preview override after | C3 / C6 |
 | Defaults | Unchanged | Shown only where no document exists; adding cadence there names people | — | C3 |
 
 ## 9. Assumptions
+
+A1–A5 below are this spec's assumptions (C7 cites «C3 A5»); the parent's amendments are always
+written «parent A…».
 
 | Assumption | Impact if false | Validation | Failure response |
 |---|---|---|---|
@@ -410,9 +458,12 @@ code only: `rulePersonNamesMember` and `displayMemberName` (`app/utils/memberRul
 
 | Q | Question | Why it matters | Recommendation and why | Owner | Blocking? | Resolution point | Default |
 |---|---|---|---|---|---|---|---|
-| Q-a | A person with «Mes por medio» and an exact count on a pattern covering `Sun.Lead` (e.g. `Sun.Lead == 2`): which wins? | Both are F5 set-asides and contradict; §4 does not say (Parent issue P5) | C6 refuses the v3 request naming the person; C5 need not model it. A refusal is visible; a silent precedence is not | Frank / C6 | No for C3 (stored and inert under v2) | C6 spec | C3 stores both, adds no warning |
-| Q-b | Should v3 apply the exactly-one check to every rule name, not only the cadence? | v3 keys people by id (S1); a first-match guess would be a silent wrong id | Yes, with `resolveRulePersonId` | C6 | No | C6 spec | C3 applies it to the cadence only |
 | Q-c | Final wording of the §6.6–§6.7 copy | Transparency is the parent's R4 | Ship as written; Frank reviews at C7's look | Frank | No | C7 | As written |
+| Q-d | Should §6.7's predicate also name a cadence member whose `excludedPatterns` cover `Sun.Lead` (`Sun.Lead`, `Sun.*`, `*.Lead`, …)? | C2's resolver makes her `Sun.Lead` status `out` (C2 RES-2), so she is `out` every month (parent A14) while ticked in «Líderes Domingo»; the predicate, keyed on pool and Tipo, never lists her | No: the exclusion is visible on her own rule card, and C6's panel reads `out` as «descansa: no está en la lista de Dom Lead» (C6 §7.7). A third reason would change §7 item 4's union, which C6 WN-1 («its two sentences») and C7 (counts by reason) consume | Frank | No | C7 look | Not in C3's predicate |
+
+Two earlier questions are closed by the parent and no longer open here: Q-a («Mes por medio» together
+with an exact count covering `Sun.Lead`) by A11 — §6.12 — and Q-b (the exactly-one check for every v3
+rule name) by A7 — §6.5.
 
 ## 11. Release, safe end state, rollback
 
@@ -424,24 +475,28 @@ code only: `rulePersonNamesMember` and `displayMemberName` (`app/utils/memberRul
 4. **Look on dev without saving.** Open the rules, set «Mes por medio» on screen, see the chip, the
    help text and the Holgura note, then discard. A save on dev writes the production document (E18).
 5. PR to `main`, `gates` green, merge; verify the production alias serves the merge commit.
-6. **No «Mes por medio» is saved on any deployment until step 5's verification passes.** Until then,
-   production runs the pre-C3 route, which has no guard and would erase the field on its next save of
-   any rule. After it, pre-C3 tabs are refused (§6.2).
+6. **No «Mes por medio» is saved on any deployment until step 5's verification passes** (parent A26).
+   Until then, production runs the pre-C3 route, which has no guard and would erase the field on its
+   next save of any rule. After it, pre-C3 tabs are refused (§6.2).
 7. Setting the cadence for the real cadence members is Frank's action in the UI, when he chooses
-   (parent U7, C7). No agent performs it.
+   after step 6 — before C4's dry run, which needs it (parent A22; C4 A2), and independent of C7's
+   flip step, which covers only moving the pools and flipping the constant (parent A22). It is inert
+   under v2 (§6.4). No agent performs it.
 
 **Safe end state.** The setting is storable, preserved by every writer, resolvable by id, shown as
 «aplica con el nuevo solver», and inert under v2 (§6.4). Nothing reads it to change behaviour until
 C2/C6.
 
-**Rollback** (the parent's «Revert with the version guard», made concrete — Parent issue P6):
+**Rollback** (parent A26: UI-only, or a full revert only before C2 ships and after listing every
+stored setting):
 
 - **Preferred — UI-only rollback.** Remove the control, chip, ambiguity chip and gated warning; keep the
   type, parser, serializer, reader, resolver and the guard. Stored settings survive; v2 is unchanged.
   Safe at any time.
-- **Full revert.** Only while C2 is not merged (C2 imports the resolver; revert C2 first otherwise).
-  Before it, list the stored cadence settings with a read-only query and keep the list with Frank: the
-  reverted route drops the field on its next save. v2 behaviour is unchanged either way (§6.4). C3-era
+- **Full revert.** Only before C2 ships (C2, and through it C4 and C6, import the resolver and read
+  the field); once C2 has shipped, only the UI-only rollback exists. Before it, list every stored
+  cadence setting with a read-only query and keep the list with Frank: the reverted route drops the
+  field on its next save. v2 behaviour is unchanged either way (§6.4). C3-era
   tabs then see the reload notice (§6.12).
 
 ## 12. Documentation in the same delivery
@@ -477,39 +532,38 @@ C2/C6.
 
 ## 14. Parent issues
 
-The parent is followed meanwhile; each item below is how this spec reads it, with the recommended
-fix to the parent's text.
+The seven issues this spec raised against the approved parent are settled by its amendments: P1
+(L4's inertness covered rule strings only) by A8; P2 (no exactly-one name check) by A7; P3 (the
+«not ticked» warning live under v2) by A9; P4 (Holgura and the specials filler) by A10; P5 (cadence
+together with an exact `Sun.Lead` count) by A11; P6 (rollback underspecified) and P7 (the
+Preview-first release window) by A26. This spec now cites the amendments in their place. Two
+wording points remain; the parent is followed meanwhile, as this spec reads it below.
 
-- **P1 — L4's inertness is too narrow.** «v2's rule strings are byte-identical with or without it»
-  holds (E8) but does not protect v2: `solverPools` injects every restriction's `person` into
-  `support` and refuses a month for a named member with no Tipo, clauses or not (E9). **Fix:** L4 reads
-  «v2's solve request and grid verdicts are identical for a config and its v2 view» (§6.4).
-- **P2 — «the existing rule-name validation» does not refuse ambiguous names.** It reports zero
-  matches only, and resolution takes the first match (E11, E12). **Fix:** L4 says the exactly-one
-  check is new, uses the existing matching criterion, and is defined by C3 (§6.5).
-- **P3 — §14 assumption 4's warning cannot be live under v2.** Until C7 the cadence members are in
-  «Líderes Sábado»; the warning would list them monthly and invite ticking them into «Líderes
-  Domingo», which changes v2. **Fix:** «C3 builds the warning; C6 renders it under v3» (§6.7).
-- **P4 — Q2/F8 «Holgura has nothing to act on under v3» overlooks the specials filler.**
-  `fairnessByMemberId` ranks Holgura N as load + N (E19), and U3 keeps uncounted specials filled «as
-  today». **Fix:** Q2's default stays (the note is about the solver and is accurate); C6 decides
-  whether the filler keeps Holgura under v3 and adjusts the form's specials sentence if not.
-- **P5 — cadence together with an exact `Sun.Lead` count on one person is undefined** in §4 (F5, F7).
-  **Fix:** §4 states that the v3 request refuses it, naming the person (Q-a).
-- **P6 — §11's rollback «Revert with the version guard» is underspecified.** **Fix:** reference §11 of
-  this spec (UI-only rollback preferred; full revert only before C2, after listing the settings).
-- **P7 — §13 omits the release window.** Preview-first ordering leaves production's pre-C3 route
-  writing the shared document while dev runs C3 (E18). **Fix:** §13's C3 row adds «no «Mes por
-  medio» saved anywhere until the production alias serves C3».
+- **P8 — A8's «with or without `sundayCadence`» is satisfied by today's code and protects nothing on
+  its own.** v2 never reads the field, so a config compared with itself minus the field always
+  yields the same request — yet a restriction carrying **only** the cadence still reaches
+  `solverPools`, which injects its `person` into `support` or refuses the month for a member with no
+  Tipo (E9). The protection the parent wants needs the cadence-only restriction removed as well.
+  **Fix:** A8 reads «… identical for a config and its v2 view (C3 §6.4: the field removed from every
+  restriction, and a restriction that carried only it removed)». Followed meanwhile: §6.4's
+  `v2View`.
+- **P9 — L4 still calls the exactly-one check «the existing rule-name validation».** The existing
+  validation (`unresolvedRuleNames`, `ruleEnforcement.ts:225-249`) reports zero matches only and
+  v2 resolves by first match (`plannerModel.ts:572-578`); the exactly-one check is C3's
+  `resolveRulePersonId` (§6.5). A7 says so, but A7 names §11, not L4, and the amendments' own rule
+  makes a row win only over the clause it names. **Fix:** A7 also names L4, or L4 reads «(C3's
+  exactly-one resolver; v2 keeps its first-match resolution)». Followed meanwhile: A7's meaning.
 
 ## 15. Review handoff
 
 - Review order: after the parent and C1 (parent «Review handoff»); critical tier — two sequential
   fresh `APPROVED` verdicts on byte-identical text; churn cap binding.
-- Evidence for reviewers: this file; the repository at `3dbc189b`; the parent. Prior planning dialogue
-  and the private evidence directory are not needed for this child.
-- A material change here to §7 propagates to C2 and C6 and restarts their review; a change to the
-  Parent issues propagates to the parent.
+- Evidence for reviewers: this file; the repository at `2d90e4b3` (code identical to `3dbc189b`,
+  §3); the parent with its amendments A1–A26; C2 RES-5/RES-7, C6 RQ-4/WN-1/WN-2/CTL-1/CTL-2 and
+  C6 §7.7 for the cross-references. Prior planning dialogue and the private evidence directory are
+  not needed for this child.
+- A material change here to §7 propagates to C2, C4, C6 and C7 (each restates §7's shapes) and
+  restarts their review; a change to the Parent issues propagates to the parent.
 - Implementation authorization: **not granted by this document.**
 
 ## Terminal state

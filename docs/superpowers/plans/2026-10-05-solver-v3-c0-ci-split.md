@@ -14,6 +14,10 @@ The accepted requirement this plan delivers is the C0 row of the approved parent
 Its evidence row (§2): «CI's solver step is ~9m43s of a 14m40s job against a 25-minute limit →
 Split CI before a second solver suite».
 
+Parent amendment **A20** (§3, «Amendments from writing the children») amends that row and wins over
+its older wording: «C0 lands a minimal `gcf_v3/` scaffold (package `owt_v3`, requirements, one smoke
+test) that C5 takes over. Safe end state: the same tests plus that smoke test.»
+
 ## Status and contract
 
 - **Document status:** Draft.
@@ -24,8 +28,11 @@ Split CI before a second solver suite».
   on a real pull request (Step 6), which is why the tier stays standard rather than critical. No
   adversarial plan review; the control after implementation is a fresh code review of the diff plus
   the verifications below.
-- **Accepted source:** parent §11 C0, §2 (CI evidence row), §8 E1 («its own source directory, Cloud
-  Build trigger **and CI job**»), §13 («→ C0 … Production behaviour unchanged … Merged, gates green»).
+- **Accepted source:** parent §11 C0 as amended by §3 A20, §2 (CI evidence row), §8 E1 («its own
+  source directory, Cloud Build trigger **and CI job**»), §13 («→ C0 … Production behaviour unchanged
+  … Merged, gates green»). A20 is the only amendment in C0's scope; A1–A19 and A21–A26 settle
+  ledger, cadence, planner and cutover contracts and change nothing here. A18 (the golden fixture is
+  asserted by both suites) is served by the fixture paragraph under Interfaces, unchanged in shape.
 - **Primary outcome:** `.github/workflows/ci.yml` runs the Node gates, v2's solver suite (`gcf/`) and
   the v3 suite (`gcf_v3/`) in **separate, parallel jobs**; the check `main`'s protection requires is
   still named **`gates`** and is green **only** when every one of those jobs succeeded; a guard proves
@@ -39,7 +46,7 @@ Split CI before a second solver suite».
 
 ## Evidence and current behavior
 
-All line numbers verified on this branch (`3dbc189b`) on 2026-10-05.
+All line numbers verified on this branch (`2d90e4b3`) on 2026-10-05.
 
 | Evidence | Source | Planning implication |
 |---|---|---|
@@ -55,8 +62,9 @@ All line numbers verified on this branch (`3dbc189b`) on 2026-10-05.
 | `gcf/` holds four test modules: `test_inertness.py`, `test_main.py`, `test_owt_solver_v2.py`, `test_pinned_assignments.py`; no subdirectories, no `__init__.py` | `ls -a gcf` | `-s gcf -t gcf` discovers all four today |
 | `gcf/.gcloudignore` excludes `test_*.py` and `*_test.py` from the deployed function | `gcf/.gcloudignore` | `*_test.py` is anticipated as a naming mistake; unittest's default pattern never discovers it |
 | Python 3.12.13 measured locally: `discover` silently skips a subdirectory without `__init__.py`; never discovers `x_test.py`; exits **5** («NO TESTS RAN») on an empty start dir; exits **1** («Start directory is not importable») on a missing one | scratch experiment, 2026-10-05 | A v3 job pointed at a missing or empty `gcf_v3/` is red, not inert; a misplaced v3 test runs nowhere and nobody is told. The guard must model this |
+| Cross-tree imports are **not** blocked by the start directory. In a scratch tree (`gcf/owt_solver_v2.py`, no `gcf/__init__.py`; `gcf_v3/owt_v3/__init__.py`; one probe test in `gcf_v3/`), `python -m unittest discover -s gcf_v3 -t gcf_v3` run from the tree root imports `owt_v3` ✓, fails on bare `owt_solver_v2` (`ModuleNotFoundError`), and **imports `gcf.owt_solver_v2` ✓** — identical on Python 3.12.13, 3.13 and 3.14.7. Mechanism: `python -m` puts the working directory (the repo root in CI) on `sys.path[0]`, and an `__init__`-less `gcf/` resolves as a namespace package. The mirror holds in `solver-v2` for `gcf_v3.owt_v3` | scratch experiment, 2026-10-05 | Isolation between the trees cannot be a `sys.path` property; it has to be a guard rule over import statements (I2, Step 3) |
 | `gcf_v3/` does not exist; no `fixtures/` directory exists | `ls` | C0 must create the minimum for the v3 job to be real (Decision P1) |
-| Cloud Build deploys v2 from `main`, trigger file filter `gcf/**` and `cloudbuild.yaml`, `--source=gcf` | `cloudbuild.yaml:1-24` (comment at `:3-5`) | Files under `gcf_v3/` match neither filter, so the scaffold deploys nothing. The filter itself is read from a comment, not from GCP (Assumption A1) |
+| Cloud Build deploys v2 from `main`, trigger file filter `gcf/**` and `cloudbuild.yaml`, `--source=gcf` | `cloudbuild.yaml:1-24` (comment at `:3-4`); `docs/SOLVER_AND_INFRA.md:458` | Files under `gcf_v3/` match neither filter, so the scaffold deploys nothing. The filter itself is read from a comment and a doc, not from GCP (Assumption A1) |
 | Other workflows: `smtp-probe.yml` (job `probe`), `flush-notifications.yml` (job `flush`) | `.github/workflows/*.yml` | No other job is named `gates` today; the guard keeps it that way |
 | Workflow-text guards already exist and are the house pattern: `flushWorkflowGate.test.ts` reads a workflow as text; `deployBranchPolicy.test.ts` keeps a pure policy in `scripts/lib/` and executes its runner **as a process** so swapped exit codes cannot pass | `app/api/__tests__/flushWorkflowGate.test.ts:38-41`; `scripts/__tests__/deployBranchPolicy.test.ts:1-23`; `scripts/lib/deploy-branch-policy.mjs` | Follow both: pure checks in `scripts/lib/`, a process-executed verdict runner |
 | `js-yaml` appears only under `overrides` in `package.json` (`:51-52`, `:68`), never as a direct dependency | `package.json` | A guard may not import a YAML parser it does not own (Decision P4) |
@@ -81,7 +89,8 @@ All line numbers verified on this branch (`3dbc189b`) on 2026-10-05.
 - Any change under `gcf/` or to `cloudbuild.yaml` (parent §10: v2's code, tests and function are
   untouched).
 - Creating the v3 Cloud Build trigger, function or source beyond the scaffold (C5, parent E1).
-- The golden fixture `fixtures/fairness/golden.json` (C2 creates it, C5 consumes it).
+- The golden fixture `fixtures/fairness/golden.json` (C2 creates it and asserts it in vitest; C5's
+  Python suite asserts its `ledger` cases — parent A18, C2 FX-1/FX-3).
 - Changing branch protection, `scripts/apply-branch-protection.sh`, or the auto-merge setting.
 - Path filters, a merge queue, a Python version matrix, or caching beyond today's npm/pip caches.
 - Running Python tests that live outside `gcf/` and `gcf_v3/` (there are none).
@@ -116,26 +125,46 @@ plan), `.github/workflows/ci.yml`, and branch protection on `main` as read above
   sparse checkout); installs with `pip install -r gcf_v3/requirements.txt`; runs exactly
   `python -m unittest discover -s gcf_v3 -t gcf_v3 -v`; `GITHUB_ACTIONS=true` (runner default); no
   secrets, no env vars; `timeout-minutes: 15` until C5 re-sets it from its own measured run (Decision
-  P6). Its result is one of the `needs` the `gates` verdict requires to be `success`.
+  P6; C5 §12.2 adopts the rule and budgets the job at 10 minutes, target 6). Its result is one of the
+  `needs` the `gates` verdict requires to be `success`.
 - **I2 — the discovery contract** (enforced by the guard, Step 3). A file under `gcf_v3/` is a test
   module iff its basename matches `test*.py` and it sits in `gcf_v3/` itself or in a directory chain
   below it in which **every** directory has an `__init__.py`. Forbidden under `gcf_v3/` (and `gcf/`):
   a `*_test.py` file, a `test*.py` file that discovery cannot reach, any definition of `load_tests`, a
   `-p` pattern or a `-s` that differs from `-t` in the command. The tree must contain at least one
   reachable test module. Imports resolve with `gcf_v3/` as the top-level directory, so the package
-  imports as `owt_v3`; nothing under `gcf/` is importable in that job, and nothing under `gcf_v3/` is
-  importable in `solver-v2`.
+  imports as `owt_v3`. A sub-tree that holds no `test*.py` (C5's `gcf_v3/acceptance/` package, C5
+  §11.1) is allowed and contributes no modules.
+  **Isolation between the trees is a guard rule, not a `sys.path` property.** Both jobs run
+  `python -m unittest` from the repository root, which puts the root on `sys.path`, so
+  `gcf.owt_solver_v2` *is* importable in `solver-v3` (as a namespace package) and `gcf_v3.owt_v3` in
+  `solver-v2` (evidence row, measured on 3.12.13). The guard therefore forbids the import statements:
+  no `.py` file under `gcf_v3/` may contain an `import gcf…` or `from gcf… import` statement naming
+  the `gcf` package (the name `gcf` itself, not `gcf_v3`), and no `.py` file under `gcf/` may import
+  `gcf_v3` or `owt_v3`. The check reads statement forms only; a dynamic `importlib.import_module` or
+  `__import__` call is a code-review matter, not a guard failure.
 - **I3 — the scaffold**, which C5 owns from merge on: `gcf_v3/requirements.txt` (one line,
   `ortools==9.15.6755`, the same pin as `gcf/requirements.txt`), `gcf_v3/.gcloudignore` (a copy of
   `gcf/.gcloudignore`), `gcf_v3/owt_v3/__init__.py` (docstring only), and `gcf_v3/test_scaffold.py`
   (one smoke test: `owt_v3` and `ortools.sat.python.cp_model` import). C5 may change the pin and
-  delete `test_scaffold.py` once another test module exists.
+  delete `test_scaffold.py` once another test module exists. This matches what C5 §11.1 consumes:
+  «`ortools==9.15.6755` and `functions-framework>=3.0,<4`. C0 scaffolds the first line»;
+  `.gcloudignore` is «C0's copy of v2's file», to which C5 adds `tests/`, `acceptance/` and
+  `cloudbuild.yaml`; C5's unit suite lives in the package `gcf_v3/tests/` (with `__init__.py`, so I2
+  reaches it) and «C0's `test_scaffold.py` may be kept or replaced».
 
 **Provides to C2 and C5 (the golden fixture):** every job runs from the repository root with the full
-tree checked out, so `fixtures/fairness/golden.json` is present in `node` (vitest) and in `solver-v3`.
-Tests must resolve it relative to their own file (Python: from `Path(__file__)`; vitest: from the
-test's own directory or `process.cwd()`, which is the repo root under `npm test`), never relative to a
-`cd`. The guard refuses sparse checkout in either job.
+tree checked out, so `fixtures/fairness/golden.json` (C2 FX-1: one file at the repository root) is
+present in `node` (vitest) and in `solver-v3`. Parent A18 has both suites assert its `ledger` cases,
+and C5 §12.1 makes the Python suite fail if the file is missing; because no job has a path filter, a
+change to the fixture alone runs both suites. Tests must resolve it relative to their own file
+(Python: from `Path(__file__)`; vitest: from the test's own directory or `process.cwd()`, which is the
+repo root under `npm test`), never relative to a `cd`. The guard refuses sparse checkout in every job.
+
+**Provides to C6:** the `node` job has the full tree, `gcf_v3/` included, so C6's vitest sync tests
+that read C5's Python-side sources — the registry `gcf_v3/owt_v3/codes.json` (C6 NT-4) and the literal
+`PIN_CAP = 250` under `gcf_v3/owt_v3/` (C6 RQ-6) — find them in CI exactly as locally. Those tests run
+in `node`, not in `solver-v3`; a red sync test turns `gates` red through `node`.
 
 **Provides to every later child and to C7:** the `gates` check keeps its name and its meaning — «every
 CI job for this commit succeeded» — so the release flow, `strict` protection and auto-merge
@@ -148,7 +177,7 @@ CI job for this commit succeeded» — so the release flow, `strict` protection 
 |---|---|---|
 | `.github/workflows/ci.yml` | One serial job `gates` | Jobs `node`, `solver-v2`, `solver-v3` in parallel; `gates` aggregates them |
 | `gcf_v3/requirements.txt`, `.gcloudignore`, `owt_v3/__init__.py`, `test_scaffold.py` (new) | — | Make the v3 job real; handed to C5 |
-| `scripts/lib/ci-layout.mjs` (new, Node builtins only) | — | Pure functions: parse `ci.yml` jobs as text; check the required-check shape; model unittest discovery and check the partition; compute the verdict from a `needs` JSON object |
+| `scripts/lib/ci-layout.mjs` (new, Node builtins only) | — | Pure functions: parse `ci.yml` jobs as text; check the required-check shape; model unittest discovery and check the partition; check the cross-tree import ban; compute the verdict from a `needs` JSON object |
 | `scripts/ci/gates-verdict.mjs` (new, Node builtins only) | — | Runner the `gates` job executes: reads `toJSON(needs)` from an env var, exits 0 only on an all-`success`, non-empty result set |
 | `scripts/__tests__/ciLayout.test.ts` (new) | — | The guard: real files must pass; mutated inputs must fail; the runner is executed as a process |
 | `docs/CI.md` | Describes one job; stale «6m34s» | Describes four jobs, why `gates` is an aggregator, the partition guard, a dated timing table |
@@ -161,7 +190,7 @@ CI job for this commit succeeded» — so the release flow, `strict` protection 
 
 | ID | Decision | Choice | Why | Tradeoffs | Owner |
 |---|---|---|---|---|---|
-| P1 | Who makes `gcf_v3/` exist before C5 | C0 lands the minimal scaffold (I3) | A v3 job on a missing dir exits 1 and on an empty dir exits 5 (measured), so the job must either have a real suite or be conditional — and a conditional job (`if: hashFiles(...)`) is skipped, which reopens the skipped-is-green hole. The scaffold also makes the partition guard non-vacuous for both trees | C0 pre-places four files in C5's directory; C5 inherits and may replace them. Rejected: conditional job (fail-open); adding the v3 job in C5 instead (contradicts the C0 row and E1, and puts the CI split inside a solver delivery) | Claude (recorded as Parent issue 1) |
+| P1 | Who makes `gcf_v3/` exist before C5 | C0 lands the minimal scaffold (I3) | A v3 job on a missing dir exits 1 and on an empty dir exits 5 (measured), so the job must either have a real suite or be conditional — and a conditional job (`if: hashFiles(...)`) is skipped, which reopens the skipped-is-green hole. The scaffold also makes the partition guard non-vacuous for both trees | C0 pre-places four files in C5's directory; C5 inherits and may replace them. Rejected: conditional job (fail-open); adding the v3 job in C5 instead (contradicts the C0 row and E1, and puts the CI split inside a solver delivery) | Claude; settled by parent A20 |
 | P2 | How `gates` stays the control | `gates` is an aggregator job: `needs: [node, solver-v2, solver-v3]`, `if: ${{ always() }}`, and its only verdict step runs `scripts/ci/gates-verdict.mjs` with `toJSON(needs)` passed through `env:`; exit 0 iff the object is non-empty and every entry's `result` is exactly `success` | `always()` means `gates` is never `skipped`; a cancelled run makes it red, not absent. A generic verdict over `needs` covers a job added later without editing the script. Passing JSON through `env:` keeps job data out of the shell source | One extra short job (~10–20 s with checkout). Rejected: making the three jobs required checks directly (needs a protection change plus admin rights, and every future job would need another one); `if: ${{ !cancelled() }}` (a cancelled run yields a *skipped* `gates`); inline `jq 'all(...)'` (true on an empty object, and untestable as a process) | Claude |
 | P3 | Partition guard: static model or runtime enumeration | Static, in vitest: model unittest's default discovery over the files on disk, and refuse every construct the model does not follow (`load_tests`, `-p`, `-s ≠ -t`, unreachable `test*.py`, `*_test.py`) | Runs on every `npm test`, locally and in the `node` job, regardless of which solver job is broken; no Python needed; fails closed on anything it cannot model. The partition is by start directory, and the two start directories are disjoint siblings, so «each module in exactly one job» follows from the model plus the command check | It is a model of discovery, not discovery. The model was checked against Python 3.12.13 (evidence row) and Step 5 re-checks it against the real runner's «Ran N tests». Rejected: emitting discovered module lists as job outputs and comparing them in `gates` (more plumbing in the release-critical job, and comparison would key on module names, which collide — both trees may hold a `test_main`) | Claude |
 | P4 | YAML parsing in the guard | Text-based job-block parsing in `scripts/lib/ci-layout.mjs`, failing closed on any block it cannot read | `js-yaml` is not a direct dependency; adding `yaml` churns the lockfile for one guard; the house precedent (`flushWorkflowGate.test.ts`) reads workflows as text | Brittle to reformatting — acceptable, because brittleness here fails red, never green | Claude |
@@ -239,6 +268,11 @@ commit series; each step leaves local gates green.
     has `__init__.py`); no file is named `*_test.py`; no file defines `load_tests`; each tree has at
     least one reachable test module; neither start directory contains the other. Hence each module is
     discovered by exactly one job.
+  - **Cross-tree imports** (I2). No `.py` file under `gcf_v3/` has an `import`/`from … import`
+    statement naming the package `gcf` (`gcf` or `gcf.<x>`, never `gcf_v3`); no `.py` file under
+    `gcf/` has one naming `gcf_v3` or `owt_v3`. This is a textual read of `gcf/`, not a change to it;
+    `gcf/` passes it today. The assertion message says why: `python -m` puts the repository root on
+    `sys.path`, so the start directory does not isolate the trees.
   - **Golden placement.** `gcf/test_inertness.py` is a reachable module of the `gcf` tree, whose job is
     `ubuntu-latest` with no matrix — the single place `GOLDEN_SCHEDULE` runs.
 - **Change — permanent negative cases** (pure functions fed mutated text and synthetic file lists; each
@@ -246,7 +280,10 @@ commit series; each step leaves local gates green.
   (in `ci.yml` or another workflow); a `paths` filter; `continue-on-error` on a solver step; a matrix
   on `solver-v2`; a third `unittest discover` over `.`; `-s gcf_v3 -t .`; a `-p` flag; a test file in
   `gcf_v3/sub/` without `__init__.py`; a `gcf_v3/foo_test.py`; a `load_tests` definition; an empty
-  `gcf_v3`.
+  `gcf_v3`; a `gcf_v3/x.py` containing `from gcf.owt_solver_v2 import solve`; a `gcf_v3/x.py`
+  containing `import gcf`; a `gcf/x.py` containing `from owt_v3 import codes`. And one permanent
+  positive case, so the ban cannot over-match: `from gcf_v3.owt_v3 import x` inside `gcf_v3/` is not
+  a `gcf` import.
 - **Change — the verdict runner, executed as a process** (the `deployBranchPolicy.test.ts` pattern):
   exit 0 for `{"node":{"result":"success"},…}` with all three `success`; exit non-zero for any
   `failure`, `cancelled` or `skipped`, for `{}`, for malformed JSON, and for a missing `NEEDS_JSON`.
@@ -347,6 +384,7 @@ commit series; each step leaves local gates green.
 | `gates` keeps its name and is the only `gates` | Guard (Step 3); post-merge protection read (Step 7) | Renamed or duplicated required check; protection pointing at nothing |
 | `gates` is never green over a red, skipped or cancelled job | Guard (`always()`, `needs` = all jobs); verdict runner executed as a process; deliberate-red control PR (Step 6) | Skipped-is-passing; a job left out of `needs`; swapped exit codes |
 | Every test module under `gcf/` and `gcf_v3/` runs in exactly one job | Guard partition + command checks; «Ran N tests» per job (Step 5) | Misplaced or misnamed test running nowhere; a suite discovered twice |
+| Neither tree imports the other | Guard import-ban check and its negative/positive cases (Step 3) | v3 silently depending on v2 code (or the reverse), which the start directory does not prevent |
 | `GOLDEN_SCHEDULE` runs once, Linux x86_64, in Actions | Guard golden-placement check; log check (Step 5); the test's own CI-fails-on-skip (`gcf/test_inertness.py:276-288`) | Matrix, ARM runner or duplicate job silently doubling or disabling the golden |
 | Same tests on every trigger | Guard (no `paths`, no job `if:`); preview and PR runs (Steps 5–6) | Frontend-only PRs skipping solver suites |
 | v2 untouched | `git diff --stat main...HEAD -- gcf cloudbuild.yaml` empty; no Cloud Build run on merge | Accidental v2 change or redeploy |
@@ -366,7 +404,8 @@ commit series; each step leaves local gates green.
 - **Rollback:** revert the merge commit through a PR (protection applies; the revert's own run uses the
   restored single-job workflow, which still produces `gates`). Protection needs no re-apply because it
   never changed. The `gcf_v3/` scaffold goes with the revert; if C5 has already built on it, revert
-  only `ci.yml` and the guard, and keep a v3 step in the single job instead.
+  only `ci.yml` and the guard, and run both suites as steps of the single `gates` job instead (Parent
+  issue 1).
 - **Restoration verification:** the revert's `main` run shows one `gates` job with all steps green;
   protection still `["gates"]`.
 
@@ -389,26 +428,38 @@ None blocking. Non-blocking, with bounded defaults:
 
 ## Parent issues
 
-1. **Who creates `gcf_v3/` before C5 is unstated.** The C0 row asks for «a new suite in separate jobs»
-   and E1 gives v3 «its own … CI job», but `gcf_v3/` is C5's directory and C5 depends on C0. A v3 job
-   with no suite is red (exit 1 or 5), and a conditional one is skipped-is-green. **Recommended fix:**
-   amend the C0 row to «…and a minimal `gcf_v3/` scaffold (package `owt_v3`, its requirements, one
-   smoke test) that C5 takes over», and its safe end state to «Same tests plus one scaffold smoke test,
-   faster wall time». This plan follows that reading (P1).
-2. **The C0 row's rollback («Revert») is incomplete once C5 has landed on the scaffold.** Reverting
-   C0 then would delete C5's files. **Recommended fix:** C0's rollback reads «Revert before C5 lands;
-   after it, revert only the workflow split and run both suites in one job». Recorded above under
-   Rollback.
+Parent issue 1 of the previous draft (who creates `gcf_v3/` before C5) is settled by parent A20 and
+removed. One remains:
+
+1. **The C0 row's rollback («Revert», parent §11) is incomplete once C5 has landed on the scaffold.**
+   §13 makes C0 a prerequisite of C5 («→ C5 | C0 merged; …»), and C5 takes the `gcf_v3/` scaffold over
+   (A20, C5 §11.1). A plain revert of C0's merge after that point deletes or conflicts with C5's files
+   and removes the `solver-v3` job that C5's suite depends on. **Recommended fix:** C0's rollback cell
+   reads «Revert before C5 lands; after it, revert only the workflow split and the guard, and run both
+   suites as steps of the single `gates` job». This plan follows that reading (Rollback, above). Not
+   addressed by A1–A26.
+
+## Notes to siblings
+
+- **C5 §11.1 «Layout»** (its opening paragraph) says «C0's CI contract (I2) makes `gcf/` unimportable
+  in the v3 job». That is not true of any start-directory layout: `python -m unittest` from the repository root puts the
+  root on `sys.path`, so `gcf.owt_solver_v2` imports as a namespace package inside `solver-v3`
+  (measured on Python 3.12.13; Evidence). I2 now states the isolation as the guard's import-statement
+  ban (Step 3). Suggested rewording for C5: «C0's guard forbids any import of `gcf` from `gcf_v3/`
+  (I2); C5 adds no dynamic import of it either.»
 
 ## Handoff
 
-- **Prerequisites supplied to later plans:** I1–I3 to C5; the fixture path contract to C2 and C5; a
-  `gates` whose meaning survives added jobs, to every child.
+- **Prerequisites supplied to later plans:** I1–I3 to C5; the fixture path contract to C2 and C5; the
+  full-tree `node` job to C6's sync tests; a `gates` whose meaning survives added jobs, to every child
+  and to C7.
 - **Outputs promised:** the four-job workflow on `main`; the guard; the scaffold; a dated timing
   table in `docs/CI.md`.
-- **C5 must:** keep I2; set `solver-v3`'s timeout from its own measured run by the P6 rule; keep
-  `gcf_v3/.gcloudignore` excluding tests; give its Cloud Build trigger a `gcf_v3/**` filter that does
-  not match `gcf/`.
+- **C5 must:** keep I2, including the import ban (no `import`/`from` of `gcf` under `gcf_v3/`, and no
+  dynamic import of it); keep `gcf_v3/acceptance/` free of `test*.py` or make each one reachable; set
+  `solver-v3`'s timeout from its own measured run by the P6 rule; keep `gcf_v3/.gcloudignore` excluding
+  tests; give its Cloud Build trigger a `gcf_v3/**` filter that does not match `gcf/` (C5 §11.3 plans
+  `owt-solver-v3-deploy` with included files `gcf_v3/**` and config `gcf_v3/cloudbuild.yaml`).
 - **Adversarial review order:** none (standard tier). Fresh code review of the diff before merge.
 - **Implementation authorization: not granted by this plan.**
 

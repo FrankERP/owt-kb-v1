@@ -38,7 +38,7 @@ file that holds a name, an alias or a per-person figure lives in the private rep
 
 ## Status and contract
 
-- **Document status:** Draft.
+- **Document status:** Draft, aligned to the parent's amendments A1–A26 (§3) on 2026-10-05.
 - **Risk tier: standard (release), with critical production-write steps gated by consent** (parent
   §11 C7 row; `CLAUDE.md` «Adversarial plan review»). Rationale: C7 introduces no new writer, no new
   serializer, no schema and no new trust boundary — every writer it uses was specified and reviewed
@@ -50,8 +50,10 @@ file that holds a name, an alias or a per-person figure lives in the private rep
   test, documentation, and — in a second, later PR — the deletion of three v2-only files. No
   adversarial plan review; the controls after implementation are a fresh code review of each PR's
   diff plus the verifications below.
-- **Accepted sources:** parent §3 (D1, D9, D15), §8 E2–E4, §11 C7, §13, §14 (assumptions 1–2, 4),
-  §15 (Q1, Q3 resolution points), §16; the settled children C0–C6 (Interfaces).
+- **Accepted sources:** parent §3 (D1, D9, D15; amendments A1, A2, A5, A6, A7, A8, A11, A14–A17,
+  A19, A21–A26, which win over older clause wording), §8 E2–E4, §11 C7, §13, §14 (assumptions 1–2,
+  4), §15 (Q1, Q3 resolution points), §16; the settled children C0–C6 (Interfaces). Where a child's
+  current text predates an amendment, this plan follows the amendment.
 - **Primary outcome:** Auto in production runs on solver v3 — the effective engine on
   `owt-backstage.vercel.app` is `v3`, `owt-solver-v3` answers within budget on the real container, the
   cadence members are in «Líderes Domingo» with «Mes por medio», «Líderes Sábado» is empty, every
@@ -63,9 +65,11 @@ file that holds a name, an alias or a per-person figure lives in the private rep
      `contract: 3`, `build` = the `main` commit that last touched `gcf_v3/**`, smoke solve all stages
      `proven`).
   3. C4's records for the lookback months that are already past applied with Frank's consent
-     (Aug and Sep 2026; Oct 2026 only from 2026-11-01, C4 PI-1).
-  4. «Mes por medio» saved on the cadence members by Frank (C4 A2, C3 §11 step 7) — inert under v2
-     by C3's v2-view guarantee (C3 §6.4).
+     (Aug and Sep 2026; October 2026 only on or after 2026-11-01, parent A21).
+  4. «Mes por medio» saved on the cadence members by Frank (C4 A2, C3 §11 step 7), and only once the
+     production alias serves C3 (parent A26). It may precede C4's dry run (A22) because it is inert
+     under v2: the whole v2 solve request and the grid's rule verdicts are identical with or without
+     it (A8; C3 §6.4).
   5. `OWT_SOLVER_V3_URL` present on Vercel Preview (C6 DOC-1).
 - **Safe ending state:** `SOLVER_ENGINE = "v3"` on `main`, production alias serving that commit;
   `solverConfig` holds the post-step pools and rules, and its pre-step snapshot sits in
@@ -75,8 +79,9 @@ file that holds a name, an alias or a per-person figure lives in the private rep
 
 ## Evidence and current behavior
 
-All repository line numbers verified on this branch (`3dbc189b`) on 2026-10-05. Children's future
-code has no line numbers; it is cited by requirement ID.
+All repository line numbers verified on this branch (`3dbc189b`) on 2026-10-05; `2d90e4b3` (the
+amendments) differs from it only under `docs/superpowers/**`, so every code line cited holds there
+too. Children's future code has no line numbers; it is cited by requirement ID.
 
 | Evidence | Source | Planning implication |
 |---|---|---|
@@ -87,7 +92,8 @@ code has no line numbers; it is cited by requirement ID.
 | Preview writes the production dataset and shares the one `solverConfig` | parent E4; `CLAUDE.md` «Vercel safety» | Every press of «Guardar reglas», «Crear borradores» or «Registrar elegibilidad» on dev is a production write |
 | v2 builds in a «Saturday anchor»: a dedicated `saturday_leads` member on every Saturday | `gcf/owt_solver_v2.py:1096-1100` | Moving the cadence members into «Líderes Domingo» while v2 is still the engine changes v2's output silently (C3 §6.7) |
 | Today «Líderes Sábado» holds two people and «Líderes Domingo» holds the third cadence member | private `evidence/u_real-data.md:36-39` | The step must account for each Saturday-pool entry; anyone who is not a cadence member is a stop-and-ask |
-| v2-era rules shape the cadence members' months: Sunday-pattern exclusions, `Sun.* == 1`/`Sat.* == 1` caps, «Holgura» | private `owt-agent-logs/backups/solverConfig-2026-09-29-sat-caps.json`, `…-2026-10-01-before-sun-bgv-floors.json` (counts only read) | Under v3 an exclusion covering `Sun.Lead` makes a cadence member `out` every month (C2 RES-2 → CAD-1 `not_eligible` → wire `out`, C5-5), and an exact rule covering `Sun.Lead` is refused (C6 WN-2). The rule set must be reviewed for v3 in the rehearsal (Step 3c) |
+| v2-era rules shape the cadence members' months: Sunday-pattern exclusions, `Sun.* == 1`/`Sat.* == 1` caps, «Holgura» | private `owt-agent-logs/backups/solverConfig-2026-09-29-sat-caps.json`, `…-2026-10-01-before-sun-bgv-floors.json` (counts only read) | Under v3 an exclusion covering `Sun.Lead` makes a cadence member `out` every month (not eligible → wire `out`, parent A14; C2 CAD-1 `not_eligible`, C5-5); a Sunday on which she is rule-excluded from `Sun.Lead` is not an «available counted Sunday» (A14); an exact rule covering `Sun.Lead` on her is refused when the v3 request is built (A11, C6 WN-2). Every rule name must resolve to exactly one member or the v3 build refuses (A7, C2 RES-7). The rule set must be reviewed for v3 in the rehearsal (Step 3c) |
+| The operational read client sends `SANITY_API_READ_TOKEN` when present and reads published documents without it; a record id is `fairnessMonth.YYYY-MM`, and a dotted id is private in Sanity, so a read without the token sees no record at all | `sanity/lib/operationalClient.ts:13-23`; parent A2 | Every read-only count of records C7 makes (Step 0.4, Step 8, Step 10) runs with the read token; a token-less read is a failure, never «no records» (A2: the reader fails closed) |
 | `scripts/dev-verify.ts` aborts every non-`GET`/`HEAD` request and refuses production hosts; `--click` reaches buttons, links, menu items and radios only | `docs/DEV_VERIFY.md:41-48`, `:135`, `:15` | The bot can show the static surfaces on dev; it **cannot** run Auto (a `POST`), tick a pool or look at production. The solve is Frank's own hands |
 | The Cloud Run timing gate needs the key from Secret Manager; Frank runs it; shapes A–E; 10 warm seeds and 3 cold runs ≥ 20 min idle; pass = all stages `proven` warm, `total_ms` p95 ≤ 8 s, `time_total` p95 ≤ 20 s, cold ≤ 45 s, memory < 75 % | C5 §13 | Step 1 is Frank's; it is scheduled, not folded into the rehearsal |
 | `LeadPoolHistoryPanel` is mounted at the config step and the stored editor; under v2 it must render as today | `MonthGenerator.tsx:56`, `:1501-1531`, `:1736-1746`, `:4490-4499`; C6 EQ-1 | Deleting it in the flip PR would make «flip back» restore v2 without its panel (Parent issue 3) |
@@ -160,12 +166,12 @@ code has no line numbers; it is cited by requirement ID.
 | From | What C7 relies on | Exact shape |
 |---|---|---|
 | C0 | The required check and the v3 job | Check `gates` = «every CI job for this commit succeeded» (C0 «Provides to every later child and to C7»); jobs `node`, `solver-v2`, `solver-v3`; local gate `python -m unittest discover -s gcf_v3 -t gcf_v3` when `gcf_v3/**` changes |
-| C1 | The toggle and its read rule | `countsForFairness?: boolean` on `sunday_role`, `saturday_role`, `special_role`; effective value `coalesce(countsForFairness, _type != "special_role")`; the note «Cuenta para equidad: aplica con el nuevo solver. Hoy Auto no lo usa.», gated by C6 to v2 (C6 CTL-1) |
-| C2 | Engine constant and resolver; ledger; record; panel; «Registrar» | `app/components/admin/solverEngine.ts` exports `SOLVER_ENGINE: "v2" \| "v3"` (value `"v2"` until Step 5); resolver EN-2: `OWT_SOLVER_ENGINE` honoured only when `VERCEL_ENV === "preview"` and the value is exactly `"v2"` or `"v3"`; `GET /api/admin/fairness?month=YYYY-MM[&horizon=1\|2]` → `FairnessLedgerResponse` with `engine`, `currentMonth`, `window[]{ month, record }`, `horizon[]{ month, record, storedServices }`, `people[].window[<LineKey>].balance` (hundredths, positive = owed); `PUT /api/admin/fairness/months` (never called by C7 directly); record `_type: "fairnessMonth"`, `_id: "fairnessMonth-YYYY-MM"`, stamps `source: "auto" \| "manual" \| "reconstructed"`, `engine`, `environment: "production" \| "preview" \| "local"`; «Registrar elegibilidad de {mes}» rendered only when the GET's `engine` is `"v3"` (UI-6); writer refuses `engine_not_v3` under v2 (WR-6); ledger `app/utils/fairnessLedger.ts`, reader `app/utils/fairnessLedgerRead.ts`; GU-3 ADR; GU-4 `CLAUDE.md` line |
-| C3 | The cadence setting, the resolver, the save guard | `solverConfig.restrictions[].sundayCadence?: "alternate"` (absent = «Normal»); `app/utils/sundayCadence.ts`: `cadenceMembers(config, roster) → { ids, refusals }`, `cadenceOutsideSundayPool(config, roster) → [{ id, name, reason: "not_ticked" \| "no_sunday_lead_tipo" }]`; `SOLVER_CONFIG_VERSION = 2`; POST `/api/admin/solver-config` body `{ rev, config, configVersion }`; pools `sundayLeads`, `saturdayLeads`, `support` as member `_id` arrays; the v2-view guarantee (§6.4): saving «Mes por medio» changes nothing v2 does |
+| C1 | The engine constant; the toggle and its read rule | `app/components/admin/solverEngine.ts` exports the constant `SOLVER_ENGINE: "v2" \| "v3"` and nothing else (parent A1), value `"v2"` until Step 5; `countsForFairness?: boolean` on `sunday_role`, `saturday_role`, `special_role`; effective value `coalesce(countsForFairness, _type != "special_role")`; the note «Cuenta para equidad: aplica con el nuevo solver. Hoy Auto no lo usa.», gated by C6 to v2 (C6 CTL-1); lookback-month services cannot be toggled from any surface (A25) |
+| C2 | Effective-engine resolver and override; eligibility resolver; ledger; record; panel; «Registrar» | Per parent A1: the pure resolver of the effective engine; `OWT_SOLVER_ENGINE` honoured only on the `preview` branch deployment, or locally when `VERCEL_ENV` is unset, and only for a value exactly `"v2"` or `"v3"` — never on `verify/service-readiness` or Production, where the constant wins; its `docs/SECRETS.md` entry (C2 EN-3); the PUT's refusal `engine_not_v3` (WR-6). The single v3 eligibility resolver `resolveMonthEligibility` (A7), whose every rule name must resolve to exactly one member (C2 RES-7, through C3's `resolveRulePersonId`). `GET /api/admin/fairness?month=YYYY-MM[&horizon=1\|2]` → `FairnessLedgerResponse` with `engine`, `currentMonth`, `window[]{ month, record }`, `horizon[]{ month, record, storedServices }`, `people[].window[<LineKey>].balance` (hundredths, positive = owed, rounded once half away from zero, A17); the reader fails closed, including when the read token is absent (A2, C2 RD-2); `PUT /api/admin/fairness/months` (never called by C7 directly); record `_type: "fairnessMonth"`, `_id: "fairnessMonth.YYYY-MM"` (A2), per-role statuses `in` / `out` / `exact` (A3), stamps `source: "auto" \| "manual" \| "reconstructed"`, `engine`, `environment: "production" \| "preview" \| "local"`; a record is replaceable only while its month has no stored weekend services and no counted specials (A5), and binds a horizon month only then (A6); «Registrar elegibilidad de {mes}» rendered only when the GET's `engine` is `"v3"` (UI-6); the panel's single formatter shows one decimal (A17); ledger `app/utils/fairnessLedger.ts`, reader `app/utils/fairnessLedgerRead.ts`; GU-3 ADR; GU-4 `CLAUDE.md` line |
+| C3 | The cadence setting, the resolver, the save guard | `solverConfig.restrictions[].sundayCadence?: "alternate"` (absent = «Normal»); `app/utils/sundayCadence.ts`: `resolveRulePersonId(person, roster) → { ok: true, id } \| { ok: false, reason: "unresolved" \| "ambiguous", matches }`, `cadenceMembers(config, roster) → { ids, refusals }`, `cadenceOutsideSundayPool(config, roster) → [{ id, name, reason: "not_ticked" \| "no_sunday_lead_tipo" }]`; `SOLVER_CONFIG_VERSION = 2`; POST `/api/admin/solver-config` body `{ rev, config, configVersion }`; pools `sundayLeads`, `saturdayLeads`, `support` as member `_id` arrays; the «Mes por medio fuera de Líderes Domingo» warning, built by C3 and shown only under v3 (A9); v2 inertness (A8, C3 §6.4) |
 | C4 | The reconstruction CLI | `npx tsx --env-file=.env.local scripts/reconstruct-fairness-months.mjs --months YYYY-MM[,…] --out <private dir> [--overrides <private file>] [--preview-run YYYY-MM]`; `--apply --plan <file>`; `--rollback` and `--rollback --apply --plan <file>`; exit `0` done, `2` refused before any write, `1` failed or partial; strictly past months only (R1); plan fingerprint consent (R15, R19); retirement by `assertRetiredWriter` and `RETIRED_ONE_SHOT_WRITERS` (R22, owned by this plan) |
-| C5 | The function, its gate and its report | Function `owt-solver-v3`, trigger `owt-solver-v3-deploy` (`gcf_v3/**`); verification C5 §11.5 (describe `ACTIVE` + `updateTime`, ping `ok: true`, `contract: 3`, `build` = deployed SHA, smoke `gcf_v3/acceptance/smoke.json`); URL source `gcloud functions describe owt-solver-v3 --gen2 --region=us-central1 --format='value(serviceConfig.uri)'`; timing shapes from `python gcf_v3/acceptance/run.py … --emit-requests <dir>` (A–D) and the private converter (E); response fields `stages[]{ id, status: "proven" \| "unproven" \| "not_run", limit: "none" \| "deterministic" \| "wall", ms, det_milli }`, `total_ms`, `violations[]`, `violation_ceiling{ value, proven }`, `unfilled[]`, `cadence[]{ person, month, state, sundays, saturdays, met, compensation }`, `missed[]{ code, person, month?, month1?, month2?, dates?, count?, cause }`, `notices[]{ code, params }` (incl. `dl_capacity`), `fairness.tolerance` (= `FAIRNESS_TOLERANCE`); the independent checker of C5 §12.3; `STAGE_DET_LIMIT` and OQ-4 (minimum instances) |
-| C6 | The planner on v3 | Effective engine resolved on the server and passed as a render prop (ENG-3); `POST /api/admin/solve` answers `409 { ok: false, error: "solver_version_mismatch", engine }` on a contract/engine mismatch (RT-1) and JSON transport errors `{ ok: false, transport_error: true, transport }` (RT-5); v3 abort 55 s route / 58 s client; a test pins `SOLVER_ENGINE === "v2"` (ENG-1); horizon control «Planear: 1 mes · 2 meses» (HZ-1); past-month refusal (HZ-7); warnings WN-1 (C3's «Mes por medio fuera de Líderes Domingo»), WN-2 (cadence refusals), WN-3 (non-empty «Líderes Sábado»); confirm writes records then drafts (CF-1–CF-11); v2 history surfaces unmounted under v3, deletion C7's (EQ-1); `OWT_SOLVER_V3_URL` SECRETS entry (DOC-1) |
+| C5 | The function, its gate and its report | Function `owt-solver-v3`, trigger `owt-solver-v3-deploy` (`gcf_v3/**`); verification C5 §11.5 (describe `ACTIVE` + `updateTime`, ping `ok: true`, `contract: 3`, `build` = deployed SHA, smoke `gcf_v3/acceptance/smoke.json`); URL source `gcloud functions describe owt-solver-v3 --gen2 --region=us-central1 --format='value(serviceConfig.uri)'`; timing shapes from `python gcf_v3/acceptance/run.py … --emit-requests <dir>` (A–D) and the private converter (E); response fields `stages[]{ id, status: "proven" \| "unproven" \| "not_run", limit: "none" \| "deterministic" \| "wall", ms, det_milli }`, `total_ms`, `violations[]`, `violation_ceiling{ value, proven }`, `unfilled[]`, `cadence[]{ person, month, state: "on" \| "off" \| "out", sundays, saturdays, met, compensation: "given" \| "missed" \| "not_applicable" }` (A14), `missed[]{ code, person, month?, month1?, month2?, dates?, count?, cause }` with causes `not_proven`, `pins`, `rule`, `unavailable`, `capacity`, `higher_priority`, `notices[]{ code, params }` (incl. `dl_capacity`, computed once per run, A19), `fairness{ tolerance, people[]{ person, lines{ <line>: { carried, planned, share, received, after } } } }` — planned and realised share both reported, `after = carried + share − received` (A19), `tolerance` = `FAIRNESS_TOLERANCE`; request fields per person `cadence`, `dl_since`, `prev_dl_leads` and the envelope's `prior` (A15); exact-count leads excluded from both monthly caps (A16); the independent checker of C5 §12.3, callable on one captured request/response pair and printing counts and codes only (C5-R15); the private Run A aggregates C5 records (A23); `STAGE_DET_LIMIT` and OQ-4 (minimum instances) |
+| C6 | The planner on v3 | Effective engine resolved on the server (C2's resolver) and passed as a render prop (ENG-3, A1); `POST /api/admin/solve` answers `409 { ok: false, error: "solver_version_mismatch", engine }` on a contract/engine mismatch (RT-1, A1) and JSON transport errors `{ ok: false, transport_error: true, transport }` (RT-5), a timeout and every other transport reason with distinct copy (A24); v3 abort 55 s route / 58 s client; a test pins `SOLVER_ENGINE === "v2"` (ENG-1); horizon control «Planear: 1 mes · 2 meses» (HZ-1); Auto refuses a horizon with a past month (HZ-7, A24); a record-bound horizon month (A6) is solved with its record's eligibility and shows its pool checkboxes read-only; the real v3 request builder, `prior` built from `GET /api/admin/roles` (A15); warnings WN-1 (C3's «Mes por medio fuera de Líderes Domingo», A9), WN-2 (cadence refusals, incl. A11), WN-3 (non-empty «Líderes Sábado»); confirm writes records then drafts (CF-1–CF-11), and — **pending C6 PI-7's parent ruling** — writes **no** record for an «anchored, unrecorded» month (stored weekend services or counted specials but no record, e.g. a month confirmed under v2) whose drafts it still creates (C6 §4, CF-1 (iii), `…-c6-planner-v3-design.md:250`). CF-1 (iii) departs from the parent's literal L3/U4/A6 (`…-fairness-design.md:294-295,326,127`) and is dropped if the parent keeps them (C6 PI-7, `:696`; §15, `:748`); C2's writer creates in that case regardless (WR-8 row 3, `…-c2-ledger-and-record-design.md:138`), so unless the ruling adds a server check, (iii) is the client's alone. Which branch is in force is Step 0 check 8; every C7 clause that relies on (iii) states both branches; v2 history surfaces unmounted under v3, deletion C7's (EQ-1); `OWT_SOLVER_V3_URL` SECRETS entry (DOC-1) |
 
 **Provides**
 
@@ -185,11 +191,11 @@ code has no line numbers; it is cited by requirement ID.
 | Component, file, or system | Current responsibility | Planned responsibility |
 |---|---|---|
 | `owt-solver-v3` (Cloud Run gen2) | Deployed, uncalled | Serves Auto in production; minimum instances per Step 1 |
-| Vercel Preview env | `OWT_SOLVER_V3_URL` (C6) | + `OWT_SOLVER_ENGINE=v3` scoped to the `preview` branch for the rehearsal (Step 2); removed after the flip (Step 9) |
+| Vercel Preview env | `OWT_SOLVER_V3_URL` (C6) | + `OWT_SOLVER_ENGINE=v3` scoped to the `preview` branch for the rehearsal (Step 2) — honoured by code only on that branch's deployment (A1), the scoping is defence in depth; removed after the flip (Step 9) |
 | Vercel Production env | `OWT_SOLVER_URL`, `OWT_SOLVER_API_KEY` | + `OWT_SOLVER_V3_URL` (Step 6) |
 | `app/components/admin/solverEngine.ts` and its pin test | `"v2"` | `"v3"` (Step 5) |
 | `solverConfig` (production document, shared with Preview) | v2 pools: cadence members split between Sunday and Saturday pools | Cadence members in «Líderes Domingo», «Líderes Sábado» empty, v3-reviewed rules (Step 7, Frank) |
-| `fairnessMonth` documents | Aug/Sep (and Oct after 2026-11-01) reconstructed by C4 | + every v2-confirmed month, reconstructed when past (Step 10); + v3 confirms (C6, ordinary operation) |
+| `fairnessMonth` documents (`fairnessMonth.YYYY-MM`, A2) | Aug/Sep (and Oct on or after 2026-11-01, A21) reconstructed by C4 | + every v2-confirmed month, reconstructed when past (Step 10); + v3 confirms (C6, ordinary operation) |
 | `docs/adr/0004, 0010, 0038, 0041, 0042, 0046, 0047` and `README.md` | v2 decisions | Amended «under v3»; v2 keeps each original (Step 5) |
 | `docs/adr/00NN-the-v2-solver-stays-as-the-rollback-engine.md` (new) | — | The cutover's own decisions (Decision K6) |
 | `CLAUDE.md` | Auto described as v2 | Engine section rewritten (Step 5); `priorMonthLeadVisibility` clause removed (Step 12) |
@@ -211,11 +217,11 @@ another row or a later repeat. Before any Vercel command that may mutate remote 
 | ID | Write | Actor | Before it | Consent gate | Verification after | Undo |
 |---|---|---|---|---|---|---|
 | W1 | `--min-instances=1` on `owt-solver-v3` (only if Step 1's cold start fails) | Frank | Gate results shown with the monthly cost | Frank decides (cost, C5 OQ-4) | `describe` shows the setting; cold runs re-measured | Set back to 0 |
-| W2 | Vercel Preview: `OWT_SOLVER_ENGINE=v3`, branch-scoped to `preview` (not `verify/service-readiness`) | Frank, or the agent on his yes | `vercel env ls preview` (names only) | Yes, once | Preview redeployed; dev alias + SHA; dev's `/admin` shows v3 controls; the fairness GET answers `engine: "v3"` | Remove the variable, redeploy Preview |
-| W3 | Optional: keep one rehearsal month by confirming it on dev (parent E4 exception) — writes that month's `fairnessMonth` (stamped `environment: "preview"`, `engine: "v3"`) and its drafts | Frank | The month's solve read and accepted in the look (Step 4) | Frank names the month | Record present with `source: "auto"`; drafts counted per month (CF-6 lines) | Drafts: deleted by Frank in the app if unwanted. The record stays (no code path deletes a route-written record, C2 §14); while its month has no stored services «Registrar» may replace it (L3) |
+| W2 | Vercel Preview: `OWT_SOLVER_ENGINE=v3`, branch-scoped to `preview` (not `verify/service-readiness`, which ignores it by code anyway, A1) | Frank, or the agent on his yes | `vercel env ls preview` (names only) | Yes, once | Preview redeployed; dev alias + SHA; dev's `/admin` shows v3 controls; the fairness GET answers `engine: "v3"` | Remove the variable, redeploy Preview |
+| W3 | Optional: keep one rehearsal month by confirming it on dev (parent E4 exception) — writes that month's `fairnessMonth` (stamped `environment: "preview"`, `engine: "v3"`; none if the month was «anchored, unrecorded» **and** Step 0 check 8 found C6 CF-1 (iii) in force — in the literal branch such a month gets the record too) and its drafts | Frank | The month's solve read and accepted in the look (Step 4) | Frank names the month | Record present with `source: "auto"`; drafts counted per month (CF-6 lines) | Drafts: deleted by Frank in the app if unwanted. The record, when one was written, stays (no code path deletes a route-written record, C2 WR-13). Because the month now has stored services, the record is frozen (A5) and **binds** that month in every later solve, the first production run included: its eligibility is the record's and its pool checkboxes are read-only (A6). Only if Frank deletes every draft and the month holds no counted special does the record stop binding, and the next confirm or «Registrar» replaces it under its revision (A5, A6) |
 | W4 | Vercel Production: `OWT_SOLVER_V3_URL` | Frank, or the agent on his yes | Value read from C5's `describe` command, piped, never typed into a file | Yes, once | `vercel env ls production` lists the name; effective at the flip deploy | Remove; redeploy |
 | W5 | The flip: merge of the flip PR to `main` (a production release) | Agent, auto-merge armed last | Rehearsal accepted, look accepted, W4 done, snapshot recorded, freeze agreed (Step 6) | **Frank's explicit go-ahead for the flip** (parent R9) | Production alias contains the merge commit, `githubCommitSha` equal; Frank's first look on production | Flip-back PR (Rollback) |
-| W6 | `solverConfig`: the one step's pools and rules | **Frank, in the production UI** («Guardar reglas») | Pre-step snapshot recorded; the intended change set written down from the rehearsal (Step 4) | Frank performs it | Read-only diff pre-step vs live: exactly the intended change set (Step 7) | Restore script W8 |
+| W6 | `solverConfig`: the one step's pools, plus the rule edits the rehearsal found v3 needs that are not inert under v2 (Parent issue 4) | **Frank, in the production UI** («Guardar reglas») | Pre-step snapshot recorded; the intended change set written down from the rehearsal (Step 4) | Frank performs it | Read-only diff pre-step vs live: exactly the intended change set (Step 7) | Restore script W8 |
 | W7 | `fairnessMonth`: C4 `--apply --plan <file>` for each v2-confirmed month when past | Agent or Frank | C4 dry run; Frank reads the private table, anomalies and balance preview | Frank's yes **to that plan file's fingerprint** (C4 R19) | Second dry run reports «sin cambios»; the panel shows the month «reconstruido» | C4 `--rollback` (dry run, then fingerprint consent) |
 | W8 | Rollback only: revert the one step's paths in `solverConfig` | Agent, private script | Dry run printing exactly which paths revert and which are skipped as edited since | Frank's yes to that dry run | Read-only diff: the reverted paths equal the pre-step snapshot | Re-run Step 7's change in the UI |
 | W9 | Rollback only: the flip-back PR merge | Agent, auto-merge armed last | Same release discipline as W5 | Frank's go-ahead for the rollback | Production alias + SHA | Flip forward again (W5) |
@@ -243,18 +249,48 @@ Two cycles with code, one operational tail:
      `build` equal to that merge's SHA, smoke solve all `proven`. Frank runs the keyed parts.
   3. `vercel env ls preview` lists `OWT_SOLVER_V3_URL`; `vercel env ls production` lists
      `OWT_SOLVER_URL` and `OWT_SOLVER_API_KEY`. Names only, never `env pull`.
-  4. Read-only count over production data, printed without names: the number of `fairnessMonth`
-     records per month for the last four months and their `source`; the months that hold stored
-     weekend services but no record (the **v2-confirmed list**, seeded into the Step 10 table).
-  5. **C3 A5 on the real roster:** a local, read-only run of `cadenceMembers` over the live
-     `solverConfig` and the unfiltered worship roster prints only `ids: <n>, refusals: <n>`.
-     Expected: 3 and 0.
+  4. Read-only count over production data, printed without names, **with `SANITY_API_READ_TOKEN`**
+     (a `fairnessMonth.YYYY-MM` id is private, A2: a token-less read returns no record, so a missing
+     token is a stop, never a «zero records» result): the number of `fairnessMonth` records per month
+     for the last four months and their `source`; the months that hold stored weekend services but no
+     record (the **v2-confirmed list**, seeded into the Step 10 table).
+  5. **Every rule name resolves to exactly one member (A7; C3 A5 on the real roster):** a local,
+     read-only run over the live `solverConfig` and the unfiltered worship roster prints only counts:
+     `cadenceMembers` → `ids: <n>, refusals: <n>` (expected 3 and 0); and C3's `resolveRulePersonId`
+     over every name C2's resolver reads (each restriction's person, both persons of each conflict,
+     every presence member — C2 RES-7) → refusals by kind (`unresolved`, `ambiguous`), each listed by
+     restriction, conflict or presence `_key`, never by name. Expected: 0. A refusal here would make
+     every v3 Auto refuse.
   6. `cadenceOutsideSundayPool` over the same inputs, counts by reason only — establishes which
      cadence members the step must move.
   7. «Líderes Sábado» membership: every id in `saturdayLeads` is one of `cadenceMembers.ids`
      (printed as a count of matches and non-matches).
-- **Failure:** any check false → stop (S1). Check 5 with refusals → Frank fixes the rule's name
-  (C3 A5) and the check re-runs. Check 7 with a non-match → Frank decides whether that person stays
+  8. **The «anchored, unrecorded» ruling (C6 PI-7) and what is merged.** Read from the parent and
+     from the merged C2 and C6 code which branch is in force, and record it in the worklog and the
+     cutover record:
+     - **Amended, server-checked:** the parent's owner amended L3/U4/A6 as C6 PI-7 asks
+       (`…-c6-planner-v3-design.md:696`) **and** C2's WR-8 as merged refuses a `source: "auto"`
+       create on a month with freezing services (`month_has_services`, re-checked at write time
+       like row 7). C6 CF-1 (iii) holds on the server; no residual window.
+     - **Amended, client-only:** the parent amended L3/U4/A6 but C2's writer still creates on
+       «no record and `expectedRev === null`» (WR-8 row 3, `…-c2-ledger-and-record-design.md:138`).
+       (iii) holds in C6's client only, with the race C6 CF-1's last sentence names (`:250`): a
+       confirm racing a stored-service save mints the record (iii) withholds. Step 8's read-back
+       detects it.
+     - **Literal:** the parent kept L3/U4/A6 as written and C6 dropped CF-1 (iii) (C6 PI-7's «If
+       the owner rules the other way»). A v3 confirm that creates drafts in a v2-planned, not-yet-past
+       month writes a permanent `source: "auto"` record for it (A5 forbids replacing it once the
+       month holds stored services; C4 never touches a record it did not write, C2 WR-14 row 5).
+       K4 and Step 10 then use their literal-branch text.
+     Sub-check, in every branch: whether any path other than Auto's confirm (for example «Editar
+     mes» in stored mode) writes a `fairnessMonth` record in the merged C6 — read from the code,
+     never assumed (C6's «Manual plans under v3» row, `:662`, does not settle it). The literal
+     branch's K4 control relies on the answer.
+- **Failure:** any check false → stop (S1). Check 8 with no ruling yet (C6's CF-1 (iii) merged as
+  a deviation the parent has neither amended nor rejected) → S1 until the parent's owner rules;
+  C6's §15 (`:748`) should have prevented that merge. Check 5 with refusals → Frank fixes the rule's name
+  (C3 A5; a rename is a «Guardar reglas» on production, inert under v2 only if v2's first-match still
+  resolves the same member — he confirms that on screen before saving) and the check re-runs. Check 7 with a non-match → Frank decides whether that person stays
   in «Líderes Sábado» (under v3 she then leads Saturdays only, C6 WN-3) or leaves it; parent D9's
   «empty» assumes only cadence members are there.
 - **State after:** nothing written.
@@ -284,14 +320,17 @@ Two cycles with code, one operational tail:
 ### 2. Point Preview at v3 (W2)
 
 - **Change:** `OWT_SOLVER_ENGINE=v3` on Vercel Preview, scoped to the `preview` branch only (the
-  `verify/service-readiness` deployment is also `VERCEL_ENV=preview` and must not receive it, C2
-  EN-3); redeploy Preview from the dashboard (a redeploy of `preview`'s current deployment, which
+  `verify/service-readiness` deployment is also `VERCEL_ENV=preview`; the resolver ignores the
+  variable there by code, A1, and the branch scoping keeps it from even being present, C2 EN-3);
+  redeploy Preview from the dashboard (a redeploy of `preview`'s current deployment, which
   reads the new variable at build time).
 - **Verification:** dev alias contains the new deployment and its `githubCommitSha` equals
   `preview`'s head; `scripts/dev-verify.ts --route /admin --text` (output in the gitignored
-  directory) shows the v3-only surfaces (horizon control, no «Vista previa» banner on the «Equidad»
-  panel, «Holgura … no aplica con el nuevo solver» chips); a read of
-  `GET /api/admin/fairness` through the same bot reports `engine: "v3"`.
+  directory) shows the v3-only surfaces (horizon control; no «Vista previa» banner on the «Equidad»
+  panel; C1's and C3's «aplica con el nuevo solver» notes absent, C6 CTL-1; WN-1/WN-3 present while
+  the pools are unchanged) — «Holgura … no aplica con el nuevo solver» is **not** a v3 signal, it
+  shows under both engines (C6 CTL-1); a read of `GET /api/admin/fairness` through the same bot
+  reports `engine: "v3"`.
 - **Live-fire warning, stated to Frank before the variable is set:** from now until Step 9, dev's
   «Crear borradores» writes records and drafts to production (C6 CF-1), «Registrar elegibilidad»
   appears on dev and writes production records (C2 EN-3 blast radius), and «Guardar reglas» on dev
@@ -306,14 +345,23 @@ Two cycles with code, one operational tail:
   make is S6.
 - **3b. On-screen edits, never saved.** On dev, in Auto's configuration: tick the cadence members
   in «Líderes Domingo»; untick everyone in «Líderes Sábado» (per check 0.7's outcome); WN-1 and WN-3
-  must then show nothing for them.
+  must then show nothing for them. On-screen pools drive only horizon months that no record binds
+  (A6); a bound month (a record plus stored services or counted specials — normally only a month
+  kept by W3) shows its pools read-only with the reason and is solved with its record's
+  eligibility.
 - **3c. Rule review for v3, on screen.** Frank walks every restriction that names a cadence member
   or holds a Saturday or Sunday count rule, with the agent's checklist (private, with names):
   an exclusion covering `Sun.Lead` on a cadence member (makes her `out` every month); an exact rule
-  covering `Sun.Lead` on a cadence member (WN-2 refusal); `Sat.*`/`Sun.*` exact counts (become
-  set-asides and fixed seat counts under v3, C2 RES-3/LG-9); «Holgura» (inert under v3); «Exenta»
-  (D13). Each decided change is made **on screen only** and written into the private change list
-  that Step 7 will apply.
+  covering `Sun.Lead` on a cadence member (refused when the v3 request is built, A11, WN-2); a
+  week exclusion covering `Sun.Lead` on a cadence member (those Sundays stop being «available
+  counted Sundays», A14, which can shift her on/off month); `Sat.*`/`Sun.*` exact counts (become
+  set-asides and fixed seat counts under v3, C2 RES-3/LG-9; exact-count leads are outside both
+  monthly caps, A16); «Holgura» (no effect on the solver under v3, A10); «Exenta» (D13); and anyone
+  named in a rule but ticked in no pool — v2 injects them as BGV/Choir candidates, v3 makes them
+  eligible for nothing (C2 RES-1, Q1), so Frank ticks or accepts each. Each decided change is made
+  **on screen only** and written into the private change list that Step 7 applies in the **same**
+  save as the pools: every kind above changes v2's request, so none may be saved before the flip
+  (Parent issue 4).
 - **3d. Solves, not confirms.** For the next two real months after the current CDMX month:
   1. one 2-month run («Planear: 2 meses»);
   2. each month alone («1 mes»), the second with the first planned on screen but not stored;
@@ -325,16 +373,27 @@ Two cycles with code, one operational tail:
   `owt-agent-logs/sdd/<cycle>/rehearsal/` (private), plus the end-to-end durations of both calls.
 - **3e. The agent's independent check** of every captured pair, with C5's independent checker
   (§12.3) or a private wrapper around it; prints only counts and codes:
+  The captured requests are the first ones built by C6's **real** request builder from real data,
+  so this check is also the re-check of C5's private Run A that parent A23 assigns to C7: the same
+  pass criteria, plus a comparison of stage statuses, timings and the maximum F13 gap with the
+  aggregates C5 recorded.
   - every stage `proven`; no `limit: "wall"`; route duration < 55 s;
   - 0 hard violations (one seat per person per service; a seat only for someone eligible and
-    available, or pinned); pin echo equals pins sent;
-  - `missed[]`: no `dl_floor_missed` unless the run also carries `dl_capacity` and the miss has cause
-    `capacity`; no `sunday_cap_exceeded`/`saturday_cap_exceeded`/`consecutive_sundays`/
-    `voice_floor_missed` except with cause `pins` in 3d.3, or `rule` for an exact `Sat.Lead` above 1
-    (C5 Known limits);
-  - each cadence member: one `on` and one `off` month across the 2-month run, or an X1 shift whose
-    `reason` explains it, and `compensation: "given"` in each `off` month with a Saturday slot;
-  - `|planned − share|` ≤ `fairness.tolerance` for every person-line;
+    available, or pinned); pin echo equals pins sent; every rule violation has cause `pins` (stored «Guardado» seats or 3d.3's
+    hand-placed ones) — none `forced`;
+  - `missed[]`: no `dl_floor_missed` unless its cause is `capacity` (and the run carries
+    `dl_capacity`) or `unavailable`; no `sunday_cap_exceeded`, `saturday_cap_exceeded` or
+    `consecutive_sundays` except with cause `pins` in 3d.3 — exact-count leads are excluded from both
+    caps (A16), so cause `rule` is never expected; no `voice_floor_missed`, `cadence_on_missed` or
+    `cadence_off_led` except with cause `pins` in 3d.3, or `unavailable` for a person whose only
+    available slots were fixed services (Frank confirms each in Step 4); `compensation_missed` only
+    with cause `unavailable` or `pins`;
+  - each cadence member, per `cadence[]` (wire states `on`/`off`/`out`, A14): `met: true` in every
+    month, except where a 3d.3 pin forces the miss (`cadence_off_led` with cause `pins`, C5 P.5); across the 2-month run one `on` and one `off`, or a shift that CAD-1's reason explains
+    (as the panel's «Motivo» shows it); `compensation: "given"` in each `off` month with a Saturday
+    she is available for; an `out` month has 0 Sundays and `compensation: "not_applicable"`;
+  - `|planned − share|` ≤ `fairness.tolerance` for every person-line, and `after = carried + share −
+    received` holds (A19);
   - every `carried` value equals the captured GET's `people[].window[line].balance`.
 - **3f. Rollback rehearsal.** (1) Remove `OWT_SOLVER_ENGINE` on Preview and redeploy; Frank runs a
   v2 Auto on dev for the next month **without confirming** — v2's diagnostics strip («Sin
@@ -345,7 +404,7 @@ Two cycles with code, one operational tail:
   (3) re-set the variable (W2 again, Frank's yes) if more rehearsal is needed.
 - **3g. Lookback reading.** The rehearsal's lookback is the three months before its first planned
   month. The current CDMX month is in it and is **expected** to read «sin registro, no cuenta» (it
-  was confirmed under v2 and is not past, C4 R1); so is October 2026 before 2026-11-01 (C4 PI-1).
+  was confirmed under v2 and is not past, A21, C4 R1); so is October 2026 before 2026-11-01 (A21).
   Neither is a defect. Any other «sin registro» month in the window is S5.
 - **Failure:** S3–S7.
 - **State after:** nothing written (unless W3); the private change list for Step 7 exists.
@@ -358,26 +417,28 @@ Two cycles with code, one operational tail:
   `SegmentedControl` options, phone cards, no page-level horizontal scroll — ADR-0035). Artifacts in
   the gitignored output directory; the report pairs each run with the dev alias SHA.
 - **Frank's own look** at each solved plan of 3d on dev: the month band (C6 HZ-5) at phone width,
-  the run notices, and the «Equidad» panel's columns «Le tocaba», «Tuvo», «Saldo (3 meses)», «En este
-  plan», «Queda» — §16: «the «Equidad» panel explains every person's numbers, and Frank reads it as
-  correct». A number Frank reads as wrong is S7.
+  the run notices (a timeout reads «El solver tardó demasiado…», every other transport error its own
+  copy, A24), and the «Equidad» panel's columns «Le tocaba», «Tuvo», «Saldo (3 meses)», «En este
+  plan», «Queda» — every figure with **one decimal**, computed once from the exact value by C2's
+  single formatter («le deben 0.8», A17) — §16: «the «Equidad» panel explains every person's
+  numbers, and Frank reads it as correct». A number Frank reads as wrong is S7.
 - **Decisions collected** (each has a default, so none blocks; recorded in the worklog and the
   cutover record): parent Q1 (Saturday-only support singers: default no monthly target, numbers shown)
-  and Q3 («Exenta» stays in the DL line, D13); C1 Q1 (no past-month toggle) and Q2 (no uncounted
-  badge); C3 Q-c (copy as written); C6's sidebar default («Ambos») and PI-5 (transport copy); the
-  Step 7 change list; W3 (keep a month or not); W1 if pending; the rollback-window criterion
-  (Decision K5).
+  and Q3 («Exenta» stays in the DL line, D13); A25 / C1 Q1 (services in lookback months cannot be
+  toggled from any surface: accepted, revisited here) and C1 Q2 (no uncounted badge); C3 Q-c (copy as
+  written); C6's sidebar default («Ambos»); the Step 7 change list; W3 (keep a month or not, knowing a
+  kept month's record binds it, W3 row); W1 if pending; the rollback-window criterion (Decision K5).
 - **State after:** Frank's go-ahead for W5, or a list of changes that send the plan back to Step 3.
 
 ### 5. The flip PR (Cycle F code)
 
 - **Branch:** `claude/solver-v3-c7-flip` from current `main`.
 - **Code:**
-  - `SOLVER_ENGINE` → `"v3"` in `app/components/admin/solverEngine.ts`, keeping its explicit
-    `"v2" | "v3"` annotation (the TS2367 reason, C6 ENG-1); the pin test changes from `"v2"` to
-    `"v3"` in the same commit. A server-side test that asserts the resolver's or the fairness GET's
-    output against the constant (C2 EN-2's table: «the constant wins» on Production or for an
-    invalid override) may be updated to reference `SOLVER_ENGINE` rather than a literal. **No other
+  - `SOLVER_ENGINE` → `"v3"` in `app/components/admin/solverEngine.ts` (C1's module, parent A1),
+    keeping its explicit `"v2" | "v3"` annotation (the TS2367 reason, C6 ENG-1); the pin test changes
+    from `"v2"` to `"v3"` in the same commit. A server-side test that asserts C2's resolver's or the
+    fairness GET's output against the constant (C2's resolver table, A1: «the constant wins» on
+    Production, on `verify/service-readiness` and for an invalid override) may be updated to reference `SOLVER_ENGINE` rather than a literal. **No other
     test may change** — in particular a client render or request test that changes with the constant
     was reading the default engine, which C6 ENG-4 forbids (S8).
 - **ADRs** (numbers: next free on `main` at merge; pointers by name until then; renumbered in the
@@ -398,14 +459,15 @@ Two cycles with code, one operational tail:
   **One new record** (Decision K6): «The v2 solver stays deployed as the rollback engine» — the flip
   as executed (snapshot → flip → pools, and why that order), the targeted restore, what retires when
   (the «sin Lead» surfaces and C4's script after the rollback window; v2 itself only by a later
-  plan), and P4 blocked on v3. Rejected alternatives: pools before the flip; whole-document restore;
-  deleting the v2 surfaces in the flip PR; building P4 on v2.
+  plan), and P4 blocked on v3. Rejected alternatives: pools (or the v2-changing rule edits) before
+  the flip; whole-document restore; deleting the v2 surfaces in the flip PR; building P4 on v2.
 - **`CLAUDE.md`:**
   - Replace the bullet at `:217-232` with an «Auto runs solver v3» bullet: `SOLVER_ENGINE = "v3"`
     since <date> (ADR-<new>); every Auto reads `GET /api/admin/fairness` fresh for its own horizon and
     refuses on a failed read; carried balances come only from `fairnessLedger.ts` (C2's GU-4 line,
-    kept, not duplicated); the record is written before any draft; the production override is
-    ignored by construction; flipping back is a PR plus the targeted restore (ADR-<new>). The v2
+    kept, not duplicated); the record is written before any draft; the override is honoured only on
+    the `preview` branch deployment or locally, never on Production or `verify/service-readiness`
+    (A1); flipping back is a PR plus the targeted restore (ADR-<new>). The v2
     paragraph follows unchanged in substance, introduced as «v2 is the rollback engine; everything
     below applies only when `SOLVER_ENGINE` is flipped back to `"v2"`», still naming
     `priorMonthLeadVisibility` (removed in Step 12).
@@ -423,8 +485,10 @@ Two cycles with code, one operational tail:
   per-person figures.
 - **`docs/SECRETS.md`** (no values, ever): `OWT_SOLVER_V3_URL` — Production now set (W4), what
   breaks without it under v3 in production (`not_configured`), still not needed on
-  `verify/service-readiness`, `.env.local`, CI or iOS; `OWT_SOLVER_ENGINE` — set only for
-  rehearsals, unset since Step 9, ignored on Production by code; `OWT_SOLVER_API_KEY` — confirm C5's
+  `verify/service-readiness`, `.env.local`, CI or iOS; `OWT_SOLVER_ENGINE` (C2's entry) — set on
+  Preview only for rehearsals, unset since Step 9; ignored by code on Production and
+  `verify/service-readiness`, honoured locally when `VERCEL_ENV` is unset (A1) — the entry is
+  corrected if it still says otherwise; `OWT_SOLVER_API_KEY` — confirm C5's
   amendment (both functions redeployed on rotation) and add that under v3 a rotation gap now breaks
   production Auto, not only v2.
 - **`docs/CI.md`:** read `:14-31` and `:184-263` as left by C0 and C5. If it describes `solver-v3`
@@ -478,12 +542,14 @@ Order is fixed (Decision K1): **flip first, pools after**.
 3. Frank reloads `/admin` on production: the horizon control appears, «Vista previa: Auto todavía no
    usa este saldo» is gone, WN-1 lists the cadence members not yet in «Líderes Domingo» and WN-3
    flags «Líderes Sábado» — the expected state between 2 and 4.
-4. **W6:** Frank applies the Step 4 change list on production — ticks, unticks and rule edits — and
-   presses «Guardar reglas» once. WN-1 and WN-3 then show nothing for the cadence members.
+4. **W6:** Frank applies the Step 4 change list on production — ticks, unticks and the rule edits
+   3c decided (all of which change v2's request, so none was saved earlier) — and presses «Guardar
+   reglas» once (one save writes pools and rules together, `MonthGenerator.tsx:1755-1761`). WN-1 and WN-3 then show nothing for the cadence members.
 5. **Post-step snapshot** (read-only, same format) and the **read-only diff** pre vs post: the change
    set equals the written change list exactly — `sundayLeads` gained exactly the expected cadence
    ids, `saturdayLeads` is empty (or holds exactly what Frank decided at check 0.7), each listed rule
-   change and nothing else; `cadenceMembers` → 3 ids, 0 refusals; `cadenceOutsideSundayPool` → empty.
+   change and nothing else; `cadenceMembers` → 3 ids, 0 refusals; `cadenceOutsideSundayPool` → empty;
+   check 0.5's every-name resolution → 0 refusals (A7).
    Any other difference → Frank corrects it in the UI or W8 reverts the step (S10).
 6. The restore script's dry run against the live document plans exactly the step's change set
    (rollback readiness proven); it is not applied.
@@ -500,9 +566,18 @@ Order is fixed (Decision K1): **flip first, pools after**.
 - Frank runs Auto on production for the next unplanned month(s), solve first. The agent asks Frank
   for the captured request/response (as in 3d) and repeats 3e's check. Frank confirms when
   satisfied — ordinary admin work, but the first v3 confirm in production: the per-month lines
-  (C6 CF-6) show records then drafts; the agent verifies read-only that the month's `fairnessMonth`
-  exists with `source: "auto"`, `engine: "v3"`, `environment: "production"`.
-- A refusal, timeout or transport error → no confirm; diagnose; S11.
+  (C6 CF-6) show records then drafts; the agent verifies read-only, with the read token (A2), that
+  `fairnessMonth.<YYYY-MM>` exists with `source: "auto"`, `engine: "v3"`, `environment:
+  "production"` for each confirmed month that was not «anchored, unrecorded». For a confirmed month
+  that **was** anchored and unrecorded, the read-back depends on Step 0 check 8's branch: **amended**
+  (either form) — none was written (C6 CF-1 (iii); the dialog names it) and the month stays in Step
+  10's table; a record found there anyway in the client-only form is the race C6 CF-1 names — it is
+  permanent (A5; no route deletes it, C2 WR-13), reported to Frank, and its Step 10 row becomes «v3
+  record (race)»; **literal** — the month now has a permanent `source: "auto"` record and leaves
+  Step 10's table as «v3 record», which K4's literal branch says happens only when Frank chose to
+  include that month. A month kept by W3 is solved with its preview-stamped record (A6) and its confirm
+  leaves that record `unchanged` (C6 CF-3).
+- A refusal, timeout or transport error (each with its own copy, A24) → no confirm; diagnose; S11.
 - **State after:** v3 serves Auto in production (parent §13 «Exit»).
 
 ### 9. Remove the Preview override
@@ -521,21 +596,38 @@ Order is fixed (Decision K1): **flip first, pools after**.
   |---|---|---|---|---|---|---|---|
 
   Seeded at check 0.4 with every month that holds stored services and was planned under v2,
-  including the current month and any later month confirmed under v2 before the flip.
-- **Rule:** at each month boundary after the flip, before the next v3 Auto, every v2-confirmed month
-  that has just become past is reconstructed: dry run (`--months <m> --out <private dir>
+  including the current month and any later month confirmed under v2 before the flip. «Record now»
+  is read with the read token (A2).
+- **Rule (A21):** at each month boundary after the flip, before the next v3 Auto, every v2-confirmed
+  month that has just become past is reconstructed (October 2026 on or after 2026-11-01): dry run (`--months <m> --out <private dir>
   --preview-run <next planned month>`) → Frank reads the private table, anomalies and balance
   preview → W7 with the plan's fingerprint → second dry run «sin cambios» → the panel shows the month
   «reconstruido». The overrides file (C4 R8) carries any correction Frank makes.
 - **The current month at cutover** (Decision K4): default — it stays «sin registro» until it becomes
-  past, then is reconstructed like the rest; its seats still feed the DL floor and the cadence state
-  through stored data (C2 CAD-2, C5 `prev_dl_leads`), so only its balances are missing from the first
-  v3 run. Frank may instead record it with «Registrar elegibilidad» under v3 right after Step 7 — a
-  `source: "manual"` record that is **permanent**: C2 WR-14 row 5 means the reconstruction will never
-  touch it, and L3 allows no replacement once the month has stored services.
-- A month confirmed on dev under v3 (W3) or in production under v3 already has a record and is not
-  in the table.
-- **Done when:** every row is «applied» or «v3 record». Then C4's script may retire (Step 12).
+  past (A21), then is reconstructed like the rest; its seats still feed the DL floor, the spacing
+  check and the cadence state through stored data (C2 CAD-2; C5 `prev_dl_leads` and `prior`, A15),
+  so only its balances are missing from the first v3 run. Frank may instead record it with
+  «Registrar elegibilidad» under v3 right after Step 7 — a `source: "manual"` record that is
+  **permanent**: C2 WR-14 row 5 means the reconstruction will never touch it, and A5 allows no
+  replacement once the month has stored weekend services or counted specials.
+  **How the default holds** depends on Step 0 check 8. **Amended** (either form): by C6's confirm
+  (CF-1 (iii)), and by C2's writer too in the server-checked form. **Literal:** only operationally —
+  every v3 Auto horizon starts at the first month after the last v2-confirmed one (Step 8's «next
+  unplanned month(s)»; HZ-7 refuses only past months, `…-c6-planner-v3-design.md:149`, so the
+  current month stays reachable), and a gap in a v2-planned month is filled by hand in «Editar mes»
+  (the path C6 ST-5 and CF-10 name, `:160,259`) — provided check 8's sub-check found that path writes
+  no record; if it does, Frank accepts that record's permanence or leaves the gap. Including such a
+  month in a v3 confirm is then Frank's explicit choice, as permanent as «Registrar» but stamped
+  `source: "auto"`.
+- A month confirmed under v3 (on dev by W3, or in production) already has a record and is not in
+  the table — **unless** it was «anchored, unrecorded» at that confirm (it held v2-planned services).
+  What happens then depends on Step 0 check 8: **amended** (either form) — a v3 confirm writes no
+  record for such a month (C6 CF-1 (iii)), so it stays in the table and is reconstructed when past,
+  like the current month (K4), except a record minted by the client-only race (Step 8), which is
+  permanent and marked «v3 record (race)»; **literal** — the confirm wrote a permanent `source:
+  "auto"` record from the on-screen config, so the month leaves the table as «v3 record» and is
+  never reconstructed (C2 WR-14 row 5).
+- **Done when:** every row is «applied», «v3 record» or «v3 record (race)». Then C4's script may retire (Step 12).
 
 ### 11. Rollback window
 
@@ -575,8 +667,8 @@ Order is fixed (Decision K1): **flip first, pools after**.
 
 ## Data and failure safety
 
-- **Identity and source of truth.** Engine: `SOLVER_ENGINE` on `main` (production ignores the
-  override, C2 EN-2). Rules: the one `solverConfig` document; the snapshots are evidence, never a
+- **Identity and source of truth.** Engine: `SOLVER_ENGINE` on `main` (Production and
+  `verify/service-readiness` ignore the override by code, A1). Rules: the one `solverConfig` document; the snapshots are evidence, never a
   source. Eligibility: `fairnessMonth` records (C2). Seats: role documents.
 - **Migration and compatibility.** None; every field C7 relies on is optional or defaulted by its
   child. A tab opened before the flip deploy and used after it gets the 409 «El solver cambió de
@@ -600,7 +692,9 @@ Order is fixed (Decision K1): **flip first, pools after**.
 | §16 DL floor or capacity notice | Step 3e `missed[]` rule | A regular silently two months without a Sunday |
 | §16 cadence on/off, compensation | Step 3e `cadence[]` rule | A cadence member doubled or skipped; compensation lost |
 | §16 caps, consecutive, voice floor, 0 hard violations, pins honoured | Step 3e; C5's independent checker | Protections missed or a seat for someone ineligible |
-| §16 «Equidad» explains every number; Frank reads it as correct | Step 4 Frank's look; carried = GET balance check (3e) | A ledger/solver disagreement, a misleading reason line |
+| §16 «Equidad» explains every number; Frank reads it as correct | Step 4 Frank's look (one decimal, A17); carried = GET balance check (3e) | A ledger/solver disagreement, a misleading reason line |
+| A23: C5's Run A re-checked with C6's real request builder | Step 3e on the captured requests, compared with C5's recorded aggregates | A gap between C5's private converter and the real builder |
+| A7: every rule name resolves to exactly one member | Check 0.5; 7.5 | Every v3 Auto refused, or a rule applied to the wrong person |
 | §16 flipping back restores v2 | Step 3f on dev; restore dry run (3f, 7.6) | A rollback path that does not work when needed |
 | Parent R9 (v2 until Frank approves) | W5 gated on Frank's go-ahead; constant pin test | An unapproved flip |
 | E4 one step after a snapshot | Pre-step snapshot `_rev` vs 3a; post-step diff (7.5) | Unrecorded or extra changes to the shared rules |
@@ -656,10 +750,10 @@ Order is fixed (Decision K1): **flip first, pools after**.
 
 | ID | Decision | Choice | Why | Tradeoffs | Owner |
 |---|---|---|---|---|---|
-| K1 | Order inside «the one step» | Flip merged and verified, then Frank saves pools and rules | v3 with old pools is announced by WN-1/WN-3 and solves nothing silently wrong; v2 with the cadence members in «Líderes Domingo» schedules them as regular Sunday leads with no warning (C3 §6.7, v2's anchor `owt_solver_v2.py:1096-1100`) | A short window of «v3 with old pools» under a freeze; Frank must be available right after the merge | Claude (Parent issue 4) |
+| K1 | Order inside «the one step» | Flip merged and verified, then Frank saves pools and rules | v3 with old pools is announced by WN-1/WN-3 and solves nothing silently wrong; v2 with the cadence members in «Líderes Domingo» schedules them as regular Sunday leads with no warning (C3 §6.7, v2's anchor `owt_solver_v2.py:1096-1100`) | A short window of «v3 with old pools» under a freeze; Frank must be available right after the merge | Claude (Parent issue 5) |
 | K2 | Who saves the rules in the step | Frank, in the production UI | C3 §5 («No agent saves rules on production»); the UI goes through the version guard and the one serializer | Manual; mitigated by the written change list and the read-only diff | C3 |
 | K3 | How a rollback restores `solverConfig` | A private, targeted revert of the step's own paths, skipping any path edited since, under `ifRevisionId` | A whole-document restore discards every rule edit made after the flip, re-mints nothing it should and bypasses C3's serializer; the precedent scripts do exactly this kind of targeted, consented patch | One private script to review; not literally «restore the snapshot» (Parent issue 2) | Claude |
-| K4 | The current month at cutover | Default «sin registro» until past, then reconstructed; «Registrar» only if Frank chooses, knowing it is permanent | Keeps one reviewed inference method for every v2-planned month; the DL floor and cadence still see its seats | The first v3 run's balances miss one month | Frank (non-blocking, default stated) |
+| K4 | The current month at cutover | Default «sin registro» until past, then reconstructed; «Registrar» only if Frank chooses, knowing it is permanent. Held by C6 CF-1 (iii) if the parent amends L3/U4/A6 (C6 PI-7), by C2's writer as well if the ruling adds WR-8's server check, and only operationally (horizons start after the last v2-confirmed month) if the parent keeps its literal text — Step 0 check 8, Step 10 | Keeps one reviewed inference method for every v2-planned month; the DL floor and cadence still see its seats | The first v3 run's balances miss one month; in the literal branch the default rests on Frank's horizon choice, not on code | Frank (non-blocking, default stated); the branch is the parent's owner's ruling |
 | K5 | When v2-only surfaces and C4's script retire | After a rollback window Frank closes, criterion in Step 11 | Parent §16 makes «flip back restores v2» an acceptance line; C4 R22 ties retirement to the same window | The panel lives on unused for a few weeks | Claude (Parent issue 3) |
 | K6 | ADRs | Seven amendments plus one new record («The v2 solver stays deployed as the rollback engine») | The four new records the parent lists are owned by C2, C3, C5, C6; C7's own rejected alternatives (order, restore, retirement timing, P4) meet the ADR bar — a competent person would otherwise delete v2 as dead code or build P4 as approved | One more record to number | Claude (Parent issue 1) |
 | K7 | MCP P4 | Leave `solve_month` unbuilt; mark the plan and `docs/MCP.md` blocked with the reason | P4's approval rests on parity with the v2 browser request and an apply order that writes drafts with no record (against L3/U4); a re-baseline changes its critical contracts, so it is a new critical plan, not a cutover step | MCP planning stays unavailable until that plan exists | Claude (parent §10 allows either) |
@@ -668,15 +762,17 @@ Order is fixed (Decision K1): **flip first, pools after**.
 
 ## Assumptions
 
+Numbered `AS*` so they never read as the parent's amendments `A1–A26`.
+
 | Assumption | Impact if false | Validation point | Failure response |
 |---|---|---|---|
-| A1 The dev-verify bot can open `/admin`'s Servicios planner and read `GET /api/admin/fairness` | Step 2/4 visual checks need Frank's eyes instead | First Step 2 run | Frank's own look covers it; note it in the cutover record |
-| A2 Frank can save request/response bodies from the browser's network panel | 3e has no captured data | Step 3d first run | Frank reads the notices and panel only; 3e reduced to what the UI shows; the cutover record says so |
-| A3 C5's independent checker can be driven with a captured request/response pair | 3e needs a private wrapper | Step 3e | A private wrapper in `owt-agent-logs` calls the checker's functions |
-| A4 Only cadence members are in «Líderes Sábado» at the flip | Emptying it would stop someone leading | Check 0.7 | Frank decides per person (WN-3 semantics) |
-| A5 No other admin runs Auto or saves rules during the freeze | A concurrent save between snapshot and step | `_rev` checks (3a, 6, 7.5) | Re-snapshot; Frank reconciles; S6 |
-| A6 The flip lands before the next month is confirmed under v2 | More months in the reconstruction tail; thinner lookback for the first v3 runs | Check 0.4 | Not a stop: the tail absorbs it; Frank may wait to flip |
-| A7 The team's planning date leaves room for the rehearsal and the flip | Pressure to skip steps | Step 0 calendar | Plan the next month under v2 and flip after it; the tail records it |
+| AS1 The dev-verify bot can open `/admin`'s Servicios planner and read `GET /api/admin/fairness` | Step 2/4 visual checks need Frank's eyes instead | First Step 2 run | Frank's own look covers it; note it in the cutover record |
+| AS2 Frank can save request/response bodies from the browser's network panel | 3e has no captured data | Step 3d first run | Frank reads the notices and panel only; 3e reduced to what the UI shows; the cutover record says so |
+| AS3 C5's independent checker can be driven with a captured request/response pair (C5-R15 promises it) | 3e needs a private wrapper | Step 3e | A private wrapper in `owt-agent-logs` calls the checker's functions |
+| AS4 Only cadence members are in «Líderes Sábado» at the flip | Emptying it would stop someone leading | Check 0.7 | Frank decides per person (WN-3 semantics) |
+| AS5 No other admin runs Auto or saves rules during the freeze | A concurrent save between snapshot and step | `_rev` checks (3a, 6, 7.5) | Re-snapshot; Frank reconciles; S6 |
+| AS6 The flip lands before the next month is confirmed under v2 | More months in the reconstruction tail; thinner lookback for the first v3 runs; each such month is «anchored, unrecorded» and not past, so in Step 0 check 8's literal branch more months rest on K4's operational control | Check 0.4 | Not a stop: the tail absorbs it; Frank may wait to flip |
+| AS7 The team's planning date leaves room for the rehearsal and the flip | Pressure to skip steps | Step 0 calendar | Plan the next month under v2 and flip after it; the tail records it |
 
 ## Open questions
 
@@ -688,7 +784,7 @@ None blocking. Non-blocking, with bounded defaults:
 | Keep a rehearsal month (W3)? | Saves re-planning; writes production from dev | Only if Frank reads the month as final | A preview-stamped record | Frank | No | Step 4 | No |
 | Current month at cutover (K4) | One month's balances in the first v3 run | Default as K4 | Permanent manual record if «Registrar» | Frank | No | Step 7 | «sin registro» until past |
 | Rollback-window criterion (K5) | When v2-only surfaces go | As Step 11 | Longer coexistence | Frank | No | Step 11 | Open until Frank declares |
-| Parent Q1, Q3; C1 Q1, Q2; C3 Q-c; C6 sidebar default, PI-5 | Deferred to «C7's look» by their owners | Each owner's default | — | Frank | No | Step 4 | Each owner's default |
+| Parent Q1, Q3; A25 / C1 Q1, Q2; C3 Q-c; C6 sidebar default | Deferred to «C7's look» by their owners (C6 PI-5's transport copy is settled by A24) | Each owner's default | — | Frank | No | Step 4 | Each owner's default |
 
 ## Parent issues
 
@@ -705,24 +801,46 @@ None blocking. Non-blocking, with bounded defaults:
    restore v2 behaviour.** Deleting the v2 surfaces in the flip makes that rollback incomplete.
    **Recommended fix:** «retire «sin Lead» after a rollback window Frank closes». Followed meanwhile:
    K5, Step 12.
-4. **E4 calls the pool move and the flip «one step» without ordering them, and the C7 row puts «Mes
-   por medio» inside it.** «Mes por medio» is set earlier and is inert under v2 (C3 §6.4; C4 PI-5,
-   adopted). The Sunday-pool tick is not inert under v2. **Recommended fix:** «after a recorded
-   snapshot, flip; once production serves v3, save the pools and the v3-reviewed rules; «Mes por
-   medio» may be saved earlier». Followed meanwhile: K1, precondition 4.
-5. **L6 («re-run for every month confirmed under v2 before cutover») cannot run on cutover day for the
-   current or a later month** (C4 R1, PI-2, adopted). **Recommended fix:** «…each as soon as it becomes
-   past». Followed meanwhile: Step 10, K4.
-6. **§16 does not say what the lookback of the rehearsal contains.** The current month is always
-   unrecorded at the first v3 runs, and October 2026 is unrecordable before 2026-11-01. **Recommended
-   fix:** add «lookback months that are current or not yet reconstructable read «sin registro»;
-   expected». Followed meanwhile: Step 3g.
-7. **The rollback does not say what happens to records and drafts written under v3.** **Recommended
+4. **A22 says the single flip step covers «only moving the pools and flipping the constant», but the
+   rule edits v3 needs are not inert under v2 either.** Removing an exact `Sun.Lead` count on a
+   cadence member (A11 refuses it under v3) or a `Sun.Lead` exclusion that makes her `out` every
+   month (A14) each changes v2's solve request, so neither can land before the flip without changing v2's output; and the UI writes pools and rules in
+   one save (`MonthGenerator.tsx:1755-1761`). **Recommended fix:** A22 reads «…covers moving the
+   pools, the rule edits the rehearsal found v3 needs that change v2's request, and flipping the
+   constant; rule edits inert under v2, like «Mes por medio», may precede it». Followed meanwhile:
+   3c, W6, Step 7.4.
+5. **E4 calls the pool move and the flip «one step» without ordering them, and the C7 row lists them
+   pools-first.** They are two writes that cannot be atomic (a merge and deploy; a Sanity save), and
+   the order decides which wrong state the gap between them shows: v2 with the cadence members in
+   «Líderes Domingo» and an empty «Líderes Sábado» silently schedules them as regular Sunday leads and
+   loses its Saturday anchor (C3 §6.7; `gcf/owt_solver_v2.py:1096-1100`), while v3 with the old pools
+   announces itself (WN-1, WN-3).
+   **Recommended fix:** E4 adds «flip first; once production serves v3, save the pools» or leaves the
+   order to C7 explicitly. Followed meanwhile: K1.
+6. **The rollback does not say what happens to records and drafts written under v3.** **Recommended
    fix:** «they stay; records are inert under v2 and valid on a later flip». Followed meanwhile:
    Rollback line 3.
+7. **L3, U4 and A6 conflict with A21 for a month that holds stored weekend services or counted
+   specials and has no record** (the current month at cutover, and any month confirmed under v2
+   before the flip). Read literally, L3 («Written by Auto's confirm under v3 only, before any
+   draft», `…-fairness-design.md:294-295`), U4 (`:326`) and A6's «Otherwise … the confirm replaces
+   the record» (`:127`) have a v3 confirm that drafts into such a month write a permanent
+   `source: "auto"` record from today's on-screen pools, while A21 (`:142`) says that month reads
+   «sin registro» until past and is then reconstructed. C6 raised it as PI-7
+   (`…-c6-planner-v3-design.md:696`) and holds its CF-1 (iii) as a deviation pending it; C2's
+   writer creates in that case today (WR-8 row 3, `…-c2-ledger-and-record-design.md:138`).
+   **Recommended fix:** the amendment C6 PI-7 words, **with** C2 WR-8's server-side refusal of a
+   `source: "auto"` create on a month with freezing services, so the rule does not rest on one
+   client. The ruling is the parent's owner's; C7 only depends on it. Followed meanwhile: Step 0
+   check 8 and the two branches of K4, Step 8 and Step 10.
+
+Resolved by the amendments and removed from this list: «Mes por medio» inside the step (A22, A26);
+L6's re-runs for months not yet past (A21); the rehearsal's «sin registro» lookback months (A21).
 
 ## Handoff
 
+- **Prerequisites this plan needs before Step 0:** the parent's ruling on C6 PI-7 (Parent issue 7)
+  and the matching state of C2 WR-8 and C6 CF-1 (iii) on `main` (Step 0 check 8).
 - **Prerequisites supplied to later work:** a production running v3; the reconstruction table; the
   snapshots and the restore script; P4's blocked status with its reason (input to any future P4
   re-baseline); ADR-<new> as the starting point for any plan to retire v2.

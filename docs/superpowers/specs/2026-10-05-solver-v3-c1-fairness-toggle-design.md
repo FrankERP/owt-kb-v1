@@ -13,9 +13,15 @@ Requirement: two sequential fresh `APPROVED` verdicts on byte-identical text bef
 churn cap applies.
 
 **Contracts, not prescriptions.** This spec states what must be true and what must never happen. File and
-function names below are cited as evidence of today's code (verified at `3dbc189b`); helper names, loop
-shapes and test file layout belong to the plan, except the names in §9 «Interfaces», which other children
-import.
+function names below are cited as evidence of today's code (verified at `3dbc189b`; `2d90e4b3` differs
+from it only under `docs/superpowers/`, so every code citation still holds); helper names, loop shapes and
+test file layout belong to the plan, except the names in §9 «Interfaces», which other children import.
+
+**Revision.** Aligned on 2026-10-05 with the parent's amendments A1–A26 (parent §3), which win over the
+parent's older clause wording. The ones that touch this child: **A1** (C1 creates the engine module),
+**A25** (L1's toggle-only wording; lookback services not toggleable), **A13** (rules see every weekend
+service; lines count counted ones), **A5/A6** (a counted special gates the month's record) and **A15**
+(`prior` is built from the GET this child extends).
 
 **Names.** This repository is public. Every example and fixture uses fictitious people («Ana», «Beto»).
 
@@ -80,10 +86,10 @@ defaults of **D14** («weekend services count, specials do not»).
 | «+ Nuevo servicio» keys its creation request id on `JSON.stringify({type, date, name, time, format})`; its controls are disabled while `storedMutationLocked`, which includes an unresolved attempt; a created role is «verified» only when the reload shows it as requested | `MonthGenerator.tsx:3067-3110` (`:3086`); `:2290-2299`; `:2518-2541` | The toggle joins the attempt identity and the verification |
 | Month-create drafts keep one `creationRequestId` for the draft's whole life, across seat edits and retries | `app/utils/monthDraftCreate.ts:1-12`, `:26-50`, `:65-84`; `plannerModel.ts:1739-1820` | Flipping a toggle after an attempt whose outcome is unknown behaves like editing a seat today (§10) |
 | `buildSolveRequest` takes config, members, dates and history — no columns; `historyEntryFromDrafts` takes drafts | `plannerModel.ts:1273-1288`, `:1909` | v2's request cannot see the toggle; the local history entry must be pinned unchanged |
-| The planner's month pills start at the current month | `app/components/admin/monthPills.ts:14-18` | No surface can toggle a service of the three lookback months (parent issue 3) |
+| The planner's month pills start at the current month | `app/components/admin/monthPills.ts:14-18` | No surface can toggle a service of the three lookback months — accepted by the parent (A25) |
 | `ServicesPanel`'s only modal is delete; it never PATCHes a role's fields | `ServicesPanel.tsx:210`, `:472-500` | The planner grid is the only edit surface |
 | Role documents are `readOnly: true` in Studio, with no create or mutating action; `published` is a visible boolean field on them | `sanity/schemas/sunRole.ts:11`, `:31-37`; `studioProtection.ts:189-192` | The field is operator-visible and read-only in Studio, like `published`; not an internal field |
-| The engine-switch module does not exist yet; its sibling constant module is neutral with an explicit type annotation (TS2367) | `app/components/admin/solverHistorySource.ts:20-54` | C1 creates `solverEngine.ts` in that shape if no other child has (§6.6) |
+| The engine-switch module does not exist yet; its sibling constant module is neutral with an explicit type annotation (TS2367) | `app/components/admin/solverHistorySource.ts:20-54` | C1 creates `solverEngine.ts` in that shape (parent A1; §6.6) |
 | `groq-js` is a dependency and already evaluates GROQ in tests | `package.json:86`; e.g. `app/utils/__tests__/outboxSweep.test.ts` | The read-rule sync test evaluates the real fragment |
 | The design reports' composer help text («en sábado cuenta como sábado; otro día, como domingo») is reversed relative to D14/F1 | private `evidence/d_persistence-ux.md` §4 vs parent D14, F1 | Parent wins: Sunday-dated → Dom Lead, any other day → Sáb Lead |
 
@@ -92,10 +98,18 @@ defaults of **D14** («weekend services count, specials do not»).
 ### Inherited (parent, binding)
 
 - **L1** — field name, the three types, the legacy read rule `coalesce(countsForFairness, _type != "special_role")`
-  with no migration, PATCH-absent = unchanged, toggle-only PATCH queues no notification, fingerprint
-  includes the field only when it differs from the type default with no `FINGERPRINT_VERSION` bump,
-  readiness/MCP loaders, `computeParticipation` and «Incluir especiales» unchanged, the ledger reads
-  through its own query.
+  with no migration, PATCH-absent = unchanged, fingerprint includes the field only when it differs from
+  the type default with no `FINGERPRINT_VERSION` bump, readiness/MCP loaders, `computeParticipation` and
+  «Incluir especiales» unchanged, the ledger reads through its own query.
+- **A25** (wins over L1's «a toggle-only PATCH queues no notification») — «A PATCH that carries the field
+  and changes nothing a notice could report queues no notification» (§5.4, C1-D2); services in lookback
+  months cannot be toggled from any surface, accepted and revisited at C7's look (§14 Q1).
+- **A1** — C1 creates `app/components/admin/solverEngine.ts` with the constant `SOLVER_ENGINE` only. The
+  effective-engine resolver, the Preview-only `OWT_SOLVER_ENGINE` override, its `docs/SECRETS.md` entry
+  and the fairness PUT's `engine_not_v3` are C2's; the solve route's `409 solver_version_mismatch` and the
+  server-resolved engine passed to the planner are C6's (§6.6).
+- **A13** — lines and protections count counted services only; rules see every weekend service, counted
+  or not (§5.1).
 - **D6/D14** — the switch on every create and month-edit surface, specials included; weekends default
   on, specials off.
 - **U7** — the switch is editable from C1 on and says «aplica con el nuevo solver» while the engine is v2.
@@ -106,7 +120,7 @@ defaults of **D14** («weekend services count, specials do not»).
 | ID | Decision | Why | Rejected alternative |
 |---|---|---|---|
 | C1-D1 | `ROLE_PROJECTION` stays byte-identical; the toggle is read by the `GET /api/admin/roles` projection and by C2's own query, never through the shared projection | It reaches the readiness loader, the MCP snapshot and v2's history (Evidence); L1 keeps those unchanged | Adding the raw field to `ROLE_PROJECTION`: would make R11's evidence toggle-aware, at the price of changing what eight readers receive, two of which L1 names as unchanged |
-| C1-D2 | «Toggle-only PATCH» is defined semantically: the request **carries** `countsForFairness` **and** changes nothing a notice could report (§5.4). A request without the field keeps today's behaviour exactly, including a no-op save's queueing | Every PATCH carries the full roster, so «toggle-only» is not a request shape. Restricting suppression to requests carrying the field leaves every pre-C1 client byte-for-byte unchanged | Suppressing every no-op PATCH: also sound, but changes an existing path outside C1's scope |
+| C1-D2 | «Toggle-only PATCH» is defined semantically: the request **carries** `countsForFairness` **and** changes nothing a notice could report (§5.4). A request without the field keeps today's behaviour exactly, including a no-op save's queueing | Every PATCH carries the full roster, so «toggle-only» is not a request shape. Restricting suppression to requests carrying the field leaves every pre-C1 client byte-for-byte unchanged. The parent adopted this wording as A25 | Suppressing every no-op PATCH: also sound, but changes an existing path outside C1's scope |
 | C1-D3 | The field is `true`, `false` or absent. `null` and any other value is refused (`400 invalid_request`, issue `countsForFairness`) on create and edit | A boolean has no «empty» value; reading `null` as «default» on PATCH would be a silent reset; «describe what gets written» (`roleCreationReceipt.ts:155-171`) | Treating `null` as absent, like `time` |
 | C1-D4 | Every document the create writer makes after C1 stores the explicit effective boolean; the edit writer sets it whenever the request carries it | New documents stop depending on the default rule; the rule then only covers legacy documents | Storing only non-default values |
 | C1-D5 | The stored-mode PATCH body always carries the column's effective value | The dirty check and the reconciliation derive from the body (`plannerSaveModel.ts:135-138`); the `_rev` assertion makes a stale value a `409`, never an overwrite | Sending only when changed |
@@ -126,7 +140,7 @@ defaults of **D14** («weekend services count, specials do not»).
 | C1-R8 | `GET /api/admin/roles` returns each role's effective `countsForFairness` | Route test: query contains the fragment; a legacy weekend row reads `true`, a legacy special `false` |
 | C1-R9 | The planner carries the value through every create and edit body, dirty check and reconciliation | Model tests (§7) |
 | C1-R10 | The Switch appears on the four surfaces with the defaults, states and copy of §6 | Component tests (§7) |
-| C1-R11 | «aplica con el nuevo solver» shows exactly while the engine is v2 | Component tests with the engine constant mocked both ways |
+| C1-R11 | C1 creates `solverEngine.ts` with the constant only (A1); «aplica con el nuevo solver» shows exactly while the engine is v2 | A test pins `SOLVER_ENGINE === "v2"` and its `"v2" \| "v3"` annotation; the module has no `"use client"` and no imports; `clientBoundary` green; component tests with the engine constant mocked both ways |
 | C1-R12 | v2 is inert to the toggle | `buildSolveRequest` output and `historyEntryFromDrafts` output identical with every toggle on and every toggle off; v2's Python suite untouched |
 | C1-R13 | Documentation in the same delivery | §11 items present in the PR |
 
@@ -139,7 +153,10 @@ defaults of **D14** («weekend services count, specials do not»).
   verification fixtures create synthetic documents without it). **Never `null`** through any writer.
 - **Meaning** (consumed by C2, not computed here): a service that does not count creates neither share
   nor received seats; a counted special maps its Lead to Dom Lead on a Sunday and to Sáb Lead on any
-  other day, its BGV to BGV, its Chorus to Coro (parent D14, F1). Under v2 nothing reads it.
+  other day, its BGV to BGV, its Chorus to Coro (parent D14, F1). «Does not count» is not «invisible»:
+  lines and protections count counted services only, but rules see every weekend service, counted or
+  not (A13), and an uncounted weekend service still reaches the v3 solver and is staffed (C5 §5 request table, service field
+  `counts: false`; only uncounted specials are never sent, U3). Under v2 nothing reads it.
 - **Studio.** A visible boolean titled «Cuenta para equidad», with a Spanish description stating the
   absent rule («Vacío = valor del tipo: domingo y sábado sí, especial no. Solo lo usa el nuevo solver.»).
   It is not in `INTERNAL_STUDIO_FIELDS`; the documents stay `readOnly: true` with every mutating action
@@ -305,15 +322,16 @@ defaults of **D14** («weekend services count, specials do not»).
 - While the engine is v2, every surface that shows the switch also shows, once, visible without
   interaction and next to the switch(es): «Cuenta para equidad: aplica con el nuevo solver. Hoy Auto no lo
   usa.» Once per surface: the grid (both modes) shows it once, not per column; each composer shows it once.
-- **Reading the engine.** The condition reads `SOLVER_ENGINE` from `app/components/admin/solverEngine.ts`.
-  If that module exists when C1 is implemented (C2 or C6 landed first — C3 never creates or imports it,
-  C3 §Non-goals), C1 imports it unchanged and edits nothing in it. Otherwise
-  C1 creates it containing only the constant — `SOLVER_ENGINE`, explicitly typed `"v2" | "v3"`, value
-  `"v2"` — neutral and annotated like `solverHistorySource.ts:20-54`. C1 reads no environment variable and
-  adds no `docs/SECRETS.md` entry. The Preview-only override is not C1's: C2 adds the server-side
-  `OWT_SOLVER_ENGINE` resolution and its `docs/SECRETS.md` entry (C2 EN-1–EN-3, its P3); C6 wires the
-  **effective** engine into this note (C6 CTL-1). Until C6, the note reads the constant, which is accurate
-  on every deployment because Auto runs v2 until C6 lands (§9).
+- **The engine module (A1).** C1 creates `app/components/admin/solverEngine.ts` containing only the
+  constant — `SOLVER_ENGINE`, explicitly typed `"v2" | "v3"`, value `"v2"` — neutral (no `"use client"`,
+  no imports) and annotated like `solverHistorySource.ts:20-54`. C3 never creates or imports it (C3
+  §Non-goals); C2 and C6 add to it or beside it and never change the constant's value or annotation
+  (C6 ENG-1). C1 reads no environment variable and adds no `docs/SECRETS.md` entry.
+- **Reading the engine.** The note's condition reads `SOLVER_ENGINE`. The resolver of the effective
+  engine and the Preview-only `OWT_SOLVER_ENGINE` override are C2's (A1); C6 rewires this note to the
+  server-resolved engine prop and hides it when that prop says v3 (C6 CTL-1, ENG-4). Until C6, reading
+  the constant is accurate on every deployment, a Preview with the override set included: the override
+  changes C2's surfaces only, and Auto runs v2 until C6 lands (§9).
 
 ### 6.7 Preserved UI invariants
 
@@ -350,6 +368,7 @@ Both stay green through the whole delivery. A red literal is a finding, never a 
 | Planner model | columns enter at the type default; drafts carry the per-column value; `historyEntryFromDrafts` identical with all toggles on and all off; `buildSolveRequest` identical (it takes no columns) |
 | UI | the four surfaces (§6.2–6.5): default, disabled and hidden states, accessible names, copy; the composer's value reaches its column; «+ Nuevo servicio» follows the Tipo until touched and keys the attempt on the value; the note shows under `"v2"` and not under `"v3"` (constant mocked) |
 | Studio | the field exists on the three types, is not hidden, the documents stay read-only |
+| Engine module | `SOLVER_ENGINE === "v2"` with its `"v2" \| "v3"` annotation; no `"use client"`, no imports; `clientBoundary` green. The test asserts nothing about other exports, so C2's resolver may join the module without C1's test being edited |
 
 The four gates: `npx tsc --noEmit`, `npm test`, `npx eslint .` with 0 errors; the Python gate does not
 apply (no `gcf/**` change).
@@ -369,13 +388,15 @@ apply (no `gcf/**` change).
 - **Rollback.** Revert the PR. Documents that carry the field keep it; v2 never reads it; the Studio
   shows it as an unknown field until it is restored. A create retried across the revert with a
   non-default value gets `409 idempotency_mismatch` (its hash changes back) — visible, no data lost.
-  Nothing to clean up (parent: «field is ignorable»).
+  Nothing to clean up (parent: «field is ignorable»). Once C2 or C6 has merged, they import
+  `solverEngine.ts` (A1), so a revert of C1 keeps that module and reverts only the toggle; the
+  `"v2"` constant changes no behaviour either way.
 - **Partial failure.** None new: every write is the existing single transaction.
 
 ## 9. Interfaces
 
-**C1 consumes** nothing from C2–C7. It reads `SOLVER_ENGINE` (its own module, or the one C2 or C6 created
-first); it never reads `OWT_SOLVER_ENGINE` or the effective-engine resolver.
+**C1 consumes** nothing from C2–C7. It reads `SOLVER_ENGINE` from the module it creates (A1); it never
+reads `OWT_SOLVER_ENGINE` or the effective-engine resolver.
 
 **C1 provides:**
 
@@ -384,16 +405,29 @@ first); it never reads `OWT_SOLVER_ENGINE` or the effective-engine resolver.
 | Stored field | `countsForFairness?: boolean` on `sunday_role`, `saturday_role`, `special_role`. Explicit on every document created after C1; set by a PATCH only when the request carries it; absent on legacy documents; never `null` | C2 (ledger), C4 (reconstruction prints it), C6 |
 | Read-rule module | neutral `app/utils/countsForFairness.ts` exporting `COUNTS_FOR_FAIRNESS_GROQ` (the string `coalesce(countsForFairness, _type != "special_role")`), `countsForFairnessDefault(roleType: "sunday_role" \| "saturday_role" \| "special_role"): boolean`, and `countsForFairness(doc: { _type: string; countsForFairness?: boolean \| null }): boolean` | C2's query and fixture builder; the GET route; the receipt module; the planner |
 | Not provided | `ROLE_PROJECTION` does not carry the field; readers built on it never see it | C2 must use its own projection |
-| GET row | `GET /api/admin/roles` → each row has `countsForFairness: boolean` (effective) | C6 (U3: which stored specials count) |
+| GET row | `GET /api/admin/roles` → each row has `countsForFairness: boolean` (effective) | C6: U3 (which stored specials count), the stored «Guardado» columns, and `prior` (A15, C6 RQ-7), whose `counts` reaches C5 as the service field `counts` |
 | POST/PATCH body | `countsForFairness?: boolean`; semantics §5.3, §5.4 | any future create/edit caller (C6's 2-month confirm creates drafts through this POST) |
 | Client types | `GridColumn.countsForFairness: boolean` (effective, both modes; `StoredGridColumn` inherits), `CreatableDraft`/`DraftCard.countsForFairness: boolean`, `StoredRolePatchBody.countsForFairness: boolean`, `RoleSemanticSnapshot.countsForFairness: boolean` | C6 (counted specials filled first, sent as pins; uncounted filled after the solve) |
-| Engine constant | `app/components/admin/solverEngine.ts`: `export const SOLVER_ENGINE: "v2" \| "v3" = "v2"` — created by C1 only if absent, containing nothing else | C2 (adds the Preview-only `OWT_SOLVER_ENGINE` resolution and its SECRETS entry, EN-1–EN-3), C6 (wires the effective engine into C1's note, CTL-1). Not C3 (it never imports the constant) |
+| Engine constant | `app/components/admin/solverEngine.ts`: `export const SOLVER_ENGINE: "v2" \| "v3" = "v2"` — created by C1 (A1), containing nothing else | C2 (adds the effective-engine resolver, the Preview-only `OWT_SOLVER_ENGINE` override and its SECRETS entry, the PUT's `engine_not_v3` — A1), C6 (the solve route's `409 solver_version_mismatch`; wires the server-resolved engine into C1's note, CTL-1), C7 (flips the value). Not C3 (it never imports the constant) |
 | Copy | «Cuenta para equidad»; «Cuenta para equidad: aplica con el nuevo solver. Hoy Auto no lo usa.»; «Si cuenta, su Lead suma como Dom Lead en domingo y como Sáb Lead en otro día; BGV y Coro suman igual.» | C6 may retire the note at cutover by the engine condition alone |
 
-**Facts the consumers must hold:** a stored value can change after the fact (stored-mode edit), so a
-month's ledger is not frozen by its eligibility record; services of months before the current one cannot
-be toggled from any surface today, so the lookback months read whatever was stored or their defaults
-(parent issue 3); a team swap never moves the value.
+**Facts the consumers must hold:**
+
+- A stored value can change after the fact (stored-mode edit), so a month's ledger is not frozen by its
+  eligibility record. The toggle is an input the consumers read live, never a snapshot.
+- A stored **special's** toggle takes part in the record gate: a month with a counted special cannot have
+  its record replaced (A5) and its record binds the solve (A6); flipping that special to uncounted (with
+  no stored weekend service in the month) lifts both, and flipping one to counted imposes both. C2's
+  writer re-checks the gate at write time, so it must read the toggle through the fragment at that moment;
+  C6's binding decision reads it from the GET rows at solve time. The PATCH does not coordinate with the
+  record writer (§5.4 is unchanged by A5): an edit racing a record write is the residual race C2 states
+  for its stored-services gate (C2 GU-3).
+- Only a **counted** Sunday-dated service is a «counted Sunday» for the cadence state (X1, A14): a toggle
+  edit on a current-month Sunday-dated service (weekend or special) can change the next run's derived
+  state.
+- Services of months before the current one cannot be toggled from any surface, so the lookback months
+  read whatever was stored or their defaults (accepted, A25).
+- A team swap never moves the value.
 
 ## 10. Known limits, stated
 
@@ -415,9 +449,10 @@ be toggled from any surface today, so the lookback months read whatever was stor
   semantics, «not in `ROLE_PROJECTION`»).
 - `docs/API_REFERENCE.md`: POST/PATCH body field and refusal; the GET row field; the toggle-only notice rule.
 - `CLAUDE.md` invariants: «`countsForFairness`: one read rule (`app/utils/countsForFairness.ts` — GROQ
-  fragment + twin + default); PATCH absent = unchanged (never the `time` precedent); a toggle-only PATCH
-  queues no notice; `ROLE_PROJECTION` does not carry it; inert until v3 serves Auto.» Reusable-utils entry
-  for the module and `solverEngine.ts` if C1 creates it.
+  fragment + twin + default); PATCH absent = unchanged (never the `time` precedent); a PATCH that carries
+  it and changes nothing a notice could report queues no notice; `ROLE_PROJECTION` does not carry it;
+  inert until v3 serves Auto.» Reusable-utils entries for the module and for `solverEngine.ts` (the
+  constant only; the resolver is C2's, A1).
 - ADR-0010: a dated note — role documents carry `countsForFairness` (default off for specials); inert
   under v2; decision 3 is amended when v3 serves Auto (parent §9, C7).
 - `protectedReadAudit.ts`: the POST and PATCH entries' `reason` mentions the field.
@@ -446,7 +481,7 @@ be toggled from any surface today, so the lookback months read whatever was stor
 
 | Q | Question | Default | Owner | Resolution |
 |---|---|---|---|---|
-| Q1 | Should past-month services be toggleable (parent issue 3)? | No surface; past services keep their stored value or default; C2's panel shows which services counted | Frank | C2 spec / C7 look |
+| Q1 | Should past-month services be toggleable? | No surface — accepted by the parent (A25); past services keep their stored value or default; C2's panel shows which services counted | Frank | C7 look (A25) |
 | Q2 | Should the Servicios board show an uncounted badge? | No (non-goal) | Frank | C7 look |
 
 ## 15. Acceptance and verification
@@ -460,33 +495,32 @@ be toggled from any surface today, so the lookback months read whatever was stor
 | C1-R7 | Untouched writers/readers | The PR's file list; mirror, parity, caller-pin and `ROLE_PROJECTION` literal tests |
 | C1-R8 | GET row field | Route test |
 | C1-R9 | Model carries the value | Save, read, draft and planner model tests |
-| C1-R10, R11 | Four surfaces, copy, engine note | Component tests; on dev, Frank's look at each surface with the note visible |
+| C1-R10, R11 | Four surfaces, copy, engine module, engine note | Component tests; engine-module pin test; on dev, Frank's look at each surface with the note visible |
 | C1-R12 | v2 inert | Solve-request and history-entry identity tests; no `gcf/**` change |
 | C1-R13 | Docs | §11 checklist in the code review |
 
 ## Parent issues
 
-1. **Who creates `solverEngine.ts`, and what the note reads once an override exists.** U7 needs the engine
-   in C1 (and C2's «Registrar» gate needs it too), all of which precede C6, while §11 gives E2 (the
-   constant and its Preview-only override) to C6. The parent does not say who creates the module.
-   *Recommended* (aligned with C2's P3): whichever of C1/C2 lands first creates it with the constant only
-   (`"v2"`) — C3 never imports it; C2 adds the Preview-only `OWT_SOLVER_ENGINE` resolution and its
-   `docs/SECRETS.md` entry; C6 wires the **effective** engine into C1's note, with «note hidden when the
-   effective engine is v3» in C6's acceptance (CTL-1). §11 should record this split. Followed here (§6.6).
-2. **«A toggle-only PATCH» is not a request shape** — every PATCH carries the full roster. *Recommended:*
-   L1 adopt C1-D2's wording («a PATCH that carries the field and changes nothing a notice could report
-   queues no notification»). Followed here (§5.4); no deviation in effect.
-3. **The ledger's lookback services cannot be toggled.** D6 asks for the switch «when editing the month»,
-   which C1 delivers; but the planner's months start at the current one (`monthPills.ts:14-18`), so the
-   services the ledger reads (the three months before the run) keep whatever was stored or their defaults.
-   *Recommended:* accept for now (non-blocking); C2's panel shows which services counted; revisit at C7's
-   look (Q1). Followed here: no past-month surface.
+None open. The three this spec raised are settled by the parent's amendments: who creates
+`solverEngine.ts` and who owns the override (**A1**: C1 the constant, C2 the resolver, override, SECRETS
+entry and PUT refusal, C6 the solve route's 409 and the engine prop — followed in §6.6 and §9); the
+semantic wording of «toggle-only PATCH» (**A25**, adopting C1-D2 — followed in §5.4); and lookback
+services that no surface can toggle (**A25**, accepted — §14 Q1).
+
+## Sibling notes
+
+For the owning child; C1 follows the parent's amendments meanwhile.
+
+| ID | Child | Issue (as read 2026-10-05) | Recommended fix |
+|---|---|---|---|
+| SN-1 | C2 | EN-1 and P3 say C2 creates `solverEngine.ts`; A1 gives the module and its constant to C1 | EN-1: C2 imports C1's constant and adds the resolver (EN-2) beside or in the module without changing the constant; drop P3 as resolved by A1 |
+| SN-2 | C6 | §5.1 «Ownership» says C1 creates the module «if absent (C1 §6.6)»; under A1 C1 creates it unconditionally | Drop «if absent»; nothing else in ENG-1–ENG-5 or CTL-1 changes. C6's S-2 (the override is C2's, not C6's) is already reflected in §6.6 |
 
 ## Review handoff
 
 - Review order per the parent: C0, **C1**, C3, C2, C4, C5, C6, C7. This child at critical tier: two
   sequential fresh `APPROVED` verdicts on byte-identical text; the churn cap is binding.
-- Evidence: this repository at `3dbc189b` (file:line above); private
+- Evidence: this repository at `3dbc189b`, unchanged in code at `2d90e4b3` (file:line above); private
   `owt-agent-logs/sdd/2026-10-05-solver-v3-fairness/evidence/` (`d_persistence-ux.md` §1.3/§4/§5,
   `d_skeptic-delivery.md` M6/M10, `d_ledger.md` (d)) — superseded wherever the parent decides otherwise.
 - Prior planning dialogue excluded from reviewers: yes.

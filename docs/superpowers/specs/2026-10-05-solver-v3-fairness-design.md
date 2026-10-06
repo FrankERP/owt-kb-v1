@@ -1,7 +1,7 @@
 # Solver v3: cross-month fairness, cadence leads and 1–2-month runs — parent design (roadmap)
 
 **Date:** 2026-10-05 · **Status:** `APPROVED` by Frank (sections in chat, then the written text at
-`d497749f`, both on 2026-10-05); amendments A1–A26 (§3) added the same day after writing the
+`d497749f`, both on 2026-10-05); amendments A1–A39 (§3) added the same day after writing the
 children — technical contracts, no policy change · **Risk tier of this parent:** standard (it owns the shared policy and
 the contracts between children; each child carries its own tier, §11).
 
@@ -145,6 +145,19 @@ children need to agree on. Where a row names a clause, the row wins over that cl
 | A24 | U6 | Non-timeout transport errors get their own copy, distinct from «El solver tardó demasiado». Auto refuses a horizon that contains a past month. |
 | A25 | L1 | «A PATCH that carries the field and changes nothing a notice could report queues no notification.» Services in lookback months cannot be toggled from any surface (accepted; revisited at C7's look). |
 | A26 | C3 row | C3's rollback is UI-only, or a full revert only before C2 ships and after listing every stored setting; no «Mes por medio» is saved anywhere until the production alias serves C3. |
+| A27 | L3, U4, A6, A21 | Auto's confirm **creates** a record for every horizon month that has none, whether or not the month already has stored services — creating never overwrites anything. A5 governs **replacement** only. The writer accepts that create; A21's «sin registro» applies only to months nobody ran v3 Auto on. |
+| A28 | A22, E4, §11 C7 | The flip step covers flipping the constant **and** every `solverConfig` edit that v3 needs and v2 would read differently: moving the pools, and removing a cadence member's exact `Sun.Lead` rule or `Sun.Lead` exclusion. «Mes por medio» alone may be saved earlier (A8). **Order:** flip the constant (PR merged, production alias and commit verified), then save the pool and rule edits; nobody runs Auto in between. |
+| A29 | E4, §11 C7 | Rollback restores only the `solverConfig` paths the flip changed, under a revision check, through C3's serializer — never a whole-document restore that would discard later edits. Records and drafts written under v3 stay; they are inert under v2. |
+| A30 | §11 C7, §16 | «sin Lead en …» is retired only after a rollback window that Frank closes, not inside the flip. |
+| A31 | §9, §11 | **ADR ownership.** New ADRs are written by the child that introduces the behaviour: C2 (ledger and record), C3 (cadence), C5 (the v3 solver function and its stages), C6 (horizon, stored services as pins, engine switch). Amendments to existing ADRs (0004, 0010, 0038, 0041, 0042, 0046, 0047) are written by C7, because they describe production behaviour, which changes at the flip. |
+| A32 | A17, U5 | «Queda» (and the folded BGV and Total tabs) is the sent `carried` hundredths plus the plan's figures, rounded once for display; it may differ from «Saldo» by 0.1 at a tie. Accepted. |
+| A33 | A12, F5 | Only an exact or cadence seat that month cancels the floor seat; a pinned seat outside the population does not. |
+| A34 | A8 | The v2 invariant is: the v2 request built from a config equals the one built from the same config with `sundayCadence` removed (and any restriction that carried only the cadence removed). |
+| A35 | L4, A7 | The exactly-one name check is new (C3's resolver), applied wherever v3 resolves a rule name (the record, the request, the reconstruction); v2 keeps its current matching. |
+| A36 | §11 C0 | C0's rollback: revert before C5 lands; after it, revert only the workflow split and the guard, and run both suites as steps of the single `gates` job. |
+| A37 | §13 | «→ C4» exits with August and September recorded; October is applied on or after 2026-11-01 (A21). |
+| A38 | L2, S1 | A person has at most **one** exact count per role key; two exact rules covering the same role for the same person are refused when saved (C3) and by the record validator (C2). The eligibility resolver's `ok: true` output always passes the record validator (tested). |
+| A39 | S4, U5 | The response carries integer seat counts per person, line and tab (received, pinned) beside the hundredths figures; the panel renders seat counts from them and never divides. The golden fixture's wire balance is `share − received` in hundredths, in both languages. |
 
 ## 4. The fairness policy (the shared contract)
 
