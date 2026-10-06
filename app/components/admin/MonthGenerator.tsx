@@ -2292,8 +2292,10 @@ export default function MonthGenerator({
   );
 
   // C1 §6.0 — "today" in CDMX, read on every render; the memo below is keyed on it, so
-  // the past-month rule is re-evaluated whenever the day changes, and again when a
-  // body is built (`draftCreateBody`, `serializeStoredColumn`).
+  // the past-month rule is re-evaluated on every render and again when a body is built
+  // (`draftCreateBody`, `serializeStoredColumn`). Nothing re-renders at the CDMX month
+  // boundary by itself, so a tab left idle across it is corrected at its next render or
+  // body build.
   const todayIso = serviceTodayIso();
   // D9's EXPLICIT column set — never inferred from `sundayDatesFull`. Each column
   // carries its EFFECTIVE «Cuenta para equidad» (C1 §6.1).

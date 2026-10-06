@@ -159,11 +159,14 @@ export interface GridColumn {
   /** SPECIALS ONLY — "worship_night" for a «Noche de alabanza». Never identity. */
   format?: ServiceFormat;
   /**
-   * «Cuenta para equidad» (solver v3 C1 §6.1) — the column's EFFECTIVE value, after
-   * the past-month rule (§6.0), in both modes. Create mode: the type default, a
-   * special's composer choice, or the admin's header edit (`applyCreateCountsEdits`).
-   * Stored mode: the GET row's value, overlaid by the header edit. Inert under v2:
-   * nothing in this module computes with it — `buildSolveRequest` takes no columns.
+   * «Cuenta para equidad» (solver v3 C1 §6.1) — the column's value. `buildColumns`
+   * returns the RAW one: the type default or a special's composer choice, with no
+   * past-month rule (§6.0) and no header edit applied. The EFFECTIVE value — after
+   * the past-month rule — is guaranteed only on the columns MonthGenerator hands the
+   * grid: create columns pass through `applyCreateCountsEdits` (the admin's header
+   * edit over the raw value), and stored columns come from `translateStoredRole` (the
+   * GET row's value) plus the header overlay and `effectiveStoredCounts`. Inert under
+   * v2: nothing in this module computes with it — `buildSolveRequest` takes no columns.
    */
   countsForFairness: boolean;
 }

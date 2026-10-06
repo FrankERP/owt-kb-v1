@@ -157,11 +157,17 @@ unrelated edit.
 
 ## Create and save contracts
 
-Create submits one empty service with `published: false` and a stable
-`creationRequestId`. An uncertain outcome freezes that exact request; the UI
+Create submits one empty service with `published: false`, a stable
+`creationRequestId` and its requested `countsForFairness` («Cuenta para equidad»,
+solver v3 C1 §6.5). The value is decided when the button is pressed and is part of
+the attempt identity (the attempt's payload key), so it is replayed exactly as it
+was first sent. An uncertain outcome freezes that exact request; the UI
 may replay or verify it but cannot mint a new identity and silently duplicate a
 service. Success requires exact role/request identity, type, date, normalized
-special name, five empty assignment arrays, and `published === false`.
+special name, five empty assignment arrays, `published === false`, and a reload
+that shows the requested `countsForFairness` (read through the one read rule, so a
+row without the field reads as its type default) — a create whose reload shows any
+other value is not verified.
 
 Stored changes remain local until **Guardar cambios**. The serializer emits a
 role-ID-targeted, complete five-array PATCH for Lead, BGVs, Chorus,
@@ -174,7 +180,15 @@ calendar's special composer and «+ Nuevo servicio» carry the house `Switch`
 special at the composer's choice, off by default. A header edit is held per column while
 the column stays selected — across the config and grid steps, «Omitir» and Auto, which
 never changes it — and dropped when the date is deselected or the special removed. A
-column blocked from creation shows no switch. Stored columns read the `GET` row's
+column blocked from creation shows no switch. The create-mode switch is disabled while a create
+batch is in flight (`pushing`) **and while any create-mode Auto run is pending**
+(`fairness={{ createInFlight: pushing || autoPending }}` plus the matching guard in
+`handleFairnessChange`, commit 5ac6c310). The second condition goes beyond the
+literal «while a create batch is in flight» of spec §6.2, on purpose: §6.1 says Auto
+never changes a column's value, and `applySpecialFill` rebuilds the drafts from the
+columns captured when Auto started, so a header toggle made during the solve would
+be overwritten in the drafts while the header still showed it, and the create body
+would disagree with the screen. Stored columns read the `GET` row's
 effective value and edit it through the header overlay, beside Fecha/Nombre/Hora (gated
 by `readOnly` and the mutation lock, never by the date-move block); every stored PATCH
 carries the column's effective value and the semantic snapshot includes it, so a
