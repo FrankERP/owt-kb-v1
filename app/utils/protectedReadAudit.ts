@@ -186,7 +186,7 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     file: "app/api/admin/roles/[id]/route.ts",
     operation: "PATCH",
     reason:
-      "guarded role edit: revision-asserted assignment/date patch that also vacates the old and claims the new weekend roleTargetLock on a permitted date move (A2 §2)",
+      "guarded role edit: revision-asserted assignment/date patch that also vacates the old and claims the new weekend roleTargetLock on a permitted date move (A2 §2); sets countsForFairness only when the body carries it and never unsets it, and a PATCH that carries it and changes nothing a notice could report queues no notice (solver v3 C1)",
     removalOwner: "permanent runtime writer (never removed — the edit surface itself)",
   },
   {

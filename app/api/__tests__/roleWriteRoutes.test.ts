@@ -1909,6 +1909,140 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
     expect(afterCallbacks).toHaveLength(0);
   });
+
+  describe("countsForFairness (solver v3 C1 §5.4)", () => {
+    interface Surface {
+      type: string;
+      seed: () => void;
+      id: string;
+      body: (over?: Record<string, unknown>) => Record<string, unknown>;
+    }
+    const SURFACES: Surface[] = [
+      {
+        type: "sunday_role",
+        seed: () => { store.roles.push(role()); store.locks.push(lock()); },
+        id: "role-1",
+        body: (over = {}) => editBody(over),
+      },
+      {
+        type: "saturday_role",
+        seed: () => {
+          store.roles.push(role({ _type: "saturday_role", week: "2026-08-08" }));
+          store.locks.push(lock({
+            _id: "roleTarget.saturday_role.2026-08-08",
+            targetKey: "saturday_role:2026-08-08",
+            roleType: "saturday_role",
+            date: "2026-08-08",
+          }));
+        },
+        id: "role-1",
+        body: (over = {}) => editBody({ _type: "saturday_role", date: "2026-08-08", ...over }),
+      },
+      {
+        type: "special_role",
+        seed: () => { store.roles.push(specialRole()); store.coordinators.push(coordinator()); },
+        id: "role-sp",
+        body: (over = {}) => specialEditBody(over),
+      },
+    ];
+
+    function rolePatchOf(id: string): PatchOp {
+      const op = committedTransactions()[0]?.ops.find((o): o is PatchOp => o.kind === "patch" && o.id === id);
+      if (!op) throw new Error(`no committed patch for ${id}`);
+      return op;
+    }
+
+    it.each(SURFACES)("$type: a body without the field puts the key in neither set nor unset", async ({ seed, id, body }) => {
+      seed();
+      const res = await rolePATCH(req(body()), ctx(id));
+      expect(res.status).toBe(200);
+      expect("countsForFairness" in rolePatchOf(id).set).toBe(false);
+      expect(rolePatchOf(id).unset).not.toContain("countsForFairness");
+    });
+
+    it.each(SURFACES.flatMap((surface) => [true, false].map((value) => ({ ...surface, value }))))(
+      "$type: an explicit $value is set in the same revision-asserted patch",
+      async ({ seed, id, body, value }) => {
+        seed();
+        const res = await rolePATCH(req(body({ countsForFairness: value })), ctx(id));
+        expect(res.status).toBe(200);
+        expect(rolePatchOf(id)).toMatchObject({ rev: "rev-1", set: { countsForFairness: value } });
+        expect(rolePatchOf(id).unset).not.toContain("countsForFairness");
+      },
+    );
+
+    it.each([
+      ["null", null],
+      ['the string "false"', "false"],
+      ["the number 0", 0],
+    ])("refuses %s with 400 before any read", async (_label, value) => {
+      store.roles.push(role());
+      store.locks.push(lock());
+      const res = await rolePATCH(req(editBody({ countsForFairness: value })), ctx("role-1"));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ error: "invalid_request", details: { issues: ["countsForFairness"] } });
+      expect(operationalFetch).not.toHaveBeenCalled();
+      expect(transactions).toHaveLength(0);
+    });
+
+    it("a toggle-only PATCH of a published role queues no notice and sends no push, but still revalidates", async () => {
+      store.roles.push(role({ published: true }));
+      store.locks.push(lock());
+      const res = await rolePATCH(req(editBody({ leads: ["mem-1"], countsForFairness: false })), ctx("role-1"));
+      expect(res.status).toBe(200);
+      expect(committedTransactions()).toHaveLength(1);
+      expect(afterCallbacks).toHaveLength(0);
+      await drainAfter();
+      expect(outboxUpserts()).toHaveLength(0);
+      expect(sendPushMock).not.toHaveBeenCalled();
+      expect(revalidateServiceViewsMock).toHaveBeenCalled();
+    });
+
+    it("a toggle-only PATCH of a published special with the same name and time queues nothing", async () => {
+      store.roles.push(specialRole({ published: true }));
+      store.coordinators.push(coordinator());
+      const res = await rolePATCH(req(specialEditBody({ leads: ["mem-1"], countsForFairness: true })), ctx("role-sp"));
+      expect(res.status).toBe(200);
+      expect(afterCallbacks).toHaveLength(0);
+      expect(revalidateServiceViewsMock).toHaveBeenCalled();
+    });
+
+    it("a toggle plus a seat change queues the union and pushes the added member, exactly as today", async () => {
+      store.roles.push(role({ published: true }));
+      store.locks.push(lock());
+      await rolePATCH(req(editBody({ leads: ["mem-5"], countsForFairness: false })), ctx("role-1"));
+      await drainAfter();
+      expect(queuedMemberIds().sort()).toEqual(["mem-1", "mem-5"]);
+      expect(sendPushMock).toHaveBeenCalledWith(["mem-5"], "assignments", expect.anything());
+    });
+
+    it("a toggle on a special that is also renamed queues as today", async () => {
+      store.roles.push(specialRole({ published: true }));
+      store.coordinators.push(coordinator());
+      await rolePATCH(
+        req(specialEditBody({ leads: ["mem-1"], service_name: "Bautizos de noche", countsForFairness: true })),
+        ctx("role-sp"),
+      );
+      await drainAfter();
+      expect(queuedMemberIds()).toEqual(["mem-1"]);
+    });
+
+    it("a toggle on a special that is also retimed queues as today", async () => {
+      store.roles.push(specialRole({ published: true, time: "09:00" }));
+      store.coordinators.push(coordinator());
+      await rolePATCH(req(specialEditBody({ leads: ["mem-1"], time: "10:00", countsForFairness: true })), ctx("role-sp"));
+      await drainAfter();
+      expect(queuedMemberIds()).toEqual(["mem-1"]);
+    });
+
+    it("a request WITHOUT the field that changes nothing still queues exactly as today (C1-D2)", async () => {
+      store.roles.push(role({ published: true }));
+      store.locks.push(lock());
+      await rolePATCH(req(editBody({ leads: ["mem-1"] })), ctx("role-1"));
+      await drainAfter();
+      expect(queuedMemberIds()).toEqual(["mem-1"]);
+    });
+  });
 });
 
 // ── Delete ──────────────────────────────────────────────────────────────────
