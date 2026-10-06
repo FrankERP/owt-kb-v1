@@ -21,11 +21,13 @@ BASE_LINES = ("DL", "SL", "BGV", "CORO")
 TAB_KEYS = ("DL", "SL", "BGV", "CORO", "TOTAL")
 SERVICE_KINDS = ("sunday", "saturday", "special")
 
-MONTH_RE = re.compile(r"^(\d{4})-(0[1-9]|1[0-2])$")
-DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# app/utils/serviceTime.ts SERVICE_TIME_RE — keep the two identical.
-SERVICE_TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
-RULE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+MONTH_RE = re.compile(r"^([0-9]{4})-(0[1-9]|1[0-2])\Z")
+DATE_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}\Z")
+# app/utils/serviceTime.ts SERVICE_TIME_RE — keep the two identical. `\Z` (not `$`, which
+# also matches before a trailing newline) and `[0-9]` (not `\d`, which is Unicode in str
+# patterns) make these exact mirrors of the JS regexes.
+SERVICE_TIME_RE = re.compile(r"^([01][0-9]|2[0-3]):[0-5][0-9]\Z")
+RULE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}\Z")
 
 # JavaScript's `\s` (ECMAScript WhiteSpace + LineTerminator), spelled out so the
 # service-id check matches app/utils/roleWriteRequest.ts isCanonicalDocumentId exactly.

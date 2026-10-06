@@ -4,7 +4,7 @@ import unittest
 from fractions import Fraction
 
 from owt_v3.rounding import hundredths, tenths
-from owt_v3.vocab import (add_months, day_class, is_canonical_document_id, is_service_time, seat_order_key,
+from owt_v3.vocab import (RULE_ID_RE, add_months, is_month, parse_date, day_class, is_canonical_document_id, is_service_time, seat_order_key,
                           time_sort_key, weekend_of)
 
 
@@ -41,6 +41,28 @@ class Vocabulary(unittest.TestCase):
         b = seat_order_key("2026-11-01", "Lead", None, "y")
         c = seat_order_key("2026-11-01", "BGV", None, "a")
         self.assertEqual(sorted([a, b, c]), [b, a, c])  # date, then Lead first, then time before none
+
+
+class StrictShapes(unittest.TestCase):
+    """The regexes mirror the JS ones: no trailing newline, ASCII digits only."""
+
+    def test_trailing_newline_refused(self):
+        self.assertIsNone(parse_date("2026-11-01\n"))
+        self.assertFalse(is_month("2026-11\n"))
+        self.assertFalse(is_service_time("19:00\n"))
+        self.assertIsNone(RULE_ID_RE.match("abc\n"))
+
+    def test_non_ascii_digits_refused(self):
+        self.assertIsNone(parse_date("\u0662\u0660\u0662\u0666-11-01"))
+        self.assertIsNone(parse_date("\uff12\uff10\uff12\uff16-11-01"))
+        self.assertFalse(is_month("\u0662\u0660\u0662\u0666-11"))
+        self.assertFalse(is_service_time("1\u0669:00"))
+
+    def test_valid_still_accepted(self):
+        self.assertEqual(parse_date("2026-11-01").isoformat(), "2026-11-01")
+        self.assertTrue(is_month("2026-11"))
+        self.assertTrue(is_service_time("19:00"))
+        self.assertIsNotNone(RULE_ID_RE.match("abc_-9"))
 
 
 class Rounding(unittest.TestCase):
