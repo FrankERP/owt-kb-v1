@@ -121,6 +121,8 @@ describe("the disclosure (UI-2, UI-3)", () => {
     renderPanel();
     openPanel();
     expect(screen.getByLabelText("Cargando el saldo de equidad…")).toBeTruthy();
+    // UI-3: the banner is always visible while open, not only once the figures arrive.
+    expect(screen.getByText("Vista previa: Auto todavía no usa este saldo")).toBeTruthy();
     release();
     await screen.findByText("Vista previa: Auto todavía no usa este saldo");
   });
@@ -130,6 +132,7 @@ describe("the disclosure (UI-2, UI-3)", () => {
     renderPanel();
     openPanel();
     expect((await screen.findByText("No se pudo leer el saldo de equidad.")).getAttribute("role")).toBe("alert");
+    expect(screen.getByText("Vista previa: Auto todavía no usa este saldo")).toBeTruthy();
     expect(document.querySelector("[data-fairness-table]")).toBeNull();
     answer = async () => ({ ok: true, status: 200, json: async () => ledger() });
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }));

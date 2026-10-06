@@ -151,6 +151,7 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
         {COPY.disclosure}
       </Button>
       <Collapse id={bodyId} open={open} className="space-y-3">
+        <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
         {load.status === "loading" && (
           <SkeletonGroup label={COPY.loading} className="space-y-2">
             <Skeleton className="h-4 w-2/3" />
@@ -169,7 +170,6 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
         )}
         {data && (
           <>
-            <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
             <p className="font-body text-xs text-mono-500">{COPY.subheader(windowSpan(data.window))}</p>
             <ul className="flex flex-wrap gap-1.5" aria-label="Meses">
               {data.window.map((w) => (
