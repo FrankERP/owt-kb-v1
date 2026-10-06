@@ -161,7 +161,11 @@ def _is_int(v):
 
 
 def _is_number(v):
-    return (isinstance(v, (int, float)) and not isinstance(v, bool)) and math.isfinite(v)
+    if isinstance(v, bool):
+        return False
+    if isinstance(v, int):
+        return True  # arbitrary-precision ints are always finite; never hand them to math.isfinite
+    return isinstance(v, float) and math.isfinite(v)
 
 
 def _object(value, path, required, optional=()):
@@ -438,7 +442,7 @@ def _parse_rules(value, months, people):
             "presence": (("id", "kind", "persons", "roles", "exclusive"), ("month",)),
             "consecutive": (("id", "kind", "person", "roles"), ()),
         }
-        if kind not in shapes:
+        if not isinstance(kind, str) or kind not in shapes:
             _fail(f"{p}.kind", "format")
         _object(raw, p, *shapes[kind])
         rid = raw["id"]
@@ -582,5 +586,5 @@ def _parse_budget(value):
             v = value[name]
             if not _is_number(v):
                 _fail(f"budget.{name}", "type")
-            out[name] = min(max(float(v), lo), hi)
+            out[name] = float(min(max(v, lo), hi))  # clamp BEFORE float(): a 10**400 int must not overflow
     return Budget(**out)

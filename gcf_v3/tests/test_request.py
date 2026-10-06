@@ -190,6 +190,18 @@ class Refusals(unittest.TestCase):
     def test_the_reserved_rule_id(self):
         self.assertInvalid(lambda b: b["rules"][2].update(id="mandatory_lead"), "rules[2].id", "reserved")
 
+    def test_unhashable_rule_kind_is_a_refusal_not_a_crash(self):
+        for bad in (["count"], {}, 5, None):
+            self.assertInvalid(lambda b, bad=bad: b["rules"][0].update(kind=bad), "rules[0].kind", "format")
+
+    def test_huge_budget_ints_clamp_instead_of_overflowing(self):
+        from owt_v3.constants import STAGE_DET_LIMIT
+        body = copy.deepcopy(EXAMPLE)
+        body["budget"] = {"total_seconds": 10**400, "stage_seconds": -(10**400), "stage_det_limit": 10**400}
+        b = parse_request(body).budget
+        self.assertEqual((b.total_seconds, b.stage_seconds), (25.0, 0.05))
+        self.assertEqual(b.stage_det_limit, STAGE_DET_LIMIT)
+
     def test_budget_clamps_down_only(self):
         body = copy.deepcopy(EXAMPLE)
         body["budget"] = {"total_seconds": 999, "stage_seconds": 0.0001, "stage_det_limit": 50}
