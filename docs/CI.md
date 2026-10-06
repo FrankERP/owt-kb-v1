@@ -13,21 +13,148 @@ meant to do.
 
 ## The workflow
 
-`.github/workflows/ci.yml`, job name **`gates`**.
+`.github/workflows/ci.yml`: three jobs do the work, in parallel, and a fourth,
+**`gates`**, is the check branch protection requires. Until 2026-10 it was one
+serial job named `gates`; it was split when the v2 solver step reached ~10 of the
+job's 15 minutes and solver v3 was about to add a second suite (see «Timing»).
 
 | | |
 |---|---|
-| Triggers | `push` to `main` and `preview`; `pull_request` targeting `main` or `preview`; manual `workflow_dispatch` |
-| Runner | `ubuntu-latest`, Node from `.nvmrc` (22), npm cache on; Python 3.12 with pip cache, matching the solver function's own `--runtime=python312` |
-| Install | `npm ci` — fails on a lockfile that drifted from `package.json`, rather than silently resolving something new |
-| Steps | `npx tsc --noEmit` → `npm test` (vitest) → `npx eslint .` → `python -m unittest discover -s gcf -t gcf` |
-| Timeout | 25 minutes — raised from 15 when the pinned-assignments solver suite took the job to ~11.5 (solver step 6m34s). If it crowds again, split the workflow; never drop the solver step |
+| Triggers | `push` to `main` and `preview`; `pull_request` targeting `main` or `preview`; manual `workflow_dispatch`. Every job runs on every trigger — no path filters, no job `if:` except `gates`' `always()` |
 | Concurrency | one run per branch (or per PR); a newer push cancels the in-flight run |
 | Permissions | `contents: read` only |
+
+| Job (display name) | Runner | Steps | Timeout |
+|---|---|---|---|
+| `node` | `ubuntu-latest`, Node from `.nvmrc` (22), npm cache | checkout → `npm ci` → `npx tsc --noEmit` → `npm test` (vitest) → `npx eslint .` | 15 min |
+| `solver-v2` | `ubuntu-latest` (x86_64), Python 3.12 with pip cache keyed on `gcf/requirements.txt` | checkout → `pip install -r gcf/requirements.txt` → `python -m unittest discover -s gcf -t gcf -v` | 25 min |
+| `solver-v3` | `ubuntu-latest` (x86_64), Python 3.12 with pip cache keyed on `gcf_v3/requirements.txt` | checkout → `pip install -r gcf_v3/requirements.txt` → `python -m unittest discover -s gcf_v3 -t gcf_v3 -v` | 15 min |
+| `gates` | `ubuntu-latest`, the runner's preinstalled Node | `needs: [node, solver-v2, solver-v3]`, `if: ${{ always() }}`; checkout → `node scripts/ci/gates-verdict.mjs` with `NEEDS_JSON: ${{ toJSON(needs) }}` in `env:` | 5 min |
+
+`npm ci`, not `npm install`: it fails on a lockfile that drifted from
+`package.json`, rather than silently resolving something new. Python 3.12 matches
+the solver function's own `--runtime=python312`.
 
 **`eslint` runs without `--max-warnings`.** Warnings are a deliberate backlog
 (see `eslint.config.mjs`); errors are not. This matches what `CLAUDE.md` asks of
 a local run — 0 errors, warnings tolerated.
+
+### Why `gates` is an aggregator
+
+Branch protection on `main` requires **one** check, `gates`, from the GitHub
+Actions app, matched by check-run **name**. Whatever job carries that name is the
+control, so after the split it had to stay one job that is green only when every
+other job is.
+
+- **A skipped required check counts as passing.** A job whose `needs` failed is
+  not run; it concludes `skipped`, and GitHub lets a PR merge over a skipped
+  required check. A `gates` with a plain `needs:` would therefore be skipped — and
+  merge — exactly when a suite went red.
+- **So `gates` has `if: ${{ always() }}`** and is never skipped. `!cancelled()`
+  is not enough: on a cancelled run it skips `gates` too. With `always()` a
+  cancelled run makes `gates` red, not absent.
+- **The verdict is a script, not an expression.** `scripts/ci/gates-verdict.mjs`
+  reads `toJSON(needs)` from `NEEDS_JSON` (through `env:`, so job data never enters
+  the shell source) and exits 0 only if that object is non-empty and every entry's
+  `result` is exactly `success`; its log names every job that was not. It is generic
+  over `needs`, so a job added later needs no script change — and Node builtins
+  only, so `gates` needs no `npm ci`. An inline `jq 'all(...)'` was rejected: it is
+  true on an empty object and cannot be tested as a process.
+- **No path filters.** A filter decides from the changed files whether the
+  workflow runs at all, and a skipped or missing `gates` either blocks a PR forever
+  or passes it. A frontend-only PR runs both solver suites; a change to a shared
+  fixture runs every suite that reads it.
+- **Why the three jobs are not required individually.** That needs a protection
+  change with admin rights, and every future job would need another one. With the
+  aggregator, adding a job means adding it to `gates.needs` — and the guard fails
+  until it is.
+- **Re-runs.** «Re-run failed jobs» re-runs the failed job and `gates` with it.
+
+`scripts/__tests__/ciLayout.test.ts` is the guard, over the pure rules in
+`scripts/lib/ci-layout.mjs`, and it runs in every `npm test` (so in `node`). It
+asserts on the real files: exactly one job across all workflows reports as
+`gates` (its `name:`, or its id when nameless), and it is job `gates` in `ci.yml`;
+no job `name:` in any workflow is a `${{ }}` expression, which could evaluate to
+`gates` unseen; its `needs` is every other `ci.yml` job; it has `always()`, a
+timeout, no matrix, and the verdict step fed through `env:`; no
+`paths`/`paths-ignore`/`branches-ignore` filter; no job `if:` but `gates`', and no
+step `if:` at all (a skipped test step leaves its job green); no
+`continue-on-error`; no sparse checkout; no step `shell:` or `working-directory:`
+and no `defaults:` (`shell: bash -c 'true' {0}` runs nothing and exits 0); a
+timeout on every job; and the solver-suite rules below. Walking `gcf/` and
+`gcf_v3/`, it skips `__pycache__`, `venv` and dot-directories, so a local `.venv`
+does not redden `npm test`. It carries permanent negative cases —
+each one a mutation of the real `ci.yml` or a synthetic tree that must stay red —
+and executes the verdict runner as a process, because a swapped exit code would
+pass a test that only reads the file. It reads workflows with a small YAML-subset
+reader (no YAML parser is a direct dependency) that throws on anything it does not
+model, so a reformatted workflow fails red, never green.
+
+### Solver suites
+
+Two jobs, one per tree, each running exactly one command from the repository
+root:
+
+```bash
+python -m unittest discover -s gcf -t gcf -v        # solver-v2 — the deployed solver
+python -m unittest discover -s gcf_v3 -t gcf_v3 -v  # solver-v3 — package owt_v3
+```
+
+The guard models unittest's default discovery (Python 3.12) and refuses whatever
+the model does not follow, so every test module under `gcf/` and `gcf_v3/` runs in
+exactly one job:
+
+- A file is a test module iff its name matches `test*.py`, is a valid module name,
+  and it sits in the tree's root or in a directory chain below it where **every**
+  directory has an `__init__.py`. Discovery skips anything else silently, so the
+  guard refuses a `test*.py` it cannot reach.
+- Refused anywhere in either tree: a `*_test.py` file (the pattern never matches
+  it), a `load_tests` definition, a `-p` pattern, a `-s` that differs from `-t`, and a
+  `unittest` run in any other form — including a `run: |` block. Each tree needs at
+  least one reachable test module: discovery exits 5 («NO TESTS RAN») on an empty
+  tree and 1 on a missing one. A package with no `test*.py` (say `gcf_v3/acceptance/`)
+  is allowed and contributes nothing.
+- Imports resolve with the tree as the top-level directory: `owt_v3`, `tests.…`,
+  `acceptance.…` — never `gcf_v3.…`, which resolves only because CI's working
+  directory is on `sys.path`.
+- **Neither tree imports the other.** `python -m` puts the repository root on
+  `sys.path`, so `gcf.owt_solver_v2` *is* importable in `solver-v3` (as a namespace
+  package) and `gcf_v3.owt_v3` in `solver-v2` — the start directory isolates
+  nothing. The guard reads import statements instead: nothing under `gcf_v3/` may
+  `import gcf…` / `from gcf… import`, and nothing under `gcf/` may import `gcf_v3`
+  or `owt_v3`. A dynamic `importlib`/`__import__` is a code-review matter.
+- **`GOLDEN_SCHEDULE` runs once per run, in `solver-v2`**, on an x86_64
+  `ubuntu-latest` runner with no matrix — the only place it is enforced (see
+  «Solver inertness goldens» below).
+
+Every job has the full tree checked out from the repository root, so a fixture at
+the root (for example `fixtures/fairness/golden.json`) is present in `node` and in
+both solver jobs; resolve it relative to the test's own file, never to a `cd`.
+
+`gcf_v3/` holds only a scaffold until the v3 solver lands: `requirements.txt`
+(the same ortools pin as `gcf/`), a copy of `gcf/.gcloudignore`, the `owt_v3`
+package and one smoke test, `test_scaffold.py`. The v2 Cloud Build trigger filters
+on `gcf/**` and `cloudbuild.yaml`, so nothing under `gcf_v3/` deploys.
+
+### Timing
+
+**Rule for every `timeout-minutes` in `ci.yml`:** a job's timeout is at least
+twice its latest measured job time. Re-measure when a suite's step time grows by a
+quarter, and split again rather than drop a suite. The numbers live here, not in
+workflow comments. `solver-v3`'s 15 is a placeholder until the v3 solver's suite
+exists and is measured.
+
+| Run | Date | Commit | Layout | Node steps | v2 solver steps | v3 solver steps | Wall (job) |
+|---|---|---|---|---|---|---|---|
+| 36983149539 | 2026-10-02 | `0a81839c` (`main`) | one job | 4m34s | 10m03s (tests 9m43s) | — | 14m41s |
+| 37357419306 | 2026-10-05 | `4759a214` (`main`) | one job | 4m50s | 10m20s (tests 10m01s) | — | 15m11s |
+| 37420430364 | 2026-10-06 | `599734c5` (`preview`) | split | 5m02s (job `node` 5m05s) | 10m08s (tests 9m53s; job `solver-v2` 10m16s) | job `solver-v3` 24s | 10m29s (run) |
+
+The single-job rows sum the job's own step times: «Node steps» is set-up through
+Lint, «v2 solver steps» is setup-python through «Solver tests». The split row is the
+first run of the split layout (the `push` run on `preview`): the same step sums, each
+job's own duration in brackets, and the run's wall time (created → `gates` done). Its
+`gates` job took 8 s on the runner's preinstalled Node (assumption A2 holds).
 
 ### Solver inertness goldens (`gcf/test_inertness.py`)
 
@@ -81,7 +208,7 @@ the job log's **Runner Image** group against that before treating it as a findin
 **If a slow runner trips an `OPTIMAL` precondition,** raise `INERTNESS_BUDGET_SECONDS` in the file
 (the solver clamps it to 30 s); never drop the assertion. **To re-capture:** a fingerprint's
 failure message already prints the actual value — commit it only for a cause in the table. The
-golden: set `GOLDEN_SCHEDULE` to `None` and push; in this job the test then **fails** with the
+golden: set `GOLDEN_SCHEDULE` to `None` and push; in the `solver-v2` job the test then **fails** with the
 captured schedule in its message (a golden left at `None` must never pass the required gate), and you
 commit it with the runner image it came from.
 
@@ -103,7 +230,8 @@ commit it with the runner image it came from.
 ### Secrets
 
 **This workflow needs no secrets and no environment variables**, on any
-platform. It installs from the lockfile and runs four local commands. Nothing
+platform. Its jobs install from the lockfile and the solver requirements files and
+run local commands only; `gates` reads nothing but the other jobs' results. Nothing
 to rotate, nothing to configure in GitHub → Settings → Secrets. If a future step
 needs one, it gets an entry in `docs/SECRETS.md` in the same change.
 
@@ -113,7 +241,9 @@ Applied to **`main` only**, via the GitHub API:
 
 - Required status check: **`gates`**, with `strict: true` — the branch must be
   up to date with `main` before merging, so a check cannot pass against a stale
-  base.
+  base. Since the 2026-10 CI split `gates` is the aggregator over every other CI
+  job (see «Why `gates` is an aggregator»); the required check kept its name, so
+  protection and `scripts/apply-branch-protection.sh` were not touched.
 - Required pull request before merging: **1 approving review is NOT required**
   (there is one human on this project; a self-approval adds ceremony, not
   safety). What is required is that changes arrive *through* a PR, so the check

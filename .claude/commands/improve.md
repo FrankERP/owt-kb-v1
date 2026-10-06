@@ -142,7 +142,8 @@ for polish:
 - Work on branch `improve/continuous`; **merge to `main` periodically**, don't
   commit improvements straight to `main`.
 - **`main` is PROTECTED and takes NO direct pushes.** It is reached through a PR
-  whose `gates` check is green (`tsc --noEmit`, `vitest`, `eslint` at 0 errors).
+  whose `gates` check is green (it requires every CI job — `tsc --noEmit`, `vitest`,
+  `eslint` at 0 errors, and both solver suites; see `docs/CI.md`).
   Protection applies to admins too, so there is no silent bypass. This reversed on
   2026-08-24; earlier revisions of this file said "direct push, no PRs", and
   following that now just fails at the remote.

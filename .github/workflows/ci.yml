@@ -1,7 +1,16 @@
-# The four gates — the three CLAUDE.md names plus the solver's Python suite — run
-# by a machine instead of asserted by a human. Before this existed, "gates green"
-# was a claim in a chat log: `main` auto-deploys to production, so nothing
-# mechanical stood between a red test suite and the team's app. This is that thing.
+# The gates — the three CLAUDE.md names plus both solver suites — run by a machine
+# instead of asserted by a human. Before this existed, "gates green" was a claim in
+# a chat log: `main` auto-deploys to production, so nothing mechanical stood between
+# a red test suite and the team's app. This is that thing.
+#
+# Three jobs do the work, in parallel: `node` (tsc, vitest, eslint), `solver-v2`
+# (the deployed CP-SAT solver, gcf/) and `solver-v3` (gcf_v3/). A fourth, `gates`,
+# runs no test of its own: it is the ONE check `main`'s branch protection requires,
+# and it is green only when every other job here concluded `success`. It aggregates
+# rather than tests because GitHub counts a SKIPPED required check as passing, so a
+# plain `needs:` would turn every red suite into a green merge. Adding a job means
+# adding it to `gates.needs`; scripts/__tests__/ciLayout.test.ts fails until you do.
+# See docs/CI.md «Why `gates` is an aggregator».
 #
 # Deliberately NOT here: Playwright e2e (needs live Sanity credentials and the
 # real dataset — see e2e/service-readiness/) and `next build` (Vercel already
@@ -24,14 +33,13 @@ concurrency:
 permissions:
   contents: read
 
+# Every timeout below follows one rule — at least twice the job's latest measured
+# time — and the measurements live in docs/CI.md «Timing», not here.
 jobs:
-  gates:
-    name: gates
+  node:
+    name: node
     runs-on: ubuntu-latest
-    # 25, not 15: the pinned-assignments solver suite took the job to ~11.5 minutes on
-    # ubuntu-latest (solver step 6m34s, run 36174302390), too thin a margin for runner
-    # variance. If it crowds this again, split the workflow — never drop the solver step.
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -57,17 +65,76 @@ jobs:
       - name: Lint
         run: npx eslint .
 
-      # The CP-SAT solver has its own suite and nothing ran it: a `gcf/**`-only PR
-      # went green on a job that never looked at the file, on code that deploys to
-      # the Cloud Function from `main` with no `preview` rehearsal. 3.12 matches the
-      # function's own `--runtime=python312` (cloudbuild.yaml).
+  # The CP-SAT solver has its own suite and nothing ran it: a `gcf/**`-only PR
+  # went green on a job that never looked at the file, on code that deploys to
+  # the Cloud Function from `main` with no `preview` rehearsal. 3.12 matches the
+  # function's own `--runtime=python312` (cloudbuild.yaml).
+  #
+  # One x86_64 Linux runner, once per run, never a matrix: GOLDEN_SCHEDULE in
+  # gcf/test_inertness.py is enforced only on Linux x86_64 and, inside Actions,
+  # FAILS instead of skipping anywhere else (docs/CI.md «Solver inertness goldens»).
+  solver-v2:
+    name: solver-v2
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: pip
+          cache-dependency-path: gcf/requirements.txt
 
       - name: Solver deps
         run: pip install -r gcf/requirements.txt
 
       - name: Solver tests
         run: python -m unittest discover -s gcf -t gcf -v
+
+  # The v3 solver (gcf_v3/, package `owt_v3`), in its own job so its suite adds
+  # nothing to v2's wall time. Same shape as solver-v2. Until the v3 solver lands
+  # it runs one scaffold smoke test; the import ban between the two trees is the
+  # guard's, because both jobs run from the repository root (docs/CI.md «Solver
+  # suites»).
+  solver-v3:
+    name: solver-v3
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: gcf_v3/requirements.txt
+
+      - name: Solver deps
+        run: pip install -r gcf_v3/requirements.txt
+
+      - name: Solver tests
+        run: python -m unittest discover -s gcf_v3 -t gcf_v3 -v
+
+  # THE REQUIRED CHECK. Its name is what branch protection matches; do not rename it.
+  gates:
+    name: gates
+    needs: [node, solver-v2, solver-v3]
+    # NEVER let this job be skipped. Without `always()`, one red job above skips
+    # `gates`, and GitHub treats a skipped required check as PASSING — the PR
+    # merges red. `!cancelled()` is not enough either: a cancelled run would skip
+    # it. With `always()` it always runs, and the verdict below decides.
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      # Exit 0 only if every job in `needs` concluded `success`; it names any that
+      # did not. The job data travels through `env:`, never into the shell source.
+      # Node builtins only, so the runner's preinstalled Node runs it: no
+      # setup-node, no `npm ci`.
+      - name: Verdict
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: node scripts/ci/gates-verdict.mjs

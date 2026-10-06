@@ -135,7 +135,8 @@ for polish:
 - Work on branch `improve/continuous`; **merge to `main` periodically**, don't
   commit improvements straight to `main`.
 - **`main` is PROTECTED and takes NO direct pushes.** It is reached through a PR
-  whose `gates` check is green (`tsc --noEmit`, `vitest`, `eslint` at 0 errors).
+  whose `gates` check is green (it requires every CI job — `tsc --noEmit`, `vitest`,
+  `eslint` at 0 errors, and both solver suites; see `docs/CI.md`).
   Protection applies to admins too, so there is no silent bypass. This reversed on
   2026-08-24; earlier revisions of this file said "direct push, no PRs", and
   following that now just fails at the remote.
@@ -160,7 +161,7 @@ for polish:
 (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark-mode-only. Studio
 embedded at `/studio`. Spanish-language UI (`lang="es"`).
 
-**Commands:** `npx tsc --noEmit` (typecheck), `npm test` (vitest, 4,293 tests), `npx eslint .` (0 errors). All THREE — that is what the CI `gates` job runs, and `main`'s branch protection requires it.
+**Commands:** `npx tsc --noEmit` (typecheck), `npm test` (vitest, 4,293 tests), `npx eslint .` (0 errors). All THREE — the CI `node` job runs them, and `gates`, which `main`'s branch protection requires, is green only when `node` and both solver jobs are (`docs/CI.md`).
 No `build` needed for the gate.
 
 **Timezone & dates (critical):** all service dates are Sanity `date` type
