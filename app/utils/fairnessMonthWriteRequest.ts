@@ -27,6 +27,7 @@ import {
   monthIndex,
   type FairnessMonthBody,
   type FairnessMonthWrite,
+  type FairnessWriteRefusal,
   type LogicalRecord,
   type RoleKey,
   type Status,
@@ -769,4 +770,65 @@ export function parseStoredFairnessMonth(
       presence,
     },
   };
+}
+
+// ─── The write decision (IF2-21; WR-8 for actor route, WR-14 for reconstruction) ──
+
+export type FairnessDecision = "create" | "replace" | "unchanged" | "delete" | { refused: FairnessWriteRefusal };
+
+/** What the executor's fresh re-read (WR-7) says about the stored record. */
+export interface StoredRecordFacts {
+  rev: string;
+  source: LogicalRecord["source"];
+  contentHash: string;
+  /** `contentHashOfStored(doc) === doc.contentHash` (REC-6). */
+  intact: boolean;
+}
+
+/**
+ * ONE pure function, shared by the executor and C4's planner, so a planned action and
+ * the executor's verdict cannot differ (C4 R14). Not part of it: WR-6's engine gate and
+ * IF2-18's validation (both before it), and the live-member checks on a month decided
+ * `create` or `replace` (after it). Rows are evaluated in the spec's order; the first
+ * match wins.
+ */
+export function decideFairnessMonth(input: {
+  actor: Actor;
+  op: "write" | "delete";
+  month: string;
+  currentMonth: string;
+  expectedRev: string | null;
+  bodyHash: string | null;
+  stored: StoredRecordFacts | null;
+  hasFreezingServices: boolean;
+}): FairnessDecision {
+  const { actor, op, stored, expectedRev } = input;
+  const past = monthIndex(input.month) < monthIndex(input.currentMonth);
+  const sameContent = stored !== null && stored.intact && stored.contentHash === input.bodyHash;
+
+  if (actor === "route") {
+    if (op !== "write") throw new Error("decideFairnessMonth: the route actor never deletes");
+    if (sameContent) return "unchanged"; //                                   WR-8 row 1
+    if (past) return { refused: "past_month" }; //                            row 2
+    if (stored === null) return expectedRev === null ? "create" : { refused: "record_missing" }; // rows 3, 4
+    if (expectedRev === null) return { refused: "record_exists" }; //         row 5
+    if (expectedRev !== stored.rev) return { refused: "stale_revision" }; //  row 6
+    if (input.hasFreezingServices) return { refused: "month_has_services" }; // row 7 (A5)
+    return "replace"; //                                                      row 8 (A6)
+  }
+
+  if (op === "delete") {
+    if (stored === null) return { refused: "record_missing" }; //                       WR-14 D1
+    if (stored.source !== "reconstructed") return { refused: "not_reconstruction_owned" }; // D2
+    if (!stored.intact) return { refused: "record_edited" }; //                         D3
+    if (expectedRev !== stored.rev) return { refused: "stale_revision" }; //            D4
+    return "delete";
+  }
+  if (!past) return { refused: "not_past_month" }; //                                   WR-14 row 1 (A4)
+  if (sameContent) return "unchanged"; //                                                row 2
+  if (stored === null) return expectedRev === null ? "create" : { refused: "record_missing" }; // rows 3, 4
+  if (stored.source !== "reconstructed") return { refused: "not_reconstruction_owned" }; // row 5
+  if (!stored.intact) return { refused: "record_edited" }; //                            row 6
+  if (expectedRev !== stored.rev) return { refused: "stale_revision" }; //               row 7
+  return "replace"; //                                                                   row 8
 }
