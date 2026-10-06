@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 import {
   personNameOptions,
@@ -73,6 +73,8 @@ import { useToast } from "@/app/components/ui/Toast";
 import {
   PLANNER_UPDATED_MESSAGE,
   editableConfig,
+  exactOverlapCardMessage,
+  exactOverlapFormMessage,
   isOutdatedSource,
   sameSolverConfig,
   type SolverConfigController,
@@ -82,11 +84,13 @@ import { SOLVER_HISTORY_SOURCE, SOLVER_SENDS_HISTORY } from "./solverHistorySour
 import { fetchDerivedHistory, type DerivedHistoryFetchResult } from "./derivedHistoryClient";
 import { useDerivedSolverHistory, type DerivedHistoryHandle } from "./useDerivedSolverHistory";
 import type { SolverHistoryDiagnostics, SolverHistoryMonth } from "@/app/utils/solverHistory";
+import { exactCapOverlaps } from "@/app/utils/solverConfigWriteRequest";
 import {
   buildColumns,
   buildRows,
   buildSolveRequest,
   applySolveResponse,
+  capLabel,
   cellsToDrafts,
   createColumnId,
   draftTargetKey,
@@ -612,11 +616,13 @@ function cadenceNameChip(issue: CadenceNameIssue): string {
     : "Nombre no reconocido en Alabanza";
 }
 
-function RestrictionCard({ r, onDelete, onEdit, nameIssue }: {
+function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
   r: PersonRestriction;
   onDelete: () => void;
   onEdit: () => void;
   nameIssue?: CadenceNameIssue;
+  /** Parent A38: the first role this card fixes twice with another card or itself — a pair saved before C3. */
+  exactOverlapRole?: string;
 }) {
   return (
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-start gap-2">
@@ -663,6 +669,9 @@ function RestrictionCard({ r, onDelete, onEdit, nameIssue }: {
             </span>
           )}
         </div>
+        {exactOverlapRole && (
+          <p className="font-body text-[11px] text-negative-fg">{exactOverlapCardMessage(exactOverlapRole)}</p>
+        )}
       </div>
       <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none mt-0.5 px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
@@ -707,11 +716,16 @@ function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () =
 
 const rbIn  = "px-2 py-1 rounded border border-accent/15 bg-transparent font-body text-xs focus:outline-none focus:border-accent";
 
-function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
+function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblings }: {
   members: MemberOption[];
   onAdd: (r: PersonRestriction) => void;
   onCancel: () => void;
   initialValues?: PersonRestriction;
+  /**
+   * Every OTHER restriction of the on-screen config, in order — what parent
+   * A38's check compares this card's `==` caps against (same `person` text).
+   */
+  siblings: PersonRestriction[];
 }) {
   const preserve = initialValues?.person ? [initialValues.person] : [];
   const names = personNameOptions(members, preserve);
@@ -730,8 +744,23 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
   const toggleExcl = (pat: string) =>
     setExcl(e => e.includes(pat) ? e.filter(x => x !== pat) : [...e, pat]);
 
+  // Parent A38 (C3 §6.2): a cap row whose `==` covers a role another `==` cap
+  // already fixes — on this card or on a card with the same `person` text — is
+  // flagged, and the form cannot be saved while one remains. The draft goes LAST,
+  // so every pair touching it has its `later` here.
+  const capOverlapMessage = new Map<string, string>();
+  for (const o of exactCapOverlaps({
+    restrictions: [...siblings, { id: "", person, excludedPatterns: [], fairness: "none", fairnessSlack: 1, weekExclusions: [], caps }],
+  })) {
+    if (o.later.restriction !== siblings.length) continue;
+    const flagged = caps[o.later.cap];
+    const other = o.first.restriction === siblings.length ? caps[o.first.cap] : siblings[o.first.restriction].caps[o.first.cap];
+    if (!flagged || !other || capOverlapMessage.has(flagged.id)) continue;
+    capOverlapMessage.set(flagged.id, exactOverlapFormMessage({ role: o.roles[0], person, rule: capLabel(other) }));
+  }
+
   // A restriction may carry «Mes por medio» alone (C3 §6.6).
-  const canAdd = !!person && (excl.length > 0 || weekEx.length > 0 || caps.length > 0 || fairness !== "none" || sundayCadence === "alternate");
+  const canAdd = !!person && capOverlapMessage.size === 0 && (excl.length > 0 || weekEx.length > 0 || caps.length > 0 || fairness !== "none" || sundayCadence === "alternate");
 
   const handleAdd = () => {
     if (!canAdd) return;
@@ -911,7 +940,8 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
             // edge (no `flex-wrap` either). Capped and wrapped instead of
             // truncated — the row now folds onto a second line rather than
             // spilling out of the card.
-            <div key={cap.id} className="flex flex-wrap gap-1.5 items-center">
+            <Fragment key={cap.id}>
+            <div className="flex flex-wrap gap-1.5 items-center">
               <Select
                 size="sm"
                 aria-label="Patrón"
@@ -963,6 +993,10 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               >sem</button>
               <button type="button" onClick={() => setCaps(cs => cs.filter(x => x.id !== cap.id))} className="text-mono-600 hover:text-negative-fg text-sm flex-none">×</button>
             </div>
+            {capOverlapMessage.has(cap.id) && (
+              <p className="font-label text-[10px] text-negative-fg">{capOverlapMessage.get(cap.id)}</p>
+            )}
+            </Fragment>
           ))}
         </div>
         <button
@@ -1141,6 +1175,16 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues }: {
   const total = config.restrictions.length + config.conflicts.length + config.presence.length;
   const isFormOpen = !!adding || !!editingId;
 
+  // Parent A38 on the on-screen config: a pair saved before C3 marks both of its
+  // cards, and the route refuses every save while it stands (C3 §6.2).
+  const exactOverlapRole = new Map<string, string>();
+  for (const o of exactCapOverlaps(config)) {
+    for (const ref of [o.first, o.later]) {
+      const id = config.restrictions[ref.restriction]?.id;
+      if (id !== undefined && !exactOverlapRole.has(id)) exactOverlapRole.set(id, o.roles[0]);
+    }
+  }
+
   return (
     <div className="space-y-2">
       {/*
@@ -1193,6 +1237,7 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues }: {
       {adding === "restriction" && (
         <PersonRestrictionForm
           members={members}
+          siblings={config.restrictions}
           onAdd={r => { onChange({ ...config, restrictions: [...config.restrictions, r] }); setAdding(null); }}
           onCancel={() => setAdding(null)}
         />
@@ -1216,10 +1261,12 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues }: {
       {config.restrictions.map(r =>
         editingId === r.id ? (
           <PersonRestrictionForm key={r.id} members={members} initialValues={r}
+            siblings={config.restrictions.filter(x => x.id !== r.id)}
             onAdd={saveRestriction} onCancel={cancelEdit} />
         ) : (
           <RestrictionCard key={r.id} r={r}
             nameIssue={cadenceNameIssues.get(r.id)}
+            exactOverlapRole={exactOverlapRole.get(r.id)}
             onDelete={() => rmRestriction(r.id)}
             onEdit={() => { setEditingId(r.id); setAdding(null); }} />
         )
