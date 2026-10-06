@@ -275,3 +275,48 @@ describe("buildSolverConfigDocument", () => {
     for (const key of Object.keys(fields)) expect(doc[key]).toEqual(fields[key]);
   });
 });
+
+// ─── Solver v3 C3 · step zero — the pre-C3 serializer, frozen ────────────────
+//
+// Written and asserted on the UNCHANGED serializer, before any C3 code lands
+// (C3 §6.1, T2): a document C3 writes for a config with no «Mes por medio» must
+// be byte-identical to what the pre-C3 code writes for the same config. A red
+// literal here is a finding about the change, never a value to re-capture.
+const FROZEN_CONFIG: SolverConfig = {
+  sundayLeads: ["m-ana", "m-carla"],
+  saturdayLeads: ["m-bruno"],
+  support: ["m-diana"],
+  restrictions: [
+    {
+      id: "r-ana", person: "Ana", excludedPatterns: ["Sat.*"], fairness: "exempt", fairnessSlack: 1,
+      weekExclusions: [{ id: "w-1", week: 2, pattern: "*.*" }],
+      caps: [{ id: "c-1", pattern: "Sun.Lead", op: "==", value: 2, relative: false, relOffset: 0 }],
+    },
+    { id: "r-bruno", person: "Bruno", excludedPatterns: [], fairness: "slack", fairnessSlack: 2, weekExclusions: [], caps: [] },
+  ],
+  conflicts: [{ id: "x-1", personA: "Ana", personB: "Bruno", pattern: "*.Lead" }],
+  presence: [{ id: "p-1", persons: ["Carla", "Diana"], pattern: "Sun.BGV" }],
+};
+
+const FROZEN_FIELDS_JSON =
+  '{"sundayLeads":["m-ana","m-carla"],"saturdayLeads":["m-bruno"],"support":["m-diana"],' +
+  '"restrictions":[{"_type":"solverRestriction","_key":"r-ana","id":"r-ana","person":"Ana",' +
+  '"excludedPatterns":["Sat.*"],"fairness":"exempt","fairnessSlack":1,' +
+  '"weekExclusions":[{"_type":"solverWeekExclusion","_key":"w-1","id":"w-1","week":2,"pattern":"*.*"}],' +
+  '"caps":[{"_type":"solverCap","_key":"c-1","id":"c-1","pattern":"Sun.Lead","op":"==","value":2,"relative":false,"relOffset":0}]},' +
+  '{"_type":"solverRestriction","_key":"r-bruno","id":"r-bruno","person":"Bruno","excludedPatterns":[],' +
+  '"fairness":"slack","fairnessSlack":2,"weekExclusions":[],"caps":[]}],' +
+  '"conflicts":[{"_type":"solverConflict","_key":"x-1","id":"x-1","personA":"Ana","personB":"Bruno","pattern":"*.Lead"}],' +
+  '"presence":[{"_type":"solverPresence","_key":"p-1","id":"p-1","persons":["Carla","Diana"],"pattern":"Sun.BGV"}]}';
+
+describe("C3 step zero — a cadence-free config serializes byte-identically to pre-C3", () => {
+  it("solverConfigFields matches the frozen pre-C3 JSON, key order included", () => {
+    expect(JSON.stringify(solverConfigFields(FROZEN_CONFIG))).toBe(FROZEN_FIELDS_JSON);
+  });
+
+  it("the parser's stored fields for the same body are the same bytes", () => {
+    const parsed = parseSolverConfigWrite(FROZEN_CONFIG);
+    if (!parsed.ok) throw new Error(parsed.issues.join(", "));
+    expect(JSON.stringify(parsed.value.fields)).toBe(FROZEN_FIELDS_JSON);
+  });
+});
