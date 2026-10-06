@@ -136,6 +136,12 @@ interface MemberOption {
   /** Declared instrument seats; absent or empty = declares nothing (spec D6). */
   instruments?: string[];
   unavailableDates?: string[];
+  /**
+   * The stored value as `/api/admin/members` projects it (absent or empty =
+   * worship). Typed so it reaches `sundayCadence.ts` intact: its resolver drops
+   * non-worship members itself, and a super-admin's roster includes them (C3 E25).
+   */
+  ministries?: unknown;
 }
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;

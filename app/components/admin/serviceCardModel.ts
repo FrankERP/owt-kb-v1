@@ -103,6 +103,11 @@ export interface MemberOption {
   unavailableDates?: string[];
   unavailabilityNotes?: { date: string; note: string }[];
   /**
+   * The stored value as `/api/admin/members` projects it (absent or empty =
+   * worship); carried so the planner hands it to `sundayCadence.ts` intact (C3 E25).
+   */
+  ministries?: unknown;
+  /**
    * Stable stored `_key` of the seat this member occupies, when it came from a
    * role seat rather than the member directory. Swaps address seats by this key,
    * never by rendered index.
