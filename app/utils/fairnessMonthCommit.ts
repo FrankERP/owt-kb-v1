@@ -24,6 +24,7 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { serviceTodayIso } from "@/app/components/admin/serviceReadiness";
 import type { CommitOutcome } from "./commitOutcome";
+import { fairnessErrorClass, fairnessErrorFrames } from "./fairnessLedgerRead";
 import {
   executeFairnessMonthWrites,
   validateFairnessMonthWrite,
@@ -63,6 +64,23 @@ const REFUSAL_ERROR: Readonly<Record<FairnessPutRefusal, "stale_revision" | "int
   member_not_worship: "integrity_conflict",
   tipo_mismatch: "integrity_conflict",
 };
+
+/** The `Error.name` of the one error this module throws — pinned for the route's tests. */
+export const FAIRNESS_MONTH_WRITE_FAILED_ERROR_NAME = "FairnessMonthWriteFailedError";
+
+/**
+ * The executor threw (a failed read, the read-client assertion, an error
+ * `sanityConflictKind` answers null for — WR-11's «thrown (500), opaque»). Its message is
+ * fixed and it carries NO `cause`: a raw `@sanity/client` error holds the request URL —
+ * the member read's `$ids` among it — in its message and its own `response` property,
+ * and Next's route-error logging would print either (spec §6 «Key hygiene» (c)).
+ */
+export class FairnessMonthWriteFailedError extends Error {
+  constructor() {
+    super("fairnessMonth: the write failed (the server log names the error's class and status)");
+    this.name = FAIRNESS_MONTH_WRITE_FAILED_ERROR_NAME;
+  }
+}
 
 const isPutRefusal = (v: unknown): v is FairnessPutRefusal =>
   typeof v === "string" && (FAIRNESS_PUT_REFUSALS as readonly string[]).includes(v);
@@ -130,19 +148,27 @@ export async function commitFairnessMonths(
   const checked = validatePut(body, currentMonth);
   if (!checked.ok) return invalid(checked.issues);
 
-  const results = await executeFairnessMonthWrites({
-    clients: { read: operationalClient, write: writeClient },
-    actor: "route",
-    op: "write",
-    months: checked.months,
-    stamps: {
-      recordedBy: actor.recordedBy,
-      now: now.toISOString(),
-      currentMonth,
-      environment: fairnessRecordEnvironment(env),
-      engine,
-    },
-  });
+  // Key hygiene (c): whatever the executor throws is logged by class, status and stack
+  // frames only, and replaced by a fixed-message error with no `cause`.
+  let results: FairnessExecution[];
+  try {
+    results = await executeFairnessMonthWrites({
+      clients: { read: operationalClient, write: writeClient },
+      actor: "route",
+      op: "write",
+      months: checked.months,
+      stamps: {
+        recordedBy: actor.recordedBy,
+        now: now.toISOString(),
+        currentMonth,
+        environment: fairnessRecordEnvironment(env),
+        engine,
+      },
+    });
+  } catch (err) {
+    console.error(`[fairnessMonthCommit] the fairness write failed: ${fairnessErrorClass(err)}\n${fairnessErrorFrames(err)}`);
+    throw new FairnessMonthWriteFailedError();
+  }
 
   // The executor re-runs IF2-18; a body this module accepted cannot fail it, but if one
   // ever did, it is a 400 like any other invalid body.

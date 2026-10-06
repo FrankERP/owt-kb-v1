@@ -359,7 +359,9 @@ describe("a nameless item (REC-3, WR-16)", () => {
     expect(() => buildFairnessMonthDocument({ body: body(), ...STAMPS, names: new Map() })).toThrow(/no member name/);
     const empty = new Map(STAMPS.names);
     empty.set("m-alma", "");
-    expect(() => buildFairnessMonthDocument({ body: body(), ...STAMPS, names: empty })).toThrow(/m-alma/);
+    expect(() => buildFairnessMonthDocument({ body: body(), ...STAMPS, names: empty })).toThrow(/no member name/);
+    // Key hygiene (c): the message is fixed and never names the member id.
+    expect(() => buildFairnessMonthDocument({ body: body(), ...STAMPS, names: empty })).not.toThrow(/m-alma/);
   });
   it("the parser rejects a stored item whose name is empty", () => {
     const doc = storedDoc() as { people: { name: string }[] };

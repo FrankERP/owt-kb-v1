@@ -63,6 +63,19 @@ export function fairnessErrorClass(err: unknown): string {
   return `${name}${status}`;
 }
 
+/**
+ * An error's stack FRAMES only — the `at …` lines (function names and file positions).
+ * Never the stack's head, which repeats the message, nor any continuation of a multi-line
+ * message: a raw client error's message carries the request URL and its `$ids`.
+ */
+export function fairnessErrorFrames(err: unknown): string {
+  const stack = err instanceof Error ? (err.stack ?? "") : "";
+  return stack
+    .split("\n")
+    .filter((line) => /^\s+at /.test(line))
+    .join("\n");
+}
+
 async function readList(label: string, bound: BoundQuery): Promise<unknown[]> {
   let rows: unknown;
   try {

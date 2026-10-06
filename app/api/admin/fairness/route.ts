@@ -6,6 +6,7 @@ import { requireActiveManager } from "@/app/utils/authGuards";
 import {
   FAIRNESS_LEDGER_UNAVAILABLE_ERROR_NAME,
   fairnessErrorClass,
+  fairnessErrorFrames,
   loadFairnessLedger,
 } from "@/app/utils/fairnessLedgerRead";
 import { FAIRNESS_UNAVAILABLE_MESSAGE, isMonthString } from "@/app/utils/fairnessVocabulary";
@@ -56,8 +57,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(result, { status: 200, headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     if (!(err instanceof Error) || err.name !== FAIRNESS_LEDGER_UNAVAILABLE_ERROR_NAME) {
-      const frames = err instanceof Error ? (err.stack ?? "").split("\n").slice(1).join("\n") : "";
-      console.error(`[fairness route] unexpected failure reading the fairness ledger: ${fairnessErrorClass(err)}\n${frames}`);
+      console.error(`[fairness route] unexpected failure reading the fairness ledger: ${fairnessErrorClass(err)}\n${fairnessErrorFrames(err)}`);
     }
     return NextResponse.json({ error: "fairness_unavailable", message: FAIRNESS_UNAVAILABLE_MESSAGE }, { status: 500 });
   }

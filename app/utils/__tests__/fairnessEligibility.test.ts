@@ -203,14 +203,14 @@ describe("names (RES-5, RES-7)", () => {
   });
 
   it("drops kids-only members before anything: never a person, a pool, a block or a name match", () => {
-    const kidsAna: EligibilityMember = { _id: "m-kids", member_name: "Ana", alias: "Alma", memberType: ["voz", "sunday_lead"], ministries: ["kids"] };
-    const r = resolve({ sundayLeads: ["m-alma", "m-diego", "m-kids"], restrictions: [rule("r1", "Alma", { excludedPatterns: ["Sat.*"] })] }, [...ROSTER, kidsAna]);
+    const kidsNamesake: EligibilityMember = { _id: "m-kids", member_name: "Iván", alias: "Alma", memberType: ["voz", "sunday_lead"], ministries: ["kids"] };
+    const r = resolve({ sundayLeads: ["m-alma", "m-diego", "m-kids"], restrictions: [rule("r1", "Alma", { excludedPatterns: ["Sat.*"] })] }, [...ROSTER, kidsNamesake]);
     expect(bodyOf(r).people.map((p) => p.memberId)).not.toContain("m-kids");
     expect(personOf(r, "m-alma").roles["Sat.Lead"]).toBe("out");
   });
 
   it("gives the same body for a worship admin's roster and a super-admin's (viewer independence)", () => {
-    const kidsTwin: EligibilityMember = { _id: "m-kids", member_name: "Kim", alias: "Diego", memberType: ["voz", "sunday_lead"], ministries: ["kids"] };
+    const kidsTwin: EligibilityMember = { _id: "m-kids", member_name: "Julia", alias: "Diego", memberType: ["voz", "sunday_lead"], ministries: ["kids"] };
     const cfg = { sundayLeads: ["m-alma", "m-diego", "m-kids"], restrictions: [rule("r1", "Diego", { sundayCadence: "alternate" as const })] };
     expect(resolve(cfg, [...ROSTER, kidsTwin])).toEqual(resolve(cfg, ROSTER));
   });

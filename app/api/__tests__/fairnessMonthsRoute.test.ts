@@ -9,6 +9,7 @@ import type { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createFakeFairnessSanity, contentLakeConflict, type FakeDoc } from "@/app/utils/__tests__/__fixtures__/fakeFairnessSanity";
+import { FAIRNESS_MONTH_WRITE_FAILED_ERROR_NAME } from "@/app/utils/fairnessMonthCommit";
 import { buildFairnessMonthDocument } from "@/app/utils/fairnessMonthWriteRequest";
 import type { FairnessMonthWrite, RoleKey, Status } from "@/app/utils/fairnessVocabulary";
 
@@ -80,7 +81,21 @@ async function put(body: unknown) {
   return { status: res.status, body: await res.json() };
 }
 
+let errors: ReturnType<typeof vi.spyOn>;
+const logged = () => errors.mock.calls.map((c: unknown[]) => c.map(String).join(" ")).join("\n");
+
+/** The error a PUT threw — failing the test if it resolved instead. */
+async function thrownBy(p: Promise<unknown>): Promise<Error> {
+  const outcome = await p.then(
+    () => null,
+    (e: unknown) => e,
+  );
+  if (!(outcome instanceof Error)) throw new Error("expected the PUT to throw");
+  return outcome;
+}
+
 beforeEach(() => {
+  errors = vi.spyOn(console, "error").mockImplementation(() => {});
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-20T18:00:00.000Z"));
   vi.stubEnv("OWT_SOLVER_ENGINE", "v3");
@@ -89,6 +104,7 @@ beforeEach(() => {
   h.lake = createFakeFairnessSanity(MEMBERS);
 });
 afterEach(() => {
+  errors.mockRestore();
   vi.useRealTimers();
   vi.unstubAllEnvs();
 });
@@ -279,15 +295,63 @@ describe("the decision and the commit (WR-7 … WR-12)", () => {
     for (const k of ["rev", "source", "recordedAt"]) expect(res.body.details).not.toHaveProperty(k);
   });
 
-  it("throws (500) on an error that is not a 409 mutation conflict", async () => {
+  it("throws (500) on an error that is not a 409 mutation conflict — opaque, logged by class and status", async () => {
     h.lake.failNext.commit = Object.assign(new Error("Unauthorized"), { statusCode: 401 });
-    await expect(PUT(req({ months: [entry("2026-11")] }))).rejects.toThrow("Unauthorized");
+    const err = await thrownBy(put({ months: [entry("2026-11")] }));
+    expect(err.name).toBe(FAIRNESS_MONTH_WRITE_FAILED_ERROR_NAME);
+    expect(err.message).not.toContain("Unauthorized");
+    expect(err.cause).toBeUndefined();
+    expect(logged()).toContain("Error 401");
+    expect(h.lake.docs.has("fairnessMonth.2026-11")).toBe(false);
   });
 
   it("throws (500) before any read when the read token is missing", async () => {
     h.lake = createFakeFairnessSanity(MEMBERS, { perspective: "published", useCdn: false });
-    await expect(PUT(req({ months: [entry("2026-11")] }))).rejects.toThrow(/read token/);
+    const err = await thrownBy(put({ months: [entry("2026-11")] }));
+    expect(err.name).toBe(FAIRNESS_MONTH_WRITE_FAILED_ERROR_NAME);
     expect(h.lake.reads).toEqual([]);
+  });
+});
+
+describe("key hygiene on a thrown failure (spec §6 «Key hygiene» (c), WR-11)", () => {
+  // A raw @sanity/client error: the request URL — the member read's `$ids` — sits in its
+  // message (httpErrorMessage) and in its own enumerable `response` (extractErrorProps).
+  const URL = 'https://x.api.sanity.io/v1/data/query/production?$ids=["m-alma","m-bruno"]';
+  const clientError = (status: number) =>
+    Object.assign(new Error(`GET-request to ${URL} resulted in HTTP ${status}\nm-alma m-bruno`), {
+      name: "ClientError",
+      statusCode: status,
+      response: { url: URL, statusCode: status },
+    });
+
+  it("a rejected member read never puts a member id in the log or the thrown error", async () => {
+    const realFetch = h.lake.read.fetch;
+    let memberReads = 0;
+    h.lake.read.fetch = async (query: string, params: Record<string, unknown> = {}) => {
+      if (query.includes('_type == "teamMembers"')) {
+        memberReads += 1;
+        throw clientError(503);
+      }
+      return realFetch(query, params);
+    };
+    const err = await thrownBy(put({ months: [entry("2026-11")] }));
+    expect(memberReads).toBe(1);
+    expect(err.name).toBe(FAIRNESS_MONTH_WRITE_FAILED_ERROR_NAME);
+    expect(err.cause).toBeUndefined();
+    expect(`${err.message}\n${err.stack ?? ""}\n${JSON.stringify(err)}`).not.toMatch(/m-alma|m-bruno|\$ids/);
+    expect(logged()).toContain("ClientError 503");
+    expect(logged()).not.toMatch(/m-alma|m-bruno|\$ids|sanity\.io/);
+    expect(h.lake.commits).toEqual([]);
+  });
+
+  it("a commit error that is not a 409 never puts a member id in the log or the thrown error", async () => {
+    h.lake.failNext.commit = clientError(500);
+    const err = await thrownBy(put({ months: [entry("2026-11")] }));
+    expect(err.name).toBe(FAIRNESS_MONTH_WRITE_FAILED_ERROR_NAME);
+    expect(err.cause).toBeUndefined();
+    expect(`${err.message}\n${err.stack ?? ""}\n${JSON.stringify(err)}`).not.toMatch(/m-alma|m-bruno|\$ids/);
+    expect(logged()).toContain("ClientError 500");
+    expect(logged()).not.toMatch(/m-alma|m-bruno|\$ids|sanity\.io/);
   });
 });
 

@@ -525,7 +525,7 @@ export function buildFairnessMonthDocument(input: {
     .map((p) => {
       const name = input.names.get(p.memberId);
       if (typeof name !== "string" || name.length === 0) {
-        throw new Error(`fairnessMonth: no member name for ${p.memberId} (REC-3: no item is written without a name)`);
+        throw new Error("fairnessMonth: an item has no member name (REC-3: no item is written without a name)");
       }
       const roles: Record<string, Status> = {};
       for (const key of ROLE_KEYS) roles[ROLE_FIELD[key]] = p.roles[key];

@@ -25,6 +25,11 @@ function reject(res: { status: number; body: unknown }) {
  * impersonation (super-admin only) the impersonated manager whose role authorized the
  * write, as `solver-config` stamps `updatedBy`.
  *
+ * A failure the executor throws (WR-11's «thrown (500), opaque») reaches Next as
+ * `FairnessMonthWriteFailedError` — a fixed message, no `cause` — after the commit module
+ * has logged its class, status and stack frames only: a raw Sanity client error carries
+ * the request URL, member ids included (spec §6 «Key hygiene» (c)).
+ *
  * Wrapped in `withVerificationRunContext` because its commit module is listed in
  * `DELIVERY_CAPABLE_IMPORTS` (every `*Commit` is); it delivers nothing.
  */

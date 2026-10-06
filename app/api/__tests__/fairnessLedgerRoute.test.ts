@@ -52,7 +52,7 @@ const stored = (month: string, ids?: string[]): FakeDoc =>
       environment: "local",
       recordedAt: `${month}-28T12:00:00.000Z`,
       recordedBy: RECONSTRUCTION_RECORDED_BY,
-      names: new Map([["m-alma", "Alma"], ["m-bruno", "Bruno"], ["m-carmen", "Carmen"], ["m-gone", "Gina"]]),
+      names: new Map([["m-alma", "Alma"], ["m-bruno", "Bruno"], ["m-carmen", "Carmen"], ["m-gone", "Greta"]]),
     }),
   }) as unknown as FakeDoc;
 
@@ -163,7 +163,7 @@ describe("the payload (RD-1, RD-3, RD-5)", () => {
   it("names a deleted member from her record and lists her as unknown", async () => {
     h.lake = createFakeFairnessSanity([...MEMBERS, ...SERVICES, stored("2026-10", ["m-alma", "m-bruno", "m-carmen", "m-gone"])]);
     const res = await get("month=2026-11");
-    expect(res.body.people.find((p: { memberId: string }) => p.memberId === "m-gone")).toMatchObject({ name: "Gina", exists: false });
+    expect(res.body.people.find((p: { memberId: string }) => p.memberId === "m-gone")).toMatchObject({ name: "Greta", exists: false });
     expect(res.body.diagnostics.unknownMembers).toEqual(["m-gone"]);
   });
 

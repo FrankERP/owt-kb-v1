@@ -150,17 +150,26 @@ describe("«Motivo» (UI-5)", () => {
 describe("rows (UI-4)", () => {
   const people = [
     person("m-bruno", "Bruno", { tabs: { window: { BGV: fig(-3, 1) }, cumulative: { BGV: fig(5, 2) } }, sang: 2 }),
-    person("m-alvaro", "Álvaro", { tabs: { window: { BGV: fig(4) }, cumulative: {} } }),
+    person("m-ivan", "Iván", { tabs: { window: { BGV: fig(4) }, cumulative: {} } }),
     person("m-alma", "Alma", { tabs: { window: { BGV: fig(4), TOTAL: fig(4) }, cumulative: {} }, exempt: true }),
     person("m-carmen", "Carmen"),
   ];
 
   it("lists the tab's population, most owed first, ties by name in Spanish order", () => {
     const { rows, out } = tabRows(response(people), "BGV");
-    expect(rows.map((r) => r.name)).toEqual(["Alma", "Álvaro", "Bruno"]);
+    expect(rows.map((r) => r.name)).toEqual(["Alma", "Iván", "Bruno"]);
     expect(rows[2]).toMatchObject({ leTocaba: "0.7", tuvo: 1, saldo: "0.3 de más", desde: "le deben 0.5", canto: 2 });
     expect(out.map((r) => r.name)).toEqual(["Carmen"]);
     expect(out[0]).toMatchObject({ leTocaba: "—", saldo: "—", desde: "—" });
+  });
+
+  it("breaks a tie by Spanish collation, not by codepoint", () => {
+    // Codepoint order puts «S» (U+0053) before «Á» (U+00C1); Spanish order puts Á with A.
+    const tied = [
+      person("m-carmen-s", "Carmen Soto", { tabs: { window: { BGV: fig(2) }, cumulative: {} } }),
+      person("m-carmen-a", "Carmen Ávila", { tabs: { window: { BGV: fig(2) }, cumulative: {} } }),
+    ];
+    expect(tabRows(response(tied), "BGV").rows.map((r) => r.name)).toEqual(["Carmen Ávila", "Carmen Soto"]);
   });
 
   it("leaves an exempt person out of Total", () => {
