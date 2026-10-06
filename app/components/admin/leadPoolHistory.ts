@@ -7,6 +7,7 @@ import { patternMatches, type RuleRow } from "./ruleEnforcement";
 import {
   memberFitsPool,
   memberIdToName,
+  v2View,
   type SolverConfig,
   type SolverHistoryEntry,
 } from "./plannerModel";
@@ -34,7 +35,9 @@ export function priorCalendarMonth(year: number, month: number): { year: number;
 }
 
 function isExcludedFromLead(config: SolverConfig, memberId: string, service: "Sun" | "Sat"): boolean {
-  const restriction = config.restrictions.find((r) => r.person === memberId);
+  // First match wins here, so a «Mes por medio» card with no clause must not be
+  // the one found ahead of a real exclusion (C3 §6.4): v2 reads `v2View`.
+  const restriction = v2View(config).restrictions.find((r) => r.person === memberId);
   if (!restriction) return false;
   const column = {
     type: service === "Sun" ? "sunday_role" as const : "saturday_role" as const,
