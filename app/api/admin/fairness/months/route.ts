@@ -13,7 +13,7 @@ function reject(res: { status: number; body: unknown }) {
 /**
  * `PUT /api/admin/fairness/months` — record 1–2 consecutive months of the fairness
  * ledger's monthly eligibility record (solver v3 C2 WR-1 … WR-17; body IF2-4, answers
- * IF2-5, refusals IF2-6). Under engine v2 it answers `409 engine_not_v3` and writes
+ * IF2-5, refusals IF2-6). Under engine v2 it answers a 409 (`details.detail: "engine_not_v3"`) and writes
  * nothing — and the effective engine is v2 everywhere until C7's flip, or until Frank
  * sets `OWT_SOLVER_ENGINE` for a Preview rehearsal (docs/SECRETS.md).
  *

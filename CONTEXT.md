@@ -10,7 +10,7 @@ The record, once per calendar month, of who was eligible for which voice role �
 each person's six role keys as `in`, `out` or `exact`, her fixed counts, «Mes por
 medio», «Exenta», the dates she was unavailable or excluded by a rule, and the
 presence rules. It is what the month was planned with; seats are never stored in it.
-Written by «Registrar», by Auto's confirm (v3) or by the reconstruction script.
+Written by «Registrar»; Auto's confirm (v3) will write it with C6 and the reconstruction script with C4.
 _Avoid_: history, snapshot of the pools
 
 **Saldo**:

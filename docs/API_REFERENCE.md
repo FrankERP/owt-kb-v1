@@ -522,13 +522,18 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   strict: unknown fields, server stamps, `_key`, `name` and `contentHash` are refused (`400
   invalid_request`, `details.issues` naming each path by field and index only). Under engine v2 —
   every deployment until C7's flip, unless `OWT_SOLVER_ENGINE` is set on the `preview` branch or
-  locally (docs/SECRETS.md) — `409 engine_not_v3` before anything is read. Per month: an identical
-  intact record → `unchanged` (200, no transaction); a past month → `past_month`; no record and
+  locally (docs/SECRETS.md) — refused with a 409 whose `details.detail` is `engine_not_v3`, before
+  anything is read. **The wire `error` of a refusal is never the refusal's own name:** it is
+  `stale_revision` for `details.detail` `record_exists` / `record_missing` / `stale_revision` and
+  `integrity_conflict` for every other detail (`engine_not_v3`, `past_month`, `month_has_services`,
+  `member_*`, `tipo_mismatch`); clients branch on `details.detail` (C2 IF2-5, IF2-6), never on
+  `error` or `message`. Per month: an identical intact record → `unchanged` (200, no
+  transaction); a past month → refused, `details.detail` `past_month`; no record and
   `expectedRev: null` → created; a record and a matching `expectedRev` and no freezing service →
-  replaced (revision-asserted, whole); otherwise `record_exists` / `record_missing` /
-  `stale_revision` (409 `stale_revision`) or `month_has_services`, and for a written month the live
+  replaced (revision-asserted, whole); otherwise `details.detail` is `record_exists` /
+  `record_missing` / `stale_revision` or `month_has_services`, and for a written month the live
   members must exist, be worship and fit the roles by current Tipo (`member_unknown` /
-  `member_not_worship` / `tipo_mismatch`, 409 `integrity_conflict` with `details.memberIds`). All
+  `member_not_worship` / `tipo_mismatch`, `integrity_conflict` with `details.memberIds`). All
   or nothing: one refused month writes nothing, `details.detail` is the earliest month's refusal and
   `details.months` every month's own verdict; a commit 409 is reported on every written month. `200`
   answers `{ months: [{ month, outcome, rev, contentHash, recordedAt }] }`. Any other failure — no

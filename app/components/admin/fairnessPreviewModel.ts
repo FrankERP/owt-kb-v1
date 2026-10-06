@@ -245,25 +245,30 @@ export function tabRows(
 /**
  * The month's counted Sunday services from the on-screen state (display only, «previsto»):
  * every stored counted Sunday-dated service, plus one weekend default for each Sunday of
- * the month with no stored `sunday_role`. One entry per service; a date may repeat.
+ * the month with no stored `sunday_role`. One entry per service; a date may repeat. Each
+ * entry carries whether it is a WEEKEND service (a stored `sunday_role` or the default) or
+ * a special: a rule exclusion applies to weekend services only (C2 LG-6, C3 CAD-2), so the
+ * X1 line must be able to tell them apart.
  */
+export type OnScreenCountedSunday = { date: string; weekend: boolean };
+
 export function onScreenCountedSundays(
   month: string,
   stored: ReadonlyArray<{ _type: string; date: string; countsForFairness?: boolean }>,
-): string[] {
+): OnScreenCountedSunday[] {
   const sundays = completeSundaySpine(month);
-  const out: string[] = [];
+  const out: OnScreenCountedSunday[] = [];
   const withSundayRole = new Set<string>();
   for (const s of stored) {
     const date = s.date.slice(0, 10);
     if (!sundays.includes(date)) continue;
     if (s._type === "sunday_role") withSundayRole.add(date);
     if ((s._type === "sunday_role" || s._type === "special_role") && countsForFairness({ _type: s._type, countsForFairness: s.countsForFairness })) {
-      out.push(date);
+      out.push({ date, weekend: s._type === "sunday_role" });
     }
   }
-  for (const sunday of sundays) if (!withSundayRole.has(sunday)) out.push(sunday);
-  return out.sort();
+  for (const sunday of sundays) if (!withSundayRole.has(sunday)) out.push({ date: sunday, weekend: true });
+  return out.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : Number(b.weekend) - Number(a.weekend)));
 }
 
 /**
@@ -277,7 +282,7 @@ export function cadenceLine(input: {
   response: FairnessLedgerResponse;
   month: string;
   resolved: EligibilityResult | null;
-  countedSundays: readonly string[];
+  countedSundays: readonly OnScreenCountedSunday[];
   liveUnavailable: readonly string[];
 }): string | null {
   const horizon = input.response.horizon.find((h) => h.month === input.month);
@@ -287,9 +292,11 @@ export function cadenceLine(input: {
   if (!item || item.sundayCadence !== "alternate") return null;
   const previous = shiftMonth(input.month, -1);
   const led = input.person.countedSundayLeads.filter((d) => d.slice(0, 7) === previous);
-  const blocked = (date: string) =>
+  // LG-6: unavailability blocks any counted service; a rule exclusion blocks weekend services only
+  // (never a special — parent A13), so a Sunday with a counted special stays available to her.
+  const blocked = ({ date, weekend }: OnScreenCountedSunday) =>
     input.liveUnavailable.includes(date) ||
-    item.blocks.some((b) => b.date === date && (b.unavailable || b.excludedRoles.includes("Sun.Lead")));
+    item.blocks.some((b) => b.date === date && (b.unavailable || (weekend && b.excludedRoles.includes("Sun.Lead"))));
   const [state] = cadenceStates({
     ledCountedSundayPreviousMonth: led.length > 0,
     months: [

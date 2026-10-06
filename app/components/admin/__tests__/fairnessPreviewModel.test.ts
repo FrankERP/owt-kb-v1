@@ -190,7 +190,12 @@ describe("the month's on-screen counted Sundays (UI-5)", () => {
         { _type: "special_role", date: "2026-10-23", countsForFairness: true },
         { _type: "sunday_role", date: "2026-11-01" },
       ]),
-    ).toEqual(["2026-10-04", "2026-10-18", "2026-10-18", "2026-10-25"]);
+    ).toEqual([
+      { date: "2026-10-04", weekend: true },
+      { date: "2026-10-18", weekend: true }, // the default weekend service (no stored sunday_role)
+      { date: "2026-10-18", weekend: false }, // the counted special
+      { date: "2026-10-25", weekend: true },
+    ]);
   });
 });
 
@@ -209,7 +214,7 @@ describe("the X1 line (UI-5, CAD-2)", () => {
   });
   const resolved = (patch: object = {}): EligibilityResult => ({ ok: true, body: { month: "2026-11", people: [item(patch)], presence: [] } });
   const diego = person("m-diego", "Diego");
-  const SUNDAYS = ["2026-11-01", "2026-11-08", "2026-11-15", "2026-11-22", "2026-11-29"];
+  const SUNDAYS = ["2026-11-01", "2026-11-08", "2026-11-15", "2026-11-22", "2026-11-29"].map((date) => ({ date, weekend: true }));
   const line = (patch: Partial<Parameters<typeof cadenceLine>[0]> = {}) =>
     cadenceLine({ person: diego, response: response([diego]), month: "2026-11", resolved: resolved(), countedSundays: SUNDAYS, liveUnavailable: [], ...patch });
 
@@ -224,9 +229,28 @@ describe("the X1 line (UI-5, CAD-2)", () => {
   });
 
   it("rests with no available Sunday, a rule-excluded Sunday counting as unavailable (A14)", () => {
-    const blocks = SUNDAYS.map((date, i) => ({ date, unavailable: i < 4, excludedRoles: i === 4 ? (["Sun.Lead"] as RoleKey[]) : [] }));
+    const blocks = SUNDAYS.map(({ date }, i) => ({ date, unavailable: i < 4, excludedRoles: i === 4 ? (["Sun.Lead"] as RoleKey[]) : [] }));
     expect(line({ resolved: resolved({ blocks }) })).toBe("En nov descansa: ningún domingo disponible.");
-    expect(line({ liveUnavailable: SUNDAYS })).toBe("En nov descansa: ningún domingo disponible.");
+    expect(line({ liveUnavailable: SUNDAYS.map((s) => s.date) })).toBe("En nov descansa: ningún domingo disponible.");
+  });
+
+  it("never lets a rule exclusion block a counted special (LG-6, CAD-2): a special on the same Sunday keeps it available", () => {
+    // One Sunday: a stored sunday_role plus a counted Sunday special; Diego is rule-excluded for Sun.Lead that week.
+    const counted = onScreenCountedSundays("2026-11", [
+      ...["2026-11-08", "2026-11-15", "2026-11-22", "2026-11-29"].map((date) => ({ _type: "sunday_role", date, countsForFairness: false })),
+      { _type: "sunday_role", date: "2026-11-01" },
+      { _type: "special_role", date: "2026-11-01", countsForFairness: true },
+    ]);
+    expect(counted).toEqual([{ date: "2026-11-01", weekend: true }, { date: "2026-11-01", weekend: false }]);
+    const blocks = [{ date: "2026-11-01", unavailable: false, excludedRoles: ["Sun.Lead"] as RoleKey[] }];
+    // The weekend service is excluded; the special is not — the spec counts one available Sunday.
+    expect(line({ countedSundays: counted, resolved: resolved({ blocks }) })).toBe("En nov le toca domingo (previsto).");
+    // With only the weekend service the rule exclusion still takes the Sunday away.
+    expect(line({ countedSundays: [counted[0]], resolved: resolved({ blocks }) })).toBe("En nov descansa: ningún domingo disponible.");
+    // And an unavailability still blocks the special too.
+    expect(
+      line({ countedSundays: counted, resolved: resolved({ blocks: [{ ...blocks[0], unavailable: true }] }) }),
+    ).toBe("En nov descansa: ningún domingo disponible.");
   });
 
   it("reads the record when it binds the month (A6), and says nothing when the resolver refuses", () => {

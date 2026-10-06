@@ -469,12 +469,14 @@ else — no other route, page or data path reads this variable.
 
 ---
 
-## `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` — read by the MCP/OAuth routes
+## `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` / `VERCEL_GIT_COMMIT_REF` — read by the MCP/OAuth routes and the solver-engine resolver
 
-**Not secrets, and never configured by hand — Vercel sets both automatically on every
-deployment.** Listed here, config-style, because the MCP/OAuth routes' behavior depends on them
-and an operator debugging a 404 or a stale `ping` version should know they exist rather than
-suspect a missing secret.
+**Not secrets, and never configured by hand — Vercel sets all three automatically on every
+deployment (they are Vercel system variables).** Listed here, config-style, because the MCP/OAuth
+routes' and the solver-engine resolver's behavior depend on them and an operator debugging a 404,
+a stale `ping` version or an unexpected engine should know they exist rather than suspect a
+missing secret. Not needed in GitHub Actions, Cloud Scheduler, the iOS build or GCF; never set
+them in a Vercel dashboard "to be safe".
 
 - **`VERCEL_ENV`** (`production` | `preview` | absent locally) selects this deployment's single
   canonical origin (`app/mcp/oauth/origin.ts`'s `canonicalOrigin`) — production →
@@ -484,6 +486,20 @@ suspect a missing secret.
   or empty) is not that case** — it selects the LOCAL origin, so on a Vercel deployment every
   request still 404s, but because no real `Host` there is `localhost:3000`, not because there is
   no origin. Either way it fails closed, never open. Never set or override this manually.
+  **`VERCEL_ENV` has three readers, with three different mappings** — do not assume one covers the
+  others: (1) `canonicalOrigin` (above); (2) `resolveSolverEngine`
+  (`app/utils/solverDeployment.ts`), which honours `OWT_SOLVER_ENGINE` only when `VERCEL_ENV` is
+  `preview` **and** `VERCEL_GIT_COMMIT_REF` is `preview`, or when `VERCEL_ENV` is absent or empty
+  (local development) — `development`, `production` and any other value answer the
+  `SOLVER_ENGINE` constant; (3) `fairnessRecordEnvironment` (same file), the `environment` stamp
+  of a `fairnessMonth` record: `production` → `production`, `preview` → `preview`, **everything
+  else, `development` included, → `local`** (so here `development` is not «unset» the way it is
+  for the resolver's local path, and not «the constant» either).
+- **`VERCEL_GIT_COMMIT_REF`** — the branch the deployment was built from. Read only by
+  `resolveSolverEngine`, to tell the `preview` branch's dev deployment from other Preview
+  deployments such as `verify/service-readiness` (also `VERCEL_ENV=preview`), which must never
+  honour the override. Set by Vercel; absent locally, which is fine because the local path keys on
+  `VERCEL_ENV` being unset. See the `OWT_SOLVER_ENGINE` entry below.
 - **`VERCEL_GIT_COMMIT_SHA`** — the deployed commit. `ping`'s `version` field reports its first 7
   characters (`"local"` when the variable is absent), so Frank can tell from the phone which
   deployment answered a `ping` call. Not sensitive — the repository is public.
@@ -599,7 +615,7 @@ answer the constant. Both `VERCEL_*` variables are set by Vercel automatically.
 
 **Purpose — what changes with it.** Under `v3`, the planner's «Equidad · vista previa» panel offers
 «Registrar elegibilidad de {mes}» and `PUT /api/admin/fairness/months` accepts writes (under `v2`
-it answers `409 engine_not_v3`); after C6, Auto on that deployment also runs the v3 solver.
+it answers a 409, `details.detail` `engine_not_v3`); after C6, Auto on that deployment also runs the v3 solver.
 Without it (the normal state) the deployment runs the constant's engine.
 
 **Where it comes from.** A literal typed by Frank: Vercel → project `owt-backstage` → Settings →

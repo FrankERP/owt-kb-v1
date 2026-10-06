@@ -34,7 +34,7 @@ against today's rules is the same failure in another form.
   rest; `createOrReplace` is never used. Because its client is injected, the protected-read audit
   gained an executor rule: declaring or calling it is a `protected-write` site.
 - **Freezing services and record binding** (parent A5, A6). A month's freezing services are its
-  stored weekend services and its counted specials. A record exists → a create; a record exists and
+  stored weekend services and its counted specials. No record → a create; a record exists and
   the month has no freezing service → it may be replaced; it has one → the record is frozen (the
   PUT refuses `month_has_services`) and BINDS: the record is what that month was solved with. A
   create never depends on freezing services (A27).
