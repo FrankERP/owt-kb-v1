@@ -88,6 +88,7 @@ function createThroughRoute(draft: CreatableDraft, published: boolean, createdAt
     time: v.time,
     format: v.format,
     published: v.published,
+    countsForFairness: v.countsForFairness,
     seats: v.seats,
     receiptId: v.receiptId,
     fingerprint: v.fingerprint,

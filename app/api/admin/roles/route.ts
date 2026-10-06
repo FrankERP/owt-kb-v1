@@ -229,6 +229,7 @@ async function postHandler(req: NextRequest) {
     time: request.time,
     format: request.format,
     published: request.published,
+    countsForFairness: request.countsForFairness,
     seats: request.seats,
     receiptId: request.receiptId,
     fingerprint: request.fingerprint,

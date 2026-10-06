@@ -315,3 +315,59 @@ describe("payloadFingerprint — frozen pre-C1 literals (solver v3 C1 step zero)
     expect(payloadFingerprint(row.payload)).toBe(row.fingerprint);
   });
 });
+
+describe("countsForFairness in the create fingerprint (solver v3 C1-R4, §5.3.2)", () => {
+  const sunday = FROZEN.sundayFilledPublished;
+  const saturday = FROZEN.saturdayEmptyDraft;
+  const special = FROZEN.specialPlainEmptyDraft;
+
+  it("hashes the type default sent explicitly exactly like the frozen pre-C1 literal", () => {
+    expect(payloadFingerprint({ ...sunday.payload, countsForFairness: true })).toBe(sunday.fingerprint);
+    expect(payloadFingerprint({ ...saturday.payload, countsForFairness: true })).toBe(saturday.fingerprint);
+    expect(payloadFingerprint({ ...special.payload, countsForFairness: false })).toBe(special.fingerprint);
+  });
+
+  it("leaves the key out of the canonical value at the default", () => {
+    expect("countsForFairness" in canonicalizeCreatePayload({ ...sunday.payload, countsForFairness: true }).canonical).toBe(false);
+    expect("countsForFairness" in canonicalizeCreatePayload({ ...special.payload, countsForFairness: false }).canonical).toBe(false);
+  });
+
+  it("changes the hash for an off-default value and keeps the version at 1", () => {
+    const off = canonicalizeCreatePayload({ ...sunday.payload, countsForFairness: false });
+    expect(off.valid).toBe(true);
+    expect(off.canonical.v).toBe(1);
+    expect(off.canonical.countsForFairness).toBe(false);
+    expect(payloadFingerprint({ ...sunday.payload, countsForFairness: false })).not.toBe(sunday.fingerprint);
+
+    const on = canonicalizeCreatePayload({ ...special.payload, countsForFairness: true });
+    expect(on.valid).toBe(true);
+    expect(on.canonical.countsForFairness).toBe(true);
+    expect(payloadFingerprint({ ...special.payload, countsForFairness: true })).not.toBe(special.fingerprint);
+  });
+
+  it.each([
+    ["null", null],
+    ['the string "true"', "true"],
+    ["the number 1", 1],
+    ["an object", {}],
+  ])("refuses %s as issue countsForFairness, deterministically and without throwing", (_label, value) => {
+    const result = canonicalizeCreatePayload({ ...sunday.payload, countsForFairness: value });
+    expect(result.valid).toBe(false);
+    expect(result.issues).toContain("countsForFairness");
+    expect("countsForFairness" in result.canonical).toBe(false);
+    expect(payloadFingerprint({ ...sunday.payload, countsForFairness: value })).toBe(
+      payloadFingerprint({ ...sunday.payload, countsForFairness: value }),
+    );
+  });
+
+  it("leaves the key out when the role type or the date is invalid (the payload is refused anyway)", () => {
+    expect("countsForFairness" in canonicalizeCreatePayload({ ...sunday.payload, _type: "post", countsForFairness: false }).canonical).toBe(false);
+    expect("countsForFairness" in canonicalizeCreatePayload({ ...sunday.payload, date: "2026-02-30", countsForFairness: false }).canonical).toBe(false);
+  });
+
+  it("refuses no pre-C1 payload: every frozen row still canonicalizes valid", () => {
+    for (const [label, row] of Object.entries(FROZEN)) {
+      expect(canonicalizeCreatePayload(row.payload).valid, label).toBe(true);
+    }
+  });
+});

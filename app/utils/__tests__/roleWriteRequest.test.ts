@@ -117,6 +117,7 @@ describe("stored document shapes", () => {
       time: null,
       format: null,
       published: true,
+      countsForFairness: true,
       seats: normalizeSeats(createBody()),
       receiptId: "roleCreate.abc",
       fingerprint: "fp",
@@ -695,9 +696,9 @@ describe("special-service time", () => {
   it("document and patch: time is written only when present, and unset when absent", () => {
     const seats = normalizeSeats(special());
     const nextKey = () => "k";
-    const withTime = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", format: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
+    const withTime = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", format: null, published: false, countsForFairness: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
     expect(withTime.time).toBe("09:00");
-    const without = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, format: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
+    const without = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, format: null, published: false, countsForFairness: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
     expect("time" in without).toBe(false);
 
     const patchWith = buildRoleEditPatch({ roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", seats, nextKey });
@@ -753,7 +754,7 @@ describe("special-service format", () => {
   it("document: format is written only for a special that carries it", () => {
     const seats = normalizeSeats(special());
     const nextKey = () => "k";
-    const common = { roleId: "special_role.x", date: "2026-10-03", serviceName: "X", time: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey } as const;
+    const common = { roleId: "special_role.x", date: "2026-10-03", serviceName: "X", time: null, published: false, countsForFairness: false, seats, receiptId: "rc", fingerprint: "fp", nextKey } as const;
     expect(buildRoleDocument({ ...common, roleType: "special_role", format: "worship_night" }).format).toBe("worship_night");
     expect("format" in buildRoleDocument({ ...common, roleType: "special_role", format: null })).toBe(false);
   });
@@ -763,5 +764,50 @@ describe("special-service format", () => {
     const patch = buildRoleEditPatch({ roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, seats, nextKey: () => "k" });
     expect("format" in patch.set).toBe(false);
     expect(patch.unset).not.toContain("format");
+  });
+});
+
+describe("countsForFairness on create (solver v3 C1-R3)", () => {
+  it.each([
+    ["sunday_role", {}, true],
+    ["saturday_role", {}, true],
+    ["special_role", { service_name: "Vigilia" }, false],
+  ] as const)("an absent value on %s parses to the type default", (type, extra, expected) => {
+    const parsed = parseCreateRequest(createBody({ _type: type, ...extra }));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.value.countsForFairness).toBe(expected);
+  });
+
+  it.each([true, false])("an explicit %s parses through unchanged", (value) => {
+    const parsed = parseCreateRequest(createBody({ countsForFairness: value }));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.value.countsForFairness).toBe(value);
+  });
+
+  it.each([null, "true", 1])("refuses %s with the single issue countsForFairness", (value) => {
+    expect(parseCreateRequest(createBody({ countsForFairness: value }))).toEqual({
+      ok: false,
+      issues: ["countsForFairness"],
+    });
+  });
+
+  it("stores the explicit effective boolean on the document (C1-D4)", () => {
+    for (const value of [true, false]) {
+      const doc = buildRoleDocument({
+        roleId: "role-9",
+        roleType: "sunday_role",
+        date: "2026-08-09",
+        serviceName: null,
+        time: null,
+        format: null,
+        published: false,
+        countsForFairness: value,
+        seats: normalizeSeats(createBody()),
+        receiptId: "roleCreate.abc",
+        fingerprint: "fp",
+        nextKey: () => "k",
+      });
+      expect(doc.countsForFairness).toBe(value);
+    }
   });
 });

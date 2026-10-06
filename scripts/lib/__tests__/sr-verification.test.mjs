@@ -525,6 +525,12 @@ describe("mirror parity — the .mjs derivations match the TypeScript helpers", 
     { _type: "not_a_role", date: "2026-08-02" },
     { _type: "sunday_role", date: "not-a-date" },
     { _type: "sunday_role", date: "2026-08-02", service_name: "stray" }, // weekend roles ignore service_name
+    // Solver v3 C1: the type default sent explicitly — weekend `true`, special `false` —
+    // enters neither canonical value, so both copies hash it like an absent field.
+    // The mirror does not model an OFF-default value, as it does not model time/format.
+    { _type: "sunday_role", date: "2026-08-02", countsForFairness: true },
+    { _type: "saturday_role", date: "2026-08-01", countsForFairness: true },
+    { _type: "special_role", date: "2026-09-12", service_name: "Vigilia", countsForFairness: false },
   ];
 
   it("mirrorPayloadFingerprint === payloadFingerprint over a table of payloads", () => {
@@ -534,6 +540,20 @@ describe("mirror parity — the .mjs derivations match the TypeScript helpers", 
   it("mirrorCanonicalCreatePayload === canonicalizeCreatePayload(...).canonical", () => {
     for (const p of payloads) {
       expect(mirrorCanonicalCreatePayload(p)).toEqual(canonicalizeCreatePayload(p).canonical);
+    }
+  });
+
+  it("hashes a default-valued countsForFairness like an absent one, in both copies (C1 §5.3.2)", () => {
+    const pairs = [
+      [{ _type: "sunday_role", date: "2026-08-02" }, { _type: "sunday_role", date: "2026-08-02", countsForFairness: true }],
+      [
+        { _type: "special_role", date: "2026-09-12", service_name: "Vigilia" },
+        { _type: "special_role", date: "2026-09-12", service_name: "Vigilia", countsForFairness: false },
+      ],
+    ];
+    for (const [absent, explicit] of pairs) {
+      expect(payloadFingerprint(explicit)).toBe(payloadFingerprint(absent));
+      expect(mirrorPayloadFingerprint(explicit)).toBe(mirrorPayloadFingerprint(absent));
     }
   });
 

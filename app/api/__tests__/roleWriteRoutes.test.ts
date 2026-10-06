@@ -966,6 +966,81 @@ describe("POST /api/admin/roles — create", () => {
 
 // ── Edit ────────────────────────────────────────────────────────────────────
 
+describe("POST /api/admin/roles — countsForFairness (solver v3 C1 §5.3)", () => {
+  function createdRole(type: string): Record<string, unknown> {
+    const op = committedTransactions()[0]?.ops.find((o) => o.kind === "create" && o.doc._type === type);
+    if (!op || op.kind !== "create") throw new Error(`no created ${type}`);
+    return op.doc;
+  }
+
+  it.each([
+    ["sunday_role", {}, true],
+    ["saturday_role", { date: "2026-08-08" }, true],
+    ["special_role", { service_name: "Bautizos" }, false],
+  ] as const)("stores the type default on a %s whose body omits the field", async (type, extra, expected) => {
+    const res = await createPOST(req(createBody({ _type: type, ...extra, creationRequestId: `req-cff-${type}` })));
+    expect(res.status).toBe(201);
+    expect(createdRole(type).countsForFairness).toBe(expected);
+  });
+
+  it.each([true, false])("stores an explicit %s", async (value) => {
+    const res = await createPOST(req(createBody({ countsForFairness: value, creationRequestId: `req-cff-explicit-${value}` })));
+    expect(res.status).toBe(201);
+    expect(createdRole("sunday_role").countsForFairness).toBe(value);
+  });
+
+  it.each([
+    ["null", null],
+    ['the string "true"', "true"],
+    ["the number 1", 1],
+  ])("refuses %s with 400 before any read, writing no receipt, role or lock", async (_label, value) => {
+    const res = await createPOST(req(createBody({ countsForFairness: value })));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "invalid_request", details: { issues: ["countsForFairness"] } });
+    expect(operationalFetch).not.toHaveBeenCalled();
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("replays a receipt written for the same off-default value, with no writes", async () => {
+    store.receipts.push(receipt({ fingerprint: payloadFingerprint(createBody({ countsForFairness: false })) }));
+    store.roles.push(role({ countsForFairness: false }));
+    const res = await createPOST(req(createBody({ countsForFairness: false })));
+    expect(res.status).toBe(200);
+    expect((await res.json()).replay).toBe(true);
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("replays a pre-C1 receipt for a retry that now sends the type default explicitly", async () => {
+    store.receipts.push(receipt());
+    store.roles.push(role());
+    const res = await createPOST(req(createBody({ countsForFairness: true })));
+    expect(res.status).toBe(200);
+    expect((await res.json()).replay).toBe(true);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("refuses the same request id with the toggle flipped as idempotency_mismatch — never a silent replay", async () => {
+    store.receipts.push(receipt({ fingerprint: payloadFingerprint(createBody({ countsForFairness: false })) }));
+    store.roles.push(role({ countsForFairness: false }));
+    for (const flipped of [createBody(), createBody({ countsForFairness: true })]) {
+      const res = await createPOST(req(flipped));
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toBe("idempotency_mismatch");
+    }
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("pushes and queues exactly as a toggle-less create does", async () => {
+    await createPOST(req(createBody({ published: true, countsForFairness: false })));
+    await drainAfter();
+    expect(sendPushMock).toHaveBeenCalledWith(["mem-1", "mem-2"], "assignments", expect.anything());
+    expect(queuedMemberIds()).toEqual(["mem-1", "mem-2"]);
+  });
+});
+
+
 describe("PATCH /api/admin/roles/[id] — edit", () => {
   function editBody(over: Record<string, unknown> = {}) {
     return {

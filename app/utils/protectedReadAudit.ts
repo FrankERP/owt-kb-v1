@@ -179,7 +179,7 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     file: "app/api/admin/roles/route.ts",
     operation: "POST",
     reason:
-      "guarded role create: one transaction creates the deterministic roleCreationReceipt, the role, and the claimed/reclaimed weekend roleTargetLock (A2 §2)",
+      "guarded role create: one transaction creates the deterministic roleCreationReceipt, the role, and the claimed/reclaimed weekend roleTargetLock (A2 §2); the role always stores the effective countsForFairness boolean, and the fingerprint carries it only off the type default (solver v3 C1)",
     removalOwner: "permanent runtime writer (never removed — the create surface itself)",
   },
   {

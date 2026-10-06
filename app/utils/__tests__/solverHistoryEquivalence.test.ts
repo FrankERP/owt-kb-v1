@@ -89,6 +89,7 @@ function storedDocument(d: DraftCard, published: boolean): Record<string, unknow
     time: v.time,
     format: v.format,
     published: v.published,
+    countsForFairness: v.countsForFairness,
     seats: v.seats,
     receiptId: v.receiptId,
     fingerprint: v.fingerprint,

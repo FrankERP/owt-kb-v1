@@ -20,6 +20,7 @@ import { ROLE_TYPES, isValidServiceDate, type RoleType } from "./serviceReadMode
 import { serviceDayKey } from "./serviceReadSelect";
 import { isServiceTime } from "./serviceTime";
 import type { ServiceFormat } from "./serviceFormat";
+import { countsForFairnessDefault } from "./countsForFairness";
 import {
   ROLE_CREATION_RECEIPT_TYPE,
   canonicalizeCreatePayload,
@@ -208,6 +209,8 @@ export function buildRoleDocument(input: {
   time: string | null;
   format: ServiceFormat | null;
   published: boolean;
+  /** The EFFECTIVE «Cuenta para equidad»: always stored explicitly (C1-D4). */
+  countsForFairness: boolean;
   seats: NormalizedSeats;
   receiptId: string;
   fingerprint: string;
@@ -222,6 +225,7 @@ export function buildRoleDocument(input: {
     ...(input.roleType === "special_role" && input.format ? { format: input.format } : {}),
     ...seatFields(input.seats, input.nextKey),
     published: input.published,
+    countsForFairness: input.countsForFairness,
     // Forward link to the idempotency tombstone. The receipt's own `roleId`
     // stays authoritative; this is not a second copy of the request key.
     creationReceiptId: input.receiptId,
@@ -268,6 +272,8 @@ export interface ParsedCreateRequest {
   time: string | null;
   format: ServiceFormat | null;
   published: boolean;
+  /** The request's «Cuenta para equidad», else the type default (C1-D4). */
+  countsForFairness: boolean;
   seats: NormalizedSeats;
   /** Deterministic weekend lock id; null for a special service. */
   lockId: string | null;
@@ -310,6 +316,10 @@ export function parseCreateRequest(body: unknown): ParseResult<ParsedCreateReque
       time: canonical.time ?? null,
       format: canonical.format ?? null,
       published: canonical.published,
+      countsForFairness:
+        typeof payload.countsForFairness === "boolean"
+          ? payload.countsForFairness
+          : countsForFairnessDefault(roleType),
       seats: normalizeSeats(payload),
       lockId: roleTargetLockId(`${roleType}:${canonical.date}`),
       targetKey,
