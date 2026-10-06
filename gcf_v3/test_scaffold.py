@@ -15,7 +15,7 @@ class ScaffoldImports(unittest.TestCase):
         import owt_v3
         from ortools.sat.python import cp_model
 
-        self.assertEqual(owt_v3.__name__, "owt_v3")
+        self.assertEqual(owt_v3.__name__, "deliberately-red")
         self.assertTrue(hasattr(cp_model, "CpModel"))
 
 
