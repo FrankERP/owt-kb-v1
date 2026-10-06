@@ -1,0 +1,2232 @@
+{
+  "$comment": "Solver v3 golden fixture (C2 IF2-29, FX-1 to FX-5). Every person and id here is FICTITIOUS - this repository is public, and code review enforces it (FX-5). Expected values are HAND-COMPUTED and reviewed; no suite regenerates them. units: every expected figure (share, received = 100 x seats, balance = share - received) is integer hundredths of a seat, positive = owed. A ledger case's expected.months lists, per month, every member with at least one line that month, and every such line: a member has a line in a month iff she was in that line's population (normal or presence) at least once that month; figures may be zero. windowTotals is the same over the window's months. setAsides is every set-aside of the window's months. notes lists the notes a case is about (each must be emitted; others may be too). plan cases are reserved for C5. The one key outside IF2-29's shape is this $comment, which both suites ignore.",
+  "schemaVersion": 1,
+  "units": "hundredths",
+  "sign": "positive_owed",
+  "cases": [
+    {
+      "id": "uneven-division-sum-to-zero",
+      "kind": "ledger",
+      "description": "Two Sunday services, each with 2 BGV seats among Alma, Bruno and Carmen: every share is 2/3 + 2/3 = 4/3 -> 133. Alma sat both (received 200, balance -67); Bruno and Carmen one each (balance 33). Exact balances sum to 0 per service; the rounded ones sum to -1.",
+      "covers": ["LG-10", "LG-13", "sum-to-zero", "uneven-division"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-alma", "m-bruno"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-alma", "m-carmen"], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"BGV": {"share": 133, "received": 200, "balance": -67}},
+            "m-bruno": {"BGV": {"share": 133, "received": 100, "balance": 33}},
+            "m-carmen": {"BGV": {"share": 133, "received": 100, "balance": 33}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"BGV": {"share": 133, "received": 200, "balance": -67}},
+          "m-bruno": {"BGV": {"share": 133, "received": 100, "balance": 33}},
+          "m-carmen": {"BGV": {"share": 133, "received": 100, "balance": 33}}
+        },
+        "setAsides": [],
+        "notes": []
+      }
+    },
+    {
+      "id": "unavailable-union",
+      "kind": "ledger",
+      "description": "Alma is unavailable on 4 Oct by the record's block, Bruno on 11 Oct by his live unavailableDates only (his live 20 Oct has no service). Each Sunday: 2 BGV seats (Carmen, Diego) among the 3 available -> 2/3. Alma and Bruno: share 2/3 -> 67, nothing received, balance 67; Carmen and Diego: 4/3 -> 133, received 200, balance -67. No floor: Alma and Bruno received nothing, Carmen and Diego are at 4/3.",
+      "covers": ["LG-6", "unavailable-record", "unavailable-live"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": [{"date": "2026-10-04", "unavailable": true, "excludedRoles": []}]
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-diego",
+                "name": "Diego",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-carmen", "m-diego"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-carmen", "m-diego"], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": ["2026-10-11", "2026-10-20"]},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []},
+          {"id": "m-diego", "name": "Diego", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"BGV": {"share": 67, "received": 0, "balance": 67}},
+            "m-bruno": {"BGV": {"share": 67, "received": 0, "balance": 67}},
+            "m-carmen": {"BGV": {"share": 133, "received": 200, "balance": -67}},
+            "m-diego": {"BGV": {"share": 133, "received": 200, "balance": -67}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"BGV": {"share": 67, "received": 0, "balance": 67}},
+          "m-bruno": {"BGV": {"share": 67, "received": 0, "balance": 67}},
+          "m-carmen": {"BGV": {"share": 133, "received": 200, "balance": -67}},
+          "m-diego": {"BGV": {"share": 133, "received": 200, "balance": -67}}
+        },
+        "setAsides": [],
+        "notes": [
+          {"month": "2026-10", "memberId": "m-alma", "note": {"code": "unavailable", "dates": ["2026-10-04"]}},
+          {"month": "2026-10", "memberId": "m-bruno", "note": {"code": "unavailable", "dates": ["2026-10-11"]}}
+        ]
+      }
+    },
+    {
+      "id": "unrecorded-window-month",
+      "kind": "ledger",
+      "description": "September has a seat but no record: it contributes nothing and reads recorded false. October: Alma and Bruno split two Sunday Lead seats, 1/2 each per service -> share 100 each, one seat each, balance 0.",
+      "covers": ["LG-3", "unrecorded-month"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-0906", "_type": "sunday_role", "date": "2026-09-06", "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []}
+        ],
+        "members": [{"id": "m-alma", "name": "Alma", "unavailableDates": []}, {"id": "m-bruno", "name": "Bruno", "unavailableDates": []}]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {"m-alma": {"DL": {"share": 100, "received": 100, "balance": 0}}, "m-bruno": {"DL": {"share": 100, "received": 100, "balance": 0}}}
+        },
+        "windowTotals": {"m-alma": {"DL": {"share": 100, "received": 100, "balance": 0}}, "m-bruno": {"DL": {"share": 100, "received": 100, "balance": 0}}},
+        "setAsides": [],
+        "notes": [{"month": "2026-09", "memberId": "m-alma", "note": {"code": "unrecorded_month"}}]
+      }
+    },
+    {
+      "id": "not-in-record-seat",
+      "kind": "ledger",
+      "description": "Carmen is not listed in October; her Choir seat on 4 Oct is set aside not_in_record and leaves the pool: 1 seat among Alma and Bruno there (1/2 each), then 2 seats among them on 11 Oct (1 each). Alma: 3/2 -> 150, received 200, balance -50; Bruno: 150, 100, 50.",
+      "covers": ["LG-5", "LG-9", "not-in-record"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": [], "Chorus": ["m-alma", "m-carmen"]},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": [], "Chorus": ["m-alma", "m-bruno"]}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {"m-alma": {"CORO": {"share": 150, "received": 200, "balance": -50}}, "m-bruno": {"CORO": {"share": 150, "received": 100, "balance": 50}}}
+        },
+        "windowTotals": {
+          "m-alma": {"CORO": {"share": 150, "received": 200, "balance": -50}},
+          "m-bruno": {"CORO": {"share": 150, "received": 100, "balance": 50}}
+        },
+        "setAsides": [{"serviceId": "sun-1004", "roleKey": "Sun.Choir", "memberId": "m-carmen", "reason": "not_in_record"}],
+        "notes": [{"month": "2026-10", "memberId": "m-carmen", "note": {"code": "not_listed"}}]
+      }
+    },
+    {
+      "id": "listed-out-then-back",
+      "kind": "ledger",
+      "description": "September lists Carmen with Sun.Lead out: she has no DL line there while Alma and Bruno split two Lead seats (1/2 each per Sunday -> 100 each, one seat each). October lists all three in: three Sundays, 1/3 each -> 100 each; Carmen led twice (-100), Alma once (0), Bruno none (100).",
+      "covers": ["LG-5", "LG-8", "R8", "D7", "role-out"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-09",
+            "rev": "rev-2026-09",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-09-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          },
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-0906", "_type": "sunday_role", "date": "2026-09-06", "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-0913", "_type": "sunday_role", "date": "2026-09-13", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": ["m-carmen"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": ["m-carmen"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1018", "_type": "sunday_role", "date": "2026-10-18", "Lead": ["m-alma"], "BGVs": [], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": true}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-09": {"m-alma": {"DL": {"share": 100, "received": 100, "balance": 0}}, "m-bruno": {"DL": {"share": 100, "received": 100, "balance": 0}}},
+          "2026-10": {
+            "m-alma": {"DL": {"share": 100, "received": 100, "balance": 0}},
+            "m-bruno": {"DL": {"share": 100, "received": 0, "balance": 100}},
+            "m-carmen": {"DL": {"share": 100, "received": 200, "balance": -100}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"DL": {"share": 200, "received": 200, "balance": 0}},
+          "m-bruno": {"DL": {"share": 200, "received": 100, "balance": 100}},
+          "m-carmen": {"DL": {"share": 100, "received": 200, "balance": -100}}
+        },
+        "setAsides": [],
+        "notes": [{"month": "2026-09", "memberId": "m-carmen", "note": {"code": "role_out", "line": "DL"}}]
+      }
+    },
+    {
+      "id": "outside-population-seat",
+      "kind": "ledger",
+      "description": "Carmen is listed with every role out but sat a BGV seat on 4 Oct: it is set aside outside_population. 1 seat among Alma and Bruno on 4 Oct (1/2 each), 2 on 11 Oct (1 each). Alma 150/200/-50, Bruno 150/100/50; Carmen is in no population and has no line.",
+      "covers": ["LG-8", "LG-9", "outside-population"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-alma", "m-carmen"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-bruno", "m-alma"], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {"m-alma": {"BGV": {"share": 150, "received": 200, "balance": -50}}, "m-bruno": {"BGV": {"share": 150, "received": 100, "balance": 50}}}
+        },
+        "windowTotals": {"m-alma": {"BGV": {"share": 150, "received": 200, "balance": -50}}, "m-bruno": {"BGV": {"share": 150, "received": 100, "balance": 50}}},
+        "setAsides": [{"serviceId": "sun-1004", "roleKey": "Sun.BGV", "memberId": "m-carmen", "reason": "outside_population"}],
+        "notes": [
+          {"month": "2026-10", "memberId": "m-carmen", "note": {"code": "outside_population", "line": "BGV", "dates": ["2026-10-04"]}},
+          {"month": "2026-10", "memberId": "m-carmen", "note": {"code": "role_out", "line": "BGV"}}
+        ]
+      }
+    },
+    {
+      "id": "exact-rule-and-clamp",
+      "kind": "ledger",
+      "description": "Alma has Sun.Lead == 2 both months; her Lead seats are set aside exact and she is in no DL population. September: Bruno and Carmen split the two other Lead seats, 1/2 each per Sunday -> 100 each, one seat each. October: Alma is blocked on three Sundays, so 2 > 1 available -> exact_clamped; of three non-Alma Sundays Bruno led two (share 3/2 -> 150, 200, -50) and Carmen one (150, 100, 50); 4 Oct's pool is 0.",
+      "covers": ["LG-9", "LG-17", "exact", "exact-clamped"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-09",
+            "rev": "rev-2026-09",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-09-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "exact", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [{"roles": ["Sun.Lead"], "count": 2}],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          },
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "exact", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [{"roles": ["Sun.Lead"], "count": 2}],
+                "exempt": false,
+                "blocks": [
+                  {"date": "2026-10-11", "unavailable": true, "excludedRoles": []},
+                  {"date": "2026-10-18", "unavailable": true, "excludedRoles": []},
+                  {"date": "2026-10-25", "unavailable": true, "excludedRoles": []}
+                ]
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-0906", "_type": "sunday_role", "date": "2026-09-06", "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-0913", "_type": "sunday_role", "date": "2026-09-13", "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-0920", "_type": "sunday_role", "date": "2026-09-20", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-0927", "_type": "sunday_role", "date": "2026-09-27", "Lead": ["m-carmen"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1018", "_type": "sunday_role", "date": "2026-10-18", "Lead": ["m-carmen"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1025", "_type": "sunday_role", "date": "2026-10-25", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": true}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-09": {"m-bruno": {"DL": {"share": 100, "received": 100, "balance": 0}}, "m-carmen": {"DL": {"share": 100, "received": 100, "balance": 0}}},
+          "2026-10": {"m-bruno": {"DL": {"share": 150, "received": 200, "balance": -50}}, "m-carmen": {"DL": {"share": 150, "received": 100, "balance": 50}}}
+        },
+        "windowTotals": {"m-bruno": {"DL": {"share": 250, "received": 300, "balance": -50}}, "m-carmen": {"DL": {"share": 250, "received": 200, "balance": 50}}},
+        "setAsides": [
+          {"serviceId": "sun-0906", "roleKey": "Sun.Lead", "memberId": "m-alma", "reason": "exact"},
+          {"serviceId": "sun-0913", "roleKey": "Sun.Lead", "memberId": "m-alma", "reason": "exact"},
+          {"serviceId": "sun-1004", "roleKey": "Sun.Lead", "memberId": "m-alma", "reason": "exact"}
+        ],
+        "notes": [
+          {"month": "2026-09", "memberId": "m-alma", "note": {"code": "exact", "roles": ["Sun.Lead"], "count": 2}},
+          {"month": "2026-10", "memberId": "m-alma", "note": {"code": "exact", "roles": ["Sun.Lead"], "count": 2}},
+          {"month": "2026-10", "memberId": "m-alma", "note": {"code": "exact_clamped", "count": 2, "available": 1}}
+        ]
+      }
+    },
+    {
+      "id": "exact-seat-leaves-other-population",
+      "kind": "ledger",
+      "description": "Alma has Sun.Lead == 1 and Sun.BGV in. On 4 Oct she holds the exact Lead seat, so she is out of that service's BGV population (F6): 2 BGV seats among Bruno and Carmen (1 each). On 11 Oct 2 BGV seats among all three (2/3 each). Alma 2/3 -> 67, received 100, -33 (her exact seat cancels the floor); Bruno 5/3 -> 167, 200, -33; Carmen 167, 100, 67.",
+      "covers": ["LG-8", "F6", "exact-seat-population", "floor-cancelled-exact"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "exact", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [{"roles": ["Sun.Lead"], "count": 1}],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": ["m-alma"], "BGVs": ["m-bruno", "m-carmen"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-alma", "m-bruno"], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"BGV": {"share": 67, "received": 100, "balance": -33}},
+            "m-bruno": {"BGV": {"share": 167, "received": 200, "balance": -33}},
+            "m-carmen": {"BGV": {"share": 167, "received": 100, "balance": 67}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"BGV": {"share": 67, "received": 100, "balance": -33}},
+          "m-bruno": {"BGV": {"share": 167, "received": 200, "balance": -33}},
+          "m-carmen": {"BGV": {"share": 167, "received": 100, "balance": 67}}
+        },
+        "setAsides": [{"serviceId": "sun-1004", "roleKey": "Sun.Lead", "memberId": "m-alma", "reason": "exact"}],
+        "notes": [{"month": "2026-10", "memberId": "m-alma", "note": {"code": "exact", "roles": ["Sun.Lead"], "count": 1}}]
+      }
+    },
+    {
+      "id": "cadence-sundays-and-saturday",
+      "kind": "ledger",
+      "description": "Alma is «Mes por medio»: no DL population, and her Sunday Lead seat (6 Sep) is set aside cadence. September: Bruno alone in DL takes the other Sunday (100/100/0); one Saturday Lead seat (Bruno) among Alma and Bruno -> 1/2 each: Alma 50/0/50, Bruno 50/100/-50. October she leads no Sunday and leads the 10 Oct Saturday, which counts in SL: two Saturdays, 1/2 each per Saturday -> 100 each, one seat each; Bruno takes both Sundays (200/200/0).",
+      "covers": ["LG-8", "LG-9", "F7", "cadence-set-aside", "cadence-no-sunday-saturday"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-09",
+            "rev": "rev-2026-09",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-09-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "in", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "sundayCadence": "alternate",
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "in", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          },
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "in", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "sundayCadence": "alternate",
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "in", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-0906", "_type": "sunday_role", "date": "2026-09-06", "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-0913", "_type": "sunday_role", "date": "2026-09-13", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []},
+          {"_id": "sat-0912", "_type": "saturday_role", "date": "2026-09-12", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []},
+          {"_id": "sat-1010", "_type": "saturday_role", "date": "2026-10-10", "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {"_id": "sat-1017", "_type": "saturday_role", "date": "2026-10-17", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []}
+        ],
+        "members": [{"id": "m-alma", "name": "Alma", "unavailableDates": []}, {"id": "m-bruno", "name": "Bruno", "unavailableDates": []}]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": true}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-09": {
+            "m-alma": {"SL": {"share": 50, "received": 0, "balance": 50}},
+            "m-bruno": {"DL": {"share": 100, "received": 100, "balance": 0}, "SL": {"share": 50, "received": 100, "balance": -50}}
+          },
+          "2026-10": {
+            "m-alma": {"SL": {"share": 100, "received": 100, "balance": 0}},
+            "m-bruno": {"DL": {"share": 200, "received": 200, "balance": 0}, "SL": {"share": 100, "received": 100, "balance": 0}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"SL": {"share": 150, "received": 100, "balance": 50}},
+          "m-bruno": {"DL": {"share": 300, "received": 300, "balance": 0}, "SL": {"share": 150, "received": 200, "balance": -50}}
+        },
+        "setAsides": [{"serviceId": "sun-0906", "roleKey": "Sun.Lead", "memberId": "m-alma", "reason": "cadence"}],
+        "notes": [
+          {"month": "2026-09", "memberId": "m-alma", "note": {"code": "cadence_set_aside", "line": "DL", "dates": ["2026-09-06"]}},
+          {"month": "2026-10", "memberId": "m-alma", "note": {"code": "cadence_no_sunday_saturday", "line": "SL", "dates": ["2026-10-10"]}}
+        ]
+      }
+    },
+    {
+      "id": "presence-non-exclusive",
+      "kind": "ledger",
+      "description": "Non-exclusive presence rule-ab (Sun.BGV; Alma, Bruno). 4 Oct: Alma's seat is the presence seat (sub-line 1/2 each) and Carmen's and Diego's are normal (2 among 4 -> 1/2 each). 11 Oct: Bruno's seat is the presence seat, Carmen's normal (1/4 each). 18 Oct: Alma is unavailable, so Bruno is the only member of Q and leaves every normal population there (his Choir too): no presence seat (pool 0), Diego's BGV seat among Carmen and Diego (1/2 each), Carmen's Choir seat among Carmen alone. BGV: Alma and Bruno 3/4 -> 75/0/75; Carmen and Diego 5/4 -> 125/200/-75. P:rule-ab: Alma and Bruno 1 -> 100/100/0. CORO: Bruno 0/0/0 (in the Choir population on 4 and 11 Oct, whose pool is 0), Carmen 100/100/0.",
+      "covers": ["LG-7", "LG-8", "LG-10", "presence-both-available", "presence-one-available", "presence-non-exclusive"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": [{"date": "2026-10-18", "unavailable": true, "excludedRoles": []}]
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-diego",
+                "name": "Diego",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": [{"ruleKey": "rule-ab", "roles": ["Sun.BGV"], "members": ["m-alma", "m-bruno"], "exclusive": false}]
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-alma", "m-carmen", "m-diego"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-bruno", "m-carmen"], "Chorus": []},
+          {"_id": "sun-1018", "_type": "sunday_role", "date": "2026-10-18", "Lead": [], "BGVs": ["m-diego"], "Chorus": ["m-carmen"]}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []},
+          {"id": "m-diego", "name": "Diego", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"BGV": {"share": 75, "received": 0, "balance": 75}, "P:rule-ab": {"share": 100, "received": 100, "balance": 0}},
+            "m-bruno": {
+              "BGV": {"share": 75, "received": 0, "balance": 75},
+              "CORO": {"share": 0, "received": 0, "balance": 0},
+              "P:rule-ab": {"share": 100, "received": 100, "balance": 0}
+            },
+            "m-carmen": {"BGV": {"share": 125, "received": 200, "balance": -75}, "CORO": {"share": 100, "received": 100, "balance": 0}},
+            "m-diego": {"BGV": {"share": 125, "received": 200, "balance": -75}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"BGV": {"share": 75, "received": 0, "balance": 75}, "P:rule-ab": {"share": 100, "received": 100, "balance": 0}},
+          "m-bruno": {
+            "BGV": {"share": 75, "received": 0, "balance": 75},
+            "CORO": {"share": 0, "received": 0, "balance": 0},
+            "P:rule-ab": {"share": 100, "received": 100, "balance": 0}
+          },
+          "m-carmen": {"BGV": {"share": 125, "received": 200, "balance": -75}, "CORO": {"share": 100, "received": 100, "balance": 0}},
+          "m-diego": {"BGV": {"share": 125, "received": 200, "balance": -75}}
+        },
+        "setAsides": [],
+        "notes": [
+          {"month": "2026-10", "memberId": "m-alma", "note": {"code": "presence", "line": "P:rule-ab", "ruleKey": "rule-ab", "members": ["m-alma", "m-bruno"]}}
+        ]
+      }
+    },
+    {
+      "id": "presence-exclusive-broken",
+      "kind": "ledger",
+      "description": "Exclusive rule-x (Sun.BGV; Alma, Bruno) — they should never serve together, but on 4 Oct both hold BGV seats: Alma's (lower id) is the presence seat, Bruno is out of the normal population (exclusive), so his seat is set aside outside_population; Carmen's seat is normal (1 among Carmen). Alma's combined share is 1/2 < 1 with one received seat and no fixed seat, so that presence seat is her floor seat and the sub-line's pool becomes 0. 11 Oct: no presence seat; Carmen's seat normal. Result: Alma and Bruno P:rule-x 0/0/0; Carmen BGV 200/200/0.",
+      "covers": ["LG-7", "LG-8", "LG-9", "LG-11", "presence-exclusive", "presence-broken-exclusive", "floor-presence-seat"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": [{"ruleKey": "rule-x", "roles": ["Sun.BGV"], "members": ["m-alma", "m-bruno"], "exclusive": true}]
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-bruno", "m-alma", "m-carmen"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-carmen"], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"P:rule-x": {"share": 0, "received": 0, "balance": 0}},
+            "m-bruno": {"P:rule-x": {"share": 0, "received": 0, "balance": 0}},
+            "m-carmen": {"BGV": {"share": 200, "received": 200, "balance": 0}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"P:rule-x": {"share": 0, "received": 0, "balance": 0}},
+          "m-bruno": {"P:rule-x": {"share": 0, "received": 0, "balance": 0}},
+          "m-carmen": {"BGV": {"share": 200, "received": 200, "balance": 0}}
+        },
+        "setAsides": [
+          {"serviceId": "sun-1004", "roleKey": "Sun.BGV", "memberId": "m-bruno", "reason": "outside_population"},
+          {"serviceId": "sun-1004", "roleKey": "Sun.BGV", "memberId": "m-alma", "reason": "floor"}
+        ],
+        "notes": [
+          {"month": "2026-10", "memberId": "m-bruno", "note": {"code": "outside_population", "line": "BGV", "dates": ["2026-10-04"]}},
+          {"month": "2026-10", "memberId": "m-alma", "note": {"code": "floor_seat", "line": "P:rule-x", "date": "2026-10-04", "roleKey": "Sun.BGV"}}
+        ]
+      }
+    },
+    {
+      "id": "presence-seat-lower-id",
+      "kind": "ledger",
+      "description": "Non-exclusive rule-ab (Sun.BGV; Alma, Bruno). On 4 Oct both hold BGV seats with Bruno first in stored order: the presence seat is Alma's (lower id), Bruno's is normal. 11 Oct: Alma's is the presence seat, Carmen's normal; 18 Oct: Bruno's presence, Carmen's normal. Sub-line 1/2 each per Sunday: Alma 150/200/-50, Bruno 150/100/50. BGV 1/3 each per Sunday: Alma 100/0/100, Bruno 100/100/0, Carmen 100/200/-100.",
+      "covers": ["LG-7", "presence-seat-order"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": [{"ruleKey": "rule-ab", "roles": ["Sun.BGV"], "members": ["m-alma", "m-bruno"], "exclusive": false}]
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-bruno", "m-alma"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-carmen", "m-alma"], "Chorus": []},
+          {"_id": "sun-1018", "_type": "sunday_role", "date": "2026-10-18", "Lead": [], "BGVs": ["m-bruno", "m-carmen"], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"BGV": {"share": 100, "received": 0, "balance": 100}, "P:rule-ab": {"share": 150, "received": 200, "balance": -50}},
+            "m-bruno": {"BGV": {"share": 100, "received": 100, "balance": 0}, "P:rule-ab": {"share": 150, "received": 100, "balance": 50}},
+            "m-carmen": {"BGV": {"share": 100, "received": 200, "balance": -100}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"BGV": {"share": 100, "received": 0, "balance": 100}, "P:rule-ab": {"share": 150, "received": 200, "balance": -50}},
+          "m-bruno": {"BGV": {"share": 100, "received": 100, "balance": 0}, "P:rule-ab": {"share": 150, "received": 100, "balance": 50}},
+          "m-carmen": {"BGV": {"share": 100, "received": 200, "balance": -100}}
+        },
+        "setAsides": [],
+        "notes": []
+      }
+    },
+    {
+      "id": "floor-seat-order",
+      "kind": "ledger",
+      "description": "Seven people in Sun.BGV, Sat.BGV and Sat.Lead; six one-seat services, so every combined share is 6/7 < 1 and Alma, Bruno and Carmen (two seats each) get a floor seat. Alma: by date (4 Oct before 11 Oct). Bruno, 10 Oct: the special's Lead seat before the Saturday's BGV seat (role order). Carmen, 18 Oct, both BGV: the special timed 19:00 before the untimed Sunday service (an absent time sorts last). After the floors three BGV seats remain (11, 10 and 18 Oct): BGV share 3/7 -> 43 for all seven; Alma, Bruno and Carmen received 100 (-57); the rest 43/0/43. SL: two Saturday-class services whose only seat was a floor seat -> 0/0/0 for all.",
+      "covers": ["LG-11", "floor-by-date", "floor-by-role", "floor-by-time", "LG-4-day-class"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-diego",
+                "name": "Diego",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-elena",
+                "name": "Elena",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-fausto",
+                "name": "Fausto",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-greta",
+                "name": "Greta",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-alma"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-alma"], "Chorus": []},
+          {"_id": "sat-1010", "_type": "saturday_role", "date": "2026-10-10", "Lead": [], "BGVs": ["m-bruno"], "Chorus": []},
+          {
+            "_id": "spc-1010",
+            "_type": "special_role",
+            "date": "2026-10-10",
+            "time": "18:00",
+            "countsForFairness": true,
+            "Lead": ["m-bruno"],
+            "BGVs": [],
+            "Chorus": []
+          },
+          {"_id": "sun-1018", "_type": "sunday_role", "date": "2026-10-18", "Lead": [], "BGVs": ["m-carmen"], "Chorus": []},
+          {
+            "_id": "spc-1018",
+            "_type": "special_role",
+            "date": "2026-10-18",
+            "time": "19:00",
+            "countsForFairness": true,
+            "Lead": [],
+            "BGVs": ["m-carmen"],
+            "Chorus": []
+          }
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []},
+          {"id": "m-diego", "name": "Diego", "unavailableDates": []},
+          {"id": "m-elena", "name": "Elena", "unavailableDates": []},
+          {"id": "m-fausto", "name": "Fausto", "unavailableDates": []},
+          {"id": "m-greta", "name": "Greta", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
+            "m-bruno": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
+            "m-carmen": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
+            "m-diego": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
+            "m-elena": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
+            "m-fausto": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
+            "m-greta": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
+          "m-bruno": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
+          "m-carmen": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
+          "m-diego": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
+          "m-elena": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
+          "m-fausto": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
+          "m-greta": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}}
+        },
+        "setAsides": [
+          {"serviceId": "sun-1004", "roleKey": "Sun.BGV", "memberId": "m-alma", "reason": "floor"},
+          {"serviceId": "spc-1010", "roleKey": "Sat.Lead", "memberId": "m-bruno", "reason": "floor"},
+          {"serviceId": "spc-1018", "roleKey": "Sun.BGV", "memberId": "m-carmen", "reason": "floor"}
+        ],
+        "notes": [
+          {"month": "2026-10", "memberId": "m-alma", "note": {"code": "floor_seat", "line": "BGV", "date": "2026-10-04", "roleKey": "Sun.BGV"}},
+          {"month": "2026-10", "memberId": "m-bruno", "note": {"code": "floor_seat", "line": "SL", "date": "2026-10-10", "roleKey": "Sat.Lead"}},
+          {"month": "2026-10", "memberId": "m-carmen", "note": {"code": "floor_seat", "line": "BGV", "date": "2026-10-18", "roleKey": "Sun.BGV"}}
+        ]
+      }
+    },
+    {
+      "id": "fixed-seat-cancels-floor",
+      "kind": "ledger",
+      "description": "Alma (Sun.Lead == 1) and Bruno («Mes por medio») each hold one fixed Lead seat and one BGV seat, with combined shares under 1: neither gets a floor seat. 4 Oct: Alma's Lead set aside exact and she leaves that BGV population; Bruno's BGV seat among Bruno, Carmen, Diego and Elena (1/4). 11 Oct: Bruno's Lead set aside cadence; Alma's BGV seat among all five (1/5). Alma 1/5 -> 20/100/-80; Bruno 9/20 -> 45/100/-55; Carmen, Diego, Elena 45/0/45.",
+      "covers": ["LG-11", "floor-cancelled-exact", "floor-cancelled-cadence"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "exact", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [{"roles": ["Sun.Lead"], "count": 1}],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "sundayCadence": "alternate",
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-diego",
+                "name": "Diego",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-elena",
+                "name": "Elena",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": ["m-alma"], "BGVs": ["m-bruno"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": ["m-bruno"], "BGVs": ["m-alma"], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []},
+          {"id": "m-diego", "name": "Diego", "unavailableDates": []},
+          {"id": "m-elena", "name": "Elena", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"BGV": {"share": 20, "received": 100, "balance": -80}},
+            "m-bruno": {"BGV": {"share": 45, "received": 100, "balance": -55}},
+            "m-carmen": {"BGV": {"share": 45, "received": 0, "balance": 45}},
+            "m-diego": {"BGV": {"share": 45, "received": 0, "balance": 45}},
+            "m-elena": {"BGV": {"share": 45, "received": 0, "balance": 45}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"BGV": {"share": 20, "received": 100, "balance": -80}},
+          "m-bruno": {"BGV": {"share": 45, "received": 100, "balance": -55}},
+          "m-carmen": {"BGV": {"share": 45, "received": 0, "balance": 45}},
+          "m-diego": {"BGV": {"share": 45, "received": 0, "balance": 45}},
+          "m-elena": {"BGV": {"share": 45, "received": 0, "balance": 45}}
+        },
+        "setAsides": [
+          {"serviceId": "sun-1004", "roleKey": "Sun.Lead", "memberId": "m-alma", "reason": "exact"},
+          {"serviceId": "sun-1011", "roleKey": "Sun.Lead", "memberId": "m-bruno", "reason": "cadence"}
+        ],
+        "notes": []
+      }
+    },
+    {
+      "id": "exact-seat-under-presence",
+      "kind": "ledger",
+      "description": "Alma has Sun.BGV == 1 and belongs to presence rule-ab (Sun.BGV; Alma, Bruno). Her exact BGV seat on 4 Oct is set aside exact and is never the presence seat: Bruno's is (he is the only member of Q, so he also leaves every normal population both Sundays). 4 Oct BGV: Carmen's seat among Carmen and Diego; Alma is out of that Choir population (she holds an exact seat there). 11 Oct: Bruno's BGV seat is again the presence seat; Alma's Choir seat among Alma, Carmen and Diego (1/3). Alma's exact seat cancels her floor (CORO 33/100/-67). Carmen's combined share 1/2 + 1/3 < 1 with one received seat: her 4 Oct BGV seat is her floor seat, so BGV is 0/0/0 for Carmen and Diego. Bruno P:rule-ab 200/200/0; Carmen and Diego CORO 33/0/33.",
+      "covers": ["LG-7", "LG-11", "exact-under-presence", "floor-cancelled-exact"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "exact", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [{"roles": ["Sun.BGV"], "count": 1}],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-diego",
+                "name": "Diego",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": [{"ruleKey": "rule-ab", "roles": ["Sun.BGV"], "members": ["m-alma", "m-bruno"], "exclusive": false}]
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-alma", "m-bruno", "m-carmen"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-bruno"], "Chorus": ["m-alma"]}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []},
+          {"id": "m-diego", "name": "Diego", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"CORO": {"share": 33, "received": 100, "balance": -67}},
+            "m-bruno": {"P:rule-ab": {"share": 200, "received": 200, "balance": 0}},
+            "m-carmen": {"BGV": {"share": 0, "received": 0, "balance": 0}, "CORO": {"share": 33, "received": 0, "balance": 33}},
+            "m-diego": {"BGV": {"share": 0, "received": 0, "balance": 0}, "CORO": {"share": 33, "received": 0, "balance": 33}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"CORO": {"share": 33, "received": 100, "balance": -67}},
+          "m-bruno": {"P:rule-ab": {"share": 200, "received": 200, "balance": 0}},
+          "m-carmen": {"BGV": {"share": 0, "received": 0, "balance": 0}, "CORO": {"share": 33, "received": 0, "balance": 33}},
+          "m-diego": {"BGV": {"share": 0, "received": 0, "balance": 0}, "CORO": {"share": 33, "received": 0, "balance": 33}}
+        },
+        "setAsides": [
+          {"serviceId": "sun-1004", "roleKey": "Sun.BGV", "memberId": "m-alma", "reason": "exact"},
+          {"serviceId": "sun-1004", "roleKey": "Sun.BGV", "memberId": "m-carmen", "reason": "floor"}
+        ],
+        "notes": [{"month": "2026-10", "memberId": "m-carmen", "note": {"code": "floor_seat", "line": "BGV", "date": "2026-10-04", "roleKey": "Sun.BGV"}}]
+      }
+    },
+    {
+      "id": "outside-population-keeps-floor",
+      "kind": "ledger",
+      "description": "Alma (Sun.Lead out, Sun.BGV in) led on 4 Oct: that seat is set aside outside_population, which is not a fixed seat, so it does not cancel her floor (A12). Her BGV share is 1/4 + 1/4 + 0 = 1/2 < 1 with one received seat (11 Oct), which becomes her floor seat. Bruno, Carmen and Diego each have 2 Choir seats of the three Sundays' 2-of-3 pools (share 2) and are never floored. BGV after the floor: only 4 Oct's seat (Bruno) is shared, 1/4 each -> 25; Bruno 25/100/-75, the others 25/0/25. DL 0/0/0 for Bruno, Carmen, Diego; CORO 200/200/0.",
+      "covers": ["LG-11", "A12", "floor-outside-population"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-diego",
+                "name": "Diego",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": ["m-alma"], "BGVs": ["m-bruno"], "Chorus": ["m-carmen", "m-diego"]},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-alma"], "Chorus": ["m-bruno", "m-carmen"]},
+          {"_id": "sun-1018", "_type": "sunday_role", "date": "2026-10-18", "Lead": [], "BGVs": [], "Chorus": ["m-bruno", "m-diego"]}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []},
+          {"id": "m-diego", "name": "Diego", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"BGV": {"share": 25, "received": 0, "balance": 25}},
+            "m-bruno": {
+              "DL": {"share": 0, "received": 0, "balance": 0},
+              "BGV": {"share": 25, "received": 100, "balance": -75},
+              "CORO": {"share": 200, "received": 200, "balance": 0}
+            },
+            "m-carmen": {
+              "DL": {"share": 0, "received": 0, "balance": 0},
+              "BGV": {"share": 25, "received": 0, "balance": 25},
+              "CORO": {"share": 200, "received": 200, "balance": 0}
+            },
+            "m-diego": {
+              "DL": {"share": 0, "received": 0, "balance": 0},
+              "BGV": {"share": 25, "received": 0, "balance": 25},
+              "CORO": {"share": 200, "received": 200, "balance": 0}
+            }
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"BGV": {"share": 25, "received": 0, "balance": 25}},
+          "m-bruno": {
+            "DL": {"share": 0, "received": 0, "balance": 0},
+            "BGV": {"share": 25, "received": 100, "balance": -75},
+            "CORO": {"share": 200, "received": 200, "balance": 0}
+          },
+          "m-carmen": {
+            "DL": {"share": 0, "received": 0, "balance": 0},
+            "BGV": {"share": 25, "received": 0, "balance": 25},
+            "CORO": {"share": 200, "received": 200, "balance": 0}
+          },
+          "m-diego": {
+            "DL": {"share": 0, "received": 0, "balance": 0},
+            "BGV": {"share": 25, "received": 0, "balance": 25},
+            "CORO": {"share": 200, "received": 200, "balance": 0}
+          }
+        },
+        "setAsides": [
+          {"serviceId": "sun-1004", "roleKey": "Sun.Lead", "memberId": "m-alma", "reason": "outside_population"},
+          {"serviceId": "sun-1011", "roleKey": "Sun.BGV", "memberId": "m-alma", "reason": "floor"}
+        ],
+        "notes": [
+          {"month": "2026-10", "memberId": "m-alma", "note": {"code": "outside_population", "line": "DL", "dates": ["2026-10-04"]}},
+          {"month": "2026-10", "memberId": "m-alma", "note": {"code": "floor_seat", "line": "BGV", "date": "2026-10-11", "roleKey": "Sun.BGV"}}
+        ]
+      }
+    },
+    {
+      "id": "specials-day-class-and-defaults",
+      "kind": "ledger",
+      "description": "A counted special on Sunday 4 Oct maps Lead to Sun.Lead (DL); a counted special on Friday 9 Oct maps Lead, BGVs and Chorus to Sat.Lead, Sat.BGV and Sat.Choir (SL, BGV, CORO). An uncounted special (16 Oct, false) and a legacy special without the field (23 Oct) contribute nothing; a legacy Saturday service without the field (24 Oct) counts. Each seat is 1 among Alma, Bruno and Carmen (1/3 -> 33): DL, SL and CORO 33 each, BGV 2/3 -> 67. Alma DL 33/100/-67 and BGV 67/100/-33; Bruno SL 33/100/-67 and BGV 67/100/-33; Carmen CORO 33/100/-67.",
+      "covers": ["LG-2", "LG-4", "D14", "special-sunday", "special-friday", "uncounted-special", "legacy-default"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "in", "Sat.Choir": "in"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "in", "Sat.Choir": "in"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "in", "Sat.Choir": "in"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "spc-1004", "_type": "special_role", "date": "2026-10-04", "countsForFairness": true, "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {
+            "_id": "spc-1009",
+            "_type": "special_role",
+            "date": "2026-10-09",
+            "countsForFairness": true,
+            "Lead": ["m-bruno"],
+            "BGVs": ["m-alma"],
+            "Chorus": ["m-carmen"]
+          },
+          {"_id": "spc-1016", "_type": "special_role", "date": "2026-10-16", "countsForFairness": false, "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {"_id": "spc-1023", "_type": "special_role", "date": "2026-10-23", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []},
+          {"_id": "sat-1024", "_type": "saturday_role", "date": "2026-10-24", "Lead": [], "BGVs": ["m-bruno"], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {
+              "DL": {"share": 33, "received": 100, "balance": -67},
+              "SL": {"share": 33, "received": 0, "balance": 33},
+              "BGV": {"share": 67, "received": 100, "balance": -33},
+              "CORO": {"share": 33, "received": 0, "balance": 33}
+            },
+            "m-bruno": {
+              "DL": {"share": 33, "received": 0, "balance": 33},
+              "SL": {"share": 33, "received": 100, "balance": -67},
+              "BGV": {"share": 67, "received": 100, "balance": -33},
+              "CORO": {"share": 33, "received": 0, "balance": 33}
+            },
+            "m-carmen": {
+              "DL": {"share": 33, "received": 0, "balance": 33},
+              "SL": {"share": 33, "received": 0, "balance": 33},
+              "BGV": {"share": 67, "received": 0, "balance": 67},
+              "CORO": {"share": 33, "received": 100, "balance": -67}
+            }
+          }
+        },
+        "windowTotals": {
+          "m-alma": {
+            "DL": {"share": 33, "received": 100, "balance": -67},
+            "SL": {"share": 33, "received": 0, "balance": 33},
+            "BGV": {"share": 67, "received": 100, "balance": -33},
+            "CORO": {"share": 33, "received": 0, "balance": 33}
+          },
+          "m-bruno": {
+            "DL": {"share": 33, "received": 0, "balance": 33},
+            "SL": {"share": 33, "received": 100, "balance": -67},
+            "BGV": {"share": 67, "received": 100, "balance": -33},
+            "CORO": {"share": 33, "received": 0, "balance": 33}
+          },
+          "m-carmen": {
+            "DL": {"share": 33, "received": 0, "balance": 33},
+            "SL": {"share": 33, "received": 0, "balance": 33},
+            "BGV": {"share": 67, "received": 0, "balance": 67},
+            "CORO": {"share": 33, "received": 100, "balance": -67}
+          }
+        },
+        "setAsides": [],
+        "notes": []
+      }
+    },
+    {
+      "id": "drafts-duplicates-target-and-later",
+      "kind": "ledger",
+      "description": "October: a draft (published false) Sunday counts — 2 BGV seats between Alma and Bruno, 1 each -> 100/100/0. The two Sunday documents of 11 Oct are a duplicate target: both dropped. A drafts.-prefixed overlay is not a canonical document. The November (target) and December records and services are ignored, so the window totals equal October.",
+      "covers": ["LG-1", "LG-3", "drafts-count", "duplicate-target", "target-and-later-ignored"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          },
+          {
+            "month": "2026-11",
+            "rev": "rev-2026-11",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-11-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          },
+          {
+            "month": "2026-12",
+            "rev": "rev-2026-12",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-12-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "published": false, "Lead": [], "BGVs": ["m-alma", "m-bruno"], "Chorus": []},
+          {"_id": "sun-1011-a", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-alma"], "Chorus": []},
+          {"_id": "sun-1011-b", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-bruno"], "Chorus": []},
+          {"_id": "drafts.sun-1018", "_type": "sunday_role", "date": "2026-10-18", "Lead": [], "BGVs": ["m-alma"], "Chorus": []},
+          {"_id": "sun-1101", "_type": "sunday_role", "date": "2026-11-01", "Lead": [], "BGVs": ["m-alma"], "Chorus": []},
+          {"_id": "sun-1206", "_type": "sunday_role", "date": "2026-12-06", "Lead": [], "BGVs": ["m-bruno"], "Chorus": []}
+        ],
+        "members": [{"id": "m-alma", "name": "Alma", "unavailableDates": []}, {"id": "m-bruno", "name": "Bruno", "unavailableDates": []}]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {"m-alma": {"BGV": {"share": 100, "received": 100, "balance": 0}}, "m-bruno": {"BGV": {"share": 100, "received": 100, "balance": 0}}}
+        },
+        "windowTotals": {"m-alma": {"BGV": {"share": 100, "received": 100, "balance": 0}}, "m-bruno": {"BGV": {"share": 100, "received": 100, "balance": 0}}},
+        "setAsides": [],
+        "notes": []
+      }
+    },
+    {
+      "id": "cumulative-span-longer-than-window",
+      "kind": "ledger",
+      "description": "Four recorded months (July to October) for a November target: the window is August to October and the cumulative span starts in July. Every month: two Sundays, 2 BGV seats among Alma, Bruno and Carmen -> 4/3 -> 133 each; Alma 200 received (-67), Bruno and Carmen 100 (33). Window totals: 3 x 4/3 = 4 -> 400; Alma 600 received (-200), Bruno and Carmen 300 (100). July is listed so a per-month suite checks it too.",
+      "covers": ["LG-12", "X4", "cumulative-span"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-07",
+            "rev": "rev-2026-07",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-07-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          },
+          {
+            "month": "2026-08",
+            "rev": "rev-2026-08",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-08-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          },
+          {
+            "month": "2026-09",
+            "rev": "rev-2026-09",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-09-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          },
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-2026-07-a", "_type": "sunday_role", "date": "2026-07-05", "Lead": [], "BGVs": ["m-alma", "m-bruno"], "Chorus": []},
+          {"_id": "sun-2026-07-b", "_type": "sunday_role", "date": "2026-07-12", "Lead": [], "BGVs": ["m-alma", "m-carmen"], "Chorus": []},
+          {"_id": "sun-2026-08-a", "_type": "sunday_role", "date": "2026-08-02", "Lead": [], "BGVs": ["m-alma", "m-bruno"], "Chorus": []},
+          {"_id": "sun-2026-08-b", "_type": "sunday_role", "date": "2026-08-09", "Lead": [], "BGVs": ["m-alma", "m-carmen"], "Chorus": []},
+          {"_id": "sun-2026-09-a", "_type": "sunday_role", "date": "2026-09-06", "Lead": [], "BGVs": ["m-alma", "m-bruno"], "Chorus": []},
+          {"_id": "sun-2026-09-b", "_type": "sunday_role", "date": "2026-09-13", "Lead": [], "BGVs": ["m-alma", "m-carmen"], "Chorus": []},
+          {"_id": "sun-2026-10-a", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-alma", "m-bruno"], "Chorus": []},
+          {"_id": "sun-2026-10-b", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-alma", "m-carmen"], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": true}, {"month": "2026-09", "recorded": true}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-07": {
+            "m-alma": {"BGV": {"share": 133, "received": 200, "balance": -67}},
+            "m-bruno": {"BGV": {"share": 133, "received": 100, "balance": 33}},
+            "m-carmen": {"BGV": {"share": 133, "received": 100, "balance": 33}}
+          },
+          "2026-08": {
+            "m-alma": {"BGV": {"share": 133, "received": 200, "balance": -67}},
+            "m-bruno": {"BGV": {"share": 133, "received": 100, "balance": 33}},
+            "m-carmen": {"BGV": {"share": 133, "received": 100, "balance": 33}}
+          },
+          "2026-09": {
+            "m-alma": {"BGV": {"share": 133, "received": 200, "balance": -67}},
+            "m-bruno": {"BGV": {"share": 133, "received": 100, "balance": 33}},
+            "m-carmen": {"BGV": {"share": 133, "received": 100, "balance": 33}}
+          },
+          "2026-10": {
+            "m-alma": {"BGV": {"share": 133, "received": 200, "balance": -67}},
+            "m-bruno": {"BGV": {"share": 133, "received": 100, "balance": 33}},
+            "m-carmen": {"BGV": {"share": 133, "received": 100, "balance": 33}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"BGV": {"share": 400, "received": 600, "balance": -200}},
+          "m-bruno": {"BGV": {"share": 400, "received": 300, "balance": 100}},
+          "m-carmen": {"BGV": {"share": 400, "received": 300, "balance": 100}}
+        },
+        "setAsides": [],
+        "notes": []
+      }
+    },
+    {
+      "id": "exempt-lines-unchanged",
+      "kind": "ledger",
+      "description": "Alma is «Exenta»: her line is computed like anyone's — one BGV seat among three, 1/3 -> 33, received 100, -67 — and only the floor seat is skipped (she would otherwise lose that seat to the floor). Bruno and Carmen 33/0/33.",
+      "covers": ["LG-14", "D13", "exempt"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": true,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [{"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-alma"], "Chorus": []}],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"BGV": {"share": 33, "received": 100, "balance": -67}},
+            "m-bruno": {"BGV": {"share": 33, "received": 0, "balance": 33}},
+            "m-carmen": {"BGV": {"share": 33, "received": 0, "balance": 33}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"BGV": {"share": 33, "received": 100, "balance": -67}},
+          "m-bruno": {"BGV": {"share": 33, "received": 0, "balance": 33}},
+          "m-carmen": {"BGV": {"share": 33, "received": 0, "balance": 33}}
+        },
+        "setAsides": [],
+        "notes": [{"month": "2026-10", "memberId": "m-alma", "note": {"code": "exempt"}}]
+      }
+    },
+    {
+      "id": "second-seats",
+      "kind": "ledger",
+      "description": "4 Oct: Alma holds Lead and is also listed in BGVs — her BGV seat is a second seat, set aside, while she stays in the BGV population with nothing received there. 11 Oct: Diego is listed twice in BGVs — the second entry is a second seat. Each Sunday 1 Lead and 1 kept BGV seat among four: 1/4 each per line per Sunday -> 50. Alma DL 50/100/-50, BGV 50/0/50; Bruno DL 50/0/50, BGV 50/100/-50; Carmen DL 50/100/-50, BGV 50/0/50; Diego DL 50/0/50, BGV 50/100/-50.",
+      "covers": ["LG-4", "LG-9", "second-seat-two-roles", "second-seat-repeated"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-diego",
+                "name": "Diego",
+                "roles": {"Sun.Lead": "in", "Sat.Lead": "out", "Sun.BGV": "in", "Sat.BGV": "out", "Sun.Choir": "out", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [
+          {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": ["m-alma"], "BGVs": ["m-alma", "m-bruno"], "Chorus": []},
+          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": ["m-carmen"], "BGVs": ["m-diego", "m-diego"], "Chorus": []}
+        ],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []},
+          {"id": "m-diego", "name": "Diego", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"DL": {"share": 50, "received": 100, "balance": -50}, "BGV": {"share": 50, "received": 0, "balance": 50}},
+            "m-bruno": {"DL": {"share": 50, "received": 0, "balance": 50}, "BGV": {"share": 50, "received": 100, "balance": -50}},
+            "m-carmen": {"DL": {"share": 50, "received": 100, "balance": -50}, "BGV": {"share": 50, "received": 0, "balance": 50}},
+            "m-diego": {"DL": {"share": 50, "received": 0, "balance": 50}, "BGV": {"share": 50, "received": 100, "balance": -50}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"DL": {"share": 50, "received": 100, "balance": -50}, "BGV": {"share": 50, "received": 0, "balance": 50}},
+          "m-bruno": {"DL": {"share": 50, "received": 0, "balance": 50}, "BGV": {"share": 50, "received": 100, "balance": -50}},
+          "m-carmen": {"DL": {"share": 50, "received": 100, "balance": -50}, "BGV": {"share": 50, "received": 0, "balance": 50}},
+          "m-diego": {"DL": {"share": 50, "received": 0, "balance": 50}, "BGV": {"share": 50, "received": 100, "balance": -50}}
+        },
+        "setAsides": [
+          {"serviceId": "sun-1004", "roleKey": "Sun.BGV", "memberId": "m-alma", "reason": "second_seat"},
+          {"serviceId": "sun-1011", "roleKey": "Sun.BGV", "memberId": "m-diego", "reason": "second_seat"}
+        ],
+        "notes": [
+          {"month": "2026-10", "memberId": "m-alma", "note": {"code": "second_seat", "line": "BGV", "dates": ["2026-10-04"]}},
+          {"month": "2026-10", "memberId": "m-diego", "note": {"code": "second_seat", "line": "BGV", "dates": ["2026-10-11"]}}
+        ]
+      }
+    },
+    {
+      "id": "exact-half",
+      "kind": "ledger",
+      "description": "One Choir seat among eight people: every share is exactly 0.125 -> 13 (half away from zero). Alma (exempt, so the floor does not take her seat) received 100: her balance is 13 - 100 = -87, never the -88 of rounding -0.875 on its own (A39). The other seven: 13/0/13. Rounded balances sum to 4; exact ones to 0.",
+      "covers": ["LG-13", "A39", "exact-half"],
+      "input": {
+        "target": "2026-11",
+        "records": [
+          {
+            "month": "2026-10",
+            "rev": "rev-2026-10",
+            "contentHash": "sha256:fixture",
+            "source": "auto",
+            "engine": "v3",
+            "environment": "production",
+            "recordedAt": "2026-10-28T12:00:00.000Z",
+            "people": [
+              {
+                "memberId": "m-alma",
+                "name": "Alma",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": true,
+                "blocks": []
+              },
+              {
+                "memberId": "m-bruno",
+                "name": "Bruno",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-carmen",
+                "name": "Carmen",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-diego",
+                "name": "Diego",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-elena",
+                "name": "Elena",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-fausto",
+                "name": "Fausto",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-greta",
+                "name": "Greta",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              },
+              {
+                "memberId": "m-ivan",
+                "name": "Iván",
+                "roles": {"Sun.Lead": "out", "Sat.Lead": "out", "Sun.BGV": "out", "Sat.BGV": "out", "Sun.Choir": "in", "Sat.Choir": "out"},
+                "exactRules": [],
+                "exempt": false,
+                "blocks": []
+              }
+            ],
+            "presence": []
+          }
+        ],
+        "services": [{"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": [], "Chorus": ["m-alma"]}],
+        "members": [
+          {"id": "m-alma", "name": "Alma", "unavailableDates": []},
+          {"id": "m-bruno", "name": "Bruno", "unavailableDates": []},
+          {"id": "m-carmen", "name": "Carmen", "unavailableDates": []},
+          {"id": "m-diego", "name": "Diego", "unavailableDates": []},
+          {"id": "m-elena", "name": "Elena", "unavailableDates": []},
+          {"id": "m-fausto", "name": "Fausto", "unavailableDates": []},
+          {"id": "m-greta", "name": "Greta", "unavailableDates": []},
+          {"id": "m-ivan", "name": "Iván", "unavailableDates": []}
+        ]
+      },
+      "expected": {
+        "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
+        "months": {
+          "2026-10": {
+            "m-alma": {"CORO": {"share": 13, "received": 100, "balance": -87}},
+            "m-bruno": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+            "m-carmen": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+            "m-diego": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+            "m-elena": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+            "m-fausto": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+            "m-greta": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+            "m-ivan": {"CORO": {"share": 13, "received": 0, "balance": 13}}
+          }
+        },
+        "windowTotals": {
+          "m-alma": {"CORO": {"share": 13, "received": 100, "balance": -87}},
+          "m-bruno": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+          "m-carmen": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+          "m-diego": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+          "m-elena": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+          "m-fausto": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+          "m-greta": {"CORO": {"share": 13, "received": 0, "balance": 13}},
+          "m-ivan": {"CORO": {"share": 13, "received": 0, "balance": 13}}
+        },
+        "setAsides": [],
+        "notes": []
+      }
+    },
+    {
+      "id": "cadence-on",
+      "kind": "cadence",
+      "description": "Eligible, did not lead last month, four available counted Sundays: on.",
+      "covers": ["CAD-1", "cadence-on"],
+      "input": {"ledCountedSundayPreviousMonth": false, "months": [{"month": "2026-11", "eligible": true, "availableCountedSundays": 4}]},
+      "expected": [{"month": "2026-11", "state": "on", "reason": "on"}]
+    },
+    {
+      "id": "cadence-led-previous-month",
+      "kind": "cadence",
+      "description": "She led a counted Sunday last month: off.",
+      "covers": ["CAD-1", "led-previous-month"],
+      "input": {"ledCountedSundayPreviousMonth": true, "months": [{"month": "2026-11", "eligible": true, "availableCountedSundays": 4}]},
+      "expected": [{"month": "2026-11", "state": "off", "reason": "led_previous_month"}]
+    },
+    {
+      "id": "cadence-untick-then-on",
+      "kind": "cadence",
+      "description": "Unticked from Sun.Lead in November (not eligible: the wire's out), eligible again in December and, not having led in November, on.",
+      "covers": ["CAD-1", "not-eligible-then-on"],
+      "input": {
+        "ledCountedSundayPreviousMonth": false,
+        "months": [{"month": "2026-11", "eligible": false, "availableCountedSundays": 4}, {"month": "2026-12", "eligible": true, "availableCountedSundays": 4}]
+      },
+      "expected": [{"month": "2026-11", "state": "off", "reason": "not_eligible"}, {"month": "2026-12", "state": "on", "reason": "on"}]
+    },
+    {
+      "id": "cadence-no-available-sunday",
+      "kind": "cadence",
+      "description": "Eligible and did not lead last month, but her only available counted Sunday is rule-excluded from Sun.Lead, so the caller counts 0 (A14): off.",
+      "covers": ["CAD-1", "CAD-2", "A14", "no-available-sunday"],
+      "input": {"ledCountedSundayPreviousMonth": false, "months": [{"month": "2026-11", "eligible": true, "availableCountedSundays": 0}]},
+      "expected": [{"month": "2026-11", "state": "off", "reason": "no_available_sunday"}]
+    },
+    {
+      "id": "cadence-two-months-on-then-assumed",
+      "kind": "cadence",
+      "description": "A two-month run from a month she did not lead: November on, December assumes November followed its state.",
+      "covers": ["CAD-1", "assumed-led-previous-month"],
+      "input": {
+        "ledCountedSundayPreviousMonth": false,
+        "months": [{"month": "2026-11", "eligible": true, "availableCountedSundays": 4}, {"month": "2026-12", "eligible": true, "availableCountedSundays": 4}]
+      },
+      "expected": [{"month": "2026-11", "state": "on", "reason": "on"}, {"month": "2026-12", "state": "off", "reason": "assumed_led_previous_month"}]
+    },
+    {
+      "id": "cadence-two-months-off-then-on",
+      "kind": "cadence",
+      "description": "A two-month run after a month she led: November off, December on.",
+      "covers": ["CAD-1", "off-then-on"],
+      "input": {
+        "ledCountedSundayPreviousMonth": true,
+        "months": [{"month": "2026-11", "eligible": true, "availableCountedSundays": 4}, {"month": "2026-12", "eligible": true, "availableCountedSundays": 4}]
+      },
+      "expected": [{"month": "2026-11", "state": "off", "reason": "led_previous_month"}, {"month": "2026-12", "state": "on", "reason": "on"}]
+    },
+    {
+      "id": "cadence-pinned-sunday-in-off-month",
+      "kind": "cadence",
+      "description": "October was an off month, but a pinned Sunday Lead seat is a stored Lead seat like any other (CAD-2), so she led a counted Sunday in October and November is off.",
+      "covers": ["CAD-2", "pinned-sunday-counts"],
+      "input": {"ledCountedSundayPreviousMonth": true, "months": [{"month": "2026-11", "eligible": true, "availableCountedSundays": 4}]},
+      "expected": [{"month": "2026-11", "state": "off", "reason": "led_previous_month"}]
+    }
+  ]
+}
