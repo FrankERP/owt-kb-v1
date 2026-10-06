@@ -133,7 +133,9 @@ import { renderableUnfilled } from "./instrumentFill";
 import { pinSeatKey, type PinConflictKind } from "./pinModel";
 import type { ParticipantRole } from "@/app/utils/computeParticipation";
 import { WORSHIP_NIGHT_FORMAT } from "@/app/utils/serviceFormat";
-import type { TargetPreflight } from "./serviceReadiness";
+import { serviceTodayIso, type TargetPreflight } from "./serviceReadiness";
+import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";
+import { effectiveColumnCounts, fairnessSwitchLabel, isFairnessColumnPast } from "./fairnessToggleModel";
 import {
   CARD_STYLE,
   PREFLIGHT_COPY,
@@ -200,6 +202,9 @@ export interface AutoState {
   disabledReason: string | null;
 }
 
+/** A stored column's header edit: Fecha, Nombre, Hora and «Cuenta para equidad» (solver v3 C1 §6.4). */
+export type StoredHeaderPatch = { date?: string; serviceName?: string; time?: string; countsForFairness?: boolean };
+
 export interface PlannerGridProps {
   mode?: "create" | "stored";
   rows: GridRow[];
@@ -253,7 +258,17 @@ export interface PlannerGridProps {
   /** Add/remove instrument and FOH rows. */
   onRowsChange: (next: GridRow[]) => void;
   onToggleSkip: (columnId: string) => void;
-  onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string; time?: string }) => void;
+  onStoredHeaderChange?: (columnId: string, patch: StoredHeaderPatch) => void;
+  /**
+   * «Cuenta para equidad» (solver v3 C1 §6.2, §6.4). Omitted ⇒ no switch and no
+   * note — the theme-gallery fixture and every test that predates C1. `onChange` gets
+   * the column id: in create mode `MonthGenerator` holds the value per column, in
+   * stored mode it rides the header overlay. `createInFlight` disables the create
+   * headers' switch while a create batch posts; a stored header gates on
+   * `readOnly`/`mutationLocked` like Fecha, Nombre and Hora — never on the date-move
+   * block. Either mode disables it on a past month (§6.0).
+   */
+  fairness?: { onChange: (columnId: string, next: boolean) => void; createInFlight: boolean };
   storedDateBlockedReason?: string | null;
   /** Prevent every stored-grid mutation while another stored mutation is unresolved. */
   mutationLocked?: boolean;
@@ -622,6 +637,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     fillEmpty,
     pinConflicts,
     clear,
+    fairness,
   } = props;
 
   const [openCell, setOpenCell] = useState<{ rowId: string; columnId: string } | null>(null);
@@ -1752,6 +1768,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             mutationLocked={mutationLocked}
             minWClass={cellMinW}
             clear={clear}
+            fairness={fairness}
           />
         ))}
 
@@ -1804,6 +1821,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // off the screen instead of scrolling inside its own box.
   const centre = (
     <div className="min-w-0 flex-1 space-y-4 xl:order-2">
+      {/* C1 §6.6: once per grid, never per column; above the grid, so it never moves a cell mid-drag. */}
+      {fairness && <FairnessEngineNote />}
       {gridBlock}
       {/*
         The drag's only words: a refusal the gate produced (C1/C2/C3, or a
@@ -2416,6 +2435,7 @@ function ColumnHeader({
   mutationLocked,
   minWClass,
   clear,
+  fairness,
 }: {
   column: GridColumn;
   preflight: TargetPreflight | null;
@@ -2424,15 +2444,19 @@ function ColumnHeader({
   onToggleSkip: () => void;
   stored: boolean;
   readOnly: boolean;
-  onStoredHeaderChange?: (columnId: string, patch: { date?: string; serviceName?: string; time?: string }) => void;
+  onStoredHeaderChange?: (columnId: string, patch: StoredHeaderPatch) => void;
   storedDateBlockedReason?: string | null;
   mutationLocked: boolean;
   /** `min-w-[150px]` in the page, `min-w-0` in full screen — see `dateTrack`. */
   minWClass: string;
   /** «Borrar» for THIS service (create mode only). */
   clear?: PlannerGridProps["clear"];
+  /** «Cuenta para equidad» (solver v3 C1); omitted ⇒ no switch. */
+  fairness?: PlannerGridProps["fairness"];
 }) {
   const date = new Date(column.date.slice(0, 10) + "T12:00:00");
+  // §6.0 — evaluated on every render, against CDMX "today".
+  const todayIso = serviceTodayIso();
   const day = date.getDate();
   const month = date.toLocaleDateString("es-MX", { month: "short" });
   // The shared `Record<ServiceType, string>` — not a third hardcoded ternary.
@@ -2505,6 +2529,15 @@ function ColumnHeader({
               />
             </>
           )}
+          {fairness && (
+            <FairnessSwitch
+              checked={effectiveColumnCounts(column, todayIso)}
+              onChange={(next) => fairness.onChange(column.columnId, next)}
+              disabled={readOnly || mutationLocked}
+              past={isFairnessColumnPast(column, todayIso)}
+              ariaLabel={fairnessSwitchLabel(column)}
+            />
+          )}
         </div>
       )}
       {/* A blocked column is skipped whatever the toggle says, so the checkbox
@@ -2520,6 +2553,16 @@ function ColumnHeader({
         >
           Omitir
         </Checkbox>
+      )}
+      {/* C1 §6.2: not on a column blocked from creation — its value is stored and edited in stored mode. */}
+      {!stored && fairness && blockCopy === null && (
+        <FairnessSwitch
+          checked={effectiveColumnCounts(column, todayIso)}
+          onChange={(next) => fairness.onChange(column.columnId, next)}
+          disabled={fairness.createInFlight}
+          past={isFairnessColumnPast(column, todayIso)}
+          ariaLabel={fairnessSwitchLabel(column)}
+        />
       )}
       {!stored && clear && (
         <Menu

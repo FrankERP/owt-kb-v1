@@ -141,8 +141,8 @@ function candidateLi(name: string): HTMLLIElement {
 describe("PlannerGrid — shape", () => {
   it("isolates same-date columns by columnId", () => {
     const columns: GridColumn[] = [
-      { columnId: "role-a", date: "2026-08-12", type: "special_role", serviceName: "Vigilia" },
-      { columnId: "role-b", date: "2026-08-12", type: "special_role", serviceName: "Retiro" },
+      { columnId: "role-a", date: "2026-08-12", type: "special_role", serviceName: "Vigilia", countsForFairness: false },
+      { columnId: "role-b", date: "2026-08-12", type: "special_role", serviceName: "Retiro", countsForFairness: false },
     ];
     const cells: GridCell[] = [
       { columnId: "role-a", rowId: "lead", occupants: [{ memberId: "m1" }], origin: "manual" },
@@ -953,7 +953,7 @@ describe("PlannerGrid — row management", () => {
       <PlannerGrid
         {...baseProps({
           mode: "stored",
-          columns: [{ columnId: "special-1", date: "2026-10-03", type: "special_role", serviceName: "Campamento · Alabanza", time: "09:00" }],
+          columns: [{ columnId: "special-1", date: "2026-10-03", type: "special_role", serviceName: "Campamento · Alabanza", time: "09:00", countsForFairness: false }],
           cells: [],
           onStoredHeaderChange,
         })}
@@ -971,7 +971,7 @@ describe("PlannerGrid — row management", () => {
       <PlannerGrid
         {...baseProps({
           mode: "stored",
-          columns: [{ columnId: "special-1", date: "2026-10-03", type: "special_role", serviceName: "Campamento · Alabanza", time: "09:00" }],
+          columns: [{ columnId: "special-1", date: "2026-10-03", type: "special_role", serviceName: "Campamento · Alabanza", time: "09:00", countsForFairness: false }],
           cells: [],
           mutationLocked: true,
         })}

@@ -128,6 +128,7 @@ import {
   notifyProposalPending,
   notifyProposalReview,
   derateClock,
+  isNoticeNeutralEdit,
   opportunisticSweepOptions,
   notifyRoleAssignments,
   notifyRolePublished,
@@ -1177,5 +1178,77 @@ describe("revalidation", () => {
     revalidateSetlistSave();
     revalidateProposalApproval();
     expect(revalidateServiceViewsMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("isNoticeNeutralEdit — the toggle-only PATCH (solver v3 C1 §5.4.4)", () => {
+  const seats = (over: Partial<NormalizedSeats> = {}): NormalizedSeats => ({
+    leads: ["m-ana"],
+    bgvs: ["m-beto"],
+    chorus: [],
+    instruments: [{ instrument: "Bajo", personId: "m-caro" }],
+    foh: [],
+    ...over,
+  });
+  const weekend = {
+    carriesCountsForFairness: true,
+    roleType: "sunday_role" as const,
+    storedDate: "2026-11-01",
+    requestedDate: "2026-11-01",
+    storedServiceName: undefined,
+    requestedServiceName: null,
+    storedTime: undefined,
+    requestedTime: null,
+    before: seats(),
+    after: seats(),
+  };
+  const special = {
+    ...weekend,
+    roleType: "special_role" as const,
+    storedServiceName: "Vigilia",
+    requestedServiceName: "Vigilia",
+    storedTime: "19:00",
+    requestedTime: "19:00",
+  };
+
+  it("is true when the request carries the field and nothing reportable changed", () => {
+    expect(isNoticeNeutralEdit(weekend)).toBe(true);
+    expect(isNoticeNeutralEdit(special)).toBe(true);
+  });
+
+  it("is false for every request WITHOUT the field, a pure no-op included (C1-D2)", () => {
+    expect(isNoticeNeutralEdit({ ...weekend, carriesCountsForFairness: false })).toBe(false);
+  });
+
+  it("is false on a date move", () => {
+    expect(isNoticeNeutralEdit({ ...weekend, requestedDate: "2026-11-08" })).toBe(false);
+  });
+
+  it("ignores a pure reorder: every member keeps the same set of labels", () => {
+    expect(isNoticeNeutralEdit({
+      ...weekend,
+      before: seats({ leads: ["m-ana", "m-dani"] }),
+      after: seats({ leads: ["m-dani", "m-ana"] }),
+    })).toBe(true);
+  });
+
+  it.each([
+    ["a member moved between seats", seats({ leads: [], bgvs: ["m-beto", "m-ana"] })],
+    ["a member added", seats({ chorus: ["m-dani"] })],
+    ["a member removed", seats({ bgvs: [] })],
+    ["an instrument relabelled for the same person", seats({ instruments: [{ instrument: "Guitarra", personId: "m-caro" }] })],
+  ])("is false when %s", (_label, after) => {
+    expect(isNoticeNeutralEdit({ ...weekend, after })).toBe(false);
+  });
+
+  it("for a special, is false on a rename or a retime, and true across whitespace-only name noise", () => {
+    expect(isNoticeNeutralEdit({ ...special, requestedServiceName: "Vigilia de oración" })).toBe(false);
+    expect(isNoticeNeutralEdit({ ...special, requestedTime: "20:00" })).toBe(false);
+    expect(isNoticeNeutralEdit({ ...special, requestedTime: null })).toBe(false);
+    expect(isNoticeNeutralEdit({ ...special, storedServiceName: "  Vigilia " })).toBe(true);
+  });
+
+  it("ignores name and time on a weekend role, which stores neither", () => {
+    expect(isNoticeNeutralEdit({ ...weekend, storedServiceName: "stray", storedTime: "09:00" })).toBe(true);
   });
 });

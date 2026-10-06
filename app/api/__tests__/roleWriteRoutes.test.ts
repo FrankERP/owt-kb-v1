@@ -58,6 +58,8 @@ vi.mock("next/server", async (importOriginal) => {
 
 import { payloadFingerprint, receiptIdForRequestId } from "@/app/utils/roleCreationReceipt";
 import { WORSHIP_MEMBER_GROQ_FILTER } from "@/app/ministries";
+import { evaluate, parse } from "groq-js";
+import { COUNTS_FOR_FAIRNESS_GROQ } from "@/app/utils/countsForFairness";
 import { GET as membersGET } from "@/app/api/admin/members/route";
 import { GET as rolesGET, POST as createPOST } from "@/app/api/admin/roles/route";
 import { PATCH as rolePATCH, DELETE as roleDELETE } from "@/app/api/admin/roles/[id]/route";
@@ -463,6 +465,34 @@ describe("GET /api/admin/roles — stored editor projection", () => {
 
     const query = operationalFetch.mock.calls[0][0] as string;
     expect(query).toContain('"published": coalesce(published, true)');
+  });
+
+  it("projects the effective countsForFairness through the one read rule (solver v3 C1-R8)", async () => {
+    operationalFetch.mockResolvedValueOnce([]);
+    expect((await rolesGET()).status).toBe(200);
+    const query = operationalFetch.mock.calls[0][0] as string;
+    expect(query).toContain(`"countsForFairness": ${COUNTS_FOR_FAIRNESS_GROQ}`);
+  });
+
+  it("reads a legacy weekend row as counted and a legacy special as not counted", async () => {
+    operationalFetch.mockResolvedValueOnce([]);
+    await rolesGET();
+    const query = operationalFetch.mock.calls[0][0] as string;
+    const dataset = [
+      { _id: "sun-legacy", _type: "sunday_role", week: "2026-11-01" },
+      { _id: "sat-legacy", _type: "saturday_role", week: "2026-11-07" },
+      { _id: "sp-legacy", _type: "special_role", date: "2026-11-11", service_name: "Vigilia" },
+      { _id: "sun-off", _type: "sunday_role", week: "2026-11-08", countsForFairness: false },
+      { _id: "sp-on", _type: "special_role", date: "2026-11-12", service_name: "Retiro", countsForFairness: true },
+    ];
+    const rows = (await (await evaluate(parse(query), { dataset })).get()) as { _id: string; countsForFairness: boolean }[];
+    expect(Object.fromEntries(rows.map((row) => [row._id, row.countsForFairness]))).toEqual({
+      "sun-legacy": true,
+      "sat-legacy": true,
+      "sp-legacy": false,
+      "sun-off": false,
+      "sp-on": true,
+    });
   });
 });
 
@@ -965,6 +995,81 @@ describe("POST /api/admin/roles — create", () => {
 });
 
 // ── Edit ────────────────────────────────────────────────────────────────────
+
+describe("POST /api/admin/roles — countsForFairness (solver v3 C1 §5.3)", () => {
+  function createdRole(type: string): Record<string, unknown> {
+    const op = committedTransactions()[0]?.ops.find((o) => o.kind === "create" && o.doc._type === type);
+    if (!op || op.kind !== "create") throw new Error(`no created ${type}`);
+    return op.doc;
+  }
+
+  it.each([
+    ["sunday_role", {}, true],
+    ["saturday_role", { date: "2026-08-08" }, true],
+    ["special_role", { service_name: "Bautizos" }, false],
+  ] as const)("stores the type default on a %s whose body omits the field", async (type, extra, expected) => {
+    const res = await createPOST(req(createBody({ _type: type, ...extra, creationRequestId: `req-cff-${type}` })));
+    expect(res.status).toBe(201);
+    expect(createdRole(type).countsForFairness).toBe(expected);
+  });
+
+  it.each([true, false])("stores an explicit %s", async (value) => {
+    const res = await createPOST(req(createBody({ countsForFairness: value, creationRequestId: `req-cff-explicit-${value}` })));
+    expect(res.status).toBe(201);
+    expect(createdRole("sunday_role").countsForFairness).toBe(value);
+  });
+
+  it.each([
+    ["null", null],
+    ['the string "true"', "true"],
+    ["the number 1", 1],
+  ])("refuses %s with 400 before any read, writing no receipt, role or lock", async (_label, value) => {
+    const res = await createPOST(req(createBody({ countsForFairness: value })));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: "invalid_request", details: { issues: ["countsForFairness"] } });
+    expect(operationalFetch).not.toHaveBeenCalled();
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("replays a receipt written for the same off-default value, with no writes", async () => {
+    store.receipts.push(receipt({ fingerprint: payloadFingerprint(createBody({ countsForFairness: false })) }));
+    store.roles.push(role({ countsForFairness: false }));
+    const res = await createPOST(req(createBody({ countsForFairness: false })));
+    expect(res.status).toBe(200);
+    expect((await res.json()).replay).toBe(true);
+    expect(transactions).toHaveLength(0);
+    expect(afterCallbacks).toHaveLength(0);
+  });
+
+  it("replays a pre-C1 receipt for a retry that now sends the type default explicitly", async () => {
+    store.receipts.push(receipt());
+    store.roles.push(role());
+    const res = await createPOST(req(createBody({ countsForFairness: true })));
+    expect(res.status).toBe(200);
+    expect((await res.json()).replay).toBe(true);
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("refuses the same request id with the toggle flipped as idempotency_mismatch — never a silent replay", async () => {
+    store.receipts.push(receipt({ fingerprint: payloadFingerprint(createBody({ countsForFairness: false })) }));
+    store.roles.push(role({ countsForFairness: false }));
+    for (const flipped of [createBody(), createBody({ countsForFairness: true })]) {
+      const res = await createPOST(req(flipped));
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toBe("idempotency_mismatch");
+    }
+    expect(transactions).toHaveLength(0);
+  });
+
+  it("pushes and queues exactly as a toggle-less create does", async () => {
+    await createPOST(req(createBody({ published: true, countsForFairness: false })));
+    await drainAfter();
+    expect(sendPushMock).toHaveBeenCalledWith(["mem-1", "mem-2"], "assignments", expect.anything());
+    expect(queuedMemberIds()).toEqual(["mem-1", "mem-2"]);
+  });
+});
+
 
 describe("PATCH /api/admin/roles/[id] — edit", () => {
   function editBody(over: Record<string, unknown> = {}) {
@@ -1469,6 +1574,9 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
       lockRev: "lock-rev-1",
       _type: "sunday_role",
       date: "2026-08-09",
+      // Solver v3 C1-D5: every stored-mode body carries the effective value — a row
+      // without the field reads as its type default.
+      countsForFairness: true,
       leads: ["lead-new", "lead-2"],
       bgvs: ["bgv-1", "bgv-2"],
       chorus: ["chorus-1", "chorus-2"],
@@ -1833,6 +1941,140 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
     expect(transactions).toHaveLength(1);
     expect(revalidateServiceViewsMock).not.toHaveBeenCalled();
     expect(afterCallbacks).toHaveLength(0);
+  });
+
+  describe("countsForFairness (solver v3 C1 §5.4)", () => {
+    interface Surface {
+      type: string;
+      seed: () => void;
+      id: string;
+      body: (over?: Record<string, unknown>) => Record<string, unknown>;
+    }
+    const SURFACES: Surface[] = [
+      {
+        type: "sunday_role",
+        seed: () => { store.roles.push(role()); store.locks.push(lock()); },
+        id: "role-1",
+        body: (over = {}) => editBody(over),
+      },
+      {
+        type: "saturday_role",
+        seed: () => {
+          store.roles.push(role({ _type: "saturday_role", week: "2026-08-08" }));
+          store.locks.push(lock({
+            _id: "roleTarget.saturday_role.2026-08-08",
+            targetKey: "saturday_role:2026-08-08",
+            roleType: "saturday_role",
+            date: "2026-08-08",
+          }));
+        },
+        id: "role-1",
+        body: (over = {}) => editBody({ _type: "saturday_role", date: "2026-08-08", ...over }),
+      },
+      {
+        type: "special_role",
+        seed: () => { store.roles.push(specialRole()); store.coordinators.push(coordinator()); },
+        id: "role-sp",
+        body: (over = {}) => specialEditBody(over),
+      },
+    ];
+
+    function rolePatchOf(id: string): PatchOp {
+      const op = committedTransactions()[0]?.ops.find((o): o is PatchOp => o.kind === "patch" && o.id === id);
+      if (!op) throw new Error(`no committed patch for ${id}`);
+      return op;
+    }
+
+    it.each(SURFACES)("$type: a body without the field puts the key in neither set nor unset", async ({ seed, id, body }) => {
+      seed();
+      const res = await rolePATCH(req(body()), ctx(id));
+      expect(res.status).toBe(200);
+      expect("countsForFairness" in rolePatchOf(id).set).toBe(false);
+      expect(rolePatchOf(id).unset).not.toContain("countsForFairness");
+    });
+
+    it.each(SURFACES.flatMap((surface) => [true, false].map((value) => ({ ...surface, value }))))(
+      "$type: an explicit $value is set in the same revision-asserted patch",
+      async ({ seed, id, body, value }) => {
+        seed();
+        const res = await rolePATCH(req(body({ countsForFairness: value })), ctx(id));
+        expect(res.status).toBe(200);
+        expect(rolePatchOf(id)).toMatchObject({ rev: "rev-1", set: { countsForFairness: value } });
+        expect(rolePatchOf(id).unset).not.toContain("countsForFairness");
+      },
+    );
+
+    it.each([
+      ["null", null],
+      ['the string "false"', "false"],
+      ["the number 0", 0],
+    ])("refuses %s with 400 before any read", async (_label, value) => {
+      store.roles.push(role());
+      store.locks.push(lock());
+      const res = await rolePATCH(req(editBody({ countsForFairness: value })), ctx("role-1"));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ error: "invalid_request", details: { issues: ["countsForFairness"] } });
+      expect(operationalFetch).not.toHaveBeenCalled();
+      expect(transactions).toHaveLength(0);
+    });
+
+    it("a toggle-only PATCH of a published role queues no notice and sends no push, but still revalidates", async () => {
+      store.roles.push(role({ published: true }));
+      store.locks.push(lock());
+      const res = await rolePATCH(req(editBody({ leads: ["mem-1"], countsForFairness: false })), ctx("role-1"));
+      expect(res.status).toBe(200);
+      expect(committedTransactions()).toHaveLength(1);
+      expect(afterCallbacks).toHaveLength(0);
+      await drainAfter();
+      expect(outboxUpserts()).toHaveLength(0);
+      expect(sendPushMock).not.toHaveBeenCalled();
+      expect(revalidateServiceViewsMock).toHaveBeenCalled();
+    });
+
+    it("a toggle-only PATCH of a published special with the same name and time queues nothing", async () => {
+      store.roles.push(specialRole({ published: true }));
+      store.coordinators.push(coordinator());
+      const res = await rolePATCH(req(specialEditBody({ leads: ["mem-1"], countsForFairness: true })), ctx("role-sp"));
+      expect(res.status).toBe(200);
+      expect(afterCallbacks).toHaveLength(0);
+      expect(revalidateServiceViewsMock).toHaveBeenCalled();
+    });
+
+    it("a toggle plus a seat change queues the union and pushes the added member, exactly as today", async () => {
+      store.roles.push(role({ published: true }));
+      store.locks.push(lock());
+      await rolePATCH(req(editBody({ leads: ["mem-5"], countsForFairness: false })), ctx("role-1"));
+      await drainAfter();
+      expect(queuedMemberIds().sort()).toEqual(["mem-1", "mem-5"]);
+      expect(sendPushMock).toHaveBeenCalledWith(["mem-5"], "assignments", expect.anything());
+    });
+
+    it("a toggle on a special that is also renamed queues as today", async () => {
+      store.roles.push(specialRole({ published: true }));
+      store.coordinators.push(coordinator());
+      await rolePATCH(
+        req(specialEditBody({ leads: ["mem-1"], service_name: "Bautizos de noche", countsForFairness: true })),
+        ctx("role-sp"),
+      );
+      await drainAfter();
+      expect(queuedMemberIds()).toEqual(["mem-1"]);
+    });
+
+    it("a toggle on a special that is also retimed queues as today", async () => {
+      store.roles.push(specialRole({ published: true, time: "09:00" }));
+      store.coordinators.push(coordinator());
+      await rolePATCH(req(specialEditBody({ leads: ["mem-1"], time: "10:00", countsForFairness: true })), ctx("role-sp"));
+      await drainAfter();
+      expect(queuedMemberIds()).toEqual(["mem-1"]);
+    });
+
+    it("a request WITHOUT the field that changes nothing still queues exactly as today (C1-D2)", async () => {
+      store.roles.push(role({ published: true }));
+      store.locks.push(lock());
+      await rolePATCH(req(editBody({ leads: ["mem-1"] })), ctx("role-1"));
+      await drainAfter();
+      expect(queuedMemberIds()).toEqual(["mem-1"]);
+    });
   });
 });
 
