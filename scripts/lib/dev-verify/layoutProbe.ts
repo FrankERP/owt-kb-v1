@@ -47,7 +47,7 @@ export interface LayoutReport {
   fullPageWidth: number;
   /** `scrollingElement.scrollWidth > clientWidth` — the page can scroll sideways. */
   pageOverflowsX: boolean;
-  /** `scrollWidth - clientWidth` of the scrolling element — how far the page pans (computed, never scrolled). */
+  /** `scrollWidth - clientWidth` of the scrolling element: its horizontal scrollable overflow in px (computed, never scrolled). The user can pan it unless the root sets `overflow-x: hidden`/`clip` — no rule in this app does. */
   maxScrollX: number;
   escapers: LayoutBox[];
   pseudoCandidates: (LayoutBox & { pseudo: string })[];
@@ -60,18 +60,30 @@ export const LAYOUT_PROBE_SOURCE = String.raw`(() => {
   const vw = html.clientWidth;
   const sx = window.scrollX;
   const round = (n) => Math.round(n * 10) / 10;
-  const clipsX = (el) => getComputedStyle(el).overflowX !== "visible";
+  // Clipping, for this purpose: anything that keeps a descendant's overflow from
+  // widening the page — a non-visible overflow-x, or containment, which turns the
+  // overflow inside it into ink overflow (layout/paint containment, a size container,
+  // content-visibility: auto).
+  const contained = (cs) =>
+    /paint|layout|strict|content/.test(cs.contain || "") ||
+    /size/.test(cs.containerType || "") ||
+    cs.contentVisibility === "auto";
+  const clipsX = (el) => {
+    const cs = getComputedStyle(el);
+    return cs.overflowX !== "visible" || contained(cs);
+  };
   // What makes an element the containing block of a fixed descendant (and so also of
   // an absolute one, which additionally takes any non-static position).
   const makesCb = (el, position) => {
     const cs = getComputedStyle(el);
+    // translate/rotate/scale are separate properties: Chromium leaves the computed
+    // transform at "none" when only they are set.
     const fixedCb =
       cs.transform !== "none" || cs.filter !== "none" || cs.perspective !== "none" ||
+      (cs.translate || "none") !== "none" || (cs.rotate || "none") !== "none" || (cs.scale || "none") !== "none" ||
       (cs.backdropFilter || "none") !== "none" ||
-      /transform|filter|perspective/.test(cs.willChange || "") ||
-      /paint|layout|strict|content/.test(cs.contain || "") ||
-      /size/.test(cs.containerType || "") ||
-      cs.contentVisibility === "auto";
+      /transform|translate|rotate|scale|filter|perspective/.test(cs.willChange || "") ||
+      contained(cs);
     return position === "fixed" ? fixedCb : cs.position !== "static" || fixedCb;
   };
   const label = (el) => {

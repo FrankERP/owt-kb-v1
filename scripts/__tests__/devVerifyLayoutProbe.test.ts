@@ -26,5 +26,7 @@ describe("dev-verify --layout probe", () => {
   it("is a source string, never a function — tsx helpers would not exist in the page", () => {
     expect(typeof LAYOUT_PROBE_SOURCE).toBe("string");
     expect(LAYOUT_PROBE_SOURCE).not.toMatch(/__name|require\(|import /);
+    // …and only reads: no scroll of any kind (a scroll event closes an open Menu).
+    expect(LAYOUT_PROBE_SOURCE).not.toMatch(/scroll(To|By|IntoView)\(|scroll(Left|Top)\s*=/);
   });
 });

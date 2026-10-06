@@ -32,9 +32,13 @@ const KNOWN: Record<string, string> = {
 
 const ROOT = path.resolve(__dirname, "../../../..");
 
-/** True when a utility list hides the element: a token whose last variant segment is `sr-only`. */
+/** True when a utility list hides the element: a token whose last variant segment is
+ *  `sr-only`, with or without Tailwind's important modifier (`!sr-only`, v4's `sr-only!`)
+ *  — the obvious next "fix" for a utility that loses the cascade, as this one did. */
 function hides(classText: string): boolean {
-  return classText.split(/[\s"'`{}()$,+]+/).some((t) => t.split(":").pop() === "sr-only");
+  return classText
+    .split(/[\s"'`{}()$,+]+/)
+    .some((t) => t.split(":").pop()!.replace(/^!|!$/g, "") === "sr-only");
 }
 
 /** Line numbers of every native control in `src` whose className hides it. */
@@ -90,6 +94,9 @@ describe("hidden native controls stay inside their own box", () => {
     expect(one(`<input className={cn("w-full", "sr-only")} />`)).toBe(1);
     expect(one(`const HIDE = "sr-only";\nexport const A = () => <input className={HIDE} />;`)).toBe(1);
     expect(one(`<input className="sm:sr-only" />`)).toBe(1);
+    expect(one(`<input className="!sr-only" />`)).toBe(1);
+    expect(one(`<input className="md:!sr-only" />`)).toBe(1);
+    expect(one(`<input className="sr-only!" />`)).toBe(1);
     // Not hidden: a reveal, a lookalike, a non-control, no className.
     expect(one(`<input className="focus:not-sr-only" />`)).toBe(0);
     expect(one(`<input className="sr-only-ish" />`)).toBe(0);
