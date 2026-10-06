@@ -605,6 +605,7 @@ describe("git-tracked protected read inventory", () => {
       "saturdarSongs",
       "setlistProposal",
       "specialIdentityCoordinator",
+      "fairnessMonth",
     ]);
   });
 });

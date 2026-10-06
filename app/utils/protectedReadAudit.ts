@@ -27,6 +27,10 @@ export const PROTECTED_TYPES = [
   "saturdarSongs",
   "setlistProposal",
   "specialIdentityCoordinator",
+  // Solver v3 C2 REC-9: the monthly eligibility record. Its ids are dotted (private), so a
+  // read off a non-canonical client is the A2 failure; its one writer is the executor
+  // (`PROTECTED_WRITE_EXECUTORS`).
+  "fairnessMonth",
 ] as const;
 
 export type ProtectedType = (typeof PROTECTED_TYPES)[number];

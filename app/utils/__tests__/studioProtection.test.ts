@@ -2,7 +2,7 @@
 // without a browser.
 //
 // The point of these tests: "we configured the Studio" is not evidence. The
-// policy is code, so every capability of every one of the fifteen protected types
+// policy is code, so every capability of every one of the sixteen protected types
 // is asserted here, plus the wiring in `sanity.config.ts` / `sanity/structure.ts`
 // that actually installs it — and the fact that the v5-inert
 // `__experimental_actions` is used nowhere.
@@ -58,7 +58,7 @@ function gitTracked(): string[] {
 // ── The policy ──────────────────────────────────────────────────────────────
 
 describe("studio protection policy", () => {
-  it("covers exactly the fifteen protected types, keeping the saturdarSongs typo", () => {
+  it("covers exactly the sixteen protected types, keeping the saturdarSongs typo", () => {
     expect([...PROTECTED_STUDIO_TYPES]).toEqual([
       "sunday_role",
       "saturday_role",
@@ -74,6 +74,8 @@ describe("studio protection policy", () => {
       // `duplicate`, `restore` and `unpublish` reachable by direct URL — a
       // second write path around the `_rev`-checked admin route.
       "solverConfig",
+      // Solver v3 C2 REC-8: the monthly eligibility record — one writer, the executor.
+      "fairnessMonth",
       // Oasis Kids: the app is the writer (kids design spec §4.2, §5).
       "kidsPair",
       "kidsSchedule",
@@ -95,6 +97,7 @@ describe("studio protection policy", () => {
       "roleCreationReceipt",
       "specialIdentityCoordinator",
       "solverConfig",
+      "fairnessMonth",
       "kidsPair",
       "kidsSchedule",
       "mcpOauthGrant",
@@ -175,6 +178,7 @@ describe("studio protection policy", () => {
       "notificationOutbox",
       "specialIdentityCoordinator",
       "solverConfig",
+      "fairnessMonth",
       "mcpOauthGrant",
       "mcpOauthCodeRedemption",
     ]);
@@ -451,6 +455,7 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/roleCreationReceipt.ts",
       "sanity/schemas/notificationOutbox.ts",
       "sanity/schemas/solverConfig.ts",
+      "sanity/schemas/fairnessMonth.ts",
       "sanity/schemas/kidsPair.ts",
       "sanity/schemas/kidsSchedule.ts",
       "sanity/schemas/mcpOauthGrant.ts",
@@ -469,7 +474,7 @@ describe("studio config installs the policy", () => {
     expect(structure).toContain("PROTECTED_STUDIO_TYPES");
   });
 
-  it("marks all fifteen protected schema types read-only", () => {
+  it("marks all sixteen protected schema types read-only", () => {
     const files: Record<string, string> = {
       sunday_role: "sanity/schemas/sunRole.ts",
       saturday_role: "sanity/schemas/satRole.ts",
@@ -482,6 +487,7 @@ describe("studio config installs the policy", () => {
       notificationOutbox: "sanity/schemas/notificationOutbox.ts",
       specialIdentityCoordinator: "sanity/schemas/specialIdentityCoordinator.ts",
       solverConfig: "sanity/schemas/solverConfig.ts",
+      fairnessMonth: "sanity/schemas/fairnessMonth.ts",
       kidsPair: "sanity/schemas/kidsPair.ts",
       kidsSchedule: "sanity/schemas/kidsSchedule.ts",
       mcpOauthGrant: "sanity/schemas/mcpOauthGrant.ts",
@@ -528,6 +534,7 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/notificationOutbox.ts",
       "sanity/schemas/specialIdentityCoordinator.ts",
       "sanity/schemas/solverConfig.ts",
+      "sanity/schemas/fairnessMonth.ts",
       "sanity/schemas/mcpOauthGrant.ts",
       "sanity/schemas/mcpOauthCodeRedemption.ts",
     ]) {
@@ -546,6 +553,7 @@ describe("studio config installs the policy", () => {
         "notificationOutbox",
         "specialIdentityCoordinator",
         "solverConfig",
+        "fairnessMonth",
         "mcpOauthGrant",
         "mcpOauthCodeRedemption",
       ].sort(),
