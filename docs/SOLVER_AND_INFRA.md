@@ -770,8 +770,10 @@ Strategy: **wrap the existing Next.js app** (not a React Native rewrite). Full r
 
   These are excluded from the deployed function via `.gcloudignore`.
 
-**This suite is a BLOCKING gate.** `gates` runs `python -m unittest discover -s gcf -t gcf`
-on Python 3.12 (`.github/workflows/ci.yml`); before that a `gcf/**`-only PR went green on a
+**This suite is a BLOCKING gate.** The `solver-v2` CI job runs
+`python -m unittest discover -s gcf -t gcf -v` on Python 3.12 (`.github/workflows/ci.yml`), and
+`gates` — the required check — requires it (and `solver-v3`, the same command over `gcf_v3/`; see
+[CI.md](CI.md) «Solver suites»); before that a `gcf/**`-only PR went green on a
 job that never opened the file, on code that deploys to the Cloud Function from `main` with
 no `preview` rehearsal. Run it locally the same way from the repo root before claiming done —
 the three Node gates are no longer the whole set.

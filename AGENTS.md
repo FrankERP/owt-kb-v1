@@ -10,14 +10,17 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 - **Before claiming done, all FOUR must pass:** `npx tsc --noEmit`, `npm test`
   (vitest), `npx eslint .` with **0 errors** (warnings are a deliberate backlog —
   see `eslint.config.mjs`), and — when the change touches `gcf/**` —
-  `python -m unittest discover -s gcf -t gcf`, which is a blocking CI gate too.
-  Add tests for testable pure logic.
+  `python -m unittest discover -s gcf -t gcf`, which is a blocking CI gate too,
+  and — when it touches `gcf_v3/**` —
+  `python -m unittest discover -s gcf_v3 -t gcf_v3`, likewise. Add tests for
+  testable pure logic.
 
 ## Conventions
 - Work on a branch, **merge to `main` periodically** (don't commit routine work
   straight to `main`). **`main` is protected and takes NO direct pushes** — it is
   reached through a PR whose `gates` check is green (`.github/workflows/ci.yml`:
-  `tsc --noEmit`, `vitest`, `eslint` with 0 errors). `preview` still takes direct
+  `gates` requires every CI job — `tsc --noEmit`, `vitest`, `eslint` with 0
+  errors, and both solver suites). `preview` still takes direct
   pushes; CI runs there too, but does not block. Protection applies to admins as
   well, so there is no silent bypass: an emergency override means deliberately
   turning protection off, doing the push, and turning it back on. See
