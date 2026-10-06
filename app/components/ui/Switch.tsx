@@ -31,6 +31,8 @@ export default function Switch({
   /** Exactly one of these names the switch. */
   "aria-label"?: string;
   "aria-labelledby"?: string;
+  /** Optional: the id of a visible line that explains the switch — e.g. why it is disabled. */
+  "aria-describedby"?: string;
   disabled?: boolean;
   size?: keyof typeof SIZE;
   className?: string;
@@ -43,6 +45,7 @@ export default function Switch({
       aria-checked={checked}
       aria-label={aria["aria-label"]}
       aria-labelledby={aria["aria-labelledby"]}
+      aria-describedby={aria["aria-describedby"]}
       disabled={disabled}
       onClick={() => { void haptic("light"); onChange(!checked); }}
       className={`relative inline-flex shrink-0 items-center rounded-full border-2 border-transparent transition-colors duration-base ease-out-brand focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base disabled:opacity-50 ${s.track} ${
