@@ -1574,6 +1574,9 @@ describe("PATCH /api/admin/roles/[id] — edit", () => {
       lockRev: "lock-rev-1",
       _type: "sunday_role",
       date: "2026-08-09",
+      // Solver v3 C1-D5: every stored-mode body carries the effective value — a row
+      // without the field reads as its type default.
+      countsForFairness: true,
       leads: ["lead-new", "lead-2"],
       bgvs: ["bgv-1", "bgv-2"],
       chorus: ["chorus-1", "chorus-2"],

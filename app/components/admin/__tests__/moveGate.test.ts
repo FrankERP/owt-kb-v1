@@ -673,7 +673,14 @@ describe("createMoveGate — memoization", () => {
 // ─── Stored-mode fixture ─────────────────────────────────────────────────────
 
 function storedColumn(column: GridColumn, admission: StoredGridColumn["admission"]): StoredGridColumn {
-  return { ...column, roleId: column.columnId, rev: "rev-1", published: true, admission };
+  return {
+    ...column,
+    roleId: column.columnId,
+    rev: "rev-1",
+    published: true,
+    admission,
+    storedFairness: { date: column.date, countsForFairness: column.countsForFairness },
+  };
 }
 
 /**

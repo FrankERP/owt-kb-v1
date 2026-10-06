@@ -17,6 +17,7 @@
 import { countsForFairnessDefault, type FairnessRoleType } from "@/app/utils/countsForFairness";
 import type { GridColumn } from "./plannerModel";
 import { serviceTodayIso } from "./serviceReadiness";
+import type { StoredGridColumn } from "./storedRoleReadModel";
 
 export const FAIRNESS_LABEL = "Cuenta para equidad";
 /** Shown once per surface while the engine is v2 (parent U7). C6 CTL-1 rewires its condition. */
@@ -89,4 +90,40 @@ export function withoutCountsEdit(edits: Map<string, boolean>, columnId: string)
   const next = new Map(edits);
   next.delete(columnId);
   return next;
+}
+
+/** A stored column is past when its stored date OR its edited date falls in a past month (§6.0). */
+export function isStoredColumnPast(
+  column: Pick<StoredGridColumn, "date" | "storedFairness">,
+  todayIso: string = serviceTodayIso(),
+): boolean {
+  return isPastServiceMonth(column.storedFairness.date, todayIso) || isPastServiceMonth(column.date, todayIso);
+}
+
+/**
+ * A stored column's effective value (§6.0, §6.1): its STORED value while it is past
+ * — so a held toggle edit neither makes it dirty nor reaches the server — else the
+ * column's (possibly edited) value.
+ */
+export function effectiveStoredCounts(
+  column: Pick<StoredGridColumn, "date" | "countsForFairness" | "storedFairness">,
+  todayIso: string = serviceTodayIso(),
+): boolean {
+  return isStoredColumnPast(column, todayIso) ? column.storedFairness.countsForFairness : column.countsForFairness;
+}
+
+function isStoredColumn(column: GridColumn): column is StoredGridColumn {
+  return "storedFairness" in column;
+}
+
+/** Whether a grid column's Switch is in the past-month state, in either mode (§6.0). */
+export function isFairnessColumnPast(column: GridColumn, todayIso: string = serviceTodayIso()): boolean {
+  return isStoredColumn(column) ? isStoredColumnPast(column, todayIso) : isPastServiceMonth(column.date, todayIso);
+}
+
+/** The value a grid column's Switch shows, in either mode — always the effective one (§6.0). */
+export function effectiveColumnCounts(column: GridColumn, todayIso: string = serviceTodayIso()): boolean {
+  return isStoredColumn(column)
+    ? effectiveStoredCounts(column, todayIso)
+    : effectiveCreateCounts(column.type, column.date, column.countsForFairness, todayIso);
 }

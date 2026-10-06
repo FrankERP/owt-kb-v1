@@ -9,12 +9,17 @@ import {
   FAIRNESS_PAST_REASON,
   FAIRNESS_SPECIAL_HELP,
   applyCreateCountsEdits,
+  effectiveColumnCounts,
   effectiveCreateCounts,
+  effectiveStoredCounts,
   fairnessSwitchLabel,
+  isFairnessColumnPast,
   isPastServiceMonth,
+  isStoredColumnPast,
   withoutCountsEdit,
 } from "../fairnessToggleModel";
 import { buildColumns } from "../plannerModel";
+import type { StoredGridColumn } from "../storedRoleReadModel";
 
 describe("the copy (solver v3 C1 §9 «Copy»)", () => {
   it("is exactly the spec's", () => {
@@ -106,5 +111,47 @@ describe("withoutCountsEdit (§6.1)", () => {
   it("returns the same map when there is nothing to drop", () => {
     const edits = new Map([["a", false]]);
     expect(withoutCountsEdit(edits, "z")).toBe(edits);
+  });
+});
+
+describe("stored columns (§6.0)", () => {
+  // Stored counted on 2026-10-04; the admin has an edit holding it off.
+  const held: StoredGridColumn = {
+    columnId: "role-1",
+    roleId: "role-1",
+    rev: "rev-1",
+    type: "sunday_role",
+    date: "2026-10-04",
+    published: false,
+    admission: "approved",
+    countsForFairness: false,
+    storedFairness: { date: "2026-10-04", countsForFairness: true },
+  };
+
+  it("outside a past month the edit is the effective value", () => {
+    expect(isStoredColumnPast(held, "2026-10-20")).toBe(false);
+    expect(effectiveStoredCounts(held, "2026-10-20")).toBe(false);
+    expect(effectiveColumnCounts(held, "2026-10-20")).toBe(false);
+  });
+
+  it("past by its stored date: the stored value wins", () => {
+    expect(isStoredColumnPast(held, "2026-11-02")).toBe(true);
+    expect(effectiveStoredCounts(held, "2026-11-02")).toBe(true);
+    expect(isFairnessColumnPast(held, "2026-11-02")).toBe(true);
+  });
+
+  it("past by its EDITED date alone: the stored value still wins", () => {
+    const movedBack: StoredGridColumn = { ...held, date: "2026-09-27" };
+    expect(isStoredColumnPast(movedBack, "2026-10-20")).toBe(true);
+    expect(effectiveStoredCounts(movedBack, "2026-10-20")).toBe(true);
+  });
+
+  it("a create column is past by its own date and shows the type default there", () => {
+    const [sunday] = buildColumns({ sundayDates: ["2026-10-04"], activeSatDates: [] });
+    const off = { ...sunday, countsForFairness: false };
+    expect(isFairnessColumnPast(off, "2026-10-20")).toBe(false);
+    expect(effectiveColumnCounts(off, "2026-10-20")).toBe(false);
+    expect(isFairnessColumnPast(off, "2026-11-02")).toBe(true);
+    expect(effectiveColumnCounts(off, "2026-11-02")).toBe(true);
   });
 });

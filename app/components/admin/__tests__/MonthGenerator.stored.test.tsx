@@ -273,6 +273,8 @@ describe("MonthGenerator — stored mode", () => {
       _type: "sunday_role",
       bgvs: ["bgv-a"],
       chorus: ["chorus-a"],
+      // Solver v3 C1-D5: the stored value rides every stored-mode PATCH.
+      countsForFairness: true,
       date: "2026-02-01",
       foh: [{ personId: "foh-a", role: "Consola" }],
       instruments: [{ instrument: "Bajo", personId: "instrument-a" }],

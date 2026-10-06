@@ -774,6 +774,7 @@ function storedGrid(opts: { readOnlyColumnId?: string }): { cells: GridCell[]; c
     rev: "rev-1",
     published: true,
     admission: opts.readOnlyColumnId === column.columnId ? "readOnly" : "approved",
+    storedFairness: { date: column.date, countsForFairness: column.countsForFairness },
   }));
   const cells = [
     cell("lead", "col-1", []),
