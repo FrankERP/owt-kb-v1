@@ -39,6 +39,8 @@ def random_request(k):
             if pick:
                 elig[s["id"]] = pick
         people.append(person(p, elig, exempt=rng.random() < 0.2))
+    if k % 3 == 0:  # a thin-eligibility person: planned share below 1, so the plan names a floor person
+        people.append(person("m-thin", {svcs[0]["id"]: ["BGV"]}))
     people[0]["cadence"] = {"2026-11": rng.choice(["on", "off", "out"])}
     rules = [{"id": "pr-1", "kind": "presence", "persons": ["m-bea", "m-cris"], "roles": ["Sun.BGV"],
               "exclusive": rng.random() < 0.5},
@@ -72,6 +74,31 @@ def solve_fill(body):
     return F, plan, model, values, received
 
 
+def floor_request(pinned=False, two_rules=False):
+    """Two Sundays, many people eligible everywhere plus two eligible for ONE BGV cell only: their planned
+    share is below 1, so the plan names them floor persons (spec §6.6); optionally received pins on them."""
+    s = [service(f"s{i}", d) for i, d in enumerate(NOV_SUNDAYS[:2])]
+    everyone = {x["id"]: ["Lead", "BGV", "Choir"] for x in s}
+    people = [person(p, dict(everyone)) for p in NAMES[:8]]
+    people += [person("m-low1", {"s0": ["BGV"]}), person("m-low2", {"s1": ["BGV"]})]
+    rules = [{"id": "pr-1", "kind": "presence", "persons": ["m-low1", "m-ana", "m-bea"],
+              "roles": ["Sun.BGV"], "exclusive": False}]
+    if two_rules:
+        rules.append({"id": "pr-2", "kind": "presence", "persons": ["m-ana", "m-cris", "m-low2"],
+                      "roles": ["Sun.BGV", "Sun.Lead"], "exclusive": False})
+    pins = [pin(s[0], "BGV", "m-low1"), pin(s[1], "BGV", "m-ana")] if pinned else []
+    return request(s, people, rules=rules, pins=pins)
+
+
+def received_pair(body):
+    F, plan, _, values, received = solve_fill(body)
+    real = realised(F.fservices(assignment_of(F, values)), F.fmonths, floor_override=plan.floor_persons)
+    formula = Counter()
+    for (m, p, line), v in real.received.items():
+        formula[(p, line)] += v
+    return plan, {k: v for k, v in formula.items() if v}, {k: v for k, v in received.items() if v}
+
+
 class ReceivedEquality(unittest.TestCase):
     def test_the_model_counts_what_the_formula_counts(self):
         for k in range(12):
@@ -83,6 +110,19 @@ class ReceivedEquality(unittest.TestCase):
             self.assertEqual({key: v for key, v in formula.items() if v},
                              {key: v for key, v in received.items() if v}, f"request {k}")
 
+
+    def test_equality_through_the_floor_branch_and_overlapping_presence_rules(self):
+        # The random months never name a floor person; these cases are what guard that branch.
+        for name, body in (("floor, no pin", floor_request()), ("floor, received pin", floor_request(pinned=True)),
+                           ("two presence rules", floor_request(two_rules=True)),
+                           ("two rules and pins", floor_request(pinned=True, two_rules=True))):
+            plan, formula, model = received_pair(body)
+            self.assertTrue(any(plan.floor_persons.values()), f"{name}: no floor person, branch unreached")
+            self.assertEqual(formula, model, name)
+
+    def test_random_months_name_a_floor_person_somewhere(self):
+        named = sum(1 for k in range(12) if any(compute_plan(Facts(parse_request(random_request(k)))).floor_persons.values()))
+        self.assertGreater(named, 0)
 
     def test_equality_when_a_presence_member_holds_a_fixed_seat(self):
         s = [service(f"s{i}", d) for i, d in enumerate(NOV_SUNDAYS[:2])]
