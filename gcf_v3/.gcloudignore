@@ -1,0 +1,10 @@
+# Keep the build context to the three files the function needs.
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.err
+.DS_Store
+# Tests don't belong in the deployed function.
+test_*.py
+*_test.py
