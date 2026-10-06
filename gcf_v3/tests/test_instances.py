@@ -3,7 +3,7 @@
 import unittest
 
 from owt_v3.facts import Facts
-from owt_v3.instances import build_instances, cause
+from owt_v3.instances import build_instances, cause, violation_entry
 from owt_v3.request import parse_request
 from tests.builders import NOV_SATURDAYS, NOV_SUNDAYS, person, pin, request, service
 
@@ -156,6 +156,61 @@ class Causes(unittest.TestCase):
         F, inst, _ = built(request(svcs, people, rules=rules, pins=[pin(svcs[0], "Lead", "m-ana")]))
         [i] = of(inst, "presence")
         self.assertEqual(cause(F, i), "pins")
+
+
+class ViolationEntries(unittest.TestCase):
+    """The §8.1 `violations` wire shape, one full dict per family."""
+
+    def test_count_carries_person_month_observed_and_the_clamped_limit(self):
+        svcs = [service("n1", NOV_SUNDAYS[0])]
+        people = [person("m-ana", {"n1": ["Lead"]}, exempt=True)]
+        rules = [{"id": "cap-a", "kind": "count", "person": "m-ana", "roles": ["Sun.Lead"], "op": "==",
+                  "month": "2026-11", "value": 2}]
+        F, inst, _ = built(request(svcs, people, rules=rules))
+        [i] = of(inst, "count")
+        self.assertEqual(violation_entry(F, i, frozenset()),
+                         {"code": "count", "rule": "cap-a", "cause": "forced", "person": "m-ana",
+                          "month": "2026-11", "observed": 0, "limit": 1})
+
+    def test_pair_carries_persons_service_and_month(self):
+        svcs = [service("n1", NOV_SUNDAYS[0])]
+        people = everyone(svcs, ["m-ana", "m-bea"], ["Lead", "BGV"])
+        rules = [{"id": "cf-1", "kind": "pair", "persons": ["m-ana", "m-bea"], "roles": ["Sun.Lead", "Sun.BGV"]}]
+        F, inst, _ = built(request(svcs, people, rules=rules))
+        [i] = of(inst, "pair")
+        self.assertEqual(violation_entry(F, i, frozenset({("n1", "Lead", "m-ana"), ("n1", "BGV", "m-bea")})),
+                         {"code": "pair", "rule": "cf-1", "cause": "forced", "persons": ["m-ana", "m-bea"],
+                          "service": "n1", "month": "2026-11"})
+
+    def test_presence_carries_persons_service_and_month(self):
+        svcs = [service("n1", NOV_SUNDAYS[0])]
+        people = [person("m-ana", {"n1": ["BGV"]}, exempt=True), person("m-bea", {"n1": ["BGV"]}, exempt=True)]
+        rules = [{"id": "pr-1", "kind": "presence", "persons": ["m-ana"], "roles": ["Sun.BGV"], "exclusive": False}]
+        F, inst, _ = built(request(svcs, people, rules=rules))
+        [i] = of(inst, "presence")
+        self.assertEqual(violation_entry(F, i, frozenset()),
+                         {"code": "presence", "rule": "pr-1", "cause": "forced", "persons": ["m-ana"],
+                          "service": "n1", "month": "2026-11"})
+
+    def test_consecutive_carries_person_and_both_weekends(self):
+        svcs = [service("n1", NOV_SUNDAYS[0])]
+        prior = {"month": "2026-10", "has_services": True, "services": [
+            {"date": "2026-10-25", "kind": "sunday", "counts": True, "seats": {"Lead": ["m-ana"]}}]}
+        rules = [{"id": "cs-1", "kind": "consecutive", "person": "m-ana", "roles": ["Sun.Lead", "Sat.Lead"]}]
+        F, inst, _ = built(request(svcs, everyone(svcs, ["m-ana"], ["Lead"]), rules=rules, prior=prior,
+                                   pins=[pin(svcs[0], "Lead", "m-ana")]))
+        [i] = of(inst, "consecutive")
+        self.assertEqual(violation_entry(F, i, frozenset(F.pinned)),
+                         {"code": "consecutive", "rule": "cs-1", "cause": "pins", "person": "m-ana",
+                          "weekends": ["2026-10-25", "2026-11-01"]})
+
+    def test_mandatory_lead_names_its_reserved_rule_and_carries_service_and_month(self):
+        svcs = [service("n1", NOV_SUNDAYS[0])]
+        F, inst, _ = built(request(svcs, [person("m-ana", {"n1": ["Lead"]}, exempt=True)]))
+        [i] = of(inst, "mandatory_lead")
+        self.assertEqual(violation_entry(F, i, frozenset()),
+                         {"code": "mandatory_lead", "rule": "mandatory_lead", "cause": "forced",
+                          "service": "n1", "month": "2026-11"})
 
 
 if __name__ == "__main__":
