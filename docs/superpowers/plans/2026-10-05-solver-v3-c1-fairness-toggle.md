@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-05-solver-v3-c1-fairness-toggle-design.md` (APPROVED at critical tier by two fresh reviewers on sha256 `cd519cf479df9b3e3c423c2b974c991132c3f58af6b33205329180795ee4c87b`). Parent: `docs/superpowers/specs/2026-10-05-solver-v3-fairness-design.md` (L1, U7, A1, A13, A25, A27, A31). The spec is the contract; this plan never changes it. Executors read both.
 
-**Grounding.** Every file path, anchor and line number below was read on `origin/main` **`4759a214`** (2026-10-05). The whole plan was executed once in a scratch copy of that tree before it was written: after Task 14 the scratch tree passed `npx tsc --noEmit` (0 errors), `npm test` (437 files, 7954 passed, 1 skipped) and `npx eslint .` (0 errors, 81 warnings — exactly the `origin/main` baseline). The step-zero literals in Task 1 were computed on the unchanged code. If `origin/main` has moved when you start, re-run each `Find`/anchor before editing; a missing anchor is a stop-and-report, never a guess.
+**Grounding.** Every file path, anchor and line number below was read on `origin/main` **`4759a214`** (2026-10-05). The plan's own text was then applied mechanically, task by task, to a fresh copy of that tree (all 197 Create/Find→Replace/Append operations matched their anchors exactly once, or exactly the stated number of times): after **every** task `npx tsc --noEmit` reported 0 errors and `npm test` was fully green (427 → 437 test files), and after Task 14 `npx eslint .` reported 0 errors and 81 warnings — exactly the `origin/main` baseline. The step-zero literals in Task 1 were computed on the unchanged code. If `origin/main` has moved when you start, re-run each `Find` anchor before editing; a missing anchor is a stop-and-report, never a guess.
 
 ## Global Constraints
 
@@ -31,7 +31,7 @@ Every task's requirements include this section.
 - **The past-month rule is client-side only (C1-D7):** no route refuses on the month. Do not add a server check.
 - **No environment variable, no `docs/SECRETS.md` entry, no new ADR** (C1-D6). ADR-0010 gets a dated forward note only — its status line and decision texts do not change.
 - **No production Sanity writes** by the delivery. **`preview` writes the production dataset** (CLAUDE.md «Vercel safety»): a toggle flipped on dev is a real value on a real service — inert under v2, but real for C2's ledger later. Do not flip toggles on dev except as Frank's own look.
-- **`colour-inventory.json` tracks the tree:** `app/utils/__tests__/colourInventory.test.ts` compares `summary.filesScanned`, so every task that adds a non-test file under `app/` regenerates the artifact with `node scripts/colour-inventory.mjs` and commits it (Tasks 2, 7, 8).
+- **`colour-inventory.json` tracks the tree:** `app/utils/__tests__/colourInventory.test.ts` compares `summary.filesScanned`, so every task that adds a non-test file under `app/` regenerates the artifact with `node scripts/colour-inventory.mjs` and commits it (Tasks 2, 7, 8). Its per-row `line` values are for humans and the guard ignores them (`colourInventory.test.ts:10-13`): they go stale after Tasks 11–13 edit colour-bearing files, and that is expected — regenerate only if a reviewer asks.
 - **`CLAUDE.md` and `AGENTS.md` stay byte-identical** outside their title and «## Continuous improvement» section (`agentDocsParity.test.ts`): every `CLAUDE.md` edit is made in `AGENTS.md` too (Task 14).
 
 ---
@@ -238,6 +238,7 @@ C1-R2, §5.2: one GROQ fragment, one TS twin, one default, in one neutral module
 
 **Interfaces:**
 - Produces (spec §9, exact): `export type FairnessRoleType = "sunday_role" | "saturday_role" | "special_role"`; `export const COUNTS_FOR_FAIRNESS_GROQ = 'coalesce(countsForFairness, _type != "special_role")'`; `export function countsForFairnessDefault(roleType: FairnessRoleType): boolean`; `export function countsForFairness(doc: { _type: string; countsForFairness?: boolean | null }): boolean`.
+- Contract for every later consumer (C2's queries included): embed the rule by **interpolating** `COUNTS_FOR_FAIRNESS_GROQ` into your own query literal (as Task 6's `GET` does); never spell `coalesce(countsForFairness…` yourself — `countsForFairness.test.ts` sweeps `app/` and `sanity/` on every run and fails on a second spelling.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -5860,3 +5861,404 @@ git add app/components/admin/MonthGenerator.tsx app/components/admin/__tests__/M
 git commit -m "feat(planner): wire countsForFairness through MonthGenerator and «+ Nuevo servicio»" \
   -m "Solver v3 C1 §6.1, §6.4, §6.5. Create-mode header edits are held per column across steps, «Omitir» and Auto, and dropped when the date or special leaves the selection; stored edits ride the header overlay, so a toggle-only change is one dirty service. «+ Nuevo servicio» gets its own switch that follows the Tipo until touched, keys the creation request on the effective value and verifies a create only when the reload shows it. Every surface applies the past-month rule at render and again when the body is built."
 ```
+
+---
+
+## Task 14: Documentation in the same delivery
+
+C1-R13, C1-D6, spec §11. No new ADR; ADR-0010 gets a dated forward note only (its status line and decision texts unchanged — C7 turns the note's date into the in-force date when it amends decision 3). No `docs/SECRETS.md` entry: C1 introduces no environment variable. (The two `protectedReadAudit.ts` `reason` strings of §11 already landed in Tasks 4 and 5.)
+
+**Files:**
+- Modify: `docs/DATA_MODEL.md:119`, `:135`
+- Modify: `docs/API_REFERENCE.md:126`, `:353`, `:354`
+- Modify: `docs/NOTIFICATIONS.md:327` (new section before «## The proposal thread — what it notifies»)
+- Modify: `docs/MONTH_GRID_EDITING.md:169`
+- Modify: `docs/UTILITIES_AND_COMPONENTS.md:203` (new section), `:536` (inventory count), `:662` (admin table row)
+- Modify: `docs/adr/0010-specials-fill-locally-not-in-the-solver.md:16`
+- Modify: `CLAUDE.md:200`, `:482` **and** `AGENTS.md` at the same two anchors (byte-identical edits — `agentDocsParity.test.ts`)
+
+**Interfaces:** none (documentation).
+
+- [ ] **Step 1: `docs/DATA_MODEL.md` — the field on both role sections**
+
+Find:
+```md
+| `published` | boolean | Default `true`. `false` = draft (managers only). **The gate.** |
+```
+Replace with:
+```md
+| `published` | boolean | Default `true`. `false` = draft (managers only). **The gate.** |
+| `countsForFairness` | boolean | «Cuenta para equidad» (solver v3 C1). **Absent on documents created before C1** and read through the ONE rule `coalesce(countsForFairness, _type != "special_role")` ([`countsForFairness.ts`](../app/utils/countsForFairness.ts)) — a weekend role counts by default. Every create since C1 stores the explicit effective boolean; a `PATCH` sets it only when the body carries it and never unsets it (every planner save carries it); never `null`. **Not in `ROLE_PROJECTION`** — `GET /api/admin/roles` and the v3 ledger read it through their own projections, so R11's history-diff evidence is toggle-blind (C1 §10). Inert until v3 serves Auto. Visible and read-only in Studio, no `initialValue`. |
+```
+
+Find:
+```md
+| `published` | boolean | Default `true`. Draft gate. |
+```
+Replace with:
+```md
+| `published` | boolean | Default `true`. Draft gate. |
+| `countsForFairness` | boolean | Same field and rules as on the weekend roles — but a special **does not count by default** (absent reads `false`). Set by the special composer or «+ Nuevo servicio» at creation and by the stored-mode header after it. |
+```
+
+- [ ] **Step 2: `docs/API_REFERENCE.md` — body field, refusal, GET row, toggle-only rule**
+
+Find:
+```md
+  normalized `serviceName` (special only), effective `published`, and the ordered/normalized
+```
+Replace with:
+```md
+  normalized `serviceName` (special only), effective `published`, `countsForFairness` **only when it
+  differs from the type default** (a weekend `false`, a special `true` — so a body without it, or with
+  the default, hashes exactly as before solver v3 C1, and the version marker stays 1), and the ordered/normalized
+```
+
+Find:
+```md
+GET all role docs (incl. `_rev`) with resolved seats + joined setlist.
+```
+Replace with:
+```md
+GET all role docs (incl. `_rev`) with resolved seats + joined setlist; each row also carries `countsForFairness`, the effective boolean through `COUNTS_FOR_FAIRNESS_GROQ` (a legacy weekend row reads `true`, a legacy special `false`).
+```
+
+Find:
+```md
+one transaction creates the receipt + role + weekend lock claim.
+```
+Replace with:
+```md
+one transaction creates the receipt + role + weekend lock claim. Accepts optional `countsForFairness` on any type: `true`/`false`, absent = the type default; anything else, `null` included, is `400 invalid_request` (issue `countsForFairness`) before any read. The role always stores the effective boolean.
+```
+
+Find:
+```md
+PATCH updates date/name/assignments;
+```
+Replace with:
+```md
+PATCH updates date/name/assignments and — only when the body carries it — `countsForFairness` (absent = unchanged, never unset; a non-boolean is `400` before any read). A PATCH that carries `countsForFairness` and changes nothing a notice could report (same date; for a special the same name and time; every member keeps the same seat labels) queues no outbox notice and sends no push, but still revalidates; a PATCH without the field behaves exactly as before (see [NOTIFICATIONS](NOTIFICATIONS.md#a-toggle-only-patch-queues-nothing-solver-v3-c1));
+```
+
+- [ ] **Step 3: `docs/NOTIFICATIONS.md` — the toggle-only PATCH rule**
+
+Find:
+```md
+## The proposal thread — what it notifies
+```
+Replace with:
+```md
+## A toggle-only PATCH queues nothing (solver v3 C1)
+
+`PATCH /api/admin/roles/[id]` queues one outbox upsert per member in the union of
+before/after assignees on every published edit — even one that changes nothing a
+notice could report — and an upsert on a pending notice slides its `notifyAfter`
+and clears `servedRecipients`. The flush would send nothing for such a save, but the
+re-debounce would delay a notice about a real change. The «Cuenta para equidad»
+switch makes such saves routine, so C1 adds one exception and nothing else:
+
+- a PATCH that **carries `countsForFairness`** and changes nothing a notice could
+  report — the date does not move; for a special, the normalized name and the time
+  are unchanged (the email names a special by both); and every member in the union of
+  stored and requested assignees holds the same SET of seat labels (`rolesForMember`,
+  compared with the flush's own `sameSet`) — **queues no outbox notice and sends no
+  push**. Revalidation still runs.
+- a PATCH **without** the field queues exactly as before, a no-op save included.
+
+The predicate is `isNoticeNeutralEdit` (`serviceMutationSideEffects.ts`). It never
+reads the stored toggle — whether the value actually changed is irrelevant — so the
+route needs no extra read and `ROLE_PROJECTION` is unchanged. A create never mentions
+the toggle: its notices depend on seats and `published` only.
+
+## The proposal thread — what it notifies
+```
+
+- [ ] **Step 4: `docs/MONTH_GRID_EDITING.md` — the header switch, the note, the past-month rule**
+
+Find:
+```md
+survive. Semantic no-ops emit no PATCH and no notification work.
+```
+Replace with:
+```md
+survive. Semantic no-ops emit no PATCH and no notification work.
+
+**«Cuenta para equidad» (solver v3 C1).** Every create column, every stored column, the
+calendar's special composer and «+ Nuevo servicio» carry the house `Switch`
+(`FairnessSwitch`). Create columns enter at the type default — Domingo and Sábado on, a
+special at the composer's choice, off by default. A header edit is held per column while
+the column stays selected — across the config and grid steps, «Omitir» and Auto, which
+never changes it — and dropped when the date is deselected or the special removed. A
+column blocked from creation shows no switch. Stored columns read the `GET` row's
+effective value and edit it through the header overlay, beside Fecha/Nombre/Hora (gated
+by `readOnly` and the mutation lock, never by the date-move block); every stored PATCH
+carries the column's effective value and the semantic snapshot includes it, so a
+toggle-only change is one dirty service and reconciles like any other edit. «+ Nuevo
+servicio»'s switch follows the Tipo until touched, is part of the attempt identity, and a
+create verifies only when the reload shows the requested value. **Past months:** a service
+whose stored or edited date falls before the current CDMX month has its switch disabled,
+with «Mes pasado: ya no se cambia.» as its accessible description, and shows and sends
+its stored value (stored) or the type default (create). The rule is evaluated at render
+and again when each body is built; it is client-side only — neither route refuses on the
+month (C1-D7). While the engine is v2 each surface shows once: «Cuenta para equidad:
+aplica con el nuevo solver. Hoy Auto no lo usa.»
+```
+
+- [ ] **Step 5: `docs/UTILITIES_AND_COMPONENTS.md` — the module entries, the component row, the inventory count**
+
+Find:
+```md
+### Dates & schedule
+```
+Replace with:
+```md
+### Fairness toggle (solver v3 C1)
+
+- **`COUNTS_FOR_FAIRNESS_GROQ`, `countsForFairnessDefault(roleType)`, `countsForFairness(doc)`**
+  ([countsForFairness.ts](../app/utils/countsForFairness.ts)) — the ONE read rule for a role's
+  «Cuenta para equidad»: the GROQ fragment (a plain quoted string, never a template literal —
+  `draftGatingCoverage` scans those), its TypeScript twin and the type default (weekends
+  count, specials do not). Neutral, no imports; no other file spells the fragment or the
+  default (`countsForFairness.test.ts` evaluates both with `groq-js` and sweeps `app/` and
+  `sanity/` for a second spelling). `ROLE_PROJECTION` does not carry the field.
+- **`SOLVER_ENGINE: "v2" | "v3"`** ([solverEngine.ts](../app/components/admin/solverEngine.ts)) —
+  the engine constant and nothing else (parent A1), `"v2"`; neutral, no imports, pinned by
+  `solverEngine.test.ts`. C2 adds the effective-engine resolver beside it; C7 flips it.
+- **`fairnessToggleModel.ts`** ([source](../app/components/admin/fairnessToggleModel.ts)) — the
+  four copy strings, the past-month rule (`isPastServiceMonth`, CDMX via `serviceTodayIso`)
+  and the effective-value helpers every surface and every request body go through
+  (`effectiveCreateCounts`, `applyCreateCountsEdits`, `effectiveStoredCounts`,
+  `effectiveColumnCounts`, `isFairnessColumnPast`). Each takes `todayIso` (default: now), so
+  the rule is evaluated at render and again at body build.
+- **`isNoticeNeutralEdit`** (in [serviceMutationSideEffects.ts](../app/utils/serviceMutationSideEffects.ts))
+  — the toggle-only PATCH predicate; see [NOTIFICATIONS](NOTIFICATIONS.md#a-toggle-only-patch-queues-nothing-solver-v3-c1).
+
+### Dates & schedule
+```
+
+Find:
+```md
+| `PlannerGrid` | Renders the month grid `plannerModel` computes — dates across and seats down.
+```
+Replace with:
+```md
+| `FairnessSwitch` / `FairnessEngineNote` | The ONE «Cuenta para equidad» control (solver v3 C1): the house `Switch` (`size="sm"`), its visible label, an optional help line and — for a service of a past month — «Mes pasado: ya no se cambia.» as its `aria-describedby`; and the once-per-surface v2 note, shown only while `SOLVER_ENGINE === "v2"`. Used by both `PlannerGrid` header modes, `MonthCalendar`'s special composer and «+ Nuevo servicio». `PlannerGrid` renders neither unless it is given the optional `fairness` prop, so the theme-gallery fixture is unchanged. |
+| `PlannerGrid` | Renders the month grid `plannerModel` computes — dates across and seats down.
+```
+
+Recount the component inventory (the heading has drifted since 2026-09-18 — `song/` holds 9 files, not 7) and write the measured numbers:
+
+```bash
+for d in "" admin kids ui song availability; do printf '%s ' "${d:-top}"; ls app/components/${d:+$d/}*.tsx | wc -l; done
+find app/components -name '*.tsx' -not -path '*__tests__*' | wc -l
+```
+Expected on `4759a214` plus `FairnessSwitch.tsx`: `top 37`, `admin 25`, `kids 7`, `ui 27`, `song 9`, `availability 3`, total `108`. Then find:
+```md
+## `app/components/` — inventory (105 `.tsx` files: 37 top-level + 24 admin + 7 kids + 27 ui + 7 song + 3 availability; counted 2026-09-18, R6 tip — `BottomNavBar` and `TutorialPoster` are the two this phase added)
+```
+Replace with (use your measured numbers if they differ):
+```md
+## `app/components/` — inventory (108 `.tsx` files: 37 top-level + 25 admin + 7 kids + 27 ui + 9 song + 3 availability; recounted for solver v3 C1, which adds `FairnessSwitch`)
+```
+
+- [ ] **Step 6: ADR-0010 — the dated forward note only**
+
+In `docs/adr/0010-specials-fill-locally-not-in-the-solver.md`, find:
+```md
+> seats only; the one-service composer stays manual.
+```
+Replace with:
+```md
+> seats only; the one-service composer stays manual.
+
+> **2026-10-05 forward note (solver v3, C1):** role documents now carry
+> `countsForFairness` («Cuenta para equidad»; on by default for weekend services, off for
+> specials), read through `app/utils/countsForFairness.ts`. It is **inert under v2**:
+> specials still never reach CP-SAT, and no decision below changes. Decision 3 is amended
+> when v3 serves Auto — by solver v3's C7, which turns this note's date into the in-force
+> date (parent spec §9, A31).
+```
+
+Do not touch the `**Status:**` line or any decision's text.
+
+- [ ] **Step 7: `CLAUDE.md` and `AGENTS.md` — the invariant and the reusable-utils entries (identical edits in both files)**
+
+In **`CLAUDE.md` and then `AGENTS.md`**, find:
+```md
+  `serviceFormat.ts` and `songLeads.ts` are the ONLY definitions of these rules.
+```
+Replace with:
+```md
+  `serviceFormat.ts` and `songLeads.ts` are the ONLY definitions of these rules.
+- **`countsForFairness`: one read rule** (`app/utils/countsForFairness.ts` — GROQ fragment + twin +
+  default); PATCH absent = unchanged (never the `time` precedent); a PATCH that carries it and
+  changes nothing a notice could report queues no notice; `ROLE_PROJECTION` does not carry it;
+  inert until v3 serves Auto. The planner's Switch is disabled for a service of a past CDMX month —
+  a client-side rule only (C1-D7); neither roles route refuses on the month.
+```
+
+In **`CLAUDE.md` and then `AGENTS.md`**, find:
+```md
+ADR-0046; `true` is the rollback), `trailingSaturday`/`rolesOfPattern`
+```
+Replace with:
+```md
+ADR-0046; `true` is the rollback), `countsForFairness`/`countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ` (`app/utils/countsForFairness.ts` — the ONE «Cuenta para equidad» read rule; neutral; nothing else spells the fragment or the default), `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts` — the engine constant only, `"v2"`; the effective-engine resolver is C2's, parent A1), `FairnessSwitch`/`FairnessEngineNote` (`app/components/admin/FairnessSwitch.tsx` — the ONE «Cuenta para equidad» control and its v2 note on all four surfaces; the past-month rule and effective values live in `fairnessToggleModel.ts`), `trailingSaturday`/`rolesOfPattern`
+```
+
+- [ ] **Step 8: Run the doc guards**
+
+Run: `npx vitest run app/utils/__tests__/agentDocsParity.test.ts app/utils/__tests__/countsForFairness.test.ts`
+Expected: PASS (the docs are not under `app/` or `sanity/`, so the single-spelling sweep is unaffected).
+
+- [ ] **Step 9: Gates**
+
+Run: `npx tsc --noEmit && npm test && npx eslint .`
+Expected: 0 tsc errors; all green; eslint 0 errors.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add docs/DATA_MODEL.md docs/API_REFERENCE.md docs/NOTIFICATIONS.md docs/MONTH_GRID_EDITING.md \
+  docs/UTILITIES_AND_COMPONENTS.md docs/adr/0010-specials-fill-locally-not-in-the-solver.md CLAUDE.md AGENTS.md
+git commit -m "docs(fairness): countsForFairness, the toggle-only PATCH rule and the past-month rule" \
+  -m "Solver v3 C1 §11, in the same delivery. The data model, the API reference, the notifications guide and the grid-editing guide describe the field, its read rule, the create/PATCH semantics, the toggle-only notice exception and the client-side past-month rule; CLAUDE.md and AGENTS.md gain the invariant and the reusable-utils entries; ADR-0010 gets a dated forward note only — C7 amends decision 3 when v3 serves Auto. No env var, so no SECRETS entry."
+```
+
+---
+
+## Task 15: Verify the delivery against the spec before any push
+
+C1-R7 and spec §15 «Verification». Nothing is committed here unless a check fails and is fixed (then fix → gates → its own commit, and re-run this whole task).
+
+**Files:** none (read-only checks).
+
+- [ ] **Step 1: The four gates on the final tree**
+
+Run: `npx tsc --noEmit && npm test && npx eslint .`
+Expected: 0 tsc errors; every test green (437 files on a `4759a214` base); eslint 0 errors and no more warnings than `origin/main` (81 on `4759a214`). `gcf/**` is untouched, so the Python gate does not apply — confirm with Step 2.
+
+- [ ] **Step 2: C1-R7 — nothing that must not move moved**
+
+Run:
+```bash
+git diff --name-only origin/main...HEAD | grep -E '(Commit\.ts$|(^|/)publishVerdict\.ts$|(^|/)publishReadyBundle\.ts$|^app/mcp/|(^|/)computeParticipation\.ts$|(^|/)ParticipationSidebar\.tsx$|^app/utils/solverHistory[^/]*\.ts$|^gcf/)'
+```
+Expected: **no output**. (The pattern deliberately matches the production `app/utils/solverHistory*.ts` modules; the two fixture files under `app/utils/__tests__/` are covered by the Global Constraints' reading note.)
+
+Run:
+```bash
+git diff --name-only origin/main...HEAD -- app/mcp app/utils/__tests__/serviceCommitCallers.test.ts app/utils/__tests__/draftGatingCoverage.test.ts app/utils/__tests__/clientBoundary.test.ts app/utils/__tests__/protectedReadAudit.test.ts app/utils/serviceReadQueries.ts
+```
+Expected: **no output** — the mirror/parity (`app/mcp/reads/__tests__/serviceSnapshot{Mirror,Parity}.test.ts`), caller-pin, draft-gating, MCP literal, client-boundary and audit tests are green with no edit to their tables, and `ROLE_PROJECTION`'s module is untouched.
+
+Run: `git diff origin/main...HEAD -- app/utils/protectedReadAudit.ts | grep -E '^[-+][^-+]'`
+Expected: exactly two `-`/`+` pairs, both `reason:` strings (POST and PATCH) — no entry added or removed.
+
+- [ ] **Step 3: C1-R2 — one spelling; no Studio default**
+
+Run: `grep -rn 'coalesce(countsForFairness' app sanity | grep -v __tests__`
+Expected: one line, `app/utils/countsForFairness.ts`.
+
+Run: `grep -n 'initialValue' sanity/schemas/sunRole.ts sanity/schemas/satRole.ts sanity/schemas/specialRole.ts`
+Expected: exactly one line per file — `published`'s `initialValue: true` — none for `countsForFairness`.
+
+- [ ] **Step 4: Spec-row spot checks**
+
+Run: `npx vitest run app/utils/__tests__/roleCreationReceipt.test.ts app/utils/__tests__/serviceReadQueries.test.ts app/utils/__tests__/roleWriteRequest.test.ts -t "frozen|historical fingerprint|exact historical"`
+Expected: PASS — Task 1's eight literals, the `ROLE_PROJECTION` literal and the two pre-existing pins in `roleWriteRequest.test.ts` are green and unedited since Task 1.
+
+Run: `git log --format=%B origin/main..HEAD | grep -ci 'co-authored-by'`
+Expected: `0`.
+
+- [ ] **Step 5: Report**
+
+Record for the code review: the commit list (`git log --oneline origin/main..HEAD`), the gate output summary, and the outputs of Steps 2–4.
+
+---
+
+## Release
+
+The branch is `claude/solver-v3-c1-fairness-toggle` (Task 0). The order is CLAUDE.md's and is not shortened:
+
+    implement (Tasks 1–15) → gates green → FRESH CODE REVIEW of the merge range → fix
+    → RE-VERIFY THE FIX (scoped review of the fix range + gates on the final tree)
+    → merge into preview, push preview → verify the dev alias → Frank's look on dev
+    → PR to main → `gates` green → arm auto-merge on the verified commit → verify the prod alias
+
+1. **Fresh code review** — run the `finish-cycle` skill. Its code-review dispatch reviews `origin/main...HEAD` against the spec (critical tier: production writers, the fingerprint and the notice path), and carries the docs-audit (spec §11 checklist) and worklog-completeness checklists. Every fix gets its own commit, then a scoped re-review of the fix range and the four gates on the final tree; the last worklog entry before any merge is a verification, never a fix.
+2. **`preview` first** — verify `.vercel/project.json` names `owt-backstage` / `prj_elS88VGezKpy18wizFN1ffoy8cJ5` before any Vercel command. Then:
+   ```bash
+   git switch preview && git pull --ff-only origin preview
+   git merge --no-ff claude/solver-v3-c1-fairness-toggle
+   git push origin preview
+   ```
+   Verify with one authoritative `get_deployment("dev-owt-backstage.vercel.app")` (or the `deploy-verifier` agent), retried ≥30 s apart: `dev-owt-backstage.vercel.app` is in `alias` and `meta.githubCommitSha` equals the pushed `preview` commit. Never a hand-rolled watcher; never `--wait` on the alias.
+3. **Frank's look on dev** (spec §15 C1-R10/R11/R14) — each of the four surfaces with the note visible: a create month's grid headers, the calendar's special composer, a stored month's headers, «+ Nuevo servicio»; and a **past month opened from «Roles previos»** showing every switch disabled with «Mes pasado: ya no se cambia.». **Preview writes the production dataset:** a toggle flipped on dev is a real stored value (inert under v2, read by C2 later) — flip only what Frank intends to keep, or flip it back. Agents may observe dev read-only with `scripts/dev-verify.ts` once `docs/DEV_VERIFY.md`'s «Verified runs» are recorded; that never replaces Frank's look.
+4. **PR to `main`** from `claude/solver-v3-c1-fairness-toggle` (body: spec link, the C1-R1…R14 coverage table below, gate results, review outcome; no AI attribution). Wait for `gates`. Arm auto-merge **last**, on the exact commit that was reviewed, re-verified and seen on dev: `gh pr merge <n> --auto --merge`. If anything is pushed to the branch afterwards (a review fix, a catch-up merge of `main`), `gh pr merge <n> --disable-auto` **before** that push, and re-arm only once that commit is verified too.
+5. **After the merge** — verify the production alias the same way (`owt-backstage.vercel.app` in `alias`, `githubCommitSha` = the merge commit). Then record the release (merge SHA, date) in the coordinator's worklog and in the solver v3 program notes, remove the worktree if one was used (`git worktree remove`; `git worktree prune` at the next cycle open), and append every dispatch's `WORKLOG:` line to `.agents/log/worklog.jsonl`.
+6. **Not part of this delivery:** a hosted Studio schema deploy (spec §8: optional, existing practice in `docs/DATA_MODEL.md`, Frank's call — the embedded Studio ships the field with the app); any production Sanity write or backfill (the read rule makes one unnecessary — spec §12).
+7. **Rollback** (spec §8): revert the PR while neither C2 nor C6 has merged. Once either has, revert only the four Switch surfaces and the note, keeping both modules, the GET row field, the client types and the writers' acceptance of the field; anything further is a forward fix.
+
+---
+
+## Coverage — spec row → task
+
+| Spec row | Where it is implemented and proven |
+|---|---|
+| **C1-R1** Schema field, Studio read-only | Task 3 (`countsForFairnessSchema.test.ts`; `studioProtection.test.ts` unedited); dev look (Release 3) |
+| **C1-R2** One fragment, one twin, one default | Task 2 (`groq-js` 12-document sync, plain-string and single-spelling guards); Task 3 (no `initialValue`); Task 15 Step 3 |
+| **C1-R3** Create accepts/validates/stores | Task 4 (parser, builder and route tests: absent → default stored, `true`/`false` stored, `null`/`"true"`/`1` → 400 with no read or write) |
+| **C1-R4** Fingerprint off-default only, `v` = 1 | Task 1 (eight frozen literals), Task 4 (default-explicit ≡ literal, off-default differs, `v` = 1, invalid deterministic, flipped toggle → 409, pre-C1 receipt replays) |
+| **C1-R5** Edit: absent unchanged, boolean set, invalid refused before any read | Task 5 (parser/patch tests; route tests on all three types: key in neither `set` nor `unset`) |
+| **C1-R6** Toggle-only PATCH queues nothing | Task 5 (`isNoticeNeutralEdit` unit tests; route: zero upserts, zero pushes, revalidation called; toggle + seat change, rename, retime and no-field no-op all queue as today) |
+| **C1-R7** Every other writer/reader unchanged | Task 1 (`ROLE_PROJECTION` literal); Task 15 Step 2 (file audit; mirror/parity/caller-pin/draft-gating/MCP/boundary tests unedited; audit `reason` strings only) |
+| **C1-R8** GET row field | Task 6 (query contains the fragment; `groq-js` over legacy rows) |
+| **C1-R9** Planner carries the value through bodies, dirty check, reconciliation | Task 9 (columns, drafts, create body), Task 10 (PATCH body, snapshot, dirty, applied/unknownConflict/committedThenSuperseded), Task 13 (end to end) |
+| **C1-R10** The Switch on four surfaces with defaults, states, copy | Tasks 8, 11 (grid both modes), 12 (special composer), 13 («+ Nuevo servicio», wiring); dev look |
+| **C1-R11** `solverEngine.ts` constant only; note exactly while v2 | Task 7 (pin, annotation, neutrality); Task 8 (note under v2); Task 12 (`fairnessEngineV3.test.tsx`: note absent, switches kept); Tasks 11–13 (note once per surface) |
+| **C1-R12** v2 inert | Task 9 (`fairnessInertV2.test.ts`: `historyEntryFromDrafts` identical all-on/all-off; `buildSolveRequest` takes no columns); no `gcf/**` change (Task 15) |
+| **C1-R13** Docs in the same delivery | Task 14; `protectedReadAudit.ts` reasons in Tasks 4–5; the code review's docs-audit checklist (Release 1) |
+| **C1-R14** No surface sets a past value | Task 8 (rule, reason as description), 9 (draft body at the type default; boundary), 10 (stored body/snapshot at the stored value; edited-date past; boundary), 11 (grid both modes), 12 (composer), 13 (stored past month as «Roles previos» opens it; month boundary; «+ Nuevo servicio» past date; create past month) |
+| **C1-D1** `ROLE_PROJECTION` byte-identical | Tasks 1, 6, 15 |
+| **C1-D2** Toggle-only defined semantically; no-field requests unchanged | Task 5 |
+| **C1-D3** `true`/`false`/absent only | Tasks 4, 5 |
+| **C1-D4** Create stores the explicit effective boolean | Task 4 |
+| **C1-D5** Stored PATCH body always carries the effective value | Task 10 (and the three updated body expectations) |
+| **C1-D6** No ADR; ADR-0010 dated note only | Task 14 Step 6 |
+| **C1-D7** Past-month rule is client-side | Tasks 8–13; no server refusal anywhere (Tasks 4–5 add none) |
+| §5.1 Stored field (absent legacy, never `null`, Studio copy) | Tasks 3, 4, 5 |
+| §5.2 Read rule, string form, audit scope | Task 2 (`protectedReadAudit`, `draftGatingCoverage`, `clientBoundary` green unedited) |
+| §5.3 Create (validation, fingerprint, document, side effects, response) | Task 4 |
+| §5.4 Edit (validation, absent, present, toggle-only, response) | Task 5 |
+| §5.5 Every other writer unchanged; a swap never moves the value | Task 15 Step 2 (no `*Commit.ts`, publish or copy-instruments change); Task 10 (a swap's expected snapshot serializes the stored value; swaps stay refused while dirty) |
+| §5.6 Readers | Tasks 1, 6, 15 |
+| §6.0 Past months | Tasks 8–13 (render and body build, fixed clocks on both sides of a boundary) |
+| §6.1 Model (effective value; create held across steps/Omitir/Auto, dropped on deselect/remove; stored overlay) | Tasks 9, 10, 13 |
+| §6.2 Create header | Tasks 11, 13 |
+| §6.3 Special composer | Task 12 |
+| §6.4 Stored header | Tasks 11, 13 |
+| §6.5 «+ Nuevo servicio» (follows Tipo; disabled with the composer; identity; verification; past date) | Task 13 |
+| §6.6 Note and engine module | Tasks 7, 8, 11–13 |
+| §6.7 Preserved UI invariants | Global Constraints; Tasks 8, 11 (house `Switch`; note outside the scroller); Task 13 (handlers keep their flows) |
+| §7 Step zero | Task 1 |
+| §7 Required tests table | Read rule T2 · Fingerprint T1/T4 · Harness mirror T4 · R11 positive control T9 (+ T4/T9 fixture edits to `solverHistoryEvidence.test.ts`) · Create route T4 · Edit route T5 · GET roles T6 · Untouched paths T15 · Save model T10 · Read model T9/T10 · Draft create T9 · Planner model T9 · UI T8/T11/T12/T13 · Studio T3 · Engine module T7 |
+| §8 Rollout, skew, rollback | Release (preview first; no production write; rollback rule) |
+| §9 Interfaces (exact shapes) | Task 2 (module), Task 4 (POST body), Task 5 (PATCH body), Task 6 (GET row), Task 7 (engine), Tasks 9–10 (client types), Task 8 (copy) |
+| §10 Known limits | Task 9 (`countsForFairnessEvidence.test.ts` pins the R11 off-default limit); Task 14 (DATA_MODEL states it) |
+| §11 Documentation | Task 14 (+ audit reasons, Tasks 4–5) |
+| §15 Verification | Task 15; Release 1–5 (review, alias checks, Frank's look incl. «Roles previos») |
+
+**Stated equivalence (not a gap):** spec §7 «UI» asks for the past-month state «including a past month opened from «Roles previos»». `ServicesPanel` opens it by mounting `MonthGenerator mode="stored" initialMonth=<past month>` (`ServicesPanel.tsx:977-1000`) and C1 changes nothing on that path but the Switch, so Task 13 renders that exact mount with the real grid; the click path itself is covered by Frank's look on dev (Release 3).
+
+## Self-review (writing-plans checklist)
+
+- **Spec coverage:** every C1-R, C1-D, §5–§11 and §15 row maps to a task above; no row is uncovered.
+- **Placeholders:** none. Every code step shows the exact code; every edit names an anchor that exists on `4759a214` exactly once (or says «both occurrences»/«all three»); every run step names the command and the expected result. The one interim value (Task 9 Step 7) is a real, behaviour-preserving value replaced by name in Task 13 Step 8.
+- **Type consistency:** `COUNTS_FOR_FAIRNESS_GROQ`, `countsForFairnessDefault`, `countsForFairness` (imported as `readCountsForFairness` where a property of the same name exists), `FairnessRoleType`, `SOLVER_ENGINE`, `FAIRNESS_*`, `isPastServiceMonth`, `effectiveCreateCounts`, `applyCreateCountsEdits`, `withoutCountsEdit`, `isStoredColumnPast`, `effectiveStoredCounts`, `isFairnessColumnPast`, `effectiveColumnCounts`, `fairnessSwitchLabel`, `FairnessSwitch`, `FairnessEngineNote`, `StoredHeaderPatch`, `isNoticeNeutralEdit`, `sameSet`, `storedFairness` and the `fairness` prop keep one spelling and one signature from the task that produces them to every task that consumes them.
+- **Executed:** the plan's text was applied task by task to a fresh copy of `4759a214`; every task ended with `tsc` clean and the full suite green, and the final tree passed all four gates with the eslint warning count equal to the baseline. Every new file in the plan is byte-identical to the file that passed.
+
+## Execution handoff
+
+Execution is **subagent-driven** (the coordinator's choice — no question needed): **REQUIRED SUB-SKILL: superpowers:subagent-driven-development.** One fresh implementer per task, in order (Tasks 0–15 are sequential: each consumes the previous one's interfaces), each given this plan, the spec and its task; a review between tasks. Tasks 9 and 13 are the largest and touch shared fixtures — do not run them in parallel with anything. Every dispatch ends with a `WORKLOG:` trailer, which the coordinator appends to `.agents/log/worklog.jsonl` (batched at cycle close is fine). Close the cycle with `finish-cycle` before any push (Release 1).
