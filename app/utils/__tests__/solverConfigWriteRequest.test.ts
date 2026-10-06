@@ -320,3 +320,98 @@ describe("C3 step zero — a cadence-free config serializes byte-identically to 
     expect(JSON.stringify(parsed.value.fields)).toBe(FROZEN_FIELDS_JSON);
   });
 });
+
+// ─── Solver v3 C3 · «Mes por medio» (`sundayCadence`) — T1, T2, T3 ───────────
+//
+// Absent = «Normal», `"alternate"` = «Mes por medio», and nothing else is ever
+// stored (C3 §6.1–§6.3). «Normal» is never a key: a document without the
+// cadence stays byte-identical to what pre-C3 code writes (step zero above).
+function cadenceBody(sundayCadence: unknown, withKey = true) {
+  const restriction: Record<string, unknown> = {
+    id: "r-ana", person: "Ana", excludedPatterns: [], fairness: "none", fairnessSlack: 1,
+    weekExclusions: [], caps: [],
+  };
+  if (withKey) restriction.sundayCadence = sundayCadence;
+  return { sundayLeads: [], saturdayLeads: [], support: [], restrictions: [restriction], conflicts: [], presence: [] };
+}
+
+describe("parseSolverConfigWrite — `sundayCadence` (C3 T1)", () => {
+  it("absent ⇒ «Normal»: no key in the canonical config and none in the stored fields", () => {
+    const parsed = parseSolverConfigWrite(cadenceBody(undefined, false));
+    if (!parsed.ok) throw new Error(parsed.issues.join(", "));
+    expect(parsed.value.config.restrictions[0]).not.toHaveProperty("sundayCadence");
+    const stored = (parsed.value.fields.restrictions as Record<string, unknown>[])[0];
+    expect(stored).not.toHaveProperty("sundayCadence");
+  });
+
+  it('`"alternate"` is kept in the config and stored', () => {
+    const parsed = parseSolverConfigWrite(cadenceBody("alternate"));
+    if (!parsed.ok) throw new Error(parsed.issues.join(", "));
+    expect(parsed.value.config.restrictions[0].sundayCadence).toBe("alternate");
+    const stored = (parsed.value.fields.restrictions as Record<string, unknown>[])[0];
+    expect(stored.sundayCadence).toBe("alternate");
+  });
+
+  it("a restriction carrying ONLY the cadence is a valid rule (no clause needed)", () => {
+    const parsed = parseSolverConfigWrite(cadenceBody("alternate"));
+    expect(parsed.ok).toBe(true);
+  });
+
+  for (const bad of ["normal", "Alternate", true, null, 1, "", "alternate "]) {
+    it(`refuses ${JSON.stringify(bad)} at restrictions[0].sundayCadence, writing nothing`, () => {
+      const parsed = parseSolverConfigWrite(cadenceBody(bad));
+      expect(parsed.ok).toBe(false);
+      if (parsed.ok) return;
+      expect(parsed.issues).toEqual(["restrictions[0].sundayCadence"]);
+    });
+  }
+});
+
+describe("solverConfigFields — `sundayCadence` (C3 T2)", () => {
+  it("emits no `sundayCadence` key for a «Normal» restriction", () => {
+    const fields = solverConfigFields(FROZEN_CONFIG);
+    for (const r of fields.restrictions as Record<string, unknown>[]) {
+      expect(r).not.toHaveProperty("sundayCadence");
+    }
+  });
+
+  it('emits `sundayCadence: "alternate"` after `caps`, and only on the restriction that carries it', () => {
+    const config: SolverConfig = {
+      ...FROZEN_CONFIG,
+      restrictions: [{ ...FROZEN_CONFIG.restrictions[0], sundayCadence: "alternate" }, FROZEN_CONFIG.restrictions[1]],
+    };
+    const [ana, bruno] = solverConfigFields(config).restrictions as Record<string, unknown>[];
+    expect(Object.keys(ana).slice(-2)).toEqual(["caps", "sundayCadence"]);
+    expect(ana.sundayCadence).toBe("alternate");
+    expect(bruno).not.toHaveProperty("sundayCadence");
+  });
+});
+
+describe("solverConfigFromDocument — `sundayCadence` (C3 T3)", () => {
+  const stored = (sundayCadence: unknown) => ({
+    restrictions: [{ _key: "r-ana", id: "r-ana", person: "Ana", fairness: "none", sundayCadence }],
+  });
+
+  it('reads `"alternate"` back as «Mes por medio»', () => {
+    expect(solverConfigFromDocument(stored("alternate")).restrictions[0].sundayCadence).toBe("alternate");
+  });
+
+  it("reads any other stored value as «Normal» — total and defensive, like `fairness`", () => {
+    for (const v of ["normal", "biweekly", null, true, 1, undefined]) {
+      expect(solverConfigFromDocument(stored(v)).restrictions[0], JSON.stringify(v)).not.toHaveProperty("sundayCadence");
+    }
+  });
+
+  it("write → read keeps the field and every id", () => {
+    const config: SolverConfig = {
+      ...FROZEN_CONFIG,
+      restrictions: [{ ...FROZEN_CONFIG.restrictions[0], sundayCadence: "alternate" }, FROZEN_CONFIG.restrictions[1]],
+    };
+    const parsed = parseSolverConfigWrite(config);
+    if (!parsed.ok) throw new Error(parsed.issues.join(", "));
+    const back = solverConfigFromDocument({ _id: SOLVER_CONFIG_DOC_ID, ...parsed.value.fields });
+    expect(back).toEqual(config);
+    expect(back.restrictions[0].sundayCadence).toBe("alternate");
+    expect(back.restrictions[1]).not.toHaveProperty("sundayCadence");
+  });
+});

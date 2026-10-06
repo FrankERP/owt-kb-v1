@@ -131,6 +131,15 @@ export const solverConfig = defineType({
                 },
               ],
             },
+            {
+              // Solver v3 C3 §6.10: «Mes por medio». Inspection only — absent
+              // means «Normal» and is never stored as a value.
+              name: "sundayCadence",
+              title: "Domingo",
+              type: "string",
+              description: "Interno: vacío = Normal",
+              options: { list: [{ title: "Mes por medio", value: "alternate" }] },
+            },
           ],
         },
       ],

@@ -53,8 +53,16 @@ export const SOLVER_CONFIG_DOC_ID = "solverConfig";
 /** The stored `_type`. Same string as the id; they are independent choices. */
 export const SOLVER_CONFIG_TYPE = "solverConfig";
 
-const FAIRNESS_VALUES = ["none", "exempt", "slack"] as const;
-const CAP_OPS = ["<=", ">=", "=="] as const;
+/**
+ * The accepted values of the three enumerated fields. Exported for the version
+ * tripwire (`solverConfigVersion.test.ts`), which pins them: a value an older
+ * client would read as something else is a document-shape change and bumps
+ * `SOLVER_CONFIG_VERSION` in the same change (C3 §6.2).
+ */
+export const FAIRNESS_VALUES = ["none", "exempt", "slack"] as const;
+export const CAP_OPS = ["<=", ">=", "=="] as const;
+/** «Mes por medio». Absence is «Normal»; «Normal» is never a stored value (C3 §6.1). */
+export const SUNDAY_CADENCE_VALUES = ["alternate"] as const;
 
 export type SolverConfigWriteFields = Record<string, unknown>;
 
@@ -165,6 +173,14 @@ export function parseSolverConfigWrite(body: unknown): ParsedSolverConfigWrite {
         issues.push(`${itemPath}.fairness`);
         return null;
       }
+      // C3 §6.2: absent ⇒ «Normal» (no key anywhere); `"alternate"` ⇒ kept;
+      // anything else — `null`, `"normal"`, a different case — is refused, like
+      // every value the UI cannot produce.
+      const cadence = item.sundayCadence;
+      if (cadence !== undefined && !(SUNDAY_CADENCE_VALUES as readonly unknown[]).includes(cadence)) {
+        issues.push(`${itemPath}.sundayCadence`);
+        return null;
+      }
       const slack = finiteNumber(item.fairnessSlack) ?? 1;
       const weekExclusions = mapItems<WeekExclusion>(
         item.weekExclusions,
@@ -223,6 +239,7 @@ export function parseSolverConfigWrite(body: unknown): ParsedSolverConfigWrite {
         fairnessSlack: slack,
         weekExclusions,
         caps,
+        ...(cadence === "alternate" ? { sundayCadence: "alternate" as const } : {}),
       };
     },
   );
@@ -298,6 +315,9 @@ export function solverConfigFields(config: SolverConfig): SolverConfigWriteField
         relative: c.relative,
         relOffset: c.relOffset,
       })),
+      // «Normal» writes NO key, so a cadence-free document stays byte-identical
+      // to what pre-C3 code writes (C3 §6.1; pinned by the step-zero literal).
+      ...(r.sundayCadence === "alternate" ? { sundayCadence: "alternate" } : {}),
     })),
     conflicts: config.conflicts.map((c) => ({
       _type: "solverConflict",
@@ -395,6 +415,10 @@ export function solverConfigFromDocument(doc: unknown): SolverConfig {
             ]
           : [];
       }),
+      // Total and defensive, like `fairness`: only `"alternate"` reads as «Mes
+      // por medio»; a value a FUTURE version writes reads as «Normal» here — and
+      // that version's bump refuses this one's saves, so it is never erased.
+      ...(item.sundayCadence === "alternate" ? { sundayCadence: "alternate" as const } : {}),
     });
   }
 

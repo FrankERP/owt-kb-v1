@@ -269,6 +269,12 @@ export interface PersonRestriction {
   fairnessSlack: number;
   weekExclusions: WeekExclusion[];
   caps: RestrictionCap[];
+  /**
+   * «Domingo: Mes por medio» (solver v3 C3). Present ONLY for «Mes por medio»;
+   * absent means «Normal», and «Normal» is never stored. Inert under v2: see
+   * `v2View`. The setting only — the cadence STATE is never stored (C2).
+   */
+  sundayCadence?: "alternate";
 }
 
 export interface ConflictRule {
