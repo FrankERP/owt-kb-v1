@@ -20,6 +20,13 @@
 // string appears — so an `items-center` baked into this component always
 // beats an `items-start` passed in from outside. `align` picks exactly one
 // of the two classes instead of letting both compile in.
+//
+// The label is `relative` so the sr-only (absolute) input's containing block is
+// the label itself. Without it the containing block lay outside the planner's
+// `overflow-x-auto` scroller, which can only clip an absolute box whose containing
+// block is at or inside it — the «Omitir» inputs of the off-screen columns sat at
+// x≈1776 and panned the whole page (2026-10-06, ADR-0035;
+// `hiddenControlContainment.test.ts`).
 
 import type { ComponentPropsWithoutRef, ReactNode } from "react";
 
@@ -46,7 +53,7 @@ export default function Checkbox({
   className?: string;
 }) {
   return (
-    <label className={`inline-flex cursor-pointer gap-2 ${align === "start" ? "items-start" : "items-center"} ${className}`.trim()}>
+    <label className={`relative inline-flex cursor-pointer gap-2 ${align === "start" ? "items-start" : "items-center"} ${className}`.trim()}>
       <input type="checkbox" className="peer sr-only" {...input} />
       <span
         aria-hidden
