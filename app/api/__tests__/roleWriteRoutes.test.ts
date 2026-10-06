@@ -58,6 +58,8 @@ vi.mock("next/server", async (importOriginal) => {
 
 import { payloadFingerprint, receiptIdForRequestId } from "@/app/utils/roleCreationReceipt";
 import { WORSHIP_MEMBER_GROQ_FILTER } from "@/app/ministries";
+import { evaluate, parse } from "groq-js";
+import { COUNTS_FOR_FAIRNESS_GROQ } from "@/app/utils/countsForFairness";
 import { GET as membersGET } from "@/app/api/admin/members/route";
 import { GET as rolesGET, POST as createPOST } from "@/app/api/admin/roles/route";
 import { PATCH as rolePATCH, DELETE as roleDELETE } from "@/app/api/admin/roles/[id]/route";
@@ -463,6 +465,34 @@ describe("GET /api/admin/roles — stored editor projection", () => {
 
     const query = operationalFetch.mock.calls[0][0] as string;
     expect(query).toContain('"published": coalesce(published, true)');
+  });
+
+  it("projects the effective countsForFairness through the one read rule (solver v3 C1-R8)", async () => {
+    operationalFetch.mockResolvedValueOnce([]);
+    expect((await rolesGET()).status).toBe(200);
+    const query = operationalFetch.mock.calls[0][0] as string;
+    expect(query).toContain(`"countsForFairness": ${COUNTS_FOR_FAIRNESS_GROQ}`);
+  });
+
+  it("reads a legacy weekend row as counted and a legacy special as not counted", async () => {
+    operationalFetch.mockResolvedValueOnce([]);
+    await rolesGET();
+    const query = operationalFetch.mock.calls[0][0] as string;
+    const dataset = [
+      { _id: "sun-legacy", _type: "sunday_role", week: "2026-11-01" },
+      { _id: "sat-legacy", _type: "saturday_role", week: "2026-11-07" },
+      { _id: "sp-legacy", _type: "special_role", date: "2026-11-11", service_name: "Vigilia" },
+      { _id: "sun-off", _type: "sunday_role", week: "2026-11-08", countsForFairness: false },
+      { _id: "sp-on", _type: "special_role", date: "2026-11-12", service_name: "Retiro", countsForFairness: true },
+    ];
+    const rows = (await (await evaluate(parse(query), { dataset })).get()) as { _id: string; countsForFairness: boolean }[];
+    expect(Object.fromEntries(rows.map((row) => [row._id, row.countsForFairness]))).toEqual({
+      "sun-legacy": true,
+      "sat-legacy": true,
+      "sp-legacy": false,
+      "sun-off": false,
+      "sp-on": true,
+    });
   });
 });
 
