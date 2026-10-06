@@ -13,7 +13,10 @@
 // so a new caller — or a new `*Commit` module — fails here until someone adds
 // it on purpose.
 //
-// WHAT COUNTS AS A CALLER. Any git-tracked, non-test source under `app/` whose
+// WHAT COUNTS AS A CALLER. Any git-tracked, non-test source under `app/` or
+// `scripts/` (widened for the fairness write executor, solver v3 C2 WR-16: C4's
+// `tsx` script is its one importer outside `app/`, and a wider scan loosens no
+// existing row — no script imports any other pinned module) whose
 // comment-stripped code imports the module by a value import: `import … from`,
 // `export … from`, a side-effect `import "…"`, a dynamic `import("…")` or a
 // `require("…")`. A TYPE-ONLY import (`import type …`, or braces whose every
@@ -45,13 +48,17 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   roleSwapCommit: ["app/api/admin/roles/swap/route.ts", "app/mcp/tools/swapAssignment.ts"],
   roleUnpublishCommit: ["app/api/admin/roles/unpublish/route.ts", "app/mcp/tools/unpublishService.ts"],
   setlistSaveCommit: ["app/api/admin/setlists/route.ts", "app/mcp/tools/editSetlist.ts"],
+  // Solver v3 C2 WR-16 / IF2-23: the ONE mutation path of `fairnessMonth`. Its importer
+  // list grows only by a reviewed edit here — C2 adds `fairnessMonthCommit.ts` and
+  // `fairnessLedgerRead.ts`; C4 adds its CLI file and its `scripts/lib` core.
+  fairnessMonthWriteRequest: [],
 };
 
 /**
  * Pinned modules whose name does not end in `Commit` — a shared predicate that a
  * writer and a tool must agree on. Each is a repo-relative path.
  */
-const PINNED_BEYOND_COMMIT: string[] = ["app/utils/publishVerdict.ts"];
+const PINNED_BEYOND_COMMIT: string[] = ["app/utils/publishVerdict.ts", "app/utils/fairnessMonthWriteRequest.ts"];
 
 const SOURCE_RE = /\.(ts|tsx|mjs|cjs|js)$/;
 const RESOLVABLE_EXT_RE = /\.(ts|tsx|mjs|cjs|js)$/;
@@ -63,7 +70,7 @@ function isNonTestSource(file: string): boolean {
 }
 
 function trackedAppSources(): string[] {
-  return execFileSync("git", ["ls-files", "app"], { cwd: REPO_ROOT, encoding: "utf8" })
+  return execFileSync("git", ["ls-files", "app", "scripts"], { cwd: REPO_ROOT, encoding: "utf8" })
     .split("\n")
     .filter((f) => f && isNonTestSource(f));
 }
