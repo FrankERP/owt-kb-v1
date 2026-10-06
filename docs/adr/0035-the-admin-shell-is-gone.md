@@ -79,3 +79,15 @@ the fix that makes the surface right also makes the bug unreachable.
 - The gallery's swatch set lost two tiles; `.brand-admin-shell` and
   `.brand-admin-tabs` are named in comments (here, in `brand.css`, in the portal
   and centring comments) but exist as rules nowhere.
+- **«Each in its own `overflow-x-auto` box» holds only for boxes that box can clip**
+  (2026-10-06). An `overflow-x-auto` element clips an absolute descendant only when that
+  descendant's containing block is the scroller or inside it. Checkbox's sr-only input had no
+  positioned ancestor, so the «Omitir» inputs of the planner's off-screen columns escaped the
+  grid's scroller; Select's hidden native `<select>` also carried `w-full`, which Tailwind
+  emits after `sr-only` and so beat its 1px, making it initial-containing-block wide. Every
+  planner page panned sideways (335 px on «Generar mes», 338 on the create grid, 812 on
+  «Editar mes» at 1440) with all gates green; the code dates from 2026-09-09 (Checkbox) and
+  2026-09-17 (Select's popover path). Both
+  primitives now give the hidden control a `relative` root, and
+  `hiddenControlContainment.test.ts` fails on a new hidden native control outside them.
+  The measurement is `scripts/dev-verify.ts --layout` (`docs/DEV_VERIFY.md`).
