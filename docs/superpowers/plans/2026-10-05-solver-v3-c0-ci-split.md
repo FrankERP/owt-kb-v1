@@ -445,16 +445,10 @@ verbatim; Rollback, above).
 
 ## Notes to siblings
 
-- **C5 §11.1 «Layout»** (its opening paragraph) says «C0's CI contract (I2) makes `gcf/` unimportable
-  in the v3 job». That is not true of any start-directory layout: `python -m unittest` from the repository root puts the
-  root on `sys.path`, so `gcf.owt_solver_v2` imports as a namespace package inside `solver-v3`
-  (measured on Python 3.12.13; Evidence). I2 now states the isolation as the guard's import-statement
-  ban (Step 3). Suggested rewording for C5: «C0's guard forbids any import of `gcf` from `gcf_v3/`
-  (I2); C5 adds no dynamic import of it either.»
-- **C5 §12.2 «CI budget»** says the v3 job runs «§12.1 plus the CI subset of §12.3», but I1 has one
-  command and `gcf_v3/acceptance/` holds no `test*.py`. The subset therefore runs only if a reachable
-  test module (under `gcf_v3/tests/`) imports the harness and drives the `ci` matrix; that layout is
-  measured to work under I1 and I2 unchanged (Evidence). C5 §12.2 should say so.
+None open. Both earlier notes are applied in C5 and closed: C5 §11.1 «Layout» now states that `gcf` is
+importable in the v3 job as a namespace package and that the isolation is C0's import ban (I2) plus no
+dynamic import; C5 §12.2 «CI budget» now says the `ci` subset runs inside I1's single command, driven by
+one test module under `gcf_v3/tests/` that imports the harness (Evidence).
 
 ## Handoff
 

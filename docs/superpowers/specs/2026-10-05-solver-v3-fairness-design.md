@@ -1,7 +1,7 @@
 # Solver v3: cross-month fairness, cadence leads and 1–2-month runs — parent design (roadmap)
 
 **Date:** 2026-10-05 · **Status:** `APPROVED` by Frank (sections in chat, then the written text at
-`d497749f`, both on 2026-10-05); amendments A1–A40 (§3) added the same day after writing the
+`d497749f`, both on 2026-10-05); amendments A1–A41 (§3) added the same day after writing the
 children — technical contracts, no policy change, **not yet read by Frank** · **Risk tier of this parent:** standard (it owns the shared policy and
 the contracts between children; each child carries its own tier, §11).
 
@@ -159,6 +159,7 @@ children need to agree on. Where a row names a clause, the row wins over that cl
 | A38 | L2, S1 | A person has at most **one** exact count per role key; two exact rules covering the same role for the same person are refused when saved (C3) and by the record validator (C2). The eligibility resolver's `ok: true` output always passes the record validator (tested). |
 | A39 | S4, U5 | The response carries integer seat counts per person, line and tab (received, pinned) beside the hundredths figures; the panel renders seat counts from them and never divides. The golden fixture's wire balance is `share − received` in hundredths, in both languages. |
 | A40 | U4, L3, A24 | If a horizon month has become past between the solve and the confirm (the confirm crossed a month boundary), the confirm refuses before writing anything — no record, no draft — and asks to run Auto again. No v3-drafted month is ever left without its record. |
+| A41 | §6, §8, every child | **Key hygiene.** `solverConfig` conflict and presence ids/`_key`s are not name-free: production's seed-era ids embed member first names (only `uid()`-minted ids are opaque). Any output that can leave a private file — script stdout, server or Cloud logs, CI logs, committed docs, public aggregates — identifies a rule by its kind, its config-array ordinal and a reason code, **never by its raw key and never by a hash of it** (a short unsalted hash of a short first-name key is reversible). The raw key appears only in the stored record, the manager-gated GET/UI and responses, private `--out` files outside the repo, and the fictitious golden fixture. The v3 function logs no request or response contents (ids, rule keys, stage ids), only counts, timings and status codes. No production config is re-keyed by this program. |
 
 ## 4. The fairness policy (the shared contract)
 
