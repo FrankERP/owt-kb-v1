@@ -59,6 +59,21 @@ export const SOLVER_CONFIG_DOC_ID = "solverConfig";
 export const SOLVER_CONFIG_TYPE = "solverConfig";
 
 /**
+ * The document shape this bundle understands (solver v3 C3 §6.2). Every body a
+ * pre-C3 client sends is version 1 (it carries none). The rules POST refuses any
+ * other value BEFORE it reads or writes anything, because the leniency below
+ * ("unknown extra fields are dropped") is exactly how an OLDER tab erases a
+ * field it cannot see: its reader drops it, and its whole-document save writes
+ * the result.
+ *
+ * **The bump rule.** A change that adds a field, OR an allowed value, that an
+ * older client would drop or rewrite bumps this in the same change.
+ * `solverConfigVersion.test.ts` pins the key set at every level and the accepted
+ * values of `sundayCadence`, `fairness` and cap `op` for each version.
+ */
+export const SOLVER_CONFIG_VERSION = 2;
+
+/**
  * The accepted values of the three enumerated fields. Exported for the version
  * tripwire (`solverConfigVersion.test.ts`), which pins them: a value an older
  * client would read as something else is a document-shape change and bumps
