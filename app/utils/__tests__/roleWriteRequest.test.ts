@@ -117,6 +117,7 @@ describe("stored document shapes", () => {
       time: null,
       format: null,
       published: true,
+      countsForFairness: true,
       seats: normalizeSeats(createBody()),
       receiptId: "roleCreate.abc",
       fingerprint: "fp",
@@ -695,9 +696,9 @@ describe("special-service time", () => {
   it("document and patch: time is written only when present, and unset when absent", () => {
     const seats = normalizeSeats(special());
     const nextKey = () => "k";
-    const withTime = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", format: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
+    const withTime = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", format: null, published: false, countsForFairness: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
     expect(withTime.time).toBe("09:00");
-    const without = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, format: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
+    const without = buildRoleDocument({ roleId: "special_role.x", roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, format: null, published: false, countsForFairness: false, seats, receiptId: "rc", fingerprint: "fp", nextKey });
     expect("time" in without).toBe(false);
 
     const patchWith = buildRoleEditPatch({ roleType: "special_role", date: "2026-10-03", serviceName: "X", time: "09:00", seats, nextKey });
@@ -753,7 +754,7 @@ describe("special-service format", () => {
   it("document: format is written only for a special that carries it", () => {
     const seats = normalizeSeats(special());
     const nextKey = () => "k";
-    const common = { roleId: "special_role.x", date: "2026-10-03", serviceName: "X", time: null, published: false, seats, receiptId: "rc", fingerprint: "fp", nextKey } as const;
+    const common = { roleId: "special_role.x", date: "2026-10-03", serviceName: "X", time: null, published: false, countsForFairness: false, seats, receiptId: "rc", fingerprint: "fp", nextKey } as const;
     expect(buildRoleDocument({ ...common, roleType: "special_role", format: "worship_night" }).format).toBe("worship_night");
     expect("format" in buildRoleDocument({ ...common, roleType: "special_role", format: null })).toBe(false);
   });
@@ -763,5 +764,104 @@ describe("special-service format", () => {
     const patch = buildRoleEditPatch({ roleType: "special_role", date: "2026-10-03", serviceName: "X", time: null, seats, nextKey: () => "k" });
     expect("format" in patch.set).toBe(false);
     expect(patch.unset).not.toContain("format");
+  });
+});
+
+describe("countsForFairness on create (solver v3 C1-R3)", () => {
+  it.each([
+    ["sunday_role", {}, true],
+    ["saturday_role", {}, true],
+    ["special_role", { service_name: "Vigilia" }, false],
+  ] as const)("an absent value on %s parses to the type default", (type, extra, expected) => {
+    const parsed = parseCreateRequest(createBody({ _type: type, ...extra }));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.value.countsForFairness).toBe(expected);
+  });
+
+  it.each([true, false])("an explicit %s parses through unchanged", (value) => {
+    const parsed = parseCreateRequest(createBody({ countsForFairness: value }));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.value.countsForFairness).toBe(value);
+  });
+
+  it.each([null, "true", 1])("refuses %s with the single issue countsForFairness", (value) => {
+    expect(parseCreateRequest(createBody({ countsForFairness: value }))).toEqual({
+      ok: false,
+      issues: ["countsForFairness"],
+    });
+  });
+
+  it("stores the explicit effective boolean on the document (C1-D4)", () => {
+    for (const value of [true, false]) {
+      const doc = buildRoleDocument({
+        roleId: "role-9",
+        roleType: "sunday_role",
+        date: "2026-08-09",
+        serviceName: null,
+        time: null,
+        format: null,
+        published: false,
+        countsForFairness: value,
+        seats: normalizeSeats(createBody()),
+        receiptId: "roleCreate.abc",
+        fingerprint: "fp",
+        nextKey: () => "k",
+      });
+      expect(doc.countsForFairness).toBe(value);
+    }
+  });
+});
+
+describe("countsForFairness on edit (solver v3 C1-R5, §5.4)", () => {
+  const edit = (over: Record<string, unknown> = {}) =>
+    parseEditRequest({ rev: "r1", date: "2026-08-09", _type: "sunday_role", leads: ["m1"], ...over });
+
+  it("absent stays absent in the parsed request", () => {
+    const parsed = edit();
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect("countsForFairness" in parsed.value).toBe(false);
+  });
+
+  it.each([true, false])("an explicit %s is carried", (value) => {
+    const parsed = edit({ countsForFairness: value });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) expect(parsed.value.countsForFairness).toBe(value);
+  });
+
+  it.each([null, "false", 0])("refuses %s with the single issue countsForFairness", (value) => {
+    expect(edit({ countsForFairness: value })).toEqual({ ok: false, issues: ["countsForFairness"] });
+  });
+
+  it("the patch for an absent value has the key in neither set nor unset — never the time precedent", () => {
+    for (const roleType of ["sunday_role", "saturday_role", "special_role"] as const) {
+      const patch = buildRoleEditPatch({
+        roleType,
+        date: "2026-08-09",
+        serviceName: roleType === "special_role" ? "Vigilia" : null,
+        time: null,
+        seats: normalizeSeats(createBody()),
+        nextKey: () => "k",
+      });
+      expect("countsForFairness" in patch.set, roleType).toBe(false);
+      expect(patch.unset, roleType).not.toContain("countsForFairness");
+    }
+  });
+
+  it("the patch for a boolean sets it on every role type", () => {
+    for (const roleType of ["sunday_role", "saturday_role", "special_role"] as const) {
+      for (const value of [true, false]) {
+        const patch = buildRoleEditPatch({
+          roleType,
+          date: "2026-08-09",
+          serviceName: roleType === "special_role" ? "Vigilia" : null,
+          time: null,
+          countsForFairness: value,
+          seats: normalizeSeats(createBody()),
+          nextKey: () => "k",
+        });
+        expect(patch.set.countsForFairness, `${roleType}:${value}`).toBe(value);
+        expect(patch.unset).not.toContain("countsForFairness");
+      }
+    }
   });
 });

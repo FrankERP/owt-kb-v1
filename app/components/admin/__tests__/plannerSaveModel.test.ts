@@ -20,6 +20,8 @@ const column: StoredGridColumn = {
   date: "2026-02-01",
   published: false,
   admission: "approved",
+  countsForFairness: true,
+  storedFairness: { date: "2026-02-01", countsForFairness: true },
 };
 
 const rows: StoredGridRow[] = [
@@ -46,6 +48,7 @@ function body(overrides: Partial<StoredRolePatchBody> = {}): StoredRolePatchBody
     rev: "rev-1",
     _type: "sunday_role",
     date: "2026-02-01",
+    countsForFairness: true,
     leads: ["m1", "m2"],
     bgvs: ["m3"],
     chorus: ["m4"],
@@ -178,5 +181,78 @@ describe("special-service time", () => {
       expect("time" in weekend.body).toBe(false);
       expect(weekend.snapshot.time).toBeNull();
     }
+  });
+});
+
+describe("countsForFairness in the stored save model (solver v3 C1 §6.1, §6.0)", () => {
+  // `column` is dated 2026-02-01 and stored counted. On "2026-02-15" February is the
+  // current month; on "2026-03-10" it is past.
+  const CURRENT = "2026-02-15";
+  const LATER = "2026-03-10";
+  const at = (over: Partial<StoredGridColumn>): StoredGridColumn => ({ ...column, ...over });
+
+  function serialized(col: StoredGridColumn, todayIso: string) {
+    const result = serializeStoredColumn(col, rows, cells, todayIso);
+    if (!result.ok) throw new Error(result.reasons.join(","));
+    return result;
+  }
+
+  it("the PATCH body and the semantic snapshot always carry the column's value (C1-D5)", () => {
+    const result = serialized(column, CURRENT);
+    expect(result.body.countsForFairness).toBe(true);
+    expect(result.snapshot.countsForFairness).toBe(true);
+  });
+
+  it("a toggle-only change is dirty", () => {
+    const baseline = serialized(column, CURRENT);
+    const toggled = serialized(at({ countsForFairness: false }), CURRENT);
+    expect(toggled.body.countsForFairness).toBe(false);
+    expect(toggled.body.leads).toEqual(baseline.body.leads);
+    expect(sameRoleSemantics(baseline.snapshot, toggled.snapshot)).toBe(false);
+  });
+
+  it("reconciles a toggle-only save: applied, unknownConflict, committedThenSuperseded", () => {
+    const intended = serialized(at({ countsForFairness: false }), CURRENT);
+    const old = serialized(column, CURRENT);
+    const attempt = freezeSaveAttempt("attempt-1", at({ countsForFairness: false }), intended);
+    expect(reconcileSaveAttempt({
+      attempt,
+      transport: { kind: "unknown" },
+      observed: { rev: "rev-2", snapshot: intended.snapshot },
+    }).kind).toBe("applied");
+    expect(reconcileSaveAttempt({
+      attempt,
+      transport: { kind: "unknown" },
+      observed: { rev: "rev-1", snapshot: old.snapshot },
+    }).kind).toBe("unknownConflict");
+    expect(reconcileSaveAttempt({
+      attempt,
+      transport: { kind: "knownCommitted" },
+      observed: { rev: "rev-3", snapshot: old.snapshot },
+    }).kind).toBe("committedThenSuperseded");
+  });
+
+  it("a column whose stored date is past carries its stored value whatever edit it holds, and is not dirty from it", () => {
+    const baseline = serialized(column, LATER);
+    const held = serialized(at({ countsForFairness: false }), LATER);
+    expect(held.body.countsForFairness).toBe(true);
+    expect(sameRoleSemantics(baseline.snapshot, held.snapshot)).toBe(true);
+  });
+
+  it("an edited date moved into a past month makes the column past too", () => {
+    const marchStored = at({
+      date: "2026-02-22",
+      countsForFairness: false,
+      storedFairness: { date: "2026-03-01", countsForFairness: true },
+    });
+    const result = serialized(marchStored, LATER);
+    expect(result.body.date).toBe("2026-02-22");
+    expect(result.body.countsForFairness).toBe(true);
+  });
+
+  it("the same held edit is sent before a month boundary and not after it", () => {
+    const held = at({ countsForFairness: false });
+    expect(serialized(held, "2026-02-28").body.countsForFairness).toBe(false);
+    expect(serialized(held, "2026-03-01").body.countsForFairness).toBe(true);
   });
 });

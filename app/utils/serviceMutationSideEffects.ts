@@ -108,6 +108,9 @@ import { SEND_TIMEOUT_MS } from "./email";
 import { notifyProposalSubmitted } from "./proposalNotify";
 import { canonicalSetlistsForWeeksQuery } from "./serviceReadQueries";
 import { normalizeStoredSeats, seatAssignees, type NormalizedSeats } from "./roleWriteRequest";
+import { sameSet } from "./outboxClassify";
+import { normalizeServiceName } from "./normalizeLabel";
+import { isServiceTime } from "./serviceTime";
 
 /** Run one delivery attempt; log and swallow any failure. Never rejects. */
 export async function attempt(label: string, fn: () => unknown | Promise<unknown>): Promise<void> {
@@ -349,6 +352,49 @@ export function roleUpdateNotice(input: {
     body: bodyOf(input.after),
     kind: "updated",
   };
+}
+
+/**
+ * Solver v3 C1 §5.4.4 — a PATCH that CARRIES `countsForFairness` and changes
+ * nothing a notice could report queues no outbox notice and sends no push.
+ *
+ * "Nothing a notice could report" is the flush's own definition: the date does
+ * not move; for a special, the normalized name and the time are unchanged (the
+ * email names a special by both, `emailServiceLabel.ts`); and every member in the
+ * union of stored and requested assignees holds the same SET of seat labels —
+ * `rolesForMember` compared with the flush's `sameSet` (`outboxClassify.ts`).
+ *
+ * A request WITHOUT the field always answers false, so every client that predates
+ * the field — a no-op save included — queues exactly as before (C1-D2). Whether
+ * the stored toggle actually differs is irrelevant here, so the route needs no
+ * read of it and `ROLE_PROJECTION` stays unchanged.
+ */
+export function isNoticeNeutralEdit(input: {
+  carriesCountsForFairness: boolean;
+  roleType: ServiceType;
+  storedDate: string;
+  requestedDate: string;
+  storedServiceName: unknown;
+  requestedServiceName: string | null;
+  storedTime: unknown;
+  requestedTime: string | null;
+  before: NormalizedSeats;
+  after: NormalizedSeats;
+}): boolean {
+  if (!input.carriesCountsForFairness) return false;
+  if (input.storedDate !== input.requestedDate) return false;
+  if (input.roleType === "special_role") {
+    if (normalizeServiceName(input.storedServiceName) !== normalizeServiceName(input.requestedServiceName)) {
+      return false;
+    }
+    const storedTime = isServiceTime(input.storedTime) ? input.storedTime : null;
+    if (storedTime !== input.requestedTime) return false;
+  }
+  const members = new Set([...seatAssignees(input.before), ...seatAssignees(input.after)]);
+  for (const memberId of members) {
+    if (!sameSet(rolesForMember(memberId, input.before), rolesForMember(memberId, input.after))) return false;
+  }
+  return true;
 }
 
 /**

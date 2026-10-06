@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import {
+  isNoticeNeutralEdit,
   notifyRoleAssignments,
   queueRoleNotices,
   revalidateRoleMutation,
@@ -284,6 +285,7 @@ async function patchHandler(
     date: newDate,
     serviceName: request.serviceName,
     time: request.time,
+    countsForFairness: request.countsForFairness,
     seats: request.seats,
     nextKey,
   });
@@ -407,31 +409,49 @@ async function patchHandler(
   }
 
   // ── Post-commit side effects (§7), all through the one shared module ───────
-  // Recipients derive from committed server state across all five seat paths:
-  // the previously stored assignees versus the seats just written. A draft edit
-  // stays silent; published or grandfathered notifies only the newly added.
-  notifyRoleAssignments([
-    roleUpdateNotice({
-      published: role.published,
-      beforeAssignees: validateRole(role).assignedRefs,
-      after: request.seats,
-      type: roleType,
-      date: newDate,
-    }),
-  ]);
-  // The debounced email (§2): one notice per member in the UNION of before- and
-  // after-assignees, so a member REMOVED by this edit is finally covered. On a
-  // date move the snapshot stays valid — only the label moved — and the flush
-  // re-dates from live state.
-  queueRoleNotices({
-    roleId: role._id,
+  // Solver v3 C1 §5.4.4: a PATCH that carries `countsForFairness` and changes
+  // nothing a notice could report queues no notice and sends no push. A PATCH
+  // without the field always takes the branch below, exactly as before.
+  const noticeNeutral = isNoticeNeutralEdit({
+    carriesCountsForFairness: request.countsForFairness !== undefined,
     roleType,
-    serviceDate: newDate,
-    published: role.published,
-    beforeSeats,
-    afterSeats: request.seats,
+    storedDate: oldDate,
+    requestedDate: newDate,
+    storedServiceName: role.service_name,
+    requestedServiceName: request.serviceName,
+    storedTime: role.time,
+    requestedTime: request.time,
+    before: beforeSeats,
+    after: request.seats,
   });
+  if (!noticeNeutral) {
+    // Recipients derive from committed server state across all five seat paths:
+    // the previously stored assignees versus the seats just written. A draft edit
+    // stays silent; published or grandfathered notifies only the newly added.
+    notifyRoleAssignments([
+      roleUpdateNotice({
+        published: role.published,
+        beforeAssignees: validateRole(role).assignedRefs,
+        after: request.seats,
+        type: roleType,
+        date: newDate,
+      }),
+    ]);
+    // The debounced email (§2): one notice per member in the UNION of before- and
+    // after-assignees, so a member REMOVED by this edit is finally covered. On a
+    // date move the snapshot stays valid — only the label moved — and the flush
+    // re-dates from live state.
+    queueRoleNotices({
+      roleId: role._id,
+      roleType,
+      serviceDate: newDate,
+      published: role.published,
+      beforeSeats,
+      afterSeats: request.seats,
+    });
+  }
 
+  // Revalidation runs in every case, the toggle-only PATCH included.
   revalidateRoleMutation();
 
   // ── Response: the REFRESHED stored read, at the COMMITTED revision ────────

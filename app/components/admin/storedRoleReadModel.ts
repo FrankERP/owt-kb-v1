@@ -2,6 +2,7 @@ import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel
 import { isValidServiceDate } from "@/app/utils/serviceReadModel";
 import { isServiceTime } from "@/app/utils/serviceTime";
 import { isWorshipNightFormat } from "@/app/utils/serviceFormat";
+import { countsForFairness as readCountsForFairness } from "@/app/utils/countsForFairness";
 import type {
   RoleDomainSummary,
   RoleTarget,
@@ -37,6 +38,14 @@ export interface StoredGridColumn extends GridColumn {
   lockRev?: string;
   published: boolean;
   admission: StoredRoleAdmission;
+  /**
+   * What the GET row said, frozen at translation (solver v3 C1 §6.0): the stored
+   * date and the stored «Cuenta para equidad». The header-edit overlay replaces
+   * `date` and `countsForFairness`, never this, so the past-month rule can see the
+   * stored AND the edited month and fall back to the stored value. C1-internal —
+   * not part of the §9 client-type interface.
+   */
+  storedFairness: { date: string; countsForFairness: boolean };
 }
 
 export interface StoredGridRow extends GridRow {
@@ -112,6 +121,7 @@ export function translateStoredRole(
   observation: StoredRoleObservation,
 ): StoredGridTranslation | null {
   const { role } = observation;
+  const storedCounts = readCountsForFairness({ _type: role._type, countsForFairness: role.countsForFairness });
   const column: StoredGridColumn = {
     columnId: role._id,
     roleId: role._id,
@@ -121,6 +131,10 @@ export function translateStoredRole(
     date: role.date,
     published: role.published !== false,
     admission: observation.admission,
+    // C1 §6.1: the GET row's effective value; a row from an older server has none
+    // and reads as its type default through the one twin.
+    countsForFairness: storedCounts,
+    storedFairness: { date: role.date, countsForFairness: storedCounts },
     ...(role._type === "special_role" ? { serviceName: normalizeServiceName(role.service_name) } : {}),
     ...(role._type === "special_role" && isServiceTime(role.time) ? { time: role.time } : {}),
     ...(role._type === "special_role" && isWorshipNightFormat(role.format) ? { format: role.format } : {}),

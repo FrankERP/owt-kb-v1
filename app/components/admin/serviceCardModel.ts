@@ -128,6 +128,13 @@ export interface ServiceRole {
   /** Specials only — set once at creation; absent means an ordinary special. */
   format?: string | null;
   published?: boolean;
+  /**
+   * The effective «Cuenta para equidad» (solver v3 C1 §5.6). GET /api/admin/roles
+   * projects it through COUNTS_FOR_FAIRNESS_GROQ, so a row from this server always
+   * carries a boolean; it is optional because a row from an older server (a rollback)
+   * carries none — read it through `countsForFairness(row)`, never directly.
+   */
+  countsForFairness?: boolean;
   leads: MemberOption[];
   bgvs: MemberOption[];
   chorus: MemberOption[];

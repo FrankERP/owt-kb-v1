@@ -25,6 +25,16 @@ describe("Switch", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it("forwards an accessible description to the button", () => {
+    render(
+      <MotionProvider>
+        <p id="why">Mes pasado: ya no se cambia.</p>
+        <Switch aria-label="Cuenta" aria-describedby="why" checked={false} disabled onChange={() => {}} />
+      </MotionProvider>,
+    );
+    expect(screen.getByRole("switch", { name: "Cuenta" }).getAttribute("aria-describedby")).toBe("why");
+  });
+
   it("renders the knob at its resting position without waiting for the feature chunk", () => {
     render(<MotionProvider><Switch aria-label="On" checked onChange={() => {}} /></MotionProvider>);
     const knob = document.querySelector<HTMLElement>("[data-switch-knob]")!;
