@@ -363,6 +363,36 @@ Every array-of-object item carries a `_key` **equal to the rule's own `id`** —
 [`app/utils/solverConfigWriteRequest.ts`](../app/utils/solverConfigWriteRequest.ts), which both the
 route and the seed script go through so the two cannot drift.
 
+**«Mes por medio» (`restrictions[].sundayCadence`, solver v3 C3).** Absent means «Normal»;
+`"alternate"` means «Mes por medio»; nothing else is ever stored — never `null`, never `"normal"`,
+so a document with no cadence is byte-identical to what pre-C3 code wrote, and no migration exists.
+It is the setting only, keyed by the restriction's `person` like every rule; the cadence STATE is
+never stored. v2 ignores it: `v2View` (`plannerModel.ts`) removes it, and every restriction that
+carried only it, wherever v2 reads restriction persons. It resolves to a member id only through
+`app/utils/sundayCadence.ts` (exactly one worship member, or a named refusal).
+
+**The config version guard.** The POST replaces the whole document and the reader keeps only the
+fields it knows, so a client that predates a field would read it away and erase it on its next
+save. Every save therefore carries `configVersion`, and the route refuses anything but exactly
+`SOLVER_CONFIG_VERSION` (2) with `400 invalid_request` before it reads or parses anything; GET and
+POST echo the version. **Bump rule:** a change that adds a field, or an allowed value, that an
+older client would drop or rewrite bumps `SOLVER_CONFIG_VERSION` in the same change —
+`solverConfigVersion.test.ts` pins the key set at every level and the accepted values of
+`sundayCadence`, `fairness` and cap `op`.
+
+**One exact count per person per role (parent A38).** A save holding two `==` caps whose roles
+(`rolesOfPattern`) intersect, for one `person` text (case-insensitive, trimmed) — on one
+restriction or across two — is refused at the later cap
+(`restrictions[i].caps[j]:exact_overlap`), by `exactCapOverlaps`, which the rule form and panel
+also run. Two spellings of one member are refused by v3's build, by member id (C2).
+
+**Any other writer of rule values** reads through `solverConfigFromDocument`, changes only its
+paths, runs `parseSolverConfigWrite` and writes only what `solverConfigFields` produced, under
+`ifRevisionId` (and with `configVersion` if it POSTs) — never an `insert`/`append` of caps or
+restrictions around the parser. The member DELETE's pool-array patch and the rule-name repair
+script's single-`person` patch are the only targeted writers. See
+[ADR-0049](adr/0049-mes-por-medio-is-a-restriction-setting-behind-a-version-guard.md).
+
 Hidden and read-only in the Studio, **and** in `PROTECTED_STUDIO_TYPES` / `INTERNAL_STUDIO_TYPES`.
 `hidden` only removes the affordance and `readOnly` only freezes the form, so a hand-typed
 `/studio/structure/...` or intent URL still offered `delete`, `duplicate`, `restore` and
@@ -428,7 +458,7 @@ actually work.
 | `tutorial` | `{ title, url }` | `post.tutorials2` |
 | `referenceLink` | `{ label, url }` | `post.referenceLinks` |
 | `contributor` | `{ person→teamMembers }` | `setlistProposal.contributors` |
-| `solverRestriction` | `{ id, person, excludedPatterns[], fairness, fairnessSlack, weekExclusions[], caps[] }` | `solverConfig.restrictions` |
+| `solverRestriction` | `{ id, person, excludedPatterns[], fairness, fairnessSlack, weekExclusions[], caps[], sundayCadence? }` — `sundayCadence` is `"alternate"` («Mes por medio») or absent («Normal») | `solverConfig.restrictions` |
 | `solverWeekExclusion` | `{ id, week, pattern }` | `solverConfig.restrictions[].weekExclusions` |
 | `solverCap` | `{ id, pattern, op, value, relative, relOffset }` | `solverConfig.restrictions[].caps` |
 | `solverConflict` | `{ id, personA, personB, pattern }` | `solverConfig.conflicts` |

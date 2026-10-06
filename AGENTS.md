@@ -213,6 +213,19 @@ several exist precisely to stop a plausible-looking change.
   `draftGatingCoverage.test.ts` enforces this, so a new manager-facing kids read that
   omits the filter fails the suite rather than shipping.
 - **Sanity array-of-object writes need a `_key` per item.**
+- **`solverConfig` saves carry `SOLVER_CONFIG_VERSION`, and nothing writes a rule value around
+  its parser.** The rules POST replaces the whole document and refuses any body whose
+  `configVersion` is not exactly `SOLVER_CONFIG_VERSION`
+  (`app/utils/solverConfigWriteRequest.ts`), because an older client reads away a field it does
+  not know and its next save erases it for everyone. A field **or an allowed value** an older
+  client would drop or rewrite bumps the version in the same change; `solverConfigVersion.test.ts`
+  is the tripwire. Any other writer that sets or restores a rule value goes through
+  `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
+  `ifRevisionId` — never again an `insert`/`append` of caps or restrictions as the two private
+  one-off scripts of 2026-09-29/10-01 did (the member DELETE's pool-array patch and the rule-name
+  repair script's single-`person` patch are the only targeted writers). A rule person has at most
+  one `==` count per role key: refused at save by `exactCapOverlaps` (by `person` text) and at v3
+  build by C2 (by member id). ADR-0049.
 - **Cache:** admin/API routes that mutate content must call the matching
   `revalidate*` util in `app/utils/revalidate.ts` (or `revalidatePath`), or the
   ISR page stays stale.
