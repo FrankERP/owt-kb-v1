@@ -837,13 +837,18 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     //
     // Menu buttons are excluded: a `Menu` trigger («Borrar», spec 2026-09-29 §3.2) is a real
     // `aria-haspopup="menu"` disclosure and always carries `aria-expanded`, as ARIA wants.
-    const disclosures = '[aria-expanded]:not([aria-haspopup="menu"])';
+    // So is the «Equidad · vista previa» toggle (solver v3 C2 UI-3), a real disclosure
+    // mounted beside the lead history, outside the grid this test is about.
+    const disclosures = (root: ParentNode) =>
+      [...root.querySelectorAll('[aria-expanded]:not([aria-haspopup="menu"])')].filter(
+        (el) => !el.closest("[data-fairness-preview]"),
+      );
     stubWideViewport();
     const { container } = goToGrid([]);
-    expect(container.querySelectorAll(disclosures).length).toBe(0);
+    expect(disclosures(container).length).toBe(0);
 
     fireEvent.click(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"]')!);
-    const expanded = container.querySelectorAll(disclosures);
+    const expanded = disclosures(container);
     expect(expanded.length).toBe(1);
     expect(expanded[0].getAttribute("aria-expanded")).toBe("true");
     expect(expanded[0].hasAttribute("data-cell-action")).toBe(true);
