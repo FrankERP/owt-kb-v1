@@ -3,8 +3,9 @@
 **Date:** 2026-10-05 · **Status:** `DRAFT` · **Parent:**
 [`2026-10-05-solver-v3-fairness-design.md`](2026-10-05-solver-v3-fairness-design.md) (`APPROVED` by
 Frank), which assigns this child L4 (§6), the F7/F8 settings it stores, Q2's default and §14
-assumption 4; aligned with the parent's amendments A1–A39 (§3 there; A1, A6, A7, A8, A9, A10,
-A11, A14, A22, A26, A28, A29, A31, A34, A35 and A38 touch this child). · **Risk tier: critical** — it changes the validator, the serializer and the
+assumption 4; aligned with the parent's amendments A1–A40 (§3 there; A1, A6, A7, A8, A9, A10,
+A11, A14, A22, A26, A28, A29, A31, A34, A35 and A38 touch this child; A40, a confirm that crosses a
+month boundary, does not). · **Risk tier: critical** — it changes the validator, the serializer and the
 whole-document writer of `solverConfig`, the one document that drives the planner's hard blocks for
 every admin on production and on Preview alike. A field that an older writer drops silently is the
 failure class this spec exists to close. Requirement: two sequential fresh `APPROVED` verdicts on
@@ -62,7 +63,7 @@ And, approving the parent and opening the children:
 
 All paths are relative to the repository root; line numbers verified on `3dbc189b`, and no file
 under `app/`, `sanity/`, `scripts/`, `docs/DATA_MODEL.md` or `CLAUDE.md` changed between it and
-`ee91d0e0` (`git diff --stat 3dbc189b ee91d0e0 -- app sanity scripts docs/DATA_MODEL.md CLAUDE.md`
+`c2c444fd` (`git diff --stat 3dbc189b c2c444fd -- app sanity scripts docs/DATA_MODEL.md CLAUDE.md`
 is empty), so they hold there too.
 
 | # | Fact | Source | Implication |
@@ -81,7 +82,7 @@ is empty), so they hold there too.
 | E12 | The matching criterion is case-insensitive, trimmed equality with `member_name` or `alias` | `app/utils/memberRuleNames.ts:37-45`; `plannerModel.ts:572-578` | The resolver reuses it; only the count of matches is new |
 | E13 | The rule form's person list is the `voz`-filtered roster | `MonthGenerator.tsx:1751` | An ambiguity check fed that list could miss a namesake without `voz` |
 | E14 | Pool checkbox lists are built from Tipo (`memberFitsPool`); the stale-tick banner is the existing pattern for a pool warning | `MonthGenerator.tsx:1642-1651`, `:1708-1734`; `plannerModel.ts:813-818` | The «not ticked» warning reuses `memberFitsPool` and the banner style |
-| E15 | The only other writers of `solverConfig`: member DELETE patches the three pool arrays only; a one-off rule-name repair script in `scripts/` patches one `restrictions[_key==…].person` path; the seed creates only when absent | `app/api/admin/members/[id]/route.ts:163-193`; `scripts/` (grep `restrictions[_key==`); `scripts/seed-solver-config.ts:187-220` | No other whole-document writer exists today; targeted patches keep sibling fields |
+| E15 | The only other writers of `solverConfig` in this repository: member DELETE patches the three pool arrays only; a one-off rule-name repair script in `scripts/` patches one `restrictions[_key==…].person` path; the seed creates only when absent. Outside it, two one-off scripts kept in the private log repository (`owt-agent-logs/backups/`, run 2026-09-29 and 2026-10-01, both already applied) wrote caps and whole restrictions with `insert`/`append`/`setIfMissing`, never through the parser | `app/api/admin/members/[id]/route.ts:163-193`; `scripts/` (grep `restrictions[_key==`); `scripts/seed-solver-config.ts:187-220`; private scripts read, not copied | No other whole-document writer exists today; targeted patches keep sibling fields. The two private scripts are the precedent §7 item 8 supersedes: a repeat of that pattern would bypass the A38 check and the field's validation |
 | E16 | No MCP tool reads or writes `solverConfig`; `solve_month` (P4) is unbuilt | `grep -rln 'solverConfig\|SOLVER_CONFIG\|restrictions' app/mcp app/api/mcp` → no match; `docs/MCP.md:36` | The MCP solve path is untouched by construction |
 | E17 | `invalid_request` is HTTP 400 and non-conflict; `stale_revision` is 409 | `app/utils/serviceMutation.ts:17-47`, `:61-65` | Chooses the refusal's code (§6.2) |
 | E18 | Preview and production read and write the same `solverConfig` (one dataset); `preview` deploys before `main` | `CLAUDE.md` «Vercel safety»; parent E4 | For the length of the release window, production's pre-C3 route is a live writer of a document that dev may have extended (§11) |
@@ -90,7 +91,8 @@ is empty), so they hold there too.
 | E21 | `rolesOfPattern` is the one neutral, solver-synced pattern → role map, over the **five** v2 keys (no `Sat.Choir`); the form's cap patterns are eleven labels, none of them `*.Choir`, `Choir.*` or `Sat.Choir` | `app/components/admin/plannerModel.ts:613`, `:637-650`; `MonthGenerator.tsx:310-322` | C3's save check can use it; the only overlap it cannot see (one on `Sat.Choir` alone) needs a hand-written body, and C2's six-key validator closes it (§6.2) |
 | E22 | Adding a restriction appends a new card; nothing merges two cards that name the same person | `MonthGenerator.tsx:1096` | Two cards with the same `person` text are reachable from the UI, so the A38 check must look across restrictions, not only within one |
 | E23 | «No Tipo» is `(memberType ?? []).length === 0`; v2 refuses the month for a rule person so judged | `plannerModel.ts:917-924`, `:1308-1314` | The §6.7 predicate uses the same definition to leave such a member out |
-| E24 | The 2026-10-05 read-only recon of production's `solverConfig` lists each stored `==` rule on a different person | private evidence (`u_real-data.md`; never copied here) | No stored document is expected to start failing A38's check; §9 A6 re-verifies before the merge |
+| E24 | The 2026-10-05 read-only recon of production's `solverConfig`, with the 2026-09-29 snapshot: some people carry two `==` caps (`Sun.*` and `Sat.*`), and no two `==` caps on one `person` text share a role under `rolesOfPattern` | private evidence (`u_real-data.md`; never copied here) | No stored document is expected to start failing A38's check; §9 A6 re-verifies before the merge |
+| E25 | The planner's `members` comes from `GET /api/admin/members`, filtered by `WORSHIP_MEMBER_GROQ_FILTER` = `($all \|\| worship-predicate)` with `$all` bound to `role === "super-admin"`: a worship admin receives worship members only, a super-admin (Frank, §2) receives **every** member, kids-only included. The route projects `ministries`; nothing downstream filters by ministry; the planner's `MemberOption` types omit the field | `app/api/admin/members/route.ts:20-32`; `app/ministries.ts:41-44`, `:74-77`; `ServicesPanel.tsx:435`, `:990`, `:1041`; `MonthGenerator.tsx:129-137`; `serviceCardModel.ts:96-110` | The roster the planner holds differs by viewer role. The resolver applies the worship predicate itself (§6.5), so one config gives one answer for every viewer |
 
 ## 4. Requirements
 
@@ -121,7 +123,11 @@ is empty), so they hold there too.
   its mapping of the refusal (`route.ts`, `useSolverConfig.ts`, `solverConfigSource.ts`).
 - v2 inertness (§6.4), including the one v2 reader that must learn to look past a cadence-only
   restriction (`solverPools`).
-- A neutral resolver module (§7) and the «not ticked» predicate.
+- A neutral resolver module (§7) and the «not ticked» predicate; the resolver applies the worship
+  predicate to its roster itself (§6.5, E25). The planner's two `MemberOption` types
+  (`MonthGenerator.tsx:129`, `serviceCardModel.ts:96`) gain `ministries?: unknown` — a type widening
+  only: the members route already projects the field (E25), so the runtime objects carry it and the
+  type stops erasing it at the resolver's boundary.
 - UI: `PersonRestrictionForm`, `RestrictionCard`, `canAdd`, the ambiguity chip, the Holgura note,
   the gated warning in `SolverConfigPanel`.
 - `scripts/seed-solver-config.ts` summary; `DEFAULT_SOLVER_CONFIG` stays as it is.
@@ -192,11 +198,16 @@ understands. Every body sent before C3 is version 1 (it carries no version). C3 
   as 1 — shows «El planificador se actualizó. Recarga la página para poder guardar las reglas.» and
   disables «Guardar reglas» (its title says why). For C3's own release this path is reached only in
   tests (a C3 bundle always meets a C3 server); it is what makes the NEXT bump, or a rollback, humane.
-- **The bump rule.** Any later change that adds a field to the stored document that an older client
-  would drop bumps `SOLVER_CONFIG_VERSION` in the same change. A tripwire test pins, for the current
-  version, the exact key set `solverConfigFields` emits at each of its levels (document, restriction,
-  week exclusion, cap, conflict, presence); adding a key without editing that pin and the constant
-  together fails the suite.
+- **The bump rule.** Any later change that adds a field **or an allowed value** to the stored
+  document that an older client would drop or rewrite bumps `SOLVER_CONFIG_VERSION` in the same
+  change — a second `sundayCadence` value or a new `fairness` value is read by this version as
+  «Normal» / `"none"` (§6.3) and erased by its next save exactly like an unknown field. A tripwire
+  test pins, for the current version, the exact key set `solverConfigFields` emits at each of its
+  levels (document, restriction, week exclusion, cap, conflict, presence) **and** the exact set of
+  values the parser accepts for each enumerated field (`sundayCadence`, `fairness`, cap `op`);
+  adding a key or an accepted value without editing that pin and the constant together fails the
+  suite. Free-text fields (`person`, pattern labels) are read back verbatim by every version and are
+  not enumerated.
 - **Unchanged:** auth (manager, content-editor excluded, `route.ts:59-64`), create-never
   (`route.ts:135-145`), the `_rev` check and `ifRevisionId`, `sanityConflictKind` classification,
   `updatedAt`/`updatedBy`, the seed's create-only path. The guard is an extra refusal ahead of them,
@@ -254,15 +265,16 @@ same person are refused when saved. The contract:
   sent — never the bare «El servidor rechazó las reglas…». Removing either cap makes the next save
   pass.
 - **Not a version bump.** The check adds no field, so `SOLVER_CONFIG_VERSION` stays 2 (§6.2's bump
-  rule concerns fields an older client would drop). A pre-C3 tab is already refused by the version
+  rule concerns fields and values an older client would drop or rewrite). A pre-C3 tab is already refused by the version
   guard before the parser runs.
 
 ### 6.3 The read path
 
 - The reader returns `sundayCadence: "alternate"` exactly when the stored value is `"alternate"`; any
   other stored value reads as «Normal» (total and defensive, like `fairness` today). A value a future
-  version writes is therefore read as «Normal» by this version — and that version's bump refuses this
-  version's saves, so the value is never erased by it.
+  version writes is therefore read as «Normal» by this version — and that version's bump (§6.2: a new
+  allowed value bumps like a new field) refuses this version's saves, so the value is never erased
+  by it.
 - Write → read round trip preserves the field and every id.
 - `sameSolverConfig` (`solverConfigSource.ts:147-149`) treats «Normal» set by the form and «Normal»
   read from the server as equal, so toggling «Mes por medio» on and back off settles to «Guardado».
@@ -278,9 +290,15 @@ as today).
 
 **The invariant.** For every config `C` and every other input held equal:
 
+- `solverPools` itself returns a deep-equal result for `C` and `v2View(C)` — every pool, the
+  injected `extraSupport` and the no-Tipo block (E9). It has two callers, and both must see one
+  answer: `buildSolveRequest`, and the pin board (`MonthGenerator.tsx:2572` → `pinConflicts`,
+  `pinModel.ts:261-270`, which flags `outsidePool` against pools that include the injected support
+  names);
 - `buildSolveRequest` returns a deep-equal result for `C` and `v2View(C)` — `ok`, `request` (pools,
   `support` injection, `dsl_rules` in order, `history`), `omittedCaps`, `trailing`, and the `reason`
   string of every refusal, including the no-Tipo refusal (E9);
+- `pinConflicts`, fed the pools `solverPools` returns, answers identically for `C` and `v2View(C)`;
 - the planner grid's rule verdicts (`evaluate`, `ruleViolationsForColumn`), `fairnessByMemberId`,
   the pin-violation copy, `priorMonthLeadVisibility` and the Saturday helpers answer identically for
   `C` and `v2View(C)`;
@@ -304,8 +322,11 @@ rule-name validation» parent L4 cites; the exactly-one half is §6.5).
 
 **Why this needs code, not only a test** (E9): `solverPools` takes the `person` of every restriction,
 so a cadence-only restriction naming someone in no pool would inject them into v2's `support`, and one
-naming a member with no Tipo would make v2 refuse the month. The plan chooses where the v2 view is
-applied; the equivalence corpus (T8) is the guard.
+naming a member with no Tipo would make v2 refuse the month. The v2 view is applied at or before
+`solverPools`, never only inside `buildSolveRequest`: applied there alone, an unpooled member with
+only a cadence rule, pinned to a BGV seat, would not be flagged `outsidePool` by the pin board while
+the request left her out. How it is applied at that point is the plan's; the equivalence corpus (T8),
+which asserts `solverPools`' own output, is the guard.
 
 ### 6.5 Name resolution (exactly one)
 
@@ -313,9 +334,27 @@ applied; the equivalence corpus (T8) is the guard.
   by a neutral function (§7) using **the existing matching criterion** (`rulePersonNamesMember`,
   `memberRuleNames.ts:37-45`) and one new condition: **exactly one** member of the roster matches.
   Zero matches ⇒ `unresolved`; two or more ⇒ `ambiguous`, with the matching ids. Neither is guessed.
-- The roster passed in is the **unfiltered** worship roster the caller resolves every other rule name
-  against — never the `voz`-filtered list the form uses (E13), never a pool. A filtered list can hide
-  a namesake and turn an ambiguous name into a resolved one.
+- **The roster is the unfiltered worship roster**: every member whose normalized ministries include
+  worship (`normalizeMinistries(m.ministries).includes("worship")`, `app/ministries.ts:41-44` — absent
+  or empty means worship, the storage contract), with **no** `voz`, pool or Tipo filter — never the
+  `voz`-filtered list the form uses (E13), never a pool. A `voz`, pool or Tipo filter can hide a true
+  namesake and turn an ambiguous name into a resolved one; the ministry predicate is the opposite
+  case — it removes members who can never hold a worship rule, so a kids volunteer is never a false
+  namesake and never the id a rule name resolves to.
+- **The resolver applies the ministry predicate itself.** Callers pass whatever member list they
+  hold; all three functions of §7 item 4 drop every member the predicate excludes before matching.
+  This is not optional, because the list callers hold is not one set: the planner's `members` is
+  worship-only for a worship admin and everyone, kids-only included, for a super-admin (E25). Applied
+  inside, one config resolves identically for every viewer, the ambiguity chip (§6.6) and
+  `cadenceOutsideSundayPool` (§6.7) included, with no third open-coded reader of the storage contract
+  (`normalizeMinistries` is the one TypeScript reader, CLAUDE.md). The one caller obligation left is
+  to pass each member's stored `ministries` as read: a list stripped of the field would read as
+  all-worship (absent = worship), turning the filter into a no-op: a kids-only namesake would again
+  read as `ambiguous`, and a name matching only a kids-only member would resolve to her (C2's
+  writer still refuses a non-worship id at commit, C2 WR-5). The planner's route projects the field
+  (E25) and C2's resolver input already declares it (C2 §7); every other roster read that feeds
+  these functions (C4's script, C7's rehearsal) must project it too (§7 obligations). T9 pins the
+  behaviour.
 - Several restrictions may carry the cadence for the same member (different spellings, or two cards):
   the result is the union, each id once, in a stable order (by id).
 - **The same function serves every v3 rule name** (parent A7, A35 — the exactly-one check is new,
@@ -349,11 +388,15 @@ All strings Spanish, as written here. Styling follows the existing chips and hou
   «Mes por medio» is selected. A restriction may carry the cadence alone.
 - **Edit preserves everything.** Saving the form without touching it returns a restriction deep-equal
   to the one it opened — for a restriction carrying every field the type has. «Normal» leaves no key.
+  This is a property of the form, not of the «Domingo» control: the form carries `sundayCadence`
+  from `initialValues` to `onAdd`, and it keeps doing so after the UI-only rollback removes the
+  control (§11).
 - **Card** (`RestrictionCard`): a chip «Mes por medio» followed by the note «aplica con el nuevo
   solver». The Holgura chip reads «holgura N · no aplica con el nuevo solver». The Holgura help text
   in the form gains the sentence «No aplica con el nuevo solver.»; its specials sentence stays.
 - **Ambiguity chip.** On a card carrying «Mes por medio» whose name is `ambiguous` over the unfiltered
-  roster: «Nombre ambiguo: coincide con {n} personas». Shown under both engines — it is about the
+  worship roster (§6.5 — the planner's `members`, which the resolver filters by ministry, so a kids
+  volunteer never counts toward {n}, whoever is viewing): «Nombre ambiguo: coincide con {n} personas». Shown under both engines — it is about the
   data, not behaviour. An `unresolved` name is already reported by the existing banner (§6.4).
 - **Engine-neutral copy.** C3 renders «aplica con el nuevo solver» unconditionally — true while v2 is
   the only engine, which it is for C3's whole life. Hiding it under v3 is C6's (§7). «no aplica con el
@@ -365,8 +408,10 @@ All strings Spanish, as written here. Styling follows the existing chips and hou
   and who is outside the effective Sunday pool, `{ id, name, reason }` with `reason` one of:
   - `"not_ticked"` — carries the `sunday_lead` Tipo (`memberFitsPool`) but is not in
     `config.sundayLeads`;
-  - `"no_sunday_lead_tipo"` — has a Tipo, but not that one, so the checkbox cannot even be shown
-    (E14).
+  - `"no_sunday_lead_tipo"` — has a Tipo, but does not fit the Sunday pool: `memberFitsPool` needs
+    `voz` **and** `sunday_lead` (`plannerModel.ts:806-818`), and she lacks one or both, so the
+    checkbox cannot even be shown (E14). Ticked or not: a stale tick does not put her in the
+    effective pool (C2 RES-1 below).
   `name` is the display name (`displayMemberName`). Refused names are not in this list; they have
   their own surfaces.
 - **A cadence member with no Tipo is never in the list.** «No Tipo» is E23's definition
@@ -374,14 +419,17 @@ All strings Spanish, as written here. Styling follows the existing chips and hou
   refuses the whole v3 build (`no_tipo`, C2 RES-7), and C6 shows that refusal before any solve
   (C6 RQ-2, «… no tiene Tipo. Corrige …»). The predicate lists only what its two sentences describe
   truthfully, so the union of §7 item 4 stays two reasons.
-- **A cadence member with a Tipo that lacks `voz`** is listed as `no_sunday_lead_tipo`, and its
-  sentence is true for her: C2's resolver gives her no `people` item and records nothing — no
+- **A cadence member with a Tipo that lacks `voz`** is listed as `no_sunday_lead_tipo` — whether or
+  not she carries `sunday_lead`, since the Tipo checkboxes are independent and «Líder Domingo» without
+  «Voz» is reachable. Its sentence names both required Tipos and says she lacks them together, so it
+  is true whichever one is missing. C2's resolver gives her no `people` item and records nothing — no
   refusal (C2 RES-5) — so she holds no voice seat at all that month, Sunday or Saturday.
 - Copy, under a heading «Mes por medio fuera de Líderes Domingo»:
   - `not_ticked`: «{nombre} no está en Líderes Domingo: descansa este mes, sin domingo y sin sábado
     de compensación.»
-  - `no_sunday_lead_tipo`: «{nombre} no tiene el Tipo «Líder Domingo»: descansa este mes, sin domingo
-    y sin sábado de compensación.»
+  - `no_sunday_lead_tipo`: «{nombre} no tiene «Voz» y «Líder Domingo» a la vez en su Tipo: descansa
+    este mes, sin domingo y sin sábado de compensación.» (the labels are `MEMBER_TYPE_LABEL`'s, the
+    one Tipo display map)
   Both describe the `out` wire state of parent A14 (not eligible: no Sunday, no compensation
   Saturday), never `off`: either reason makes her `Sun.Lead` status `out` in C2's resolver (C2 RES-1:
   `Sun.Lead` is `in` iff she is in the Sunday pool and her Tipo fits), and C6 maps that to `out`
@@ -436,7 +484,7 @@ apply). The one change to what the v2 writer accepts is parent A38's exact-count
 | Situation | Behaviour |
 |---|---|
 | Pre-C3 tab saves after release | 400 `invalid_request`/`configVersion`; «El servidor rechazó las reglas y no guardó nada.»; stored document unchanged; reloading the page loads the C3 bundle |
-| C3 tab after a full rollback (§11) | GET lacks `configVersion` ⇒ save disabled with the reload notice; reload loads the reverted bundle |
+| C3 tab after a full rollback (§11) | A C3 tab that loaded **before** the revert writes once: the reverted route ignores the unknown `configVersion` key and its parser drops the field, so that first save erases every stored «Mes por medio»; its echo then lacks `configVersion` ⇒ save disabled with the reload notice. A C3 tab that loads after the revert sees a GET without `configVersion` and is disabled at once. Reloading loads the reverted bundle. The one lost write is the loss the full revert already plans for: §11 lists every stored setting before reverting |
 | Invalid cadence value in a body | 400 with `restrictions[i].sundayCadence`; nothing written |
 | Name unresolved / ambiguous | Saved as written; existing banner / ambiguity chip; C2's resolver (and with it «Registrar», Auto's confirm and C4) and C6's Auto refuse at build time, naming it (§6.5) |
 | «Mes por medio» and an exact count covering `Sun.Lead` on one person | Saved as written, no warning in C3 (both are valid v2 data and the field is inert there); on production the pair exists only until C7's flip step, which removes the exact `Sun.Lead` rule (parent A28); under v3 C6 refuses the request naming the person and the rule (parent A11; C6 WN-2), and C5 refuses such a request with `invalid_request` (C5 §5.3) |
@@ -482,7 +530,8 @@ code only: `rulePersonNamesMember` and `displayMemberName` (`app/utils/memberRul
    so a server route (C2), the planner (C6) and C4's script (through C2's resolver) import the same
    code:
    ```ts
-   type RosterMember = { _id: string; member_name: string; alias?: string; memberType?: string[] };
+   type RosterMember = { _id: string; member_name: string; alias?: string; memberType?: string[];
+                         ministries?: unknown };   // stored value as read; absent/empty = worship
    type NameRefusal = { person: string; reason: "unresolved" | "ambiguous"; matches: string[] };
 
    resolveRulePersonId(person: string, roster: RosterMember[]):
@@ -496,6 +545,12 @@ code only: `rulePersonNamesMember` and `displayMemberName` (`app/utils/memberRul
      Array<{ id: string; name: string; reason: "not_ticked" | "no_sunday_lead_tipo" }>;
      // resolved cadence members only, and only those whose Tipo is non-empty (§6.7)
    ```
+   All three first drop every roster member for whom
+   `normalizeMinistries(m.ministries).includes("worship")` is false (`app/ministries.ts`, neutral),
+   then match over what remains (§6.5): a kids-only member is never a match, never counted toward
+   `ambiguous`, never in `matches`, never in `ids`. `roster` may therefore be any superset of the
+   worship roster that carries each member's stored `ministries` — the planner's `members` for any
+   viewer role included (E25).
    The plan may not rename these without updating C2 and C6 in the same review cycle.
 5. **Copy constants** (same module): `CADENCE_V2_NOTE = "aplica con el nuevo solver"`,
    `SLACK_V3_NOTE = "no aplica con el nuevo solver"`, and the two warning sentences of §6.7, so C6
@@ -543,7 +598,11 @@ code only: `rulePersonNamesMember` and `displayMemberName` (`app/utils/memberRul
   `cadenceOutsideSundayPool`: a cadence member with no Tipo is absent from the latter by design
   (§6.7) and refused by the former (`no_tipo`).
 - **C4** reaches the setting only through C2's resolver (C4 «Consumes from C3»), so the same
-  refusals apply to the reconstruction.
+  refusals apply to the reconstruction. Its roster read projects each member's `ministries`
+  (§6.5).
+- **Every caller** of item 4's functions (C2's resolver, C6's planner, C4 and C7 through C2) passes
+  members with their stored `ministries` as read, never stripped; the worship predicate is applied
+  inside the functions, so no caller filters by ministry itself.
 - **C6** builds the request's cadence members with `cadenceMembers` over the same roster (C6 RQ-4)
   and S1's eligibility and the confirm's record body from C2's resolver output (parent A7); refuses
   Auto before any read on a `cadenceMembers` refusal and on «Mes por medio» together with an exact
@@ -569,6 +628,7 @@ code only: `rulePersonNamesMember` and `displayMemberName` (`app/utils/memberRul
 | A38 at save: identity | Same `person` text (case-insensitive, trimmed), within and across restrictions; two spellings of one member left to C2's build-time check by id | The route holds no roster (§6.5); a text match needs none and is exactly what the form can show | **Roster read on save**: a read on a critical writer, and still unsound after a rename. **Within one restriction only**: two cards for one person are reachable (E22) | Parent (rule); C3 (save half) |
 | A38 at save: role coverage | `rolesOfPattern` (five keys) | Exists, neutral, solver-synced (E21); C3 lands before C2's six-key expansion | **Waiting for `rolesOfPatternV3`**: C3 has no prerequisites (parent §11). **A second six-key map in C3**: two expansions that can drift. The `Sat.Choir`-only gap is unreachable from the form and closed by C2 at build time | C3 |
 | A stored overlap | Every save refused, naming the pair; both cards marked | Matches A38 («refused when saved»); removing one cap unblocks the next save | Accepting a stored pair until it is edited: a save path that bypasses the rule | C3 |
+| Roster's ministry filter | Inside §7 item 4's functions (`normalizeMinistries`), over an optional `ministries` on `RosterMember` | E25: the planner's `members` differs by viewer role; filtering inside gives one answer per config for every viewer and every child, and adds no open-coded reader of the storage contract | **Caller-side filter as an obligation**: each of the planner, C2, C4 and C7 would have to remember it, and a forgotten one shows false «Nombre ambiguo» chips and v3 refusals for a super-admin only. **Narrowing the members route**: changes a super-admin's admin lists (they are the only role that edits `ministries`, `route.ts:20-21`) | C3 |
 | Cadence member with no Tipo in the §6.7 warning | Left out | Its copy («descansa este mes») would be false: the v3 build refuses (C2 RES-7 `no_tipo`), and C6 RQ-2 names her before any solve | A third reason with «Auto no correrá…» copy: duplicates C6's refusal and changes §7 item 4's union that C6 (IF-C3, WN-1) and C7 consume | C3 |
 
 ## 9. Assumptions
@@ -581,7 +641,7 @@ written «parent A…».
 | A1 Vercel Skew Protection is off for `owt-backstage` (Hobby plan) | An old tab's POST would be routed to the OLD deployment's route, which has no guard and drops the field | Before the merge to `main`: read the project's Skew Protection setting (Vercel → Project → Settings → Advanced, or `get_project`) and record it in the PR | Keep the release rule of §11 (no cadence saved) until the skew window has expired, and record that in the ADR |
 | A2 No other whole-document writer of `solverConfig` exists (E15) | That writer drops the field | Plan re-greps `solverConfig\|SOLVER_CONFIG_DOC_ID` for `.set(`/`createOrReplace`/`.patch(` | If it sets or restores rule values: through §7 item 8 (parser, `solverConfigFields`, `ifRevisionId`; the version when it POSTs). A pool-array or single-`person` patch like E15's stays targeted |
 | A3 No MCP tool reads `solverConfig` (E16) | An MCP reader would need the field | Plan re-greps `app/mcp`, `app/api/mcp` | Out of C3's scope; flag to the MCP owner |
-| A4 The planner's `members` is the unfiltered worship roster | Ambiguity judged over a subset | Plan reads `ServicesPanel`'s member query and the C2 roster query | C2/C6 pass the unfiltered roster (obligation, §7) |
+| A4 Every roster handed to §7 item 4 carries each member's stored `ministries` and is a **superset** of the worship roster — never a `voz`, pool or Tipo subset. For the planner this is a fact (E25: worship-only for a worship admin, everyone for a super-admin; both supersets once the resolver filters) | A stripped `ministries` lets a kids-only namesake read as `ambiguous` and a kids-only-only name resolve (§6.5); a subset can hide a true namesake | Plan reads `ServicesPanel`'s member query, the planner's `MemberOption` types and C2's/C4's roster queries | The caller projects `ministries` and drops its subset filter (obligation, §7) |
 | A5 The cadence members' names are unique today | v3 refuses until Frank disambiguates | C7 rehearsal runs `cadenceMembers` on the real roster | Frank edits the rule's name to an unambiguous alias |
 | A6 No stored restriction set holds two `==` caps covering one role for one `person` text (E24) | After release every «Guardar reglas» is refused, naming the pair, until one cap is removed | Before the merge to `main`: a read-only query of the stored `solverConfig` run through `exactCapOverlaps`, result (count only, no names) recorded in the PR | Frank removes one cap of each pair in the UI after release; the save after that passes. No agent edits the rules |
 
@@ -624,17 +684,35 @@ C2/C6.
 **Rollback** (parent A26: UI-only, or a full revert only before C2 ships and after listing every
 stored setting):
 
-- **Preferred — UI-only rollback.** Remove the control, chip, ambiguity chip and gated warning; keep the
-  type, parser, serializer, reader, resolver, the guard and the A38 check with its form and refusal
-  copy (removing the check would let the v2 writer accept a pair C2 refuses). Stored settings
-  survive; v2 is unchanged. Safe at any time.
+- **Preferred — UI-only rollback.** Remove the «Domingo» control, the «Mes por medio» chip, the
+  ambiguity chip and the gated warning. Keep the type, parser, serializer, reader, resolver, the
+  guard (`SOLVER_CONFIG_VERSION` stays 2) and the A38 check with its form and refusal copy (removing
+  the check would let the v2 writer accept a pair C2 refuses). **Keep the form's data path:**
+  `PersonRestrictionForm` still carries the edited restriction's `sundayCadence` from `initialValues`
+  to `onAdd` unchanged — it can no longer set the value, only carry it — and `canAdd` still accepts a
+  restriction whose only setting is that carried cadence, so a cadence-only card stays editable and
+  its save keeps the field. Without this, the form builds its result from its own state
+  (`MonthGenerator.tsx:675`, E6), so the first edit of any cadence card would write a restriction
+  without the field; the client still sends version 2 and the guard would not stop it. After the
+  rollback a cadence-only card shows no chip; the setting is still stored and still saved. T11's
+  deep-equal preserve-on-edit test (fixture carrying every field the type has) and its cadence-only
+  `canAdd` test on the edit path (`initialValues` carrying the cadence, the control never touched), with T7, T8 and T14, stay and pass **unmodified** on the rollback; a rollback change
+  that removes or edits them is a full revert and follows that procedure. With those conditions met,
+  stored settings survive and v2 is unchanged, at any time.
 - This child's rollback is distinct from C7's rollback of the flip, which restores `solverConfig`
   paths through §7 item 8 (parent A29) and leaves C3 in place.
 - **Full revert.** Only before C2 ships (C2, and through it C4 and C6, import the resolver and read
   the field); once C2 has shipped, only the UI-only rollback exists. Before it, list every stored
   cadence setting with a read-only query and keep the list with Frank: the reverted route drops the
-  field on its next save. v2 behaviour is unchanged either way (§6.4). C3-era
-  tabs then see the reload notice (§6.12).
+  field on its next save. v2 behaviour is unchanged either way (§6.4). A C3-era tab loaded before
+  the revert writes once, dropping the field, and then sees the reload notice (§6.12).
+- **A deployment-level rollback is a full revert.** A Vercel Instant Rollback, or a promote, of
+  production to a deployment older than C3 runs the pre-C3 route against the stored document, and so
+  is the full revert above with the same conditions: only before C2 ships, and only after listing
+  every stored cadence setting. Pointing `dev-owt-backstage` at a pre-C3 deployment is the same,
+  because dev writes the same document (E18). Once C2 has shipped, a rollback that far is not one of
+  this child's rollbacks (parent A26); an incident that forces it lists the stored settings first all
+  the same.
 
 ## 12. Documentation in the same delivery
 
@@ -642,14 +720,21 @@ stored setting):
   the bump rule and the one-exact-count-per-role rule; the `solverRestriction` row (`:431`) gains
   `sundayCadence?`.
 - `CLAUDE.md`, «Don't-break-these invariants»: one bullet — the rules POST refuses a body without the
-  current `SOLVER_CONFIG_VERSION`; a field an older client would drop bumps it in the same change; the
-  tripwire test is the guard; any other writer that sets or restores a rule value goes through the
-  same parser and serializer (§7 item 8; E15's pool-array and single-`person` patches excepted); and a rule person has at most one `==` count per role key, refused at save
-  by `exactCapOverlaps` (by text) and at v3 build by C2 (by member id).
+  current `SOLVER_CONFIG_VERSION`; a field or an allowed value an older client would drop or rewrite
+  bumps it in the same change; the tripwire test is the guard; any other writer that sets or restores a rule value goes through the
+  same parser and serializer (§7 item 8; E15's pool-array and single-`person` patches excepted —
+  never again an `insert`/`append` of caps or restrictions as in the two private one-off scripts of
+  E15); and a rule person has at most one `==` count per role key, refused at save by
+  `exactCapOverlaps` (by text) and at v3 build by C2 (by member id).
 - One ADR (numbered when it reaches `main`; C3 owns it, parent A31): the cadence is a restriction
   setting keyed by name (not `teamMembers`, ADR-0029), stored without its state, and protected by a
-  refuse-not-merge version guard; and the A38 save check's text-only identity and five-key coverage —
-  with the rejected alternatives of §8. Amendments to existing ADRs are C7's (A31).
+  refuse-not-merge version guard; the A38 save check's text-only identity and five-key coverage —
+  with the rejected alternatives of §8; the rule that any other writer of rule values goes through
+  the parser and serializer (§7 item 8), recording the two private one-off scripts of E15
+  (2026-09-29, 2026-10-01: caps and restrictions appended with no parser) as the precedent it
+  supersedes; the resolver's own worship filter (§6.5, E25); and the rollback rules of §11 (the UI-only rollback keeps the
+  form's data path; an Instant Rollback or promote past C3 is a full revert). Amendments to existing
+  ADRs are C7's (A31).
 - `docs/SECRETS.md`: no new secret or environment variable — nothing to add.
 
 ## 13. Acceptance and verification
@@ -662,11 +747,11 @@ stored setting):
 | T4 | R2 | POST with `configVersion` absent / `null` / `"2"` / `1` / `3` ⇒ 400 `invalid_request`, `issues: ["configVersion"]`, stored document never fetched, no patch; with `2` ⇒ today's behaviour (all existing route tests, bodies gaining `configVersion`); GET and POST echo carry `configVersion` | Route tests, `solverConfigRoute.test.ts` |
 | T5 | R2 | A body exactly as a pre-C3 client sends it (`{rev, config}`, restriction without the field) against a stored document carrying «Mes por medio» ⇒ refused, document unchanged | Route test |
 | T6 | R2, R10 | `useSolverConfig` sends `configVersion`; `saveFailure` maps the refusal to the outdated message with `stale: false` (no «Recargar reglas»); a GET with another or no `configVersion` disables «Guardar reglas» with the reload notice; a refusal carrying a `restrictions[i].caps[j]:exact_overlap` issue maps (a bare `restrictions[i].caps[j]` — a non-object cap — does not) to the two-exact-counts message naming the pair, `stale: false` | Hook/source tests |
-| T7 | R2 | Tripwire: pinned key sets per level for version 2; adding a key without updating pin and constant fails | Unit |
-| T8 | R3 | Corpus: for configs with cadence on a clause-bearing restriction, cadence-only for a pooled member, for an unpooled member, for a no-Tipo member, for an unresolvable name, and with a clause-less «Holgura 0» restriction that never carried it — `buildSolveRequest` (incl. refusals), `allRulesToDs`, `evaluate` over a sample grid, `fairnessByMemberId` deep-equal between `C` and `v2View(C)`; the existing v2 suites (`plannerModel`, `solverPools`, `ruleEnforcement`, `localFill`, `pinViolations`, `saturdayFloors`, `trailingSaturday`, `leadPoolHistory`) pass **unmodified** | Unit + existing suites |
-| T9 | R4 | Exactly one ⇒ id; none ⇒ `unresolved`; member_name of one equal to alias of another, or two equal aliases ⇒ `ambiguous` with both ids; case/trim behaviour identical to `rulePersonNamesMember`; union across restrictions, unique, sorted | Unit |
-| T10 | R6 | `not_ticked`, `no_sunday_lead_tipo`, ticked ⇒ absent, refused names ⇒ absent, `memberType` absent or `[]` ⇒ absent (ticked or not), a Tipo without `voz` ⇒ `no_sunday_lead_tipo`; panel renders the warning with the gate open and nothing with it closed (default) | Unit + component |
-| T11 | R5, R7 | Segmented «Domingo» renders; cadence-only restriction can be added; edit without changes returns a deep-equal restriction carrying every field; card chip + «aplica con el nuevo solver»; Holgura chip note; ambiguity chip over the unfiltered roster; toggle on and off ⇒ «Guardado» | `MonthGenerator.ruleEdit.test.tsx` and peers |
+| T7 | R2 | Tripwire: pinned key sets per level and pinned accepted-value sets for `sundayCadence`, `fairness` and cap `op` for version 2; adding a key or an accepted value without updating pin and constant fails | Unit |
+| T8 | R3 | Corpus: for configs with cadence on a clause-bearing restriction, cadence-only for a pooled member, for an unpooled member (also pinned to a BGV seat), for a no-Tipo member, for an unresolvable name, and with a clause-less «Holgura 0» restriction that never carried it — `solverPools` (pools, `extraSupport`, no-Tipo block), `buildSolveRequest` (incl. refusals), `pinConflicts` over those pools, `allRulesToDs`, `evaluate` over a sample grid, `fairnessByMemberId` deep-equal between `C` and `v2View(C)`; the existing v2 suites (`plannerModel`, `solverPools`, `ruleEnforcement`, `localFill`, `pinViolations`, `saturdayFloors`, `trailingSaturday`, `leadPoolHistory`) pass **unmodified** | Unit + existing suites |
+| T9 | R4 | Exactly one ⇒ id; none ⇒ `unresolved`; member_name of one equal to alias of another, or two equal aliases ⇒ `ambiguous` with both ids; case/trim behaviour identical to `rulePersonNamesMember`; union across restrictions, unique, sorted. Ministry filter, for all three functions: a worship member plus a kids-only (`ministries: ["kids"]`) namesake ⇒ the worship id, not `ambiguous`; a name matching only a kids-only member ⇒ `unresolved` and absent from `cadenceOutsideSundayPool`; `ministries` absent, `[]` and `["worship","kids"]` ⇒ kept; the same config over a worship-only roster and over that roster plus kids-only members (the two viewer roles of E25) ⇒ identical results | Unit |
+| T10 | R6 | `not_ticked`, `no_sunday_lead_tipo`, ticked with a fitting Tipo ⇒ absent, ticked with «Líder Domingo» but no «Voz» ⇒ `no_sunday_lead_tipo`, refused names ⇒ absent, `memberType` absent or `[]` ⇒ absent (ticked or not), a Tipo without `voz` ⇒ `no_sunday_lead_tipo`; panel renders the warning with the gate open and nothing with it closed (default) | Unit + component |
+| T11 | R5, R7 | Segmented «Domingo» renders and selecting «Mes por medio» on a new restriction with no clause makes `canAdd` true (removed with the control on the UI-only rollback); **edit path, no control touched:** the form opened with `initialValues` carrying `sundayCadence: "alternate"` and no clause has `canAdd` true and returns it unchanged, and the form opened with a restriction carrying every field the type has returns a deep-equal restriction (these two survive the UI-only rollback unmodified, §11 — neither selects anything in the «Domingo» control); card chip + «aplica con el nuevo solver»; Holgura chip note; ambiguity chip over the unfiltered worship roster, and no chip for a name shared only with a kids-only member; toggle on and off ⇒ «Guardado» | `MonthGenerator.ruleEdit.test.tsx` and peers |
 | T12 | R8, R10 | Seed parses a capture with the field and its summary prints «Mes por medio»; a capture with an overlapping `==` pair is refused with its issue path and nothing written; defaults unchanged | Unit / script run without `--apply` against a fixture |
 | T13 | R9 | Docs and ADR present; `studioProtection` tests unchanged and green | Code review's docs checklist |
 | T14 | R10 | `exactCapOverlaps` and the parser: two `==` caps on one restriction covering `Sun.Lead` ⇒ refused at the later cap with `:exact_overlap`; three mutually overlapping caps ⇒ each later cap reported once; same on two restrictions whose `person` differs only in case and surrounding spaces ⇒ refused; `Sat.* == 1` with `*.Lead == 1` ⇒ refused on `Sat.Lead`; equal values and relative values ⇒ still refused; `==` beside `>=`/`<=` on the same role ⇒ accepted; two different `person` texts (a name and an alias of one member) ⇒ accepted at save; `Sat.* ==` with `*.Choir ==` ⇒ accepted (five-key map, the documented gap); every existing parser fixture and `DEFAULT_SOLVER_CONFIG` ⇒ no overlap. Form: an overlapping cap row shows its message and `canAdd` is false; panel marks both cards of a stored pair; removing one cap lets the save through | Unit + `MonthGenerator.ruleEdit.test.tsx` |
@@ -690,17 +775,33 @@ by-id half to C2's validator and resolver, which A38 names too (§6.2, §8).
 
 - Review order: after the parent and C1 (parent «Review handoff»); critical tier — two sequential
   fresh `APPROVED` verdicts on byte-identical text; churn cap binding.
-- Evidence for reviewers: this file; the repository at `ee91d0e0` (code identical to `3dbc189b`,
-  §3); the parent with its amendments A1–A39; C2 RES-5/RES-7/WR-4, C6 RQ-2/RQ-4/WN-1/WN-2/CTL-1/CTL-2,
+- Evidence for reviewers: this file; the repository at `c2c444fd` (code identical to `3dbc189b`,
+  §3); the parent with its amendments A1–A40; C2 RES-5/RES-7/WR-4, C6 RQ-2/RQ-4/WN-1/WN-2/CTL-1/CTL-2,
   C6 §7.7 and C7 K3 for the cross-references. Prior planning dialogue is not needed; the private
   evidence directory backs one count (E24), which §9 A6 re-verifies before the merge, so reviewers
   need not open it.
 - A material change here to §7 propagates to C2, C4, C6 and C7 (each restates §7's shapes) and
-  restarts their review; a change to the Parent issues propagates to the parent. This revision
-  changed §7: item 3 gains `exactCapOverlaps` and the A38 refusal; item 4's predicate excludes a
-  cadence member with no Tipo (union unchanged); item 7 follows A28; item 8 (the parser and
+  restarts their review; a change to the Parent issues propagates to the parent. The previous
+  revision changed §7: item 3 gains `exactCapOverlaps` and the A38 refusal; item 4's predicate
+  excludes a cadence member with no Tipo (union unchanged); item 7 follows A28; item 8 (the parser and
   serializer for any other writer, A29) and the obligations on C2 (A38 by member id) and C7 (A29
-  restore path; rehearsal runs C2's resolver too) are new.
+  restore path; rehearsal runs C2's resolver too) are new. The round-1 revision changed
+  no name or shape in §7: §11's UI-only rollback keeps the form's data path and retains T11's
+  preserve-on-edit tests; §11 and §12 name a deployment-level rollback past C3 as a full revert; §6.4
+  and T8 assert `solverPools`' own output and the pin board; §6.6 states edit preservation as a form
+  property; §6.7 rewords the `no_sunday_lead_tipo` sentence (a value of an item-5 constant, not its
+  name) and its reason definition, with T10's added case; the §6.12 rollback row states the one write
+  a pre-revert tab makes; the amendment count is A1–A40.
+- **This revision** (round-2 fixes) **changes §7 item 4's shape**: `RosterMember` gains
+  `ministries?: unknown`, and all three functions apply the worship predicate
+  (`normalizeMinistries`) to the roster before matching, because the planner's `members` includes
+  kids-only members for a super-admin (E25). Names are unchanged; the field is optional, so C2's
+  member shape (which already declares it) stays compatible. A new obligation asks every caller to
+  pass `ministries` as read. It propagates to C2 (RES-5, §7's C3 row), C4, C6 and C7, which restate
+  item 4's shape. Also: the bump rule and T7 cover allowed values as well as fields (§6.2, §6.3,
+  §12); E15 and the ADR name the two private one-off writers as the precedent §7 item 8 supersedes;
+  E24 is reworded to what the snapshot shows; T11's rollback-surviving tests are pinned to the edit
+  path.
 - Implementation authorization: **not granted by this document.**
 
 ## Terminal state
