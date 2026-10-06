@@ -3,15 +3,17 @@ import { describe, expect, it, vi } from "vitest";
 
 import { LAYOUT_PROBE_SOURCE } from "../lib/dev-verify/layoutProbe";
 
-// jsdom has no layout engine — every box is 0×0 — so this pins the probe's SHAPE
-// and that the source string evaluates on its own in a page, not its geometry. The
-// geometry was validated in real Chromium when the flag was added (docs/DEV_VERIFY.md).
+// jsdom has no layout engine — every box is 0×0 — so this pins the probe's SHAPE,
+// that the source string evaluates on its own in a page, and that it never scrolls;
+// not its geometry. The geometry was validated in headless Chromium on 2026-10-06
+// (the cases are listed in docs/DEV_VERIFY.md's `--layout` row).
 describe("dev-verify --layout probe", () => {
   it("evaluates standalone in a page and returns every field the report reads", () => {
     document.body.innerHTML = `<div class="overflow-x-auto"><div style="width:4000px">x</div></div>`;
-    // jsdom implements no scrolling; the probe's pan check only needs scrollTo to exist.
+    // It must only READ: a scroll would queue a `scroll` event and close an open Menu.
     const scrollTo = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     const result = (0, eval)(LAYOUT_PROBE_SOURCE) as Record<string, unknown>;
+    expect(scrollTo).not.toHaveBeenCalled();
     scrollTo.mockRestore();
     expect(Object.keys(result).sort()).toEqual([
       "body", "escapers", "fullPageWidth", "html", "maxScrollX", "pageOverflowsX",

@@ -89,5 +89,6 @@ the fix that makes the surface right also makes the bug unreachable.
   «Editar mes» at 1440) with all gates green; the code dates from 2026-09-09 (Checkbox) and
   2026-09-17 (Select's popover path). Both
   primitives now give the hidden control a `relative` root, and
-  `hiddenControlContainment.test.ts` fails on a new hidden native control outside them.
+  `hiddenControlContainment.test.ts` fails on a new hidden native control outside the
+  known, contained sites (those two primitives and two photo file inputs in vertical flow).
   The measurement is `scripts/dev-verify.ts --layout` (`docs/DEV_VERIFY.md`).

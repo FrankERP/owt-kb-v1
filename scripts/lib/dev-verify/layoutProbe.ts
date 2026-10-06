@@ -11,16 +11,21 @@
  *
  * A SOURCE STRING, not a function: tsx/esbuild can wrap a function in helpers
  * (`__name`) that do not exist in the page, and `page.evaluate` would then throw
- * there. The string is evaluated as-is. It reads layout and computed style, and its
- * one side effect is the pan check — `scrollTo` to the far right and back — which
- * is client-side scroll position only; lock 1 still aborts any request.
+ * there. The string is evaluated as-is. It only READS layout and computed style —
+ * no scrolling, no events: a `scrollTo` round trip would queue a `scroll` event,
+ * and `Menu` closes on any document scroll, so `--click <menu> --layout
+ * --screenshot` would capture the menu already closed. It makes no request.
  *
- * `escapers` are the OUTERMOST elements whose box crosses the viewport's left or
- * right edge with no ancestor that clips `overflow-x` (auto, scroll, hidden or
- * clip) between them and `<html>`: an overflow-x-auto box's own wide child is
- * contained and is not listed; the box itself, if IT is wider than the page, is.
- * For an absolute or fixed box only ancestors from its containing block outward
- * count — an overflow box BELOW the containing block does not clip it.
+ * `escapers` are the OUTERMOST elements whose box crosses the viewport's RIGHT edge
+ * (left-edge overflow is unreachable by scrolling and never widens the page) with no
+ * ancestor that clips `overflow-x` (auto, scroll, hidden or clip) between them and
+ * `<html>`: an overflow-x-auto box's own wide child is contained and is not listed;
+ * the box itself, if IT is wider than the page, is. For an absolute or fixed box only
+ * ancestors from its containing block outward count — an overflow box BELOW the
+ * containing block does not clip it — and the walk re-anchors at every absolute or
+ * fixed ancestor on the way up. A fixed box anchored to the viewport adds no
+ * scrollable overflow and is skipped. The list is diagnostic; `pageOverflowsX`,
+ * computed by the browser, is the verdict.
  * `pseudoCandidates` are `::before`/`::after` boxes at least as wide as the
  * viewport — the one kind of box `querySelectorAll` cannot see.
  */
@@ -42,7 +47,7 @@ export interface LayoutReport {
   fullPageWidth: number;
   /** `scrollingElement.scrollWidth > clientWidth` — the page can scroll sideways. */
   pageOverflowsX: boolean;
-  /** `scrollX` after `scrollTo(1e6, 0)` — how far the page actually pans. */
+  /** `scrollWidth - clientWidth` of the scrolling element — how far the page pans (computed, never scrolled). */
   maxScrollX: number;
   escapers: LayoutBox[];
   pseudoCandidates: (LayoutBox & { pseudo: string })[];
@@ -56,9 +61,17 @@ export const LAYOUT_PROBE_SOURCE = String.raw`(() => {
   const sx = window.scrollX;
   const round = (n) => Math.round(n * 10) / 10;
   const clipsX = (el) => getComputedStyle(el).overflowX !== "visible";
+  // What makes an element the containing block of a fixed descendant (and so also of
+  // an absolute one, which additionally takes any non-static position).
   const makesCb = (el, position) => {
     const cs = getComputedStyle(el);
-    const fixedCb = cs.transform !== "none" || cs.filter !== "none" || /paint|layout|strict|content/.test(cs.contain || "");
+    const fixedCb =
+      cs.transform !== "none" || cs.filter !== "none" || cs.perspective !== "none" ||
+      (cs.backdropFilter || "none") !== "none" ||
+      /transform|filter|perspective/.test(cs.willChange || "") ||
+      /paint|layout|strict|content/.test(cs.contain || "") ||
+      /size/.test(cs.containerType || "") ||
+      cs.contentVisibility === "auto";
     return position === "fixed" ? fixedCb : cs.position !== "static" || fixedCb;
   };
   const label = (el) => {
@@ -87,17 +100,23 @@ export const LAYOUT_PROBE_SOURCE = String.raw`(() => {
   for (const el of all) {
     const r = el.getBoundingClientRect();
     if (r.width === 0 && r.height === 0) continue;
-    if (r.right + sx <= vw + 0.5 && r.left + sx >= -0.5) continue;
+    if (r.right + sx <= vw + 0.5) continue;
     // An overflow ancestor clips an out-of-flow box only from the box's containing
     // block outward: an absolute box whose containing block lies OUTSIDE an
     // overflow-x-auto scroller is not clipped by it, and overflows the page.
-    const own = getComputedStyle(el).position;
-    let awaitingCb = own === "absolute" || own === "fixed";
+    let mode = getComputedStyle(el).position;
+    let awaitingCb = mode === "absolute" || mode === "fixed";
     let clipped = false;
     for (let a = el.parentElement; a && a !== html; a = a.parentElement) {
-      if (awaitingCb && makesCb(a, own)) awaitingCb = false;
-      if (!awaitingCb && a !== body && clipsX(a)) { clipped = true; break; }
+      if (awaitingCb && makesCb(a, mode)) awaitingCb = false;
+      if (awaitingCb) continue;
+      if (a !== body && clipsX(a)) { clipped = true; break; }
+      const pos = getComputedStyle(a).position;
+      if (pos === "absolute" || pos === "fixed") { mode = pos; awaitingCb = true; }
     }
+    // Still awaiting a fixed box's containing block at <html>: it is anchored to the
+    // viewport and adds no scrollable overflow.
+    if (awaitingCb && mode === "fixed") continue;
     if (!clipped) found.push(el);
   }
   const foundSet = new Set(found);
@@ -110,7 +129,7 @@ export const LAYOUT_PROBE_SOURCE = String.raw`(() => {
     .sort((a, b) => b.right - a.right)
     .slice(0, 12);
   const pseudoCandidates = [];
-  for (const el of all) {
+  pseudo: for (const el of all) {
     for (const pseudo of ["::before", "::after"]) {
       const cs = getComputedStyle(el, pseudo);
       if (cs.content === "none" || cs.content === "normal") continue;
@@ -118,13 +137,10 @@ export const LAYOUT_PROBE_SOURCE = String.raw`(() => {
       if (!(w >= vw)) continue;
       const r = el.getBoundingClientRect();
       pseudoCandidates.push({ ...box(el, r), pseudo, width: round(w) });
-      if (pseudoCandidates.length >= 12) break;
+      if (pseudoCandidates.length >= 12) break pseudo;
     }
   }
-  const before = { x: window.scrollX, y: window.scrollY };
-  window.scrollTo(1e6, before.y);
-  const maxScrollX = window.scrollX;
-  window.scrollTo(before.x, before.y);
+  const maxScrollX = Math.max(0, se.scrollWidth - se.clientWidth);
   return {
     viewport: { innerWidth: window.innerWidth, clientWidth: vw },
     scrollingElement: { scrollWidth: se.scrollWidth, clientWidth: se.clientWidth },
