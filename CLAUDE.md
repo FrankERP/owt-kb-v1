@@ -7,17 +7,19 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 - Next.js 16 (App Router; `proxy.ts` = middleware), React 19, Sanity v5
   (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark and light themes — follows the device by default; members can pin either at `/me`.
   Studio embedded at `/studio`. iOS app via Capacitor.
-- **Before claiming done, all FOUR must pass:** `npx tsc --noEmit`, `npm test`
-  (vitest), `npx eslint .` with **0 errors** (warnings are a deliberate backlog —
-  see `eslint.config.mjs`), and — when the change touches `gcf/**` —
-  `python -m unittest discover -s gcf -t gcf`, which is a blocking CI gate too.
-  Add tests for testable pure logic.
+- **Before claiming done, these must pass:** always `npx tsc --noEmit`, `npm test`
+  (vitest) and `npx eslint .` with **0 errors** (warnings are a deliberate backlog —
+  see `eslint.config.mjs`); plus the solver suite of each tree the change touches —
+  `gcf/**`: `python -m unittest discover -s gcf -t gcf`; `gcf_v3/**`:
+  `python -m unittest discover -s gcf_v3 -t gcf_v3`. All five are blocking CI
+  gates. Add tests for testable pure logic.
 
 ## Conventions
 - Work on a branch, **merge to `main` periodically** (don't commit routine work
   straight to `main`). **`main` is protected and takes NO direct pushes** — it is
   reached through a PR whose `gates` check is green (`.github/workflows/ci.yml`:
-  `tsc --noEmit`, `vitest`, `eslint` with 0 errors). `preview` still takes direct
+  `gates` requires every CI job — `tsc --noEmit`, `vitest`, `eslint` with 0
+  errors, and both solver suites). `preview` still takes direct
   pushes; CI runs there too, but does not block. Protection applies to admins as
   well, so there is no silent bypass: an emergency override means deliberately
   turning protection off, doing the push, and turning it back on. See

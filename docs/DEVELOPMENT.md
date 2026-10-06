@@ -66,8 +66,10 @@ npm test              # must be all-green
 npx eslint .          # must report 0 ERRORS; warnings are a deliberate backlog
 ```
 
-These are the same three the CI `gates` job runs, which is what `main`'s branch protection
-requires — so a change that skips them locally is caught at the PR, not merged.
+These are the same three the CI `node` job runs, and `gates` — what `main`'s branch protection
+requires — is green only when `node` and both solver jobs are (see [CI.md](CI.md)), so a change
+that skips them locally is caught at the PR, not merged. A change under `gcf/` or `gcf_v3/` also
+runs that tree's suite locally (`CLAUDE.md` lists the commands).
 
 Add or update a unit test whenever you touch testable pure logic (extract a helper if needed).
 For anything the browser can exercise, also verify the change end-to-end in the preview, not just
@@ -81,8 +83,9 @@ the command output in hand.
 - **Work on a branch; merge to `main` periodically.** Don't commit routine work straight to
   `main`. The continuous-improvement loop uses branch `improve/continuous`.
 - **`main` is PROTECTED and takes no direct pushes.** It is reached through a PR whose
-  `gates` check is green (`tsc`, `vitest`, `eslint` at 0 errors). Protection applies to admins
-  too, so there is no silent bypass. `preview` still takes direct pushes.
+  `gates` check is green (every CI job: `tsc`, `vitest`, `eslint` at 0 errors, and both solver
+  suites). Protection applies to admins too, so there is no silent bypass. `preview` still
+  takes direct pushes.
 - **Push order is `preview` FIRST, then `main`** — always. `main` auto-deploys to production,
   so merging the PR *is* the release. Merge into `preview`, push, VERIFY the dev alias moved
   (the target domain in the deployment's `alias` array and `meta.githubCommitSha` equal to the
