@@ -27,6 +27,10 @@ describe("dev-verify --layout probe", () => {
     expect(typeof LAYOUT_PROBE_SOURCE).toBe("string");
     expect(LAYOUT_PROBE_SOURCE).not.toMatch(/__name|require\(|import /);
     // …and only reads: no scroll of any kind (a scroll event closes an open Menu).
-    expect(LAYOUT_PROBE_SOURCE).not.toMatch(/scroll(To|By|IntoView)\(|scroll(Left|Top)\s*=/);
+    // A call (`scrollTo(`, `.scroll(`, `scrollIntoViewIfNeeded(`…) or an assignment
+    // (`scrollLeft =`, `+=`) — but not a read such as `scrollLeft === 0`.
+    expect(LAYOUT_PROBE_SOURCE).not.toMatch(
+      /\bscroll(?:To|By|IntoView\w*)\(|\.scroll\(|\bscroll(?:Left|Top)\s*[-+*/]?=(?!=)/,
+    );
   });
 });

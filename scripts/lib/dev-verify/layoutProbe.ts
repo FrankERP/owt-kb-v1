@@ -18,8 +18,13 @@
  *
  * `escapers` are the OUTERMOST elements whose box crosses the viewport's RIGHT edge
  * (left-edge overflow is unreachable by scrolling and never widens the page) with no
- * ancestor that clips `overflow-x` (auto, scroll, hidden or clip) between them and
- * `<html>`: an overflow-x-auto box's own wide child is contained and is not listed;
+ * ancestor that clips between them and `<html>` — a non-visible `overflow-x` (auto,
+ * scroll, hidden, clip), or layout/paint containment (`contain`, or
+ * `content-visibility: auto`), which turns the overflow inside it into ink overflow.
+ * NOT `container-type`: Chromium applies size and style containment for it but no
+ * layout containment, so it neither contains overflow nor anchors an out-of-flow
+ * box (measured, Chromium 151). An overflow-x-auto box's own wide child is
+ * contained and is not listed;
  * the box itself, if IT is wider than the page, is. For an absolute or fixed box only
  * ancestors from its containing block outward count — an overflow box BELOW the
  * containing block does not clip it — and the walk re-anchors at every absolute or
@@ -61,12 +66,11 @@ export const LAYOUT_PROBE_SOURCE = String.raw`(() => {
   const sx = window.scrollX;
   const round = (n) => Math.round(n * 10) / 10;
   // Clipping, for this purpose: anything that keeps a descendant's overflow from
-  // widening the page — a non-visible overflow-x, or containment, which turns the
-  // overflow inside it into ink overflow (layout/paint containment, a size container,
-  // content-visibility: auto).
+  // widening the page — a non-visible overflow-x, or layout/paint containment, which
+  // turns the overflow inside it into ink overflow. container-type is deliberately
+  // absent: it carries no layout containment (see the header).
   const contained = (cs) =>
     /paint|layout|strict|content/.test(cs.contain || "") ||
-    /size/.test(cs.containerType || "") ||
     cs.contentVisibility === "auto";
   const clipsX = (el) => {
     const cs = getComputedStyle(el);
