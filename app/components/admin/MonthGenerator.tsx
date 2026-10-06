@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 import {
   personNameOptions,
@@ -60,6 +60,8 @@ import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import { CADENCE_V2_NOTE, SLACK_V3_NOTE } from "@/app/utils/sundayCadence";
 import { useToast } from "@/app/components/ui/Toast";
 import {
   PLANNER_UPDATED_MESSAGE,
@@ -603,8 +605,17 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
           )}
           {r.fairness === "slack" && (
             <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-recency-fg/15 text-recency-strong border border-recency-fg/30">
-              holgura {r.fairnessSlack}
+              {`holgura ${r.fairnessSlack} · ${SLACK_V3_NOTE}`}
             </span>
+          )}
+          {/* C3 §6.6: the note is its own span so C6 can hide it under v3 (CTL-1). */}
+          {r.sundayCadence === "alternate" && (
+            <>
+              <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30">
+                Mes por medio
+              </span>
+              <span className="font-body text-[10px] text-mono-500 self-center">{CADENCE_V2_NOTE}</span>
+            </>
           )}
         </div>
       </div>
@@ -665,11 +676,17 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
   const [slack,    setSlack]    = useState(initialValues?.fairnessSlack ?? 1);
   const [weekEx,   setWeekEx]   = useState<Array<{ id: string; week: number; pattern: string }>>(initialValues?.weekExclusions ?? []);
   const [caps,     setCaps]     = useState<PersonRestriction["caps"]>(initialValues?.caps ?? []);
+  // «Domingo» (solver v3 C3 §6.6). Seeded from the edited restriction and carried
+  // to `onAdd` whether or not the control below is rendered: the UI-only
+  // rollback removes the CONTROL, never this data path (C3 §11).
+  const [sundayCadence, setSundayCadence] = useState<PersonRestriction["sundayCadence"]>(initialValues?.sundayCadence);
+  const cadenceLabelId = useId();
 
   const toggleExcl = (pat: string) =>
     setExcl(e => e.includes(pat) ? e.filter(x => x !== pat) : [...e, pat]);
 
-  const canAdd = !!person && (excl.length > 0 || weekEx.length > 0 || caps.length > 0 || fairness !== "none");
+  // A restriction may carry «Mes por medio» alone (C3 §6.6).
+  const canAdd = !!person && (excl.length > 0 || weekEx.length > 0 || caps.length > 0 || fairness !== "none" || sundayCadence === "alternate");
 
   const handleAdd = () => {
     if (!canAdd) return;
@@ -680,7 +697,11 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
     // no error: the card re-rendered unchanged and a cap added to an existing
     // person simply never appeared. `ConflictForm` and `PresenceForm` always
     // preserved the id; this one did not.
-    onAdd({ id: initialValues?.id ?? uid(), person, excludedPatterns: excl, fairness, fairnessSlack: slack, weekExclusions: weekEx, caps });
+    onAdd({
+      id: initialValues?.id ?? uid(), person, excludedPatterns: excl, fairness, fairnessSlack: slack, weekExclusions: weekEx, caps,
+      // «Normal» is NO key — never `sundayCadence: undefined` (C3 §6.1).
+      ...(sundayCadence === "alternate" ? { sundayCadence } : {}),
+    });
   };
 
   return (
@@ -756,8 +777,31 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         {fairness === "slack" && (
           <p className="font-body text-[11px] text-mono-500 mt-1">
             {slack >= 1
-              ? `En Auto de fin de semana su carga total del mes puede alejarse hasta ${slack} servicio${slack === 1 ? "" : "s"} de la del resto. Al llenar especiales cuenta como si llevara ${slack} más.`
+              ? `En Auto de fin de semana su carga total del mes puede alejarse hasta ${slack} servicio${slack === 1 ? "" : "s"} de la del resto. No aplica con el nuevo solver. Al llenar especiales cuenta como si llevara ${slack} más.`
               : "Con 0 no tiene efecto: escribe un número del 1 al 5."}
+          </p>
+        )}
+      </div>
+
+      {/* «Domingo» — solver v3 C3 §6.6. A one-of-N choice, so `SegmentedControl`. */}
+      <div>
+        <p id={cadenceLabelId} className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Domingo</p>
+        <SegmentedControl
+          labelledBy={cadenceLabelId}
+          size="sm"
+          value={sundayCadence === "alternate" ? "alternate" : "normal"}
+          onChange={v => setSundayCadence(v === "alternate" ? "alternate" : undefined)}
+          options={[
+            { value: "normal", label: "Normal" },
+            { value: "alternate", label: "Mes por medio" },
+          ]}
+        />
+        {sundayCadence === "alternate" && (
+          <p className="font-body text-[11px] text-mono-500 mt-1">
+            Si el mes anterior no dirigió domingo, está en Líderes Domingo y puede al menos un domingo, ese mes
+            le toca uno; en otro caso descansa y, si no dirige domingo, de preferencia dirige un sábado. Fuera
+            de Líderes Domingo no le toca ni domingo ni sábado de compensación. Aplica con el nuevo solver; el
+            solver actual no lo usa.
           </p>
         )}
       </div>
