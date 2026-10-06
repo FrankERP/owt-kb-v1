@@ -84,7 +84,8 @@ export function useSolverConfig(): SolverConfigController {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           // `configVersion` on EVERY save (C3 §6.2): the route refuses a body
-          // whose version is not its own, before it reads or writes anything.
+          // whose version is not its own, before it reads the stored document
+          // or parses `config`.
           body: JSON.stringify({ rev, config, configVersion: SOLVER_CONFIG_VERSION }),
         });
         const body = await readJson(res);

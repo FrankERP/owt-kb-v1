@@ -41,7 +41,8 @@ import {
  *    field — «Mes por medio» was the first — reads it away and its next save,
  *    about any rule, erases it for everyone. Every body carries
  *    `configVersion`; anything but exactly `SOLVER_CONFIG_VERSION` is a 400
- *    `invalid_request` before anything is read or written. `invalid_request`,
+ *    `invalid_request` after auth and the body's JSON/shape check, before the
+ *    stored document is read or `config` is parsed. `invalid_request`,
  *    not `stale_revision`: an old tab renders the latter as «Recargar reglas»,
  *    whose re-read goes through that tab's own field-dropping reader and can
  *    never produce a body this route accepts.

@@ -33,8 +33,9 @@ the newer one may have extended.
 - **Refuse, never merge: a config version.** `SOLVER_CONFIG_VERSION` (2) in
   `app/utils/solverConfigWriteRequest.ts`. Every save carries `configVersion`; the route refuses
   anything else with `400 invalid_request` (`details.issues: ["configVersion"]`) after auth and
-  before it reads or parses anything, and every GET and POST echo carries the version, so a
-  client meeting another one disables its own save. A field **or an allowed value** an older
+  the body's JSON/shape check, before the stored document is read or `config` is parsed, and
+  every GET and POST echo carries the version, so a client meeting another one disables its own
+  save. A field **or an allowed value** an older
   client would drop or rewrite bumps it in the same change; `solverConfigVersion.test.ts` pins
   the key set at every level and the accepted values of `sundayCadence`, `fairness` and cap `op`.
 - **One exact count per person per role (parent A38), checked at save by `person` TEXT.**
@@ -63,14 +64,41 @@ the newer one may have extended.
 - **Merging on the server** the fields a body lacks: indistinguishable from a deliberate
   «Normal», which is also absence.
 - **Requiring the field on every restriction**: guards this one field; a version guards the next.
+- **A required enum `"normal"|"alternate"`** as the field's shape: every stored restriction would
+  change on its next save, for nothing.
 - **`stale_revision` as the refusal**: an old tab renders it as «Recargar reglas», whose re-read
   goes through that tab's own field-dropping reader and can never produce an accepted body. A
   new conflict code would print «(error 409)».
-- **A roster read on save** to judge A38 by member id: a read on a critical writer, and still
-  unsound after a rename. **A second, six-key pattern map** in C3: two expansions that can drift;
-  C2 owns the six-key expansion.
+- **v2 equivalence with only the field stripped**: holds trivially, but a cadence-only
+  restriction would still reach `solverPools` and inject its person into `support` (or make v2
+  refuse the month for a member with no Tipo) — which is why `v2View` removes whole restrictions
+  that carried only the cadence.
+- **Refusing a name at save** (and **a roster read on save** to judge A38 by member id): a read
+  on a critical writer, and still unsound after a rename. Names are refused at build time (C2's
+  resolver, C6's Auto) and warned at edit.
+- **Checking A38 within one restriction only**: two cards for one person are reachable from the
+  UI (E22), so the check also looks across restrictions.
+- **Waiting for C2 IF2-16** (the six-key role map) before checking A38: C3 has no prerequisites.
+  **A second, six-key pattern map** in C3 is worse: two expansions that can drift; C2 owns the
+  six-key expansion, and the `Sat.Choir`-only gap is unreachable from the form and closed by C2
+  at build time.
+- **Accepting a stored overlapping pair until it is edited**: a save path that bypasses the rule.
+  Every save is refused, naming the pair, instead.
+- **An ambiguity chip on every card**: a v2-visible warning about a v3-only refusal, which C6
+  already names at Auto. Under v2 an ambiguous non-cadence name has a defined first-match
+  meaning, so the chip is on cadence restrictions only.
+- **Rendering the «not ticked» warning under v2 with «don't tick yet» copy**: noisy for months
+  and easy to misread. It is built in C3 and rendered only under v3.
+- **Gating the engine-dependent copy on `SOLVER_ENGINE` now**: equivalent until C6, wrong under a
+  Preview override after. The copy renders unconditionally and C6 adapts it on its
+  effective-engine prop.
 - **A caller-side ministry filter**: every consumer would have to remember it, and a forgotten
-  one shows false «Nombre ambiguo» chips and v3 refusals for a super-admin only.
+  one shows false «Nombre ambiguo» chips and v3 refusals for a super-admin only. **Narrowing the
+  members route** instead: it changes a super-admin's admin lists, and a super-admin is the only
+  role that edits `ministries`.
+- **A third no-Tipo reason in the «not ticked» predicate**, with «Auto no correrá…» copy: it
+  duplicates C6's refusal and changes the union that C6 and C7 consume. A cadence member with no
+  Tipo is left out of the warning because its copy («descansa este mes») would be false.
 
 ## Consequences
 

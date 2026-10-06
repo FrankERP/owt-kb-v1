@@ -374,9 +374,10 @@ carried only it, wherever v2 reads restriction persons. It resolves to a member 
 **The config version guard.** The POST replaces the whole document and the reader keeps only the
 fields it knows, so a client that predates a field would read it away and erase it on its next
 save. Every save therefore carries `configVersion`, and the route refuses anything but exactly
-`SOLVER_CONFIG_VERSION` (2) with `400 invalid_request` before it reads or parses anything; GET and
-POST echo the version. **Bump rule:** a change that adds a field, or an allowed value, that an
-older client would drop or rewrite bumps `SOLVER_CONFIG_VERSION` in the same change —
+`SOLVER_CONFIG_VERSION` (2) with `400 invalid_request` after auth and the body's JSON/shape check,
+before the stored document is read or `config` is parsed; GET and POST echo the version. **Bump
+rule:** a change that adds a field, or an allowed value, that an older client would drop or rewrite
+bumps `SOLVER_CONFIG_VERSION` in the same change —
 `solverConfigVersion.test.ts` pins the key set at every level and the accepted values of
 `sundayCadence`, `fairness` and cap `op`.
 

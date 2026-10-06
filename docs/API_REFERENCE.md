@@ -465,11 +465,11 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 - **`POST /api/admin/solver-config`** — replace the rule set. Body `{ rev, config, configVersion }`.
   **A `configVersion` that is not exactly `SOLVER_CONFIG_VERSION`** (absent, `null`, a string, an
   older or newer number) is `400 invalid_request` with `details: { issues: ["configVersion"],
-  expected, received }`, checked after auth and before anything is read or parsed — a client that
-  predates a field would otherwise erase it (ADR-0049). A config holding two `==` caps that fix a
-  common role for one `person` text is `400 invalid_request` at
-  `restrictions[i].caps[j]:exact_overlap` (the later cap; parent A38). Success echoes
-  `{ present, rev, config, configVersion }`.
+  expected, received }`, checked after auth and the body's JSON/shape check, before the stored
+  document is read or `config` is parsed — a client that predates a field would otherwise erase it
+  (ADR-0049). A config holding two `==` caps that fix a common role for one `person` text is
+  `400 invalid_request` at `restrictions[i].caps[j]:exact_overlap` (the later cap; parent A38).
+  Success echoes `{ present, rev, config, configVersion }`.
   **UPDATE only: it can never create the document** — a POST while it is absent is `404 not_found`
   with `details.detail = "create_not_allowed_here"`, because only `scripts/seed-solver-config.ts`
   may mint it. A `rev` that is missing is `400 invalid_request`; one that does not match is

@@ -32,7 +32,11 @@
 // enforcement chain is built to avoid. So: reject with an issue path, and let
 // the caller show it. The one exception is unknown EXTRA fields, which are
 // dropped: the posted body is a `SolverConfig` plus whatever a future version
-// adds, and refusing to save because the client is newer helps nobody.
+// adds, and refusing to save because the client is newer helps nobody HERE —
+// this parser is lenient on purpose. The counterweight is one level up:
+// `SOLVER_CONFIG_VERSION` (below). The route refuses a body whose
+// `configVersion` is not exactly its own, a newer client's (e.g. 3) included,
+// so on the route this parser never sees a body written for another shape.
 
 import { normalizeLabel } from "./normalizeLabel";
 // A RUNTIME import since C3: `rolesOfPattern` is the ONE solver-synced pattern →
@@ -61,7 +65,8 @@ export const SOLVER_CONFIG_TYPE = "solverConfig";
 /**
  * The document shape this bundle understands (solver v3 C3 §6.2). Every body a
  * pre-C3 client sends is version 1 (it carries none). The rules POST refuses any
- * other value BEFORE it reads or writes anything, because the leniency below
+ * other value after auth and the body's JSON/shape check, before the stored
+ * document is read or `config` is parsed, because the leniency below
  * ("unknown extra fields are dropped") is exactly how an OLDER tab erases a
  * field it cannot see: its reader drops it, and its whole-document save writes
  * the result.
