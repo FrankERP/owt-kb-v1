@@ -51,7 +51,7 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
   // Solver v3 C2 WR-16 / IF2-23: the ONE mutation path of `fairnessMonth`. Its importer
   // list grows only by a reviewed edit here — C2 adds `fairnessMonthCommit.ts` and
   // `fairnessLedgerRead.ts`; C4 adds its CLI file and its `scripts/lib` core.
-  fairnessMonthWriteRequest: ["app/utils/fairnessMonthCommit.ts"],
+  fairnessMonthWriteRequest: ["app/utils/fairnessLedgerRead.ts", "app/utils/fairnessMonthCommit.ts"],
   // Solver v3 C2 WR-1: the PUT route is the commit module's only caller (no MCP tool).
   fairnessMonthCommit: ["app/api/admin/fairness/months/route.ts"],
 };
