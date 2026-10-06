@@ -19,6 +19,8 @@ import { createHash } from "node:crypto";
 import type { SanityClient, Transaction } from "@sanity/client";
 
 import {
+  PRESENCE_RULE_KEY_RE,
+  RECORD_LIMITS,
   ROLE_KEYS,
   canonicalRoles,
   compareCodepoint,
@@ -99,10 +101,8 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === "object" && !Array.isArray(v);
 }
 
-/** A Sanity document id (letters, digits, `.`, `_`, `-`; ≤ 128). */
-const MEMBER_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
-/** REC-4's presence rule key grammar. */
-export const RULE_KEY_RE = /^[A-Za-z0-9_-]{1,64}$/;
+/** A Sanity document id: letters, digits, `.`, `_`, `-`, at most 128 — any id the roster can hold (RES-8). */
+const MEMBER_ID_RE = /^[A-Za-z0-9._-]{1,128}$/;
 
 const at = (base: string, key: string) => (base ? `${base}.${key}` : key);
 const idx = (base: string, i: number) => `${base}[${i}]`;
@@ -183,7 +183,7 @@ export function validateFairnessMonthWrite(
   const month = body.month;
   const monthOk = isMonthString(month);
   if (!monthOk) issues.push({ path: "month", message: MSG.month });
-  else if (isMonthString(currentMonth) && monthIndex(month) > monthIndex(currentMonth) + 12) {
+  else if (isMonthString(currentMonth) && monthIndex(month) > monthIndex(currentMonth) + RECORD_LIMITS.monthsAhead) {
     issues.push({ path: "month", message: MSG.monthCeiling });
   }
 
@@ -202,13 +202,13 @@ export function validateFairnessMonthWrite(
   const memberIds = new Set<string>();
   if (!Array.isArray(body.people)) issues.push({ path: "people", message: MSG.array });
   else {
-    if (body.people.length < 1 || body.people.length > 100) issues.push({ path: "people", message: MSG.peopleCount });
+    if (body.people.length < 1 || body.people.length > RECORD_LIMITS.people) issues.push({ path: "people", message: MSG.peopleCount });
     body.people.forEach((person, i) => validatePerson(person, idx("people", i), monthOk ? month : null, memberIds, issues));
   }
 
   if (!Array.isArray(body.presence)) issues.push({ path: "presence", message: MSG.array });
   else {
-    if (body.presence.length > 20) issues.push({ path: "presence", message: MSG.presenceCount });
+    if (body.presence.length > RECORD_LIMITS.presenceRules) issues.push({ path: "presence", message: MSG.presenceCount });
     const ruleKeys = new Set<string>();
     body.presence.forEach((rule, j) => validatePresence(rule, idx("presence", j), memberIds, ruleKeys, issues));
   }
@@ -279,7 +279,7 @@ function validatePerson(
             }
           }
         }
-        if (!(Number.isInteger(rule.count) && (rule.count as number) >= 1 && (rule.count as number) <= 31)) {
+        if (!(Number.isInteger(rule.count) && (rule.count as number) >= 1 && (rule.count as number) <= RECORD_LIMITS.exactCountMax)) {
           issues.push({ path: at(rulePath, "count"), message: MSG.count });
         }
       });
@@ -340,7 +340,7 @@ function validatePresence(
     return;
   }
   unknownFields(rule, PRESENCE_FIELDS, path, issues);
-  if (typeof rule.ruleKey !== "string" || !RULE_KEY_RE.test(rule.ruleKey)) {
+  if (typeof rule.ruleKey !== "string" || !PRESENCE_RULE_KEY_RE.test(rule.ruleKey)) {
     issues.push({ path: at(path, "ruleKey"), message: MSG.ruleKey });
   } else if (ruleKeys.has(rule.ruleKey)) issues.push({ path: at(path, "ruleKey"), message: MSG.duplicateRule });
   else ruleKeys.add(rule.ruleKey);
@@ -348,8 +348,8 @@ function validatePresence(
   const members = rule.members;
   if (
     !Array.isArray(members) ||
-    members.length < 2 ||
-    members.length > 12 ||
+    members.length < RECORD_LIMITS.presenceMembersMin ||
+    members.length > RECORD_LIMITS.presenceMembersMax ||
     !members.every((m) => typeof m === "string" && memberIds.has(m)) ||
     new Set(members).size !== members.length
   ) {

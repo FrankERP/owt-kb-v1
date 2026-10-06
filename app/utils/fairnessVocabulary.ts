@@ -81,6 +81,23 @@ export function compareCodepoint(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+// ─── Record limits (WR-4, REC-4) ───────────────────────────────────────────
+//
+// One definition for the record's validator and the eligibility resolver, which must
+// never build a body the validator refuses (RES-8). `people` is C5's request limit too.
+
+export const RECORD_LIMITS = {
+  people: 100,
+  presenceRules: 20,
+  presenceMembersMin: 2,
+  presenceMembersMax: 12,
+  exactCountMax: 31,
+  monthsAhead: 12,
+} as const;
+
+/** REC-4's presence rule key grammar (a config rule id, unchanged — a PRIVATE identifier, §6). */
+export const PRESENCE_RULE_KEY_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
 // ─── Months ─────────────────────────────────────────────────────────────────
 
 export const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
