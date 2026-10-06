@@ -354,6 +354,21 @@ function storedDoc(): Record<string, unknown> {
   return { ...buildFairnessMonthDocument({ body: body(), ...STAMPS }), _rev: "rev-1", _createdAt: "t", _updatedAt: "t" };
 }
 
+describe("a nameless item (REC-3, WR-16)", () => {
+  it("the builder refuses a person with no non-empty name", () => {
+    expect(() => buildFairnessMonthDocument({ body: body(), ...STAMPS, names: new Map() })).toThrow(/no member name/);
+    const empty = new Map(STAMPS.names);
+    empty.set("m-alma", "");
+    expect(() => buildFairnessMonthDocument({ body: body(), ...STAMPS, names: empty })).toThrow(/m-alma/);
+  });
+  it("the parser rejects a stored item whose name is empty", () => {
+    const doc = storedDoc() as { people: { name: string }[] };
+    doc.people[0].name = "";
+    const parsed = parseStoredFairnessMonth(doc);
+    expect(parsed.ok).toBe(false);
+  });
+});
+
 describe("parseStoredFairnessMonth (C2 IF2-20, RD-2)", () => {
   it("maps a valid document to the logical record (IF2-3)", () => {
     const parsed = parseStoredFairnessMonth(storedDoc());

@@ -516,13 +516,17 @@ export function buildFairnessMonthDocument(input: {
   const people = [...body.people]
     .sort((a, b) => compareCodepoint(a.memberId, b.memberId))
     .map((p) => {
+      const name = input.names.get(p.memberId);
+      if (typeof name !== "string" || name.length === 0) {
+        throw new Error(`fairnessMonth: no member name for ${p.memberId} (REC-3: no item is written without a name)`);
+      }
       const roles: Record<string, Status> = {};
       for (const key of ROLE_KEYS) roles[ROLE_FIELD[key]] = p.roles[key];
       return {
         _key: personKey(p.memberId),
         _type: "fairnessPerson",
         member: { _type: "reference", _ref: p.memberId, _weak: true },
-        name: input.names.get(p.memberId) ?? "",
+        name,
         roles,
         exactRules: p.exactRules
           .map((r) => ({ roles: canonicalRoles(r.roles), count: r.count }))
@@ -659,7 +663,7 @@ export function parseStoredFairnessMonth(
       else if (!isPlainObject(member) || typeof member._ref !== "string" || member._ref.length === 0) {
         issues.push({ path: at(path, "member"), message: PARSE.type });
       } else memberId = member._ref;
-      const nameOk = str(item.name, at(path, "name"));
+      const nameOk = str(item.name, at(path, "name"), true);
       const roles = {} as Record<RoleKey, Status>;
       if (item.roles === undefined) issues.push({ path: at(path, "roles"), message: PARSE.missing });
       else if (!isPlainObject(item.roles)) issues.push({ path: at(path, "roles"), message: PARSE.type });
