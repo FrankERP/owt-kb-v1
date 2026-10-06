@@ -432,6 +432,51 @@ describe("create mode — columns, drafts and bodies (C1 §6.1, §6.2)", () => {
     expect(sw("Cuenta para equidad 2026-02-08").getAttribute("aria-checked")).toBe("true");
   });
 
+  it("locks the header switch while an Auto solve is pending, so the create body keeps what the screen shows", async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const bodies: Record<string, unknown>[] = [];
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/admin/solve") {
+        await gate;
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            schedule: { "1": { Sunday: { Lead: ["Ana"], BGV: [], Choir: [] } } },
+            total_counts: { Ana: 1 },
+            role_counts: { Ana: { "Sun.Lead": 1 } },
+            unfilled_seats: [],
+          }),
+        };
+      }
+      if (url === "/api/admin/roles") bodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      return response(200);
+    });
+    stubFetchWithHistory(fetchMock);
+    const members = [{ _id: "lead-1", member_name: "Ana", memberType: ["voz", "sunday_lead"] }];
+    const { container } = render(<Gen members={members} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText("Ana"));
+    setMonthYear(container, 2, 2026);
+    deselectAll(container, "saturday");
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar con Solver/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/admin/solve", expect.anything()));
+    expect(sw("Cuenta para equidad 2026-02-08").disabled).toBe(true);
+    fireEvent.click(sw("Cuenta para equidad 2026-02-08"));
+    expect(sw("Cuenta para equidad 2026-02-08").getAttribute("aria-checked")).toBe("true");
+
+    release!();
+    await waitFor(() => expect(container.querySelector('[data-row-id="lead"][data-date="2026-02-01"] [data-occupant]')).toBeTruthy());
+    expect(sw("Cuenta para equidad 2026-02-08").disabled).toBe(false);
+    fireEvent.click(sw("Cuenta para equidad 2026-02-08"));
+    fireEvent.click(screen.getByRole("button", { name: /^Crear \d+ borrador/ }));
+    await waitFor(() => expect(bodies.length).toBeGreaterThan(0));
+    expect(Object.fromEntries(bodies.map((body) => [body.date, body.countsForFairness]))["2026-02-08"]).toBe(false);
+  });
+
   it("a past month's create columns are disabled at the type default, and the bodies carry it", async () => {
     vi.setSystemTime(new Date("2026-03-10T18:00:00.000Z"));
     const bodies = stubCreates();

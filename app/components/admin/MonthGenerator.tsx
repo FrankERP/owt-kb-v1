@@ -3067,7 +3067,7 @@ export default function MonthGenerator({
       handleStoredHeaderChange(columnId, { countsForFairness: next });
       return;
     }
-    if (pushing) return;
+    if (pushing || autoPending) return;
     const nextEdits = new Map(createCountsEdits).set(columnId, next);
     setCreateCountsEdits(nextEdits);
     const nextColumns = applyCreateCountsEdits(createColumns, nextEdits);
@@ -4732,7 +4732,7 @@ export default function MonthGenerator({
           onRowsChange={handleRowsChange}
           onToggleSkip={handleToggleSkip}
           onStoredHeaderChange={handleStoredHeaderChange}
-          fairness={{ onChange: handleFairnessChange, createInFlight: pushing }}
+          fairness={{ onChange: handleFairnessChange, createInFlight: pushing || autoPending }}
           storedDateBlockedReason={storedDateBlocked}
           mutationLocked={storedMutationLocked || createAutoLocked}
           onAuto={handleAuto}
