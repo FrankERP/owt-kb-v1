@@ -148,12 +148,13 @@ exists and is measured.
 |---|---|---|---|---|---|---|---|
 | 36983149539 | 2026-10-02 | `0a81839c` (`main`) | one job | 4m34s | 10m03s (tests 9m43s) | — | 14m41s |
 | 37357419306 | 2026-10-05 | `4759a214` (`main`) | one job | 4m50s | 10m20s (tests 10m01s) | — | 15m11s |
-| *pending* | — | — | split | — | — | — | — |
+| 37420430364 | 2026-10-06 | `599734c5` (`preview`) | split | 5m02s (job `node` 5m05s) | 10m08s (tests 9m53s; job `solver-v2` 10m16s) | job `solver-v3` 24s | 10m29s (run) |
 
 The single-job rows sum the job's own step times: «Node steps» is set-up through
-Lint, «v2 solver steps» is setup-python through «Solver tests». The *pending* row
-is filled from the first run of the split layout (the `push` run on `preview`),
-with per-job durations and the run's wall time.
+Lint, «v2 solver steps» is setup-python through «Solver tests». The split row is the
+first run of the split layout (the `push` run on `preview`): the same step sums, each
+job's own duration in brackets, and the run's wall time (created → `gates` done). Its
+`gates` job took 8 s on the runner's preinstalled Node (assumption A2 holds).
 
 ### Solver inertness goldens (`gcf/test_inertness.py`)
 
