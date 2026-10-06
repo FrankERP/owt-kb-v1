@@ -7,13 +7,12 @@ role assignments, member availability, and proposals. **Spanish-language UI.**
 - Next.js 16 (App Router; `proxy.ts` = middleware), React 19, Sanity v5
   (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark and light themes — follows the device by default; members can pin either at `/me`.
   Studio embedded at `/studio`. iOS app via Capacitor.
-- **Before claiming done, all FOUR must pass:** `npx tsc --noEmit`, `npm test`
-  (vitest), `npx eslint .` with **0 errors** (warnings are a deliberate backlog —
-  see `eslint.config.mjs`), and — when the change touches `gcf/**` —
-  `python -m unittest discover -s gcf -t gcf`, which is a blocking CI gate too,
-  and — when it touches `gcf_v3/**` —
-  `python -m unittest discover -s gcf_v3 -t gcf_v3`, likewise. Add tests for
-  testable pure logic.
+- **Before claiming done, these must pass:** always `npx tsc --noEmit`, `npm test`
+  (vitest) and `npx eslint .` with **0 errors** (warnings are a deliberate backlog —
+  see `eslint.config.mjs`); plus the solver suite of each tree the change touches —
+  `gcf/**`: `python -m unittest discover -s gcf -t gcf`; `gcf_v3/**`:
+  `python -m unittest discover -s gcf_v3 -t gcf_v3`. All five are blocking CI
+  gates. Add tests for testable pure logic.
 
 ## Conventions
 - Work on a branch, **merge to `main` periodically** (don't commit routine work
