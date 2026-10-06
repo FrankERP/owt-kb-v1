@@ -7,6 +7,7 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import { writeClient } from "@/sanity/lib/serverClient";
 import {
   SOLVER_CONFIG_DOC_ID,
+  SOLVER_CONFIG_VERSION,
   parseSolverConfigWrite,
   solverConfigFromDocument,
 } from "@/app/utils/solverConfigWriteRequest";
@@ -22,7 +23,7 @@ import {
  * path; extending the prop chain would have meant editing the page and
  * `AdminPanel` for no gain.
  *
- * ─── The two things this route deliberately CANNOT do ────────────────────────
+ * ─── The three things this route deliberately CANNOT do ──────────────────────
  *
  * 1. **It can never CREATE the document.** Only `scripts/seed-solver-config.ts`
  *    may, and only while the document is absent. Without that asymmetry the
@@ -34,7 +35,18 @@ import {
  *    that trade is not recoverable. A POST against an absent document is
  *    therefore a `404 not_found` with the reason stated in the message.
  *
- * 2. **It can never accept a stale `_rev`.** Multi-admin is the entire point of
+ * 2. **It can never accept a body from a client that reads another document
+ *    shape** (solver v3 C3 §6.2). This POST replaces the WHOLE document and the
+ *    reader keeps only the fields it knows, so a tab whose bundle predates a
+ *    field — «Mes por medio» was the first — reads it away and its next save,
+ *    about any rule, erases it for everyone. Every body carries
+ *    `configVersion`; anything but exactly `SOLVER_CONFIG_VERSION` is a 400
+ *    `invalid_request` before anything is read or written. `invalid_request`,
+ *    not `stale_revision`: an old tab renders the latter as «Recargar reglas»,
+ *    whose re-read goes through that tab's own field-dropping reader and can
+ *    never produce a body this route accepts.
+ *
+ * 3. **It can never accept a stale `_rev`.** Multi-admin is the entire point of
  *    P6, so last-write-wins is the wrong default: two admins with the panel open
  *    would silently overwrite each other's whole rule set. This follows the
  *    codebase's own convention — an exact observed revision threaded from the
@@ -94,16 +106,21 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const doc = await loadStored();
-  if (!doc) return NextResponse.json({ present: false, rev: null, config: null });
+  // `configVersion` on every answer, absent included: a client that speaks
+  // another version disables its own save on reading it (C3 §6.2).
+  if (!doc) {
+    return NextResponse.json({ present: false, rev: null, config: null, configVersion: SOLVER_CONFIG_VERSION });
+  }
   return NextResponse.json({
     present: true,
     rev: typeof doc._rev === "string" ? doc._rev : null,
     config: solverConfigFromDocument(doc),
+    configVersion: SOLVER_CONFIG_VERSION,
   });
 }
 
 /**
- * Replace the rule set. Body: `{ rev, config }` — `config` is a `SolverConfig`
+ * Replace the rule set. Body: `{ rev, config, configVersion }` — `config` is a `SolverConfig`
  * as the panel holds it, carrying `id` on every rule and no `_key` anywhere.
  * `parseSolverConfigWrite` is what mints them; the seed script uses the same
  * module, so the two writers cannot drift.
@@ -120,6 +137,22 @@ export async function POST(req: NextRequest) {
   }
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return reject(serviceError("invalid_request", { details: { issues: ["body"] } }));
+  }
+
+  // The version guard (C3 §6.2) — after auth and the JSON parse, before `rev`,
+  // the parser and the read: an outdated body is refused with nothing read.
+  const configVersion = (body as Record<string, unknown>).configVersion;
+  if (configVersion !== SOLVER_CONFIG_VERSION) {
+    return reject(
+      serviceError("invalid_request", {
+        message: "Esta pestaña tiene una versión anterior de las reglas. Recarga la página; no se guardó nada.",
+        details: {
+          issues: ["configVersion"],
+          expected: SOLVER_CONFIG_VERSION,
+          received: configVersion === undefined ? null : configVersion,
+        },
+      }),
+    );
   }
 
   const rev = (body as Record<string, unknown>).rev;
@@ -185,5 +218,6 @@ export async function POST(req: NextRequest) {
     present: true,
     rev: after && typeof after._rev === "string" ? after._rev : null,
     config: parsed.value.config,
+    configVersion: SOLVER_CONFIG_VERSION,
   });
 }
