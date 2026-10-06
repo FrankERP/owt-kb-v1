@@ -22,7 +22,14 @@ import {
   parseSolverConfigWrite,
   solverConfigFields,
 } from "../solverConfigWriteRequest";
-import type { SolverConfig } from "@/app/components/admin/plannerModel";
+import type {
+  ConflictRule,
+  PersonRestriction,
+  PresenceRule,
+  RestrictionCap,
+  SolverConfig,
+  WeekExclusion,
+} from "@/app/components/admin/plannerModel";
 
 const SHAPES: Record<number, {
   keys: Record<"document" | "restriction" | "weekExclusion" | "cap" | "conflict" | "presence", string[]>;
@@ -48,19 +55,35 @@ const SHAPES: Record<number, {
   },
 };
 
-/** A config carrying every optional field the type has, so every key is emitted. */
-const EVERYTHING: SolverConfig = {
+/**
+ * A config carrying every optional field the type has, so every key is emitted.
+ * Each level is declared `Required<...>`: a new optional field turns tsc red until
+ * this fixture carries it, and then the key pin turns red until SHAPES and
+ * SOLVER_CONFIG_VERSION are bumped.
+ */
+const WEEK_EXCLUSION: Required<WeekExclusion> = { id: "w-1", week: 1, pattern: "*.*" };
+const CAP: Required<RestrictionCap> = {
+  id: "c-1", pattern: "Sun.BGV", op: "<=", value: 1, relative: true, relOffset: 2,
+};
+const RESTRICTION: Required<PersonRestriction> = {
+  id: "r-1", person: "Ana", excludedPatterns: ["Sat.*"], fairness: "slack", fairnessSlack: 2,
+  weekExclusions: [WEEK_EXCLUSION],
+  caps: [CAP],
+  sundayCadence: "alternate",
+};
+const CONFLICT: Required<ConflictRule> = {
+  id: "x-1", personA: "Ana", personB: "Bruno", pattern: "*.Lead",
+};
+const PRESENCE: Required<PresenceRule> = {
+  id: "p-1", persons: ["Bruno", "Carla"], pattern: "Sun.BGV",
+};
+const EVERYTHING: Required<SolverConfig> = {
   sundayLeads: ["m-ana"],
   saturdayLeads: ["m-bruno"],
   support: ["m-carla"],
-  restrictions: [{
-    id: "r-1", person: "Ana", excludedPatterns: ["Sat.*"], fairness: "slack", fairnessSlack: 2,
-    weekExclusions: [{ id: "w-1", week: 1, pattern: "*.*" }],
-    caps: [{ id: "c-1", pattern: "Sun.BGV", op: "<=", value: 1, relative: true, relOffset: 2 }],
-    sundayCadence: "alternate",
-  }],
-  conflicts: [{ id: "x-1", personA: "Ana", personB: "Bruno", pattern: "*.Lead" }],
-  presence: [{ id: "p-1", persons: ["Bruno", "Carla"], pattern: "Sun.BGV" }],
+  restrictions: [RESTRICTION],
+  conflicts: [CONFLICT],
+  presence: [PRESENCE],
 };
 
 const sortedKeys = (o: unknown) => Object.keys(o as Record<string, unknown>).sort();
