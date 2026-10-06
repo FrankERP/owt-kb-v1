@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 317,
-    "filesScanned": 414,
+    "filesScanned": 415,
     "filesWithColour": 55,
     "byCategory": {
       "2": 2,
@@ -2767,7 +2767,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 685,
+      "line": 692,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
