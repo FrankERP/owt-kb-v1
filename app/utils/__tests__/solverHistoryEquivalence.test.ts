@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import type { RankMember } from "@/app/components/admin/candidateRanking";
 import { historyEntryFromDrafts, type DraftCard } from "@/app/components/admin/plannerModel";
 import { draftCreateBody } from "@/app/utils/monthDraftCreate";
+import { countsForFairnessDefault } from "@/app/utils/countsForFairness";
 import { buildRoleDocument, parseCreateRequest } from "@/app/utils/roleWriteRequest";
 import { ROLE_PROJECTION } from "@/app/utils/serviceReadQueries";
 import { deriveSolverHistory, historyWindow } from "@/app/utils/solverHistory";
@@ -41,6 +42,7 @@ function draft(over: Partial<DraftCard> & Pick<DraftCard, "_type" | "date">): Dr
     exists: false,
     isExisting: false,
     skipped: false,
+    countsForFairness: countsForFairnessDefault(over._type),
     leads: [],
     bgvs: [],
     chorus: [],

@@ -12,6 +12,7 @@ import { draftCreateBody, newCreationRequestId, runDraftCreateBatch } from "@/ap
 import { normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { isServiceTime } from "@/app/utils/serviceTime";
 import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
+import { countsForFairnessDefault } from "@/app/utils/countsForFairness";
 import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
 import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
 import MonthCalendar from "./MonthCalendar";
@@ -3095,6 +3096,9 @@ export default function MonthGenerator({
       ...(createType === "special_role" ? { service_name: normalizedName ?? "" } : {}),
       ...(createTimeValue ? { time: createTimeValue } : {}),
       ...(createFormat ? { format: createFormat } : {}),
+      // Task 13 replaces this with the composer's effective value; until then the
+      // type default keeps today's behaviour exactly.
+      countsForFairness: countsForFairnessDefault(createType),
       leads: [],
       bgvs: [],
       chorus: [],

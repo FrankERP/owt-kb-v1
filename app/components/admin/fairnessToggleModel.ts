@@ -15,6 +15,7 @@
 // of "now". The rule is client-side only: neither roles route refuses on the month.
 
 import { countsForFairnessDefault, type FairnessRoleType } from "@/app/utils/countsForFairness";
+import type { GridColumn } from "./plannerModel";
 import { serviceTodayIso } from "./serviceReadiness";
 
 export const FAIRNESS_LABEL = "Cuenta para equidad";
@@ -55,4 +56,37 @@ export function fairnessSwitchLabel(target: { date: string; serviceName?: string
   return target.serviceName
     ? `${FAIRNESS_LABEL} ${target.date} · ${target.serviceName}`
     : `${FAIRNESS_LABEL} ${target.date}`;
+}
+
+/**
+ * Create mode (§6.1): the admin's header edits, by `columnId`, over the columns
+ * `buildColumns` made — each column's EFFECTIVE value, the past-month rule applied.
+ * Idempotent: applying it to columns it already produced changes nothing.
+ */
+export function applyCreateCountsEdits(
+  columns: readonly GridColumn[],
+  edits: ReadonlyMap<string, boolean>,
+  todayIso: string = serviceTodayIso(),
+): GridColumn[] {
+  return columns.map((column) => ({
+    ...column,
+    countsForFairness: effectiveCreateCounts(
+      column.type,
+      column.date,
+      edits.get(column.columnId) ?? column.countsForFairness,
+      todayIso,
+    ),
+  }));
+}
+
+/**
+ * Drop one column's held edit (§6.1: deselecting the weekend date or removing the
+ * special discards its value). Returns the SAME map when there is nothing to drop,
+ * so a state update with it re-renders nothing.
+ */
+export function withoutCountsEdit(edits: Map<string, boolean>, columnId: string): Map<string, boolean> {
+  if (!edits.has(columnId)) return edits;
+  const next = new Map(edits);
+  next.delete(columnId);
+  return next;
 }

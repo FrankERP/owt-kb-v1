@@ -106,11 +106,13 @@ const SPECIAL: GridColumn = {
   date: "2026-03-18",
   type: "special_role",
   serviceName: "Vigilia",
+  countsForFairness: false,
 };
 const SUNDAY: GridColumn = {
   columnId: createColumnId("sunday_role", "2026-03-15"),
   date: "2026-03-15",
   type: "sunday_role",
+  countsForFairness: true,
 };
 
 const ROWS: GridRow[] = buildRows();
@@ -661,6 +663,7 @@ describe("the fill itself", () => {
       date: "2026-03-25",
       type: "special_role",
       serviceName: "Bautizos",
+      countsForFairness: false,
     };
     const columns = [SPECIAL, second];
     const members = pick("ana", "beto", "carla", "dora", "elsa", "fina", "zoe");

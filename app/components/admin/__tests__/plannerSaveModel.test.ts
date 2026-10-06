@@ -20,6 +20,7 @@ const column: StoredGridColumn = {
   date: "2026-02-01",
   published: false,
   admission: "approved",
+  countsForFairness: true,
 };
 
 const rows: StoredGridRow[] = [

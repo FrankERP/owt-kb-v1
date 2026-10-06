@@ -12,6 +12,7 @@
 // original id) are unit-testable without a DOM or a network.
 
 import type { ServiceFormat } from "./serviceFormat";
+import { effectiveCreateCounts } from "@/app/components/admin/fairnessToggleModel";
 
 export interface DraftInstrumentSlot {
   instrument: string;
@@ -43,6 +44,11 @@ export interface CreatableDraft {
    * by the stored-mode composer — the month CREATE flow never drafts one.
    */
   format?: ServiceFormat;
+  /**
+   * «Cuenta para equidad» (solver v3 C1 §6.1) — the draft's column value. The body
+   * re-applies the past-month rule when it is built (`draftCreateBody`).
+   */
+  countsForFairness: boolean;
   leads: string[];
   bgvs: string[];
   chorus: string[];
@@ -61,8 +67,16 @@ export function newCreationRequestId(): string {
   return out.slice(0, 32);
 }
 
-/** The exact POST body for one draft. Blank slots are dropped, order preserved. */
-export function draftCreateBody(draft: CreatableDraft, published: boolean) {
+/**
+ * The exact POST body for one draft. Blank slots are dropped, order preserved.
+ *
+ * `countsForFairness` is always sent (solver v3 C1 §6.1), decided HERE against
+ * `todayIso` (default: now, in CDMX) rather than trusted from the draft: a draft of a
+ * past month sends its type default whatever it holds (§6.0), so a tab left open
+ * across a month boundary cannot send a value its month no longer allows — and a
+ * past-dated create always hashes as the omit-at-default fingerprint.
+ */
+export function draftCreateBody(draft: CreatableDraft, published: boolean, todayIso?: string) {
   return {
     creationRequestId: draft.creationRequestId,
     _type: draft._type,
@@ -74,6 +88,7 @@ export function draftCreateBody(draft: CreatableDraft, published: boolean) {
     ...(draft._type === "special_role" ? { service_name: draft.service_name ?? "" } : {}),
     ...(draft._type === "special_role" && draft.time ? { time: draft.time } : {}),
     ...(draft._type === "special_role" && draft.format ? { format: draft.format } : {}),
+    countsForFairness: effectiveCreateCounts(draft._type, draft.date, draft.countsForFairness, todayIso),
     leads: draft.leads,
     bgvs: draft.bgvs,
     chorus: draft.chorus,

@@ -35,8 +35,8 @@ const ROWS = buildRows();
 
 const SUNDAYS = ["2026-09-06", "2026-09-13", "2026-09-20", "2026-09-27"];
 
-const COL_1: GridColumn = { columnId: "col-1", date: "2026-09-06", type: "sunday_role" };
-const COL_2: GridColumn = { columnId: "col-2", date: "2026-09-13", type: "sunday_role" };
+const COL_1: GridColumn = { columnId: "col-1", date: "2026-09-06", type: "sunday_role", countsForFairness: true };
+const COL_2: GridColumn = { columnId: "col-2", date: "2026-09-13", type: "sunday_role", countsForFairness: true };
 
 const GABY: RankMember = { _id: "gaby", member_name: "Gabriela Rocha", alias: "Gaby", memberType: ["voz"] };
 const FRANK: RankMember = { _id: "frank", member_name: "Francisco Rocha", alias: "Frank", memberType: ["voz", "instrumento"] };
@@ -534,7 +534,7 @@ describe("evaluateMove — acceptance 8 (the preconditions)", () => {
   });
 
   it("a row the target column does not show is never a drop zone — P2 cannot catch it, since it judges the column as it is NOW", () => {
-    const saturday: GridColumn = { columnId: "col-sat", date: "2026-09-12", type: "saturday_role" };
+    const saturday: GridColumn = { columnId: "col-sat", date: "2026-09-12", type: "saturday_role", countsForFairness: true };
     const cells = [cell("coro", "col-1", ["gaby"]), cell("coro", "col-sat", [])];
 
     const verdict = evaluateMove(

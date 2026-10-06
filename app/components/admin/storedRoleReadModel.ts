@@ -2,6 +2,7 @@ import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel
 import { isValidServiceDate } from "@/app/utils/serviceReadModel";
 import { isServiceTime } from "@/app/utils/serviceTime";
 import { isWorshipNightFormat } from "@/app/utils/serviceFormat";
+import { countsForFairness as readCountsForFairness } from "@/app/utils/countsForFairness";
 import type {
   RoleDomainSummary,
   RoleTarget,
@@ -121,6 +122,9 @@ export function translateStoredRole(
     date: role.date,
     published: role.published !== false,
     admission: observation.admission,
+    // C1 §6.1: the GET row's effective value; a row from an older server has none
+    // and reads as its type default through the one twin.
+    countsForFairness: readCountsForFairness({ _type: role._type, countsForFairness: role.countsForFairness }),
     ...(role._type === "special_role" ? { serviceName: normalizeServiceName(role.service_name) } : {}),
     ...(role._type === "special_role" && isServiceTime(role.time) ? { time: role.time } : {}),
     ...(role._type === "special_role" && isWorshipNightFormat(role.format) ? { format: role.format } : {}),

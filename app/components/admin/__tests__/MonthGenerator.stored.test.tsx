@@ -340,6 +340,9 @@ describe("MonthGenerator — stored mode", () => {
       instruments: [],
       foh: [],
       published: false,
+      // Solver v3 C1: every create body carries the effective value — here the
+      // Domingo default.
+      countsForFairness: true,
     });
     expect(bodies[1].creationRequestId).toBe(bodies[0].creationRequestId);
   });

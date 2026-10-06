@@ -50,6 +50,7 @@ import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { displayMemberName, rulePersonNamesMember } from "@/app/utils/memberRuleNames";
 import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
+import { countsForFairnessDefault } from "@/app/utils/countsForFairness";
 
 // ─── Grid shape ───────────────────────────────────────────────────────────────
 
@@ -157,6 +158,14 @@ export interface GridColumn {
   time?: string;
   /** SPECIALS ONLY — "worship_night" for a «Noche de alabanza». Never identity. */
   format?: ServiceFormat;
+  /**
+   * «Cuenta para equidad» (solver v3 C1 §6.1) — the column's EFFECTIVE value, after
+   * the past-month rule (§6.0), in both modes. Create mode: the type default, a
+   * special's composer choice, or the admin's header edit (`applyCreateCountsEdits`).
+   * Stored mode: the GET row's value, overlaid by the header edit. Inert under v2:
+   * nothing in this module computes with it — `buildSolveRequest` takes no columns.
+   */
+  countsForFairness: boolean;
 }
 
 /** Fail closed when a caller supplies ambiguous or detached grid identity. */
@@ -223,6 +232,8 @@ export interface DraftCard {
    */
   isExisting: boolean;
   skipped: boolean;
+  /** Its column's effective «Cuenta para equidad»; `draftCreateBody` sends it (C1 §6.1). */
+  countsForFairness: boolean;
   leads: string[];
   bgvs: string[];
   chorus: string[];
@@ -429,8 +440,11 @@ export function hasTarget(row: GridRow, column: Pick<GridColumn, "type" | "forma
 export function buildColumns(input: {
   sundayDates: string[];
   activeSatDates: string[];
-  /** Weekday specials (E2), each with the `service_name` it will be created under. */
-  specials?: { date: string; name: string }[];
+  /**
+   * Weekday specials (E2), each with the `service_name` it will be created under and
+   * the composer's «Cuenta para equidad» choice — the column's initial value (C1 §6.3).
+   */
+  specials?: { date: string; name: string; countsForFairness?: boolean }[];
 }): GridColumn[] {
   const { sundayDates, activeSatDates, specials = [] } = input;
 
@@ -458,10 +472,21 @@ export function buildColumns(input: {
     cols.push(col);
   };
 
-  for (const d of sundayDates) push({ columnId: createColumnId("sunday_role", d), date: d, type: "sunday_role" });
-  for (const d of activeSatDates) push({ columnId: createColumnId("saturday_role", d), date: d, type: "saturday_role" });
+  // C1 §6.1: every column enters at its type default; a special at the composer's choice.
+  for (const d of sundayDates) {
+    push({ columnId: createColumnId("sunday_role", d), date: d, type: "sunday_role", countsForFairness: countsForFairnessDefault("sunday_role") });
+  }
+  for (const d of activeSatDates) {
+    push({ columnId: createColumnId("saturday_role", d), date: d, type: "saturday_role", countsForFairness: countsForFairnessDefault("saturday_role") });
+  }
   for (const s of specials) {
-    push({ columnId: createColumnId("special_role", s.date), date: s.date, type: "special_role", serviceName: s.name });
+    push({
+      columnId: createColumnId("special_role", s.date),
+      date: s.date,
+      type: "special_role",
+      serviceName: s.name,
+      countsForFairness: s.countsForFairness ?? countsForFairnessDefault("special_role"),
+    });
   }
 
   return cols.sort((a, b) => a.date.localeCompare(b.date));
@@ -1810,6 +1835,7 @@ export function cellsToDrafts(
       exists,
       isExisting,
       skipped,
+      countsForFairness: column.countsForFairness,
       leads,
       bgvs,
       chorus,
