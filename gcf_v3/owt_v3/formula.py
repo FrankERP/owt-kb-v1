@@ -237,6 +237,7 @@ def realised(services, months, floor_override=None):
                 out.floor_seat[(m, p)] = (sid, role)
         # final pass with floor set-asides applied together
         for s, kept, second, pop, rules, q, pi, cls in passes:
+            seat_start = len(out.seats)
             for role, h in second:
                 k = role_key(s.day, role)
                 out.set_asides.append({"service": s.id, "role": role, "key": k, "person": h, "reason": "second_seat"})
@@ -257,18 +258,33 @@ def realised(services, months, floor_override=None):
                     line = what if kind == "normal" else f"P:{what}"
                     out.received[(m, h, line)] += 1
                     out.seats.append((s.id, role, h, line))
+            # conservation: independent sources. Share actually added to out.share vs the
+            # seats actually recorded in out.seats for this service (FX-3 / LG-10).
+            svc_seats = out.seats[seat_start:]
+            role_of_key = {}
+            for role, h in kept:
+                role_of_key.setdefault(role_key(s.day, role), set()).add(role)
             for k, members in pop.items():
                 pool = sum(1 for (role, h), (kind, what) in final.items()
                            if kind == "normal" and role_key(s.day, role) == k)
+                added = Fraction(0)
                 for p in members:
-                    out.share[(m, p, LINE_OF_KEY[k])] += Fraction(pool, len(members))
-                shared = sum((Fraction(pool, len(members)) for _ in members), Fraction(0))
-                out.conservation.append((s.id, k, shared, pool))
+                    inc = Fraction(pool, len(members))
+                    out.share[(m, p, LINE_OF_KEY[k])] += inc
+                    added += inc
+                roles = role_of_key.get(k, set())
+                recorded = sum(1 for (_sid, role, _h, oc) in svc_seats
+                               if role in roles and oc == LINE_OF_KEY[k])
+                out.conservation.append((s.id, k, added, recorded))
             for rho, _ in rules:
                 live = rho.id in pi and final[pi[rho.id]][0] == "presence"
                 members = q[rho.id]
+                added = Fraction(0)
                 if live:
                     for p in members:
-                        out.share[(m, p, f"P:{rho.id}")] += Fraction(1, len(members))
-                out.conservation.append((s.id, f"P:{rho.id}", Fraction(1) if live else Fraction(0), 1 if live else 0))
+                        inc = Fraction(1, len(members))
+                        out.share[(m, p, f"P:{rho.id}")] += inc
+                        added += inc
+                recorded = sum(1 for (_sid, _role, _h, oc) in svc_seats if oc == f"P:{rho.id}")
+                out.conservation.append((s.id, f"P:{rho.id}", added, recorded))
     return out

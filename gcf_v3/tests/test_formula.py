@@ -55,8 +55,18 @@ class Populations(unittest.TestCase):
         share, recv = totals(res)
         self.assertEqual(share[("m-cris", "BGV")], Fraction(2, 3))
         self.assertEqual(recv[("m-ana", "BGV")], 1)
-        for sid, line, shared, pool in res.conservation:
-            self.assertEqual(shared, pool)
+        self.assertTrue(res.conservation)
+        self.assertIn(("s1", "Sun.BGV", Fraction(2), 2), res.conservation)
+        for sid, line, shared, recorded in res.conservation:
+            self.assertEqual(shared, recorded)
+        # independent cross-check: total share per line == total received seats per line
+        by_line_share, by_line_recv = {}, {}
+        for (m, p, line), v in res.share.items():
+            by_line_share[line] = by_line_share.get(line, Fraction(0)) + v
+        for (m, p, line), v in res.received.items():
+            by_line_recv[line] = by_line_recv.get(line, 0) + v
+        for line, v in by_line_recv.items():
+            self.assertEqual(by_line_share[line], v)
 
     def test_exact_half(self):
         people = [f"m-{n}" for n in ("ana", "bea", "cris", "dario", "ema", "fede", "gala", "iris")]
