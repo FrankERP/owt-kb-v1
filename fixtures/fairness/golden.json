@@ -1004,8 +1004,8 @@
     {
       "id": "floor-seat-order",
       "kind": "ledger",
-      "description": "Seven people in Sun.BGV, Sat.BGV and Sat.Lead; six one-seat services, so every combined share is 6/7 < 1 and Alma, Bruno and Carmen (two seats each) get a floor seat. Alma: by date (4 Oct before 11 Oct). Bruno, 10 Oct: the special's Lead seat before the Saturday's BGV seat (role order). Carmen, 18 Oct, both BGV: the special timed 19:00 before the untimed Sunday service (an absent time sorts last). After the floors three BGV seats remain (11, 10 and 18 Oct): BGV share 3/7 -> 43 for all seven; Alma, Bruno and Carmen received 100 (-57); the rest 43/0/43. SL: two Saturday-class services whose only seat was a floor seat -> 0/0/0 for all.",
-      "covers": ["LG-11", "floor-by-date", "floor-by-role", "floor-by-time", "LG-4-day-class"],
+      "description": "Seven people in Sat.Lead, Sun.BGV and Sat.BGV; six one-seat services, so every combined share is 2/7 SL + 4/7 BGV = 6/7 < 1 and Alma, Bruno and Carmen (two seats each) get a floor seat. Alma: date before role (4 Oct BGV is chosen over the later 17 Oct Lead). Bruno, 10 Oct: role before time (the untimed Saturday's Lead seat is chosen over the 18:00 special's BGV seat). Carmen, 18 Oct, both Sun.BGV: time before id (the 19:00 special, whose id sorts after the untimed Sunday's, is chosen). After the floors Sat.Lead keeps one seat (17 Oct): SL share 1/7 -> 14 for all seven, Alma received 100 (-86); BGV keeps two seats (10 Oct special, 18 Oct Sunday): 2/7 -> 29 for all seven, Bruno and Carmen received 100 (-71), Alma 0 (29), the rest 29.",
+      "covers": ["LG-11", "floor-by-date", "floor-by-role", "floor-by-time", "floor-date-before-role", "floor-role-before-time", "floor-time-before-id", "LG-4-day-class"],
       "input": {
         "target": "2026-11",
         "records": [
@@ -1080,21 +1080,21 @@
         ],
         "services": [
           {"_id": "sun-1004", "_type": "sunday_role", "date": "2026-10-04", "Lead": [], "BGVs": ["m-alma"], "Chorus": []},
-          {"_id": "sun-1011", "_type": "sunday_role", "date": "2026-10-11", "Lead": [], "BGVs": ["m-alma"], "Chorus": []},
-          {"_id": "sat-1010", "_type": "saturday_role", "date": "2026-10-10", "Lead": [], "BGVs": ["m-bruno"], "Chorus": []},
+          {"_id": "sat-1017", "_type": "saturday_role", "date": "2026-10-17", "Lead": ["m-alma"], "BGVs": [], "Chorus": []},
+          {"_id": "sat-1010", "_type": "saturday_role", "date": "2026-10-10", "Lead": ["m-bruno"], "BGVs": [], "Chorus": []},
           {
             "_id": "spc-1010",
             "_type": "special_role",
             "date": "2026-10-10",
             "time": "18:00",
             "countsForFairness": true,
-            "Lead": ["m-bruno"],
-            "BGVs": [],
+            "Lead": [],
+            "BGVs": ["m-bruno"],
             "Chorus": []
           },
           {"_id": "sun-1018", "_type": "sunday_role", "date": "2026-10-18", "Lead": [], "BGVs": ["m-carmen"], "Chorus": []},
           {
-            "_id": "spc-1018",
+            "_id": "sun-1018-night",
             "_type": "special_role",
             "date": "2026-10-18",
             "time": "19:00",
@@ -1118,28 +1118,28 @@
         "window": [{"month": "2026-08", "recorded": false}, {"month": "2026-09", "recorded": false}, {"month": "2026-10", "recorded": true}],
         "months": {
           "2026-10": {
-            "m-alma": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
-            "m-bruno": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
-            "m-carmen": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
-            "m-diego": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
-            "m-elena": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
-            "m-fausto": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
-            "m-greta": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}}
+            "m-alma": {"SL": {"share": 14, "received": 100, "balance": -86}, "BGV": {"share": 29, "received": 0, "balance": 29}},
+            "m-bruno": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 100, "balance": -71}},
+            "m-carmen": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 100, "balance": -71}},
+            "m-diego": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 0, "balance": 29}},
+            "m-elena": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 0, "balance": 29}},
+            "m-fausto": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 0, "balance": 29}},
+            "m-greta": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 0, "balance": 29}}
           }
         },
         "windowTotals": {
-          "m-alma": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
-          "m-bruno": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
-          "m-carmen": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 100, "balance": -57}},
-          "m-diego": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
-          "m-elena": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
-          "m-fausto": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}},
-          "m-greta": {"SL": {"share": 0, "received": 0, "balance": 0}, "BGV": {"share": 43, "received": 0, "balance": 43}}
+          "m-alma": {"SL": {"share": 14, "received": 100, "balance": -86}, "BGV": {"share": 29, "received": 0, "balance": 29}},
+          "m-bruno": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 100, "balance": -71}},
+          "m-carmen": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 100, "balance": -71}},
+          "m-diego": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 0, "balance": 29}},
+          "m-elena": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 0, "balance": 29}},
+          "m-fausto": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 0, "balance": 29}},
+          "m-greta": {"SL": {"share": 14, "received": 0, "balance": 14}, "BGV": {"share": 29, "received": 0, "balance": 29}}
         },
         "setAsides": [
           {"serviceId": "sun-1004", "roleKey": "Sun.BGV", "memberId": "m-alma", "reason": "floor"},
-          {"serviceId": "spc-1010", "roleKey": "Sat.Lead", "memberId": "m-bruno", "reason": "floor"},
-          {"serviceId": "spc-1018", "roleKey": "Sun.BGV", "memberId": "m-carmen", "reason": "floor"}
+          {"serviceId": "sat-1010", "roleKey": "Sat.Lead", "memberId": "m-bruno", "reason": "floor"},
+          {"serviceId": "sun-1018-night", "roleKey": "Sun.BGV", "memberId": "m-carmen", "reason": "floor"}
         ],
         "notes": [
           {"month": "2026-10", "memberId": "m-alma", "note": {"code": "floor_seat", "line": "BGV", "date": "2026-10-04", "roleKey": "Sun.BGV"}},
