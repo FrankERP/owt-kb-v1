@@ -9,21 +9,41 @@
 // A closed `Collapse` disclosure that loads on FIRST open — no read for an admin who never
 // opens it, and nothing in any other suite's `fetch` count. Every figure is the GET's
 // tenths through the one formatter (A17); every string is in `fairnessPreviewModel.ts`.
+//
+// «Registrar elegibilidad de {mes}» (UI-6) is its one write: offered only when the GET's
+// effective engine is v3 (so never in production while the constant is v2) and the
+// month is between the current one and 12 months ahead; replaced by a line when the
+// month's record binds (WR-8 row 7 would refuse it). It builds the body with the
+// resolver from the on-screen state, sends `source: "manual"` and asserts the record
+// revision the panel READ (WR-15); on any 409 it re-reads the GET — content and
+// revision together — before a retry is possible, and the dialog stays open on every
+// refusal.
 
 import { useId, useMemo, useState } from "react";
 
 import Button from "@/app/components/ui/Button";
 import Collapse from "@/app/components/ui/Collapse";
+import CueDialog from "@/app/components/ui/CueDialog";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import { resolveMonthEligibility, type EligibilityMember } from "@/app/utils/fairnessEligibility";
-import type { FairnessLedgerResponse, FairnessPerson, TabKey } from "@/app/utils/fairnessVocabulary";
+import {
+  RECORD_LIMITS,
+  monthIndex,
+  type FairnessLedgerResponse,
+  type FairnessPerson,
+  type TabKey,
+} from "@/app/utils/fairnessVocabulary";
+import { useTransientValue } from "@/app/utils/useTransientValue";
 import {
   COPY,
+  REGISTRAR,
   TABS,
   cadenceLine,
   chipText,
   onScreenCountedSundays,
+  refusalMessage,
+  resolverLines,
   tabRows,
   windowSpan,
   monthYear,
@@ -32,6 +52,7 @@ import {
 import type { SolverConfig } from "./plannerModel";
 
 export const FAIRNESS_ENDPOINT = "/api/admin/fairness";
+export const FAIRNESS_MONTHS_ENDPOINT = "/api/admin/fairness/months";
 
 type Load = { status: "idle" } | { status: "loading" } | { status: "error" } | { status: "ready"; data: FairnessLedgerResponse };
 
@@ -108,15 +129,25 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
   const [outOpen, setOutOpen] = useState(false);
   const [tab, setTab] = useState<TabKey>("DL");
   const [load, setLoad] = useState<Load>({ status: "idle" });
+  const [reading, setReading] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+  const [success, showSuccess] = useTransientValue<string | null>(null, 3000);
 
+  // A re-read keeps the figures on screen until the new ones arrive (a refused
+  // «Registrar» re-reads while its dialog is open).
   const read = async () => {
-    setLoad({ status: "loading" });
+    setReading(true);
+    setLoad((prev) => (prev.status === "ready" ? prev : { status: "loading" }));
     try {
       const res = await fetch(`${FAIRNESS_ENDPOINT}?month=${month}&horizon=1`, { cache: "no-store" });
       if (!res.ok) throw new Error(`fairness read ${res.status}`);
       setLoad({ status: "ready", data: (await res.json()) as FairnessLedgerResponse });
     } catch {
       setLoad({ status: "error" });
+    } finally {
+      setReading(false);
     }
   };
 
@@ -144,6 +175,46 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
   };
   const { rows, out } = data ? tabRows(data, tab, extraMotivo) : { rows: [], out: [] };
   const sinceLabel = data?.recordsSince ? monthYear(data.recordsSince) : "—";
+
+  // UI-6 — «Registrar»: v3 only, and only for a month the record writer accepts.
+  const horizon = data?.horizon.find((h) => h.month === month) ?? null;
+  const registrable =
+    data !== null &&
+    data.engine === "v3" &&
+    monthIndex(month) >= monthIndex(data.currentMonth) &&
+    monthIndex(month) <= monthIndex(data.currentMonth) + RECORD_LIMITS.monthsAhead;
+
+  const confirm = async () => {
+    if (!resolved.ok || !data) return;
+    setSaving(true);
+    setRefusal(null);
+    try {
+      const res = await fetch(FAIRNESS_MONTHS_ENDPOINT, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ months: [{ ...resolved.body, source: "manual", expectedRev: horizon?.record?.rev ?? null }] }),
+      });
+      if (res.ok) {
+        setDialogOpen(false);
+        showSuccess(REGISTRAR.success);
+        await read();
+        return;
+      }
+      let body: unknown = null;
+      try {
+        body = await res.json();
+      } catch {
+        body = null;
+      }
+      setRefusal(refusalMessage(month, body));
+      // WR-15: never retry on the revision just refused — re-read content and rev together.
+      if (res.status === 409) await read();
+    } catch {
+      setRefusal(REGISTRAR.failed);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <section className="rounded-lg border border-accent/15 bg-surface-raised-alt/40 p-3 space-y-2" data-fairness-preview="">
@@ -201,9 +272,70 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
               </div>
             )}
             <p className="font-body text-[11px] text-mono-500">{tab === "TOTAL" ? COPY.totalFooter : COPY.footer}</p>
+            {registrable &&
+              (horizon?.recordBinds ? (
+                <p className="font-body text-xs text-mono-500">{REGISTRAR.monthHasServices(month)}</p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      setRefusal(null);
+                      setDialogOpen(true);
+                    }}
+                  >
+                    {REGISTRAR.button(month)}
+                  </Button>
+                  {success && <span className="font-body text-xs text-accent">{success}</span>}
+                </div>
+              ))}
           </>
         )}
       </Collapse>
+      <CueDialog
+        open={dialogOpen}
+        title={REGISTRAR.button(month)}
+        onDismiss={() => {
+          if (!saving) setDialogOpen(false);
+        }}
+      >
+        <div className="space-y-2 font-body text-sm text-ink-muted">
+          <p>{REGISTRAR.body(month)}</p>
+          {!resolved.ok &&
+            resolverLines(month, resolved).map((line) => (
+              <p key={line} role="alert" className="text-negative-fg">
+                {line}
+              </p>
+            ))}
+          {props.rulesDirty && <p>{REGISTRAR.unsaved}</p>}
+          {horizon?.record ? (
+            <p>{REGISTRAR.replace(horizon.record.recordedAt)}</p>
+          ) : horizon && horizon.storedServices > 0 ? (
+            <p>{REGISTRAR.frozenCreate(month)}</p>
+          ) : null}
+          {data && data.environment !== "production" && <p>{REGISTRAR.devEnvironment(data.environment)}</p>}
+          {refusal && (
+            <p role="alert" className="text-negative-fg">
+              {refusal}
+            </p>
+          )}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" size="sm" disabled={saving} onClick={() => setDialogOpen(false)}>
+              {REGISTRAR.cancel}
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              busy={saving}
+              disabled={!resolved.ok || saving || reading || load.status !== "ready"}
+              onClick={() => void confirm()}
+            >
+              {REGISTRAR.confirm}
+            </Button>
+          </div>
+        </div>
+      </CueDialog>
     </section>
   );
 }
