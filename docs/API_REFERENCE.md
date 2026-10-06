@@ -500,6 +500,40 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   `localStorage` is no longer read. See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and
   [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
 
+- **`GET /api/admin/fairness?month=YYYY-MM[&horizon=1|2]`** — the solver v3 fairness ledger
+  (C2 RD-1 … RD-5; [ADR-0050](adr/0050-the-fairness-balance-is-measured-against-recorded-eligibility.md)):
+  for the 3 months before `month`, each person's per-line share, received seats and balance (all
+  integer hundredths, positive = owed, `balance = share − received`, plus display `tenths` and the
+  seat count), the cumulative balance since the earliest record, per-month notes and set-asides,
+  `countedSundayLeads` and `firstRecordedIn`; the horizon month(s) with their full logical record
+  (or `null`), freezing-service count and `recordBinds`; the effective `engine` and this
+  deployment's `environment`. Gated **exactly like `solver-history`** (no session or a
+  content-editor → `403`); a malformed `month` or a `horizon` other than `1`/`2` → `400
+  { error: "invalid_request" }`; `200` carries `Cache-Control: no-store`. Any failure — no
+  `SANITY_API_READ_TOKEN` (the records' dotted ids are private; checked before any read), a rejected
+  read, a non-list answer, a stored record that fails the record-schema check — is `500
+  { error: "fairness_unavailable", message: "No se pudo leer el saldo de equidad." }` with **no
+  `people` key**. A month without a record is not a failure. Read by the planner's «Equidad · vista
+  previa» panel, on first open only.
+
+- **`PUT /api/admin/fairness/months`** — record 1–2 consecutive months of the eligibility record
+  (`fairnessMonth`; C2 WR-1 … WR-17). **admin and super-admin only** (content-editor → `403
+  forbidden`). Body `{ months: [{ month, source: "auto"|"manual", expectedRev, people, presence }] }`,
+  strict: unknown fields, server stamps, `_key`, `name` and `contentHash` are refused (`400
+  invalid_request`, `details.issues` naming each path by field and index only). Under engine v2 —
+  every deployment until C7's flip, unless `OWT_SOLVER_ENGINE` is set on the `preview` branch or
+  locally (docs/SECRETS.md) — `409 engine_not_v3` before anything is read. Per month: an identical
+  intact record → `unchanged` (200, no transaction); a past month → `past_month`; no record and
+  `expectedRev: null` → created; a record and a matching `expectedRev` and no freezing service →
+  replaced (revision-asserted, whole); otherwise `record_exists` / `record_missing` /
+  `stale_revision` (409 `stale_revision`) or `month_has_services`, and for a written month the live
+  members must exist, be worship and fit the roles by current Tipo (`member_unknown` /
+  `member_not_worship` / `tipo_mismatch`, 409 `integrity_conflict` with `details.memberIds`). All
+  or nothing: one refused month writes nothing, `details.detail` is the earliest month's refusal and
+  `details.months` every month's own verdict; a commit 409 is reported on every written month. `200`
+  answers `{ months: [{ month, outcome, rev, contentHash, recordedAt }] }`. No notification, no
+  revalidation, and never a delete.
+
 ---
 
 ## Cron / Webhook

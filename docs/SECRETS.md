@@ -289,10 +289,14 @@ cannot be recovered — see [Retrievability](#retrievability-assume-nothing-is-r
 
 - **Purpose:** authenticated reads that must bypass the CDN — NextAuth member
   lookups (`sanity/lib/serverClient.ts:10`), `operationalClient`, and the
-  dry-run half of `scripts/` migrations.
+  dry-run half of `scripts/` migrations. **Needed to read `fairnessMonth`** (solver v3
+  C2): its ids are dotted, so private — without the token they are invisible, so the
+  fairness ledger GET fails closed (`500 fairness_unavailable`) and, after C6, Auto refuses
+  to solve; the record writer refuses to read without it too.
 - **Role needed:** Viewer.
 - **Platforms:** same two Vercel scopes as above, plus local `.env.local`. **Not**
-  in GitHub Actions.
+  in GitHub Actions. The fairness ledger reads it on the `Preview, Production` pair and in
+  `.env.local`.
 
 ### `SR_VERIFY_SANITY_TOKEN`
 
@@ -322,8 +326,10 @@ cannot be recovered — see [Retrievability](#retrievability-assume-nothing-is-r
 **Blast radius if you revoke first:** between the revoke and the last redeploy,
 every authenticated read and every write fails — members cannot sign in
 (NextAuth reads through `SANITY_API_READ_TOKEN`), proposals cannot be saved or
-approved, and the outbox sweep cannot flush. Create-then-swap-then-revoke, in
-that order, and the window is zero.
+approved, and the outbox sweep cannot flush. With `SANITY_API_READ_TOKEN` gone the
+«Equidad» preview's ledger GET also fails closed (it can no longer see the private
+`fairnessMonth` records) and, after C6, Auto refuses to solve. Create-then-swap-then-revoke,
+in that order, and the window is zero.
 
 ## `RESEND_API_KEY`
 

@@ -11,13 +11,13 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (20)
+## Registered document types (21)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
 `teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, the two Oasis Kids types
-`kidsPair` and `kidsSchedule`, and seven **internal** types never authored by hand:
+`kidsPair` and `kidsSchedule`, and eight **internal** types never authored by hand:
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
-`solverConfig`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
+`solverConfig`, `fairnessMonth`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -426,6 +426,36 @@ needs, and only an enforceable state enables mutable grid operations
 
 ---
 
+## `fairnessMonth` — the monthly eligibility record (solver v3)
+
+One document per calendar month at `_id: "fairnessMonth.YYYY-MM"`
+([`fairnessMonth.ts`](../sanity/schemas/fairnessMonth.ts); spec
+`docs/superpowers/specs/2026-10-05-solver-v3-c2-ledger-and-record-design.md`, REC-1 … REC-9;
+[ADR-0050](adr/0050-the-fairness-balance-is-measured-against-recorded-eligibility.md)). The id is
+**dotted on purpose**: Sanity never serves an id containing a dot to an unauthenticated read, and
+the record holds members' unavailable dates. Every reader must therefore carry
+`SANITY_API_READ_TOKEN` — without it a read answers «no record» with no error — and the ledger
+reader and the write executor refuse to read without it.
+
+| Field | Meaning |
+|---|---|
+| `schemaVersion` | `1` |
+| `month` | `YYYY-MM`, equal to the id's month |
+| `source` | `auto` (Auto's confirm, C6), `manual` («Registrar»), `reconstructed` (C4's script) |
+| `engine`, `environment` | `v2`/`v3`; `production`/`preview`/`local` — server-stamped |
+| `recordedAt`, `recordedBy` | the server clock; the session's effective member id, or the script's marker |
+| `contentHash` | `sha256:` + hex over the canonical content (REC-6); a record is *intact* iff it recomputes |
+| `people[]` | `fairnessPerson`: `member` (weak reference), `name` (display only), `roles` (`sunLead`, `satLead`, `sunBgv`, `satBgv`, `sunChoir`, `satChoir`: `in`/`out`/`exact`), `exactRules[]`, `sundayCadence?` (`"alternate"`), `exempt`, `blocks[]` |
+| `presence[]` | `fairnessPresence`: `ruleKey`, `roles`, `members` (ids), `exclusive` |
+
+It never stores seats, shares, balances, the cadence state, rule strings or names inside
+`presence`; seats are read from the role documents. **Written only** by the write executor in
+[`fairnessMonthWriteRequest.ts`](../app/utils/fairnessMonthWriteRequest.ts) — through
+`PUT /api/admin/fairness/months` (engine v3 only) or C4's consented reconstruction script — which
+mints every `_key`, the hash and the stamps; Studio governs it read-only like `solverConfig`.
+
+---
+
 ## `tag`, `author` — Taxonomies
 
 - **`tag`** ([`tag.ts`](../sanity/schemas/tag.ts)): `{ name, slug }`. Referenced by `post.tags[]`.
@@ -466,6 +496,10 @@ actually work.
 | `solverCap` | `{ id, pattern, op, value, relative, relOffset }` | `solverConfig.restrictions[].caps` |
 | `solverConflict` | `{ id, personA, personB, pattern }` | `solverConfig.conflicts` |
 | `solverPresence` | `{ id, persons[], pattern }` | `solverConfig.presence` |
+| `fairnessPerson` | `{ member (weak ref), name, roles{six}, exactRules[], sundayCadence?, exempt, blocks[] }` — `_key` = `p` + 24 hex of SHA-256(member id) | `fairnessMonth.people` |
+| `fairnessExactRule` | `{ roles[], count }` — `_key` = `x` + 24 hex of SHA-256(canonical role list) | `fairnessMonth.people[].exactRules` |
+| `fairnessBlock` | `{ date, unavailable, excludedRoles[] }` — `_key` = `d` + YYYYMMDD | `fairnessMonth.people[].blocks` |
+| `fairnessPresence` | `{ ruleKey, roles[], members[], exclusive }` — `_key` = `r` + 24 hex of SHA-256(ruleKey) | `fairnessMonth.presence` |
 
 **Every array-of-object write must include a unique `_key` per item and the correct `_type`.**
 The API routes generate keys with `Math.random().toString(36).slice(2,9)` and attach the right
@@ -670,13 +704,13 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Fifteen** types are closed to it — the six protected service types, the seven internal types
+**Sixteen** types are closed to it — the six protected service types, the eight internal types
 (`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry) **plus** the two
 Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
-`solverConfig`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
+`solverConfig`, `fairnessMonth`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
 
 The last two hold OAuth state for the MCP connector (P0 auth): `mcpOauthGrant` is one document per
 authorized connection (member id, a HASH of the client id, origin, timestamps, the current refresh

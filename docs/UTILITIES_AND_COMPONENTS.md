@@ -238,6 +238,35 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   v2 sees: `sundayCadence` stripped and cadence-only restrictions removed; applied in
   `solverPools` and `isExcludedFromLead`. `cadenceV2Inert.test.ts` is the guard.
 
+### Fairness ledger and the eligibility record (solver v3 C2, ADR-0050)
+- **`computeFairnessLedger`, `keepVoiceSeats`, `cadenceStates`** ([fairnessLedger.ts](../app/utils/fairnessLedger.ts), neutral) —
+  the ONE TypeScript definition of F2–F7 and X1: the record-free seat step (duplicate weekend
+  targets dropped, uncounted services out, one kept seat per person per service), populations,
+  presence sub-lines, set-asides and the floor seat, in exact BigInt rationals rounded once.
+  `fixtures/fairness/golden.json` is its contract with the v3 solver (C5): both suites assert it.
+- **`formatFairnessTenths`, `saldoWords`** ([fairnessFormat.ts](../app/utils/fairnessFormat.ts)) — the ONLY
+  fairness-figure formatter: one decimal from a tenths figure computed from the exact value, never
+  from hundredths (a sweep refuses code that divides a figure by 10 or 100).
+- **`resolveMonthEligibility`** ([fairnessEligibility.ts](../app/utils/fairnessEligibility.ts), neutral,
+  client-callable) — the ONE v3 eligibility resolver: on-screen rules and members → one month's
+  record body, or a named refusal; an `ok` body always passes the validator (RES-8).
+- **`rolesOfPatternV3`** ([plannerModel.ts](../app/components/admin/plannerModel.ts)) and
+  **`capValueForMonth`** ([serviceRuleContext.ts](../app/components/admin/serviceRuleContext.ts)) — the
+  ONE v3 six-key pattern map (equal to `rolesOfPattern` on v2's five keys, plus `Sat.Choir`;
+  `patternRolesV3Sync.test.ts`) and the ONE per-month count resolution over `resolvedCapValue`.
+  `memberFitsRoleKey` (plannerModel) is the one Tipo-fits-role predicate.
+- **`fairnessMonthWriteRequest.ts`** ([source](../app/utils/fairnessMonthWriteRequest.ts), neutral, never
+  client-imported) — the record's id and keys, `validateFairnessMonthWrite`, `contentHashOfWrite` /
+  `contentHashOfStored`, `parseStoredFairnessMonth` (the ONE record-schema check), `decideFairnessMonth`
+  and `executeFairnessMonthWrites` — the ONLY mutation path of `fairnessMonth` (clients injected;
+  callers pinned over `app/` and `scripts/`; a site of the audit's executor rule).
+- **`resolveSolverEngine`, `fairnessRecordEnvironment`** ([solverDeployment.ts](../app/utils/solverDeployment.ts)) —
+  the ONE reader of `OWT_SOLVER_ENGINE` and the record's `environment` stamp; never imported by a
+  client module.
+- **`FairnessPreviewPanel`** ([source](../app/components/admin/FairnessPreviewPanel.tsx)) with its
+  view-model [fairnessPreviewModel.ts](../app/components/admin/fairnessPreviewModel.ts) — the read-only
+  «Equidad · vista previa» beside «sin Lead en …», loading on first open, and «Registrar» (v3 only).
+
 ### Dates & schedule
 - **`daysUntil(dateStr, now?)`**, **`formatCountdown(days)`** ([daysUntil.ts](../app/utils/daysUntil.ts))
   — the service countdown, in a neutral module with no imports/hooks so a Server Component may
