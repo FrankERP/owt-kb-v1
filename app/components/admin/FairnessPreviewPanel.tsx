@@ -287,9 +287,9 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
                   >
                     {REGISTRAR.button(month)}
                   </Button>
-                  {success && <span className="font-body text-xs text-accent">{success}</span>}
                 </div>
               ))}
+            {success && <span className="font-body text-xs text-accent">{success}</span>}
           </>
         )}
       </Collapse>

@@ -50,7 +50,7 @@ const MEMBERS = [
   { _id: "m-alma", member_name: "Alma", memberType: ["voz", "sunday_lead"] },
   { _id: "m-bruno", member_name: "Bruno", memberType: ["voz", "support"] },
   // A super-admin's roster also holds kids-only members (RES-5).
-  { _id: "m-kids", member_name: "Kim", memberType: ["voz", "sunday_lead"], ministries: ["kids"] },
+  { _id: "m-kids", member_name: "Carmen", memberType: ["voz", "sunday_lead"], ministries: ["kids"] },
 ];
 
 type Answer = { ok: boolean; status: number; json: () => Promise<unknown> };
@@ -154,6 +154,20 @@ describe("the write (UI-6, WR-15)", () => {
     expect(await screen.findByText("Registrado ✓")).toBeTruthy();
     expect(gets).toHaveLength(2);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("keeps «Registrado ✓» when the re-read flips the month to recordBinds (frozen create)", async () => {
+    getAnswers = [
+      json(200, ledger({}, { record: null, storedServices: 3 })),
+      json(200, ledger({}, { record: { ...RECORD, rev: "rev-1" }, storedServices: 3, recordBinds: true })),
+    ];
+    await openPanel();
+    fireEvent.click(registrar()!);
+    fireEvent.click(confirmButton());
+    await waitFor(() => expect(puts).toHaveLength(1));
+    await waitFor(() => expect(gets).toHaveLength(2));
+    expect(await screen.findByText("Noviembre ya tiene servicios guardados: su registro ya no se puede reemplazar.")).toBeTruthy();
+    expect(screen.getByText("Registrado ✓")).toBeTruthy();
   });
 
   it("sends expectedRev null for an unrecorded month", async () => {
