@@ -61,7 +61,14 @@ import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
-import { CADENCE_V2_NOTE, SLACK_V3_NOTE } from "@/app/utils/sundayCadence";
+import {
+  CADENCE_OUTSIDE_HEADING,
+  CADENCE_OUTSIDE_SENTENCE,
+  CADENCE_V2_NOTE,
+  SLACK_V3_NOTE,
+  cadenceOutsideSundayPool,
+  resolveRulePersonId,
+} from "@/app/utils/sundayCadence";
 import { useToast } from "@/app/components/ui/Toast";
 import {
   PLANNER_UPDATED_MESSAGE,
@@ -235,6 +242,15 @@ interface Props {
     integrityGeneration: number;
     reload: () => Promise<boolean>;
   };
+  /**
+   * The gate of the «Mes por medio fuera de Líderes Domingo» warning (solver v3
+   * C3 §6.7, §7 item 6). Defaults to CLOSED and C3 never opens it: under v2 the
+   * cadence members sit in «Líderes Sábado» by design, and the warning would
+   * invite the one action that changes v2. C6 passes its server-resolved
+   * effective engine (`=== "v3"`, never the `SOLVER_ENGINE` constant) and keeps
+   * it closed for a record-bound month.
+   */
+  showCadencePoolWarning?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -577,7 +593,31 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
 
 // ─── Rule builder — display cards ─────────────────────────────────────────────
 
-function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDelete: () => void; onEdit: () => void }) {
+/**
+ * Why a «Mes por medio» card's name does not name exactly one worship member
+ * (C3 §6.5–§6.6) — over the planner's UNFILTERED roster, never the form's
+ * `voz`-filtered list. `n` is the number of matches.
+ */
+type CadenceNameIssue = { reason: "unresolved" | "ambiguous"; n: number };
+
+/**
+ * The chip for a `CadenceNameIssue`. Shown under both engines: it is about the
+ * data, not behaviour. The `unresolved` chip is the plan's addition (C3 review
+ * item 10): v2's first-match banner resolves a name that only a kids-only member
+ * carries in a super-admin's roster, so without it that name would be silent here.
+ */
+function cadenceNameChip(issue: CadenceNameIssue): string {
+  return issue.reason === "ambiguous"
+    ? `Nombre ambiguo: coincide con ${issue.n} personas`
+    : "Nombre no reconocido en Alabanza";
+}
+
+function RestrictionCard({ r, onDelete, onEdit, nameIssue }: {
+  r: PersonRestriction;
+  onDelete: () => void;
+  onEdit: () => void;
+  nameIssue?: CadenceNameIssue;
+}) {
   return (
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-start gap-2">
       <div className="flex-1 min-w-0 space-y-1">
@@ -616,6 +656,11 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
               </span>
               <span className="font-body text-[10px] text-mono-500 self-center">{CADENCE_V2_NOTE}</span>
             </>
+          )}
+          {r.sundayCadence === "alternate" && nameIssue && (
+            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-warning-strong/10 text-warning-strong border border-warning-strong/30">
+              {cadenceNameChip(nameIssue)}
+            </span>
           )}
         </div>
       </div>
@@ -1053,10 +1098,13 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
 
 // ─── Rule builder — main orchestrator ────────────────────────────────────────
 
-function RuleBuilder({ config, onChange, members, source }: {
+function RuleBuilder({ config, onChange, members, source, cadenceNameIssues }: {
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
+  /** The PERSONA dropdown's list — `voz` members. Never what a name is resolved against. */
   members: MemberOption[];
+  /** Restriction id → its «Mes por medio» name issue, resolved over the unfiltered roster by the panel. */
+  cadenceNameIssues: ReadonlyMap<string, CadenceNameIssue>;
   /**
    * The WHOLE source state, not a `shared` boolean.
    *
@@ -1171,6 +1219,7 @@ function RuleBuilder({ config, onChange, members, source }: {
             onAdd={saveRestriction} onCancel={cancelEdit} />
         ) : (
           <RestrictionCard key={r.id} r={r}
+            nameIssue={cadenceNameIssues.get(r.id)}
             onDelete={() => rmRestriction(r.id)}
             onEdit={() => { setEditingId(r.id); setAdding(null); }} />
         )
@@ -1677,7 +1726,7 @@ function historyMonthsLabel(months: SolverHistoryMonth[]): string {
     .join(" · ");
 }
 
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false }: {
   members: MemberOption[];
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
@@ -1693,8 +1742,23 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
    * panel is exactly the per-browser one.
    */
   derived?: DerivedHistoryHandle;
+  /** C3 §7 item 6 — see `Props.showCadencePoolWarning`. Closed unless C6 opens it. */
+  showCadencePoolWarning?: boolean;
 }) {
   const [searches, setSearches] = useState<Record<string, string>>({});
+
+  // C3 §6.5–§6.6: a «Mes por medio» name must name exactly one WORSHIP member,
+  // judged over `members` as the panel received it — the unfiltered roster —
+  // and never over the `voz` list `RuleBuilder` offers as names (E13). The
+  // resolver drops non-worship members itself (E25).
+  const cadenceNameIssues = new Map<string, CadenceNameIssue>();
+  for (const r of config.restrictions) {
+    if (r.sundayCadence !== "alternate") continue;
+    const resolved = resolveRulePersonId(r.person, members);
+    if (!resolved.ok) cadenceNameIssues.set(r.id, { reason: resolved.reason, n: resolved.matches.length });
+  }
+  // C3 §6.7: computed only behind the gate, so a closed gate costs nothing.
+  const cadenceOutside = showCadencePoolWarning ? cadenceOutsideSundayPool(config, members) : [];
 
   // The pools are "Tipo" and nothing else: an empty Tipo puts a member in no
   // pool and matches no seat, which is how someone stops being schedulable.
@@ -1795,6 +1859,21 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         </div>
       )}
 
+      {cadenceOutside.length > 0 && (
+        <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
+          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
+            {CADENCE_OUTSIDE_HEADING}
+          </p>
+          <ul className="space-y-1">
+            {cadenceOutside.map(x => (
+              <li key={x.id} className="font-body text-xs text-mono-400">
+                {CADENCE_OUTSIDE_SENTENCE[x.reason](x.name)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {derived ? (
         <DerivedLeadPoolHistory config={config} members={members} history={derived} year={year} month={month} />
       ) : (
@@ -1812,6 +1891,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         onChange={onChange}
         members={members.filter(m => m.memberType?.includes("voz"))}
         source={rules.source}
+        cadenceNameIssues={cadenceNameIssues}
       />
 
       {/*
@@ -1853,6 +1933,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 export default function MonthGenerator({
   mode = "create", members, existingRoles, onClose, onCreated, rules, capability, preflight, allRoles,
   initialMonth, focusRoleId, openComposerInitially = false, storedSource, storedCapabilities, onCleared,
+  showCadencePoolWarning = false,
 }: Props) {
   const storedMode = mode === "stored";
   const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
@@ -4273,6 +4354,7 @@ export default function MonthGenerator({
           year={year}
           month={month}
           derived={derivedMode ? derivedHistory : undefined}
+          showCadencePoolWarning={showCadencePoolWarning}
         />
       ) : (
         <SolverConfigUnavailable source={rules.source} onReload={rules.reload} />
