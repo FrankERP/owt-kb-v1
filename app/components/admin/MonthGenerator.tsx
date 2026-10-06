@@ -62,7 +62,9 @@ import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
 import { useToast } from "@/app/components/ui/Toast";
 import {
+  PLANNER_UPDATED_MESSAGE,
   editableConfig,
+  isOutdatedSource,
   sameSolverConfig,
   type SolverConfigController,
   type SolverConfigSource,
@@ -1336,13 +1338,16 @@ function SolverConfigSaveBar({ config, rules }: {
   // rather than cleared in an effect, so there is no render where both are true.
   const error = failure && failure.against === source ? failure : null;
   const rev = source.status === "ready" ? source.rev : null;
+  // C3 §6.2: the server speaks another config version. This bundle would drop
+  // or rewrite what it cannot read, so it does not save at all until reloaded.
+  const outdated = isOutdatedSource(source);
   const savedConfig = editableConfig(source);
   // By CONTENT: an edit undone by hand settles back to "Guardado" instead of
   // offering to write a document that would not change.
   const dirty = savedConfig === null || !sameSolverConfig(savedConfig, config);
 
   const onSave = async () => {
-    if (rev === null) return;
+    if (rev === null || outdated) return;
     setSaving(true);
     setFailure(null);
     // `useSolverConfig.save` owns its own try/catch and RESOLVES on every
@@ -1362,6 +1367,11 @@ function SolverConfigSaveBar({ config, rules }: {
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+      {outdated && (
+        <p role="status" className="font-body text-[11px] text-warning-strong mr-auto">
+          {PLANNER_UPDATED_MESSAGE}
+        </p>
+      )}
       {error && (
         <p role="alert" className="font-body text-[11px] text-negative-fg mr-auto">
           {error.message}
@@ -1379,7 +1389,7 @@ function SolverConfigSaveBar({ config, rules }: {
       <button
         type="button"
         onClick={onSave}
-        disabled={rev === null || !dirty || saving}
+        disabled={rev === null || !dirty || saving || outdated}
         // `rev === null` is ONE reason the button is dead and THREE different
         // facts about the world. Saying "solo el script de siembra puede
         // crearlas" while a read is merely failing tells an admin the team's
@@ -1387,15 +1397,17 @@ function SolverConfigSaveBar({ config, rules }: {
         // document that is sitting there intact. Same distinction the copy at
         // the foot of `RuleBuilder` makes, on the control that acts on it.
         title={
-          source.status === "absent"
-            ? "Todavía no hay reglas compartidas en el servidor; solo el script de siembra puede crearlas."
-            : source.status === "error"
-              ? "No se pudieron cargar las reglas compartidas; no se puede guardar hasta que vuelvan a cargar."
-              : source.status === "loading"
-                ? "Cargando las reglas compartidas…"
-                : dirty
-                  ? "Guardar estas reglas para todos los administradores"
-                  : undefined
+          outdated
+            ? PLANNER_UPDATED_MESSAGE
+            : source.status === "absent"
+              ? "Todavía no hay reglas compartidas en el servidor; solo el script de siembra puede crearlas."
+              : source.status === "error"
+                ? "No se pudieron cargar las reglas compartidas; no se puede guardar hasta que vuelvan a cargar."
+                : source.status === "loading"
+                  ? "Cargando las reglas compartidas…"
+                  : dirty
+                    ? "Guardar estas reglas para todos los administradores"
+                    : undefined
         }
         className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/40 text-accent hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
       >
