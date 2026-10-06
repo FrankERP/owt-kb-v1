@@ -12,11 +12,13 @@ import { describe, expect, it } from "vitest";
 import {
   SOLVER_CONFIG_DOC_ID,
   buildSolverConfigDocument,
+  exactCapOverlaps,
   parseSolverConfigWrite,
   solverConfigFields,
   solverConfigFromDocument,
 } from "../solverConfigWriteRequest";
-import type { SolverConfig } from "@/app/components/admin/plannerModel";
+import { DEFAULT_SOLVER_CONFIG } from "@/app/components/admin/solverConfigDefaults";
+import type { PersonRestriction, RestrictionCap, SolverConfig } from "@/app/components/admin/plannerModel";
 
 /** The UI's own id factory (`MonthGenerator.tsx`), copied so the test is honest
  *  about what a freshly added rule actually carries. */
@@ -273,5 +275,266 @@ describe("buildSolverConfigDocument", () => {
     const doc = buildSolverConfigDocument({ config, now: "x" });
     const fields = solverConfigFields(config);
     for (const key of Object.keys(fields)) expect(doc[key]).toEqual(fields[key]);
+  });
+});
+
+// ─── Solver v3 C3 · step zero — the pre-C3 serializer, frozen ────────────────
+//
+// Written and asserted on the UNCHANGED serializer, before any C3 code lands
+// (C3 §6.1, T2): a document C3 writes for a config with no «Mes por medio» must
+// be byte-identical to what the pre-C3 code writes for the same config. A red
+// literal here is a finding about the change, never a value to re-capture.
+const FROZEN_CONFIG: SolverConfig = {
+  sundayLeads: ["m-ana", "m-carla"],
+  saturdayLeads: ["m-bruno"],
+  support: ["m-diana"],
+  restrictions: [
+    {
+      id: "r-ana", person: "Ana", excludedPatterns: ["Sat.*"], fairness: "exempt", fairnessSlack: 1,
+      weekExclusions: [{ id: "w-1", week: 2, pattern: "*.*" }],
+      caps: [{ id: "c-1", pattern: "Sun.Lead", op: "==", value: 2, relative: false, relOffset: 0 }],
+    },
+    { id: "r-bruno", person: "Bruno", excludedPatterns: [], fairness: "slack", fairnessSlack: 2, weekExclusions: [], caps: [] },
+  ],
+  conflicts: [{ id: "x-1", personA: "Ana", personB: "Bruno", pattern: "*.Lead" }],
+  presence: [{ id: "p-1", persons: ["Carla", "Diana"], pattern: "Sun.BGV" }],
+};
+
+const FROZEN_FIELDS_JSON =
+  '{"sundayLeads":["m-ana","m-carla"],"saturdayLeads":["m-bruno"],"support":["m-diana"],' +
+  '"restrictions":[{"_type":"solverRestriction","_key":"r-ana","id":"r-ana","person":"Ana",' +
+  '"excludedPatterns":["Sat.*"],"fairness":"exempt","fairnessSlack":1,' +
+  '"weekExclusions":[{"_type":"solverWeekExclusion","_key":"w-1","id":"w-1","week":2,"pattern":"*.*"}],' +
+  '"caps":[{"_type":"solverCap","_key":"c-1","id":"c-1","pattern":"Sun.Lead","op":"==","value":2,"relative":false,"relOffset":0}]},' +
+  '{"_type":"solverRestriction","_key":"r-bruno","id":"r-bruno","person":"Bruno","excludedPatterns":[],' +
+  '"fairness":"slack","fairnessSlack":2,"weekExclusions":[],"caps":[]}],' +
+  '"conflicts":[{"_type":"solverConflict","_key":"x-1","id":"x-1","personA":"Ana","personB":"Bruno","pattern":"*.Lead"}],' +
+  '"presence":[{"_type":"solverPresence","_key":"p-1","id":"p-1","persons":["Carla","Diana"],"pattern":"Sun.BGV"}]}';
+
+describe("C3 step zero — a cadence-free config serializes byte-identically to pre-C3", () => {
+  it("solverConfigFields matches the frozen pre-C3 JSON, key order included", () => {
+    expect(JSON.stringify(solverConfigFields(FROZEN_CONFIG))).toBe(FROZEN_FIELDS_JSON);
+  });
+
+  it("the parser's stored fields for the same body are the same bytes", () => {
+    const parsed = parseSolverConfigWrite(FROZEN_CONFIG);
+    if (!parsed.ok) throw new Error(parsed.issues.join(", "));
+    expect(JSON.stringify(parsed.value.fields)).toBe(FROZEN_FIELDS_JSON);
+  });
+});
+
+// ─── Solver v3 C3 · «Mes por medio» (`sundayCadence`) — T1, T2, T3 ───────────
+//
+// Absent = «Normal», `"alternate"` = «Mes por medio», and nothing else is ever
+// stored (C3 §6.1–§6.3). «Normal» is never a key: a document without the
+// cadence stays byte-identical to what pre-C3 code writes (step zero above).
+function cadenceBody(sundayCadence: unknown, withKey = true) {
+  const restriction: Record<string, unknown> = {
+    id: "r-ana", person: "Ana", excludedPatterns: [], fairness: "none", fairnessSlack: 1,
+    weekExclusions: [], caps: [],
+  };
+  if (withKey) restriction.sundayCadence = sundayCadence;
+  return { sundayLeads: [], saturdayLeads: [], support: [], restrictions: [restriction], conflicts: [], presence: [] };
+}
+
+describe("parseSolverConfigWrite — `sundayCadence` (C3 T1)", () => {
+  it("absent ⇒ «Normal»: no key in the canonical config and none in the stored fields", () => {
+    const parsed = parseSolverConfigWrite(cadenceBody(undefined, false));
+    if (!parsed.ok) throw new Error(parsed.issues.join(", "));
+    expect(parsed.value.config.restrictions[0]).not.toHaveProperty("sundayCadence");
+    const stored = (parsed.value.fields.restrictions as Record<string, unknown>[])[0];
+    expect(stored).not.toHaveProperty("sundayCadence");
+  });
+
+  it('`"alternate"` is kept in the config and stored', () => {
+    const parsed = parseSolverConfigWrite(cadenceBody("alternate"));
+    if (!parsed.ok) throw new Error(parsed.issues.join(", "));
+    expect(parsed.value.config.restrictions[0].sundayCadence).toBe("alternate");
+    const stored = (parsed.value.fields.restrictions as Record<string, unknown>[])[0];
+    expect(stored.sundayCadence).toBe("alternate");
+  });
+
+  it("a restriction carrying ONLY the cadence is a valid rule (no clause needed)", () => {
+    const parsed = parseSolverConfigWrite(cadenceBody("alternate"));
+    expect(parsed.ok).toBe(true);
+  });
+
+  for (const bad of ["normal", "Alternate", true, null, 1, "", "alternate "]) {
+    it(`refuses ${JSON.stringify(bad)} at restrictions[0].sundayCadence, writing nothing`, () => {
+      const parsed = parseSolverConfigWrite(cadenceBody(bad));
+      expect(parsed.ok).toBe(false);
+      if (parsed.ok) return;
+      expect(parsed.issues).toEqual(["restrictions[0].sundayCadence"]);
+    });
+  }
+});
+
+describe("solverConfigFields — `sundayCadence` (C3 T2)", () => {
+  it("emits no `sundayCadence` key for a «Normal» restriction", () => {
+    const fields = solverConfigFields(FROZEN_CONFIG);
+    for (const r of fields.restrictions as Record<string, unknown>[]) {
+      expect(r).not.toHaveProperty("sundayCadence");
+    }
+  });
+
+  it('emits `sundayCadence: "alternate"` after `caps`, and only on the restriction that carries it', () => {
+    const config: SolverConfig = {
+      ...FROZEN_CONFIG,
+      restrictions: [{ ...FROZEN_CONFIG.restrictions[0], sundayCadence: "alternate" }, FROZEN_CONFIG.restrictions[1]],
+    };
+    const [ana, bruno] = solverConfigFields(config).restrictions as Record<string, unknown>[];
+    expect(Object.keys(ana).slice(-2)).toEqual(["caps", "sundayCadence"]);
+    expect(ana.sundayCadence).toBe("alternate");
+    expect(bruno).not.toHaveProperty("sundayCadence");
+  });
+});
+
+describe("solverConfigFromDocument — `sundayCadence` (C3 T3)", () => {
+  const stored = (sundayCadence: unknown) => ({
+    restrictions: [{ _key: "r-ana", id: "r-ana", person: "Ana", fairness: "none", sundayCadence }],
+  });
+
+  it('reads `"alternate"` back as «Mes por medio»', () => {
+    expect(solverConfigFromDocument(stored("alternate")).restrictions[0].sundayCadence).toBe("alternate");
+  });
+
+  it("reads any other stored value as «Normal» — total and defensive, like `fairness`", () => {
+    for (const v of ["normal", "biweekly", null, true, 1, undefined]) {
+      expect(solverConfigFromDocument(stored(v)).restrictions[0], JSON.stringify(v)).not.toHaveProperty("sundayCadence");
+    }
+  });
+
+  it("write → read keeps the field and every id", () => {
+    const config: SolverConfig = {
+      ...FROZEN_CONFIG,
+      restrictions: [{ ...FROZEN_CONFIG.restrictions[0], sundayCadence: "alternate" }, FROZEN_CONFIG.restrictions[1]],
+    };
+    const parsed = parseSolverConfigWrite(config);
+    if (!parsed.ok) throw new Error(parsed.issues.join(", "));
+    const back = solverConfigFromDocument({ _id: SOLVER_CONFIG_DOC_ID, ...parsed.value.fields });
+    expect(back).toEqual(config);
+    expect(back.restrictions[0].sundayCadence).toBe("alternate");
+    expect(back.restrictions[1]).not.toHaveProperty("sundayCadence");
+  });
+});
+
+// ─── Solver v3 C3 · one exact count per person per role (parent A38) — T14 ────
+//
+// Two `==` caps that cover a common role (`rolesOfPattern`, the five v2 keys) for
+// one `person` text are refused at save — within one restriction and across
+// restrictions whose `person` is equal case-insensitively after trimming. The
+// issue names the LATER cap of each pair, once, with the `:exact_overlap` suffix.
+let capSeq = 0;
+const cap = (pattern: string, op: RestrictionCap["op"], value = 1, extra: Partial<RestrictionCap> = {}): RestrictionCap => ({
+  id: `c-${++capSeq}`, pattern, op, value, relative: false, relOffset: 0, ...extra,
+});
+const rule = (id: string, person: string, caps: RestrictionCap[]): PersonRestriction => ({
+  id, person, excludedPatterns: [], fairness: "none", fairnessSlack: 1, weekExclusions: [], caps,
+});
+const withRules = (...restrictions: PersonRestriction[]): SolverConfig => ({
+  sundayLeads: [], saturdayLeads: [], support: [], restrictions, conflicts: [], presence: [],
+});
+const refusedAt = (config: SolverConfig): string[] => {
+  const parsed = parseSolverConfigWrite(config);
+  return parsed.ok ? [] : parsed.issues;
+};
+
+describe("exactCapOverlaps + the parser — one exact count per role (C3 T14)", () => {
+  it("refuses two `==` caps on one restriction covering Sun.Lead, at the later cap", () => {
+    const config = withRules(rule("r-ana", "Ana", [cap("Sun.Lead", "==", 2), cap("Sun.*", "==", 3)]));
+    expect(exactCapOverlaps(config)).toEqual([
+      { first: { restriction: 0, cap: 0 }, later: { restriction: 0, cap: 1 }, person: "Ana", roles: ["Sun.Lead"] },
+    ]);
+    expect(refusedAt(config)).toEqual(["restrictions[0].caps[1]:exact_overlap"]);
+  });
+
+  it("three mutually overlapping caps report each later cap once", () => {
+    const config = withRules(rule("r-ana", "Ana", [cap("Sun.Lead", "=="), cap("*.Lead", "=="), cap("*.*", "==")]));
+    expect(exactCapOverlaps(config).map((o) => [o.first.cap, o.later.cap])).toEqual([[0, 1], [0, 2], [1, 2]]);
+    expect(refusedAt(config)).toEqual([
+      "restrictions[0].caps[1]:exact_overlap",
+      "restrictions[0].caps[2]:exact_overlap",
+    ]);
+  });
+
+  it("looks ACROSS restrictions whose person differs only in case and surrounding spaces", () => {
+    const config = withRules(
+      rule("r-1", "Ana", [cap("Sun.Lead", "==", 2)]),
+      rule("r-2", "Bruno", [cap("Sun.Lead", "==", 1)]),
+      rule("r-3", "  aNA ", [cap("*.Lead", "==", 1)]),
+    );
+    expect(exactCapOverlaps(config)).toEqual([
+      { first: { restriction: 0, cap: 0 }, later: { restriction: 2, cap: 0 }, person: "Ana", roles: ["Sun.Lead"] },
+    ]);
+    expect(refusedAt(config)).toEqual(["restrictions[2].caps[0]:exact_overlap"]);
+  });
+
+  it("`Sat.* == 1` with `*.Lead == 1` is refused on Sat.Lead", () => {
+    const config = withRules(rule("r-ana", "Ana", [cap("Sat.*", "=="), cap("*.Lead", "==")]));
+    expect(exactCapOverlaps(config)[0].roles).toEqual(["Sat.Lead"]);
+    expect(refusedAt(config)).toEqual(["restrictions[0].caps[1]:exact_overlap"]);
+  });
+
+  it("the value plays no part: equal values, and relative values, are still refused", () => {
+    expect(refusedAt(withRules(rule("r", "Ana", [cap("Sun.BGV", "==", 2), cap("Sun.BGV", "==", 2)])))).toEqual([
+      "restrictions[0].caps[1]:exact_overlap",
+    ]);
+    expect(refusedAt(withRules(rule("r", "Ana", [
+      cap("Sat.BGV", "==", 0, { relative: true, relOffset: 2 }),
+      cap("Sat.*", "==", 0, { relative: true, relOffset: 9 }),
+    ])))).toEqual(["restrictions[0].caps[1]:exact_overlap"]);
+  });
+
+  it("`==` beside `>=` or `<=` on the same role is accepted, as today", () => {
+    const config = withRules(rule("r", "Ana", [cap("Sun.Lead", "==", 2), cap("Sun.Lead", ">=", 1), cap("Sun.*", "<=", 3)]));
+    expect(exactCapOverlaps(config)).toEqual([]);
+    expect(parseSolverConfigWrite(config).ok).toBe(true);
+  });
+
+  it("two DIFFERENT person texts (a name and an alias of one member) pass the save — C2 judges by id", () => {
+    const config = withRules(
+      rule("r-1", "Ana", [cap("Sun.Lead", "==", 2)]),
+      rule("r-2", "Ana Karen Villalobos", [cap("Sun.Lead", "==", 1)]),
+    );
+    expect(exactCapOverlaps(config)).toEqual([]);
+    expect(parseSolverConfigWrite(config).ok).toBe(true);
+  });
+
+  it("`Sat.* ==` with `*.Choir ==` passes: the five-key map has no Sat.Choir (the documented gap)", () => {
+    const config = withRules(rule("r", "Ana", [cap("Sat.*", "=="), cap("*.Choir", "==")]));
+    expect(exactCapOverlaps(config)).toEqual([]);
+    expect(parseSolverConfigWrite(config).ok).toBe(true);
+  });
+
+  it("only runs once every item parsed, so its indices are the body's own", () => {
+    // A bad cap on restriction 0 is refused by itself; the overlap on
+    // restriction 1 is not reported in the same answer (review item 17).
+    const config = withRules(
+      rule("r-1", "Bruno", [{ ...cap("Sun.BGV", "<="), op: "!=" as RestrictionCap["op"] }]),
+      rule("r-2", "Ana", [cap("Sun.Lead", "=="), cap("Sun.Lead", "==")]),
+    );
+    expect(refusedAt(config)).toEqual(["restrictions[0].caps[0].op"]);
+  });
+
+  it("normalises the way the parser does, so client and route agree on a raw body", () => {
+    // Inner whitespace and NFC are `normalizeLabel`'s; case and trim are the
+    // rule-name criterion's (`rulePersonNamesMember`).
+    const config = withRules(
+      rule("r-1", "Ana  Karen", [cap(" Sun.Lead ", "==")]),
+      rule("r-2", "ana karen", [cap("Sun.Lead", "==")]),
+    );
+    expect(exactCapOverlaps(config)).toHaveLength(1);
+    expect(refusedAt(config)).toEqual(["restrictions[1].caps[0]:exact_overlap"]);
+  });
+
+  it("no existing fixture of this file and not DEFAULT_SOLVER_CONFIG overlaps", () => {
+    for (const c of [fullConfig(), FROZEN_CONFIG, DEFAULT_SOLVER_CONFIG]) {
+      expect(exactCapOverlaps(c)).toEqual([]);
+      expect(parseSolverConfigWrite(c).ok).toBe(true);
+    }
+  });
+
+  it("DEFAULT_SOLVER_CONFIG is unchanged by C3: no restriction carries the cadence (§6.9)", () => {
+    expect(DEFAULT_SOLVER_CONFIG.restrictions.filter((r) => r.sundayCadence !== undefined)).toEqual([]);
   });
 });

@@ -36,6 +36,7 @@ import {
   type SolverConfigSource,
 } from "./solverConfigSource";
 import type { SolverConfig } from "./plannerModel";
+import { SOLVER_CONFIG_VERSION } from "@/app/utils/solverConfigWriteRequest";
 
 async function readJson(res: Response): Promise<unknown> {
   try {
@@ -82,10 +83,13 @@ export function useSolverConfig(): SolverConfigController {
         const res = await fetch(SOLVER_CONFIG_ENDPOINT, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rev, config }),
+          // `configVersion` on EVERY save (C3 §6.2): the route refuses a body
+          // whose version is not its own, before it reads the stored document
+          // or parses `config`.
+          body: JSON.stringify({ rev, config, configVersion: SOLVER_CONFIG_VERSION }),
         });
         const body = await readJson(res);
-        if (!res.ok) return { ok: false, ...saveFailure(res.status, body) };
+        if (!res.ok) return { ok: false, ...saveFailure(res.status, body, config) };
         const next = sourceFromGet(true, body);
         // The write landed. If its echo is unusable we re-read rather than
         // parking a state that cannot save again — and never report the save
