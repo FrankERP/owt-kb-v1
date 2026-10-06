@@ -48,7 +48,7 @@ conflict (5 of 5), the one presence rule, 3 of 8 restrictions and 1 of 5 caps. S
 `P:<ruleKey>` line key (C2 RES-6/REC-4, C6 RQ-5), a solver rule `id` (C5 §5, rules; C5-17), a stage id
 that embeds one (`balance_max:P:<id>`, `balance_sq:P:<id>`, C5 §7.1 row «10…»; C5-17) and a
 `violations[].rule` (C5 §8, `violations`; C5-17). This is the program's key-hygiene rule as the
-coordinator decided it for every child (rule ids and `_key`s are not name-free; no output that can
+coordinator decided it for every child and the parent now states it as **A41** (rule ids and `_key`s are not name-free; no output that can
 leave a private file carries a raw key; no re-keying of production config by this program), and it
 matches C2 §6 «Key hygiene», C4 D5/R12 and C5-17. Wherever C7 output leaves a private file —
 stdout, a transcript, the worklog line, a PR description, a doc — an item is named by **kind and
@@ -57,16 +57,23 @@ snapshot the run read, in document order) and a stage by C5's **public label** (
 `P:<id>` rendered `P#<n>`, so `balance_max:P#1`) or by its kind when aggregated; the raw key, and
 the name it carries, go only to a private output file under `owt-agent-logs` beside the ordinal (the
 authenticated admin UI shows them as it shows names today; C7 adds no surface). The coordinator's
-rule also admits a short SHA-256 prefix of the key; **C7 never uses one**: a seed key is
+first ruling also admitted a short SHA-256 prefix of the key; A41 drops that arm («never by a hash
+of it») and **C7 never used one**: a seed key is
 `d-<first name>…`, so a hash prefix is reversed by hashing the roster's first names (C2 §6 «Key hygiene»,
-which declines that arm for the same reason; C4 R12's test forbids «a SHA-256 hex prefix»). Member `_id`s of the worship
-pools are opaque (the 11 lead-pool refs in the same private file are 36-character ids) and may be
-printed. Re-keying the seed items opaquely is a `solverConfig` write that changes C2's `ruleKey` and
+which declines that arm for the same reason; C4 R12's test forbids «a SHA-256 hex prefix»). **Member `_id`s are
+not name-free by rule either.** The 11 lead-pool refs (`sundayLeads`, `saturdayLeads`) in the same
+private file are 36-character UUIDs today, but nothing enforces that shape: a seed mints
+`kidsMember-<slug>` ids, which have met worship members before (C4 Evidence «Document identifiers»,
+R12), C5-17 treats every person id as name-bearing, and the same file's `support` pool already holds
+non-UUID refs (4 of 6 are 22-character ids; shapes counted, no value printed). So C7 prints a member
+`_id` only after checking, per id, that it has the UUID shape (`8-4-4-4-12` hexadecimal); any other id
+is named by its pool and ordinal (`sundayLeads[3]`) or counted, and the raw id goes only to a private
+output file. Re-keying the seed items opaquely is a `solverConfig` write that changes C2's `ruleKey` and
 so every record's `P:` line; this program does not do it (see «Parent issues»).
 
 ## Status and contract
 
-- **Document status:** Draft, aligned to the parent's amendments A1–A40 (§3) on 2026-10-05. A27–A30
+- **Document status:** Draft, aligned to the parent's amendments A1–A41 (§3) on 2026-10-05 (A41, key hygiene, is K10). A27–A30
   settle what this plan used to raise as parent issues (the anchored-month record, the step's
   contents and order, the targeted restore, the retirement window); A31 settles the ADR split. A40
   (a confirm whose horizon month became past after the solve refuses before writing) is C6's and
@@ -89,7 +96,7 @@ so every record's `P:` line; this program does not do it (see «Parent issues»)
   adversarial plan review; the controls after implementation are a fresh code review of each PR's
   diff plus the verifications below.
 - **Accepted sources:** parent §3 (D1, D9, D15; amendments A1, A2, A5, A6, A7, A8, A11, A14–A17,
-  A19, A21–A40, which win over older clause wording — in particular A27 over C6's former CF-1 (iii),
+  A19, A21–A41, which win over older clause wording — in particular A27 over C6's former CF-1 (iii),
   A28 over A22 and E4's unordered «one step», A29 over E4's «restore from that snapshot», A30 over
   the C7 row's «retire «sin Lead»» inside the cutover), §8 E2–E4, §11 C7, §13, §14 (assumptions 1–2,
   4), §15 (Q1, Q3 resolution points), §16; the settled children C0–C6 (Interfaces). Where a child's
@@ -221,11 +228,11 @@ too. Children's future code has no line numbers; it is cited by requirement ID.
 |---|---|---|
 | C0 | The required check and the v3 job | Check `gates` = «every CI job for this commit succeeded» (C0 «Provides to every later child and to C7»); jobs `node`, `solver-v2`, `solver-v3`; local gate `python -m unittest discover -s gcf_v3 -t gcf_v3` when `gcf_v3/**` changes |
 | C1 | The engine constant; the toggle and its read rule | `app/components/admin/solverEngine.ts`, created by C1 with the constant `SOLVER_ENGINE: "v2" \| "v3"` only (parent A1), value `"v2"` until Step 5; C2's effective-engine resolver (IF2-14) may join the module (C1 §7 «Engine module»: its test asserts nothing about other exports; C2 EN-2 lets C2's plan pick the file) and C6 may export the `"v2" \| "v3"` union type from it (C6 ENG-1), so C7 relies only on the constant's name, annotation and value, read from the merged code; C1's engine-module pin test (C1-R11; C1 §7 «Engine module») asserts `SOLVER_ENGINE === "v2"` and the annotation; `countsForFairness?: boolean` on `sunday_role`, `saturday_role`, `special_role`; effective value `coalesce(countsForFairness, _type != "special_role")`; the note «Cuenta para equidad: aplica con el nuevo solver. Hoy Auto no lo usa.», gated by C6 to v2 (C6 CTL-1); lookback-month services cannot be toggled from any app surface (A25) — a **client-side** rule (C1 §6.0, C1-D7; C1 §10): neither roles route refuses on the month, so a hand-built admin request can still set a past service's flag, and a date move, which C1 does not gate, can carry a service and its flag into or out of a past month. C7 therefore never treats a past month's counted set as frozen: any freezing-services count it reads (check 0.4) goes through C2 IF2-24, which applies C1's read rule live |
-| C2 | Effective-engine resolver; eligibility resolver; read builders; the ledger GET; the record; the writer and executor (reached only through others) | Every shape is C2 §7's and is cited by its IF2 ID, never copied here (C2 §7 preamble); this cell states only C7's use. **Engine:** IF2-14 (EN-2's table — the override honoured only on the `preview` branch deployment or locally with `VERCEL_ENV` unset, the constant winning on Production and `verify/service-readiness`, A1) and its `OWT_SOLVER_ENGINE` SECRETS entry (EN-3); the PUT refusal `engine_not_v3` (IF2-6, WR-6). **Eligibility:** IF2-15, the single v3 resolver (A7). C7 runs it read-only (checks 0.5 and 0.9, Step 7.5) with IF2-27's rows, unaltered, as `members` and IF2-28's document parsed by `solverConfigFromDocument` as `config` (a `null` document is a stop), and prints its `refusals` counted by `reason` and its `issues` by `code`, never a `person`. Its names resolve through C3 (RES-7), its people come from the roster after RES-5's worship filter, and its `ok: true` output passes the record validator (RES-8, A38), so a v3 Auto that solved never meets a validator refusal at confirm. **Reads:** IF2-24 (freezing-services counts per month), IF2-25 (records, each parsed by IF2-20 before C7 counts it; a parser refusal is a stop), IF2-27, IF2-28 — always on a client carrying the read token, the `published` perspective and no CDN (§7.3 «Read builders», A2); C7 writes no record, roster, rule or role GROQ of its own. **GET:** IF2-7 (gate, fail-closed body) and IF2-8, of which C7 reads `engine` (Step 2, 3f, restoration), `horizon[].recordBinds` (3b, W3, Step 8), `people[].window[<LineKey>].balance` (3e's carried check: `DL`/`SL`/`BGV`/`CORO` by key, `P:` lines key-free, since C6 RQ-5 (a) mints the request's `P:` keys), and — through C6's panel, formatted by IF2-13 — `tabs`, `Figures.seats` and `Figures.tenths` (Step 4). **Record:** IF2-2 (id, `source`, `engine`, `environment` are what Steps 8 and 10 read back; statuses are IF2-1 `Status`). **Writes:** IF2-4/IF2-5 (the PUT) and IF2-22/IF2-23 (the executor and its call sites) are reached only through «Registrar» (UI-6), C6's confirm or C4's script; C7 has no write path of its own (C2 §7.4, C7 row). **Behaviour C7 relies on, by rule:** the route actor creates a record for a recordless month with `expectedRev: null` whether or not the month holds stored services (WR-8 row 3, A27); a record is replaceable only while its month has no freezing services (A5, IF2-24) and binds a horizon month only then (A6, IF2-8 `horizon[].recordBinds`); no route deletes a record (WR-13) and the reconstruction actor touches only records it wrote (WR-14 row 5); «Registrar elegibilidad de {mes}» renders only when IF2-8 `engine` is `"v3"` (UI-6); the reader fails closed, a missing read token included (RD-2, A2); the ledger and its reader are `app/utils/fairnessLedger.ts` (IF2-10) and `app/utils/fairnessLedgerRead.ts` (RD-1); GU-3's ADR; GU-4's `CLAUDE.md` lines, including the one effective-engine line, which C6 DOC-3 does not repeat |
-| C3 | The cadence setting, the resolver, the save guard | `solverConfig.restrictions[].sundayCadence?: "alternate"` (absent = «Normal»); `app/utils/sundayCadence.ts`: `resolveRulePersonId(person, roster) → { ok: true, id } \| { ok: false, reason: "unresolved" \| "ambiguous", matches }`, `cadenceMembers(config, roster) → { ids, refusals }`, `cadenceOutsideSundayPool(config, roster) → [{ id, name, reason: "not_ticked" \| "no_sunday_lead_tipo" }]`; `SOLVER_CONFIG_VERSION = 2`; POST `/api/admin/solver-config` body `{ rev, config, configVersion }`; the one reader, parser and serializer `solverConfigFromDocument`, `parseSolverConfigWrite`, `solverConfigFields` (`app/utils/solverConfigWriteRequest.ts`, neutral), which the rollback restore uses (A29); a save holding two exact counts on one role key for one person is refused (A38); pools `sundayLeads`, `saturdayLeads`, `support` as member `_id` arrays; the «Mes por medio fuera de Líderes Domingo» warning, built by C3 and shown only under v3 (A9); C3's v2-only cadence copy — `CADENCE_V2_NOTE` (C3 §7 item 5) on the card chip and the form help, and the form help's closing sentence «Aplica con el nuevo solver; el solver actual no lo usa.» (C3 §6.6) — rendered unconditionally by C3 and gated to v2 by C6 (CTL-1), removed by C7's flip PR (Step 5); v2 inertness as A34 words it (C3 §6.4); C3 §11 step 7 assigns the flip step — the constant, then the pool moves and the removal of a cadence member's exact `Sun.Lead` rule or `Sun.Lead` exclusion — to C7, as A28 does. **Roster:** all three `sundayCadence.ts` functions first drop every member whose `normalizeMinistries(ministries)` lacks `"worship"` (C3 §7 item 4), so the roster C7 hands them is any superset of the worship roster that carries each member's stored `ministries` as read — C7 uses C2 IF2-27's rows, which project it; a list stripped of the field would read as all-worship. **C3's obligation on C7** (C3 §7 «Obligations», C7 bullet): the cadence-readiness check runs C2's resolver as well as `cadenceOutsideSundayPool`, because a cadence member with no Tipo is absent from the latter by design and refused by the former (`no_tipo`) — check 0.5 does both |
+| C2 | Effective-engine resolver; eligibility resolver; read builders; the ledger GET; the record; the writer and executor (reached only through others) | Every shape is C2 §7's and is cited by its IF2 ID, never copied here (C2 §7 preamble); this cell states only C7's use. **Engine:** IF2-14 (EN-2's table — the override honoured only on the `preview` branch deployment or locally with `VERCEL_ENV` unset, the constant winning on Production and `verify/service-readiness`, A1) and its `OWT_SOLVER_ENGINE` SECRETS entry (EN-3); the PUT refusal `engine_not_v3` (IF2-6, WR-6). **Eligibility:** IF2-15, the single v3 resolver (A7). C7 runs it read-only (checks 0.5 and 0.9, Step 7.5) with IF2-27's rows, unaltered, as `members` and IF2-28's document parsed by `solverConfigFromDocument` as `config` (a `null` document is a stop), and prints its `refusals` counted by `reason` and its `issues` by `code`, never a `person`. Its names resolve through C3 (RES-7), its people come from the roster after RES-5's worship filter, and its `ok: true` output passes the record validator (RES-8, A38), so a v3 Auto that solved never meets a validator refusal at confirm. **Reads:** IF2-24 (freezing-services counts per month), IF2-25 (records, each parsed by IF2-20 before C7 counts it; a parser refusal is a stop), IF2-27, IF2-28 — always on a client carrying the read token, the `published` perspective and no CDN (§7.3 «Read builders», A2); C7 writes no record, roster, rule or role GROQ of its own. **GET:** IF2-7 (gate, fail-closed body) and IF2-8, of which C7 reads `engine` (Step 2, 3f, restoration), `horizon[].recordBinds` (3b, W3, Step 8), `people[].window[<LineKey>].balance` (3e's carried check: `DL`/`SL`/`BGV`/`CORO` by key, `P:` lines by config ordinal — the request's through C6's id → config-ordinal map, the GET's `P:<ruleKey>` through the private rehearsal snapshot — since C6 RQ-5 (a) mints the request's `P:` keys), and — through C6's panel, formatted by IF2-13 — `tabs`, `Figures.seats` and `Figures.tenths` (Step 4). **Record:** IF2-2 (id, `source`, `engine`, `environment` are what Steps 8 and 10 read back; statuses are IF2-1 `Status`). **Writes:** IF2-4/IF2-5 (the PUT) and IF2-22/IF2-23 (the executor and its call sites) are reached only through «Registrar» (UI-6), C6's confirm or C4's script; C7 has no write path of its own (C2 §7.4, C7 row). **Behaviour C7 relies on, by rule:** the route actor creates a record for a recordless month with `expectedRev: null` whether or not the month holds stored services (WR-8 row 3, A27); a record is replaceable only while its month has no freezing services (A5, IF2-24) and binds a horizon month only then (A6, IF2-8 `horizon[].recordBinds`); no route deletes a record (WR-13) and the reconstruction actor touches only records it wrote (WR-14 row 5); «Registrar elegibilidad de {mes}» renders only when IF2-8 `engine` is `"v3"` (UI-6); the reader fails closed, a missing read token included (RD-2, A2); the ledger and its reader are `app/utils/fairnessLedger.ts` (IF2-10) and `app/utils/fairnessLedgerRead.ts` (RD-1); GU-3's ADR; GU-4's `CLAUDE.md` lines, including the one effective-engine line, which C6 DOC-3 does not repeat |
+| C3 | The cadence setting, the resolver, the save guard | `solverConfig.restrictions[].sundayCadence?: "alternate"` (absent = «Normal»); `app/utils/sundayCadence.ts`: `resolveRulePersonId(person, roster) → { ok: true, id } \| { ok: false, reason: "unresolved" \| "ambiguous", matches }`, `cadenceMembers(config, roster) → { ids, refusals }`, `cadenceOutsideSundayPool(config, roster) → [{ id, name, reason: "not_ticked" \| "no_sunday_lead_tipo" }]`; `SOLVER_CONFIG_VERSION = 2`; POST `/api/admin/solver-config` body `{ rev, config, configVersion }`; the one reader, parser and serializer `solverConfigFromDocument`, `parseSolverConfigWrite`, `solverConfigFields` (`app/utils/solverConfigWriteRequest.ts`, neutral), which the rollback restore uses (A29); a save holding two exact counts on one role key for one person is refused (A38); pools `sundayLeads`, `saturdayLeads`, `support` as member `_id` arrays; the «Mes por medio fuera de Líderes Domingo» warning, built by C3 and shown only under v3 (A9); C3's v2-only cadence copy, both rendered unconditionally by C3 and both removed by C7's flip PR (Step 5) — `CADENCE_V2_NOTE` (C3 §6.6, §7 item 5), used only as the card chip's note and gated to v2 by C6 (CTL-1), and the form help's closing sentence «Aplica con el nuevo solver; el solver actual no lo usa.» (C3 §6.6), an inline string that is not exported and that C6 does not gate; v2 inertness as A34 words it (C3 §6.4); C3 §11 step 7 assigns the flip step — the constant, then the pool moves and the removal of a cadence member's exact `Sun.Lead` rule or `Sun.Lead` exclusion — to C7, as A28 does. **Roster:** all three `sundayCadence.ts` functions first drop every member whose `normalizeMinistries(ministries)` lacks `"worship"` (C3 §7 item 4), so the roster C7 hands them is any superset of the worship roster that carries each member's stored `ministries` as read — C7 uses C2 IF2-27's rows, which project it; a list stripped of the field would read as all-worship. **C3's obligation on C7** (C3 §7 «Obligations», C7 bullet): the cadence-readiness check runs C2's resolver as well as `cadenceOutsideSundayPool`, because a cadence member with no Tipo is absent from the latter by design and refused by the former (`no_tipo`) — check 0.5 does both |
 | C4 | The reconstruction CLI | `npx tsx --env-file=.env.local scripts/reconstruct-fairness-months.mjs --months YYYY-MM[,…] --out <private dir> [--overrides <private file>] [--preview-run YYYY-MM]`; `--apply --plan <file>`; `--rollback` and `--rollback --apply --plan <file>`; exit `0` done, `2` refused before any write, `1` failed or partial; strictly past months only (R1); plan fingerprint consent (R15, R19); a month whose record a v3 Auto confirm created reads «no lo escribió la reconstrucción: no se toca» — expected, not a failure (R14, A27); retirement by `assertRetiredWriter` and `RETIRED_ONE_SHOT_WRITERS` (R22, owned by this plan); the CLI file is the executor's one script call site and its registrations are C2 IF2-23's |
 | C5 | The function, its gate and its report | Function `owt-solver-v3`, trigger `owt-solver-v3-deploy` (`gcf_v3/**`); verification C5 §11.5 (describe `ACTIVE` + `updateTime`, ping `ok: true`, `contract: 3`, `build` = deployed SHA, smoke `gcf_v3/acceptance/smoke.json`); URL source `gcloud functions describe owt-solver-v3 --gen2 --region=us-central1 --format='value(serviceConfig.uri)'`; timing shapes from `python gcf_v3/acceptance/run.py … --emit-requests <dir>` (A–D) and the private converter (E); response fields `stages[]{ id, status: "proven" \| "unproven" \| "not_run", limit: "none" \| "deterministic" \| "wall", ms, det_milli }`, `total_ms`, `violations[]`, `violation_ceiling{ value, proven }`, `unfilled[]`, `cadence[]{ person, month, state: "on" \| "off" \| "out", sundays, saturdays, met, compensation: "given" \| "missed" \| "not_applicable" }` (A14), `missed[]{ code, person, month?, month1?, month2?, dates?, count?, cause }` with causes `not_proven`, `pins`, `rule`, `unavailable`, `capacity`, `higher_priority`, `notices[]{ code, params }` (incl. `dl_capacity`, computed once per run, A19), `fairness{ tolerance, people[]{ person, floor[], lines{ <line>: { carried, planned, share, received, pinned, set_aside, after, tenths{ share, after } } }, tabs{ DL?, SL?, BGV?, CORO?, TOTAL? } } }` — planned and realised share both reported, `after = carried + share − received` on every line and tab (A19), each tab's figures computed from its own exact sums, never from its lines (C5 §8.2), **plus the integer received and pinned seat counts per person, line and tab that A39 adds** (C5 §8.2 names the fields), `tolerance` = `FAIRNESS_TOLERANCE`; request fields per person `cadence`, `dl_since`, `prev_dl_leads` and the envelope's `prior` (A15); exact-count leads excluded from both monthly caps (A16); the independent checker of C5 §12.3, callable on one captured request/response pair and printing counts and codes only (C5-R15); the private Run A aggregates C5 records (A23); `STAGE_DET_LIMIT` and OQ-4 (minimum instances) |
-| C6 | The planner on v3 | Effective engine resolved on the server (C2 IF2-14) and passed as a render prop (ENG-3, A1); `POST /api/admin/solve` answers `409 { ok: false, error: "solver_version_mismatch", engine }` on a contract/engine mismatch (RT-1, A1) and JSON transport errors `{ ok: false, transport_error: true, transport }` (RT-5), a timeout and every other transport reason with distinct copy (A24); v3 abort 55 s route / 58 s client; a test pins `SOLVER_ENGINE === "v2"` (ENG-1); horizon control «Planear: 1 mes · 2 meses» (HZ-1); Auto refuses a horizon with a past month (HZ-7, A24); a record-bound horizon month (A6, C2 IF2-8 `horizon[].recordBinds`) is solved with its record's eligibility and shows its pool checkboxes read-only; the real v3 request builder, `prior` built from `GET /api/admin/roles` (A15), every rule id minted and every `carried` `P:<ruleKey>` key rewritten to `P:` + a minted id, the id map held in memory only (RQ-4, RQ-5 (a), KH-1 — why 3e matches `P:` lines key-free); warnings WN-1 (C3's «Mes por medio fuera de Líderes Domingo», A9), WN-2 (cadence refusals, incl. A11), WN-3 (non-empty «Líderes Sábado»); confirm writes records then drafts (CF-1–CF-11) and, per **parent A27**, **creates** a record for every recordless horizon month it confirms — anchored (stored weekend services or counted specials, e.g. a month confirmed under v2) or not; a bound month's record is sent back `unchanged`, a recorded-unbound one is replaced under its revision (A6). C6's former CF-1 (iii) and PI-7 (no record for an «anchored, unrecorded» month) are gone; Step 0 check 8 confirms the merged code has no such path; the «Equidad» panel's tabs «Dom Lead · Sáb Lead · BGV · Coro · Total», each from its own entry: «Tuvo» from C2 IF2-8 `Figures.seats`, «Saldo (3 meses)» from IF2-8 `tabs.window[<tab>]`, «En este plan» from C5's integer seat count on the tab (A39) and «Queda» from the tab's `tenths.after` (A32), formatted by C2 IF2-13 (A17); v2 history surfaces unmounted under v3, deletion C7's (EQ-1); `OWT_SOLVER_V3_URL` SECRETS entry (DOC-1), which points to this plan's W0 for setting it on Preview |
+| C6 | The planner on v3 | Effective engine resolved on the server (C2 IF2-14) and passed as a render prop (ENG-3, A1); `POST /api/admin/solve` answers `409 { ok: false, error: "solver_version_mismatch", engine }` on a contract/engine mismatch (RT-1, A1) and JSON transport errors `{ ok: false, transport_error: true, transport }` (RT-5), a timeout and every other transport reason with distinct copy (A24); v3 abort 55 s route / 58 s client; C6 adds no engine pin — C1's engine-module test (C1-R11) is the one pin of `SOLVER_ENGINE === "v2"` and C6 ENG-1 reuses it; horizon control «Planear: 1 mes · 2 meses» (HZ-1); Auto refuses a horizon with a past month (HZ-7, A24); a record-bound horizon month (A6, C2 IF2-8 `horizon[].recordBinds`) is solved with its record's eligibility and shows its pool checkboxes read-only; the real v3 request builder, `prior` built from `GET /api/admin/roles` (A15), every rule id minted and every `carried` `P:<ruleKey>` key rewritten to `P:` + a minted id, the id → label map held in memory only (RQ-4, RQ-5 (a), KH-1), and a minted-id → config-ordinal map kept in the plan snapshot (C6 RQ-5 and KH-1 as amended), through which 3e matches the request's `P:` lines to the GET's by ordinal (AS8); warnings WN-1 (C3's «Mes por medio fuera de Líderes Domingo», A9), WN-2 (cadence refusals, incl. A11), WN-3 (non-empty «Líderes Sábado»); confirm writes records then drafts (CF-1–CF-11) and, per **parent A27**, **creates** a record for every recordless horizon month it confirms — anchored (stored weekend services or counted specials, e.g. a month confirmed under v2) or not; a bound month's record is sent back `unchanged`, a recorded-unbound one is replaced under its revision (A6). C6's former CF-1 (iii) and PI-7 (no record for an «anchored, unrecorded» month) are gone; Step 0 check 8 confirms the merged code has no such path; the «Equidad» panel's tabs «Dom Lead · Sáb Lead · BGV · Coro · Total», each from its own entry: «Tuvo» from C2 IF2-8 `Figures.seats`, «Saldo (3 meses)» from IF2-8 `tabs.window[<tab>]`, «En este plan» from C5's integer seat count on the tab (A39) and «Queda» from the tab's `tenths.after` (A32), formatted by C2 IF2-13 (A17); v2 history surfaces unmounted under v3, deletion C7's (EQ-1); `OWT_SOLVER_V3_URL` SECRETS entry (DOC-1), which points to this plan's W0 for setting it on Preview |
 
 **Provides**
 
@@ -248,7 +255,7 @@ too. Children's future code has no line numbers; it is cited by requirement ID.
 | Vercel Preview env | `OWT_SOLVER_URL`, `OWT_SOLVER_API_KEY` (C6 documents `OWT_SOLVER_V3_URL`, sets nothing) | + `OWT_SOLVER_V3_URL` Preview-wide (W0, Step 2a; stays); + `OWT_SOLVER_ENGINE=v3` scoped to the `preview` branch for the rehearsal (Step 2) — honoured by code only on that branch's deployment (A1), the scoping is defence in depth; removed after the flip (Step 9) |
 | Vercel Production env | `OWT_SOLVER_URL`, `OWT_SOLVER_API_KEY` | + `OWT_SOLVER_V3_URL` (Step 6) |
 | `app/components/admin/solverEngine.ts` and its pin test | `"v2"` | `"v3"` (Step 5) |
-| `RestrictionCard` and `PersonRestrictionForm` (C3's «Mes por medio» chip note and form help) | Show C3's v2-only cadence copy, gated to v2 by C6 (CTL-1) | Copy removed in the flip PR (Step 5); restored by a flip-back |
+| `RestrictionCard` and `PersonRestrictionForm` (C3's «Mes por medio» chip note and form help) | Show C3's v2-only cadence copy: the chip's `CADENCE_V2_NOTE`, gated to v2 by C6 (CTL-1), and the form help's closing sentence, ungated (shown under both engines) | Both removed in the flip PR (Step 5); restored by a flip-back |
 | `solverConfig` (production document, shared with Preview) | v2 pools: cadence members split between Sunday and Saturday pools | Cadence members in «Líderes Domingo», «Líderes Sábado» empty, v3-reviewed rules (Step 7, Frank) |
 | `fairnessMonth` documents (`fairnessMonth.YYYY-MM`, A2) | Aug/Sep (and Oct on or after 2026-11-01, A21) reconstructed by C4 | + every v2-confirmed month, reconstructed when past (Step 10); + v3 confirms (C6, ordinary operation) |
 | `docs/adr/0004, 0010, 0038, 0041, 0042, 0046, 0047` and `README.md` | v2 decisions | Amended «under v3»; v2 keeps each original (Step 5) |
@@ -349,6 +356,8 @@ Two cycles with code, one operational tail:
        output passes the validator).
      - **A39:** C5's response carries the integer received and pinned seat counts per person, line
        and tab, and C6's panel renders «En este plan» and «Los pines tomaron {n} lugares» from them.
+   - **3e's ordinal map (AS8):** C6's plan snapshot holds the minted-id → config-ordinal map and
+     how it can be captured with a run; if it cannot, 3e uses AS8's fallback, recorded here.
      - **Sub-check:** which paths other than Auto's confirm write a `fairnessMonth` record in the
        merged code — C2's «Registrar elegibilidad» (UI-6) and anything C6 adds (its «Manual plans
        under v3» row in C6 §9 «Behaviour and invariants preserved», records «at first confirm»; whether «Editar
@@ -444,10 +453,10 @@ Two cycles with code, one operational tail:
 - **Verification:** dev alias contains the new deployment and its `githubCommitSha` equals
   `preview`'s head; `scripts/dev-verify.ts --route /admin --text` (output in the gitignored
   directory) shows the v3-only surfaces (horizon control; no «Vista previa» banner on the «Equidad»
-  panel; C1's and C3's «aplica con el nuevo solver» notes absent, C6 CTL-1 — the form help's closing
-  sentence «Aplica con el nuevo solver; el solver actual no lo usa.» is not the `CADENCE_V2_NOTE`
-  string, so whether C6's gate hides it is read here, on screen: still shown under the override is
-  recorded, not a defect, because the flip PR removes it (Step 5); WN-1/WN-3 present while
+  panel; C1's note and C3's card-chip note («aplica con el nuevo solver», `CADENCE_V2_NOTE`) absent,
+  C6 CTL-1 — the form help's closing sentence «Aplica con el nuevo solver; el solver actual no lo
+  usa.» is not that constant and C6 does not gate it, so it is expected still shown under the
+  override: recorded, not a defect, because the flip PR removes it (Step 5); WN-1/WN-3 present while
   the pools are unchanged) — «Holgura … no aplica con el nuevo solver» is **not** a v3 signal, it
   shows under both engines (C6 CTL-1); a read of the fairness GET (C2 IF2-7) through the same bot
   reports IF2-8 `engine: "v3"`.
@@ -493,7 +502,10 @@ Two cycles with code, one operational tail:
   4. one run after ≥ 20 minutes idle (the end-to-end cold path through the route, 55 s abort).
   For each run Frank saves, from the browser's network panel, the request and response bodies of
   `POST /api/admin/solve` and the response of `GET /api/admin/fairness` to
-  `owt-agent-logs/sdd/<cycle>/rehearsal/` (private), plus the end-to-end durations of both calls.
+  `owt-agent-logs/sdd/<cycle>/rehearsal/` (private), plus the end-to-end durations of both calls,
+  the run's minted-id → config-ordinal map from C6's plan snapshot (C6 RQ-5 and KH-1 as amended;
+  captured however the merged C6 exposes it — AS8), and a one-line note of whether that run's
+  on-screen config added or deleted a presence rule relative to 3a's snapshot.
 - **3e. The agent's independent check** of every captured pair, with C5's independent checker
   (§12.3) or a private wrapper around it; prints only counts and codes — stage statuses counted by
   stage kind (`P:<…>` collapsed; C5's public label `P#<n>` where one sub-line must be told apart) and
@@ -527,15 +539,31 @@ Two cycles with code, one operational tail:
     `tenths` (C5 §8.2: outputs only);
   - each request person's `carried` equals, exactly (C6 RQ-4 copies without rounding), the
     captured GET's C2 IF2-8 `people[].window[<LineKey>].balance` for that person: the `DL`, `SL`,
-    `BGV` and `CORO` lines (C2 IF2-1 `LineKey`) **by key**; the presence sub-lines **key-free**.
-    The request never carries the GET's `P:<ruleKey>` keys: C6 rewrites each to `P:` + a minted id
-    and keeps the id → `ruleKey` map in memory only (C6 RQ-4, RQ-5 (a), KH-1), and the on-screen
-    config the minting depends on (3b/3c's edits included) is never saved, so the map cannot be
-    rebuilt. The `P:` check is therefore that some one-to-one map from the GET's `P:` keys onto the
-    request's gives every person an equal balance on every mapped line (equivalently, the multiset
-    of `P:` columns, each a person → balance map, is the same on both sides); with production's one
-    presence rule this is that single line, person by person. It prints only counts and pass/fail
-    (K10); a failure's detail goes to a private file.
+    `BGV` and `CORO` lines (C2 IF2-1 `LineKey`) **by key**; the presence sub-lines **by config
+    ordinal**. The two sides never share a `P:` key: the GET's are `P:<ruleKey>` (C2 RES-6: a
+    presence `ruleKey` is its config item's id, seed-shaped in production), while C6 rewrites each
+    one it copies into the request to `P:` + a minted id (C6 RQ-4, RQ-5 (a), KH-1). Both are
+    brought to one name-free space, `presence[i]` (K10, parent A41):
+    - **request side** — each `P:<minted id>` through the run's id → config-ordinal map from C6's
+      plan snapshot (3d's capture);
+    - **GET side** — each `P:<ruleKey>` through the index of the item with that id in the
+      `presence` array of 3a's rehearsal snapshot (Step 8: of the pre-step or post-step snapshot
+      the run's config matches). This join reads raw keys and therefore runs only inside the private
+      wrapper under `owt-agent-logs/sdd/<cycle>/`; the keys never reach its stdout;
+    - a `P:` key with no on-screen card (a carried-only line, or a bound month's recorded rule
+      since deleted from the config — C6 renders it «regla de presencia registrada») has no ordinal
+      on either side; those lines are compared as one group by the key-free multiset test (some
+      one-to-one pairing of the group's columns, each a person → balance map, makes them equal) and
+      printed as a count.
+    Pass: the set of ordinals is the same on both sides (no presence line dropped or added), every
+    person has an equal balance on every `presence[i]`, and the carried-only group passes. A run whose
+    3d note records an on-screen add or delete of a presence rule — the map's ordinals then index an
+    array the snapshot does not hold — is checked by the key-free multiset test over all its `P:`
+    lines instead, and counted as such, never reported as matched by ordinal. With production's one
+    presence rule the expected output is `presence[0]`: n persons, n equal; carried-only: 0. Output
+    is ordinals, counts and pass/fail only — never a `P:` key, a minted id, a `ruleKey`, a hash of
+    one or a per-person figure (K10); a failure's detail (member `_id`, the two balances) goes to a
+    private file beside the capture.
 - **3f. Rollback rehearsal.** (1) Remove `OWT_SOLVER_ENGINE` on Preview and redeploy; Frank runs a
   v2 Auto on dev for the next month **without confirming** — v2's diagnostics strip («Sin
   optimizar»/«Equidad relajada»/«Historial» as applicable) appears and «sin Lead» renders as before;
@@ -589,20 +617,23 @@ Two cycles with code, one operational tail:
 - **Code:**
   - `SOLVER_ENGINE` → `"v3"` in `app/components/admin/solverEngine.ts` (C1's module, parent A1),
     keeping its explicit `"v2" | "v3"` annotation (the TS2367 reason, C6 ENG-1); the engine pin
-    tests change from `"v2"` to `"v3"` in the same commit — C1's engine-module test (C1-R11, C1 §7
-    «Engine module») and C6 ENG-1's «a test pins `SOLVER_ENGINE === "v2"`» if the merged code holds
-    it as a separate test (read from the code; any other literal-value pin found there is named in
-    the PR description before it is changed, or it is S8). A server-side test that asserts C2's resolver's (IF2-14) or the
+    test changes from `"v2"` to `"v3"` in the same commit — C1's engine-module test (C1-R11, C1 §7
+    «Engine module»), the one pin of the constant's value: C6 ENG-1 adds no second pin and reuses
+    C1's (any other literal-value pin of `SOLVER_ENGINE` found in the merged code is named in the
+    PR description before it is changed, or it is S8). A server-side test that asserts C2's resolver's (IF2-14) or the
     fairness GET's IF2-8 `engine` against the constant (EN-2's table, A1: «the constant wins» on
     Production, on `verify/service-readiness` and for an invalid override) may be updated to reference `SOLVER_ENGINE` rather than a literal.
   - **C3's v2-only cadence copy goes** (a code change, no data write): the form help's closing
     sentence «Aplica con el nuevo solver; el solver actual no lo usa.» (C3 §6.6) is deleted from the
-    help text, every use of `CADENCE_V2_NOTE` (the card chip's note and the form help, C3 §6.6, §7
-    item 5; C6 CTL-1's gate on them) is removed, and the constant with it once nothing imports it.
-    Under v3 both say something false about «the current solver»; C6's gate hides the constant's
-    uses already, but not necessarily the help sentence (Step 2). The tests that assert that copy or
-    its gate — C3's T11 card-chip/help assertions and C6 CTL-1's render tests for those two surfaces —
-    are updated in the same commit to assert its absence. Untouched: C1's note «Cuenta para equidad:
+    help text (the rest of the help stays: it describes the v3 behaviour), and every use of
+    `CADENCE_V2_NOTE` — the card chip's note, its only use (C3 §6.6, §7 item 5), with C6 CTL-1's
+    gate on it — is removed, and the constant with it once nothing imports it. Under v3 both say
+    something false about «the current solver»; C6's gate hides the chip's note already, but not the
+    help sentence, which C6 does not gate (CTL-1; Step 2). The tests that assert the chip's note or
+    its gate — C3 T11's card-chip note assertion and C6 CTL-1's card-chip render tests — are updated
+    in the same commit to assert its absence. Neither C3 (T11) nor C6 (CTL-1) names a test of the
+    help sentence; any test the merged code holds that asserts it is named in the PR description
+    before it is changed, then updated in the same commit to assert its absence (S8). Untouched: C1's note «Cuenta para equidad:
     aplica con el nuevo solver. Hoy Auto no lo usa.», which C1-R11 (approved) shows exactly while
     the engine is v2 through C6's prop and so retires by the engine condition alone (C1 §9, row «Copy»);
     C3's «no aplica con el nuevo solver» on «Holgura», true under both engines (`SLACK_V3_NOTE`); C2's
@@ -701,10 +732,14 @@ Two cycles with code, one operational tail:
   `patch().ifRevisionId(<the fresh read's _rev>).set(…)` — never a whole-document restore from the
   snapshot, never a field the serializer does not emit, never `_rev`, never a create or a replace of
   the document; lists every skipped path; dry run by default, `--apply` only after Frank's yes to
-  that dry run (W8). Stdout and stderr carry counts, pool member `_id`s, and each rule path by kind
-  and ordinal (`restrictions[i].caps[j]`, `conflicts[i]`, `presence[i]`, K10) — never a rule item
-  `id`/`_key`, a hash of one, or a name, error paths included; the ordinal-to-key map and the names
-  go only to a private output file under `owt-agent-logs/backups/` beside the script. Its dry
+  that dry run (W8). Stdout and stderr carry counts, each rule path by kind and ordinal
+  (`restrictions[i].caps[j]`, `conflicts[i]`, `presence[i]`, K10) and, for a pool path, each member
+  `_id` only after the script checks that it has the UUID shape (`8-4-4-4-12` hexadecimal) — any
+  other pool id is printed as its pool and ordinal (`sundayLeads[i]`) and counted, its raw value
+  going to the private output file (K10: no rule makes a member `_id` name-free) — never a rule item
+  `id`/`_key`, a hash of one, or a name, error paths included; the ordinal-to-key map, every
+  non-UUID pool id and the names go only to a private output file under `owt-agent-logs/backups/`
+  beside the script. Its dry
   run also reports C3's round trip of the live document (3f). Reviewed in Cycle F's code review
   (its path given to the reviewer).
 - **Pre-step snapshot:** a read-only fetch of the whole `solverConfig` document (every field, `_rev`,
@@ -845,14 +880,29 @@ Order is fixed (Decision K1): **flip first, pools after**.
   `file` — with `file`, `did` (wrote `fairnessMonth` records with `source: "reconstructed"` for
   v2-confirmed months, through C2's executor) and `replacement` (nothing: every v2-confirmed month is
   recorded; a v3 confirm or «Registrar elegibilidad» records a month from then on);
-  `RETIRED_WRITER_NAMES` (`:77`) is derived from that object's keys and is not edited; the test's
-  pinned name list and its «seven» wording (`scripts/lib/__tests__/sr-retired-writer.test.mjs:42-43`)
-  gain the eighth name. Its audit entry moves from `OPERATOR_TOOLING_ALLOWLIST`
-  (`app/utils/protectedReadAudit.ts:367`) to `RETIRED_ONE_SHOT_WRITERS` (`:307`), whose test requires
-  that import and call in the registered file and pins the lists (C4 R22;
-  `protectedReadAudit.test.ts`). `docs/SOLVER_AND_INFRA.md` «Retired writers» heading count, its
-  «These seven» sentence and its table gain the row (`:580-590` warns that the count and the rows
-  drift apart).
+  `RETIRED_WRITER_NAMES` (`:77`) is derived from that object's keys and is not edited. Its audit
+  entry moves from `OPERATOR_TOOLING_ALLOWLIST` (`app/utils/protectedReadAudit.ts:367`) to
+  `RETIRED_ONE_SHOT_WRITERS` (`:307`), whose test requires that import and call in the registered
+  file and the retired list to equal `RETIRED_WRITERS`' files (`protectedReadAudit.test.ts:446-462`);
+  the operator-tooling test's pinned list (`:487-506`, where C4 R20 added the file) drops it, as it
+  dropped `migrate-proposal-messages.mjs` (`:497-499`), so the registries stay disjoint (`:465-485`).
+  **Every «seven retired writers» pin moves to eight together (C4 R22 (iv)), each named here because
+  three of them are prose that no test reads:**
+  - `scripts/lib/__tests__/sr-retired-writer.test.mjs:42-56` — the test title «registers exactly the
+    seven plan §8 executable writers» and its pinned name list gain the eighth name;
+  - `app/utils/__tests__/protectedReadAudit.test.ts:434-445` — the test title «lists exactly the
+    seven retired one-shot writers» and its pinned `file#module` list gain
+    `scripts/reconstruct-fairness-months.mjs#module`;
+  - `app/utils/protectedReadAudit.ts:295` — the `RETIRED_ONE_SHOT_WRITERS` comment «Each of these
+    seven files» says eight (comment only; no test fails if it is missed);
+  - `scripts/lib/sr-retired-writer.mjs:10-13` — the module header, which calls every retired writer
+    a historical one-shot that cannot adopt the guarded invariant, is refreshed: this one wrote through
+    C2's guarded executor and retires because its job is done (comment only; no test fails if it is
+    missed);
+  - `docs/SOLVER_AND_INFRA.md:580` — the «Retired writers» heading count, its «These seven» sentence
+    and its table gain the row, and that sentence, like the module header, stops saying every one
+    of them cannot adopt the guarded invariant (`:580-590` warns that the count and the rows drift
+    apart; no test pins that prose).
 - **Docs:** `CLAUDE.md:228` loses the `priorMonthLeadVisibility` clause; `docs/SOLVER_AND_INFRA.md:162`
   and `docs/UTILITIES_AND_COMPONENTS.md:196` lose the panel; ADR-<new> gains the retirement date.
 - **Gates and release:** as Step 5, then auto-merge on the reviewed commit, production alias + SHA.
@@ -929,12 +979,13 @@ Order is fixed (Decision K1): **flip first, pools after**.
   - **S7** a number Frank reads as wrong, or a defect traced to a child — fixed in that child's code by
     its own PR and review, then the rehearsal resumes from 3d;
   - **S8** the flip changes any test other than those Step 5 allows, and only as it allows: the
-    engine pin tests (C1's engine-module test, C1-R11 / C1 §7 «Engine module»; C6 ENG-1's pin where
-    the merged code holds it separately; any other literal-value pin of `SOLVER_ENGINE` found in the
-    merged code, named in the PR description first), the server-side tests asserting C2's resolver
-    (IF2-14) or the GET's IF2-8 `engine` against the constant, and the tests asserting C3's v2-only
-    cadence copy or C6 CTL-1's gate on it (C3 T11's note assertions; CTL-1's render tests for the card
-    chip and the form help), rewritten to assert its absence;
+    engine pin test (C1's engine-module test, C1-R11 / C1 §7 «Engine module», the one pin C6 ENG-1
+    reuses; any other literal-value pin of `SOLVER_ENGINE` found in the merged code, named in the PR
+    description first), the server-side tests asserting C2's resolver (IF2-14) or the GET's IF2-8
+    `engine` against the constant, and the tests asserting C3's v2-only cadence copy or C6 CTL-1's
+    gate on it (C3 T11's card-chip note assertion; CTL-1's card-chip render tests; any test of the
+    merged code asserting the form help's sentence, named in the PR description first), rewritten to
+    assert its absence;
   - **S9** the production alias does not serve the flip commit;
   - **S10** the post-step diff differs from the change list;
   - **S11** the first production v3 run cannot produce an acceptable plan for the next month before
@@ -942,7 +993,7 @@ Order is fixed (Decision K1): **flip first, pools after**.
   - **S12** any step would place a member name or per-person figure in this repository, or a
     `solverConfig` item key or anything derived from one (K10) in this repository or a PR.
 - **Rollback** (until Step 11 closes the window; each line its own consent):
-  1. Flip-back PR: `SOLVER_ENGINE = "v2"` and its pins, plus the restoring of C3's v2-only cadence
+  1. Flip-back PR: `SOLVER_ENGINE = "v2"` and its pin test (C1-R11), plus the restoring of C3's v2-only cadence
      copy and its tests (a revert of Step 5's hunks), release discipline as Step 5, `preview` first,
      W9. If Step 9 has not run yet (a rollback triggered by S9–S11), `OWT_SOLVER_ENGINE` is removed
      from Preview **before** the flip-back reaches `preview`, so its build follows the constant and
@@ -974,11 +1025,11 @@ Order is fixed (Decision K1): **flip first, pools after**.
 | K7 | MCP P4 | Leave `solve_month` unbuilt; mark the plan and `docs/MCP.md` blocked with the reason | P4's approval rests on parity with the v2 browser request and an apply order that writes drafts with no record (against L3/U4); a re-baseline changes its critical contracts, so it is a new critical plan, not a cutover step | MCP planning stays unavailable until that plan exists | Claude (parent §10 allows either) |
 | K8 | Where snapshots, diffs, captures and the restore script live | `owt-agent-logs` (private) | They contain names, availability and per-person figures; precedent `owt-agent-logs/backups/` | The restore script is reviewed by path, outside the repo diff | Claude |
 | K9 | Cold start remedy | W1 before any code (a warm-up ping is a C6 change) | C5 §13 order; no code in the release path | A monthly cost if needed | Frank |
-| K10 | How C7 output names a `solverConfig` item | By kind and ordinal; stages by kind or C5's public label; raw keys only in private files under `owt-agent-logs` | The program's key-hygiene rule (coordinator); production keys carry first names (seed-era `d-…`, evidence row); the rule's short-hash arm is declined because a hash of a seed key is reversed by trying the roster (as C2 §6 and C4 R12 decline it) | Matching an ordinal to its rule takes the private file; ordinals are positions in the snapshot read, so they are quoted with that snapshot | Claude |
+| K10 | How C7 output names a `solverConfig` item | By kind and ordinal; stages by kind or C5's public label; raw keys only in private files under `owt-agent-logs` | The program's key-hygiene rule (coordinator; parent A41); production keys carry first names (seed-era `d-…`, evidence row); the rule's short-hash arm is declined because a hash of a seed key is reversed by trying the roster (as C2 §6 and C4 R12 decline it) | Matching an ordinal to its rule takes the private file; ordinals are positions in the snapshot read, so they are quoted with that snapshot | Claude |
 
 ## Assumptions
 
-Numbered `AS*` so they never read as the parent's amendments `A1–A40`.
+Numbered `AS*` so they never read as the parent's amendments `A1–A41`.
 
 | Assumption | Impact if false | Validation point | Failure response |
 |---|---|---|---|
@@ -989,6 +1040,7 @@ Numbered `AS*` so they never read as the parent's amendments `A1–A40`.
 | AS5 No other admin runs Auto or saves rules during the freeze | A concurrent save between snapshot and step | `_rev` checks (3a, 6, 7.5) | Re-snapshot; Frank reconciles; S6 |
 | AS6 The flip lands before the next month is confirmed under v2 | More months in the reconstruction tail; thinner lookback for the first v3 runs; each such month is not past and has no record, so more months rest on K4's operational control (a v3 confirm that included one would record it, A27) | Check 0.4 | Not a stop: the tail absorbs it; Frank may wait to flip |
 | AS7 The team's planning date leaves room for the rehearsal and the flip | Pressure to skip steps | Step 0 calendar | Plan the next month under v2 and flip after it; the tail records it |
+| AS8 C6's minted-id → config-ordinal map can be captured with each run (from the plan snapshot, however the merged C6 exposes it) | 3e cannot match presence sub-lines by ordinal | Step 3d first run; Step 0 check 8 reads the merged C6 for it | 3e's `P:` check falls back to the key-free multiset test for every run, and the cutover record says so; with production's one presence rule the two tests are equivalent |
 
 ## Open questions
 
@@ -1007,9 +1059,9 @@ None blocking. Non-blocking, with bounded defaults:
 None open. **Settled since the last draft — key hygiene.** This plan used to raise, as its one
 cross-child issue, that the siblings treated `solverConfig` keys as name-free while production's are
 not (K10's evidence), with two options: (a) keys are names wherever they leave a private file, or
-(b) a consented re-key of the seed items. The coordinator ruled for every child: (a) — output that
-can leave a private file names a rule by ordinal (or a short hash, an arm C7, C2 and C4 decline,
-K10), raw keys only in private `--out` files and the authenticated admin UI and payloads; C5 logs no
+(b) a consented re-key of the seed items. The coordinator ruled for every child: (a), now parent A41 — output that
+can leave a private file names a rule by kind and ordinal (the short-hash arm of the first ruling,
+which C7, C2 and C4 declined, is gone from A41; K10), raw keys only in private `--out` files and the authenticated admin UI and payloads; C5 logs no
 request or response contents; and **no re-keying** of production config by this program. The
 siblings now carry it (C2 §6 «Key hygiene», C4 D5/R12, C5-17 and §11.2); K10 is C7's application.
 
@@ -1041,7 +1093,7 @@ rehearsal's «sin registro» lookback months (A21).
 
 ## Terminal state
 
-`READY_FOR_REVIEW` — standard tier, self-reviewed against A1–A40. It consumes A27, A38 and A39 as
+`READY_FOR_REVIEW` — standard tier, self-reviewed against A1–A41. It consumes A27, A38 and A39 as
 the parent words them; the sibling texts now match — C6 has dropped CF-1 (iii) and PI-7 (C6
 §13 «Parent issues»: «PI-7 by A27»), C5 emits the integer seat counts (C5 §8.2: `seats` and
 `pinned_seats` per line and per tab, A39), and C2 carries the A38 refusal and the output invariant (IF2-15 `overlapping_exact`, RES-8);
