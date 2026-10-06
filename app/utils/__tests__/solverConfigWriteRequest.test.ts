@@ -12,11 +12,13 @@ import { describe, expect, it } from "vitest";
 import {
   SOLVER_CONFIG_DOC_ID,
   buildSolverConfigDocument,
+  exactCapOverlaps,
   parseSolverConfigWrite,
   solverConfigFields,
   solverConfigFromDocument,
 } from "../solverConfigWriteRequest";
-import type { SolverConfig } from "@/app/components/admin/plannerModel";
+import { DEFAULT_SOLVER_CONFIG } from "@/app/components/admin/solverConfigDefaults";
+import type { PersonRestriction, RestrictionCap, SolverConfig } from "@/app/components/admin/plannerModel";
 
 /** The UI's own id factory (`MonthGenerator.tsx`), copied so the test is honest
  *  about what a freshly added rule actually carries. */
@@ -413,5 +415,126 @@ describe("solverConfigFromDocument — `sundayCadence` (C3 T3)", () => {
     expect(back).toEqual(config);
     expect(back.restrictions[0].sundayCadence).toBe("alternate");
     expect(back.restrictions[1]).not.toHaveProperty("sundayCadence");
+  });
+});
+
+// ─── Solver v3 C3 · one exact count per person per role (parent A38) — T14 ────
+//
+// Two `==` caps that cover a common role (`rolesOfPattern`, the five v2 keys) for
+// one `person` text are refused at save — within one restriction and across
+// restrictions whose `person` is equal case-insensitively after trimming. The
+// issue names the LATER cap of each pair, once, with the `:exact_overlap` suffix.
+let capSeq = 0;
+const cap = (pattern: string, op: RestrictionCap["op"], value = 1, extra: Partial<RestrictionCap> = {}): RestrictionCap => ({
+  id: `c-${++capSeq}`, pattern, op, value, relative: false, relOffset: 0, ...extra,
+});
+const rule = (id: string, person: string, caps: RestrictionCap[]): PersonRestriction => ({
+  id, person, excludedPatterns: [], fairness: "none", fairnessSlack: 1, weekExclusions: [], caps,
+});
+const withRules = (...restrictions: PersonRestriction[]): SolverConfig => ({
+  sundayLeads: [], saturdayLeads: [], support: [], restrictions, conflicts: [], presence: [],
+});
+const refusedAt = (config: SolverConfig): string[] => {
+  const parsed = parseSolverConfigWrite(config);
+  return parsed.ok ? [] : parsed.issues;
+};
+
+describe("exactCapOverlaps + the parser — one exact count per role (C3 T14)", () => {
+  it("refuses two `==` caps on one restriction covering Sun.Lead, at the later cap", () => {
+    const config = withRules(rule("r-ana", "Ana", [cap("Sun.Lead", "==", 2), cap("Sun.*", "==", 3)]));
+    expect(exactCapOverlaps(config)).toEqual([
+      { first: { restriction: 0, cap: 0 }, later: { restriction: 0, cap: 1 }, person: "Ana", roles: ["Sun.Lead"] },
+    ]);
+    expect(refusedAt(config)).toEqual(["restrictions[0].caps[1]:exact_overlap"]);
+  });
+
+  it("three mutually overlapping caps report each later cap once", () => {
+    const config = withRules(rule("r-ana", "Ana", [cap("Sun.Lead", "=="), cap("*.Lead", "=="), cap("*.*", "==")]));
+    expect(exactCapOverlaps(config).map((o) => [o.first.cap, o.later.cap])).toEqual([[0, 1], [0, 2], [1, 2]]);
+    expect(refusedAt(config)).toEqual([
+      "restrictions[0].caps[1]:exact_overlap",
+      "restrictions[0].caps[2]:exact_overlap",
+    ]);
+  });
+
+  it("looks ACROSS restrictions whose person differs only in case and surrounding spaces", () => {
+    const config = withRules(
+      rule("r-1", "Ana", [cap("Sun.Lead", "==", 2)]),
+      rule("r-2", "Bruno", [cap("Sun.Lead", "==", 1)]),
+      rule("r-3", "  aNA ", [cap("*.Lead", "==", 1)]),
+    );
+    expect(exactCapOverlaps(config)).toEqual([
+      { first: { restriction: 0, cap: 0 }, later: { restriction: 2, cap: 0 }, person: "Ana", roles: ["Sun.Lead"] },
+    ]);
+    expect(refusedAt(config)).toEqual(["restrictions[2].caps[0]:exact_overlap"]);
+  });
+
+  it("`Sat.* == 1` with `*.Lead == 1` is refused on Sat.Lead", () => {
+    const config = withRules(rule("r-ana", "Ana", [cap("Sat.*", "=="), cap("*.Lead", "==")]));
+    expect(exactCapOverlaps(config)[0].roles).toEqual(["Sat.Lead"]);
+    expect(refusedAt(config)).toEqual(["restrictions[0].caps[1]:exact_overlap"]);
+  });
+
+  it("the value plays no part: equal values, and relative values, are still refused", () => {
+    expect(refusedAt(withRules(rule("r", "Ana", [cap("Sun.BGV", "==", 2), cap("Sun.BGV", "==", 2)])))).toEqual([
+      "restrictions[0].caps[1]:exact_overlap",
+    ]);
+    expect(refusedAt(withRules(rule("r", "Ana", [
+      cap("Sat.BGV", "==", 0, { relative: true, relOffset: 2 }),
+      cap("Sat.*", "==", 0, { relative: true, relOffset: 9 }),
+    ])))).toEqual(["restrictions[0].caps[1]:exact_overlap"]);
+  });
+
+  it("`==` beside `>=` or `<=` on the same role is accepted, as today", () => {
+    const config = withRules(rule("r", "Ana", [cap("Sun.Lead", "==", 2), cap("Sun.Lead", ">=", 1), cap("Sun.*", "<=", 3)]));
+    expect(exactCapOverlaps(config)).toEqual([]);
+    expect(parseSolverConfigWrite(config).ok).toBe(true);
+  });
+
+  it("two DIFFERENT person texts (a name and an alias of one member) pass the save — C2 judges by id", () => {
+    const config = withRules(
+      rule("r-1", "Ana", [cap("Sun.Lead", "==", 2)]),
+      rule("r-2", "Ana Karen Villalobos", [cap("Sun.Lead", "==", 1)]),
+    );
+    expect(exactCapOverlaps(config)).toEqual([]);
+    expect(parseSolverConfigWrite(config).ok).toBe(true);
+  });
+
+  it("`Sat.* ==` with `*.Choir ==` passes: the five-key map has no Sat.Choir (the documented gap)", () => {
+    const config = withRules(rule("r", "Ana", [cap("Sat.*", "=="), cap("*.Choir", "==")]));
+    expect(exactCapOverlaps(config)).toEqual([]);
+    expect(parseSolverConfigWrite(config).ok).toBe(true);
+  });
+
+  it("only runs once every item parsed, so its indices are the body's own", () => {
+    // A bad cap on restriction 0 is refused by itself; the overlap on
+    // restriction 1 is not reported in the same answer (review item 17).
+    const config = withRules(
+      rule("r-1", "Bruno", [{ ...cap("Sun.BGV", "<="), op: "!=" as RestrictionCap["op"] }]),
+      rule("r-2", "Ana", [cap("Sun.Lead", "=="), cap("Sun.Lead", "==")]),
+    );
+    expect(refusedAt(config)).toEqual(["restrictions[0].caps[0].op"]);
+  });
+
+  it("normalises the way the parser does, so client and route agree on a raw body", () => {
+    // Inner whitespace and NFC are `normalizeLabel`'s; case and trim are the
+    // rule-name criterion's (`rulePersonNamesMember`).
+    const config = withRules(
+      rule("r-1", "Ana  Karen", [cap(" Sun.Lead ", "==")]),
+      rule("r-2", "ana karen", [cap("Sun.Lead", "==")]),
+    );
+    expect(exactCapOverlaps(config)).toHaveLength(1);
+    expect(refusedAt(config)).toEqual(["restrictions[1].caps[0]:exact_overlap"]);
+  });
+
+  it("no existing fixture of this file and not DEFAULT_SOLVER_CONFIG overlaps", () => {
+    for (const c of [fullConfig(), FROZEN_CONFIG, DEFAULT_SOLVER_CONFIG]) {
+      expect(exactCapOverlaps(c)).toEqual([]);
+      expect(parseSolverConfigWrite(c).ok).toBe(true);
+    }
+  });
+
+  it("DEFAULT_SOLVER_CONFIG is unchanged by C3: no restriction carries the cadence (§6.9)", () => {
+    expect(DEFAULT_SOLVER_CONFIG.restrictions.filter((r) => r.sundayCadence !== undefined)).toEqual([]);
   });
 });

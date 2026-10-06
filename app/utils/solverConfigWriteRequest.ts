@@ -35,13 +35,18 @@
 // adds, and refusing to save because the client is newer helps nobody.
 
 import { normalizeLabel } from "./normalizeLabel";
-import type {
-  ConflictRule,
-  PersonRestriction,
-  PresenceRule,
-  RestrictionCap,
-  SolverConfig,
-  WeekExclusion,
+// A RUNTIME import since C3: `rolesOfPattern` is the ONE solver-synced pattern →
+// role map (`patternRolesSync.test.ts`). `plannerModel` is neutral — no
+// "use client", no `server-only` — and does not import this module, so the
+// route, the seed script (`npx tsx`) and the client all load it.
+import {
+  rolesOfPattern,
+  type ConflictRule,
+  type PersonRestriction,
+  type PresenceRule,
+  type RestrictionCap,
+  type SolverConfig,
+  type WeekExclusion,
 } from "@/app/components/admin/plannerModel";
 
 /**
@@ -266,6 +271,17 @@ export function parseSolverConfigWrite(body: unknown): ParsedSolverConfigWrite {
 
   if (issues.length) return { ok: false, issues };
 
+  // Parent A38: one exact count per person per role. Run ONLY after the early
+  // return above: every refused item pushes an issue there, so past this line no
+  // item was dropped and `restrictions[i].caps[j]` are the BODY's own indices —
+  // the ones the client maps the refusal back through.
+  const overlapIssues: string[] = [];
+  for (const o of exactCapOverlaps({ restrictions })) {
+    const path = `restrictions[${o.later.restriction}].caps[${o.later.cap}]:exact_overlap`;
+    if (!overlapIssues.includes(path)) overlapIssues.push(path);
+  }
+  if (overlapIssues.length) return { ok: false, issues: overlapIssues };
+
   const config: SolverConfig = {
     sundayLeads: stringArray(body.sundayLeads),
     saturdayLeads: stringArray(body.saturdayLeads),
@@ -275,6 +291,61 @@ export function parseSolverConfigWrite(body: unknown): ParsedSolverConfigWrite {
     presence,
   };
   return { ok: true, value: { config, fields: solverConfigFields(config) } };
+}
+
+/** A cap's position in a config, in document order (C3 §7 item 3). */
+export type CapRef = { restriction: number; cap: number };
+
+/** Two `==` caps that fix a common role for one person (parent A38). */
+export interface ExactCapOverlap {
+  /** The earlier cap of the pair, in document order. */
+  first: CapRef;
+  /** The later cap — the one the parser's issue names. */
+  later: CapRef;
+  /** The earlier restriction's `person`, as written. */
+  person: string;
+  /** The common role keys, in `rolesOfPattern`'s order. */
+  roles: string[];
+}
+
+/**
+ * Every pair of `==` caps whose `rolesOfPattern` sets intersect — on one
+ * restriction, or on two whose `person` texts are equal case-insensitively after
+ * trimming (the rule-name criterion, `rulePersonNamesMember`). Pairs are ordered
+ * by their later cap, then their earlier one. Value, `relative` and `relOffset`
+ * play no part, and `<=`/`>=` caps never pair.
+ *
+ * Shared by the parser (which refuses each `later` once), the rule form, the
+ * panel and the client's refusal mapping, so the form's check and the route's
+ * refusal cannot disagree. Person and pattern go through `normalizeLabel` first
+ * — the parser stores them that way — so a raw on-screen config and the parsed
+ * body give the same pairs.
+ *
+ * Sees `person` TEXT only: two spellings of one member, and an overlap on
+ * `Sat.Choir` alone (not one of the five keys), are C2's to refuse by member id
+ * at build time (C3 §6.2).
+ */
+export function exactCapOverlaps(config: Pick<SolverConfig, "restrictions">): ExactCapOverlap[] {
+  const exact: Array<{ ref: CapRef; key: string; person: string; roles: string[] }> = [];
+  (config.restrictions ?? []).forEach((r, ri) => {
+    const name = normalizeLabel(r.person);
+    if (name === null) return;
+    (r.caps ?? []).forEach((c, ci) => {
+      if (c.op !== "==") return;
+      const roles: string[] = rolesOfPattern(normalizeLabel(c.pattern) ?? "");
+      if (roles.length === 0) return;
+      exact.push({ ref: { restriction: ri, cap: ci }, key: name.toLowerCase(), person: r.person, roles });
+    });
+  });
+  const out: ExactCapOverlap[] = [];
+  for (let j = 1; j < exact.length; j++) {
+    for (let i = 0; i < j; i++) {
+      if (exact[i].key !== exact[j].key) continue;
+      const roles = exact[i].roles.filter((role) => exact[j].roles.includes(role));
+      if (roles.length) out.push({ first: exact[i].ref, later: exact[j].ref, person: exact[i].person, roles });
+    }
+  }
+  return out;
 }
 
 /**
