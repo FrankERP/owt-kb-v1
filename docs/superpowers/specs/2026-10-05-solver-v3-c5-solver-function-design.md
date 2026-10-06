@@ -1,14 +1,14 @@
 # Solver v3, child C5: the `owt-solver-v3` function — design spec
 
-**Date:** 2026-10-05 · **Status:** `DRAFT`, aligned to the parent's amendments A1–A39 (A27–A39 applied 2026-10-05) · **Parent:**
+**Date:** 2026-10-05 · **Status:** `DRAFT`, aligned to the parent's amendments A1–A40 (A27–A40 applied 2026-10-05; A40 governs C6's confirm and asks nothing of the function) · **Parent:**
 [`2026-10-05-solver-v3-fairness-design.md`](2026-10-05-solver-v3-fairness-design.md) (`APPROVED` by
-Frank; amendments A1–A39 in its §3 win over older clause wording). This child owns parent §5 (S1–S6),
+Frank; amendments A1–A40 in its §3 win over older clause wording). This child owns parent §5 (S1–S6),
 the solver half of F1–F15, E1, and the new ADR for the function and its stages (A31). It owns no part
 of the engine switch (A1).
 
 **Risk tier: standard** (parent §11). The function is deployed separately, with its own source, trigger
 and test job, and nothing calls it until C6 routes to it behind the effective engine (C1's constant,
-C2's Preview-only resolver, A1) and C7 flips that constant. It writes nothing: no Sanity, no Vercel, no browser state. Its only security surface is the
+C2's Preview-only resolver, C2 IF2-14, A1) and C7 flips that constant. It writes nothing: no Sanity, no Vercel, no browser state. Its only security surface is the
 API-key guard, a copy of v2's fail-closed guard, on a function Frank creates and grants by hand; no
 agent handles the key's value. Its **contract feeds critical work** (C6's confirm, U4), so the request
 and response below are written to be implemented exactly. A change to them after review goes back
@@ -18,10 +18,21 @@ through review, together with every child that consumes them (C2, C6, C7).
 Module splits, helper names, loop shapes and line numbers belong to the implementation plan. Existing
 files are cited as evidence only.
 
+**C2's interfaces are cited, never copied.** C2 §7 is the single source of every type, signature,
+route shape, code list, builder and schema C2 provides, under stable IDs `IF2-1` … `IF2-29`. This
+spec names those IDs (and, where it must, one field of one: «IF2-8 `people[].firstRecordedIn`») and
+states only what C5 itself adds: its own wire contract (§5, §8), its own use of C2's items and its own
+obligations. If anything below seems to restate a C2 shape and the two differ, C2's item wins and the
+text here is a C5 defect. C2's behaviour rules (LG-, CAD-, RES-, FX- rows) are cited by row ID.
+
 **Names.** This repository is public. People are described by their role in the policy («the cadence
 members», «the fixed-count lead», «the presence pair», «an exempt lead», «the Saturday-only support
 singers»), never by name. Examples use fictitious people (Ana, Bruno, Carla…). No member name, alias or
 per-person figure from the private evidence appears here, and none may appear in the v3 code or tests.
+**Identifiers count as names (C5-17).** A rule `id`, a `P:` line key, a stage id that embeds one, a
+person `id` and a service `id` may each carry a member's name on the real run: production's presence and
+conflict keys are seed-era strings built from first names. They travel on the private wire and nowhere
+else; every log, printout and recorded aggregate uses stage public labels, codes and counts (§11.2).
 
 ## Original request
 
@@ -133,16 +144,16 @@ per-person figure from the private evidence appears here, and none may appear in
 
 - **v2.** Nothing changes in `gcf/`, v2's tests, its golden schedules, its trigger or its manual script
   (parent §10, E1).
-- **The engine switch (A1).** C1's `SOLVER_ENGINE` constant; C2's effective-engine resolver, the
+- **The engine switch (A1).** C1's `SOLVER_ENGINE` constant; C2's effective-engine resolver (IF2-14), the
   Preview-only `OWT_SOLVER_ENGINE` override and its `docs/SECRETS.md` entry; C6's `409
   solver_version_mismatch`. The function never reads an engine: it answers `contract: 3` or refuses.
 - **C6.** The route, the client, `OWT_SOLVER_V3_URL` (documented by C6 DOC-1, set on Vercel by C7), the Spanish copy, the request
   builder (including `prior`, A15), the past-month refusal (A24) and the «Equidad» panel. The function
   never reads the clock, so it cannot tell a past month from a future one.
 - **The other children:**
-  - C2: the ledger over stored data, the single v3 eligibility resolver (A7), the X1 cadence-state
-    function, authorship of the golden fixture, the eligibility record (`fairnessMonth.YYYY-MM`, A2)
-    and the one display formatter (A17).
+  - C2: the ledger over stored data (IF2-10), the single v3 eligibility resolver (IF2-15, A7), the X1
+    cadence-state function (IF2-12), authorship of the golden fixture (IF2-29), the eligibility
+    record (IF2-2, A2) and the one display formatter (IF2-13, A17).
   - C4: the record's reconstruction.
   - C1: the toggle.
   - C3: the cadence setting.
@@ -154,27 +165,28 @@ per-person figure from the private evidence appears here, and none may appear in
 ## 4. Decisions
 
 The parent's decisions are inherited and not reopened: D1–D15, X1–X4, F1–F15, S1–S6, E1 and the
-amendments A1–A39. The decisions below are this spec's readings where a contract needs more precision
+amendments A1–A40. The decisions below are this spec's readings where a contract needs more precision
 than the parent gives. Where an amendment settled the point, the «Why» column cites it.
 
 | ID | Decision | Why | Tradeoff |
 |---|---|---|---|
 | C5-1 | Each service has an opaque `id`. A pin carries the service `id` and its `date`, and the two must agree. | A15. Two services can share a date: a Sunday-dated counted special next to the Sunday service, or two specials on one day (ADR-0011). | One more field per pin. |
-| C5-2 | **Pattern exclusions (`!in`) and week exclusions arrive inside eligibility.** C2's resolver folds them into the record, so they are hard, except on a pinned seat's own row. The soft rule families are counts, pairs, presence, consecutive and the mandatory lead. There is no `week_exclusion` rule kind. | A15. v2 never made exclusions soft (ADR-0041 lists six soft families). C2 stores them as date blocks (rule-excluded, outside the population). F12: «a seat only for someone eligible and available (or pinned)». | An admin cannot have a «Sem 3» exclusion «broken» to save another rule. v2 did not allow that either. |
+| C5-2 | **Pattern exclusions (`!in`) and week exclusions arrive inside eligibility.** C2's resolver (IF2-15) folds them into the record (IF2-2 `people[].blocks`), so they are hard, except on a pinned seat's own row. The soft rule families are counts, pairs, presence, consecutive and the mandatory lead. There is no `week_exclusion` rule kind. | A15. v2 never made exclusions soft (ADR-0041 lists six soft families). C2 stores them as date blocks (rule-excluded, outside the population). F12: «a seat only for someone eligible and available (or pinned)». | An admin cannot have a «Sem 3» exclusion «broken» to save another rule. v2 did not allow that either. |
 | C5-3 | **Protections (F7, F9, F10, F11) and fairness lines see counted services only.** Rules (counts, pairs, presence, consecutive, mandatory lead) apply to every weekend service in the request, counted or not, and never to a special. | A13. X1 defines «led» over counted Sundays; ADR-0010 keeps rules off specials. | Two Sunday leads in one month are not a cap miss when one of those Sundays is uncounted. |
-| C5-4 | **Rule role sets and count values arrive resolved.** A rule carries `roles` (the six role keys, expanded by C2's one v3 pattern expansion) and an integer `value`. A relative cap is already resolved against its month's full Sunday count by the caller, using C2's one per-month count resolution; a result below 0 is sent as 0 and noticed by the caller (C6 RQ-5). v3 has no pattern parser, never sees `{weeks-N}`, and refuses a negative value. | A15. One expansion and one resolution, the ones the record stores, mean that request and record cannot disagree. | — |
-| C5-5 | The cadence state on the wire has three values: `on`, `off` and `out`. `out` is X1's «off» with no compensation Saturday: she is not eligible for Sun.Lead that month (C2's CAD-1 reason `not_eligible`). | A14. From resolved eligibility alone, the solver cannot tell «not in the pool» from «unavailable every Sunday», and only the second earns the Saturday. | The caller maps CAD-1's reason to `out`. |
+| C5-4 | **Rule role sets and count values arrive resolved.** A rule carries `roles` (role keys, expanded by C2's one v3 pattern expansion, IF2-16) and an integer `value`. A relative cap is already resolved against its month's full Sunday count by the caller, using C2's one per-month count resolution (IF2-17); a result below 0 is sent as 0 and noticed by the caller (C6 RQ-5). v3 has no pattern parser, never sees `{weeks-N}`, and refuses a negative value. | A15. One expansion and one resolution, the ones the record stores, mean that request and record cannot disagree. | — |
+| C5-5 | The cadence state on the wire has three values: `on`, `off` and `out`. `out` is X1's «off» with no compensation Saturday: she is not eligible for Sun.Lead that month (IF2-12's reason `not_eligible`, CAD-1). | A14. From resolved eligibility alone, the solver cannot tell «not in the pool» from «unavailable every Sunday», and only the second earns the Saturday. | The caller maps CAD-1's reason to `out`. |
 | C5-6 | The mandatory lead stays one of ADR-0041's soft families, counted in the rules stage. Fill's weights still rank Lead first. A `solve` weekend service where nobody is eligible or pinned for Lead has no mandatory-lead instance. Its Lead seats come back unfilled with reason `no_possible_lead` (S2), not as a violation. | A19. F15 keeps ADR-0041's mechanism unchanged. | A leaderless service and a broken cap cost one violation each, as in ADR-0041. |
 | C5-7 | The report gives two shares per person and line. `planned` is F13's: fixed before the solve and used by the objective. `share` is F14's: the shared ledger formula applied to the returned assignment. Then `after = carried + share − received`. | A19. `after` («queda») must equal what C2's ledger will compute for the same services. The gap between `planned` and `share` is exactly what F13 measures. | Two numbers per line. C6 chooses which to show. |
-| C5-8 | Each person-line `share` is computed in exact rationals and rounded **once** to integer hundredths, half away from zero. Nothing is rounded per service. `received` and `pinned` are exact (100 × a seat count). A balance is **never rounded on its own**: `after` is the identity `carried + share − received` over the wire hundredths, as C2's `balance` is `share − received` (LG-13, A39); the two differ from a separately rounded exact balance only at a half. The two display figures, `share` and `after`, also cross the wire as integer **tenths**, each rounded once, half away from zero, from the same rational the hundredths come from — never from the hundredths (§8.2). For `share` that rational is exact. For `after` it is the request's `carried` (already hundredths, §5.3) plus the exact `share` minus `received` (A32: «Queda» may differ from «Saldo» by 0.1 at a tie, accepted). The same holds for each person's display **tabs** (DL, SL, BGV with its `P:*` sub-lines folded, CORO, TOTAL; C2 LG-14's folds): their figures are rounded once from the exact sum of their lines, never summed from the lines' hundredths or tenths (§8.2). **Seat counts** cross the wire as integers beside the hundredths, per line and per tab: `seats` (= `received` ÷ 100) and `pinned_seats` (= `pinned` ÷ 100), emitted by the function so no consumer divides (A39). The function never formats a figure: the panel writes C5's tenths through C2's single formatter, which takes tenths only (A17, C2 UI-4), and renders seat counts as emitted. | A17, A32, A39. Identical to C2's LG-13, hundredths and tenths, so both languages produce the same bits. C2 UI-4 forbids deriving tenths from hundredths under `app/**`, and C6 EQ-5 forbids the panel to sum or divide, so without C5's tenths and seat counts, per line and per tab, «Queda», «En este plan» and «Los pines tomaron {n} lugares» would have no compliant input on any tab, the folded BGV and Total included (C6 S-11, S-12). C2 solves the same problem for its own figures with `tabs` and `Figures.seats` (C2 §7, LG-13). | Four more integers per line, and one small object per tab. |
+| C5-8 | Each person-line `share` is computed in exact rationals and rounded **once** to integer hundredths, half away from zero. Nothing is rounded per service. `received` and `pinned` are exact (100 × a seat count). A balance is **never rounded on its own**: `after` is the identity `carried + share − received` over the wire hundredths, as C2's `balance` is `share − received` (LG-13, A39); the two differ from a separately rounded exact balance only at a half. The two display figures, `share` and `after`, also cross the wire as integer **tenths**, each rounded once, half away from zero, from the same rational the hundredths come from — never from the hundredths (§8.2). For `share` that rational is exact. For `after` it is the request's `carried` (already hundredths, §5.3) plus the exact `share` minus `received` (A32: «Queda» may differ from «Saldo» by 0.1 at a tie, accepted). The same holds for each person's display **tabs** (IF2-1 `TabKey` and its folds, LG-14): their figures are rounded once from the exact sum of their lines, never summed from the lines' hundredths or tenths (§8.2). **Seat counts** cross the wire as integers beside the hundredths, per line and per tab: `seats` (= `received` ÷ 100) and `pinned_seats` (= `pinned` ÷ 100), emitted by the function so no consumer divides (A39). The function never formats a figure: the panel writes C5's tenths through C2's single formatter (IF2-13, which takes tenths only; A17, C2 UI-4), and renders seat counts as emitted. | A17, A32, A39. Identical to C2's LG-13, hundredths and tenths, so both languages produce the same bits. C2 UI-4 forbids deriving tenths from hundredths under `app/**`, and C6 EQ-5 forbids the panel to sum or divide, so without C5's tenths and seat counts, per line and per tab, «Queda», «En este plan» and «Los pines tomaron {n} lugares» would have no compliant input on any tab, the folded BGV and Total included (C6 S-11, S-12). C2 solves the same problem for its own figures with IF2-8's `tabs` and `Figures.seats` (LG-13). | Four more integers per line, and one small object per tab. |
 | C5-9 | **Placing a monthly set-aside in the plan.** First subtract the person's pinned seats that already meet it. Spread the remainder evenly over her `solve` services in that month where she is eligible for a matching role and holds no pin. Within one service, split it equally among her eligible matching roles. | F5's «spread evenly» does not say how pins interact. Spreading over `fixed` services, where no seat can be given, or counting a pin twice would misstate the pool. | One more rule for C6 to explain. |
-| C5-10 | **The realised formula is C2's.** The populations, presence seat, set-asides, sub-lines and floor seat in the report (and in the model's received count) follow C2's LG-4 to LG-11, translated into request terms (§6). Translation: a pin counts as a stored seat; `eligible` replaces «in ∧ available ∧ not rule-excluded»; `count ==` rules replace exact statuses. Where C2's text and an amendment differ, the amendment wins on both sides (today: the floor skip, C5-15, A33). **One seat per person per service** (§6.6, C2 LG-4): where the formula's input holds one person more than once among a service's voice seats, the seat ranked first by Lead > BGV > Choir is hers and every other is a `second_seat` set-aside, checked first — it credits nobody, owes nobody, leaves the pool as it would be without it and moves no population. That is exactly what C6 sends (ST-6) and what C5 can receive (§5.5 `pin_conflict`). | F14 and A18 require one formula, and the golden fixture (C2's) is its guard. A double seat C5 never receives must still be read the same way by both formulas, or «Queda» and the next ledger read differ for that service. | A later change to C2's LG rules is a change to C5. |
+| C5-10 | **The realised formula is C2's.** The populations, presence seat, set-asides, sub-lines and floor seat in the report (and in the model's received count) follow C2's LG-1 to LG-11, translated into request terms (§6). LG-1 to LG-3 decide what reaches the formula: every copy of a weekend type duplicated on one stored date is dropped (LG-1); a service counts by `coalesce(countsForFairness, _type != "special_role")` on the raw field, an absent field included, and an uncounted service contributes nothing (LG-2); only recorded months before the target contribute, a month without a record contributes nothing, and the target and later months are ignored (LG-3). In production the caller has already applied them — `carried` is C2's ledger output, `prior` arrives with LG-1 applied (C6 RQ-7) and `counts` arrives resolved, the function's half of LG-2 being C5-3 — so the deployed function gains no rule from them; the golden test's adapter applies all three itself (§6.6). Translation: a pin counts as a stored seat; `eligible` replaces «in ∧ available ∧ not rule-excluded»; `count ==` rules replace exact statuses. Where C2's text and an amendment differ, the amendment wins on both sides (today: the floor skip, C5-15, A33). **The presence seat is never a fixed seat** (§6.3, C2 LG-7): a seat whose holder is «exact» for its role key, or a DL-mapped seat of a `cadence` holder, is set aside `exact` or `cadence`, cancels the floor (C5-15) and credits no sub-line, whether or not a presence rule covers it. **One seat per person per service** (§6.6, C2 LG-4): where the formula's input holds one person more than once among a service's voice seats, the seat ranked first by Lead > BGV > Choir is hers and every other is a `second_seat` set-aside, checked first — it credits nobody, owes nobody, leaves the pool as it would be without it and moves no population. That is exactly what C6 sends (ST-6) and what C5 can receive (§5.5 `pin_conflict`). | F14 and A18 require one formula, and the golden fixture (C2's, IF2-29) is its guard. A double seat C5 never receives must still be read the same way by both formulas, or «Queda» and the next ledger read differ for that service. | A later change to C2's LG rules is a change to C5. |
 | C5-11 | F10 (the DL floor) is read per month. For each horizon month m in which a DL-line person is available, require her Sunday leads in m−1 plus her Sunday leads in m to be at least 1. The pair is skipped when m−1 is before her first DL-eligible month (`dl_since`, A15), or when m−1 is the stored previous month and has no stored services. | This follows F10's sentence. The prototype also demanded a lead in m1 when the person was available only in m1 of an (m1, m2) pair. | Differs from the prototype in that one case. |
 | C5-12 | Capacity is computed once per run, over the run's months, for the people whose floor the previous month has not already met (§6.8). | A19. | — |
 | C5-13 | The pin cap is **250**. A request over it is refused. | A two-month board with 5 Sundays a month and a Saturday every week has 130 voice seats. Counted specials add their own seats as pins. 250 bounds how far rows can grow and still leaves headroom. | — |
 | C5-14 | Reuse `OWT_SOLVER_API_KEY` (parent Q5 default). | Same trust boundary, same caller. A second key would double every rotation without a separation that matters: a leaked key buys CPU on either function, never data. | One rotation now redeploys two functions (§11.6). |
 | C5-15 | **The floor skip is A12's and A33's: only a fixed seat, exact or cadence.** Realised: no floor set-aside in m for a person who holds, in m, a seat set aside for reason (a) `exact` or (b) `cadence` (§6.3). In the plan, where nothing is held yet, «holds a fixed seat» means: her clamped `==` value is ≥ 1 for some rule in m, or her cadence state in m is `on`, or she holds a pinned seat in m set aside for (a) or (b). A seat set aside as `outside_population` does not skip the floor. | A12 names «exact or cadence»; A33 confirms that a pinned seat outside the population does not cancel the floor. The plan has no seats before the solve, so it reads the monthly set-asides that will produce them. | A floor person whose `on` Sunday is missed has a different floor status in the plan and the report (measured, §12.4). |
 | C5-16 | **`presence` and `pair` may be scoped to one month.** Each accepts an optional `month`, as `count` has. A month-scoped object applies only at that month's services; an object without `month` applies across the horizon. | Parent S1 («rules … scoped per month») and A6: a record-bound month carries its own presence snapshot, which may differ from the on-screen rule an unrecorded month uses (C6 sibling issue S-3). | One more validation rule (§5.4). |
+| C5-17 | **Every caller-supplied identifier is treated as name-bearing.** Rule ids, `P:` line keys, stage ids that embed them (`balance_max:P:<id>`, `balance_sq:P:<id>`), person ids and service ids travel on the wire, which is private (C6 renders a rule id only through its label map, C6 RQ-5), and nowhere else. Logs, stdout, the checker's output, the harness's `summary.json`, PR descriptions, the review log and the cutover record carry stage **public labels** (§11.2), codes and counts only — never one of those identifiers. | Production's presence key and every conflict key are seed-era strings of the `d-<first name>-<first name>` form (the pattern of the `d-` literals at `app/components/admin/solverConfigDefaults.ts:89-96`; the private production config holds the same pattern), and so are some restriction and cap keys. Only keys the planner mints are opaque (`uid()`, `MonthGenerator.tsx:388`, used at `:675`, `:873`, `:936`, `:994`), and editing an item keeps its old key (`initialValues?.id ?? uid()`). C6 sends a presence key byte for byte and keeps a compliant count or pair key (C6 RQ-5 (a), (b)), so these keys reach `violations[].rule`, the `P:` stage ids and `carried`. Re-keying the config would be a production write outside C5, and would not cover the next hand-written key. The rule holds whatever any sibling decides about keys. | Aggregates read `balance_max:P#1`, not the rule's key; whoever needs the id maps it on the private side. |
 
 ## 5. Request contract (S1) — `contract: 3`
 
@@ -184,8 +196,8 @@ One JSON object.
   default.
 - All fairness quantities are integers in hundredths of a seat, and positive means owed («le deben»).
 - Dates are `YYYY-MM-DD` on the CDMX calendar; months are `YYYY-MM`.
-- **Role keys** are the six of C2's record: `Sun.Lead`, `Sat.Lead`, `Sun.BGV`, `Sat.BGV`,
-  `Sun.Choir` and `Sat.Choir`.
+- **Role keys** are C2 IF2-1's `RoleKey` values, the six of the record; line keys are IF2-1's
+  `LineKey` (with the request-side reading of `P:` in §5.3). C5 adds no key of its own.
 
 ### 5.1 Envelope
 
@@ -216,12 +228,11 @@ One JSON object.
 | `counts` | bool | C1's effective `countsForFairness`. A `special` must have `counts: true`: uncounted specials are never sent (U3) |
 | `seats` | `{ "Lead": n, "BGV": n, "Choir": n }`, each 0–6 | Required when `fixed` is false; ignored when it is true. A non-fixed `saturday` must have no `Choir` key, or a value of 0: v2 never fills Saturday Choir |
 
-**Line and role-key map.** This is the one definition (F1, D14, C2's LG-4):
-
-| Service | Lead | BGV | Choir |
-|---|---|---|---|
-| `sunday`, or a `special` dated on a Sunday | DL / `Sun.Lead` | BGV / `Sun.BGV` | CORO / `Sun.Choir` |
-| `saturday`, or a `special` on any other day | SL / `Sat.Lead` | BGV / `Sat.BGV` | CORO / `Sat.Choir` |
+**Role key and line of a seat.** The role → line map is C2 IF2-1's, and a stored seat's role key
+(a special's by day class) is C2 LG-4's; C5 defines neither. C5's only addition is the reading in
+request terms: a `sunday` service, or a `special` dated on a Sunday, takes the `Sun.*` key of its
+seat's role (`Lead`, `BGV`, `Choir`); a `saturday` service, or a `special` on any other day, takes
+the `Sat.*` key. The line then follows from IF2-1.
 
 Rule instances never include a special (C5-3). For a special, the role key is used only for
 population exits. «DL-mapped lead» means a Lead seat whose line is DL; «SL-mapped lead» means one whose
@@ -234,11 +245,11 @@ line is SL.
 | `id` | string, 1–64 chars | The stable member id (`teamMembers._id`). Unique |
 | `name` | string | For display only. Never used in logic, never logged |
 | `exempt` | bool, default false | «Exenta». Removes the person from the voice floor and from its floor seat, and nothing else: every line still counts her (F8, D13) |
-| `eligibility` | `{ "<service id>": ["Lead" \| "BGV" \| "Choir", …] }` | The roles the person may hold at each service. **Already resolved by the caller from C2's single v3 eligibility resolver (A7)**, or from the month's record when the record binds (A6). That source covers Tipo, pools, `!in` patterns, week exclusions, and roles with status `out` (a resolved count of 0 included); a role is eligible when its status is `in` or `exact` (A3), by the day class of the service (A13). Two more inputs are folded in: availability on that date (record snapshot ∪ live `unavailableDates`, F4) and, for a special, the eligibility of its D14 line. Every key must be a request service |
-| `carried` | `{ line key: int }` | Carried balance per line, from C2's 3-month window (F2–F3). Positive means owed. Keys are `DL`, `SL`, `BGV`, `CORO` and `P:<presence rule id>`; a missing key means 0. Each value must satisfy \|v\| ≤ 10000 (input validation, not a policy cap). A `P:` key with no matching presence rule in the request is accepted and reported as a carried-only line (§8.2). Any other key is refused |
-| `cadence` | `{ "YYYY-MM": "on" \| "off" \| "out" }` | Present if and only if the person is «Mes por medio» (C3). It must have exactly one entry per request month, from C2's X1 function as mapped by C5-5 (F7, A14). A person with `cadence` who also has an `==` count rule containing `Sun.Lead` is refused (`invalid_request`, with `field` naming her entry). C6 refuses the same case first, naming the person (A11) |
-| `dl_since` | `YYYY-MM` or `null` | The person's first recorded DL eligibility (A15): the first month whose eligibility marks her `Sun.Lead` «in». C6 takes C2's `firstRecordedIn["Sun.Lead"]`, or the first unrecorded horizon month whose source marks her «in» (C6 RQ-4). `null` means never. Used only for the F10 skip |
-| `prev_dl_leads` | int ≥ 0 | Her Sunday leads in the month before the run (A15): the DL-mapped lead seats she held at counted services in `prior.month` (F10). C6 counts C2's `countedSundayLeads` entries in that month (C6 RQ-4) |
+| `eligibility` | `{ "<service id>": ["Lead" \| "BGV" \| "Choir", …] }` | The roles the person may hold at each service. **Already resolved by the caller from the body of C2's single v3 eligibility resolver (IF2-15, A7)**, or from the month's record when it binds (IF2-8 `horizon[].record`, an IF2-3, iff `horizon[].recordBinds`; A6). That source covers Tipo, pools, `!in` patterns, week exclusions, and roles with status `out` (a resolved count of 0 included); a role is eligible when its status is `in` or `exact` (A3), by the day class of the service (A13). Two more inputs are folded in: availability on that date (record snapshot ∪ live `unavailableDates`, F4) and, for a special, the eligibility of its D14 line. Every key must be a request service |
+| `carried` | `{ line key: int }` | Carried balance per line, as C6 copies it from IF2-8 `people[].window[<line>].balance` (the 3-month window, F2–F3), in IF2-1's units and sign. Keys are IF2-1 `LineKey`s; on this wire a `P:` key is `P:` + a request presence rule's `id` (§5.4). C6 sends a presence rule's `id` as the month source's `ruleKey` byte for byte, never minted (C6 RQ-5 (a)), so IF2-8's `P:<ruleKey>` keys carry over unchanged; a missing key means 0. Each value must satisfy \|v\| ≤ 10000 (input validation, not a policy cap). A `P:` key with no matching presence rule in the request is accepted and reported as a carried-only line (§8.2). Any other key is refused |
+| `cadence` | `{ "YYYY-MM": "on" \| "off" \| "out" }` | Present if and only if the person is «Mes por medio» (C3). It must have exactly one entry per request month, IF2-12's output as mapped by C5-5 (F7, A14). A person with `cadence` who also has an `==` count rule containing `Sun.Lead` is refused (`invalid_request`, with `field` naming her entry). C6 refuses the same case first, naming the person (A11) |
+| `dl_since` | `YYYY-MM` or `null` | The person's first recorded DL eligibility (A15): the first month whose eligibility marks her `Sun.Lead` «in». C6 takes IF2-8 `people[].firstRecordedIn["Sun.Lead"]`, or the first unrecorded horizon month whose source marks her «in» (C6 RQ-4). `null` means never. Used only for the F10 skip |
+| `prev_dl_leads` | int ≥ 0 | Her Sunday leads in the month before the run (A15): the DL-mapped lead seats she held at counted services in `prior.month` (F10). C6 counts the IF2-8 `people[].countedSundayLeads` entries in that month (C6 RQ-4) |
 
 ### 5.4 Rules
 
@@ -255,7 +266,7 @@ month)` is unique; an `id` that mixes the two is refused. `count` always carries
 |---|---|---|
 | `count` | `person`, `roles`, `op` (`==`, `<=`, `>=`), `month`, `value` (integer ≥ 0) | One object per rule per month; `month` must be a request month, and `(id, month)` is unique. **Instance** (`id`, `month`): the person's seats in `roles` at the weekend services of that month (fixed and non-fixed alike), compared with `value`. **At most one exact count per role key (A38):** in one month, no two of a person's `==` rules may list a common role key; such a request is refused (§5.8). **Exact status:** in that month, role key k is «exact» for the person if and only if her `==` rule listing k has a value ≥ 1 (C2's REC-3/RES-3) |
 | `pair` | `persons` (exactly 2), `roles`, `month`? | Applies across the whole horizon, or only to the services of `month` when it is present (C5-16). **Instance:** each weekend service in scope where both people have a term. At most one of them holds a role in `roles` there |
-| `presence` | `persons` (≥ 1, ordered), `roles`, `exclusive` (bool), `month`? | Applies across the whole horizon, or only to the services of `month` when it is present (C5-16). `exclusive` is C2's RES-6 value, copied as is. **Instance:** each weekend service in scope with a role key in `roles`, where at least one member holds such a role. This is per service, not per week as in v2's `each_week`, because F5 and F6 are per service. `P:<id>` is the rule's sub-line: one line per `id`, whatever its scoping; at each service its members, roles and exclusivity are those of the object in scope there |
+| `presence` | `persons` (≥ 1, ordered), `roles`, `exclusive` (bool), `month`? | Applies across the whole horizon, or only to the services of `month` when it is present (C5-16). `exclusive` is C2's RES-6 value (the month source's `presence[].exclusive`, IF2-15's body or IF2-3), copied as is. **Instance:** each weekend service in scope with a role key in `roles`, where at least one member holds such a role. This is per service, not per week as in v2's `each_week`, because F5 and F6 are per service. `P:<id>` is the rule's sub-line: one line per `id`, whatever its scoping; at each service its members, roles and exclusivity are those of the object in scope there |
 | `consecutive` | `person`, `roles` | Applies across the whole horizon plus `prior.services`. A weekend is the Sunday on or after the service's date. **Instance:** each pair of weekends 7 days apart where the person has a term in both. Broken if and only if she holds a matching seat in both. Today's UI does not emit this rule; it is here because S1 names it |
 
 ### 5.5 Pins
@@ -404,14 +415,26 @@ populations.
 
 ### 6.3 Presence seat, set-asides and pools (F5, LG-7, LG-9, LG-10)
 
-**The presence seat π(ρ, s)** is the first seat at s that meets both conditions:
+**The presence seat π(ρ, s)** is the first seat at s that meets all three conditions (C2 LG-7):
 
-- its role key is in ρ's roles;
-- its holder is a member of ρ.
+- its role key k is in ρ's roles;
+- its holder h is a member of ρ;
+- it is **not a fixed seat**: k is not «exact» for h in the month of s (§5.4), and the seat is not a
+  DL-mapped seat of a holder with `cadence`.
 
-Seats are ordered Lead > BGV > Choir, then by holder order. In both the response and the model, holder
-order is codepoint order of member ids. Rules are taken in codepoint order of `id`, and a seat serves
-at most one rule. If π's holder is not in Q(ρ, s), π is set aside and the sub-line pool at s is 0.
+A fixed seat is decided before the solve (F6) and is A12's «fixed seat», so it is never a presence
+seat, whether or not a presence rule covers it: it is set aside `exact` or `cadence` by (a) or (b)
+below, cancels the floor (§6.4, C5-15) and credits no sub-line; the next candidate seat, if any, is
+π. Seats are ordered Lead > BGV > Choir, then by holder order. In both the response and the model,
+holder order is codepoint order of member ids. Rules are taken in codepoint order of `id`, and a seat
+serves at most one rule. If π's holder is not in Q(ρ, s), π is set aside and the sub-line pool at s
+is 0.
+
+This definition is the realised one (the report and the shared function of §6.6), which the model's
+received count mirrors (§6.6); exact status and `cadence` are request facts, so the model applies it
+to its decision variables directly. It does **not** change the soft `presence` rule instance (§5.4,
+§6.7): a member holding a fixed seat in one of ρ's roles still satisfies that instance. Nor does it
+change the plan's forced presence seat below.
 
 **Set-asides at (s, k), realised.** A seat other than a presence seat is set aside when its holder:
 
@@ -521,9 +544,17 @@ gap with the realised figure is the measured F13 gap (§12.4).
 It runs in two places:
 
 - **In the post-solve report**, on the returned assignment.
-- **In the golden-fixture test**, against `fixtures/fairness/golden.json` (C2's file, read by both
-  suites). A test-side adapter resolves each `ledger` case's records into the function's inputs exactly
-  as C2's LG-5–LG-8 state.
+- **In the golden-fixture test**, against C2's golden fixture (IF2-29, read by both suites). A
+  test-side adapter turns each `ledger` case's input (IF2-10 `LedgerInput`, as IF2-29 types it) into
+  the function's inputs exactly as C2's ledger prepares its own: first IF2-11's seat-keeping step —
+  LG-1 (every copy of a weekend type duplicated on one stored date dropped), LG-2 (a service counts by
+  `coalesce(countsForFairness, _type != "special_role")` on the raw field, an absent field included, so
+  a legacy weekend service counts and a legacy special does not; an uncounted service contributes
+  nothing) and LG-4 (role key by seat array and, at a special, by day class; one kept seat per person
+  per service) — then LG-3's month selection (a month contributes only when it has a record and is
+  before `target`; a month without one contributes nothing and is reported unrecorded; the target and
+  later months are ignored), then LG-5–LG-8's populations. These are test-side obligations: in
+  production the caller has applied LG-1–LG-3 (C5-10).
 
 **The model's received count for a line equals this function's `received` on the same assignment.** In
 particular, the model applies §6.3's presence-seat attribution and §6.4's floor identification to its
@@ -708,14 +739,14 @@ Each entry in `people` is `{ "person", "floor", "lines", "tabs" }`:
   - `received`: 100 × the seats counted in the line;
   - `pinned`: the part of `received` that comes from pins;
   - `seats` and `pinned_seats`: integers of seats, `received` ÷ 100 and `pinned` ÷ 100 (both exact,
-    since `received` and `pinned` are 100 × a seat count), emitted so no consumer divides (A39, the
-    shape of C2's `Figures.seats`). Display counts only: never fairness figures, never fed to a
+    since `received` and `pinned` are 100 × a seat count), emitted so no consumer divides (A39; the
+    counterpart of IF2-8 `Figures.seats`). Display counts only: never fairness figures, never fed to a
     computation;
   - `set_aside`: 100 × the seats she held in the line's services that were set aside;
   - `after`: `carried + share − received`. This is an identity, and a consumer may assert it;
   - `tenths`: `{ "share": int, "after": int }`, the display figures in tenths of a seat, the shape of
-    C2's `Figures.tenths` (A17, C5-8). Each is rounded once by C2 LG-13's tenths rule,
-    tenths = sign(x) · ⌊|x| · 10 + ½⌋, where x is in seats:
+    IF2-8 `Figures.tenths` (A17, C5-8). Each is rounded once by C2 LG-13's tenths rule (half away
+    from zero), where x is in seats:
     - `share`: x is F14's exact rational share (the one `share` is rounded from);
     - `after`: x = `carried`/100 + the exact share − `received`/100, with `carried` as the request
       sent it (A32: it may differ from C2's «Saldo» tenths by 0.1 at a tie, accepted);
@@ -731,11 +762,10 @@ A line appears for a person when any of these holds:
 - she has a carried value for it;
 - she received anything in it.
 
-- **`tabs`:** `{ "DL"?, "SL"?, "BGV"?, "CORO"?, "TOTAL"? }`, the five display tabs of U5, in the key
-  set and folds of C2's `tabs` (C2 §7, LG-14): `DL`, `SL` and `CORO` are their line; `BGV` is the
-  `BGV` line plus every `P:<id>` sub-line (F1, folded for display); `TOTAL` is every line the person
-  has (D3, F1). Total and the folded BGV are not lines and no stage optimises them; they exist only
-  so the panel never sums. Each tab holds:
+- **`tabs`:** an object keyed by IF2-1 `TabKey`, each key optional: the five display tabs of U5,
+  with IF2-1's folds (LG-14; the `P:` sub-lines folded into `BGV` are this request's, §5.3) — the
+  counterpart of IF2-8 `tabs`. Total and the folded BGV are not lines and no stage optimises them;
+  they exist only so the panel never sums. Each tab holds:
   - `carried`, `received` and `pinned`: the exact integer sums of its lines' values (each is already
     exact in hundredths);
   - `seats` and `pinned_seats`: the tab's `received` ÷ 100 and `pinned` ÷ 100, integers, exact (A39).
@@ -868,8 +898,16 @@ handling is keyed by service.
 | Anything else | The solve's result: 200 or 422 |
 | Any unexpected exception | 500 `internal_error` |
 
-The key is read once, at import. Logs carry only `request_id`, months, sizes, stage statuses and
-timings. They never carry names or the request body.
+The key is read once, at import. Logs carry only `request_id`, months, sizes and, per stage, its
+**public label**, status and timings (C5-17). They never carry names, the request body or any
+identifier the caller supplied: no person, service or rule id, no line key, and no stage id that embeds
+one. A stage's public label is its stage id with each `P:<id>` replaced by `P#<n>`, where n is that
+sub-line's 1-based position among the request's distinct presence `id`s in §7.1's order, by first
+appearance; every other stage id (`rules`, `balance_max:DL`, …) is its own public label. A public label
+is a rendering for logs and aggregates, never a wire value: it is not in `codes.json`, and C6 sees no
+new code. A logged failure carries its code only, plus
+`timeout`'s `stage` as a public label and `too_many_pins`'s counts; the parameters that name a person,
+service, field or rule stay in the response.
 
 ### 11.3 Cloud Build
 
@@ -982,17 +1020,27 @@ Every name in the suite is fictitious. It runs from the repo root as
 - The key comparison is constant-time.
 - Unparseable JSON returns `invalid_json`.
 - A 500 carries no stack trace.
+- Identifiers stay off the logs (C5-17): a request whose rule ids (presence, count and pair), `carried`
+  `P:` keys, person ids and service ids each contain a marker string, run once to success and once to a
+  stubbed `timeout` in a `balance_max:P:<id>` stage, writes no log line containing the marker; the
+  stage appears as `balance_max:P#1`. The harness's `summary.json` and the checker's output over the
+  same pair contain no marker either.
 
 **Golden fixture (F14)**
 
 - The Python function reproduces, to the hundredth and per month, every expected `share`, `received`
-  and `balance` in every `ledger` case of `fixtures/fairness/golden.json` (C2's FX-3). The test
+  and `balance` in every `ledger` case of the golden fixture (IF2-29; C2's FX-3). The test
   computes each `balance` as its own `share` − `received`, both in hundredths, which is FX-2's and
   LG-13's definition (A39) — never the exact balance rounded on its own, which differs at a half (an
   exact share of 0.125 with one seat received: 13 − 100 = −87, where rounding −0.875 alone gives
   −88). C2's FX-4 exact-half case guards it in both languages.
 - Exact balances sum to 0 per (service, role key) and per (rule, service).
-- C5 adds hand-computed `plan` cases for §6.5 (FX-2 reserves them), and Python asserts them.
+- The adapter's selection (§6.6) is asserted through FX-4's cases: a duplicate weekend target (every
+  copy dropped, LG-1); the legacy default with the field absent and an uncounted special (LG-2); a
+  window month with no record and the target and a later month ignored (LG-3). Each passes per month
+  in Python, as every other `ledger` case does.
+- C5 adds hand-computed `plan` cases for §6.5 (IF2-29 reserves the `plan` kind; their `input` and
+  `expected` are C5's to define), and Python asserts them.
 - The suite never asserts the `cadence` cases: they are TypeScript's (A18).
 - The suite fails if the file is missing, or if it has no `ledger` cases.
 
@@ -1017,6 +1065,12 @@ Every name in the suite is fictitious. It runs from the repo root as
   - the floor skip of C5-15 in both passes: an exact or cadence seat skips it, an
     `outside_population` seat does not, and in the plan a clamped `==` ≥ 1 or an `on` state skips it
     before any seat exists.
+- The presence seat is never a fixed seat (§6.3, C2 LG-7; FX-4's case of a person whose `exact`
+  seat is at a weekend service covered by a presence rule she belongs to): a presence member whose seat at a covered weekend service is in a role key «exact» for her
+  has that seat set aside `exact`, never chosen as π; the next matching member's seat is π if there
+  is one, otherwise the sub-line's pool there is 0; her floor is cancelled (C5-15). The same with a
+  `cadence` holder's DL-mapped seat (set aside `cadence`). The soft `presence` instance still counts
+  her seat as present (§6.7), and the model's received count equals the shared function's on both.
 - One seat per person per service (§6.6): an input with one person in Lead and BGV of one service
   keeps the Lead seat; the BGV seat is a `second_seat` set-aside, and every `share` and `received` equals
   those of the same input with that seat removed; it cancels no floor and moves no population. A
@@ -1031,7 +1085,7 @@ Every name in the suite is fictitious. It runs from the repo root as
   share of 11/17 (0.647…) returns `share: 65` and `tenths.share: 6`, not 7; `carried: 30` with an exact
   share of 9/26 (0.346…) and nothing received returns `after: 65` and `tenths.after: 6`, not 7; an exact
   0.65 gives 7 and −0.65 gives −7 (half away from zero). These are Python unit tests, not fixture
-  fields: FX-2's expected values stay in hundredths (C2 §13, LG-13).
+  fields: IF2-29's expected values stay in hundredths (FX-2, LG-13).
 - Display tabs (§8.2), each folded case one that summing the lines would get wrong: a `BGV` exact
   share of 7/50 (0.14) and one `P:<id>` exact share of 7/50 give `tabs.BGV.tenths.share: 3` (0.28),
   not the lines' 1 + 1 = 2; a `BGV` exact share of 49/200 (0.245, line hundredths 25) and one
@@ -1091,6 +1145,11 @@ chained solves. Between runs it derives each next request's inputs:
 
 `--emit-requests <dir>` writes the request bodies for the timing-gate shapes (§13).
 
+Beside its per-run outputs, `run.py` writes one `summary.json` holding only aggregates in public form
+(C5-17): pass/fail per criterion, stage statuses by public label, timings, counts of misses and
+violations by code and cause, and the maximum F13 gap. It is the only harness output that may be
+copied into the repo, a PR, the review log or the cutover record.
+
 **The independent checker** (in `gcf_v3/acceptance/`, importable on its own) takes one request and
 its response and recomputes from `assignments` alone, never from the response's own flags or from the
 model's code:
@@ -1104,8 +1163,9 @@ model's code:
   pinned`, A39) per line and tab, and `|planned − share|` against `fairness.tolerance` per
   person-line.
 
-It returns counts and codes only, never names, so C7's rehearsal can run it on captured Preview pairs
-(C7 step 3e).
+It returns counts, codes and stage public labels only (§11.2), never names and never an identifier
+from the request — a pair rule's id reaches `violations[].rule`, so it is counted, not printed (C5-17)
+— so C7's rehearsal can run it on captured Preview pairs (C7 step 3e).
 
 **The fictitious realistic world** (`gcf_v3/acceptance/world_realistic.json`) mirrors today's structure,
 not today's people. It has 17 voice members:
@@ -1170,9 +1230,11 @@ expected breaks, misses and notices, each with the expected cause.
 - **Input:** a converter kept in the private repo (`owt-agent-logs/sdd/2026-10-05-solver-v3-fairness/`)
   maps that repo's read-only dumps to the harness's world format.
 - **Command:** `run.py --world <private>/world.json --matrix full --out <private>/out/`.
-- **What reaches the repo:** only aggregates go into the PR description and the review log. These are
-  pass/fail per criterion, stage statuses, timings and the maximum F13 gap. No names, no per-person
-  numbers.
+- **What reaches the repo:** only the run's `summary.json` aggregates go into the PR description and
+  the review log: pass/fail per criterion, stage statuses by public label (§11.2), timings and the
+  maximum F13 gap. No names, no per-person numbers, and no identifier from the real request — no rule
+  id, `P:` key or stage id that embeds one, since production's presence and conflict keys carry first
+  names (C5-17).
 - **Limit:** the converter approximates C6's request builder and C4's records, which do not exist yet.
   C7's rehearsal re-checks with the real builder.
 
@@ -1205,8 +1267,9 @@ Frank runs the gate, because the key comes from Secret Manager. It runs against 
 
 - curl's `time_total`;
 - `total_ms`;
-- per stage: status, `limit`, `ms` and `det_milli`. The ratio of `ms` to `det_milli` calibrates
-  `STAGE_DET_LIMIT`;
+- per stage, by public label (§11.2): status, `limit`, `ms` and `det_milli`. The ratio of `ms` to
+  `det_milli` calibrates `STAGE_DET_LIMIT`. Shape E is the real request, whose presence and conflict
+  keys carry first names, so its stage ids are never recorded raw (C5-17);
 - the Cloud Run memory metric.
 
 **Pass:**
@@ -1300,22 +1363,26 @@ job and scaffold in place, so `solver-v3` stays green on the scaffold's smoke te
     SL, BGV, CORO, TOTAL: {carried, share, received, pinned, seats, pinned_seats, after, tenths{share,
     after}}}}}`, `TOTAL` absent for an exempt person; `seats` and `pinned_seats` are required integers
     of seats (A39). The panel renders «Queda» (and any plan share it shows) on each tab only from that
-    tab's `tenths`, through C2's formatter (A32); «En este plan» from that tab's `seats`; and the `{n}`
+    tab's `tenths`, through C2's formatter (IF2-13; A32); «En este plan» from that tab's `seats`; and the `{n}`
     of «Los pines tomaron {n} lugares» from that tab's `pinned_seats`. It never divides `received` or
     `pinned`, and never sums lines into a tab (A17, A39, C6 EQ-3–EQ-5, S-12);
   - `cadence[]`, `missed[]{code, person, month, month1, month2, dates, count, cause}`,
     `notices[]{code, params}`;
   - on failure: `{ok: false, code, params}`.
 - **What C6 must send:**
-  - eligibility built only from C2's `resolveMonthEligibility` output, or from the horizon record when
-    it binds (A6, A7), plus availability and the day-class eligibility of specials (A13);
+  - eligibility built only from IF2-15's `ok: true` body, or from the horizon month's IF2-3 record
+    when IF2-8 `horizon[].recordBinds` (A6, A7), plus availability and the day-class eligibility of
+    specials (A13);
   - week exclusions and `!in` patterns only through eligibility: there is no `week_exclusion` rule
     (C5-2);
-  - role sets as six-key lists, using C2's `rolesOfPatternV3`, and counts resolved per month with
-    C2's `capValueForMonth`, with a below-zero result sent as 0 and noticed by C6 itself (A15, C5-4);
-  - presence `exclusive` copied from C2's RES-6; a presence or pair rule whose two months' sources
-    differ may be sent as one month-scoped object per month (C5-16);
-  - cadence `out` exactly when CAD-1's reason is `not_eligible`, otherwise CAD-1's on/off (A14, C5-5);
+  - role sets as role-key lists from IF2-16, and counts resolved per month with IF2-17, with a
+    below-zero result sent as 0 and noticed by C6 itself (A15, C5-4);
+  - presence `exclusive` copied from the month source (RES-6); a presence or pair rule whose two
+    months' sources differ may be sent as one month-scoped object per month (C5-16);
+  - cadence `out` exactly when IF2-12's reason is `not_eligible`, otherwise IF2-12's state (A14,
+    C5-5);
+  - `carried` from IF2-8 `people[].window[<line>].balance`, keys unchanged, with every presence
+    rule's `id` equal to its `ruleKey` so the `P:` keys match (§5.3, C6 RQ-5 (a));
   - `prior` built from its own `GET /api/admin/roles` read (A15, C6 RQ-7);
   - `fixed: true` for stored horizon services and counted specials, with their seats as pins (U2, U3);
   - `counts` from C1's legacy read.
@@ -1324,7 +1391,8 @@ job and scaffold in place, so `solver-v3` stays green on the scaffold's smoke te
   resolver and the record already refuse it, so a compliant month source never carries it), and a
   horizon that contains a past month (A24).
 - **Rule ids:** any stable id matching §5.4's pattern, unique per `(id, month)`; C6 mints one when a
-  config key does not qualify and keeps the key for display (C6 RQ-5).
+  config key does not qualify and keeps the key for display (C6 RQ-5); a presence rule's `id` is its
+  `ruleKey`, never minted (§5.3).
 - **Stored double seats:** a stored service holding one person in two voice seats is sent with only
   the seat ranked first by Lead > BGV > Choir (C6 ST-6); §6.6 and C2's LG-4 read the stored service
   the same way, so «Queda» for that service matches the next ledger read.
@@ -1336,31 +1404,38 @@ job and scaffold in place, so `solver-v3` stays green on the scaffold's smoke te
   - `gcf_v3/owt_solver_v3.py --json-mode` is the local entry point.
   - `fairness.tolerance` means C6 needs no mirror of its own.
 
-**Consumed from C2 (ledger)**
+**Consumed from C2 (ledger)** — C2 IF2-1, IF2-8 and IF2-29 directly, and IF2-12, IF2-16 and IF2-17
+through C6 (C2 §7.4's C5 row); IF2-3 and IF2-15 reach C5 only as C6's eligibility source, and IF2-10's
+`LedgerInput` only as the input of IF2-29's `ledger` cases. Shapes are C2's; C5's own use follows.
 
-- **Carried balances.** `carried` per person and line, in hundredths, positive meaning owed. C6 copies
-  C2's `window[line].balance`, which covers the 3 calendar months before `months[0]` and is rounded once,
-  half away from zero (LG-13, C5-8). Sub-line keys are `P:<ruleKey>`.
-- **Cadence states.** CAD-1 `cadenceStates`, one `{state, reason}` per cadence member per request month.
-  For month 2, the state assumes month 1 follows its own state.
-- **Past facts (via C6, A15).** `firstRecordedIn["Sun.Lead"]` gives `dl_since`, and the
-  `countedSundayLeads` entries in `prior.month` give `prev_dl_leads` (C6 RQ-4). `prior.has_services`
-  and `prior.services` come from C6's roles read, not from C2 (C6 RQ-7).
-- **The realised formula.** C2's LG-4–LG-11 and LG-13 (its hundredths and its display tenths), which C5 implements in Python under C5-10,
-  with the floor skip as A12 and A33 state it (C5-15): no floor set-aside when an exact or cadence
-  seat already met the floor. The wire balance is `share − received` in hundredths (LG-13, A39), and
-  one seat per person per service is counted, the first by Lead > BGV > Choir, every other a
-  `second_seat` set-aside (§6.6, C2 LG-4, LG-9).
-- **The golden fixture.** `fixtures/fairness/golden.json`, with C2's FX-2 schema: `schemaVersion: 1`,
-  `units: "hundredths"`, `sign: "positive_owed"`, and `cases[]{id, kind, description, covers, input,
-  expected}`.
-  - C5's Python asserts every `ledger` case per month, resolving the records as LG-5–LG-8 state.
+- **Vocabulary.** IF2-1: role keys, line keys, tab keys and folds, set-aside reasons, units and sign.
+  C5's wire uses them as §5 and §8.2 state; C5 adds the request-side `P:` reading (§5.3).
+- **Carried balances.** IF2-8 `people[].window[<line>].balance`, which C6 copies into `carried`
+  unrounded (C6 RQ-4; C5-8 relies on it being rounded once by LG-13). C5 validates the range and keys
+  (§5.3) and never recomputes it.
+- **Cadence states.** IF2-12's output, mapped by C6 to `on`/`off`/`out` (C5-5, A14). C5 reads only
+  the mapped state.
+- **Past facts (via C6, A15).** IF2-8 `people[].firstRecordedIn` gives `dl_since` and IF2-8
+  `people[].countedSundayLeads` gives `prev_dl_leads` (§5.3, C6 RQ-4). `prior.has_services` and
+  `prior.services` come from C6's roles read, not from C2 (C6 RQ-7).
+- **Eligibility and rule shapes (via C6).** IF2-15's body or the bound month's IF2-3 record (§5.3
+  `eligibility`), IF2-16's expansion for every `roles` and IF2-17's value for every count (C5-4).
+- **The realised formula.** C2's LG-4–LG-11 and LG-13 (its hundredths and its display tenths), which
+  C5 implements in Python under C5-10, with the floor skip as A12 and A33 state it (C5-15), the
+  presence seat never a fixed seat (LG-7, §6.3), the wire balance `share − received` in hundredths
+  (LG-13, A39) and one seat per person per service (LG-4, LG-9, §6.6). C5's own figures mirror
+  IF2-8's `Figures` and `tabs` (§8.2).
+- **The golden fixture.** IF2-29 (`fixtures/fairness/golden.json`). C5's use:
+  - C5's Python asserts every `ledger` case per month, preparing each case's IF2-10 input by
+    IF2-11's step (LG-1, LG-2, LG-4) and LG-3's month selection, with populations as LG-5–LG-8 state
+    (FX-3; §6.6).
   - C5 adds `plan` cases, and C2's vitest schema-checks them.
   - `cadence` cases are TypeScript's alone (A18). The acceptance harness carries a test-only X1,
     self-checked against them as a harness precondition and never shipped. The production X1 stays
     C2's alone (F7).
-  - The FX-4 coverage list is required, including the non-exclusive presence case and the floor-seat
-    cases.
+  - The FX-4 coverage list is required, including the non-exclusive presence case, the floor-seat
+    cases (an `exact` seat at a presence-covered weekend service among them), the second seat and
+    the exact half.
 
 **Consumed from C0 (CI)**
 
@@ -1384,7 +1459,8 @@ job and scaffold in place, so `solver-v3` stays green on the scaffold's smoke te
 - The source command for the `OWT_SOLVER_V3_URL` value. Setting it on Preview and Production, under
   consent, and updating its `docs/SECRETS.md` status are C7's writes (§11.6).
 - C5's ADR (§14), which C7's amendments to existing ADRs cite (A31).
-- `FAIRNESS_TOLERANCE` and the aggregates of the private run, for the cutover record.
+- `FAIRNESS_TOLERANCE` and the aggregates of the private run (its `summary.json`, public form only,
+  C5-17), for the cutover record.
 - The independent checker (§12.3), callable on one captured request and response pair (C7 step 3e,
   its assumption A3).
 
@@ -1466,11 +1542,30 @@ stages) is applied in §14.
 
 ### Sibling changes this spec depends on (not made here)
 
-| Sibling | Change | Why |
-|---|---|---|
-| C2 | FX-4: a case with one person in Lead and BGV of one stored service (the BGV seat a `second_seat` set-aside, LG-4), which both suites assert | §6.6; the rule itself is already in C2 LG-4 and LG-9, stated as §6.6 states it |
-| C2 | FX-4: an exact-half `balance` case (A39), e.g. an exact share of 0.125 with one seat received, expected −87 | §12.1 golden bullet |
-| C6 | EQ-3, EQ-4 and EQ-5 render «En este plan» from `tabs[<tab>].seats` and the `{n}` of «Los pines tomaron {n} lugares» from `tabs[<tab>].pinned_seats`; IF-C5 copies both fields per line and per tab, now required (A39); S-12 closes | §8.2, Interfaces |
+**Raised by the 2026-10-05 cross-check (open with their owners).** C5-17 holds on C5's own surfaces
+whatever the siblings do; these rows make the siblings agree with it.
+
+- **C2 RES-6:** «the planner mints compliant ids (`plannerModel.ts:1658`, `MonthGenerator.tsx:388`)»
+  is true of new rules only. Production's presence key (and every conflict key) is a seed-era,
+  REC-4-compliant string built from first names, and an edit keeps it
+  (`MonthGenerator.tsx:994`, `initialValues?.id ?? uid()`). State that, and never treat `ruleKey` or a
+  `P:<ruleKey>` key as name-free. C2's own evidence row (C2 §3, the `solverConfig` rule-ids row) already
+  records this; RES-6 is the clause that still contradicts it.
+- **C2 FX-3:** Python's job is «after IF2-11's step (LG-1, LG-2, LG-4) and LG-3's month selection, with
+  populations as LG-5–LG-8 state», not LG-5–LG-8 alone (C5 §6.6).
+- **C4 R12, R13 and C7 check 0.5:** a refusal located by restriction, conflict or presence `_key` prints
+  a name on the real config. Print the item's kind and array ordinal instead.
+- **C7 Step 6 (restore stdout) and the cutover record in `docs/SOLVER_AND_INFRA.md`:** stage statuses
+  come from C5's `summary.json` or the checker, by public label (§11.2), never raw stage ids; Step 3e's
+  and §13's per-stage figures likewise.
+- **C6:** no change expected — RQ-5 renders a rule id only through its label map. A check only: no C6
+  log, toast or telemetry line prints a rule id or `P:` key. The three rows of the previous draft are applied by their owners and removed (each
+checked in the sibling's current text): C2 FX-4 now carries the second-seat case (one person in Lead
+and BGV of one stored service, and one listed twice in one role key) and the exact-half `balance`
+case; C6 EQ-3–EQ-5 and IF-C5 read `seats` and `pinned_seats` per line and per tab (A39), and S-12 is
+closed. C2's round-3 row for C5 (the presence seat is never a fixed seat, LG-7) is applied in §6.3,
+C5-10 and §12.1, and C2's interface-consolidation row in this revision (C2 §7 IF2 citations
+throughout; «Consumed from C2»).
 
 C6's sibling issues S-5 (`prior` from C6's roles read) and S-7 (one limit of 100 people) are applied
 (§5.6, «Consumed from C2») or already hold (C2 WR-4 and §5.1 both say 100). S-11 is applied: per-line
@@ -1507,12 +1602,13 @@ unrecorded one — that C6's bounded default already handles by refusing that 2-
 | C5-R12 | E1: deploy, guard and secrets | Own directory, trigger and script; guard tests; the SECRETS entries; the ping returns the build SHA | §12.1, handler tests; §11.5 after Frank's §11.4 |
 | C5-R13 | v2 stays untouched | No diff under `gcf/`, in `cloudbuild.yaml` or in `scripts/deploy-solver-gcf.sh`; `solver-v2` is green | Diff review; C0's v2 job |
 | C5-R14 | The combined, amended policy is accepted offline (A23) | The `full` matrix, scenario P16 and the private re-run pass, and their aggregates are recorded | §12.3 |
-| C5-R15 | The independent checker C7 drives | It recomputes every hard check, rule instance and protection from `assignments` alone, prints counts and codes only, and agrees with the response on every acceptance run | §12.3 |
+| C5-R15 | The independent checker C7 drives | It recomputes every hard check, rule instance and protection from `assignments` alone, prints counts, codes and stage public labels only, never a request identifier (C5-17), and agrees with the response on every acceptance run | §12.3 |
+| C5-R16 | Request identifiers never leave the wire (C5-17) | The marker test: no log line, `summary.json` or checker output holds a request identifier; stages appear by public label | §12.1, handler tests; §12.3 |
 
 ## Review handoff
 
-- Review the parent first (with its amendments A1–A39), then C2 (whose ledger rules and fixture this
-  spec implements), then this spec.
+- Review the parent first (with its amendments A1–A40), then C2 (whose ledger rules, fixture and §7
+  interfaces this spec implements and cites), then this spec.
 - Evidence: `owt-agent-logs/sdd/2026-10-05-solver-v3-fairness/evidence/`, in particular
   `f_final-proto.md`, `f_final-stress.md`, `u_solver-core.md`, `u_consumers-infra.md` and
   `u_solver-tests-fixb.md`. Prototype code: `prototype/v3/final/` (`v3f.py`, `chain.py`,
@@ -1522,6 +1618,5 @@ unrecorded one — that C6's bounded default already handles by refusing that 2-
 
 ## Terminal state
 
-`READY_FOR_REVIEW`. Three sibling changes this spec depends on are not made here and are listed
-above: C2's FX-4 cases for a second seat and for an exact half, and C6's reading
-of `seats` and `pinned_seats`. C5's implementation still waits for C2's fixture (Assumptions).
+`READY_FOR_REVIEW`. The cross-check's sibling rows above are open with C2, C4 and C7; none changes C5's contract. C5's implementation still waits
+for C2's fixture (Assumptions).
