@@ -283,6 +283,12 @@ export interface PersonRestriction {
   fairnessSlack: number;
   weekExclusions: WeekExclusion[];
   caps: RestrictionCap[];
+  /**
+   * «Domingo: Mes por medio» (solver v3 C3). Present ONLY for «Mes por medio»;
+   * absent means «Normal», and «Normal» is never stored. Inert under v2: see
+   * `v2View`. The setting only — the cadence STATE is never stored (C2).
+   */
+  sundayCadence?: "alternate";
 }
 
 export interface ConflictRule {
@@ -290,6 +296,38 @@ export interface ConflictRule {
   personA: string;
   personB: string;
   pattern: string;
+}
+
+/**
+ * The config v2 sees (solver v3 C3 §6.4; parent A8, A34): `sundayCadence` removed
+ * from every restriction, and every restriction removed that CARRIED it and,
+ * without it, has no clause — no excluded pattern, no week exclusion, no cap and
+ * `fairness === "none"` — exactly what the pre-C3 form could not have produced. A
+ * restriction that never carried the cadence is never removed, clause-less or not
+ * (a «Holgura 0» one stays, as today).
+ *
+ * Applied where v2 reads restriction PERSONS rather than clauses — `solverPools`
+ * (both its callers: `buildSolveRequest` and the pin board) and the first-match
+ * `isExcludedFromLead` — so a cadence-only card never injects its person into
+ * `support`, never makes a member with no Tipo refuse the month, and never
+ * shadows another card. `cadenceV2Inert.test.ts` asserts every v2 answer equal
+ * for `C` and `v2View(C)`.
+ */
+export function v2View<C extends Pick<SolverConfig, "restrictions">>(config: C): C {
+  return {
+    ...config,
+    restrictions: config.restrictions.flatMap((r) => {
+      if (r.sundayCadence === undefined) return [r];
+      const { sundayCadence: _cadence, ...rest } = r;
+      void _cadence;
+      const clauseless =
+        rest.excludedPatterns.length === 0 &&
+        rest.weekExclusions.length === 0 &&
+        rest.caps.length === 0 &&
+        rest.fairness === "none";
+      return clauseless ? [] : [rest];
+    }),
+  };
 }
 
 export interface PresenceRule {
@@ -883,7 +921,12 @@ export interface SolverPools {
   dslBlockedByTipo: string[];
 }
 
-export function solverPools(config: SolverConfig, members: RankMember[]): SolverPools {
+export function solverPools(input: SolverConfig, members: RankMember[]): SolverPools {
+  // C3 §6.4: v2 reads every restriction's PERSON below, so a «Mes por medio»
+  // card with no clause would inject an unpooled member into `support` and
+  // make a member with no Tipo refuse the month. v2 sees `v2View`, here, so
+  // both callers — `buildSolveRequest` and the pin board — get one answer.
+  const config = v2View(input);
   const idToName = (id: string) => memberIdToName(id, members);
 
   // The stored pools are ids, ticked at some point in the past; "Tipo" is the

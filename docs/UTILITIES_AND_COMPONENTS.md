@@ -221,6 +221,23 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
 - **`isNoticeNeutralEdit`** (in [serviceMutationSideEffects.ts](../app/utils/serviceMutationSideEffects.ts))
   — the toggle-only PATCH predicate; see [NOTIFICATIONS](NOTIFICATIONS.md#a-toggle-only-patch-queues-nothing-solver-v3-c1).
 
+### Solver rule set — «Mes por medio» and exact counts (solver v3 C3, ADR-0049)
+- **`SOLVER_CONFIG_VERSION`, `exactCapOverlaps(config)`, `SUNDAY_CADENCE_VALUES`/`FAIRNESS_VALUES`/`CAP_OPS`**
+  ([solverConfigWriteRequest.ts](../app/utils/solverConfigWriteRequest.ts), neutral) — the rules
+  POST refuses any other `configVersion`; `exactCapOverlaps` is the ONE check that a person has at
+  most one `==` count per role key, run by the parser, the rule form, the panel and the client's
+  refusal mapping. `parseSolverConfigWrite`/`solverConfigFields`/`solverConfigFromDocument` are the
+  only way any writer sets or restores a rule value.
+- **`resolveRulePersonId`, `cadenceMembers`, `cadenceOutsideSundayPool`, `RosterMember`**
+  ([sundayCadence.ts](../app/utils/sundayCadence.ts), neutral) — exactly one worship member per
+  rule name or a named refusal (`unresolved`/`ambiguous`), over the unfiltered roster minus
+  non-worship members (the functions apply `normalizeMinistries` themselves). v2 keeps its
+  first-match `resolveToMemberName`. Copy: `CADENCE_V2_NOTE`, `SLACK_V3_NOTE`,
+  `CADENCE_OUTSIDE_HEADING`, `CADENCE_OUTSIDE_SENTENCE`.
+- **`v2View(config)`** ([plannerModel.ts](../app/components/admin/plannerModel.ts)) — the config
+  v2 sees: `sundayCadence` stripped and cadence-only restrictions removed; applied in
+  `solverPools` and `isExcludedFromLead`. `cadenceV2Inert.test.ts` is the guard.
+
 ### Dates & schedule
 - **`daysUntil(dateStr, now?)`**, **`formatCountdown(days)`** ([daysUntil.ts](../app/utils/daysUntil.ts))
   — the service countdown, in a neutral module with no imports/hooks so a Server Component may
