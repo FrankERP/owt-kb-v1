@@ -74,11 +74,16 @@ other job is.
 `scripts/lib/ci-layout.mjs`, and it runs in every `npm test` (so in `node`). It
 asserts on the real files: exactly one job across all workflows reports as
 `gates` (its `name:`, or its id when nameless), and it is job `gates` in `ci.yml`;
-its `needs` is every other `ci.yml` job; it has `always()`, a timeout, no matrix,
-and the verdict step fed through `env:`; no `paths`/`paths-ignore`/`branches-ignore`
-filter; no job `if:` but `gates`', and no step `if:` at all (a skipped test step
-leaves its job green); no `continue-on-error`; no sparse checkout; a timeout on
-every job; and the solver-suite rules below. It carries permanent negative cases —
+no job `name:` in any workflow is a `${{ }}` expression, which could evaluate to
+`gates` unseen; its `needs` is every other `ci.yml` job; it has `always()`, a
+timeout, no matrix, and the verdict step fed through `env:`; no
+`paths`/`paths-ignore`/`branches-ignore` filter; no job `if:` but `gates`', and no
+step `if:` at all (a skipped test step leaves its job green); no
+`continue-on-error`; no sparse checkout; no step `shell:` or `working-directory:`
+and no `defaults:` (`shell: bash -c 'true' {0}` runs nothing and exits 0); a
+timeout on every job; and the solver-suite rules below. Walking `gcf/` and
+`gcf_v3/`, it skips `__pycache__`, `venv` and dot-directories, so a local `.venv`
+does not redden `npm test`. It carries permanent negative cases —
 each one a mutation of the real `ci.yml` or a synthetic tree that must stay red —
 and executes the verdict runner as a process, because a swapped exit code would
 pass a test that only reads the file. It reads workflows with a small YAML-subset

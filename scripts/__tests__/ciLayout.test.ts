@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   checkCiLayout,
@@ -143,6 +144,15 @@ describe("required check: `gates` (negative cases — each must be red)", () => 
       "required-check",
     );
   });
+
+  it("refuses an expression in any job `name:` — it could evaluate to `gates` unseen", () => {
+    const other = {
+      file: ".github/workflows/other.yml",
+      text: "on: push\njobs:\n  probe:\n    name: ${{ 'gates' }}\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      - run: 'true'\n",
+    };
+    expectRule(checkRequiredCheck([...readWorkflows(), other]), "required-check");
+    expectRule(layoutProblems(mutate(CI, "    name: solver-v3\n", "    name: ${{ vars.V3_NAME }}\n")), "required-check");
+  });
 });
 
 describe("no silent skips (negative cases)", () => {
@@ -186,6 +196,29 @@ describe("no silent skips (negative cases)", () => {
       "    name: solver-v3\n    runs-on: ubuntu-latest\n    timeout-minutes: 15\n    steps:\n      - uses: actions/checkout@v4\n        with:\n          sparse-checkout: gcf_v3\n",
     );
     expectRule(checkNoSilentSkips(text), "no-silent-skips");
+  });
+
+  const V3_TESTS = "        run: python -m unittest discover -s gcf_v3 -t gcf_v3 -v\n";
+
+  it("refuses a step `shell:` — `bash -c 'true' {0}` runs nothing and stays green", () => {
+    const text = mutate(CI, V3_TESTS, `${V3_TESTS}        shell: bash -c 'true' {0}\n`);
+    expectRule(checkNoSilentSkips(text), "no-silent-skips");
+  });
+
+  it("refuses a step `working-directory:` — the command would discover from somewhere else", () => {
+    const text = mutate(CI, V3_TESTS, `${V3_TESTS}        working-directory: gcf_v3\n`);
+    expectRule(checkNoSilentSkips(text), "no-silent-skips");
+  });
+
+  it("refuses `defaults:` at workflow level and at job level", () => {
+    const workflow = mutate(
+      CI,
+      "permissions:\n  contents: read\n",
+      "permissions:\n  contents: read\n\ndefaults:\n  run:\n    shell: bash -c 'true' {0}\n",
+    );
+    expectRule(checkNoSilentSkips(workflow), "no-silent-skips");
+    const job = mutate(CI, "    name: solver-v2\n", "    name: solver-v2\n    defaults:\n      run:\n        working-directory: gcf\n");
+    expectRule(checkNoSilentSkips(job), "no-silent-skips");
   });
 });
 
@@ -278,6 +311,36 @@ describe("partition: every test module in exactly one job (negative cases)", () 
 
   it("refuses an empty `gcf_v3` — the job would exit 5 (NO TESTS RAN)", () => {
     expectRule(checkPartition({ gcf: V2, gcf_v3: [] }), "partition");
+  });
+});
+
+describe("walkTree", () => {
+  it("skips dot-directories, venv and __pycache__ — a local environment is not the tree", () => {
+    // A `.venv` inside gcf/ or gcf_v3/ carries site-packages full of test*.py that
+    // discovery never reaches; walking it would turn every local `npm test` red.
+    const root = mkdtempSync(join(tmpdir(), "ci-layout-"));
+    try {
+      const put = (path: string, body = "") => {
+        mkdirSync(dirname(join(root, path)), { recursive: true });
+        writeFileSync(join(root, path), body);
+      };
+      put("gcf_v3/test_ok.py");
+      put("gcf_v3/tests/__init__.py");
+      put("gcf_v3/tests/test_pkg.py");
+      put("gcf_v3/.venv/lib/python3.12/site-packages/pkg/test_vendored.py");
+      put("gcf_v3/venv/lib/test_vendored.py");
+      put("gcf_v3/tests/.pytest_cache/test_cached.py");
+      put("gcf_v3/__pycache__/test_ok.cpython-312.pyc");
+      put("gcf_v3/.gcloudignore");
+      expect(walkTree(root, "gcf_v3").map((e) => e.path).sort()).toEqual([
+        "gcf_v3/.gcloudignore",
+        "gcf_v3/test_ok.py",
+        "gcf_v3/tests/__init__.py",
+        "gcf_v3/tests/test_pkg.py",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

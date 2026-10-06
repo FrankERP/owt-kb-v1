@@ -325,6 +325,12 @@ export function checkRequiredCheck(workflows) {
     if (!doc) continue;
     if (w.file === CI_WORKFLOW) ci = doc;
     for (const [id, job] of Object.entries(doc.jobs)) {
+      if (typeof job.name === "string" && job.name.includes("${{")) {
+        problems.push(
+          `[required-check] ${w.file} job ${id} has an expression in its name: (${oneLine(job.name)}) — it is ` +
+            `evaluated at run time and could report as "${REQUIRED_CHECK}" where this guard cannot see it. Use a literal name`,
+        );
+      }
       const displayName = typeof job.name === "string" ? job.name : id;
       if (displayName === REQUIRED_CHECK) hits.push(`${w.file} job ${id}`);
     }
@@ -387,7 +393,8 @@ export function checkRequiredCheck(workflows) {
 /**
  * Nothing in ci.yml may skip a job or a step, or let one fail green: no path or
  * branch-ignore filter, no `if:` (except gates' `always()`), no continue-on-error,
- * no sparse checkout, and every job has a timeout.
+ * no sparse checkout, no step `shell:`/`working-directory:` and no `defaults:`, and
+ * every job has a timeout.
  * @param {string} ciText
  * @returns {string[]}
  */
@@ -408,7 +415,16 @@ export function checkNoSilentSkips(ciText) {
       }
     }
   }
+  if ("defaults" in doc) {
+    problems.push(
+      "[no-silent-skips] ci.yml has a workflow-level `defaults:` — a default shell or working directory changes " +
+        "what every run: step executes, out of sight of the step",
+    );
+  }
   for (const [id, job] of Object.entries(doc.jobs)) {
+    if ("defaults" in job) {
+      problems.push(`[no-silent-skips] job ${id} has \`defaults:\` — a default shell or working directory changes what its run: steps execute`);
+    }
     if (id !== REQUIRED_CHECK && "if" in job) {
       problems.push(`[no-silent-skips] job ${id} has \`if:\` — a skipped job reports \`skipped\`, which gates would have to vouch for`);
     }
@@ -416,6 +432,14 @@ export function checkNoSilentSkips(ciText) {
       problems.push(`[no-silent-skips] job ${id} needs a timeout-minutes (docs/CI.md «Timing» sets each one)`);
     }
     stepsOf(job).forEach((step, n) => {
+      for (const key of ["shell", "working-directory"]) {
+        if (key in step) {
+          problems.push(
+            `[no-silent-skips] job ${id} step ${stepLabel(step, n)} has \`${key}:\` — \`shell: bash -c 'true' {0}\` ` +
+              "runs nothing and exits 0, and a working directory moves what a command discovers. Every run: step uses the defaults",
+          );
+        }
+      }
       if ("if" in step) {
         problems.push(
           `[no-silent-skips] job ${id} step ${stepLabel(step, n)} has \`if:\` — a skipped step leaves its job green, ` +
@@ -697,8 +721,10 @@ export function checkCiLayout({ workflows, trees }) {
 
 /**
  * Every file under `<root>/<tree>`, as repo-relative POSIX paths; `.py` files carry
- * their text. Skips `__pycache__`. A missing tree is an empty listing (which
- * `checkPartition` reports).
+ * their text. Skips `__pycache__`, `venv` and every dot-directory (`.venv`,
+ * `.pytest_cache`, …): a local environment's site-packages holds test*.py files
+ * discovery never reaches, and walking them would turn a local `npm test` red. A
+ * missing tree is an empty listing (which `checkPartition` reports).
  */
 export function walkTree(root, tree) {
   const out = [];
@@ -706,11 +732,11 @@ export function walkTree(root, tree) {
   const walk = (rel) => {
     const names = readdirSync(join(root, rel)).sort();
     for (const name of names) {
-      if (name === "__pycache__") continue;
       const path = `${rel}/${name}`;
       const stat = statSync(join(root, path));
-      if (stat.isDirectory()) walk(path);
-      else if (stat.isFile()) {
+      if (stat.isDirectory()) {
+        if (name !== "__pycache__" && name !== "venv" && !name.startsWith(".")) walk(path);
+      } else if (stat.isFile()) {
         out.push(path.endsWith(".py") ? { path, text: readFileSync(join(root, path), "utf8") } : { path });
       }
     }
