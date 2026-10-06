@@ -531,8 +531,12 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   `member_not_worship` / `tipo_mismatch`, 409 `integrity_conflict` with `details.memberIds`). All
   or nothing: one refused month writes nothing, `details.detail` is the earliest month's refusal and
   `details.months` every month's own verdict; a commit 409 is reported on every written month. `200`
-  answers `{ months: [{ month, outcome, rev, contentHash, recordedAt }] }`. No notification, no
-  revalidation, and never a delete.
+  answers `{ months: [{ month, outcome, rev, contentHash, recordedAt }] }`. Any other failure — no
+  `SANITY_API_READ_TOKEN`, a rejected read, a commit error that is not a 409 mutation conflict — is
+  an opaque `500`: the handler throws `FairnessMonthWriteFailedError` (fixed message, no `cause`),
+  and the server log carries only the original error's class, status and stack frames, never its
+  message, which can hold the request URL and member ids. No notification, no revalidation, and
+  never a delete.
 
 ---
 
