@@ -575,6 +575,44 @@ deployment built in between may hold the new key — and verify as in step 5.
 
 ---
 
+## `OWT_SOLVER_ENGINE` (solver v3 — the Preview-only engine override)
+
+**Needed in: Vercel Preview, branch-scoped to `preview` only — and only while Frank wants a v3
+rehearsal on dev. Optional in local `.env.local` (a local v3 rehearsal). Leave it unset
+everywhere else. Not needed in: Vercel Production (the code ignores it there), the
+`Preview (verify/service-readiness)` scope (the code ignores it there too — never add it "to be
+safe"), GitHub Actions, Cloud Scheduler, the iOS build, GCF.**
+
+**Not a secret** — plain config, `"v2"` or `"v3"`. It is the ONE override of the solver-engine
+constant (`SOLVER_ENGINE` in `app/components/admin/solverEngine.ts`, parent A1), read by exactly one
+function, `resolveSolverEngine` (`app/utils/solverDeployment.ts`). That function honours an exact
+`v2`/`v3` only when `VERCEL_ENV === "preview"` **and** `VERCEL_GIT_COMMIT_REF === "preview"` (the
+dev deployment), or when `VERCEL_ENV` is unset or empty (local development). Production, `vercel
+dev` (`VERCEL_ENV=development`), the `verify/service-readiness` deployment and any other value
+answer the constant. Both `VERCEL_*` variables are set by Vercel automatically.
+
+**Purpose — what changes with it.** Under `v3`, the planner's «Equidad · vista previa» panel offers
+«Registrar elegibilidad de {mes}» and `PUT /api/admin/fairness/months` accepts writes (under `v2`
+it answers `409 engine_not_v3`); after C6, Auto on that deployment also runs the v3 solver.
+Without it (the normal state) the deployment runs the constant's engine.
+
+**Where it comes from.** A literal typed by Frank: Vercel → project `owt-backstage` → Settings →
+Environment Variables → Preview, scoped to the Git branch `preview`; or a line in `.env.local`.
+There is no issuer or generator.
+
+**Rotate / change:** edit or remove the value, then redeploy Preview (push `preview` or redeploy
+from the dashboard) and verify the dev alias moved — like every Vercel env var it binds at build
+time. Locally, restart the dev server. To go back to the constant, remove it.
+
+**Blast radius.** While it is `v3` on Preview, «Registrar» appears on dev and writes
+**production** `fairnessMonth` records — `preview` writes the real dataset (CLAUDE.md «Vercel
+safety») — stamped `environment: "preview"`, which no app surface can delete (C2 WR-13). Set
+locally with `VERCEL_ENV` unset, a local server writes production records stamped `local`. After
+C6, Auto on that deployment runs v3. Nothing is broken mid-change: a deployment reads the value it
+was built with.
+
+---
+
 ## Not yet documented
 
 Other variables in use — `NEXTAUTH_*`, `EMAIL_ALLOWLIST`, FCM push credentials — predate this file. Add each one here as it is next touched or rotated.
