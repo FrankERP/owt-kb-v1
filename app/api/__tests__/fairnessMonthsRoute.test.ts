@@ -268,6 +268,17 @@ describe("the decision and the commit (WR-7 … WR-12)", () => {
     expect(res.body.details).not.toHaveProperty("rev");
   });
 
+  it("omits rev/source/recordedAt on a commit-time record_exists whose first month is a replace (IF2-5)", async () => {
+    const changed = entry("2026-11", { expectedRev: "rev-0" });
+    changed.people[1].exempt = true;
+    h.lake = createFakeFairnessSanity([...MEMBERS, record(entry("2026-11"))]);
+    h.lake.failNext.commit = contentLakeConflict("documentAlreadyExistsError");
+    const res = await put({ months: [changed, entry("2026-12")] });
+    expect(res.status).toBe(409);
+    expect(res.body.details.detail).toBe("record_exists");
+    for (const k of ["rev", "source", "recordedAt"]) expect(res.body.details).not.toHaveProperty(k);
+  });
+
   it("throws (500) on an error that is not a 409 mutation conflict", async () => {
     h.lake.failNext.commit = Object.assign(new Error("Unauthorized"), { statusCode: 401 });
     await expect(PUT(req({ months: [entry("2026-11")] }))).rejects.toThrow("Unauthorized");

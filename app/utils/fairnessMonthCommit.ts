@@ -178,7 +178,13 @@ export async function commitFairnessMonths(
   const detail = first.ownVerdict as FairnessPutRefusal;
   const details: FairnessMonthsPutConflictDetails = { detail, months: ownVerdicts(results) };
   if (first.cause) details.cause = first.cause;
-  if (detail === "record_exists" && first.current) {
+  // IF2-5 / WR-8 row 5: rev/source/recordedAt describe a DECISION-time `record_exists`
+  // (the month asked for a create, `expectedRev === null`, and a record stood). A
+  // commit-time `already_exists` can map another month to `record_exists` while this
+  // entry is a replace (non-null expectedRev) whose stored record did not collide, so
+  // those fields would describe a month that did not collide: omit them.
+  const firstEntry = checked.months[results.indexOf(first)];
+  if (detail === "record_exists" && first.current && firstEntry?.expectedRev === null) {
     details.rev = first.current.rev;
     details.source = first.current.source as FairnessMonthsPutConflictDetails["source"];
     if (first.current.recordedAt) details.recordedAt = first.current.recordedAt;
