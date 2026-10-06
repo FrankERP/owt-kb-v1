@@ -253,3 +253,65 @@ describe("buildCreationReceipt", () => {
     }
   });
 });
+
+// ─── Step zero (solver v3 C1 §7) — captured on the unchanged code ────────────
+//
+// Computed with `payloadFingerprint` BEFORE `countsForFairness` existed (origin/main
+// 4759a214, 2026-10-05). They stay green through C1 and everything after it: a red
+// literal is a finding — a retry sent by a tab loaded before the change would stop
+// replaying its receipt — never a value to re-capture.
+const FROZEN = {
+  sundayFilledPublished: {
+    payload: {
+      _type: "sunday_role", date: "2026-07-05", published: true,
+      leads: ["m-ana", "m-beto"], bgvs: ["m-caro"], chorus: ["m-dani"],
+      instruments: [{ instrument: "Guitarra", personId: "m-eli" }, { instrument: "Bajo", personId: "m-fer" }],
+      foh: [{ role: "Sonido", personId: "m-gabo" }],
+    },
+    fingerprint: "4753d40e4948396aac0a70055c9fa9283ebd28db9646af35c9a262acf597eab5",
+  },
+  sundayDatetimeDate: {
+    payload: {
+      _type: "sunday_role", date: "2026-07-05T12:00:00Z", published: true,
+      leads: ["m-ana", "m-beto"], bgvs: ["m-caro"], chorus: ["m-dani"],
+      instruments: [{ instrument: "Guitarra", personId: "m-eli" }, { instrument: "Bajo", personId: "m-fer" }],
+      foh: [{ role: "Sonido", personId: "m-gabo" }],
+    },
+    fingerprint: "4753d40e4948396aac0a70055c9fa9283ebd28db9646af35c9a262acf597eab5",
+  },
+  saturdayEmptyDraft: {
+    payload: { _type: "saturday_role", date: "2026-07-04", published: false, leads: [], bgvs: [], chorus: [], instruments: [], foh: [] },
+    fingerprint: "1c2d9d3715313ebda773e4cf444677e196d73bf9fb8e82e4b089af212700629f",
+  },
+  saturdayNoSeatKeys: {
+    payload: { _type: "saturday_role", date: "2026-07-11" },
+    fingerprint: "db75df926b3729d18426728d2cdca5baa9d17362bb6e7c5b0e8289dd9d9bee64",
+  },
+  specialPlainEmptyDraft: {
+    payload: { _type: "special_role", date: "2026-04-03", service_name: "Viernes Santo", published: false, leads: [], bgvs: [], chorus: [], instruments: [], foh: [] },
+    fingerprint: "26424c6356af86a9710da4b44dbd221404e33308c0989b42fc493ed9d1f0055f",
+  },
+  specialTimeEmptyDraft: {
+    payload: { _type: "special_role", date: "2026-04-03", service_name: "Viernes Santo", time: "09:00", published: false, leads: [], bgvs: [], chorus: [], instruments: [], foh: [] },
+    fingerprint: "f392af30ca7c9cb7d6fbe6077aa6864a301a6a700691b362f1f1b0d1f2e4c3ee",
+  },
+  specialFormatEmptyDraft: {
+    payload: { _type: "special_role", date: "2026-04-04", service_name: "Noche", format: "worship_night", published: false, leads: [], bgvs: [], chorus: [], instruments: [], foh: [] },
+    fingerprint: "c7950d2ddfedc3ce3d8adafd0e77592a87106b316c5b8b4f0f681dd726c7f3cc",
+  },
+  specialTimeFormatFilledPublished: {
+    payload: {
+      _type: "special_role", date: "2026-04-04", service_name: "Noche · Bloque 1", time: "19:30", format: "worship_night", published: true,
+      leads: ["m-ana"], bgvs: ["m-beto"], chorus: ["m-caro"],
+      instruments: [{ instrument: "Piano", personId: "m-dani" }],
+      foh: [{ role: "Audio", personId: "m-eli" }],
+    },
+    fingerprint: "adfd6ca403ee1e4b3ff19bf349b73e42c43a0c6d254ba9cd7376077de0fc6179",
+  },
+} satisfies Record<string, { payload: RoleCreatePayload; fingerprint: string }>;
+
+describe("payloadFingerprint — frozen pre-C1 literals (solver v3 C1 step zero)", () => {
+  it.each(Object.entries(FROZEN))("%s hashes to its frozen literal", (_label, row) => {
+    expect(payloadFingerprint(row.payload)).toBe(row.fingerprint);
+  });
+});
