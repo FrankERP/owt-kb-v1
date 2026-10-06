@@ -59,12 +59,17 @@ class Hygiene(unittest.TestCase):
         status, resp, line = logged(marked(), solver_for=stub({f"balance_max:P:pres-{MARK}"}))
         self.assertEqual(status, 200)
         self.assertClean(line)
-        self.assertIn('"label": "balance_max:P#1", "limit"', line)
+        by_label = {st["label"]: st for st in json.loads(line)["stages"]}
+        self.assertEqual(by_label["balance_max:P#1"]["status"], "not_run")
+        self.assertClean(line)
 
     def test_a_timeout_logs_code_stage_label_and_seconds(self):
         status, resp, line = logged(marked(), solver_for=stub({"rules"}))
         self.assertEqual((status, resp["code"]), (422, "timeout"))
         self.assertClean(line)
+        entry = json.loads(line)
+        self.assertEqual((entry["code"], entry["stage"]), ("timeout", "rules"))
+        self.assertIsInstance(entry["seconds"], (int, float))
 
     def test_a_refusal_logs_its_code_only(self):
         body = marked()
