@@ -168,6 +168,26 @@ role-ID-targeted, complete five-array PATCH for Lead, BGVs, Chorus,
 instruments, and FOH. Every untouched occupant, `_key`, and stored label must
 survive. Semantic no-ops emit no PATCH and no notification work.
 
+**«Cuenta para equidad» (solver v3 C1).** Every create column, every stored column, the
+calendar's special composer and «+ Nuevo servicio» carry the house `Switch`
+(`FairnessSwitch`). Create columns enter at the type default — Domingo and Sábado on, a
+special at the composer's choice, off by default. A header edit is held per column while
+the column stays selected — across the config and grid steps, «Omitir» and Auto, which
+never changes it — and dropped when the date is deselected or the special removed. A
+column blocked from creation shows no switch. Stored columns read the `GET` row's
+effective value and edit it through the header overlay, beside Fecha/Nombre/Hora (gated
+by `readOnly` and the mutation lock, never by the date-move block); every stored PATCH
+carries the column's effective value and the semantic snapshot includes it, so a
+toggle-only change is one dirty service and reconciles like any other edit. «+ Nuevo
+servicio»'s switch follows the Tipo until touched, is part of the attempt identity, and a
+create verifies only when the reload shows the requested value. **Past months:** a service
+whose stored or edited date falls before the current CDMX month has its switch disabled,
+with «Mes pasado: ya no se cambia.» as its accessible description, and shows and sends
+its stored value (stored) or the type default (create). The rule is evaluated at render
+and again when each body is built; it is client-side only — neither route refuses on the
+month (C1-D7). While the engine is v2 each surface shows once: «Cuenta para equidad:
+aplica con el nuevo solver. Hoy Auto no lo usa.»
+
 Date moves use the separate `changeServiceDate` capability. A cross-month move
 keeps the source role-ID column, loads the destination target's complete Sunday
 spine, and reconciles by role ID outside the displayed-month filter. Invalid
