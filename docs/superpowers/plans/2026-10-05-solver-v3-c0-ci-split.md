@@ -18,6 +18,10 @@ Parent amendment **A20** (§3, «Amendments from writing the children») amends 
 its older wording: «C0 lands a minimal `gcf_v3/` scaffold (package `owt_v3`, requirements, one smoke
 test) that C5 takes over. Safe end state: the same tests plus that smoke test.»
 
+Parent amendment **A36** amends the same row's Rollback cell («Revert») and also wins: «C0's rollback:
+revert before C5 lands; after it, revert only the workflow split and the guard, and run both suites as
+steps of the single `gates` job.»
+
 ## Status and contract
 
 - **Document status:** Draft.
@@ -28,10 +32,11 @@ test) that C5 takes over. Safe end state: the same tests plus that smoke test.»
   on a real pull request (Step 6), which is why the tier stays standard rather than critical. No
   adversarial plan review; the control after implementation is a fresh code review of the diff plus
   the verifications below.
-- **Accepted source:** parent §11 C0 as amended by §3 A20, §2 (CI evidence row), §8 E1 («its own
+- **Accepted source:** parent §11 C0 as amended by §3 A20 and A36, §2 (CI evidence row), §8 E1 («its own
   source directory, Cloud Build trigger **and CI job**»), §13 («→ C0 … Production behaviour unchanged
-  … Merged, gates green»). A20 is the only amendment in C0's scope; A1–A19 and A21–A26 settle
-  ledger, cadence, planner and cutover contracts and change nothing here. A18 (the golden fixture is
+  … Merged, gates green»). A20 (the scaffold) and A36 (the rollback) are the amendments in C0's scope;
+  A1–A19, A21–A35 and A37–A39 settle ledger, cadence, planner, solver and cutover contracts and change
+  nothing here (A31 assigns no ADR to C0, consistent with P7). A18 (the golden fixture is
   asserted by both suites) is served by the fixture paragraph under Interfaces, unchanged in shape.
 - **Primary outcome:** `.github/workflows/ci.yml` runs the Node gates, v2's solver suite (`gcf/`) and
   the v3 suite (`gcf_v3/`) in **separate, parallel jobs**; the check `main`'s protection requires is
@@ -63,6 +68,7 @@ All line numbers verified on this branch (`2d90e4b3`) on 2026-10-05.
 | `gcf/.gcloudignore` excludes `test_*.py` and `*_test.py` from the deployed function | `gcf/.gcloudignore` | `*_test.py` is anticipated as a naming mistake; unittest's default pattern never discovers it |
 | Python 3.12.13 measured locally: `discover` silently skips a subdirectory without `__init__.py`; never discovers `x_test.py`; exits **5** («NO TESTS RAN») on an empty start dir; exits **1** («Start directory is not importable») on a missing one | scratch experiment, 2026-10-05 | A v3 job pointed at a missing or empty `gcf_v3/` is red, not inert; a misplaced v3 test runs nowhere and nobody is told. The guard must model this |
 | Cross-tree imports are **not** blocked by the start directory. In a scratch tree (`gcf/owt_solver_v2.py`, no `gcf/__init__.py`; `gcf_v3/owt_v3/__init__.py`; one probe test in `gcf_v3/`), `python -m unittest discover -s gcf_v3 -t gcf_v3` run from the tree root imports `owt_v3` ✓, fails on bare `owt_solver_v2` (`ModuleNotFoundError`), and **imports `gcf.owt_solver_v2` ✓** — identical on Python 3.12.13, 3.13 and 3.14.7. Mechanism: `python -m` puts the working directory (the repo root in CI) on `sys.path[0]`, and an `__init__`-less `gcf/` resolves as a namespace package. The mirror holds in `solver-v2` for `gcf_v3.owt_v3` | scratch experiment, 2026-10-05 | Isolation between the trees cannot be a `sys.path` property; it has to be a guard rule over import statements (I2, Step 3) |
+| A test module inside a package under `gcf_v3/` can import a sibling package that holds no `test*.py`. In a scratch tree (`gcf_v3/owt_v3/__init__.py`; `gcf_v3/tests/__init__.py` + `tests/test_acceptance_ci.py`; `gcf_v3/acceptance/__init__.py` + `acceptance/run.py`), the test does `from acceptance.run import …` and `import owt_v3`; `python -m unittest discover -s gcf_v3 -t gcf_v3 -v` run from the tree root → `tests.test_acceptance_ci… ok`, `Ran 1 test`, exit 0 — identical on Python 3.12.13, 3.13.15 and 3.14.7 | scratch experiment, 2026-10-05 | C5's CI acceptance subset (C5 §12.2) can run inside I1's single command, driven from a module under `gcf_v3/tests/`; no second step is needed (I1) |
 | `gcf_v3/` does not exist; no `fixtures/` directory exists | `ls` | C0 must create the minimum for the v3 job to be real (Decision P1) |
 | Cloud Build deploys v2 from `main`, trigger file filter `gcf/**` and `cloudbuild.yaml`, `--source=gcf` | `cloudbuild.yaml:1-24` (comment at `:3-4`); `docs/SOLVER_AND_INFRA.md:458` | Files under `gcf_v3/` match neither filter, so the scaffold deploys nothing. The filter itself is read from a comment and a doc, not from GCP (Assumption A1) |
 | Other workflows: `smtp-probe.yml` (job `probe`), `flush-notifications.yml` (job `flush`) | `.github/workflows/*.yml` | No other job is named `gates` today; the guard keeps it that way |
@@ -126,7 +132,12 @@ plan), `.github/workflows/ci.yml`, and branch protection on `main` as read above
   `python -m unittest discover -s gcf_v3 -t gcf_v3 -v`; `GITHUB_ACTIONS=true` (runner default); no
   secrets, no env vars; `timeout-minutes: 15` until C5 re-sets it from its own measured run (Decision
   P6; C5 §12.2 adopts the rule and budgets the job at 10 minutes, target 6). Its result is one of the
-  `needs` the `gates` verdict requires to be `success`.
+  `needs` the `gates` verdict requires to be `success`. That command is the job's only test command:
+  anything else C5 runs in CI — its acceptance CI subset (C5 §12.2) included — runs inside it, from a
+  reachable test module (e.g. under `gcf_v3/tests/`) that imports `gcf_v3/acceptance/` (measured to
+  work, Evidence). Such a module imports by top-level names — `acceptance.…`, `owt_v3`, `tests.…` —
+  because `gcf_v3/` is the top-level directory; a `gcf_v3.…` import resolves only because CI's working
+  directory is on `sys.path`, and is not the form to rely on.
 - **I2 — the discovery contract** (enforced by the guard, Step 3). A file under `gcf_v3/` is a test
   module iff its basename matches `test*.py` and it sits in `gcf_v3/` itself or in a directory chain
   below it in which **every** directory has an `__init__.py`. Forbidden under `gcf_v3/` (and `gcf/`):
@@ -404,8 +415,8 @@ commit series; each step leaves local gates green.
 - **Rollback:** revert the merge commit through a PR (protection applies; the revert's own run uses the
   restored single-job workflow, which still produces `gates`). Protection needs no re-apply because it
   never changed. The `gcf_v3/` scaffold goes with the revert; if C5 has already built on it, revert
-  only `ci.yml` and the guard, and run both suites as steps of the single `gates` job instead (Parent
-  issue 1).
+  only `ci.yml` and the guard, and run both suites as steps of the single `gates` job instead (parent
+  A36).
 - **Restoration verification:** the revert's `main` run shows one `gates` job with all steps green;
   protection still `["gates"]`.
 
@@ -428,16 +439,9 @@ None blocking. Non-blocking, with bounded defaults:
 
 ## Parent issues
 
-Parent issue 1 of the previous draft (who creates `gcf_v3/` before C5) is settled by parent A20 and
-removed. One remains:
-
-1. **The C0 row's rollback («Revert», parent §11) is incomplete once C5 has landed on the scaffold.**
-   §13 makes C0 a prerequisite of C5 («→ C5 | C0 merged; …»), and C5 takes the `gcf_v3/` scaffold over
-   (A20, C5 §11.1). A plain revert of C0's merge after that point deletes or conflicts with C5's files
-   and removes the `solver-v3` job that C5's suite depends on. **Recommended fix:** C0's rollback cell
-   reads «Revert before C5 lands; after it, revert only the workflow split and the guard, and run both
-   suites as steps of the single `gates` job». This plan follows that reading (Rollback, above). Not
-   addressed by A1–A26.
+None. The previous draft's two items are settled: who creates `gcf_v3/` before C5 (parent A20) and the
+rollback once C5 has built on the scaffold (parent A36, which adopts this plan's recommended reading
+verbatim; Rollback, above).
 
 ## Notes to siblings
 
@@ -447,6 +451,10 @@ removed. One remains:
   (measured on Python 3.12.13; Evidence). I2 now states the isolation as the guard's import-statement
   ban (Step 3). Suggested rewording for C5: «C0's guard forbids any import of `gcf` from `gcf_v3/`
   (I2); C5 adds no dynamic import of it either.»
+- **C5 §12.2 «CI budget»** says the v3 job runs «§12.1 plus the CI subset of §12.3», but I1 has one
+  command and `gcf_v3/acceptance/` holds no `test*.py`. The subset therefore runs only if a reachable
+  test module (under `gcf_v3/tests/`) imports the harness and drives the `ci` matrix; that layout is
+  measured to work under I1 and I2 unchanged (Evidence). C5 §12.2 should say so.
 
 ## Handoff
 

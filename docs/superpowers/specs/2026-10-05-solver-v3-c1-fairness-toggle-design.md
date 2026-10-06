@@ -13,15 +13,19 @@ Requirement: two sequential fresh `APPROVED` verdicts on byte-identical text bef
 churn cap applies.
 
 **Contracts, not prescriptions.** This spec states what must be true and what must never happen. File and
-function names below are cited as evidence of today's code (verified at `3dbc189b`; `2d90e4b3` differs
-from it only under `docs/superpowers/`, so every code citation still holds); helper names, loop shapes and
+function names below are cited as evidence of today's code (verified at `3dbc189b`; `2d90e4b3` and
+`ee91d0e0` differ from it only under `docs/superpowers/`, so every code citation still holds); helper names, loop shapes and
 test file layout belong to the plan, except the names in §9 «Interfaces», which other children import.
 
-**Revision.** Aligned on 2026-10-05 with the parent's amendments A1–A26 (parent §3), which win over the
+**Revision.** Aligned on 2026-10-05 with the parent's amendments A1–A39 (parent §3), which win over the
 parent's older clause wording. The ones that touch this child: **A1** (C1 creates the engine module),
 **A25** (L1's toggle-only wording; lookback services not toggleable), **A13** (rules see every weekend
-service; lines count counted ones), **A5/A6** (a counted special gates the month's record) and **A15**
-(`prior` is built from the GET this child extends).
+service; lines count counted ones), **A5/A6** (a counted special gates the month's record), **A15**
+(`prior` is built from the GET this child extends), **A27** (a counted special gates the record's
+replacement and binding only, never its creation — §9) and **A31** (amendments to existing ADRs are
+C7's — C1-D6, §11). A28–A30 and A32–A39 were read against this child and change nothing in its scope
+(flip and rollback steps, display rounding, floor seats, the cadence invariant, rule-name matching, CI,
+reconstruction dates, exact-count refusal, response seat counts).
 
 **Names.** This repository is public. Every example and fixture uses fictitious people («Ana», «Beto»).
 
@@ -124,7 +128,7 @@ defaults of **D14** («weekend services count, specials do not»).
 | C1-D3 | The field is `true`, `false` or absent. `null` and any other value is refused (`400 invalid_request`, issue `countsForFairness`) on create and edit | A boolean has no «empty» value; reading `null` as «default» on PATCH would be a silent reset; «describe what gets written» (`roleCreationReceipt.ts:155-171`) | Treating `null` as absent, like `time` |
 | C1-D4 | Every document the create writer makes after C1 stores the explicit effective boolean; the edit writer sets it whenever the request carries it | New documents stop depending on the default rule; the rule then only covers legacy documents | Storing only non-default values |
 | C1-D5 | The stored-mode PATCH body always carries the column's effective value | The dirty check and the reconciliation derive from the body (`plannerSaveModel.ts:135-138`); the `_rev` assertion makes a stale value a `409`, never an overwrite | Sending only when changed |
-| C1-D6 | No new ADR. ADR-0010 gets a dated forward note; CLAUDE.md gets the invariant (§11) | The fingerprint and PATCH rules follow existing precedents documented in code; the policy decision is the parent's, and its ADR amendments land at cutover (C7) | A C1 ADR |
+| C1-D6 | No new ADR, and no amendment of an existing one (A31: those are C7's). ADR-0010 gets a dated forward note only — no status-line change, no change to any decision's text — which C7 turns into the in-force date when it amends decision 3 (C7 Step 5, ADR table row 0010); CLAUDE.md gets the invariant (§11) | The fingerprint and PATCH rules follow existing precedents documented in code; the policy decision is the parent's, and its ADR amendments land at cutover (C7, A31) | A C1 ADR; C1 amending ADR-0010's decision 3 now, while v2 still serves Auto |
 
 ## 4. Requirements
 
@@ -419,9 +423,11 @@ reads `OWT_SOLVER_ENGINE` or the effective-engine resolver.
   its record replaced (A5) and its record binds the solve (A6); flipping that special to uncounted (with
   no stored weekend service in the month) lifts both, and flipping one to counted imposes both. C2's
   writer re-checks the gate at write time, so it must read the toggle through the fragment at that moment;
-  C6's binding decision reads it from the GET rows at solve time. The PATCH does not coordinate with the
-  record writer (§5.4 is unchanged by A5): an edit racing a record write is the residual race C2 states
-  for its stored-services gate (C2 GU-3).
+  C6's binding decision reads it from the GET rows at solve time. The gate governs **replacement and
+  binding only**: a recordless month gets its record created by Auto's confirm whatever its counted
+  specials (A27), so no toggle value ever blocks a create. The PATCH does not coordinate with the record
+  writer (§5.4 is unchanged by A5): an edit racing a record write is the residual race C2 states for its
+  freezing-services gate (C2 §4.2, «Residual race, stated»).
 - Only a **counted** Sunday-dated service is a «counted Sunday» for the cadence state (X1, A14): a toggle
   edit on a current-month Sunday-dated service (weekend or special) can change the next run's derived
   state.
@@ -453,8 +459,10 @@ reads `OWT_SOLVER_ENGINE` or the effective-engine resolver.
   it and changes nothing a notice could report queues no notice; `ROLE_PROJECTION` does not carry it;
   inert until v3 serves Auto.» Reusable-utils entries for the module and for `solverEngine.ts` (the
   constant only; the resolver is C2's, A1).
-- ADR-0010: a dated note — role documents carry `countsForFairness` (default off for specials); inert
-  under v2; decision 3 is amended when v3 serves Auto (parent §9, C7).
+- ADR-0010: a dated forward note — role documents carry `countsForFairness` (default off for specials);
+  inert under v2; decision 3 is amended when v3 serves Auto, by C7 (parent §9, A31). The note changes
+  neither the status line nor any decision's text; C7 writes the amendment and turns the note's date
+  into the in-force date (C7 Step 5).
 - `protectedReadAudit.ts`: the POST and PATCH entries' `reason` mentions the field.
 - `docs/MONTH_GRID_EDITING.md` (and `UTILITIES_AND_COMPONENTS.md`): the header switch and the note.
 - No `docs/SECRETS.md` entry: C1 introduces no environment variable.
@@ -505,22 +513,20 @@ None open. The three this spec raised are settled by the parent's amendments: wh
 `solverEngine.ts` and who owns the override (**A1**: C1 the constant, C2 the resolver, override, SECRETS
 entry and PUT refusal, C6 the solve route's 409 and the engine prop — followed in §6.6 and §9); the
 semantic wording of «toggle-only PATCH» (**A25**, adopting C1-D2 — followed in §5.4); and lookback
-services that no surface can toggle (**A25**, accepted — §14 Q1).
+services that no surface can toggle (**A25**, accepted — §14 Q1). A27–A39 raise none for C1: A27 is
+followed in §9 and A31 in C1-D6 and §11.
 
 ## Sibling notes
 
-For the owning child; C1 follows the parent's amendments meanwhile.
-
-| ID | Child | Issue (as read 2026-10-05) | Recommended fix |
-|---|---|---|---|
-| SN-1 | C2 | EN-1 and P3 say C2 creates `solverEngine.ts`; A1 gives the module and its constant to C1 | EN-1: C2 imports C1's constant and adds the resolver (EN-2) beside or in the module without changing the constant; drop P3 as resolved by A1 |
-| SN-2 | C6 | §5.1 «Ownership» says C1 creates the module «if absent (C1 §6.6)»; under A1 C1 creates it unconditionally | Drop «if absent»; nothing else in ENG-1–ENG-5 or CTL-1 changes. C6's S-2 (the override is C2's, not C6's) is already reflected in §6.6 |
+None open. The two earlier notes are applied by their owners (re-read 2026-10-05): SN-1 — C2's EN-1
+consumes C1's constant unchanged and C2 §12 lists its P3 as resolved by A1; SN-2 — C6 §5.1 no longer
+says «if absent» (C6 §13 records it). Their IDs are not reused.
 
 ## Review handoff
 
 - Review order per the parent: C0, **C1**, C3, C2, C4, C5, C6, C7. This child at critical tier: two
   sequential fresh `APPROVED` verdicts on byte-identical text; the churn cap is binding.
-- Evidence: this repository at `3dbc189b`, unchanged in code at `2d90e4b3` (file:line above); private
+- Evidence: this repository at `3dbc189b`, unchanged in code at `2d90e4b3` and `ee91d0e0` (file:line above); private
   `owt-agent-logs/sdd/2026-10-05-solver-v3-fairness/evidence/` (`d_persistence-ux.md` §1.3/§4/§5,
   `d_skeptic-delivery.md` M6/M10, `d_ledger.md` (d)) — superseded wherever the parent decides otherwise.
 - Prior planning dialogue excluded from reviewers: yes.

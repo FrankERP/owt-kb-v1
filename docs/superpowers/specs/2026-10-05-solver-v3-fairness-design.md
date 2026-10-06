@@ -1,8 +1,8 @@
 # Solver v3: cross-month fairness, cadence leads and 1–2-month runs — parent design (roadmap)
 
 **Date:** 2026-10-05 · **Status:** `APPROVED` by Frank (sections in chat, then the written text at
-`d497749f`, both on 2026-10-05); amendments A1–A39 (§3) added the same day after writing the
-children — technical contracts, no policy change · **Risk tier of this parent:** standard (it owns the shared policy and
+`d497749f`, both on 2026-10-05); amendments A1–A40 (§3) added the same day after writing the
+children — technical contracts, no policy change, **not yet read by Frank** · **Risk tier of this parent:** standard (it owns the shared policy and
 the contracts between children; each child carries its own tier, §11).
 
 **Contracts, not prescriptions.** This document states what must be true and what must never happen.
@@ -158,6 +158,7 @@ children need to agree on. Where a row names a clause, the row wins over that cl
 | A37 | §13 | «→ C4» exits with August and September recorded; October is applied on or after 2026-11-01 (A21). |
 | A38 | L2, S1 | A person has at most **one** exact count per role key; two exact rules covering the same role for the same person are refused when saved (C3) and by the record validator (C2). The eligibility resolver's `ok: true` output always passes the record validator (tested). |
 | A39 | S4, U5 | The response carries integer seat counts per person, line and tab (received, pinned) beside the hundredths figures; the panel renders seat counts from them and never divides. The golden fixture's wire balance is `share − received` in hundredths, in both languages. |
+| A40 | U4, L3, A24 | If a horizon month has become past between the solve and the confirm (the confirm crossed a month boundary), the confirm refuses before writing anything — no record, no draft — and asks to run Auto again. No v3-drafted month is ever left without its record. |
 
 ## 4. The fairness policy (the shared contract)
 
@@ -475,7 +476,7 @@ On Preview with the engine set to v3, solving (not confirming) the next two real
 - at most 1 Sunday and 1 Saturday lead per person per month (exact-count leads excepted); no
   consecutive Sundays; voice floor met; 0 hard violations; pins honoured;
 - the «Equidad» panel explains every person's numbers, and Frank reads it as correct;
-- flipping the constant back and restoring the `solverConfig` snapshot restores v2 behaviour.
+- flipping the constant back and restoring only the `solverConfig` paths the flip changed (A29) restores v2 behaviour.
 
 The 12-month and pin-scenario evidence is C5's offline acceptance, not this Preview run.
 
