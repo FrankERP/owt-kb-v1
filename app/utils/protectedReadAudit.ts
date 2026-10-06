@@ -323,6 +323,13 @@ export const PROTECTED_RUNTIME_WRITERS: readonly AuditExemption[] = [
     removalOwner: "permanent runtime writer (never removed — the notification sweep itself)",
   },
   {
+    file: "app/utils/fairnessMonthCommit.ts",
+    operation: "module",
+    reason:
+      "the eligibility-record writer behind `PUT /api/admin/fairness/months` (solver v3 C2 WR-1, ADR-0043): it holds the route's domain body — the engine gate, the strict body and the server stamps — and DELEGATES every mutation to the write executor with actor `route`: create-only-by-collision, revision-asserted whole replace, the freezing-services gate (A5), all-or-nothing in one transaction, no side effects. It commits no transaction itself; it is a site through the executor rule (`PROTECTED_WRITE_EXECUTORS`), and `serviceCommitCallers.test.ts` pins its one caller",
+    removalOwner: "permanent runtime writer (never removed — the eligibility record's write surface itself)",
+  },
+  {
     file: "app/utils/fairnessMonthWriteRequest.ts",
     operation: "module",
     reason:

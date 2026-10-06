@@ -470,7 +470,7 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
   });
 
-  it("licenses the seventeen permanent runtime writers for WRITES ONLY, never reads", () => {
+  it("licenses the eighteen permanent runtime writers for WRITES ONLY, never reads", () => {
     expect(PROTECTED_RUNTIME_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "app/utils/outboxSweep.ts#module",
@@ -487,6 +487,7 @@ describe("A2 handoff allowlist", () => {
         "app/utils/roleWriteOps.ts#module",
         "app/utils/setlistSaveCommit.ts#module",
         "app/utils/fairnessMonthWriteRequest.ts#module",
+        "app/utils/fairnessMonthCommit.ts#module",
         "app/api/me/proposals/route.ts#POST",
         "app/api/me/proposals/[id]/messages/route.ts#POST",
         "app/api/admin/proposals/[id]/messages/route.ts#POST",
@@ -641,7 +642,7 @@ describe("git-tracked protected read inventory", () => {
 
   it("finds exactly the registered fairness executor sites (C2 GU-5, IF2-23)", () => {
     const sites = REAL_SITES.filter((s) => s.client === "executor").map((s) => `${s.file}#${s.operation}`);
-    expect(sites.sort()).toEqual(["app/utils/fairnessMonthWriteRequest.ts#module"]);
+    expect(sites.sort()).toEqual(["app/utils/fairnessMonthCommit.ts#module", "app/utils/fairnessMonthWriteRequest.ts#module"]);
   });
 
   it("routes every migrated member-facing and notification read through the canonical client", () => {
