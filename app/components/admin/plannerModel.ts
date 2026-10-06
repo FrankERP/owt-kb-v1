@@ -51,6 +51,7 @@ import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel
 import { displayMemberName, rulePersonNamesMember } from "@/app/utils/memberRuleNames";
 import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
 import { countsForFairnessDefault } from "@/app/utils/countsForFairness";
+import { canonicalRoles, type RoleKey } from "@/app/utils/fairnessVocabulary";
 
 // ─── Grid shape ───────────────────────────────────────────────────────────────
 
@@ -712,6 +713,21 @@ export function rolesOfPattern(pattern: string): SolverRole[] {
   }
   const role = ROLE_ORDER.find((r) => r === p);
   return role ? [role] : [];
+}
+
+/**
+ * THE v3 six-key pattern expansion (solver v3 C2 RES-2, IF2-16). Restricted to v2's five
+ * keys it is exactly `rolesOfPattern` — which stays the ONE v2 map, untouched — and it adds
+ * `Sat.Choir` exactly when the pattern covers chorus on Saturday: `Sat.*`, `*.Choir`, `*.*`,
+ * `Sat.Choir`, and their legacy aliases. `[]` for anything else, never a guess; canonical
+ * role order (IF2-1). The record's exclusions, exact rules and presence roles, and every v3
+ * rule C6 sends, are expanded through this one function. `patternRolesV3Sync.test.ts`
+ * holds the relation to `rolesOfPattern` for every saveable pattern and alias.
+ */
+export function rolesOfPatternV3(pattern: string): RoleKey[] {
+  const p = LEGACY_PATTERN_ALIASES.get(pattern) ?? pattern;
+  const satChoir = p === "Sat.*" || p === "*.Choir" || p === "*.*" || p === "Sat.Choir";
+  return canonicalRoles([...rolesOfPattern(pattern), ...(satChoir ? (["Sat.Choir"] as const) : [])]);
 }
 
 /** A cap as the solver's DSL spells it, e.g. `Sat.* == 1` or `Sat.BGV >= {weeks-2}`. */
