@@ -4,6 +4,13 @@ import { useState } from "react";
 
 import { draftTargetKey } from "./plannerModel";
 import Select from "@/app/components/ui/Select";
+import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";
+import {
+  FAIRNESS_LABEL,
+  FAIRNESS_SPECIAL_HELP,
+  effectiveCreateCounts,
+  isPastServiceMonth,
+} from "./fairnessToggleModel";
 
 /**
  * The month generator's date picker (E1/E2). Replaces the two Domingos/Sábados
@@ -62,7 +69,12 @@ export interface MonthCalendarProps {
   createdTargets?: ReadonlySet<string>;
   /** Toggle one weekend date on/off. Refused here when it holds a special (E3). */
   onToggleWeekend: (date: string) => void;
-  onAddSpecial: (date: string, name: string) => void;
+  /**
+   * `countsForFairness` is the composer's «Cuenta para equidad» (solver v3 C1 §6.3) —
+   * off by default each time the composer opens, the type default in a past month —
+   * and becomes the special column's initial value.
+   */
+  onAddSpecial: (date: string, name: string, countsForFairness: boolean) => void;
   onRemoveSpecial: (date: string) => void;
 }
 
@@ -197,6 +209,7 @@ export default function MonthCalendar({
 }: MonthCalendarProps) {
   const [composerDate, setComposerDate] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [draftCounts, setDraftCounts] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const days = monthDays(year, month);
@@ -243,6 +256,7 @@ export default function MonthCalendar({
   function openComposer(date: string) {
     setNotice(null);
     setDraftName("");
+    setDraftCounts(false);
     setComposerDate(date);
   }
 
@@ -286,9 +300,11 @@ export default function MonthCalendar({
       setNotice(refusal);
       return;
     }
-    onAddSpecial(openDate, name);
+    // §6.0: decided now — in a past month the special's type default, whatever was chosen.
+    onAddSpecial(openDate, name, effectiveCreateCounts("special_role", openDate, draftCounts));
     setComposerDate(null);
     setDraftName("");
+    setDraftCounts(false);
     setNotice(null);
   }
 
@@ -405,6 +421,14 @@ export default function MonthCalendar({
             onChange={(e) => setDraftName(e.target.value)}
             className="min-h-[44px] w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors"
           />
+          <FairnessSwitch
+            checked={effectiveCreateCounts("special_role", openDate, draftCounts)}
+            onChange={setDraftCounts}
+            past={isPastServiceMonth(openDate)}
+            ariaLabel={FAIRNESS_LABEL}
+            help={FAIRNESS_SPECIAL_HELP}
+          />
+          <FairnessEngineNote />
           <div className="flex gap-2">
             <button
               type="button"
@@ -418,6 +442,7 @@ export default function MonthCalendar({
               onClick={() => {
                 setComposerDate(null);
                 setDraftName("");
+                setDraftCounts(false);
                 setNotice(null);
               }}
               className="min-h-[44px] flex-1 rounded-lg border border-accent/20 px-3 font-label text-[11px] uppercase tracking-widest"

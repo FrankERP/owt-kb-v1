@@ -1822,7 +1822,7 @@ export default function MonthGenerator({
   const [deselectedSundays, setDeselectedSundays] = useState<string[]>([]);
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
   /** E2's weekday specials for THIS month — reset whenever year/month changes. */
-  const [specials, setSpecials] = useState<{ date: string; name: string }[]>([]);
+  const [specials, setSpecials] = useState<{ date: string; name: string; countsForFairness: boolean }[]>([]);
   /**
    * The rules ON SCREEN — the fetched document plus whatever the admin has
    * typed since, not yet saved.
@@ -4188,7 +4188,8 @@ export default function MonthGenerator({
             );
           }
         }}
-        onAddSpecial={(date, name) => setSpecials(prev => [...prev.filter(s => s.date !== date), { date, name }])}
+        onAddSpecial={(date, name, countsForFairness) =>
+          setSpecials(prev => [...prev.filter(s => s.date !== date), { date, name, countsForFairness }])}
         onRemoveSpecial={date => setSpecials(prev => prev.filter(s => s.date !== date))}
       />
 
