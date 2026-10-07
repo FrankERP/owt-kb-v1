@@ -43,3 +43,19 @@ class TimingShapes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HarnessGuards(unittest.TestCase):
+    def test_report_exact_rejects_an_unexpected_extra(self):
+        from acceptance import scenarios
+        resp = {"ok": True, "violations": [], "notices": [],
+                "missed": [{"code": "sunday_cap_exceeded", "cause": "higher_priority"}]}
+        self.assertTrue(scenarios._exact([({}, resp)], [{"m": [("sunday_cap_exceeded", "higher_priority")]}]))
+        self.assertFalse(scenarios._exact([({}, resp)], [{}]))
+        self.assertFalse(scenarios._exact([({}, {**resp, "ok": False})], [{}]))
+
+    def test_a_failed_setup_solve_is_a_harness_error(self):
+        from acceptance import x1
+        self.assertEqual(run._setup(({}, {"ok": True}), "x"), ({}, {"ok": True}))
+        with self.assertRaises(x1.HarnessError):
+            run._setup(({}, {"ok": False, "code": "timeout"}), "base")

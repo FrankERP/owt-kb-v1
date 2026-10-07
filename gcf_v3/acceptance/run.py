@@ -43,6 +43,14 @@ MATRIX = {
 }
 
 
+def _setup(pair, what):
+    """A setup solve (history the scenarios stand on) must succeed, or the criteria that read
+    that history would pass vacuously on a partial one."""
+    if not pair[1].get("ok"):
+        raise x1.HarnessError(f"setup solve failed ({what}): {pair[1].get('code')}")
+    return pair
+
+
 class Env:
     """Base chains (the world's history up to Oct 2026, solved by the policy itself) and runs on top."""
 
@@ -57,7 +65,7 @@ class Env:
             month = self.data["start"]
             while month <= BASE_LAST:
                 if not ch.stored_in(month):
-                    ch.run([month], seed)
+                    _setup(ch.run([month], seed), f"base {month} seed {seed}")
                 month = add_months(month, 1)
             self._base[seed] = ch.stored
         ch = Chain(self.data, overlay)
@@ -233,7 +241,7 @@ def run_matrix(world_path, matrix, out_dir=None):
             summary.criterion(f"A.s{seed}.{name}", ok)
     for seed in plan["B"]:
         ch = env.base(seed)
-        ch.run(RUN_A, seed)
+        _setup(ch.run(RUN_A, seed), f"B preliminary Nov+Dec seed {seed}")
         ch.drop_months(["2026-12"])
         req, resp = ch.run(["2026-12"], seed, store=False)
         env.record(f"B-s{seed}", req, resp)
@@ -256,11 +264,14 @@ def run_matrix(world_path, matrix, out_dir=None):
     fictitious = bool(data.get("scenarios"))  # P and G name the fictitious world's members
     for seed in plan["P"] if fictitious else ():
         for sid, checks, runs in scenarios.scenario_runs(env, seed):
+            verdicts = []
             for i, (req, resp) in enumerate(runs):
                 env.record(f"{sid}-s{seed}-r{i + 1}", req, resp)
                 verdict = summary.add_run(req, resp)
-                if resp.get("ok") and sid not in ("P15",):
-                    checks = checks + [("checker_ok", verdict["ok"])]
+                if sid not in ("P15",):
+                    verdicts.append(bool(resp.get("ok")) and verdict["ok"])
+            if verdicts:  # every run's verdict counts, not the last one's
+                checks = checks + [("checker_ok", all(verdicts))]
             for name, ok in checks:
                 summary.criterion(f"{sid}.s{seed}.{name}", ok)
     for seed in plan["G"] if fictitious else ():
@@ -270,7 +281,7 @@ def run_matrix(world_path, matrix, out_dir=None):
                         "exempt": False, "cadence": False, "unavailable": []} for m in extra]
             ch = Env({**data, "members": data["members"] + members}).base(seed)
             for month in ("2026-11", "2026-12", "2027-01"):
-                ch.run([month], seed)
+                _setup(ch.run([month], seed), f"G{size} {month} seed {seed}")
             req, resp = ch.run(["2027-02", "2027-03"], seed, store=False)
             env.record(f"G{size}-s{seed}", req, resp)
             summary.add_run(req, resp)

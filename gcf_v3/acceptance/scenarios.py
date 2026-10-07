@@ -45,8 +45,59 @@ def _line(resp, person, line):
     return None
 
 
+# What each scenario's report must hold, exactly (spec §12.3): (code, cause) multisets for the
+# violations ("v"), the misses ("m") and the notices ("n"), per run. Anything else in a report
+# fails `report_exact`. Notices carry no cause, so theirs is None. The misses beside a scenario's
+# subject are its pins' or fixed rows' own consequences (a pinned or stored row that crowds a cap
+# or a Sunday run is reported, not hidden). P15 is exempt (honest `not_proven` everywhere).
+_P = "pins"
+_HP = "higher_priority"
+EXPECTED = {
+    "P1": [{"v": [("pair", _P)]}],
+    "P2": [{"v": [("count", _P)], "m": [("consecutive_sundays", _P)]}],
+    "P3": [{"v": [("count", _P), ("pair", _P)], "m": [("consecutive_sundays", _P)]}],
+    "P4": [{"v": [("presence", _P)], "m": [("consecutive_sundays", _HP), ("sunday_cap_exceeded", _HP),
+                                          ("sunday_cap_exceeded", _HP)]}],
+    "P5": [{"m": [("cadence_off_led", _P)]}],
+    "P6": [{"m": [("consecutive_sundays", _P)] * 4 + [("sunday_cap_exceeded", _P)]}],
+    "P7": [{}],
+    "P8": [{"m": [("sunday_cap_exceeded", _HP)], "n": [("exact_clamped", None)] * 2}],
+    "P9": [{"n": [("presence_not_applicable", None)]}],
+    "P10": [{}, {}],
+    "P11": [{"m": [("sunday_cap_exceeded", _HP)]}],
+    "P12": [{}],
+    "P13": [{"m": [("sunday_cap_exceeded", _HP)]}] + [{}] * 5,
+    "P14": [{}],
+    "P16": [{}],
+}
+
+
+def _exact(runs, expected):
+    """True when every run's violations, misses and notices equal the expected multisets."""
+    from collections import Counter
+    if len(runs) != len(expected):
+        return False
+    for (_, resp), want in zip(runs, expected):
+        if not resp.get("ok"):
+            return False
+        got = {"v": Counter((x["code"], x["cause"]) for x in resp["violations"]),
+               "m": Counter((x["code"], x["cause"]) for x in resp["missed"]),
+               "n": Counter((x["code"], x.get("cause")) for x in resp["notices"])}
+        if any(got[k] != Counter(want.get(k, [])) for k in got):
+            return False
+    return True
+
+
 def scenario_runs(env, seed):
-    """Yield (scenario id, [(check name, bool)], [(request, response)])."""
+    """Yield (scenario id, [(check name, bool)], [(request, response)]); each scenario with an
+    EXPECTED entry also carries `report_exact`."""
+    for sid, checks, runs in _scenarios(env, seed):
+        if sid in EXPECTED:
+            checks = checks + [("report_exact", _exact(runs, EXPECTED[sid]))]
+        yield sid, checks, runs
+
+
+def _scenarios(env, seed):
     # P1 — the presence pair, both pinned to one Sunday's BGV: a pair break caused by pins
     req, resp = env.run([NOV], seed, {"pins": [pin(SUNDAYS_NOV[1], "BGV", "m-gala"),
                                                pin(SUNDAYS_NOV[1], "BGV", "m-hector")]})
