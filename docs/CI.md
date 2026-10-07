@@ -149,6 +149,12 @@ quarter, and split again rather than drop a suite. The numbers live here, not in
 workflow comments. `solver-v3`'s 15 was set before its suite existed; the suite's
 first GitHub-runner measurement (a `workflow_dispatch` run of the C5 branch) is
 still to be taken, and 15 stands while that job stays at or under 7m30s.
+**PENDING, owed before the C5 merge:** the only figure so far is local, not a
+runner's: 194 tests in 20.0 s on a developer laptop (2026-10-07), about 22x under
+that 7m30s bar, so no timeout change is expected. Take the real row (dispatch
+`ci.yml` on the pushed branch, add it to the table above, then re-check
+`timeout-minutes: 15` and the two `ciLayout.test.ts` anchors) and delete this
+paragraph.
 
 | Run | Date | Commit | Layout | Node steps | v2 solver steps | v3 solver steps | Wall (job) |
 |---|---|---|---|---|---|---|---|
