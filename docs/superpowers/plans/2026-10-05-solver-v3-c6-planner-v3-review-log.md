@@ -143,4 +143,14 @@ so the task reviewers check them against the code:
 
 ## Post-approval changes (un-reviewed)
 
-None. The plan file still hashes to `1579b20c…` at the time this log was written.
+- **2026-10-07 — Task 16's quotes of C2's X1 sentences.** C2 amended its §8 X1 copy the same day
+  (Frank: the cadence state concerns Sunday lead only): «En {mes} le toca domingo (previsto).»
+  (unchanged) · «En {mes} no dirige domingo: ya dirigió el {día}.» · «En {mes} no dirige domingo: no
+  está en la lista de Dom Lead.» · «En {mes} no dirige domingo: ningún domingo disponible.» Task 16
+  quoted the old «descansa» sentences (the Step 4 Find and replacement blocks, the EQ-4 test's title and
+  expectation), and sibling rows S-19 and S-22 quoted them too; all were updated to C2's amended copy,
+  and S-22 now reads «applied on C2's branch 2026-10-07». The edit sits outside the critical slice
+  (Tasks 17–19 are untouched) and was not reviewed.
+- **Digest:** the approved digest `1579b20c…` covers the pre-change bytes only; the file no longer
+  matches it. Task 0 Step 4 (the anchors re-verified against the merged tree) and the real execution of
+  Task 16 re-prove these quotes.

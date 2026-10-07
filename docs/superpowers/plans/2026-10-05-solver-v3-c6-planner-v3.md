@@ -7781,7 +7781,7 @@ describe("WN-1 / WN-3 — C3's warning names its months; the Saturday-pool note"
 });
 
 describe("EQ-4 — the cadence line after a run is RQ-4's own value", () => {
-  it("a Sunday the planner skipped is not a request service, so the run says «descansa» where the preview said «le toca»", async () => {
+  it("a Sunday the planner skipped is not a request service, so the run says «no dirige domingo» where the preview said «le toca»", async () => {
     const cfg = config({ sundayLeads: ["m-ana", "m-bruno"], restrictions: [restriction("r-ana", "Ana", { sundayCadence: "alternate" })] });
     const people = [ledgerPerson("m-ana", "Ana", { tabs: { window: { DL: { share: 0, received: 0, balance: 0, seats: 0, tenths: { share: 0, balance: 0 } } }, cumulative: {} } })];
     const solve = solveRoute((r) => ({ status: 200, body: echoV3(r) }));
@@ -7798,7 +7798,7 @@ describe("EQ-4 — the cadence line after a run is RQ-4's own value", () => {
     await waitFor(() => expect(solve.requests).toHaveLength(1));
     // Ana is eligible nowhere in this request (her one planned Sunday is a day off), so she is not
     // sent; RQ-4's state is computed for her anyway and is what the panel shows.
-    await waitFor(() => expect(screen.getAllByText(/En nov descansa: ningún domingo disponible\./).length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText(/En nov no dirige domingo: ningún domingo disponible\./).length).toBeGreaterThan(0));
     expect(screen.queryAllByText(/En nov le toca domingo/)).toHaveLength(0);
   });
 });
@@ -7853,11 +7853,11 @@ Find:
     case "on":
       return `En ${mes} le toca domingo (previsto).`;
     case "led_previous_month":
-      return `En ${mes} descansa: dirigió domingo el ${dayMonth(led[led.length - 1])}.`;
+      return `En ${mes} no dirige domingo: ya dirigió el ${dayMonth(led[led.length - 1])}.`;
     case "not_eligible":
-      return `En ${mes} descansa: no está en la lista de Dom Lead.`;
+      return `En ${mes} no dirige domingo: no está en la lista de Dom Lead.`;
     default:
-      return `En ${mes} descansa: ningún domingo disponible.`;
+      return `En ${mes} no dirige domingo: ningún domingo disponible.`;
   }
 }
 ```
@@ -7878,11 +7878,11 @@ export function x1LineText(month: string, reason: CadenceReason, ledDate: string
     case "on":
       return `En ${mes} le toca domingo (previsto).`;
     case "led_previous_month":
-      return `En ${mes} descansa: dirigió domingo el ${ledDate ? dayMonth(ledDate) : "—"}.`;
+      return `En ${mes} no dirige domingo: ya dirigió el ${ledDate ? dayMonth(ledDate) : "—"}.`;
     case "not_eligible":
-      return `En ${mes} descansa: no está en la lista de Dom Lead.`;
+      return `En ${mes} no dirige domingo: no está en la lista de Dom Lead.`;
     default:
-      return `En ${mes} descansa: ningún domingo disponible.`;
+      return `En ${mes} no dirige domingo: ningún domingo disponible.`;
   }
 }
 ```
@@ -10354,10 +10354,10 @@ git log $BASE..HEAD --format=%B | grep -ci "co-authored" || true                
 
 | ID | Child | Issue | C6 meanwhile |
 |---|---|---|---|
-| S-19 | C2 | C2 §8's X1 copy has no sentence for IF2-12's `assumed_led_previous_month` (month 2 of a run); C2's `cadenceLine` falls through to «descansa: ningún domingo disponible», which would be false there | C6 renders §7.7's «Mes por medio: no dirige domingo en {mes}.» for that month and no X1 sentence (Task 16; copy amended 2026-10-07) |
+| S-19 | C2 | C2 §8's X1 copy has no sentence for IF2-12's `assumed_led_previous_month` (month 2 of a run); C2's `cadenceLine` falls through to «no dirige domingo: ningún domingo disponible», which would be false there | C6 renders §7.7's «Mes por medio: no dirige domingo en {mes}.» for that month and no X1 sentence (Task 16; copy amended 2026-10-07) |
 | S-20 | C5 | `invalid_request`'s `detail` tokens are not listed in `codes.json` (only its parameter names), so C6 cannot key copy on them | C6 renders the generic planner-bug line with `field` only (§7.5) |
 | S-21 | C2 / spec | IF-C2 lists IF2-11 as «ST-6's test only», while C2 §7.4 forbids a C6 reimplementation of LG-4; this plan calls `keepVoiceSeats` at run time (Plan decisions) | For the reviewer to rule; the fallback is a local first-seen pass tested against IF2-11 |
-| S-22 | C2 | Frank, 2026-10-07: «Mes por medio» governs Sunday lead only, so a cadence line must not read as resting from everything. C2 §8's X1 sentences still say «En {mes} descansa: …» (`led_previous_month`, `not_eligible`, the default) | C6 renders C2's X1 sentences unchanged through `x1LineText` (Task 16) and rewords only its own copy (§7.2, §7.7, SP-7's motivo); C2 to reword its X1 copy on its own branch |
+| S-22 | C2 | Frank, 2026-10-07: «Mes por medio» governs Sunday lead only, so a cadence line must not read as resting from everything. C2 §8's X1 sentences said «En {mes} descansa: …» (`led_previous_month`, `not_eligible`, the default) | applied on C2's branch 2026-10-07: C2 §8's X1 now reads «En {mes} no dirige domingo: …»; C6 renders C2's X1 sentences unchanged through `x1LineText` (Task 16) and rewords only its own copy (§7.2, §7.7, SP-7's motivo) |
 | S-18 | C7 | (open in the spec) C7 cites «KH-1 as amended» for the ordinal map that KH-3 delivers | KH-3 is delivered as the spec states; the table's format is in Plan decisions |
 
 ---
@@ -10416,7 +10416,7 @@ Recommended: **superpowers:subagent-driven-development** — a fresh implementer
 - *Stale `[PROVISIONAL]` descriptions removed:* «How to read an edit step», Task 0 Step 4 (now «re-verify the anchors from C2 Tasks 11–17 and C5 Tasks 10–15 (re-verified at replay 2026-10-07 against `4c50309b`) against the merged `main`») and its stop rule, Task 16 Step 9's expectation, Self-review item 2, Procedure item 3.
 - *Task 0 Step 5:* if the next two free ADR numbers are not `0051`/`0052`, both are replaced everywhere (the places are listed there).
 - *Task 2 Step 7 (`docs/SECRETS.md`, `OWT_SOLVER_V3_URL`):* the value is set with `printf '%s' "$URL" | npx vercel env add OWT_SOLVER_V3_URL <preview|production> --type config` and removed with `npx vercel env rm OWT_SOLVER_V3_URL <env> --yes` (the sibling entries' style); it is stated as non-sensitive config; a rotation is `rm` + `add` back to back, then one redeploy, and the blast radius names the build that could start between the two.
-- *Copy (Frank, 2026-10-07: «Mes por medio» governs Sunday lead only — BGV/Coro and the voice floor are untouched):* Task 4's `v3Copy.ts` — `cadence_off_led` «…, su mes sin domingo («Mes por medio»).», `V3_CADENCE_STATE.off` «no dirige domingo», `.out` «no dirige domingo: no está en la lista de Dom Lead», `V3_PANEL_REASON.cadenceOff` «Mes por medio: no dirige domingo en {mes}.», `V3_LINES.motivoCadence` «es su mes sin domingo («Mes por medio»)»; the tests that assert them: Task 10 Step 1 (SP-7's motivo table) and Task 16 Step 1 (the DL reason line); the `x1LineText` doc comment (Task 16 Step 4) and sibling row S-19 quote the new line. Keys and behaviour unchanged. C2's own X1 sentences («En {mes} descansa: …», extracted verbatim by Task 16 Step 4) are C2's copy and stay — new sibling row S-22. The spec's §7.2 and §7.7 carry the dated amendment.
+- *Copy (Frank, 2026-10-07: «Mes por medio» governs Sunday lead only — BGV/Coro and the voice floor are untouched):* Task 4's `v3Copy.ts` — `cadence_off_led` «…, su mes sin domingo («Mes por medio»).», `V3_CADENCE_STATE.off` «no dirige domingo», `.out` «no dirige domingo: no está en la lista de Dom Lead», `V3_PANEL_REASON.cadenceOff` «Mes por medio: no dirige domingo en {mes}.», `V3_LINES.motivoCadence` «es su mes sin domingo («Mes por medio»)»; the tests that assert them: Task 10 Step 1 (SP-7's motivo table) and Task 16 Step 1 (the DL reason line); the `x1LineText` doc comment (Task 16 Step 4) and sibling row S-19 quote the new line. Keys and behaviour unchanged. C2's own X1 sentences («En {mes} no dirige domingo: …» since C2's amendment of 2026-10-07, extracted verbatim by Task 16 Step 4) are C2's copy — sibling row S-22 (applied on C2's branch 2026-10-07). The spec's §7.2 and §7.7 carry the dated amendment.
 - *EQ-6 (Task 16 Step 2):* a new component test — at a stubbed 390 px viewport (`innerWidth` and a narrow `matchMedia`, as `participationAlongside.test.tsx` stubs one), after a v3 run, Ana's card inside `[data-fairness-cards]` reads «En este plan 2 · Queda le deben 0.3»; the cards are `md:hidden` and the table sits in its own `hidden md:block overflow-x-auto` box. It sits in Step 2's component file, not Step 1's model file, because it renders (Step 1 is `node`-environment and renders nothing). A mutation check (expecting «En este plan 3») failed as it should. Coverage row and gaps paragraph updated.
 - *CF-9's «none for a specials-only month» stays declined* (review round 1). What proves it today: the v3 confirm's history filter is today's P1 second lock (`d._type !== "special_role"`) copied verbatim, and today's create suite proves that lock under v2. What would add it: lifting the create suite's special-composer helpers into `v3PlannerHarness.tsx` and a specials-only 2-month confirm asserting no history entry for that month. Coverage row and gaps paragraph say so.
 - *Coverage CF-11* now cites tests, not code (`v3ConfirmRun.test.ts` › the record step › a network error; the drafts thrown-POST case; `MonthGenerator.v3Confirm.test.tsx` › «other failure» offers «Reintentar (n pendientes)»).
