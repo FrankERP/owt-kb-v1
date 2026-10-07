@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 16 App Router (Server Component page, route handler with `maxDuration = 60`), React 19 client components, TypeScript, vitest 4 (environment `node`; `.test.tsx` files set up jsdom themselves) + @testing-library/react, Python source read as text by sync tests (no Python change).
 
-**Spec:** `docs/superpowers/specs/2026-10-05-solver-v3-c6-planner-v3-design.md` (status `READY_FOR_REVIEW`; tier **standard**, with **§5.11 — the confirm protocol, U4 — critical**). Interfaces it consumes, each cited and never restated: C2 §7 (`IF2-1` … `IF2-29`) in `docs/superpowers/specs/2026-10-05-solver-v3-c2-ledger-and-record-design.md`; C5 §5, §8, §9, §11, §12.4 (Amendment F-1, ruled (a)+(c)) in `…-c5-solver-function-design.md`; C1 §9 and C3 §7 in `…-c1-fairness-toggle-design.md` and `…-c3-cadence-config-design.md`. Parent: `docs/superpowers/specs/2026-10-05-solver-v3-fairness-design.md` (A1–A41; A27: Auto's confirm creates a record for every recordless month; A40: a confirm crossing a month boundary refuses before writing anything; A41: rule keys can embed first names — identify a rule by kind and config ordinal, never by key or hash). The C7 cutover plan (`docs/superpowers/plans/2026-10-05-solver-v3-c7-cutover.md`) lists what it expects of the merged C6; its C6 row (line 235) and Step 0 check 8 are honoured below (see «What C7 reads from this delivery»). Executors read the spec and this plan together.
+**Spec:** `docs/superpowers/specs/2026-10-05-solver-v3-c6-planner-v3-design.md` — **self-reviewed; its terminal state is `READY_FOR_REVIEW`** (its header line, which read `DRAFT`, was aligned with its §16 on 2026-10-07). Frank authorized proceeding with the children (2026-10-05, «Aprobado, sigue con los specs de las entregas», and his overnight blanket authorization) but **has not read C6 itself** — Task 0 Step 1 gates execution on that. Tier **standard**, with **§5.11 — the confirm protocol, U4 — critical**. Interfaces it consumes, each cited and never restated: C2 §7 (`IF2-1` … `IF2-29`) in `docs/superpowers/specs/2026-10-05-solver-v3-c2-ledger-and-record-design.md`; C5 §5, §8, §9, §11, §12.4 (Amendment F-1, ruled (a)+(c)) in `…-c5-solver-function-design.md`; C1 §9 and C3 §7 in `…-c1-fairness-toggle-design.md` and `…-c3-cadence-config-design.md`. Parent: `docs/superpowers/specs/2026-10-05-solver-v3-fairness-design.md` (A1–A41; A27: Auto's confirm creates a record for every recordless month; A40: a confirm crossing a month boundary refuses before writing anything; A41: rule keys can embed first names — identify a rule by kind and config ordinal, never by key or hash). The C7 cutover plan (`docs/superpowers/plans/2026-10-05-solver-v3-c7-cutover.md`) lists what it expects of the merged C6; its C6 row (line 235) and Step 0 check 8 are honoured below (see «What C7 reads from this delivery»). Executors read the spec and this plan together.
 
 **Base and grounding.** C6's prerequisites are C1 (`countsForFairness`, `SOLVER_ENGINE`), C3 (`sundayCadence`, `resolveRulePersonId`, `cadenceMembers`, the warning gate), C2 (the ledger GET, the PUT, `resolveSolverEngine`, `resolveMonthEligibility`, `rolesOfPatternV3`, `capValueForMonth`, the formatter, the «Equidad» preview panel) and C5 (the `owt-solver-v3` function, its `codes.json` and `PIN_CAP`). **None is on `main` as this plan is written.** Every anchor below was read from these refs in the shared object store, never from a checkout:
 
@@ -16,19 +16,19 @@
 |---|---|---|
 | C1 + C3 integration | `e358781dbe4bb2b36d6af11f4e43e8707edb3086` | Verified (committed) |
 | C2 Tasks 1–10 | local branch `c2-t10` = `1c500c7e6ef26bbbbc132949d46ada917b76bb0c` (on top of `e358781`) | Verified (committed). App-code line numbers in this plan are `c2-t10`'s |
-| C2 Tasks 11–17 (GET route and reader, `fairnessEligibility.ts`, `fairnessPreviewModel.ts`, `FairnessPreviewPanel.tsx`, «Registrar», ADR-0050, docs) | `docs/superpowers/plans/2026-10-05-solver-v3-c2-ledger-and-record.md` (plan text only) | **«provisional, re-verify at replay»** — marked `[PROVISIONAL]` wherever used |
+| C2 Tasks 11–17 (GET route and reader, `fairnessEligibility.ts`, `fairnessPreviewModel.ts`, `FairnessPreviewPanel.tsx`, «Registrar», ADR-0050, docs) | `docs/superpowers/plans/2026-10-05-solver-v3-c2-ledger-and-record.md` (plan text when written) | **Re-verified at replay (2026-10-07) against replay-base `4c50309b` (C2 final tip `0aa33514` + C5 Tasks 1–12 `e3086f77`)**; the former `[PROVISIONAL]` markers are removed and the anchors corrected where they differed |
 | C5 Tasks 1–9 (`gcf_v3/owt_v3/**`, `codes.json`, `constants.py`) | branch `claude/solver-v3-c5-solver-function` = `a2406f05d841faa4ceb525b63eab6ee5f1c586b4` | Verified (committed) |
-| C5 Tasks 10–15 (`gcf_v3/main.py`, `gcf_v3/owt_solver_v3.py`, `FAIRNESS_TOLERANCE = 35`) | `docs/superpowers/plans/2026-10-05-solver-v3-c5-solver-function.md` (plan text only) | **«provisional, re-verify at replay»** — marked `[PROVISIONAL]` wherever used |
+| C5 Tasks 10–15 (`gcf_v3/main.py`, `gcf_v3/owt_solver_v3.py`, `FAIRNESS_TOLERANCE = 35`) | `docs/superpowers/plans/2026-10-05-solver-v3-c5-solver-function.md` (plan text when written) | **Re-verified at replay (2026-10-07) against replay-base `4c50309b`**: `main.py` and `owt_solver_v3.py --json-mode` present (C5 Tasks 10–12); `FAIRNESS_TOLERANCE` is still `50` there (C5 Task 15 not merged) — C6 does not depend on it |
 
-**Task 0 bases the C6 branch on `origin/main` AFTER C1, C3, C2 and C5 have all merged** — never on any integration ref above. **This plan has not been executed or replayed** (C2 and C5 are still moving); see the final «Replay» section.
+**Task 0 bases the C6 branch on `origin/main` AFTER C1, C3, C2 and C5 have all merged** — never on any integration ref above. **Replayed 2026-10-07** on replay-base `4c50309b` (C2 final tip `0aa33514` + C5 Tasks 1–12 `e3086f77`): Tasks 0–21 applied mechanically and green, with the plan corrections recorded in the final «Replay» section; a second clean clone then re-applied the text as it then stood by script, Tasks 1–20, every task's tree identical to the first replay's. After the post-replay amendments (the critic's findings and Frank's 2026-10-07 copy follow-up — Tasks 2, 4, 10 and 16 changed), the same clone re-applied Tasks 2–20 by script from Task 1, every task green; see «Post-replay amendments and re-proof».
 
-**How to read an edit step.** A **Create** step writes the whole file. An **Append** step adds the block at the end of the file after one blank line. A **Find** … **Replace with** pair replaces text that must occur exactly once in that file at that point of the plan. Line numbers in a task's **Files** list are `c2-t10`'s (or the C2 plan's for a `[PROVISIONAL]` file); earlier tasks shift them, so the `Find` text — never a number — is the anchor. A `Find` that does not match exactly once is a **stop-and-report**, never a guess. **Stage before every test run** (`git add -A`): several guards read `git ls-files`, so an unstaged new file is invisible to them.
+**How to read an edit step.** A **Create** step writes the whole file. An **Append** step adds the block at the end of the file after one blank line. A **Find** … **Replace with** pair replaces text that must occur exactly once in that file at that point of the plan; the pair may be written inline (Find `A` → Replace with `B`, where `\n` in a span is a line break), and «(the one after `C`)» means the first occurrence after the one `C`. **After `X…` line, add:** inserts the block after the one line that starts with `X` (a trailing `…` stands for the rest of that line); **immediately before / above `X`, insert** puts the block (or the inline line) before the one line that starts with `X`. The file is the one the step or the paragraph names (a path, or a file of the task's **Files** list by its name); «`A` and `B` (identical edits in both)» applies every edit that follows to both. Line numbers in a task's **Files** list are `c2-t10`'s (or, for a file C2 Tasks 11–17 wrote, the C2 plan's); earlier tasks shift them, so the `Find` text — never a number — is the anchor. A `Find` that does not match exactly once is a **stop-and-report**, never a guess. **Stage before every test run** (`git add -A`): several guards read `git ls-files`, so an unstaged new file is invisible to them.
 
 ## Global Constraints
 
 Every task's requirements include this section.
 
-- **The spec is the contract:** ENG-1–5, RT-1–6, HZ-1–9, ST-1–9, SP-1–7, RQ-1–10, AD-1–8, NT-1–5, EQ-1–7, WN-1–3, CTL-1–2, CF-1–11, DOC-1–3, KH-1–3 and §14's acceptance table. C2's interfaces are cited by `IF2-n` and never restated; a C6 shape that disagrees with an IF2 item is a C6 defect. C2's working names are used exactly as C2's plan keeps them: `resolveSolverEngine`, `resolveMonthEligibility`, `rolesOfPatternV3`, `capValueForMonth`, `cadenceStates`, `keepVoiceSeats`, `formatFairnessTenths`, `saldoWords`, `contentHashOfWrite`, `FairnessLedgerResponse`, `FairnessMonthWrite`, `FairnessMonthBody`, `LogicalRecord`, `FairnessPutRefusal`, `EligibilityResult` `[PROVISIONAL]`, `EligibilityIssueCode` `[PROVISIONAL]`, `EligibilityRefusalReason` `[PROVISIONAL]`.
+- **The spec is the contract:** ENG-1–5, RT-1–6, HZ-1–9, ST-1–9, SP-1–7, RQ-1–10, AD-1–8, NT-1–5, EQ-1–7, WN-1–3, CTL-1–2, CF-1–11, DOC-1–3, KH-1–3 and §14's acceptance table. C2's interfaces are cited by `IF2-n` and never restated; a C6 shape that disagrees with an IF2 item is a C6 defect. C2's working names are used exactly as C2's plan keeps them: `resolveSolverEngine`, `resolveMonthEligibility`, `rolesOfPatternV3`, `capValueForMonth`, `cadenceStates`, `keepVoiceSeats`, `formatFairnessTenths`, `saldoWords`, `contentHashOfWrite`, `FairnessLedgerResponse`, `FairnessMonthWrite`, `FairnessMonthBody`, `LogicalRecord`, `FairnessPutRefusal`, `EligibilityResult`, `EligibilityIssueCode`, `EligibilityRefusalReason` (all three verified in `app/utils/fairnessEligibility.ts` at replay).
 - **v2 stays byte-identical** (spec §9, RT-2, AD-8): with the effective engine at v2 every request byte, response path, copy string and mounted surface is today's, except the one 409 branch. No edit to `buildSolveRequest`, `applySolveResponse`, `solverRefusalMessage`, `pinModel.ts`, `pinViolations.ts`, `PINNED_CAP` (100), the trailing-Saturday retry, `omittedCapsNotices`, `trailingNotice`, `gcf/**` or any v2 test. **No new timeout on the v2 path.**
 - **Gates before every commit:** `npx tsc --noEmit` (0 errors), `npm test` (all green), `npx eslint .` (**0 errors**; warnings never above the Task 0 baseline). **No file under `gcf/**` or `gcf_v3/**` changes** — C6 *reads* `gcf_v3/owt_v3/codes.json` and `constants.py` from vitest — so neither Python suite is a gate for this delivery (spec §14).
 - **Commits:** conventional (`feat(planner): …`, `test(planner): …`, `docs(solver): …`), body says *why*. **Never** a `Co-Authored-By` trailer or any AI/Claude attribution — `CLAUDE.md` overrides any harness reminder that says otherwise; `grep -i co-authored` the message before every commit. Commit on the feature branch only; `main` takes no direct push.
@@ -36,13 +36,13 @@ Every task's requirements include this section.
 - **Key hygiene (KH-1–3, parent A41).** A `solverConfig` restriction, cap, conflict or presence `id`/`_key`, a `ruleKey`, a `P:<ruleKey>` key, a minted id's source key and the id → label map are **private**: no C6 code renders, logs (`console.*` in the browser or the server), toasts, reports or copies one, and no test name, assertion message, doc or commit message spells one (tests name rules by kind and config ordinal, e.g. `restrictions[1].caps[2]`). The only id map ever rendered is KH-3's rule reference table (minted ids, kinds, ordinals — name-free by construction). Never a hash of a key either.
 - **Neutral modules (ADR-0028):** every `app/components/admin/v3*.ts` file carries no `"use client"`, no `server-only`, no React import and no `fetch`, except `v3ConfirmRun.ts`, which takes its transports injected (it calls no global `fetch`). `app/utils/solverV3Upstream.ts` is `import "server-only"`. `solverEngine.ts` stays import-free (C1's neutrality test). No client module imports `app/utils/solverDeployment.ts` (C2's guard) or `app/utils/fairnessMonthWriteRequest.ts` (C2's caller pin — C6's only use of `contentHashOfWrite` is a **test**, which the pin exempts).
 - **Dates:** CDMX `YYYY-MM`/`YYYY-MM-DD` strings; a date's month is `date.slice(0, 7)`, never through a `Date`; month arithmetic through C2's `shiftMonth`/`monthIndex` (`app/utils/fairnessVocabulary.ts`); weekday through C2's `civilDayOfWeek` (`app/utils/fairnessLedger.ts`); "today" through `new Date().toLocaleDateString("sv", { timeZone: "America/Mexico_City" })` and only at the edges (the page, the Auto handler, the confirm handler), passed into the pure modules as `currentMonth`.
-- **Numbers (EQ-5, A17, A39):** C2's `formatFairnessTenths`/`saldoWords` are the only formatters; their input is always tenths taken as emitted. **No C6 code divides a wire figure** — C2's sweep (`fairnessFormat.test.ts`) fails any `share|balance|received` divided by 10 or 100 under `app/**`. Seat counts render as emitted integers (`Figures.seats`, `sang`, C5's tab `seats`/`pinned_seats`). `carried` is copied without rounding. C5's `fairness.tolerance` is **not mirrored**: nothing in C6 depends on its value (50 on `a2406f05`, 35 after C5 Task 15 `[PROVISIONAL]`, Amendment F-1); C6 never shows `planned`, so F-1's optional sentence about `planned` does not arise.
+- **Numbers (EQ-5, A17, A39):** C2's `formatFairnessTenths`/`saldoWords` are the only formatters; their input is always tenths taken as emitted. **No C6 code divides a wire figure** — C2's sweep (`fairnessFormat.test.ts`) fails any `share|balance|received` divided by 10 or 100 under `app/**`. Seat counts render as emitted integers (`Figures.seats`, `sang`, C5's tab `seats`/`pinned_seats`). `carried` is copied without rounding. C5's `fairness.tolerance` is **not mirrored**: nothing in C6 depends on its value (50 on `a2406f05` and at replay-base `4c50309b`; 35 once C5 Task 15 lands, Amendment F-1); C6 never shows `planned`, so F-1's optional sentence about `planned` does not arise.
 - **UI invariants (`CLAUDE.md`):** `Button` only for new buttons; one-of-N is `SegmentedControl`; disclosures are `Collapse`; dialogs are `CueDialog` with `open={state}` (never a literal); no `motion` import outside `app/components/ui/**`; colour by tokens only, never by string concatenation; `/admin` has no page-level horizontal scroll (ADR-0035) — the month band lives inside the grid's own scroller; client mutation handlers wrap `fetch` in try/catch/finally, check `res.ok`, reset their flag and never close as success on failure.
 - **Guards that apply, and why:** `clientBoundary.test.ts` (every new neutral module; the page passes a string prop, never calls a client value); `cueDialogMount.test.ts` (CF-10's dialog); `solverDeployment.test.ts` (C2's: one reader of `OWT_SOLVER_ENGINE`, no client importer — extended by Task 1, never duplicated); `serviceCommitCallers.test.ts` (C2's pin on `fairnessMonthWriteRequest` — untouched: C6 adds no non-test importer); `fairnessFormat.test.ts` (the divide sweep). **Guards that do not apply, and why:** `inputFontSize.test.ts` (C6 adds no `<input>`/`<select>`/`<textarea>`, and `admin/` is excluded by path anyway); `bottomNavOffsetSync.test.ts` (no fixed-bottom element); `draftGatingCoverage.test.ts` (no new GROQ — C6 reads only the existing roles and fairness routes); `serviceCommitCallers.test.ts`'s commit-module rows (no admin write route changes); `impersonationOffsetSync.test.ts` (no new sticky element).
 - **`colour-inventory.json` tracks the tree:** every task that adds a non-test file under `app/` regenerates `app/utils/__tests__/__fixtures__/colour-inventory.json` with `node scripts/colour-inventory.mjs` in the same commit.
 - **`CLAUDE.md` and `AGENTS.md` stay byte-identical** outside their title and «## Continuous improvement» (`agentDocsParity.test.ts`): Task 18 makes every edit in both.
 - **No production write by the delivery or any agent.** `preview` writes the production dataset. On dev nobody presses «Guardar», «Confirmar», «Crear … borradores», «Crear y publicar» or «Registrar»; the dev-verify bot is read-only by construction. Setting `OWT_SOLVER_V3_URL` anywhere is **C7's** consented write (W0, W4); C6 sets nothing.
-- **ADR numbers:** C6 writes two records (DOC-2). Numbers follow the order records reach `main`: at Task 0 take the next two free numbers on `origin/main` (expected `0052` and `0053` if C3 holds `0049`, C2 `0050` and C5 `0051`); if another record lands first, renumber in the merge of `main` into this branch — file names, titles, index rows and every pointer — and let `adrIndex.test.ts` confirm.
+- **ADR numbers:** C6 writes two records (DOC-2). Numbers follow the order records reach `main`: at Task 0 take the next two free numbers on `origin/main` (`0051` and `0052` at replay: C3 holds `0049`, C2 `0050`, and C5 writes no record); if another record lands first, renumber in the merge of `main` into this branch — file names, titles, index rows and every pointer — and let `adrIndex.test.ts` confirm.
 
 ---
 
@@ -81,8 +81,8 @@ Every task's requirements include this section.
 
 | File | Responsibility | Spec rows |
 |---|---|---|
-| `app/utils/solverV3Upstream.ts` | `server-only`. Classifies a body by `contract: 3`, calls `OWT_SOLVER_V3_URL` (or the local `gcf_v3/owt_solver_v3.py --json-mode` off Vercel) with a 55 s abort, and turns every upstream answer into one of: a verbatim v3 success, a coded v3 failure (422) or a route-made transport error; logs only engine, outcome, status, timing | RT-1, RT-3–RT-6, KH-2 |
-| `app/components/admin/v3Wire.ts` | Neutral types of the `contract: 3` request and response as C6 builds and reads them | IF-C5 |
+| `app/utils/solverV3Upstream.ts` | `server-only`, loaded by the solve route on its v3 branch only (dynamic `import()`). Re-exports `isV3Body` from `v3Wire.ts`, calls `OWT_SOLVER_V3_URL` (or the local `gcf_v3/owt_solver_v3.py --json-mode` off Vercel) with a 55 s abort, and turns every upstream answer into one of: a verbatim v3 success, a coded v3 failure (422) or a route-made transport error; logs only engine, outcome, status, timing | RT-1, RT-3–RT-6, KH-2 |
+| `app/components/admin/v3Wire.ts` | Neutral types of the `contract: 3` request and response as C6 builds and reads them, and `isV3Body` (the contract marker the route classifies every body with) | IF-C5, RT-1 |
 | `app/components/admin/v3Horizon.ts` | Horizon months, date ownership, the CDMX current month, the past (HZ-7) and ceiling (HZ-9) refusal, selection retention on a horizon change | HZ-2, HZ-3, HZ-7, HZ-9, CF-1 |
 | `app/components/admin/v3Copy.ts` | Every Spanish line of §7 keyed on codes, with each code's parameter list (for the registry sync), the month/date/list formatters, and the C6-own refusal lines | §7, NT-4, RQ-2, RQ-5, RQ-10, AD-3, CF-4 |
 | `app/components/admin/v3RuleIds.ts` | Rule-id minting, the card-label map and KH-3's rule reference table | RQ-5, KH-1, KH-3 |
@@ -99,7 +99,7 @@ Every task's requirements include this section.
 | `app/components/admin/v3Confirm.ts` | **[CRITICAL]** Frozen PUT entries per month state, the confirm guard, the PUT outcome classifier, draft grouping and §7.8's lines | CF-1–CF-4, CF-6, CF-8 |
 | `app/components/admin/v3ConfirmRun.ts` | **[CRITICAL]** `runV3ConfirmAttempt` — one attempt: guard, one atomic PUT (until it succeeds), drafts month by month, per-month report, retry state | CF-1, CF-4–CF-7, CF-11 |
 | `app/components/admin/V3IncompleteDialog.tsx` | `"use client"`. CF-10's «El plan quedó incompleto» `CueDialog` | CF-10 |
-| `docs/adr/00NN-the-planner-resolves-the-solver-engine-on-the-server.md`, `docs/adr/00NN-auto-plans-one-or-two-months-with-stored-services-as-fixed-services.md` | DOC-2's two records (numbers at Task 0) | DOC-2 |
+| `docs/adr/0051-the-planner-learns-the-solver-engine-from-the-server.md`, `docs/adr/0052-auto-plans-one-or-two-months-with-stored-services-fixed.md` | DOC-2's two records (numbers taken at Task 0) | DOC-2 |
 
 **Created — tests**
 
@@ -117,7 +117,7 @@ Every task's requirements include this section.
 | `PlannerGrid.tsx` | `engine`, `v3Report`, `monthBands`, `autoConfirmText` props; `AutoState.retry`; read-only check for create-mode stored columns; «Guardado» chip | 1, 14, 15, 16 |
 | `MonthCalendar.tsx` | `engine` prop to the note | 1 |
 | `MonthGenerator.tsx` | engine prop; CTL-1 wiring; horizon state and control; stacked calendars; «Guardado» columns; display ledger read; the v3 Auto branch; v3 history surfaces swapped for «Equidad»; banners; the v3 confirm | 1, 14, 15, 16, 19 |
-| `FairnessPreviewPanel.tsx`, `fairnessPreviewModel.ts` `[PROVISIONAL]` | `engine` and `plan` props; the two plan columns; §7.7 reasons | 16 |
+| `FairnessPreviewPanel.tsx`, `fairnessPreviewModel.ts` | `engine` and `plan` props; the two plan columns; §7.7 reasons | 16 |
 | `app/api/admin/solve/route.ts` | engine resolution, the 409, the v3 branch through `solverV3Upstream.ts`; v2 path unchanged | 2 |
 | `app/components/admin/__tests__/fairnessEngineV3.test.tsx`, `fairnessSwitch.test.tsx` | the note takes its engine as a prop | 1 |
 | `docs/SECRETS.md` | `OWT_SOLVER_V3_URL` entry (DOC-1) | 2 |
@@ -173,6 +173,8 @@ git show origin/main:gcf_v3/owt_v3/constants.py | grep -x 'PIN_CAP = 250'
 
 Expected: all seventeen paths listed and the `PIN_CAP = 250` line printed. If any is missing, **stop**: C6 is not implementable yet (ENG-1: C6 never creates a resolver; RQ-6: the pin cap mirrors C5's literal).
 
+**Entry gate, also before Task 1:** Frank has read the C6 spec's §5.11 confirm protocol and §7 copy, or explicitly waived it. The spec is self-reviewed (`READY_FOR_REVIEW`) and Frank's 2026-10-05 authorization to proceed with the children did not include reading C6; record his read or his waiver (date and words) in the worklog. Without either, **stop** — no task of this plan runs.
+
 - [ ] **Step 2: Branch from the current `main`**
 
 ```bash
@@ -187,7 +189,7 @@ If the coordinator runs this in a worktree (`CLAUDE.md`: only when two things mu
 Run: `npx tsc --noEmit && npm test 2>&1 | tail -4 && npx eslint . 2>&1 | tail -1`
 Expected: no `tsc` output; all tests pass (record files/tests); `✖ N problems (0 errors, N warnings)` — record N: it is the warning ceiling for the whole delivery.
 
-- [ ] **Step 4: Re-verify every `[PROVISIONAL]` anchor against the merged code** (C2 Tasks 11–17 and C5 Tasks 10–15 were plan text when this plan was written)
+- [ ] **Step 4: Re-verify the anchors from C2 Tasks 11–17 and C5 Tasks 10–15 (re-verified at replay 2026-10-07 against `4c50309b`) against the merged `main`** (those tasks were plan text when this plan was written; the replay base carried their final code, and `main` must still carry it)
 
 ```bash
 git grep -n 'export function resolveMonthEligibility\|export type EligibilityIssueCode\|export type EligibilityRefusalReason\|export type EligibilityResult' origin/main -- app/utils/fairnessEligibility.ts
@@ -199,12 +201,12 @@ git grep -n -- '--json-mode' origin/main -- gcf_v3/owt_solver_v3.py
 git grep -n 'resolveSolverEngine' origin/main -- app
 ```
 
-Expected: every symbol found; two `<FairnessPreviewPanel` mounts in `MonthGenerator.tsx`; `resolveSolverEngine` imported by `fairnessMonthCommit.ts` and `app/api/admin/fairness/route.ts` only. A missing or renamed symbol is a **stop-and-report**: fix this plan's `[PROVISIONAL]` text before Task 1 (see «Replay»).
+Expected: every symbol found; two `<FairnessPreviewPanel` mounts in `MonthGenerator.tsx`; `resolveSolverEngine` imported by `fairnessMonthCommit.ts` and `app/api/admin/fairness/route.ts` only. A missing or renamed symbol is a **stop-and-report**: fix this plan's text that names it before Task 1 (see «Replay»).
 
 - [ ] **Step 5: Take the ADR numbers**
 
 Run: `ls docs/adr | grep -E '^[0-9]{4}-' | sort | tail -3`
-Expected: the highest number on `main` (≥ `0051` once C3, C2 and C5 have merged). C6's two records take the next two numbers; write them into Task 20 and the File Structure table now (replace `00NN`).
+Expected: the highest number on `main` (`0050` at replay-base: C3 `0049`, C2 `0050`; C5 writes no record). C6's two records take the next two numbers. **If they are not `0051` and `0052`, replace BOTH numbers everywhere before Task 1** (each as `NNNN`, `ADR-NNNN` and in file names): Global Constraints («ADR numbers»), the File Structure row for the two records, Task 20's **Files** list, Step 1 and Step 2 (file names and titles), Step 3's two index rows, the Coverage row ENG-5, and Self-review item 2. The «Replay» section's mentions are history and stay. `adrIndex.test.ts` (Task 20 Step 7) confirms the result.
 
 ---
 
@@ -540,7 +542,7 @@ Replace with:
 ```ts
 export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine } = {}) {
 ```
-and add `import type { SolverEngine } from "./solverEngine";` beside the file's other `./` imports. In the stored mount, Find:
+The type import goes directly after the `./SetlistEditor` import: Find `import { SetlistEditor } from "./SetlistEditor";` → Replace with `import { SetlistEditor } from "./SetlistEditor";\nimport type { SolverEngine } from "./solverEngine";`. In the stored mount, Find:
 ```tsx
             mode="stored"
 ```
@@ -589,7 +591,7 @@ export function FairnessEngineNote({ engine }: { engine: SolverEngine }) {
   if (engine !== "v2") return null;
 ```
 
-`app/components/admin/PlannerGrid.tsx` — add `import type { SolverEngine } from "./solverEngine";` beside its `./` imports. Find:
+`app/components/admin/PlannerGrid.tsx` — the type import goes directly after the `./moveOccupant` import: Find `import { moveOccupant, type MoveOccupantEndpoint, type MoveOccupantSource } from "./moveOccupant";` → Replace with `import { moveOccupant, type MoveOccupantEndpoint, type MoveOccupantSource } from "./moveOccupant";\nimport type { SolverEngine } from "./solverEngine";`. Find:
 ```ts
   fairness?: { onChange: (columnId: string, next: boolean) => void; createInFlight: boolean };
 ```
@@ -619,7 +621,7 @@ Replace with:
       {fairness && <FairnessEngineNote engine={engine} />}
 ```
 
-`app/components/admin/MonthCalendar.tsx` — add `import type { SolverEngine } from "./solverEngine";`. Find:
+`app/components/admin/MonthCalendar.tsx` — the type import goes directly after the `./FairnessSwitch` import: Find `import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";` → Replace with `import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";\nimport type { SolverEngine } from "./solverEngine";`. Find:
 ```ts
   onRemoveSpecial: (date: string) => void;
 }
@@ -653,13 +655,17 @@ Replace with:
 
 - [ ] **Step 7: `MonthGenerator` takes the prop and forwards it**
 
-Add `import type { SolverEngine } from "./solverEngine";` beside the file's other `./` imports. Find (end of `Props`):
+The type import goes directly after the `./useDerivedSolverHistory` import: Find `import { useDerivedSolverHistory, type DerivedHistoryHandle } from "./useDerivedSolverHistory";` → Replace with `import { useDerivedSolverHistory, type DerivedHistoryHandle } from "./useDerivedSolverHistory";\nimport type { SolverEngine } from "./solverEngine";`. Find (end of `Props`; the comment's last line keeps it apart from `SolverConfigPanel`'s own `showCadencePoolWarning?: boolean;` field):
 ```ts
+   * it closed for a record-bound month.
+   */
   showCadencePoolWarning?: boolean;
 }
 ```
 Replace with:
 ```ts
+   * it closed for a record-bound month.
+   */
   showCadencePoolWarning?: boolean;
   /**
    * The effective solver engine, resolved by `/admin`'s Server Component and threaded through
@@ -724,11 +730,11 @@ Replace with:
 ```
 `SolverConfigPanel` — Find:
 ```ts
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, fairnessServices }: {
 ```
 Replace with:
 ```ts
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, engine = "v2" }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, fairnessServices, engine = "v2" }: {
   /** C6 ENG-3: forwarded to the rule cards (CTL-1). */
   engine?: SolverEngine;
 ```
@@ -746,11 +752,13 @@ Replace with:
 The mount — Find:
 ```tsx
           showCadencePoolWarning={showCadencePoolWarning}
+          fairnessServices={existingRoles}
         />
 ```
 Replace with:
 ```tsx
           showCadencePoolWarning={showCadencePoolWarning}
+          fairnessServices={existingRoles}
           engine={engine}
         />
 ```
@@ -785,7 +793,27 @@ Replace with:
 
 `app/components/admin/__tests__/fairnessSwitch.test.tsx` — Find `render(<FairnessEngineNote />);` → Replace with `render(<FairnessEngineNote engine="v2" />);`.
 
-`app/components/admin/__tests__/fairnessEngineV3.test.tsx` — delete the line `vi.mock("../solverEngine", () => ({ SOLVER_ENGINE: "v3" }));`; change the header comment's second sentence to «Here the server-resolved engine prop is "v3" (C6 CTL-1): every surface keeps its Switch and drops the note.»; replace `render(<FairnessEngineNote />)` with `render(<FairnessEngineNote engine="v3" />)`; add `engine="v3"` to the `<PlannerGrid` and the `<MonthCalendar` it renders; rename the describe to `'the note under engine "v3" (the prop)'`.
+`app/components/admin/__tests__/fairnessEngineV3.test.tsx` — the header comment's second sentence, the mock (its line goes; the blank lines around it stay), the describe's name, and `engine="v3"` on each render. Find:
+```tsx
+// engine is v2. Here the constant is mocked to "v3": every surface keeps its Switch
+// and drops the note. (The v2 side is asserted beside each surface's own tests.)
+```
+Replace with:
+```tsx
+// engine is v2. Here the server-resolved engine prop is "v3" (C6 CTL-1): every surface keeps its Switch and drops the note. (The v2 side is asserted beside each surface's own tests.)
+```
+Find:
+```tsx
+vi.mock("../solverEngine", () => ({ SOLVER_ENGINE: "v3" }));
+
+import MonthCalendar from "../MonthCalendar";
+```
+Replace with:
+```tsx
+
+import MonthCalendar from "../MonthCalendar";
+```
+Find `describe('the note under SOLVER_ENGINE "v3"', () => {` → Replace with `describe('the note under engine "v3" (the prop)', () => {`. Find `render(<FairnessEngineNote />)` → Replace with `render(<FairnessEngineNote engine="v3" />)`. Find `      <PlannerGrid\n        rows={buildRows()}` → Replace with `      <PlannerGrid\n        engine="v3"\n        rows={buildRows()}`. Find `      <MonthCalendar\n        year={2026}` → Replace with `      <MonthCalendar\n        engine="v3"\n        year={2026}`.
 
 - [ ] **Step 9: Run the tests, the whole suite and the gates**
 
@@ -822,8 +850,8 @@ module, the one client-importable home, and the resolver's module re-exports it.
 - Regenerate: `app/utils/__tests__/__fixtures__/colour-inventory.json`
 
 **Interfaces:**
-- Consumes: C2 `resolveSolverEngine` (IF2-14); C5's request/response contract (C5 §5, §8; `contract: 3`, `engine: "v3"`, failure `{ ok: false, contract: 3, engine: "v3", code, params }` at 422/400/401/405/503/500); C5's local entry `python gcf_v3/owt_solver_v3.py --json-mode` (C5 §11.1) `[PROVISIONAL]` (C5 Task 10).
-- Produces: `v3Wire.ts` — `V3Role`, `V3_ROLES`, `V3ServiceKind`, `V3Service`, `V3Person`, `V3Rule`, `V3Pin`, `V3Prior`, `V3SolveRequest`, `V3Stage`, `V3TabFigures`, `V3FairnessPerson`, `V3Success`, `V3Failure`, `V3TransportReason`, `V3TransportError`, `V3VersionMismatch` (exact definitions below; every later task uses them). `solverV3Upstream.ts` — `V3_UPSTREAM_TIMEOUT_MS = 55_000`, `isV3Body(body: unknown): boolean`, `classifyUpstream(status: number, text: string): V3UpstreamResult`, `solveV3(body, env?, fetchImpl?, timeoutMs?): Promise<V3UpstreamResult>` with `V3UpstreamResult = { status: 200 | 422; text: string; outcome: string }`. Route: `409 { ok: false, error: "solver_version_mismatch", engine }`.
+- Consumes: C2 `resolveSolverEngine` (IF2-14); C5's request/response contract (C5 §5, §8; `contract: 3`, `engine: "v3"`, failure `{ ok: false, contract: 3, engine: "v3", code, params }` at 422/400/401/405/503/500); C5's local entry `python gcf_v3/owt_solver_v3.py --json-mode` (C5 §11.1; C5 Task 10, verified at replay).
+- Produces: `v3Wire.ts` — `V3Role`, `V3_ROLES`, `V3ServiceKind`, `V3Service`, `V3Person`, `V3Rule`, `V3Pin`, `V3Prior`, `V3SolveRequest`, `V3Stage`, `V3TabFigures`, `V3FairnessPerson`, `V3Success`, `V3Failure`, `V3TransportReason`, `V3TransportError`, `V3VersionMismatch`, `isV3Body(body: unknown): boolean` (exact definitions below; every later task uses them). `solverV3Upstream.ts` — `V3_UPSTREAM_TIMEOUT_MS = 55_000`, `isV3Body` (re-exported from `v3Wire.ts`), `classifyUpstream(status: number, text: string): V3UpstreamResult`, `solveV3(body, env?, fetchImpl?, timeoutMs?): Promise<V3UpstreamResult>` with `V3UpstreamResult = { status: 200 | 422; text: string; outcome: string }`. Route: `409 { ok: false, error: "solver_version_mismatch", engine }`.
 
 - [ ] **Step 1: Write the wire types** — Create `app/components/admin/v3Wire.ts`
 
@@ -831,8 +859,9 @@ module, the one client-importable home, and the resolver's module re-exports it.
 // app/components/admin/v3Wire.ts
 //
 // The `contract: 3` wire as C6 builds and reads it (C5 §5 request, §8 response — C5's spec is the
-// source; these are C6's typed view of it). NEUTRAL: types and two constants only, imported by the
-// client modules, the request builder and the server-only transport alike.
+// source; these are C6's typed view of it). NEUTRAL: types, two constants and the contract marker
+// `isV3Body`, imported by the client modules, the request builder, the solve route and the
+// server-only transport alike.
 //
 // Key hygiene (C6 KH-1, parent A41): a request's rule ids are MINTED by C6 (`v3RuleIds.ts`), never
 // a config key; `P:<id>` keys in `carried` and `fairness.lines` carry minted ids too.
@@ -987,6 +1016,16 @@ export interface V3VersionMismatch {
   ok: false;
   error: "solver_version_mismatch";
   engine: "v2" | "v3";
+}
+
+/**
+ * The v3 contract marker (C5 §5.1). It classifies; the SERVER's engine decides (RT-1). Lives here,
+ * not in the server-only transport, so the solve route can classify every body without loading
+ * that module on the v2 path.
+ */
+export function isV3Body(body: unknown): boolean {
+  return typeof body === "object" && body !== null && !Array.isArray(body)
+    && (body as { contract?: unknown }).contract === 3;
 }
 ```
 
@@ -1302,6 +1341,8 @@ import { spawn } from "child_process";
 import path from "path";
 import type { V3TransportError, V3TransportReason } from "@/app/components/admin/v3Wire";
 
+export { isV3Body } from "@/app/components/admin/v3Wire";
+
 export const V3_UPSTREAM_TIMEOUT_MS = 55_000;
 
 export interface V3UpstreamResult {
@@ -1317,12 +1358,6 @@ type FetchLike = (
   url: string,
   init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal },
 ) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
-
-/** The v3 contract marker (C5 §5.1). It classifies; the SERVER's engine decides (RT-1). */
-export function isV3Body(body: unknown): boolean {
-  return typeof body === "object" && body !== null && !Array.isArray(body)
-    && (body as { contract?: unknown }).contract === 3;
-}
 
 function transport(reason: V3TransportReason): V3UpstreamResult {
   const body: V3TransportError = { ok: false, transport_error: true, transport: reason };
@@ -1432,7 +1467,7 @@ Replace with:
 import { spawn } from "child_process";
 import path from "path";
 import { resolveSolverEngine } from "@/app/utils/solverDeployment";
-import { isV3Body, solveV3 } from "@/app/utils/solverV3Upstream";
+import { isV3Body } from "@/app/components/admin/v3Wire";
 ```
 Find:
 ```ts
@@ -1450,6 +1485,9 @@ Replace with:
   }
   if (v3Body) {
     const started = Date.now();
+    // The transport is `server-only` and loaded on the v3 branch alone: the v2 path never loads it,
+    // so it stays byte-for-byte today's and `solveRoute.test.ts` runs unedited (no `server-only` mock).
+    const { solveV3 } = await import("@/app/utils/solverV3Upstream");
     const result = await solveV3(body);
     // KH-2: engine, outcome class, status and timing — never a byte of the request or response.
     // A coded failure's `code` is a registry token; anything else is logged as "coded".
@@ -1478,8 +1516,9 @@ merges) — one Preview-wide value like `OWT_SOLVER_URL`, no branch-scoped pair,
 locally only to call the deployed function), GitHub Actions, the iOS build. Not read by either Cloud
 Function.
 
-**Not a secret** — ordinary config, like `OWT_SOLVER_URL`: the function is protected by
-`OWT_SOLVER_API_KEY` (sent as `X-Api-Key` on every v3 call too, C5-14), not by its URL.
+**Not a secret** — ordinary, non-sensitive config, like `OWT_SOLVER_URL`: added as `--type config`
+(readable, never `Sensitive`); the function is protected by `OWT_SOLVER_API_KEY` (sent as
+`X-Api-Key` on every v3 call too, C5-14), not by its URL.
 
 **Purpose — what breaks without it.** `app/utils/solverV3Upstream.ts` (called by
 `app/api/admin/solve/route.ts`) posts every `contract: 3` request here. While a deployment's
@@ -1489,22 +1528,26 @@ unset value makes every Auto answer «No se pudo usar el solver (not_configured)
 applied or written. A wrong value answers `unreachable`, `http_status`, `not_json` or — if it
 points at the v2 function — `contract_echo`, each with its own copy; still nothing is applied.
 
-**Where it comes from.** `gcloud functions describe owt-solver-v3 --gen2 --region=us-central1
---format='value(serviceConfig.uri)'` (C5 §11.5), piped into `vercel env add OWT_SOLVER_V3_URL
-<preview|production>` — never typed into a file or a chat. C6 introduces the variable and sets it
-nowhere: setting it on Preview is C7's consented write W0 (its Step 2a) and on Production W4 (its
-Step 6).
+**Where it comes from.** `URL="$(gcloud functions describe owt-solver-v3 --gen2
+--region=us-central1 --format='value(serviceConfig.uri)')"` (C5 §11.5), then
+`printf '%s' "$URL" | npx vercel env add OWT_SOLVER_V3_URL <preview|production> --type config` —
+never typed into a file or a chat. C6 introduces the variable and sets it nowhere: setting it on
+Preview is C7's consented write W0 (its Step 2a) and on Production W4 (its Step 6).
 
-**Rotate / change:** (1) read the current URL with the describe command above; (2) `vercel env rm
-OWT_SOLVER_V3_URL <env>` then `vercel env add` with the piped value, for each environment that has
-it; (3) redeploy that environment (Vercel bakes env vars at build time) and verify the alias and
-its `githubCommitSha`; (4) run one Auto «1 mes» on dev without confirming. A URL changes only if
-the function is re-created under another name or region.
+**Rotate / change.** `vercel env add` refuses an existing key, so a rotation is `rm` + `add` back
+to back, then one redeploy: (1) read the current URL into `$URL` with the describe command above;
+(2) for each environment that has it, `npx vercel env rm OWT_SOLVER_V3_URL <env> --yes` and
+immediately `printf '%s' "$URL" | npx vercel env add OWT_SOLVER_V3_URL <env> --type config`;
+(3) redeploy that environment once (the value binds at build time) and verify the alias and its
+`githubCommitSha`; (4) run one Auto «1 mes» on dev without confirming. A URL changes only if the
+function is re-created under another name or region.
 
-**Blast radius.** Between step 2 and the redeploy, the running deployment keeps the old value, so
-nothing changes until the new build serves; a deployment whose engine is `v2` is unaffected
-throughout. If the new value is wrong, v3 Auto on that deployment answers a transport error until
-it is corrected — no record or draft is ever written by a failed solve.
+**Blast radius.** Between the `rm` and the redeploy, the running deployment keeps the old value,
+so nothing changes until the new build serves; a deployment whose engine is `v2` is unaffected
+throughout. A build that starts between the `rm` and the `add` has no value, so v3 Auto there
+answers `not_configured` until the next redeploy — hence the two commands back to back and one
+redeploy after both. If the new value is wrong, v3 Auto on that deployment answers a transport
+error until it is corrected — no record or draft is ever written by a failed solve.
 
 **Status.** Introduced by C6; not set on any Vercel environment yet (C7 W0/W4 record the dates here).
 
@@ -1752,7 +1795,7 @@ pure functions over CDMX strings, so Auto and the confirm apply the same rules b
 - Regenerate: `colour-inventory.json`
 
 **Interfaces:**
-- Consumes: `dayLabel(iso)` (`plannerModel.ts`, «8 nov»); `capValueForMonth` (IF2-17, `serviceRuleContext.ts`) as a **type** only; `FairnessPutRefusal` (IF2-6); `EligibilityRefusalReason`, `EligibilityIssueCode` (IF2-15's unions, `app/utils/fairnessEligibility.ts` `[PROVISIONAL]`); `V3TransportReason` (Task 2); C5's `gcf_v3/owt_v3/codes.json` and `gcf_v3/owt_v3/constants.py` (read as text by the sync tests).
+- Consumes: `dayLabel(iso)` (`plannerModel.ts`, «8 nov»); `capValueForMonth` (IF2-17, `serviceRuleContext.ts`) as a **type** only; `FairnessPutRefusal` (IF2-6); `EligibilityRefusalReason`, `EligibilityIssueCode` (IF2-15's unions, `app/utils/fairnessEligibility.ts`); `V3TransportReason` (Task 2); C5's `gcf_v3/owt_v3/codes.json` and `gcf_v3/owt_v3/constants.py` (read as text by the sync tests).
 - Produces (every later task renders through these and nothing else):
   - `interface V3Names { person(id: string): string; rule(id: string): string; service(id: string): string }`; `interface CodeCopy { params: readonly string[]; render(p: Readonly<Record<string, unknown>>, n: V3Names): string }`
   - formatters `monthName(ym)`, `monthNameCap(ym)`, `monthsList(months, capitalFirst?)`, `joinEs(items)`, `datesList(dates)`, `lineLabel(line, n)`
@@ -2100,7 +2143,7 @@ const withCause = (base: string, p: Params) => {
 };
 const MISSED: Record<string, CodeCopy> = {
   cadence_on_missed: { params: ["person", "month", "cause"], render: (p, n) => withCause(`${n.person(s(p, "person"))} no dirigió domingo en ${monthName(s(p, "month"))}, su mes de dirigir («Mes por medio»).`, p) },
-  cadence_off_led: { params: ["person", "month", "cause"], render: (p, n) => withCause(`${n.person(s(p, "person"))} dirigió domingo en ${monthName(s(p, "month"))}, su mes de descanso («Mes por medio»).`, p) },
+  cadence_off_led: { params: ["person", "month", "cause"], render: (p, n) => withCause(`${n.person(s(p, "person"))} dirigió domingo en ${monthName(s(p, "month"))}, su mes sin domingo («Mes por medio»).`, p) },
   compensation_missed: { params: ["person", "month", "cause"], render: (p, n) => withCause(`${n.person(s(p, "person"))} no tiene su sábado de compensación en ${monthName(s(p, "month"))}.`, p) },
   voice_floor_missed: { params: ["person", "month", "cause"], render: (p, n) => withCause(`${n.person(s(p, "person"))} no canta en ningún servicio de ${monthName(s(p, "month"))}.`, p) },
   dl_floor_missed: { params: ["person", "month1", "month2", "cause"], render: (p, n) => withCause(`${n.person(s(p, "person"))} no dirige domingo ni en ${monthName(s(p, "month1"))} ni en ${monthName(s(p, "month2"))}.`, p) },
@@ -2201,8 +2244,8 @@ export function refusalLine(code: string, params: Params): string {
 
 export const V3_CADENCE_STATE: Record<string, CodeCopy> = {
   on: fixed("le toca"),
-  off: fixed("descansa"),
-  out: fixed("descansa: no está en la lista de Dom Lead"),
+  off: fixed("no dirige domingo"),
+  out: fixed("no dirige domingo: no está en la lista de Dom Lead"),
 };
 export const V3_COMPENSATION: Record<string, CodeCopy> = {
   given: fixed("tiene su sábado de compensación"),
@@ -2313,7 +2356,7 @@ export const V3_CONFIRM_REFUSAL: Record<FairnessPutRefusal, (month: string) => s
 
 export const V3_PANEL_REASON = {
   cadenceOn: (month: string) => `Mes por medio: le toca en ${monthName(month)}.`,
-  cadenceOff: (month: string) => `Mes por medio: descansa en ${monthName(month)}.`,
+  cadenceOff: (month: string) => `Mes por medio: no dirige domingo en ${monthName(month)}.`,
   compensation: (month: string) => `Sábado de compensación en ${monthName(month)}.`,
   unavailable: (dates: readonly string[]) => `No disponible ${datesList(dates)}: esas fechas no le cuentan.`,
   fixedRule: (ruleLabel: string) => `Su número lo fija «${ruleLabel}».`,
@@ -2354,7 +2397,7 @@ export const V3_LINES = {
   prefillDone: "Los especiales que cuentan para equidad se llenaron primero (Lead y BGV, por saldo) y el solver acomodó los fines de semana alrededor de ellos.",
   secondTier: (person: string, service: string, motivo: string) =>
     `${person} dirige el ${service} aunque ${motivo}: nadie más podía dirigirlo.`,
-  motivoCadence: "es su mes de descanso («Mes por medio»)",
+  motivoCadence: "es su mes sin domingo («Mes por medio»)",
   motivoSundayCap: (month: string) => `ya dirige otro domingo en ${monthName(month)}`,
   motivoSaturdayCap: (month: string) => `ya dirige otro sábado en ${monthName(month)}`,
   motivoConsecutive: "dirige el domingo anterior o el siguiente",
@@ -2797,12 +2840,12 @@ config ordinal so C7 can compare a captured request with the config without a ke
 - Regenerate: `colour-inventory.json`
 
 **Interfaces:**
-- Consumes: IF2-8 `FairnessLedgerResponse` (`horizon[].record`, `.storedServices`, `.recordBinds`), IF2-3 `LogicalRecord`, `FairnessMonthBody`, `RoleKey`, `Status` (`fairnessVocabulary.ts`); IF2-15 `resolveMonthEligibility`, `EligibilityMember`, `EligibilityResult` (`fairnessEligibility.ts` `[PROVISIONAL]`); `civilDayOfWeek`; Task 4's `V3_RESOLVER_REFUSAL`, `V3_RESOLVER_ISSUE`, `V3_ROUTE_COPY`; Task 2's `V3Role`, `V3ServiceKind`.
+- Consumes: IF2-8 `FairnessLedgerResponse` (`horizon[].record`, `.storedServices`, `.recordBinds`), IF2-3 `LogicalRecord`, `FairnessMonthBody`, `RoleKey`, `Status` (`fairnessVocabulary.ts`); IF2-15 `resolveMonthEligibility`, `EligibilityMember`, `EligibilityResult` (`fairnessEligibility.ts`); `civilDayOfWeek`; Task 4's `V3_RESOLVER_REFUSAL`, `V3_RESOLVER_ISSUE`, `V3_ROUTE_COPY`; Task 2's `V3Role`, `V3ServiceKind`.
 - Produces: `type MonthState = "bound" | "recorded_unbound" | "unrecorded" | "anchored_unrecorded"`; `interface MonthSource { month: string; state: MonthState; rev: string | null; recordedAt: string | null; body: FairnessMonthBody }` (deep-frozen); `monthStateOf(h): MonthState`; `displayedMonthStates(months, ledger | null): Map<string, MonthState>`; `bodyFromRecord(record: LogicalRecord): FairnessMonthBody`; `resolveMonthSources(input: { months: readonly string[]; ledger: FairnessLedgerResponse; config: SolverConfig; members: readonly EligibilityMember[]; exactLeadLabel: (person: string) => string | null }): { ok: true; sources: MonthSource[] } | { ok: false; lines: string[] }`; `dayClass(kind, date): "Sun" | "Sat"`; `roleKeyOf(cls, role): RoleKey`; `rolesOfService(kind, fixed): V3Role[]`; `serviceEligibility(source, memberId, service: { date: string; kind: V3ServiceKind; fixed: boolean }, liveUnavailable: readonly string[]): V3Role[]`. `v3Fixtures.ts` gains `ALL_IN`, `figures`, `ledgerPerson`, `record`, `ledgerResponse`.
 
 - [ ] **Step 1: Extend the fixtures** — `app/components/admin/__tests__/v3Fixtures.ts`
 
-Add beside the file's existing `import type` line at the top:
+After the file's `import type { PersonRestriction, RestrictionCap, SolverConfig } from "../plannerModel";` line, add:
 ```ts
 import type {
   FairnessLedgerResponse, FairnessPerson, Figures, LogicalRecord, RoleKey, Status,
@@ -4452,9 +4495,9 @@ describe("SP-1 — today's hard blocks AND RQ-2's eligibility", () => {
       eligibility: everyoneEligible(["m-ana", "m-bruno", "m-carla", "m-dani"]),
       cells: [{ columnId: SUN_SPECIAL, rowId: "bgv", occupants: [{ memberId: "m-bruno" }], origin: "manual" }],
       config: config({ conflicts: [{ id: "x", personA: "Carla", personB: "Bruno", pattern: "*.*" }] }),
-      rows: [ROWS[0]],
     });
     // Ana unavailable; Bruno holds BGV here (same category); Dani has no voice Tipo; Carla is kept apart from Bruno.
+    // Both rows are passed: the hard blocks see a column's occupants only through the rows it is given.
     expect(lead(out.cells)).toEqual([]);
   });
 
@@ -4545,15 +4588,17 @@ describe("SP-2 — the second tier, one case per protection, used only when the 
   });
 
   it("only second-tier candidates: fill outranks protections — least important miss first, with SP-7's notice", () => {
-    // Ana misses `cadence` (most important); Bruno misses `no_consecutive` (least) → Bruno.
+    // Ana misses `cadence` (most important); Bruno misses `no_consecutive` (least) → Bruno. Bruno is «exact»
+    // for Sun.Lead, so his fixed Sunday the 29th (same month) does not ALSO make him miss `sunday_cap`.
     const cadence: RunCadence = new Map([["m-ana", [{ month: "2026-11", state: "off", reason: "led_previous_month", wire: "off" }]]]);
-    const out = run({ cadence, fixedLeads: [{ date: "2026-11-29", memberId: "m-bruno", dl: true }], members: [ANA, BRUNO], eligibility: everyoneEligible(["m-ana", "m-bruno"]) });
+    const sources = sourceOf([person("m-ana"), person("m-bruno", { roles: status("Sun.Lead", "exact") })]);
+    const out = run({ cadence, sources, fixedLeads: [{ date: "2026-11-29", memberId: "m-bruno", dl: true }], members: [ANA, BRUNO], eligibility: everyoneEligible(["m-ana", "m-bruno"]) });
     expect(lead(out.cells)).toEqual(["m-bruno"]);
     expect(out.notices).toContain("Bruno dirige el Vigilia 22 nov aunque dirige el domingo anterior o el siguiente: nadie más podía dirigirlo.");
   });
 
   it.each([
-    ["cadence", { cadence: new Map([["m-ana", [{ month: "2026-11", state: "off" as const, reason: "led_previous_month" as const, wire: "off" as const }]]]) }, "es su mes de descanso («Mes por medio»)"],
+    ["cadence", { cadence: new Map([["m-ana", [{ month: "2026-11", state: "off" as const, reason: "led_previous_month" as const, wire: "off" as const }]]]) }, "es su mes sin domingo («Mes por medio»)"],
     ["sunday_cap", { fixedLeads: [{ date: "2026-11-01", memberId: "m-ana", dl: true }] }, "ya dirige otro domingo en noviembre"],
   ])("SP-7's motivo for %s", (_name, over, motivo) => {
     const out = run({ ...over, members: [ANA], eligibility: everyoneEligible(["m-ana"]) });
@@ -6122,7 +6167,7 @@ export function participationMonthsOf(horizon: readonly string[], choice: string
   return horizon.includes(choice) ? [choice] : [...horizon];
 }
 ```
-`app/components/admin/__tests__/v3Horizon.test.ts` — add `participationMonthsOf` to the import list and append:
+`app/components/admin/__tests__/v3Horizon.test.ts` — the import list gains `participationMonthsOf`: Find `  monthsEntering, retainInHorizon, weekendDatesOfMonth,` → Replace with `  monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth,`, and append:
 ```ts
 
 describe("participationMonthsOf (HZ-6)", () => {
@@ -6478,7 +6523,16 @@ Replace with:
 
 - [ ] **Step 6: `MonthGenerator` — the horizon state and its effect**
 
-Add to the imports: `import { horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";`, `import { monthNameCap, monthsList } from "./v3Copy";`, `import { normalizeServiceName } from "@/app/utils/normalizeLabel";` and — if not already imported — `type StoredGridTranslation` from `./storedRoleReadModel`.
+The imports (`normalizeServiceName` from `@/app/utils/normalizeLabel` and `type StoredGridTranslation` from `./storedRoleReadModel` are already imported — neither is imported a second time). Find:
+```ts
+} from "./storedRoleReadModel";
+```
+Replace with:
+```ts
+} from "./storedRoleReadModel";
+import { horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
+import { monthNameCap, monthsList } from "./v3Copy";
+```
 
 Module level — Find:
 ```ts
@@ -6571,7 +6625,7 @@ Replace with:
 ```ts
     if (storedMode || !fillEmptyOnly || !solverConfig || isV3) return undefined;
 ```
-and add `isV3` to each of those two memos' dependency arrays.
+and each of those two memos' dependency arrays gains `isV3`: Find `  }, [storedMode, solverConfig, members, sundayDatesFull, activeSatDates, year, month]);` → Replace with `  }, [storedMode, solverConfig, members, sundayDatesFull, activeSatDates, year, month, isV3]);`; Find `  }, [storedMode, fillEmptyOnly, solverConfig, cells, columns, rows, members, sundayDatesFull, requestSaturdayWeeks]);` → Replace with `  }, [storedMode, fillEmptyOnly, solverConfig, cells, columns, rows, members, sundayDatesFull, requestSaturdayWeeks, isV3]);`.
 
 - [ ] **Step 7: `MonthGenerator` — «Guardado» columns from the stored editor's coherent read**
 
@@ -6991,6 +7045,14 @@ describe("refusals before the fetch", () => {
 });
 
 describe("AD-3 / AD-6 — outcomes and «Reintentar»", () => {
+  // Auto's «Reintentar» is the button PlannerGrid renders right after Auto's error line. Until
+  // Task 16 hides v2's history surfaces under v3, the failed history read on the grid step offers
+  // its own «Reintentar», so a page-wide query would find two.
+  const autoRetryButton = (line: string) => {
+    const next = screen.getByText(line).nextElementSibling;
+    return next instanceof HTMLButtonElement && next.textContent === "Reintentar" ? next : null;
+  };
+
   it("a timeout code shows the timeout copy and «Reintentar», which runs again", async () => {
     const solve = solveRoute((_r, n) => n === 1
       ? { status: 422, body: { ok: false, contract: 3, engine: "v3", code: "timeout", params: { stage: "fill", seconds: 25 } } }
@@ -7000,7 +7062,7 @@ describe("AD-3 / AD-6 — outcomes and «Reintentar»", () => {
     preview();
     runAuto();
     await waitFor(() => expect(screen.getByText(V3_ROUTE_COPY.timeout)).toBeTruthy());
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Reintentar" })); });
+    await act(async () => { fireEvent.click(autoRetryButton(V3_ROUTE_COPY.timeout)!); });
     await waitFor(() => expect(solve.requests).toHaveLength(2));
   });
 
@@ -7011,7 +7073,7 @@ describe("AD-3 / AD-6 — outcomes and «Reintentar»", () => {
     preview();
     runAuto();
     await waitFor(() => expect(screen.getByText(V3_ROUTE_COPY.configuration("not_configured"))).toBeTruthy());
-    expect(screen.queryByRole("button", { name: "Reintentar" })).toBeNull();
+    expect(autoRetryButton(V3_ROUTE_COPY.configuration("not_configured"))).toBeNull();
   });
 
   it("a v2-shaped answer under v3 is a configuration transport; v2's parsers are never called", async () => {
@@ -7131,7 +7193,7 @@ export default function V3RunPanel({ report, ruleTable }: { report: V3RunReport;
 
 - [ ] **Step 5: `PlannerGrid` — retry, report slot, v3 confirm sentence, unfilled reasons**
 
-Add `import Button from "@/app/components/ui/Button";` if the file does not import it yet. Find:
+(`Button` is already imported by `PlannerGrid`.) Find:
 ```ts
   notices?: string[];
   disabledReason: string | null;
@@ -7159,7 +7221,7 @@ Replace with:
   /** Solver v3 C6 ST-9: replaces the v2 confirm sentence when «Solo llenar vacíos» is off. */
   autoConfirmText?: string;
 ```
-Add `v3Report,` and `autoConfirmText,` to the `props` destructure (after `monthBands,`).
+The `props` destructure gains `v3Report` and `autoConfirmText` after `monthBands`: Find `    monthBands,` → Replace with `    monthBands,\n    v3Report,\n    autoConfirmText,`.
 Find:
 ```tsx
         {mode === "create" && autoState.error && <p className="font-body text-xs text-negative-fg">{autoState.error}</p>}
@@ -7237,7 +7299,23 @@ Replace with:
 
 - [ ] **Step 6: `MonthGenerator` — the v3 run**
 
-Add to the imports: `import { runV3Auto, type V3AutoResult } from "./v3AutoRun";`, `import { buildV3SolveRequest, preReadRefusals } from "./v3SolveRequest";`, `import { applyV3Assignments, v3OutcomeLine, v3RetryOffered } from "./v3SolveResponse";`, `import { buildV3RunReport, v3Names, type V3RunReport } from "./v3RunReport";`, `import { renderRuleRefTable } from "./v3RuleIds";`, `import { cdmxCurrentMonth } from "./v3Horizon";` (merge with Task 14's line), `import V3RunPanel from "./V3RunPanel";`, `import type { V3Success } from "./v3Wire";`, and extend Task 14's `./v3Copy` import with `V3_LINES, V3_ROUTE_COPY, transportLine, type V3Names`.
+The imports — Task 14's `./v3Horizon` line gains `cdmxCurrentMonth`, its `./v3Copy` line gains `V3_LINES, V3_ROUTE_COPY, transportLine, type V3Names`, and seven imports follow them. Find:
+```ts
+import { horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
+import { monthNameCap, monthsList } from "./v3Copy";
+```
+Replace with:
+```ts
+import { cdmxCurrentMonth, horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
+import { monthNameCap, monthsList, V3_LINES, V3_ROUTE_COPY, transportLine, type V3Names } from "./v3Copy";
+import { runV3Auto, type V3AutoResult } from "./v3AutoRun";
+import { buildV3SolveRequest, preReadRefusals } from "./v3SolveRequest";
+import { applyV3Assignments, v3OutcomeLine, v3RetryOffered } from "./v3SolveResponse";
+import { buildV3RunReport, v3Names, type V3RunReport } from "./v3RunReport";
+import { renderRuleRefTable } from "./v3RuleIds";
+import V3RunPanel from "./V3RunPanel";
+import type { V3Success } from "./v3Wire";
+```
 
 Find:
 ```ts
@@ -7498,7 +7576,7 @@ Under v2 the only change is that a 409 version mismatch asks for a reload instea
 **Files:**
 - Create: `app/components/admin/v3Equidad.ts`
 - Modify: `app/components/admin/v3Copy.ts` (`V3_LINES` gains the two plan columns and EQ-7's lines)
-- Modify `[PROVISIONAL]` (C2 Task 13/14 code): `app/components/admin/fairnessPreviewModel.ts` (extract `x1LineText`), `app/components/admin/FairnessPreviewPanel.tsx` (`engine`, `plan`, plan columns, diagnostics)
+- Modify (C2 Task 13/14 code, anchors verified at replay): `app/components/admin/fairnessPreviewModel.ts` (extract `x1LineText`), `app/components/admin/FairnessPreviewPanel.tsx` (`engine`, `plan`, plan columns, diagnostics)
 - Modify: `app/components/admin/MonthGenerator.tsx` — the display read, banners, read-only pools (`MemberPool`, `SolverConfigPanel`), WN-1's months, WN-3's line, the v2 history surfaces gated, both `<FairnessPreviewPanel` mounts
 - Modify: `app/components/admin/ServicesPanel.tsx` — the create mount passes `showCadencePoolWarning={engine === "v3"}`
 - Modify: `app/components/admin/__tests__/engineProp.test.ts` (add `FairnessPreviewPanel` to the mounts that must pass `engine=`)
@@ -7506,7 +7584,7 @@ Under v2 the only change is that a 409 version mismatch asks for a reload instea
 - Regenerate: `colour-inventory.json`
 
 **Interfaces:**
-- Consumes: C2 `FairnessPreviewPanel`, `tabRows`, `cadenceLine`, `COPY` `[PROVISIONAL]`; IF2-8 `diagnostics`, `countedSundayLeads`; IF2-13 `saldoWords`; Task 15's `v3Run` (its `response.fairness.people`, `build.cadence`, `build.request`, `names`); Task 6 `displayedMonthStates`, `MonthState`; Task 13 `isLedgerBody`; C3 `CADENCE_OUTSIDE_HEADING`, `CADENCE_OUTSIDE_SENTENCE` (unchanged).
+- Consumes: C2 `FairnessPreviewPanel`, `tabRows`, `cadenceLine`, `COPY`; IF2-8 `diagnostics`, `countedSundayLeads`; IF2-13 `saldoWords`; Task 15's `v3Run` (its `response.fairness.people`, `build.cadence`, `build.request`, `names`); Task 6 `displayedMonthStates`, `MonthState`; Task 13 `isLedgerBody`; C3 `CADENCE_OUTSIDE_HEADING`, `CADENCE_OUTSIDE_SENTENCE` (unchanged).
 - Produces: `x1LineText(month: string, reason: CadenceReason, ledDate: string | null): string` (C2's four X1 sentences, now exported); `interface EquidadPlan { people: ReadonlyMap<string, V3FairnessPerson>; reason(memberId: string, tab: TabKey): string }`; `buildEquidadPlan(input: { response: V3Success; request: V3SolveRequest; cadence: RunCadence; ledger: FairnessLedgerResponse | null; names: V3Names; members: ReadonlyArray<{ _id: string; unavailableDates?: string[] }> }): EquidadPlan`; `planCells(plan: EquidadPlan | null | undefined, memberId: string, tab: TabKey): { enEstePlan: string; queda: string }`; `ledgerDiagnosticsLines(d: FairnessLedgerResponse["diagnostics"]): string[]`; `FairnessPreviewPanelProps.engine?: SolverEngine`, `.plan?: EquidadPlan | null`.
 
 - [ ] **Step 1: Write the failing model test** — `app/components/admin/__tests__/v3Equidad.test.ts`
@@ -7563,7 +7641,7 @@ describe("plan columns (EQ-3, EQ-5)", () => {
 
   it("each row's reason line comes from codes; the DL cadence line is RQ-4's own state, one per month", () => {
     expect(plan.reason("m-ana", "DL")).toBe(
-      "En nov le toca domingo (previsto). Mes por medio: descansa en diciembre. No disponible 15 nov: esas fechas no le cuentan. Su número lo fija «Ana · Sun.Lead == 2». Los pines tomaron 1 lugares.",
+      "En nov le toca domingo (previsto). Mes por medio: no dirige domingo en diciembre. No disponible 15 nov: esas fechas no le cuentan. Su número lo fija «Ana · Sun.Lead == 2». Los pines tomaron 1 lugares.",
     );
     expect(plan.reason("m-ana", "SL")).toBe("Sábado de compensación en diciembre. No disponible 15 nov: esas fechas no le cuentan.");
     expect(plan.reason("m-ana", "TOTAL")).toContain("Exenta: fuera de Total y del mínimo de voz.");
@@ -7591,11 +7669,12 @@ describe("the ledger's diagnostics (EQ-7)", () => {
 
 ```tsx
 /** @vitest-environment jsdom */
-// Solver v3 C6 EQ-1, EQ-2, EQ-4, ST-8, WN-1, WN-3 — what the planner shows about fairness and month
-// states under each engine: the v2 history surfaces under v2 only, C2's banner under v2 only, the
-// cadence line from the run's own states, the four month-state banners and read-only pools, C3's
-// warning naming the months it applies to, and the Saturday-pool note.
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+// Solver v3 C6 EQ-1, EQ-2, EQ-4, EQ-6, ST-8, WN-1, WN-3 — what the planner shows about fairness and
+// month states under each engine: the v2 history surfaces under v2 only, C2's banner under v2 only,
+// the cadence line from the run's own states, the plan's values in a person's phone card, the four
+// month-state banners and read-only pools, C3's warning naming the months it applies to, and the
+// Saturday-pool note.
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { echoV3, renderV3, routeFetch, solveRoute } from "./v3PlannerHarness";
@@ -7723,6 +7802,41 @@ describe("EQ-4 — the cadence line after a run is RQ-4's own value", () => {
     expect(screen.queryAllByText(/En nov le toca domingo/)).toHaveLength(0);
   });
 });
+describe("EQ-6 — at phone width: one card per person, and the plan's values inside it", () => {
+  // jsdom lays nothing out and the panel asks `matchMedia` nothing, so a 390 px viewport (stubbed
+  // the way `participationAlongside.test.tsx` stubs a narrow one) renders the same DOM: what is
+  // asserted is the split by class — the cards `md:hidden`, the table `hidden md:block` inside its
+  // OWN `overflow-x-auto` box (no page-level horizontal scroll, ADR-0035) — and what Ana's card
+  // SAYS, scoped to `[data-fairness-cards]`. The real phone look stays C7's.
+  it("after a v3 run, Ana's card reads «En este plan 2 · Queda le deben 0.3»", async () => {
+    vi.stubGlobal("innerWidth", 390);
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: false, media: query, onchange: null, addEventListener: () => {}, removeEventListener: () => {},
+      addListener: () => {}, removeListener: () => {}, dispatchEvent: () => false,
+    }));
+    const dl = { carried: 0, share: 0, received: 200, pinned: 0, seats: 2, pinned_seats: 0, after: 0, tenths: { share: 0, after: 3 } };
+    const solve = solveRoute((r) => ({
+      status: 200,
+      body: { ...echoV3(r), fairness: { scale: 100, tolerance: 35, lines: [], people: [{ person: "m-ana", floor: [], lines: {}, tabs: { DL: dl } }] } },
+    }));
+    const people = [ledgerPerson("m-ana", "Ana", { tabs: { window: { DL: { share: 0, received: 0, balance: 0, seats: 0, tenths: { share: 0, balance: 0 } } }, cumulative: {} } })];
+    routeFetch(historyRoute, solve.route, ledgerRoute((q) => ledgerResponse(months(q), { people })));
+    renderV3({ config: config({ sundayLeads: ["m-ana"] }) });
+    preview();
+    openEquidad();
+    fireEvent.click(screen.getByRole("button", { name: /Auto-asignar/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(solve.requests).toHaveLength(1));
+    const anaCards = () =>
+      Array.from(document.querySelectorAll("[data-fairness-cards] > li")).filter((li) => li.querySelector("p")?.textContent === "Ana") as HTMLElement[];
+    await waitFor(() => expect(anaCards().length).toBeGreaterThan(0));
+    for (const card of anaCards()) expect(within(card).getByText("En este plan 2 · Queda le deben 0.3")).toBeTruthy();
+    for (const list of Array.from(document.querySelectorAll("[data-fairness-cards]"))) expect(list.classList.contains("md:hidden")).toBe(true);
+    for (const table of Array.from(document.querySelectorAll("[data-fairness-table]"))) {
+      expect(["hidden", "md:block", "overflow-x-auto"].every((c) => table.classList.contains(c))).toBe(true);
+    }
+  });
+});
 ```
 
 - [ ] **Step 3: Run both to see them fail**
@@ -7730,7 +7844,7 @@ describe("EQ-4 — the cadence line after a run is RQ-4's own value", () => {
 Run: `git add -A && npx vitest run app/components/admin/__tests__/v3Equidad.test.ts app/components/admin/__tests__/MonthGenerator.v3Equidad.test.tsx`
 Expected: FAIL — `Cannot find module '../v3Equidad'`; the planner still mounts the v2 surfaces under v3.
 
-- [ ] **Step 4: Extract C2's X1 sentences** `[PROVISIONAL]` — `app/components/admin/fairnessPreviewModel.ts`
+- [ ] **Step 4: Extract C2's X1 sentences** — `app/components/admin/fairnessPreviewModel.ts`
 
 Find:
 ```ts
@@ -7755,7 +7869,8 @@ Replace with:
 /**
  * C2 §8's X1 sentences, keyed on the IF2-12 reason — exported (solver v3 C6 EQ-4) so the v3 panel
  * renders RQ-4's computed states through THIS copy and adds none of its own. `assumed_led_previous_month`
- * has no sentence of its own here (C6 renders §7.7's «descansa» line for it — sibling issue S-19).
+ * has no sentence of its own here (C6 renders §7.7's «Mes por medio: no dirige domingo en {mes}.» line
+ * for it — sibling issue S-19).
  */
 export function x1LineText(month: string, reason: CadenceReason, ledDate: string | null): string {
   const mes = monthShort(month);
@@ -7771,7 +7886,7 @@ export function x1LineText(month: string, reason: CadenceReason, ledDate: string
   }
 }
 ```
-and add `type CadenceReason` to the file's existing import from `@/app/utils/fairnessLedger` (it already imports `cadenceStates` from there).
+The file's import from `@/app/utils/fairnessLedger` gains `type CadenceReason`: Find `import { cadenceStates } from "@/app/utils/fairnessLedger";` → Replace with `import { cadenceStates, type CadenceReason } from "@/app/utils/fairnessLedger";`.
 
 - [ ] **Step 5: Add the plan columns' and EQ-7's copy** — `app/components/admin/v3Copy.ts`
 
@@ -7885,9 +8000,9 @@ export function ledgerDiagnosticsLines(d: FairnessLedgerResponse["diagnostics"])
 }
 ```
 
-- [ ] **Step 7: Extend C2's panel** `[PROVISIONAL]` — `app/components/admin/FairnessPreviewPanel.tsx`
+- [ ] **Step 7: Extend C2's panel** — `app/components/admin/FairnessPreviewPanel.tsx`
 
-Add imports: `import type { SolverEngine } from "./solverEngine";`, `import { ledgerDiagnosticsLines, planCells, type EquidadPlan } from "./v3Equidad";`, `import { V3_LINES } from "./v3Copy";`.
+The three imports go directly after the panel's `./plannerModel` import: Find `import type { SolverConfig } from "./plannerModel";` → Replace with `import type { SolverConfig } from "./plannerModel";\nimport type { SolverEngine } from "./solverEngine";\nimport { ledgerDiagnosticsLines, planCells, type EquidadPlan } from "./v3Equidad";\nimport { V3_LINES } from "./v3Copy";`.
 Find:
 ```ts
   /** Whether the on-screen rules differ from the saved ones. */
@@ -7971,18 +8086,18 @@ Replace with:
     if (engine === "v3" && props.plan) return props.plan.reason(person.memberId, tab);
     if (!data || tab !== "DL") return "";
 ```
-Find:
+Find (the banner sits directly under the `Collapse`, outside the `{data && …}` block — so the diagnostics guard on `data`):
 ```tsx
-            <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
+        <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
 ```
 Replace with:
 ```tsx
-            {engine === "v2" && (
-              <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
-            )}
-            {engine === "v3" && ledgerDiagnosticsLines(data.diagnostics).map((line) => (
-              <p key={line} className="font-body text-xs text-warning-strong">{line}</p>
-            ))}
+        {engine === "v2" && (
+          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
+        )}
+        {engine === "v3" && data && ledgerDiagnosticsLines(data.diagnostics).map((line) => (
+          <p key={line} className="font-body text-xs text-warning-strong">{line}</p>
+        ))}
 ```
 Find (both `FiguresTable` uses):
 ```tsx
@@ -8003,7 +8118,7 @@ Replace with:
 
 - [ ] **Step 8: `MonthGenerator` — the display read, banners, read-only pools, warnings, surfaces**
 
-Add imports: `import { displayedMonthStates } from "./v3MonthSources";`, `import { isLedgerBody } from "./v3AutoRun";`, `import { buildEquidadPlan, type EquidadPlan } from "./v3Equidad";`, `import type { FairnessLedgerResponse } from "@/app/utils/fairnessVocabulary";`, and `dayLabel` from `./plannerModel` if not imported.
+The four imports go directly after Task 15's `./V3RunPanel` import (`dayLabel` is already imported from `./plannerModel`): Find `import V3RunPanel from "./V3RunPanel";` → Replace with `import V3RunPanel from "./V3RunPanel";\nimport { displayedMonthStates } from "./v3MonthSources";\nimport { isLedgerBody } from "./v3AutoRun";\nimport { buildEquidadPlan, type EquidadPlan } from "./v3Equidad";\nimport type { FairnessLedgerResponse } from "@/app/utils/fairnessVocabulary";`.
 
 After Task 15's `const [autoRetry, setAutoRetry] = …` line, add:
 ```ts
@@ -8065,9 +8180,10 @@ Replace with:
       {solverConfig ? (
         <SolverConfigPanel
 ```
-The same mount — Find:
+The same mount (C2's `fairnessServices` line sits between the two props) — Find:
 ```tsx
           showCadencePoolWarning={showCadencePoolWarning}
+          fairnessServices={existingRoles}
           engine={engine}
         />
 ```
@@ -8079,6 +8195,7 @@ Replace with:
           cadencePoolWarningMonths={isV3 ? unboundMonths : undefined}
           poolsReadOnly={allBound}
           equidadPlan={equidadPlan}
+          fairnessServices={existingRoles}
           engine={engine}
         />
 ```
@@ -8098,7 +8215,7 @@ Replace with:
   /** C6 EQ-3/EQ-4: forwarded to the «Equidad» panel. */
   equidadPlan?: EquidadPlan | null;
 ```
-In its destructure, Find `showCadencePoolWarning = false, engine = "v2" }: {` → Replace with `showCadencePoolWarning = false, engine = "v2", cadencePoolWarningMonths, poolsReadOnly = false, equidadPlan = null }: {`. Find:
+In its destructure, Find `showCadencePoolWarning = false, fairnessServices, engine = "v2" }: {` → Replace with `showCadencePoolWarning = false, fairnessServices, engine = "v2", cadencePoolWarningMonths, poolsReadOnly = false, equidadPlan = null }: {`. Find:
 ```tsx
             {CADENCE_OUTSIDE_HEADING}
 ```
@@ -8107,7 +8224,7 @@ Replace with:
             {CADENCE_OUTSIDE_HEADING}
             {cadencePoolWarningMonths && cadencePoolWarningMonths.length > 0 && ` — ${monthsList(cadencePoolWarningMonths, true)}`}
 ```
-For the three `<MemberPool` uses in `SolverConfigPanel`, add `readOnly={poolsReadOnly}` to each (Find `          field="sundayLeads" label="Líderes Domingo"` → Replace with `          field="sundayLeads" label="Líderes Domingo" readOnly={poolsReadOnly}`, and likewise for `field="saturdayLeads" label="Líderes Sábado"` and `field="support" label="Soporte"`). `MemberPool` — Find:
+The three `<MemberPool` uses in `SolverConfigPanel` each gain `readOnly={poolsReadOnly}`: Find `          field="sundayLeads" label="Líderes Domingo"` → Replace with `          field="sundayLeads" label="Líderes Domingo" readOnly={poolsReadOnly}`; Find `          field="saturdayLeads" label="Líderes Sábado"` → Replace with `          field="saturdayLeads" label="Líderes Sábado" readOnly={poolsReadOnly}`; Find `          field="support" label="Soporte"` → Replace with `          field="support" label="Soporte" readOnly={poolsReadOnly}`. `MemberPool` — Find:
 ```ts
 function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search, onSearch }: {
   field: "sundayLeads" | "saturdayLeads" | "support";
@@ -8127,7 +8244,7 @@ Replace with:
 ```tsx
           type="button" onClick={onSelectAll} disabled={readOnly}
 ```
-and give its `<Checkbox` the prop `disabled={readOnly}` (Find `          <Checkbox\n            key={m._id}` → Replace with `          <Checkbox\n            disabled={readOnly}\n            key={m._id}`).
+and its `<Checkbox` gains `disabled={readOnly}` (Find `          <Checkbox\n            key={m._id}` → Replace with `          <Checkbox\n            disabled={readOnly}\n            key={m._id}`).
 
 The v2 history surfaces under v2 only (EQ-1). In `SolverConfigPanel`, Find:
 ```tsx
@@ -8157,25 +8274,29 @@ Replace with:
 ```tsx
       {solverConfig && !isV3 && (derivedMode ? (
 ```
-Both C2 panel mounts `[PROVISIONAL]` gain the engine and the plan — in `SolverConfigPanel`, Find:
+Both C2 panel mounts (anchors verified at replay against replay-base; re-check after Task 15) gain the engine and the plan — in `SolverConfigPanel`, Find:
 ```tsx
-          rulesDirty={rulesDirtyOf(rules, config)}
-        />
+        rulesDirty={rulesDirtyOf(rules, config)}
+      />
 ```
 Replace with:
 ```tsx
-          rulesDirty={rulesDirtyOf(rules, config)}
-          engine={engine}
-          plan={engine === "v3" ? equidadPlan : undefined}
-        />
+        rulesDirty={rulesDirtyOf(rules, config)}
+        engine={engine}
+        plan={engine === "v3" ? equidadPlan : undefined}
+      />
 ```
 and on the grid step, Find:
 ```tsx
-rulesDirty={rulesDirtyOf(rules, solverConfig)} />
+          rulesDirty={rulesDirtyOf(rules, solverConfig)}
+        />
 ```
 Replace with:
 ```tsx
-rulesDirty={rulesDirtyOf(rules, solverConfig)} engine={engine} plan={isV3 && !storedMode ? equidadPlan : undefined} />
+          rulesDirty={rulesDirtyOf(rules, solverConfig)}
+          engine={engine}
+          plan={isV3 && !storedMode ? equidadPlan : undefined}
+        />
 ```
 
 `ServicesPanel` — in the create mount, Find `            engine={engine}\n            members={members}` → Replace with `            engine={engine}\n            showCadencePoolWarning={engine === "v3"}\n            members={members}`.
@@ -8185,7 +8306,7 @@ rulesDirty={rulesDirtyOf(rules, solverConfig)} engine={engine} plan={isV3 && !st
 - [ ] **Step 9: Run the tests, C2's and C3's panel suites, and the gates**
 
 Run: `node scripts/colour-inventory.mjs && git add -A && npx vitest run app/components/admin/__tests__/v3Equidad.test.ts app/components/admin/__tests__/MonthGenerator.v3Equidad.test.tsx app/components/admin/__tests__/FairnessPreviewPanel.test.tsx app/components/admin/__tests__/fairnessPreviewModel.test.ts app/components/admin/__tests__/MonthGenerator.fairnessPreview.test.tsx app/components/admin/__tests__/MonthGenerator.cadenceWarning.test.tsx app/components/admin/__tests__/MonthGenerator.cadence.test.tsx app/components/admin/__tests__/engineProp.test.ts app/utils/__tests__/fairnessFormat.test.ts`
-Expected: PASS — C2's panel suites (provisional names) and C3's warning suite unedited (the default engine is v2; C3's prop-`true` case still opens with no read).
+Expected: PASS — C2's panel suites and C3's warning suite unedited (the default engine is v2; C3's prop-`true` case still opens with no read).
 Run: `npx tsc --noEmit && npm test && npx eslint .` — Expected: 0 errors.
 
 - [ ] **Step 10: Commit**
@@ -9333,6 +9454,8 @@ describe("CF-8, CF-9, CF-10", () => {
     expect(onClose).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Seguir aquí" }));
     await waitFor(() => expect(incomplete()).toBeNull());
+    // The provider lifts the app root's aria-hidden one frame after the last layer leaves; wait for it.
+    await waitFor(() => expect(screen.getByRole("button", { name: /Previsualizar/ })).toBeTruthy());
     // Back on the grid the dialog is closed (no stale open state) and the gap is still there to ask about.
     preview();
     expect(incomplete()).toBeNull();
@@ -9382,7 +9505,17 @@ export default function V3IncompleteDialog({ open, gaps, onLeave, onStay }: {
 
 - [ ] **Step 4: `MonthGenerator` — the shared POST, the state, the frozen entries**
 
-Add imports: `import { confirmGuard, draftsByMonth, freezeConfirmEntries, guardLine, monthReportLines, twoMonthSummaryLine, type MonthProgress, type V3ConfirmEntry } from "./v3Confirm";`, `import { INITIAL_V3_CONFIRM_STATE, progressFrom, runV3ConfirmAttempt, type V3ConfirmResult, type V3ConfirmState } from "./v3ConfirmRun";`, `import V3IncompleteDialog from "./V3IncompleteDialog";`, and extend existing ones with `isLedgerBody, V3_LEDGER_TIMEOUT_MS` (`./v3AutoRun`) and `resolveMonthSources` (`./v3MonthSources`).
+The imports — Task 16's `./v3MonthSources` line gains `resolveMonthSources`; its `./v3AutoRun` line gains `V3_LEDGER_TIMEOUT_MS` (Task 16 already imports `isLedgerBody` — a second import of it would be a duplicate identifier), and the three new imports follow that line. Find `import { displayedMonthStates } from "./v3MonthSources";` → Replace with `import { displayedMonthStates, resolveMonthSources } from "./v3MonthSources";`. Find:
+```ts
+import { isLedgerBody } from "./v3AutoRun";
+```
+Replace with:
+```ts
+import { isLedgerBody, V3_LEDGER_TIMEOUT_MS } from "./v3AutoRun";
+import { confirmGuard, draftsByMonth, freezeConfirmEntries, guardLine, monthReportLines, twoMonthSummaryLine, type MonthProgress, type V3ConfirmEntry } from "./v3Confirm";
+import { INITIAL_V3_CONFIRM_STATE, progressFrom, runV3ConfirmAttempt, type V3ConfirmResult, type V3ConfirmState } from "./v3ConfirmRun";
+import V3IncompleteDialog from "./V3IncompleteDialog";
+```
 
 Module level — Find:
 ```ts
@@ -9517,7 +9650,7 @@ Replace with:
     setPushError(null);
     let result;
 ```
-Before `  async function handleConfirm(publish: boolean) {`, insert:
+The new code goes directly above `handleConfirm` (the block ends with that function's own first line). Find `  async function handleConfirm(publish: boolean) {` → Replace with:
 ```ts
   /**
    * CF-2's no-Auto path: a fresh read, bound months from their records, every other month from IF2-15.
@@ -9846,15 +9979,15 @@ while a confirm is in flight. Under v2 the confirm is unchanged."
 ## Task 20: The documentation in the same delivery (DOC-2, DOC-3; DOC-1 landed in Task 2) — [standard; docs-audit material]
 
 **Files:**
-- Create: `docs/adr/00NN-the-planner-learns-the-solver-engine-from-the-server.md` and `docs/adr/00NM-auto-plans-one-or-two-months-with-stored-services-fixed.md` — `00NN` is the first free number on `main` recorded at Task 0 Step 5 and `00NM` the next one (numbers follow the order records reach `main`; if another record lands first, renumber in the merge of `main` and let `adrIndex.test.ts` confirm)
+- Create: `docs/adr/0051-the-planner-learns-the-solver-engine-from-the-server.md` and `docs/adr/0052-auto-plans-one-or-two-months-with-stored-services-fixed.md` — `0051` is the first free number on `main` recorded at Task 0 Step 5 and `0052` the next one (numbers follow the order records reach `main`; if another record lands first, renumber in the merge of `main` and let `adrIndex.test.ts` confirm)
 - Modify: `docs/adr/README.md` (two index rows), `docs/API_REFERENCE.md` (the solve route), `CLAUDE.md` and `AGENTS.md` (identical edits — `agentDocsParity.test.ts`), `docs/UTILITIES_AND_COMPONENTS.md`
 
 **Interfaces:** none (documentation only).
 
-- [ ] **Step 1: Write the engine ADR** — Create `docs/adr/00NN-the-planner-learns-the-solver-engine-from-the-server.md`
+- [ ] **Step 1: Write the engine ADR** — Create `docs/adr/0051-the-planner-learns-the-solver-engine-from-the-server.md`
 
 ```markdown
-# ADR-00NN: The planner learns the solver engine from the server
+# ADR-0051: The planner learns the solver engine from the server
 
 **Date:** 2026-10-06 · **Status:** Accepted
 
@@ -9902,10 +10035,10 @@ flips the constant (and C1's pin test) and touches no client code to do it; a cl
 changes with the constant is a defect (C7 S8).
 ```
 
-- [ ] **Step 2: Write the horizon ADR** — Create `docs/adr/00NM-auto-plans-one-or-two-months-with-stored-services-fixed.md`
+- [ ] **Step 2: Write the horizon ADR** — Create `docs/adr/0052-auto-plans-one-or-two-months-with-stored-services-fixed.md`
 
 ```markdown
-# ADR-00NM: Auto plans one or two months, with stored services and counted specials as fixed services
+# ADR-0052: Auto plans one or two months, with stored services and counted specials as fixed services
 
 **Date:** 2026-10-06 · **Status:** Accepted (behind `SOLVER_ENGINE`; production stays v2 until C7)
 
@@ -9961,10 +10094,10 @@ Deleting the v2 history surfaces is C7's, after the rollback window.
 
 - [ ] **Step 3: Index the two records** — `docs/adr/README.md`
 
-Append two rows after the last ADR row, in the file's format:
+After the index's last ADR row — at the replay base the `- [ADR-0050: El saldo de equidad …` line, add:
 ```markdown
-- [ADR-00NN: The planner learns the solver engine from the server](00NN-the-planner-learns-the-solver-engine-from-the-server.md) — solver v3 C6. Why `/admin` resolves the effective engine (C2's resolver: the constant, or the Preview-only override) on the server and threads it as a prop to every engine-dependent surface, why the solve route answers a body of the other contract `409 solver_version_mismatch`, and why a client fetch, a `NEXT_PUBLIC_` variable or reading the constant in client code were rejected.
-- [ADR-00NM: Auto plans one or two months, with stored services and counted specials as fixed services](00NM-auto-plans-one-or-two-months-with-stored-services-fixed.md) — solver v3 C6, behind the engine switch. The 1–2-month horizon, stored services sent fixed by document id, counted specials pre-filled then fixed, minted rule ids with a name-free ordinal table, and the confirm that writes every month's eligibility record in one PUT before any draft (A27, A40); what ADR-0010 and ADR-0047 will need amended at C7's flip.
+- [ADR-0051: The planner learns the solver engine from the server](0051-the-planner-learns-the-solver-engine-from-the-server.md) — solver v3 C6. Why `/admin` resolves the effective engine (C2's resolver: the constant, or the Preview-only override) on the server and threads it as a prop to every engine-dependent surface, why the solve route answers a body of the other contract `409 solver_version_mismatch`, and why a client fetch, a `NEXT_PUBLIC_` variable or reading the constant in client code were rejected.
+- [ADR-0052: Auto plans one or two months, with stored services and counted specials as fixed services](0052-auto-plans-one-or-two-months-with-stored-services-fixed.md) — solver v3 C6, behind the engine switch. The 1–2-month horizon, stored services sent fixed by document id, counted specials pre-filled then fixed, minted rule ids with a name-free ordinal table, and the confirm that writes every month's eligibility record in one PUT before any draft (A27, A40); what ADR-0010 and ADR-0047 will need amended at C7's flip.
 ```
 
 - [ ] **Step 4: The solve route** — `docs/API_REFERENCE.md`
@@ -10026,8 +10159,13 @@ Motion tokens are `--motion-*` /
 
 - [ ] **Step 6: The inventory** — `docs/UTILITIES_AND_COMPONENTS.md`
 
-In the `## app/components/` heading, add 2 to the admin `.tsx` count and to the total (`V3RunPanel.tsx`, `V3IncompleteDialog.tsx`). Then append, at the end of the admin components list in that section, the entries:
+The `## app/components/` heading's figures are a recount of the files on the branch (`ls app/components/<dir>/*.tsx | wc -l` for each directory, `ls app/components/*.tsx | wc -l` for the top level), and it names C6's two additions — C6 adds `V3RunPanel.tsx` and `V3IncompleteDialog.tsx`, but the heading was already one admin file short at the replay base (C2's `FairnessPreviewPanel.tsx` was never counted: 25 admin / 108 total written, 26 / 109 on disk), so adding 2 to it would leave it wrong. On the replay base: Find ``## `app/components/` — inventory (108 `.tsx` files: 37 top-level + 25 admin + 7 kids + 27 ui + 9 song + 3 availability; recounted for solver v3 C1, which adds `FairnessSwitch`)`` → Replace with ``## `app/components/` — inventory (111 `.tsx` files: 37 top-level + 28 admin + 7 kids + 27 ui + 9 song + 3 availability; recounted for solver v3 C6, which adds `V3RunPanel` and `V3IncompleteDialog` — C2's `FairnessPreviewPanel` had not been counted)``.
+
+The entries go under the admin panels table, one blank line after its last row (the table ends there; the entries are a list under it), so the block opens with that blank line.
+
+After the ``| `ParticipationSidebar` | …`` line, add:
 ```markdown
+
 - **`V3RunPanel`** (solver v3 C6) — a v3 run's line, stage summary and «Ver etapas», with the run's name-free rule reference table (wire id · kind · config ordinal) headed by its `request_id`.
 - **`V3IncompleteDialog`** (solver v3 C6) — CF-10's «El plan quedó incompleto» `CueDialog`, opened when leaving after a partial v3 confirm.
 - **`v3*.ts` (solver v3 C6, neutral)** — `v3Wire` (the `contract: 3` types), `v3Horizon`, `v3Copy`, `v3RuleIds`, `v3MonthSources`, `v3Services`, `v3People`, `v3Rules`, `v3Prefill`, `v3SolveRequest`, `v3SolveResponse`, `v3RunReport`, `v3AutoRun`, `v3Equidad`, `v3Confirm`, `v3ConfirmRun`; and `app/utils/solverV3Upstream.ts` (`server-only`, the solve route's v3 transport).
@@ -10060,8 +10198,10 @@ line is C2's and is not repeated; ADR amendments are C7's at the flip."
 
 - [ ] **Step 1: The five gates on the final tree**
 
+`BASE` below is the commit this branch was cut from: `origin/main` once C2 and C5 are on `main` (the normal case); on a replay cut from an integration of C2 and C5 that is not on `main`, that integration commit (`git rev-parse replay-base`) — against `origin/main` such a branch would show C2's and C5's own changes. Set it first: `BASE=origin/main` (or `BASE=$(git rev-parse replay-base)` on a replay).
+
 Run: `npx tsc --noEmit && npm test && npx eslint . 2>&1 | tail -1`
-Expected: 0 `tsc` errors; every test green; `0 errors` and warnings ≤ the Task 0 baseline. Python suites: `git diff --stat origin/main -- gcf gcf_v3` must print nothing — C6 changes no Python, so neither suite is a gate (spec §14).
+Expected: 0 `tsc` errors; every test green; `0 errors` and warnings ≤ the Task 0 baseline. Python suites: `git diff --stat $BASE -- gcf gcf_v3` must print nothing — C6 changes no Python, so neither suite is a gate (spec §14).
 
 - [ ] **Step 2: The static checks the spec names**
 
@@ -10069,14 +10209,14 @@ Expected: 0 `tsc` errors; every test green; `0 errors` and warnings ≤ the Task
 # ENG-1 (C2's guard) and ENG-4: one reader of the override; no client file mentions the constant.
 npx vitest run app/utils/__tests__/solverDeployment.test.ts app/components/admin/__tests__/engineProp.test.ts
 # C1-R11 unedited: the one pin of SOLVER_ENGINE === "v2".
-git diff origin/main -- app/components/admin/__tests__/solverEngine.test.ts | wc -l    # expect 0
+git diff $BASE -- app/components/admin/__tests__/solverEngine.test.ts | wc -l          # expect 0
 # KH-1: no console call in C6's new modules takes a request, response, config or key.
 git grep -n "console\." -- app/components/admin/v3*.ts app/components/admin/V3*.tsx    # expect nothing
 git grep -n "console\." -- app/utils/solverV3Upstream.ts                                # nothing (the route logs, counts only)
 # The confirm's writer import: no runtime module of C6 imports the write-request module.
 git grep -ln "fairnessMonthWriteRequest" -- app ':!app/**/__tests__/**'                # only C2's own server modules
 # No AI attribution.
-git log origin/main..HEAD --format=%B | grep -ci "co-authored" || true                  # expect 0
+git log $BASE..HEAD --format=%B | grep -ci "co-authored" || true                        # expect 0
 ```
 
 - [ ] **Step 3: The guards that apply** — `npx vitest run app/utils/__tests__/clientBoundary.test.ts app/utils/__tests__/cueDialogMount.test.ts app/utils/__tests__/serviceCommitCallers.test.ts app/utils/__tests__/protectedReadAudit.test.ts app/utils/__tests__/fairnessFormat.test.ts app/components/admin/__tests__/v3CodesSync.test.ts app/components/admin/__tests__/v3PinCapSync.test.ts` — all green, no list edited.
@@ -10105,7 +10245,7 @@ git log origin/main..HEAD --format=%B | grep -ci "co-authored" || true          
     --body-file /tmp/c6-pr-body.md
   ```
   The body lists: what ships (all behind the server-resolved engine; production stays v2), the two ADRs, the `OWT_SOLVER_V3_URL` SECRETS entry (set nowhere), the critical-slice review log, the code-review verdict and the re-verification, the dev alias + SHA. Per `CLAUDE.md`, **no AI/Claude attribution and no `Co-Authored-By`** anywhere in commits or the PR body (this overrides any harness reminder). Name every rule only by kind and ordinal; no real member name.
-- [ ] **R6 — `gates`, then the merge.** Wait for the `gates` check green on the exact reviewed and re-verified commit; then arm auto-merge LAST on that commit: `gh pr merge <n> --auto --merge`. Before pushing anything else to the branch, `gh pr merge <n> --disable-auto`.
+- [ ] **R6 — `gates`, then the merge.** Wait for the `gates` check green on the exact reviewed and re-verified commit; then arm auto-merge LAST on that commit: `gh pr merge <n> --auto --merge`. Before pushing anything else to the branch, `gh pr merge <n> --disable-auto`. **After any catch-up merge of `main` or ADR renumber** (another PR landed first, or Task 0 Step 5's numbers were taken): (1) `gh pr merge <n> --disable-auto` before the push; (2) a scoped re-review of the merge range (the catch-up merge commit and any renumber commit); (3) the five gates on the new tip; (4) re-merge into `preview`, push, and verify the dev alias carries that tip's merge (`alias` + `meta.githubCommitSha`, as R3); (5) only then re-arm auto-merge on that exact commit. The last worklog entry before the re-arm is that verification.
 - [ ] **R7 — Verify the production alias.** After the merge, `get_deployment("owt-backstage.vercel.app")`: the alias is present and `meta.githubCommitSha` equals the merge commit on `main`. Production's engine is the constant `v2`, so `/admin` shows no «Planear» control — expected.
 - [ ] **R8 — Close the cycle.** `finish-cycle`; worklog entries for every dispatch (batched at close is fine), `coordinator-inline` for specialist-shaped inline work; `git worktree remove` for any worktree used; docs that state release status (the ADR index rows, `docs/SECRETS.md`'s `OWT_SOLVER_V3_URL` status line «not set on any Vercel environment yet») re-read for accuracy.
 
@@ -10121,7 +10261,7 @@ git log origin/main..HEAD --format=%B | grep -ci "co-authored" || true          
 | ENG-2 | — (C2's) | C2's resolver table tests, relied on unchanged |
 | ENG-3 | 1, 14 | `engineProp.test.ts` (server-only importers; the page resolves and passes it); `MonthGenerator.v3Horizon.test.tsx` › HZ-1 (v3 controls iff the prop says v3) |
 | ENG-4 | 1 | `engineProp.test.ts` › no client module mentions `SOLVER_ENGINE` |
-| ENG-5 | 20 | ADR-00NN (C7 flips; no code here) |
+| ENG-5 | 20 | ADR-0051 (C7 flips; no code here) |
 | RT-1 | 2 | `solveRouteV3.test.ts` › RT-1 both directions, no upstream call |
 | RT-2 | 2 | `solveRoute.test.ts` (unedited) + `solveRouteV3.test.ts` › forwarded body equals received |
 | RT-3 | 2 | `solverV3Upstream.test.ts` › remote with `X-Api-Key`, local off Vercel, `not_configured` on Vercel; `solveRouteV3.test.ts` |
@@ -10181,7 +10321,7 @@ git log origin/main..HEAD --format=%B | grep -ci "co-authored" || true          
 | EQ-3 | 16 | `v3Equidad.test.ts` › plan columns from the tab, «—» before a solve / absent tab |
 | EQ-4 | 16 | `v3Equidad.test.ts` › reasons; component › RQ-4's line after the run, UI-5's before |
 | EQ-5 | 16 | `v3Equidad.test.ts`; C2's `fairnessFormat.test.ts` divide sweep |
-| EQ-6 | 16 | C2's panel card tests; C6's plan values in the card (see gaps) |
+| EQ-6 | 16 | `MonthGenerator.v3Equidad.test.tsx` › EQ-6: at a stubbed 390 px viewport, after a v3 run, Ana's card inside `[data-fairness-cards]` reads «En este plan 2 · Queda le deben 0.3»; the cards are `md:hidden` and the table sits in its own `hidden md:block overflow-x-auto` box (no page-level scroll); C2's panel card tests for the rest. The real phone look is C7's (see gaps) |
 | EQ-7 | 16 | `v3Equidad.test.ts` › diagnostics lines |
 | WN-1 | 16 | component › no read yet (open, both/one month), one bound month, all bound, v2 closed; C3's sentences verbatim |
 | WN-2 | 11 | `v3SolveRequest.test.ts` › name refusal, cadence + exact, kids-only namesake |
@@ -10196,9 +10336,9 @@ git log origin/main..HEAD --format=%B | grep -ci "co-authored" || true          
 | CF-6 | 17, 18, 19 | `monthReportLines`; `v3ConfirmRun.test.ts`; component › per-month line |
 | CF-7 | 18, 19 | `v3ConfirmRun.test.ts` › resend only missing, replay per shape, month-2-only; component › byte-identical PUT on «Reintentar (n pendientes)» |
 | CF-8 | 17, 19 | `twoMonthSummaryLine`; component › no publish at 2, kept at 1; `v3ConfirmRun.test.ts` › published passes through |
-| CF-9 | 19 | component › two history entries for a 2-month confirm (specials-only: today's `special_role` filter, copied verbatim — see Coverage gaps) |
+| CF-9 | 19 | `MonthGenerator.v3Confirm.test.tsx` › one history entry per month with a weekend draft created (two for a 2-month confirm). «None for a specials-only month» is **declined, not asserted** (review round 1): the v3 history filter is today's P1 second lock (`d._type !== "special_role"`) copied verbatim, proven today by the create suite under v2; adding it needs the create suite's special-composer helpers lifted into `v3PlannerHarness.tsx` (see Coverage gaps) |
 | CF-10 | 19 | component › «El plan quedó incompleto» from the grid «Cancelar» and Escape, «Seguir aquí» stays, «Salir así» leaves; from the config step after «← Volver» («Cancelar» and Escape), and no stale open dialog on the next «Previsualizar» |
-| CF-11 | 18, 19 | `v3ConfirmRun.test.ts` › thrown POST is a failure; `confirmV3`'s try/catch/finally (its unreachable catch keeps the confirm retryable and claims «No se creó nada» only when no draft can exist) |
+| CF-11 | 18, 19 | `v3ConfirmRun.test.ts` › the record step (CF-4) › «a network error → zero POSTs, the record line, retry true» (a thrown PUT); `v3ConfirmRun.test.ts` › drafts › «a draft 409 adds today's note …; a thrown POST is a failure, never a creation (CF-11)»; `MonthGenerator.v3Confirm.test.tsx` › ««other failure» offers «Reintentar (n pendientes)», whose PUT body is byte-identical (CF-7)» (a 500 on the PUT: the failure line shows instead of a success, the pending flag is reset — «Reintentar» is clickable — and the retry lands) |
 | DOC-1 | 2 | `docs/SECRETS.md` entry (review) |
 | DOC-2 | 20 | two ADRs + index (`adrIndex.test.ts`) |
 | DOC-3 | 20 | `CLAUDE.md`/`AGENTS.md` line (`agentDocsParity.test.ts`) |
@@ -10208,15 +10348,16 @@ git log origin/main..HEAD --format=%B | grep -ci "co-authored" || true          
 | §7 copy | 4 (+16 for EQ-3/EQ-7 lines) | `v3Copy.test.ts`, `v3CodesSync.test.ts` |
 | §14 «Parent §16» | — (C7) | Preview, engine v3, two real months solved (not confirmed) |
 
-**Coverage gaps (stated, not hidden):** EQ-6's phone-width card is asserted by C2's own panel tests; C6's plan values inside the card are rendered (Task 16 Step 7) but not asserted — add a card assertion at replay. ST-7's component path (a partial confirm, then Auto again, the created target sent fixed) depends on `ServicesPanel` reloading the roles after `onCreated`, which the MonthGenerator harness does not do; it is proven at unit level (`v3Services.test.ts` › ST-7). CF-9's «none for a specials-only month» is not asserted at component level: the v3 confirm's history filter is today's P1 second lock (`d._type !== "special_role"`) copied verbatim, today's create suite proves it under v2, and a v3 component test would need that suite's non-exported special-composer helpers under Task 14's stacked calendars — add it at replay if the helpers are lifted into `v3PlannerHarness.tsx`. HZ-5's and EQ-6's phone checks are C7's look. EQ-7's three diagnostic lines are C6-own copy the spec's §7 does not enumerate (they reuse the derived history's wording) — flagged for the reviewer.
+**Coverage gaps (stated, not hidden):** EQ-6 is asserted at a stubbed 390 px viewport (Task 16 Step 2 › EQ-6, added after the replay): Ana's card's plan values inside `[data-fairness-cards]` and the class split that keeps the table in its own scroller. jsdom lays nothing out and the panel consults no `matchMedia`, so the test proves the DOM a phone gets, not pixels; the spec row's «`Collapse` for the detail» is met by the panel's own disclosure (C2's card renders its detail lines inline) — flagged for the reviewer. ST-7's component path (a partial confirm, then Auto again, the created target sent fixed) depends on `ServicesPanel` reloading the roles after `onCreated`, which the MonthGenerator harness does not do; it is proven at unit level (`v3Services.test.ts` › ST-7). CF-9's «none for a specials-only month» stays **declined** (review round 1) and is not asserted at component level: the v3 confirm's history filter is today's P1 second lock (`d._type !== "special_role"`) copied verbatim, and today's create suite proves that lock under v2; a v3 component test would need that suite's non-exported special-composer helpers under Task 14's stacked calendars — lifting them into `v3PlannerHarness.tsx` and adding a specials-only 2-month confirm that asserts no history entry for that month is what would add it. HZ-5's and EQ-6's real phone checks are C7's look. EQ-7's three diagnostic lines are C6-own copy the spec's §7 does not enumerate (they reuse the derived history's wording) — flagged for the reviewer.
 
 ## Sibling issues found while planning (C6 edits no sibling text)
 
 | ID | Child | Issue | C6 meanwhile |
 |---|---|---|---|
-| S-19 | C2 | C2 §8's X1 copy has no sentence for IF2-12's `assumed_led_previous_month` (month 2 of a run); C2's `cadenceLine` falls through to «descansa: ningún domingo disponible», which would be false there | C6 renders §7.7's «Mes por medio: descansa en {mes}.» for that month and no X1 sentence (Task 16) |
+| S-19 | C2 | C2 §8's X1 copy has no sentence for IF2-12's `assumed_led_previous_month` (month 2 of a run); C2's `cadenceLine` falls through to «descansa: ningún domingo disponible», which would be false there | C6 renders §7.7's «Mes por medio: no dirige domingo en {mes}.» for that month and no X1 sentence (Task 16; copy amended 2026-10-07) |
 | S-20 | C5 | `invalid_request`'s `detail` tokens are not listed in `codes.json` (only its parameter names), so C6 cannot key copy on them | C6 renders the generic planner-bug line with `field` only (§7.5) |
 | S-21 | C2 / spec | IF-C2 lists IF2-11 as «ST-6's test only», while C2 §7.4 forbids a C6 reimplementation of LG-4; this plan calls `keepVoiceSeats` at run time (Plan decisions) | For the reviewer to rule; the fallback is a local first-seen pass tested against IF2-11 |
+| S-22 | C2 | Frank, 2026-10-07: «Mes por medio» governs Sunday lead only, so a cadence line must not read as resting from everything. C2 §8's X1 sentences still say «En {mes} descansa: …» (`led_previous_month`, `not_eligible`, the default) | C6 renders C2's X1 sentences unchanged through `x1LineText` (Task 16) and rewords only its own copy (§7.2, §7.7, SP-7's motivo); C2 to reword its X1 copy on its own branch |
 | S-18 | C7 | (open in the spec) C7 cites «KH-1 as amended» for the ordinal map that KH-3 delivers | KH-3 is delivered as the spec states; the table's format is in Plan decisions |
 
 ---
@@ -10224,7 +10365,7 @@ git log origin/main..HEAD --format=%B | grep -ci "co-authored" || true          
 ## Self-review (writing-plans checklist)
 
 1. **Spec coverage.** Every row of §5 (ENG, RT, HZ, ST, SP, RQ, AD, NT, EQ, WN, CTL, CF, DOC, KH) and §14's acceptance table maps to a task and a named test above; the gaps are listed with their reason.
-2. **Placeholder scan.** No «TBD»/«TODO»/«similar to Task N». The only deferred values are the two ADR numbers (`00NN`, `00NM`), fixed at Task 0 Step 5 by the repository's numbering rule, and the `[PROVISIONAL]` anchors, each re-verified at Task 0 Step 4.
+2. **Placeholder scan.** No «TBD»/«TODO»/«similar to Task N». The only deferred values are the two ADR numbers (`0051`, `0052`), fixed at Task 0 Step 5 by the repository's numbering rule. The anchors from C2 Tasks 11–17 and C5 Tasks 10–15 were re-verified at replay (2026-10-07, against `4c50309b`) and are re-checked against the merged `main` at Task 0 Step 4.
 3. **Type consistency.** Names cross-checked across tasks: `MonthSource`/`MonthState` (6) → 8, 9, 10, 11, 17; `RunCadence` (8) → 10, 11, 16; `CollectedRules`/`mintInputOf`/`emitV3Rules`/`ruleReferences` (9) → 11; `MintedIds`/`RuleRefEntry`/`renderRuleRefTable` (5) → 9, 11, 15; `V3BuildResult`/`V3Snapshot` (11) → 13, 15, 19; `V3Outcome` (12) → 13, 15; `V3ConfirmEntry`/`MonthProgress` (17) → 18, 19; `V3ConfirmState`/`runV3ConfirmAttempt`/`progressFrom` (18) → 19; `EquidadPlan` (16) → `FairnessPreviewPanel`; `flagDisagreementLines` (8) → 11.
 
 ## Execution handoff
@@ -10235,11 +10376,86 @@ Recommended: **superpowers:subagent-driven-development** — a fresh implementer
 
 ## Replay
 
-**This plan was written, not executed.** C2 Tasks 11–17 and C5 Tasks 10–15 were still being implemented, so every `[PROVISIONAL]` anchor is plan text, not code, and the `c2-t10`-verified anchors in `MonthGenerator.tsx` sit near C2 Task 14's insertions. A later agent executes it as follows:
+**Replayed 2026-10-07** in a throwaway clone (`/private/tmp/claude-501/c6-replay/repo`, outside every checkout; nothing pushed, no Sanity write, no secret read or set) on **replay-base `4c50309b3080a7b0f1246d414a77892486fb4833`** = C2's final tip `0aa33514` (C1 + C3 + C2) merged with C5 Tasks 1–12 `e3086f77`. Every Create / Append / Find→Replace block was applied by script from this text; every «run it to see it fail» failed for its stated reason; each task's gates were run (full vitest as `npx vitest run --maxWorkers=3` on a memory-constrained machine) and each task committed and tagged `task-N` in the clone. Where a step did not apply or went red, this text was corrected, the clone reset to the previous task's tag, and the task re-run from the corrected text. Final clone HEAD: `10e36642` (branch `claude/solver-v3-c6-planner-v3`).
+
+**Gate counts per task** (tsc errors · vitest files / tests · eslint errors / warnings; baseline 0 · 468 / 8644 · 0 / 81; Python: gcf_v3 175 OK, gcf 105 OK (1 skipped) at the base — no task touched `gcf/**` or `gcf_v3/**`, so neither was a gate):
+
+| Task | Gates | Task | Gates |
+|---|---|---|---|
+| 0 | baseline (above) | 11 | 0 · 484 / 8838 · 0 / 81 |
+| 1 | 0 · 470 / 8653 · 0 / 81 | 12 | 0 · 486 / 8869 · 0 / 81 |
+| 2 | 0 · 472 / 8684 · 0 / 81 | 13 | 0 · 487 / 8884 · 0 / 81 |
+| 3 | 0 · 473 / 8695 · 0 / 81 | 14 | 0 · 488 / 8896 · 0 / 80 (one `set-state-in-effect` warning gone with the rewritten month-change effect) |
+| 4 | 0 · 476 / 8724 · 0 / 81 | 15 | 0 · 489 / 8907 · 0 / 80 |
+| 5 | 0 · 477 / 8733 · 0 / 81 | 16 | 0 · 491 / 8920 · 0 / 80 |
+| 6 | 0 · 478 / 8757 · 0 / 81 | 17 [CRITICAL] | 0 · 492 / 8949 · 0 / 80 |
+| 7 | 0 · 479 / 8770 · 0 / 81 | 18 [CRITICAL] | 0 · 493 / 8967 · 0 / 80 |
+| 8 | 0 · 480 / 8783 · 0 / 81 | 19 [CRITICAL] | 0 · 494 / 8980 · 0 / 80 |
+| 9 | 0 · 481 / 8798 · 0 / 81 | 20 | 0 · 494 / 8980 · 0 / 80 |
+| 10 | 0 · 482 / 8815 · 0 / 81 | 21 (final tree, no commit) | 0 · 494 / 8980 · 0 / 80; Step 2 static checks and Step 3 guards green; all 34 test files the Coverage table names exist |
+
+**Corrections made to this text at replay** (grouped; none changes behaviour the spec fixes):
+
+- *Header, Global Constraints, File Structure (Task 0):* `[PROVISIONAL]` markers removed after re-verifying every C2 Tasks 11–17 / C5 Tasks 10–15 symbol against the replay base; `FAIRNESS_TOLERANCE` is still `50` there (C6 does not depend on it); ADR numbers `00NN`/`00NM` → `0051`/`0052` everywhere, File-Structure ADR names aligned with Task 20's.
+- *Anchors that moved under C2's final tip:* Task 1 Step 7 (the «end of `Props`» Find matched twice → starts at the doc comment's last line; `SolverConfigPanel`'s signature and mount carry C2's `fairnessServices`); Task 16 Step 7 (the `{COPY.banner}` Find re-indented, outside `{data && …}`, so the diagnostics line guards `data &&`); Task 16 Step 8 (both `<FairnessPreviewPanel` mounts' indentation and two-line form; the `SolverConfigPanel` mount and destructure carry `fairnessServices`).
+- *Imports:* Task 2 (`isV3Body` moves to `v3Wire.ts`, re-exported by the transport; the route imports the `server-only` transport with `await import(...)` inside the v3 branch only, so the unedited `solveRoute.test.ts` still loads; File Structure rows updated); Task 14 Step 6 and Task 19 Step 4 (import sentences that would have imported `normalizeServiceName` / `isLedgerBody` a second time → explicit Find/Replace pairs adding only the new names).
+- *Tests that were wrong, module unchanged:* Task 10 Step 1 (SP-1 passes both rows so the same-category block can fire; SP-2 makes Bruno «exact» for Sun.Lead so his only miss is `no_consecutive`); Task 15 Step 2 (Auto's «Reintentar» queried beside Auto's error line — the v2 history panel's own retry is still on the page until Task 16); Task 19 Step 1 (the config-step dialog test waits for `CueDialogProvider` to lift the app root's `aria-hidden` one frame after the dialog closes — a flake found by Task 21's full run).
+- *Docs and verification:* Task 20 Step 6 (the inventory heading is recounted — it was one admin file short at the base — and the three entries go after the admin table, one blank line between); Task 21 Steps 1–2 (`$BASE` instead of `origin/main`, which on a replay is not the base).
+- **Tasks 17–19 (critical slice):** Tasks 17 and 18 unchanged. Task 19 changed four times, none behaviourally — at the first replay the Step 4 import instruction (two Find/Replace pairs) and the Step 1 test's wait for the provider's frame; at the second-clone proof (below) the Step 4 imports as one inline and one block Find/Replace, and Step 5's «Before `  async function handleConfirm(publish: boolean) {`, insert:» (whose block ends with that very line, so a literal insert duplicated it) as a Find/Replace of that line with the same block. Per item 5 below, Tasks 17–19 go back through the adversarial review on this text.
+
+**Second-clone proof (2026-10-07).** A second fresh clone (`/private/tmp/claude-501/c6-replay/repo2`: 0aa33514 merged with e3086f77, tree identical to replay-base; `node_modules` cloned with `cp -Rc`; the first clone's `task-N` tags fetched) re-applied Tasks 1–20 by script (`tools2/apply2.py`, whose docstring is the grammar: the forms «How to read an edit step» lists, nothing else; any other edit-like prose is reported, never guessed). A dry pass (each task applied on the first clone's `task-(N-1)` and diffed against its `task-N`) found where the text did not determine the tree; the text was corrected, then the real pass ran 1 → 20 in one go: every Find exactly once, every «see it fail» red for its stated reason, every «see it pass» green, gates on every task, each task committed. **All 20 trees IDENTICAL to the first replay's, all 20 commit messages identical, gate counts equal to the table above at every task** (no flake, no re-run) — for the text as it then stood; the post-replay amendments below changed Tasks 2, 4, 10 and 16 on purpose. Corrections, all format-only (each reproduces the first replay's bytes):
+
+- *Header:* «How to read an edit step» names the inline Find → Replace, «(the one after …)», `After … line, add:`, `immediately before / above … insert`, how the file is named, and «identical edits in both».
+- *Imports with no stated position* («add … beside the file's other `./` imports», «Add imports: …», «add … to the import list», «extend …») → inline or block Find/Replace anchored on the import they follow: Task 1 Steps 5–7, Task 14 Step 1, Task 15 Step 6, Task 16 Steps 4, 7 and 8, Task 19 Step 4.
+- *Prose edits* → explicit pairs: Task 1 Step 8 (`fairnessEngineV3.test.tsx`), Task 14 Step 6 (`isV3` in two dependency arrays), Task 15 Step 5 (`Button` already imported; the `props` destructure), Task 16 Step 8 («and likewise for …» → three `<MemberPool` pairs).
+- *Positions:* Task 6 Step 1 and Task 20 Steps 3 and 6 → `After … line, add:` (Task 20 Step 6's block opens with the blank line that separates it from the table); Task 19 Step 5 → Find/Replace (above).
+
+**Post-replay amendments and re-proof (2026-10-07).** After the second-clone proof, the critic's findings and Frank's copy follow-up changed this text:
+
+- *Header and spec status:* the header now states the spec's true status — self-reviewed, terminal state `READY_FOR_REVIEW` (the spec's header line, which read `DRAFT`, was aligned with its §16 with a dated note), Frank's authorization to proceed with the children, and that he has not read C6 itself. Task 0 Step 1 gains the entry gate «Frank has read the C6 spec's §5.11 confirm protocol and §7 copy, or explicitly waived it» before Task 1.
+- *Stale `[PROVISIONAL]` descriptions removed:* «How to read an edit step», Task 0 Step 4 (now «re-verify the anchors from C2 Tasks 11–17 and C5 Tasks 10–15 (re-verified at replay 2026-10-07 against `4c50309b`) against the merged `main`») and its stop rule, Task 16 Step 9's expectation, Self-review item 2, Procedure item 3.
+- *Task 0 Step 5:* if the next two free ADR numbers are not `0051`/`0052`, both are replaced everywhere (the places are listed there).
+- *Task 2 Step 7 (`docs/SECRETS.md`, `OWT_SOLVER_V3_URL`):* the value is set with `printf '%s' "$URL" | npx vercel env add OWT_SOLVER_V3_URL <preview|production> --type config` and removed with `npx vercel env rm OWT_SOLVER_V3_URL <env> --yes` (the sibling entries' style); it is stated as non-sensitive config; a rotation is `rm` + `add` back to back, then one redeploy, and the blast radius names the build that could start between the two.
+- *Copy (Frank, 2026-10-07: «Mes por medio» governs Sunday lead only — BGV/Coro and the voice floor are untouched):* Task 4's `v3Copy.ts` — `cadence_off_led` «…, su mes sin domingo («Mes por medio»).», `V3_CADENCE_STATE.off` «no dirige domingo», `.out` «no dirige domingo: no está en la lista de Dom Lead», `V3_PANEL_REASON.cadenceOff` «Mes por medio: no dirige domingo en {mes}.», `V3_LINES.motivoCadence` «es su mes sin domingo («Mes por medio»)»; the tests that assert them: Task 10 Step 1 (SP-7's motivo table) and Task 16 Step 1 (the DL reason line); the `x1LineText` doc comment (Task 16 Step 4) and sibling row S-19 quote the new line. Keys and behaviour unchanged. C2's own X1 sentences («En {mes} descansa: …», extracted verbatim by Task 16 Step 4) are C2's copy and stay — new sibling row S-22. The spec's §7.2 and §7.7 carry the dated amendment.
+- *EQ-6 (Task 16 Step 2):* a new component test — at a stubbed 390 px viewport (`innerWidth` and a narrow `matchMedia`, as `participationAlongside.test.tsx` stubs one), after a v3 run, Ana's card inside `[data-fairness-cards]` reads «En este plan 2 · Queda le deben 0.3»; the cards are `md:hidden` and the table sits in its own `hidden md:block overflow-x-auto` box. It sits in Step 2's component file, not Step 1's model file, because it renders (Step 1 is `node`-environment and renders nothing). A mutation check (expecting «En este plan 3») failed as it should. Coverage row and gaps paragraph updated.
+- *CF-9's «none for a specials-only month» stays declined* (review round 1). What proves it today: the v3 confirm's history filter is today's P1 second lock (`d._type !== "special_role"`) copied verbatim, and today's create suite proves that lock under v2. What would add it: lifting the create suite's special-composer helpers into `v3PlannerHarness.tsx` and a specials-only 2-month confirm asserting no history entry for that month. Coverage row and gaps paragraph say so.
+- *Coverage CF-11* now cites tests, not code (`v3ConfirmRun.test.ts` › the record step › a network error; the drafts thrown-POST case; `MonthGenerator.v3Confirm.test.tsx` › «other failure» offers «Reintentar (n pendientes)»).
+- *Release R6:* after any catch-up merge of `main` or ADR renumber — disable auto-merge, scoped re-review of the merge range, the five gates on the new tip, preview re-merge with the dev alias + SHA verified, then re-arm on that exact commit.
+- *Procedure item 4's confirmations, made at replay:* `EligibilityRefusalReason`, `EligibilityIssueCode` and `EligibilityResult` by Task 0 Step 4's grep, and `EligibilityMember` present in `app/utils/fairnessEligibility.ts` at the base (grep); `historyEntryFromDrafts`'s key format (year/month) by Task 19's history test; `CueDialog`'s accessible name from `title` by Task 19's dialog query («El plan quedó incompleto»); the composer's labels by Task 15's specials test; `buildFairnessMonthDocument`'s output parsing by Task 17's round-trip test — all green at the first replay, the second-clone proof and the re-proof below.
+
+**Re-proof.** The changed text touches Tasks 2, 4, 10 and 16 (code, tests or Find/Replace text), so the second clone was reset to Task 1 (`r2-task-1`, tree identical to `task-1`) and Tasks 2–20 re-applied by script from the amended text (`tools2/apply3.py` — `apply2.py` with tags `r3-task-N` and the tree comparison against the first replay made advisory, since four tasks now change on purpose). Every Find matched once, every «see it fail» failed for its stated reason (Task 16: the model file fails to load with `Cannot find module '../v3Equidad'` and all 9 component tests fail, the new EQ-6 test among them), every «see it pass» passed, gates green at every task, every commit message identical to the first replay's, no `Co-Authored` line, no `gcf/**`/`gcf_v3/**` change; the parsed op list of Tasks 1–20 after the final edits to this text (292 ops) equals the one that ran. Final HEAD `547b1ca9`; `git diff --stat task-20 r3-task-20` = 6 files, exactly the amended ones (`docs/SECRETS.md`, `v3Copy.ts`, `v3Prefill.test.ts`, `v3Equidad.test.ts`, `MonthGenerator.v3Equidad.test.tsx`, `fairnessPreviewModel.ts`'s comment). Task 21 Step 3's seven guards plus solverDeployment and engineProp on the final tree (clientBoundary, cueDialogMount, serviceCommitCallers, protectedReadAudit, fairnessFormat, v3CodesSync, v3PinCapSync, solverDeployment, engineProp): 9 files / 109 tests passed; all 34 test files the Coverage table names exist.
+
+| Task | see it pass (files / tests) | Gates: tsc · vitest files / tests · eslint errors / warnings |
+|---|---|---|
+| 2 | 3 / 40 | 0 · 472 / 8684 · 0 / 81 |
+| 3 | 1 / 11 | 0 · 473 / 8695 · 0 / 81 |
+| 4 | 3 / 29 | 0 · 476 / 8724 · 0 / 81 |
+| 5 | 1 / 9 | 0 · 477 / 8733 · 0 / 81 |
+| 6 | 1 / 24 | 0 · 478 / 8757 · 0 / 81 |
+| 7 | 1 / 13 | 0 · 479 / 8770 · 0 / 81 |
+| 8 | 1 / 13 | 0 · 480 / 8783 · 0 / 81 |
+| 9 | 1 / 15 | 0 · 481 / 8798 · 0 / 81 |
+| 10 | 2 / 56 | 0 · 482 / 8815 · 0 / 81 |
+| 11 | 2 / 23 | 0 · 484 / 8838 · 0 / 81 |
+| 12 | 2 / 31 | 0 · 486 / 8869 · 0 / 81 |
+| 13 | 1 / 15 | 0 · 487 / 8884 · 0 / 81 |
+| 14 | 6 / 195 | 0 · 488 / 8896 · 0 / 80 |
+| 15 | 6 / 80 | 0 · 489 / 8907 · 0 / 80 |
+| 16 | 9 / 76 | 0 · 491 / **8921** · 0 / 80 |
+| 17 [CRITICAL] | 2 / 36 | 0 · 492 / **8950** · 0 / 80 |
+| 18 [CRITICAL] | 2 / 33 | 0 · 493 / **8968** · 0 / 80 |
+| 19 [CRITICAL] | 6 / 122 | 0 · 494 / **8981** · 0 / 80 |
+| 20 | 2 / 5 | 0 · 494 / **8981** · 0 / 80 |
+
+Tasks 2–15 equal the first replay's counts; from Task 16 on every full run has one more test (the EQ-6 test), so the final tree is **0 · 494 / 8981 · 0 / 80** (the table above and Task 21's row are the first replay's, 8980). **Tasks 17–19 (critical slice): no change from these amendments** — not one line of their text changed; their own files (`v3Confirm.ts`, `v3ConfirmRun.ts`, `V3IncompleteDialog.tsx`, their three test files, and Task 19's `MonthGenerator.tsx` hunks) are byte-identical to the first replay's `task-19`, and their trees differ from it only by the files inherited from Tasks 2, 4, 10 and 16.
+
+**Next:** the real execution follows the procedure below once C1, C3, C2 and C5 are on `main`; Tasks 17–19 first go back through the adversarial review (item 5).
+
+**Procedure for the real execution** (unchanged in substance):
 
 1. **When:** after C1, C3, C2 and C5 have all merged to `main` (Task 0 Step 1 is the entry gate).
 2. **Where:** a throwaway clone built from that `origin/main` under the scratchpad (outside every checkout), never an existing worktree.
-3. **How:** task by task, each ending with the five gates green and a commit; Task 0 Step 3 records the baseline counts (files/tests/warnings) and Step 4 re-checks every `[PROVISIONAL]` symbol.
+3. **How:** task by task, each ending with the five gates green and a commit; Task 0 Step 3 records the baseline counts (files/tests/warnings) and Step 4 re-checks the C2 Tasks 11–17 / C5 Tasks 10–15 symbols against the merged `main`.
 4. **Fixing the plan:** a `Find` that does not match exactly once, a renamed C2/C5 symbol, a test that cannot go red for the stated reason, or a fixture whose expectation is wrong is a **stop-and-fix of this plan's text** (never a silent local adjustment): edit the task, re-run it from a fresh state, and record the change in a short «Replay log» appended here. In particular confirm at replay: C2's final names for `EligibilityRefusalReason`/`EligibilityIssueCode`/`EligibilityMember`; the exact text of C2's `FairnessPreviewPanel`/`fairnessPreviewModel` blocks Task 16 edits and of the two `<FairnessPreviewPanel` mounts Task 16 extends; `historyEntryFromDrafts`'s key format (Task 19's history test asserts year/month only); `CueDialog`'s accessible name from `title` (Task 19's dialog query); the composer's labels (Task 15's specials test); and that `buildFairnessMonthDocument`'s output parses (Task 17's round trip — a failing round trip is a C2 finding, fixed in C2's module, never worked around here).
 5. **If Tasks 17–19 change** during replay, their text goes back through the adversarial review (two fresh `APPROVED` on byte-identical text) before execution continues past them.
 6. **Proof of mechanical applicability:** once green end to end, re-apply the plan's own text to a second fresh clone of the same `origin/main`; every anchor must match exactly once at its point in the plan and each task's tree must come out identical to the executed one (the C2 plan's method).

@@ -1,6 +1,8 @@
 # Solver v3, child C6: the planner on v3 — engine switch, 1–2-month horizon, stored services as pins, live «Equidad» — design spec
 
-**Date:** 2026-10-05 · **Status:** `DRAFT` · **Parent:**
+**Date:** 2026-10-05 · **Status:** `READY_FOR_REVIEW` (status line amended 2026-10-07 to match §16 — it
+read `DRAFT`: the spec is self-reviewed; Frank authorized proceeding with the children on 2026-10-05
+but has not read C6 itself) · **Parent:**
 [`2026-10-05-solver-v3-fairness-design.md`](2026-10-05-solver-v3-fairness-design.md) (APPROVED by
 Frank) — this child owns parent §7 (U1–U8) and its part of §8 E2 (A1). The parent's amendments
 A1–A41 (its §3) win over older clause wording; this spec is aligned to them (A1, A2, A5–A7, A9–A11,
@@ -192,7 +194,7 @@ And the instruction that started the children: «Aprobado, sigue con los specs d
 | SP-4 | **Uncounted specials** keep today's mechanism exactly: never sent, filled after the solve at every exit by today's load ranking. Instruments keep today's fill at every exit. | Existing special/instrument tests green under v3 |
 | SP-5 | On an exit before the pre-fill ran (any pre-flight refusal — RQ-2's resolver lines and RQ-4's disagreement refusal included, since the pre-fill reads both — or a failed ledger read), counted specials are left as they are and the refusal adds «Los especiales que cuentan para equidad no se llenaron porque Auto no corrió.» | Test |
 | SP-6 | A notice names the pre-fill whenever it placed anyone: «Los especiales que cuentan para equidad se llenaron primero (Lead y BGV, por saldo) y el solver acomodó los fines de semana alrededor de ellos.» | Test |
-| SP-7 | Every second-tier placement (SP-2) gets one notice, keyed on the protection it misses: «{persona} dirige el {servicio} aunque {motivo}: nadie más podía dirigirlo.», with `{motivo}` «es su mes de descanso («Mes por medio»)» (a), «ya dirige otro domingo en {mes}» (b), «ya dirige otro sábado en {mes}» (c) or «dirige el domingo anterior o el siguiente» (d). The solver's own `missed` line for the same miss (cause `pins`, §7.2) still renders; C6 adds no other copy of it. | Test per motivo |
+| SP-7 | Every second-tier placement (SP-2) gets one notice, keyed on the protection it misses: «{persona} dirige el {servicio} aunque {motivo}: nadie más podía dirigirlo.», with `{motivo}` «es su mes sin domingo («Mes por medio»)» (a; copy amended 2026-10-07, see §7.7), «ya dirige otro domingo en {mes}» (b), «ya dirige otro sábado en {mes}» (c) or «dirige el domingo anterior o el siguiente» (d). The solver's own `missed` line for the same miss (cause `pins`, §7.2) still renders; C6 adds no other copy of it. | Test per motivo |
 
 ### 5.6 The v3 request (built from planner state, C2, C3, C1)
 
@@ -492,7 +494,7 @@ rule card's own label; a line → «Dom Lead», «Sáb Lead», «BGV», «Coro»
 | Code | Params | Copy |
 |---|---|---|
 | `cadence_on_missed` | person, month | «{persona} no dirigió domingo en {mes}, su mes de dirigir («Mes por medio»).» |
-| `cadence_off_led` | person, month | «{persona} dirigió domingo en {mes}, su mes de descanso («Mes por medio»).» |
+| `cadence_off_led` | person, month | «{persona} dirigió domingo en {mes}, su mes sin domingo («Mes por medio»).» (copy amended 2026-10-07, see §7.7) |
 | `compensation_missed` | person, month | «{persona} no tiene su sábado de compensación en {mes}.» |
 | `voice_floor_missed` | person, month | «{persona} no canta en ningún servicio de {mes}.» |
 | `dl_floor_missed` | person, month1, month2 | «{persona} no dirige domingo ni en {mes1} ni en {mes2}.» |
@@ -561,14 +563,24 @@ label of a record rule with no on-screen card, and «regla de presencia registra
 
 ### 7.7 Panel reasons (one line per row)
 
-«Mes por medio: le toca en {mes}.» · «Mes por medio: descansa en {mes}.» · «Sábado de compensación en
+«Mes por medio: le toca en {mes}.» · «Mes por medio: no dirige domingo en {mes}.» · «Sábado de compensación en
 {mes}.» · «No disponible {fechas}: esas fechas no le cuentan.» · «Su número lo fija «{regla}».» ·
 «Los pines tomaron {n} lugares.» · «Exenta: fuera de Total y del mínimo de voz.» Ledger-side reasons
 (no record, not in the pool) are C2's.
 
 Registry groups shown only through these reasons: `cadence_state` `on` «le toca», `off`
-«descansa», `out` «descansa: no está en la lista de Dom Lead»; `compensation` `given` «tiene su
-sábado de compensación», `missed` «no tuvo su sábado de compensación», `not_applicable` (no line).
+«no dirige domingo», `out` «no dirige domingo: no está en la lista de Dom Lead»; `compensation`
+`given` «tiene su sábado de compensación», `missed` «no tuvo su sábado de compensación»,
+`not_applicable` (no line).
+
+**Copy amended 2026-10-07 (Frank): the cadence state concerns Sunday lead only.** «Mes por medio»
+governs Sunday lead and nothing else — BGV/Coro and the voice floor are untouched — so no C6 line
+says «descansa» or «mes de descanso» for the `off`/`out` state: the cadence-off reason above (was
+«Mes por medio: descansa en {mes}.»), the `off`/`out` registry copy (was «descansa» / «descansa: no
+está en la lista de Dom Lead»), §7.2's `cadence_off_led` (was «…, su mes de descanso («Mes por
+medio»).») and SP-7's motivo (a) (was «es su mes de descanso («Mes por medio»)», now «es su mes sin
+domingo («Mes por medio»)» — this note supersedes the wording SP-7 quotes). Codes, keys and
+behaviour are unchanged. C2's own X1 sentences («En {mes} descansa: …») are C2's copy, not C6's.
 
 ### 7.8 Confirm (U4)
 
