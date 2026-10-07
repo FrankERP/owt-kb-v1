@@ -120,7 +120,7 @@ export function isInsideRoot(child: string, root: string, caseInsensitive: boole
  * the rest appended — so an `--out` that does not exist yet, or one reached
  * through a link, is judged by where it would really land.
  */
-function realLocation(p: string): string {
+export function realLocation(p: string): string {
   let current = path.resolve(p);
   const rest: string[] = [];
   while (!existsSync(current)) {
