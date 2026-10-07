@@ -131,18 +131,24 @@ Every job has the full tree checked out from the repository root, so a fixture a
 the root (for example `fixtures/fairness/golden.json`) is present in `node` and in
 both solver jobs; resolve it relative to the test's own file, never to a `cd`.
 
-`gcf_v3/` holds only a scaffold until the v3 solver lands: `requirements.txt`
-(the same ortools pin as `gcf/`), a copy of `gcf/.gcloudignore`, the `owt_v3`
-package and one smoke test, `test_scaffold.py`. The v2 Cloud Build trigger filters
-on `gcf/**` and `cloudbuild.yaml`, so nothing under `gcf_v3/` deploys.
+`gcf_v3/` holds the v3 solver (solver v3 C5): the `owt_v3` package, the HTTP entry
+`main.py`, the `--json-mode` CLI `owt_solver_v3.py`, `requirements.txt` (the same
+ortools pin as `gcf/`, plus `functions-framework`), its own `.gcloudignore` and
+`cloudbuild.yaml`, the unit suite in `tests/` and the acceptance harness in
+`acceptance/` (a package with no `test*.py`; its `ci` subset runs from
+`tests/test_acceptance_ci.py`). C0's `test_scaffold.py` stays. Two of the suite's
+modules read `fixtures/fairness/golden.json` (C2's fixture), so the job is red
+without it. v2's trigger filters on `gcf/**` and `cloudbuild.yaml`; v3's
+(`owt-solver-v3-deploy`) on `gcf_v3/**` — neither matches the other's paths.
 
 ### Timing
 
 **Rule for every `timeout-minutes` in `ci.yml`:** a job's timeout is at least
 twice its latest measured job time. Re-measure when a suite's step time grows by a
 quarter, and split again rather than drop a suite. The numbers live here, not in
-workflow comments. `solver-v3`'s 15 is a placeholder until the v3 solver's suite
-exists and is measured.
+workflow comments. `solver-v3`'s 15 was set before its suite existed; the suite's
+first GitHub-runner measurement (a `workflow_dispatch` run of the C5 branch) is
+still to be taken, and 15 stands while that job stays at or under 7m30s.
 
 | Run | Date | Commit | Layout | Node steps | v2 solver steps | v3 solver steps | Wall (job) |
 |---|---|---|---|---|---|---|---|
