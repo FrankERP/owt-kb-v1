@@ -2227,6 +2227,313 @@
       "covers": ["CAD-2", "pinned-sunday-counts"],
       "input": {"ledCountedSundayPreviousMonth": true, "months": [{"month": "2026-11", "eligible": true, "availableCountedSundays": 4}]},
       "expected": [{"month": "2026-11", "state": "off", "reason": "led_previous_month"}]
+    },
+    {
+      "id": "plan-exact-pin-remainder",
+      "kind": "plan",
+      "description": "An exact count of 2 with one pinned seat: the remaining 1 is spread over her two unpinned Sundays (C5-9).",
+      "covers": ["C5-9", "F5", "F13"],
+      "input": {
+        "contract": 3,
+        "seed": 1,
+        "months": ["2026-11"],
+        "services": [
+          {
+            "id": "s1",
+            "date": "2026-11-01",
+            "month": "2026-11",
+            "kind": "sunday",
+            "fixed": false,
+            "counts": true,
+            "seats": {
+              "Lead": 2,
+              "BGV": 0,
+              "Choir": 0
+            }
+          },
+          {
+            "id": "s2",
+            "date": "2026-11-08",
+            "month": "2026-11",
+            "kind": "sunday",
+            "fixed": false,
+            "counts": true,
+            "seats": {
+              "Lead": 2,
+              "BGV": 0,
+              "Choir": 0
+            }
+          },
+          {
+            "id": "s3",
+            "date": "2026-11-15",
+            "month": "2026-11",
+            "kind": "sunday",
+            "fixed": false,
+            "counts": true,
+            "seats": {
+              "Lead": 2,
+              "BGV": 0,
+              "Choir": 0
+            }
+          }
+        ],
+        "people": [
+          {
+            "id": "m-alma",
+            "name": "Alma",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"],
+              "s3": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          },
+          {
+            "id": "m-bruno",
+            "name": "Bruno",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"],
+              "s3": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          },
+          {
+            "id": "m-carmen",
+            "name": "Carmen",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"],
+              "s3": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          }
+        ],
+        "rules": [
+          {
+            "id": "cap-a",
+            "kind": "count",
+            "person": "m-alma",
+            "roles": ["Sun.Lead"],
+            "op": "==",
+            "month": "2026-11",
+            "value": 2
+          }
+        ],
+        "pins": [
+          {
+            "service": "s1",
+            "date": "2026-11-01",
+            "role": "Lead",
+            "person": "m-alma"
+          }
+        ],
+        "prior": {
+          "month": "2026-10",
+          "has_services": true,
+          "services": []
+        }
+      },
+      "expected": {
+        "planned": {
+          "m-bruno": {
+            "DL": 200
+          },
+          "m-carmen": {
+            "DL": 200
+          },
+          "m-alma": {
+            "DL": 0
+          }
+        },
+        "floor": {}
+      }
+    },
+    {
+      "id": "plan-floor-at-received-pin",
+      "kind": "plan",
+      "description": "A low-share person's floor seat in the plan is her earliest received pinned seat (§6.4): nine people over two Sundays, hers is 3/9 < 1.",
+      "covers": ["F5", "F9", "C5-15", "F13"],
+      "input": {
+        "contract": 3,
+        "seed": 1,
+        "months": ["2026-11"],
+        "services": [
+          {
+            "id": "s1",
+            "date": "2026-11-01",
+            "month": "2026-11",
+            "kind": "sunday",
+            "fixed": false,
+            "counts": true,
+            "seats": {
+              "Lead": 2,
+              "BGV": 0,
+              "Choir": 0
+            }
+          },
+          {
+            "id": "s2",
+            "date": "2026-11-08",
+            "month": "2026-11",
+            "kind": "sunday",
+            "fixed": false,
+            "counts": true,
+            "seats": {
+              "Lead": 2,
+              "BGV": 0,
+              "Choir": 0
+            }
+          }
+        ],
+        "people": [
+          {
+            "id": "m-bruno",
+            "name": "Bruno",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          },
+          {
+            "id": "m-carmen",
+            "name": "Carmen",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          },
+          {
+            "id": "m-diego",
+            "name": "Diego",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          },
+          {
+            "id": "m-elena",
+            "name": "Elena",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          },
+          {
+            "id": "m-fausto",
+            "name": "Fausto",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          },
+          {
+            "id": "m-greta",
+            "name": "Greta",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          },
+          {
+            "id": "m-ivan",
+            "name": "Ivan",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          },
+          {
+            "id": "m-julia",
+            "name": "Julia",
+            "exempt": true,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          },
+          {
+            "id": "m-alma",
+            "name": "Alma",
+            "exempt": false,
+            "eligibility": {
+              "s1": ["Lead"],
+              "s2": ["Lead"]
+            },
+            "carried": {},
+            "dl_since": null,
+            "prev_dl_leads": 0
+          }
+        ],
+        "rules": [],
+        "pins": [
+          {
+            "service": "s2",
+            "date": "2026-11-08",
+            "role": "Lead",
+            "person": "m-alma"
+          }
+        ],
+        "prior": {
+          "month": "2026-10",
+          "has_services": true,
+          "services": []
+        }
+      },
+      "expected": {
+        "planned": {
+          "m-bruno": {
+            "DL": 33
+          },
+          "m-alma": {
+            "DL": 33
+          }
+        },
+        "floor": {
+          "2026-11": ["m-alma"]
+        }
+      }
     }
   ]
 }
