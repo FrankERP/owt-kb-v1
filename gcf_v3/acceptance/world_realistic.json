@@ -1,0 +1,40 @@
+{
+  "schema": 1,
+  "scenarios": true,
+  "description": "Fictitious roster mirroring the worship team's STRUCTURE (17 voices: 3 cadence leads, a fixed-count lead, an exempt lead, a capped lead, an exclusive presence pair, 3 regulars, 3 support singers with one Sunday BGV each, 2 Saturday-only support singers, 1 unrestricted support singer). One cadence lead enters the Sunday pool in Sep 2026 (a promotion), so the three are not in phase. No real person, name or figure.",
+  "start": "2026-08",
+  "saturday_anchor": "2026-08-08",
+  "seats": {"sunday": {"Lead": 2, "BGV": 3, "Choir": 3}, "saturday": {"Lead": 2, "BGV": 3}},
+  "availability": {"seed": 2026, "rate": 0.08},
+  "members": [
+    {"id": "m-ana", "name": "Ana", "roles": ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": true, "unavailable": []},
+    {"id": "m-bea", "name": "Bea", "roles": ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": true, "unavailable": []},
+    {"id": "m-cris", "name": "Cris", "roles": ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": true, "unavailable": [], "since": {"Sun.Lead": "2026-09"}},
+    {"id": "m-dario", "name": "Dario", "roles": ["Sun.Lead"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-ema", "name": "Ema", "roles": ["Sun.Lead"], "exempt": true, "cadence": false, "unavailable": []},
+    {"id": "m-fede", "name": "Fede", "roles": ["Sun.Lead", "Sun.BGV"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-gala", "name": "Gala", "roles": ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-hector", "name": "Hector", "roles": ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-ines", "name": "Ines", "roles": ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-jose", "name": "Jose", "roles": ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-kike", "name": "Kike", "roles": ["Sun.Lead", "Sat.Lead", "Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-lola", "name": "Lola", "roles": ["Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-mario", "name": "Mario", "roles": ["Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-nora", "name": "Nora", "roles": ["Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-olga", "name": "Olga", "roles": ["Sat.BGV"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-paco", "name": "Paco", "roles": ["Sat.BGV"], "exempt": false, "cadence": false, "unavailable": []},
+    {"id": "m-rosa", "name": "Rosa", "roles": ["Sun.BGV", "Sat.BGV", "Sun.Choir"], "exempt": false, "cadence": false, "unavailable": []}
+  ],
+  "rules": [
+    {"id": "cap-fixed", "kind": "count", "person": "m-dario", "roles": ["Sun.Lead"], "op": "==", "value": 2},
+    {"id": "cap-capped", "kind": "count", "person": "m-fede", "roles": ["Sun.BGV"], "op": "<=", "sundays_minus": 2},
+    {"id": "cap-lola", "kind": "count", "person": "m-lola", "roles": ["Sun.BGV"], "op": "==", "value": 1},
+    {"id": "cap-mario", "kind": "count", "person": "m-mario", "roles": ["Sun.BGV"], "op": "==", "value": 1},
+    {"id": "cap-nora", "kind": "count", "person": "m-nora", "roles": ["Sun.BGV"], "op": "==", "value": 1},
+    {"id": "pres-pair", "kind": "presence", "persons": ["m-gala", "m-hector"], "roles": ["Sun.BGV"], "exclusive": true},
+    {"id": "pair-bgv", "kind": "pair", "persons": ["m-gala", "m-hector"], "roles": ["Sun.BGV", "Sat.BGV"]},
+    {"id": "pair-lead", "kind": "pair", "persons": ["m-gala", "m-hector"], "roles": ["Sun.Lead", "Sat.Lead"]},
+    {"id": "pair-leads-1", "kind": "pair", "persons": ["m-ines", "m-jose"], "roles": ["Sun.Lead", "Sat.Lead"]},
+    {"id": "pair-leads-2", "kind": "pair", "persons": ["m-bea", "m-kike"], "roles": ["Sun.BGV"]}
+  ]
+}
