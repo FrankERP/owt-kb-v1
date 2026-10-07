@@ -200,6 +200,73 @@ rollback until D3 deletes them. The Historial chips are **read-only** — the de
 fact about the stored services, so there is no manual month exclusion (no ×); an empty month
 reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md).
 
+### Fairness toggle (solver v3 C1)
+
+- **`COUNTS_FOR_FAIRNESS_GROQ`, `countsForFairnessDefault(roleType)`, `countsForFairness(doc)`**
+  ([countsForFairness.ts](../app/utils/countsForFairness.ts)) — the ONE read rule for a role's
+  «Cuenta para equidad»: the GROQ fragment (a plain quoted string, never a template literal —
+  `draftGatingCoverage` scans those), its TypeScript twin and the type default (weekends
+  count, specials do not). Neutral, no imports; no other file spells the fragment or the
+  default (`countsForFairness.test.ts` evaluates both with `groq-js` and sweeps `app/` and
+  `sanity/` for a second spelling). `ROLE_PROJECTION` does not carry the field.
+- **`SOLVER_ENGINE: "v2" | "v3"`** ([solverEngine.ts](../app/components/admin/solverEngine.ts)) —
+  the engine constant and nothing else (parent A1), `"v2"`; neutral, no imports, pinned by
+  `solverEngine.test.ts`. C2 adds the effective-engine resolver beside it; C7 flips it.
+- **`fairnessToggleModel.ts`** ([source](../app/components/admin/fairnessToggleModel.ts)) — the
+  four copy strings, the past-month rule (`isPastServiceMonth`, CDMX via `serviceTodayIso`)
+  and the effective-value helpers every surface and every request body go through
+  (`effectiveCreateCounts`, `applyCreateCountsEdits`, `effectiveStoredCounts`,
+  `effectiveColumnCounts`, `isFairnessColumnPast`). Each takes `todayIso` (default: now), so
+  the rule is evaluated at render and again at body build.
+- **`isNoticeNeutralEdit`** (in [serviceMutationSideEffects.ts](../app/utils/serviceMutationSideEffects.ts))
+  — the toggle-only PATCH predicate; see [NOTIFICATIONS](NOTIFICATIONS.md#a-toggle-only-patch-queues-nothing-solver-v3-c1).
+
+### Solver rule set — «Mes por medio» and exact counts (solver v3 C3, ADR-0049)
+- **`SOLVER_CONFIG_VERSION`, `exactCapOverlaps(config)`, `SUNDAY_CADENCE_VALUES`/`FAIRNESS_VALUES`/`CAP_OPS`**
+  ([solverConfigWriteRequest.ts](../app/utils/solverConfigWriteRequest.ts), neutral) — the rules
+  POST refuses any other `configVersion`; `exactCapOverlaps` is the ONE check that a person has at
+  most one `==` count per role key, run by the parser, the rule form, the panel and the client's
+  refusal mapping. `parseSolverConfigWrite`/`solverConfigFields`/`solverConfigFromDocument` are the
+  only way any writer sets or restores a rule value.
+- **`resolveRulePersonId`, `cadenceMembers`, `cadenceOutsideSundayPool`, `RosterMember`**
+  ([sundayCadence.ts](../app/utils/sundayCadence.ts), neutral) — exactly one worship member per
+  rule name or a named refusal (`unresolved`/`ambiguous`), over the unfiltered roster minus
+  non-worship members (the functions apply `normalizeMinistries` themselves). v2 keeps its
+  first-match `resolveToMemberName`. Copy: `CADENCE_V2_NOTE`, `SLACK_V3_NOTE`,
+  `CADENCE_OUTSIDE_HEADING`, `CADENCE_OUTSIDE_SENTENCE`.
+- **`v2View(config)`** ([plannerModel.ts](../app/components/admin/plannerModel.ts)) — the config
+  v2 sees: `sundayCadence` stripped and cadence-only restrictions removed; applied in
+  `solverPools` and `isExcludedFromLead`. `cadenceV2Inert.test.ts` is the guard.
+
+### Fairness ledger and the eligibility record (solver v3 C2, ADR-0050)
+- **`computeFairnessLedger`, `keepVoiceSeats`, `cadenceStates`** ([fairnessLedger.ts](../app/utils/fairnessLedger.ts), neutral) —
+  the ONE TypeScript definition of F2–F7 and X1: the record-free seat step (duplicate weekend
+  targets dropped, uncounted services out, one kept seat per person per service), populations,
+  presence sub-lines, set-asides and the floor seat, in exact BigInt rationals rounded once.
+  `fixtures/fairness/golden.json` is its contract with the v3 solver (C5): both suites assert it.
+- **`formatFairnessTenths`, `saldoWords`** ([fairnessFormat.ts](../app/utils/fairnessFormat.ts)) — the ONLY
+  fairness-figure formatter: one decimal from a tenths figure computed from the exact value, never
+  from hundredths (a sweep refuses code that divides a figure by 10 or 100).
+- **`resolveMonthEligibility`** ([fairnessEligibility.ts](../app/utils/fairnessEligibility.ts), neutral,
+  client-callable) — the ONE v3 eligibility resolver: on-screen rules and members → one month's
+  record body, or a named refusal; an `ok` body always passes the validator (RES-8).
+- **`rolesOfPatternV3`** ([plannerModel.ts](../app/components/admin/plannerModel.ts)) and
+  **`capValueForMonth`** ([serviceRuleContext.ts](../app/components/admin/serviceRuleContext.ts)) — the
+  ONE v3 six-key pattern map (equal to `rolesOfPattern` on v2's five keys, plus `Sat.Choir`;
+  `patternRolesV3Sync.test.ts`) and the ONE per-month count resolution over `resolvedCapValue`.
+  `memberFitsRoleKey` (plannerModel) is the one Tipo-fits-role predicate.
+- **`fairnessMonthWriteRequest.ts`** ([source](../app/utils/fairnessMonthWriteRequest.ts), neutral, never
+  client-imported) — the record's id and keys, `validateFairnessMonthWrite`, `contentHashOfWrite` /
+  `contentHashOfStored`, `parseStoredFairnessMonth` (the ONE record-schema check), `decideFairnessMonth`
+  and `executeFairnessMonthWrites` — the ONLY mutation path of `fairnessMonth` (clients injected;
+  callers pinned over `app/` and `scripts/`; a site of the audit's executor rule).
+- **`resolveSolverEngine`, `fairnessRecordEnvironment`** ([solverDeployment.ts](../app/utils/solverDeployment.ts)) —
+  the ONE reader of `OWT_SOLVER_ENGINE` and the record's `environment` stamp; never imported by a
+  client module.
+- **`FairnessPreviewPanel`** ([source](../app/components/admin/FairnessPreviewPanel.tsx)) with its
+  view-model [fairnessPreviewModel.ts](../app/components/admin/fairnessPreviewModel.ts) — the read-only
+  «Equidad · vista previa» beside «sin Lead en …», loading on first open, and «Registrar» (v3 only).
+
 ### Dates & schedule
 - **`daysUntil(dateStr, now?)`**, **`formatCountdown(days)`** ([daysUntil.ts](../app/utils/daysUntil.ts))
   — the service countdown, in a neutral module with no imports/hooks so a Server Component may
@@ -533,7 +600,7 @@ rows don't all re-render on every provider render. Consumers: `AudioPlayer`, `Da
 
 ---
 
-## `app/components/` — inventory (105 `.tsx` files: 37 top-level + 24 admin + 7 kids + 27 ui + 7 song + 3 availability; counted 2026-09-18, R6 tip — `BottomNavBar` and `TutorialPoster` are the two this phase added)
+## `app/components/` — inventory (109 `.tsx` files: 37 top-level + 26 admin + 7 kids + 27 ui + 9 song + 3 availability; recounted for solver v3 C2, which adds `FairnessPreviewPanel`)
 
 Legend: **[C]** client, **[S]** server.
 
@@ -659,6 +726,8 @@ behaviour of each, and the guards that pin them.
 | `pinModel` | «Solo llenar vacíos»'s pure half: board → `pinned` (`collectPins`, one seat per person per service, Lead → BGV → Coro), the Spanish pre-fetch refusals (`pinRefusal`), the exact-name handshake (`pinHandshakeHolds`), board conflicts (`pinConflicts`), the notices for seats left out as duplicates (`droppedPinNotices`), `emptyVoiceSeats`, and the `seatLabel`/`serviceDayLabel` wording. `collectPins` and `emptyVoiceSeats` take the request's `weekendsWithSaturday` and skip any Saturday whose week it does not send, so a trailing Saturday T5 withheld is neither pinned nor counted (ruling Q1, ADR-0048). |
 | `pinViolations` | Parses the six `pin_violations` forms and names each as the rules card does (`pinViolationNotices`); unmatched entries render one generic line. The forms' grammar is in [`SOLVER_AND_INFRA.md`](SOLVER_AND_INFRA.md) (the solver's output, `pin_violations`); ADR-0041 names the six constraint families they report. |
 | `clearCells` | «Borrar»: `planClear` (scope × Voces/Instrumentos, live counts, approximate hand-placed), `applyClear`, `restoreCleared` (onto live cells, columns still on the grid only), `dropClearedMarkers`. FOH never; a month-scope clear also leaves a special service's Coro and instruments (nothing refills them), while a service-scope clear on a special clears them. |
+| `FairnessSwitch` / `FairnessEngineNote` | The ONE «Cuenta para equidad» control (solver v3 C1): the house `Switch` (`size="sm"`), its visible label, an optional help line and — for a service of a past month — «Mes pasado: ya no se cambia.» as its `aria-describedby`; and the once-per-surface v2 note, shown only while `SOLVER_ENGINE === "v2"`. Used by both `PlannerGrid` header modes, `MonthCalendar`'s special composer and «+ Nuevo servicio». `PlannerGrid` renders neither unless it is given the optional `fairness` prop, so the theme-gallery fixture is unchanged. |
+| `FairnessPreviewPanel` | The «Equidad · vista previa» disclosure (solver v3 C2 UI-1…UI-7): a READ-ONLY view of the fairness ledger for the month on screen, mounted by `MonthGenerator` beside «sin Lead en …» (`LeadPoolHistoryPanel`) at the planner's config step and in the stored editor. A closed `Collapse` that reads `GET /api/admin/fairness` on FIRST open only, so an admin who never opens it costs no read; it changes nothing Auto reads, sends, solves or writes, and a failed read never blocks Auto or a save. Tabs are a `SegmentedControl`; every figure is the GET's tenths through one formatter and every string lives in `fairnessPreviewModel.ts` (including the Dom Lead tab's «Mes por medio» line, `cadenceLine`). Its one write is «Registrar elegibilidad de {mes}» (UI-6), offered only when the GET's effective engine is v3 and the month is from the current one to 12 months ahead: a confirm `CueDialog` that builds the body from the on-screen state through `resolveMonthEligibility`, sends `source: "manual"` to `PUT /api/admin/fairness/months` asserting the revision it READ, re-reads the GET on any 409 and stays open on every refusal. Guards: `FairnessPreviewPanel.test.tsx`, `FairnessPreviewPanel.registrar.test.tsx`, `fairnessPreviewModel.test.ts`. |
 | `PlannerGrid` | Renders the month grid `plannerModel` computes — dates across and seats down. Applicable admitted cells are editable; integrity-defective stored columns stay visible and read-only. An occupant whose «Tipo» no longer fits the seat is tinted amber and named under the cell, and the picker gives them a removal-only row — `rankCandidates` filters them out, so that row is their only exit (ADR-0029). `MonthGenerator` owns `cells`/`counts` and mutations. Owns the **three-column workspace**: Participaciones (216px), grid, and candidate picker (240px while a cell is active). The chart width is a content floor derived from `ParticipationSidebar`. **Pantalla completa** manages focus, traps Tab, locks body scroll, `inert`s the rest of `<body>` EXCEPT the `CueDialog` root and the toast stack (so a dialog raised from full screen, and a «Borrar» toast's «Deshacer», stay clickable), applies safe-area padding, and portals to `document.body` for Safari. The grid scrolls horizontally rather than squeezing its `minmax(150px, 1fr)` date columns; row labels remain sticky. Its `planner-wide` root lets `app/brand.css` lift the admin frame cap through `:has()`. In create mode it also renders, from props and still provider-free, the «Solo llenar vacíos» switch and its confirm copy, the Auto notice list (`AutoState.notices`), the pin-conflict chips, and the «Borrar» menus — one on the toolbar, one per column header. |
 | `MonthGenerator` | Owns create-planning and stored editing in the shared three-part `PlannerGrid`. Create mode retains solver preview/Auto; the fairness history it solves with is **derived from the stored weekend services** (`SOLVER_HISTORY_SOURCE === "derived"`, ADR-0042): the display reads it through `useDerivedSolverHistory`, and — only while `SOLVER_SENDS_HISTORY` is true — **every Auto re-reads it for its own month at solve time** through `fetchDerivedHistory` (never the display copy, never cached across a solve), a failed read refusing the solve («No se pudo leer el historial de equidad. Auto no corrió; reintenta.»). **Since 2026-09-30 the switch is `false` (ADR-0046): Auto sends `history: []`, reads nothing and never refuses over the history.** The Historial block's chips are **read-only** (no × month exclusion any more); diagnostics are always shown. `localStorage`'s `owt_solver_history_v2` is only WRITTEN on confirm (the rollback target), never read. Stored mode owns create-one, explicit full-roster save, date/name edits, team/seat swaps, frozen attempts, and roles/integrity readback reconciliation. Since 2026-09-22, stored mode's toolbar also offers **«Llenar especiales…»**: an inline picker over the month's approved specials (ticked by default, published ones marked «· publicado») whose «Llenar vacíos» fills the ticked group's empty Lead/BGV/instrument seats locally with load scoped to the group alone (`groupFill.ts`) — never the solver, nothing written before «Guardar». On a worship night the fill leaves **Lead** to the admin: `hasTarget` gives that row no target there (the block's Lead holds every song's leaders instead), and `fillColumn` only fills rows that have one — BGV and instruments still fill normally. `ServicesPanel` loads it through `next/dynamic({ ssr: false, loading: PanelSkeleton })` (R5 Task 6) — it already only mounted once `showGenerator`/`monthEditor` went true (D10's full-width panel replaces the whole tab rather than opening in a dialog), so `dynamic` turns that existing on-open MOUNT into an on-open FETCH: the planner/solver code never reaches the initial Servicios chunk. Create mode's «Solo llenar vacíos» switch (off by default, never persisted) is its state: both Auto paths go through one seam (`prepareSolve`/`runSolve`) that sends the board's voice seats as pins and completes instruments without re-seating on every exit. When the solver itself refuses a request that sent the trailing Saturday (a 422 without `transport_error`), `runSolve` rebuilds it once through `prepareSolve`'s `retry` (`withholdTrailing`, ruling Q19, ADR-0048) and solves again inside the same `autoPending`; a retry is never retried. It owns the «Borrar» handlers, the month-clear confirm `CueDialog`, the Auto notice list, and the service-clear toast with «Deshacer» (withdrawn when Auto runs, or the month or step changes). |
 | `SetlistEditor` | Inline setlist builder (reorder/remove, play-key, medley via `normalizeMedleyTags`). |

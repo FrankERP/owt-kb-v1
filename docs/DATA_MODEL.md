@@ -11,13 +11,13 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (20)
+## Registered document types (21)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
 `teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, the two Oasis Kids types
-`kidsPair` and `kidsSchedule`, and seven **internal** types never authored by hand:
+`kidsPair` and `kidsSchedule`, and eight **internal** types never authored by hand:
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
-`solverConfig`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
+`solverConfig`, `fairnessMonth`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -117,6 +117,7 @@ Structurally identical.
 | `creationReceiptId` | string (hidden, readOnly) | The `roleCreationReceipt._id` that minted this role. **Internal** — written only by the guarded create. |
 | `creationFingerprint` | string (hidden, readOnly) | The canonical create-payload fingerprint. **Internal.** The receipt stays authoritative; this is the forward link. |
 | `published` | boolean | Default `true`. `false` = draft (managers only). **The gate.** |
+| `countsForFairness` | boolean | «Cuenta para equidad» (solver v3 C1). **Absent on documents created before C1** and read through the ONE rule `coalesce(countsForFairness, _type != "special_role")` ([`countsForFairness.ts`](../app/utils/countsForFairness.ts)) — a weekend role counts by default. Every create since C1 stores the explicit effective boolean; a `PATCH` sets it only when the body carries it and never unsets it (every planner save carries it); never `null`. **Not in `ROLE_PROJECTION`** — `GET /api/admin/roles` and the v3 ledger read it through their own projections, so R11's history-diff evidence is toggle-blind (C1 §10). Inert until v3 serves Auto. Visible and read-only in Studio, no `initialValue`. |
 | `week` | date | The week this service is valid for. |
 | `Lead` | array of reference → `teamMembers` | "Leaders." **Seat 1.** |
 | `BGVs` | array of reference → `teamMembers` | Background Vocals. **Seat 2.** |
@@ -133,6 +134,7 @@ keyed on **`date`** (not `week`).
 |-------|------|-------|
 | `creationReceiptId`, `creationFingerprint` | string (hidden, readOnly) | Same internal create-receipt link as the weekend role docs. |
 | `published` | boolean | Default `true`. Draft gate. |
+| `countsForFairness` | boolean | Same field and rules as on the weekend roles — but a special **does not count by default** (absent reads `false`). Set by the special composer or «+ Nuevo servicio» at creation and by the stored-mode header after it. |
 | `date` | date | Date of the special service. |
 | `service_name` | string | e.g. "Viernes Santo," "Nochebuena." |
 | `time` | string | `"HH:mm"`, local (America/Mexico_City). Optional. Display/sort only for same-day sets — never identity (ADR-0011, PR #90). Validated by the `serviceTime.ts` regex, mirrored in the schema. |
@@ -363,6 +365,37 @@ Every array-of-object item carries a `_key` **equal to the rule's own `id`** —
 [`app/utils/solverConfigWriteRequest.ts`](../app/utils/solverConfigWriteRequest.ts), which both the
 route and the seed script go through so the two cannot drift.
 
+**«Mes por medio» (`restrictions[].sundayCadence`, solver v3 C3).** Absent means «Normal»;
+`"alternate"` means «Mes por medio»; nothing else is ever stored — never `null`, never `"normal"`,
+so a document with no cadence is byte-identical to what pre-C3 code wrote, and no migration exists.
+It is the setting only, keyed by the restriction's `person` like every rule; the cadence STATE is
+never stored. v2 ignores it: `v2View` (`plannerModel.ts`) removes it, and every restriction that
+carried only it, wherever v2 reads restriction persons. It resolves to a member id only through
+`app/utils/sundayCadence.ts` (exactly one worship member, or a named refusal).
+
+**The config version guard.** The POST replaces the whole document and the reader keeps only the
+fields it knows, so a client that predates a field would read it away and erase it on its next
+save. Every save therefore carries `configVersion`, and the route refuses anything but exactly
+`SOLVER_CONFIG_VERSION` (2) with `400 invalid_request` after auth and the body's JSON/shape check,
+before the stored document is read or `config` is parsed; GET and POST echo the version. **Bump
+rule:** a change that adds a field, or an allowed value, that an older client would drop or rewrite
+bumps `SOLVER_CONFIG_VERSION` in the same change —
+`solverConfigVersion.test.ts` pins the key set at every level and the accepted values of
+`sundayCadence`, `fairness` and cap `op`.
+
+**One exact count per person per role (parent A38).** A save holding two `==` caps whose roles
+(`rolesOfPattern`) intersect, for one `person` text (case-insensitive, trimmed) — on one
+restriction or across two — is refused at the later cap
+(`restrictions[i].caps[j]:exact_overlap`), by `exactCapOverlaps`, which the rule form and panel
+also run. Two spellings of one member are refused by v3's build, by member id (C2).
+
+**Any other writer of rule values** reads through `solverConfigFromDocument`, changes only its
+paths, runs `parseSolverConfigWrite` and writes only what `solverConfigFields` produced, under
+`ifRevisionId` (and with `configVersion` if it POSTs) — never an `insert`/`append` of caps or
+restrictions around the parser. The member DELETE's pool-array patch and the rule-name repair
+script's single-`person` patch are the only targeted writers. See
+[ADR-0049](adr/0049-mes-por-medio-is-a-restriction-setting-behind-a-version-guard.md).
+
 Hidden and read-only in the Studio, **and** in `PROTECTED_STUDIO_TYPES` / `INTERNAL_STUDIO_TYPES`.
 `hidden` only removes the affordance and `readOnly` only freezes the form, so a hand-typed
 `/studio/structure/...` or intent URL still offered `delete`, `duplicate`, `restore` and
@@ -390,6 +423,36 @@ create-planning and stored-service month editing. Its four states — `loading` 
 a failed read cannot be mistaken for an empty document: only `ready` carries the `_rev` a save
 needs, and only an enforceable state enables mutable grid operations
 (`app/components/admin/solverConfigSource.ts`).
+
+---
+
+## `fairnessMonth` — the monthly eligibility record (solver v3)
+
+One document per calendar month at `_id: "fairnessMonth.YYYY-MM"`
+([`fairnessMonth.ts`](../sanity/schemas/fairnessMonth.ts); spec
+`docs/superpowers/specs/2026-10-05-solver-v3-c2-ledger-and-record-design.md`, REC-1 … REC-9;
+[ADR-0050](adr/0050-the-fairness-balance-is-measured-against-recorded-eligibility.md)). The id is
+**dotted on purpose**: Sanity never serves an id containing a dot to an unauthenticated read, and
+the record holds members' unavailable dates. Every reader must therefore carry
+`SANITY_API_READ_TOKEN` — without it a read answers «no record» with no error — and the ledger
+reader and the write executor refuse to read without it.
+
+| Field | Meaning |
+|---|---|
+| `schemaVersion` | `1` |
+| `month` | `YYYY-MM`, equal to the id's month |
+| `source` | `auto` (Auto's confirm, C6), `manual` («Registrar»), `reconstructed` (C4's script) |
+| `engine`, `environment` | `v2`/`v3`; `production`/`preview`/`local` — server-stamped |
+| `recordedAt`, `recordedBy` | the server clock; the session's effective member id, or the script's marker |
+| `contentHash` | `sha256:` + hex over the canonical content (REC-6); a record is *intact* iff it recomputes |
+| `people[]` | `fairnessPerson`: `member` (weak reference), `name` (display only), `roles` (`sunLead`, `satLead`, `sunBgv`, `satBgv`, `sunChoir`, `satChoir`: `in`/`out`/`exact`), `exactRules[]`, `sundayCadence?` (`"alternate"`), `exempt`, `blocks[]` |
+| `presence[]` | `fairnessPresence`: `ruleKey`, `roles`, `members` (ids), `exclusive` |
+
+It never stores seats, shares, balances, the cadence state, rule strings or names inside
+`presence`; seats are read from the role documents. **Written only** by the write executor in
+[`fairnessMonthWriteRequest.ts`](../app/utils/fairnessMonthWriteRequest.ts) — through
+`PUT /api/admin/fairness/months` (engine v3 only) or C4's consented reconstruction script — which
+mints every `_key`, the hash and the stamps; Studio governs it read-only like `solverConfig`.
 
 ---
 
@@ -428,11 +491,15 @@ actually work.
 | `tutorial` | `{ title, url }` | `post.tutorials2` |
 | `referenceLink` | `{ label, url }` | `post.referenceLinks` |
 | `contributor` | `{ person→teamMembers }` | `setlistProposal.contributors` |
-| `solverRestriction` | `{ id, person, excludedPatterns[], fairness, fairnessSlack, weekExclusions[], caps[] }` | `solverConfig.restrictions` |
+| `solverRestriction` | `{ id, person, excludedPatterns[], fairness, fairnessSlack, weekExclusions[], caps[], sundayCadence? }` — `sundayCadence` is `"alternate"` («Mes por medio») or absent («Normal») | `solverConfig.restrictions` |
 | `solverWeekExclusion` | `{ id, week, pattern }` | `solverConfig.restrictions[].weekExclusions` |
 | `solverCap` | `{ id, pattern, op, value, relative, relOffset }` | `solverConfig.restrictions[].caps` |
 | `solverConflict` | `{ id, personA, personB, pattern }` | `solverConfig.conflicts` |
 | `solverPresence` | `{ id, persons[], pattern }` | `solverConfig.presence` |
+| `fairnessPerson` | `{ member (weak ref), name, roles{six}, exactRules[], sundayCadence?, exempt, blocks[] }` — `_key` = `p` + 24 hex of SHA-256(member id) | `fairnessMonth.people` |
+| `fairnessExactRule` | `{ roles[], count }` — `_key` = `x` + 24 hex of SHA-256(canonical role list) | `fairnessMonth.people[].exactRules` |
+| `fairnessBlock` | `{ date, unavailable, excludedRoles[] }` — `_key` = `d` + YYYYMMDD | `fairnessMonth.people[].blocks` |
+| `fairnessPresence` | `{ ruleKey, roles[], members[], exclusive }` — `_key` = `r` + 24 hex of SHA-256(ruleKey) | `fairnessMonth.presence` |
 
 **Every array-of-object write must include a unique `_key` per item and the correct `_type`.**
 The API routes generate keys with `Math.random().toString(36).slice(2,9)` and attach the right
@@ -637,13 +704,13 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Fifteen** types are closed to it — the six protected service types, the seven internal types
+**Sixteen** types are closed to it — the six protected service types, the eight internal types
 (`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry) **plus** the two
 Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
-`solverConfig`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
+`solverConfig`, `fairnessMonth`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
 
 The last two hold OAuth state for the MCP connector (P0 auth): `mcpOauthGrant` is one document per
 authorized connection (member id, a HASH of the client id, origin, timestamps, the current refresh

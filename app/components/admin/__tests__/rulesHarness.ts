@@ -13,20 +13,29 @@ import { vi } from "vitest";
 import { DEFAULT_SOLVER_CONFIG } from "../solverConfigDefaults";
 import { READ_FAILED_MESSAGE, type SolverConfigController } from "../solverConfigSource";
 import type { SolverConfig } from "../plannerModel";
+import { SOLVER_CONFIG_VERSION } from "@/app/utils/solverConfigWriteRequest";
 
 export interface RulesHarness extends SolverConfigController {
   save: SolverConfigController["save"] & ReturnType<typeof vi.fn>;
   reload: SolverConfigController["reload"] & ReturnType<typeof vi.fn>;
 }
 
-/** The document exists — the production state. */
+/**
+ * The document exists — the production state. `configVersion` is the version the
+ * server echoed (C3 §6.2); it defaults to this bundle's, i.e. a tab that may save.
+ */
 export function readyRules(
   config: SolverConfig = DEFAULT_SOLVER_CONFIG,
-  opts: { rev?: string; save?: SolverConfigController["save"] } = {},
+  opts: { rev?: string; save?: SolverConfigController["save"]; configVersion?: number } = {},
 ): RulesHarness {
   const save = vi.fn(opts.save ?? (async () => ({ ok: true as const })));
   return {
-    source: { status: "ready", rev: opts.rev ?? "rev-1", config },
+    source: {
+      status: "ready",
+      rev: opts.rev ?? "rev-1",
+      config,
+      configVersion: opts.configVersion ?? SOLVER_CONFIG_VERSION,
+    },
     reload: vi.fn(),
     save,
   } as RulesHarness;

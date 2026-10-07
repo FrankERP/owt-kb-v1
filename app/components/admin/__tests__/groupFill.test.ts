@@ -19,8 +19,8 @@ const voz = (id: string, alias: string, unavailableDates: string[] = []): RankMe
 const TEN = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"].map((id) => voz(id, id.toUpperCase()));
 
 const special = (id: string, date: string, time?: string): GridColumn =>
-  ({ columnId: id, date, type: "special_role", serviceName: `Set ${id}`, ...(time ? { time } : {}) });
-const SUNDAY: GridColumn = { columnId: "sun", date: "2026-10-04", type: "sunday_role" };
+  ({ columnId: id, date, type: "special_role", serviceName: `Set ${id}`, countsForFairness: false, ...(time ? { time } : {}) });
+const SUNDAY: GridColumn = { columnId: "sun", date: "2026-10-04", type: "sunday_role", countsForFairness: true };
 
 const cell = (columnId: string, rowId: string, ids: string[], origin: GridCell["origin"] = "manual"): GridCell =>
   ({ columnId, rowId, occupants: ids.map((memberId) => ({ memberId })), origin });

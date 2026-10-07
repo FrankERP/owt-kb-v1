@@ -41,7 +41,12 @@ export interface Line {
 /** Calendar-day comparison; both sides are already America/Mexico_City dates. */
 const isPast = (serviceDate: string, today: string) => serviceDate < today;
 
-const sameSet = (a: string[], b: string[]) => {
+/**
+ * Two label lists name the same SET (duplicates and order ignored). The flush's
+ * per-member comparison — and, through `isNoticeNeutralEdit`, the toggle-only
+ * PATCH's (solver v3 C1 §5.4.4), so the two can never disagree about "no change".
+ */
+export const sameSet = (a: string[], b: string[]) => {
   const x = [...new Set(a)].sort();
   const y = [...new Set(b)].sort();
   return x.length === y.length && x.every((v, i) => v === y[i]);

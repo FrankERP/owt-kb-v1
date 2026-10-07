@@ -200,6 +200,11 @@ several exist precisely to stop a plausible-looking change.
   written: the setlist PUT refuses anything else under the role `_rev` it asserts, approval
   carries leaders over by song reference, proposals and weekend setlists never carry them.
   `serviceFormat.ts` and `songLeads.ts` are the ONLY definitions of these rules.
+- **`countsForFairness`: one read rule** (`app/utils/countsForFairness.ts` — GROQ fragment + twin +
+  default); PATCH absent = unchanged (never the `time` precedent); a PATCH that carries it and
+  changes nothing a notice could report queues no notice; `ROLE_PROJECTION` does not carry it;
+  inert until v3 serves Auto. The planner's Switch is disabled for a service of a past CDMX month —
+  a client-side rule only (C1-D7); neither roles route refuses on the month.
 - Member-facing reads must filter `published != false` (draft/publish gating) for the
   **worship** types, whose documents predate the field — an absent `published` there
   must mean "visible". **Kids reads use the stricter `published == true`** instead
@@ -213,6 +218,28 @@ several exist precisely to stop a plausible-looking change.
   `draftGatingCoverage.test.ts` enforces this, so a new manager-facing kids read that
   omits the filter fails the suite rather than shipping.
 - **Sanity array-of-object writes need a `_key` per item.**
+- **`solverConfig` saves carry `SOLVER_CONFIG_VERSION`, and nothing writes a rule value around
+  its parser.** The rules POST replaces the whole document and refuses any body whose
+  `configVersion` is not exactly `SOLVER_CONFIG_VERSION`
+  (`app/utils/solverConfigWriteRequest.ts`), because an older client reads away a field it does
+  not know and its next save erases it for everyone. A field **or an allowed value** an older
+  client would drop or rewrite bumps the version in the same change; `solverConfigVersion.test.ts`
+  is the tripwire. Any other writer that sets or restores a rule value goes through
+  `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
+  `ifRevisionId` — never again an `insert`/`append` of caps or restrictions as the two private
+  one-off scripts of 2026-09-29/10-01 did (the member DELETE's pool-array patch and the rule-name
+  repair script's single-`person` patch are the only targeted writers). A rule person has at most
+  one `==` count per role key: refused at save by `exactCapOverlaps` (by `person` text) and at v3
+  build by C2 (by member id). ADR-0049.
+- **The fairness ledger has one definition, and its records one writer** (solver v3 C2,
+  ADR-0050). `app/utils/fairnessLedger.ts` is the only TypeScript definition of F2–F7 and X1;
+  `fixtures/fairness/golden.json` is asserted by both suites (vitest now, C5's Python later) and its
+  expected values are hand-computed — never regenerated from either implementation's output.
+  `fairnessMonth` records are written only through `fairnessMonthCommit` (the PUT, actor `route`)
+  or the reconstruction actor (C4's consented script), both through `executeFairnessMonthWrites` —
+  the ONLY mutation path of the type (`createOrReplace` never; the reconstruction actor's guarded
+  delete the only delete). Every reader of `fairnessMonth` carries `SANITY_API_READ_TOKEN` or fails
+  closed: the ids are dotted, so private, and an untokened read answers «no record» with no error.
 - **Cache:** admin/API routes that mutate content must call the matching
   `revalidate*` util in `app/utils/revalidate.ts` (or `revalidatePath`), or the
   ISR page stays stale.
@@ -291,6 +318,12 @@ several exist precisely to stop a plausible-looking change.
 - **`/admin` has no shell and no page-level horizontal scroll** — the planner grid and the
   availability matrix are the only horizontal scrollers, each in its own `overflow-x-auto`
   box (ADR-0035). The Servicios board is a vertical grid the PAGE scrolls (ADR-0044).
+  **A visually hidden native control (`sr-only`) keeps a positioned ancestor inside its own
+  control**: an absolute box whose containing block lies outside an `overflow-x-auto` box is
+  not clipped by it, and Select's hidden `<select>` + Checkbox's input panned every planner
+  page for weeks that way (fixed 2026-10-06; `hiddenControlContainment.test.ts`). A
+  `--full-page` capture's width is not evidence either way — measure with
+  `scripts/dev-verify.ts --layout` (`scrollingElement.scrollWidth` vs `clientWidth`).
 - **A theme-gallery fixture hosts PRESENTATIONAL halves only** — never a component that
   reads a session, a cookie, the network or an env var. The gallery route is public and
   prerendered (ADR-0017), so `useSession` there breaks both; that is why the `nav` fixture
@@ -481,7 +514,7 @@ read of that history: checked, never throws, `{ ok: false }` on any failure, use
 hook, and by every Auto only while `SOLVER_SENDS_HISTORY` is true), `SOLVER_HISTORY_SOURCE`
 (`app/components/admin/solverHistorySource.ts` — the deployment-wide switch, `"derived"`; `"local"`
 is the rollback until D3), `SOLVER_SENDS_HISTORY` (same file — `false`: Auto sends `history: []`,
-ADR-0046; `true` is the rollback), `trailingSaturday`/`rolesOfPattern` (`app/components/admin/plannerModel.ts` — the ONE definition of the Saturday after the last Sunday, solver week `weeks + 1`, ADR-0048; and the ONE pattern → solver-roles map, mirroring the solver's `expand_pattern`, guarded by `patternRolesSync.test.ts`).
+ADR-0046; `true` is the rollback), `countsForFairness`/`countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ` (`app/utils/countsForFairness.ts` — the ONE «Cuenta para equidad» read rule; neutral; nothing else spells the fragment or the default), `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts` — the engine constant only, `"v2"`; the effective engine is `resolveSolverEngine`'s (`app/utils/solverDeployment.ts`), parent A1), `FairnessSwitch`/`FairnessEngineNote` (`app/components/admin/FairnessSwitch.tsx` — the ONE «Cuenta para equidad» control and its v2 note on all four surfaces; the past-month rule and effective values live in `fairnessToggleModel.ts`), `trailingSaturday`/`rolesOfPattern` (`app/components/admin/plannerModel.ts` — the ONE definition of the Saturday after the last Sunday, solver week `weeks + 1`, ADR-0048; and the ONE pattern → solver-roles map, mirroring the solver's `expand_pattern`, guarded by `patternRolesSync.test.ts`), `rolesOfPatternV3` (`plannerModel.ts` — the ONE v3 six-key pattern map; equals `rolesOfPattern` on the five v2 keys and adds `Sat.Choir`; synced by `patternRolesV3Sync.test.ts`), `capValueForMonth` (`app/components/admin/serviceRuleContext.ts` — the ONE per-month count resolution, over `resolvedCapValue`, a typed result never rounded or clamped), `memberFitsRoleKey` (`plannerModel.ts` — the ONE does-this-Tipo-fit-this-v3-role-key predicate, shared by the eligibility resolver and the record writer), `resolveMonthEligibility` (`app/utils/fairnessEligibility.ts` — the ONE v3 eligibility resolver; client-callable; an `ok` body always passes the record validator), `formatFairnessTenths`/`saldoWords` (`app/utils/fairnessFormat.ts` — the ONLY fairness-figure formatter: one decimal from a tenths figure computed from the exact value, never from hundredths), `resolveSolverEngine` (`app/utils/solverDeployment.ts` — the ONE reader of `OWT_SOLVER_ENGINE`; it overrides `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts`, C1's constant) only on the `preview` branch deployment and locally; never imported by a client module), `parseStoredFairnessMonth` (`app/utils/fairnessMonthWriteRequest.ts` — the ONE record-schema check for `fairnessMonth`; the reader and C4's script both call it), `keepVoiceSeats` (`app/utils/fairnessLedger.ts` — the ONE seat rule: duplicate weekend targets dropped, uncounted services out, one kept seat per person per service), `executeFairnessMonthWrites` (`fairnessMonthWriteRequest.ts` — the only mutation path for `fairnessMonth`, clients injected; every reader of the type carries the read token or fails closed).
 Motion tokens are `--motion-*` /
 `--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and

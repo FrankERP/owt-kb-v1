@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 import {
   personNameOptions,
@@ -12,8 +12,19 @@ import { draftCreateBody, newCreationRequestId, runDraftCreateBatch } from "@/ap
 import { normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { isServiceTime } from "@/app/utils/serviceTime";
 import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
-import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
-import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
+import { countsForFairness as readCountsForFairness, countsForFairnessDefault } from "@/app/utils/countsForFairness";
+import { creatableTargets, serviceTodayIso, type TargetPreflight } from "./serviceReadiness";
+import PlannerGrid, { type AutoState, type SolveDiagnostics, type StoredHeaderPatch } from "./PlannerGrid";
+import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";
+import {
+  FAIRNESS_LABEL,
+  FAIRNESS_SPECIAL_HELP,
+  applyCreateCountsEdits,
+  effectiveCreateCounts,
+  effectiveStoredCounts,
+  isPastServiceMonth,
+  withoutCountsEdit,
+} from "./fairnessToggleModel";
 import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL, type ServiceRole } from "./serviceCardModel";
 import {
@@ -54,15 +65,29 @@ import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
+import FairnessPreviewPanel from "./FairnessPreviewPanel";
 import Button from "@/app/components/ui/Button";
 import CueDialog from "@/app/components/ui/CueDialog";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import {
+  CADENCE_OUTSIDE_HEADING,
+  CADENCE_OUTSIDE_SENTENCE,
+  CADENCE_V2_NOTE,
+  SLACK_V3_NOTE,
+  cadenceOutsideSundayPool,
+  resolveRulePersonId,
+} from "@/app/utils/sundayCadence";
 import { useToast } from "@/app/components/ui/Toast";
 import {
+  PLANNER_UPDATED_MESSAGE,
   editableConfig,
+  exactOverlapCardMessage,
+  exactOverlapFormMessage,
+  isOutdatedSource,
   sameSolverConfig,
   type SolverConfigController,
   type SolverConfigSource,
@@ -71,11 +96,13 @@ import { SOLVER_HISTORY_SOURCE, SOLVER_SENDS_HISTORY } from "./solverHistorySour
 import { fetchDerivedHistory, type DerivedHistoryFetchResult } from "./derivedHistoryClient";
 import { useDerivedSolverHistory, type DerivedHistoryHandle } from "./useDerivedSolverHistory";
 import type { SolverHistoryDiagnostics, SolverHistoryMonth } from "@/app/utils/solverHistory";
+import { exactCapOverlaps } from "@/app/utils/solverConfigWriteRequest";
 import {
   buildColumns,
   buildRows,
   buildSolveRequest,
   applySolveResponse,
+  capLabel,
   cellsToDrafts,
   createColumnId,
   draftTargetKey,
@@ -134,6 +161,12 @@ interface MemberOption {
   /** Declared instrument seats; absent or empty = declares nothing (spec D6). */
   instruments?: string[];
   unavailableDates?: string[];
+  /**
+   * The stored value as `/api/admin/members` projects it (absent or empty =
+   * worship). Typed so it reaches `sundayCadence.ts` intact: its resolver drops
+   * non-worship members itself, and a super-admin's roster includes them (C3 E25).
+   */
+  ministries?: unknown;
 }
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
@@ -141,7 +174,18 @@ const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 // `service_name` is what `cellsToDrafts` needs to tell one stored special on a
 // date from another (E17). `ServiceRole` — what `ServicesPanel` actually passes
 // — already carries it; this local shape used to drop it on the floor.
-interface ExistingRole { _id: string; _type: string; date: string; service_name?: string; }
+// `countsForFairness` is the effective flag `GET /api/admin/roles` projects (solver v3 C1);
+// the «Equidad» preview counts the month's Sundays with it (C2 UI-5, display only).
+interface ExistingRole { _id: string; _type: string; date: string; service_name?: string; countsForFairness?: boolean; }
+
+/** `YYYY-MM` for the «Equidad» preview's `month` and its remount `key`. */
+const monthKeyOf = (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}`;
+
+/** Whether the on-screen rules differ from the saved ones — «Registrar» says so (C2 §8). */
+function rulesDirtyOf(rules: SolverConfigController, config: SolverConfig): boolean {
+  const saved = editableConfig(rules.source);
+  return saved !== null && !sameSolverConfig(saved, config);
+}
 
 interface Props {
   mode?: "create" | "stored";
@@ -225,6 +269,15 @@ interface Props {
     integrityGeneration: number;
     reload: () => Promise<boolean>;
   };
+  /**
+   * The gate of the «Mes por medio fuera de Líderes Domingo» warning (solver v3
+   * C3 §6.7, §7 item 6). Defaults to CLOSED and C3 never opens it: under v2 the
+   * cadence members sit in «Líderes Sábado» by design, and the warning would
+   * invite the one action that changes v2. C6 passes its server-resolved
+   * effective engine (`=== "v3"`, never the `SOLVER_ENGINE` constant) and keeps
+   * it closed for a record-bound month.
+   */
+  showCadencePoolWarning?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -567,7 +620,33 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
 
 // ─── Rule builder — display cards ─────────────────────────────────────────────
 
-function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDelete: () => void; onEdit: () => void }) {
+/**
+ * Why a «Mes por medio» card's name does not name exactly one worship member
+ * (C3 §6.5–§6.6) — over the planner's UNFILTERED roster, never the form's
+ * `voz`-filtered list. `n` is the number of matches.
+ */
+type CadenceNameIssue = { reason: "unresolved" | "ambiguous"; n: number };
+
+/**
+ * The chip for a `CadenceNameIssue`. Shown under both engines: it is about the
+ * data, not behaviour. The `unresolved` chip is the plan's addition (C3 review
+ * item 10): v2's first-match banner resolves a name that only a kids-only member
+ * carries in a super-admin's roster, so without it that name would be silent here.
+ */
+function cadenceNameChip(issue: CadenceNameIssue): string {
+  return issue.reason === "ambiguous"
+    ? `Nombre ambiguo: coincide con ${issue.n} personas`
+    : "Nombre no reconocido en Alabanza";
+}
+
+function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
+  r: PersonRestriction;
+  onDelete: () => void;
+  onEdit: () => void;
+  nameIssue?: CadenceNameIssue;
+  /** Parent A38: the first role this card fixes twice with another card or itself — a pair saved before C3. */
+  exactOverlapRole?: string;
+}) {
   return (
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-start gap-2">
       <div className="flex-1 min-w-0 space-y-1">
@@ -595,10 +674,27 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
           )}
           {r.fairness === "slack" && (
             <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-recency-fg/15 text-recency-strong border border-recency-fg/30">
-              holgura {r.fairnessSlack}
+              {`holgura ${r.fairnessSlack} · ${SLACK_V3_NOTE}`}
+            </span>
+          )}
+          {/* C3 §6.6: the note is its own span so C6 can hide it under v3 (CTL-1). */}
+          {r.sundayCadence === "alternate" && (
+            <>
+              <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30">
+                Mes por medio
+              </span>
+              <span className="font-body text-[10px] text-mono-500 self-center">{CADENCE_V2_NOTE}</span>
+            </>
+          )}
+          {r.sundayCadence === "alternate" && nameIssue && (
+            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-warning-strong/10 text-warning-strong border border-warning-strong/30">
+              {cadenceNameChip(nameIssue)}
             </span>
           )}
         </div>
+        {exactOverlapRole && (
+          <p className="font-body text-[11px] text-negative-fg">{exactOverlapCardMessage(exactOverlapRole)}</p>
+        )}
       </div>
       <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none mt-0.5 px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
@@ -643,11 +739,16 @@ function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () =
 
 const rbIn  = "px-2 py-1 rounded border border-accent/15 bg-transparent font-body text-xs focus:outline-none focus:border-accent";
 
-function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
+function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblings }: {
   members: MemberOption[];
   onAdd: (r: PersonRestriction) => void;
   onCancel: () => void;
   initialValues?: PersonRestriction;
+  /**
+   * Every OTHER restriction of the on-screen config, in order — what parent
+   * A38's check compares this card's `==` caps against (same `person` text).
+   */
+  siblings: PersonRestriction[];
 }) {
   const preserve = initialValues?.person ? [initialValues.person] : [];
   const names = personNameOptions(members, preserve);
@@ -657,11 +758,32 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
   const [slack,    setSlack]    = useState(initialValues?.fairnessSlack ?? 1);
   const [weekEx,   setWeekEx]   = useState<Array<{ id: string; week: number; pattern: string }>>(initialValues?.weekExclusions ?? []);
   const [caps,     setCaps]     = useState<PersonRestriction["caps"]>(initialValues?.caps ?? []);
+  // «Domingo» (solver v3 C3 §6.6). Seeded from the edited restriction and carried
+  // to `onAdd` whether or not the control below is rendered: the UI-only
+  // rollback removes the CONTROL, never this data path (C3 §11).
+  const [sundayCadence, setSundayCadence] = useState<PersonRestriction["sundayCadence"]>(initialValues?.sundayCadence);
+  const cadenceLabelId = useId();
 
   const toggleExcl = (pat: string) =>
     setExcl(e => e.includes(pat) ? e.filter(x => x !== pat) : [...e, pat]);
 
-  const canAdd = !!person && (excl.length > 0 || weekEx.length > 0 || caps.length > 0 || fairness !== "none");
+  // Parent A38 (C3 §6.2): a cap row whose `==` covers a role another `==` cap
+  // already fixes — on this card or on a card with the same `person` text — is
+  // flagged, and the form cannot be saved while one remains. The draft goes LAST,
+  // so every pair touching it has its `later` here.
+  const capOverlapMessage = new Map<string, string>();
+  for (const o of exactCapOverlaps({
+    restrictions: [...siblings, { id: "", person, excludedPatterns: [], fairness: "none", fairnessSlack: 1, weekExclusions: [], caps }],
+  })) {
+    if (o.later.restriction !== siblings.length) continue;
+    const flagged = caps[o.later.cap];
+    const other = o.first.restriction === siblings.length ? caps[o.first.cap] : siblings[o.first.restriction].caps[o.first.cap];
+    if (!flagged || !other || capOverlapMessage.has(flagged.id)) continue;
+    capOverlapMessage.set(flagged.id, exactOverlapFormMessage({ role: o.roles[0], person, rule: capLabel(other) }));
+  }
+
+  // A restriction may carry «Mes por medio» alone (C3 §6.6).
+  const canAdd = !!person && capOverlapMessage.size === 0 && (excl.length > 0 || weekEx.length > 0 || caps.length > 0 || fairness !== "none" || sundayCadence === "alternate");
 
   const handleAdd = () => {
     if (!canAdd) return;
@@ -672,7 +794,11 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
     // no error: the card re-rendered unchanged and a cap added to an existing
     // person simply never appeared. `ConflictForm` and `PresenceForm` always
     // preserved the id; this one did not.
-    onAdd({ id: initialValues?.id ?? uid(), person, excludedPatterns: excl, fairness, fairnessSlack: slack, weekExclusions: weekEx, caps });
+    onAdd({
+      id: initialValues?.id ?? uid(), person, excludedPatterns: excl, fairness, fairnessSlack: slack, weekExclusions: weekEx, caps,
+      // «Normal» is NO key — never `sundayCadence: undefined` (C3 §6.1).
+      ...(sundayCadence === "alternate" ? { sundayCadence } : {}),
+    });
   };
 
   return (
@@ -748,8 +874,31 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         {fairness === "slack" && (
           <p className="font-body text-[11px] text-mono-500 mt-1">
             {slack >= 1
-              ? `En Auto de fin de semana su carga total del mes puede alejarse hasta ${slack} servicio${slack === 1 ? "" : "s"} de la del resto. Al llenar especiales cuenta como si llevara ${slack} más.`
+              ? `En Auto de fin de semana su carga total del mes puede alejarse hasta ${slack} servicio${slack === 1 ? "" : "s"} de la del resto. No aplica con el nuevo solver. Al llenar especiales cuenta como si llevara ${slack} más.`
               : "Con 0 no tiene efecto: escribe un número del 1 al 5."}
+          </p>
+        )}
+      </div>
+
+      {/* «Domingo» — solver v3 C3 §6.6. A one-of-N choice, so `SegmentedControl`. */}
+      <div>
+        <p id={cadenceLabelId} className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Domingo</p>
+        <SegmentedControl
+          labelledBy={cadenceLabelId}
+          size="sm"
+          value={sundayCadence === "alternate" ? "alternate" : "normal"}
+          onChange={v => setSundayCadence(v === "alternate" ? "alternate" : undefined)}
+          options={[
+            { value: "normal", label: "Normal" },
+            { value: "alternate", label: "Mes por medio" },
+          ]}
+        />
+        {sundayCadence === "alternate" && (
+          <p className="font-body text-[11px] text-mono-500 mt-1">
+            Solo cambia cuántas veces dirige domingo; en BGV y Coro participa igual que todos. Dirige domingo
+            un mes sí y uno no: le toca el mes siguiente a uno en que no dirigió domingo, si puede al menos un
+            domingo. En el mes que no le toca, de preferencia dirige un sábado. Solo aplica si está en Líderes
+            Domingo. Aplica con el nuevo solver; el solver actual no lo usa.
           </p>
         )}
       </div>
@@ -814,7 +963,8 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
             // edge (no `flex-wrap` either). Capped and wrapped instead of
             // truncated — the row now folds onto a second line rather than
             // spilling out of the card.
-            <div key={cap.id} className="flex flex-wrap gap-1.5 items-center">
+            <Fragment key={cap.id}>
+            <div className="flex flex-wrap gap-1.5 items-center">
               <Select
                 size="sm"
                 aria-label="Patrón"
@@ -866,6 +1016,10 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               >sem</button>
               <button type="button" onClick={() => setCaps(cs => cs.filter(x => x.id !== cap.id))} className="text-mono-600 hover:text-negative-fg text-sm flex-none">×</button>
             </div>
+            {capOverlapMessage.has(cap.id) && (
+              <p className="font-label text-[10px] text-negative-fg">{capOverlapMessage.get(cap.id)}</p>
+            )}
+            </Fragment>
           ))}
         </div>
         <button
@@ -1001,10 +1155,13 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
 
 // ─── Rule builder — main orchestrator ────────────────────────────────────────
 
-function RuleBuilder({ config, onChange, members, source }: {
+function RuleBuilder({ config, onChange, members, source, cadenceNameIssues }: {
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
+  /** The PERSONA dropdown's list — `voz` members. Never what a name is resolved against. */
   members: MemberOption[];
+  /** Restriction id → its «Mes por medio» name issue, resolved over the unfiltered roster by the panel. */
+  cadenceNameIssues: ReadonlyMap<string, CadenceNameIssue>;
   /**
    * The WHOLE source state, not a `shared` boolean.
    *
@@ -1040,6 +1197,16 @@ function RuleBuilder({ config, onChange, members, source }: {
 
   const total = config.restrictions.length + config.conflicts.length + config.presence.length;
   const isFormOpen = !!adding || !!editingId;
+
+  // Parent A38 on the on-screen config: a pair saved before C3 marks both of its
+  // cards, and the route refuses every save while it stands (C3 §6.2).
+  const exactOverlapRole = new Map<string, string>();
+  for (const o of exactCapOverlaps(config)) {
+    for (const ref of [o.first, o.later]) {
+      const id = config.restrictions[ref.restriction]?.id;
+      if (id !== undefined && !exactOverlapRole.has(id)) exactOverlapRole.set(id, o.roles[0]);
+    }
+  }
 
   return (
     <div className="space-y-2">
@@ -1093,6 +1260,7 @@ function RuleBuilder({ config, onChange, members, source }: {
       {adding === "restriction" && (
         <PersonRestrictionForm
           members={members}
+          siblings={config.restrictions}
           onAdd={r => { onChange({ ...config, restrictions: [...config.restrictions, r] }); setAdding(null); }}
           onCancel={() => setAdding(null)}
         />
@@ -1116,9 +1284,12 @@ function RuleBuilder({ config, onChange, members, source }: {
       {config.restrictions.map(r =>
         editingId === r.id ? (
           <PersonRestrictionForm key={r.id} members={members} initialValues={r}
+            siblings={config.restrictions.filter(x => x.id !== r.id)}
             onAdd={saveRestriction} onCancel={cancelEdit} />
         ) : (
           <RestrictionCard key={r.id} r={r}
+            nameIssue={cadenceNameIssues.get(r.id)}
+            exactOverlapRole={exactOverlapRole.get(r.id)}
             onDelete={() => rmRestriction(r.id)}
             onEdit={() => { setEditingId(r.id); setAdding(null); }} />
         )
@@ -1336,13 +1507,16 @@ function SolverConfigSaveBar({ config, rules }: {
   // rather than cleared in an effect, so there is no render where both are true.
   const error = failure && failure.against === source ? failure : null;
   const rev = source.status === "ready" ? source.rev : null;
+  // C3 §6.2: the server speaks another config version. This bundle would drop
+  // or rewrite what it cannot read, so it does not save at all until reloaded.
+  const outdated = isOutdatedSource(source);
   const savedConfig = editableConfig(source);
   // By CONTENT: an edit undone by hand settles back to "Guardado" instead of
   // offering to write a document that would not change.
   const dirty = savedConfig === null || !sameSolverConfig(savedConfig, config);
 
   const onSave = async () => {
-    if (rev === null) return;
+    if (rev === null || outdated) return;
     setSaving(true);
     setFailure(null);
     // `useSolverConfig.save` owns its own try/catch and RESOLVES on every
@@ -1362,6 +1536,11 @@ function SolverConfigSaveBar({ config, rules }: {
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+      {outdated && (
+        <p role="status" className="font-body text-[11px] text-warning-strong mr-auto">
+          {PLANNER_UPDATED_MESSAGE}
+        </p>
+      )}
       {error && (
         <p role="alert" className="font-body text-[11px] text-negative-fg mr-auto">
           {error.message}
@@ -1379,7 +1558,7 @@ function SolverConfigSaveBar({ config, rules }: {
       <button
         type="button"
         onClick={onSave}
-        disabled={rev === null || !dirty || saving}
+        disabled={rev === null || !dirty || saving || outdated}
         // `rev === null` is ONE reason the button is dead and THREE different
         // facts about the world. Saying "solo el script de siembra puede
         // crearlas" while a read is merely failing tells an admin the team's
@@ -1387,15 +1566,17 @@ function SolverConfigSaveBar({ config, rules }: {
         // document that is sitting there intact. Same distinction the copy at
         // the foot of `RuleBuilder` makes, on the control that acts on it.
         title={
-          source.status === "absent"
-            ? "Todavía no hay reglas compartidas en el servidor; solo el script de siembra puede crearlas."
-            : source.status === "error"
-              ? "No se pudieron cargar las reglas compartidas; no se puede guardar hasta que vuelvan a cargar."
-              : source.status === "loading"
-                ? "Cargando las reglas compartidas…"
-                : dirty
-                  ? "Guardar estas reglas para todos los administradores"
-                  : undefined
+          outdated
+            ? PLANNER_UPDATED_MESSAGE
+            : source.status === "absent"
+              ? "Todavía no hay reglas compartidas en el servidor; solo el script de siembra puede crearlas."
+              : source.status === "error"
+                ? "No se pudieron cargar las reglas compartidas; no se puede guardar hasta que vuelvan a cargar."
+                : source.status === "loading"
+                  ? "Cargando las reglas compartidas…"
+                  : dirty
+                    ? "Guardar estas reglas para todos los administradores"
+                    : undefined
         }
         className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/40 text-accent hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
       >
@@ -1615,8 +1796,10 @@ function historyMonthsLabel(months: SolverHistoryMonth[]): string {
     .join(" · ");
 }
 
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, fairnessServices }: {
   members: MemberOption[];
+  /** The month's stored services, for the «Equidad» preview's counted Sundays (C2 UI-5). */
+  fairnessServices: ExistingRole[];
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
   rules: SolverConfigController;
@@ -1631,8 +1814,23 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
    * panel is exactly the per-browser one.
    */
   derived?: DerivedHistoryHandle;
+  /** C3 §7 item 6 — see `Props.showCadencePoolWarning`. Closed unless C6 opens it. */
+  showCadencePoolWarning?: boolean;
 }) {
   const [searches, setSearches] = useState<Record<string, string>>({});
+
+  // C3 §6.5–§6.6: a «Mes por medio» name must name exactly one WORSHIP member,
+  // judged over `members` as the panel received it — the unfiltered roster —
+  // and never over the `voz` list `RuleBuilder` offers as names (E13). The
+  // resolver drops non-worship members itself (E25).
+  const cadenceNameIssues = new Map<string, CadenceNameIssue>();
+  for (const r of config.restrictions) {
+    if (r.sundayCadence !== "alternate") continue;
+    const resolved = resolveRulePersonId(r.person, members);
+    if (!resolved.ok) cadenceNameIssues.set(r.id, { reason: resolved.reason, n: resolved.matches.length });
+  }
+  // C3 §6.7: computed only behind the gate, so a closed gate costs nothing.
+  const cadenceOutside = showCadencePoolWarning ? cadenceOutsideSundayPool(config, members) : [];
 
   // The pools are "Tipo" and nothing else: an empty Tipo puts a member in no
   // pool and matches no seat, which is how someone stops being schedulable.
@@ -1733,6 +1931,21 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         </div>
       )}
 
+      {cadenceOutside.length > 0 && (
+        <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
+          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
+            {CADENCE_OUTSIDE_HEADING}
+          </p>
+          <ul className="space-y-1">
+            {cadenceOutside.map(x => (
+              <li key={x.id} className="font-body text-xs text-mono-400">
+                {CADENCE_OUTSIDE_SENTENCE[x.reason](x.name)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {derived ? (
         <DerivedLeadPoolHistory config={config} members={members} history={derived} year={year} month={month} />
       ) : (
@@ -1745,11 +1958,22 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         />
       )}
 
+      {/* Solver v3 C2 UI-1: the read-only «Equidad» preview, BESIDE «sin Lead en …», never in its place. */}
+      <FairnessPreviewPanel
+        key={monthKeyOf(year, month)}
+        month={monthKeyOf(year, month)}
+        config={config}
+        members={members}
+        storedServices={fairnessServices}
+        rulesDirty={rulesDirtyOf(rules, config)}
+      />
+
       <RuleBuilder
         config={config}
         onChange={onChange}
         members={members.filter(m => m.memberType?.includes("voz"))}
         source={rules.source}
+        cadenceNameIssues={cadenceNameIssues}
       />
 
       {/*
@@ -1791,6 +2015,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 export default function MonthGenerator({
   mode = "create", members, existingRoles, onClose, onCreated, rules, capability, preflight, allRoles,
   initialMonth, focusRoleId, openComposerInitially = false, storedSource, storedCapabilities, onCleared,
+  showCadencePoolWarning = false,
 }: Props) {
   const storedMode = mode === "stored";
   const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
@@ -1821,7 +2046,16 @@ export default function MonthGenerator({
   const [deselectedSundays, setDeselectedSundays] = useState<string[]>([]);
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
   /** E2's weekday specials for THIS month — reset whenever year/month changes. */
-  const [specials, setSpecials] = useState<{ date: string; name: string }[]>([]);
+  const [specials, setSpecials] = useState<{ date: string; name: string; countsForFairness: boolean }[]>([]);
+  /**
+   * «Cuenta para equidad» edits on create-mode columns (solver v3 C1 §6.1), by
+   * `columnId`. Held for as long as the column stays in the selection — across the
+   * config and grid steps, an «Omitir» and any number of Auto runs (Auto never
+   * touches it). Deselecting the weekend date or removing the special drops its
+   * entry, so re-adding starts from the default (or the composer's choice); a month
+   * change clears it with the other picks.
+   */
+  const [createCountsEdits, setCreateCountsEdits] = useState<Map<string, boolean>>(new Map());
   /**
    * The rules ON SCREEN — the fetched document plus whatever the admin has
    * typed since, not yet saved.
@@ -2066,7 +2300,7 @@ export default function MonthGenerator({
     attempt: FrozenSaveAttempt;
     transport: PatchTransportOutcome;
   }>>(new Map());
-  const [storedHeaderEdits, setStoredHeaderEdits] = useState<Map<string, { date?: string; serviceName?: string; time?: string }>>(new Map());
+  const [storedHeaderEdits, setStoredHeaderEdits] = useState<Map<string, StoredHeaderPatch>>(new Map());
   const [touchedStoredRoleIds, setTouchedStoredRoleIds] = useState<Set<string>>(new Set());
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const [composerOpen, setComposerOpen] = useState(storedMode && openComposerInitially);
@@ -2075,12 +2309,23 @@ export default function MonthGenerator({
   const [createName, setCreateName] = useState("");
   const [createTime, setCreateTime] = useState("");
   const [createWorshipNight, setCreateWorshipNight] = useState(false);
+  // «+ Nuevo servicio»'s «Cuenta para equidad» (C1 §6.5): follows the Tipo until touched.
+  const [createCountsTouched, setCreateCountsTouched] = useState(false);
+  const [createCountsChoice, setCreateCountsChoice] = useState(false);
   const [creatingOne, setCreatingOne] = useState(false);
   const [createAttemptStatus, setCreateAttemptStatus] = useState<"unknown" | "committedUnverified" | null>(null);
   const createAttempt = useRef<{
     id: string;
     payloadKey: string;
-    target: { type: ServiceType; date: string; name: string | null; time: string | null; format: ServiceFormat | null };
+    target: {
+      type: ServiceType;
+      date: string;
+      name: string | null;
+      time: string | null;
+      format: ServiceFormat | null;
+      /** The effective «Cuenta para equidad» — part of the attempt identity (C1 §6.5). */
+      countsForFairness: boolean;
+    };
     roleId?: string;
   } | null>(null);
   const baselineByRole = useRef<Map<string, RoleSemanticSnapshot>>(new Map());
@@ -2122,6 +2367,7 @@ export default function MonthGenerator({
     setActiveSatDates(getDates(year, month, 6));
     setDeselectedSundays([]);
     setSpecials([]);
+    setCreateCountsEdits(new Map());
   }, [year, month]);
 
   /**
@@ -2259,17 +2505,41 @@ export default function MonthGenerator({
     [sundayDatesFull, deselectedSundays],
   );
 
-  // D9's EXPLICIT column set — never inferred from `sundayDatesFull`.
+  // C1 §6.0 — "today" in CDMX, read on every render; the memo below is keyed on it, so
+  // the past-month rule is re-evaluated on every render and again when a body is built
+  // (`draftCreateBody`, `serializeStoredColumn`). Nothing re-renders at the CDMX month
+  // boundary by itself, so a tab left idle across it is corrected at its next render or
+  // body build.
+  const todayIso = serviceTodayIso();
+  // D9's EXPLICIT column set — never inferred from `sundayDatesFull`. Each column
+  // carries its EFFECTIVE «Cuenta para equidad» (C1 §6.1).
   const createColumns = useMemo(
-    () => buildColumns({ sundayDates: selectedSundays, activeSatDates, specials }),
-    [selectedSundays, activeSatDates, specials],
+    () => applyCreateCountsEdits(
+      buildColumns({ sundayDates: selectedSundays, activeSatDates, specials }),
+      createCountsEdits,
+      todayIso,
+    ),
+    [selectedSundays, activeSatDates, specials, createCountsEdits, todayIso],
   );
   const columns = storedMode
-    ? storedTranslations.map((entry) => ({
-        ...entry.column,
-        ...(storedHeaderEdits.get(entry.column.roleId) ?? {}),
-      }))
+    ? storedTranslations.map((entry) => {
+        const edited: StoredGridColumn = { ...entry.column, ...(storedHeaderEdits.get(entry.column.roleId) ?? {}) };
+        // C1 §6.0: while past, the stored value — a held toggle edit is neither shown nor sent.
+        return { ...edited, countsForFairness: effectiveStoredCounts(edited, todayIso) };
+      })
     : createColumns;
+  /**
+   * «+ Nuevo servicio»'s effective «Cuenta para equidad» (C1 §6.5): the Tipo's
+   * default until the admin touches the Switch, then the admin's value until the
+   * composer resets; the Tipo's default while the date is in a past month (§6.0).
+   */
+  const composerCounts = (today: string) =>
+    effectiveCreateCounts(
+      createType,
+      createDate,
+      createCountsTouched ? createCountsChoice : countsForFairnessDefault(createType),
+      today,
+    );
   const storedColumns = columns.filter((column): column is StoredGridColumn => "roleId" in column);
   const dirtyStoredColumns = storedMode
     ? storedColumns.filter((column) => {
@@ -2529,7 +2799,10 @@ export default function MonthGenerator({
       && role.bgvs.length === 0
       && role.chorus.length === 0
       && role.instruments.length === 0
-      && role.foh.length === 0,
+      && role.foh.length === 0
+      // C1 §6.5: verified only with the requested «Cuenta para equidad» too.
+      && readCountsForFairness({ _type: role._type, countsForFairness: role.countsForFairness })
+        === attempt.target.countsForFairness,
     );
     if (!admittedEmpty) return;
     createAttempt.current = null;
@@ -2538,6 +2811,8 @@ export default function MonthGenerator({
     setCreateName("");
     setCreateTime("");
     setCreateWorshipNight(false);
+    setCreateCountsTouched(false);
+    setCreateCountsChoice(false);
     setSaveNotice("Servicio vacío creado y verificado. Ya puedes asignar el equipo.");
     onCreated();
   }, [onCreated, storedGenerationKey, storedInventory.coherent, storedMode, storedSource?.roles]);
@@ -2983,7 +3258,7 @@ export default function MonthGenerator({
     closeGroupFill();
   }
 
-  function handleStoredHeaderChange(columnId: string, patch: { date?: string; serviceName?: string; time?: string }) {
+  function handleStoredHeaderChange(columnId: string, patch: StoredHeaderPatch) {
     if (!storedMode || storedMutationLocked) return;
     if (patch.date !== undefined && storedDateBlocked) {
       setSaveNotice(storedDateBlocked);
@@ -2996,6 +3271,23 @@ export default function MonthGenerator({
     });
     setTouchedStoredRoleIds((current) => new Set(current).add(columnId));
     setSaveNotice(null);
+  }
+
+  /**
+   * «Cuenta para equidad» from a grid header (C1 §6.2, §6.4). Stored mode rides the
+   * header overlay like Fecha/Nombre/Hora; create mode holds the edit per column and
+   * re-derives the drafts from the columns it now produces.
+   */
+  function handleFairnessChange(columnId: string, next: boolean) {
+    if (storedMode) {
+      handleStoredHeaderChange(columnId, { countsForFairness: next });
+      return;
+    }
+    if (pushing || autoPending) return;
+    const nextEdits = new Map(createCountsEdits).set(columnId, next);
+    setCreateCountsEdits(nextEdits);
+    const nextColumns = applyCreateCountsEdits(createColumns, nextEdits);
+    setDrafts((prev) => cellsToDrafts(cells, nextColumns, skippedColumnIds, prev, existingRoles));
   }
 
   function handleRowsChange(next: GridRow[]) {
@@ -3082,7 +3374,17 @@ export default function MonthGenerator({
       return;
     }
     const createFormat = createType === "special_role" && createWorshipNight ? WORSHIP_NIGHT_FORMAT : null;
-    const target = { type: createType, date: createDate, name: normalizedName, time: createTimeValue, format: createFormat };
+    // C1 §6.5/§6.0: decided NOW — a tab left open across a month boundary cannot send
+    // a value its month no longer allows — and part of the attempt identity.
+    const createCounts = composerCounts(serviceTodayIso());
+    const target = {
+      type: createType,
+      date: createDate,
+      name: normalizedName,
+      time: createTimeValue,
+      format: createFormat,
+      countsForFairness: createCounts,
+    };
     const payloadKey = JSON.stringify(target);
     if (!createAttempt.current || createAttempt.current.payloadKey !== payloadKey) {
       createAttempt.current = { id: newCreationRequestId(), payloadKey, target };
@@ -3095,6 +3397,7 @@ export default function MonthGenerator({
       ...(createType === "special_role" ? { service_name: normalizedName ?? "" } : {}),
       ...(createTimeValue ? { time: createTimeValue } : {}),
       ...(createFormat ? { format: createFormat } : {}),
+      countsForFairness: createCounts,
       leads: [],
       bgvs: [],
       chorus: [],
@@ -4183,9 +4486,20 @@ export default function MonthGenerator({
               prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date],
             );
           }
+          // C1 §6.1: a date that leaves (or re-enters) the selection starts from its default.
+          setCreateCountsEdits(prev =>
+            withoutCountsEdit(prev, createColumnId(dow === 0 ? "sunday_role" : "saturday_role", date)),
+          );
         }}
-        onAddSpecial={(date, name) => setSpecials(prev => [...prev.filter(s => s.date !== date), { date, name }])}
-        onRemoveSpecial={date => setSpecials(prev => prev.filter(s => s.date !== date))}
+        onAddSpecial={(date, name, countsForFairness) => {
+          setSpecials(prev => [...prev.filter(s => s.date !== date), { date, name, countsForFairness }]);
+          // C1 §6.1: a (re-)added special starts from the composer's choice.
+          setCreateCountsEdits(prev => withoutCountsEdit(prev, createColumnId("special_role", date)));
+        }}
+        onRemoveSpecial={date => {
+          setSpecials(prev => prev.filter(s => s.date !== date));
+          setCreateCountsEdits(prev => withoutCountsEdit(prev, createColumnId("special_role", date)));
+        }}
       />
 
       {/*
@@ -4211,6 +4525,8 @@ export default function MonthGenerator({
           year={year}
           month={month}
           derived={derivedMode ? derivedHistory : undefined}
+          showCadencePoolWarning={showCadencePoolWarning}
+          fairnessServices={existingRoles}
         />
       ) : (
         <SolverConfigUnavailable source={rules.source} onReload={rules.reload} />
@@ -4378,7 +4694,17 @@ export default function MonthGenerator({
                 <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-4 font-label text-xs uppercase tracking-widest disabled:opacity-50">
                   {creatingOne ? "Creando…" : createAttemptStatus === "unknown" ? "Reintentar misma solicitud" : createAttemptStatus === "committedUnverified" ? "Verificando…" : "Crear vacío"}
                 </button>
-                <button type="button" onClick={() => setComposerOpen(false)} disabled={creatingOne || createAttemptStatus !== null} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setComposerOpen(false);
+                    // C1 §6.5: «Cancelar» resets the switch to follow the Tipo again.
+                    setCreateCountsTouched(false);
+                    setCreateCountsChoice(false);
+                  }}
+                  disabled={creatingOne || createAttemptStatus !== null}
+                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50"
+                >
                   Cancelar
                 </button>
                 {createAttemptStatus && (
@@ -4386,6 +4712,21 @@ export default function MonthGenerator({
                     Recargar
                   </button>
                 )}
+              </div>
+              {/* C1 §6.5: disabled with the other composer controls; the note once per composer. */}
+              <div className="space-y-1 md:col-span-4" data-fairness-composer="">
+                <FairnessSwitch
+                  checked={composerCounts(todayIso)}
+                  onChange={(next) => {
+                    setCreateCountsTouched(true);
+                    setCreateCountsChoice(next);
+                  }}
+                  disabled={storedMutationLocked}
+                  past={isPastServiceMonth(createDate, todayIso)}
+                  ariaLabel={FAIRNESS_LABEL}
+                  help={createType === "special_role" ? FAIRNESS_SPECIAL_HELP : undefined}
+                />
+                <FairnessEngineNote />
               </div>
             </div>
           )}
@@ -4500,6 +4841,18 @@ export default function MonthGenerator({
         />
       ))}
 
+      {/* Solver v3 C2 UI-1: the read-only «Equidad» preview, beside the lead history. */}
+      {solverConfig && (
+        <FairnessPreviewPanel
+          key={monthKeyOf(year, month)}
+          month={monthKeyOf(year, month)}
+          config={solverConfig}
+          members={members}
+          storedServices={existingRoles}
+          rulesDirty={rulesDirtyOf(rules, solverConfig)}
+        />
+      )}
+
       {viewMode === "edit" && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">⇄ Intercambiar equipos:</span>
@@ -4609,6 +4962,7 @@ export default function MonthGenerator({
           onRowsChange={handleRowsChange}
           onToggleSkip={handleToggleSkip}
           onStoredHeaderChange={handleStoredHeaderChange}
+          fairness={{ onChange: handleFairnessChange, createInFlight: pushing || autoPending }}
           storedDateBlockedReason={storedDateBlocked}
           mutationLocked={storedMutationLocked || createAutoLocked}
           onAuto={handleAuto}

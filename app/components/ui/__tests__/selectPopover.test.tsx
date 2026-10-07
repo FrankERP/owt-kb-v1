@@ -144,6 +144,18 @@ describe("Select — desktop popover", () => {
       await waitFor(() => expect(screen.queryByRole("menu")).toBeNull());
     });
 
+    it("keeps the hidden native select inside its own box: exactly `sr-only`, in a positioned root", async () => {
+      // 2026-10-06: the hidden select carried the chrome's `w-full` and padding,
+      // which Tailwind emits AFTER `sr-only` and so win over its 1px box. With no
+      // positioned ancestor the absolute select took 100% of the initial containing
+      // block from its static x and panned every planner page sideways (ADR-0035).
+      render(<Harness id="mes" label="Mes" value="1" onChange={() => {}}>{MESES}</Harness>);
+      await act(async () => {});
+      const native = screen.getByLabelText("Mes") as HTMLSelectElement;
+      expect(native.className.split(/\s+/)).toEqual(["sr-only"]);
+      expect(native.parentElement!.className.split(/\s+/)).toContain("relative");
+    });
+
     it("takes the sr-only native select out of the tab order (it was an invisible stop before the trigger)", async () => {
       render(<Harness id="mes" label="Mes" value="1" onChange={() => {}}>{MESES}</Harness>);
       await act(async () => {});

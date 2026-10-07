@@ -123,7 +123,9 @@ Revision strings: non-empty, ≤200 chars, no whitespace. Ids: non-empty, ≤200
 hashes it:
 
 - **included** in the fingerprint — `roleType`, normalized `date` day key, `targetIdentity`,
-  normalized `serviceName` (special only), effective `published`, and the ordered/normalized
+  normalized `serviceName` (special only), effective `published`, `countsForFairness` **only when it
+  differs from the type default** (a weekend `false`, a special `true` — so a body without it, or with
+  the default, hashes exactly as before solver v3 C1, and the version marker stays 1), and the ordered/normalized
   `leads`/`bgvs`/`chorus`/`instruments`/`foh` inputs, plus a version marker;
 - **excluded** — the request id itself, the role `_id`, generated `_key`s, and all timestamps.
   Ordering is codepoint, never `localeCompare`.
@@ -350,8 +352,8 @@ responses, refusals, notices and revalidations below are theirs too
 | Route | Methods | Notes |
 |-------|---------|-------|
 | `/api/admin/setlists` | GET, PUT | GET `?week=&type=sunday\|saturday\|special&roleId=` → additive canonical read: always `{setlistId, songs, recentSongs}` (recentSongs = songId→most-recent past use, 8-week window) **plus** `targetState: none\|single\|duplicate\|draft_conflict\|invalid`. `single` adds `contentState` (`empty\|incomplete\|ready\|invalid`) + `observed {state,id,rev}` (special uses the special-role id/rev); conflict branches add `conflictingIds`/`draftIds`/`canonicalIds`/`reason`+`recordIds` and return `setlistId: null`, `songs: []`. For `type=special` the response also carries `format` (`"worship_night"` or `null`) and `leadRoster` (`{id,name}[]`, the role's own `Lead`), and each `songs[]` row carries `leadIds` (`leads[]._ref`). Request identity (`type`, valid `YYYY-MM-DD` `week`, special `roleId` resolving to one `special_role` on that date) is validated **before** any target read → 400, never `targetState: "none"`. Read failure → 500, never an empty clean result. **PUT** submits the unchanged `observed` state from that GET (see below) → one guarded transaction → `revalidateServiceViews()` + push to setlist subscribers **only when the service is published** (`subject.published !== false`); a draft save is silent, matching the debounced email. Rows may carry `leadIds` (0–2 distinct canonical member ids) — see below. |
-| `/api/admin/roles` | GET, POST | GET all role docs (incl. `_rev`) with resolved seats + joined setlist. **POST** create a service: requires `creationRequestId`; whitelists `_type`; `published` only on exact `true`; accepts `format` (only `"worship_night"`, only for `special_role` — silently dropped for a weekend role) at creation, never patchable afterward; one transaction creates the receipt + role + weekend lock claim. **201** on create, **200 `{…role, replay:true}`** on an exact replay. Then `revalidateServiceViews()` + `revalidatePath("/me")`; if published, `after()` fires push (`assignments`) + assignment emails. `maxDuration=60`. |
-| `/api/admin/roles/[id]` | PATCH, DELETE | Both require the client-observed `rev` (+ optional `lockRev`) in the JSON body — **DELETE has a required body**. PATCH updates date/name/assignments; a permitted date move atomically vacates the old lock and claims the new one; request `_type` is a cross-check and **never converts a document** (the old type/target is derived from storage). Diffs `addedAssignees`; if `published !== false` (published **or** grandfathered), `after()` notifies newly added (drafts stay silent). DELETE applies the dependency policy, vacates the owned lock, retires a receipt-backed key, and deletes the role in one transaction. Both revalidate. `maxDuration=60`. |
+| `/api/admin/roles` | GET, POST | GET all role docs (incl. `_rev`) with resolved seats + joined setlist; each row also carries `countsForFairness`, the effective boolean through `COUNTS_FOR_FAIRNESS_GROQ` (a legacy weekend row reads `true`, a legacy special `false`). **POST** create a service: requires `creationRequestId`; whitelists `_type`; `published` only on exact `true`; accepts `format` (only `"worship_night"`, only for `special_role` — silently dropped for a weekend role) at creation, never patchable afterward; one transaction creates the receipt + role + weekend lock claim. Accepts optional `countsForFairness` on any type: `true`/`false`, absent = the type default; anything else, `null` included, is `400 invalid_request` (issue `countsForFairness`) before any read. The role always stores the effective boolean. **201** on create, **200 `{…role, replay:true}`** on an exact replay. Then `revalidateServiceViews()` + `revalidatePath("/me")`; if published, `after()` fires push (`assignments`) + assignment emails. `maxDuration=60`. |
+| `/api/admin/roles/[id]` | PATCH, DELETE | Both require the client-observed `rev` (+ optional `lockRev`) in the JSON body — **DELETE has a required body**. PATCH updates date/name/assignments and — only when the body carries it — `countsForFairness` (absent = unchanged, never unset; a non-boolean is `400` before any read). A PATCH that carries `countsForFairness` and changes nothing a notice could report (same date; for a special the same name and time; every member keeps the same seat labels) queues no outbox notice and sends no push, but still revalidates; a PATCH without the field behaves exactly as before (see [NOTIFICATIONS](NOTIFICATIONS.md#a-toggle-only-patch-queues-nothing-solver-v3-c1)); a permitted date move atomically vacates the old lock and claims the new one; request `_type` is a cross-check and **never converts a document** (the old type/target is derived from storage). Diffs `addedAssignees`; if `published !== false` (published **or** grandfathered), `after()` notifies newly added (drafts stay silent). DELETE applies the dependency policy, vacates the owned lock, retires a receipt-backed key, and deletes the role in one transaction. Both revalidate. `maxDuration=60`. |
 | `/api/admin/roles/publish` | POST | **CHANGED contract: `{ roles: [{id, rev}], published: boolean }`** — the old `{ids[], published}` shape is **no longer accepted** (it fails `invalid_request`, `issues:["roles"]`). Exact boolean required; non-empty batch ≤100; canonical ids, no duplicates, no `drafts.*`. Fetches only `sunday_role\|saturday_role\|special_role` and requires exact one-to-one cardinality/type/revision — a single missing / wrong-type / stale / raw-draft / duplicate-target entry **rejects the whole batch during prevalidation**. Then one transaction patches every publication state and heartbeats every coordination token. `{ok:true, published, unpublished}`. Only genuine `false → true` transitions notify (`computePublishTransitions`); newly-published → `after()` push + **one consolidated batch email per member**. Revalidates `/`, `/schedule`, `/me`. `maxDuration=60`. |
 | `/api/admin/roles/publish-ready` | POST | **New.** Server-authoritative bulk publish. The client's "Publicar listos" selection is a **hint, never an authorization**: this route reloads all five read domains and re-derives readiness with the same pure predicates the UI uses, then commits one transaction whose ops assert the exact revisions readiness was computed over. Modes: `ready` \| `override` \| `recover`. An `override` may acknowledge only the four **workflow** blockers (availability conflict, active proposal, incomplete setlist, empty team); the eighteen **hard** blockers are never override-eligible, because no acknowledgement makes a publish over unproven state safe. Two ops asserting different revisions of one shared document are an explicit refusal, never a silent last-one-wins. See [SERVICE_READINESS_UI](SERVICE_READINESS_UI.md#7-bulk-publish). |
 | `/api/admin/roles/unpublish` | POST | **New.** Hides a published service. Deliberately gated on fewer sources than any other control (`roles` + `roleTargets` only) — pulling a service back must stay available *precisely when* setlist, proposal or member data is unsafe or unavailable. |
@@ -455,12 +457,21 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   those may make Auto retry without the trailing Saturday (ADR-0048, ruling Q19). No Sanity
   writes. See [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
 - **`GET /api/admin/solver-config`** — the shared planner rule set (`_id: solverConfig`).
-  Returns `{ present, rev, config }`. **`present: false` with `config: null` means the document
+  Returns `{ present, rev, config, configVersion }` — `configVersion` is the document shape this
+  deployment speaks (`SOLVER_CONFIG_VERSION`); a client that speaks another disables its save.
+  **`present: false` with `config: null` means the document
   does not exist**, which is a different answer from a failed read (an HTTP error, no body):
   absent ⇒ the client may fall back to its built-in defaults **in memory only**; failed ⇒ it must
   refuse to save. Collapsing the two into one `?? DEFAULT` is how a transient failure overwrites
   the real rules.
-- **`POST /api/admin/solver-config`** — replace the rule set. Body `{ rev, config }`.
+- **`POST /api/admin/solver-config`** — replace the rule set. Body `{ rev, config, configVersion }`.
+  **A `configVersion` that is not exactly `SOLVER_CONFIG_VERSION`** (absent, `null`, a string, an
+  older or newer number) is `400 invalid_request` with `details: { issues: ["configVersion"],
+  expected, received }`, checked after auth and the body's JSON/shape check, before the stored
+  document is read or `config` is parsed — a client that predates a field would otherwise erase it
+  (ADR-0049). A config holding two `==` caps that fix a common role for one `person` text is
+  `400 invalid_request` at `restrictions[i].caps[j]:exact_overlap` (the later cap; parent A38).
+  Success echoes `{ present, rev, config, configVersion }`.
   **UPDATE only: it can never create the document** — a POST while it is absent is `404 not_found`
   with `details.detail = "create_not_allowed_here"`, because only `scripts/seed-solver-config.ts`
   may mint it. A `rev` that is missing is `400 invalid_request`; one that does not match is
@@ -488,6 +499,49 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   that run's own month (`cache: "no-store"`, a 20 s ceiling); the solve never reuses the display's copy, and `owt_solver_history_v2` in
   `localStorage` is no longer read. See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and
   [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
+
+- **`GET /api/admin/fairness?month=YYYY-MM[&horizon=1|2]`** — the solver v3 fairness ledger
+  (C2 RD-1 … RD-5; [ADR-0050](adr/0050-the-fairness-balance-is-measured-against-recorded-eligibility.md)):
+  for the 3 months before `month`, each person's per-line share, received seats and balance (all
+  integer hundredths, positive = owed, `balance = share − received`, plus display `tenths` and the
+  seat count), the cumulative balance since the earliest record, per-month notes and set-asides,
+  `countedSundayLeads` and `firstRecordedIn`; the horizon month(s) with their full logical record
+  (or `null`), freezing-service count and `recordBinds`; the effective `engine` and this
+  deployment's `environment`. Gated **exactly like `solver-history`** (no session or a
+  content-editor → `403`); a malformed `month` or a `horizon` other than `1`/`2` → `400
+  { error: "invalid_request" }`; `200` carries `Cache-Control: no-store`. Any failure — no
+  `SANITY_API_READ_TOKEN` (the records' dotted ids are private; checked before any read), a rejected
+  read, a non-list answer, a stored record that fails the record-schema check — is `500
+  { error: "fairness_unavailable", message: "No se pudo leer el saldo de equidad." }` with **no
+  `people` key**. A month without a record is not a failure. Read by the planner's «Equidad · vista
+  previa» panel, on first open only.
+
+- **`PUT /api/admin/fairness/months`** — record 1–2 consecutive months of the eligibility record
+  (`fairnessMonth`; C2 WR-1 … WR-17). **admin and super-admin only** (content-editor → `403
+  forbidden`). Body `{ months: [{ month, source: "auto"|"manual", expectedRev, people, presence }] }`,
+  strict: unknown fields, server stamps, `_key`, `name` and `contentHash` are refused (`400
+  invalid_request`, `details.issues` naming each path by field and index only). Under engine v2 —
+  every deployment until C7's flip, unless `OWT_SOLVER_ENGINE` is set on the `preview` branch or
+  locally (docs/SECRETS.md) — refused with a 409 whose `details.detail` is `engine_not_v3`, before
+  anything is read. **The wire `error` of a refusal is not, in general, the refusal's own name
+  (only `stale_revision` carries its own):** it is `stale_revision` for `details.detail`
+  `record_exists` / `record_missing` / `stale_revision` and `integrity_conflict` for every other
+  detail (`engine_not_v3`, `past_month`, `month_has_services`, `member_*`, `tipo_mismatch`);
+  clients branch on `details.detail` (C2 IF2-5, IF2-6), never on `error` or `message`. Per month: an identical intact record → `unchanged` (200, no
+  transaction); a past month → refused, `details.detail` `past_month`; no record and
+  `expectedRev: null` → created; a record and a matching `expectedRev` and no freezing service →
+  replaced (revision-asserted, whole); otherwise `details.detail` is `record_exists` /
+  `record_missing` / `stale_revision` or `month_has_services`, and for a written month the live
+  members must exist, be worship and fit the roles by current Tipo (`member_unknown` /
+  `member_not_worship` / `tipo_mismatch`, `integrity_conflict` with `details.memberIds`). All
+  or nothing: one refused month writes nothing, `details.detail` is the earliest month's refusal and
+  `details.months` every month's own verdict; a commit 409 is reported on every written month. `200`
+  answers `{ months: [{ month, outcome, rev, contentHash, recordedAt }] }`. Any other failure — no
+  `SANITY_API_READ_TOKEN`, a rejected read, a commit error that is not a 409 mutation conflict — is
+  an opaque `500`: the handler throws `FairnessMonthWriteFailedError` (fixed message, no `cause`),
+  and the server log carries only the original error's class, status and stack frames, never its
+  message, which can hold the request URL and member ids. No notification, no revalidation, and
+  never a delete.
 
 ---
 
@@ -541,7 +595,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
   history, and `notifyProposalSubmitted` sends nothing.
 - **Protected mutations have no alternate path:** the API routes above are the only writers. The
-  embedded Studio strips every mutating action from all fifteen protected types, and the seven historical
+  embedded Studio strips every mutating action from all sixteen protected types, and the seven historical
   one-shot scripts fail closed before constructing a client — see
   [DATA_MODEL → Studio](DATA_MODEL.md#studio) and
   [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).

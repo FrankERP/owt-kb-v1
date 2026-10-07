@@ -39,6 +39,7 @@ import {
   type StoredReceipt,
 } from "@/app/utils/roleWriteOps";
 import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+import { COUNTS_FOR_FAIRNESS_GROQ } from "@/app/utils/countsForFairness";
 
 function reject(res: { status: number; body: unknown }) {
   return NextResponse.json(res.body, { status: res.status });
@@ -66,6 +67,7 @@ export async function GET() {
     | order(coalesce(week, date) asc, time asc) {
       _id, _rev, _type, service_name, time, format,
       "published": coalesce(published, true),
+      "countsForFairness": ${COUNTS_FOR_FAIRNESS_GROQ},
       "date": coalesce(week, date),
       "leads": Lead[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
       "bgvs": BGVs[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
@@ -229,6 +231,7 @@ async function postHandler(req: NextRequest) {
     time: request.time,
     format: request.format,
     published: request.published,
+    countsForFairness: request.countsForFairness,
     seats: request.seats,
     receiptId: request.receiptId,
     fingerprint: request.fingerprint,

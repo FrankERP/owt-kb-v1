@@ -39,6 +39,16 @@ describe("Checkbox", () => {
     expect(mark.getAttribute("class")!.split(/\s+/).some((t) => t.startsWith("text-"))).toBe(false);
   });
 
+  it("keeps the sr-only input inside its own label: the label is positioned", () => {
+    // 2026-10-06: without it the absolute input's containing block lay outside the
+    // planner's overflow-x-auto scroller, which therefore could not clip it — the
+    // «Omitir» inputs of the off-screen columns panned the whole page (ADR-0035).
+    render(<Checkbox checked onChange={() => {}}>Sí</Checkbox>);
+    const input = screen.getByRole("checkbox");
+    expect(input.className.split(/\s+/)).toContain("sr-only");
+    expect(input.closest("label")!.className.split(/\s+/)).toContain("relative");
+  });
+
   it("aligns the label row by align, defaulting to center", () => {
     render(<Checkbox checked onChange={() => {}}>Sí</Checkbox>);
     const label = screen.getByRole("checkbox").closest("label")!;

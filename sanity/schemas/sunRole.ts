@@ -35,6 +35,16 @@ export const sundayRole = {
       initialValue: true,
       description: "Si está apagado, el servicio es un borrador visible solo para admins.",
     },
+    // «Cuenta para equidad» (solver v3 C1). Visible and read-only like `published` —
+    // the whole document is readOnly. NO `initialValue`: the Studio cannot create these
+    // documents, and the default has ONE spelling, app/utils/countsForFairness.ts,
+    // which sanity/ cannot import. The description is copy, not a second spelling.
+    {
+      name: "countsForFairness",
+      title: "Cuenta para equidad",
+      type: "boolean",
+      description: "Vacío = valor del tipo: domingo y sábado sí, especial no. Solo lo usa el nuevo solver.",
+    },
     {
       name: 'week',
       title: 'Week',
