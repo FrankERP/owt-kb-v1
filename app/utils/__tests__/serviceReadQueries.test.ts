@@ -103,3 +103,21 @@ describe("raw-draft inventory builders", () => {
     }
   });
 });
+
+describe("ROLE_PROJECTION — frozen (solver v3 C1 step zero)", () => {
+  it("is byte-identical to its pre-C1 text: countsForFairness never rides the shared projection", () => {
+    expect(ROLE_PROJECTION).toBe([
+      "{",
+      "  _id, _rev, _type, published, week, date, service_name, time, format,",
+      "  creationReceiptId, creationFingerprint,",
+      "  Lead[]{ _key, _type, _ref },",
+      "  BGVs[]{ _key, _type, _ref },",
+      "  Chorus[]{ _key, _type, _ref },",
+      "  instruments[]{ _key, _type, instrument, person{ _type, _ref } },",
+      "  foh_team[]{ _key, _type, role, person{ _type, _ref } },",
+      "  songs[]{ _key, play_key, medley_tag, song{ _type, _ref }, leads[]{ _key, _type, _ref } }",
+      "}",
+    ].join("\n"));
+    expect(ROLE_PROJECTION).not.toContain("countsForFairness");
+  });
+});

@@ -17,6 +17,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { draftCreateBody, type CreatableDraft } from "@/app/utils/monthDraftCreate";
+import { countsForFairnessDefault } from "@/app/utils/countsForFairness";
 import { buildCreationReceipt, payloadFingerprint } from "@/app/utils/roleCreationReceipt";
 import { buildRoleDocument, parseCreateRequest } from "@/app/utils/roleWriteRequest";
 import { ROLE_CREATION_RECEIPT_EVIDENCE_PROJECTION, ROLE_PROJECTION } from "@/app/utils/serviceReadQueries";
@@ -55,6 +56,7 @@ function creatable(over: Partial<CreatableDraft> & Pick<CreatableDraft, "_type" 
   return {
     localId: `local-${seq}`,
     creationRequestId: `req-evidence-${String(seq).padStart(4, "0")}`,
+    countsForFairness: countsForFairnessDefault(over._type),
     leads: [],
     bgvs: [],
     chorus: [],
@@ -88,6 +90,7 @@ function createThroughRoute(draft: CreatableDraft, published: boolean, createdAt
     time: v.time,
     format: v.format,
     published: v.published,
+    countsForFairness: v.countsForFairness,
     seats: v.seats,
     receiptId: v.receiptId,
     fingerprint: v.fingerprint,

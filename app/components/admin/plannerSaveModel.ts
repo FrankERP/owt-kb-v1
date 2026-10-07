@@ -1,6 +1,7 @@
 import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { isServiceTime } from "@/app/utils/serviceTime";
 import type { GridCell } from "./plannerModel";
+import { effectiveStoredCounts } from "./fairnessToggleModel";
 import type { StoredGridColumn, StoredGridRow } from "./storedRoleReadModel";
 
 export interface RoleSemanticSnapshot {
@@ -8,6 +9,8 @@ export interface RoleSemanticSnapshot {
   date: string;
   serviceName: string | null;
   time: string | null;
+  /** «Cuenta para equidad» — part of the semantics, so a toggle-only change is dirty (C1 §6.1). */
+  countsForFairness: boolean;
   leads: string[];
   bgvs: string[];
   chorus: string[];
@@ -22,6 +25,8 @@ export interface StoredRolePatchBody {
   date: string;
   service_name?: string;
   time?: string;
+  /** Always sent — the column's effective value (C1-D5); the `_rev` assertion makes a stale one a 409. */
+  countsForFairness: boolean;
   leads: string[];
   bgvs: string[];
   chorus: string[];
@@ -58,11 +63,19 @@ function cellsForColumn(cells: readonly GridCell[], columnId: string): GridCell[
   return cells.filter((cell) => cell.columnId === columnId);
 }
 
-/** Complete full-array PATCH serializer. It never emits only dirty rows. */
+/**
+ * Complete full-array PATCH serializer. It never emits only dirty rows.
+ *
+ * `countsForFairness` is the column's EFFECTIVE value, decided here against
+ * `todayIso` (default: now, in CDMX) — solver v3 C1 §6.0: a column whose stored or
+ * edited date is in a past month sends its stored value whatever toggle edit it
+ * holds, so the dirty check, the reconciliation and the body all agree.
+ */
 export function serializeStoredColumn(
   column: StoredGridColumn,
   rows: readonly StoredGridRow[],
   cells: readonly GridCell[],
+  todayIso?: string,
 ): StoredColumnSerialization {
   const reasons = new Set<string>();
   if (column.admission === "readOnly") reasons.add("column_not_mutable");
@@ -126,6 +139,7 @@ export function serializeStoredColumn(
     date: column.date,
     ...(column.type === "special_role" ? { service_name: normalizeServiceName(column.serviceName) } : {}),
     ...(column.type === "special_role" && isServiceTime(column.time) ? { time: column.time } : {}),
+    countsForFairness: effectiveStoredCounts(column, todayIso),
     leads,
     bgvs,
     chorus,
@@ -141,6 +155,7 @@ export function semanticSnapshot(body: StoredRolePatchBody): RoleSemanticSnapsho
     date: body.date,
     serviceName: body._type === "special_role" ? normalizeServiceName(body.service_name) : null,
     time: body._type === "special_role" && isServiceTime(body.time) ? body.time : null,
+    countsForFairness: body.countsForFairness,
     leads: sortedStrings(body.leads),
     bgvs: sortedStrings(body.bgvs),
     chorus: sortedStrings(body.chorus),

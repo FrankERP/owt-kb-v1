@@ -20,6 +20,7 @@ import { ROLE_TYPES, isValidServiceDate, type RoleType } from "./serviceReadMode
 import { serviceDayKey } from "./serviceReadSelect";
 import { isServiceTime } from "./serviceTime";
 import type { ServiceFormat } from "./serviceFormat";
+import { countsForFairnessDefault } from "./countsForFairness";
 import {
   ROLE_CREATION_RECEIPT_TYPE,
   canonicalizeCreatePayload,
@@ -208,6 +209,8 @@ export function buildRoleDocument(input: {
   time: string | null;
   format: ServiceFormat | null;
   published: boolean;
+  /** The EFFECTIVE «Cuenta para equidad»: always stored explicitly (C1-D4). */
+  countsForFairness: boolean;
   seats: NormalizedSeats;
   receiptId: string;
   fingerprint: string;
@@ -222,6 +225,7 @@ export function buildRoleDocument(input: {
     ...(input.roleType === "special_role" && input.format ? { format: input.format } : {}),
     ...seatFields(input.seats, input.nextKey),
     published: input.published,
+    countsForFairness: input.countsForFairness,
     // Forward link to the idempotency tombstone. The receipt's own `roleId`
     // stays authoritative; this is not a second copy of the request key.
     creationReceiptId: input.receiptId,
@@ -238,6 +242,8 @@ export function buildRoleEditPatch(input: {
   date: string;
   serviceName: string | null;
   time: string | null;
+  /** Solver v3 C1 §5.4: set when present; when absent the key is in neither `set` nor `unset`. */
+  countsForFairness?: boolean;
   seats: NormalizedSeats;
   nextKey: KeyFactory;
 }): { set: Record<string, unknown>; unset: string[] } {
@@ -247,6 +253,7 @@ export function buildRoleEditPatch(input: {
       [roleDateField(input.roleType)]: input.date,
       ...(special ? { service_name: input.serviceName ?? "" } : {}),
       ...(special && input.time ? { time: input.time } : {}),
+      ...(typeof input.countsForFairness === "boolean" ? { countsForFairness: input.countsForFairness } : {}),
       ...seatFields(input.seats, input.nextKey),
     },
     // Clearing the field in the editor must really clear it; a weekend role
@@ -268,6 +275,8 @@ export interface ParsedCreateRequest {
   time: string | null;
   format: ServiceFormat | null;
   published: boolean;
+  /** The request's «Cuenta para equidad», else the type default (C1-D4). */
+  countsForFairness: boolean;
   seats: NormalizedSeats;
   /** Deterministic weekend lock id; null for a special service. */
   lockId: string | null;
@@ -310,6 +319,10 @@ export function parseCreateRequest(body: unknown): ParseResult<ParsedCreateReque
       time: canonical.time ?? null,
       format: canonical.format ?? null,
       published: canonical.published,
+      countsForFairness:
+        typeof payload.countsForFairness === "boolean"
+          ? payload.countsForFairness
+          : countsForFairnessDefault(roleType),
       seats: normalizeSeats(payload),
       lockId: roleTargetLockId(`${roleType}:${canonical.date}`),
       targetKey,
@@ -329,6 +342,12 @@ export interface ParsedEditRequest {
   time: string | null;
   /** Only for cross-checking against the STORED type — never used to convert. */
   requestedType: RoleType | null;
+  /**
+   * Solver v3 C1 §5.4: present ONLY when the body carries a boolean. Absent means
+   * "leave the stored value untouched" — deliberately NOT the `time` precedent,
+   * where an absent value clears the field.
+   */
+  countsForFairness?: boolean;
   seats: NormalizedSeats;
 }
 
@@ -347,6 +366,10 @@ export function parseEditRequest(body: unknown): ParseResult<ParsedEditRequest> 
   const rawTime = body.time;
   const hasTime = rawTime !== undefined && rawTime !== null && rawTime !== "";
   if (hasTime && !isServiceTime(rawTime)) return fail(["time"]);
+  // `countsForFairness`: absent leaves the stored value untouched; a boolean sets
+  // it; anything else — `null` included — is refused here, before any read (C1-D3).
+  const rawCounts = body.countsForFairness;
+  if (rawCounts !== undefined && typeof rawCounts !== "boolean") return fail(["countsForFairness"]);
   return {
     ok: true,
     value: {
@@ -356,6 +379,7 @@ export function parseEditRequest(body: unknown): ParseResult<ParsedEditRequest> 
       serviceName: normalizeLabel(body.service_name),
       time: hasTime ? (rawTime as string) : null,
       requestedType,
+      ...(typeof rawCounts === "boolean" ? { countsForFairness: rawCounts } : {}),
       seats: normalizeSeats(body),
     },
   };

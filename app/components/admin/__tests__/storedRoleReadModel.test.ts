@@ -281,3 +281,43 @@ describe("special-service format", () => {
     expect("format" in columnFor(undefined)).toBe(false);
   });
 });
+
+describe("countsForFairness on the stored column (solver v3 C1 §6.1)", () => {
+  const specialTarget = (): RoleTarget => target({
+    targetKey: "special_role:special-1",
+    type: "special_role",
+    canonicalIds: ["special-1"],
+    records: [{ ...target().records[0]!, id: "special-1", rev: "rev-1", type: "special_role" }],
+    expectsLock: false,
+    lock: null,
+  });
+
+  function weekendColumn(over: Record<string, unknown>) {
+    const joined = joinStoredRoleInventory([role(over)], summary());
+    expect(joined.coherent).toBe(true);
+    return translateStoredRole(joined.roles[0]!)!.column;
+  }
+
+  function specialColumn(over: Record<string, unknown>) {
+    const special = role({ _id: "special-1", _type: "special_role", service_name: "Vigilia", ...over });
+    const joined = joinStoredRoleInventory([special], summary([specialTarget()]));
+    expect(joined.coherent).toBe(true);
+    return translateStoredRole(joined.roles[0]!)!.column;
+  }
+
+  it("carries the GET row's value, and freezes it with the stored date", () => {
+    expect(weekendColumn({ countsForFairness: false })).toMatchObject({
+      countsForFairness: false,
+      storedFairness: { date: "2026-02-01", countsForFairness: false },
+    });
+    expect(specialColumn({ countsForFairness: true })).toMatchObject({
+      countsForFairness: true,
+      storedFairness: { date: "2026-02-01", countsForFairness: true },
+    });
+  });
+
+  it("reads a row without the field (an older server) as its type default", () => {
+    expect(weekendColumn({}).countsForFairness).toBe(true);
+    expect(specialColumn({}).countsForFairness).toBe(false);
+  });
+});
