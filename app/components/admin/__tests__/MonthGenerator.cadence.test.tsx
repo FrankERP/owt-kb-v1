@@ -129,7 +129,11 @@ describe("the «Domingo» control (C3 §6.6, T11 — removed with the control on
 
     fireEvent.click(within(domingo()).getByRole("radio", { name: "Mes por medio" }));
     expect(add().disabled).toBe(false);
-    expect(screen.getByText(/Si el mes anterior no dirigió domingo, está en Líderes Domingo y puede al menos un domingo/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Solo cambia cuántas veces dirige domingo; en BGV y Coro participa igual que todos. Dirige domingo un mes sí y uno no: le toca el mes siguiente a uno en que no dirigió domingo, si puede al menos un domingo. En el mes que no le toca, de preferencia dirige un sábado. Solo aplica si está en Líderes Domingo. Aplica con el nuevo solver; el solver actual no lo usa.",
+      ),
+    ).toBeTruthy();
     expect(screen.getByText(/Aplica con el nuevo solver; el solver actual no lo usa\./)).toBeTruthy();
 
     fireEvent.click(add());

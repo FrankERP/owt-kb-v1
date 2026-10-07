@@ -23,6 +23,7 @@ describe("dev-verify args", () => {
       fullPage: false,
       text: false,
       a11y: false,
+      layout: false,
       touch: false,
       console: false,
       viewport: { width: 1280, height: 800 },
@@ -35,12 +36,12 @@ describe("dev-verify args", () => {
   it("parses every flag, repeating --click in order", () => {
     const parsed = parseArgs([
       "--route", "/admin", "--base-url", "https://x", "--screenshot", "out.png", "--full-page",
-      "--text", "--a11y", "--console", "--viewport", "375x812", "--theme", "dark",
+      "--text", "--a11y", "--layout", "--console", "--viewport", "375x812", "--theme", "dark",
       "--click", "Editar mes", "--click", "Cerrar", "--wait", "Servicios", "--json",
     ]);
     expect(parsed).toEqual({
       route: "/admin", baseUrl: "https://x", screenshot: "out.png", fullPage: true,
-      text: true, a11y: true, touch: false, console: true, viewport: { width: 375, height: 812 }, theme: "dark",
+      text: true, a11y: true, layout: true, touch: false, console: true, viewport: { width: 375, height: 812 }, theme: "dark",
       clicks: ["Editar mes", "Cerrar"], waitFor: "Servicios", settleMs: 0, json: true,
     });
   });

@@ -18,6 +18,7 @@ import { initialNavigationHeaders, resolveBypassSecret } from "../e2e/service-re
 import { isArgsError, parseArgs, type ParsedArgs } from "./lib/dev-verify/args";
 import { resolveTarget } from "./lib/dev-verify/hostPolicy";
 import { decideRequest, type Phase } from "./lib/dev-verify/mutationPolicy";
+import { LAYOUT_PROBE_SOURCE, type LayoutReport } from "./lib/dev-verify/layoutProbe";
 import { PING_KEY } from "./lib/dev-verify/pingKey";
 import { assertNoLeak, decideExitCode, formatHuman, redactReport, type RunReport } from "./lib/dev-verify/report";
 
@@ -249,6 +250,19 @@ async function main(): Promise<void> {
     if (args.settleMs > 0) await page.waitForTimeout(args.settleMs);
 
     const stem = args.route.replace(/[^a-z0-9]+/gi, "_").replace(/^_|_$/g, "") || "root";
+    // BEFORE the screenshot: the measurement is of the page at the emulated viewport,
+    // not of whatever a full-page capture does to it.
+    // A probe that throws is a page error (exit 4), not a lost run: the captures below still happen.
+    if (args.layout) {
+      try {
+        const layout = (await page.evaluate(LAYOUT_PROBE_SOURCE)) as LayoutReport;
+        const file = path.join(OUT_DIR, `${stem}.layout.json`);
+        writeFileSync(file, JSON.stringify(layout, null, 2));
+        report.artifacts.layout = file;
+      } catch (err) {
+        report.pageErrors.push(`layout:${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     if (args.screenshot) {
       const file = path.isAbsolute(args.screenshot) ? args.screenshot : path.join(OUT_DIR, args.screenshot);
       await page.screenshot({ path: file, fullPage: args.fullPage });
