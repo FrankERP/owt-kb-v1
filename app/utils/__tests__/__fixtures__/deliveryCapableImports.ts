@@ -24,4 +24,7 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "roleSwapCommit",
   "publishReadyCommit",
   "roleUnpublishCommit",
+  // Solver v3 C2 (ADR-0043's rule for every `*Commit`): the eligibility-record writer
+  // delivers nothing, but the name puts its route in the run-context scan anyway.
+  "fairnessMonthCommit",
 ];

@@ -6,6 +6,9 @@
 // client and scope strictly to `drafts.*`.
 
 import { ROLE_TYPES, SETLIST_TYPES } from "@/app/utils/serviceReadModel";
+import { WORSHIP_AUDIENCE_GROQ_FILTER } from "@/app/ministries";
+import { COUNTS_FOR_FAIRNESS_GROQ } from "@/app/utils/countsForFairness";
+import { SOLVER_CONFIG_DOC_ID } from "@/app/utils/solverConfigWriteRequest";
 
 export interface BoundQuery {
   query: string;
@@ -424,5 +427,129 @@ export function weekendRoleCreationReceiptsQuery(): BoundQuery {
   return {
     query: `*[_type == "roleCreationReceipt" && roleType in $roleTypes] ${ROLE_CREATION_RECEIPT_EVIDENCE_PROJECTION}`,
     params: { roleTypes: [...WEEKEND_ROLE_TYPES] },
+  };
+}
+
+// ── Solver v3 fairness reads (C2 IF2-24 … IF2-28) ──────────────────────────
+// Additive builders for the fairness ledger, its write executor, C4's script and
+// C7's rehearsal. NONE carries a `published` clause — prior-month drafts count,
+// and neither `fairnessMonth`, `teamMembers` nor `solverConfig` is draft-gated —
+// and each names canonical documents only. A caller runs them only on a client
+// carrying the read token, the `published` perspective and no CDN (parent A2):
+// `fairnessMonth` ids are dotted, so an untokened read answers «no record» with
+// no error. This file stays the one exempt home of draft-seeing reads
+// (`draftGatingCoverage.test.ts`); no new exemption is added.
+
+const CANONICAL = `!(_id in path("drafts.**"))`;
+
+/** The weekend role types — the freezing services' weekend half (§4 vocabulary). */
+const FAIRNESS_WEEKEND_TYPES = ["sunday_role", "saturday_role"];
+
+/** `YYYY-MM` → `[YYYY-MM-01, first day of the next month)`, by integer arithmetic. */
+function monthRange(month: string): { month: string; from: string; to: string } {
+  const year = Number(month.slice(0, 4));
+  const m = Number(month.slice(5, 7));
+  const next = m === 12 ? `${String(year + 1).padStart(4, "0")}-01` : `${month.slice(0, 4)}-${String(m + 1).padStart(2, "0")}`;
+  return { month, from: `${month}-01`, to: `${next}-01` };
+}
+
+/**
+ * IF2-24 — the freezing-services counts per month: the ONE definition of §4's
+ * freezing services (parent A5), used by the write executor (WR-7), the ledger
+ * reader (RD-1), C4 (R1) and, through IF2-8's `storedServices`, C6. Answers
+ * `Array<{ month, weekend, countedSpecials, uncountedSpecials }>` in the order of
+ * `months`; freezing = `weekend + countedSpecials`. Specials split by C1's rule.
+ */
+export function serviceCountsInMonths(months: string[]): BoundQuery {
+  return {
+    query: `$months[]{
+      "month": month,
+      "weekend": count(*[_type in $weekendTypes && ${CANONICAL} && week >= ^.from && week < ^.to]),
+      "countedSpecials": count(*[_type == "special_role" && ${CANONICAL} && date >= ^.from && date < ^.to && ${COUNTS_FOR_FAIRNESS_GROQ}]),
+      "uncountedSpecials": count(*[_type == "special_role" && ${CANONICAL} && date >= ^.from && date < ^.to && !(${COUNTS_FOR_FAIRNESS_GROQ})])
+    }`,
+    params: { months: months.map(monthRange), weekendTypes: FAIRNESS_WEEKEND_TYPES },
+  };
+}
+
+/**
+ * IF2-25 — every `fairnessMonth` document with `month <= lastMonth`, whole, as stored
+ * (IF2-2). Every caller parses each row through the stored-record parser (IF2-20).
+ */
+export function fairnessMonthsThroughQuery(lastMonth: string): BoundQuery {
+  return {
+    query: `*[_type == "fairnessMonth" && ${CANONICAL} && month <= $last] | order(month asc)`,
+    params: { last: lastMonth },
+  };
+}
+
+/**
+ * The `fairnessMonth` documents with these exact ids, whole, as stored — the write
+ * executor's fresh re-read (WR-7). The ids come from the write-request module, the one
+ * place that constructs them (REC-1).
+ */
+export function fairnessMonthsByIdsQuery(ids: string[]): BoundQuery {
+  return {
+    query: `*[_type == "fairnessMonth" && _id in $ids]`,
+    params: { ids: [...ids] },
+  };
+}
+
+/**
+ * IF2-26 — the voice role documents of the three types whose stored date (`week` on a
+ * weekend role, `date` on a special) is in `[fromDay, toDayExclusive)`, every published
+ * state, with the effective counted flag (`ROLE_PROJECTION` does not carry it) and the
+ * Lead/BGVs/Chorus `_ref`s in stored order. The caller normalises `date` through
+ * `serviceDayKey` and maps each row to IF2-10's `LedgerService`.
+ */
+export function voiceRolesInRangeQuery(fromDay: string, toDayExclusive: string): BoundQuery {
+  return {
+    query: `*[_type in $roleTypes && ${CANONICAL} && select(_type == "special_role" => date, week) >= $from && select(_type == "special_role" => date, week) < $to]{
+      _id, _type,
+      "date": select(_type == "special_role" => date, week),
+      time, published,
+      "countsForFairness": ${COUNTS_FOR_FAIRNESS_GROQ},
+      "Lead": Lead[]._ref, "BGVs": BGVs[]._ref, "Chorus": Chorus[]._ref
+    }`,
+    params: { roleTypes: [...ROLE_TYPES], from: fromDay, to: toDayExclusive },
+  };
+}
+
+/**
+ * Team members by id with the fields the fairness writer and ledger read: the display
+ * name (alias, else `member_name`), `ministries` and `memberType` (the executor's WR-5
+ * checks) and `unavailableDates` (the ledger's live availability, LG-6). No ministry
+ * filter — a seat holder is named whatever her ministry.
+ */
+export function fairnessMembersByIdsQuery(ids: string[]): BoundQuery {
+  return {
+    query: `*[_type == "teamMembers" && ${CANONICAL} && _id in $ids]{ _id, member_name, alias, ministries, memberType, unavailableDates }`,
+    params: { ids: [...ids] },
+  };
+}
+
+/**
+ * IF2-27 — the worship roster: the one server-side definition of the eligibility
+ * resolver's unfiltered worship roster (RES-5) and of C3's `RosterMember` list for a
+ * script. Every canonical `teamMembers` document matching `WORSHIP_AUDIENCE_GROQ_FILTER`
+ * (absent or empty `ministries` is worship; no `$all` arm), with no `voz`, Tipo, pool or
+ * `disabled` filter, projecting exactly six fields.
+ */
+export function worshipRosterQuery(): BoundQuery {
+  return {
+    query: `*[_type == "teamMembers" && ${CANONICAL} && ${WORSHIP_AUDIENCE_GROQ_FILTER}]{ _id, member_name, alias, memberType, ministries, unavailableDates }`,
+    params: {},
+  };
+}
+
+/**
+ * IF2-28 — the rule set singleton, `$id` bound from `SOLVER_CONFIG_DOC_ID` (never a
+ * second literal). Answers the stored document or `null`; the caller parses it with
+ * `solverConfigFromDocument` and treats `null` as ABSENT, never as the defaults.
+ */
+export function solverConfigQuery(): BoundQuery {
+  return {
+    query: `*[_id == $id][0]`,
+    params: { id: SOLVER_CONFIG_DOC_ID },
   };
 }

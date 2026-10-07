@@ -289,10 +289,14 @@ cannot be recovered — see [Retrievability](#retrievability-assume-nothing-is-r
 
 - **Purpose:** authenticated reads that must bypass the CDN — NextAuth member
   lookups (`sanity/lib/serverClient.ts:10`), `operationalClient`, and the
-  dry-run half of `scripts/` migrations.
+  dry-run half of `scripts/` migrations. **Needed to read `fairnessMonth`** (solver v3
+  C2): its ids are dotted, so private — without the token they are invisible, so the
+  fairness ledger GET fails closed (`500 fairness_unavailable`) and, after C6, Auto refuses
+  to solve; the record writer refuses to read without it too.
 - **Role needed:** Viewer.
 - **Platforms:** same two Vercel scopes as above, plus local `.env.local`. **Not**
-  in GitHub Actions.
+  in GitHub Actions. The fairness ledger reads it on the `Preview, Production` pair and in
+  `.env.local`.
 
 ### `SR_VERIFY_SANITY_TOKEN`
 
@@ -322,8 +326,10 @@ cannot be recovered — see [Retrievability](#retrievability-assume-nothing-is-r
 **Blast radius if you revoke first:** between the revoke and the last redeploy,
 every authenticated read and every write fails — members cannot sign in
 (NextAuth reads through `SANITY_API_READ_TOKEN`), proposals cannot be saved or
-approved, and the outbox sweep cannot flush. Create-then-swap-then-revoke, in
-that order, and the window is zero.
+approved, and the outbox sweep cannot flush. With `SANITY_API_READ_TOKEN` gone the
+«Equidad» preview's ledger GET also fails closed (it can no longer see the private
+`fairnessMonth` records) and, after C6, Auto refuses to solve. Create-then-swap-then-revoke,
+in that order, and the window is zero.
 
 ## `RESEND_API_KEY`
 
@@ -463,12 +469,14 @@ else — no other route, page or data path reads this variable.
 
 ---
 
-## `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` — read by the MCP/OAuth routes
+## `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` / `VERCEL_GIT_COMMIT_REF` — Vercel system variables the app and the build scripts read
 
-**Not secrets, and never configured by hand — Vercel sets both automatically on every
-deployment.** Listed here, config-style, because the MCP/OAuth routes' behavior depends on them
-and an operator debugging a 404 or a stale `ping` version should know they exist rather than
-suspect a missing secret.
+**Not secrets, and never configured by hand — Vercel sets all three automatically on every
+deployment (they are Vercel system variables).** Listed here, config-style, because the MCP/OAuth
+routes', the solver-engine resolver's and the build scripts' behavior depend on them and an
+operator debugging a 404, a stale `ping` version, an unexpected engine or a skipped build should
+know they exist rather than suspect a missing secret. Not needed in GitHub Actions, Cloud
+Scheduler, the iOS build or GCF; never set them in a Vercel dashboard "to be safe".
 
 - **`VERCEL_ENV`** (`production` | `preview` | absent locally) selects this deployment's single
   canonical origin (`app/mcp/oauth/origin.ts`'s `canonicalOrigin`) — production →
@@ -478,9 +486,38 @@ suspect a missing secret.
   or empty) is not that case** — it selects the LOCAL origin, so on a Vercel deployment every
   request still 404s, but because no real `Host` there is `localhost:3000`, not because there is
   no origin. Either way it fails closed, never open. Never set or override this manually.
+  **`VERCEL_ENV` is read in four places outside tests, with four different mappings** — do not
+  assume one covers the others: (1) `canonicalOrigin` (above); (2) `resolveSolverEngine`
+  (`app/utils/solverDeployment.ts`), which honours `OWT_SOLVER_ENGINE` only when `VERCEL_ENV` is
+  `preview` **and** `VERCEL_GIT_COMMIT_REF` is `preview`, or when `VERCEL_ENV` is absent or empty
+  (local development) — `development`, `production` and any other value answer the
+  `SOLVER_ENGINE` constant; (3) `fairnessRecordEnvironment` (same file), the `environment` stamp
+  of a `fairnessMonth` record: `production` → `production`, `preview` → `preview`, **everything
+  else, `development` included, → `local`** (so here `development` is not «unset» the way it is
+  for the resolver's local path, and not «the constant» either); (4) `evaluateDeployPolicy`
+  (`scripts/lib/deploy-branch-policy.mjs`, run by `scripts/vercel-ignore-build.mjs` as
+  `vercel.json`'s `ignoreCommand`): `production` builds whatever ref it came from, any other value
+  (or none) falls through to the ref allow-list (`docs/CI.md`). The list is a snapshot of the
+  non-test readers, not a contract — a `git grep` for the variable name is the authority.
+- **`VERCEL_GIT_COMMIT_REF`** — the branch the deployment was built from. Read in several places
+  outside tests: `resolveSolverEngine`, to tell the `preview` branch's dev deployment from other
+  Preview deployments such as `verify/service-readiness` (also `VERCEL_ENV=preview`), which must
+  never honour the override; `evaluateDeployPolicy` (`scripts/lib/deploy-branch-policy.mjs`),
+  which checks it against the allow-list of refs that spend a build, and
+  `scripts/vercel-ignore-build.mjs`, which only quotes it in its log line;
+  `evaluateDeploymentCoherence` (`scripts/lib/deployment-coherence.mjs`, called from
+  `next.config.mjs` at build time), which holds `verify/service-readiness` to the isolated
+  verification dataset and every other ref off it; and `resolveVerificationEnvironment`
+  (`app/utils/srVerificationIdentity.ts`), which reports it as `gitRef` in the verification
+  identity. Set by Vercel; absent locally, where the build assertions skip (a build with no ref
+  asserts nothing) and the solver resolver's local path keys on `VERCEL_ENV` being unset. See the
+  `OWT_SOLVER_ENGINE` entry below. Like the `VERCEL_ENV` list, this one is a snapshot — a
+  `git grep` for the variable name is the authority.
 - **`VERCEL_GIT_COMMIT_SHA`** — the deployed commit. `ping`'s `version` field reports its first 7
   characters (`"local"` when the variable is absent), so Frank can tell from the phone which
-  deployment answered a `ping` call. Not sensitive — the repository is public.
+  deployment answered a `ping` call; `resolveVerificationEnvironment`
+  (`app/utils/srVerificationIdentity.ts`) also reads it, as the verification identity's
+  `gitCommitSha`. Not sensitive — the repository is public.
 
 ## `OWT_SOLVER_API_KEY` (Secret Manager: `owt-solver-api-key`)
 
@@ -572,6 +609,44 @@ PREV=$(CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true gcloud secrets versions access N 
 ```
 Then redeploy exactly as steps 3 (function) and 4 (Vercel) — warm instances and any Vercel
 deployment built in between may hold the new key — and verify as in step 5.
+
+---
+
+## `OWT_SOLVER_ENGINE` (solver v3 — the Preview-only engine override)
+
+**Needed in: Vercel Preview, branch-scoped to `preview` only — and only while Frank wants a v3
+rehearsal on dev. Optional in local `.env.local` (a local v3 rehearsal). Leave it unset
+everywhere else. Not needed in: Vercel Production (the code ignores it there), the
+`Preview (verify/service-readiness)` scope (the code ignores it there too — never add it "to be
+safe"), GitHub Actions, Cloud Scheduler, the iOS build, GCF.**
+
+**Not a secret** — plain config, `"v2"` or `"v3"`. It is the ONE override of the solver-engine
+constant (`SOLVER_ENGINE` in `app/components/admin/solverEngine.ts`, parent A1), read by exactly one
+function, `resolveSolverEngine` (`app/utils/solverDeployment.ts`). That function honours an exact
+`v2`/`v3` only when `VERCEL_ENV === "preview"` **and** `VERCEL_GIT_COMMIT_REF === "preview"` (the
+dev deployment), or when `VERCEL_ENV` is unset or empty (local development). Production, `vercel
+dev` (`VERCEL_ENV=development`), the `verify/service-readiness` deployment and any other value
+answer the constant. Both `VERCEL_*` variables are set by Vercel automatically.
+
+**Purpose — what changes with it.** Under `v3`, the planner's «Equidad · vista previa» panel offers
+«Registrar elegibilidad de {mes}» and `PUT /api/admin/fairness/months` accepts writes (under `v2`
+it answers a 409, `details.detail` `engine_not_v3`); after C6, Auto on that deployment also runs the v3 solver.
+Without it (the normal state) the deployment runs the constant's engine.
+
+**Where it comes from.** A literal typed by Frank: Vercel → project `owt-backstage` → Settings →
+Environment Variables → Preview, scoped to the Git branch `preview`; or a line in `.env.local`.
+There is no issuer or generator.
+
+**Rotate / change:** edit or remove the value, then redeploy Preview (push `preview` or redeploy
+from the dashboard) and verify the dev alias moved — like every Vercel env var it binds at build
+time. Locally, restart the dev server. To go back to the constant, remove it.
+
+**Blast radius.** While it is `v3` on Preview, «Registrar» appears on dev and writes
+**production** `fairnessMonth` records — `preview` writes the real dataset (CLAUDE.md «Vercel
+safety») — stamped `environment: "preview"`, which no app surface can delete (C2 WR-13). Set
+locally with `VERCEL_ENV` unset, a local server writes production records stamped `local`. After
+C6, Auto on that deployment runs v3. Nothing is broken mid-change: a deployment reads the value it
+was built with.
 
 ---
 

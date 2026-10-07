@@ -20,6 +20,7 @@ import {
   OPERATOR_TOOLING_ALLOWLIST,
   PROTECTED_RUNTIME_WRITERS,
   PROTECTED_TYPES,
+  PROTECTED_WRITE_EXECUTORS,
   RETIRED_ONE_SHOT_WRITERS,
   auditViolations,
   describeSite,
@@ -268,6 +269,91 @@ export default function Sheet() { return LABELS.featuredSongs; }`,
   });
 });
 
+// ── The executor rule (solver v3 C2 GU-5) ───────────────────────────────────
+
+describe("the protected write executor rule (C2 GU-5)", () => {
+  it("registers exactly the fairness write executor", () => {
+    expect([...PROTECTED_WRITE_EXECUTORS]).toEqual(["executeFairnessMonthWrites"]);
+  });
+
+  it("(a) flags a module that calls the executor with NO Sanity client import", () => {
+    const sites = scanSource(
+      "app/utils/exampleCaller.ts",
+      `import { executeFairnessMonthWrites } from "@/app/utils/fairnessMonthWriteRequest";
+export async function record(clients, months, stamps) {
+  return executeFairnessMonthWrites({ clients, actor: "route", op: "write", months, stamps });
+}`,
+    );
+    expect(sites).toEqual([
+      {
+        file: "app/utils/exampleCaller.ts",
+        operation: "module",
+        kind: "protected-write",
+        client: "executor",
+        compliant: false,
+        evidence: "calls the protected write executor executeFairnessMonthWrites()",
+      },
+    ]);
+    expect(auditViolations(sites)).toHaveLength(1);
+  });
+
+  it("(b) attributes a call inside a wrapped route handler to its HTTP method", () => {
+    const sites = scanSource(
+      "app/api/example/route.ts",
+      `import { executeFairnessMonthWrites } from "@/app/utils/fairnessMonthWriteRequest";
+import { withVerificationRunContext } from "@/app/utils/srVerificationRunContext";
+export const PUT = withVerificationRunContext(async (req) => {
+  return executeFairnessMonthWrites(await req.json());
+});`,
+    );
+    expect(sites.map((s) => [s.operation, s.kind])).toEqual([["PUT", "protected-write"]]);
+  });
+
+  it("(c) flags the declaring module", () => {
+    const sites = scanSource(
+      "app/utils/exampleExecutor.ts",
+      `export async function executeFairnessMonthWrites(input) {
+  const tx = input.clients.write.transaction();
+  return tx.commit();
+}`,
+    );
+    expect(sites).toHaveLength(1);
+    expect(sites[0]).toMatchObject({ operation: "module", kind: "protected-write" });
+    expect(sites[0].evidence).toBe("declares the protected write executor executeFairnessMonthWrites()");
+  });
+
+  it("(d) ignores a similarly named function and the name in a comment or an import alone", () => {
+    expect(
+      scanSource(
+        "app/utils/example.ts",
+        `// executeFairnessMonthWrites(input) is the one writer — mentioned only.
+/* executeFairnessMonthWrites({}) */
+import { executeFairnessMonthWrites } from "@/app/utils/fairnessMonthWriteRequest";
+export function executeFairnessMonthWritesLater() { return myexecuteFairnessMonthWrites(1); }`,
+      ),
+    ).toEqual([]);
+  });
+
+  it("(e) still yields nothing for files that merely mention protected type names", () => {
+    expect(
+      scanSource("app/components/Example.tsx", `const LABELS = { fairnessMonth: "Registro", sunday_role: "Domingo" };`),
+    ).toEqual([]);
+  });
+
+  it("keeps a client-bearing caller's other sites beside the executor site", () => {
+    const sites = scanSource(
+      "app/utils/exampleCommit.ts",
+      `import { operationalClient } from "@/sanity/lib/operationalClient";
+import { writeClient } from "@/sanity/lib/serverClient";
+import { executeFairnessMonthWrites } from "@/app/utils/fairnessMonthWriteRequest";
+export async function commit(months) {
+  return executeFairnessMonthWrites({ clients: { read: operationalClient, write: writeClient }, months });
+}`,
+    );
+    expect(sites.map((s) => [s.operation, s.kind, s.client])).toEqual([["module", "protected-write", "executor"]]);
+  });
+});
+
 // ── Defensive type-rejection guard ──────────────────────────────────────────
 
 describe("defensive type-rejection guard exclusion", () => {
@@ -384,7 +470,7 @@ describe("A2 handoff allowlist", () => {
     expect(A2_HANDOFF_ALLOWLIST).toEqual([]);
   });
 
-  it("licenses the sixteen permanent runtime writers for WRITES ONLY, never reads", () => {
+  it("licenses the eighteen permanent runtime writers for WRITES ONLY, never reads", () => {
     expect(PROTECTED_RUNTIME_WRITERS.map((e) => `${e.file}#${e.operation}`).sort()).toEqual(
       [
         "app/utils/outboxSweep.ts#module",
@@ -400,6 +486,8 @@ describe("A2 handoff allowlist", () => {
         "app/utils/roleUnpublishCommit.ts#module",
         "app/utils/roleWriteOps.ts#module",
         "app/utils/setlistSaveCommit.ts#module",
+        "app/utils/fairnessMonthWriteRequest.ts#module",
+        "app/utils/fairnessMonthCommit.ts#module",
         "app/api/me/proposals/route.ts#POST",
         "app/api/me/proposals/[id]/messages/route.ts#POST",
         "app/api/admin/proposals/[id]/messages/route.ts#POST",
@@ -552,6 +640,11 @@ describe("git-tracked protected read inventory", () => {
     expect(violations.map(describeSite)).toEqual([]);
   });
 
+  it("finds exactly the registered fairness executor sites (C2 GU-5, IF2-23)", () => {
+    const sites = REAL_SITES.filter((s) => s.client === "executor").map((s) => `${s.file}#${s.operation}`);
+    expect(sites.sort()).toEqual(["app/utils/fairnessMonthCommit.ts#module", "app/utils/fairnessMonthWriteRequest.ts#module"]);
+  });
+
   it("routes every migrated member-facing and notification read through the canonical client", () => {
     const migrated = [
       "app/(client)/page.tsx",
@@ -605,6 +698,7 @@ describe("git-tracked protected read inventory", () => {
       "saturdarSongs",
       "setlistProposal",
       "specialIdentityCoordinator",
+      "fairnessMonth",
     ]);
   });
 });

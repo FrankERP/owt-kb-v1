@@ -1,4 +1,4 @@
-import { trailingSaturday } from "./plannerModel";
+import { resolvedCapValue, trailingSaturday, type RestrictionCap } from "./plannerModel";
 import type { ServiceType } from "./serviceCardModel";
 
 /** `sundayDates` is what the grid reads, and `week` must equal `weekForColumn` over it. */
@@ -39,6 +39,29 @@ export function completeSundaySpine(month: string): string[] {
     date.setDate(date.getDate() + 1);
   }
   return dates;
+}
+
+/**
+ * THE per-month count resolution of a cap (solver v3 C2 RES-3, IF2-17): `resolvedCapValue`
+ * over every Sunday of the calendar month (ADR-0047's D2), as a TYPED result — never a
+ * restatement of `max(0, weeks − offset)`, never rounded, truncated or clamped beyond that
+ * `max(0, ·)`. `not_whole` (checked first): the result is fractional or non-finite (a
+ * fractional `value`, a fractional `relOffset` not clamped to 0, NaN, ±Infinity);
+ * `negative`: a fixed whole `value` below 0. The resolver adds RES-3's upper bound (31) for
+ * `==` caps; C6 refuses a `<=`/`>=` cap whose result is `ok: false`.
+ *
+ * It lives HERE, not beside `rolesOfPatternV3` in `plannerModel.ts`, because it calls
+ * `completeSundaySpine` and this module already imports `plannerModel`: the other way
+ * round would be an import cycle (C2 review log, open item; plan decision).
+ */
+export function capValueForMonth(
+  cap: RestrictionCap,
+  month: string,
+): { ok: true; count: number } | { ok: false; reason: "not_whole" | "negative" } {
+  const count = resolvedCapValue(cap, completeSundaySpine(month).length);
+  if (!Number.isInteger(count)) return { ok: false, reason: "not_whole" };
+  if (count < 0) return { ok: false, reason: "negative" };
+  return { ok: true, count };
 }
 
 /**

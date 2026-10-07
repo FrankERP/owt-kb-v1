@@ -255,9 +255,21 @@ covers C2's bytes only.
   values or the private evidence files. Several marked premises that depend on them as
   unverified.
 
-## Post-approval changes
+## Post-approval changes (un-reviewed)
 
-**None.** On 2026-10-06 the canonical file's SHA-256 is
+- **2026-10-07, Frank — §8 X1 row (DL tab, cadence).** «descansa» read as resting from BGV and
+  Coro too; «Mes por medio» governs Sunday lead only. Copy amended 2026-10-07 (Frank): the cadence
+  state concerns Sunday lead only. Copy only — no contract changed.
+- **Old text:** «En {nov} descansa: dirigió domingo el {25 oct}.» · «En {nov} descansa: no está en
+  la lista de Dom Lead.» · «En {nov} descansa: ningún domingo disponible.»
+- **New text:** «En {nov} no dirige domingo: ya dirigió el {25 oct}.» · «En {nov} no dirige
+  domingo: no está en la lista de Dom Lead.» · «En {nov} no dirige domingo: ningún domingo
+  disponible.» («En {nov} le toca domingo (previsto).» is unchanged.)
+- **Digest:** the approved digest `dbf2c40486a9705a779cbc656a935b329c0a59fd33e64d19f25459dc99e18d3e`
+  covers the pre-amendment bytes only; the amended spec no longer matches it and this change was
+  not reviewed. Sibling: row S-22 of the C6 plan; C3 reworded its own copy the same day.
+
+Before this amendment, on 2026-10-06 the canonical file's SHA-256 was
 `dbf2c40486a9705a779cbc656a935b329c0a59fd33e64d19f25459dc99e18d3e`, the same as the approved
 digest, and it is committed at `cc05dff0`. The spec's header still reads `Status: DRAFT`.
 Changing that header, or adopting any open non-blocking item above, falls outside this approval

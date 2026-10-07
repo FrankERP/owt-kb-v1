@@ -51,6 +51,7 @@ import { normalizeLabel, normalizeServiceName } from "@/app/utils/normalizeLabel
 import { displayMemberName, rulePersonNamesMember } from "@/app/utils/memberRuleNames";
 import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
 import { countsForFairnessDefault } from "@/app/utils/countsForFairness";
+import { canonicalRoles, type RoleKey } from "@/app/utils/fairnessVocabulary";
 
 // ─── Grid shape ───────────────────────────────────────────────────────────────
 
@@ -714,6 +715,21 @@ export function rolesOfPattern(pattern: string): SolverRole[] {
   return role ? [role] : [];
 }
 
+/**
+ * THE v3 six-key pattern expansion (solver v3 C2 RES-2, IF2-16). Restricted to v2's five
+ * keys it is exactly `rolesOfPattern` — which stays the ONE v2 map, untouched — and it adds
+ * `Sat.Choir` exactly when the pattern covers chorus on Saturday: `Sat.*`, `*.Choir`, `*.*`,
+ * `Sat.Choir`, and their legacy aliases. `[]` for anything else, never a guess; canonical
+ * role order (IF2-1). The record's exclusions, exact rules and presence roles, and every v3
+ * rule C6 sends, are expanded through this one function. `patternRolesV3Sync.test.ts`
+ * holds the relation to `rolesOfPattern` for every saveable pattern and alias.
+ */
+export function rolesOfPatternV3(pattern: string): RoleKey[] {
+  const p = LEGACY_PATTERN_ALIASES.get(pattern) ?? pattern;
+  const satChoir = p === "Sat.*" || p === "*.Choir" || p === "*.*" || p === "Sat.Choir";
+  return canonicalRoles([...rolesOfPattern(pattern), ...(satChoir ? (["Sat.Choir"] as const) : [])]);
+}
+
 /** A cap as the solver's DSL spells it, e.g. `Sat.* == 1` or `Sat.BGV >= {weeks-2}`. */
 export function capText(cap: RestrictionCap): string {
   const val = cap.relative ? `{weeks-${cap.relOffset}}` : String(cap.value);
@@ -881,6 +897,20 @@ export function memberFitsPool(
   field: "sundayLeads" | "saturdayLeads" | "support",
 ): boolean {
   return memberFitsPoolSubtype(member, POOL_SUBTYPE[field]);
+}
+
+/**
+ * Does a member's CURRENT Tipo fit one of the six v3 role keys (solver v3 C2 WR-5, RES-1)?
+ * `Sun.Lead`: `voz` + `sunday_lead`; `Sat.Lead`: `voz` + `sunday_lead` or `saturday_lead`;
+ * every BGV and Choir key: `voz` + any of the three subtypes. Built on
+ * `memberFitsPoolSubtype`, the ONE pool predicate — the eligibility resolver and the
+ * record writer's `tipo_mismatch` check read this same function, so they cannot disagree.
+ */
+export function memberFitsRoleKey(member: { memberType?: string[] } | undefined, key: RoleKey): boolean {
+  const fits = (subtype: PoolSubtype) => memberFitsPoolSubtype(member, subtype);
+  if (key === "Sun.Lead") return fits("sunday_lead");
+  if (key === "Sat.Lead") return fits("sunday_lead") || fits("saturday_lead");
+  return fits("sunday_lead") || fits("saturday_lead") || fits("support");
 }
 
 /**
