@@ -307,11 +307,12 @@ honesty gate (empty runs over churn).
   guard green is the one forbidden move (`docs/NOTIFICATIONS.md`).
 
 ## Agent skills
-- **Worklog + HR:** log every subagent dispatch to `.agents/log/worklog.jsonl` (a gitignored
+- **Worklog:** log every subagent dispatch to `.agents/log/worklog.jsonl` (a gitignored
   symlink into the PRIVATE `FrankERP/owt-agent-logs` — never commit it here; this repo is
   public). Agents end with a `WORKLOG:` trailer; the coordinator appends, batched at cycle
-  close, including `no_result` and `coordinator-inline` entries. `hr-officer` runs weekly or
-  on demand (`/hr-report`), advisory only. `docs/agents/worklog.md`.
+  close, including `no_result` and `coordinator-inline` entries. It is a history of the work
+  done, nothing more — `hr-officer` and `/hr-report` were retired 2026-10-07.
+  `docs/agents/worklog.md`.
 - **Issues:** GitHub Issues (`FrankERP/owt-kb-v1`) via `gh` — `docs/agents/issue-tracker.md`.
   Labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`
   (`docs/agents/triage-labels.md`).

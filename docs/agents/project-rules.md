@@ -595,7 +595,7 @@ honesty gate (empty runs over churn).
 
 ## Agent skills
 
-### Agent worklog + HR review
+### Agent worklog
 
 **Log every subagent dispatch** to `.agents/log/worklog.jsonl` (append-only, one JSON
 object per line; a gitignored symlink into the PRIVATE repo `FrankERP/owt-agent-logs`
@@ -608,9 +608,18 @@ work done inline rather than dispatched.
 At cycle close, the code-review dispatch also carries the docs-audit and
 worklog-completeness checklists — one agent, one context read, three checklists
 (amended 2026-08-19; separate `docs-auditor` dispatches remain available for
-doc-heavy cycles). `hr-officer` runs **weekly** (or on demand via `/hr-report`),
-not per cycle. The gate is **advisory** — it never blocks a delivery, and HR
-proposes roster changes rather than making them. See `docs/agents/worklog.md`.
+doc-heavy cycles).
+
+**The worklog is a history of the work done, nothing more** (amended 2026-10-07).
+Until then it fed a weekly `hr-officer` review (`/hr-report`: a staff review, a
+bulletin, roster proposals); Frank retired both in the token-efficiency phase that
+produced §Review policy — the review had become ceremony the work no longer needed,
+while the record of what was dispatched, and with what outcome, is still worth
+keeping. Nothing reviews the log now, so the finish-cycle worklog checklist is what
+keeps it whole: the entries a cycle owes before the batch, a parse of the appended
+lines after it. The usage dashboard script survives outside the repo
+(`~/.agents/scripts/usage_stats.py`); the past bulletins stay in
+`docs/agents/reports/` as history. See `docs/agents/worklog.md`.
 
 ### Issue tracker
 
