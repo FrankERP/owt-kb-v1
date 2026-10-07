@@ -379,12 +379,13 @@ All strings Spanish, as written here. Styling follows the existing chips and hou
 - **Form** (`PersonRestrictionForm`): below «Equidad», a `SegmentedControl` (CLAUDE.md: every
   one-of-N choice) labelled «Domingo» with «Normal» and «Mes por medio». Initialised from the edited
   restriction; «Normal» for a new one. With «Mes por medio» selected, help text:
-  «Si el mes anterior no dirigió domingo, está en Líderes Domingo y puede al menos un domingo, ese mes
-  le toca uno; en otro caso descansa y, si no dirige domingo, de preferencia dirige un sábado. Fuera
-  de Líderes Domingo no le toca ni domingo ni sábado de compensación. Aplica con el nuevo solver; el
-  solver actual no lo usa.» It follows X1 (all three «on» conditions; a Sunday she is rule-excluded
+  «Solo cambia cuántas veces dirige domingo; en BGV y Coro participa igual que todos. Dirige domingo
+  un mes sí y uno no: le toca el mes siguiente a uno en que no dirigió domingo, si puede al menos un
+  domingo. En el mes que no le toca, de preferencia dirige un sábado. Solo aplica si está en Líderes
+  Domingo. Aplica con el nuevo solver; el solver actual no lo usa.» It follows X1 (all three «on» conditions; a Sunday she is rule-excluded
   from does not count, A14), X2 (the Saturday only in a month she leads no Sunday) and A14 (outside
   the Sunday line the state is `out`: no Sunday, no compensation Saturday).
+  Copy amended after approval (2026-10-07, Frank): the original text read as if the member also rested from BGV and Coro; the rule governs Sunday Lead only. Copy only — no contract changed.
 - **`canAdd`**: true when a person is chosen and at least one of today's clauses is set **or**
   «Mes por medio» is selected. A restriction may carry the cadence alone.
 - **Edit preserves everything.** Saving the form without touching it returns a restriction deep-equal
@@ -416,7 +417,7 @@ All strings Spanish, as written here. Styling follows the existing chips and hou
   `name` is the display name (`displayMemberName`). Refused names are not in this list; they have
   their own surfaces.
 - **A cadence member with no Tipo is never in the list.** «No Tipo» is E23's definition
-  (`(memberType ?? []).length === 0`). For her the outcome is not «descansa este mes»: C2's resolver
+  (`(memberType ?? []).length === 0`). For her the outcome is not «este mes no dirige domingo ni sábado de compensación»: C2's resolver
   refuses the whole v3 build (C2 RES-7; IF2-15 `refusals[].reason` `no_tipo`), and C6 shows that refusal before any solve
   (C6 RQ-2, «… no tiene Tipo. Corrige …»). The predicate lists only what its two sentences describe
   truthfully, so the union of §7 item 4 stays two reasons.
@@ -426,15 +427,15 @@ All strings Spanish, as written here. Styling follows the existing chips and hou
   is true whichever one is missing. C2's resolver gives her no `people` item and records nothing — no
   refusal (C2 RES-5) — so she holds no voice seat at all that month, Sunday or Saturday.
 - Copy, under a heading «Mes por medio fuera de Líderes Domingo»:
-  - `not_ticked`: «{nombre} no está en Líderes Domingo: descansa este mes, sin domingo y sin sábado
-    de compensación.»
-  - `no_sunday_lead_tipo`: «{nombre} no tiene «Voz» y «Líder Domingo» a la vez en su Tipo: descansa
-    este mes, sin domingo y sin sábado de compensación.» (the labels are `MEMBER_TYPE_LABEL`'s, the
+  - `not_ticked`: «{nombre} no está en Líderes Domingo: este mes no dirige domingo ni sábado de
+    compensación.»
+  - `no_sunday_lead_tipo`: «{nombre} no tiene «Voz» y «Líder Domingo» a la vez en su Tipo: este mes no dirige
+    domingo ni sábado de compensación.» (the labels are `MEMBER_TYPE_LABEL`'s, the
     one Tipo display map)
   Both describe the `out` wire state of parent A14 (not eligible: no Sunday, no compensation
   Saturday), never `off`: either reason makes her `Sun.Lead` status `out` in C2's resolver (C2 RES-1:
   `Sun.Lead` is `in` iff she is in the Sunday pool and her Tipo fits), and C6 maps that to `out`
-  (C6 RQ-4), which its panel reads «descansa: no está en la lista de Dom Lead» (C6 §7.7).
+  (C6 RQ-4), which its panel reads «descansa: no está en la lista de Dom Lead» (C6 §7.7). (C6 copy; to be reworded by C6 to name Sunday lead, 2026-10-07)
 - **It renders only when the engine is v3.** Until C7, the cadence members sit in «Líderes Sábado»
   by design (parent D9, E4); under v2 the warning would list them every month and invite the one
   action that changes v2's behaviour — ticking them into «Líderes Domingo» makes v2 schedule them as
@@ -444,6 +445,7 @@ All strings Spanish, as written here. Styling follows the existing chips and hou
   `SOLVER_ENGINE` constant, which under a Preview override is not the effective engine (parent A1).
   The predicate reads the on-screen config only; C6 also leaves it closed for a record-bound month,
   whose cadence setting and eligibility are the record's (parent A6; C6 WN-1).
+- Copy amended after approval (2026-10-07, Frank): «descansa» read as resting from BGV and Coro; the state concerns Sunday lead only. Copy only — no contract changed.
 
 ### 6.8 «Holgura» (Q2)
 
@@ -637,7 +639,7 @@ or signature; C3 imports none of them.
 | A38 at save: role coverage | `rolesOfPattern` (five keys) | Exists, neutral, solver-synced (E21); C3 lands before C2's six-key expansion (C2 IF2-16) | **Waiting for C2 IF2-16**: C3 has no prerequisites (parent §11). **A second six-key map in C3**: two expansions that can drift. The `Sat.Choir`-only gap is unreachable from the form and closed by C2 at build time | C3 |
 | A stored overlap | Every save refused, naming the pair; both cards marked | Matches A38 («refused when saved»); removing one cap unblocks the next save | Accepting a stored pair until it is edited: a save path that bypasses the rule | C3 |
 | Roster's ministry filter | Inside §7 item 4's functions (`normalizeMinistries`), over an optional `ministries` on `RosterMember` | E25: the planner's `members` differs by viewer role; filtering inside gives one answer per config for every viewer and every child, and adds no open-coded reader of the storage contract | **Caller-side filter as an obligation**: each of the planner, C2, C4 and C7 would have to remember it, and a forgotten one shows false «Nombre ambiguo» chips and v3 refusals for a super-admin only. **Narrowing the members route**: changes a super-admin's admin lists (they are the only role that edits `ministries`, `route.ts:20-21`) | C3 |
-| Cadence member with no Tipo in the §6.7 warning | Left out | Its copy («descansa este mes») would be false: the v3 build refuses (C2 RES-7; IF2-15 `no_tipo`), and C6 RQ-2 names her before any solve | A third reason with «Auto no correrá…» copy: duplicates C6's refusal and changes §7 item 4's union that C6 (IF-C3, WN-1) and C7 consume | C3 |
+| Cadence member with no Tipo in the §6.7 warning | Left out | Its copy («este mes no dirige domingo ni sábado de compensación») would be false: the v3 build refuses (C2 RES-7; IF2-15 `no_tipo`), and C6 RQ-2 names her before any solve | A third reason with «Auto no correrá…» copy: duplicates C6's refusal and changes §7 item 4's union that C6 (IF-C3, WN-1) and C7 consume | C3 |
 
 ## 9. Assumptions
 

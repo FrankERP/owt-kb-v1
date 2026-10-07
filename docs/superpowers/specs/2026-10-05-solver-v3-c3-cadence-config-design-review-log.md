@@ -191,3 +191,21 @@ commit touching it is `1d1bba18`. Two things changed around it and are outside t
 `755f4749aa951454d847073756675b85d861e61620f221823fef3e6dc4730706` (committed in `1d1bba18`),
 two sequential fresh `APPROVED` verdicts on byte-identical bytes. The current spec equals it.
 Approval is not authorization to implement.
+
+## Post-approval changes (un-reviewed)
+
+- **2026-10-07, Frank — rule-UI help text (§6.6, «The rule UI», Form bullet).** The original copy read
+  as if the member also rested from BGV and Coro; the rule governs Sunday Lead only. Copy only — no
+  contract changed.
+- **Old text:** «Si el mes anterior no dirigió domingo, está en Líderes Domingo y puede al menos un
+  domingo, ese mes le toca uno; en otro caso descansa y, si no dirige domingo, de preferencia dirige un
+  sábado. Fuera de Líderes Domingo no le toca ni domingo ni sábado de compensación. Aplica con el nuevo
+  solver; el solver actual no lo usa.»
+- **New text:** «Solo cambia cuántas veces dirige domingo; en BGV y Coro participa igual que todos.
+  Dirige domingo un mes sí y uno no: le toca el mes siguiente a uno en que no dirigió domingo, si puede
+  al menos un domingo. En el mes que no le toca, de preferencia dirige un sábado. Solo aplica si está en
+  Líderes Domingo. Aplica con el nuevo solver; el solver actual no lo usa.»
+- **Digest:** the approved digest `755f4749aa951454d847073756675b85d861e61620f221823fef3e6dc4730706`
+  covers the pre-amendment bytes only; the amended spec no longer matches it and this change was not
+  reviewed.
+- **2026-10-07, Frank — §6.7 warning copy.** «descansa» read as resting from BGV and Coro; the state concerns Sunday lead only. Both warning sentences now end «este mes no dirige domingo ni sábado de compensación.» Copy only — no contract changed. Not reviewed; the approved digest does not cover it.
