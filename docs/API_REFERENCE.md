@@ -457,12 +457,21 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   those may make Auto retry without the trailing Saturday (ADR-0048, ruling Q19). No Sanity
   writes. See [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
 - **`GET /api/admin/solver-config`** — the shared planner rule set (`_id: solverConfig`).
-  Returns `{ present, rev, config }`. **`present: false` with `config: null` means the document
+  Returns `{ present, rev, config, configVersion }` — `configVersion` is the document shape this
+  deployment speaks (`SOLVER_CONFIG_VERSION`); a client that speaks another disables its save.
+  **`present: false` with `config: null` means the document
   does not exist**, which is a different answer from a failed read (an HTTP error, no body):
   absent ⇒ the client may fall back to its built-in defaults **in memory only**; failed ⇒ it must
   refuse to save. Collapsing the two into one `?? DEFAULT` is how a transient failure overwrites
   the real rules.
-- **`POST /api/admin/solver-config`** — replace the rule set. Body `{ rev, config }`.
+- **`POST /api/admin/solver-config`** — replace the rule set. Body `{ rev, config, configVersion }`.
+  **A `configVersion` that is not exactly `SOLVER_CONFIG_VERSION`** (absent, `null`, a string, an
+  older or newer number) is `400 invalid_request` with `details: { issues: ["configVersion"],
+  expected, received }`, checked after auth and the body's JSON/shape check, before the stored
+  document is read or `config` is parsed — a client that predates a field would otherwise erase it
+  (ADR-0049). A config holding two `==` caps that fix a common role for one `person` text is
+  `400 invalid_request` at `restrictions[i].caps[j]:exact_overlap` (the later cap; parent A38).
+  Success echoes `{ present, rev, config, configVersion }`.
   **UPDATE only: it can never create the document** — a POST while it is absent is `404 not_found`
   with `details.detail = "create_not_allowed_here"`, because only `scripts/seed-solver-config.ts`
   may mint it. A `rev` that is missing is `400 invalid_request`; one that does not match is

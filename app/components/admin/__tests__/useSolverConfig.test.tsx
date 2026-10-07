@@ -10,8 +10,9 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_SOLVER_CONFIG } from "../solverConfigDefaults";
-import { SAVE_STALE_MESSAGE, SOLVER_CONFIG_ENDPOINT } from "../solverConfigSource";
+import { SAVE_OUTDATED_TAB_MESSAGE, SAVE_STALE_MESSAGE, SOLVER_CONFIG_ENDPOINT } from "../solverConfigSource";
 import { useSolverConfig } from "../useSolverConfig";
+import { SOLVER_CONFIG_VERSION } from "@/app/utils/solverConfigWriteRequest";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -70,23 +71,24 @@ describe("useSolverConfig — saving", () => {
     const fetchMock = stubFetch((url, init) =>
       init?.method === "POST"
         ? post(init)
-        : ok({ present: true, rev: "rev-1", config: DEFAULT_SOLVER_CONFIG }),
+        : ok({ present: true, rev: "rev-1", config: DEFAULT_SOLVER_CONFIG, configVersion: SOLVER_CONFIG_VERSION }),
     );
     const { result } = renderHook(() => useSolverConfig());
     await waitFor(() => expect(result.current.source.status).toBe("ready"));
     return { result, fetchMock };
   }
 
-  it("POSTs `{ rev, config }` and adopts the rev the server hands back", async () => {
+  it("POSTs `{ rev, config, configVersion }` and adopts the rev the server hands back", async () => {
     const edited = { ...DEFAULT_SOLVER_CONFIG, sundayLeads: ["frank"] };
     const { result, fetchMock } = await readyHook(() =>
-      ok({ present: true, rev: "rev-2", config: edited }),
+      ok({ present: true, rev: "rev-2", config: edited, configVersion: SOLVER_CONFIG_VERSION }),
     );
     await act(async () => {
       expect(await result.current.save(edited, "rev-1")).toEqual({ ok: true });
     });
     const post = fetchMock.mock.calls.find((c) => c[1]?.method === "POST");
-    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ rev: "rev-1", config: edited });
+    // C3 §6.2: the version rides on EVERY save; the route refuses a body without it.
+    expect(JSON.parse(String(post?.[1]?.body))).toEqual({ rev: "rev-1", config: edited, configVersion: 2 });
     // Adopting the new rev is what lets a SECOND save succeed without a reload.
     expect(result.current.source).toMatchObject({ status: "ready", rev: "rev-2" });
   });
@@ -128,5 +130,38 @@ describe("useSolverConfig — saving", () => {
     });
     await waitFor(() => expect(fetchMock.mock.calls.filter((c) => !c[1]).length).toBe(2));
     expect(result.current.source).toMatchObject({ status: "ready", rev: "rev-1" });
+  });
+});
+
+describe("useSolverConfig — the config version (C3 §6.2, T6)", () => {
+  it("maps the route's version refusal to the outdated-tab message, and leaves the state alone", async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === "POST"
+        ? {
+            ok: false,
+            status: 400,
+            json: async () => ({
+              error: "invalid_request", conflict: false,
+              details: { issues: ["configVersion"], expected: 2, received: 1 },
+            }),
+          }
+        : ok({ present: true, rev: "rev-1", config: DEFAULT_SOLVER_CONFIG, configVersion: SOLVER_CONFIG_VERSION }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() => useSolverConfig());
+    await waitFor(() => expect(result.current.source.status).toBe("ready"));
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.save(DEFAULT_SOLVER_CONFIG, "rev-1");
+    });
+    expect(outcome).toEqual({ ok: false, message: SAVE_OUTDATED_TAB_MESSAGE, stale: false });
+    expect(result.current.source).toMatchObject({ status: "ready", rev: "rev-1", configVersion: 2 });
+  });
+
+  it("an echo from a server speaking another version lands as an outdated `ready` source", async () => {
+    stubFetch(() => ok({ present: true, rev: "rev-1", config: DEFAULT_SOLVER_CONFIG }));
+    const { result } = renderHook(() => useSolverConfig());
+    await waitFor(() => expect(result.current.source.status).toBe("ready"));
+    expect(result.current.source).toMatchObject({ configVersion: 1 });
   });
 });

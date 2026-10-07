@@ -70,7 +70,16 @@
  *
  * The `_key` minting and every validation rule come from
  * `app/utils/solverConfigWriteRequest.ts` — the SAME module the admin route
- * uses, so the seeded document and every later save cannot drift.
+ * uses, so the seeded document and every later save cannot drift. That includes
+ * «Mes por medio» (`sundayCadence`) and the one-exact-count-per-role refusal
+ * (solver v3 C3, parent A38). It is not subject to the route's config version
+ * guard: it has no request envelope and only ever creates.
+ *
+ * ─── What it prints ──────────────────────────────────────────────────────────
+ *
+ * Rules by kind and ordinal, never by stored key or person name
+ * (`scripts/lib/solverConfigSummary.ts`, solver v3 parent A41): seed-era ids
+ * embed first names. The capture file and the Studio hold the names.
  */
 
 import { readFileSync } from "node:fs";
@@ -84,6 +93,7 @@ import {
   parseSolverConfigWrite,
   solverConfigFromDocument,
 } from "../app/utils/solverConfigWriteRequest";
+import { solverConfigSummaryLines } from "./lib/solverConfigSummary";
 
 /**
  * The capture is the RAW `localStorage` string, so it may be either the JSON
@@ -97,25 +107,8 @@ function parseCapture(text: string): unknown {
 }
 
 function summarize(label: string, c: ReturnType<typeof solverConfigFromDocument>) {
-  console.log(`\n${label}`);
-  console.log(
-    `  pools: ${c.sundayLeads.length} dom · ${c.saturdayLeads.length} sáb · ${c.support.length} apoyo`,
-  );
-  for (const r of c.restrictions) {
-    const bits = [
-      r.excludedPatterns.length ? `!in ${r.excludedPatterns.join(",")}` : "",
-      r.weekExclusions.map((w) => `!in week ${w.week} ${w.pattern}`).join(" "),
-      r.caps.map((cap) => `${cap.pattern} ${cap.op} ${cap.value}${cap.relative ? ` (rel ${cap.relOffset})` : ""}`).join(" "),
-      r.fairness !== "none" ? `fairness:${r.fairness}` : "",
-    ].filter(Boolean);
-    console.log(`  restriction ${r.id} · ${r.person} · ${bits.join(" · ") || "(sin cláusulas)"}`);
-  }
-  for (const x of c.conflicts) {
-    console.log(`  conflict    ${x.id} · ${x.personA} !with ${x.personB} on ${x.pattern}`);
-  }
-  for (const p of c.presence) {
-    console.log(`  presence    ${p.id} · any_of(${p.persons.join(", ")}) on ${p.pattern}`);
-  }
+  console.log("");
+  for (const line of solverConfigSummaryLines(label, c)) console.log(line);
 }
 
 /**

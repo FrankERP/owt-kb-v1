@@ -28,18 +28,25 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SOLVER_CONFIG } from "../solverConfigDefaults";
 import { SOLVER_HISTORY_SOURCE } from "../solverHistorySource";
 import {
+  EXACT_ROLE_LABEL,
+  PLANNER_UPDATED_MESSAGE,
   READ_FAILED_MESSAGE,
   SAVE_ABSENT_MESSAGE,
   SAVE_FORBIDDEN_MESSAGE,
+  SAVE_OUTDATED_TAB_MESSAGE,
   SAVE_REJECTED_MESSAGE,
   SAVE_STALE_MESSAGE,
   editableConfig,
+  exactOverlapCardMessage,
+  exactOverlapFormMessage,
+  isOutdatedSource,
   sameSolverConfig,
   saveFailure,
   sourceFromGet,
   type SolverConfigSource,
 } from "../solverConfigSource";
-import type { SolverConfig } from "../plannerModel";
+import type { PersonRestriction, SolverConfig } from "../plannerModel";
+import { SOLVER_CONFIG_VERSION } from "@/app/utils/solverConfigWriteRequest";
 
 const STORED = {
   present: true,
@@ -390,5 +397,90 @@ describe("the source union cannot express a save outside `ready`", () => {
       "error",
       "loading",
     ]);
+  });
+});
+
+// ─── Solver v3 C3 · the config version and the A38 refusal, client side (T6) ──
+describe("sourceFromGet — the server's config version (C3 §6.2)", () => {
+  it("a `ready` source carries the version the server echoed", () => {
+    const source = sourceFromGet(true, { ...STORED, configVersion: SOLVER_CONFIG_VERSION });
+    expect(source).toMatchObject({ status: "ready", configVersion: SOLVER_CONFIG_VERSION });
+    expect(isOutdatedSource(source)).toBe(false);
+  });
+
+  it("an echo with another version — or none, which reads as 1 — is outdated", () => {
+    for (const configVersion of [undefined, 1, 3, "2", null]) {
+      const source = sourceFromGet(true, { ...STORED, configVersion });
+      expect(source.status).toBe("ready");
+      expect(isOutdatedSource(source), JSON.stringify(configVersion)).toBe(true);
+    }
+    expect(sourceFromGet(true, STORED)).toMatchObject({ configVersion: 1 });
+  });
+
+  it("only a `ready` source can be outdated", () => {
+    expect(isOutdatedSource({ status: "loading" })).toBe(false);
+    expect(isOutdatedSource({ status: "error", message: "x" })).toBe(false);
+    expect(isOutdatedSource(sourceFromGet(true, { present: false }))).toBe(false);
+  });
+
+  it("says why saving is off, in one sentence", () => {
+    expect(PLANNER_UPDATED_MESSAGE).toBe("El planificador se actualizó. Recarga la página para poder guardar las reglas.");
+  });
+});
+
+describe("saveFailure — the version refusal and the exact-count refusal (C3 T6)", () => {
+  const anaCaps = (person2: string): SolverConfig => ({
+    sundayLeads: [], saturdayLeads: [], support: [], conflicts: [], presence: [],
+    restrictions: [
+      { id: "r-1", person: "Ana", excludedPatterns: [], fairness: "none", fairnessSlack: 1, weekExclusions: [],
+        caps: [{ id: "c-1", pattern: "Sun.*", op: "==", value: 2, relative: false, relOffset: 0 }] },
+      { id: "r-2", person: person2, excludedPatterns: [], fairness: "none", fairnessSlack: 1, weekExclusions: [],
+        caps: [{ id: "c-2", pattern: "*.Lead", op: "==", value: 1, relative: false, relOffset: 0 }] },
+    ] as PersonRestriction[],
+  });
+  const refusal = (issues: string[]) => ({ error: "invalid_request", conflict: false, details: { issues } });
+
+  it("maps the version refusal to the outdated-tab message, with no reload offer", () => {
+    expect(saveFailure(400, { ...refusal(["configVersion"]), details: { issues: ["configVersion"], expected: 2, received: null } }))
+      .toEqual({ message: SAVE_OUTDATED_TAB_MESSAGE, stale: false });
+    expect(SAVE_OUTDATED_TAB_MESSAGE).toBe(
+      "Esta pestaña tiene una versión anterior del planificador y no guardó nada. Recarga la página y vuelve a aplicar tu cambio.",
+    );
+  });
+
+  it("names the pair of an `:exact_overlap` refusal from the config it SENT", () => {
+    expect(saveFailure(400, refusal(["restrictions[1].caps[0]:exact_overlap"]), anaCaps("ana "))).toEqual({
+      message: "Hay dos números fijos para Dom Lead de Ana («Sun.* == 2»). Quita uno y guarda de nuevo; no se guardó nada.",
+      stale: false,
+    });
+  });
+
+  it("a bare `restrictions[i].caps[j]` (a non-object cap) is NOT an overlap — the plain rejection", () => {
+    expect(saveFailure(400, refusal(["restrictions[1].caps[0]"]), anaCaps("Ana"))).toEqual({
+      message: SAVE_REJECTED_MESSAGE,
+      stale: false,
+    });
+  });
+
+  it("an overlap refusal it cannot pair still never reads as the bare rejection", () => {
+    const got = saveFailure(400, refusal(["restrictions[1].caps[0]:exact_overlap"]), anaCaps("Bruno"));
+    expect(got.stale).toBe(false);
+    expect(got.message).not.toBe(SAVE_REJECTED_MESSAGE);
+    expect(got.message).toMatch(/números fijos/);
+  });
+});
+
+describe("the A38 copy (C3 §6.2)", () => {
+  it("names a role the way the form's pattern list names it", () => {
+    expect(EXACT_ROLE_LABEL).toEqual({
+      "Sun.Lead": "Dom Lead", "Sat.Lead": "Sáb Lead", "Sun.BGV": "Dom BGV", "Sat.BGV": "Sáb BGV", "Sun.Choir": "Dom Coro",
+    });
+  });
+
+  it("has one wording per surface", () => {
+    expect(exactOverlapFormMessage({ role: "Sat.Lead", person: "Ana", rule: "Sat.* == 1" })).toBe(
+      "Ya hay un número fijo para Sáb Lead de Ana («Sat.* == 1»). Quita uno de los dos.",
+    );
+    expect(exactOverlapCardMessage("Sun.Choir")).toBe("Dos números fijos para Dom Coro: quita uno para poder guardar.");
   });
 });

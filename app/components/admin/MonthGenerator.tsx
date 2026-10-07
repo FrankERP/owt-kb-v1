@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTransientValue } from "@/app/utils/useTransientValue";
 import {
   personNameOptions,
@@ -71,9 +71,22 @@ import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
 import Select from "@/app/components/ui/Select";
+import SegmentedControl from "@/app/components/ui/SegmentedControl";
+import {
+  CADENCE_OUTSIDE_HEADING,
+  CADENCE_OUTSIDE_SENTENCE,
+  CADENCE_V2_NOTE,
+  SLACK_V3_NOTE,
+  cadenceOutsideSundayPool,
+  resolveRulePersonId,
+} from "@/app/utils/sundayCadence";
 import { useToast } from "@/app/components/ui/Toast";
 import {
+  PLANNER_UPDATED_MESSAGE,
   editableConfig,
+  exactOverlapCardMessage,
+  exactOverlapFormMessage,
+  isOutdatedSource,
   sameSolverConfig,
   type SolverConfigController,
   type SolverConfigSource,
@@ -82,11 +95,13 @@ import { SOLVER_HISTORY_SOURCE, SOLVER_SENDS_HISTORY } from "./solverHistorySour
 import { fetchDerivedHistory, type DerivedHistoryFetchResult } from "./derivedHistoryClient";
 import { useDerivedSolverHistory, type DerivedHistoryHandle } from "./useDerivedSolverHistory";
 import type { SolverHistoryDiagnostics, SolverHistoryMonth } from "@/app/utils/solverHistory";
+import { exactCapOverlaps } from "@/app/utils/solverConfigWriteRequest";
 import {
   buildColumns,
   buildRows,
   buildSolveRequest,
   applySolveResponse,
+  capLabel,
   cellsToDrafts,
   createColumnId,
   draftTargetKey,
@@ -145,6 +160,12 @@ interface MemberOption {
   /** Declared instrument seats; absent or empty = declares nothing (spec D6). */
   instruments?: string[];
   unavailableDates?: string[];
+  /**
+   * The stored value as `/api/admin/members` projects it (absent or empty =
+   * worship). Typed so it reaches `sundayCadence.ts` intact: its resolver drops
+   * non-worship members itself, and a super-admin's roster includes them (C3 E25).
+   */
+  ministries?: unknown;
 }
 
 const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
@@ -236,6 +257,15 @@ interface Props {
     integrityGeneration: number;
     reload: () => Promise<boolean>;
   };
+  /**
+   * The gate of the «Mes por medio fuera de Líderes Domingo» warning (solver v3
+   * C3 §6.7, §7 item 6). Defaults to CLOSED and C3 never opens it: under v2 the
+   * cadence members sit in «Líderes Sábado» by design, and the warning would
+   * invite the one action that changes v2. C6 passes its server-resolved
+   * effective engine (`=== "v3"`, never the `SOLVER_ENGINE` constant) and keeps
+   * it closed for a record-bound month.
+   */
+  showCadencePoolWarning?: boolean;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -578,7 +608,33 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
 
 // ─── Rule builder — display cards ─────────────────────────────────────────────
 
-function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDelete: () => void; onEdit: () => void }) {
+/**
+ * Why a «Mes por medio» card's name does not name exactly one worship member
+ * (C3 §6.5–§6.6) — over the planner's UNFILTERED roster, never the form's
+ * `voz`-filtered list. `n` is the number of matches.
+ */
+type CadenceNameIssue = { reason: "unresolved" | "ambiguous"; n: number };
+
+/**
+ * The chip for a `CadenceNameIssue`. Shown under both engines: it is about the
+ * data, not behaviour. The `unresolved` chip is the plan's addition (C3 review
+ * item 10): v2's first-match banner resolves a name that only a kids-only member
+ * carries in a super-admin's roster, so without it that name would be silent here.
+ */
+function cadenceNameChip(issue: CadenceNameIssue): string {
+  return issue.reason === "ambiguous"
+    ? `Nombre ambiguo: coincide con ${issue.n} personas`
+    : "Nombre no reconocido en Alabanza";
+}
+
+function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
+  r: PersonRestriction;
+  onDelete: () => void;
+  onEdit: () => void;
+  nameIssue?: CadenceNameIssue;
+  /** Parent A38: the first role this card fixes twice with another card or itself — a pair saved before C3. */
+  exactOverlapRole?: string;
+}) {
   return (
     <div className="rounded-lg border border-accent/10 bg-surface-sunken/40 px-3 py-2 flex items-start gap-2">
       <div className="flex-1 min-w-0 space-y-1">
@@ -606,10 +662,27 @@ function RestrictionCard({ r, onDelete, onEdit }: { r: PersonRestriction; onDele
           )}
           {r.fairness === "slack" && (
             <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-recency-fg/15 text-recency-strong border border-recency-fg/30">
-              holgura {r.fairnessSlack}
+              {`holgura ${r.fairnessSlack} · ${SLACK_V3_NOTE}`}
+            </span>
+          )}
+          {/* C3 §6.6: the note is its own span so C6 can hide it under v3 (CTL-1). */}
+          {r.sundayCadence === "alternate" && (
+            <>
+              <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30">
+                Mes por medio
+              </span>
+              <span className="font-body text-[10px] text-mono-500 self-center">{CADENCE_V2_NOTE}</span>
+            </>
+          )}
+          {r.sundayCadence === "alternate" && nameIssue && (
+            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-warning-strong/10 text-warning-strong border border-warning-strong/30">
+              {cadenceNameChip(nameIssue)}
             </span>
           )}
         </div>
+        {exactOverlapRole && (
+          <p className="font-body text-[11px] text-negative-fg">{exactOverlapCardMessage(exactOverlapRole)}</p>
+        )}
       </div>
       <button type="button" onClick={onEdit} className="text-mono-600 hover:text-accent transition-colors shrink-0 text-xs leading-none mt-0.5 px-0.5" title="Editar">✎</button>
       <button type="button" onClick={onDelete} className="text-mono-600 hover:text-negative-fg transition-colors shrink-0 text-sm leading-none mt-0.5">×</button>
@@ -654,11 +727,16 @@ function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () =
 
 const rbIn  = "px-2 py-1 rounded border border-accent/15 bg-transparent font-body text-xs focus:outline-none focus:border-accent";
 
-function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
+function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblings }: {
   members: MemberOption[];
   onAdd: (r: PersonRestriction) => void;
   onCancel: () => void;
   initialValues?: PersonRestriction;
+  /**
+   * Every OTHER restriction of the on-screen config, in order — what parent
+   * A38's check compares this card's `==` caps against (same `person` text).
+   */
+  siblings: PersonRestriction[];
 }) {
   const preserve = initialValues?.person ? [initialValues.person] : [];
   const names = personNameOptions(members, preserve);
@@ -668,11 +746,32 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
   const [slack,    setSlack]    = useState(initialValues?.fairnessSlack ?? 1);
   const [weekEx,   setWeekEx]   = useState<Array<{ id: string; week: number; pattern: string }>>(initialValues?.weekExclusions ?? []);
   const [caps,     setCaps]     = useState<PersonRestriction["caps"]>(initialValues?.caps ?? []);
+  // «Domingo» (solver v3 C3 §6.6). Seeded from the edited restriction and carried
+  // to `onAdd` whether or not the control below is rendered: the UI-only
+  // rollback removes the CONTROL, never this data path (C3 §11).
+  const [sundayCadence, setSundayCadence] = useState<PersonRestriction["sundayCadence"]>(initialValues?.sundayCadence);
+  const cadenceLabelId = useId();
 
   const toggleExcl = (pat: string) =>
     setExcl(e => e.includes(pat) ? e.filter(x => x !== pat) : [...e, pat]);
 
-  const canAdd = !!person && (excl.length > 0 || weekEx.length > 0 || caps.length > 0 || fairness !== "none");
+  // Parent A38 (C3 §6.2): a cap row whose `==` covers a role another `==` cap
+  // already fixes — on this card or on a card with the same `person` text — is
+  // flagged, and the form cannot be saved while one remains. The draft goes LAST,
+  // so every pair touching it has its `later` here.
+  const capOverlapMessage = new Map<string, string>();
+  for (const o of exactCapOverlaps({
+    restrictions: [...siblings, { id: "", person, excludedPatterns: [], fairness: "none", fairnessSlack: 1, weekExclusions: [], caps }],
+  })) {
+    if (o.later.restriction !== siblings.length) continue;
+    const flagged = caps[o.later.cap];
+    const other = o.first.restriction === siblings.length ? caps[o.first.cap] : siblings[o.first.restriction].caps[o.first.cap];
+    if (!flagged || !other || capOverlapMessage.has(flagged.id)) continue;
+    capOverlapMessage.set(flagged.id, exactOverlapFormMessage({ role: o.roles[0], person, rule: capLabel(other) }));
+  }
+
+  // A restriction may carry «Mes por medio» alone (C3 §6.6).
+  const canAdd = !!person && capOverlapMessage.size === 0 && (excl.length > 0 || weekEx.length > 0 || caps.length > 0 || fairness !== "none" || sundayCadence === "alternate");
 
   const handleAdd = () => {
     if (!canAdd) return;
@@ -683,7 +782,11 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
     // no error: the card re-rendered unchanged and a cap added to an existing
     // person simply never appeared. `ConflictForm` and `PresenceForm` always
     // preserved the id; this one did not.
-    onAdd({ id: initialValues?.id ?? uid(), person, excludedPatterns: excl, fairness, fairnessSlack: slack, weekExclusions: weekEx, caps });
+    onAdd({
+      id: initialValues?.id ?? uid(), person, excludedPatterns: excl, fairness, fairnessSlack: slack, weekExclusions: weekEx, caps,
+      // «Normal» is NO key — never `sundayCadence: undefined` (C3 §6.1).
+      ...(sundayCadence === "alternate" ? { sundayCadence } : {}),
+    });
   };
 
   return (
@@ -759,8 +862,31 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
         {fairness === "slack" && (
           <p className="font-body text-[11px] text-mono-500 mt-1">
             {slack >= 1
-              ? `En Auto de fin de semana su carga total del mes puede alejarse hasta ${slack} servicio${slack === 1 ? "" : "s"} de la del resto. Al llenar especiales cuenta como si llevara ${slack} más.`
+              ? `En Auto de fin de semana su carga total del mes puede alejarse hasta ${slack} servicio${slack === 1 ? "" : "s"} de la del resto. No aplica con el nuevo solver. Al llenar especiales cuenta como si llevara ${slack} más.`
               : "Con 0 no tiene efecto: escribe un número del 1 al 5."}
+          </p>
+        )}
+      </div>
+
+      {/* «Domingo» — solver v3 C3 §6.6. A one-of-N choice, so `SegmentedControl`. */}
+      <div>
+        <p id={cadenceLabelId} className="font-label text-[10px] uppercase tracking-widest text-mono-500 mb-1">Domingo</p>
+        <SegmentedControl
+          labelledBy={cadenceLabelId}
+          size="sm"
+          value={sundayCadence === "alternate" ? "alternate" : "normal"}
+          onChange={v => setSundayCadence(v === "alternate" ? "alternate" : undefined)}
+          options={[
+            { value: "normal", label: "Normal" },
+            { value: "alternate", label: "Mes por medio" },
+          ]}
+        />
+        {sundayCadence === "alternate" && (
+          <p className="font-body text-[11px] text-mono-500 mt-1">
+            Solo cambia cuántas veces dirige domingo; en BGV y Coro participa igual que todos. Dirige domingo
+            un mes sí y uno no: le toca el mes siguiente a uno en que no dirigió domingo, si puede al menos un
+            domingo. En el mes que no le toca, de preferencia dirige un sábado. Solo aplica si está en Líderes
+            Domingo. Aplica con el nuevo solver; el solver actual no lo usa.
           </p>
         )}
       </div>
@@ -825,7 +951,8 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
             // edge (no `flex-wrap` either). Capped and wrapped instead of
             // truncated — the row now folds onto a second line rather than
             // spilling out of the card.
-            <div key={cap.id} className="flex flex-wrap gap-1.5 items-center">
+            <Fragment key={cap.id}>
+            <div className="flex flex-wrap gap-1.5 items-center">
               <Select
                 size="sm"
                 aria-label="Patrón"
@@ -877,6 +1004,10 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues }: {
               >sem</button>
               <button type="button" onClick={() => setCaps(cs => cs.filter(x => x.id !== cap.id))} className="text-mono-600 hover:text-negative-fg text-sm flex-none">×</button>
             </div>
+            {capOverlapMessage.has(cap.id) && (
+              <p className="font-label text-[10px] text-negative-fg">{capOverlapMessage.get(cap.id)}</p>
+            )}
+            </Fragment>
           ))}
         </div>
         <button
@@ -1012,10 +1143,13 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
 
 // ─── Rule builder — main orchestrator ────────────────────────────────────────
 
-function RuleBuilder({ config, onChange, members, source }: {
+function RuleBuilder({ config, onChange, members, source, cadenceNameIssues }: {
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
+  /** The PERSONA dropdown's list — `voz` members. Never what a name is resolved against. */
   members: MemberOption[];
+  /** Restriction id → its «Mes por medio» name issue, resolved over the unfiltered roster by the panel. */
+  cadenceNameIssues: ReadonlyMap<string, CadenceNameIssue>;
   /**
    * The WHOLE source state, not a `shared` boolean.
    *
@@ -1051,6 +1185,16 @@ function RuleBuilder({ config, onChange, members, source }: {
 
   const total = config.restrictions.length + config.conflicts.length + config.presence.length;
   const isFormOpen = !!adding || !!editingId;
+
+  // Parent A38 on the on-screen config: a pair saved before C3 marks both of its
+  // cards, and the route refuses every save while it stands (C3 §6.2).
+  const exactOverlapRole = new Map<string, string>();
+  for (const o of exactCapOverlaps(config)) {
+    for (const ref of [o.first, o.later]) {
+      const id = config.restrictions[ref.restriction]?.id;
+      if (id !== undefined && !exactOverlapRole.has(id)) exactOverlapRole.set(id, o.roles[0]);
+    }
+  }
 
   return (
     <div className="space-y-2">
@@ -1104,6 +1248,7 @@ function RuleBuilder({ config, onChange, members, source }: {
       {adding === "restriction" && (
         <PersonRestrictionForm
           members={members}
+          siblings={config.restrictions}
           onAdd={r => { onChange({ ...config, restrictions: [...config.restrictions, r] }); setAdding(null); }}
           onCancel={() => setAdding(null)}
         />
@@ -1127,9 +1272,12 @@ function RuleBuilder({ config, onChange, members, source }: {
       {config.restrictions.map(r =>
         editingId === r.id ? (
           <PersonRestrictionForm key={r.id} members={members} initialValues={r}
+            siblings={config.restrictions.filter(x => x.id !== r.id)}
             onAdd={saveRestriction} onCancel={cancelEdit} />
         ) : (
           <RestrictionCard key={r.id} r={r}
+            nameIssue={cadenceNameIssues.get(r.id)}
+            exactOverlapRole={exactOverlapRole.get(r.id)}
             onDelete={() => rmRestriction(r.id)}
             onEdit={() => { setEditingId(r.id); setAdding(null); }} />
         )
@@ -1347,13 +1495,16 @@ function SolverConfigSaveBar({ config, rules }: {
   // rather than cleared in an effect, so there is no render where both are true.
   const error = failure && failure.against === source ? failure : null;
   const rev = source.status === "ready" ? source.rev : null;
+  // C3 §6.2: the server speaks another config version. This bundle would drop
+  // or rewrite what it cannot read, so it does not save at all until reloaded.
+  const outdated = isOutdatedSource(source);
   const savedConfig = editableConfig(source);
   // By CONTENT: an edit undone by hand settles back to "Guardado" instead of
   // offering to write a document that would not change.
   const dirty = savedConfig === null || !sameSolverConfig(savedConfig, config);
 
   const onSave = async () => {
-    if (rev === null) return;
+    if (rev === null || outdated) return;
     setSaving(true);
     setFailure(null);
     // `useSolverConfig.save` owns its own try/catch and RESOLVES on every
@@ -1373,6 +1524,11 @@ function SolverConfigSaveBar({ config, rules }: {
 
   return (
     <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+      {outdated && (
+        <p role="status" className="font-body text-[11px] text-warning-strong mr-auto">
+          {PLANNER_UPDATED_MESSAGE}
+        </p>
+      )}
       {error && (
         <p role="alert" className="font-body text-[11px] text-negative-fg mr-auto">
           {error.message}
@@ -1390,7 +1546,7 @@ function SolverConfigSaveBar({ config, rules }: {
       <button
         type="button"
         onClick={onSave}
-        disabled={rev === null || !dirty || saving}
+        disabled={rev === null || !dirty || saving || outdated}
         // `rev === null` is ONE reason the button is dead and THREE different
         // facts about the world. Saying "solo el script de siembra puede
         // crearlas" while a read is merely failing tells an admin the team's
@@ -1398,15 +1554,17 @@ function SolverConfigSaveBar({ config, rules }: {
         // document that is sitting there intact. Same distinction the copy at
         // the foot of `RuleBuilder` makes, on the control that acts on it.
         title={
-          source.status === "absent"
-            ? "Todavía no hay reglas compartidas en el servidor; solo el script de siembra puede crearlas."
-            : source.status === "error"
-              ? "No se pudieron cargar las reglas compartidas; no se puede guardar hasta que vuelvan a cargar."
-              : source.status === "loading"
-                ? "Cargando las reglas compartidas…"
-                : dirty
-                  ? "Guardar estas reglas para todos los administradores"
-                  : undefined
+          outdated
+            ? PLANNER_UPDATED_MESSAGE
+            : source.status === "absent"
+              ? "Todavía no hay reglas compartidas en el servidor; solo el script de siembra puede crearlas."
+              : source.status === "error"
+                ? "No se pudieron cargar las reglas compartidas; no se puede guardar hasta que vuelvan a cargar."
+                : source.status === "loading"
+                  ? "Cargando las reglas compartidas…"
+                  : dirty
+                    ? "Guardar estas reglas para todos los administradores"
+                    : undefined
         }
         className="font-label text-[11px] uppercase tracking-widest px-3 py-2 rounded-lg border border-accent/40 text-accent hover:bg-accent/10 transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
       >
@@ -1626,7 +1784,7 @@ function historyMonthsLabel(months: SolverHistoryMonth[]): string {
     .join(" · ");
 }
 
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false }: {
   members: MemberOption[];
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
@@ -1642,8 +1800,23 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
    * panel is exactly the per-browser one.
    */
   derived?: DerivedHistoryHandle;
+  /** C3 §7 item 6 — see `Props.showCadencePoolWarning`. Closed unless C6 opens it. */
+  showCadencePoolWarning?: boolean;
 }) {
   const [searches, setSearches] = useState<Record<string, string>>({});
+
+  // C3 §6.5–§6.6: a «Mes por medio» name must name exactly one WORSHIP member,
+  // judged over `members` as the panel received it — the unfiltered roster —
+  // and never over the `voz` list `RuleBuilder` offers as names (E13). The
+  // resolver drops non-worship members itself (E25).
+  const cadenceNameIssues = new Map<string, CadenceNameIssue>();
+  for (const r of config.restrictions) {
+    if (r.sundayCadence !== "alternate") continue;
+    const resolved = resolveRulePersonId(r.person, members);
+    if (!resolved.ok) cadenceNameIssues.set(r.id, { reason: resolved.reason, n: resolved.matches.length });
+  }
+  // C3 §6.7: computed only behind the gate, so a closed gate costs nothing.
+  const cadenceOutside = showCadencePoolWarning ? cadenceOutsideSundayPool(config, members) : [];
 
   // The pools are "Tipo" and nothing else: an empty Tipo puts a member in no
   // pool and matches no seat, which is how someone stops being schedulable.
@@ -1744,6 +1917,21 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         </div>
       )}
 
+      {cadenceOutside.length > 0 && (
+        <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
+          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
+            {CADENCE_OUTSIDE_HEADING}
+          </p>
+          <ul className="space-y-1">
+            {cadenceOutside.map(x => (
+              <li key={x.id} className="font-body text-xs text-mono-400">
+                {CADENCE_OUTSIDE_SENTENCE[x.reason](x.name)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {derived ? (
         <DerivedLeadPoolHistory config={config} members={members} history={derived} year={year} month={month} />
       ) : (
@@ -1761,6 +1949,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         onChange={onChange}
         members={members.filter(m => m.memberType?.includes("voz"))}
         source={rules.source}
+        cadenceNameIssues={cadenceNameIssues}
       />
 
       {/*
@@ -1802,6 +1991,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 export default function MonthGenerator({
   mode = "create", members, existingRoles, onClose, onCreated, rules, capability, preflight, allRoles,
   initialMonth, focusRoleId, openComposerInitially = false, storedSource, storedCapabilities, onCleared,
+  showCadencePoolWarning = false,
 }: Props) {
   const storedMode = mode === "stored";
   const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
@@ -4311,6 +4501,7 @@ export default function MonthGenerator({
           year={year}
           month={month}
           derived={derivedMode ? derivedHistory : undefined}
+          showCadencePoolWarning={showCadencePoolWarning}
         />
       ) : (
         <SolverConfigUnavailable source={rules.source} onReload={rules.reload} />
