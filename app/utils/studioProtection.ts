@@ -1,4 +1,4 @@
-// Studio protection policy for the fifteen protected stored types
+// Studio protection policy for the sixteen protected stored types
 // (Service Readiness A2 §8 / A3 §4) — pure, exported, and unit-testable.
 //
 // WHY a code-owned policy instead of UI configuration alone: the Studio is an
@@ -24,7 +24,7 @@
 // look at a lock, a receipt, or a malformed role while diagnosing.
 
 /**
- * The fifteen protected stored types. `saturdarSongs` is a deliberate stored typo —
+ * The sixteen protected stored types. `saturdarSongs` is a deliberate stored typo —
  * never rename.
  *
  * Membership here is what earns a type a pane in `sanity/structure.ts`'s
@@ -54,6 +54,10 @@ export const PROTECTED_STUDIO_TYPES = [
   "notificationOutbox",
   "specialIdentityCoordinator",
   "solverConfig",
+  // The monthly eligibility record of the fairness ledger (solver v3 C2 REC-8): machine
+  // state written only by the write executor in `fairnessMonthWriteRequest.ts`, under a
+  // revision assertion and with a minted `_key` per item. Internal, like `solverConfig`.
+  "fairnessMonth",
   // Oasis Kids scheduling (kids design spec §4.2, §5): the app is the writer and
   // the Studio is not the editing surface. Protected but deliberately NOT
   // {@link INTERNAL_STUDIO_TYPES} — these are human-meaningful documents a Kids
@@ -137,7 +141,7 @@ const DELETE_ONLY_REASONS: Readonly<Record<DeleteOnlyStudioType, { read: string;
   });
 
 /**
- * The seven internal types: never authored by hand at all, so they are also
+ * The eight internal types: never authored by hand at all, so they are also
  * `hidden: true` in the schema and never appear in any create affordance.
  * `notificationOutbox` is additionally delete-only (above) — it is the one type
  * governed by both lists at once.
@@ -156,6 +160,10 @@ const DELETE_ONLY_REASONS: Readonly<Record<DeleteOnlyStudioType, { read: string;
  * for the same reason as the coordination types above: machine state written
  * only by `app/mcp/oauth/grantStore.ts`, never human-meaningful content — unlike
  * `kidsPair`/`kidsSchedule`, which are protected but deliberately NOT internal.
+ *
+ * `fairnessMonth` (solver v3 C2) joins for the `solverConfig` reason: its one writer is
+ * the revision-asserting write executor, and a Studio delete, duplicate or restore would
+ * be a second, unguarded write path into the record the fairness ledger reads.
  */
 export const INTERNAL_STUDIO_TYPES = [
   "roleTargetLock",
@@ -163,6 +171,7 @@ export const INTERNAL_STUDIO_TYPES = [
   "notificationOutbox",
   "specialIdentityCoordinator",
   "solverConfig",
+  "fairnessMonth",
   "mcpOauthGrant",
   "mcpOauthCodeRedemption",
 ] as const;
@@ -223,6 +232,21 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
     "presence",
     "updatedAt",
     "updatedBy",
+  ],
+  // Every field of the eligibility record (C2 REC-1 … REC-4): the executor writes the
+  // whole document, with a `_key` per item and a content hash over it. No field of it is
+  // hand-authored legitimately (REC-8).
+  fairnessMonth: [
+    "schemaVersion",
+    "month",
+    "source",
+    "engine",
+    "environment",
+    "recordedAt",
+    "recordedBy",
+    "contentHash",
+    "people",
+    "presence",
   ],
   // Every field either MCP OAuth type may carry — written only by
   // `app/mcp/oauth/grantStore.ts`, mirroring `GRANT_FIELDS`/`CODE_REDEMPTION_FIELDS`
@@ -493,6 +517,7 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   notificationOutbox: "Cola de avisos (solo lectura)",
   specialIdentityCoordinator: "Coordinador de especiales (solo lectura)",
   solverConfig: "Reglas del planificador (solo lectura)",
+  fairnessMonth: "Registros de equidad (solo lectura)",
   kidsPair: "Kids — Parejas (solo lectura)",
   kidsSchedule: "Kids — Roles del domingo (solo lectura)",
   mcpOauthGrant: "MCP OAuth — Concesiones (solo lectura)",

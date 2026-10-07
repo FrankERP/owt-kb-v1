@@ -65,6 +65,7 @@ import { ruleContextForTarget } from "./serviceRuleContext";
 import { unresolvedRuleNames } from "./ruleEnforcement";
 import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
+import FairnessPreviewPanel from "./FairnessPreviewPanel";
 import Button from "@/app/components/ui/Button";
 import CueDialog from "@/app/components/ui/CueDialog";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
@@ -173,7 +174,18 @@ const dn = (m: MemberOption) => m.alias?.trim() || m.member_name;
 // `service_name` is what `cellsToDrafts` needs to tell one stored special on a
 // date from another (E17). `ServiceRole` — what `ServicesPanel` actually passes
 // — already carries it; this local shape used to drop it on the floor.
-interface ExistingRole { _id: string; _type: string; date: string; service_name?: string; }
+// `countsForFairness` is the effective flag `GET /api/admin/roles` projects (solver v3 C1);
+// the «Equidad» preview counts the month's Sundays with it (C2 UI-5, display only).
+interface ExistingRole { _id: string; _type: string; date: string; service_name?: string; countsForFairness?: boolean; }
+
+/** `YYYY-MM` for the «Equidad» preview's `month` and its remount `key`. */
+const monthKeyOf = (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}`;
+
+/** Whether the on-screen rules differ from the saved ones — «Registrar» says so (C2 §8). */
+function rulesDirtyOf(rules: SolverConfigController, config: SolverConfig): boolean {
+  const saved = editableConfig(rules.source);
+  return saved !== null && !sameSolverConfig(saved, config);
+}
 
 interface Props {
   mode?: "create" | "stored";
@@ -1784,8 +1796,10 @@ function historyMonthsLabel(months: SolverHistoryMonth[]): string {
     .join(" · ");
 }
 
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, fairnessServices }: {
   members: MemberOption[];
+  /** The month's stored services, for the «Equidad» preview's counted Sundays (C2 UI-5). */
+  fairnessServices: ExistingRole[];
   config: SolverConfig;
   onChange: (c: SolverConfig) => void;
   rules: SolverConfigController;
@@ -1943,6 +1957,16 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
           month={month}
         />
       )}
+
+      {/* Solver v3 C2 UI-1: the read-only «Equidad» preview, BESIDE «sin Lead en …», never in its place. */}
+      <FairnessPreviewPanel
+        key={monthKeyOf(year, month)}
+        month={monthKeyOf(year, month)}
+        config={config}
+        members={members}
+        storedServices={fairnessServices}
+        rulesDirty={rulesDirtyOf(rules, config)}
+      />
 
       <RuleBuilder
         config={config}
@@ -4502,6 +4526,7 @@ export default function MonthGenerator({
           month={month}
           derived={derivedMode ? derivedHistory : undefined}
           showCadencePoolWarning={showCadencePoolWarning}
+          fairnessServices={existingRoles}
         />
       ) : (
         <SolverConfigUnavailable source={rules.source} onReload={rules.reload} />
@@ -4815,6 +4840,18 @@ export default function MonthGenerator({
           month={month}
         />
       ))}
+
+      {/* Solver v3 C2 UI-1: the read-only «Equidad» preview, beside the lead history. */}
+      {solverConfig && (
+        <FairnessPreviewPanel
+          key={monthKeyOf(year, month)}
+          month={monthKeyOf(year, month)}
+          config={solverConfig}
+          members={members}
+          storedServices={existingRoles}
+          rulesDirty={rulesDirtyOf(rules, solverConfig)}
+        />
+      )}
 
       {viewMode === "edit" && (
         <div className="flex flex-wrap items-center gap-2">

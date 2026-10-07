@@ -500,6 +500,49 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   `localStorage` is no longer read. See [ADR-0042](adr/0042-the-fairness-history-is-derived-from-stored-services.md) and
   [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
 
+- **`GET /api/admin/fairness?month=YYYY-MM[&horizon=1|2]`** — the solver v3 fairness ledger
+  (C2 RD-1 … RD-5; [ADR-0050](adr/0050-the-fairness-balance-is-measured-against-recorded-eligibility.md)):
+  for the 3 months before `month`, each person's per-line share, received seats and balance (all
+  integer hundredths, positive = owed, `balance = share − received`, plus display `tenths` and the
+  seat count), the cumulative balance since the earliest record, per-month notes and set-asides,
+  `countedSundayLeads` and `firstRecordedIn`; the horizon month(s) with their full logical record
+  (or `null`), freezing-service count and `recordBinds`; the effective `engine` and this
+  deployment's `environment`. Gated **exactly like `solver-history`** (no session or a
+  content-editor → `403`); a malformed `month` or a `horizon` other than `1`/`2` → `400
+  { error: "invalid_request" }`; `200` carries `Cache-Control: no-store`. Any failure — no
+  `SANITY_API_READ_TOKEN` (the records' dotted ids are private; checked before any read), a rejected
+  read, a non-list answer, a stored record that fails the record-schema check — is `500
+  { error: "fairness_unavailable", message: "No se pudo leer el saldo de equidad." }` with **no
+  `people` key**. A month without a record is not a failure. Read by the planner's «Equidad · vista
+  previa» panel, on first open only.
+
+- **`PUT /api/admin/fairness/months`** — record 1–2 consecutive months of the eligibility record
+  (`fairnessMonth`; C2 WR-1 … WR-17). **admin and super-admin only** (content-editor → `403
+  forbidden`). Body `{ months: [{ month, source: "auto"|"manual", expectedRev, people, presence }] }`,
+  strict: unknown fields, server stamps, `_key`, `name` and `contentHash` are refused (`400
+  invalid_request`, `details.issues` naming each path by field and index only). Under engine v2 —
+  every deployment until C7's flip, unless `OWT_SOLVER_ENGINE` is set on the `preview` branch or
+  locally (docs/SECRETS.md) — refused with a 409 whose `details.detail` is `engine_not_v3`, before
+  anything is read. **The wire `error` of a refusal is not, in general, the refusal's own name
+  (only `stale_revision` carries its own):** it is `stale_revision` for `details.detail`
+  `record_exists` / `record_missing` / `stale_revision` and `integrity_conflict` for every other
+  detail (`engine_not_v3`, `past_month`, `month_has_services`, `member_*`, `tipo_mismatch`);
+  clients branch on `details.detail` (C2 IF2-5, IF2-6), never on `error` or `message`. Per month: an identical intact record → `unchanged` (200, no
+  transaction); a past month → refused, `details.detail` `past_month`; no record and
+  `expectedRev: null` → created; a record and a matching `expectedRev` and no freezing service →
+  replaced (revision-asserted, whole); otherwise `details.detail` is `record_exists` /
+  `record_missing` / `stale_revision` or `month_has_services`, and for a written month the live
+  members must exist, be worship and fit the roles by current Tipo (`member_unknown` /
+  `member_not_worship` / `tipo_mismatch`, `integrity_conflict` with `details.memberIds`). All
+  or nothing: one refused month writes nothing, `details.detail` is the earliest month's refusal and
+  `details.months` every month's own verdict; a commit 409 is reported on every written month. `200`
+  answers `{ months: [{ month, outcome, rev, contentHash, recordedAt }] }`. Any other failure — no
+  `SANITY_API_READ_TOKEN`, a rejected read, a commit error that is not a 409 mutation conflict — is
+  an opaque `500`: the handler throws `FairnessMonthWriteFailedError` (fixed message, no `cause`),
+  and the server log carries only the original error's class, status and stack frames, never its
+  message, which can hold the request URL and member ids. No notification, no revalidation, and
+  never a delete.
+
 ---
 
 ## Cron / Webhook
@@ -552,7 +595,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
   history, and `notifyProposalSubmitted` sends nothing.
 - **Protected mutations have no alternate path:** the API routes above are the only writers. The
-  embedded Studio strips every mutating action from all fifteen protected types, and the seven historical
+  embedded Studio strips every mutating action from all sixteen protected types, and the seven historical
   one-shot scripts fail closed before constructing a client — see
   [DATA_MODEL → Studio](DATA_MODEL.md#studio) and
   [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).

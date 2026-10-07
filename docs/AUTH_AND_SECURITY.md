@@ -226,10 +226,10 @@ The embedded Sanity Studio is an **alternate write path into exactly the documen
 mutation routes spend their whole effort protecting**. `app/utils/studioProtection.ts` closes it,
 and does so assertably — "we ticked a box in the config" is not testable; this module is.
 
-Fifteen `PROTECTED_STUDIO_TYPES` are read-only in Studio: `sunday_role`, `saturday_role`,
+Sixteen `PROTECTED_STUDIO_TYPES` are read-only in Studio: `sunday_role`, `saturday_role`,
 `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`, `roleTargetLock`,
 `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`, `solverConfig`,
-`kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`. Seven of them are
+`kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`, `fairnessMonth`. Eight of them are
 additionally `INTERNAL_STUDIO_TYPES` — machine-owned bookkeeping no operator ever authors by hand.
 The two kids types are not: they are app-written but human-meaningful, so they stay visible
 read-only (see [DATA_MODEL → Studio](DATA_MODEL.md#studio)).
