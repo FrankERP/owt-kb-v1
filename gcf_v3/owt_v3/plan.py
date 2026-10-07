@@ -151,7 +151,7 @@ def compute_plan(F):
             sv = F.svc[sid]
             for role in sv.roles:
                 if sv.key(role) not in keys:
-                    weight[(sid, sv.key(role), r.person)] *= 1 - Fraction(remainder, len(targets))
+                    weight[(sid, sv.key(role), r.person)] *= 1 - min(Fraction(1), Fraction(remainder, len(targets)))
     for p in F.pids:
         for m in F.months:
             if F.cadence_state(p, m) != "on":
@@ -174,7 +174,9 @@ def compute_plan(F):
                 pool = max(Fraction(0), base - sa[(s.id, k)] - extra_sa[(s.id, k)])
                 total = sum((weight[(s.id, k, p)] for p in members), Fraction(0))
                 for p in members:
-                    out[(s.month, p, LINE_OF_KEY[k])] += pool * weight[(s.id, k, p)] / total
+                    # a zero total (every member's exit weight spent) falls back to an equal split
+                    share = weight[(s.id, k, p)] / total if total else Fraction(1, len(members))
+                    out[(s.month, p, LINE_OF_KEY[k])] += pool * share
             for rho, _ in rules_at[s.id]:
                 members = q[(s.id, rho.id)]
                 if members and sub_pool.get((s.id, rho.id)) and (s.id, rho.id) not in dropped_sub:

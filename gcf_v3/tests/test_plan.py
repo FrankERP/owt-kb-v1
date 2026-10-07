@@ -88,6 +88,29 @@ class SpreadExit(unittest.TestCase):
         self.assertEqual(plan.planned("m-ana", "CORO"), Fraction(2, 3))
         self.assertEqual(plan.planned("m-bea", "CORO"), Fraction(4, 3))
 
+    def test_a_pin_in_a_non_matching_role_cannot_zero_the_pool(self):
+        s = sundays(2, {"Lead": 1, "BGV": 1, "Choir": 0})
+        ana = person("m-ana", {"s1": ["Lead", "BGV"], "s2": ["Lead", "BGV"]}, exempt=True)
+        bea = person("m-bea", {"s1": ["Lead"], "s2": ["Lead"]}, exempt=True)
+        rule = {"id": "cap-a", "kind": "count", "person": "m-ana", "roles": ["Sun.Lead"], "op": "==",
+                "month": "2026-11", "value": 1}
+        _, plan = plan_of(request(s, [ana, bea], rules=[rule], pins=[pin(s[0], "BGV", "m-ana")]))
+        # s2's BGV weight for ana is 0 and she is its only member: equal split, no ZeroDivisionError
+        self.assertGreaterEqual(plan.planned("m-ana", "DB"), 0)
+
+    def test_two_non_matching_pins_clamp_the_weight_at_zero(self):
+        s = sundays(3, {"Lead": 1, "BGV": 1, "Choir": 0})
+        els = {f"s{i}": ["Lead", "BGV"] for i in (1, 2, 3)}
+        ana = person("m-ana", els, exempt=True)
+        bea = person("m-bea", dict(els), exempt=True)
+        rule = {"id": "cap-a", "kind": "count", "person": "m-ana", "roles": ["Sun.Lead"], "op": "==",
+                "month": "2026-11", "value": 2}
+        _, plan = plan_of(request(s, [ana, bea], rules=[rule],
+                                  pins=[pin(s[0], "BGV", "m-ana"), pin(s[1], "BGV", "m-ana")]))
+        for line in ("DL", "DB"):
+            self.assertGreaterEqual(plan.planned("m-ana", line), 0)
+            self.assertGreaterEqual(plan.planned("m-bea", line), 0)
+
 
 class MonthlySetAsides(unittest.TestCase):
     def test_an_exact_count_minus_its_pins_is_spread_C5_9(self):
