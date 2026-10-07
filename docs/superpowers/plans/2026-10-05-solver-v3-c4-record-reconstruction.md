@@ -11,12 +11,11 @@
 **Spec:** `docs/superpowers/specs/2026-10-05-solver-v3-c4-record-reconstruction-design.md` — CRITICAL tier, APPROVED by two sequential fresh reviewers on SHA-256 `954869fe589ecccfe4f70a673792500ddd2b371791e6cd9d14882c1a165fb21a` (re-hashed 2026-10-06: unchanged; committed as `cc05dff0`). It cites every C2 interface by `IF2-` ID; the single source of those is C2's spec §7 (`docs/superpowers/specs/2026-10-05-solver-v3-c2-ledger-and-record-design.md`, SHA-256 `dbf2c404…`). Parent: `docs/superpowers/specs/2026-10-05-solver-v3-fairness-design.md` (A1–A41; A41 = key hygiene). Review log: `docs/superpowers/specs/2026-10-05-solver-v3-c4-record-reconstruction-design-review-log.md` — every item it leaves «open for the implementation plan» has a row in «Plan decisions» below. This plan never edits the spec.
 
 **Base and grounding.** C4's prerequisites are C1, C3 and C2 (spec A1, «Review handoff»); none is on `main` as this plan is written.
-- The C1+C3 integration is commit `e358781dbe4bb2b36d6af11f4e43e8707edb3086`.
-- C2 Tasks 1–10 are committed on local branch `c2-t10` (`1c500c7e6ef26bbbbc132949d46ada917b76bb0c`) on top of that integration; every anchor marked **[verified c2-t10]** was read there with `git show c2-t10:<path>`.
-- C2 Tasks 11–17 (ledger reader + GET, `resolveMonthEligibility`, preview model/panel, «Registrar», ADR and docs) are being implemented now. Their code is taken from `docs/superpowers/plans/2026-10-05-solver-v3-c2-ledger-and-record.md`; every such anchor is marked **«from C2 plan Task N, re-verify at replay»**. The full list is in «Anchor provenance» at the end.
-- **Task 0 bases the C4 branch on `origin/main` AFTER C1, C3 and C2 have all merged** — never on the integration, never on `c2-t10`, never on C2's branch.
+- The plan was written against the C1+C3 integration (`e358781dbe4bb2b36d6af11f4e43e8707edb3086`) and C2 Tasks 1–10 on local branch `c2-t10` (`1c500c7e6ef26bbbbc132949d46ada917b76bb0c`); anchors marked **[verified c2-t10]** were read there.
+- It was then **replayed on C2's final tip, `a35f812e02b4749ccbccc9a97d405c5d6c0f69bf`** (C1 + C3 + all 17 C2 tasks + C2's final-review fixes): every anchor this plan had taken from C2's plan, marked **[verified a35f812e]** below, matched there as written. The full list is in «Anchor provenance».
+- **Task 0 bases the C4 branch on `origin/main` AFTER C1, C3 and C2 have all merged** — never on the integration, never on `c2-t10`, never on C2's branch, never on `a35f812e`. The replay base only proves the plan applies; `main` may have moved since, so Task 0 Step 4 re-checks the anchors there.
 
-**This plan was NOT executed** (C2 is still moving). Its code was written against the files named above and type-checked by reading, not by running; the «Replay» section says how a later agent executes it on a throwaway copy built from C2's final tip and fixes the plan where it does not apply.
+**How this plan was verified.** Replayed on 2026-10-06: the whole plan was executed task by task in a throwaway clone of `a35f812e` under `/private/tmp/claude-501/c4-replay/` (outside every checkout, no `.env.local`, `node_modules` cloned with `cp -Rc` from a lockfile-identical checkout), each task's «see it fail» checked for its stated reason, its three gates green and a commit. Where a step did not apply or did not go green, the PLAN TEXT was corrected and the task re-run from the previous task's commit (the list is in «Replay record»). The golden table's bytes, written by the first green run and then checked by hand against R4–R13 and the world, are now a **Create** block in Task 7 Step 1. Finally the corrected plan's Create/Find/Append blocks were re-applied mechanically to a **second** fresh clone of `a35f812e` under `CI=true`: every `Find` matched exactly once at its point, every «see it fail» failed, every gate went green with the counts written in each task's gate step, and each task's tree came out byte-identical to the executed one. Gate counts: baseline **468 files / 8643 tests**, final **478 files / 8817 tests**, `tsc` silent, ESLint **0 errors / 81 warnings** throughout.
 
 **How to read an edit step.** A **Create** step writes the whole file. A **Find** … **Replace with** pair replaces text that occurs exactly once in that file at that point of the plan. An **Append** step adds the block at the end of the file after one blank line. Line numbers in a **Files** list are orientation only; the `Find` text is the anchor — a missing anchor is a stop-and-report, never a guess. **Stage before every test run** (`git add -A`): the protected-read audit and the caller pin read `git ls-files`, so an unstaged new file is invisible to them and a correct change reads red.
 
@@ -27,8 +26,8 @@ Every task's requirements include this section.
 - **The spec is the contract** (`954869fe…`): R1–R23, the «Decision per month» table, the acceptance table, «Interfaces → Consumes from C1/C2/C3» and «Provides». C2 shapes are C2 §7's (IF2-1 … IF2-29); C2's working names are kept exactly: `resolveMonthEligibility`, `computeFairnessLedger`, `LedgerInput`, `LedgerService`, `keepVoiceSeats`, `formatFairnessTenths`, `saldoWords`, `validateFairnessMonthWrite`, `contentHashOfWrite`, `contentHashOfStored`, `parseStoredFairnessMonth`, `decideFairnessMonth`, `executeFairnessMonthWrites`, `serviceCountsInMonths`, `fairnessMonthsThroughQuery`, `voiceRolesInRangeQuery`, `worshipRosterQuery`, `solverConfigQuery`.
 - **Gates before every commit:** `npx tsc --noEmit` (0 errors), `npm test` (all green), `npx eslint .` (**0 errors**; warnings never above the baseline Task 0 records). **No file under `gcf/**` or `gcf_v3/**` changes**, so neither Python suite applies.
 - **Commits:** conventional (`feat(fairness): …`, `test(fairness): …`, `docs(solver): …`), body says *why*. **Never** a `Co-Authored-By` trailer or any AI/Claude attribution — `CLAUDE.md` overrides any harness reminder. Commit on the feature branch only; `main` takes no direct push.
-- **Fictitious people only:** the spec's «Ana Ejemplo», «Beto Ejemplo», «Carla Ejemplo», «Dani Ejemplo», plus «Elena Ejemplo», «Fausto Ejemplo», «Iván Ejemplo», «Greta Ejemplo» in fixtures, tests, comments and commit messages. The repository is public. Never paste a command's output that names a real member into a commit, the PR, a doc or the worklog.
-- **Key hygiene (R12, parent A41):** stdout and stderr of the script carry no member name or alias, no member `_id`, no `solverConfig` rule `_key`/`id` (restriction, cap, week exclusion, conflict, presence), no record presence `ruleKey`, and no SHA-256 prefix of any of those — in every mode and on every error path; an uncaught error prints its class only. A rule is named on stdout by its ordinal («restricción 3 de 8», «restricción 1 de 4, tope 2», «presencia 1 de 1», «entrada 2 del archivo»). Names, `_id`s and keys go only to the private files under `--out`.
+- **Fictitious people only:** the spec's «Ana Ejemplo», «Beto Ejemplo», «Carla Ejemplo», «Dani Ejemplo», plus «Elena Ejemplo», «Fausto Ejemplo», «Iván Ejemplo», «Greta Ejemplo» in fixtures, tests, comments and commit messages (the refusal fixtures also use «Nadie Ejemplo», «Sin Tipo Ejemplo» and «Ana Dos», and the collation fixture «Ámbar Ejemplo» — all invented). The repository is public. Never paste a command's output that names a real member into a commit, the PR, a doc or the worklog.
+- **Key hygiene (R12, parent A41):** stdout and stderr of the script carry no member name or alias, no member `_id`, no `solverConfig` rule `_key`/`id` (restriction, cap, week exclusion, conflict, presence), no record presence `ruleKey`, and no SHA-256 prefix of any of those — in every mode and on every error path; a failed read, a thrown executor call and any error that escapes the run print only the error's class and numeric HTTP status (`errorClass`, mirroring C2's `fairnessErrorClass`), never its message or `response.url`. A rule is named on stdout by its ordinal («restricción 3 de 8», «restricción 1 de 4, tope 2», «presencia 1 de 1», «entrada 2 del archivo»). Names, `_id`s and keys go only to the private files under `--out`.
 - **Private paths (R11):** `--out`, `--overrides` and `--plan` are refused (exit 2, before any read) when they resolve — symlinks followed — inside any working tree of this repository. Operator files live outside it, e.g. `~/owt-private/c4/`.
 - **One writer (R2, A4):** no C4 file calls a Sanity mutation method or imports `app/utils/fairnessMonthCommit.ts`; no C4 file builds a record `_id`, `_key`, stamp, `name` or `contentHash` (IF2-19 only); every create/replace/delete goes through `executeFairnessMonthWrites` with actor `reconstruction`, called only from `scripts/reconstruct-fairness-months.mjs`.
 - **Reads (R3):** only through C2's builders IF2-24 … IF2-28, only on the injected client built with the read token, `perspective: "published"` and `useCdn: false`; no GROQ of C4's own; a failed or malformed read writes no file (exit 1).
@@ -56,7 +55,7 @@ Every task's requirements include this section.
 | `scripts/lib/reconstructReport.ts` | Spanish table, refusal report, apply/rollback reports, name-free stdout lines | R11, R12, R13 |
 | `scripts/lib/reconstructRun.ts` | The runner: token check before any client, reads, derive, dry run, apply, rollback, exit codes | R1, R3, R10, R11, R14–R19 |
 
-**Created — tests and test fixtures** (`scripts/__tests__/`): `reconstructArgs.test.ts`, `reconstructOverrides.test.ts`, `reconstructPlanFile.test.ts`, `reconstructInference.test.ts`, `reconstructAnomalies.test.ts`, `reconstructReport.test.ts`, `reconstructDryRun.test.ts`, `reconstructApply.test.ts`, `reconstructRollback.test.ts`, `reconstructGuards.test.ts`; `__fixtures__/reconstructWorld.ts` (the R23 world), `__fixtures__/reconstructHarness.ts`, `__fixtures__/reconstruct-golden-table.md` (vitest file snapshot, created on first run — see Task 7 and «Replay»).
+**Created — tests and test fixtures** (`scripts/__tests__/`): `reconstructArgs.test.ts`, `reconstructOverrides.test.ts`, `reconstructPlanFile.test.ts`, `reconstructInference.test.ts`, `reconstructAnomalies.test.ts`, `reconstructReport.test.ts`, `reconstructDryRun.test.ts`, `reconstructApply.test.ts`, `reconstructRollback.test.ts`, `reconstructGuards.test.ts`; `__fixtures__/reconstructWorld.ts` (the R23 world), `__fixtures__/reconstructHarness.ts`, `__fixtures__/reconstruct-golden-table.md` (the vitest file snapshot; its bytes are a **Create** block in Task 7 Step 1).
 
 **Modified**
 
@@ -99,7 +98,9 @@ Every task's requirements include this section.
 | Week-exclusion blocks | No correction removes one (R8 lists additions only); the table header states it with the presence limitation | Review log, set 3 (state the limitation) |
 | Blocked-date merge | A corrected date merges into an existing block of that date: `unavailable` ORed, `excludedRoles` unioned in canonical order | Review log, set 2 |
 | Comparing a re-create after rollback with its backup; per-month presence overrides | Declined | A re-create is a fresh dry run Frank reviews; presence overrides were declined in the spec's set-1 fix |
-| Golden table | Asserted structurally in code (statuses, anomalies, preview words) AND by a vitest file snapshot created on the first run, inspected, then committed | Hand-writing a byte-exact Markdown table without running the ledger is not credible; CI fails on a missing snapshot |
+| Golden table | Asserted structurally in code (statuses, anomalies, preview words) AND by a vitest file snapshot whose bytes are the **Create** block in Task 7 Step 1 — written by the replay's first green run on `a35f812e`, then checked by hand against R4–R13 and the world (Task 7 Step 4) | Hand-writing a byte-exact Markdown table without running the ledger is not credible; under `CI=true` vitest fails on a missing or different snapshot instead of writing one |
+| A replace's per-person diff (spec «Decision per month»: «the table shows the per-person diff»; R21) | `replaceChanges` (Task 6) compares the stored record (IF2-20) with the planned body: people added or removed, each role's status word, exact-rule grouping, «Exenta», «Mes por medio», blocked dates, then presence rules; the table shows it as «Cambios frente al registro guardado» under a «reemplazar» month only | Added at replay: the plan as written had no diff, which the spec requires for every replace (and R21's re-run instruction relies on it) |
+| Error output (R12; C2's final-review carry-over) | Every executor call, every read and the CLI's last-resort handler print an error through `errorClass` — its class and numeric HTTP status, mirroring C2's `fairnessErrorClass`, which sits in a `server-only` module the script cannot import; never the message, never `response.url` | C2's executor rethrows every non-409 client error raw, and a `@sanity/client` error carries member ids in its message and URL; Task 8 tests both an executor commit and an executor read failing that way, and the apply's own re-read |
 
 ## Review-log open items → disposition
 
@@ -123,7 +124,7 @@ Every task's requirements include this section.
 | Week-exclusion blocks no override can remove | Stated limitation |
 | R13 «ticked today» from a second IF2-15 call | Adopted |
 | Rule ordinal over the parsed config | Adopted |
-| An error-path test whose fake throws messages carrying fixture names | Task 7 and Task 10 |
+| An error-path test whose fake throws messages carrying fixture names | Tasks 7, 8 and 10 (Task 8's error is shaped as `@sanity/client` throws it, ids in its message and `response.url`) |
 | Recording the run's own inputs in the plan | `inputs: { months, previewRun, overridesHash }` |
 | `record_missing` absent from the decision matrix | A write-time refusal like `member_unknown`; tested in Task 8 |
 | «corregido» outside the strict body | `corrections` beside the body |
@@ -164,9 +165,9 @@ If the coordinator runs this in a worktree (`CLAUDE.md`: only when two things mu
 - [ ] **Step 3: Record the baseline**
 
 Run: `npx tsc --noEmit && npm test 2>&1 | tail -4 && npx eslint . 2>&1 | tail -1`
-Expected: no `tsc` output; all tests green (record the file and test counts — C2's plan predicts **468 files / 8636 tests** after its Task 16 on the integration; `main` may differ); `✖ N problems (0 errors, N warnings)` — record `N`: it is the warning ceiling for the whole delivery.
+Expected: no `tsc` output; all tests green (record the file and test counts — on the replay base `a35f812e` (C2's final tip) they were **468 files / 8643 tests** with 81 warnings; `main` may differ, and every later count in this plan is the replay base's); `✖ N problems (0 errors, N warnings)` — record `N`: it is the warning ceiling for the whole delivery.
 
-- [ ] **Step 4: Re-check the provisional anchors** (they came from C2's plan, not from code)
+- [ ] **Step 4: Re-check the anchors that came from C2's plan** (all matched as written on the replay base `a35f812e`; `main` may have moved since)
 
 ```bash
 grep -n 'fairnessMonthWriteRequest: \[' app/utils/__tests__/serviceCommitCallers.test.ts
@@ -179,7 +180,7 @@ grep -n "Guarded OPERATOR TOOLING" -A 7 app/utils/protectedReadAudit.ts
 grep -n "finds exactly the registered fairness executor sites" -A 3 app/utils/__tests__/protectedReadAudit.test.ts
 ```
 
-Expected: the caller-pin row reads `fairnessMonthWriteRequest: ["app/utils/fairnessLedgerRead.ts", "app/utils/fairnessMonthCommit.ts"],` (C2 Task 11); `EligibilityMember` has `_id`, `member_name`, `alias?`, `memberType?`, `ministries?`, `unavailableDates?` and `resolveMonthEligibility(input: { month; config; members })` (C2 Task 12); the ADR ends with C2's «Consequences» bullets (C2 Task 16); the two `SOLVER_AND_INFRA.md` headings exist; the audit header and the executor-sites pin read as quoted in Tasks 10's `Find` blocks. Any difference: adapt the matching `Find` block in Tasks 3, 4, 10 or 11 to the text on `main` (keeping the change's meaning) and note it in the PR.
+Expected: the caller-pin row reads `fairnessMonthWriteRequest: ["app/utils/fairnessLedgerRead.ts", "app/utils/fairnessMonthCommit.ts"],` (C2 Task 11); `EligibilityMember` has `_id`, `member_name`, `alias?`, `memberType?`, `ministries?`, `unavailableDates?` and `resolveMonthEligibility(input: { month; config; members })` (C2 Task 12); the ADR ends with C2's «Consequences» bullets (C2 Task 16); the two `SOLVER_AND_INFRA.md` headings exist; the audit header and the executor-sites pin read as quoted in Task 10's `Find` blocks. (Every one of these read exactly so on `a35f812e`.) Any difference: adapt the matching `Find` block in Tasks 3, 4, 10 or 11 to the text on `main` (keeping the change's meaning) and note it in the PR.
 
 ---
 ## Task 1: Arguments, month scope and private paths — **[CRITICAL slice: the apply gate's front door — flag combinations, R1's refusal before any read, R11's path refusal]**
@@ -495,7 +496,7 @@ Expected: PASS — and the diff tool's own suite is unchanged by the export.
 - [ ] **Step 5: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green; 0 errors; warnings at the Task 0 baseline.
+Expected: all green (on the replay base `a35f812e`: **469 files / 8667 tests**, 81 warnings); 0 errors; warnings at the Task 0 baseline.
 
 ```bash
 git add -A
@@ -512,7 +513,7 @@ Spec R8 (schema, full validation before any record is built, «no aplica a esta 
 - Test: `scripts/__tests__/reconstructOverrides.test.ts`
 
 **Interfaces:**
-- Consumes: `canonicalRoles`, `isMonthString`, `isRoleKey`, `type RoleKey`, `type FairnessMonthBody` (C2 IF2-1 module); `isValidServiceDate` (`app/utils/serviceReadModel.ts`); `type EligibilityMember` (`app/utils/fairnessEligibility.ts` — **from C2 plan Task 12, re-verify at replay**).
+- Consumes: `canonicalRoles`, `isMonthString`, `isRoleKey`, `type RoleKey`, `type FairnessMonthBody` (C2 IF2-1 module); `isValidServiceDate` (`app/utils/serviceReadModel.ts`); `type EligibilityMember` (`app/utils/fairnessEligibility.ts` **[verified a35f812e]**).
 - Produces (types module): `type Line`, `LINES`, `LINE_ROLES`, `type RosterRow = EligibilityMember`, `type ReconstructionBody = FairnessMonthBody & { expectedRev: string | null }`, `type CellReason`, `interface CellInfo`, `type PersonCells`, `interface Correction`, `type MonthAction`, `type RollbackAction`, `ANOMALY_CODES`, `type AnomalyCode`, `interface Anomaly`, `type RefusalKind`, `interface RunRefusal`, `class ReadFailure`.
 - Produces (overrides): `OVERRIDES_SCHEMA_VERSION = 1`, `ALL_MONTHS = "*"`, `interface MonthOverride { roles; exactRules }`, `interface MemberOverride { ordinal; memberId; note; exempt; sundayCadence; joinMonths; blockedDates; months }`, `interface Overrides { hash; members }`, `overridesHash(text): string`, `parseOverrides(text: string, rosterIds: ReadonlySet<string>): { ok: true; overrides: Overrides } | { ok: false; refusals: RunRefusal[] }`, `outOfRunEntries(overrides, months): Array<{ ordinal; memberId; month }>`.
 
@@ -1092,7 +1093,7 @@ Expected: PASS.
 - [ ] **Step 5: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green; 0 errors; warnings at baseline.
+Expected: all green (on the replay base `a35f812e`: **470 files / 8690 tests**, 81 warnings); 0 errors; warnings at baseline.
 
 ```bash
 git add -A
@@ -1106,7 +1107,7 @@ Spec R2 (C4 builds no id, key, stamp, name or record hash), R14 (the planned act
 
 **Files:**
 - Create: `scripts/lib/reconstructDecide.ts`, `scripts/lib/reconstructPlanFile.ts`
-- Modify: `app/utils/__tests__/serviceCommitCallers.test.ts` (the `fairnessMonthWriteRequest` row of `EXPECTED_CALLERS`) — **anchor from C2 plan Task 11, re-verify at replay**
+- Modify: `app/utils/__tests__/serviceCommitCallers.test.ts` (the `fairnessMonthWriteRequest` row of `EXPECTED_CALLERS`) **[verified a35f812e]**
 - Test: `scripts/__tests__/reconstructPlanFile.test.ts`
 
 **Interfaces:**
@@ -1671,7 +1672,7 @@ Expected: PASS — the pin finds exactly the three importers; the audit flags no
 - [ ] **Step 5: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green; 0 errors; warnings at baseline.
+Expected: all green (on the replay base `a35f812e`: **471 files / 8707 tests**, 81 warnings); 0 errors; warnings at baseline.
 
 ```bash
 git add -A
@@ -1688,7 +1689,7 @@ Spec R4 (Tipo today as hypothetical ticks; today's rules unaltered — «Plan de
 - Test: `scripts/__tests__/reconstructInference.test.ts`
 
 **Interfaces:**
-- Consumes: `memberFitsPool`, `memberFitsRoleKey`, `rolesOfPatternV3`, `type SolverConfig` (`app/components/admin/plannerModel.ts` **[verified c2-t10]**); `countsForFairness` (C1); `resolveMonthEligibility`, `type EligibilityResult` (**from C2 plan Task 12, re-verify at replay**); `keepVoiceSeats`, `civilDayOfWeek`, `type LedgerService` (IF2-11/IF2-10 **[verified c2-t10]**); `ROLE_KEYS`, `ROLE_LINE`, `canonicalRoles`, `compareCodepoint` (IF2-1); `isValidServiceDate`; `serviceDayKey`; `resolveRulePersonId`, `type RosterMember` (C3 `app/utils/sundayCadence.ts`); Task 2's `MemberOverride`, `ALL_MONTHS` and types; Task 3's `validateReconstructionBody` (tests).
+- Consumes: `memberFitsPool`, `memberFitsRoleKey`, `rolesOfPatternV3`, `type SolverConfig` (`app/components/admin/plannerModel.ts` **[verified c2-t10]**); `countsForFairness` (C1); `resolveMonthEligibility`, `type EligibilityResult` (**[verified a35f812e]**); `keepVoiceSeats`, `civilDayOfWeek`, `type LedgerService` (IF2-11/IF2-10 **[verified c2-t10]**); `ROLE_KEYS`, `ROLE_LINE`, `canonicalRoles`, `compareCodepoint` (IF2-1); `isValidServiceDate`; `serviceDayKey`; `resolveRulePersonId`, `type RosterMember` (C3 `app/utils/sundayCadence.ts`); Task 2's `MemberOverride`, `ALL_MONTHS` and types; Task 3's `validateReconstructionBody` (tests).
 - Produces: `hypotheticalConfig(config: SolverConfig, roster: readonly RosterRow[]): SolverConfig`; `toLedgerServices(rows: unknown): LedgerService[]` (throws `ReadFailure("services")`); `type SeatJoins = Map<string, Partial<Record<Line, { month: string; firstSeatDate: string }>>>`; `seatJoinMonths(joinWindow: readonly LedgerService[]): SeatJoins`; `interface CountedDay { id; date; sunday; weekend }`; `countedServiceDays(services: readonly LedgerService[]): CountedDay[]`; `interface TransformResult { body; cells; corrections; joins; anomalies; refusals }`; `transformMonth(input: { month; body: FairnessMonthBody; roster; seatJoins; overrides }): TransformResult`; `resolverRefusals(result, config, roster, month): RunRefusal[]`; `rulesNaming(config, person, reason): Array<{ ordinal: string; key: string }>`; `validatorRefusal(month, body, issues, overrides): RunRefusal`; `dedupeRefusals(list): RunRefusal[]`.
 
 - [ ] **Step 1: Write the failing test**
@@ -2581,7 +2582,7 @@ Expected: PASS. If a resolver expectation differs, read C2's `resolveMonthEligib
 - [ ] **Step 5: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green; 0 errors; warnings at baseline.
+Expected: all green (on the replay base `a35f812e`: **472 files / 8729 tests**, 81 warnings); 0 errors; warnings at baseline.
 
 ```bash
 git add -A
@@ -3117,7 +3118,7 @@ Expected: PASS. A differing ledger-derived expectation (`held`, a note, `unknown
 - [ ] **Step 5: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green; 0 errors; warnings at baseline.
+Expected: all green (on the replay base `a35f812e`: **473 files / 8740 tests**, 81 warnings); 0 errors; warnings at baseline.
 
 ```bash
 git add -A
@@ -3127,7 +3128,7 @@ git commit -m "feat(fairness): the reconstruction's anomalies and ledger runs" -
 ---
 ## Task 6: The Spanish reports and the name-free stdout lines — [standard; R12 privacy]
 
-Spec R11 (the private table: services with «cuenta», per-person rows with status words `elegible`/`fuera`/`fija N`, reason, «corregido», join months, seats, blocked dates, «Exenta», «Mes por medio»; presence rules as stored; the balance preview with one decimal through IF2-13; anomalies; `es` collation), R12 (stdout carries no name, `_id`, key or hash prefix), R13 (the refusal line and the private refusal report).
+Spec R11 (the private table: services with «cuenta», per-person rows with status words `elegible`/`fuera`/`fija N`, reason, «corregido», join months, seats, blocked dates, «Exenta», «Mes por medio»; presence rules as stored; «Decision per month» and R21 (a «reemplazar» row shows the per-person diff against the stored record); the balance preview with one decimal through IF2-13; anomalies; `es` collation), R12 (stdout carries no name, `_id`, key or hash prefix), R13 (the refusal line and the private refusal report).
 
 **Files:**
 - Create: `scripts/lib/reconstructReport.ts`
@@ -3135,7 +3136,7 @@ Spec R11 (the private table: services with «cuenta», per-person rows with stat
 
 **Interfaces:**
 - Consumes: `saldoWords` (IF2-13 **[verified c2-t10]**); `ROLE_KEYS`, `type RoleKey`, `type Status`, `type TabKey`; Task 1's `type RunMode`; Task 2's types; Task 3's `type RollbackPlanContent`.
-- Produces: `MODE_LABEL`, `ACTION_LABEL: Record<MonthAction, string>`, `ROLLBACK_LABEL: Record<RollbackAction, string>`, `REASON_LABEL: Record<CellReason, string>`, `SERVICE_TYPE_LABEL`, `statusLabel(status, count): string`, `interface TableCell`, `interface TableRow`, `interface TableMonth`, `interface TableModel`, `renderTable(model: TableModel): string`, `anomalyText(a: Anomaly, nameOf: (id: string) => string): string`, `renderRefusalReport(input: { generatedAt; refusals; nameOf }): string`, `renderApplyReport(input: { generatedAt; mode; results: Array<{ month; verdict; memberIds? }>; notAttempted: string[] }): string`, `renderRollbackTable(input: { generatedAt; projectId; dataset; content: RollbackPlanContent }): string`, `targetLine(mode, projectId, dataset): string`, `refusalLine(r: RunRefusal, index: number, total: number, reportPath: string | null): string`.
+- Produces: `MODE_LABEL`, `ACTION_LABEL: Record<MonthAction, string>`, `ROLLBACK_LABEL: Record<RollbackAction, string>`, `REASON_LABEL: Record<CellReason, string>`, `SERVICE_TYPE_LABEL`, `statusLabel(status, count): string`, `interface TableCell`, `interface TableRow`, `interface TableMonth`, `interface TableModel`, `interface ReplaceChange`, `replaceChanges(existing: Pick<LogicalRecord, "people" | "presence">, planned: Pick<FairnessMonthBody, "people" | "presence">, nameOf): ReplaceChange[]`, `renderTable(model: TableModel): string`, `anomalyText(a: Anomaly, nameOf: (id: string) => string): string`, `renderRefusalReport(input: { generatedAt; refusals; nameOf }): string`, `renderApplyReport(input: { generatedAt; mode; results: Array<{ month; verdict; memberIds? }>; notAttempted: string[] }): string`, `renderRollbackTable(input: { generatedAt; projectId; dataset; content: RollbackPlanContent }): string`, `targetLine(mode, projectId, dataset): string`, `refusalLine(r: RunRefusal, index: number, total: number, reportPath: string | null): string`.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3146,13 +3147,14 @@ Spec R11 (the private table: services with «cuenta», per-person rows with stat
 // name-free lines stdout may carry. Every name is fictitious.
 import { describe, expect, it } from "vitest";
 
-import type { RoleKey } from "@/app/utils/fairnessVocabulary";
+import type { FairnessMonthBody, LogicalRecord, RoleKey, Status } from "@/app/utils/fairnessVocabulary";
 import {
   ACTION_LABEL,
   anomalyText,
   refusalLine,
   renderRefusalReport,
   renderTable,
+  replaceChanges,
   statusLabel,
   targetLine,
   type TableCell,
@@ -3320,6 +3322,59 @@ describe("the private table (R11)", () => {
   });
 });
 
+describe("a replace's per-person changes against the stored record («Decision per month», R21)", () => {
+  const roles = (patch: Partial<Record<RoleKey, Status>> = {}): Record<RoleKey, Status> => ({
+    "Sun.Lead": "out",
+    "Sat.Lead": "out",
+    "Sun.BGV": "out",
+    "Sat.BGV": "out",
+    "Sun.Choir": "out",
+    "Sat.Choir": "out",
+    ...patch,
+  });
+  const person = (memberId: string, patch: Partial<FairnessMonthBody["people"][number]> = {}): FairnessMonthBody["people"][number] => ({
+    memberId,
+    roles: roles(),
+    exactRules: [],
+    exempt: false,
+    blocks: [],
+    ...patch,
+  });
+  const existing: Pick<LogicalRecord, "people" | "presence"> = {
+    people: [
+      { ...person("m-ana", { roles: roles({ "Sun.Lead": "in" }), blocks: [{ date: "2026-07-12", unavailable: true, excludedRoles: [] }] }), name: "Ana E." },
+      { ...person("m-greta"), name: "Greta E." },
+    ],
+    presence: [],
+  };
+  const planned: Pick<FairnessMonthBody, "people" | "presence"> = {
+    people: [
+      person("m-ana", { roles: roles({ "Sun.Lead": "in", "Sun.BGV": "exact" }), exactRules: [{ roles: ["Sun.BGV"], count: 2 }], exempt: true }),
+      person("m-beto", { sundayCadence: "alternate" }),
+    ],
+    presence: [{ ruleKey: "d-beto-carla", roles: ["Sun.BGV"], members: ["m-beto", "m-carla"], exclusive: false }],
+  };
+
+  it("lists every person added, removed or changed, then every presence rule, by name and id", () => {
+    expect(replaceChanges(existing, planned, nameOf)).toEqual([
+      { kind: "person", id: "m-ana", name: "Ana E.", change: "changed", details: ["Dom. BGV: fuera → fija 2", "Exenta: no → sí", "fecha bloqueada quitada: 2026-07-12"] },
+      { kind: "person", id: "m-beto", name: "Beto E.", change: "added", details: [] },
+      { kind: "person", id: "m-greta", name: "Greta E.", change: "removed", details: [] },
+      { kind: "presence", id: "d-beto-carla", name: "", change: "added", details: ["Sun.BGV · Beto E., m-carla · no exclusiva"] },
+    ]);
+  });
+
+  it("renders them under the month, and only for a month planned «reemplazar»", () => {
+    const text = renderTable({ ...MODEL, table: [{ ...MODEL.table[0], action: "replace", changes: replaceChanges(existing, planned, nameOf) }] });
+    expect(text).toContain("### Cambios frente al registro guardado");
+    expect(text).toContain("| Ana E. (`m-ana`) | Dom. BGV: fuera → fija 2 · Exenta: no → sí · fecha bloqueada quitada: 2026-07-12 |");
+    expect(text).toContain("| Beto E. (`m-beto`) | nueva en el registro |");
+    expect(text).toContain("| Greta E. (`m-greta`) | sale del registro |");
+    expect(text).toContain("| presencia `d-beto-carla` | nueva en el registro · Sun.BGV · Beto E., m-carla · no exclusiva |");
+    expect(renderTable(MODEL)).not.toContain("Cambios frente al registro guardado");
+  });
+});
+
 describe("anomaly sentences (R13)", () => {
   it("gives every anomaly type a sentence that names the member", () => {
     for (const code of ANOMALY_CODES) {
@@ -3354,7 +3409,15 @@ Expected: FAIL — `../lib/reconstructReport` does not resolve.
 // integers (A39). Pure: no I/O.
 
 import { saldoWords } from "../../app/utils/fairnessFormat";
-import { ROLE_KEYS, type RoleKey, type Status, type TabKey } from "../../app/utils/fairnessVocabulary";
+import {
+  ROLE_KEYS,
+  compareCodepoint,
+  type FairnessMonthBody,
+  type LogicalRecord,
+  type RoleKey,
+  type Status,
+  type TabKey,
+} from "../../app/utils/fairnessVocabulary";
 import type { RunMode } from "./reconstructArgs";
 import type { RollbackPlanContent } from "./reconstructPlanFile";
 import { LINES, type Anomaly, type CellReason, type Line, type MonthAction, type RollbackAction, type RunRefusal } from "./reconstructTypes";
@@ -3447,6 +3510,87 @@ export interface TableMonth {
   services: Array<{ date: string; type: string; counted: boolean }>;
   rows: TableRow[];
   presence: Array<{ ordinal: string; ruleKey: string; roles: RoleKey[]; members: string[]; exclusive: boolean }>;
+  /** Only on a month planned «reemplazar»: what the replace changes against the stored record, person by person. */
+  changes?: ReplaceChange[];
+}
+
+/**
+ * One line of a «reemplazar» month's per-person diff against the stored record (spec
+ * «Decision per month»: «the table shows the per-person diff»; R21: a replace after an
+ * edit shows what the edit changed). Private table only: `id` is a member `_id` or a
+ * presence `ruleKey`, `name` a display name.
+ */
+export interface ReplaceChange {
+  kind: "person" | "presence";
+  id: string;
+  name: string;
+  change: "added" | "removed" | "changed";
+  details: string[];
+}
+
+type BodyPerson = FairnessMonthBody["people"][number];
+const countFor = (p: BodyPerson, k: RoleKey) => p.exactRules.find((r) => r.roles.includes(k))?.count ?? null;
+const blockLabel = (b: BodyPerson["blocks"][number]) => (b.unavailable ? b.date : `${b.date} (${b.excludedRoles.join(", ")})`);
+const rulesLabel = (p: BodyPerson) => p.exactRules.map((r) => `${r.roles.join("+")} = ${r.count}`).join("; ") || "ninguna";
+const cadenceLabel = (p: BodyPerson) => (p.sundayCadence === "alternate" ? "sí" : "no");
+
+/**
+ * The diff a «reemplazar» row shows: every person the replace adds, removes or changes
+ * (status words as the table words them, exact-rule grouping, «Exenta», «Mes por medio»,
+ * blocked dates), by display name with Spanish collation, then every presence rule it
+ * adds, removes or changes, by key. Pure; computes no seat and no figure.
+ */
+export function replaceChanges(
+  existing: Pick<LogicalRecord, "people" | "presence">,
+  planned: Pick<FairnessMonthBody, "people" | "presence">,
+  nameOf: (id: string) => string,
+): ReplaceChange[] {
+  const before = new Map(existing.people.map((p) => [p.memberId, p] as const));
+  const after = new Map(planned.people.map((p) => [p.memberId, p] as const));
+  const people: ReplaceChange[] = [];
+  for (const id of new Set([...before.keys(), ...after.keys()])) {
+    const old = before.get(id);
+    const now = after.get(id);
+    const name = nameOf(id) || old?.name || "";
+    if (!old || !now) {
+      people.push({ kind: "person", id, name, change: old ? "removed" : "added", details: [] });
+      continue;
+    }
+    const details: string[] = [];
+    for (const k of ROLE_KEYS) {
+      const was = statusLabel(old.roles[k], countFor(old, k));
+      const is = statusLabel(now.roles[k], countFor(now, k));
+      if (was !== is) details.push(`${ROLE_HEAD[k]}: ${was} → ${is}`);
+    }
+    if (details.length === 0 && rulesLabel(old) !== rulesLabel(now)) details.push(`reglas fijas: ${rulesLabel(old)} → ${rulesLabel(now)}`);
+    if (old.exempt !== now.exempt) details.push(`Exenta: ${old.exempt ? "sí" : "no"} → ${now.exempt ? "sí" : "no"}`);
+    if (cadenceLabel(old) !== cadenceLabel(now)) details.push(`Mes por medio: ${cadenceLabel(old)} → ${cadenceLabel(now)}`);
+    const oldBlocks = new Map(old.blocks.map((b) => [b.date, blockLabel(b)] as const));
+    const newBlocks = new Map(now.blocks.map((b) => [b.date, blockLabel(b)] as const));
+    for (const date of [...new Set([...oldBlocks.keys(), ...newBlocks.keys()])].sort(compareCodepoint)) {
+      const was = oldBlocks.get(date);
+      const is = newBlocks.get(date);
+      if (was === undefined) details.push(`fecha bloqueada nueva: ${is}`);
+      else if (is === undefined) details.push(`fecha bloqueada quitada: ${was}`);
+      else if (was !== is) details.push(`fecha bloqueada cambiada: ${was} → ${is}`);
+    }
+    if (details.length > 0) people.push({ kind: "person", id, name, change: "changed", details });
+  }
+  people.sort((a, b) => a.name.localeCompare(b.name, "es") || compareCodepoint(a.id, b.id));
+
+  const ruleLabel = (r: FairnessMonthBody["presence"][number]) =>
+    `${r.roles.join(", ")} · ${r.members.map((id) => nameOf(id) || id).join(", ")} · ${r.exclusive ? "exclusiva" : "no exclusiva"}`;
+  const oldRules = new Map(existing.presence.map((r) => [r.ruleKey, ruleLabel(r)] as const));
+  const newRules = new Map(planned.presence.map((r) => [r.ruleKey, ruleLabel(r)] as const));
+  const presence: ReplaceChange[] = [];
+  for (const key of [...new Set([...oldRules.keys(), ...newRules.keys()])].sort(compareCodepoint)) {
+    const was = oldRules.get(key);
+    const is = newRules.get(key);
+    if (was === undefined) presence.push({ kind: "presence", id: key, name: "", change: "added", details: [is ?? ""] });
+    else if (is === undefined) presence.push({ kind: "presence", id: key, name: "", change: "removed", details: [was] });
+    else if (was !== is) presence.push({ kind: "presence", id: key, name: "", change: "changed", details: [`${was} → ${is}`] });
+  }
+  return [...people, ...presence];
 }
 
 export interface TableModel {
@@ -3516,6 +3660,19 @@ export function renderTable(m: TableModel): string {
       );
     }
     lines.push("");
+    if (month.changes) {
+      lines.push("### Cambios frente al registro guardado", "");
+      if (month.changes.length === 0) lines.push("_Ningún cambio visible por persona._", "");
+      else {
+        lines.push("| Persona o regla | Cambio |", "|---|---|");
+        for (const c of month.changes) {
+          const who = c.kind === "person" ? `${c.name || "(sin nombre)"} (\`${c.id}\`)` : `presencia \`${c.id}\``;
+          const what = c.change === "added" ? ["nueva en el registro"] : c.change === "removed" ? ["sale del registro"] : [];
+          lines.push(`| ${who} | ${[...what, ...c.details].join(" · ")} |`);
+        }
+        lines.push("");
+      }
+    }
     lines.push("### Reglas de presencia (como se guardarán)", "");
     if (month.presence.length === 0) lines.push("_Ninguna._", "");
     else {
@@ -3675,11 +3832,11 @@ Expected: PASS.
 - [ ] **Step 5: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green; 0 errors; warnings at baseline.
+Expected: all green (on the replay base `a35f812e`: **474 files / 8755 tests**, 81 warnings); 0 errors; warnings at baseline.
 
 ```bash
 git add -A
-git commit -m "feat(fairness): the reconstruction's Spanish table, refusal report and name-free lines" -m "Solver v3 C4 R11-R13. The private table shows each month's services with their counted flag, every person's status words, reason codes and corregido marks, join months, the ledger's seat counts, blocked dates, Exenta and Mes por medio, the presence rules as they will be stored, the balance preview through C2's one formatter, the anomalies and the corrections' notes. Stdout and stderr lines carry the target, reason codes and rule ordinals only; names, member ids and rule keys go to the private report."
+git commit -m "feat(fairness): the reconstruction's Spanish table, refusal report and name-free lines" -m "Solver v3 C4 R11-R13. The private table shows each month's services with their counted flag, every person's status words, reason codes and corregido marks, join months, the ledger's seat counts, blocked dates, Exenta and Mes por medio, the presence rules as they will be stored, a replace's per-person changes against the stored record, the balance preview through C2's one formatter, the anomalies and the corrections' notes. Stdout and stderr lines carry the target, reason codes and rule ordinals only; names, member ids and rule keys go to the private report."
 ```
 
 ---
@@ -3689,10 +3846,10 @@ Spec R1 (refusal before any read; the skip; a recorded month never skipped), R3 
 
 **Files:**
 - Create: `scripts/lib/reconstructRun.ts`, `scripts/__tests__/__fixtures__/reconstructWorld.ts`, `scripts/__tests__/__fixtures__/reconstructHarness.ts`
-- Test: `scripts/__tests__/reconstructDryRun.test.ts` (and its file snapshot `scripts/__tests__/__fixtures__/reconstruct-golden-table.md`, written by the first run)
+- Test: `scripts/__tests__/reconstructDryRun.test.ts` and its file snapshot `scripts/__tests__/__fixtures__/reconstruct-golden-table.md` (created in Step 1 from the bytes given there)
 
 **Interfaces:**
-- Consumes: C2's builders `solverConfigQuery`, `worshipRosterQuery`, `fairnessMonthsThroughQuery`, `serviceCountsInMonths`, `voiceRolesInRangeQuery`, `type BoundQuery` (`app/utils/serviceReadQueries.ts`, IF2-24 … IF2-28 **[verified c2-t10]**); `solverConfigFromDocument`, `buildSolverConfigDocument` (tests) (`app/utils/solverConfigWriteRequest.ts`); `resolveMonthEligibility` (**from C2 plan Task 12**); `fairnessRecordEnvironment` (`app/utils/solverDeployment.ts`, REC-2 **[verified c2-t10]**); `displayMemberName`; `countsForFairness`; types `FairnessDeleteEntry`, `FairnessExecution`, `FairnessStamps` (write-request module, type-only); `createFakeFairnessSanity`, `type FakeDoc` (`app/utils/__tests__/__fixtures__/fakeFairnessSanity.ts` **[verified c2-t10]**); `executeFairnessMonthWrites`, `buildFairnessMonthDocument` (tests only); Tasks 1–6.
+- Consumes: C2's builders `solverConfigQuery`, `worshipRosterQuery`, `fairnessMonthsThroughQuery`, `serviceCountsInMonths`, `voiceRolesInRangeQuery`, `type BoundQuery` (`app/utils/serviceReadQueries.ts`, IF2-24 … IF2-28 **[verified c2-t10]**); `solverConfigFromDocument`, `buildSolverConfigDocument` (tests) (`app/utils/solverConfigWriteRequest.ts`); `resolveMonthEligibility` (**[verified a35f812e]**); `fairnessRecordEnvironment` (`app/utils/solverDeployment.ts`, REC-2 **[verified c2-t10]**); `displayMemberName`; `countsForFairness`; types `FairnessDeleteEntry`, `FairnessExecution`, `FairnessStamps` (write-request module, type-only); `createFakeFairnessSanity`, `type FakeDoc` (`app/utils/__tests__/__fixtures__/fakeFairnessSanity.ts` **[verified c2-t10]**); `executeFairnessMonthWrites`, `buildFairnessMonthDocument` (tests only); Tasks 1–6.
 - Produces: `interface ClientConfig { projectId; dataset; apiVersion; token; perspective: "published"; useCdn: false }`; `type ExecuteFn`; `interface RunDeps { env; repoRoot; platform; now; createClient(config: ClientConfig): SanityClient; execute: ExecuteFn; out; err; gitFs? }`; `errorClass(e: unknown): string`; `runReconstruction(argv: readonly string[], deps: RunDeps): Promise<number>`. Test fixtures: `NOW`, `NAMES`, `MEMBER_IDS`, `RULE_KEYS`, `restriction`, `cap`, `member`, `WORLD_CONFIG`, `configDoc`, `MEMBERS`, `SERVICES`, `DRAFTS`, `JUNE_MANUAL`, `JULY_RECONSTRUCTED`, `SEPTEMBER_BODY`, `SEPTEMBER_EDITED`, `OVERRIDES`, `worldDocs`, `storedRecord`, `MONTHS`; `harness(docs, opts)`, `ENV`, `REPO_ROOT`.
 
 - [ ] **Step 1: Write the world, the harness and the failing test**
@@ -4030,6 +4187,202 @@ export function harness(docs: FakeDoc[], opts: { env?: Record<string, string | u
 }
 ````
 
+The dry-run test's file snapshot (`toMatchFileSnapshot`), exactly as the replay's first run on `a35f812e` wrote it and as it was then checked by hand against R4–R13 and the world's comments (see Step 4). It ends with one newline. Never regenerate it to make the test pass: a difference is a finding about the code or the world.
+
+**Create** `scripts/__tests__/__fixtures__/reconstruct-golden-table.md`:
+
+````markdown
+# Reconstrucción de registros de equidad — tabla para revisar
+
+- Destino: `proj-test` · `test`
+- Generado: <hora>
+- Meses pedidos: 2026-06, 2026-07, 2026-08, 2026-09 · vista previa del saldo: corrida 2026-10
+- Archivo de correcciones: `sha256:7a7af344c4f63fd292004376973e3bcacc61f797d5847940798e4189fdc35da8`
+- «Mes por medio» encontrados: 1 en las reglas · 0 en correcciones
+- **Disponibilidad: lo guardado hoy, no lo que había entonces.**
+- Las reglas de hoy se aplican hacia atrás. Una corrección no puede editar una regla de presencia ni quitar una exclusión por semana: se aceptan como quedan registradas (ver anomalías) o el mes no se aplica.
+
+## 2026-06 — no lo escribió la reconstrucción: no se toca
+
+### Servicios
+
+_Sin servicios guardados._
+
+### Personas
+
+| Persona | Dom. Líder | Sáb. Líder | Dom. BGV | Sáb. BGV | Dom. Coro | Sáb. Coro | Inicio de línea (DL · SL · BGV · Coro) | Lugares (DL · SL · BGV · Coro) | Fechas bloqueadas | Exenta | Mes por medio |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Ana E. (`m-ana`) | fuera · antes de su primer servicio en esta línea | fuera · regla de hoy | fuera · antes de su primer servicio en esta línea | fuera · regla de hoy | fuera · antes de su primer servicio en esta línea | fuera · regla de hoy | 2026-07 · — · 2026-08 · 2026-07 | 0 · 0 · 0 · 0 | — | no | no |
+| Beto E. (`m-beto`) | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · 2026-07 · — | 0 · 0 · 0 · 0 | — | no | no |
+| Carla E. (`m-carla`) | fuera · su Tipo no cubre el rol | fuera · su Tipo no cubre el rol | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · 2026-09 · — | 0 · 0 · 0 · 0 | — | no | no |
+| Dani E. (`kidsMember-dani`) | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | 2026-07 · — · — · — | 0 · 0 · 0 · 0 | — | no | sí |
+| Elena E. (`m-elena`) | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · — · — | 0 · 0 · 0 · 0 | — | no | no |
+| Iván E. (`m-ivan`) | fuera · su Tipo no cubre el rol | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · 2026-07 · — · — | 0 · 0 · 0 · 0 | 2026-06-13 (Sat.Lead, Sat.BGV, Sat.Choir) | no | no |
+
+### Reglas de presencia (como se guardarán)
+
+| Regla | Clave | Roles | Miembros | Exclusiva |
+|---|---|---|---|---|
+| presencia 1 de 1 | `d-beto-carla` | Sun.BGV | Beto E., Carla E. | no |
+
+## 2026-07 — reemplazar
+
+### Servicios
+
+| Fecha | Tipo | Cuenta |
+|---|---|---|
+| 2026-07-05 | domingo | sí |
+| 2026-07-11 | sábado | sí |
+| 2026-07-19 | domingo | sí |
+
+### Personas
+
+| Persona | Dom. Líder | Sáb. Líder | Dom. BGV | Sáb. BGV | Dom. Coro | Sáb. Coro | Inicio de línea (DL · SL · BGV · Coro) | Lugares (DL · SL · BGV · Coro) | Fechas bloqueadas | Exenta | Mes por medio |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Ana E. (`m-ana`) | elegible · Tipo de hoy | fuera · regla de hoy | fuera · antes de su primer servicio en esta línea | fuera · regla de hoy | elegible · Tipo de hoy | fuera · regla de hoy | 2026-07 · — · 2026-08 · 2026-07 | 1 · 0 · 0 · 1 | — | no | no |
+| Beto E. (`m-beto`) | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fija 1 · regla fija de hoy | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · 2026-07 · — | 0 · 0 · 1 · 0 | 2026-07-26 | no | no |
+| Carla E. (`m-carla`) | fuera · su Tipo no cubre el rol | fuera · su Tipo no cubre el rol | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · 2026-09 · — | 0 · 0 · 0 · 0 | — | no | no |
+| Dani E. (`kidsMember-dani`) | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | 2026-07 · — · — · — | 1 · 0 · 0 · 0 | — | no | sí |
+| Elena E. (`m-elena`) | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · — · — | 0 · 0 · 0 · 0 | — | no | no |
+| Iván E. (`m-ivan`) | fuera · su Tipo no cubre el rol | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · 2026-07 · — · — | 0 · 1 · 0 · 0 | 2026-07-11 (Sat.Lead, Sat.BGV, Sat.Choir) | no | no |
+
+### Cambios frente al registro guardado
+
+| Persona o regla | Cambio |
+|---|---|
+| Ana E. (`m-ana`) | Dom. Coro: fuera → elegible · fecha bloqueada quitada: 2026-07-12 |
+| Beto E. (`m-beto`) | nueva en el registro |
+| Carla E. (`m-carla`) | nueva en el registro |
+| Dani E. (`kidsMember-dani`) | nueva en el registro |
+| Elena E. (`m-elena`) | nueva en el registro |
+| Iván E. (`m-ivan`) | nueva en el registro |
+| presencia `d-beto-carla` | nueva en el registro · Sun.BGV · Beto E., Carla E. · no exclusiva |
+
+### Reglas de presencia (como se guardarán)
+
+| Regla | Clave | Roles | Miembros | Exclusiva |
+|---|---|---|---|---|
+| presencia 1 de 1 | `d-beto-carla` | Sun.BGV | Beto E., Carla E. | no |
+
+## 2026-08 — crear
+
+### Servicios
+
+| Fecha | Tipo | Cuenta |
+|---|---|---|
+| 2026-08-01 | sábado | sí |
+| 2026-08-02 | domingo | sí |
+| 2026-08-08 | especial | sí |
+| 2026-08-16 | domingo | sí |
+| 2026-08-16 | domingo | sí |
+| 2026-08-22 | sábado | sí |
+| 2026-08-30 | especial | no |
+
+### Personas
+
+| Persona | Dom. Líder | Sáb. Líder | Dom. BGV | Sáb. BGV | Dom. Coro | Sáb. Coro | Inicio de línea (DL · SL · BGV · Coro) | Lugares (DL · SL · BGV · Coro) | Fechas bloqueadas | Exenta | Mes por medio |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Ana E. (`m-ana`) | elegible · Tipo de hoy | fuera · regla de hoy | elegible · Tipo de hoy | fuera · regla de hoy | elegible · Tipo de hoy | fuera · regla de hoy | 2026-07 · — · 2026-08 · 2026-07 | 1 · 0 · 1 · 0 | 2026-08-15 | no | no |
+| Beto E. (`m-beto`) | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fija 1 · regla fija de hoy | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · 2026-07 · — | 0 · 0 · 1 · 0 | — | no | no |
+| Carla E. (`m-carla`) | fuera · su Tipo no cubre el rol | fuera · su Tipo no cubre el rol | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · 2026-09 · — | 0 · 0 · 0 · 0 | — | no | no |
+| Dani E. (`kidsMember-dani`) | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | 2026-07 · — · — · — | 0 · 0 · 0 · 0 | — | no | sí |
+| Elena E. (`m-elena`) | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · — · — | 0 · 0 · 0 · 0 | — | no | no |
+| Iván E. (`m-ivan`) | fuera · su Tipo no cubre el rol | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · 2026-07 · — · — | 0 · 3 · 0 · 0 | 2026-08-08 (Sat.Lead, Sat.BGV, Sat.Choir) | no | no |
+
+### Reglas de presencia (como se guardarán)
+
+| Regla | Clave | Roles | Miembros | Exclusiva |
+|---|---|---|---|---|
+| presencia 1 de 1 | `d-beto-carla` | Sun.BGV | Beto E., Carla E. | no |
+
+## 2026-09 — editado después de reconstruir: no se toca
+
+### Servicios
+
+| Fecha | Tipo | Cuenta |
+|---|---|---|
+| 2026-09-06 | domingo | sí |
+| 2026-09-13 | domingo | sí |
+| 2026-09-19 | sábado | sí |
+
+### Personas
+
+| Persona | Dom. Líder | Sáb. Líder | Dom. BGV | Sáb. BGV | Dom. Coro | Sáb. Coro | Inicio de línea (DL · SL · BGV · Coro) | Lugares (DL · SL · BGV · Coro) | Fechas bloqueadas | Exenta | Mes por medio |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Ana E. (`m-ana`) | elegible · Tipo de hoy | fuera · regla de hoy | elegible · Tipo de hoy | fuera · regla de hoy | elegible · Tipo de hoy | fuera · regla de hoy | 2026-07 · — · 2026-08 · 2026-07 | 2 · 0 · 0 · 1 | — | no | no |
+| Beto E. (`m-beto`) | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fija 1 · regla fija de hoy | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · 2026-07 · — | 0 · 0 · 1 · 0 | — | no | no |
+| Carla E. (`m-carla`) | fuera · su Tipo no cubre el rol | fuera · su Tipo no cubre el rol | elegible · Tipo de hoy | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · 2026-09 · — | 0 · 0 · 1 · 0 | 2026-09-06, 2026-09-13 · corregido | no | no |
+| Dani E. (`kidsMember-dani`) | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | 2026-07 · — · — · — | 0 · 0 · 0 · 0 | — | no | sí |
+| Elena E. (`m-elena`) | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · — · — · — | 0 · 0 · 0 · 0 | — | no | no |
+| Fausto E. (`m-fausto`) · añadida por corrección | fuera · su Tipo no cubre el rol | fuera · su Tipo no cubre el rol | elegible · corrección · corregido | fuera · su Tipo no cubre el rol | fuera · su Tipo no cubre el rol | fuera · su Tipo no cubre el rol | — · — · 2026-09 · — | 0 · 0 · 1 · 0 | — | no | no |
+| Iván E. (`m-ivan`) | fuera · su Tipo no cubre el rol | elegible · Tipo de hoy | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | fuera · antes de su primer servicio en esta línea | — · 2026-07 · — · — | 0 · 1 · 0 · 0 | 2026-09-12 (Sat.Lead, Sat.BGV, Sat.Choir) | no | no |
+
+### Reglas de presencia (como se guardarán)
+
+| Regla | Clave | Roles | Miembros | Exclusiva |
+|---|---|---|---|---|
+| presencia 1 de 1 | `d-beto-carla` | Sun.BGV | Beto E., Carla E. | no |
+
+## Vista previa del saldo — corrida 2026-10 (ventana 2026-07, 2026-08, 2026-09)
+
+Registros usados: 2026-07: el plan · 2026-08: el plan · 2026-09: el registro guardado
+
+Cifras del ledger de C2 con un decimal; «le deben» = le toca más de lo que tuvo.
+
+| Persona | DL | SL | BGV | Coro | Total |
+|---|---|---|---|---|---|
+| Miembro eliminado (`m-hugo`) | al día | al día | al día | al día | al día |
+| Ana E. (`m-ana`) | 1.0 de más | al día | al día | al día | 1.0 de más |
+| Beto E. (`m-beto`) | al día | al día | al día | al día | al día |
+| Carla E. (`m-carla`) | al día | al día | al día | al día | al día |
+| Dani E. (`kidsMember-dani`) | al día | al día | al día | al día | al día |
+| Elena E. (`m-elena`) | le deben 1.0 | al día | al día | al día | le deben 1.0 |
+| Fausto E. (`m-fausto`) | al día | al día | al día | al día | al día |
+| Iván E. (`m-ivan`) | al día | al día | al día | al día | al día |
+
+## Anomalías (se listan; nada se resuelve solo)
+
+- Carla E. (`m-carla`): elegible por Tipo para BGV pero hoy no está marcada en la lista (2026-06, 2026-07, 2026-08, 2026-09); la inferencia puede sobrestimarla.
+- Carla E. (`m-carla`): elegible por Tipo para Coro pero hoy no está marcada en la lista (2026-06, 2026-07, 2026-08, 2026-09); la inferencia puede sobrestimarla.
+- Dani E. (`kidsMember-dani`): marcada hoy para BGV y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Dani E. (`kidsMember-dani`): marcada hoy para Coro y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Dani E. (`kidsMember-dani`): marcada hoy para SL y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Beto E. (`m-beto`): marcada hoy para Coro y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Beto E. (`m-beto`): marcada hoy para DL y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Beto E. (`m-beto`): marcada hoy para SL y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Elena E. (`m-elena`): marcada hoy para BGV y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Elena E. (`m-elena`): marcada hoy para Coro y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Elena E. (`m-elena`): marcada hoy para DL y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Elena E. (`m-elena`): marcada hoy para SL y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Iván E. (`m-ivan`): marcada hoy para BGV y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- Iván E. (`m-ivan`): marcada hoy para Coro y sin ningún lugar contado en esa línea: queda «fuera» en 2026-06, 2026-07, 2026-08, 2026-09 y puede leerse «al día» cuando se le debe. Corrección: «joinMonths».
+- 2026-07 · Iván E. (`m-ivan`): tiene un lugar Sat.Lead el 2026-07-11, un fin de semana en que una regla de hoy la excluye de ese rol.
+- 2026-07 · Ana E. (`m-ana`): su primer lugar en Coro (2026-07-19) no es el primer servicio de esa línea en el mes (2026-07-05); si llegó a mitad de mes, corrige con «blockedDates».
+- 2026-07 · presencia 1 de 1 (`d-beto-carla`): aplica el 2026-07-05 y nadie de la regla tuvo un lugar de presencia; quizá la regla de hoy no regía entonces.
+- 2026-07 · presencia 1 de 1 (`d-beto-carla`): aplica el 2026-07-19 y nadie de la regla tuvo un lugar de presencia; quizá la regla de hoy no regía entonces.
+- 2026-07 · Ana E. (`m-ana`): fecha bloqueada perdida (2026-07-12): el registro actual la tiene y el nuevo no; el registro se respaldó. Corrección: «blockedDates».
+- 2026-08 · Ana E. (`m-ana`): tiene un lugar Sat.BGV el 2026-08-01 con estado «fuera»; se queda fuera (un lugar nunca da elegibilidad).
+- 2026-08 · Beto E. (`m-beto`): regla fija = 1, tuvo 0 (Sun.BGV).
+- 2026-08 · presencia 1 de 1 (`d-beto-carla`): aplica el 2026-08-02 y nadie de la regla tuvo un lugar de presencia; quizá la regla de hoy no regía entonces.
+- 2026-08 · miembro sin documento (`m-hugo`): miembro eliminado o fuera de alabanza: sus lugares no cuentan y la parte de los demás en esos servicios cambia.
+- 2026-08 · dos documentos sunday_role el 2026-08-16 (`sun-2026-08-16-a`, `sun-2026-08-16-b`): el ledger descarta los dos.
+- 2026-09 · Carla E. (`m-carla`): tiene un lugar Sun.BGV el 2026-09-13, una fecha marcada como no disponible.
+- 2026-09 · Carla E. (`m-carla`): su primer lugar en BGV (2026-09-13) no es el primer servicio de esa línea en el mes (2026-09-06); si llegó a mitad de mes, corrige con «blockedDates».
+- 2026-09 · presencia 1 de 1 (`d-beto-carla`): aplica el 2026-09-06 y nadie de la regla tuvo un lugar de presencia; quizá la regla de hoy no regía entonces.
+- 2026-09 · presencia 1 de 1 (`d-beto-carla`): el lugar de presencia de Carla E. (`m-carla`) (2026-09-13) queda fuera de la población (C2 LG-7).
+- 2026-09 · Fausto E. (`m-fausto`): añadida por corrección; las exclusiones por semana de hoy no se le aplican (R8).
+- 2026-09 · Ana E. (`m-ana`): dos lugares de voz en el servicio del 2026-09-13; el de Sun.Choir se aparta como segundo lugar.
+
+## Correcciones: notas
+
+- entrada 1 · Fausto E. (`m-fausto`): Cantó en septiembre; hoy su Tipo ya no tiene voz.
+- entrada 2 · Carla E. (`m-carla`): Llegó a mitad de septiembre.
+
+## Correcciones que no aplican a esta corrida
+
+- entrada 3 · `m-ivan` · 2026-10: no aplica a esta corrida
+````
+
 **Create** `scripts/__tests__/reconstructDryRun.test.ts`:
 
 ````ts
@@ -4241,6 +4594,18 @@ describe("the fictitious world's dry run", () => {
     expect(plan.preview.figures["kidsMember-dani"]?.DL).toBeUndefined();
     const table = readFileSync(h.tablePath(), "utf8");
     expect(table).toContain("| Elena E. (`m-elena`) | le deben 1.0 |");
+  });
+
+  it("shows a replace's per-person changes against the stored record — only on the «reemplazar» month («Decision per month», R21)", async () => {
+    const h = make(worldDocs());
+    await h.dryRun(MONTHS, ["--overrides", h.overridesFile]);
+    const table = readFileSync(h.tablePath(), "utf8");
+    const july = table.slice(table.indexOf("## 2026-07 — reemplazar"), table.indexOf("## 2026-08 — crear"));
+    expect(july).toContain("### Cambios frente al registro guardado");
+    expect(july).toContain("| Ana E. (`m-ana`) | Dom. Coro: fuera → elegible · fecha bloqueada quitada: 2026-07-12 |");
+    expect(july).toContain("| Beto E. (`m-beto`) | nueva en el registro |");
+    expect(july).toContain("| presencia `d-beto-carla` | nueva en el registro · Sun.BGV · Beto E., Carla E. · no exclusiva |");
+    expect(table.match(/### Cambios frente al registro guardado/g)).toHaveLength(1);
   });
 
   it("shows a newcomer «al día» before her join month", async () => {
@@ -4515,6 +4880,7 @@ import {
   refusalLine,
   renderRefusalReport,
   renderTable,
+  replaceChanges,
   targetLine,
   type TableCell,
   type TableModel,
@@ -4568,7 +4934,12 @@ class Refusal extends Error {
   }
 }
 
-/** R12: an error is printed as its class (and an HTTP status) — never its message, which may carry a request body or a name. */
+/**
+ * R12: an error is printed as its class (and an HTTP status) — never its message, which may carry a request body or a name.
+ * It mirrors C2's `fairnessErrorClass` (`app/utils/fairnessLedgerRead.ts`, a `server-only` module this script cannot
+ * import): C2's executor rethrows every non-409 client error raw, and a `@sanity/client` error carries member ids in its
+ * message and in `response.url`. Used for the reads, for every executor call, and for any error that escapes the run.
+ */
 export function errorClass(e: unknown): string {
   if (e instanceof ReadFailure) return `ReadFailure (${e.step}${e.causeClass ? `: ${e.causeClass}` : ""})`;
   if (e instanceof Error) {
@@ -4995,7 +5366,9 @@ function derive(input: {
       members: r.members.map((id) => nameOf(id) || id),
       exclusive: r.exclusive,
     }));
-    return { month, action: actions.get(month)!, services, rows, presence };
+    // «Decision per month»: a replace shows, person by person, what it changes in the stored record.
+    const changes = actions.get(month) === "replace" ? replaceChanges(stored.get(month)!.record, p.body, nameOf) : undefined;
+    return { month, action: actions.get(month)!, services, rows, presence, changes };
   });
   const previewRows = preview.result.people.map((person) => {
     const tabs: Partial<Record<TabKey, number>> = {};
@@ -5090,15 +5463,15 @@ function reportRefusals(ctx: Ctx, refusals: readonly RunRefusal[], nameOf: (id: 
 }
 ````
 
-- [ ] **Step 4: Run it to see it pass, then inspect the golden table it wrote**
+- [ ] **Step 4: Run it to see it pass — against the snapshot of Step 1**
 
-Run: `git add -A && npx vitest run scripts/__tests__/reconstructDryRun.test.ts`
-Expected: PASS, and vitest writes `scripts/__tests__/__fixtures__/reconstruct-golden-table.md` (a missing file snapshot is written on a local run; under `CI=true` it fails instead). Open it and check, line by line: only the world's fictitious names, aliases and ids appear; the four month headings carry `no lo escribió la reconstrucción: no se toca`, `reemplazar`, `crear`, `editado después de reconstruir: no se toca`; the services tables show `especial | no` for 30 Aug and `especial | sí` for 8 Aug; Fausto E.'s row carries `añadida por corrección`; the presence table shows `d-beto-carla` with `Beto E., Carla E.` and `no`; the preview rows show `le deben 1.0` for Elena E.'s DL; the «no aplica» list holds `entrada 3 · \`m-ivan\` · 2026-10`. Any surprise is a finding about the code — fix the code, delete the snapshot, re-run.
+Run: `git add -A && CI=true npx vitest run scripts/__tests__/reconstructDryRun.test.ts`
+Expected: PASS. `CI=true` makes vitest refuse to write a missing or different file snapshot, so this proves the table the code renders is byte-identical to Step 1's file. What the replay checked by hand in those bytes (on `a35f812e`, 2026-10-06), against R4–R13 and the world's comments: only the world's fictitious names, aliases and ids appear; the four month headings carry `no lo escribió la reconstrucción: no se toca`, `reemplazar`, `crear`, `editado después de reconstruir: no se toca`; July, the one «reemplazar» month and the only one with a «Cambios frente al registro guardado» section, shows Ana E.'s `Dom. Coro: fuera → elegible · fecha bloqueada quitada: 2026-07-12`, five people `nueva en el registro` and `d-beto-carla` added; the services tables show `especial | no` for 30 Aug and `especial | sí` for 8 Aug, and both 16 Aug Sunday documents; Ana E.'s BGV join month is 2026-08, set by the Sat.BGV seat she held while `fuera` (R5: a kept seat sets a join month, never a status — `seat_while_out` lists it); Beto E. has no DL join month, because his only Sunday lead sits in a duplicated weekend document the seat step drops (LG-1); Iván E.'s August SL seats are 3 (two Saturdays and the counted special of 8 Aug, which his week-2 exclusion does not bind — A13); the twelve «marcada hoy … sin ningún lugar contado» lines are Dani E. 3 (BGV, Coro, SL — never DL), Beto E. 3, Elena E. 4 and Iván E. 2; Fausto E.'s row carries `añadida por corrección`; the presence table shows `d-beto-carla` with `Beto E., Carla E.` and `no`; the preview reads July and August from the plan and September from the stored, hand-edited record, so Elena E. — whose Sun.Lead is `in` only in that edit — shows `le deben 1.0` for DL and Ana E. `1.0 de más` (R11's acceptance row); the deleted holder `m-hugo` has no display name, so his preview row sorts first and reads `Miembro eliminado`; the «no aplica» list holds `entrada 3 · \`m-ivan\` · 2026-10`. A difference is a finding about the code or the world — fix that, never re-capture the snapshot.
 
 - [ ] **Step 5: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green; 0 errors; warnings at baseline. `protectedReadAudit.test.ts` still passes: `reconstructRun.ts` builds no client of its own (`deps.createClient` is not `createClient(`), so it holds no audited site.
+Expected: all green (on the replay base `a35f812e`: **475 files / 8785 tests**, 81 warnings); 0 errors; warnings at baseline. `protectedReadAudit.test.ts` still passes: `reconstructRun.ts` builds no client of its own (`deps.createClient` is not `createClient(`), so it holds no audited site.
 
 ```bash
 git add -A
@@ -5137,7 +5510,7 @@ import { RECORDED_BY } from "../lib/reconstructDecide";
 import type { WritePlanContent } from "../lib/reconstructPlanFile";
 import type { ExecuteFn } from "../lib/reconstructRun";
 import { ENV, REPO_ROOT, harness, type Harness } from "./__fixtures__/reconstructHarness";
-import { MONTHS, OVERRIDES, storedRecord, worldDocs } from "./__fixtures__/reconstructWorld";
+import { MEMBER_IDS, MONTHS, NAMES, OVERRIDES, RULE_KEYS, storedRecord, worldDocs } from "./__fixtures__/reconstructWorld";
 
 const open: Harness[] = [];
 const make = (...args: Parameters<typeof harness>) => {
@@ -5156,6 +5529,18 @@ const docOf = (h: Harness, id: string) => {
   return doc;
 };
 const STAMPS = { recordedBy: RECORDED_BY, now: "2026-10-20T18:00:00.000Z", currentMonth: "2026-10", environment: "local" as const };
+/**
+ * A Content Lake failure shaped as `@sanity/client` throws it: its message and `response.url` carry member ids, a
+ * name and a rule key. C2's executor rethrows every non-409 error raw, so the run must print its class and status only.
+ */
+const clientError = () =>
+  Object.assign(new Error("Mutation failed for Ana Ejemplo (m-ana, kidsMember-dani) under d-ana"), {
+    name: "ClientError",
+    statusCode: 500,
+    response: { url: "https://proj-test.api.sanity.io/v2024-07-23/data/query/test?query=*&%24ids=m-ana%2CkidsMember-dani", body: { error: { description: "Ana Ejemplo" } } },
+  });
+const RAW = ["Mutation failed", "api.sanity.io", ...NAMES, ...MEMBER_IDS, ...RULE_KEYS];
+const leaks = (text: string) => RAW.filter((secret) => text.includes(secret));
 
 /** A harness whose executor runs `before(input)` first — a concurrent edit AFTER the apply re-derived the plan. */
 function racing(docs: FakeDoc[]) {
@@ -5208,16 +5593,41 @@ describe("the writes (R10, R14, R16)", () => {
     expect(await h.dryRun("2026-07,2026-08,2026-09")).toBe(0);
     expect(planOf(h).months.map((m) => m.action)).toEqual(["create", "create", "create"]);
     setBefore((input) => {
-      if (input.months[0].month === "2026-08") h.lake.failNext.commit = new Error("socket hang up near Ana Ejemplo");
+      if (input.months[0].month === "2026-08") h.lake.failNext.commit = clientError();
     });
     expect(await h.applyLast()).toBe(1);
-    expect(h.out).toEqual(expect.arrayContaining(["2026-07 · created", "2026-08 · error Error", "sin intentar: 2026-09"]));
+    expect(h.out).toEqual(expect.arrayContaining(["2026-07 · created", "2026-08 · error ClientError 500", "sin intentar: 2026-09"]));
     expect(h.out.join("\n")).toMatch(/corre el dry run otra vez antes de cualquier reparación/);
-    expect(h.allOutput()).not.toMatch(/Ana/);
+    expect(leaks(h.allOutput())).toEqual([]);
+    const report = readFileSync(h.out.find((l) => l.startsWith("informe: "))!.slice("informe: ".length), "utf8");
+    expect(report).toContain("| 2026-08 | error ClientError 500 |");
+    expect(report).not.toMatch(/Mutation failed|api\.sanity\.io/);
     expect(h.lake.commits.map((ops) => ops[0].id)).toEqual(["fairnessMonth.2026-07"]);
     setBefore(() => {});
     expect(await h.dryRun("2026-07,2026-08,2026-09")).toBe(0);
     expect(planOf(h).months.map((m) => m.action)).toEqual(["unchanged", "create", "create"]);
+  });
+
+  it("prints only an error's class and status when the executor's own read throws, and stops before any write", async () => {
+    const { h, setBefore } = racing(worldDocs());
+    await h.dryRun(MONTHS, corrections(h));
+    setBefore(() => {
+      h.lake.failNext.fetch = clientError();
+    });
+    expect(await h.applyLast(corrections(h))).toBe(1);
+    expect(h.out).toEqual(expect.arrayContaining(["2026-07 · error ClientError 500", "sin intentar: 2026-08"]));
+    expect(h.lake.commits).toEqual([]);
+    expect(leaks(h.allOutput())).toEqual([]);
+  });
+
+  it("prints only the class and status when the apply's own re-read fails, writing nothing", async () => {
+    const h = make(worldDocs());
+    await h.dryRun(MONTHS, corrections(h));
+    h.lake.failNext.fetch = clientError();
+    expect(await h.applyLast(corrections(h))).toBe(1);
+    expect(h.err.join("\n")).toContain("falló: ReadFailure (solverConfig: ClientError 500)");
+    expect(h.lake.commits).toEqual([]);
+    expect(leaks(h.allOutput())).toEqual([]);
   });
 });
 
@@ -5376,7 +5786,7 @@ describe("the gate (R11, R19)", () => {
 - [ ] **Step 2: Run it to see it fail**
 
 Run: `git add -A && npx vitest run scripts/__tests__/reconstructApply.test.ts`
-Expected: FAIL — every apply answers exit 2 «apply: modo no disponible todavía en esta versión».
+Expected: FAIL — every apply answers exit 2 «apply: modo no disponible todavía en esta versión» (21 tests, 20 red; the write-token test is already green, because the token check comes before the mode dispatch).
 
 - [ ] **Step 3: Implement**
 
@@ -5610,7 +6020,7 @@ Expected: PASS — both suites (the dry run's behaviour is unchanged).
 - [ ] **Step 5: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green; 0 errors; warnings at baseline.
+Expected: all green (on the replay base `a35f812e`: **476 files / 8806 tests**, 81 warnings); 0 errors; warnings at baseline.
 
 ```bash
 git add -A
@@ -5755,7 +6165,7 @@ describe("the rollback apply (R18)", () => {
 - [ ] **Step 2: Run it to see it fail**
 
 Run: `git add -A && npx vitest run scripts/__tests__/reconstructRollback.test.ts`
-Expected: FAIL — every rollback answers exit 2 «rollback: modo no disponible todavía en esta versión».
+Expected: FAIL — every rollback answers exit 2 «rollback: modo no disponible todavía en esta versión» (5 tests, 4 red; «refuses a write plan handed to --rollback --apply» is already green, because Task 8's `readPlan` refuses a plan of the other kind).
 
 - [ ] **Step 3: Implement**
 
@@ -5978,7 +6388,7 @@ Expected: PASS — all three suites.
 - [ ] **Step 5: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green; 0 errors; warnings at baseline.
+Expected: all green (on the replay base `a35f812e`: **477 files / 8811 tests**, 81 warnings); 0 errors; warnings at baseline.
 
 ```bash
 git add -A
@@ -6088,8 +6498,9 @@ describe("the real CLI under tsx (R19)", () => {
         cwd: REPO_ROOT,
         encoding: "utf8",
         timeout: 60_000,
-        // A minimal environment: no token can reach the child, whatever the parent holds.
-        env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? work, NEXT_PUBLIC_SANITY_PROJECT_ID: "proj-test", NEXT_PUBLIC_SANITY_DATASET: "test" },
+        // A minimal environment: no token can reach the child, whatever the parent holds. NODE_ENV is
+        // there because Next's types make it a required key of ProcessEnv.
+        env: { NODE_ENV: "test", PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? work, NEXT_PUBLIC_SANITY_PROJECT_ID: "proj-test", NEXT_PUBLIC_SANITY_DATASET: "test" },
       });
       expect(result.error).toBeUndefined();
       expect(result.stdout).toContain("reconstruct-fairness-months · proj-test · test · DRY-RUN");
@@ -6314,7 +6725,7 @@ import { fileURLToPath } from "node:url";
 import { createClient } from "@sanity/client";
 
 import { executeFairnessMonthWrites } from "../app/utils/fairnessMonthWriteRequest.ts";
-import { runReconstruction } from "./lib/reconstructRun.ts";
+import { errorClass, runReconstruction } from "./lib/reconstructRun.ts";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -6332,8 +6743,8 @@ runReconstruction(process.argv.slice(2), {
     process.exitCode = code;
   },
   (error) => {
-    // R12: the class only — never a message that could carry a request body or a name.
-    process.stderr.write(`reconstruct-fairness-months: falló: ${error instanceof Error ? error.name : typeof error}\n`);
+    // R12: the class and status only — never a message that could carry a request body or a name.
+    process.stderr.write(`reconstruct-fairness-months: falló: ${errorClass(error)}\n`);
     process.exitCode = 1;
   },
 );
@@ -6347,7 +6758,7 @@ Expected: PASS — the audit finds exactly one new site (`scripts/reconstruct-fa
 - [ ] **Step 5: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green; 0 errors; warnings at baseline (`tsc` does not read the `.mjs`; ESLint does).
+Expected: all green (on the replay base `a35f812e`: **478 files / 8817 tests**, 81 warnings); 0 errors; warnings at baseline (`tsc` does not read the `.mjs`; ESLint does).
 
 ```bash
 git add -A
@@ -6360,9 +6771,9 @@ git commit -m "feat(fairness): the reconstruct-fairness-months CLI, visible to t
 Spec R21: `docs/SOLVER_AND_INFRA.md`'s `scripts/` toolbox gains the runbook (purpose, inputs, the token check, the consent step, dry run → review → apply → second dry run, rollback, the private paths, «names never enter the repository», and the standing re-run instruction); the inference rules R4–R9 go into C2's fairness-record ADR as a section (A31: C2 authors that ADR; C4 writes none of its own). No `docs/SECRETS.md` change: the two tokens already cover both halves. `CLAUDE.md`/`AGENTS.md` are not edited (R21 names neither; their parity test).
 
 **Files:**
-- Modify: `docs/SOLVER_AND_INFRA.md` (before «### Accounts / auth»; the «`scripts/lib/`» paragraph) **[verified c2-t10; C2 Task 16 does not edit §3 — re-verify at replay]**
-- Modify: `docs/adr/0050-the-fairness-balance-is-measured-against-recorded-eligibility.md` (append) — **from C2 plan Task 16, re-verify at replay; use the number Task 0 found**
-- Modify: `docs/adr/README.md` (ADR-0050's row) — **from C2 plan Task 16, re-verify at replay**
+- Modify: `docs/SOLVER_AND_INFRA.md` (before «### Accounts / auth»; the «`scripts/lib/`» paragraph) **[verified c2-t10 and a35f812e]**
+- Modify: `docs/adr/0050-the-fairness-balance-is-measured-against-recorded-eligibility.md` (append) **[verified a35f812e: it is `0050`; on `main` use the number Task 0 found]**
+- Modify: `docs/adr/README.md` (ADR-0050's row) **[verified a35f812e]**
 
 **Interfaces:** none (documentation).
 
@@ -6401,7 +6812,8 @@ Spec R21: `docs/SOLVER_AND_INFRA.md`'s `scripts/` toolbox gains the runbook (pur
   1. **Dry run:** `npx tsx --env-file=.env.local scripts/reconstruct-fairness-months.mjs --months 2026-08,2026-09 --out ~/owt-private/c4 [--overrides ~/owt-private/c4/correcciones.json] [--preview-run YYYY-MM]`.
      It writes `<out>/<time>-dry-run/`: `tabla.md` (per month the services with «cuenta»; per person each
      role's status, reason and «corregido» mark, join months, seats, blocked dates, «Exenta», «Mes por
-     medio»; the presence rules as stored; the balance preview for the run month; the anomalies),
+     medio»; for a «reemplazar» month, what it changes in the stored record, person by person; the presence
+     rules as stored; the balance preview for the run month; the anomalies),
      `plan.json`, and a `backup-YYYY-MM.json` of every record a replace would overwrite. Stdout: the action
      per month with counts, how many «Mes por medio» settings it found (a loud warning at zero), the plan's
      fingerprint and the two paths.
@@ -6423,7 +6835,8 @@ Spec R21: `docs/SOLVER_AND_INFRA.md`'s `scripts/` toolbox gains the runbook (pur
 - **Standing instruction: after any seat edit, date move, «cuenta» flag change or member availability edit
   that touches a reconstructed month, re-run the dry run for that month** — nothing else prompts it (the
   past-month rule on «cuenta» is client-side, so a hand-built request or a date move can still change a past
-  month). A «reemplazar» row and its per-person table then show what changed, for a fresh consent.
+  month). A «reemplazar» row and its «Cambios frente al registro guardado» section then show, person by
+  person, what changed, for a fresh consent.
 - **Months:** strictly before the current CDMX month — October 2026 only on or after 2026-11-01. A month
   with no record and no stored weekend service or counted special is skipped («sin servicios guardados»). A
   month whose record a v3 Auto confirm wrote reads «no lo escribió la reconstrucción: no se toca» —
@@ -6523,7 +6936,7 @@ and one seat per person per service. Amends no existing ADR (parent A31: C7 does
 - [ ] **Step 3: Gates and commit**
 
 Run: `git add -A && npx tsc --noEmit && npm test && npx eslint .`
-Expected: all green — `adrIndex.test.ts` and any doc-pinning suites still pass (no new ADR file, no renumbering).
+Expected: all green (on the replay base `a35f812e`: **478 files / 8817 tests**, 81 warnings) — `adrIndex.test.ts` and any doc-pinning suites still pass (no new ADR file, no renumbering).
 
 ```bash
 git add -A
@@ -6538,7 +6951,7 @@ git commit -m "docs(solver): the fairness-record reconstruction's runbook and it
 - [ ] **Step 1: The gates on the final tree**
 
 Run: `npx tsc --noEmit && npm test && npx eslint . 2>&1 | tail -1`
-Expected: `tsc` silent; every suite green — about **10 more test files** than Task 0's baseline (the ten `scripts/__tests__/reconstruct*.test.ts`); `✖ N problems (0 errors, N warnings)` with `N` equal to Task 0's. If `ParticipationSidebar.test.tsx` times out under load (a known pre-existing flake), re-run before treating it as a finding.
+Expected: `tsc` silent; every suite green — **10 more test files** than Task 0's baseline (the ten `scripts/__tests__/reconstruct*.test.ts`; on the replay base **478 files / 8817 tests**, against 468 / 8643); `✖ N problems (0 errors, N warnings)` with `N` equal to Task 0's. If `ParticipationSidebar.test.tsx` times out under load (a known pre-existing flake), re-run before treating it as a finding.
 
 - [ ] **Step 2: The scope and privacy checks**
 
@@ -6577,16 +6990,43 @@ The code ships by `CLAUDE.md`'s normal order. **Shipping the code writes no reco
 - **O6 — Later months.** October 2026 only on or after 2026-11-01; each later v2-confirmed month as it becomes past — C7 Step 10 runs O2–O5 again. Rollback, if ever needed, is the same two-consent sequence with `--rollback`.
 
 ---
-## Replay
+## Replay record
 
-This plan was written while C2 was still being implemented, so it has **not been executed**. A later agent replays it before anyone implements C4 for real:
+**Replayed on 2026-10-06** on `a35f812e02b4749ccbccc9a97d405c5d6c0f69bf` (C2's final tip: C1 + C3 + all 17 C2 tasks + C2's final-review fixes), in throwaway clones under `/private/tmp/claude-501/c4-replay/` with no `.env.local` and no network — every test uses the injected fake clients. Nothing touched Sanity or any real dataset, and the CLI never ran against one.
 
-1. **Build a throwaway copy from C2's final tip** — `origin/main` once C1, C3 and C2 have merged (preferred), or C2's final branch tip on top of the C1+C3 integration — in a folder outside every checkout (e.g. `/private/tmp/claude-501/c4-replay/`), with `node_modules` cloned from a lockfile-matching checkout (`cp -Rc`) and **no `.env.local`** (the replay never needs a token: every test uses the fake clients).
-2. **Run Task 0's Step 4 first** and fix every provisional anchor that differs (list below), keeping each change's meaning.
-3. **Execute the plan task by task**, exactly as written: each task's «see it fail» must fail for the stated reason, its gates must pass, and it ends in a commit on the throwaway copy. Where a step does not apply — an anchor that does not match, a C2 name that changed, a type that does not compile, an expectation that differs — **fix the plan text** (and say why in the replay notes), never only the copy. A hand-derived expectation that fails (Tasks 4, 5, 7) is a finding: decide whether the code or the derivation is wrong from the spec and C2's LG/RES rows, and fix that one.
-4. **The golden table** (Task 7 Step 4): the first run writes `scripts/__tests__/__fixtures__/reconstruct-golden-table.md`; inspect it by the checklist in that step, then fold its exact bytes into the plan as a **Create** block in Task 7 Step 1 (so a later executor gets the file from the plan, and `CI=true` never meets a missing snapshot).
-5. **Re-apply mechanically**: copy the corrected plan's Create/Find/Append blocks onto a second fresh copy and confirm each task's tree is byte-identical to the executed one and every gate passes — the method the C2 plan used.
-6. **Record the result** in the plan's header («How this plan was verified»): the base commit, the file/test counts after each task, every plan change. Do not touch production; do not run the CLI against any real dataset.
+**Method.** A script applied the plan's blocks in document order, task by task: each **Create**/**Append**/**Find** → **Replace with** exactly as written, each «Run it to see it fail» (must exit non-zero, reason checked by hand), each «Run it to see it pass», the three gates (`tsc --noEmit`, the whole vitest suite, `eslint .`) and the task's commit. A failing step was fixed in THIS FILE and its task re-run from the previous task's commit — never patched in the copy alone. After the last task the corrected plan was re-applied the same way to a second fresh clone under `CI=true`, comparing each task's tree with the executed one.
+
+**Result.** Every `Find` matched exactly once at its point; every «see it fail» failed for its stated reason; every hand-derived expectation of Tasks 4, 5 and 7 held as written (statuses, join months, the anomaly counts by type, Elena E.'s «le deben 1.0», every refusal line) — no derivation and no code had to change for them; the second clone came out byte-identical to the executed one at every task, with every gate green.
+
+| After task | Test files / tests | `tsc` | ESLint |
+|---|---|---|---|
+| 0 (baseline) | 468 / 8643 | silent | 0 errors / 81 warnings |
+| 1 | 469 / 8667 | silent | 0 / 81 |
+| 2 | 470 / 8690 | silent | 0 / 81 |
+| 3 | 471 / 8707 | silent | 0 / 81 |
+| 4 | 472 / 8729 | silent | 0 / 81 |
+| 5 | 473 / 8740 | silent | 0 / 81 |
+| 6 | 474 / 8755 | silent | 0 / 81 |
+| 7 | 475 / 8785 | silent | 0 / 81 |
+| 8 | 476 / 8806 | silent | 0 / 81 |
+| 9 | 477 / 8811 | silent | 0 / 81 |
+| 10 | 478 / 8817 | silent | 0 / 81 |
+| 11 | 478 / 8817 | silent | 0 / 81 |
+
+**Plan corrections made by the replay:**
+
+1. **Spec gap — a replace's per-person diff** (spec «Decision per month»: «the table shows the per-person diff»; R21: a «reemplazar» row «with its per-person diff then shows what the edit changed»). Found while checking the golden table by hand: the plan's table had none. Task 6 gains `ReplaceChange` and `replaceChanges` (people added, removed or changed — status words, exact-rule grouping, «Exenta», «Mes por medio», blocked dates — then presence rules) and renders them as «Cambios frente al registro guardado» under a «reemplazar» month only, with two new tests; Task 7's `derive` fills `TableMonth.changes` from the stored record (IF2-20) and the planned body, with one new dry-run test (July of the world: Ana E. gains Dom. Coro and loses 2026-07-12, five people are added, `d-beto-carla` is added). Task 11's runbook wording, «Plan decisions», the interfaces lists and the coverage row follow.
+2. **C2 carry-over — error output.** C2's executor rethrows every non-409 client error raw, and such an error carries member ids in its message and `response.url`. The plan already printed every read and executor error through `errorClass` (class and numeric status, never the message), but no test used an error of that shape on the executor path. Task 8's R16 test now throws a `@sanity/client`-shaped `ClientError` (status 500; a name, member ids and a rule key in its message and URL) and asserts stdout, stderr and the private apply report carry only `error ClientError 500`; two new Task 8 tests do the same for the executor's own member/record read (it stops before any write) and for the apply's re-read (`ReadFailure (solverConfig: ClientError 500)`, exit 1). `errorClass`'s comment now states that it mirrors C2's `fairnessErrorClass` (a `server-only` module the script cannot import), the CLI's last-resort handler prints `errorClass(error)` instead of the bare class, and the key-hygiene constraint says so.
+3. **Did not compile — Task 10.** The CLI spawn test's minimal `env` failed `tsc` (TS2769: Next's types make `NODE_ENV` a required key of `ProcessEnv`); it now sets `NODE_ENV: "test"`.
+4. **The golden table** is now a **Create** block in Task 7 Step 1 — the bytes of the first green run, checked by hand against R4–R13 and the world's comments (the checklist, now stated as verified, is in Step 4). Step 4 runs under `CI=true`, so a missing or different snapshot fails instead of being written. The Files list, «File Structure» and «Plan decisions» say so.
+5. **Expectations made exact.** Task 8's and Task 9's «see it fail» each have one test already green before the implementation (the write-token refusal precedes the mode dispatch; Task 8's `readPlan` refuses a plan of the other kind) — the Expected lines now give the counts. Task 0's baseline is 468 / 8643 on `a35f812e` (C2's plan had predicted 8636; its final-review fixes added seven tests), and every task's gate step now states the replay base's counts.
+6. **Provenance.** Every anchor this plan had taken from C2's plan (the importer-pin row, `EligibilityMember`, `resolveMonthEligibility`, `EligibilityResult`, ADR-0050's number, file, closing text and index row, the `SOLVER_AND_INFRA.md` headings, the audit header and executor-sites pin) matched on `a35f812e` as written — no `Find` block changed for them; they are marked **[verified a35f812e]**. The header, «Coverage gaps», «Anchor provenance», «Self-review» and «Execution handoff» drop their «not executed» statements.
+
+**Environment note (second copy, Tasks 9–11).** The machine hit memory pressure mid-replay (swap nearly full, load average above 100); two full `npx vitest run` gates there failed with vitest «Failed to start forks worker» and 5000 ms timeouts in suites C4 does not touch. Tasks 9–11 were re-applied from Task 8's commit with the gate's vitest limited to `--maxWorkers=3` — same suites, fewer parallel workers — and went green with the counts in the table (477 / 8811, 478 / 8817), each tree byte-identical to the executed one. The plan's gate command is unchanged.
+
+**C2 moved after this replay:** its tip is now `0aa33514` (final-review minors: ADR-0050's first clause, docs, the panel's X1 line). None of those lines is an anchor of this plan except ADR-0050, which Task 11 appends to; Task 0 Step 4 re-checks every anchor anyway.
+
+**To replay again** (if C2 changes before C4 is implemented): the same method on C2's new tip, starting from Task 0 Step 4; the per-task counts above are the expected gate output on `a35f812e` only.
 
 ---
 ## Coverage — spec row → task
@@ -6603,8 +7043,8 @@ This plan was written while C2 was still being implemented, so it has **not been
 | R8 corrections file: schema, full validation, replacement rule (A38), adding a person, blocked dates, notes private, «no aplica», never edits the config | Tasks 2, 4, 7 | `reconstructOverrides.test.ts` (each refusal); «R8» in `reconstructInference.test.ts`; Fausto added and Carla's blocked date in the world |
 | R9 availability: the month's stored dates, week exclusions on weekend dates, corrected dates; header line | Tasks 4, 5, 6 | «R9»; `seat_rule_excluded` never at a special; table header «Disponibilidad: lo guardado hoy…» |
 | R10 stamps `reconstructed`/`v2`/`local`/marker, set by the executor; `environment` via REC-2's function | Tasks 3, 7, 8 | Task 8's first apply test reads the stored documents |
-| R11 private table (services + «cuenta», status words, reasons, «corregido», joins, seats, blocks, Exenta, Mes por medio, presence as stored, preview through IF2-13 over after-apply records, anomalies, `es` collation); `--out`/`--overrides`/`--plan` refused in the repo; backups before a replace | Tasks 1, 5, 6, 7, 8 | `reconstructReport.test.ts`; golden file snapshot; edited-month preview reads the stored record; newcomer «al día»; exact sums zero; path tests incl. symlink and sibling worktree; `--plan` inside the repo → exit 2, zero reads |
-| R12 stdout/stderr name-free and identifier-free in every mode; ordinals; no hash prefixes; errors by class | Tasks 1, 6, 7, 10 | key-hygiene sweep (dry run, apply, rollback, resolver/corrections/binding refusals, failed read) with seed-shaped `d-ana`, `d-ana-beto`, `d-beto-carla`, `kidsMember-dani`; «a refusal over the d-ana restriction prints its ordinal» |
+| R11 private table (services + «cuenta», status words, reasons, «corregido», joins, seats, blocks, Exenta, Mes por medio, presence as stored, preview through IF2-13 over after-apply records, anomalies, `es` collation); `--out`/`--overrides`/`--plan` refused in the repo; backups before a replace; a replace's per-person diff («Decision per month», R21) | Tasks 1, 5, 6, 7, 8 | `reconstructReport.test.ts` (incl. «a replace's per-person changes»); golden file snapshot (July's «Cambios frente al registro guardado»); edited-month preview reads the stored record; newcomer «al día»; exact sums zero; path tests incl. symlink and sibling worktree; `--plan` inside the repo → exit 2, zero reads |
+| R12 stdout/stderr name-free and identifier-free in every mode; ordinals; no hash prefixes; errors by class and status | Tasks 1, 6, 7, 8, 10 | key-hygiene sweep (dry run, apply, rollback, resolver/corrections/binding refusals, failed read) with seed-shaped `d-ana`, `d-ana-beto`, `d-beto-carla`, `kidsMember-dani`; «a refusal over the d-ana restriction prints its ordinal»; Task 8's `ClientError` cases (an executor commit, an executor read, the apply's re-read — name, ids and key in the message and `response.url`): only `ClientError 500` reaches stdout, stderr and the apply report |
 | R13 every anomaly type; refusals (resolver reasons incl. presence, validator, corrections, plan binding) with name-free lines and a private report | Tasks 4–7 | per-type counts on the world; variant run for `rule_split`/`cadence_not_in`; `anomalyText` for every code; refusal tests |
 | R14 decision per month = IF2-21; every row against the executor, incl. `member_unknown` after re-derivation | Tasks 3, 7, 8 | Task 3 decision tests; Task 8 «every decision row» (not owned, edited, unchanged, `not_past_month`, `member_unknown`, `record_missing`, `stale_revision`, `record_exists`, create, replace) |
 | R15 plan binding: bodies, hashes, revisions, overrides hash, backup hashes, anomalies, preview figures, service-input digest (+ member-input digest), fingerprint | Tasks 3, 7, 8 | «the plan binding (R15)» (four refusing changes + a preview-only availability change; three non-changes still apply) |
@@ -6626,13 +7066,13 @@ This plan was written while C2 was still being implemented, so it has **not been
 | Q1 (a counted special sets a join month); Q2 (Tipo-eligible but unticked → `in` + anomaly) | Tasks 4, 5, 7 | counted special in `seatJoinMonths`; `not_ticked_today` |
 
 **Coverage gaps (stated, not hidden):**
-- **The golden table's bytes are not in this plan.** Task 7 asserts the table's content structurally and by a vitest file snapshot that the first run writes; the replay folds the inspected bytes into the plan («Replay» step 4).
-- **Nothing here has been executed.** Every hand-derived expectation (statuses, anomaly counts, Elena's «le deben 1.0», the refusal lines) follows the world's comments and C2's code as read on `c2-t10` and in C2's plan; the replay is where they are proven or corrected.
+- **Replayed on `a35f812e`, not on `main`.** Every block applies and goes green there («Replay record»); `main` after C1, C3 and C2 merge may differ, which is why Task 0 Step 4 re-checks the anchors before Task 1.
 - **Beyond the spec, deliberately:** the required `--fingerprint` flag and the member-input digest (each only adds a refusal). C7's W7/Step 10 command lines must gain `--fingerprint` when C7 is replayed — a sibling note for C7's coordinator; this plan edits no other file.
 - **Order of the backup before the plan** is guaranteed by code order (Tasks 7, 9) and checked in review; no test observes the order of two file writes.
 - **The production acceptance row** is manual by nature (Release O5).
-- **The two «no se toca» rows' anomalies read the STORED record** (the after-apply rule, «Plan decisions»): on a foreign or edited month, `cadence_not_in`, `exact_mismatch`, the seat and presence anomalies describe the record that stays, not the computed body. A reviewer may want to confirm that reading of R13 («computed with the record R11's preview rule uses» is explicit only for `member_gone`).
-- **Absent projected fields:** the plan assumes groq-js (tests) and the Content Lake (production) may answer an absent projected field as `null` or omit it, and every consumer tolerates both (`?? []`, `?? undefined`, C2/C3's own optional chaining) — true by inspection; the replay proves it.
+- **The two «no se toca» rows' anomalies read the STORED record** (the after-apply rule, «Plan decisions»): on a foreign or edited month, `cadence_not_in`, `exact_mismatch`, the seat and presence anomalies describe the record that stays, not the computed body. A reviewer may want to confirm that reading of R13 («computed with the record R11's preview rule uses» is explicit only for `member_gone`). On those two rows the table's PERSON rows, by contrast, show the computed body (what a reconstruction would say), while their «Lugares» column and the preview read the stored record; the month's heading says it is not touched.
+- **A seat holder with no member document has no display name**, so his preview row sorts first (R11's `es` collation on an empty name) and reads «Miembro eliminado» — deterministic, visible in the golden table.
+- **Absent projected fields:** the plan assumes groq-js (tests) and the Content Lake (production) may answer an absent projected field as `null` or omit it, and every consumer tolerates both (`?? []`, `?? undefined`, C2/C3's own optional chaining) — true by inspection, and the replay ran every consumer over groq-js answers.
 
 ## Anchor provenance
 
@@ -6646,19 +7086,19 @@ This plan was written while C2 was still being implemented, so it has **not been
 - C1/C3: `app/utils/countsForFairness.ts`, `app/utils/sundayCadence.ts` (`resolveRulePersonId`, `RosterMember`), `app/utils/solverConfigWriteRequest.ts` (`solverConfigFromDocument`, `buildSolverConfigDocument`, `SOLVER_CONFIG_DOC_ID`).
 - Existing: `scripts/lib/solverHistoryDiffRun.ts` (`realLocation` not exported; the rest exported), `scripts/lib/strip-comments.mjs`, `scripts/lib/__tests__/sr-retired-writer.test.mjs` (write markers), `app/utils/serviceReadModel.ts` (`isValidServiceDate` rejects impossible days), `app/utils/serviceReadSelect.ts` (`serviceDayKey`), `app/utils/memberRuleNames.ts` (`displayMemberName`, `rulePersonNamesMember`), `app/ministries.ts`, `docs/SOLVER_AND_INFRA.md` §3 headings, `vitest.config.ts` (`scripts/**/*.test.{ts,mjs}`).
 
-**From C2's plan — re-verify at replay (Task 0 Step 4):**
+**Taken from C2's plan, then verified on C2's final tip `a35f812e` by the replay (Task 0 Step 4 re-checks them on `main`):**
 - **C2 Task 11:** the write-request module's caller-pin row reading `["app/utils/fairnessLedgerRead.ts", "app/utils/fairnessMonthCommit.ts"]` (Task 3's `Find`).
 - **C2 Task 12:** `app/utils/fairnessEligibility.ts` — `resolveMonthEligibility({ month, config, members })`, `EligibilityMember`, `EligibilityResult` (issues `{ code, ruleKey? }`, refusals `{ person, reason }`), its people sorted by id with `voz` only, effective pools (ticked AND Tipo-fitting), `sundayCadence` on every cadence member's item, its week-exclusion and unavailable-date blocks; plus Task 12's edits inside the write-request module (limits moved to the vocabulary, `MEMBER_ID_RE`), which C4 uses only through C2's functions.
 - **C2 Task 16:** ADR-0050's number, file name and closing «Consequences» text (Task 11's `Append`), and its README row ending «… and one seat per person per service. Amends no existing ADR (parent A31: C7 does, at the flip)» (Task 11's `Find`).
 - **C2 Tasks 13–15** (preview model, panel, «Registrar»): no C4 code depends on them; the «Equidad» panel is used only by Release O5.
-- **C2's final baseline counts** (Task 0 Step 3).
+- **C2's final baseline counts** (Task 0 Step 3): 468 files / 8643 tests, 81 warnings on `a35f812e`.
 
 ## Self-review (writing-plans checklist)
 
 1. **Spec coverage:** every R row, the acceptance table, the «Consumes from» items, «Provides», the D and A rows and Q1–Q2 map to a task above; the gaps are listed under «Coverage gaps».
-2. **Placeholder scan:** no «TBD», «TODO», «similar to Task N» or test-less step; the one generated artifact (the golden snapshot) is named, its generation step and inspection checklist are given, and the replay folds it in. Two interim strings exist on purpose and are removed by later tasks: «modo no disponible todavía en esta versión» (Tasks 7–8, gone after Task 9).
-3. **Type consistency:** names are used identically across tasks — `parseReconstructArgs`, `privatePathRefusals`, `parseOverrides`/`MemberOverride`/`ALL_MONTHS`, `validateReconstructionBody`/`hashOfBody`/`parseRecord`/`summarizeStored`/`decideWrite`/`decideDelete`/`RECORDED_BY`, `canonicalJson`/`fingerprintOf`/`serializePlan`/`parsePlanFile`/`planDifferences`/`serviceInputDigest`/`memberInputDigest`, `hypotheticalConfig`/`seatJoinMonths`/`countedServiceDays`/`transformMonth`/`resolverRefusals`/`validatorRefusal`/`dedupeRefusals`, `monthAnomalies`/`poolAnomalies`/`joinAnomalies`/`lostBlocks`/`sortAnomalies`, `ledgerMembers`/`plannedLogicalRecord`/`monthLedger`/`seatsPerLine`/`previewFigures`/`previewWindow`, `renderTable`/`renderRefusalReport`/`renderApplyReport`/`renderRollbackTable`/`refusalLine`/`targetLine`, `runReconstruction`/`RunDeps`/`ClientConfig`/`ExecuteFn`; C2's names exactly as C2 §7 and `c2-t10` spell them.
+2. **Placeholder scan:** no «TBD», «TODO», «similar to Task N» or test-less step; the one generated artifact (the golden snapshot) is a **Create** block in Task 7 Step 1, with the hand check it passed stated in Step 4. Two interim strings exist on purpose and are removed by later tasks: «modo no disponible todavía en esta versión» (Tasks 7–8, gone after Task 9).
+3. **Type consistency:** names are used identically across tasks — `parseReconstructArgs`, `privatePathRefusals`, `parseOverrides`/`MemberOverride`/`ALL_MONTHS`, `validateReconstructionBody`/`hashOfBody`/`parseRecord`/`summarizeStored`/`decideWrite`/`decideDelete`/`RECORDED_BY`, `canonicalJson`/`fingerprintOf`/`serializePlan`/`parsePlanFile`/`planDifferences`/`serviceInputDigest`/`memberInputDigest`, `hypotheticalConfig`/`seatJoinMonths`/`countedServiceDays`/`transformMonth`/`resolverRefusals`/`validatorRefusal`/`dedupeRefusals`, `monthAnomalies`/`poolAnomalies`/`joinAnomalies`/`lostBlocks`/`sortAnomalies`, `ledgerMembers`/`plannedLogicalRecord`/`monthLedger`/`seatsPerLine`/`previewFigures`/`previewWindow`, `renderTable`/`replaceChanges`/`renderRefusalReport`/`renderApplyReport`/`renderRollbackTable`/`refusalLine`/`targetLine`, `runReconstruction`/`RunDeps`/`ClientConfig`/`ExecuteFn`/`errorClass`; C2's names exactly as C2 §7, `c2-t10` and `a35f812e` spell them.
 
 ## Execution handoff
 
-Do not execute this plan until C1, C3 and C2 are on `main` and the «Replay» has run. Then: **Subagent-driven (recommended)** — `superpowers:subagent-driven-development`, a fresh implementation worker per task, a review between tasks, the critical slices (Tasks 1, 2, 3, 4, 7, 8, 9, 10) reviewed at high effort; or **inline** — `superpowers:executing-plans` with checkpoints after Tasks 3, 7, 9 and 11. Either way the cycle closes with `finish-cycle` and the «Release» order; the production dry run and the `--apply` stay separate operations behind Frank's explicit consent.
+Do not execute this plan until C1, C3 and C2 are on `main` (the replay has run on C2's final tip — «Replay record»). Then: **Subagent-driven (recommended)** — `superpowers:subagent-driven-development`, a fresh implementation worker per task, a review between tasks, the critical slices (Tasks 1, 2, 3, 4, 7, 8, 9, 10) reviewed at high effort; or **inline** — `superpowers:executing-plans` with checkpoints after Tasks 3, 7, 9 and 11. Either way the cycle closes with `finish-cycle` and the «Release» order; the production dry run and the `--apply` stay separate operations behind Frank's explicit consent.
