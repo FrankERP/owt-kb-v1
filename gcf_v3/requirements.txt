@@ -1,1 +1,4 @@
+# Pinned for parity with gcf/requirements.txt and the local owt-roles conda env: the ortools
+# pin moves only together with v2's and the local env (spec C5 §11.1), never a floating range.
 ortools==9.15.6755
+functions-framework>=3.0,<4

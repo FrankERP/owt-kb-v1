@@ -1,0 +1,104 @@
+{
+  "registry": "owt-solver-v3",
+  "contract": 3,
+  "note": "Every machine-readable code the function can emit, with its parameter names. No copy: the planner owns the Spanish text (C6's sync test reads this file).",
+  "groups": {
+    "error": {
+      "contract_mismatch": ["received"],
+      "invalid_request": ["field", "detail"],
+      "unknown_person": ["field", "person"],
+      "unknown_service": ["field", "service"],
+      "pin_conflict": ["person", "service"],
+      "too_many_pins": ["count", "cap"],
+      "timeout": ["stage", "seconds"],
+      "invalid_json": [],
+      "unauthorized": [],
+      "method_not_allowed": [],
+      "misconfigured": [],
+      "internal_error": []
+    },
+    "stage": {
+      "rules": [],
+      "fill": [],
+      "cadence": [],
+      "compensation": [],
+      "voice_floor": [],
+      "dl_floor": [],
+      "sunday_cap": [],
+      "saturday_cap": [],
+      "no_consecutive": [],
+      "balance_max:{line}": ["line"],
+      "balance_sq:{line}": ["line"],
+      "tiebreak": []
+    },
+    "stage_status": {
+      "proven": [],
+      "unproven": [],
+      "not_run": []
+    },
+    "stage_reason": {
+      "budget": [],
+      "no_solution_in_limit": [],
+      "stopped_earlier": []
+    },
+    "limit": {
+      "none": [],
+      "deterministic": [],
+      "wall": []
+    },
+    "violation": {
+      "mandatory_lead": ["rule", "cause", "service", "month"],
+      "count": ["rule", "cause", "person", "month", "observed", "limit"],
+      "pair": ["rule", "cause", "persons", "service", "month"],
+      "presence": ["rule", "cause", "persons", "service", "month"],
+      "consecutive": ["rule", "cause", "person", "weekends"]
+    },
+    "violation_rule": {
+      "mandatory_lead": []
+    },
+    "violation_cause": {
+      "pins": [],
+      "forced": []
+    },
+    "unfilled_reason": {
+      "no_possible_lead": [],
+      "no_candidate": [],
+      "rules": [],
+      "fill_not_proven": []
+    },
+    "missed": {
+      "cadence_on_missed": ["person", "month", "cause"],
+      "cadence_off_led": ["person", "month", "cause"],
+      "compensation_missed": ["person", "month", "cause"],
+      "voice_floor_missed": ["person", "month", "cause"],
+      "dl_floor_missed": ["person", "month1", "month2", "cause"],
+      "sunday_cap_exceeded": ["person", "month", "count", "cause"],
+      "saturday_cap_exceeded": ["person", "month", "count", "cause"],
+      "consecutive_sundays": ["person", "dates", "cause"]
+    },
+    "missed_cause": {
+      "not_proven": [],
+      "pins": [],
+      "rule": [],
+      "unavailable": [],
+      "capacity": [],
+      "higher_priority": []
+    },
+    "notice": {
+      "dl_capacity": ["months", "seats", "people"],
+      "exact_clamped": ["rule", "person", "month", "value", "available"],
+      "min_clamped": ["rule", "person", "month", "value", "available"],
+      "presence_not_applicable": ["rule", "service"]
+    },
+    "cadence_state": {
+      "on": [],
+      "off": [],
+      "out": []
+    },
+    "compensation": {
+      "given": [],
+      "missed": [],
+      "not_applicable": []
+    }
+  }
+}

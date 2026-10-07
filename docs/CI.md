@@ -131,30 +131,40 @@ Every job has the full tree checked out from the repository root, so a fixture a
 the root (for example `fixtures/fairness/golden.json`) is present in `node` and in
 both solver jobs; resolve it relative to the test's own file, never to a `cd`.
 
-`gcf_v3/` holds only a scaffold until the v3 solver lands: `requirements.txt`
-(the same ortools pin as `gcf/`), a copy of `gcf/.gcloudignore`, the `owt_v3`
-package and one smoke test, `test_scaffold.py`. The v2 Cloud Build trigger filters
-on `gcf/**` and `cloudbuild.yaml`, so nothing under `gcf_v3/` deploys.
+`gcf_v3/` holds the v3 solver (solver v3 C5): the `owt_v3` package, the HTTP entry
+`main.py`, the `--json-mode` CLI `owt_solver_v3.py`, `requirements.txt` (the same
+ortools pin as `gcf/`, plus `functions-framework`), its own `.gcloudignore` and
+`cloudbuild.yaml`, the unit suite in `tests/` and the acceptance harness in
+`acceptance/` (a package with no `test*.py`; its `ci` subset runs from
+`tests/test_acceptance_ci.py`). C0's `test_scaffold.py` stays. Two of the suite's
+modules read `fixtures/fairness/golden.json` (C2's fixture), so the job is red
+without it. v2's trigger filters on `gcf/**` and `cloudbuild.yaml`; v3's
+(`owt-solver-v3-deploy`) on `gcf_v3/**` — neither matches the other's paths.
 
 ### Timing
 
 **Rule for every `timeout-minutes` in `ci.yml`:** a job's timeout is at least
 twice its latest measured job time. Re-measure when a suite's step time grows by a
 quarter, and split again rather than drop a suite. The numbers live here, not in
-workflow comments. `solver-v3`'s 15 is a placeholder until the v3 solver's suite
-exists and is measured.
+workflow comments. `solver-v3`'s 15 was set before its suite existed; the solver
+v3 C5 row below is the suite's first runner measurement (job `solver-v3` 1m04s,
+about 7x under the 7m30s bar), so 15 stands.
 
 | Run | Date | Commit | Layout | Node steps | v2 solver steps | v3 solver steps | Wall (job) |
 |---|---|---|---|---|---|---|---|
 | 36983149539 | 2026-10-02 | `0a81839c` (`main`) | one job | 4m34s | 10m03s (tests 9m43s) | — | 14m41s |
 | 37357419306 | 2026-10-05 | `4759a214` (`main`) | one job | 4m50s | 10m20s (tests 10m01s) | — | 15m11s |
 | 37420430364 | 2026-10-06 | `599734c5` (`preview`) | split | 5m02s (job `node` 5m05s) | 10m08s (tests 9m53s; job `solver-v2` 10m16s) | job `solver-v3` 24s | 10m29s (run) |
+| 37691117260 | 2026-10-07 | `d92e3458` (`claude/solver-v3-c5-solver-function`) | split | 5m36s (job `node` 5m40s) | 10m20s (tests 10m00s; job `solver-v2` 10m32s) | 54s (tests 40s; job `solver-v3` 1m04s) | 10m46s (run) |
 
 The single-job rows sum the job's own step times: «Node steps» is set-up through
 Lint, «v2 solver steps» is setup-python through «Solver tests». The split row is the
 first run of the split layout (the `push` run on `preview`): the same step sums, each
 job's own duration in brackets, and the run's wall time (created → `gates` done). Its
 `gates` job took 8 s on the runner's preinstalled Node (assumption A2 holds).
+The solver v3 C5 row is the `pull_request` run of PR #136's head, measured the same
+way; «v3 solver steps» is setup-python through «Solver tests». The 37420430364 row's
+`solver-v3` job timed C0's scaffold, not the suite.
 
 ### Solver inertness goldens (`gcf/test_inertness.py`)
 

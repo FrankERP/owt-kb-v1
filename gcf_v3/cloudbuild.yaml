@@ -1,0 +1,36 @@
+# Cloud Build config for the OWT solver v3 Cloud Function `owt-solver-v3` (spec C5 §11.3).
+#
+# Trigger `owt-solver-v3-deploy`: GitHub, branch ^main$, included files gcf_v3/**, config file
+# gcf_v3/cloudbuild.yaml. It runs on every push to main that touches gcf_v3/ and deploys the
+# self-contained gcf_v3/ directory. v2's trigger (`owt-solver-deploy`, gcf/** and the root
+# cloudbuild.yaml) and this one match no path of each other's.
+#
+# The API key is the same Secret Manager secret as v2 (owt-solver-api-key, spec C5-14); nothing
+# sensitive lives here. OWT_SOLVER_V3_BUILD is the deployed commit, echoed by the ping as `build`.
+#
+# First creation and manual fallback: bash scripts/deploy-solver-v3-gcf.sh
+steps:
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: deploy-solver-v3
+    entrypoint: gcloud
+    args:
+      - functions
+      - deploy
+      - owt-solver-v3
+      - --gen2
+      - --region=us-central1
+      - --runtime=python312
+      - --source=gcf_v3
+      - --entry-point=solve
+      - --trigger-http
+      # No --allow-unauthenticated: it calls run.services.setIamPolicy, which the build account
+      # (roles/editor) cannot. The first manual creation grants allUsers -> run.invoker once, and
+      # the binding persists across revisions. The X-Api-Key header is the barrier.
+      - --memory=512MB
+      - --cpu=1
+      - --timeout=120s
+      - --set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest
+      - --set-env-vars=OWT_SOLVER_V3_BUILD=$COMMIT_SHA
+
+options:
+  logging: CLOUD_LOGGING_ONLY

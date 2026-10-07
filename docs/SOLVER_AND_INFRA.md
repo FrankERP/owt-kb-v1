@@ -521,6 +521,78 @@ holds for the trailing Saturday, now that the planner sends `weeks + 1`: the pla
 first (the solver's non-trailing path is unchanged by the invariant), then the function if ever
 both — an old function refuses a request that names it.
 
+### Solver v3 (`gcf_v3/`) — `owt-solver-v3`, deployed and not called
+
+The date-based v3 solver (spec `docs/superpowers/specs/2026-10-05-solver-v3-c5-solver-function-design.md`,
+ADR-0051) lives in `gcf_v3/` (package `owt_v3`) and imports nothing from `gcf/`. **Nothing calls it**
+until C6 routes Auto to it behind the effective engine and C7 flips `SOLVER_ENGINE`; v2 above is
+unchanged and remains the engine.
+
+- **Contract `3`.** One request staffs the weekend voice seats of 1–2 calendar months: dated
+  services (opaque `id`, `kind`, `fixed`, `counts`, `seats`), people with eligibility already
+  resolved per service, carried balances per line (hundredths), cadence states (`on`/`off`/`out`),
+  rules (`count`/`pair`/`presence`/`consecutive`, role keys and values resolved by the caller), pins
+  by service id, the previous month's facts (`prior`) and a seed. The response carries the
+  assignment, unfilled seats with reasons, the pin handshake, violations under a ceiling, every
+  stage's status, the per-person fairness lines and display tabs (hundredths, tenths and integer
+  seat counts), cadence outcomes, missed protections with causes, and notices. Every code is in
+  `gcf_v3/owt_v3/codes.json`; `PIN_CAP = 250` is in `gcf_v3/owt_v3/constants.py`.
+- **Stages** (each solved, then fixed): rules (the violation ceiling) → fill → cadence →
+  compensation Saturday → voice floor → DL floor → Sunday cap → Saturday cap → no consecutive
+  Sundays → per line (DL, SL, BGV, each presence sub-line, CORO) most-owed then sum of squares →
+  tie-break. One search worker, `linearization_level = 2`, a deterministic limit per stage
+  (`STAGE_DET_LIMIT`) under a 2.5 s wall guard, a 25 s budget.
+- **Local run:** `python gcf_v3/owt_solver_v3.py --json-mode < request.json` from the repository root.
+- **Tests:** the `solver-v3` CI job (`python -m unittest discover -s gcf_v3 -t gcf_v3 -v`), which
+  includes the acceptance `ci` subset. The full offline acceptance:
+  `python gcf_v3/acceptance/run.py --world gcf_v3/acceptance/world_realistic.json --matrix full --out <dir>`
+  (aggregates in `<dir>/summary.json`; per-run pairs under `<dir>/runs/`). The independent checker
+  runs on one captured pair from `gcf_v3/`: `python -m acceptance.checker request.json response.json`
+  — it prints counts, codes and stage public labels only. Timing-gate shapes A–D:
+  `python gcf_v3/acceptance/run.py --emit-requests <dir>`.
+- **Deploy.** Cloud Build trigger `owt-solver-v3-deploy` (GitHub, branch `^main$`, included files
+  `gcf_v3/**`, config `gcf_v3/cloudbuild.yaml`, region global, service account the default compute
+  account — the same shape as `owt-solver-deploy`). Its filter and v2's (`gcf/**`, `cloudbuild.yaml`)
+  share no path. It deploys `owt-solver-v3` gen2, us-central1, python312, 512MB, 1 vCPU, 120 s, the
+  key from Secret Manager (`owt-solver-api-key`, shared with v2) and
+  `OWT_SOLVER_V3_BUILD=$COMMIT_SHA`. It does not pass `--allow-unauthenticated` (the build account
+  cannot set IAM). **First creation, once, after the merge:** `scripts/deploy-solver-v3-gcf.sh`
+  from the fetched tip of `main` (it refuses a dirty `gcf_v3/`, passes `--gen2` and
+  `--allow-unauthenticated` with the operator's rights, and stamps
+  `OWT_SOLVER_V3_BUILD=$(git rev-parse HEAD)`); then the runtime account's
+  `roles/secretmanager.secretAccessor` on `owt-solver-api-key` is checked
+  (`gcloud secrets get-iam-policy owt-solver-api-key`), and the trigger is created. Until then the
+  function does not exist and a merge that touches `gcf_v3/**` deploys nothing. The same script is
+  the manual fallback. A change to `fixtures/fairness/golden.json` alone deploys nothing.
+
+#### Verifying a v3 deploy
+
+1. `gcloud functions describe owt-solver-v3 --gen2 --region=us-central1 --format='value(state,updateTime)'`
+   — `ACTIVE`, with an `updateTime` after the merge.
+2. **Ping** — the key read from Secret Manager with file logging off and piped to curl, never printed:
+
+   ```bash
+   URL=$(gcloud functions describe owt-solver-v3 --gen2 --region=us-central1 --format='value(serviceConfig.uri)')
+   KEY=$(CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true gcloud secrets versions access latest --secret=owt-solver-api-key)
+   printf 'X-Api-Key: %s\n' "$KEY" | curl -s -X POST "$URL" -H @- -H "Content-Type: application/json" \
+     -d '{"contract":3,"ping":true}' \
+     | python3 -c 'import json,sys; r=json.load(sys.stdin); print(r["ok"], r["contract"], r["build"])'
+   unset KEY
+   ```
+
+   It must print `True 3 <the merged commit SHA>` (`git rev-parse origin/main`) — the analogue of
+   the Vercel alias check.
+3. **Smoke solve** — the same key handling, with `-d @gcf_v3/acceptance/smoke.json` (fictitious
+   people) and `print(r["ok"], all(s["status"] == "proven" for s in r["stages"]))`: it must print
+   `True True`.
+
+The function URL (C6/C7's `OWT_SOLVER_V3_URL`) is
+`gcloud functions describe owt-solver-v3 --gen2 --region=us-central1 --format='value(serviceConfig.uri)'`.
+
+**Rollback.** Disable the trigger `owt-solver-v3-deploy`; nothing routes to the function, so it may
+stay or be deleted (Frank's call); revert the PR. No data depends on it. C0's `solver-v3` job and
+scaffold stay, green on `gcf_v3/test_scaffold.py`.
+
 ---
 
 ## 3. `scripts/` — one-off migrations, imports & ops

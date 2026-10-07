@@ -1,0 +1,30 @@
+{
+  "contract": 3,
+  "seed": 1,
+  "months": [
+    "2026-11"
+  ],
+  "services": [
+    {"id": "smoke-2026-11-01-sun", "date": "2026-11-01", "month": "2026-11", "kind": "sunday", "fixed": false, "counts": true, "seats": {"Lead": 2, "BGV": 3, "Choir": 3}},
+    {"id": "smoke-2026-11-07-sat", "date": "2026-11-07", "month": "2026-11", "kind": "saturday", "fixed": false, "counts": true, "seats": {"Lead": 2, "BGV": 3}},
+    {"id": "smoke-2026-11-08-sun", "date": "2026-11-08", "month": "2026-11", "kind": "sunday", "fixed": false, "counts": true, "seats": {"Lead": 2, "BGV": 3, "Choir": 3}}
+  ],
+  "people": [
+    {"id": "m-ana", "name": "Ana", "eligibility": {"smoke-2026-11-01-sun": ["Lead", "BGV", "Choir"], "smoke-2026-11-07-sat": ["Lead", "BGV"], "smoke-2026-11-08-sun": ["Lead", "BGV", "Choir"]}, "carried": {"DL": -40}, "dl_since": "2026-05", "prev_dl_leads": 0, "cadence": {"2026-11": "off"}},
+    {"id": "m-bea", "name": "Bea", "eligibility": {"smoke-2026-11-01-sun": ["Lead", "BGV", "Choir"], "smoke-2026-11-07-sat": ["Lead", "BGV"], "smoke-2026-11-08-sun": ["Lead", "BGV", "Choir"]}, "carried": {"DL": -30}, "dl_since": "2026-05", "prev_dl_leads": 1},
+    {"id": "m-cris", "name": "Cris", "eligibility": {"smoke-2026-11-01-sun": ["Lead", "BGV", "Choir"], "smoke-2026-11-07-sat": ["Lead", "BGV"], "smoke-2026-11-08-sun": ["Lead", "BGV", "Choir"]}, "carried": {"DL": -20}, "dl_since": "2026-05", "prev_dl_leads": 0},
+    {"id": "m-dario", "name": "Dario", "eligibility": {"smoke-2026-11-01-sun": ["Lead", "BGV", "Choir"], "smoke-2026-11-07-sat": ["Lead", "BGV"], "smoke-2026-11-08-sun": ["Lead", "BGV", "Choir"]}, "carried": {"DL": -10}, "dl_since": "2026-05", "prev_dl_leads": 1},
+    {"id": "m-ema", "name": "Ema", "eligibility": {"smoke-2026-11-01-sun": ["Lead", "BGV", "Choir"], "smoke-2026-11-07-sat": ["Lead", "BGV"], "smoke-2026-11-08-sun": ["Lead", "BGV", "Choir"]}, "carried": {"DL": 0}, "dl_since": "2026-05", "prev_dl_leads": 0},
+    {"id": "m-fede", "name": "Fede", "eligibility": {"smoke-2026-11-01-sun": ["Lead", "BGV", "Choir"], "smoke-2026-11-07-sat": ["Lead", "BGV"], "smoke-2026-11-08-sun": ["Lead", "BGV", "Choir"]}, "carried": {"DL": 10}, "dl_since": "2026-05", "prev_dl_leads": 1},
+    {"id": "m-gala", "name": "Gala", "eligibility": {"smoke-2026-11-01-sun": ["Lead", "BGV", "Choir"], "smoke-2026-11-07-sat": ["Lead", "BGV"], "smoke-2026-11-08-sun": ["Lead", "BGV", "Choir"]}, "carried": {"DL": 20}, "dl_since": "2026-05", "prev_dl_leads": 0},
+    {"id": "m-ines", "name": "Ines", "eligibility": {"smoke-2026-11-01-sun": ["Lead", "BGV", "Choir"], "smoke-2026-11-07-sat": ["Lead", "BGV"], "smoke-2026-11-08-sun": ["Lead", "BGV", "Choir"]}, "carried": {"DL": 30}, "dl_since": "2026-05", "prev_dl_leads": 1},
+    {"id": "m-jose", "name": "Jose", "eligibility": {"smoke-2026-11-01-sun": ["Lead", "BGV", "Choir"], "smoke-2026-11-07-sat": ["Lead", "BGV"], "smoke-2026-11-08-sun": ["Lead", "BGV", "Choir"]}, "carried": {"DL": 40}, "dl_since": "2026-05", "prev_dl_leads": 0}
+  ],
+  "rules": [
+    {"id": "pres-1", "kind": "presence", "persons": ["m-gala", "m-ines"], "roles": ["Sun.BGV"], "exclusive": false},
+    {"id": "pair-1", "kind": "pair", "persons": ["m-bea", "m-cris"], "roles": ["Sun.Lead"]}
+  ],
+  "pins": [],
+  "prior": {"month": "2026-10", "has_services": true, "services": []},
+  "request_id": "smoke"
+}

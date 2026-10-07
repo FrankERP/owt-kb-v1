@@ -233,8 +233,8 @@ several exist precisely to stop a plausible-looking change.
   build by C2 (by member id). ADR-0049.
 - **The fairness ledger has one definition, and its records one writer** (solver v3 C2,
   ADR-0050). `app/utils/fairnessLedger.ts` is the only TypeScript definition of F2–F7 and X1;
-  `fixtures/fairness/golden.json` is asserted by both suites (vitest now, C5's Python later) and its
-  expected values are hand-computed — never regenerated from either implementation's output.
+  `fixtures/fairness/golden.json` is asserted by both suites (vitest and C5's Python,
+  `gcf_v3/tests/test_golden.py`) and its expected values are hand-computed — never regenerated from either implementation's output.
   `fairnessMonth` records are written only through `fairnessMonthCommit` (the PUT, actor `route`)
   or the reconstruction actor (C4's consented script), both through `executeFairnessMonthWrites` —
   the ONLY mutation path of the type (`createOrReplace` never; the reconstruction actor's guarded
