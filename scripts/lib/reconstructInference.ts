@@ -16,9 +16,8 @@
 // so the join month and the ledger read the same seats.
 
 import { memberFitsPool, memberFitsRoleKey, rolesOfPatternV3, type SolverConfig } from "../../app/components/admin/plannerModel";
-import { countsForFairness } from "../../app/utils/countsForFairness";
 import type { EligibilityResult } from "../../app/utils/fairnessEligibility";
-import { civilDayOfWeek, keepVoiceSeats, type LedgerService } from "../../app/utils/fairnessLedger";
+import { keepVoiceSeats, type LedgerService } from "../../app/utils/fairnessLedger";
 import { ROLE_KEYS, ROLE_LINE, canonicalRoles, compareCodepoint, type FairnessMonthBody, type RoleKey, type Status } from "../../app/utils/fairnessVocabulary";
 import { isValidServiceDate } from "../../app/utils/serviceReadModel";
 import { serviceDayKey } from "../../app/utils/serviceReadSelect";
@@ -115,21 +114,11 @@ export interface CountedDay {
 }
 
 /**
- * The counted services of a list, with their day class — composed from C1's read rule
- * and C2's exported seat step (its duplicate targets) and civil weekday; no second
- * rule. Used for R13's «first counted service of the line» and the presence check.
+ * The counted services of a list, with their day class — read straight from C2's exported seat step (IF2-11 `counted`: LG-1, LG-2, day class);
+ * no second rule. Used for R13's «first counted service of the line» and the presence check.
  */
 export function countedServiceDays(services: readonly LedgerService[]): CountedDay[] {
-  const dropped = new Set(keepVoiceSeats([...services]).duplicateTargets.flatMap((d) => d.roleIds));
-  return services
-    .filter((s) => !s._id.startsWith("drafts.") && !dropped.has(s._id) && countsForFairness(s))
-    .map((s) => ({
-      id: s._id,
-      date: s.date,
-      sunday: s._type === "sunday_role" || (s._type === "special_role" && civilDayOfWeek(s.date) === 0),
-      weekend: s._type !== "special_role",
-    }))
-    .sort((a, b) => compareCodepoint(a.date, b.date) || compareCodepoint(a.id, b.id));
+  return keepVoiceSeats([...services]).counted.map((c) => ({ id: c.id, date: c.date, sunday: c.sunday, weekend: c.weekend }));
 }
 
 // ─── R5–R8 ──────────────────────────────────────────────────────────────────────
@@ -187,6 +176,9 @@ export function transformMonth(input: {
   const refusals: RunRefusal[] = [];
   const joins = new Map<string, Partial<Record<Line, string>>>();
 
+  const mark = (memberId: string, field: Correction["field"]) => {
+    if (!corrections.some((c) => c.memberId === memberId && c.field === field)) corrections.push({ memberId, field });
+  };
   const effectiveJoins = (memberId: string): Partial<Record<Line, string>> => {
     const seat = input.seatJoins.get(memberId) ?? {};
     const override = overrideOf.get(memberId);
@@ -194,11 +186,10 @@ export function transformMonth(input: {
     for (const line of LINES) {
       const joined = override?.joinMonths[line] ?? seat[line]?.month;
       if (joined !== undefined) out[line] = joined;
+      // R8: a corrected join month is marked like every other overridden value.
+      if (override?.joinMonths[line] !== undefined) mark(memberId, `join:${line}`);
     }
     return out;
-  };
-  const mark = (memberId: string, field: Correction["field"]) => {
-    if (!corrections.some((c) => c.memberId === memberId && c.field === field)) corrections.push({ memberId, field });
   };
 
   // Reasons as Tipo and today's rules left each cell (R11), before any transform.
@@ -221,6 +212,7 @@ export function transformMonth(input: {
     joins.set(p.memberId, effective);
     const personCells = cells.get(p.memberId)!;
     const cut = new Set<RoleKey>();
+    const overridden = new Set<Line>(LINES.filter((l) => override?.joinMonths[l] !== undefined));
     for (const line of LINES) {
       if (line === "DL" && cadence) continue;
       const joined = effective[line];
@@ -228,9 +220,14 @@ export function transformMonth(input: {
       for (const k of LINE_ROLES[line]) {
         if (p.roles[k] === "out") continue;
         p.roles[k] = "out";
-        personCells[k] = { reason: "linea", corrected: false };
+        personCells[k] = overridden.has(line) ? { reason: "correccion", corrected: true } : { reason: "linea", corrected: false };
         cut.add(k);
       }
+    }
+    // A corrected join month that keeps a line in also changed what its cells say.
+    for (const line of overridden) {
+      if (line === "DL" && cadence) continue;
+      for (const k of LINE_ROLES[line]) if (personCells[k].reason === "tipo") personCells[k] = { reason: "correccion", corrected: true };
     }
     if (cut.size === 0) continue;
     const kept: Person["exactRules"] = [];

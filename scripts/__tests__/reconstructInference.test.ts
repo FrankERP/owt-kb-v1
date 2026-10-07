@@ -8,6 +8,7 @@ import type { LedgerService } from "@/app/utils/fairnessLedger";
 import type { FairnessMonthBody, RoleKey, Status } from "@/app/utils/fairnessVocabulary";
 import { validateReconstructionBody } from "../lib/reconstructDecide";
 import {
+  countedServiceDays,
   hypotheticalConfig,
   resolverRefusals,
   seatJoinMonths,
@@ -293,6 +294,33 @@ describe("R8 — corrections win, and replace exact rules whole (A38)", () => {
     expect(t.body.people.map((p) => p.memberId)).not.toContain("m-fausto");
     expect(person(t.body, "m-carla").roles["Sun.BGV"]).toBe("in");
     expect(t.joins.get("m-carla")).toEqual({ BGV: "2026-07" });
+  });
+
+  it("marks a corrected join month: the column's correction and the cells it keeps in", () => {
+    const file = corrections({ schemaVersion: 1, members: { "m-carla": { joinMonths: { BGV: "2026-07" } } } });
+    const t = transform("2026-08", config(), [svc("sun-0913", "sunday_role", "2026-09-13", { BGVs: ["m-carla"] })], file);
+    expect(t.corrections).toContainEqual({ memberId: "m-carla", field: "join:BGV" });
+    expect(t.cells.get("m-carla")!["Sun.BGV"]).toEqual({ reason: "correccion", corrected: true });
+    expect(t.cells.get("m-carla")!["Sat.BGV"]).toEqual({ reason: "correccion", corrected: true });
+  });
+
+  it("marks a corrected join month that cuts a line as corrected, not as «linea»", () => {
+    const file = corrections({ schemaVersion: 1, members: { "m-carla": { joinMonths: { BGV: "2026-12" } } } });
+    const t = transform("2026-08", config(), [svc("sun-0705", "sunday_role", "2026-07-05", { BGVs: ["m-carla"] })], file);
+    expect(person(t.body, "m-carla").roles["Sun.BGV"]).toBe("out");
+    expect(t.cells.get("m-carla")!["Sun.BGV"]).toEqual({ reason: "correccion", corrected: true });
+    expect(t.corrections).toContainEqual({ memberId: "m-carla", field: "join:BGV" });
+  });
+
+  it("reads the counted services from C2's seat step (drafts, duplicate weekends, uncounted ones dropped)", () => {
+    const list = [
+      svc("a", "sunday_role", "2026-09-13", { Lead: ["m-ivan"] }),
+      svc("b", "sunday_role", "2026-09-13", { Lead: ["m-carla"] }),
+      svc("drafts.c", "sunday_role", "2026-09-20", {}),
+      svc("d", "special_role", "2026-09-27", {}, { countsForFairness: false }),
+      svc("e", "special_role", "2026-09-27", {}, { countsForFairness: true }),
+    ];
+    expect(countedServiceDays(list)).toEqual([{ id: "e", date: "2026-09-27", sunday: true, weekend: false }]);
   });
 
   it("merges a blocked-date correction into an existing week-exclusion block", () => {

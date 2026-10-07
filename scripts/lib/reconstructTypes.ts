@@ -39,7 +39,7 @@ export type PersonCells = Record<RoleKey, CellInfo>;
 /** One «corregido» mark (R8, R11). Kept beside the body in the plan, never inside it: IF2-18 is strict. */
 export interface Correction {
   memberId: string;
-  field: RoleKey | "exempt" | "sundayCadence" | "blocks" | "added";
+  field: RoleKey | "exempt" | "sundayCadence" | "blocks" | "added" | `join:${Line}`;
 }
 
 /** A month's planned action (spec «Decision per month», plus R1's skip). */
