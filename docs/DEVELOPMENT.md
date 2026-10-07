@@ -91,8 +91,9 @@ the command output in hand.
   (the target domain in the deployment's `alias` array and `meta.githubCommitSha` equal to the
   pushed commit — a green build is not this check), then open the PR.
 - **A merge to `main` is a release, so it needs a FRESH CODE REVIEW of the diff first** — not
-  the plan review. Fix what it finds, then re-verify the fix; the last step before a merge must
-  be a verification, not a fix. See [CI.md](CI.md) and the root `CLAUDE.md`.
+  the plan review. One `code-reviewer` per merge range; every fix re-runs the gates, and only a
+  fix for a HIGH finding gets its own scoped re-review. The last step before a merge must be a
+  verification, not a fix. See [CI.md](CI.md) and the root `CLAUDE.md` §Review policy.
 - **Conventional commits:** `fix(scope): …`, `feat(scope): …`, `chore(scope): …`,
   `refactor(scope): …`, `test(scope): …`. The body explains the **why** and the failure it
   prevents.
