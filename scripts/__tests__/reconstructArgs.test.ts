@@ -92,6 +92,12 @@ describe("private paths (R11)", () => {
     expect(refusalsFor(path.join(work, "out"))).toEqual([]);
   });
 
+  it("refuses a repository child whose name starts with two dots", () => {
+    const refusals = refusalsFor(path.join(REPO_ROOT, "..c4-private", "out"));
+    expect(refusals).toHaveLength(1);
+    expect(refusals[0]).toMatch(/^--out está dentro del repositorio/);
+  });
+
   it("refuses a folder inside the repository, naming the flag and not the path", () => {
     const refusals = refusalsFor(path.join(REPO_ROOT, "tmp-reconstruct-out"));
     expect(refusals).toHaveLength(1);

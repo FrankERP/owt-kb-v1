@@ -112,7 +112,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs | { error: string
 export function isInsideRoot(child: string, root: string, caseInsensitive: boolean): boolean {
   const norm = (p: string) => (caseInsensitive ? p.toLowerCase() : p);
   const rel = path.relative(norm(root), norm(child));
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  return rel === "" || (rel !== ".." && !rel.startsWith(".." + path.sep) && !path.isAbsolute(rel));
 }
 
 /**
