@@ -521,20 +521,24 @@ Scheduler, the iOS build or GCF; never set them in a Vercel dashboard "to be saf
 
 ## `OWT_SOLVER_API_KEY` (Secret Manager: `owt-solver-api-key`)
 
-**Needed in: Vercel Preview AND Production (the SAME value — both environments call the one
-Cloud Function) and GCP Secret Manager `owt-solver-api-key` (project `eloquent-figure-421401`).
-Not needed in:** `.env.local` (with `OWT_SOLVER_URL` unset, local dev spawns
-`gcf/owt_solver_v2.py` directly and no key is involved), GitHub Actions, the iOS build.
+**Needed in: Vercel Preview AND Production (the SAME value — both environments call the solver
+functions) and GCP Secret Manager `owt-solver-api-key` (project `eloquent-figure-421401`), which
+BOTH Cloud Functions read: `owt-solver` (v2) and, since solver v3 C5, `owt-solver-v3` (one key for
+both — same trust boundary, same caller, spec C5-14). Not needed in:** `.env.local` (with
+`OWT_SOLVER_URL` unset, local dev spawns `gcf/owt_solver_v2.py` — or, for v3,
+`gcf_v3/owt_solver_v3.py --json-mode` — directly and no key is involved), GitHub Actions (the
+`solver-v3` job calls the handler with a stub key), the iOS build.
 `OWT_SOLVER_URL`, its companion, is ordinary config (Vercel Preview and Production), not a
 secret.
 
 | Platform | Role |
 |---|---|
 | Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header |
-| Secret Manager `owt-solver-api-key` | Cloud Build deploys the function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest` (`cloudbuild.yaml`, and `scripts/deploy-solver-gcf.sh` for a manual deploy) |
+| Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (first creation and manual: `scripts/deploy-solver-v3-gcf.sh`) |
 
-**Purpose.** The only barrier on a publicly invokable function (`allUsers` holds
-`run.invoker`). Without it on the function, `gcf/main.py` answers **503** to every call (fails
+**Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
+`run.invoker`). Without it on a function, its handler (`gcf/main.py`, `gcf_v3/main.py`) answers
+**503** to every call (fails
 closed); with a value that differs from Vercel's, **401** — either way «Generar mes» fails with
 "Solver service returned HTTP …" in both environments.
 
@@ -569,20 +573,24 @@ in that gap bakes a key in that the function may not be serving yet.
      gcloud secrets versions add owt-solver-api-key --data-file=- --format="value(name)" && \
      unset SECRET
    ```
-3. **Redeploy the function** so no warm instance keeps the old key (`gcf/main.py` reads it once,
-   at import): re-run the Cloud Build trigger `owt-solver-deploy` on `main` (console → Cloud Build
-   → Triggers → Run), or, **from the fetched tip of `main`** (`git fetch && git switch --detach
-   origin/main` — the script deploys whatever `gcf/` is on disk, to the one function production
-   uses, so a stale or feature checkout would ship old or unreviewed solver code),
-   `GCP_PROJECT=eloquent-figure-421401 bash scripts/deploy-solver-gcf.sh`.
+3. **Redeploy BOTH functions** so no warm instance keeps the old key (`gcf/main.py` and
+   `gcf_v3/main.py` each read it once, at import): re-run both Cloud Build triggers on `main`,
+   `owt-solver-deploy` and `owt-solver-v3-deploy` (console → Cloud Build → Triggers → Run), or,
+   **from the fetched tip of `main`** (`git fetch && git switch --detach origin/main` — each script
+   deploys whatever its directory holds on disk, so a stale or feature checkout would ship old or
+   unreviewed solver code), `GCP_PROJECT=eloquent-figure-421401 bash scripts/deploy-solver-gcf.sh`
+   and `GCP_PROJECT=eloquent-figure-421401 bash scripts/deploy-solver-v3-gcf.sh`. Each function
+   reads `:latest` when an instance starts.
 4. **Redeploy Vercel Production and Preview** (dashboard → Deployments → ⋯ → Redeploy on the
    current production deployment and on the current `preview` one): env vars bind at build time.
-5. Verify with the smoke request in `docs/SOLVER_AND_INFRA.md` ("Verifying a Cloud Function
-   deploy"), which reads the new value from Secret Manager — then one «Generar mes» on dev.
+5. Verify with the smoke requests in `docs/SOLVER_AND_INFRA.md` ("Verifying a Cloud Function
+   deploy" for v2, "Verifying a v3 deploy" for v3), which read the new value from Secret
+   Manager — then one «Generar mes» on dev.
 
-**Blast radius of rotation.** From step 2 until each Vercel environment's redeploy (step 4)
-completes, any request that reaches a freshly started function instance fails with HTTP 401 —
-«Generar mes» fails in both environments, intermittently at first (warm instances still hold the
+**Blast radius of rotation.** From step 2 until both functions and each Vercel environment's
+redeploy (steps 3–4) complete, any request that reaches a freshly started instance of EITHER
+function fails with HTTP 401 — «Generar mes» fails in both environments, on v2 as today and on
+every environment whose engine is v3, intermittently at first (warm instances still hold the
 old key) and then always. Nothing is written — Auto only proposes; «Guardar» writes — so the cost
 is minutes of Auto unavailable. **If the rotation stalls between steps 2 and 4, finish it forward** —
 that is almost always the shortest way out. A real rollback must NOT disable the new version:
@@ -607,8 +615,8 @@ PREV=$(CLOUDSDK_CORE_DISABLE_FILE_LOGGING=true gcloud secrets versions access N 
     --force --sensitive --non-interactive && \
   unset PREV
 ```
-Then redeploy exactly as steps 3 (function) and 4 (Vercel) — warm instances and any Vercel
-deployment built in between may hold the new key — and verify as in step 5.
+Then redeploy exactly as steps 3 (both functions) and 4 (Vercel) — warm instances and any
+Vercel deployment built in between may hold the new key — and verify as in step 5.
 
 ---
 
@@ -647,6 +655,26 @@ safety») — stamped `environment: "preview"`, which no app surface can delete 
 locally with `VERCEL_ENV` unset, a local server writes production records stamped `local`. After
 C6, Auto on that deployment runs v3. Nothing is broken mid-change: a deployment reads the value it
 was built with.
+
+---
+
+## `OWT_SOLVER_V3_BUILD` (function config — not a secret)
+
+**Needed in: the `owt-solver-v3` Cloud Function only.** Not Vercel, not GitHub Actions, not
+`.env.local`, not the iOS build — and not v2's `owt-solver`, which has no such field.
+
+**Purpose.** The commit the function was deployed from, echoed as `build` by every v3 response
+and by the ping (`{"contract": 3, "ping": true}`). It is what the deploy check compares with the
+merged SHA (`docs/SOLVER_AND_INFRA.md` «Verifying a v3 deploy», the function's analogue of the
+Vercel alias check). When absent, `build` is `"unknown"` and nothing else breaks.
+
+**Where the value comes from.** Cloud Build's `$COMMIT_SHA` (`gcf_v3/cloudbuild.yaml`,
+`--set-env-vars=OWT_SOLVER_V3_BUILD=$COMMIT_SHA`), or `git rev-parse HEAD` in
+`scripts/deploy-solver-v3-gcf.sh`. Never set by hand.
+
+**How to rotate.** Nothing to rotate: every deploy rewrites it.
+
+**Blast radius of rotation.** None.
 
 ---
 

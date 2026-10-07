@@ -1,7 +1,7 @@
 // Solver v3 C2 FX-1 … FX-5 — the golden fixture (`fixtures/fairness/golden.json`,
-// IF2-29), asserted by vitest now and by C5's Python suite later. Expected values are
-// hand-computed and frozen in the file; this suite never regenerates them. It asserts
-// every `ledger` and `cadence` case and schema-checks `plan` cases (C5 adds them).
+// IF2-29), asserted by this vitest suite and by C5's Python (`gcf_v3/tests/test_golden.py`).
+// Expected values are hand-computed and frozen in the file; this suite never regenerates
+// them. It asserts every `ledger` and `cadence` case and schema-checks `plan` cases (C5's).
 //
 // What a `ledger` case asserts here (the file's `$comment` states the same):
 //   · `window`: each window month and whether it is recorded;

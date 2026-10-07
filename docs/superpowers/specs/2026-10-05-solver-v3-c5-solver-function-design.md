@@ -1271,6 +1271,29 @@ expected breaks, misses and notices, each with the expected cause.
 **A measured maximum above 50 (half a seat) is a finding, not a tolerance.** The delivery stops there
 and the gap is reported to Frank with its cause, for example a flip in floor status or a pin pattern.
 
+**Amendment F-1 (2026-10-06, post-approval of this standard-tier spec; ruled by the coordinator
+under Frank's standing authorization of 2026-10-05 22:52 — «no me consultes más; te autorizo lo
+que necesites»).** The implementation plan measured the gap on the spec as written: 65 hundredths
+over the fictitious `full` matrix (2-month runs), 50 on the private real-data chain, 131 under the
+pinned scenario P6. Two causes: (1) the realised ledger drops a person holding a seat in a role key
+that is `exact` for her from the other roles' populations at that service (C2 LG-8 (vii)), while the
+plan did so only for pins and for exact rules with no slack; (2) F6 for pins is plan-only by design
+(C5-10). Ruling — **(a) + (c)**:
+- **(a)** §6.2/§6.3: an exact rule **with slack** spreads its F6 exit the way C5-9 spreads its
+  set-aside: at each of her C5-9 target services she weighs `1 − remainder/|targets|` in the other
+  role keys' populations, and a pool there is shared `pool × w_p / Σw` (exact, still conserving). The
+  subtracted term is clamped to 1 — `1 − min(1, remainder/|targets|)` — so the weight stays in [0, 1]:
+  a pin in a role key outside the rule removes its service from her targets without lowering the
+  remainder, which can leave remainder > |targets|; and where Σw = 0 the pool splits equally over the
+  population (`gcf_v3/owt_v3/plan.py`). No C2 rule changes. Measured after (a): 35 (fictitious), 23 (real) → `FAIRNESS_TOLERANCE = 35`.
+- **(c)** this section's measurement and the CI assertion bind only runs where every stage is
+  `proven`, nothing is unfilled and **no pin** is sent. A pinned run's gap is **reported**
+  (`summary.json` `max_gap_by_pins.pinned`), never bound; the independent checker still reports
+  every gap.
+Cost if wrong: a few people's planned figure differs from the realised one by up to 0.35 seat on
+unpinned runs (C6 may need one sentence explaining `planned` for them if it shows it — noted for C6's
+plan); pinned runs can differ more, which the parent's X4 already makes visible.
+
 ## 13. Real-container timing gate (definition; C7 runs it)
 
 Frank runs the gate, because the key comes from Secret Manager. It runs against the deployed
@@ -1279,8 +1302,9 @@ Frank runs the gate, because the key comes from Secret Manager. It runs against 
 **Shapes.** The harness emits them with `--emit-requests`; all use fictitious people except E:
 
 - **A:** 1 month, 5 Sundays, Saturdays every other week.
-- **B:** Nov+Dec, 4+5 Sundays.
-- **C:** 2 months, 5+5 Sundays, a Saturday every week, a trailing Saturday.
+- **B:** Nov+Dec 2026, 5+4 Sundays.
+- **C:** Oct+Nov 2026, 4+5 Sundays, a Saturday every week, October's trailing Saturday (Oct 31)
+  included. (Two consecutive months never both have 5 Sundays.)
 - **D:** B with about 100 pins (fill-empty).
 - **E:** the real Nov+Dec request, built by the private converter and kept outside the repo.
 
