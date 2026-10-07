@@ -69,6 +69,63 @@ export function overridesHash(text: string): string {
   return `sha256:${createHash("sha256").update(text, "utf8").digest("hex")}`;
 }
 
+/**
+ * `JSON.parse` keeps the LAST of two equal keys and says nothing, so a hand-edited file
+ * that names one member (or month, or role) twice would silently lose a correction and
+ * renumber the entries (R8: validated in full; R12: «entrada N»). The text is already
+ * known to be valid JSON here; this walks it once, with a key set per object, and returns
+ * every repeat. `ordinal` is the 1-based position, counting repeats, of the `members`
+ * entry the repeat sits in (or is), `null` outside `members`.
+ */
+export function findDuplicateKeys(text: string): Array<{ ordinal: number | null }> {
+  interface Frame {
+    obj: boolean;
+    keys: Set<string>;
+    count: number;
+    expectKey: boolean;
+    lastKey: string | null;
+    ordinal: number | null;
+    isMembers: boolean;
+  }
+  const out: Array<{ ordinal: number | null }> = [];
+  const stack: Frame[] = [];
+  const open = (obj: boolean) => {
+    const parent = stack[stack.length - 1];
+    const ordinal: number | null = parent ? (parent.isMembers ? parent.count : parent.ordinal) : null;
+    stack.push({
+      obj,
+      keys: new Set(),
+      count: 0,
+      expectKey: obj,
+      lastKey: null,
+      ordinal,
+      isMembers: obj && stack.length === 1 && parent.obj && parent.lastKey === "members",
+    });
+  };
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    const top = stack[stack.length - 1];
+    if (c === "{") open(true);
+    else if (c === "[") open(false);
+    else if (c === "}" || c === "]") stack.pop();
+    else if (c === "," && top && top.obj) top.expectKey = true;
+    else if (c === '"') {
+      let j = i + 1;
+      while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+      if (top && top.obj && top.expectKey) {
+        const key = JSON.parse(text.slice(i, j + 1)) as string;
+        top.count += 1;
+        top.expectKey = false;
+        top.lastKey = key;
+        if (top.keys.has(key)) out.push({ ordinal: top.isMembers ? top.count : top.ordinal });
+        top.keys.add(key);
+      }
+      i = j;
+    }
+  }
+  return out;
+}
+
 export function parseOverrides(
   text: string,
   rosterIds: ReadonlySet<string>,
@@ -94,6 +151,13 @@ export function parseOverrides(
   }
   if (!isObj(doc)) {
     refuse(null, "override_schema", "El archivo debe ser un objeto con «schemaVersion» y «members».");
+    return { ok: false, refusals };
+  }
+  const duplicates = findDuplicateKeys(text);
+  if (duplicates.length > 0) {
+    for (const d of duplicates) {
+      refuse(d.ordinal, "override_duplicate", "Una clave aparece dos veces en el mismo objeto; JSON se quedaría con la última y la corrección anterior se perdería.");
+    }
     return { ok: false, refusals };
   }
   for (const key of Object.keys(doc)) {

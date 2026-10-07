@@ -121,3 +121,37 @@ describe("parsing (R8)", () => {
     ]);
   });
 });
+
+describe("duplicate keys (R8: nothing is silently dropped)", () => {
+  const dupRefusals = (text: string) => {
+    const parsed = parseOverrides(text, ROSTER);
+    return parsed.ok ? [] : parsed.refusals.map((r) => [r.reason, r.rules[0]?.ordinal ?? null]);
+  };
+
+  it("refuses one member _id named twice, pointing at the repeat's position", () => {
+    const text = '{"schemaVersion":1,"members":{"m-ana":{"exempt":true},"m-beto":{},"m-ana":{"note":"x"}}}';
+    expect(dupRefusals(text)).toEqual([["override_duplicate", "entrada 3 del archivo"]]);
+  });
+
+  it("refuses a repeated month key and a repeated role key inside an entry", () => {
+    const month = '{"schemaVersion":1,"members":{"m-ana":{},"m-beto":{"months":{"2026-08":{},"2026-08":{}}}}}';
+    expect(dupRefusals(month)).toEqual([["override_duplicate", "entrada 2 del archivo"]]);
+    const role = '{"schemaVersion":1,"members":{"m-ana":{"months":{"*":{"roles":{"Sun.BGV":"in","Sun.BGV":"out"}}}}}}';
+    expect(dupRefusals(role)).toEqual([["override_duplicate", "entrada 1 del archivo"]]);
+  });
+
+  it("refuses a repeated root key without naming an entry", () => {
+    expect(dupRefusals('{"schemaVersion":1,"members":{},"members":{}}')).toEqual([["override_duplicate", null]]);
+  });
+
+  it("does not mistake equal keys in different objects, string values or escapes for repeats", () => {
+    const text = JSON.stringify({
+      schemaVersion: 1,
+      members: {
+        "m-ana": { note: 'a "note": {"x":1,"x":2} \\', months: { "*": { roles: { "Sun.BGV": "in" } } } },
+        "m-beto": { months: { "*": { roles: { "Sun.BGV": "out" } } } },
+      },
+    });
+    expect(parseOverrides(text, ROSTER).ok).toBe(true);
+  });
+});
