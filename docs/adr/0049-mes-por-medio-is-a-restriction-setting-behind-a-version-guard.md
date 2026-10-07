@@ -98,7 +98,9 @@ the newer one may have extended.
   role that edits `ministries`.
 - **A third no-Tipo reason in the «not ticked» predicate**, with «Auto no correrá…» copy: it
   duplicates C6's refusal and changes the union that C6 and C7 consume. A cadence member with no
-  Tipo is left out of the warning because its copy («descansa este mes») would be false.
+  Tipo is left out of the warning because its sentences («… este mes no dirige domingo ni sábado
+  de compensación.») would misdescribe her: no month is solved for her to sit out, because the v3
+  build refuses the whole month over her missing Tipo, and C6 names that refusal before any solve.
 
 ## Consequences
 

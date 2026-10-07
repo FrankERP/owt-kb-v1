@@ -182,10 +182,10 @@ describe("the copy C6 gates (C3 §7 item 5)", () => {
     expect(SLACK_V3_NOTE).toBe("no aplica con el nuevo solver");
     expect(CADENCE_OUTSIDE_HEADING).toBe("Mes por medio fuera de Líderes Domingo");
     expect(CADENCE_OUTSIDE_SENTENCE.not_ticked("Ana")).toBe(
-      "Ana no está en Líderes Domingo: descansa este mes, sin domingo y sin sábado de compensación.",
+      "Ana no está en Líderes Domingo: este mes no dirige domingo ni sábado de compensación.",
     );
     expect(CADENCE_OUTSIDE_SENTENCE.no_sunday_lead_tipo("Fer")).toBe(
-      "Fer no tiene «Voz» y «Líder Domingo» a la vez en su Tipo: descansa este mes, sin domingo y sin sábado de compensación.",
+      "Fer no tiene «Voz» y «Líder Domingo» a la vez en su Tipo: este mes no dirige domingo ni sábado de compensación.",
     );
   });
 });

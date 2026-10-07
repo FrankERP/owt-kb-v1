@@ -883,10 +883,10 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
         />
         {sundayCadence === "alternate" && (
           <p className="font-body text-[11px] text-mono-500 mt-1">
-            Si el mes anterior no dirigió domingo, está en Líderes Domingo y puede al menos un domingo, ese mes
-            le toca uno; en otro caso descansa y, si no dirige domingo, de preferencia dirige un sábado. Fuera
-            de Líderes Domingo no le toca ni domingo ni sábado de compensación. Aplica con el nuevo solver; el
-            solver actual no lo usa.
+            Solo cambia cuántas veces dirige domingo; en BGV y Coro participa igual que todos. Dirige domingo
+            un mes sí y uno no: le toca el mes siguiente a uno en que no dirigió domingo, si puede al menos un
+            domingo. En el mes que no le toca, de preferencia dirige un sábado. Solo aplica si está en Líderes
+            Domingo. Aplica con el nuevo solver; el solver actual no lo usa.
           </p>
         )}
       </div>
