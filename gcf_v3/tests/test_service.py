@@ -5,7 +5,10 @@ import copy
 import unittest
 
 from owt_v3.codes import audit_response
-from owt_v3.service import handle, public_label
+from owt_v3.facts import Facts
+from owt_v3.instances import build_instances
+from owt_v3.request import parse_request
+from owt_v3.service import handle, handle_raw, public_label
 from tests.test_model import random_request
 from tests.test_request import EXAMPLE
 
@@ -60,6 +63,53 @@ class Core(unittest.TestCase):
         status, resp, log = handle({"contract": 3, "ping": True})
         self.assertEqual((status, resp["pin_cap"], resp["engine"]), (200, 250, "v3"))
         self.assertTrue(log["ping"])
+
+    def test_an_unbounded_prev_dl_leads_never_overflows_the_model(self):
+        # «int ≥ 0» with no maximum (§5): 10**20 overflowed CP-SAT's int64 → 500 (§5.8, §6.1).
+        # The model reads min(prev, 1), so any prev ≥ 1 builds the same model as prev = 1.
+        # m-ana is the example's one DL-floor instance (F10) in its first month.
+        def run(prev):
+            body = copy.deepcopy(EXAMPLE)
+            body["people"][0]["prev_dl_leads"] = prev
+            self.assertEqual(body["people"][0]["id"], "m-ana")
+            return handle(body)
+
+        status_1, resp_1, _ = run(1)
+        self.assertEqual(status_1, 200, resp_1)
+        for prev in (10**20, 10**4000):
+            status, resp, log = run(prev)
+            self.assertEqual(status, 200, (resp.get("code"), log.get("exception")))
+            self.assertEqual((resp["assignments"], resp["missed"]), (resp_1["assignments"], resp_1["missed"]))
+
+    def test_an_unbounded_at_most_count_never_overflows_the_model(self):
+        # A `<=` value is never clamped (only ==/>= are): 10**20 reached the model → 500.
+        def run(value):
+            body = copy.deepcopy(EXAMPLE)
+            body["rules"].append({"id": "cap-a", "kind": "count", "person": "m-ana", "roles": ["Sun.Lead"],
+                                  "op": "<=", "month": "2026-11", "value": value})
+            return handle(body)
+
+        status_9, resp_9, _ = run(9)
+        self.assertEqual(status_9, 200, resp_9)
+        for value in (10**20, 10**4000):
+            status, resp, log = run(value)
+            self.assertEqual(status, 200, (resp.get("code"), log.get("exception")))
+            self.assertEqual(resp["assignments"], resp_9["assignments"])
+            self.assertNotIn("cap-a", [v.get("rule") for v in resp["violations"]])
+
+    def test_an_at_most_count_keeps_its_limit_as_sent(self):
+        # The model's bound is min(limit, cells); the instance — and so violations[].limit — is not.
+        body = copy.deepcopy(EXAMPLE)
+        body["rules"].append({"id": "cap-a", "kind": "count", "person": "m-ana", "roles": ["Sun.Lead"],
+                              "op": "<=", "month": "2026-11", "value": 10**20})
+        facts = Facts(parse_request(body))
+        [inst] = [i for i in build_instances(facts)[0] if i.rule == "cap-a"]
+        self.assertEqual(inst.limit, 10**20)
+
+    def test_a_too_deep_body_is_invalid_json_not_a_500(self):
+        # §11.2: unparseable JSON is 400 invalid_json; a 200,000-deep array raised RecursionError.
+        status, resp, log = handle_raw("[" * 200000 + "]" * 200000)
+        self.assertEqual((status, resp["code"], log["code"]), (400, "invalid_json", "invalid_json"))
 
     def test_public_labels(self):
         self.assertEqual(public_label("balance_max:P:pr-9", ["pr-1", "pr-9"]), "balance_max:P#2")

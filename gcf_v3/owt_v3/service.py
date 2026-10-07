@@ -119,7 +119,7 @@ def handle_raw(data, clock=time.perf_counter):
     """Raw bytes or text → (status, response, log record); unparseable JSON is `invalid_json` (400)."""
     try:
         body = json.loads(data)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, RecursionError):  # RecursionError: a ~200,000-deep array (§11.2)
         log = {"event": "owt-solver-v3", "http": 400, "code": "invalid_json"}
         return 400, failure("invalid_json"), log
     return handle(body, clock=clock)

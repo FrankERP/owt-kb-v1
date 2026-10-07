@@ -103,7 +103,11 @@ class Model:
             return v
         expr = self._sum(inst.terms)
         if inst.family == "count":
-            {"==": lambda: m.Add(expr == inst.limit), "<=": lambda: m.Add(expr <= inst.limit),
+            # A `<=` value is never clamped (only `==`/`>=` are, Facts), and a schema-valid
+            # 10**20 overflows CP-SAT's int64 (a 500). The sum cannot exceed its cell count,
+            # so that bound changes no solution; inst.limit stays as sent for the report.
+            at_most = min(inst.limit, len(inst.terms))
+            {"==": lambda: m.Add(expr == inst.limit), "<=": lambda: m.Add(expr <= at_most),
              ">=": lambda: m.Add(expr >= inst.limit)}[inst.op]().OnlyEnforceIf(ok)
         elif inst.family == "pair":
             m.Add(expr <= 1).OnlyEnforceIf(ok)
@@ -264,7 +268,10 @@ class Model:
         terms = []
         F = self.F
         for p, mo in F.f10_instances():
-            prev = F.people[p].prev_dl_leads if mo == F.months[0] else self.L[(p, F.months[0])]
+            # min(prev, 1): only prev + L == 0 matters, and an unbounded schema-valid
+            # prev_dl_leads (10**20) would overflow CP-SAT's int64 (a 500). report.missed()
+            # reads the raw value in pure Python.
+            prev = min(F.people[p].prev_dl_leads, 1) if mo == F.months[0] else self.L[(p, F.months[0])]
             y = self._bool("dlf")
             self.m.Add(y >= 1 - prev - self.L[(p, mo)])
             terms.append(y)
