@@ -204,14 +204,21 @@ export default function Select({ label, size = "md", className = "", popover = t
   const triggerNaming = named ? { "aria-label": `${named}: ${chosen?.text ?? ""}` } : {};
 
   return (
-    <div className={`block ${className}`.trim()} onKeyDown={onTypeAhead}>
+    <div className={`relative block ${className}`.trim()} onKeyDown={onTypeAhead}>
       {Label}
       {/*
         `tabIndex={-1}` AFTER the spread: `sr-only` is visually hidden but still
         focusable, so the native element was an invisible tab stop in front of the
         trigger. It keeps `htmlFor`, so it is still what the <label> and AT name.
+
+        EXACTLY `sr-only`, in a `relative` root (2026-10-06, ADR-0035). It used to
+        carry the chrome too, and Tailwind emits `width`/`padding` AFTER `sr-only`,
+        so `w-full` beat its 1px: with no positioned ancestor the absolute select
+        took 100% of the initial containing block from its static x and panned every
+        planner page sideways — 335px on «Generar mes», 812px on «Editar mes».
+        `hiddenControlContainment.test.ts`.
       */}
-      <select {...select} ref={nativeRef} tabIndex={-1} onChange={handleChange} className={`${nativeClass} sr-only`}>
+      <select {...select} ref={nativeRef} tabIndex={-1} onChange={handleChange} className="sr-only">
         {children}
       </select>
       <Menu

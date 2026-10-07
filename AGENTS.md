@@ -296,6 +296,12 @@ several exist precisely to stop a plausible-looking change.
 - **`/admin` has no shell and no page-level horizontal scroll** — the planner grid and the
   availability matrix are the only horizontal scrollers, each in its own `overflow-x-auto`
   box (ADR-0035). The Servicios board is a vertical grid the PAGE scrolls (ADR-0044).
+  **A visually hidden native control (`sr-only`) keeps a positioned ancestor inside its own
+  control**: an absolute box whose containing block lies outside an `overflow-x-auto` box is
+  not clipped by it, and Select's hidden `<select>` + Checkbox's input panned every planner
+  page for weeks that way (fixed 2026-10-06; `hiddenControlContainment.test.ts`). A
+  `--full-page` capture's width is not evidence either way — measure with
+  `scripts/dev-verify.ts --layout` (`scrollingElement.scrollWidth` vs `clientWidth`).
 - **A theme-gallery fixture hosts PRESENTATIONAL halves only** — never a component that
   reads a session, a cookie, the network or an env var. The gallery route is public and
   prerendered (ADR-0017), so `useSession` there breaks both; that is why the `nav` fixture

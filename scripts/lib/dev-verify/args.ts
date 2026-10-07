@@ -7,6 +7,8 @@ export interface ParsedArgs {
   fullPage: boolean;
   text: boolean;
   a11y: boolean;
+  /** Measure horizontal overflow in the page (`layoutProbe.ts`) and write `<stem>.layout.json`. */
+  layout: boolean;
   /** Emulate a touch device (Playwright `hasTouch` + `isMobile`); `--click` becomes a tap. */
   touch: boolean;
   console: boolean;
@@ -25,7 +27,7 @@ export function isArgsError(v: ParsedArgs | ArgsError): v is ArgsError {
   return typeof (v as ArgsError).error === "string";
 }
 
-const BOOLEAN_FLAGS = new Set(["--full-page", "--text", "--a11y", "--console", "--json", "--touch"]);
+const BOOLEAN_FLAGS = new Set(["--full-page", "--text", "--a11y", "--layout", "--console", "--json", "--touch"]);
 const VALUE_FLAGS = new Set(["--route", "--base-url", "--screenshot", "--viewport", "--theme", "--click", "--wait", "--settle"]);
 
 export function parseArgs(argv: string[]): ParsedArgs | ArgsError {
@@ -34,6 +36,7 @@ export function parseArgs(argv: string[]): ParsedArgs | ArgsError {
     fullPage: false,
     text: false,
     a11y: false,
+    layout: false,
     touch: false,
     console: false,
     viewport: { width: 1280, height: 800 },
@@ -48,6 +51,7 @@ export function parseArgs(argv: string[]): ParsedArgs | ArgsError {
         case "--full-page": out.fullPage = true; break;
         case "--text": out.text = true; break;
         case "--a11y": out.a11y = true; break;
+        case "--layout": out.layout = true; break;
         case "--touch": out.touch = true; break;
         case "--console": out.console = true; break;
         case "--json": out.json = true; break;
