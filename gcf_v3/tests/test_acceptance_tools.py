@@ -59,3 +59,48 @@ class HarnessGuards(unittest.TestCase):
         self.assertEqual(run._setup(({}, {"ok": True}), "x"), ({}, {"ok": True}))
         with self.assertRaises(x1.HarnessError):
             run._setup(({}, {"ok": False, "code": "timeout"}), "base")
+
+
+class EmitChecksX1First(unittest.TestCase):
+    """§12.3: the timing shapes stand on a base chain the X1 double drove, so `--emit-requests`
+    checks the double against the fixture's cadence cases first and refuses on a mismatch."""
+
+    def _disagreeing_fixture(self, d):
+        from acceptance import x1
+        with open(x1.FIXTURE, encoding="utf-8") as f:
+            fixture = json.load(f)
+        case = next(c for c in fixture["cases"] if c.get("kind") == "cadence")
+        case["expected"][0]["state"] = "off" if case["expected"][0]["state"] == "on" else "on"
+        path = os.path.join(d, "golden.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(fixture, f)
+        return path
+
+    def test_a_disagreeing_double_emits_nothing(self):
+        from unittest import mock
+        from acceptance import x1
+        real = x1.check_against_fixture
+        with tempfile.TemporaryDirectory() as d:
+            bad = self._disagreeing_fixture(d)
+            out = os.path.join(d, "shapes")
+            with mock.patch.object(x1, "check_against_fixture", side_effect=lambda: real(bad)), \
+                    mock.patch.object(run, "load_world", side_effect=AssertionError("a chain ran")):
+                with self.assertRaises(x1.HarnessError):
+                    run.emit_requests(run.WORLD, out)
+            self.assertFalse(os.path.exists(out))
+
+    def test_main_reports_the_harness_error_and_exits_2(self):
+        import contextlib
+        import io
+        from unittest import mock
+        from acceptance import x1
+        with tempfile.TemporaryDirectory() as d:
+            out = os.path.join(d, "shapes")
+            stdout = io.StringIO()
+            with mock.patch.object(x1, "check_against_fixture",
+                                   side_effect=x1.HarnessError("the test double disagrees")), \
+                    contextlib.redirect_stdout(stdout):
+                code = run.main(["--emit-requests", out])
+            self.assertEqual(code, 2)
+            self.assertEqual(json.loads(stdout.getvalue()), {"harness_error": "the test double disagrees"})
+            self.assertFalse(os.path.exists(out))

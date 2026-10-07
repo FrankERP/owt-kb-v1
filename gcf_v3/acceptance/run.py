@@ -313,7 +313,11 @@ def run_matrix(world_path, matrix, out_dir=None):
 
 
 def emit_requests(world_path, out_dir):
-    """The timing-gate shapes A–D (§13), from the fictitious world after its Aug–Oct chain."""
+    """The timing-gate shapes A–D (§13), from the fictitious world after its Aug–Oct chain.
+
+    The base chain is driven by the X1 double, so the double is checked against the fixture
+    first, as `run_matrix` does: a mismatch is a HarnessError and nothing is written."""
+    x1.check_against_fixture()
     data = load_world(world_path)
     env = Env(data)
     os.makedirs(out_dir, exist_ok=True)
@@ -348,7 +352,11 @@ def main(argv=None):
     ap.add_argument("--emit-requests", dest="emit")
     args = ap.parse_args(argv)
     if args.emit:
-        names = emit_requests(args.world, args.emit)
+        try:
+            names = emit_requests(args.world, args.emit)
+        except x1.HarnessError as e:
+            print(json.dumps({"harness_error": str(e)}))
+            return 2
         print(json.dumps({"emitted": names}))
         return 0
     if not args.out:
