@@ -92,7 +92,7 @@ describe("«Mes por medio fuera de Líderes Domingo» (C3 §6.7, T10)", () => {
   it("renders nothing while its gate is closed — the default", () => {
     renderGen(config, WORSHIP);
     expect(screen.queryByText(CADENCE_OUTSIDE_HEADING)).toBeNull();
-    expect(screen.queryByText(/descansa este mes/)).toBeNull();
+    expect(screen.queryByText(/no dirige domingo ni sábado de compensación/)).toBeNull();
   });
 
   it("lists each resolved cadence member outside the Sunday pool when the gate is open", () => {

@@ -141,8 +141,8 @@ export const CADENCE_OUTSIDE_HEADING = "Mes por medio fuera de Líderes Domingo"
 /** The warning's two sentences, by reason. Both describe parent A14's `out` state. */
 export const CADENCE_OUTSIDE_SENTENCE: Readonly<Record<CadenceOutsideReason, (name: string) => string>> = {
   not_ticked: (name) =>
-    `${name} no está en Líderes Domingo: descansa este mes, sin domingo y sin sábado de compensación.`,
+    `${name} no está en Líderes Domingo: este mes no dirige domingo ni sábado de compensación.`,
   no_sunday_lead_tipo: (name) =>
     `${name} no tiene «${MEMBER_TYPE_LABEL.voz}» y «${MEMBER_TYPE_LABEL.sunday_lead}» a la vez en su Tipo: ` +
-    "descansa este mes, sin domingo y sin sábado de compensación.",
+    "este mes no dirige domingo ni sábado de compensación.",
 };
