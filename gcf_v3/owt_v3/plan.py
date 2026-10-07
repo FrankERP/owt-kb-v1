@@ -8,6 +8,12 @@ are then recomputed with them. Exact `Fraction`s; the caller rounds once (C5-8).
 One reading the spec leaves to the plan: a pinned seat that will be a rule's presence
 seat (a member's pin in one of the rule's role keys that is not a fixed seat) IS that
 rule's forced presence seat, so it is removed from the pool once, not twice.
+
+Amendment F-1 (a) (Frank's ruling at the F13 gate): an exact rule WITH slack spreads its F6
+exit the way C5-9 spreads its set-aside — at each target service she weighs
+1 − remainder/|targets| in the other role keys' populations, and a pool is shared in
+proportion to the weights. Without it the realised exit (C2 LG-8 (vii)) is invisible to the
+plan and the F13 gap exceeds half a seat.
 """
 
 from collections import defaultdict
@@ -81,6 +87,7 @@ def compute_plan(F):
                 res.in_population.add((s.month, p, f"P:{rho.id}"))
     # ── set-asides that do not depend on floor persons ─────────────────────
     sa = defaultdict(Fraction)  # (sid, key) -> seats
+    weight = defaultdict(lambda: Fraction(1))  # (sid, key, p) -> population membership weight
     received_pins = defaultdict(list)  # (m, p) -> [(order, sid, key, kind, rho_id)]
     fixed_pin = set()  # (m, p) holding a pinned seat set aside (a) exact or (b) cadence
     for s in counted:
@@ -139,6 +146,12 @@ def compute_plan(F):
             if keys:
                 targets.append((s.id, keys))
         _spread(sa, targets, max(0, c - pinned))
+        remainder = max(0, c - pinned)
+        for sid, keys in targets:  # the F6 exit, spread like the set-aside (spec §6.2 as amended, F-1 (a))
+            sv = F.svc[sid]
+            for role in sv.roles:
+                if sv.key(role) not in keys:
+                    weight[(sid, sv.key(role), r.person)] *= 1 - Fraction(remainder, len(targets))
     for p in F.pids:
         for m in F.months:
             if F.cadence_state(p, m) != "on":
@@ -159,8 +172,9 @@ def compute_plan(F):
                 members = pop[(s.id, k)]
                 base = F.row_size[(s.id, role)]
                 pool = max(Fraction(0), base - sa[(s.id, k)] - extra_sa[(s.id, k)])
+                total = sum((weight[(s.id, k, p)] for p in members), Fraction(0))
                 for p in members:
-                    out[(s.month, p, LINE_OF_KEY[k])] += pool / len(members)
+                    out[(s.month, p, LINE_OF_KEY[k])] += pool * weight[(s.id, k, p)] / total
             for rho, _ in rules_at[s.id]:
                 members = q[(s.id, rho.id)]
                 if members and sub_pool.get((s.id, rho.id)) and (s.id, rho.id) not in dropped_sub:

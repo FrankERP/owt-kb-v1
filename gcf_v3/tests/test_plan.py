@@ -69,7 +69,24 @@ class DecidedSeats(unittest.TestCase):
         rule = {"id": "cap-a", "kind": "count", "person": "m-ana", "roles": ["Sun.BGV"], "op": "==",
                 "month": "2026-11", "value": 1}
         _, plan = plan_of(request(s, people, rules=[rule]))
-        self.assertEqual(plan.planned("m-ana", "DL"), 1)  # in the Lead pool at both Sundays
+        # nothing is decided, but the spread F6 exit (amendment F-1 (a)) leaves her half a member
+        # of the Lead pool at each Sunday: 1 x (1/2) / (1/2 + 1) per Sunday
+        self.assertEqual(plan.planned("m-ana", "DL"), Fraction(2, 3))
+
+
+class SpreadExit(unittest.TestCase):
+    """Amendment F-1 (a): an exact rule with slack spreads its F6 exit like its set-aside."""
+
+    def test_the_exit_is_spread_over_her_target_services(self):
+        s = sundays(2, {"Lead": 1, "BGV": 0, "Choir": 1})
+        ana = person("m-ana", {"s1": ["Lead", "Choir"], "s2": ["Lead", "Choir"]}, exempt=True)
+        bea = person("m-bea", {"s1": ["Choir"], "s2": ["Choir"]}, exempt=True)
+        rule = {"id": "cap-a", "kind": "count", "person": "m-ana", "roles": ["Sun.Lead"], "op": "==",
+                "month": "2026-11", "value": 1}
+        _, plan = plan_of(request(s, [ana, bea], rules=[rule]))
+        # each Sunday: Choir pool 1, ana weighs 1 - 1/2; she gets 1/3, bea 2/3
+        self.assertEqual(plan.planned("m-ana", "CORO"), Fraction(2, 3))
+        self.assertEqual(plan.planned("m-bea", "CORO"), Fraction(4, 3))
 
 
 class MonthlySetAsides(unittest.TestCase):

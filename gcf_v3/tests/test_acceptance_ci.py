@@ -13,6 +13,7 @@ import unittest
 
 from acceptance import run, x1
 from acceptance.world import load_world
+from owt_v3.constants import FAIRNESS_TOLERANCE
 
 
 class CiMatrix(unittest.TestCase):
@@ -42,6 +43,10 @@ class CiMatrix(unittest.TestCase):
         self.assertGreaterEqual(self.summary["runs"], 40)
         for prefix in ("A.s1.", "A.s2.", "B.s1.", "C.s1.", "D.s1.", "P1.s1.", "P16.s1."):
             self.assertTrue(any(k.startswith(prefix) for k in self.summary["criteria"]), prefix)
+
+    def test_the_f13_gap_is_within_the_tolerance_on_pinless_runs(self):
+        self.assertGreater(self.summary["max_gap_by_pins"]["pinless"], 0)  # measured, not vacuous
+        self.assertLessEqual(self.summary["max_gap_by_pins"]["pinless"], FAIRNESS_TOLERANCE)
 
     def test_the_summary_is_public(self):
         world = load_world(run.WORLD)

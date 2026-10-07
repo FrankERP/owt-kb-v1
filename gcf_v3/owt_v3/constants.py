@@ -33,6 +33,7 @@ MIN_STAGE_DET_LIMIT = 0.001
 # stage in the `full` acceptance matrix, and at most 1.0 (measured, Task 15).
 STAGE_DET_LIMIT = 0.6
 
-# F13 (spec §12.4): the smallest multiple of 5 hundredths at or above the largest
-# |planned - share| measured over the `full` matrix (Task 15). Above 50 is a finding.
-FAIRNESS_TOLERANCE = 50
+# F13 (spec §12.4 as amended at the F13 gate): the smallest multiple of 5 hundredths at or above
+# the largest |planned - share| over the pinless, all-proven, fully filled runs of the `full`
+# matrix and of the private re-run. A pinned run's gap is reported, not bound by it.
+FAIRNESS_TOLERANCE = 35

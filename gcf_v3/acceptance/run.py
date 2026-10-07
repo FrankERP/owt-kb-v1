@@ -27,6 +27,7 @@ if __package__ in (None, ""):  # run as a script: `python gcf_v3/acceptance/run.
 
 from acceptance import checker, scenarios, x1  # noqa: E402
 from acceptance.world import Chain, load_world  # noqa: E402
+from owt_v3.constants import FAIRNESS_TOLERANCE  # noqa: E402
 from owt_v3.request import parse_request  # noqa: E402
 from owt_v3.service import handle, public_label  # noqa: E402
 from owt_v3.solver import solve_problem  # noqa: E402
@@ -300,6 +301,9 @@ def run_matrix(world_path, matrix, out_dir=None):
             values[order] = {public_label(r["id"], []): r["value"] for r in runner.records
                              if r["id"].startswith("balance_") and ":P:" not in r["id"]}
         summary.informational[f"O.s{seed}.balance_values"] = values
+    # F13 (spec §12.4 as amended, Task 15): the tolerance binds pinless runs where every stage is
+    # proven and nothing is unfilled; a pinned run's gap is reported (`max_gap_by_pins`), not judged.
+    summary.criterion("F13.pinless_gap_within_tolerance", summary.gaps["pinless"] <= FAIRNESS_TOLERANCE)
     result = summary.as_dict()
     if out_dir:
         os.makedirs(out_dir, exist_ok=True)
