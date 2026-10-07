@@ -615,8 +615,9 @@ Until then it fed a weekly `hr-officer` review (`/hr-report`: a staff review, a
 bulletin, roster proposals); Frank retired both in the token-efficiency phase that
 produced §Review policy — the review had become ceremony the work no longer needed,
 while the record of what was dispatched, and with what outcome, is still worth
-keeping. Nothing reviews the log now, so the finish-cycle completeness checklist is
-what keeps it whole. The usage dashboard script survives outside the repo
+keeping. Nothing reviews the log now, so the finish-cycle worklog checklist is what
+keeps it whole: the entries a cycle owes before the batch, a parse of the appended
+lines after it. The usage dashboard script survives outside the repo
 (`~/.agents/scripts/usage_stats.py`); the past bulletins stay in
 `docs/agents/reports/` as history. See `docs/agents/worklog.md`.
 

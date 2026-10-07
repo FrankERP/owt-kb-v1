@@ -118,8 +118,10 @@ the log — which is the one place they are supposed to be auditable.
 An entry's `outcome` reflects the agent's own verdict, not the cycle's mood: a report
 carrying any Important finding logs as `findings`, never `ok`.
 
-A missing or malformed line is a finish-cycle completeness finding, never a runtime
-error. Nothing in the app reads this file.
+Since nothing reviews the file any more, the coordinator **parses the lines it just
+appended** (each one valid JSON carrying the required fields above) as part of the
+finish-cycle worklog checklist. A missing or malformed line found there is fixed by an
+appended correction, never a runtime error. Nothing in the app reads this file.
 
 ### Correcting a line
 
