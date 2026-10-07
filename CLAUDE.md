@@ -33,12 +33,12 @@ rule changes, change both; if they disagree, this file wins.
   `main` auto-deploys to **production** (`owt-backstage.vercel.app`, the app the team uses),
   so `preview` goes first: the PR gate proves the code passes, never that it looks right on dev.
 - **Auto-merge** (`gh pr merge <n> --auto --merge`, allowed since 2026-09-29) approves a
-  COMMIT: arm it LAST, on the exact commit that was reviewed, verified and seen on dev.
+  COMMIT: arm it LAST, on the exact commit that cleared §Review policy, verified and seen on dev.
   `gh pr merge <n> --disable-auto` BEFORE pushing anything else to that branch. No merge
   queue: a PR left out of date by `strict` waits until someone updates it.
 - **Worktrees only when two things must be in flight at once** (`Agent` with
   `isolation: "worktree"`, or `EnterWorktree` — never a hand-rolled `git worktree add`; code
-  review needs none). `node_modules` via APFS clone (`cp -Rc`) from the primary checkout.
+  review needs none). `node_modules` via APFS clone (`cp -Rc`) from the primary checkout — never a fresh install.
   **Symlink `.env.local`** (`ln -s ../../../.env.local .env.local`) — never write a real one in
   a worktree: `git worktree remove` destroys it silently (how `DEV_VERIFY_*` was lost).
   `git worktree remove` is part of the merge step; `git worktree prune` at cycle open.
@@ -113,7 +113,8 @@ the budget goes there, once.
   `npx vercel inspect <deployment-url> --wait --timeout 5m` — never on the stable domain (it
   answers with the OLD deployment) — then still the alias+SHA check.
 - **Agents may look at dev** with `scripts/dev-verify.ts` (read-only, as «Verificador (bot)»)
-  once `docs/DEV_VERIFY.md`'s three verified runs are recorded; it is not Frank's own look.
+  once `docs/DEV_VERIFY.md`'s three verified runs are recorded — use it for the human-eyes
+  step when the change is visual; it is not Frank's own look.
 - **`preview` writes to the real Sanity dataset** — a rehearsal of the UI, never a dry run of data.
 - **Preview email reaches one address only because `EMAIL_REDIRECT_TO` is set** on Preview
   (since 2026-07-24): a publish on dev does not notify the team, and clearing that variable
@@ -145,8 +146,9 @@ looks wrong** — several exist to stop a plausible-looking change.
   per date on purpose (E19 in `plannerModel.ts`) — do not re-key it.
 - **A «Noche de alabanza» is `special_role.format = "worship_night"`, set once at creation** —
   never a fourth role type, never set or unset by PATCH (ADR-0036). Song leaders
-  (`songs[].leads`, one or two) must be in the set's Lead; proposals and weekend setlists never
-  carry them. `serviceFormat.ts` and `songLeads.ts` are the only definitions.
+  (`songs[].leads`, one or two) must be in the set's Lead (the setlist PUT refuses others under
+  the role `_rev` it asserts; approval carries them over by song reference); proposals and
+  weekend setlists never carry them. `serviceFormat.ts` and `songLeads.ts` are the only definitions.
 - **`countsForFairness`: one read rule** (`app/utils/countsForFairness.ts`); PATCH absent =
   unchanged; a PATCH that changes nothing reportable queues no notice; `ROLE_PROJECTION` does
   not carry it; the planner Switch is disabled for a past CDMX month (client-only, C1-D7).
@@ -164,9 +166,9 @@ looks wrong** — several exist to stop a plausible-looking change.
 - **The fairness ledger has one definition, and its records one writer** (ADR-0050).
   `app/utils/fairnessLedger.ts` is the only TS definition of F2–F7 and X1;
   `fixtures/fairness/golden.json` is asserted by vitest and `gcf_v3/tests/test_golden.py` and
-  is hand-computed — never regenerated from output. `fairnessMonth` is written only through
+  is hand-computed — never regenerated from output. `fairnessMonth` is mutated only through
   `executeFairnessMonthWrites` (`fairnessMonthCommit`'s PUT or C4's consented reconstruction
-  script; never `createOrReplace`). Every reader carries `SANITY_API_READ_TOKEN` or fails
+  script; never `createOrReplace`; the reconstruction actor's guarded delete is the only delete). Every reader carries `SANITY_API_READ_TOKEN` or fails
   closed — the dotted ids are private, and an untokened read answers «no record» with no error.
 - **Cache:** admin/API routes that mutate content call the matching `revalidate*`
   (`app/utils/revalidate.ts`) or `revalidatePath`, or the ISR page stays stale.
@@ -188,7 +190,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   (ADR-0028); no gate sees it except `clientBoundary.test.ts`.
 - **Impersonation banner ↔ navbar:** `ImpersonationBanner` publishes `impersonating` and its
   MEASURED `--impersonation-h` on `<html>`; `brand.css` offsets `.brand-navbar`; everything
-  sticky or scroll-margined under the navbar adds `var(--impersonation-offset)`. Guard:
+  sticky or scroll-margined under the navbar adds `var(--impersonation-offset)` (never
+  `--impersonation-h` itself, which is never 0). Guard:
   `impersonationOffsetSync.test.ts`.
 - **The phone tab bar publishes its MEASURED `--bottom-nav-h`** plus `has-bottom-nav` on
   `<html>`. Fixed-bottom elements clear it: toasts use
@@ -216,8 +219,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   `maximum-scale=1`. Guard: `inputFontSize.test.ts`.
 - **OAuth/MCP routes** serve only their deployment's canonical origin, fail closed without
   `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and depends
-  on NextAuth's DEFAULT `redirect` callback keeping its query (`authRedirectCallback.test.ts`;
-  `docs/MCP.md`).
+  on NextAuth's DEFAULT `redirect` callback keeping its query — never add a custom `redirect`
+  callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
 - **The four admin write routes** (setlists PUT, swap, publish-ready, unpublish) delegate
   everything after authorization to `app/utils/*Commit.ts`; MCP writes go only through them
   (`serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
