@@ -15,6 +15,13 @@
 > load scoped to that group only. Still local, still never the solver, still empty
 > seats only; the one-service composer stays manual.
 
+> **2026-10-05 forward note (solver v3, C1):** role documents now carry
+> `countsForFairness` («Cuenta para equidad»; on by default for weekend services, off for
+> specials), read through `app/utils/countsForFairness.ts`. It is **inert under v2**:
+> specials still never reach CP-SAT, and no decision below changes. Decision 3 is amended
+> when v3 serves Auto — by solver v3's C7, which turns this note's date into the in-force
+> date (parent spec §9, A31).
+
 ## Context
 
 Special services (`special_role` — vigils, conferences, midweek nights) were

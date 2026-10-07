@@ -8,12 +8,13 @@ import { describe, expect, it } from "vitest";
 
 import type { RankMember } from "../candidateRanking";
 import { buildRows, createColumnId, type GridCell, type GridColumn } from "../plannerModel";
+import { countsForFairnessDefault } from "@/app/utils/countsForFairness";
 import { fillInstruments, renderableUnfilled, isInstrumentRowId } from "../instrumentFill";
 
 // March 2026: five Sundays, 1st..29th.
 const SUNDAYS = ["2026-03-01", "2026-03-08", "2026-03-15", "2026-03-22", "2026-03-29"];
 const col = (date: string, type: GridColumn["type"] = "sunday_role"): GridColumn =>
-  ({ columnId: createColumnId(type, date), date, type });
+  ({ columnId: createColumnId(type, date), date, type, countsForFairness: countsForFairnessDefault(type) });
 const COLS = SUNDAYS.map((d) => col(d));
 const ROWS = buildRows();
 const KEYS = "instrumento:Keys";

@@ -23,6 +23,11 @@ import { stubFetchWithHistory } from "./derivedHistoryHarness";
 import { readyRules } from "./rulesHarness";
 import { AdminProviders } from "./providersHarness";
 import type { SolverConfigController } from "../solverConfigSource";
+import {
+  FAIRNESS_ENGINE_NOTE,
+  FAIRNESS_PAST_REASON,
+  FAIRNESS_SPECIAL_HELP,
+} from "../fairnessToggleModel";
 
 /**
  * `MonthGenerator` with the shared rule set supplied.
@@ -149,7 +154,7 @@ describe("MonthCalendar — specials (E2)", () => {
       target: { value: "Bautizos" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
-    expect(onAddSpecial).toHaveBeenCalledWith(WEDNESDAY, "Bautizos");
+    expect(onAddSpecial).toHaveBeenCalledWith(WEDNESDAY, "Bautizos", false);
   });
 
   it("refuses an unnamed special — a special_role with no service_name has no identity", () => {
@@ -165,7 +170,7 @@ describe("MonthCalendar — specials (E2)", () => {
       selectedSaturdays: AUG_SATURDAYS.filter((d) => d !== "2026-08-15"),
     });
     composeSpecial("2026-08-15", "Boda");
-    expect(onAddSpecial).toHaveBeenCalledWith("2026-08-15", "Boda");
+    expect(onAddSpecial).toHaveBeenCalledWith("2026-08-15", "Boda", false);
   });
 
   it("lists each special with a Quitar control that removes exactly that date", () => {
@@ -273,7 +278,7 @@ describe("MonthCalendar — P2 refuses a second special on a stored one's date",
       createdTargets: new Set([draftTargetKey("saturday_role", "2026-08-15")]),
     });
     composeSpecial("2026-08-15", "Boda");
-    expect(onAddSpecial).toHaveBeenCalledWith("2026-08-15", "Boda");
+    expect(onAddSpecial).toHaveBeenCalledWith("2026-08-15", "Boda", false);
   });
 
   it("the pure predicate reports the session-created refusal, and defaults to not refusing", () => {
@@ -304,7 +309,7 @@ describe("MonthCalendar — P2 refuses a second special on a stored one's date",
       existingRoles: [{ _type: "saturday_role", date: "2026-08-15" }],
     });
     composeSpecial("2026-08-15", "Boda");
-    expect(onAddSpecial).toHaveBeenCalledWith("2026-08-15", "Boda");
+    expect(onAddSpecial).toHaveBeenCalledWith("2026-08-15", "Boda", false);
   });
 });
 
@@ -566,5 +571,101 @@ describe("MonthGenerator + calendar — unavailability notices follow the column
     // (A bare "2 ago" check would match "12 ago" and pass vacuously.)
     expect(notices.textContent).toContain("Bautizos 12 ago");
     expect(notices.textContent).not.toContain("Dom");
+  });
+});
+
+describe("MonthCalendar — «Cuenta para equidad» in the special composer (solver v3 C1 §6.3)", () => {
+  // Only `Date` is faked: August 2026 is the current month.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-03T18:00:00.000Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const toggle = () => screen.getByRole("switch", { name: "Cuenta para equidad" }) as HTMLButtonElement;
+
+  it("starts off, carries the choice to onAddSpecial, and starts off again on the next open", () => {
+    const { container, onAddSpecial } = renderCalendar();
+    fireEvent.click(cell(container, WEDNESDAY));
+    expect(toggle().getAttribute("aria-checked")).toBe("false");
+    expect(toggle().disabled).toBe(false);
+    fireEvent.click(toggle());
+    expect(toggle().getAttribute("aria-checked")).toBe("true");
+    fireEvent.change(screen.getByLabelText("Nombre del servicio especial"), { target: { value: "Bautizos" } });
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
+    expect(onAddSpecial).toHaveBeenCalledWith(WEDNESDAY, "Bautizos", true);
+
+    fireEvent.click(cell(container, "2026-08-13"));
+    expect(toggle().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("«Cancelar» drops the choice", () => {
+    const { container } = renderCalendar();
+    fireEvent.click(cell(container, WEDNESDAY));
+    fireEvent.click(toggle());
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    fireEvent.click(cell(container, WEDNESDAY));
+    expect(toggle().getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("shows the special help line and the v2 note once", () => {
+    const { container } = renderCalendar();
+    fireEvent.click(cell(container, WEDNESDAY));
+    expect(screen.getAllByText(FAIRNESS_SPECIAL_HELP)).toHaveLength(1);
+    expect(screen.getAllByText(FAIRNESS_ENGINE_NOTE)).toHaveLength(1);
+  });
+});
+
+describe("MonthCalendar — the composer in a past month (solver v3 C1 §6.0)", () => {
+  // September 2026 is "now": the calendar's August is a past month.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-10T18:00:00.000Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("is disabled at off with the reason as its description, and «Agregar» sends off", () => {
+    const { container, onAddSpecial } = renderCalendar();
+    fireEvent.click(cell(container, WEDNESDAY));
+    const sw = screen.getByRole("switch", { name: "Cuenta para equidad" }) as HTMLButtonElement;
+    expect(sw.disabled).toBe(true);
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    expect(document.getElementById(sw.getAttribute("aria-describedby")!)?.textContent).toBe(FAIRNESS_PAST_REASON);
+    fireEvent.change(screen.getByLabelText("Nombre del servicio especial"), { target: { value: "Bautizos" } });
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
+    expect(onAddSpecial).toHaveBeenCalledWith(WEDNESDAY, "Bautizos", false);
+  });
+});
+
+describe("MonthGenerator + calendar — the composer's choice reaches the special's create body (C1 §6.3)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-03T18:00:00.000Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("a special composed ON is created counted; the Sundays keep their default", async () => {
+    const calls: Record<string, unknown>[] = [];
+    const fetchMock = vi.fn(async (url: string, init: { body: string }) => {
+      if (url !== "/api/admin/roles") throw new Error(`unexpected fetch to ${url}`);
+      calls.push(JSON.parse(init.body) as Record<string, unknown>);
+      return { ok: true, status: 200, json: async () => ({}) };
+    });
+    stubFetchWithHistory(fetchMock);
+
+    const { container } = render(<Gen members={[]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+    setMonthYear(container, 8, 2026);
+    deselectAll(container, "saturday");
+    fireEvent.click(cell(container, WEDNESDAY));
+    fireEvent.change(screen.getByLabelText("Nombre del servicio especial"), { target: { value: "Bautizos" } });
+    fireEvent.click(screen.getByRole("switch", { name: "Cuenta para equidad" }));
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
+    fireEvent.click(screen.getByRole("button", { name: /Previsualizar/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Crear \d+ borrador/ }));
+
+    await waitFor(() => expect(calls).toHaveLength(6));
+    const byDate = Object.fromEntries(calls.map((body) => [body.date, body.countsForFairness]));
+    expect(byDate[WEDNESDAY]).toBe(true);
+    for (const sunday of AUG_SUNDAYS) expect(byDate[sunday]).toBe(true);
   });
 });

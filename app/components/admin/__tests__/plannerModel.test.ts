@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { SolveResponse } from "@/app/api/admin/solve/route";
 import { computeParticipation } from "@/app/utils/computeParticipation";
+import { countsForFairnessDefault } from "@/app/utils/countsForFairness";
 import type { RankMember } from "../candidateRanking";
 import {
   applySolveResponse as applySolveResponseModel,
@@ -39,7 +40,12 @@ import {
   type SolverHistoryEntry,
 } from "../plannerModel";
 
-type GridColumn = Omit<ModelGridColumn, "columnId"> & { columnId?: string };
+// `columnId` and `countsForFairness` are optional in the suite's own column shape;
+// `normalizeColumns` fills them the way `buildColumns` would.
+type GridColumn = Omit<ModelGridColumn, "columnId" | "countsForFairness"> & {
+  columnId?: string;
+  countsForFairness?: boolean;
+};
 type GridCell = {
   date: string;
   rowId: string;
@@ -53,6 +59,7 @@ const normalizeColumns = (columns: GridColumn[]): ModelGridColumn[] =>
   columns.map((column) => ({
     ...column,
     columnId: column.columnId ?? createColumnId(column.type, column.date),
+    countsForFairness: column.countsForFairness ?? countsForFairnessDefault(column.type),
   }));
 
 const normalizeCells = (cells: GridCell[], columns: ModelGridColumn[]): ModelGridCell[] =>
@@ -162,8 +169,8 @@ describe("stable grid identity", () => {
 
   it("keeps two same-date columns and their rosters independent", () => {
     const columns: ModelGridColumn[] = [
-      { columnId: "role-a", date: "2026-02-11", type: "special_role", serviceName: "Vigilia" },
-      { columnId: "role-b", date: "2026-02-11", type: "special_role", serviceName: "Retiro" },
+      { columnId: "role-a", date: "2026-02-11", type: "special_role", serviceName: "Vigilia", countsForFairness: false },
+      { columnId: "role-b", date: "2026-02-11", type: "special_role", serviceName: "Retiro", countsForFairness: false },
     ];
     const cells: ModelGridCell[] = [
       { columnId: "role-a", rowId: "lead", occupants: [{ memberId: "m1" }], origin: "manual" },
@@ -181,7 +188,7 @@ describe("stable grid identity", () => {
     ];
     const [role] = cellsToParticipantRolesModel(
       cells,
-      [{ columnId: "role-a", date: "2026-03-04", type: "special_role", serviceName: "Vigilia" }],
+      [{ columnId: "role-a", date: "2026-03-04", type: "special_role", serviceName: "Vigilia", countsForFairness: false }],
       [m("m1", "Uno")],
     );
     expect(role.date).toBe("2026-03-04");
@@ -191,13 +198,13 @@ describe("stable grid identity", () => {
   it("fails closed on missing, duplicate, or detached identity", () => {
     expect(() =>
       assertGridIdentity([
-        { columnId: "same", date: "2026-02-01", type: "sunday_role" },
-        { columnId: "same", date: "2026-02-08", type: "sunday_role" },
+        { columnId: "same", date: "2026-02-01", type: "sunday_role", countsForFairness: true },
+        { columnId: "same", date: "2026-02-08", type: "sunday_role", countsForFairness: true },
       ]),
     ).toThrow(/Duplicate grid columnId/);
     expect(() =>
       assertGridIdentity(
-        [{ columnId: "known", date: "2026-02-01", type: "sunday_role" }],
+        [{ columnId: "known", date: "2026-02-01", type: "sunday_role", countsForFairness: true }],
         [{ columnId: "missing", rowId: "lead", occupants: [], origin: "empty" }],
       ),
     ).toThrow(/unknown columnId/);
@@ -227,6 +234,7 @@ describe("stable grid identity", () => {
       exists: false,
       isExisting: false,
       skipped: false,
+      countsForFairness: true,
       leads: [],
       bgvs: [],
       chorus: [],
@@ -1171,6 +1179,7 @@ describe("historyEntryFromDrafts", () => {
     exists: false,
     isExisting: false,
     skipped: false,
+    countsForFairness: true,
     leads: [],
     bgvs: [],
     chorus: [],
@@ -1440,6 +1449,7 @@ describe("a special contributes nothing to fairness history (E9/E20)", () => {
     exists: false,
     isExisting: false,
     skipped: false,
+    countsForFairness: false,
     leads: ["m1"],
     bgvs: ["m2"],
     chorus: ["m1", "m2"],
@@ -1617,7 +1627,7 @@ describe("buildColumns dedupes by date, weekend-first (E3, work item 13)", () =>
       specials: [{ date: "2026-02-08", name: "Vigilia" }],
     });
     expect(cols).toEqual([
-      { columnId: createColumnId("sunday_role", "2026-02-08"), date: "2026-02-08", type: "sunday_role" },
+      { columnId: createColumnId("sunday_role", "2026-02-08"), date: "2026-02-08", type: "sunday_role", countsForFairness: true },
     ]);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0][0]).toContain("2026-02-08");
@@ -1632,7 +1642,7 @@ describe("buildColumns dedupes by date, weekend-first (E3, work item 13)", () =>
       specials: [{ date: "2026-02-07", name: "Vigilia" }],
     });
     expect(cols).toEqual([
-      { columnId: createColumnId("saturday_role", "2026-02-07"), date: "2026-02-07", type: "saturday_role" },
+      { columnId: createColumnId("saturday_role", "2026-02-07"), date: "2026-02-07", type: "saturday_role", countsForFairness: true },
     ]);
     warn.mockRestore();
   });
@@ -1644,8 +1654,8 @@ describe("buildColumns dedupes by date, weekend-first (E3, work item 13)", () =>
       specials: [{ date: "2026-02-07", name: "Vigilia" }],
     });
     expect(cols).toEqual([
-      { columnId: createColumnId("special_role", "2026-02-07"), date: "2026-02-07", type: "special_role", serviceName: "Vigilia" },
-      { columnId: createColumnId("sunday_role", "2026-02-08"), date: "2026-02-08", type: "sunday_role" },
+      { columnId: createColumnId("special_role", "2026-02-07"), date: "2026-02-07", type: "special_role", serviceName: "Vigilia", countsForFairness: false },
+      { columnId: createColumnId("sunday_role", "2026-02-08"), date: "2026-02-08", type: "sunday_role", countsForFairness: true },
     ]);
   });
 
@@ -1688,14 +1698,14 @@ describe("buildColumns dedupes by date, weekend-first (E3, work item 13)", () =>
     // default were deleted. February 2026, all four Saturdays selected — Feb 28
     // is a Saturday with no Sunday of its own in-month, and still gets a column.
     expect(buildColumns({ sundayDates: FEB_SUNDAYS, activeSatDates: FEB_SATURDAYS })).toEqual([
-      { columnId: createColumnId("sunday_role", "2026-02-01"), date: "2026-02-01", type: "sunday_role" },
-      { columnId: createColumnId("saturday_role", "2026-02-07"), date: "2026-02-07", type: "saturday_role" },
-      { columnId: createColumnId("sunday_role", "2026-02-08"), date: "2026-02-08", type: "sunday_role" },
-      { columnId: createColumnId("saturday_role", "2026-02-14"), date: "2026-02-14", type: "saturday_role" },
-      { columnId: createColumnId("sunday_role", "2026-02-15"), date: "2026-02-15", type: "sunday_role" },
-      { columnId: createColumnId("saturday_role", "2026-02-21"), date: "2026-02-21", type: "saturday_role" },
-      { columnId: createColumnId("sunday_role", "2026-02-22"), date: "2026-02-22", type: "sunday_role" },
-      { columnId: createColumnId("saturday_role", "2026-02-28"), date: "2026-02-28", type: "saturday_role" },
+      { columnId: createColumnId("sunday_role", "2026-02-01"), date: "2026-02-01", type: "sunday_role", countsForFairness: true },
+      { columnId: createColumnId("saturday_role", "2026-02-07"), date: "2026-02-07", type: "saturday_role", countsForFairness: true },
+      { columnId: createColumnId("sunday_role", "2026-02-08"), date: "2026-02-08", type: "sunday_role", countsForFairness: true },
+      { columnId: createColumnId("saturday_role", "2026-02-14"), date: "2026-02-14", type: "saturday_role", countsForFairness: true },
+      { columnId: createColumnId("sunday_role", "2026-02-15"), date: "2026-02-15", type: "sunday_role", countsForFairness: true },
+      { columnId: createColumnId("saturday_role", "2026-02-21"), date: "2026-02-21", type: "saturday_role", countsForFairness: true },
+      { columnId: createColumnId("sunday_role", "2026-02-22"), date: "2026-02-22", type: "sunday_role", countsForFairness: true },
+      { columnId: createColumnId("saturday_role", "2026-02-28"), date: "2026-02-28", type: "saturday_role", countsForFairness: true },
     ]);
   });
 });
@@ -1773,5 +1783,34 @@ describe("applySolveResponse under pins (spec §3.2 Waivers)", () => {
     expect(out.cells.find((c) => c.columnId === SUN1 && c.rowId === "lead")).toEqual({
       columnId: SUN1, rowId: "lead", occupants: [{ memberId: "ana" }], origin: "auto",
     });
+  });
+});
+
+describe("countsForFairness on create columns and drafts (solver v3 C1 §6.1)", () => {
+  it("weekend columns enter counted; a special at the composer's choice, else not counted", () => {
+    const cols = buildColumns({
+      sundayDates: ["2026-11-01"],
+      activeSatDates: ["2026-11-07"],
+      specials: [
+        { date: "2026-11-11", name: "Vigilia" },
+        { date: "2026-11-12", name: "Retiro", countsForFairness: true },
+      ],
+    });
+    expect(cols.map((c) => [c.date, c.countsForFairness])).toEqual([
+      ["2026-11-01", true],
+      ["2026-11-07", true],
+      ["2026-11-11", false],
+      ["2026-11-12", true],
+    ]);
+  });
+
+  it("each draft carries its column's value", () => {
+    const cols = buildColumns({ sundayDates: ["2026-11-01", "2026-11-08"], activeSatDates: [] });
+    const edited = cols.map((c) => (c.date === "2026-11-08" ? { ...c, countsForFairness: false } : c));
+    const drafts = cellsToDraftsModel([], edited, new Set(), [], []);
+    expect(drafts.map((d) => [d.date, d.countsForFairness])).toEqual([
+      ["2026-11-01", true],
+      ["2026-11-08", false],
+    ]);
   });
 });

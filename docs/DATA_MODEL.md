@@ -117,6 +117,7 @@ Structurally identical.
 | `creationReceiptId` | string (hidden, readOnly) | The `roleCreationReceipt._id` that minted this role. **Internal** — written only by the guarded create. |
 | `creationFingerprint` | string (hidden, readOnly) | The canonical create-payload fingerprint. **Internal.** The receipt stays authoritative; this is the forward link. |
 | `published` | boolean | Default `true`. `false` = draft (managers only). **The gate.** |
+| `countsForFairness` | boolean | «Cuenta para equidad» (solver v3 C1). **Absent on documents created before C1** and read through the ONE rule `coalesce(countsForFairness, _type != "special_role")` ([`countsForFairness.ts`](../app/utils/countsForFairness.ts)) — a weekend role counts by default. Every create since C1 stores the explicit effective boolean; a `PATCH` sets it only when the body carries it and never unsets it (every planner save carries it); never `null`. **Not in `ROLE_PROJECTION`** — `GET /api/admin/roles` and the v3 ledger read it through their own projections, so R11's history-diff evidence is toggle-blind (C1 §10). Inert until v3 serves Auto. Visible and read-only in Studio, no `initialValue`. |
 | `week` | date | The week this service is valid for. |
 | `Lead` | array of reference → `teamMembers` | "Leaders." **Seat 1.** |
 | `BGVs` | array of reference → `teamMembers` | Background Vocals. **Seat 2.** |
@@ -133,6 +134,7 @@ keyed on **`date`** (not `week`).
 |-------|------|-------|
 | `creationReceiptId`, `creationFingerprint` | string (hidden, readOnly) | Same internal create-receipt link as the weekend role docs. |
 | `published` | boolean | Default `true`. Draft gate. |
+| `countsForFairness` | boolean | Same field and rules as on the weekend roles — but a special **does not count by default** (absent reads `false`). Set by the special composer or «+ Nuevo servicio» at creation and by the stored-mode header after it. |
 | `date` | date | Date of the special service. |
 | `service_name` | string | e.g. "Viernes Santo," "Nochebuena." |
 | `time` | string | `"HH:mm"`, local (America/Mexico_City). Optional. Display/sort only for same-day sets — never identity (ADR-0011, PR #90). Validated by the `serviceTime.ts` regex, mirrored in the schema. |

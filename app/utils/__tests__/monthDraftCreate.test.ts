@@ -14,6 +14,7 @@ import {
   type DraftPostOutcome,
 } from "@/app/utils/monthDraftCreate";
 import { isValidCreationRequestId } from "@/app/utils/roleWriteRequest";
+import { countsForFairnessDefault } from "@/app/utils/countsForFairness";
 
 function draft(over: Partial<CreatableDraft> = {}): CreatableDraft {
   return {
@@ -21,6 +22,7 @@ function draft(over: Partial<CreatableDraft> = {}): CreatableDraft {
     creationRequestId: "req-draft-00000001",
     _type: "sunday_role",
     date: "2026-08-09",
+    countsForFairness: countsForFairnessDefault(over._type ?? "sunday_role"),
     leads: ["mem-1"],
     bgvs: [],
     chorus: [],
@@ -173,17 +175,55 @@ describe("draftCreateBody — special services", () => {
   });
 
   it("draftCreateBody emits time for a special only when present", () => {
-    const base = { localId: "l", creationRequestId: "req-abc-0001", _type: "special_role" as const, date: "2026-10-03", service_name: "X", leads: [], bgvs: [], chorus: [], instruments: [], foh: [] };
+    const base = { localId: "l", creationRequestId: "req-abc-0001", _type: "special_role" as const, date: "2026-10-03", service_name: "X", countsForFairness: false, leads: [], bgvs: [], chorus: [], instruments: [], foh: [] };
     expect(draftCreateBody({ ...base, time: "09:00" }, false)).toMatchObject({ time: "09:00" });
     expect("time" in draftCreateBody(base, false)).toBe(false);
     expect("time" in draftCreateBody({ ...base, _type: "sunday_role", time: "09:00" }, false)).toBe(false);
   });
 
   it("draftCreateBody emits format for a special carrying it, never for a weekend draft, and omits it when absent", () => {
-    const base = { localId: "l", creationRequestId: "req-abc-0001", _type: "special_role" as const, date: "2026-10-03", service_name: "X", leads: [], bgvs: [], chorus: [], instruments: [], foh: [] };
+    const base = { localId: "l", creationRequestId: "req-abc-0001", _type: "special_role" as const, date: "2026-10-03", service_name: "X", countsForFairness: false, leads: [], bgvs: [], chorus: [], instruments: [], foh: [] };
     expect(draftCreateBody({ ...base, format: "worship_night" }, false)).toMatchObject({ format: "worship_night" });
     expect("format" in draftCreateBody(base, false)).toBe(false);
     expect("format" in draftCreateBody({ ...base, _type: "sunday_role", format: "worship_night" }, false)).toBe(false);
     expect("format" in draftCreateBody({ ...base, _type: "saturday_role", format: "worship_night" }, false)).toBe(false);
+  });
+});
+
+describe("draftCreateBody — countsForFairness (solver v3 C1 §6.1, §6.0)", () => {
+  // `draft()` is dated 2026-08-09: August 2026 is current on "2026-08-31" and past on "2026-09-01".
+  it("sends the draft's own value", () => {
+    expect(draftCreateBody(draft({ countsForFairness: false }), false, "2026-08-31").countsForFairness).toBe(false);
+    expect(
+      draftCreateBody(draft({ _type: "special_role", service_name: "Vigilia", countsForFairness: true }), false, "2026-08-31")
+        .countsForFairness,
+    ).toBe(true);
+  });
+
+  it("sends the type default for a draft of a past month, whatever the draft holds", () => {
+    expect(draftCreateBody(draft({ countsForFairness: false }), false, "2026-09-01").countsForFairness).toBe(true);
+    expect(
+      draftCreateBody(draft({ _type: "special_role", service_name: "Vigilia", countsForFairness: true }), false, "2026-09-01")
+        .countsForFairness,
+    ).toBe(false);
+  });
+
+  it("the batch posts every draft's value and keeps its request id", async () => {
+    const bodies: { creationRequestId: string; countsForFairness: boolean }[] = [];
+    await runDraftCreateBatch({
+      drafts: [
+        draft({ localId: "on", creationRequestId: "req-draft-on-0001", date: "2099-01-04", countsForFairness: true }),
+        draft({ localId: "off", creationRequestId: "req-draft-off-0001", date: "2099-01-11", countsForFairness: false }),
+      ],
+      published: false,
+      post: async (body) => {
+        bodies.push(body);
+        return { ok: true } satisfies DraftPostOutcome;
+      },
+    });
+    expect(bodies.map((b) => [b.creationRequestId, b.countsForFairness])).toEqual([
+      ["req-draft-on-0001", true],
+      ["req-draft-off-0001", false],
+    ]);
   });
 });

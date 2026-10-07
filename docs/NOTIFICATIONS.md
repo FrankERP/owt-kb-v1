@@ -324,6 +324,28 @@ tick and a late GitHub run CAN overlap and split one backlog across two sweeps
 sharing the SMTP width — the workflow's `concurrency` group serialises GitHub
 only against itself.
 
+## A toggle-only PATCH queues nothing (solver v3 C1)
+
+`PATCH /api/admin/roles/[id]` queues one outbox upsert per member in the union of
+before/after assignees on every published edit — even one that changes nothing a
+notice could report — and an upsert on a pending notice slides its `notifyAfter`
+and clears `servedRecipients`. The flush would send nothing for such a save, but the
+re-debounce would delay a notice about a real change. The «Cuenta para equidad»
+switch makes such saves routine, so C1 adds one exception and nothing else:
+
+- a PATCH that **carries `countsForFairness`** and changes nothing a notice could
+  report — the date does not move; for a special, the normalized name and the time
+  are unchanged (the email names a special by both); and every member in the union of
+  stored and requested assignees holds the same SET of seat labels (`rolesForMember`,
+  compared with the flush's own `sameSet`) — **queues no outbox notice and sends no
+  push**. Revalidation still runs.
+- a PATCH **without** the field queues exactly as before, a no-op save included.
+
+The predicate is `isNoticeNeutralEdit` (`serviceMutationSideEffects.ts`). It never
+reads the stored toggle — whether the value actually changed is irrelevant — so the
+route needs no extra read and `ROLE_PROJECTION` is unchanged. A create never mentions
+the toggle: its notices depend on seats and `published` only.
+
 ## The proposal thread — what it notifies
 
 Released 2026-08-26. `lead_notes` / `admin_notes` became a `messages[]` thread.

@@ -38,8 +38,8 @@ afterEach(() => cleanup());
 const ROWS = buildRows();
 const SUNDAYS = ["2026-09-06", "2026-09-13", "2026-09-20", "2026-09-27"];
 
-const COL_A: GridColumn = { columnId: "col-1", date: "2026-09-06", type: "sunday_role" };
-const COL_B: GridColumn = { columnId: "col-2", date: "2026-09-13", type: "sunday_role" };
+const COL_A: GridColumn = { columnId: "col-1", date: "2026-09-06", type: "sunday_role", countsForFairness: true };
+const COL_B: GridColumn = { columnId: "col-2", date: "2026-09-13", type: "sunday_role", countsForFairness: true };
 
 const GABY: RankMember = { _id: "gaby", member_name: "Gabriela Rocha", alias: "Gaby", memberType: ["voz"] };
 const FRANK: RankMember = { _id: "frank", member_name: "Francisco Rocha", alias: "Frank", memberType: ["voz", "instrumento"] };
@@ -774,6 +774,7 @@ function storedGrid(opts: { readOnlyColumnId?: string }): { cells: GridCell[]; c
     rev: "rev-1",
     published: true,
     admission: opts.readOnlyColumnId === column.columnId ? "readOnly" : "approved",
+    storedFairness: { date: column.date, countsForFairness: column.countsForFairness },
   }));
   const cells = [
     cell("lead", "col-1", []),

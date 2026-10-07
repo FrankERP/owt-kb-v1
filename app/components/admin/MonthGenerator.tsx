@@ -12,8 +12,19 @@ import { draftCreateBody, newCreationRequestId, runDraftCreateBatch } from "@/ap
 import { normalizeServiceName } from "@/app/utils/normalizeLabel";
 import { isServiceTime } from "@/app/utils/serviceTime";
 import { WORSHIP_NIGHT_FORMAT, type ServiceFormat } from "@/app/utils/serviceFormat";
-import { creatableTargets, type TargetPreflight } from "./serviceReadiness";
-import PlannerGrid, { type AutoState, type SolveDiagnostics } from "./PlannerGrid";
+import { countsForFairness as readCountsForFairness, countsForFairnessDefault } from "@/app/utils/countsForFairness";
+import { creatableTargets, serviceTodayIso, type TargetPreflight } from "./serviceReadiness";
+import PlannerGrid, { type AutoState, type SolveDiagnostics, type StoredHeaderPatch } from "./PlannerGrid";
+import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";
+import {
+  FAIRNESS_LABEL,
+  FAIRNESS_SPECIAL_HELP,
+  applyCreateCountsEdits,
+  effectiveCreateCounts,
+  effectiveStoredCounts,
+  isPastServiceMonth,
+  withoutCountsEdit,
+} from "./fairnessToggleModel";
 import MonthCalendar from "./MonthCalendar";
 import { SERVICE_LABEL, type ServiceRole } from "./serviceCardModel";
 import {
@@ -2011,7 +2022,16 @@ export default function MonthGenerator({
   const [deselectedSundays, setDeselectedSundays] = useState<string[]>([]);
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
   /** E2's weekday specials for THIS month — reset whenever year/month changes. */
-  const [specials, setSpecials] = useState<{ date: string; name: string }[]>([]);
+  const [specials, setSpecials] = useState<{ date: string; name: string; countsForFairness: boolean }[]>([]);
+  /**
+   * «Cuenta para equidad» edits on create-mode columns (solver v3 C1 §6.1), by
+   * `columnId`. Held for as long as the column stays in the selection — across the
+   * config and grid steps, an «Omitir» and any number of Auto runs (Auto never
+   * touches it). Deselecting the weekend date or removing the special drops its
+   * entry, so re-adding starts from the default (or the composer's choice); a month
+   * change clears it with the other picks.
+   */
+  const [createCountsEdits, setCreateCountsEdits] = useState<Map<string, boolean>>(new Map());
   /**
    * The rules ON SCREEN — the fetched document plus whatever the admin has
    * typed since, not yet saved.
@@ -2256,7 +2276,7 @@ export default function MonthGenerator({
     attempt: FrozenSaveAttempt;
     transport: PatchTransportOutcome;
   }>>(new Map());
-  const [storedHeaderEdits, setStoredHeaderEdits] = useState<Map<string, { date?: string; serviceName?: string; time?: string }>>(new Map());
+  const [storedHeaderEdits, setStoredHeaderEdits] = useState<Map<string, StoredHeaderPatch>>(new Map());
   const [touchedStoredRoleIds, setTouchedStoredRoleIds] = useState<Set<string>>(new Set());
   const monthPrefix = `${year}-${String(month).padStart(2, "0")}`;
   const [composerOpen, setComposerOpen] = useState(storedMode && openComposerInitially);
@@ -2265,12 +2285,23 @@ export default function MonthGenerator({
   const [createName, setCreateName] = useState("");
   const [createTime, setCreateTime] = useState("");
   const [createWorshipNight, setCreateWorshipNight] = useState(false);
+  // «+ Nuevo servicio»'s «Cuenta para equidad» (C1 §6.5): follows the Tipo until touched.
+  const [createCountsTouched, setCreateCountsTouched] = useState(false);
+  const [createCountsChoice, setCreateCountsChoice] = useState(false);
   const [creatingOne, setCreatingOne] = useState(false);
   const [createAttemptStatus, setCreateAttemptStatus] = useState<"unknown" | "committedUnverified" | null>(null);
   const createAttempt = useRef<{
     id: string;
     payloadKey: string;
-    target: { type: ServiceType; date: string; name: string | null; time: string | null; format: ServiceFormat | null };
+    target: {
+      type: ServiceType;
+      date: string;
+      name: string | null;
+      time: string | null;
+      format: ServiceFormat | null;
+      /** The effective «Cuenta para equidad» — part of the attempt identity (C1 §6.5). */
+      countsForFairness: boolean;
+    };
     roleId?: string;
   } | null>(null);
   const baselineByRole = useRef<Map<string, RoleSemanticSnapshot>>(new Map());
@@ -2312,6 +2343,7 @@ export default function MonthGenerator({
     setActiveSatDates(getDates(year, month, 6));
     setDeselectedSundays([]);
     setSpecials([]);
+    setCreateCountsEdits(new Map());
   }, [year, month]);
 
   /**
@@ -2449,17 +2481,41 @@ export default function MonthGenerator({
     [sundayDatesFull, deselectedSundays],
   );
 
-  // D9's EXPLICIT column set — never inferred from `sundayDatesFull`.
+  // C1 §6.0 — "today" in CDMX, read on every render; the memo below is keyed on it, so
+  // the past-month rule is re-evaluated on every render and again when a body is built
+  // (`draftCreateBody`, `serializeStoredColumn`). Nothing re-renders at the CDMX month
+  // boundary by itself, so a tab left idle across it is corrected at its next render or
+  // body build.
+  const todayIso = serviceTodayIso();
+  // D9's EXPLICIT column set — never inferred from `sundayDatesFull`. Each column
+  // carries its EFFECTIVE «Cuenta para equidad» (C1 §6.1).
   const createColumns = useMemo(
-    () => buildColumns({ sundayDates: selectedSundays, activeSatDates, specials }),
-    [selectedSundays, activeSatDates, specials],
+    () => applyCreateCountsEdits(
+      buildColumns({ sundayDates: selectedSundays, activeSatDates, specials }),
+      createCountsEdits,
+      todayIso,
+    ),
+    [selectedSundays, activeSatDates, specials, createCountsEdits, todayIso],
   );
   const columns = storedMode
-    ? storedTranslations.map((entry) => ({
-        ...entry.column,
-        ...(storedHeaderEdits.get(entry.column.roleId) ?? {}),
-      }))
+    ? storedTranslations.map((entry) => {
+        const edited: StoredGridColumn = { ...entry.column, ...(storedHeaderEdits.get(entry.column.roleId) ?? {}) };
+        // C1 §6.0: while past, the stored value — a held toggle edit is neither shown nor sent.
+        return { ...edited, countsForFairness: effectiveStoredCounts(edited, todayIso) };
+      })
     : createColumns;
+  /**
+   * «+ Nuevo servicio»'s effective «Cuenta para equidad» (C1 §6.5): the Tipo's
+   * default until the admin touches the Switch, then the admin's value until the
+   * composer resets; the Tipo's default while the date is in a past month (§6.0).
+   */
+  const composerCounts = (today: string) =>
+    effectiveCreateCounts(
+      createType,
+      createDate,
+      createCountsTouched ? createCountsChoice : countsForFairnessDefault(createType),
+      today,
+    );
   const storedColumns = columns.filter((column): column is StoredGridColumn => "roleId" in column);
   const dirtyStoredColumns = storedMode
     ? storedColumns.filter((column) => {
@@ -2719,7 +2775,10 @@ export default function MonthGenerator({
       && role.bgvs.length === 0
       && role.chorus.length === 0
       && role.instruments.length === 0
-      && role.foh.length === 0,
+      && role.foh.length === 0
+      // C1 §6.5: verified only with the requested «Cuenta para equidad» too.
+      && readCountsForFairness({ _type: role._type, countsForFairness: role.countsForFairness })
+        === attempt.target.countsForFairness,
     );
     if (!admittedEmpty) return;
     createAttempt.current = null;
@@ -2728,6 +2787,8 @@ export default function MonthGenerator({
     setCreateName("");
     setCreateTime("");
     setCreateWorshipNight(false);
+    setCreateCountsTouched(false);
+    setCreateCountsChoice(false);
     setSaveNotice("Servicio vacío creado y verificado. Ya puedes asignar el equipo.");
     onCreated();
   }, [onCreated, storedGenerationKey, storedInventory.coherent, storedMode, storedSource?.roles]);
@@ -3173,7 +3234,7 @@ export default function MonthGenerator({
     closeGroupFill();
   }
 
-  function handleStoredHeaderChange(columnId: string, patch: { date?: string; serviceName?: string; time?: string }) {
+  function handleStoredHeaderChange(columnId: string, patch: StoredHeaderPatch) {
     if (!storedMode || storedMutationLocked) return;
     if (patch.date !== undefined && storedDateBlocked) {
       setSaveNotice(storedDateBlocked);
@@ -3186,6 +3247,23 @@ export default function MonthGenerator({
     });
     setTouchedStoredRoleIds((current) => new Set(current).add(columnId));
     setSaveNotice(null);
+  }
+
+  /**
+   * «Cuenta para equidad» from a grid header (C1 §6.2, §6.4). Stored mode rides the
+   * header overlay like Fecha/Nombre/Hora; create mode holds the edit per column and
+   * re-derives the drafts from the columns it now produces.
+   */
+  function handleFairnessChange(columnId: string, next: boolean) {
+    if (storedMode) {
+      handleStoredHeaderChange(columnId, { countsForFairness: next });
+      return;
+    }
+    if (pushing || autoPending) return;
+    const nextEdits = new Map(createCountsEdits).set(columnId, next);
+    setCreateCountsEdits(nextEdits);
+    const nextColumns = applyCreateCountsEdits(createColumns, nextEdits);
+    setDrafts((prev) => cellsToDrafts(cells, nextColumns, skippedColumnIds, prev, existingRoles));
   }
 
   function handleRowsChange(next: GridRow[]) {
@@ -3272,7 +3350,17 @@ export default function MonthGenerator({
       return;
     }
     const createFormat = createType === "special_role" && createWorshipNight ? WORSHIP_NIGHT_FORMAT : null;
-    const target = { type: createType, date: createDate, name: normalizedName, time: createTimeValue, format: createFormat };
+    // C1 §6.5/§6.0: decided NOW — a tab left open across a month boundary cannot send
+    // a value its month no longer allows — and part of the attempt identity.
+    const createCounts = composerCounts(serviceTodayIso());
+    const target = {
+      type: createType,
+      date: createDate,
+      name: normalizedName,
+      time: createTimeValue,
+      format: createFormat,
+      countsForFairness: createCounts,
+    };
     const payloadKey = JSON.stringify(target);
     if (!createAttempt.current || createAttempt.current.payloadKey !== payloadKey) {
       createAttempt.current = { id: newCreationRequestId(), payloadKey, target };
@@ -3285,6 +3373,7 @@ export default function MonthGenerator({
       ...(createType === "special_role" ? { service_name: normalizedName ?? "" } : {}),
       ...(createTimeValue ? { time: createTimeValue } : {}),
       ...(createFormat ? { format: createFormat } : {}),
+      countsForFairness: createCounts,
       leads: [],
       bgvs: [],
       chorus: [],
@@ -4373,9 +4462,20 @@ export default function MonthGenerator({
               prev.includes(date) ? prev.filter(d => d !== date) : [...prev, date],
             );
           }
+          // C1 §6.1: a date that leaves (or re-enters) the selection starts from its default.
+          setCreateCountsEdits(prev =>
+            withoutCountsEdit(prev, createColumnId(dow === 0 ? "sunday_role" : "saturday_role", date)),
+          );
         }}
-        onAddSpecial={(date, name) => setSpecials(prev => [...prev.filter(s => s.date !== date), { date, name }])}
-        onRemoveSpecial={date => setSpecials(prev => prev.filter(s => s.date !== date))}
+        onAddSpecial={(date, name, countsForFairness) => {
+          setSpecials(prev => [...prev.filter(s => s.date !== date), { date, name, countsForFairness }]);
+          // C1 §6.1: a (re-)added special starts from the composer's choice.
+          setCreateCountsEdits(prev => withoutCountsEdit(prev, createColumnId("special_role", date)));
+        }}
+        onRemoveSpecial={date => {
+          setSpecials(prev => prev.filter(s => s.date !== date));
+          setCreateCountsEdits(prev => withoutCountsEdit(prev, createColumnId("special_role", date)));
+        }}
       />
 
       {/*
@@ -4569,7 +4669,17 @@ export default function MonthGenerator({
                 <button type="button" onClick={() => void handleCreateOne()} disabled={creatingOne || (storedMutationLocked && createAttemptStatus !== "unknown") || storedWriteUnresolved || createAttemptStatus === "committedUnverified" || !!storedCreateBlocked} title={storedCreateBlocked ?? undefined} className="min-h-[44px] rounded-lg bg-surface-accent-solid text-on-fill px-4 font-label text-xs uppercase tracking-widest disabled:opacity-50">
                   {creatingOne ? "Creando…" : createAttemptStatus === "unknown" ? "Reintentar misma solicitud" : createAttemptStatus === "committedUnverified" ? "Verificando…" : "Crear vacío"}
                 </button>
-                <button type="button" onClick={() => setComposerOpen(false)} disabled={creatingOne || createAttemptStatus !== null} className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setComposerOpen(false);
+                    // C1 §6.5: «Cancelar» resets the switch to follow the Tipo again.
+                    setCreateCountsTouched(false);
+                    setCreateCountsChoice(false);
+                  }}
+                  disabled={creatingOne || createAttemptStatus !== null}
+                  className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest disabled:opacity-50"
+                >
                   Cancelar
                 </button>
                 {createAttemptStatus && (
@@ -4577,6 +4687,21 @@ export default function MonthGenerator({
                     Recargar
                   </button>
                 )}
+              </div>
+              {/* C1 §6.5: disabled with the other composer controls; the note once per composer. */}
+              <div className="space-y-1 md:col-span-4" data-fairness-composer="">
+                <FairnessSwitch
+                  checked={composerCounts(todayIso)}
+                  onChange={(next) => {
+                    setCreateCountsTouched(true);
+                    setCreateCountsChoice(next);
+                  }}
+                  disabled={storedMutationLocked}
+                  past={isPastServiceMonth(createDate, todayIso)}
+                  ariaLabel={FAIRNESS_LABEL}
+                  help={createType === "special_role" ? FAIRNESS_SPECIAL_HELP : undefined}
+                />
+                <FairnessEngineNote />
               </div>
             </div>
           )}
@@ -4800,6 +4925,7 @@ export default function MonthGenerator({
           onRowsChange={handleRowsChange}
           onToggleSkip={handleToggleSkip}
           onStoredHeaderChange={handleStoredHeaderChange}
+          fairness={{ onChange: handleFairnessChange, createInFlight: pushing || autoPending }}
           storedDateBlockedReason={storedDateBlocked}
           mutationLocked={storedMutationLocked || createAutoLocked}
           onAuto={handleAuto}

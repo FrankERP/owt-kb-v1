@@ -14,7 +14,7 @@ export interface RunReport {
   status: number | null;
   landedUrl: string | null;
   theme: "light" | "dark";
-  artifacts: { screenshot?: string; text?: string; a11y?: string };
+  artifacts: { screenshot?: string; text?: string; a11y?: string; layout?: string };
   consoleErrors: string[];
   failedRequests: { method: string; url: string; status: number | null }[];
   blockedMutations: BlockedMutation[];

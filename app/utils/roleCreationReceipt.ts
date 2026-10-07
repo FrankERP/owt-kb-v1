@@ -23,6 +23,7 @@ import { normalizeLabel } from "@/app/utils/normalizeLabel";
 import { isServiceTime } from "./serviceTime";
 import { isWorshipNightFormat, type ServiceFormat } from "./serviceFormat";
 import { ROLE_TYPES, type RoleType } from "@/app/utils/serviceReadModel";
+import { countsForFairnessDefault } from "./countsForFairness";
 import { serviceDayKey } from "@/app/utils/serviceReadSelect";
 
 export const ROLE_CREATION_RECEIPT_TYPE = "roleCreationReceipt";
@@ -40,6 +41,8 @@ export interface RoleCreatePayload {
   service_name?: unknown;
   time?: unknown;
   format?: unknown;
+  /** Solver v3 C1 «Cuenta para equidad»: absent, `true` or `false` — anything else is an issue. */
+  countsForFairness?: unknown;
   published?: unknown;
   leads?: unknown;
   bgvs?: unknown;
@@ -71,6 +74,15 @@ export interface CanonicalCreatePayload {
    * fingerprint stays byte-identical (the same rule as `time`).
    */
   format?: ServiceFormat;
+  /**
+   * Present ONLY when the request's value differs from its type's default — a
+   * weekend `false`, a special `true` (solver v3 C1 §5.3.2). Omitted otherwise, so
+   * every payload without the field, and every payload carrying its type's default
+   * explicitly, hashes byte-identically to before the field existed: a receipt
+   * written before C1 still replays a retry from an old tab, and
+   * `FINGERPRINT_VERSION` stays 1.
+   */
+  countsForFairness?: boolean;
   published: boolean;
   leads: string[];
   bgvs: string[];
@@ -81,7 +93,7 @@ export interface CanonicalCreatePayload {
 
 export interface CanonicalizedCreatePayload {
   valid: boolean;
-  /** Issue tags: payload | role_type | date | service_name. */
+  /** Issue tags: payload | role_type | date | service_name | time | format | countsForFairness. */
   issues: string[];
   canonical: CanonicalCreatePayload;
 }
@@ -170,6 +182,17 @@ export function canonicalizeCreatePayload(payload: RoleCreatePayload): Canonical
   if (hasFormat && !format) issues.push("format");
   if (format && roleType !== "special_role") issues.push("format");
 
+  // `countsForFairness` is optional on every role type: absent means the type
+  // default; `true`/`false` is the admin's choice; anything else — `null` included —
+  // is refused rather than read as "default" (C1-D3). It enters the canonical value
+  // only when it differs from the default, and only for a valid type and date.
+  const rawCounts = doc.countsForFairness;
+  if (rawCounts !== undefined && typeof rawCounts !== "boolean") issues.push("countsForFairness");
+  const offDefaultCounts =
+    roleType && date && typeof rawCounts === "boolean" && rawCounts !== countsForFairnessDefault(roleType)
+      ? rawCounts
+      : null;
+
   let targetIdentity: string | null = null;
   if (roleType && date) {
     if (roleType === "special_role") {
@@ -190,6 +213,7 @@ export function canonicalizeCreatePayload(payload: RoleCreatePayload): Canonical
       serviceName,
       ...(time && roleType === "special_role" ? { time } : {}),
       ...(format && roleType === "special_role" ? { format } : {}),
+      ...(offDefaultCounts !== null ? { countsForFairness: offDefaultCounts } : {}),
       // Effective publication default: only an exact boolean `true` publishes,
       // matching the writer's `published === true` (missing/false = draft).
       published: doc.published === true,
