@@ -312,11 +312,11 @@ export function cadenceLine(input: {
     case "on":
       return `En ${mes} le toca domingo (previsto).`;
     case "led_previous_month":
-      return `En ${mes} descansa: dirigió domingo el ${dayMonth(led[led.length - 1])}.`;
+      return `En ${mes} no dirige domingo: ya dirigió el ${dayMonth(led[led.length - 1])}.`;
     case "not_eligible":
-      return `En ${mes} descansa: no está en la lista de Dom Lead.`;
+      return `En ${mes} no dirige domingo: no está en la lista de Dom Lead.`;
     default:
-      return `En ${mes} descansa: ningún domingo disponible.`;
+      return `En ${mes} no dirige domingo: ningún domingo disponible.`;
   }
 }
 

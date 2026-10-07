@@ -176,7 +176,7 @@ describe("the content (UI-3, UI-4, UI-5)", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     fireEvent.click(toggle);
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getAllByText("En nov descansa: dirigió domingo el 25 oct.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("En nov no dirige domingo: ya dirigió el 25 oct.").length).toBeGreaterThan(0);
   });
 
   it("says when no month is recorded yet", async () => {

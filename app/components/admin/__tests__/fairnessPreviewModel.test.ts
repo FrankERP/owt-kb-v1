@@ -221,17 +221,17 @@ describe("the X1 line (UI-5, CAD-2)", () => {
   it("is «previsto» on", () => expect(line()).toBe("En nov le toca domingo (previsto)."));
 
   it("rests after a Sunday led in the previous month, naming it", () => {
-    expect(line({ person: { ...diego, countedSundayLeads: ["2026-09-06", "2026-10-25"] } })).toBe("En nov descansa: dirigió domingo el 25 oct.");
+    expect(line({ person: { ...diego, countedSundayLeads: ["2026-09-06", "2026-10-25"] } })).toBe("En nov no dirige domingo: ya dirigió el 25 oct.");
   });
 
   it("rests when not on the Dom Lead list (from the resolver, never the raw tick)", () => {
-    expect(line({ resolved: resolved({ roles: OUT }) })).toBe("En nov descansa: no está en la lista de Dom Lead.");
+    expect(line({ resolved: resolved({ roles: OUT }) })).toBe("En nov no dirige domingo: no está en la lista de Dom Lead.");
   });
 
   it("rests with no available Sunday, a rule-excluded Sunday counting as unavailable (A14)", () => {
     const blocks = SUNDAYS.map(({ date }, i) => ({ date, unavailable: i < 4, excludedRoles: i === 4 ? (["Sun.Lead"] as RoleKey[]) : [] }));
-    expect(line({ resolved: resolved({ blocks }) })).toBe("En nov descansa: ningún domingo disponible.");
-    expect(line({ liveUnavailable: SUNDAYS.map((s) => s.date) })).toBe("En nov descansa: ningún domingo disponible.");
+    expect(line({ resolved: resolved({ blocks }) })).toBe("En nov no dirige domingo: ningún domingo disponible.");
+    expect(line({ liveUnavailable: SUNDAYS.map((s) => s.date) })).toBe("En nov no dirige domingo: ningún domingo disponible.");
   });
 
   it("never lets a rule exclusion block a counted special (LG-6, CAD-2): a special on the same Sunday keeps it available", () => {
@@ -246,11 +246,11 @@ describe("the X1 line (UI-5, CAD-2)", () => {
     // The weekend service is excluded; the special is not — the spec counts one available Sunday.
     expect(line({ countedSundays: counted, resolved: resolved({ blocks }) })).toBe("En nov le toca domingo (previsto).");
     // With only the weekend service the rule exclusion still takes the Sunday away.
-    expect(line({ countedSundays: [counted[0]], resolved: resolved({ blocks }) })).toBe("En nov descansa: ningún domingo disponible.");
+    expect(line({ countedSundays: [counted[0]], resolved: resolved({ blocks }) })).toBe("En nov no dirige domingo: ningún domingo disponible.");
     // And an unavailability still blocks the special too.
     expect(
       line({ countedSundays: counted, resolved: resolved({ blocks: [{ ...blocks[0], unavailable: true }] }) }),
-    ).toBe("En nov descansa: ningún domingo disponible.");
+    ).toBe("En nov no dirige domingo: ningún domingo disponible.");
   });
 
   it("reads the record when it binds the month (A6), and says nothing when the resolver refuses", () => {
@@ -260,7 +260,7 @@ describe("the X1 line (UI-5, CAD-2)", () => {
       presence: [],
     };
     const bound = response([diego], { horizon: [{ month: "2026-11", record, storedServices: 4, recordBinds: true }] });
-    expect(line({ response: bound })).toBe("En nov descansa: no está en la lista de Dom Lead.");
+    expect(line({ response: bound })).toBe("En nov no dirige domingo: no está en la lista de Dom Lead.");
     expect(line({ resolved: { ok: false, issues: [{ code: "no_people" }], refusals: [] } })).toBeNull();
     expect(line({ resolved: resolved({ sundayCadence: undefined }) })).toBeNull();
   });
