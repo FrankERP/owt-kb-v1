@@ -9980,7 +9980,7 @@ while a confirm is in flight. Under v2 the confirm is unchanged."
 
 **Files:**
 - Create: `docs/adr/0052-the-planner-learns-the-solver-engine-from-the-server.md` and `docs/adr/0053-auto-plans-one-or-two-months-with-stored-services-fixed.md` — `0052` is the first free number on `main` recorded at Task 0 Step 5 and `0053` the next one (numbers follow the order records reach `main`; if another record lands first, renumber in the merge of `main` and let `adrIndex.test.ts` confirm)
-- Modify: `docs/adr/README.md` (two index rows), `docs/API_REFERENCE.md` (the solve route), `CLAUDE.md` and `AGENTS.md` (identical edits — `agentDocsParity.test.ts`), `docs/UTILITIES_AND_COMPONENTS.md`
+- Modify: `docs/adr/README.md` (two index rows), `docs/API_REFERENCE.md` (the solve route), `docs/agents/project-rules.md` (the long form), `CLAUDE.md` and `AGENTS.md` (identical index lines — `agentDocsParity.test.ts`), `docs/UTILITIES_AND_COMPONENTS.md`
 
 **Interfaces:** none (documentation only).
 
@@ -10121,9 +10121,9 @@ Replace with:
   The v2 path above is unchanged.
 ```
 
-- [ ] **Step 5: `CLAUDE.md` and `AGENTS.md`** (identical edits in both; DOC-3 — the engine resolver's line is C2's GU-4 and is not repeated)
+- [ ] **Step 5: the rules — long form in `docs/agents/project-rules.md`, index lines in `CLAUDE.md` and `AGENTS.md`** (DOC-3 — the engine resolver's line is C2's GU-4 and is not repeated). Since 2026-10-07 `CLAUDE.md`/`AGENTS.md` are the index (one or two lines per rule) and the long form lives under the same headings in `docs/agents/project-rules.md`; a rule changes in both (amended at Task 0 on `c0375d7d`, where the replay's `CLAUDE.md` anchors now live in the long-form file).
 
-Find:
+In `docs/agents/project-rules.md`, Find:
 ```markdown
 - **Client mutation handlers** must wrap `fetch` in try/catch/finally, check
 ```
@@ -10157,9 +10157,24 @@ month; critical, reviewed as such), `v3Copy.ts` (the ONLY v3 copy, keyed on code
 Motion tokens are `--motion-*` /
 ```
 
+`CLAUDE.md` and `AGENTS.md` (identical edits in both) take the two index lines, each beside the long form's rule.
+
+Before `- **Client mutation handlers** wrap`, insert:
+```markdown
+- **Two solver parsers, never crossed (solver v3 C6, U8):** client branches read the server-resolved
+  `engine` prop, never `SOLVER_ENGINE`; a v3 answer goes only through `v3SolveResponse.ts`, a v2 one
+  only through v2's parsers; v3 copy only in `v3Copy.ts`; no rule key on the wire, a line or a log.
+```
+Before `- Motion tokens are`, insert:
+```markdown
+- **Solver v3 planner (C6, behind the engine prop):** `buildV3SolveRequest` (the ONE v3 request
+  builder), `runV3Auto`, `freezeConfirmEntries`/`runV3ConfirmAttempt` (the ONE v3 confirm —
+  critical), `v3Copy.ts`, `prefillCountedSpecials`.
+```
+
 - [ ] **Step 6: The inventory** — `docs/UTILITIES_AND_COMPONENTS.md`
 
-The `## app/components/` heading's figures are a recount of the files on the branch (`ls app/components/<dir>/*.tsx | wc -l` for each directory, `ls app/components/*.tsx | wc -l` for the top level), and it names C6's two additions — C6 adds `V3RunPanel.tsx` and `V3IncompleteDialog.tsx`, but the heading was already one admin file short at the replay base (C2's `FairnessPreviewPanel.tsx` was never counted: 25 admin / 108 total written, 26 / 109 on disk), so adding 2 to it would leave it wrong. On the replay base: Find ``## `app/components/` — inventory (108 `.tsx` files: 37 top-level + 25 admin + 7 kids + 27 ui + 9 song + 3 availability; recounted for solver v3 C1, which adds `FairnessSwitch`)`` → Replace with ``## `app/components/` — inventory (111 `.tsx` files: 37 top-level + 28 admin + 7 kids + 27 ui + 9 song + 3 availability; recounted for solver v3 C6, which adds `V3RunPanel` and `V3IncompleteDialog` — C2's `FairnessPreviewPanel` had not been counted)``.
+The `## app/components/` heading's figures are a recount of the files on the branch (`ls app/components/<dir>/*.tsx | wc -l` for each directory, `ls app/components/*.tsx | wc -l` for the top level), and it names C6's two additions — C6 adds `V3RunPanel.tsx` and `V3IncompleteDialog.tsx`, but the heading was already one admin file short at the replay base (C2's `FairnessPreviewPanel.tsx` was never counted: 25 admin / 108 total written, 26 / 109 on disk), so adding 2 to it would leave it wrong. On `c0375d7d` (C2's final tip already recounted the heading to 109 / 26 admin, counting `FairnessPreviewPanel`; at the replay base it read 108 / 25): Find ``## `app/components/` — inventory (109 `.tsx` files: 37 top-level + 26 admin + 7 kids + 27 ui + 9 song + 3 availability; recounted for solver v3 C2, which adds `FairnessPreviewPanel`)`` → Replace with ``## `app/components/` — inventory (111 `.tsx` files: 37 top-level + 28 admin + 7 kids + 27 ui + 9 song + 3 availability; recounted for solver v3 C6, which adds `V3RunPanel` and `V3IncompleteDialog`)``.
 
 The entries go under the admin panels table, one blank line after its last row (the table ends there; the entries are a list under it), so the block opens with that blank line.
 
@@ -10186,7 +10201,8 @@ git commit -m "docs(solver): the v3 planner's records — engine from the server
 Two ADRs for the behaviour C6 introduces (the server-resolved engine with the solve route's 409,
 and the horizon with stored services and counted specials as fixed services and the records-first
 confirm), the solve route's v3 contract in the API reference, the two-parsers rule and the v3
-planner's reusable pieces in CLAUDE.md and AGENTS.md, and the inventory. The engine resolver's own
+planner's reusable pieces in docs/agents/project-rules.md with their index lines in CLAUDE.md and
+AGENTS.md, and the inventory. The engine resolver's own
 line is C2's and is not repeated; ADR amendments are C7's at the flip."
 ```
 
