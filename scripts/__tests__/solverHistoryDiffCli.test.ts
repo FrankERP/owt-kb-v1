@@ -177,6 +177,8 @@ describe("paths inside the repository are refused", () => {
     expect(isInsideRoot("/elsewhere", "/r", false)).toBe(false);
     expect(isInsideRoot("/R/a", "/r", true)).toBe(true);
     expect(isInsideRoot("/R/a", "/r", false)).toBe(false);
+    expect(isInsideRoot("/r/..x/a", "/r", false)).toBe(true);
+    expect(isInsideRoot("/elsewhere/a", "/r/b", false)).toBe(false);
   });
 
   it("refuses an in-repo --out and creates nothing there", async () => {
