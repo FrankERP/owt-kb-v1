@@ -144,6 +144,10 @@ import { applyV3Assignments, v3OutcomeLine, v3RetryOffered } from "./v3SolveResp
 import { buildV3RunReport, v3Names, type V3RunReport } from "./v3RunReport";
 import { renderRuleRefTable } from "./v3RuleIds";
 import V3RunPanel from "./V3RunPanel";
+import { displayedMonthStates } from "./v3MonthSources";
+import { isLedgerBody } from "./v3AutoRun";
+import { buildEquidadPlan, type EquidadPlan } from "./v3Equidad";
+import type { FairnessLedgerResponse } from "@/app/utils/fairnessVocabulary";
 import type { V3Success } from "./v3Wire";
 import {
   classifyPatchOutcome,
@@ -582,7 +586,9 @@ function savedWindowFor(year: number, month: number, allRoles: SavedRole[]): Sav
 
 // ─── MemberPool — extracted to module level to prevent scroll-reset on remount ──
 
-function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search, onSearch }: {
+function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search, onSearch, readOnly = false }: {
+  /** C6 ST-8: shown read-only when every horizon month is bound (its record decides). */
+  readOnly?: boolean;
   field: "sundayLeads" | "saturdayLeads" | "support";
   label: string;
   pool: MemberOption[];
@@ -602,7 +608,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
       <div className="flex items-center justify-between mb-1">
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</p>
         <button
-          type="button" onClick={onSelectAll}
+          type="button" onClick={onSelectAll} disabled={readOnly}
           className="font-label text-[10px] uppercase tracking-widest text-accent/70 hover:text-accent transition-colors"
         >
           {allSelected ? "Ninguno" : "Todos"}
@@ -621,6 +627,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-mono-600 italic">Sin resultados</p>}
         {visible.map(m => (
           <Checkbox
+            disabled={readOnly}
             key={m._id}
             className={`w-full px-2 py-1 text-xs transition-colors ${config[field].includes(m._id) ? "bg-accent/10" : "hover:bg-accent/5"}`}
             checked={config[field].includes(m._id)}
@@ -1823,9 +1830,15 @@ function historyMonthsLabel(months: SolverHistoryMonth[]): string {
     .join(" · ");
 }
 
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, fairnessServices, engine = "v2" }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, fairnessServices, engine = "v2", cadencePoolWarningMonths, poolsReadOnly = false, equidadPlan = null }: {
   /** C6 ENG-3: forwarded to the rule cards (CTL-1). */
   engine?: SolverEngine;
+  /** C6 WN-1: the horizon months the warning applies to (v3); named beside C3's heading. */
+  cadencePoolWarningMonths?: string[];
+  /** C6 ST-8: every horizon month is bound — the pool checkboxes are read-only. */
+  poolsReadOnly?: boolean;
+  /** C6 EQ-3/EQ-4: forwarded to the «Equidad» panel. */
+  equidadPlan?: EquidadPlan | null;
   members: MemberOption[];
   /** The month's stored services, for the «Equidad» preview's counted Sundays (C2 UI-5). */
   fairnessServices: ExistingRole[];
@@ -1907,7 +1920,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 
       <div className="grid grid-cols-3 gap-3">
         <MemberPool
-          field="sundayLeads" label="Líderes Domingo"
+          field="sundayLeads" label="Líderes Domingo" readOnly={poolsReadOnly}
           pool={sundayPool} config={config}
           onToggle={id => toggleMember("sundayLeads", id)}
           onSelectAll={() => selectAll("sundayLeads", sundayPool)}
@@ -1915,7 +1928,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
           onSearch={q => setSearches(s => ({ ...s, sundayLeads: q }))}
         />
         <MemberPool
-          field="saturdayLeads" label="Líderes Sábado"
+          field="saturdayLeads" label="Líderes Sábado" readOnly={poolsReadOnly}
           pool={saturdayPool} config={config}
           onToggle={id => toggleMember("saturdayLeads", id)}
           onSelectAll={() => selectAll("saturdayLeads", saturdayPool)}
@@ -1923,7 +1936,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
           onSearch={q => setSearches(s => ({ ...s, saturdayLeads: q }))}
         />
         <MemberPool
-          field="support" label="Soporte"
+          field="support" label="Soporte" readOnly={poolsReadOnly}
           pool={supportPool} config={config}
           onToggle={id => toggleMember("support", id)}
           onSelectAll={() => selectAll("support", supportPool)}
@@ -1964,6 +1977,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
           <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
             {CADENCE_OUTSIDE_HEADING}
+            {cadencePoolWarningMonths && cadencePoolWarningMonths.length > 0 && ` — ${monthsList(cadencePoolWarningMonths, true)}`}
           </p>
           <ul className="space-y-1">
             {cadenceOutside.map(x => (
@@ -1975,7 +1989,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         </div>
       )}
 
-      {derived ? (
+      {engine !== "v2" ? null : derived ? (
         <DerivedLeadPoolHistory config={config} members={members} history={derived} year={year} month={month} />
       ) : (
         <LeadPoolHistoryPanel
@@ -1995,6 +2009,8 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         members={members}
         storedServices={fairnessServices}
         rulesDirty={rulesDirtyOf(rules, config)}
+        engine={engine}
+        plan={engine === "v3" ? equidadPlan : undefined}
       />
 
       <RuleBuilder
@@ -2015,7 +2031,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
       <SolverConfigSaveBar config={config} rules={rules} />
 
       {/* Solver history indicator */}
-      {derived ? <DerivedHistoryBlock history={derived} /> : history.length > 0 && (
+      {engine !== "v2" ? null : derived ? <DerivedHistoryBlock history={derived} /> : history.length > 0 && (
         <div>
           <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mb-1">
             Historial ({history.length})
@@ -2100,6 +2116,27 @@ export default function MonthGenerator({
     horizonKey: string;
   } | null>(null);
   const [autoRetry, setAutoRetry] = useState<(() => void) | null>(null);
+  // §4 «Displayed state before a run»: one display read of the ledger per horizon change (v3 only).
+  // Banners, the read-only pools and WN-1's gate read it; every Auto still reads fresh (RQ-1). A
+  // failed or pending read shows every month as not bound, so banners and gates err toward showing.
+  const [displayLedger, setDisplayLedger] = useState<{ key: string; body: FairnessLedgerResponse } | null>(null);
+  const horizonKey = horizon.join(",");
+  useEffect(() => {
+    if (!isV3 || storedMode) return;
+    const months = horizonKey.split(",");
+    const controller = new AbortController();
+    fetch(`/api/admin/fairness?month=${months[0]}&horizon=${months.length}`, { cache: "no-store", signal: controller.signal })
+      .then(async (res) => {
+        const body: unknown = res.ok ? await res.json() : null;
+        if (isLedgerBody(body, months)) setDisplayLedger({ key: horizonKey, body });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [isV3, storedMode, horizonKey]);
+  const shownLedger = displayLedger && displayLedger.key === horizonKey ? displayLedger.body : null;
+  const monthStates = displayedMonthStates(horizon, shownLedger);
+  const unboundMonths = horizon.filter((m) => monthStates.get(m) !== "bound");
+  const allBound = isV3 && !storedMode && unboundMonths.length === 0;
   const [participationChoice, setParticipationChoice] = useState<string>("both");
   /**
    * «Cuenta para equidad» edits on create-mode columns (solver v3 C1 §6.1), by
@@ -4650,6 +4687,23 @@ export default function MonthGenerator({
     ...(isV3 && autoRetry ? { retry: autoRetry } : {}),
   };
   const v3RunCurrent = v3Run && v3Run.horizonKey === horizon.join(",") ? v3Run : null;
+  const equidadPlan = isV3 && v3RunCurrent
+    ? buildEquidadPlan({ response: v3RunCurrent.response, request: v3RunCurrent.build.request, cadence: v3RunCurrent.build.cadence, ledger: shownLedger, names: v3RunCurrent.names, members })
+    : null;
+  const recordedOn = (m: string) => {
+    const at = shownLedger?.horizon.find((h) => h.month === m)?.record?.recordedAt;
+    return at ? dayLabel(at.slice(0, 10)) : "";
+  };
+  // ST-8 banners (v3, create mode).
+  const v3Banners: string[] = !isV3 || storedMode ? [] : allBound
+    ? [V3_LINES.allBound(horizon)]
+    : horizon.flatMap((m) => {
+        const state = monthStates.get(m);
+        if (state === "bound") return [V3_LINES.bound(m, recordedOn(m))];
+        if (state === "recorded_unbound") return [V3_LINES.recordedUnbound(m, recordedOn(m))];
+        if (state === "anchored_unrecorded") return [V3_LINES.anchoredUnrecorded(m)];
+        return [];
+      });
   // C6 ST-9: the confirm's count under v3 — the planned weekend columns' empty voice seats.
   const v3EmptyVoiceSeats = columns
     .filter((c) => c.type !== "special_role")
@@ -4753,6 +4807,12 @@ export default function MonthGenerator({
         `DEFAULT_SOLVER_CONFIG` there would present a rule set nobody wrote as
         this team's — with a save control underneath offering to make it so.
       */}
+      {v3Banners.map((line) => (
+        <p key={line} data-v3-month-state="" className="font-body text-xs text-ink-muted bg-accent/5 rounded-lg px-3 py-2">{line}</p>
+      ))}
+      {isV3 && solverConfig && solverConfig.saturdayLeads.length > 0 && (
+        <p className="font-body text-xs text-warning-strong bg-warning-fg/10 rounded-lg px-3 py-2">{V3_LINES.saturdayPool}</p>
+      )}
       {solverConfig ? (
         <SolverConfigPanel
           members={members}
@@ -4764,7 +4824,12 @@ export default function MonthGenerator({
           year={year}
           month={month}
           derived={derivedMode ? derivedHistory : undefined}
-          showCadencePoolWarning={showCadencePoolWarning}
+          // WN-1: open exactly when the engine is v3 (the parent's half) AND some horizon month is not
+          // bound; under v3 each line names the months it applies to (C3's sentences unchanged).
+          showCadencePoolWarning={showCadencePoolWarning && unboundMonths.length > 0}
+          cadencePoolWarningMonths={isV3 ? unboundMonths : undefined}
+          poolsReadOnly={allBound}
+          equidadPlan={equidadPlan}
           fairnessServices={existingRoles}
           engine={engine}
         />
@@ -5069,7 +5134,7 @@ export default function MonthGenerator({
         editor's only view of the history (there is no «Historial» block beside
         it), so the same rule holds: no leader list until the read is `ready`.
       */}
-      {solverConfig && (derivedMode ? (
+      {solverConfig && !isV3 && (derivedMode ? (
         <DerivedLeadPoolHistory config={solverConfig} members={members} history={derivedHistory} year={year} month={month} />
       ) : (
         <LeadPoolHistoryPanel
@@ -5090,6 +5155,8 @@ export default function MonthGenerator({
           members={members}
           storedServices={existingRoles}
           rulesDirty={rulesDirtyOf(rules, solverConfig)}
+          engine={engine}
+          plan={isV3 && !storedMode ? equidadPlan : undefined}
         />
       )}
 

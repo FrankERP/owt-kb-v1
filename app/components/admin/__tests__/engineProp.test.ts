@@ -66,7 +66,7 @@ describe("the engine prop (C6 ENG-3, ENG-4)", () => {
   });
 
   it("every production mount of an engine-dependent component passes `engine=`", () => {
-    const everywhere = ["ServicesPanel", "MonthGenerator", "FairnessEngineNote"];
+    const everywhere = ["ServicesPanel", "MonthGenerator", "FairnessEngineNote", "FairnessPreviewPanel"];
     const inGenerator = ["PlannerGrid", "MonthCalendar", "SolverConfigPanel", "RuleBuilder", "RestrictionCard"];
     const missing: string[] = [];
     for (const f of sources().filter((s) => s.endsWith(".tsx"))) {

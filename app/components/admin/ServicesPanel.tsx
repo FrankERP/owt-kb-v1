@@ -1041,6 +1041,7 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
         <PanelBoundary>
           <MonthGenerator
             engine={engine}
+            showCadencePoolWarning={engine === "v3"}
             members={members}
             existingRoles={roles}
             // `ServiceRole` is a structural superset of `ParticipantRole` (richer

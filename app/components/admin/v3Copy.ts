@@ -457,6 +457,13 @@ export const V3_LINES = {
   leave: "Salir así",
   stay: "Seguir aquí",
   draftConflict: "Alguien más cambió esas fechas: recarga y revisa.",
+  // EQ-3 — the two plan columns (U5)
+  colEnEstePlan: "En este plan",
+  colQueda: "Queda",
+  // EQ-7 — the ledger's diagnostics, in the derived history's own wording
+  diagDuplicates: (list: string) => `Servicios duplicados en una fecha — no cuenta ninguno: ${list}`,
+  diagNotInRecord: (n: number) => `Lugares de personas que no están en el registro de su mes — no cuentan: ${n}`,
+  diagUnknownMembers: (n: number) => `Miembros asignados sin ficha — no cuentan: ${n}`,
 } as const;
 
 /** C5's literal `PIN_CAP = 250` (gcf_v3/owt_v3/constants.py), mirrored once (RQ-6, `v3PinCapSync.test.ts`). */
