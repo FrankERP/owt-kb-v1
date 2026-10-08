@@ -284,4 +284,30 @@ describe("the gate (R11, R19)", () => {
     expect(h.out.join("\n")).toMatch(/--plan está dentro del repositorio/);
     expect(h.err).toEqual([]);
   });
+
+  it.each([
+    ["dataset", { NEXT_PUBLIC_SANITY_DATASET: "production" }],
+    ["project", { NEXT_PUBLIC_SANITY_PROJECT_ID: "proj-otro" }],
+  ])("binds the plan to its target: a plan applied under another %s is refused before any read", async (_label, env) => {
+    const h = make(worldDocs());
+    await h.dryRun(MONTHS, corrections(h));
+    expect(h.readPlan().content.inputs).toMatchObject({ projectId: "proj-test", dataset: "test" });
+    const reads = h.lake.reads.length;
+    h.deps.env = { ...ENV, ...env };
+    expect(await h.applyLast(corrections(h))).toBe(2);
+    expect(h.configs).toHaveLength(1);
+    expect(h.lake.reads).toHaveLength(reads);
+    expect(h.lake.commits).toEqual([]);
+    expect(h.out.join("\n")).toMatch(/el plan revisado es de otro destino/);
+  });
+
+  it("refuses a plan of the previous version as foreign", async () => {
+    const h = make(worldDocs());
+    await h.dryRun(MONTHS, corrections(h));
+    const old = path.join(h.work, "v1-plan.json");
+    writeFileSync(old, readFileSync(h.planPath(), "utf8").replace('"version": 2', '"version": 1'));
+    expect(await h.run(["--apply", "--plan", old, "--fingerprint", h.fingerprint(), "--out", h.outDir, ...corrections(h)])).toBe(2);
+    expect(h.out.join("\n")).toMatch(/no es un plan de esta herramienta/);
+    expect(h.lake.commits).toEqual([]);
+  });
 });

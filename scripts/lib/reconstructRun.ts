@@ -80,6 +80,7 @@ import {
   serializePlan,
   serviceInputDigest,
   type PlanFile,
+  type PlanTarget,
   type RollbackMonthPlan,
   type RollbackPlanContent,
   type WriteMonthPlan,
@@ -236,6 +237,9 @@ async function run(argv: readonly string[], deps: RunDeps): Promise<number> {
   if (plan && plan.content.mode === "write" && args.previewRun !== null && args.previewRun !== plan.content.inputs.previewRun) {
     throw new Refusal(["--preview-run no coincide con la corrida del plan revisado"]);
   }
+  if (plan && (plan.content.inputs.projectId !== projectId || plan.content.inputs.dataset !== dataset)) {
+    throw new Refusal(["el plan revisado es de otro destino (proyecto · dataset): solo se aplica donde se hizo su dry run. Nada se leyó."]);
+  }
 
   const notPast = notPastMonths(months, currentMonth);
   if (notPast.length > 0) {
@@ -283,6 +287,9 @@ async function run(argv: readonly string[], deps: RunDeps): Promise<number> {
   if (!plan) throw new Refusal(["--apply necesita el plan revisado (--plan)"]);
   return args.mode === "apply" ? apply(ctx, plan) : rollbackApply(ctx, plan);
 }
+
+/** The «Destino» the run reads and writes, bound into every plan's inputs. */
+const targetOf = (ctx: Ctx): PlanTarget => ({ projectId: ctx.projectId, dataset: ctx.dataset });
 
 function readLocal(file: string, flag: string): string {
   try {
@@ -383,13 +390,14 @@ function actionOf(decision: ReturnType<typeof decideWrite>): MonthAction {
 
 function derive(input: {
   reads: WorldReads | null;
+  target: PlanTarget;
   months: string[];
   previewRun: string;
   overridesText: string | null;
   currentMonth: string;
   environment: RecordEnvironment;
 }): DeriveOutcome {
-  const { reads, months, previewRun, currentMonth, environment } = input;
+  const { reads, target, months, previewRun, currentMonth, environment } = input;
   if (reads === null) return { kind: "absent_config" };
   const config = solverConfigFromDocument(reads.config);
   const roster = reads.roster;
@@ -545,7 +553,7 @@ function derive(input: {
   // R15 — what the consent attaches to.
   const content: WritePlanContent = {
     mode: "write",
-    inputs: { months, previewRun, overridesHash: overrides?.hash ?? "none" },
+    inputs: { ...target, months, previewRun, overridesHash: overrides?.hash ?? "none" },
     months: months.map((month): WriteMonthPlan => {
       const p = planned.get(month);
       if (!p) return { month, action: "skip", body: null, bodyHash: null, corrections: [], existing: null, backup: null };
@@ -666,7 +674,7 @@ function derive(input: {
 async function dryRun(ctx: Ctx): Promise<number> {
   const previewRun = ctx.args.previewRun ?? defaultPreviewRun(ctx.months);
   const reads = await readWorld(ctx.read, ctx.months, previewRun);
-  const outcome = derive({ reads, months: ctx.months, previewRun, overridesText: ctx.overridesText, currentMonth: ctx.currentMonth, environment: ctx.environment });
+  const outcome = derive({ reads, target: targetOf(ctx), months: ctx.months, previewRun, overridesText: ctx.overridesText, currentMonth: ctx.currentMonth, environment: ctx.environment });
   if (outcome.kind === "absent_config") {
     throw new Refusal([
       "no hay reglas guardadas (no existe solverConfig): las reglas por defecto no son las de hoy y perderían cada exclusión y regla fija (R3). No se escribió ningún archivo.",
@@ -761,6 +769,7 @@ async function apply(ctx: Ctx, plan: PlanFile): Promise<number> {
   const reads = await readWorld(ctx.read, content.inputs.months, content.inputs.previewRun);
   const outcome = derive({
     reads,
+    target: targetOf(ctx),
     months: content.inputs.months,
     previewRun: content.inputs.previewRun,
     overridesText: ctx.overridesText,
@@ -874,7 +883,7 @@ async function rollbackContent(ctx: Ctx, months: string[]): Promise<{ content: R
       backup,
     };
   });
-  return { content: { mode: "rollback", inputs: { months }, months: plans }, backups };
+  return { content: { mode: "rollback", inputs: { ...targetOf(ctx), months }, months: plans }, backups };
 }
 
 async function rollbackDry(ctx: Ctx): Promise<number> {

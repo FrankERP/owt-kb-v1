@@ -126,7 +126,7 @@ describe("validation and parsing through C2 (IF2-18, IF2-20)", () => {
 describe("the plan file (R15, R17, R18)", () => {
   const content: RollbackPlanContent = {
     mode: "rollback",
-    inputs: { months: ["2026-08"] },
+    inputs: { projectId: "proj-test", dataset: "test", months: ["2026-08"] },
     months: [
       {
         month: "2026-08",

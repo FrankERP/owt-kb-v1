@@ -76,7 +76,7 @@ describe("the fictitious world's dry run", () => {
     expect(plan.months[1].body?.expectedRev).toBe("rev-jul");
     expect(plan.months[2]).toMatchObject({ existing: null, backup: null });
     expect(plan.months[2].body?.expectedRev).toBeNull();
-    expect(plan.inputs).toEqual({ months: ["2026-06", "2026-07", "2026-08", "2026-09"], previewRun: "2026-10", overridesHash: expect.stringMatching(/^sha256:/) });
+    expect(plan.inputs).toEqual({ projectId: "proj-test", dataset: "test", months: ["2026-06", "2026-07", "2026-08", "2026-09"], previewRun: "2026-10", overridesHash: expect.stringMatching(/^sha256:/) });
     expect(h.lake.commits).toEqual([]);
     expect(h.out[0]).toBe("reconstruct-fairness-months · proj-test · test · DRY-RUN");
     expect(h.out).toContain("«Mes por medio» encontrados: 1 en las reglas · 0 en correcciones");

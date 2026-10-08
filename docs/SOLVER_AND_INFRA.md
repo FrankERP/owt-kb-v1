@@ -805,9 +805,10 @@ Both of the first two are listed by exact `file + operation` in the protected-re
      `_id` copied from the table — see the header of `lib/reconstructOverrides.ts`), then step 1 again,
      until the table is right.
   3. **Apply:** `npx tsx --env-file=.env.local scripts/reconstruct-fairness-months.mjs --apply --plan <out>/<time>-dry-run/plan.json --fingerprint <hex> --out ~/owt-private/c4 [--overrides <the same file>]`.
-     It re-derives everything and refuses with zero writes if anything differs from the plan (a voice seat,
-     a «cuenta» flag, an availability date, a correction, a record revision) or a replace's backup is
-     missing; then it writes month by month, oldest first, and stops at the first refusal or error (exit 1).
+     It refuses before any read a plan made against another project or dataset (the fingerprint covers
+     the «Destino»); it re-derives everything and refuses with zero writes if anything differs from the
+     plan (a voice seat, a «cuenta» flag, an availability date, a correction, a record revision) or a
+     replace's backup is missing; then it writes month by month, oldest first, and stops at the first refusal or error (exit 1).
   4. **Dry run again:** every written month must read «sin cambios»; then the «Equidad» preview should show
      those months «reconstruido». After a failed or partial apply this is the repair: a write that failed
      may have landed.

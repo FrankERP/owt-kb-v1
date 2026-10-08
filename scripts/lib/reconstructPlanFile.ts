@@ -16,7 +16,8 @@ import { compareCodepoint, type TabKey } from "../../app/utils/fairnessVocabular
 import type { Anomaly, Correction, MonthAction, ReconstructionBody, RollbackAction, RosterRow } from "./reconstructTypes";
 
 export const PLAN_KIND = "owt-fairness-reconstruction-plan";
-export const PLAN_VERSION = 1;
+/** 2: `inputs` names the target project and dataset; a version-1 plan is refused as foreign. */
+export const PLAN_VERSION = 2;
 
 /** JSON with object keys in codepoint order at every level; `undefined` members dropped; arrays kept as built. */
 export function canonicalJson(value: unknown): string {
@@ -106,9 +107,19 @@ export interface WriteMonthPlan {
   backup: { file: string; hash: string } | null;
 }
 
+/**
+ * The project and dataset the run read — a plan decision beyond R15's list, like the
+ * member-input digest: the fingerprint Frank approves then names the «Destino» the
+ * table printed, and a plan applied against another dataset is refused before any read.
+ */
+export interface PlanTarget {
+  projectId: string;
+  dataset: string;
+}
+
 export interface WritePlanContent {
   mode: "write";
-  inputs: { months: string[]; previewRun: string; overridesHash: string };
+  inputs: PlanTarget & { months: string[]; previewRun: string; overridesHash: string };
   months: WriteMonthPlan[];
   anomalies: Anomaly[];
   preview: {
@@ -130,7 +141,7 @@ export interface RollbackMonthPlan {
 
 export interface RollbackPlanContent {
   mode: "rollback";
-  inputs: { months: string[] };
+  inputs: PlanTarget & { months: string[] };
   months: RollbackMonthPlan[];
 }
 
