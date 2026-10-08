@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { spawn } from "child_process";
 import path from "path";
+import { resolveSolverEngine } from "@/app/utils/solverDeployment";
+import { isV3Body } from "@/app/components/admin/v3Wire";
 
 // The solver runs on a 1-vCPU Cloud Run instance (cloudbuild.yaml; 0.33 until
 // 2026-09-30) and can take tens of seconds on a hard month with a cold start. Allow the request to wait rather than timing out (504).
@@ -175,6 +177,27 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  // Solver v3 C6 RT-1: after auth and the JSON parse, the SERVER's effective engine decides; the
+  // body's contract only classifies it. A body of the other contract is refused before any other
+  // validation and before any upstream call — the page was rendered under another engine.
+  const engine = resolveSolverEngine(process.env);
+  const v3Body = isV3Body(body);
+  if (v3Body !== (engine === "v3")) {
+    return NextResponse.json({ ok: false, error: "solver_version_mismatch", engine }, { status: 409 });
+  }
+  if (v3Body) {
+    const started = Date.now();
+    // The transport is `server-only` and loaded on the v3 branch alone: the v2 path never loads it,
+    // so it stays byte-for-byte today's and `solveRoute.test.ts` runs unedited (no `server-only` mock).
+    const { solveV3 } = await import("@/app/utils/solverV3Upstream");
+    const result = await solveV3(body);
+    // KH-2: engine, outcome class, status and timing — never a byte of the request or response.
+    // A coded failure's `code` is a registry token; anything else is logged as "coded".
+    const outcome = /^[a-z_]{1,40}$/.test(result.outcome) ? result.outcome : "coded";
+    console.info(JSON.stringify({ route: "admin/solve", engine, outcome, status: result.status, ms: Date.now() - started }));
+    return new NextResponse(result.text, { status: result.status, headers: { "Content-Type": "application/json" } });
   }
 
   if (!body.sunday_leads?.length) {

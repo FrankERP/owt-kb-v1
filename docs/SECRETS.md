@@ -678,6 +678,52 @@ Vercel alias check). When absent, `build` is `"unknown"` and nothing else breaks
 
 ---
 
+## `OWT_SOLVER_V3_URL` (solver v3 — the URL of the `owt-solver-v3` function)
+
+**Needed in: Vercel Preview (first, for C7's rehearsal) and Vercel Production (before C7's flip
+merges) — one Preview-wide value like `OWT_SOLVER_URL`, no branch-scoped pair, so
+`verify/service-readiness` has it too. Not needed in:** `.env.local` (with it unset and
+`VERCEL_ENV` unset, the route runs `python gcf_v3/owt_solver_v3.py --json-mode` locally — set it
+locally only to call the deployed function), GitHub Actions, the iOS build. Not read by either Cloud
+Function.
+
+**Not a secret** — ordinary, non-sensitive config, like `OWT_SOLVER_URL`: added as `--type config`
+(readable, never `Sensitive`); the function is protected by `OWT_SOLVER_API_KEY` (sent as
+`X-Api-Key` on every v3 call too, C5-14), not by its URL.
+
+**Purpose — what breaks without it.** `app/utils/solverV3Upstream.ts` (called by
+`app/api/admin/solve/route.ts`) posts every `contract: 3` request here. While a deployment's
+effective engine is `v2` (production until C7's flip) nothing reads it. Once the engine is `v3`
+there — the `preview` branch with `OWT_SOLVER_ENGINE=v3`, or production after the flip — an
+unset value makes every Auto answer «No se pudo usar el solver (not_configured)…» and nothing is
+applied or written. A wrong value answers `unreachable`, `http_status`, `not_json` or — if it
+points at the v2 function — `contract_echo`, each with its own copy; still nothing is applied.
+
+**Where it comes from.** `URL="$(gcloud functions describe owt-solver-v3 --gen2
+--region=us-central1 --format='value(serviceConfig.uri)')"` (C5 §11.5), then
+`printf '%s' "$URL" | npx vercel env add OWT_SOLVER_V3_URL <preview|production> --type config` —
+never typed into a file or a chat. C6 introduces the variable and sets it nowhere: setting it on
+Preview is C7's consented write W0 (its Step 2a) and on Production W4 (its Step 6).
+
+**Rotate / change.** `vercel env add` refuses an existing key, so a rotation is `rm` + `add` back
+to back, then one redeploy: (1) read the current URL into `$URL` with the describe command above;
+(2) for each environment that has it, `npx vercel env rm OWT_SOLVER_V3_URL <env> --yes` and
+immediately `printf '%s' "$URL" | npx vercel env add OWT_SOLVER_V3_URL <env> --type config`;
+(3) redeploy that environment once (the value binds at build time) and verify the alias and its
+`githubCommitSha`; (4) run one Auto «1 mes» on dev without confirming. A URL changes only if the
+function is re-created under another name or region.
+
+**Blast radius.** Between the `rm` and the redeploy, the running deployment keeps the old value,
+so nothing changes until the new build serves; a deployment whose engine is `v2` is unaffected
+throughout. A build that starts between the `rm` and the `add` has no value, so v3 Auto there
+answers `not_configured` until the next redeploy — hence the two commands back to back and one
+redeploy after both. If the new value is wrong, v3 Auto on that deployment answers a transport
+error until it is corrected — no record or draft is ever written by a failed solve.
+
+**Status.** Introduced by C6; not set on any Vercel environment yet (C7 W0/W4 record the dates here).
+
+---
+
 ## Not yet documented
 
 Other variables in use — `NEXTAUTH_*`, `EMAIL_ALLOWLIST`, FCM push credentials — predate this file. Add each one here as it is next touched or rotated.
