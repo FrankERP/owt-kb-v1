@@ -382,7 +382,12 @@ export function renderApplyReport(input: {
   lines.push("| Mes | Resultado |", "|---|---|");
   for (const r of input.results) lines.push(`| ${r.month} | ${r.verdict}${r.memberIds?.length ? ` (${r.memberIds.map((id) => `\`${id}\``).join(", ")})` : ""} |`);
   for (const month of input.notAttempted) lines.push(`| ${month} | sin intentar |`);
-  lines.push("", "Una escritura fallida pudo haber llegado: corre el dry run otra vez antes de cualquier reparación (R16).");
+  lines.push(
+    "",
+    input.mode === "rollback-apply"
+      ? "Un borrado fallido pudo haber llegado: corre --rollback (sin --apply) otra vez antes de cualquier reparación (R16, R18)."
+      : "Una escritura fallida pudo haber llegado: corre el dry run otra vez antes de cualquier reparación (R16).",
+  );
   return `${lines.join("\n")}\n`;
 }
 

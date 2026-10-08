@@ -816,7 +816,11 @@ function finishWrites(ctx: Ctx, results: Array<{ month: string; verdict: string;
   if (notAttempted.length > 0) ctx.deps.out(`sin intentar: ${notAttempted.join(", ")}`);
   ctx.deps.out(`informe: ${report}`);
   if (stopped) {
-    ctx.deps.out("Una escritura fallida pudo haber llegado: corre el dry run otra vez antes de cualquier reparación; los meses que sí llegaron dirán «sin cambios» (R16).");
+    ctx.deps.out(
+      ctx.args.mode === "apply"
+        ? "Una escritura fallida pudo haber llegado: corre el dry run otra vez antes de cualquier reparación; los meses que sí llegaron dirán «sin cambios» (R16)."
+        : `Un borrado fallido pudo haber llegado: corre --rollback (sin --apply) otra vez antes de cualquier reparación; los meses ya borrados dirán «${ROLLBACK_LABEL.none}» (R16, R18).`,
+    );
     return 1;
   }
   ctx.deps.out(

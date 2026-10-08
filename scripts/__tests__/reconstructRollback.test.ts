@@ -6,6 +6,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { executeFairnessMonthWrites } from "@/app/utils/fairnessMonthWriteRequest";
 import type { RollbackPlanContent } from "../lib/reconstructPlanFile";
 import { harness, type Harness } from "./__fixtures__/reconstructHarness";
 import { MONTHS, WORLD_CONFIG, configDoc, restriction, worldDocs } from "./__fixtures__/reconstructWorld";
@@ -111,5 +112,32 @@ describe("the rollback apply (R18)", () => {
     expect(await h.dryRun(MONTHS)).toBe(0);
     expect(await h.run(["--rollback", "--apply", "--plan", h.planPath(), "--fingerprint", h.fingerprint(), "--out", h.outDir])).toBe(2);
     expect(h.out.join("\n")).toMatch(/plan de escritura/);
+  });
+
+  it("stops at a failed delete and names the rollback's own repair, not the write's (R16, R18)", async () => {
+    let failOn: string | null = null;
+    const h = make(worldDocs(), {
+      execute: (input) => {
+        if (input.months[0].month === failOn) h.lake.failNext.commit = Object.assign(new Error("Ana Ejemplo m-ana"), { name: "ClientError", statusCode: 500 });
+        return executeFairnessMonthWrites(input);
+      },
+    });
+    await applied(h);
+    expect(await h.run(["--rollback", "--months", "2026-07,2026-08", "--out", h.outDir])).toBe(0);
+    failOn = "2026-08";
+    expect(await h.run(["--rollback", "--apply", "--plan", h.planPath(), "--fingerprint", h.fingerprint(), "--out", h.outDir])).toBe(1);
+    expect(h.out).toEqual(expect.arrayContaining(["2026-07 · deleted", "2026-08 · error ClientError 500"]));
+    const stop = h.out.filter((l) => l.includes("pudo haber llegado"));
+    expect(stop).toEqual([expect.stringContaining("--rollback")]);
+    expect(stop[0]).toContain("«sin registro: nada que borrar»");
+    expect(stop[0]).not.toMatch(/sin cambios|Una escritura/);
+    const report = readFileSync(h.out.findLast((l) => l.startsWith("informe: "))!.slice("informe: ".length), "utf8");
+    expect(report).toContain("ROLLBACK-APPLY");
+    expect(report).toContain("--rollback");
+    expect(report).not.toMatch(/Una escritura/);
+    expect(h.allOutput()).not.toMatch(/Ana Ejemplo|m-ana/);
+    failOn = null;
+    expect(await h.run(["--rollback", "--months", "2026-07,2026-08", "--out", h.outDir])).toBe(0);
+    expect(rollbackPlan(h).months.map((m) => m.action)).toEqual(["none", "delete"]);
   });
 });
