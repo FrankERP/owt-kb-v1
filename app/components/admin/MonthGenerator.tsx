@@ -136,6 +136,8 @@ import {
   type StoredGridColumn,
   type StoredGridTranslation,
 } from "./storedRoleReadModel";
+import { horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
+import { monthNameCap, monthsList } from "./v3Copy";
 import {
   classifyPatchOutcome,
   freezeSaveAttempt,
@@ -446,6 +448,11 @@ const SAVED_WINDOW_DAYS = 56;
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const uid = () => Math.random().toString(36).slice(2, 9);
+
+/** C6 ST-2: a service's target — a weekend type and date, or a special's date and normalized name (ADR-0011). */
+function v3TargetOf(c: Pick<GridColumn, "type" | "date" | "serviceName">): string {
+  return c.type === "special_role" ? `special_role|${c.date}|${normalizeServiceName(c.serviceName) ?? ""}` : `${c.type}|${c.date}`;
+}
 
 function getDates(year: number, month: number, day: 0 | 6): string[] {
   const dates: string[] = [];
@@ -2064,6 +2071,17 @@ export default function MonthGenerator({
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
   /** E2's weekday specials for THIS month — reset whenever year/month changes. */
   const [specials, setSpecials] = useState<{ date: string; name: string; countsForFairness: boolean }[]>([]);
+  // Solver v3 C6 HZ-1/HZ-2 — the horizon: 1 or 2 consecutive months under v3; under v2 (and in the
+  // stored editor) exactly the selected month, so every v2 derivation below is unchanged.
+  const isV3 = engine === "v3";
+  const [horizonLength, setHorizonLength] = useState<HorizonLength>(1);
+  const firstMonth = `${year}-${String(month).padStart(2, "0")}`;
+  const horizon = useMemo(
+    () => horizonMonths(firstMonth, isV3 && !storedMode ? horizonLength : 1),
+    [firstMonth, isV3, storedMode, horizonLength],
+  );
+  const previousHorizon = useRef<string[]>([]);
+  const [participationChoice, setParticipationChoice] = useState<string>("both");
   /**
    * «Cuenta para equidad» edits on create-mode columns (solver v3 C1 §6.1), by
    * `columnId`. Held for as long as the column stays in the selection — across the
@@ -2166,6 +2184,25 @@ export default function MonthGenerator({
       .map(translateStoredRole)
       .filter((entry): entry is StoredGridTranslation => entry !== null);
   }, [storedInventory, storedMode]);
+  // Solver v3 C6 ST-1: under v3, every stored service of a horizon month, from the SAME full-roster
+  // read and the SAME coherence verdict the stored editor uses, shown read-only («Guardado»). A read
+  // that is not ready or not coherent, or a horizon role whose translation is refused, is not ready:
+  // Auto refuses on it (Task 15).
+  const v3Stored = useMemo((): { ready: boolean; translations: StoredGridTranslation[] } => {
+    if (!isV3 || storedMode) return { ready: true, translations: [] };
+    const ready = storedSource?.rolesStatus === "ready" && storedSource?.integrityStatus === "ready" && storedInventory.coherent;
+    if (!ready) return { ready: false, translations: [] };
+    const translated = storedInventory.roles
+      .filter((o) => horizon.includes(o.role.date.slice(0, 7)))
+      .map(translateStoredRole);
+    if (translated.some((t) => t === null)) return { ready: false, translations: [] };
+    return {
+      ready: true,
+      translations: (translated as StoredGridTranslation[]).map((t) => ({ ...t, column: { ...t.column, admission: "readOnly" as const } })),
+    };
+  }, [isV3, storedMode, storedSource?.rolesStatus, storedSource?.integrityStatus, storedInventory, horizon]);
+  const v3StoredIds = useMemo(() => new Set(v3Stored.translations.map((t) => t.column.columnId)), [v3Stored]);
+  const v3StoredTargets = useMemo(() => new Set(v3Stored.translations.map((t) => v3TargetOf(t.column))), [v3Stored]);
   const storedTranslations = useMemo(() => {
     const prefix = `${year}-${String(month).padStart(2, "0")}`;
     return allStoredTranslations.filter((entry) => entry.column.date.slice(0, 7) === prefix);
@@ -2381,11 +2418,22 @@ export default function MonthGenerator({
    * `buildColumns`' dedupe is per-date and does not catch it; nothing does.
    */
   useEffect(() => {
+    if (isV3 && !storedMode) {
+      // HZ-2: a month that leaves the horizon drops its selections; a month that enters starts as a
+      // month change starts today (its Saturdays selected, every Sunday selected, no specials).
+      const entering = monthsEntering(previousHorizon.current, horizon);
+      previousHorizon.current = horizon;
+      setActiveSatDates((prev) => [...retainInHorizon(prev, horizon), ...entering.flatMap((m) => weekendDatesOfMonth(m).saturdays)]);
+      setDeselectedSundays((prev) => retainInHorizon(prev, horizon));
+      setSpecials((prev) => retainInHorizon(prev, horizon));
+      setCreateCountsEdits((prev) => new Map([...prev].filter(([columnId]) => horizon.includes(columnId.slice(-10, -3)))));
+      return;
+    }
     setActiveSatDates(getDates(year, month, 6));
     setDeselectedSundays([]);
     setSpecials([]);
     setCreateCountsEdits(new Map());
-  }, [year, month]);
+  }, [year, month, isV3, storedMode, horizon]);
 
   /**
    * D10: moving out of `CueDialog` into a full-width panel silently dropped
@@ -2476,7 +2524,11 @@ export default function MonthGenerator({
 
   // Unconditional (D9/E21): the solve always addresses the full month's
   // Sundays — only RENDERING/CREATION is gated by `columns` below.
-  const sundayDatesFull = useMemo(() => getDates(year, month, 0), [year, month]);
+  const sundayDatesFull = useMemo(
+    // Under v3 the horizon's own Sundays, month by month (HZ-3); v2 reads only the selected month.
+    () => (isV3 && !storedMode ? horizon.flatMap((m) => weekendDatesOfMonth(m).sundays) : getDates(year, month, 0)),
+    [isV3, storedMode, horizon, year, month],
+  );
 
   /**
    * **E21's whole point.** The calendar's Sunday picks are a RENDER/CREATE
@@ -2538,13 +2590,27 @@ export default function MonthGenerator({
     ),
     [selectedSundays, activeSatDates, specials, createCountsEdits, todayIso],
   );
+  // ST-2: under v3 a planned column is never built for a target a stored service occupies; the
+  // stored service shows as its own «Guardado» column instead, keyed by its document `_id`.
+  const plannedCreateColumns = isV3 && !storedMode
+    ? createColumns.filter((c) => !v3StoredTargets.has(v3TargetOf(c)))
+    : createColumns;
   const columns = storedMode
     ? storedTranslations.map((entry) => {
         const edited: StoredGridColumn = { ...entry.column, ...(storedHeaderEdits.get(entry.column.roleId) ?? {}) };
         // C1 §6.0: while past, the stored value — a held toggle edit is neither shown nor sent.
         return { ...edited, countsForFairness: effectiveStoredCounts(edited, todayIso) };
       })
-    : createColumns;
+    : plannedCreateColumns;
+  /** HZ-5, ST-1: what the v3 create grid shows — planned columns and the «Guardado» ones, by date. */
+  const v3GridColumns: GridColumn[] = isV3 && !storedMode
+    ? [...columns, ...v3Stored.translations.map((t) => t.column)]
+        .sort((a, b) => a.date.localeCompare(b.date) || a.columnId.localeCompare(b.columnId))
+    : columns;
+  const v3StoredCells = v3Stored.translations.flatMap((t) => t.cells);
+  const monthBands = isV3 && !storedMode && horizon.length === 2
+    ? horizon.map((m) => ({ month: m, label: monthNameCap(m), columnIds: v3GridColumns.filter((c) => c.date.slice(0, 7) === m).map((c) => c.columnId) }))
+    : undefined;
   /**
    * «+ Nuevo servicio»'s effective «Cuenta para equidad» (C1 §6.5): the Tipo's
    * default until the admin touches the Switch, then the admin's value until the
@@ -2843,12 +2909,12 @@ export default function MonthGenerator({
    * request would be refused pre-flight or there are no rules yet — Auto sends nothing then.
    */
   const requestSaturdayWeeks = useMemo(() => {
-    if (storedMode || !solverConfig) return undefined;
+    if (storedMode || !solverConfig || isV3) return undefined;
     const built = buildSolveRequest({
       config: solverConfig, members, sundayDates: sundayDatesFull, activeSatDates, historyEntries: [], year, month,
     });
     return built.ok ? built.request.weekends_with_saturday : undefined;
-  }, [storedMode, solverConfig, members, sundayDatesFull, activeSatDates, year, month]);
+  }, [storedMode, solverConfig, members, sundayDatesFull, activeSatDates, year, month, isV3]);
 
   const savedWindow = useMemo(
     () => savedWindowFor(year, month, allRoles ?? []),
@@ -2857,7 +2923,7 @@ export default function MonthGenerator({
 
   /** Spec §3.3 — what the board says about each seat that will be pinned; only with the switch on. */
   const pinBoard = useMemo(() => {
-    if (storedMode || !fillEmptyOnly || !solverConfig) return undefined;
+    if (storedMode || !fillEmptyOnly || !solverConfig || isV3) return undefined;
     const collected = collectPins({
       cells, columns, rows, members, sundayDates: sundayDatesFull, weekendsWithSaturday: requestSaturdayWeeks,
     });
@@ -2868,7 +2934,7 @@ export default function MonthGenerator({
       members,
       pools: { sundayLeads: p.sundayLeadNames, saturdayLeads: p.saturdayLeadNames, support: [...p.supportNames, ...p.extraSupport] },
     });
-  }, [storedMode, fillEmptyOnly, solverConfig, cells, columns, rows, members, sundayDatesFull, requestSaturdayWeeks]);
+  }, [storedMode, fillEmptyOnly, solverConfig, cells, columns, rows, members, sundayDatesFull, requestSaturdayWeeks, isV3]);
 
   /**
    * The SAVED half of the participation rail: everything stored in the month
@@ -2901,10 +2967,13 @@ export default function MonthGenerator({
    * (`YYYY-MM-DD`), so its first seven characters ARE its calendar month. No
    * `new Date` anywhere near it, so there is no UTC day-flip to get wrong.
    */
+  // HZ-6: under v3 the sidebar counts the months the admin picks («Ambos» by default); v2: the month.
+  const participationMonths = isV3 && !storedMode ? participationMonthsOf(horizon, participationChoice) : [firstMonth];
+  const participationKey = participationMonths.join(",");
   const participationSaved = useMemo(() => {
-    const prefix = `${year}-${String(month).padStart(2, "0")}`;
-    return (allRoles ?? []).filter(r => r.date.slice(0, 7) === prefix);
-  }, [allRoles, year, month]);
+    const months = participationKey.split(",");
+    return (allRoles ?? []).filter(r => months.includes(r.date.slice(0, 7)));
+  }, [allRoles, participationKey]);
 
 
   /**
@@ -4422,7 +4491,7 @@ export default function MonthGenerator({
   const creatableColumns = columns.filter((c) => creatingColumnIds.has(c.columnId));
   const participationRoles = plannerParticipationRoles({
     saved: participationSaved,
-    creatableColumns: storedMode ? columns : creatableColumns,
+    creatableColumns: storedMode ? columns : creatableColumns.filter((c) => participationMonths.includes(c.date.slice(0, 7))),
     cells,
     members,
   });
@@ -4462,16 +4531,27 @@ export default function MonthGenerator({
         </div>
       </div>
 
+      {isV3 && (
+        <SegmentedControl
+          label="Planear"
+          value={horizonLength === 2 ? "2" : "1"}
+          onChange={(v) => setHorizonLength(v === "2" ? 2 : 1)}
+          options={[{ value: "1", label: "1 mes" }, { value: "2", label: "2 meses" }]}
+        />
+      )}
+
       {/*
         E1/E2/P3: the calendar REPLACES the Domingos/Sábados checkboxes and the
         Saturday pill row, and lives on this setup step only. `key` remounts it
         per month so no composer state (or refusal notice) can survive a month
         change and offer a date that is no longer on screen.
       */}
+      {/* HZ-4: one calendar per horizon month, stacked, each keyed by its month (v2: exactly one). */}
+      {horizon.map((calendarMonth) => (
       <MonthCalendar
-        key={`${year}-${month}`}
-        year={year}
-        month={month}
+        key={calendarMonth}
+        year={Number(calendarMonth.slice(0, 4))}
+        month={Number(calendarMonth.slice(5, 7))}
         selectedSundays={selectedSundays}
         selectedSaturdays={activeSatDates}
         specials={specials}
@@ -4519,6 +4599,7 @@ export default function MonthGenerator({
           setCreateCountsEdits(prev => withoutCountsEdit(prev, createColumnId("special_role", date)));
         }}
       />
+      ))}
 
       {/*
         D13: the `useSolver` toggle is retired — the grid always offers Auto,
@@ -4958,8 +5039,8 @@ export default function MonthGenerator({
         <PlannerGrid
           mode={storedMode ? "stored" : "create"}
           rows={rows}
-          columns={columns}
-          cells={cells}
+          columns={v3GridColumns}
+          cells={isV3 && !storedMode ? [...cells, ...v3StoredCells] : cells}
           members={members}
           savedWindow={savedWindow}
           preflightFor={col => storedMode ? null : (preflight ? preflight(col.type, col.date) : null)}
@@ -4977,7 +5058,9 @@ export default function MonthGenerator({
           skipped={skippedColumnIds}
           unresolvedNames={allUnresolvedNames}
           unfilled={unfilled}
-          onCellsChange={handleCellsChange}
+          // ST-3: a «Guardado» column's cells never enter the board's state.
+          onCellsChange={(next) => handleCellsChange(isV3 ? next.filter((c) => !v3StoredIds.has(c.columnId)) : next)}
+          monthBands={monthBands}
           onRowsChange={handleRowsChange}
           onToggleSkip={handleToggleSkip}
           onStoredHeaderChange={handleStoredHeaderChange}
@@ -5022,6 +5105,16 @@ export default function MonthGenerator({
             is the chart's own content floor either way.
           */
           participation={
+            <div className="space-y-2">
+            {isV3 && !storedMode && horizon.length === 2 && (
+              <SegmentedControl
+                label="Cuenta"
+                size="sm"
+                value={horizon.includes(participationChoice) ? participationChoice : "both"}
+                onChange={setParticipationChoice}
+                options={[...horizon.map((m) => ({ value: m, label: monthNameCap(m) })), { value: "both", label: "Ambos" }]}
+              />
+            )}
             <ParticipationSidebar
               roles={participationRoles}
               // The month IS the scope now (`participationSaved`), so the month
@@ -5030,8 +5123,11 @@ export default function MonthGenerator({
               // stored. The old label had to warn that January was in a
               // February total; nothing from another month can reach this chart
               // any more.
-              monthLabel={`${MONTHS[month - 1]} ${year} · guardados + borradores`}
+              monthLabel={isV3 && !storedMode
+                ? `${monthsList(participationMonths, true)} · guardados + borradores`
+                : `${MONTHS[month - 1]} ${year} · guardados + borradores`}
             />
+            </div>
           }
           monthLabel={`${MONTHS[month - 1]} ${year}`}
           fillEmpty={storedMode ? undefined : {
@@ -5041,7 +5137,7 @@ export default function MonthGenerator({
               cells, columns, rows, sundayDates: sundayDatesFull, weekendsWithSaturday: requestSaturdayWeeks,
             }),
           }}
-          pinConflicts={pinBoard}
+          pinConflicts={isV3 ? undefined : pinBoard}
           clear={storedMode ? undefined : {
             countFor: (scope, what) => planClear({ cells, rows, columns, scope, what }).seats,
             onClear: handleClear,

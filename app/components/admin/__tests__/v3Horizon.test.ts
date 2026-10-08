@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   HORIZON_MONTHS_AHEAD, cdmxCurrentMonth, cdmxTodayIso, horizonMonths, horizonRefusal, monthOfDate,
-  monthsEntering, retainInHorizon, weekendDatesOfMonth,
+  monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth,
 } from "../v3Horizon";
 
 describe("horizonMonths (HZ-2)", () => {
@@ -74,5 +74,13 @@ describe("selections across a horizon change (HZ-2)", () => {
     expect(monthsEntering(["2026-11", "2026-12"], ["2026-12", "2027-01"])).toEqual(["2027-01"]);
     expect(monthsEntering(["2026-11"], ["2026-11", "2026-12"])).toEqual(["2026-12"]);
     expect(monthsEntering(["2026-11", "2026-12"], ["2026-11"])).toEqual([]);
+  });
+});
+
+describe("participationMonthsOf (HZ-6)", () => {
+  it("counts one month, or both («Ambos» and anything not in the horizon)", () => {
+    expect(participationMonthsOf(["2026-11", "2026-12"], "2026-12")).toEqual(["2026-12"]);
+    expect(participationMonthsOf(["2026-11", "2026-12"], "both")).toEqual(["2026-11", "2026-12"]);
+    expect(participationMonthsOf(["2026-12"], "2026-11")).toEqual(["2026-12"]);
   });
 });

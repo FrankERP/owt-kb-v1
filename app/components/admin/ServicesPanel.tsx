@@ -1058,6 +1058,17 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
             capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
             // Per-target A1/A2 preflight: only proven-`creatable` targets are posted.
             preflight={preflightTarget}
+            // Solver v3 C6 ST-1: under v3 the create grid shows the horizon's stored services read-only,
+            // from the same roles + integrity read (and coherence verdict) the stored editor uses.
+            storedSource={{
+              roles,
+              integrity: summaries.roles,
+              rolesStatus: sourceRecords.roles.status,
+              integrityStatus: sourceRecords.roleTargets.status,
+              rolesGeneration: sourceRecords.roles.generation,
+              integrityGeneration: sourceRecords.roleTargets.generation,
+              reload: async () => (await loadSources(["roles", "roleTargets"])).length === 0,
+            }}
             onClose={() => setShowGenerator(false)}
             onCreated={async () => {
               showToast(mutationOutcomeMessage("Servicios generados.", await loadSources()));

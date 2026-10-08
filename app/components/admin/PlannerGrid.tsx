@@ -309,6 +309,12 @@ export interface PlannerGridProps {
   /** Named on the full-screen bar, where the page's own month header is gone. */
   monthLabel?: string;
   /**
+   * Solver v3 C6 HZ-5: one band per horizon month above the column headers, INSIDE the grid's own
+   * horizontal scroller (ADR-0035), with a visible boundary at the second month's first column.
+   * Columns arrive in date order, so each band's columns are contiguous. Omitted under v2.
+   */
+  monthBands?: ReadonlyArray<{ month: string; label: string; columnIds: readonly string[] }>;
+  /**
    * «Solo llenar vacíos» (create mode, spec 2026-09-29 §3). Omitted ⇒ no switch. `MonthGenerator`
    * owns the state (E2: per run, never persisted); this renders it and words the confirm.
    */
@@ -637,6 +643,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     sundayDatesForColumn,
     participation,
     monthLabel,
+    monthBands,
     fillEmpty,
     pinConflicts,
     clear,
@@ -1756,9 +1763,25 @@ export default function PlannerGrid(props: PlannerGridProps) {
         className="grid"
         style={{ gridTemplateColumns: `${labelTrack} repeat(${columns.length}, ${dateTrack})` }}
       >
+        {monthBands && (
+          <>
+            <div className={`${labelMinW} ${stickyLabel}`} />
+            {monthBands.map((band, i) => band.columnIds.length > 0 && (
+              <div
+                key={band.month}
+                data-month-band={band.month}
+                style={{ gridColumn: `span ${band.columnIds.length}` }}
+                className={`px-1 pb-1 font-label text-[11px] uppercase tracking-widest text-accent ${i > 0 ? "border-l-2 border-accent/40" : ""}`}
+              >
+                {band.label}
+              </div>
+            ))}
+          </>
+        )}
         <div className={`${labelMinW} ${stickyLabel}`} />
         {columns.map((column) => (
           <ColumnHeader
+            guardado={mode === "create" && "admission" in column}
             key={column.columnId}
             column={column}
             preflight={preflightFor(column)}
@@ -1796,7 +1819,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
             onOpen={(columnId) => {
               if (mutationLocked) return;
               const column = columnById.get(columnId);
-              if (mode === "stored" && column && "admission" in column && column.admission === "readOnly") return;
+              // C6 ST-3: in create mode a stored column («Guardado», v3) is never edited.
+              if (column && "admission" in column && (mode === "create" || column.admission === "readOnly")) return;
               openPicker(row, columnId);
             }}
             onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
@@ -2440,7 +2464,10 @@ function ColumnHeader({
   minWClass,
   clear,
   fairness,
+  guardado = false,
 }: {
+  /** C6 ST-1: a stored service shown read-only in the v3 create grid — date, type, name and «Guardado» only. */
+  guardado?: boolean;
   column: GridColumn;
   preflight: TargetPreflight | null;
   createBlock: "existing" | "created" | null;
@@ -2476,6 +2503,23 @@ function ColumnHeader({
           : CREATE_BLOCK_COPY.existingWeekend
         : null;
 
+  if (guardado) {
+    return (
+      <div data-grid-column-id={column.columnId} className={`${minWClass} space-y-1 px-1`}>
+        <div className="flex items-center gap-1.5">
+          <span className="font-display text-base leading-none">{day}</span>
+          <span className="font-label text-xs uppercase tracking-widest text-mono-500">{month}</span>
+        </div>
+        <span className="font-label text-xs uppercase tracking-widest text-mono-500">{typeLabel}</span>
+        {column.serviceName && (
+          <span className={`block font-body text-[11px] text-ink-muted/80 ${CARD_STYLE.longText}`}>{column.serviceName}</span>
+        )}
+        <span data-guardado="" className="inline-block rounded-full border border-accent/30 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-widest text-accent">
+          Guardado
+        </span>
+      </div>
+    );
+  }
   return (
     <div data-grid-column-id={column.columnId} className={`${minWClass} space-y-1 px-1 ${skipped || blockCopy ? "opacity-40" : ""}`}>
       {/* Legibility pass: the header's date, month and service type were

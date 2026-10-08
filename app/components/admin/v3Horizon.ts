@@ -80,3 +80,8 @@ export function monthsEntering(previous: readonly string[], next: readonly strin
   const before = new Set(previous);
   return next.filter((m) => !before.has(m));
 }
+
+/** HZ-6: which months the participation sidebar counts — one horizon month, or «Ambos». */
+export function participationMonthsOf(horizon: readonly string[], choice: string): string[] {
+  return horizon.includes(choice) ? [choice] : [...horizon];
+}
