@@ -414,11 +414,21 @@ export const RETIRED_ONE_SHOT_WRITERS: readonly AuditExemption[] = [
 
 /**
  * Guarded OPERATOR TOOLING — kept SEPARATE from the A2 writer allowlist and NOT
- * owned by A2, because A2 does not remove these writers: they exist precisely to
- * be run by hand against the isolated verification dataset, and their guards
- * (`scripts/lib/sr-verification.mjs`) hard-refuse the production project and
- * dataset on either axis, in dry-run too. They are listed here, by exact
- * file + operation, so they are visible to the audit rather than invisible to it.
+ * owned by A2, because A2 does not remove these tools. Each is run by hand and listed
+ * here by exact file + operation, so it is visible to the audit rather than invisible
+ * to it. Two kinds live here:
+ *
+ *  - isolated-dataset tooling (the Service Readiness cleanup, feasibility harness and
+ *    deployed-route dataset adapter): meant for the verification dataset only, its
+ *    guards (`scripts/lib/sr-verification.mjs`) hard-refuse the production project and
+ *    dataset on either axis, in dry-run too;
+ *  - consented PRODUCTION tools: dry run (or read-only) by default, `--apply` only after
+ *    the user's explicit consent, each writing one narrow target — the notice requeue
+ *    tools (`notificationOutbox`), the one-off backfills and lock bootstrap, the
+ *    read-only proposal reconcile, and the solver v3 fairness-record reconstruction
+ *    (`fairnessMonth` records, only through C2's write executor, its `--apply` bound to a
+ *    reviewed plan's fingerprint). Their guards do not refuse production; consent and
+ *    a dry run do.
  */
 export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
   {
@@ -487,6 +497,14 @@ export const OPERATOR_TOOLING_ALLOWLIST: readonly AuditExemption[] = [
     reason:
       "one-off A2 §1 rollout: creates the claimed weekend roleTargetLock for each pre-A2 weekend role. Reads through the canonical published client and the raw client for draft evidence; each lock is created at its deterministic id (a concurrent create loses rather than overwriting) paired with a revision-asserting no-op patch on the role's own unchanged week field, which is the protected write this entry covers. Refuses a duplicate target, a draft overlay, a malformed role, or an existing lock",
     removalOwner: "one-off migration tooling (never A2 — retire alongside the other one-shot writers)",
+  },
+  {
+    file: "scripts/reconstruct-fairness-months.mjs",
+    operation: "module",
+    reason:
+      "solver v3 C4 fairness-record reconstruction CLI: its core reads role documents, the fairness records and members' availability through C2's read builders on an injected token-carrying client, and this file writes ONLY `fairnessMonth` records — every create, replace and delete through C2's write executor (`executeFairnessMonthWrites`, actor `reconstruction`), which makes it a `protected-write` site under the executor rule whatever else it does (C2 IF2-23, GU-5). Dry run by default; `--apply` and `--rollback --apply` write exactly a reviewed plan, under the fingerprint the user consented to (C4 R15, R19); its stdout carries no member name, member id or rule key (C4 R12)",
+    removalOwner:
+      "solver v3 C7 Step 12, the retirement PR (C4 R22): once the last v2-confirmed month is reconstructed and the cutover's rollback window closes, this entry moves to RETIRED_ONE_SHOT_WRITERS and the file gains assertRetiredWriter()",
   },
 ];
 

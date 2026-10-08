@@ -55,8 +55,9 @@ const EXPECTED_CALLERS: Record<string, string[]> = {
     "app/utils/fairnessLedgerRead.ts",
     "app/utils/fairnessMonthCommit.ts",
     // Solver v3 C4 R20 b: the reconstruction core's ONE gateway to the module (IF2-18 …
-    // IF2-21). It never calls the executor; the CLI file, the only caller, joins in C4's Task 10.
+    // IF2-21), which never calls the executor — and the CLI file, its one caller outside app/.
     "scripts/lib/reconstructDecide.ts",
+    "scripts/reconstruct-fairness-months.mjs",
   ],
   // Solver v3 C2 WR-1: the PUT route is the commit module's only caller (no MCP tool).
   fairnessMonthCommit: ["app/api/admin/fairness/months/route.ts"],
