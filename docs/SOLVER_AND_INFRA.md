@@ -10,6 +10,12 @@ the test setup.
 A Python 3.12 + **OR-Tools CP-SAT** constraint solver deployed as a **Gen-2 Google Cloud
 Function** named `owt-solver`. It builds a **fair monthly worship-team roster**.
 
+> **Since 2026-10-09 this is the rollback engine.** Auto runs solver v3 (`owt-solver-v3`, «Solver
+> v3 (`gcf_v3/`)» in §2 below; `SOLVER_ENGINE = "v3"`,
+> [ADR-0054](adr/0054-the-v2-solver-stays-deployed-as-the-rollback-engine.md)).
+> This section describes v2, which stays deployed, byte-identical and selectable: it serves Auto
+> again only if `SOLVER_ENGINE` is flipped back to `"v2"`, by a PR released like any other.
+
 Files: [`gcf/main.py`](../gcf/main.py) (HTTP handler), [`gcf/owt_solver_v2.py`](../gcf/owt_solver_v2.py)
 (the solver, ~1300 lines, the single source of truth), `requirements.txt`, `.gcloudignore`,
 `test_main.py`, `test_owt_solver_v2.py`.
@@ -521,12 +527,13 @@ holds for the trailing Saturday, now that the planner sends `weeks + 1`: the pla
 first (the solver's non-trailing path is unchanged by the invariant), then the function if ever
 both — an old function refuses a request that names it.
 
-### Solver v3 (`gcf_v3/`) — `owt-solver-v3`, deployed and not called
+### Solver v3 (`gcf_v3/`) — `owt-solver-v3`, serves Auto since 2026-10-09
 
 The date-based v3 solver (spec `docs/superpowers/specs/2026-10-05-solver-v3-c5-solver-function-design.md`,
-ADR-0051) lives in `gcf_v3/` (package `owt_v3`) and imports nothing from `gcf/`. **Nothing calls it**
-until C6 routes Auto to it behind the effective engine and C7 flips `SOLVER_ENGINE`; v2 above is
-unchanged and remains the engine.
+ADR-0051) lives in `gcf_v3/` (package `owt_v3`) and imports nothing from `gcf/`. **Auto calls it**
+through `app/api/admin/solve/route.ts` (`app/utils/solverV3Upstream.ts`, URL `OWT_SOLVER_V3_URL`) on
+every deployment whose effective engine is v3 — production and dev since the 2026-10-09 cutover
+(ADR-0054, «Cutover record» below). v2 above is unchanged and is the rollback engine.
 
 - **Contract `3`.** One request staffs the weekend voice seats of 1–2 calendar months: dated
   services (opaque `id`, `kind`, `fixed`, `counts`, `seats`), people with eligibility already
@@ -589,9 +596,65 @@ unchanged and remains the engine.
 The function URL (C6/C7's `OWT_SOLVER_V3_URL`) is
 `gcloud functions describe owt-solver-v3 --gen2 --region=us-central1 --format='value(serviceConfig.uri)'`.
 
-**Rollback.** Disable the trigger `owt-solver-v3-deploy`; nothing routes to the function, so it may
-stay or be deleted (Frank's call); revert the PR. No data depends on it. C0's `solver-v3` job and
-scaffold stay, green on `gcf_v3/test_scaffold.py`.
+**Rollback.** Since the cutover production Auto routes here. A bad function deploy: revert its PR
+(the trigger redeploys the previous source) and verify as above; if Auto cannot wait for that, flip
+the engine back to v2 (ADR-0054). Disabling `owt-solver-v3-deploy` or deleting the function comes
+only after a flip-back has been released and verified, and is Frank's call. Records written under
+v3 stay; they are inert under v2.
+
+#### Cutover record (solver v3 C7, 2026-10-09)
+
+The release that made v3 Auto's engine
+([ADR-0054](adr/0054-the-v2-solver-stays-deployed-as-the-rollback-engine.md); plan
+`docs/superpowers/plans/2026-10-05-solver-v3-c7-cutover.md`). No names, no per-person figures, and
+no `solverConfig` key or anything derived from one: a stage is named by its kind.
+
+- **Flip:** PR <!-- C7-PENDING: flip PR number -->, `main` merge
+  <!-- C7-PENDING: main merge SHA -->, production alias and `githubCommitSha` verified
+  <!-- C7-PENDING: verification date -->.
+- **Function:** `owt-solver-v3` build `f939f5ba` (the C5 merge, PR #136, the last `gcf_v3/**`
+  change on `main`). Minimum instances: 0 <!-- C7-PENDING: confirm after cold runs #2 and #3 -->.
+- **`FAIRNESS_TOLERANCE`:** 35 hundredths of a seat (`gcf_v3/owt_v3/constants.py`) — the bound on
+  `|planned − share|` per line for a pinless, all-proven, fully filled run; a pinned run's gap is
+  reported, not bound.
+- **Real-container timing gate** (C5 §13; 2026-10-08, build `f939f5ba`, ten warm runs per shape;
+  shapes A–D from C5's harness, E the real Nov+Dec 2026 request built by C5's private converter).
+  Every stage `proven` on every warm run of every shape (10/10 on A–E), and no stage stopped by
+  `limit: "wall"`:
+
+  | Shape | `total_ms` p50 / p95 | curl `time_total` p50 / p95 (s) |
+  |---|---|---|
+  | A | 666 / 712 | 0.84 / 1.12 |
+  | B | 1499 / 1866 | 1.67 / 2.05 |
+  | C | 2517 / 2735 | 2.68 / 2.94 |
+  | D (92 pins requested, all honoured) | 266 / 403 | 0.47 / 0.62 |
+  | E (real Nov+Dec 2026) | 1676 / 1910 | 1.88 / 2.17 |
+
+  Cold runs (≥ 20 min idle): #1 7.97 s, every stage proven; #2 and #3
+  <!-- C7-PENDING: cold runs #2 and #3 (time_total, stages proven) -->. Cloud Run memory p99 at most
+  42 % of 512 MB. Median ms per `det_milli` by stage kind was about 4.7–16.8 on the container (max
+  25) — the figure that calibrates `STAGE_DET_LIMIT` for the real container — and every stage
+  finished far inside its budget. C5 §13's pass lines (all stages proven warm, `total_ms` p95 ≤ 8 s,
+  `time_total` p95 ≤ 20 s, cold ≤ 45 s, memory < 75 %) hold on every run measured so far.
+- **Preview rehearsal** (aggregates): <!-- C7-PENDING: runs; stages proven by stage kind; misses
+  by code and cause; capacity notice yes/no -->.
+- **Private snapshots** (`owt-agent-logs`, file names only): rehearsal
+  `backups/solverConfig-2026-10-08-rehearsal.json`; pre-step
+  <!-- C7-PENDING: backups/solverConfig-<date>-before-v3-flip.json -->; post-step
+  <!-- C7-PENDING: backups/solverConfig-<date>-after-v3-flip.json -->.
+- **Entry findings, read from the merged code (2026-10-08).** Parent A27 (a v3 confirm creates
+  the record of every recordless horizon month), A39 (integer seat counts in the response and the
+  panel) and the plan's AS8 (the minted-id → config-ordinal map is captured with each run) hold.
+  A38 holds in C2 — its validator and its resolver refuse two exact counts covering one role key
+  for one person, and a test asserts that every `ok: true` resolver output passes the validator
+  (RES-8) — but C3's save compares lowercased `person` text, so a pair written once under a
+  member's name and once under their alias saves, and only C2 refuses it (every v3 Auto then
+  refuses at the resolver). Frank ruled on 2026-10-08 to proceed with this recorded; the C3 fix
+  comes in a separate, later PR. Writers of a `fairnessMonth` record: the fairness months route —
+  reached by C2's «Registrar elegibilidad» (create and stored mode) and by C6's v3 confirm in
+  create mode — and C4's reconstruction script. Stored mode's «Guardar» writes no record.
+- **Preview override:** `OWT_SOLVER_ENGINE` removed from Preview
+  <!-- C7-PENDING: date (planned 2026-10-09, plan Step 9) -->.
 
 ---
 

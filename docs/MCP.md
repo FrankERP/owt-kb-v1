@@ -37,7 +37,10 @@
 > `revise_proposal`, `apply_schedule`) plan approved at critical tier 2026-09-28
 > ([plan](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply.md),
 > [review log](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply-review-log.md)), not
-> implemented.**
+> implemented — blocked since 2026-10-09: its parity target (the browser's v2 request) and its
+> apply order (drafts without an eligibility record) do not hold under v3
+> ([ADR-0054](adr/0054-the-v2-solver-stays-deployed-as-the-rollback-engine.md)). Re-baseline onto
+> v3 as a new critical plan before any implementation.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The

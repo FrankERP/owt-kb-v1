@@ -148,9 +148,9 @@ wrong.** Utils live in [`app/utils/`](../app/utils/); **most** have a matching t
   failure can never be mistaken for "this month has no history." This is what
   `GET /api/admin/solver-history` calls (see [API_REFERENCE.md](API_REFERENCE.md#solver)), and
   what P4's `solve_month` would call directly (bearer auth, never the admin route) if history is
-  ever sent again. **Since 2026-09-30 Auto sends no history** (`SOLVER_SENDS_HISTORY = false`,
-  ADR-0046). With the switch back on, the planner's history is derived for the target month at
-  solve time, never read from `localStorage` and never cached across a solve — the display's
+  ever sent again — P4 is blocked on a v3 re-baseline (ADR-0054). **Since 2026-09-30 Auto sends
+  no history** (`SOLVER_SENDS_HISTORY = false`, ADR-0046). With the switch back on, the planner's
+  history is derived for the target month at solve time, never read from `localStorage` and never cached across a solve — the display's
   copy is for drawing only.
 - **`canonicalWeekendRolesInRangeQuery`, `canonicalMemberNamesQuery`,
   `weekendRoleCreationReceiptsQuery`, `ROLE_CREATION_RECEIPT_EVIDENCE_PROJECTION`** (additions

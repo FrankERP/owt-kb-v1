@@ -157,6 +157,11 @@ disagree, `CLAUDE.md` wins and this file is the one to fix.
   moment that variable is removed or the value is cleared, preview mails the
   whole team with no other change. Check `vercel env ls preview` before assuming
   either. Production has no such redirect.
+- **`OWT_SOLVER_ENGINE` on Preview exists for rehearsals only and is normally unset.**
+  Set it branch-scoped to `preview` for a rehearsal (C7 set it for the v3 rehearsal and removed it
+  after the flip) and remove it afterwards: unset, dev follows `SOLVER_ENGINE`, so a flip-back
+  reaches dev and production alike. Whatever engine it selects, dev writes the production dataset.
+  Production and `verify/service-readiness` ignore it by code. See `docs/SECRETS.md`.
 
 ## Decision records
 When a choice rejects a real alternative and the reason won't be obvious from
@@ -198,7 +203,8 @@ several exist precisely to stop a plausible-looking change.
 - **`countsForFairness`: one read rule** (`app/utils/countsForFairness.ts` — GROQ fragment + twin +
   default); PATCH absent = unchanged (never the `time` precedent); a PATCH that carries it and
   changes nothing a notice could report queues no notice; `ROLE_PROJECTION` does not carry it;
-  inert until v3 serves Auto. The planner's Switch is disabled for a service of a past CDMX month —
+  in force since v3 began serving Auto on 2026-10-09 (ADR-0054; inert again under the rollback
+  engine, v2). The planner's Switch is disabled for a service of a past CDMX month —
   a client-side rule only (C1-D7); neither roles route refuses on the month.
 - Member-facing reads must filter `published != false` (draft/publish gating) for the
   **worship** types, whose documents predate the field — an absent `published` there
@@ -238,7 +244,17 @@ several exist precisely to stop a plausible-looking change.
 - **Cache:** admin/API routes that mutate content must call the matching
   `revalidate*` util in `app/utils/revalidate.ts` (or `revalidatePath`), or the
   ISR page stays stale.
-- **Auto sends the solver NO fairness history** (`SOLVER_SENDS_HISTORY = false` since
+- **Auto runs solver v3** (`SOLVER_ENGINE = "v3"` since 2026-10-09, ADR-0054). Every Auto reads
+  `GET /api/admin/fairness` FRESH for its own horizon (never a display copy) and refuses on a
+  failed read, so nothing is solved with missing balances; carried balances come only from
+  `fairnessLedger.ts` (the ledger rule above, not repeated here); the confirm writes every horizon
+  month's eligibility record in one PUT before any draft (ADR-0053). The Preview override
+  `OWT_SOLVER_ENGINE` is honoured only on the `preview` branch deployment, or locally with
+  `VERCEL_ENV` unset — never on Production or `verify/service-readiness`, where the constant wins
+  (parent A1). Flipping back is a PR (the constant and its pin test, plus a revert of the
+  cutover's copy hunks) plus the private, targeted `solverConfig` restore (ADR-0054).
+  **v2 is the rollback engine; everything below applies only when `SOLVER_ENGINE` is flipped back
+  to `"v2"`:** Auto sends the solver NO fairness history (`SOLVER_SENDS_HISTORY = false` since
   2026-09-30, ADR-0046): `history: []`, no read at solve time, no refusal over a failed read, no
   «Historial» line — the solver balances within the month and the pool checkboxes decide across
   months. A member whose count for ONE role is fixed by an exact rule (`Sun.Lead == 2`) leaves
@@ -511,15 +527,15 @@ per row behind a ⋯ `Button variant="icon"`, never hover-only buttons, and taki
 away asks first through a confirm `CueDialog` that stays open on a refused PATCH
 (decision O). Giving access back needs no confirm), `loadSolverHistory`
 (`app/utils/solverHistoryRead.ts` — the ONE server-callable fairness-history builder;
-P4's `solve_month` calls it directly, never the admin route — only if `SOLVER_SENDS_HISTORY`
-is flipped back, ADR-0046), `deriveSolverHistory`/
+P4 is blocked on a v3 re-baseline (ADR-0054); read only if `SOLVER_ENGINE` and
+`SOLVER_SENDS_HISTORY` are both flipped back, ADR-0046), `deriveSolverHistory`/
 `historyWindow` (`app/utils/solverHistory.ts` — the ONE derivation; neutral),
 `fetchDerivedHistory` (`app/components/admin/derivedHistoryClient.ts` — the planner's ONE
 read of that history: checked, never throws, `{ ok: false }` on any failure, used by the display
 hook, and by every Auto only while `SOLVER_SENDS_HISTORY` is true), `SOLVER_HISTORY_SOURCE`
 (`app/components/admin/solverHistorySource.ts` — the deployment-wide switch, `"derived"`; `"local"`
 is the rollback until D3), `SOLVER_SENDS_HISTORY` (same file — `false`: Auto sends `history: []`,
-ADR-0046; `true` is the rollback), `countsForFairness`/`countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ` (`app/utils/countsForFairness.ts` — the ONE «Cuenta para equidad» read rule; neutral; nothing else spells the fragment or the default), `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts` — the engine constant only, `"v2"`; the effective engine is `resolveSolverEngine`'s (`app/utils/solverDeployment.ts`), parent A1), `FairnessSwitch`/`FairnessEngineNote` (`app/components/admin/FairnessSwitch.tsx` — the ONE «Cuenta para equidad» control and its v2 note on all four surfaces; the past-month rule and effective values live in `fairnessToggleModel.ts`), `trailingSaturday`/`rolesOfPattern` (`app/components/admin/plannerModel.ts` — the ONE definition of the Saturday after the last Sunday, solver week `weeks + 1`, ADR-0048; and the ONE pattern → solver-roles map, mirroring the solver's `expand_pattern`, guarded by `patternRolesSync.test.ts`), `rolesOfPatternV3` (`plannerModel.ts` — the ONE v3 six-key pattern map; equals `rolesOfPattern` on the five v2 keys and adds `Sat.Choir`; synced by `patternRolesV3Sync.test.ts`), `capValueForMonth` (`app/components/admin/serviceRuleContext.ts` — the ONE per-month count resolution, over `resolvedCapValue`, a typed result never rounded or clamped), `memberFitsRoleKey` (`plannerModel.ts` — the ONE does-this-Tipo-fit-this-v3-role-key predicate, shared by the eligibility resolver and the record writer), `resolveMonthEligibility` (`app/utils/fairnessEligibility.ts` — the ONE v3 eligibility resolver; client-callable; an `ok` body always passes the record validator), `formatFairnessTenths`/`saldoWords` (`app/utils/fairnessFormat.ts` — the ONLY fairness-figure formatter: one decimal from a tenths figure computed from the exact value, never from hundredths), `resolveSolverEngine` (`app/utils/solverDeployment.ts` — the ONE reader of `OWT_SOLVER_ENGINE`; it overrides `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts`, C1's constant) only on the `preview` branch deployment and locally; never imported by a client module), `parseStoredFairnessMonth` (`app/utils/fairnessMonthWriteRequest.ts` — the ONE record-schema check for `fairnessMonth`; the reader and C4's script both call it), `keepVoiceSeats` (`app/utils/fairnessLedger.ts` — the ONE seat rule: duplicate weekend targets dropped, uncounted services out, one kept seat per person per service), `executeFairnessMonthWrites` (`fairnessMonthWriteRequest.ts` — the only mutation path for `fairnessMonth`, clients injected; every reader of the type carries the read token or fails closed).
+ADR-0046; `true` is the rollback), `countsForFairness`/`countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ` (`app/utils/countsForFairness.ts` — the ONE «Cuenta para equidad» read rule; neutral; nothing else spells the fragment or the default), `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts` — the engine constant only, `"v3"` since 2026-10-09, `"v2"` the rollback, ADR-0054; the effective engine is `resolveSolverEngine`'s (`app/utils/solverDeployment.ts`), parent A1), `FairnessSwitch`/`FairnessEngineNote` (`app/components/admin/FairnessSwitch.tsx` — the ONE «Cuenta para equidad» control and its v2 note on all four surfaces; the past-month rule and effective values live in `fairnessToggleModel.ts`), `trailingSaturday`/`rolesOfPattern` (`app/components/admin/plannerModel.ts` — the ONE definition of the Saturday after the last Sunday, solver week `weeks + 1`, ADR-0048; and the ONE pattern → solver-roles map, mirroring the solver's `expand_pattern`, guarded by `patternRolesSync.test.ts`), `rolesOfPatternV3` (`plannerModel.ts` — the ONE v3 six-key pattern map; equals `rolesOfPattern` on the five v2 keys and adds `Sat.Choir`; synced by `patternRolesV3Sync.test.ts`), `capValueForMonth` (`app/components/admin/serviceRuleContext.ts` — the ONE per-month count resolution, over `resolvedCapValue`, a typed result never rounded or clamped), `memberFitsRoleKey` (`plannerModel.ts` — the ONE does-this-Tipo-fit-this-v3-role-key predicate, shared by the eligibility resolver and the record writer), `resolveMonthEligibility` (`app/utils/fairnessEligibility.ts` — the ONE v3 eligibility resolver; client-callable; an `ok` body always passes the record validator), `formatFairnessTenths`/`saldoWords` (`app/utils/fairnessFormat.ts` — the ONLY fairness-figure formatter: one decimal from a tenths figure computed from the exact value, never from hundredths), `resolveSolverEngine` (`app/utils/solverDeployment.ts` — the ONE reader of `OWT_SOLVER_ENGINE`; it overrides `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts`, C1's constant) only on the `preview` branch deployment and locally; never imported by a client module), `parseStoredFairnessMonth` (`app/utils/fairnessMonthWriteRequest.ts` — the ONE record-schema check for `fairnessMonth`; the reader and C4's script both call it), `keepVoiceSeats` (`app/utils/fairnessLedger.ts` — the ONE seat rule: duplicate weekend targets dropped, uncounted services out, one kept seat per person per service), `executeFairnessMonthWrites` (`fairnessMonthWriteRequest.ts` — the only mutation path for `fairnessMonth`, clients injected; every reader of the type carries the read token or fails closed).
 **Solver v3 planner (C6, behind the engine prop):** `buildV3SolveRequest` (`app/components/admin/v3SolveRequest.ts`
 — the ONE v3 request builder, pure: planner state + ledger GET + roles read + CDMX month in; request, notices,
 refusals and the run snapshot out; C7's rehearsal uses the same code), `runV3Auto` (`v3AutoRun.ts` — refusals

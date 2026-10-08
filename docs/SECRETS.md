@@ -533,7 +533,7 @@ secret.
 
 | Platform | Role |
 |---|---|
-| Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; with the engine at `v2` that path is never taken) |
+| Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; the path production takes since the 2026-10-09 cutover, ADR-0054 — v2's only after a flip-back) |
 | Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (first creation and manual: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
@@ -591,8 +591,10 @@ in that gap bakes a key in that the function may not be serving yet.
 redeploy (steps 3–4) complete, any request that reaches a freshly started instance of EITHER
 function fails with HTTP 401 — «Generar mes» fails in both environments, on v2 as today and on
 every environment whose engine is v3, intermittently at first (warm instances still hold the
-old key) and then always. Nothing is written — Auto only proposes; «Guardar» writes — so the cost
-is minutes of Auto unavailable. **If the rotation stalls between steps 2 and 4, finish it forward** —
+old key) and then always. **Since the 2026-10-09 cutover production's engine is v3** (ADR-0054), so
+a gap on `owt-solver-v3` is what breaks production Auto, not only v2; v2's own gap matters only
+after a flip-back, which is why step 3 still redeploys both. Nothing is written — Auto only
+proposes; «Guardar» writes — so the cost is minutes of Auto unavailable. **If the rotation stalls between steps 2 and 4, finish it forward** —
 that is almost always the shortest way out. A real rollback must NOT disable the new version:
 `:latest` names the most recently created version even when it is disabled, so the function could
 no longer start. Instead write the previous value back as a NEWER version and restore Vercel to
@@ -622,8 +624,8 @@ Vercel deployment built in between may hold the new key — and verify as in ste
 
 ## `OWT_SOLVER_ENGINE` (solver v3 — the Preview-only engine override)
 
-**Needed in: Vercel Preview, branch-scoped to `preview` only — and only while Frank wants a v3
-rehearsal on dev. Optional in local `.env.local` (a local v3 rehearsal). Leave it unset
+**Needed in: Vercel Preview, branch-scoped to `preview` only — and only while Frank wants an
+engine rehearsal on dev (normally unset). Optional in local `.env.local` (a local rehearsal). Leave it unset
 everywhere else. Not needed in: Vercel Production (the code ignores it there), the
 `Preview (verify/service-readiness)` scope (the code ignores it there too — never add it "to be
 safe"), GitHub Actions, Cloud Scheduler, the iOS build, GCF.**
@@ -637,9 +639,10 @@ dev` (`VERCEL_ENV=development`), the `verify/service-readiness` deployment and a
 answer the constant. Both `VERCEL_*` variables are set by Vercel automatically.
 
 **Purpose — what changes with it.** Under `v3`, the planner's «Equidad · vista previa» panel offers
-«Registrar elegibilidad de {mes}» and `PUT /api/admin/fairness/months` accepts writes (under `v2`
-it answers a 409, `details.detail` `engine_not_v3`); after C6, Auto on that deployment also runs the v3 solver.
-Without it (the normal state) the deployment runs the constant's engine.
+«Registrar elegibilidad de {mes}», `PUT /api/admin/fairness/months` accepts writes and Auto runs
+the v3 solver; under `v2`, the PUT answers a 409 (`details.detail` `engine_not_v3`) and Auto runs
+v2 — the way to rehearse the rollback engine on dev. Without it (the normal state) the deployment
+runs the constant's engine, `"v3"` since the 2026-10-09 cutover (ADR-0054).
 
 **Where it comes from.** A literal typed by Frank: Vercel → project `owt-backstage` → Settings →
 Environment Variables → Preview, scoped to the Git branch `preview`; or a line in `.env.local`.
@@ -649,12 +652,17 @@ There is no issuer or generator.
 from the dashboard) and verify the dev alias moved — like every Vercel env var it binds at build
 time. Locally, restart the dev server. To go back to the constant, remove it.
 
-**Blast radius.** While it is `v3` on Preview, «Registrar» appears on dev and writes
-**production** `fairnessMonth` records — `preview` writes the real dataset (CLAUDE.md «Vercel
+**Blast radius.** While dev's engine is `v3` — by this override, or by the constant since the
+cutover — «Registrar» appears on dev and writes **production** `fairnessMonth` records — `preview` writes the real dataset (CLAUDE.md «Vercel
 safety») — stamped `environment: "preview"`, which no app surface can delete (C2 WR-13). Set
-locally with `VERCEL_ENV` unset, a local server writes production records stamped `local`. After
-C6, Auto on that deployment runs v3. Nothing is broken mid-change: a deployment reads the value it
-was built with.
+locally with `VERCEL_ENV` unset, a local server writes production records stamped `local`. Set to
+`v2` on Preview, dev runs the rollback engine while production stays on v3. Nothing is broken
+mid-change: a deployment reads the value it was built with.
+
+**Status.** Set on Vercel Preview (branch `preview` only) for solver v3 C7's rehearsal; **unset
+since 2026-10-09** (C7 Step 9), so dev follows `SOLVER_ENGINE` and a flip-back reaches dev and
+production alike. Never set on Production or `verify/service-readiness` (both ignore it by code);
+honoured locally only when `VERCEL_ENV` is unset.
 
 ---
 
@@ -680,9 +688,9 @@ Vercel alias check). When absent, `build` is `"unknown"` and nothing else breaks
 
 ## `OWT_SOLVER_V3_URL` (solver v3 — the URL of the `owt-solver-v3` function)
 
-**Needed in: Vercel Preview (first, for C7's rehearsal) and Vercel Production (before C7's flip
-merges) — one Preview-wide value like `OWT_SOLVER_URL`, no branch-scoped pair, so
-`verify/service-readiness` has it too. Not needed in:** `.env.local` (with it unset and
+**Needed in: Vercel Preview and Vercel Production — one Preview-wide value like `OWT_SOLVER_URL`,
+no branch-scoped pair, so `verify/service-readiness` has it too, which matters because that
+deployment's engine is the constant, `"v3"` since the 2026-10-09 cutover. Not needed in:** `.env.local` (with it unset and
 `VERCEL_ENV` unset, the route runs `python gcf_v3/owt_solver_v3.py --json-mode` locally — set it
 locally only to call the deployed function), GitHub Actions, the iOS build. Not read by either Cloud
 Function.
@@ -692,11 +700,11 @@ Function.
 `X-Api-Key` on every v3 call too, C5-14), not by its URL.
 
 **Purpose — what breaks without it.** `app/utils/solverV3Upstream.ts` (called by
-`app/api/admin/solve/route.ts`) posts every `contract: 3` request here. While a deployment's
-effective engine is `v2` (production until C7's flip) nothing reads it. Once the engine is `v3`
-there — the `preview` branch with `OWT_SOLVER_ENGINE=v3`, or production after the flip — an
-unset value makes every Auto answer «No se pudo usar el solver (not_configured)…» and nothing is
-applied or written. A wrong value answers `unreachable`, `http_status`, `not_json` or — if it
+`app/api/admin/solve/route.ts`) posts every `contract: 3` request here. Since the 2026-10-09
+cutover every deployment's engine is `v3` unless flipped back (ADR-0054), so on a deployment
+without it every Auto answers «No se pudo usar el solver (not_configured)…» and nothing is applied
+or written — production included. Under a `v2` engine (a flip-back, or `OWT_SOLVER_ENGINE=v2` on
+dev) nothing reads it. A wrong value answers `unreachable`, `http_status`, `not_json` or — if it
 points at the v2 function — `contract_echo`, each with its own copy; still nothing is applied.
 
 **Where it comes from.** `URL="$(gcloud functions describe owt-solver-v3 --gen2
@@ -720,7 +728,9 @@ answers `not_configured` until the next redeploy — hence the two commands back
 redeploy after both. If the new value is wrong, v3 Auto on that deployment answers a transport
 error until it is corrected — no record or draft is ever written by a failed solve.
 
-**Status.** Introduced by C6; not set on any Vercel environment yet (C7 W0/W4 record the dates here).
+**Status.** Set on Vercel Preview **since 2026-10-08** (C7 W0; Preview-wide, `--type config`, so
+`verify/service-readiness` has it too) and on Vercel Production **since 2026-10-09** (C7 W4). Not
+set in `.env.local`, CI or the iOS build, which do not need it.
 
 ---
 

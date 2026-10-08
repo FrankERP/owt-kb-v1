@@ -110,6 +110,8 @@ the budget goes there, once.
   once `docs/DEV_VERIFY.md`'s three verified runs are recorded — use it for the human-eyes
   step when the change is visual; it is not Frank's own look.
 - **`preview` writes to the real Sanity dataset** — a rehearsal of the UI, never a dry run of data.
+- **`OWT_SOLVER_ENGINE` on Preview is for rehearsals only and normally unset** (branch-scoped to
+  `preview` while set; Production and `verify/service-readiness` ignore it). See `docs/SECRETS.md`.
 - **Preview email reaches one address only because `EMAIL_REDIRECT_TO` is set** on Preview
   (since 2026-07-24): a publish on dev does not notify the team, and clearing that variable
   makes preview mail the whole team. Check `vercel env ls preview`. Production has no redirect.
@@ -166,12 +168,19 @@ looks wrong** — several exist to stop a plausible-looking change.
   closed — the dotted ids are private, and an untokened read answers «no record» with no error.
 - **Cache:** admin/API routes that mutate content call the matching `revalidate*`
   (`app/utils/revalidate.ts`) or `revalidatePath`, or the ISR page stays stale.
-- **Auto sends the solver NO fairness history** (`SOLVER_SENDS_HISTORY = false`, ADR-0046):
-  `history: []`, no read at solve time. An exact rule (`Sun.Lead == 2`) takes that member out
-  of that role's band; a `>=` floor stays in. Only if the switch flips back: history is derived
+- **Auto runs solver v3** (`SOLVER_ENGINE = "v3"` since 2026-10-09, ADR-0054): every Auto reads
+  `GET /api/admin/fairness` fresh for its own horizon and refuses on a failed read; carried
+  balances come only from the ledger (above); the confirm writes the eligibility records before
+  any draft. The override `OWT_SOLVER_ENGINE` is honoured only on the `preview` branch deployment
+  or locally, never on Production or `verify/service-readiness`. Flipping back is a PR plus the
+  targeted `solverConfig` restore (ADR-0054).
+  **v2 is the rollback engine; everything below applies only when `SOLVER_ENGINE` is flipped back
+  to `"v2"`:** Auto sends NO fairness history (`SOLVER_SENDS_HISTORY = false`, ADR-0046):
+  `history: []`, no read at solve time. An exact rule (`Sun.Lead == 2`) takes that member out of
+  that role's band; a `>=` floor stays in. Only if that switch flips back too: history is derived
   for the target month on every Auto (never `localStorage`, never cached — ADR-0042), a failed
-  read refuses the solve, no panel is handed `[]` as a stand-in, and `owt_solver_history_v2` is
-  written only on confirm. The Historial chips are read-only.
+  read refuses the solve, no panel (`priorMonthLeadVisibility`) is handed `[]` as a stand-in, and
+  `owt_solver_history_v2` is written only on confirm. The Historial chips are read-only.
 - **Two solver parsers, never crossed (solver v3 C6, U8):** client branches read the server-resolved
   `engine` prop, never `SOLVER_ENGINE`; a v3 answer goes only through `v3SolveResponse.ts`, a v2 one
   only through v2's parsers; v3 copy only in `v3Copy.ts`; no rule key on the wire, a line or a log.

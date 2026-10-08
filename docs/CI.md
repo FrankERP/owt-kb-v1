@@ -96,8 +96,8 @@ Two jobs, one per tree, each running exactly one command from the repository
 root:
 
 ```bash
-python -m unittest discover -s gcf -t gcf -v        # solver-v2 — the deployed solver
-python -m unittest discover -s gcf_v3 -t gcf_v3 -v  # solver-v3 — package owt_v3
+python -m unittest discover -s gcf -t gcf -v        # solver-v2 — the rollback engine (ADR-0054)
+python -m unittest discover -s gcf_v3 -t gcf_v3 -v  # solver-v3 — package owt_v3, the engine Auto runs
 ```
 
 The guard models unittest's default discovery (Python 3.12) and refuses whatever
@@ -168,9 +168,11 @@ way; «v3 solver steps» is setup-python through «Solver tests». The 374204303
 
 ### Solver inertness goldens (`gcf/test_inertness.py`)
 
-The Cloud Function deploys from `main` with no `preview` rehearsal and serves both
-environments, so a solver change is safe to ship only if a request with no `pinned` key builds
-the model **and runs the search** it did before. Three literals, frozen from the solver as it
+The v2 Cloud Function deploys from `main` with no `preview` rehearsal, and since the 2026-10-09
+cutover it is the rollback engine (ADR-0054): it serves both environments again the moment
+`SOLVER_ENGINE` is flipped back, with no rehearsal of its own. So a solver change is safe to ship
+only if a request with no `pinned` key builds the model **and runs the search** it did before.
+Three literals, frozen from the solver as it
 stood before pins existed, hold that. A fourth, frozen before the trailing Saturday, holds the
 same for a request that does not name it, over eight shapes (no, some and all Saturdays; five
 Sundays; week exclusions; history; pins; pins with history). A fifth, frozen on the solver that
