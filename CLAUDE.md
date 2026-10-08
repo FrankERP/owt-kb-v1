@@ -3,571 +3,292 @@
 Internal app for the Oasis Worship Team: song library, weekly setlists, team
 role assignments, member availability, and proposals. **Spanish-language UI.**
 
+**This file is the index** — one or two lines per rule, because it is loaded into every
+session and nearly every subagent. The long form (rationale, incident history, exact guard
+behaviour) is [`docs/agents/project-rules.md`](docs/agents/project-rules.md) under the same
+headings: **read the matching section there before changing code a rule governs.** When a
+rule changes, change both; if they disagree, this file wins.
+
 ## Stack & commands
-- Next.js 16 (App Router; `proxy.ts` = middleware), React 19, Sanity v5
-  (`next-sanity`), Tailwind, NextAuth v4, Fuse.js. Node 22. Dark and light themes — follows the device by default; members can pin either at `/me`.
-  Studio embedded at `/studio`. iOS app via Capacitor.
-- **Before claiming done, these must pass:** always `npx tsc --noEmit`, `npm test`
-  (vitest) and `npx eslint .` with **0 errors** (warnings are a deliberate backlog —
-  see `eslint.config.mjs`); plus the solver suite of each tree the change touches —
-  `gcf/**`: `python -m unittest discover -s gcf -t gcf`; `gcf_v3/**`:
-  `python -m unittest discover -s gcf_v3 -t gcf_v3`. All five are blocking CI
-  gates. Add tests for testable pure logic.
+- Next.js 16 (App Router; `proxy.ts` = middleware), React 19, Sanity v5 (`next-sanity`),
+  Tailwind, NextAuth v4, Fuse.js. Node 22. Dark and light themes (device by default, pinnable
+  at `/me`). Studio embedded at `/studio`. iOS app via Capacitor.
+- **Before claiming done, these must pass:** always `npx tsc --noEmit`, `npm test` (vitest)
+  and `npx eslint .` with **0 errors** (warnings are a deliberate backlog — see
+  `eslint.config.mjs`); plus the solver suite of each tree the change touches — `gcf/**`:
+  `python -m unittest discover -s gcf -t gcf`; `gcf_v3/**`:
+  `python -m unittest discover -s gcf_v3 -t gcf_v3`. All five are blocking CI gates. Add
+  tests for testable pure logic.
 
 ## Conventions
-- Work on a branch, **merge to `main` periodically** (don't commit routine work
-  straight to `main`). **`main` is protected and takes NO direct pushes** — it is
-  reached through a PR whose `gates` check is green (`.github/workflows/ci.yml`:
-  `gates` requires every CI job — `tsc --noEmit`, `vitest`, `eslint` with 0
-  errors, and both solver suites). `preview` still takes direct
-  pushes; CI runs there too, but does not block. Protection applies to admins as
-  well, so there is no silent bypass: an emergency override means deliberately
-  turning protection off, doing the push, and turning it back on. See
-  `docs/CI.md`. **Auto-merge is allowed** (repo setting, since 2026-09-29):
-  `gh pr merge <n> --auto --merge` lands a PR once `gates` is green on a branch
-  up to date with `main`, so nobody has to watch CI. It merges on green, not on a
-  human's look, so it approves a COMMIT: arm it LAST, on the exact commit that
-  was reviewed, re-verified and seen on dev. It stays armed across later pushes —
-  `gh pr merge <n> --disable-auto` BEFORE pushing anything else to that branch (a
-  review fix, a catch-up merge of `main`), and re-arm only once that commit is
-  verified too. If another PR lands first, `strict` leaves it waiting out of
-  date; nothing here updates it for you (no merge queue).
-- **A MERGE TO `main` IS A RELEASE, SO IT NEEDS A FRESH CODE REVIEW FIRST.** Not the
-  plan review — a review of the *diff*. Children E and F were both adversarially reviewed
-  as plans (19 rounds and 2), merged, and deployed; the code review ran afterwards and
-  found three control-flow bugs already serving the team. Plan review cannot see them by
-  construction: it reads plans. One round even blocked on `clearThemeMirror()`'s error
-  handling while standing next to the `setTheme`-identity bug in the same function, because
-  it was not looking at code. The order is:
+- Work on a branch. **`main` is protected and takes NO direct pushes** — only a PR whose
+  `gates` check is green (`.github/workflows/ci.yml`; protection applies to admins too;
+  `docs/CI.md`). `preview` takes direct pushes; CI runs there but does not block.
+- **Release order — always, without being asked:**
 
-      implement → gates green → FRESH CODE REVIEW on the merge range → fix
-      → RE-VERIFY THE FIX (scoped review of the fix range + gates re-run on the final tree)
-      → merge to main → preview → verify alias → main
+      implement → gates green → code review (§Review policy) → fix → gates on the final tree
+      → merge the branch into preview, push, VERIFY the dev alias moved
+      → PR to main, wait for `gates` → merge (= the production release) → verify the prod alias
 
-  A fix for a review finding is written fast, under pressure, by the author the review just
-  corrected — it is not lower-risk than the code that produced it. The cycle that earned this
-  step ran three review rounds and two of them found the previous fix incomplete: a HIGH fix left
-  a production notification audience half-gated, and the fix for that still fired when no role
-  existed. Auditable from the worklog alone: the last entry before a merge must be a
-  verification, not a fix. That property is what makes it a control rather than an intention.
+  `main` auto-deploys to **production** (`owt-backstage.vercel.app`, the app the team uses),
+  so `preview` goes first: the PR gate proves the code passes, never that it looks right on dev.
+- **Auto-merge** (`gh pr merge <n> --auto --merge`, allowed since 2026-09-29) approves a
+  COMMIT: arm it LAST, on the exact commit that cleared §Review policy, verified and seen on dev.
+  `gh pr merge <n> --disable-auto` BEFORE pushing anything else to that branch. No merge
+  queue: a PR left out of date by `strict` waits until someone updates it.
+- **Worktrees only when two things must be in flight at once** (`Agent` with
+  `isolation: "worktree"`, or `EnterWorktree` — never a hand-rolled `git worktree add`; code
+  review needs none). `node_modules` via APFS clone (`cp -Rc`) from the primary checkout — never a fresh install.
+  **Symlink `.env.local`** (`ln -s ../../../.env.local .env.local`) — never write a real one in
+  a worktree: `git worktree remove` destroys it silently (how `DEV_VERIFY_*` was lost).
+  `git worktree remove` is part of the merge step; `git worktree prune` at cycle open.
+- Conventional commits (`fix(scope): …`), body explains the *why*. **Never** add AI/Claude
+  attribution or `Co-Authored-By` trailers.
+- **Keep docs current in the same delivery** — behaviour, verification counts, branch/commit
+  and deployment state; remove stale "not released"/"preview only" claims as a release advances.
+- **Production Sanity writes need explicit user consent** — dry-run first (one-off scripts in
+  `scripts/`, guarded by `--apply`, run with `node --env-file=.env.local scripts/<name>.mjs`).
+  Diagnosing ≠ consent to write.
+- **Any new secret or env var gets an entry in `docs/SECRETS.md`** in the same change: which
+  platforms need it (and which don't), where the value came from, how to rotate it, what
+  breaks mid-rotation. Never the value itself.
 
-- **PUSH ORDER IS `preview` FIRST, THEN `main`. Always, without being asked.**
-  `main` auto-deploys to **production** — `owt-backstage.vercel.app`, the app the
-  team uses. So `git push origin main` *is* a production release, not a checkpoint.
-  Pushing it before dev has seen the change means the team gets it first and dev
-  becomes the rehearsal you already skipped. The order is:
+## Review policy (2026-10-07)
+Reviews were 590 of the ~940 subagent dispatches between 2026-09-08 and 10-07 — 1.7 per
+implementation dispatch. The diff review is the layer that catches implementation bugs, so
+the budget goes there, once.
+- **One fresh code review per merge range**, by ONE `code-reviewer`, before the merge to
+  `main` — the same dispatch carries the docs-audit and worklog checklists (`finish-cycle`).
+- **Fixes:** every fix re-runs the gates on the final tree. A **scoped re-review** (one agent,
+  the fix range only) only when the fix closes a **HIGH** finding: a production writer's
+  correctness, data loss, auth/security, a notification audience. Any other fix: gates plus
+  the author's own re-read of the fix diff, said so in the PR. A third round needs Frank.
+  The last worklog entry before a merge is still a verification (that gates re-run, or the
+  HIGH re-review), never a fix.
+- **No per-task reviewers** when executing a plan (`subagent-driven-development`'s spec and
+  quality reviewers, any `task-reviewer`): the merge-range review covers the tasks. Exception:
+  a task that itself owns a critical contract.
+- **Plans: no adversarial plan review for standard work** — spec self-reviewed, then Frank.
+  **Critical contracts only** — a production/server writer or mutation trust boundary, a
+  destructive or full-array serializer, an auth/security/ACL/secret boundary, a schema/data
+  migration, a multi-document transaction/concurrency/recovery protocol, an irreversible
+  remote release action — use `.agents/skills/adversarial-plan-review/SKILL.md` on the slice
+  that owns the contract: reviewers one at a time, binding churn cap (two rounds with verified
+  blockers → stop; a third needs Frank's go-ahead in advance), a committed
+  `<plan>-review-log.md`. Incidents are not exempt: a mid-fire change to a production writer's
+  concurrency, batching or deletion needs ≥1 fresh `APPROVED` on a one-paragraph hypothesis.
+- **No review fan-out:** a review, re-review, reconcile or "preflight" never runs as a
+  multi-agent Workflow.
 
-      feature branch (local gates green)
-      → merge the feature branch into preview, push preview, VERIFY the dev alias moved
-      → open a PR from the feature branch to main, WAIT for the `gates` check
-      → merge the PR — that is the production release
-
-  The verify step is not optional and a green build does not satisfy it — confirm
-  `dev-owt-backstage.vercel.app` is in the deployment's `alias` array and that its
-  `githubCommitSha` is the commit you pushed. **`preview` still goes first**: the
-  PR gate proves the code compiles and passes, never that it looks right to a
-  human on dev. Then verify the production alias the same way after the merge.
-- **Worktrees only when two things must be in flight at once** — parallel agents
-  writing overlapping files (`Agent` with `isolation: "worktree"`) or protecting the
-  primary tree while gates/servers run elsewhere (`EnterWorktree`, never a hand-rolled
-  `git worktree add`). Code review is read-only — no worktree. Populate
-  `node_modules` with an APFS clone from the primary checkout (`cp -Rc`), never a
-  fresh install. **Symlink `.env.local` to the primary checkout's copy**
-  (`ln -s ../../../.env.local .env.local` from the worktree root) — never write a
-  real one inside a worktree. `.env*.local` is gitignored, so a file created there
-  is invisible to git and is destroyed by `git worktree remove` with no warning and
-  no Papelera. That is how the `DEV_VERIFY_*` credentials were lost: they were
-  written in the worktree that built `scripts/dev-verify.ts` on 2026-09-01, the
-  worktree was removed, and the account survived in Sanity while its password did
-  not. `git worktree remove` is part of the merge step; `git worktree prune` at
-  cycle open.
-- Conventional commits (`fix(scope): …`), body explains the *why*.
-- **Never** add AI/Claude attribution or `Co-Authored-By` trailers.
-- **Keep documentation current in the same delivery.** Implementation, behavior,
-  verification counts, branch/commit state, and deployment status must be
-  reflected in the canonical docs before reporting completion; remove stale
-  "not released" or "preview only" statements when a release advances.
-- Production Sanity writes need explicit user consent — dry-run first
-  (one-off scripts in `scripts/`, guarded by `--apply`, run with
-  `node --env-file=.env.local scripts/<name>.mjs`). Diagnosing ≠ consent to write.
-- **Any new secret or env var gets an entry in `docs/SECRETS.md`** in the same
-  change: which platforms need it (and which don't), where the value came from,
-  how to rotate it, and what breaks mid-rotation. Never the value itself.
+## Token economy
+- **One session per phase, not per project** (spec → plan → each implementation slice →
+  release). A phase ends in a file (spec, plan, ledger, handoff) and the next session starts
+  by reading only that file. When context passes ~250k tokens, or the work is about to pause
+  for more than an hour, write the handoff and say so — resuming a large context after the
+  cache expires re-bills all of it.
+- **Workflows only for genuinely parallel, independent work, ≤10 agents** unless Frank asks
+  for more in that message.
+- Subagent briefs name the files and the question; reports return conclusions, not dumps.
+  Pipe long command output to a file and read the part you need.
 
 ## Vercel safety
 - Canonical project: `frank-rochas-projects/owt-backstage`
-  (`prj_elS88VGezKpy18wizFN1ffoy8cJ5`). Never create or automatically select
-  another Vercel project for this repository.
-- Before any Vercel command that may link, deploy, alias, or mutate remote
-  state, verify `.vercel/project.json` matches that name and ID.
-- If the link is missing or incorrect, run:
-  `vercel link --yes --project owt-backstage --scope frank-rochas-projects`
-  and verify the resulting project ID before continuing.
-- Never use automatic `--yes` linking through `vercel`, `vercel deploy`, or
-  `vercel curl`.
-- **Two branches deploy, and both are real:** `preview` → `dev-owt-backstage.vercel.app`,
-  `main` → **production**, `owt-backstage.vercel.app`. There is no staging branch
-  that deploys nowhere. **`preview` goes first** — see the push-order rule under
-  Conventions.
-- **Agents can look at dev once the one-time seed is done** (`docs/DEV_VERIFY.md` — the three
-  verification runs in its «Verified runs» section must be recorded before relying on it).
-  `scripts/dev-verify.ts` observes `dev-owt-backstage` read-only as the «Verificador (bot)»
-  member — screenshots, text, a11y tree, console. Use it for the human-eyes step of the push
-  order when the change is visual; it never writes, and it still is not a substitute for
-  Frank's own look at a release.
-- **Only `main`, `preview` and `verify/service-readiness` spend a Vercel build.**
-  `vercel.json`'s `ignoreCommand` runs `scripts/vercel-ignore-build.mjs` and skips
-  every other ref — the deployment is still CREATED, as `CANCELED` with a URL that
-  serves nothing, so a `claude/*` push proves nothing and you still verify on
-  `dev-owt-backstage` by merging into `preview`. Function Storage counts every
-  RETAINED deployment (the embedded Studio makes each ~75 MB), which is how the free
-  tier hit 100% on 2026-09-17 with 136 of them; a canceled build stores nothing but
-  still counts against the per-day deployment quota. To build a skipped ref ON
-  PURPOSE, redeploy from the dashboard with «Use project's Ignore Build Step»
-  unchecked — a plain redeploy and a deploy hook both carry the branch's ref and are
-  skipped again — and that checkbox is documented for a Project Settings ignore
-  step, not for a `vercel.json` one, so the hatch that CANNOT fail is changing what
-  the branch carries: merge into `preview`, or drop `ignoreCommand` and push. It
-  fails open: no git ref, `VERCEL_ENV=production`, or a broken policy module all
-  build. `deployBranchPolicy.test.ts` guards the policy AND the wiring, and runs the
-  script as a process so swapped exit codes cannot pass. See `docs/CI.md`.
-- The stable dev domain is owned **exclusively** by the `preview` branch. Never
-  point it at or deploy it directly from a feature/development branch. To update
-  dev: merge the intended development branch into `preview`, push `preview`,
-  then verify that Vercel deployed the `preview` commit to the stable dev domain.
-- **Verifying a deploy means checking the ALIAS, not the build.** A `● Ready`
-  build proves a commit compiled, not that any domain serves it. HTTP checks prove
-  less than nothing — the app answers `302` to SSO. Query the deployment and
-  confirm two fields: the target domain appears in `alias`, and `meta.githubCommitSha`
-  equals the commit you pushed.
-- **Never hand-roll a bash deploy watcher** (`until … vercel inspect … grep …`).
-  Two in one day spun silently forever — one on a PATH miss (`vercel` is not
-  installed; only `npx vercel` works), one on a grep heuristic that never matched —
-  while the deploy had been READY in ~85 s. Builds here take ~90 s, so: push, then
-  verify with a direct `get_deployment(domain)` query (Vercel MCP) or dispatch the
-  `deploy-verifier` agent, retrying that same authoritative check a few times ≥30 s
-  apart. If something must genuinely block on the build, use the vendor's waiter —
-  `npx vercel inspect <deployment-url> --wait --timeout 5m` — never a grep loop, and
-  never on the stable domain: an alias resolves to the OLD deployment until the new
-  one is ready, so `--wait` on it returns instantly with stale success (observed
-  2026-08-24). Then still do the alias+SHA check, which `--wait` does not replace.
-- **`preview` writes to the real Sanity dataset.** It is a rehearsal of the UI,
-  never a dry run of data. Every write lands in the same documents production
-  reads.
-- **Its email currently does NOT reach the team, and that is a variable, not a
-  property.** `EMAIL_REDIRECT_TO` is set on the Preview environment (since
-  2026-07-24), so notifications are generated and sent for real but every message
-  is rerouted to one address. Two consequences worth holding together: a publish
-  on dev will NOT tell the team, so it is not a way to notify them; and the
-  moment that variable is removed or the value is cleared, preview mails the
-  whole team with no other change. Check `vercel env ls preview` before assuming
-  either. Production has no such redirect.
+  (`prj_elS88VGezKpy18wizFN1ffoy8cJ5`). Never create or automatically select another. Before
+  any Vercel command that may link, deploy, alias or mutate, verify `.vercel/project.json`
+  matches; if not: `vercel link --yes --project owt-backstage --scope frank-rochas-projects`
+  and verify the resulting ID. Never automatic `--yes` linking through `vercel`,
+  `vercel deploy` or `vercel curl`.
+- **Two branches deploy, both real:** `preview` → `dev-owt-backstage.vercel.app` (owned
+  **exclusively** by `preview` — update dev only by merging into `preview`), `main` →
+  production. No staging branch.
+- **Only `main`, `preview` and `verify/service-readiness` spend a build** (`vercel.json`
+  `ignoreCommand` → `scripts/vercel-ignore-build.mjs`; fails open). Other refs are created
+  `CANCELED` with a URL that serves nothing, so a `claude/*` push proves nothing. Guard:
+  `deployBranchPolicy.test.ts`; storage quota and the deliberate-build hatch: `docs/CI.md`.
+- **Verifying a deploy means checking the ALIAS:** the target domain is in the deployment's
+  `alias` and `meta.githubCommitSha` is the pushed commit. A `● Ready` build proves only that
+  it compiled; HTTP checks prove nothing (SSO answers `302`). Builds take ~90 s: one
+  `get_deployment(domain)` query (Vercel MCP) or the `deploy-verifier` agent, retried a few
+  times ≥30 s apart. **Never a hand-rolled bash watcher.** If something must block:
+  `npx vercel inspect <deployment-url> --wait --timeout 5m` — never on the stable domain (it
+  answers with the OLD deployment) — then still the alias+SHA check.
+- **Agents may look at dev** with `scripts/dev-verify.ts` (read-only, as «Verificador (bot)»)
+  once `docs/DEV_VERIFY.md`'s three verified runs are recorded — use it for the human-eyes
+  step when the change is visual; it is not Frank's own look.
+- **`preview` writes to the real Sanity dataset** — a rehearsal of the UI, never a dry run of data.
+- **Preview email reaches one address only because `EMAIL_REDIRECT_TO` is set** on Preview
+  (since 2026-07-24): a publish on dev does not notify the team, and clearing that variable
+  makes preview mail the whole team. Check `vercel env ls preview`. Production has no redirect.
 
 ## Decision records
-When a choice rejects a real alternative and the reason won't be obvious from
-the code later — a pin that looks arbitrary, code that looks like a bug but
-isn't, something deliberately *not* done, an upgrade tried and reverted — write
-a short ADR in `docs/adr/` (see its README for the bar and the template) and
-link it from the code or doc it governs. **Not for routine work:** most changes
-need no ADR. Read the relevant ADR before "fixing" something that looks wrong —
-several exist precisely to stop a plausible-looking change.
+A choice that rejects a real alternative for a reason the code won't show (a pin that looks
+arbitrary, code that looks like a bug but isn't, something deliberately *not* done, an upgrade
+tried and reverted) gets a short ADR in `docs/adr/` (README: bar and template), linked from
+what it governs. Not for routine work. **Read the relevant ADR before "fixing" something that
+looks wrong** — several exist to stop a plausible-looking change.
 
 ## Don't-break-these invariants
-- **Timezone = America/Mexico_City.** Service dates are Sanity `date`
-  (`YYYY-MM-DD`). Render pinned to local noon: `new Date(iso.slice(0,10)+"T12:00:00")`
-  — never bare `new Date(iso)` (UTC day-flip). Server "today":
-  `new Date().toLocaleDateString("sv",{timeZone:"America/Mexico_City"})`.
-  For "Hoy/Ayer" / countdown *labels*, use a calendar-day diff at local noon,
-  not elapsed hours.
-- **`saturdarSongs`** (Saturday setlist type) is a deliberate typo — **do not
-  rename**, it would orphan data. Sunday setlist = `featuredSongs`.
-- **Five member-referencing seats** on role docs (`sunday_role`/`saturday_role`/
-  `special_role`): `Lead[]._ref`, `BGVs[]._ref`, `Chorus[]._ref`,
-  `instruments[].person._ref`, `foh_team[].person._ref`. Any "who serves" query
-  must cover all five — reuse `assignedMemberRefsQuery()` in `app/utils/notifyTargets.ts`.
-- **A special's `time` (`"HH:mm"`) is display and sort only — never identity.** Identity
-  stays `date + normalized service_name` (ADR-0011); two sets on one day need different
-  names. `isServiceTime`/`compareServiceTime` (`app/utils/serviceTime.ts`) are the ONLY
-  validator and comparator under `app/**`; the Studio schema mirrors the regex because
-  `sanity/` cannot import `app/`, and `serviceTimeSchemaSync.test.ts` fails if the two
-  drift. `time` is never combined with `date` into a `Date`.
-  **Same-day sets are created in `/admin` stored mode («+ Nuevo servicio»)**, which keys
-  specials by `_id`/`date|name`; the month CREATE flow drafts one special per date on
-  purpose (E19 in `plannerModel.ts`) — do not re-key it.
+- **Timezone = America/Mexico_City.** Service dates are Sanity `date` (`YYYY-MM-DD`), rendered
+  at local noon: `new Date(iso.slice(0,10)+"T12:00:00")` — never bare `new Date(iso)`. Server
+  today: `new Date().toLocaleDateString("sv",{timeZone:"America/Mexico_City"})`. «Hoy/Ayer» and
+  countdown labels: calendar-day diff at local noon, not elapsed hours.
+- **`saturdarSongs`** (Saturday setlist) is a deliberate typo — **do not rename**, it would
+  orphan data. Sunday setlist = `featuredSongs`.
+- **Five member-referencing seats** on role docs (`sunday_role`/`saturday_role`/`special_role`):
+  `Lead[]._ref`, `BGVs[]._ref`, `Chorus[]._ref`, `instruments[].person._ref`,
+  `foh_team[].person._ref`. Every "who serves" query covers all five — reuse
+  `assignedMemberRefsQuery()` (`app/utils/notifyTargets.ts`).
+- **A special's `time` (`"HH:mm"`) is display and sort only — never identity** (identity =
+  `date` + normalized `service_name`, ADR-0011; never combined into a `Date`).
+  `isServiceTime`/`compareServiceTime` (`app/utils/serviceTime.ts`) are the only validator and
+  comparator under `app/**`; the Studio mirror is guarded by `serviceTimeSchemaSync.test.ts`.
+  Same-day sets are created in `/admin` stored mode; the month CREATE flow drafts one special
+  per date on purpose (E19 in `plannerModel.ts`) — do not re-key it.
 - **A «Noche de alabanza» is `special_role.format = "worship_night"`, set once at creation** —
-  never a fourth role type (ADR-0036); the PATCH route never sets or unsets it. Its songs may
-  name one or two leaders (`songs[].leads`, keyed references) who must be in the set's Lead when
-  written: the setlist PUT refuses anything else under the role `_rev` it asserts, approval
-  carries leaders over by song reference, proposals and weekend setlists never carry them.
-  `serviceFormat.ts` and `songLeads.ts` are the ONLY definitions of these rules.
-- **`countsForFairness`: one read rule** (`app/utils/countsForFairness.ts` — GROQ fragment + twin +
-  default); PATCH absent = unchanged (never the `time` precedent); a PATCH that carries it and
-  changes nothing a notice could report queues no notice; `ROLE_PROJECTION` does not carry it;
-  inert until v3 serves Auto. The planner's Switch is disabled for a service of a past CDMX month —
-  a client-side rule only (C1-D7); neither roles route refuses on the month.
-- Member-facing reads must filter `published != false` (draft/publish gating) for the
-  **worship** types, whose documents predate the field — an absent `published` there
-  must mean "visible". **Kids reads use the stricter `published == true`** instead
-  (`kidsSchedule` is minted with the field by its write route, so a field-less doc is a
-  bug, not a legacy row). Copy the rule that matches the type you are reading.
-  **For `kidsSchedule` the rule is wider than "member-facing":** every read under
-  `app/**` must carry `published == true`, manager-only ones included, because a
-  fairness clock asking "did this pair serve?" needs the same answer the members got
-  (ADR-0022). Two reads are exempt and both are editors of drafts —
-  `api/kids/schedules/route.ts` and the planner page's `"schedules"` projection.
-  `draftGatingCoverage.test.ts` enforces this, so a new manager-facing kids read that
-  omits the filter fails the suite rather than shipping.
+  never a fourth role type, never set or unset by PATCH (ADR-0036). Song leaders
+  (`songs[].leads`, one or two) must be in the set's Lead (the setlist PUT refuses others under
+  the role `_rev` it asserts; approval carries them over by song reference); proposals and
+  weekend setlists never carry them. `serviceFormat.ts` and `songLeads.ts` are the only definitions.
+- **`countsForFairness`: one read rule** (`app/utils/countsForFairness.ts`); PATCH absent =
+  unchanged; a PATCH that changes nothing reportable queues no notice; `ROLE_PROJECTION` does
+  not carry it; the planner Switch is disabled for a past CDMX month (client-only, C1-D7).
+- **Draft gating:** member-facing **worship** reads filter `published != false` (absent =
+  visible). **Every `kidsSchedule` read under `app/**` uses `published == true`**, manager
+  reads included (ADR-0022), except its two draft editors (`api/kids/schedules/route.ts`, the
+  planner page's `"schedules"` projection). Guard: `draftGatingCoverage.test.ts`.
 - **Sanity array-of-object writes need a `_key` per item.**
-- **`solverConfig` saves carry `SOLVER_CONFIG_VERSION`, and nothing writes a rule value around
-  its parser.** The rules POST replaces the whole document and refuses any body whose
-  `configVersion` is not exactly `SOLVER_CONFIG_VERSION`
-  (`app/utils/solverConfigWriteRequest.ts`), because an older client reads away a field it does
-  not know and its next save erases it for everyone. A field **or an allowed value** an older
-  client would drop or rewrite bumps the version in the same change; `solverConfigVersion.test.ts`
-  is the tripwire. Any other writer that sets or restores a rule value goes through
+- **`solverConfig`:** saves carry `SOLVER_CONFIG_VERSION`; the rules POST refuses any other
+  (`app/utils/solverConfigWriteRequest.ts`), and a field or allowed value an older client would
+  drop bumps it (`solverConfigVersion.test.ts`). No writer sets a rule value around
   `solverConfigFromDocument` → `parseSolverConfigWrite` → `solverConfigFields` under
-  `ifRevisionId` — never again an `insert`/`append` of caps or restrictions as the two private
-  one-off scripts of 2026-09-29/10-01 did (the member DELETE's pool-array patch and the rule-name
-  repair script's single-`person` patch are the only targeted writers). A rule person has at most
-  one `==` count per role key: refused at save by `exactCapOverlaps` (by `person` text) and at v3
-  build by C2 (by member id). ADR-0049.
-- **The fairness ledger has one definition, and its records one writer** (solver v3 C2,
-  ADR-0050). `app/utils/fairnessLedger.ts` is the only TypeScript definition of F2–F7 and X1;
-  `fixtures/fairness/golden.json` is asserted by both suites (vitest and C5's Python,
-  `gcf_v3/tests/test_golden.py`) and its expected values are hand-computed — never regenerated from either implementation's output.
-  `fairnessMonth` records are written only through `fairnessMonthCommit` (the PUT, actor `route`)
-  or the reconstruction actor (C4's consented script), both through `executeFairnessMonthWrites` —
-  the ONLY mutation path of the type (`createOrReplace` never; the reconstruction actor's guarded
-  delete the only delete). Every reader of `fairnessMonth` carries `SANITY_API_READ_TOKEN` or fails
-  closed: the ids are dotted, so private, and an untokened read answers «no record» with no error.
-- **Cache:** admin/API routes that mutate content must call the matching
-  `revalidate*` util in `app/utils/revalidate.ts` (or `revalidatePath`), or the
-  ISR page stays stale.
-- **Auto sends the solver NO fairness history** (`SOLVER_SENDS_HISTORY = false` since
-  2026-09-30, ADR-0046): `history: []`, no read at solve time, no refusal over a failed read, no
-  «Historial» line — the solver balances within the month and the pool checkboxes decide across
-  months. A member whose count for ONE role is fixed by an exact rule (`Sun.Lead == 2`) leaves
-  that role's band in the solver; a `>=` floor stays in. Everything below applies only when the
-  switch is flipped back to `true` (the rollback, still tested):
-  **the solver's history is derived for the target month at solve time; never read from
-  `localStorage`, never cached across a solve** (`SOLVER_HISTORY_SOURCE = "derived"` since the
-  2026-09-28 cutover, ADR-0042). `handleAutoDerived` re-reads `fetchDerivedHistory` for its OWN
-  month on every Auto — never the display copy `useDerivedSolverHistory` holds — and a failed
-  read refuses the solve (the specials still fill). No panel is ever handed `[]` as a stand-in
-  for a history that has not answered: `priorMonthLeadVisibility` reads it as «sin Lead» for
-  every leader. `owt_solver_history_v2` is only WRITTEN on confirm (`appendLocalHistoryEntry`,
-  built from `localStorage`'s own contents, never from React state) as the rollback target
-  until the dual-write is removed (D3), and READ only if the switch is flipped back to
-  `"local"`. The Historial chips are read-only: no manual month exclusion.
-- **Client mutation handlers** must wrap `fetch` in try/catch/finally, check
-  `res.ok`, reset their loading flag, and never close-as-success on failure.
-- **`/api/cron/*` stays excluded from the `proxy.ts` middleware matcher** — those
-  routes authenticate with `CRON_SECRET` themselves. The matcher is duplicated in
-  `app/utils/routeMatcher.ts` and the two must stay byte-identical (sync guard in
-  `routeMatcher.test.ts`).
-- **Notification emails: `before` is captured PRE-COMMIT** and threaded into
-  `after()`. Reading live state inside `after()` gives post-write state and the
-  system silently sends nothing. See `docs/NOTIFICATIONS.md`.
-- **A Server Component may never CALL a value imported from a `"use client"`
-  module.** It receives a client reference, not the function, and calling it
-  throws at render — that is what took `/` down for 56 minutes on 2026-09-02
-  (ADR-0028). Rendering a client component as JSX, or forwarding a client value
-  as a prop to one, stays legal. None of the three gates can see this by
-  themselves: `tsc` types the export identically on both sides, unit tests import
-  the function and never the boundary, and `next build` does not render a dynamic
-  route. `clientBoundary.test.ts` is the guard, and it fails on a NEW violation
-  anywhere under `app/**`.
-- **The impersonation banner and the navbar are both `sticky top-0` in
-  different containers.** `ImpersonationBanner` publishes an `impersonating`
-  class plus its MEASURED height as `--impersonation-h` on `<html>`; `brand.css`
-  offsets `.brand-navbar` by that variable. Nothing but a comment connects the
-  two halves, so they must move together — `impersonationOffsetSync.test.ts` is
-  the guard. The height is measured, not a constant, because the banner wraps
-  to two lines on a phone. Everything sticky or scroll-margined UNDER the navbar
-  also adds `var(--impersonation-offset)` to its calc — 0 unless impersonating,
-  never `--impersonation-h` itself, which is never 0 — and the same test sweeps
-  `app/**` for an under-navbar calc that forgets it.
-- **The phone tab bar publishes its MEASURED height as `--bottom-nav-h` (px) on `<html>`**
-  plus a `has-bottom-nav` class; `brand.css` pads the route main under that class. Fixed-bottom
-  elements must clear either the inset (when the bar is absent) or the bar's own height
-  (which already includes the inset) when it is present. Elements that must also clear the
-  inset when the bar is absent use `max(env(safe-area-inset-bottom), var(--bottom-nav-h, 0px))`
-  (toasts); elements that sit flush on the bar use `var(--bottom-nav-h, 0px)` alone (the audio
-  transport, whose own inset padding is zeroed under `html.has-bottom-nav`; the song FAB).
-  `bottomNavOffsetSync.test.ts` is the guard — a new fixed-bottom element joins its list.
-- **NextAuth's `update()` never rejects and returns `null` on every failure**
-  (`fetchData` swallows network, non-2xx and parse errors; `update` returns
-  `undefined` while loading). A handler that only inspects the returned
-  session's fields reads every real failure as success — check for nullish
-  FIRST. Both impersonation handlers do; see `ImpersonationBanner`.
-- **A `CueDialog` effect that MOVES FOCUS depends on the presence edge only** —
-  entry focus is `[open, top]` (and skips when focus is already inside the shell);
-  layer registration is `[id, mounted, registerLayer]`, because its cleanup is the
-  unregister and the provider restores focus behind it. Never `onDismiss`, never a
-  ref prop: most consumers pass an inline arrow and none is guaranteed stable, so
-  those re-run the effect on EVERY render and throw the caret onto the close button — on iOS the keyboard
-  closes with it, which is how members lost the ability to edit their profile,
-  `/biblioteca`'s filter search and the song editor, for weeks, with all three
-  gates green (ADR-0034). The Tab/Escape listener may keep unstable deps; binding
-  a listener moves no focus. Four typing tests are the guard — `CueDialog`,
-  `ProfilePanel`, `LibraryFilters`, `EditSongButton` — and each one asserts on
-  `document.activeElement`, not just on the typed value.
-- **`app/(client)/template.tsx` renders a fragment, never a wrapper.** A transformed
-  ancestor is a containing block for every `position: fixed` descendant (FAB, audio
-  transport, toasts). `reveal.test.ts` is the guard.
-- **`/admin` has no shell and no page-level horizontal scroll** — the planner grid and the
-  availability matrix are the only horizontal scrollers, each in its own `overflow-x-auto`
-  box (ADR-0035). The Servicios board is a vertical grid the PAGE scrolls (ADR-0044).
-  **A visually hidden native control (`sr-only`) keeps a positioned ancestor inside its own
-  control**: an absolute box whose containing block lies outside an `overflow-x-auto` box is
-  not clipped by it, and Select's hidden `<select>` + Checkbox's input panned every planner
-  page for weeks that way (fixed 2026-10-06; `hiddenControlContainment.test.ts`). A
-  `--full-page` capture's width is not evidence either way — measure with
-  `scripts/dev-verify.ts --layout` (`scrollingElement.scrollWidth` vs `clientWidth`).
-- **A theme-gallery fixture hosts PRESENTATIONAL halves only** — never a component that
-  reads a session, a cookie, the network or an env var. The gallery route is public and
-  prerendered (ADR-0017), so `useSession` there breaks both; that is why the `nav` fixture
-  hosts `BottomNavBar` and not `BottomNav`. `themeGallery.test.ts` sweeps every fixture for
-  `useSession`/`next-auth`/`fetch`/Sanity/env and fails a new one that reaches out. The
-  song fixture's `TutorialPoster` is the ONE documented exception — the `i.ytimg.com` URL
-  is hard-coded inside the production component — and `e2e/theme-gallery/gallery.spec.ts`
-  stubs that route so the baseline stays deterministic. Splitting a component is the
-  answer; loosening the guard is not.
-- **Form controls are 16 px on a phone.** WebKit zooms into any focused `<input>`/`<textarea>`/`<select>` under 16 px and never zooms back, so every member-reachable control is `text-[16px] sm:text-<size>` (`ui/Select`/`ui/DateField` carry it in their `SIZE` maps). Never `maximum-scale=1` on the viewport. `inputFontSize.test.ts` is the guard (`admin/`, `kids/` excluded by path).
-- **OAuth/MCP routes serve only their deployment's canonical origin, fail closed without
-  `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and it depends
-  on NextAuth's DEFAULT `redirect` callback preserving its query** — never add a custom
-  `redirect` callback without keeping that. `authRedirectCallback.test.ts` is the guard. See
-  [`docs/MCP.md`](docs/MCP.md).
-- **The four admin write routes (setlists PUT, swap, publish-ready, unpublish) delegate
-  everything after authorization to `app/utils/*Commit.ts`; `serviceCommitCallers.test.ts` pins
-  their callers and `publishVerdict`'s; MCP writes go only through them; `/api/mcp` buffers SSE so
-  a tool finishes inside the handler.**
+  `ifRevisionId` (the only targeted writers: the member DELETE's pool patch, the rule-name
+  repair script). One `==` count per person per role key (`exactCapOverlaps`; C2). ADR-0049.
+- **The fairness ledger has one definition, and its records one writer** (ADR-0050).
+  `app/utils/fairnessLedger.ts` is the only TS definition of F2–F7 and X1;
+  `fixtures/fairness/golden.json` is asserted by vitest and `gcf_v3/tests/test_golden.py` and
+  is hand-computed — never regenerated from output. `fairnessMonth` is mutated only through
+  `executeFairnessMonthWrites` (`fairnessMonthCommit`'s PUT or C4's consented reconstruction
+  script; never `createOrReplace`; the reconstruction actor's guarded delete is the only delete). Every reader carries `SANITY_API_READ_TOKEN` or fails
+  closed — the dotted ids are private, and an untokened read answers «no record» with no error.
+- **Cache:** admin/API routes that mutate content call the matching `revalidate*`
+  (`app/utils/revalidate.ts`) or `revalidatePath`, or the ISR page stays stale.
+- **Auto sends the solver NO fairness history** (`SOLVER_SENDS_HISTORY = false`, ADR-0046):
+  `history: []`, no read at solve time. An exact rule (`Sun.Lead == 2`) takes that member out
+  of that role's band; a `>=` floor stays in. Only if the switch flips back: history is derived
+  for the target month on every Auto (never `localStorage`, never cached — ADR-0042), a failed
+  read refuses the solve, no panel is handed `[]` as a stand-in, and `owt_solver_history_v2` is
+  written only on confirm. The Historial chips are read-only.
+- **Client mutation handlers** wrap `fetch` in try/catch/finally, check `res.ok`, reset their
+  loading flag, and never close-as-success on failure.
+- **`/api/cron/*` stays excluded from the `proxy.ts` matcher** (those routes check
+  `CRON_SECRET`); the matcher is duplicated byte-identical in `app/utils/routeMatcher.ts`
+  (`routeMatcher.test.ts`).
+- **Notification emails: `before` is captured PRE-COMMIT** and threaded into `after()` —
+  reading live state there sends nothing (`docs/NOTIFICATIONS.md`).
+- **A Server Component may never CALL a value imported from a `"use client"` module**
+  (rendering it as JSX or forwarding it as a prop is fine). It took `/` down for 56 minutes
+  (ADR-0028); no gate sees it except `clientBoundary.test.ts`.
+- **Impersonation banner ↔ navbar:** `ImpersonationBanner` publishes `impersonating` and its
+  MEASURED `--impersonation-h` on `<html>`; `brand.css` offsets `.brand-navbar`; everything
+  sticky or scroll-margined under the navbar adds `var(--impersonation-offset)` (never
+  `--impersonation-h` itself, which is never 0). Guard:
+  `impersonationOffsetSync.test.ts`.
+- **The phone tab bar publishes its MEASURED `--bottom-nav-h`** plus `has-bottom-nav` on
+  `<html>`. Fixed-bottom elements clear it: toasts use
+  `max(env(safe-area-inset-bottom), var(--bottom-nav-h, 0px))`; elements flush on the bar (the
+  audio transport, the song FAB) use `var(--bottom-nav-h, 0px)`. A new one joins
+  `bottomNavOffsetSync.test.ts`.
+- **NextAuth's `update()` never rejects and returns `null` on every failure** (`undefined`
+  while loading) — check for nullish FIRST (see `ImpersonationBanner`).
+- **A `CueDialog` effect that MOVES FOCUS depends on the presence edge only** — entry focus
+  `[open, top]`, layer registration `[id, mounted, registerLayer]`; never `onDismiss` or a ref
+  prop, or the caret jumps every render and iOS closes the keyboard (ADR-0034). Guards: the
+  typing tests of `CueDialog`, `ProfilePanel`, `LibraryFilters`, `EditSongButton`, asserting
+  `document.activeElement`.
+- **`app/(client)/template.tsx` renders a fragment, never a wrapper** — a transformed ancestor
+  traps every `position: fixed` descendant. Guard: `reveal.test.ts`.
+- **`/admin` has no shell and no page-level horizontal scroll** — only the planner grid and
+  the availability matrix scroll sideways, each in its own `overflow-x-auto` (ADR-0035,
+  ADR-0044). A visually hidden native control keeps a positioned ancestor inside its control
+  (`hiddenControlContainment.test.ts`). Measure with `scripts/dev-verify.ts --layout`.
+- **A theme-gallery fixture hosts PRESENTATIONAL halves only** — nothing that reads a session,
+  cookie, network or env (ADR-0017; `themeGallery.test.ts`). `TutorialPoster` is the one
+  documented exception (stubbed in `e2e/theme-gallery/gallery.spec.ts`). Split the component;
+  never loosen the guard.
+- **Form controls are 16 px on a phone** (`text-[16px] sm:text-<size>`); never
+  `maximum-scale=1`. Guard: `inputFontSize.test.ts`.
+- **OAuth/MCP routes** serve only their deployment's canonical origin, fail closed without
+  `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and depends
+  on NextAuth's DEFAULT `redirect` callback keeping its query — never add a custom `redirect`
+  callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
+- **The four admin write routes** (setlists PUT, swap, publish-ready, unpublish) delegate
+  everything after authorization to `app/utils/*Commit.ts`; MCP writes go only through them
+  (`serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
 
 ## Reusable utils (don't reinvent)
-`normalizeText` (accent-insensitive search), `assignedMemberRefsQuery`,
-`revalidateSongViews`/`revalidateServiceViews`, `buildRuns`/`normalizeMedleyTags`
-(medley grouping), `extractYouTubeId`, `computeParticipation`,
-`summarizeUnfilledSeats`, `paintsDayCard` (whether a `DayCard` will paint
-anything rather than render `null` — the home page asks it instead of copying
-the guard), `publishVerdict` (`app/utils/publishVerdict.ts` — the ONLY per-service publish
-predicate), `isMemberActive` (30s-TTL auth gate),
-`requireActiveSession`/`requireActiveManager`, `wantsNotification` (the ONLY
-per-type email-preference resolver — nothing reads `notifPrefs` directly),
-`sweepOutbox`, `shell`/`td`/`C` (`emailShell.ts` — the shared email palette),
-`serviceLabel`/`serviceIdentity` (`app/utils/emailServiceLabel.ts` — how every notification
-email names a special (outbox, publish, «Nueva propuesta»): its `service_name` and `time`, so
-same-day sets read apart),
-`themeColour` (`app/utils/themeColour.ts`), `useTransientValue` (`[value, show, reset,
-hold]` — an inline, in-place flash next to the control that produced it, e.g.
-"Guardado ✓" beside a save button. A bare `setTimeout(() => setToast(null))` leaks its
-timer, so a second flash inherits the first one's clock and an error can vanish in
-100ms. Use `hold` for a message that must PERSIST until something replaces it —
-`MonthGenerator`'s swap toast, which reports writes that landed in Sanity but could
-not be verified. Never hand-roll the timer. For a FIXED, stacked notification use
-`useToast` instead — the two are not interchangeable), `useToast`
-(`app/components/ui/Toast.tsx` — the ONLY fixed toast stack; `toast({ message, tone?,
-duration?, hold?, action? })`, portalled, `z-[95]` above `CueDialog`), `Menu`
-(`app/components/ui/Menu.tsx` — every anchored dropdown; real `role="menu"` semantics,
-roving focus, merges the trigger's own ref. Since R5 the panel is PORTALLED to
-`document.body` and positioned `fixed` from the trigger's rect: an `absolute` panel was
-clipped by any scrolling or `overflow-hidden` ancestor, and a `fixed` one inside the
-transformed reveal host would be trapped anyway. It flips and sizes itself to the room it
-has, clamps to the viewport, is opaque (`bg-surface-raised`) because it can now sit over a
-dialog, and CLOSES on any ancestor scroll — a fixed panel cannot honestly travel with its
-trigger), `Collapse` (`app/components/ui/Collapse.tsx`
-— every disclosure; the one place height animates, on user-triggered opens only),
-`SegmentedControl` (`app/components/ui/SegmentedControl.tsx` — every one-of-N choice;
-never `aria-pressed` toggles), `SlidingIndicator` (tab bars), `Switch`, `Checkbox`,
-`Select` (desktop: a `Menu` popover; touch: the native picker), `DateField`
-(native controls under house chrome — never a bare
-`<select>`/`<input type="checkbox|date|month">` in `app/**`; **`disabled` reaches the
-`kind="month"` stepper arrows too** — a composite field is ONE control, and arrows that
-stayed live mid-save started a second load underneath the first), `NumberRoll`,
-`AnimatedList` (`app/components/ui/AnimatedList.tsx` — every list that reflows on filter),
-`SwipeStrip` (`app/components/ui/SwipeStrip.tsx` — the one drag-with-snap host, `onSwipe(dir)`
-past a distance/velocity threshold; the schedule's week strip is its one consumer),
-`findDuplicates`/`serviceConflicts` (`app/utils/agenda.ts` — the ONE same-section-repeat check;
-`DayCard`'s ⚠ marks and the schedule agenda's conflict count both read it so they can never
-disagree), `daysUntil`/`formatCountdown` (`app/utils/daysUntil.ts` — the ONLY countdown; CDMX-pinned),
-`haptic()` (`app/utils/haptics.ts` — native only, fire-and-forget),
-`CueDialog` (`app/components/ui/CueDialog.tsx` — every dialog, never a hand-rolled
-`fixed inset-0` shell; render `<CueDialog open={x}>`, never a literal `open` behind a
-conditional — directly or inside a wrapper component (a local `Modal`, a
-`SetlistPopover`, a `SeatPicker`) whose only JSX output is `<CueDialog open …>` — a
-dialog element with a literal `open` gets no enter/exit either way;
-`cueDialogMount.test.ts` is the guard), `Button` (`app/components/ui/Button.tsx` — the ONLY button; six variants, never
-an inline class string. `tone` is the one colour prop: the `pill`'s pressed colour
-(`accent`/`availability`) and the `icon`'s destructive hover (`danger`) — never a
-`hover:` pair in `className`, which races the variant's own), `Presence` (every animated conditional), `Skeleton`/
-`SkeletonGroup` (every loading placeholder), `revealProps` (route reveal),
-`useAvailability` (`app/components/availability/useAvailability.ts` — the ONLY
-client-side availability writer; `MyAvailabilityPanel` (on `/me/disponibilidad`)
-calls it once and hands the state down to `AvailabilityGrid`, which only renders —
-two hook calls would be two revisions racing into the same document), `MEMBER_TYPE_LABEL`
-(`app/utils/memberTypes.ts` — the ONLY Tipo display map, mirrors the
-`worshipTeam` schema; `/admin`'s `TYPE_ABBR` is that table's own abbreviations,
-not a second source), `useLongPress` (`app/components/ui/useLongPress.ts` — the
-ONLY long-press: 450ms/8px, cancelled by a lift, a leave, or any scroll; a
-mouse `contextmenu` opens the same sheet on desktop), `QuickActions`
-(`app/components/ui/QuickActions.tsx` — the ONLY quick-action sheet a long
-press opens, a `CueDialog mode="sheet"` of ghost buttons plus «Cancelar»),
-`blackout()` (`app/components/ui/Blackout.tsx` — the sign-out exit; a plain
-CSS transition outside `motion` on purpose, since it outlives the component
-that triggered it; `cancel()` covers a `signOut` that throws), `PullToRefresh`
-(`app/components/ui/PullToRefresh.tsx` — mounted once in the client layout,
-never per route; opt a gesture-owning surface out with `data-pull-ignore`),
-`CueStrip` (`app/components/ui/CueStrip.tsx` — the navbar's next-service cue,
-fetched client-side so `Navbar` stays sync),
-`TransposeProvider`/`useTransposeOptional` (`app/components/song/TransposeProvider.tsx`
-— the ONLY transposition seat on the song page; `ChordChart` falls back to its own
-state only when rendered WITHOUT a provider, never as a second live copy),
-`transpose.ts` (`app/utils/transpose.ts` — `rootIndex`/`noteAt`/`semitonesBetween`/
-`transposeKey`/`transposeChord`/`capoSuggestion`/`isChordPro`; neutral, so a Server
-Component may call them), `practice.ts` (`app/utils/practice.ts` —
-`tempoPeriodMs`/`beatsPerBar`/`autoscrollPxPerSecond`/`countLyricLines`; neutral too),
-`lyricMarkers.tsx` (`app/utils/` — the lyric block's typography: `LYRIC_EYEBROW`/
-`LYRIC_EYEBROW_BLOCK` restyle the section headings a sheet ALREADY has (never ADD a label —
-decision N) and `dimRepeatMarkers` dims `//`. Neutral, so the song page may call it. The
-eyebrow element is a bare `div`, never a `p` (a `p` loses the `!important` tie to
-`prose-p:!mt-0` on emission order), and the block carries NO `first:` — only the page's
-prose wrapper knows which eyebrow is first, via
-`[&>div:first-child>div:first-child]:!mt-0`), `TutorialPoster`
-(`app/components/song/TutorialPoster.tsx` — the ONLY tutorial embed: a YouTube poster under
-a «Reproducir» `Button`, player on press; a url with no extractable id keeps the raw
-iframe, a url-less row renders nothing. Never boot an embed on page load),
-`RehearsalPlayer`/`Waveform` (`app/components/song/` — the ONLY rehearsal-mix player; one `<audio>`
-through `PlayerContext`, URLs are always `/api/audio/[song]/[key]`, never `cdn.sanity.io`; the
-canvas paints with `themeColour`; the KEY is the hero dial's — `mixesForKey(mixes, soundingKey)`,
-never a picker of its own), `rehearsalMixes.ts` (`app/utils/` — neutral `groupMixes`/
-`preselectMix`/`waveformBars`/`mixTones`/`mixesForKey`; `SEAT_TO_FAMILY` pins app seats to
-abletonnl families),
-`fillSpecialGroup`/`orderGroup` (`app/components/admin/groupFill.ts` — the ONLY stored-mode
-filler: a ticked group of special services, Lead/BGV via `fillColumn` and instruments via
-`fillInstruments({ fillColumns })`, with `columns = group` and `savedWindow = []` so only
-load inside the group counts; empty seats only, nothing vacated, nothing written until
-«Guardar»),
-`collectPins`/`pinRefusal`/`pinHandshakeHolds` (`app/components/admin/pinModel.ts` — the ONLY
-board → solver-pins translation; exact `member_name`, one seat per person per service), `planClear`
-(`app/components/admin/clearCells.ts` — «Borrar»; FOH is never cleared in bulk),
-`upcomingMonthPills`/`addMonths` (`app/components/admin/monthPills.ts` — the Servicios panel's
-upcoming month pills: every month with services from the current one on, PLUS the current
-month and the next two even when empty, so a month opens in the stored editor without
-generating it),
-`isWorshipNight`/`WORSHIP_NIGHT_FORMAT` (`app/utils/serviceFormat.ts` — the ONE format
-definition, neutral), `songLeads.ts` (`app/utils/` — `leadSeatIds`/`songItemLeadIds`/
-`validateSongLeads`/`carryOverSongLeads`/`unassignedLeads`/`leadRosterOf`/`formatLeadNames`/
-`sortedLeadIds`/`SONG_LEADS_MAX`; neutral, shared by the setlist and approval writers, the
-editor, the cards and the outbox snapshot. `sortedLeadIds` is the ONE normalizer for
-snapshot leader ids, used by both `songRowsFrom` (queue side) and `outboxSweep`'s
-`normalizeSnapshotRows` (flush side) — the two must agree byte for byte, or every save on
-a worship night emails, or clearing leaders never does),
-`BottomNavBar` (`app/components/BottomNavBar.tsx` — the phone tab bar's PRESENTATIONAL
-half, props only; `BottomNav` keeps the session, the pathname and the measurement. Anything
-that needs the bar without a session — a gallery fixture — hosts this one),
-`SongHeroPills` (`app/components/song/` — the ONE 12-key picker on the song page;
-never add a second strip, `ChordChart` keeps only its ± pair), `TempoPill`
-(`app/components/song/` — the ONE tempo control, on the song hero (`size="md"`) and in
-`SongSheet`'s meta row (`size="sm"`); two clocks: the RING is a CSS animation clocked by
-`--tempo-period`, never a `setInterval`, and the CLICK is `createMetronome`
-(`app/components/song/metronome.ts` — the ONLY metronome, a Web Audio lookahead
-scheduler built on the first tap and stopped on the second, on a hidden tab, on an
-`enabled={false}` surface and on unmount; on iOS it obeys the silent switch). ONE
-metronome sounds app-wide: a `start()` takes the floor from whichever instance held it
-and that pill un-presses through its `onStop`), `LyricsAutoscroll` (`app/components/song/` — rAF +
-`window.scrollTo`, NEVER a transform; pauses on touch, stops on the wheel),
-`Equalizer`/`PlayPauseGlyph` (`app/components/ui/` — the one playing indicator and the
-one play/pause morph, shared by the audio cards, the transport and `PracticeCluster`),
-`NAVBAR_H_CLASS` (`app/utils/navbarHeight.ts` — the navbar height's one spelling, for
-`Navbar` and `NavbarSkeleton` ONLY; other offsets still hard-code theirs),
-`SectionNav practice` → `PracticeCluster` (`app/components/song/` — the song page's
-sticky title·key·BPM·play cluster; it lives in the page's own bar, never in `Navbar`),
-`AdminRail` (`app/components/admin/AdminRail.tsx` — the Control Room's ONLY section nav:
-one component, two layouts (a sticky vertical rail at `lg+`, the underline strip below),
-both in the DOM with CSS picking one and a DIFFERENT `SlidingIndicator` id each, or the
-marker would fly across the page at the breakpoint; `ADMIN_TAB_ICON` is the one
-glyph-per-tab map and every item carries an explicit `aria-label`, because the labels are
-`display: none` — and so out of the a11y tree — while the planner is open; the `lg+` rail
-is also user-collapsible to those icons, persisted per browser in `owt_admin_rail_collapsed`,
-and the planner's forced collapse wins and hides the toggle — ADR-0044),
-`useIntegrityQueue` (`app/components/admin/useIntegrityQueue.ts` — the ONLY integrity
-fetch; `AdminPanel` calls it once and the panel AND the rail dot read that one state.
-Gated on the role actually having a Servicios tab (`enabled`), re-read on ENTERING
-Servicios, and a failed, in-flight or disabled domain reads `unknown`, never `clean`),
-`PanelSkeleton` (`app/components/admin/PanelSkeleton.tsx` — the `loading` component for
-every admin panel behind `next/dynamic`, and a Suspense fallback ONLY: App Router
-`next/dynamic` never hands it an `error`/`retry` pair), `PanelBoundary`
-(`app/components/admin/PanelBoundary.tsx` — the error boundary those panels render inside,
-and the one place a chunk-load failure surfaces on `/admin`; without it a rejected
-`import()` throws through `React.lazy` to the route's error page. «Reintentar» reloads the
-page, because `React.lazy` caches the rejection), `MembersPanel`
-(`app/components/admin/MembersPanel.tsx` — the Miembros tab; row actions are ONE `Menu`
-per row behind a ⋯ `Button variant="icon"`, never hover-only buttons, and taking access
-away asks first through a confirm `CueDialog` that stays open on a refused PATCH
-(decision O). Giving access back needs no confirm), `loadSolverHistory`
-(`app/utils/solverHistoryRead.ts` — the ONE server-callable fairness-history builder;
-P4's `solve_month` calls it directly, never the admin route — only if `SOLVER_SENDS_HISTORY`
-is flipped back, ADR-0046), `deriveSolverHistory`/
-`historyWindow` (`app/utils/solverHistory.ts` — the ONE derivation; neutral),
-`fetchDerivedHistory` (`app/components/admin/derivedHistoryClient.ts` — the planner's ONE
-read of that history: checked, never throws, `{ ok: false }` on any failure, used by the display
-hook, and by every Auto only while `SOLVER_SENDS_HISTORY` is true), `SOLVER_HISTORY_SOURCE`
-(`app/components/admin/solverHistorySource.ts` — the deployment-wide switch, `"derived"`; `"local"`
-is the rollback until D3), `SOLVER_SENDS_HISTORY` (same file — `false`: Auto sends `history: []`,
-ADR-0046; `true` is the rollback), `countsForFairness`/`countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ` (`app/utils/countsForFairness.ts` — the ONE «Cuenta para equidad» read rule; neutral; nothing else spells the fragment or the default), `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts` — the engine constant only, `"v2"`; the effective engine is `resolveSolverEngine`'s (`app/utils/solverDeployment.ts`), parent A1), `FairnessSwitch`/`FairnessEngineNote` (`app/components/admin/FairnessSwitch.tsx` — the ONE «Cuenta para equidad» control and its v2 note on all four surfaces; the past-month rule and effective values live in `fairnessToggleModel.ts`), `trailingSaturday`/`rolesOfPattern` (`app/components/admin/plannerModel.ts` — the ONE definition of the Saturday after the last Sunday, solver week `weeks + 1`, ADR-0048; and the ONE pattern → solver-roles map, mirroring the solver's `expand_pattern`, guarded by `patternRolesSync.test.ts`), `rolesOfPatternV3` (`plannerModel.ts` — the ONE v3 six-key pattern map; equals `rolesOfPattern` on the five v2 keys and adds `Sat.Choir`; synced by `patternRolesV3Sync.test.ts`), `capValueForMonth` (`app/components/admin/serviceRuleContext.ts` — the ONE per-month count resolution, over `resolvedCapValue`, a typed result never rounded or clamped), `memberFitsRoleKey` (`plannerModel.ts` — the ONE does-this-Tipo-fit-this-v3-role-key predicate, shared by the eligibility resolver and the record writer), `resolveMonthEligibility` (`app/utils/fairnessEligibility.ts` — the ONE v3 eligibility resolver; client-callable; an `ok` body always passes the record validator), `formatFairnessTenths`/`saldoWords` (`app/utils/fairnessFormat.ts` — the ONLY fairness-figure formatter: one decimal from a tenths figure computed from the exact value, never from hundredths), `resolveSolverEngine` (`app/utils/solverDeployment.ts` — the ONE reader of `OWT_SOLVER_ENGINE`; it overrides `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts`, C1's constant) only on the `preview` branch deployment and locally; never imported by a client module), `parseStoredFairnessMonth` (`app/utils/fairnessMonthWriteRequest.ts` — the ONE record-schema check for `fairnessMonth`; the reader and C4's script both call it), `keepVoiceSeats` (`app/utils/fairnessLedger.ts` — the ONE seat rule: duplicate weekend targets dropped, uncounted services out, one kept seat per person per service), `executeFairnessMonthWrites` (`fairnessMonthWriteRequest.ts` — the only mutation path for `fairnessMonth`, clients injected; every reader of the type carries the read token or fails closed).
-Motion tokens are `--motion-*` /
-`--ease-*`; `motion` is
-importable only under `app/components/ui/**` — see `docs/MOTION.md` and
-ADR-0031.
+Before writing a helper, hook or UI primitive, check this list, the long form's section (what
+each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "the ONLY" one.
+- **Data/logic:** `normalizeText`, `assignedMemberRefsQuery`, `revalidateSongViews`/
+  `revalidateServiceViews`, `buildRuns`/`normalizeMedleyTags`, `extractYouTubeId`,
+  `computeParticipation`, `summarizeUnfilledSeats`, `paintsDayCard`, `publishVerdict`,
+  `isMemberActive`, `requireActiveSession`/`requireActiveManager`, `wantsNotification` (nothing
+  reads `notifPrefs` directly), `sweepOutbox`, `shell`/`td`/`C` (email palette),
+  `serviceLabel`/`serviceIdentity`, `findDuplicates`/`serviceConflicts`,
+  `daysUntil`/`formatCountdown`, `MEMBER_TYPE_LABEL`, `isWorshipNight`, `songLeads.ts`
+  (`sortedLeadIds` must agree byte for byte on the queue and flush sides), `transpose.ts`,
+  `practice.ts`, `rehearsalMixes.ts`, `themeColour`.
+- **Planner/solver:** `fillSpecialGroup`/`orderGroup`, `collectPins`/`pinRefusal`/
+  `pinHandshakeHolds`, `planClear`, `upcomingMonthPills`/`addMonths`, `trailingSaturday`
+  (ADR-0048), `rolesOfPattern`/`rolesOfPatternV3` (`patternRolesSync`/`patternRolesV3Sync`
+  tests mirror the solver), `capValueForMonth`, `memberFitsRoleKey`,
+  `resolveMonthEligibility`, `formatFairnessTenths`/`saldoWords`, `keepVoiceSeats`,
+  `parseStoredFairnessMonth`, `executeFairnessMonthWrites`, `countsForFairness`/
+  `countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ`, `FairnessSwitch`, `SOLVER_ENGINE` +
+  `resolveSolverEngine` (server only), `SOLVER_HISTORY_SOURCE`, `SOLVER_SENDS_HISTORY`,
+  `loadSolverHistory`, `deriveSolverHistory`/`historyWindow`, `fetchDerivedHistory`,
+  `useIntegrityQueue`.
+- **UI — never hand-roll these:** `Button` (the only button; `tone`, never a `hover:` pair in
+  `className`), `CueDialog` (every dialog; `<CueDialog open={x}>`, never a literal `open` —
+  `cueDialogMount.test.ts`), `Menu`, `Select`, `DateField`, `Switch`, `Checkbox` (never a bare
+  `<select>`/`<input type="checkbox|date|month">`), `SegmentedControl`, `Collapse`,
+  `Presence`, `Skeleton`/`SkeletonGroup`, `AnimatedList`, `SlidingIndicator`, `NumberRoll`,
+  `SwipeStrip`, `useToast` (fixed stack) vs `useTransientValue` (inline flash) — not
+  interchangeable, `useLongPress`, `QuickActions`, `PullToRefresh` (mounted once),
+  `blackout()`, `Equalizer`/`PlayPauseGlyph`, `revealProps`, `haptic()`, `CueStrip`,
+  `NAVBAR_H_CLASS`, `AdminRail`, `PanelSkeleton`/`PanelBoundary`, `MembersPanel`,
+  `BottomNavBar` (presentational half of `BottomNav`).
+- **Song page:** `TransposeProvider`/`useTransposeOptional`, `SongHeroPills` (the one key
+  picker), `TempoPill` + `createMetronome` (one metronome app-wide), `LyricsAutoscroll`,
+  `lyricMarkers.tsx`, `TutorialPoster`, `RehearsalPlayer`/`Waveform` (URLs always
+  `/api/audio/[song]/[key]`), `PracticeCluster`.
+- **Availability:** `useAvailability` is the ONLY client-side writer — one hook call per page.
+- Motion tokens are `--motion-*`/`--ease-*`; `motion` is importable only under
+  `app/components/ui/**` (`docs/MOTION.md`, ADR-0031).
 
 ## Colour tokens
-Colour lives in **67 base roles + 30 composed tokens** (`app/brand.css` `:root`,
-`tailwind.config.ts`). The seven retired `--brand-*` COLOUR variables and their `brand.*`
-Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
-`--brand-duration-*`) survive.
-- **Never build a colour by string concatenation.** `` `${hex}55` `` worked on a bare hex;
-  a token cannot be appended to, and `rgb(var(--accent-rgb) / 0.2)55` is not a valid
-  `<color>` — the browser drops the whole declaration with nothing in the console. Use
-  `themeColour(rgbVar, alpha?)`, which always returns a complete colour.
-- **`var()` is not substituted inside SVG presentation attributes** (`fill=`, `stroke=`).
-  Set `color` on an ancestor and let the attribute inherit `currentColor`.
-- **Composed tokens bake their own alpha** — an opacity modifier on one double-applies it.
-  A lint clause bans it.
-- **Collapsing a `dark:` variant changes specificity.** A `dark:` base at (0,2,0) masks a
-  bare `hover:`/`focus:` utility; an unprefixed token at (0,1,0) does not. Check what a
-  base was masking before removing it.
+**67 base roles + 30 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
+retired `--brand-*` colour variables are gone. **Never build a colour by string
+concatenation** — use `themeColour(rgbVar, alpha?)`. **`var()` is not substituted in SVG
+presentation attributes** — set `color` on an ancestor and inherit `currentColor`. **Composed
+tokens bake their own alpha** — no opacity modifier (a lint clause bans it). **Collapsing a
+`dark:` variant changes specificity** — check what the base was masking first.
 
 ## Auth
-Roles: `super-admin` > `admin` > `content-editor` > `member`. Gate via
-`requireActiveManager`; some actions are super-admin-only (checked in the route).
-Impersonation is super-admin-only, enforced server-side in `auth.ts`.
+Roles: `super-admin` > `admin` > `content-editor` > `member`. Gate via `requireActiveManager`;
+some actions are super-admin-only (checked in the route). Impersonation is super-admin-only,
+enforced server-side in `auth.ts`.
 
-**Ministries** (`worship`, `kids` — `app/ministries.ts`) are a SECOND axis, not a
-role tier. Gate with `requireMinistryMember(id)` / `requireMinistryManager(id)`
-(`app/utils/authGuards.ts`); worship pages call `requireWorshipPage`
-(`app/utils/worshipPageGate.ts`, which makes them dynamic — ADR-0020).
-- **Isolation is two-way:** a kids-only member reaches no worship surface, and a
-  worship `admin`/`content-editor` gets nothing in kids. Only `super-admin` spans
-  both. Role never implies ministry; management never implies membership. That
-  holds for the app's own surfaces — **`/studio` is not ministry-scoped** (`proxy.ts`
-  opens it to `admin`), and `teamMembers`, `managesMinistries` included, is editable
-  by anyone with Sanity project write access.
-- **Storage contract:** **absent** `ministries` ⇒ worship (the legacy,
-  migration-free rule — `normalizeMinistries` + `WORSHIP_MEMBER_GROQ_FILTER` are
-  the only readers). **Explicitly empty** is rejected at every write boundary
-  (`validateMinistryWrite`) and never stored — stored `[]` reads back as worship
-  and would hand a kids volunteer the whole catalog.
-- **"Tipo" (`memberType`) is the ONLY worship eligibility axis.** Every seat
-  filters on it (`rankCandidates`) and every solver pool is built from it
-  (`MonthGenerator`), so a member with an EMPTY Tipo matches no seat and is in no
-  pool — that is how someone stops being schedulable, and it is editable from
-  `/admin`. The `retiredFrom` soft-retirement mechanism was removed on
-  2026-09-03 (ADR-0029) after an audit found it made a retired-but-seated member
-  impossible to un-seat outside Studio; it had one document in production, the
-  dev-verify bot, which carried no Tipo at all. **Do not reintroduce a second
-  eligibility axis** without re-reading that ADR. `disabled` is separate and
-  unchanged: it removes app ACCESS, not schedulability, and is never written by
-  `handleEdit`.
+**Ministries** (`worship`, `kids` — `app/ministries.ts`) are a SECOND axis, not a role tier:
+`requireMinistryMember(id)`/`requireMinistryManager(id)` (`app/utils/authGuards.ts`); worship
+pages call `requireWorshipPage` (dynamic — ADR-0020).
+- **Isolation is two-way**; only `super-admin` spans both; role never implies ministry,
+  management never implies membership. `/studio` is not ministry-scoped.
+- **Absent `ministries` ⇒ worship** (`normalizeMinistries`, `WORSHIP_MEMBER_GROQ_FILTER`);
+  explicitly empty is rejected at every write (`validateMinistryWrite`) — a stored `[]` would
+  read back as worship.
+- **"Tipo" (`memberType`) is the ONLY worship eligibility axis** — an empty Tipo is in no seat
+  and no pool. Do not reintroduce a second axis (ADR-0029 removed `retiredFrom`). `disabled`
+  removes app ACCESS, not schedulability, and `handleEdit` never writes it.
 
 ## Continuous improvement
 Run `/loop /improve` — the `/improve` command (`.claude/commands/improve.md`)
@@ -575,101 +296,27 @@ does one verified improvement per run with a priority ladder, verify gate, and
 honesty gate (empty runs over churn).
 
 ## Known landmines (don't rediscover as "bugs")
-- Lyrics (`body`) and chord charts (`chords`) are independent fields — do not
-  re-entangle them with `CHORD_MARKER_RE` on save. See ADR-0018. Adding a filled
-  chart hides `body` in both readers until every chart is removed (existing
-  reader behavior, not a bug).
+- Lyrics (`body`) and chord charts (`chords`) are independent fields — don't re-entangle them
+  on save (ADR-0018). A filled chart hides `body` in both readers (expected).
 - ~15 songs have no lyrics source in the catalog PDF (expected).
-- Android build pending; Apple Developer Program enrollment is waiting on the DUNS
-  number (confirmed 2026-08-27).
-- **Email templates are LIGHT, deliberately not `brand.css`.** Five attempts to
-  hold a dark palette against Outlook for Mac failed (spec §6 has the table).
-  Client dark-mode transforms assume email is light; there is no reliable hook to
-  win from the sending side. Don't "restore the brand colours".
-- `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is **500 ms and deliberately
-  not the real number**, and **it is now OPTIMISTIC, not conservative** — check
-  which way before reasoning from it. The guard charges **per WAVE**
-  (`(waves - 1) * MEASURED_MS_PER_SEND`), and a wave measured **~2 605 ms** on
-  Gmail at width 8. The often-quoted 372 ms is `sendMs / emailed` — per MESSAGE,
-  not the figure the guard uses. The old 14 413 ms belonged to the retired cPanel
-  sender (ADR-0025). Production runs `NOTIFY_FLUSH_EMAIL_LIMIT=40` with
-  `SEND_CONCURRENCY=8`, and the inequality now holds on the REAL number —
-  `(5-1) × 2 605 = 10 420 < 20 000` — which it never did before. Raising the
-  constant to keep the guard green is still the one forbidden move — see
-  `docs/NOTIFICATIONS.md`.
+- Android build pending; Apple Developer enrollment waits on the DUNS number (2026-08-27).
+- **Email templates are LIGHT on purpose**, not `brand.css` — five dark palettes lost to
+  Outlook for Mac. Don't "restore the brand colours".
+- `MEASURED_MS_PER_SEND` in `outboxSweep.test.ts` is 500 ms, deliberately not the real number,
+  and now OPTIMISTIC: the guard charges per WAVE (~2 605 ms measured). Raising it to keep the
+  guard green is the one forbidden move (`docs/NOTIFICATIONS.md`).
 
 ## Agent skills
-
-### Agent worklog + HR review
-
-**Log every subagent dispatch** to `.agents/log/worklog.jsonl` (append-only, one JSON
-object per line; a gitignored symlink into the PRIVATE repo `FrankERP/owt-agent-logs`
-— never commit it here, because this repo is public and the log is agent-written free
-text covering incidents). Agents end their reports with
-a `WORKLOG:` trailer; the **coordinator appends** the lines — **batched at cycle
-close is fine** (amended 2026-08-19; per-dispatch appends remain welcome) — including
-`no_result` for dispatches that crashed and `coordinator-inline` for specialist-shaped
-work done inline rather than dispatched.
-At cycle close, the code-review dispatch also carries the docs-audit and
-worklog-completeness checklists — one agent, one context read, three checklists
-(amended 2026-08-19; separate `docs-auditor` dispatches remain available for
-doc-heavy cycles). `hr-officer` runs **weekly** (or on demand via `/hr-report`),
-not per cycle. The gate is **advisory** — it never blocks a delivery, and HR
-proposes roster changes rather than making them. See `docs/agents/worklog.md`.
-
-### Issue tracker
-
-Issues live in GitHub Issues (`FrankERP/owt-kb-v1`), managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Default canonical labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
-
-### Adversarial plan review
-
-**Reserved for critical contracts only** (retiered 2026-08-19). The evidence for the
-retier: Child E ran 19 plan-review rounds and the post-merge *code* review still found
-three control-flow bugs serving the team — the diff review is the layer that catches
-implementation bugs, so standard work spends its budget there instead.
-
-- **Standard work (the default): no adversarial plan review.** The pipeline is
-  spec (self-reviewed, then user-reviewed) → implement → gates → fresh code review
-  of the diff. Parent roadmaps and read/model/UI/cutover work are standard unless
-  they directly own a critical contract.
-- **Critical contracts keep the loop.** Use
-  `.agents/skills/adversarial-plan-review/SKILL.md` and record the risk tier and
-  rationale. When only a slice of a spec owns the critical contract, review that
-  slice's plan, not the whole spec.
-
-That directory is a **vendored copy** of the canonical skill at
-`~/.agents/skills/adversarial-plan-review/` (shared with Codex). The two must stay
-byte-identical; `scripts/__tests__/vendoredSkillDigest.test.ts` fails loudly if this
-copy changes without its digest being updated. Change both in the same delivery.
-
-**Every completed review gets a committed review log** beside the plan —
-`<plan-basename>-review-log.md`, written after the loop and never shown to a
-reviewer. See `docs/superpowers/plans/2026-08-06-grid-drag-and-drop-review-log.md`.
-
-- **Critical risk:** two sequential fresh `APPROVED` verdicts on byte-identical
-  text. Critical means changing a production/server writer or mutation trust
-  boundary, destructive/full-array serializer, auth/security/ACL/secret boundary,
-  schema/data migration, multi-document transaction/concurrency/recovery protocol,
-  or irreversible remote release action. A client/UI consumer of an already-approved
-  idempotent writer stays standard unless it changes one of those contracts.
-- **Incidents are not exempt.** A change to a production writer's concurrency,
-  batching, or deletion behaviour is critical whether planned or discovered
-  mid-fire. Under time pressure the bar drops to ONE fresh `APPROVED` on a
-  one-paragraph hypothesis — no plan document — but never to zero. The 2026-08-07
-  outbox incident shipped ten deploys with no round and paid for it twice.
-- Run reviewers **one at a time** and never expose prior findings. **Non-blocking
-  findings never trigger a fresh round** — fix or decline them and record the
-  disposition. **The churn cap is binding:** after two rounds with *verified
-  substantive* blockers, stop; round three needs Frank's explicit go-ahead,
-  obtained in advance (the cap was passed silently on 2026-08-11/12 — 15- and
-  19-round loops whose real remedy was a rewrite, not another round).
-- After each implementation phase, run a fresh code review plus the documented
-  test/browser gates. Plan approval never authorizes implementation.
-
-### Domain docs
-
-Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+- **Worklog:** log every subagent dispatch to `.agents/log/worklog.jsonl` (a gitignored
+  symlink into the PRIVATE `FrankERP/owt-agent-logs` — never commit it here; this repo is
+  public). Agents end with a `WORKLOG:` trailer; the coordinator appends, batched at cycle
+  close, including `no_result` and `coordinator-inline` entries. It is a history of the work
+  done, nothing more — `hr-officer` and `/hr-report` were retired 2026-10-07.
+  `docs/agents/worklog.md`.
+- **Issues:** GitHub Issues (`FrankERP/owt-kb-v1`) via `gh` — `docs/agents/issue-tracker.md`.
+  Labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`
+  (`docs/agents/triage-labels.md`).
+- **Adversarial plan review:** when, see §Review policy. `.agents/skills/adversarial-plan-review/`
+  is a vendored copy of `~/.agents/skills/adversarial-plan-review/` (shared with Codex), kept
+  byte-identical by `scripts/__tests__/vendoredSkillDigest.test.ts` — change both together.
+- **Domain docs:** single-context, `CONTEXT.md` + `docs/adr/` — `docs/agents/domain.md`.

@@ -1,9 +1,12 @@
 # Agent worklog
 
 Every subagent dispatch in this repository is recorded in `.agents/log/worklog.jsonl`.
-The log is the evidence base for the **weekly** `hr-officer` review (per-cycle until
-the 2026-08-19 workflow amendment): without it, HR can only audit agent definitions,
-not whether the agents actually did their jobs.
+The log is a **history of the work done** — what was dispatched, to which agent, and
+what came back — and nothing more (amended 2026-10-07). It used to be the evidence base
+for a weekly `hr-officer` review and its `/hr-report` bulletin; both were retired on
+2026-10-07 (archived in `~/.agents/retired/`; past bulletins stay in
+`docs/agents/reports/`). Nothing reviews the log now: the finish-cycle completeness
+checklist is what keeps it whole.
 
 ## The file
 
@@ -17,7 +20,7 @@ not whether the agents actually did their jobs.
   recovered. It was tracked publicly 2026-08-06 → 2026-08-13 (46 commits); an audit of
   all 167 entries found no tokens, emails, `NAME=value` pairs or member data, which is
   what makes that week acceptable rather than a rotation event.
-- **Append-only.** Nothing rewrites, reorders, or truncates it, including `hr-officer`.
+- **Append-only.** Nothing rewrites, reorders, or truncates it.
 
 ## Schema
 
@@ -43,7 +46,7 @@ not whether the agents actually did their jobs.
 
 ## Who writes it
 
-**The coordinator appends every line.** Five of the seven agents are read-only and
+**The coordinator appends every line.** Most agents are read-only and
 physically cannot write files — so agents *report* their entry and the coordinator
 *records* it. Each agent brief ends with:
 
@@ -63,9 +66,9 @@ Two entries agents cannot report for themselves, and the coordinator must write:
   agent cannot log its own death; an unlogged failure looks like a dispatch that never
   happened.
 - **`coordinator-inline`** — substantial specialist-shaped work the coordinator did
-  itself instead of dispatching (a review, an exploration, a verification run). This is
-  the recruiting signal: recurring inline work with no owner is how `hr-officer` spots
-  a role the roster is missing. Do not omit these to keep the log tidy.
+  itself instead of dispatching (a review, an exploration, a verification run). Without
+  them the history shows only the delegated half of the work. Do not omit these to keep
+  the log tidy.
 
 **Entries are appended in one batch at cycle close** (amended 2026-08-19;
 per-dispatch appends remain welcome). Never stage them in `owt-kb-v1` — the
@@ -78,9 +81,8 @@ the same way a backfilled one is — from the commit the dispatch produced or th
 commit that closes its findings — never from recollection.
 
 **Incidents and firefights count as cycles.** Nobody logs mid-fire, and nobody is
-expected to — backfill the entries once the fire is out; the weekly `hr-officer`
-review covers the incident window like any other work. Incident work runs with the least scrutiny,
-which makes it the cycle most worth closing properly. The 2026-08-07 SMTP incident (an
+expected to — backfill the entries once the fire is out. Incident work runs with the least
+scrutiny, which makes it the cycle most worth closing properly. The 2026-08-07 SMTP incident (an
 afternoon of production commits, zero entries) is the case this rule exists for.
 
 ### Backfilling, when it cannot be avoided
@@ -99,8 +101,8 @@ file has ever carried. Three constraints, each earned:
   entries this file has ever held came from a backfill re-recording a dispatch that was
   already logged — twice by the same coordinator inside one day.
 
-Out-of-order timestamps remain fine; the file is append-only and `hr-officer` reads it
-in file order. What is not fine is a timestamp that could not have happened.
+Out-of-order timestamps remain fine; the file is append-only and is read in file
+order. What is not fine is a timestamp that could not have happened.
 
 That last sentence is not a backfill-only rule. Every entry's `ts` is a fresh clock
 read at the moment of the append, or the commit that recorded the entry — never a
@@ -116,29 +118,19 @@ the log — which is the one place they are supposed to be auditable.
 An entry's `outcome` reflects the agent's own verdict, not the cycle's mood: a report
 carrying any Important finding logs as `findings`, never `ok`.
 
-A missing or malformed line is an `hr-officer` finding, never a runtime error. Nothing
-in the app reads this file.
+Since nothing reviews the file any more, the coordinator **parses the lines it just
+appended** (each one valid JSON carrying the required fields above) as part of the
+finish-cycle worklog checklist. A missing or malformed line found there is fixed by an
+appended correction, never a runtime error. Nothing in the app reads this file.
 
 ### Correcting a line
 
 A wrong field has no in-place repair. The two precedents were rewriting the file
 (which violates append-only) and leaving it wrong. Corrections are appended, never
 edited. The correcting entry carries `corrects` (the 1-based line number), `field`,
-and `corrected_value`, alongside the normal entry fields. `hr-officer` reads the file
-in order, so a later correction supersedes an earlier value. Line 141 is the case:
+and `corrected_value`, alongside the normal entry fields. The file is read in order,
+so a later correction supersedes an earlier value. Line 141 is the case:
 its `ts` is 8h27m before the artifact it cites, and the line itself is unchanged.
-
-## The HR gate
-
-`hr-officer` runs on a **weekly cadence** (amended 2026-08-19; previously per
-cycle): dispatch it when a week or more has passed since its own last log entry, or
-on demand via `/hr-report`. It reviews entries since its own last log entry **in
-file order** (not timestamp order — backfilled entries carry older timestamps but
-land later in the file) and returns `STAFF REVIEW` / `FINDINGS` / `PROPOSALS`.
-
-The gate is **advisory**: HR findings never block a delivery, and HR proposes roster
-changes (new agents, retirements, merges) as drafts for the user to approve. It never
-creates or edits agent definitions, and never edits this log.
 
 See also: `.agents/skills/adversarial-plan-review/SKILL.md` for the review workflow
 whose rounds also land here.
