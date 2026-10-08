@@ -533,7 +533,7 @@ secret.
 
 | Platform | Role |
 |---|---|
-| Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header |
+| Vercel Preview + Production | `app/api/admin/solve/route.ts` sends it as the `X-Api-Key` header — to v2 itself, and to v3 through `app/utils/solverV3Upstream.ts` (solver v3 C6; with the engine at `v2` that path is never taken) |
 | Secret Manager `owt-solver-api-key` | Cloud Build deploys each function with `--set-secrets=OWT_SOLVER_API_KEY=owt-solver-api-key:latest`: v2 from `cloudbuild.yaml` (manual: `scripts/deploy-solver-gcf.sh`), v3 from `gcf_v3/cloudbuild.yaml` (first creation and manual: `scripts/deploy-solver-v3-gcf.sh`) |
 
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds

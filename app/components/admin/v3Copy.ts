@@ -441,6 +441,8 @@ export const V3_LINES = {
   ruleTableTitle: "Reglas enviadas (id, tipo, posición en la configuración)",
   // CF-6, CF-8, CF-10 and §7.8's other lines
   recordOtherFailure: "No se pudo registrar la elegibilidad. No se creó nada; pulsa «Reintentar».",
+  draftsOutsideHorizon: (months: readonly string[]) =>
+    `La vista previa tiene servicios fuera de ${monthsList(months)}. No se creó nada; vuelve a previsualizar.`,
   pastAfterDrafts: (month: string) =>
     `${monthNameCap(month)} ya pasó mientras planeabas, así que no se creó nada más. Lo ya creado se queda; completa lo que falta en «Editar mes».`,
   monthComplete: (month: string, c: number, t: number) => `${monthNameCap(month)}: ${c} de ${t} creados.`,

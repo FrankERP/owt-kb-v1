@@ -181,6 +181,28 @@ describe("after a v3 Auto (CF-1–CF-5)", () => {
     expect(put.bodies[1]).toBe(put.bodies[0]);
   });
 
+  it("«Reintentar» repeats the LAST button pressed, never the first (review fix)", async () => {
+    const ledger = ledgerRouteSwitchable((m) => ledgerResponse(m));
+    const solve = solveRoute((r) => ({ status: 200, body: echoV3(r) }));
+    const put = putRoute((b, n) => (n === 1 ? { status: 500, body: null } : outcomes(b.months.map((x) => x.month))));
+    const post = postRoute((_b, n) => (n === 1 ? { status: 500, body: {} } : { status: 201, body: {} }));
+    routeFetch(historyRoute, ledger.route, solve.route, put.route, post.route);
+    const { container } = renderV3({ config: POOLS });
+    onlySundays(container, ["2026-11-01", "2026-11-08"]);
+    preview();
+    runAuto();
+    await waitFor(() => expect(solve.requests).toHaveLength(1));
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());     // the run is applied, not just sent
+    // «Crear y publicar» fails at the record; the admin then chooses drafts, which partly fail.
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Crear y publicar" })); });
+    await waitFor(() => expect(screen.getByText("No se pudo registrar la elegibilidad. No se creó nada; pulsa «Reintentar».")).toBeTruthy());
+    await act(async () => { createDrafts(); });
+    await waitFor(() => expect(post.bodies).toHaveLength(2));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^Reintentar \(/ })); });
+    await waitFor(() => expect(post.bodies).toHaveLength(3));
+    expect(post.bodies.map((b) => b.published)).toEqual([false, false, false]);   // never the first press's publish
+  });
+
   it("CF-1: across the month boundary the confirm writes nothing and offers no «Reintentar»", async () => {
     const ledger = ledgerRouteSwitchable((m) => ledgerResponse(m));
     const solve = solveRoute((r) => ({ status: 200, body: echoV3(r) }));

@@ -3,7 +3,7 @@
 // fetch: the fresh ledger read, the contract-3 request, apply by service id, the run report and
 // «Ver etapas» with KH-3's table; «Reintentar» exactly where AD-6 allows it; specials at every exit;
 // v2's parsers never reached under v3 and v3's never under v2; and v2's one new 409 branch.
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const spies = vi.hoisted(() => ({ applySolveResponse: vi.fn(), solverRefusalMessage: vi.fn(), buildSolveRequest: vi.fn(), classifyV3Answer: vi.fn(), applyV3Assignments: vi.fn() }));
@@ -31,7 +31,7 @@ vi.mock("../v3SolveResponse", async (importOriginal) => {
 });
 
 import { echoV3, renderV3, routeFetch, seat, solveRoute, storedRole } from "./v3PlannerHarness";
-import { deselectAll } from "./plannerWiringHarness";
+import { cellAt, deselectAll, fillEmptySwitch } from "./plannerWiringHarness";
 import { NAME_SHAPED_KEYS, config, ledgerResponse } from "./v3Fixtures";
 import { V3_ROUTE_COPY } from "../v3Copy";
 
@@ -176,6 +176,105 @@ describe("AD-3 / AD-6 — outcomes and «Reintentar»", () => {
     await waitFor(() => expect(screen.getByText(V3_ROUTE_COPY.configuration("contract_echo"))).toBeTruthy());
     expect(spies.applySolveResponse).not.toHaveBeenCalled();
     expect(spies.solverRefusalMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("after the press, the LATEST render (review fixes: the derived path's reason, under v3)", () => {
+  const TIMEOUT = { status: 422, body: { ok: false, contract: 3, engine: "v3", code: "timeout", params: { stage: "fill", seconds: 25 } } };
+  const autoRetryButton = (line: string) => {
+    const next = screen.getByText(line).nextElementSibling;
+    return next instanceof HTMLButtonElement && next.textContent === "Reintentar" ? next : null;
+  };
+  const place = (container: HTMLElement, rowId: string, date: string, name: string) => {
+    fireEvent.click(cellAt(container, rowId, date));
+    fireEvent.click(within(container.querySelector("[data-candidate-picker]") as HTMLElement).getByText(name));
+    fireEvent.click(screen.getByText("Cerrar"));
+  };
+  /** `fetch` that holds every call matching `held` until `release()`; `sent` says one arrived. */
+  function holdFetch(mock: (url: string, init?: RequestInit) => Promise<unknown>, held: (url: string) => boolean) {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const state = { on: false, sent: false, release: () => release() };
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (state.on && held(url)) { state.sent = true; await gate; }
+      return mock(url, init);
+    });
+    return state;
+  }
+
+  it("Auto's «Reintentar» builds from the board as it is NOW: a seat placed after the failure is pinned and kept", async () => {
+    const solve = solveRoute((r, n) => (n === 1 ? TIMEOUT : { status: 200, body: echoV3(r) }));
+    routeFetch(ledgerRoute(), historyRoute, solve.route);
+    const { container } = renderV3({ config: POOLS });
+    deselectAll(container, "saturday");
+    preview();
+    fireEvent.click(fillEmptySwitch());
+    runAuto();
+    await waitFor(() => expect(screen.getByText(V3_ROUTE_COPY.timeout)).toBeTruthy());
+    place(container, "bgv", "2026-11-08", "Dani");
+    expect(cellAt(container, "bgv", "2026-11-08").textContent).toContain("Dani");
+    await act(async () => { fireEvent.click(autoRetryButton(V3_ROUTE_COPY.timeout)!); });
+    await waitFor(() => expect(solve.requests).toHaveLength(2));
+    expect(solve.requests[1].pins).toContainEqual(expect.objectContaining({ date: "2026-11-08", role: "BGV", person: "m-dani" }));
+    await waitFor(() => expect(screen.getByText(/^Plan de 1 mes/)).toBeTruthy());
+    expect(cellAt(container, "bgv", "2026-11-08").textContent).toContain("Dani");
+  });
+
+  it("a seat placed during the ledger read survives the refusal: the fill reads the CURRENT cells", async () => {
+    const { mock } = routeFetch(ledgerRoute(500, { error: "fairness_unavailable" }), historyRoute);
+    const hold = holdFetch(mock, (url) => url.startsWith("/api/admin/fairness?"));
+    const { container } = renderV3({ config: POOLS });
+    deselectAll(container, "saturday");
+    preview();
+    hold.on = true;                                                          // only Auto's own read is held
+    runAuto();
+    await waitFor(() => expect(screen.getByText("Calculando...")).toBeTruthy());
+    place(container, "lead", "2026-11-08", "Bruno");
+    await act(async () => { hold.release(); });
+    await waitFor(() => expect(screen.getByText(V3_ROUTE_COPY.ledgerFailed)).toBeTruthy());
+    expect(cellAt(container, "lead", "2026-11-08").textContent).toContain("Bruno");
+  });
+
+  it("a horizon changed during the SOLVE gets nothing: not the old horizon's seats, drafts or report", async () => {
+    const solve = solveRoute((r) => ({ status: 200, body: echoV3(r) }));
+    const { mock } = routeFetch(ledgerRoute(), historyRoute, solve.route);
+    const hold = holdFetch(mock, (url) => url === "/api/admin/solve");
+    const { container } = renderV3({ config: POOLS });
+    deselectAll(container, "saturday");
+    preview();
+    hold.on = true;
+    runAuto();
+    await waitFor(() => expect(hold.sent).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: "← Volver" }));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Planear" })).getByRole("radio", { name: "2 meses" }));
+    preview();
+    await act(async () => { hold.release(); });
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+    expect(solve.requests).toHaveLength(1);
+    expect(cellAt(container, "lead", "2026-11-01").textContent).not.toMatch(/Ana|Bruno/);
+    expect(screen.queryByText(/^Plan de 1 mes/)).toBeNull();
+  });
+
+  it("the lock's Auto half: while a v3 confirm is in flight, Auto's «Reintentar» is not offered", async () => {
+    const solve = solveRoute(() => TIMEOUT);
+    const putRoute = (url: string, init?: RequestInit) => (url === "/api/admin/fairness/months" && init?.method === "PUT"
+      ? { status: 200, body: { months: [{ month: "2026-11", outcome: "created", rev: "x", contentHash: "sha256:x", recordedAt: "t" }] } }
+      : undefined);
+    const { mock } = routeFetch(ledgerRoute(), historyRoute, solve.route, putRoute, rolesRoute);
+    const hold = holdFetch(mock, (url) => url === "/api/admin/fairness/months");
+    const { container } = renderV3({ config: POOLS });
+    deselectAll(container, "saturday");
+    preview();
+    runAuto();
+    await waitFor(() => expect(screen.getByText(V3_ROUTE_COPY.timeout)).toBeTruthy());
+    expect(autoRetryButton(V3_ROUTE_COPY.timeout)).toBeTruthy();
+    hold.on = true;
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: /^Crear \d+ borrador/ })); });
+    await waitFor(() => expect(hold.sent).toBe(true));
+    expect(autoRetryButton(V3_ROUTE_COPY.timeout)).toBeNull();
+    await act(async () => { hold.release(); });
+    await waitFor(() => expect(screen.queryByText("Creando...")).toBeNull());
+    expect(solve.requests).toHaveLength(1);
   });
 });
 

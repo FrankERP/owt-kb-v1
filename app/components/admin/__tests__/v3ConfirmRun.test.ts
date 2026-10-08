@@ -55,6 +55,19 @@ describe("order (CF-4, CF-5)", () => {
   });
 });
 
+describe("a draft outside the horizon (review fix)", () => {
+  it("refuses before any write: no PUT, no POST, no «Reintentar» — never records written and a «complete» with nothing created", async () => {
+    const { run, tracedPut, tracedPost } = attempt({ months: ["2026-12"], drafts: [draft("n1", "2026-11-01")] });
+    const out = await run;
+    expect(tracedPut).not.toHaveBeenCalled();
+    expect(tracedPost).not.toHaveBeenCalled();
+    expect(out).toEqual({
+      kind: "refused_guard", retry: false, state: INITIAL_V3_CONFIRM_STATE,
+      lines: ["La vista previa tiene servicios fuera de diciembre. No se creó nada; vuelve a previsualizar."],
+    });
+  });
+});
+
 describe("the record step (CF-4): any refusal or unexpected outcome creates no draft", () => {
   it.each([
     ["a refusal", vi.fn(async () => ({ status: 409, body: { error: "integrity_conflict", conflict: true, details: { detail: "month_has_services", months: [{ month: "2026-11", verdict: "month_has_services" }] } } })), false],

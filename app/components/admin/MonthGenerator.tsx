@@ -4295,6 +4295,9 @@ export default function MonthGenerator({
       setAutoError("No se pudieron cargar las reglas compartidas. Recárgalas antes de usar Auto.");
       return;
     }
+    // C6: under v3 a press during a confirm starts no run (`handleAutoV3`'s lock), so it must not
+    // withdraw a «Borrar» undo either — refused here, before the withdrawal.
+    if (isV3 && pushing) return;
     // A «Borrar» undo is withdrawn once Auto runs (spec §3.2): restoring after a solve would
     // write the pre-solve seats over the solver's answer.
     withdrawUndos();
@@ -4322,19 +4325,6 @@ export default function MonthGenerator({
     }
   }
 
-  /**
-   * Auto in DERIVED mode (R14): the history is read for the handler's own
-   * target, at call time — never the display's copy, which can be stale under an
-   * edit to a prior month, and never a month the admin moves to meanwhile.
-   *
-   * The pending flag goes up BEFORE the read (the per-browser path raises it
-   * only after its synchronous pre-flight, because it has nothing to wait for),
-   * and this `try/finally` covers the read AND the solve, so no exit — a
-   * failure, a throw, the 20 s ceiling — can leave Auto on «Calculando...».
-   * The ceiling is an abort: `fetchDerivedHistory` then answers `{ ok: false }`
-   * at once, whatever the transport is doing, and a timeout takes the same
-   * refusal as any other failed read.
-   */
   /** C6 SP-4: the planned counted specials, which today's after-solve filler leaves to the pre-fill. */
   function countedSpecialIds(): Set<string> {
     return new Set(columns.filter((c) => c.type === "special_role" && c.countsForFairness).map((c) => c.columnId));
@@ -4377,14 +4367,9 @@ export default function MonthGenerator({
           return { status: res.status, body: await res.json().catch(() => null) };
         },
         isCurrent: () => horizonKeyRef.current === requested,
-        build: (ledger) => buildV3SolveRequest({
-          months, currentMonth, ledger, config, members,
-          storedRoles: storedSource?.roles ?? [],
-          planned: { columns: v3PlannedColumns(), cells, rows },
-          savedWindow, fillEmpty: fillEmptyOnly,
-          seed: crypto.getRandomValues(new Uint32Array(1))[0] % 2147483648,
-          requestId: newCreationRequestId(),
-        }),
+        // After the read, the board comes from the LATEST render (`v3LatestRef`); the config stays
+        // the one `preRead` checked at the press.
+        build: (ledger) => v3LatestRef.current.build({ months, currentMonth, ledger, config }),
         postSolve: async (request, signal) => {
           const res = await fetch("/api/admin/solve", {
             method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request), signal,
@@ -4392,22 +4377,41 @@ export default function MonthGenerator({
           return { status: res.status, text: await res.text() };
         },
       });
-      applyV3AutoResult(config, result, requested);
+      v3LatestRef.current.apply(config, result, requested);
     } catch {
-      setAutoError(V3_ROUTE_COPY.connection);
-      applySpecialFill(config, cells, undefined, fillEmptyOnly, countedSpecialIds());
+      v3LatestRef.current.threw(config, requested);
     } finally {
       setAutoPending(false);
     }
   }
 
+  /** The board half of a v3 request, from the render that calls it — through `v3LatestRef`, the latest. */
+  function buildV3FromBoard(input: { months: string[]; currentMonth: string; ledger: FairnessLedgerResponse; config: SolverConfig }) {
+    return buildV3SolveRequest({
+      ...input, members,
+      storedRoles: storedSource?.roles ?? [],
+      planned: { columns: v3PlannedColumns(), cells, rows },
+      savedWindow, fillEmpty: fillEmptyOnly,
+      seed: crypto.getRandomValues(new Uint32Array(1))[0] % 2147483648,
+      requestId: newCreationRequestId(),
+    });
+  }
+
+  /** A throw past `runV3Auto` (unreachable by construction: every transport is caught where it happens). */
+  function v3AutoThrew(config: SolverConfig, horizonKey: string) {
+    if (horizonKeyRef.current !== horizonKey) return;
+    setAutoError(V3_ROUTE_COPY.connection);
+    applySpecialFill(config, cells, undefined, fillEmptyOnly, countedSpecialIds());
+  }
+
   /** Every exit fills uncounted specials and instruments as today (AD-7); counted specials are the pre-fill's. */
   function applyV3AutoResult(config: SolverConfig, result: V3AutoResult, horizonKey: string) {
+    // RQ-1, at both ends: a horizon changed during the read («stale») OR during the solve gets nothing —
+    // no fill, no frozen entries, no report — as the derived path does for a changed month. AD-7's fill
+    // is for the board Auto was pressed on, and the board on screen now belongs to another horizon:
+    // applying there would set its drafts from the old horizon's columns.
+    if (result.kind === "stale" || horizonKeyRef.current !== horizonKey) return;
     const skip = countedSpecialIds();
-    if (result.kind === "stale") {
-      applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
-      return;
-    }
     if (result.kind === "refused") {
       setAutoError(result.lines[0]);
       setAutoNotices(result.lines.slice(1));
@@ -4423,7 +4427,7 @@ export default function MonthGenerator({
     setV3Report(null);
     if (outcome.kind !== "success") {
       setAutoError(v3OutcomeLine(outcome));
-      if (v3RetryOffered(outcome)) setAutoRetry(() => () => { void handleAuto(); });
+      if (v3RetryOffered(outcome)) setAutoRetry(() => () => { void v3LatestRef.current.auto(); });
       setV3Run(null);
       applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
       return;
@@ -4442,6 +4446,19 @@ export default function MonthGenerator({
     applySpecialFill(config, applied.cells, applied.unfilled, fillEmptyOnly, skip);
   }
 
+  /**
+   * Auto in DERIVED mode (R14): the history is read for the handler's own
+   * target, at call time — never the display's copy, which can be stale under an
+   * edit to a prior month, and never a month the admin moves to meanwhile.
+   *
+   * The pending flag goes up BEFORE the read (the per-browser path raises it
+   * only after its synchronous pre-flight, because it has nothing to wait for),
+   * and this `try/finally` covers the read AND the solve, so no exit — a
+   * failure, a throw, the 20 s ceiling — can leave Auto on «Calculando...».
+   * The ceiling is an abort: `fetchDerivedHistory` then answers `{ ok: false }`
+   * at once, whatever the transport is doing, and a timeout takes the same
+   * refusal as any other failed read.
+   */
   async function handleAutoDerived() {
     const target = { year, month };
     setAutoPending(true);
@@ -4522,6 +4539,15 @@ export default function MonthGenerator({
   useLayoutEffect(() => {
     solveWithDerivedHistoryRef.current = solveWithDerivedHistory;
   });
+  // C6: what a v3 Auto does after its ledger read — and Auto's «Reintentar» — runs in the LATEST render,
+  // for the derived path's reason (above): the grid stays editable during the read and after a failed
+  // run, and a press-time closure would build from, and write back, the board as it was at the press.
+  // «Reintentar» through the latest `handleAuto` also reads the latest `pushing`, so the confirm lock
+  // covers it.
+  const v3LatestRef = useRef({ auto: handleAuto, build: buildV3FromBoard, apply: applyV3AutoResult, threw: v3AutoThrew });
+  useLayoutEffect(() => {
+    v3LatestRef.current = { auto: handleAuto, build: buildV3FromBoard, apply: applyV3AutoResult, threw: v3AutoThrew };
+  });
   // «Deshacer» fires from a toast up to 10 s later: the ref hands it the LATEST render's
   // `undoClear`, so it restores onto the live cells rather than the ones the clear saw.
   const undoClearRef = useRef(undoClear);
@@ -4568,7 +4594,9 @@ export default function MonthGenerator({
     // entries and repeats the refusal; only a new v3 Auto (which re-freezes and resets) or closing the
     // planner leaves it. That is the spec's own remedy («vuelve a correr Auto», §7.8), not a gap; on the
     // no-Auto path it means running Auto once.
-    let current: V3ConfirmSession | null = v3Confirm && v3Confirm.key === key ? v3Confirm : null;
+    // The pressed button decides this attempt's publish — and so what «Reintentar» repeats: the session
+    // keeps the LAST button pressed, never the first.
+    let current: V3ConfirmSession | null = v3Confirm && v3Confirm.key === key ? { ...v3Confirm, publish } : null;
     let attemptDrafts: DraftCard[] = toCreateNow;
     let posted = 0;
     let result: V3ConfirmResult | null = null;
@@ -4883,7 +4911,8 @@ export default function MonthGenerator({
 
   const autoState: AutoState = {
     pending: autoPending, error: autoError, notices: autoNotices, disabledReason: gateBlocked,
-    ...(isV3 && autoRetry ? { retry: autoRetry } : {}),
+    // C6: Auto's «Reintentar» is offered only while no v3 confirm is in flight (the lock's Auto half).
+    ...(isV3 && autoRetry && !pushing ? { retry: autoRetry } : {}),
   };
   const v3RunCurrent = v3Run && v3Run.horizonKey === horizon.join(",") ? v3Run : null;
   const equidadPlan = isV3 && v3RunCurrent

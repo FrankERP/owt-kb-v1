@@ -3,7 +3,8 @@
 // Transports are injected (the component passes `fetch`-based ones; tests pass fakes); no global
 // `fetch` is called here. Each attempt, in order:
 //   1. the guard (CF-1, A40, HZ-9) on the client's CDMX month AT THIS ATTEMPT — a horizon month that
-//      became past, or one past C2's ceiling, refuses before anything is written; no «Reintentar»;
+//      became past, or one past C2's ceiling, refuses before anything is written; no «Reintentar»; so
+//      does a draft outside the horizon months;
 //   2. the records (CF-4): every month's frozen entry in ONE `PUT /api/admin/fairness/months`
 //      (all-or-nothing, C2 WR-9), resent byte-identical until it lands, never after (CF-7). A replay
 //      of a PUT that did land answers `unchanged` by C2's decision order (WR-8 row 1);
@@ -19,6 +20,7 @@ import {
   classifyRecordPut, confirmGuard, draftsByMonth, guardLine, monthReportLines, recordRetryOffered, recordVerdictLine,
   type MonthProgress, type PutAnswer, type V3ConfirmEntry,
 } from "./v3Confirm";
+import { V3_LINES } from "./v3Copy";
 
 export interface V3ConfirmState {
   /** The PUT landed (an expected outcome for every month) — it is never sent again in this confirm. */
@@ -74,6 +76,12 @@ export async function runV3ConfirmAttempt(input: {
       state: input.state,
       retry: false,
     };
+  }
+  // Every draft belongs to a horizon month, or nothing is written: a draft outside `months` would be
+  // skipped by `draftsByMonth`, and a confirm that wrote the records and created none of its drafts
+  // would report success (review fix: a stale run's drafts can outlive a horizon change).
+  if (input.drafts.some((d) => !input.months.includes(d.date.slice(0, 7)))) {
+    return { kind: "refused_guard", lines: [V3_LINES.draftsOutsideHorizon(input.months)], state: input.state, retry: false };
   }
 
   // 2. Records first, atomically, until they land (CF-4, CF-7).

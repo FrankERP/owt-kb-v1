@@ -7,13 +7,13 @@
 // NEUTRAL and pure: dates are CDMX strings, months move by integer arithmetic, weekdays come from
 // C2's civil-calendar formula — never through a `Date` on a service date. The clock is an input.
 
-import { monthIndex, shiftMonth } from "@/app/utils/fairnessVocabulary";
+import { RECORD_LIMITS, monthIndex, shiftMonth } from "@/app/utils/fairnessVocabulary";
 import { civilDayOfWeek } from "@/app/utils/fairnessLedger";
 
 export type HorizonLength = 1 | 2;
 
-/** C2 WR-4: a record month is at most the current CDMX month + 12 (spec HZ-9). */
-export const HORIZON_MONTHS_AHEAD = 12;
+/** C2 WR-4: a record month is at most the current CDMX month + 12 (spec HZ-9) — C2's own constant, never a copy. */
+export const HORIZON_MONTHS_AHEAD = RECORD_LIMITS.monthsAhead;
 
 export function horizonMonths(first: string, length: HorizonLength): string[] {
   return length === 2 ? [first, shiftMonth(first, 1)] : [first];
