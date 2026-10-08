@@ -589,6 +589,10 @@ describe("A2 handoff allowlist", () => {
         // only notificationOutbox, and is dry-run until --apply.
         "scripts/requeue-role-notices.mjs#module",
         "scripts/requeue-setlist-notice.mjs#module",
+        // Solver v3 C4 R20 a: the one caller of C2's write executor outside app/ — a
+        // `protected-write` site under the executor rule, always (C2 IF2-23). It moves to
+        // RETIRED_ONE_SHOT_WRITERS at C7 Step 12 (C4 R22), as migrate-proposal-messages did.
+        "scripts/reconstruct-fairness-months.mjs#module",
         "scripts/service-readiness-cleanup.mjs#module",
         "scripts/service-readiness-feasibility.mjs#module",
       ].sort(),
@@ -642,7 +646,11 @@ describe("git-tracked protected read inventory", () => {
 
   it("finds exactly the registered fairness executor sites (C2 GU-5, IF2-23)", () => {
     const sites = REAL_SITES.filter((s) => s.client === "executor").map((s) => `${s.file}#${s.operation}`);
-    expect(sites.sort()).toEqual(["app/utils/fairnessMonthCommit.ts#module", "app/utils/fairnessMonthWriteRequest.ts#module"]);
+    expect(sites.sort()).toEqual([
+      "app/utils/fairnessMonthCommit.ts#module",
+      "app/utils/fairnessMonthWriteRequest.ts#module",
+      "scripts/reconstruct-fairness-months.mjs#module",
+    ]);
   });
 
   it("routes every migrated member-facing and notification read through the canonical client", () => {

@@ -137,7 +137,7 @@ export function civilDayOfWeek(date: string): number {
   return (y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + offsets[month - 1] + day) % 7;
 }
 
-interface CountedService {
+export interface CountedService {
   id: string;
   type: LedgerService["_type"];
   date: string;
@@ -226,9 +226,11 @@ export function keepVoiceSeats(services: LedgerService[]): {
   kept: VoiceSeat[];
   secondSeats: VoiceSeat[];
   duplicateTargets: Array<{ type: string; date: string; roleIds: string[] }>;
+  /** LG-1/LG-2's surviving services with their day class — the one counted-service list (C4 reads it, never re-derives it). */
+  counted: CountedService[];
 } {
-  const { kept, secondSeats, duplicateTargets } = seatStep(services);
-  return { kept, secondSeats, duplicateTargets };
+  const { kept, secondSeats, duplicateTargets, counted } = seatStep(services);
+  return { kept, secondSeats, duplicateTargets, counted };
 }
 
 // ─── X1 (IF2-12; CAD-1) ──────────────────────────────────────────────────────

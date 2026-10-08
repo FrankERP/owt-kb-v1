@@ -112,7 +112,7 @@ export function parseCliArgs(argv: readonly string[]): CliArgs | { error: string
 export function isInsideRoot(child: string, root: string, caseInsensitive: boolean): boolean {
   const norm = (p: string) => (caseInsensitive ? p.toLowerCase() : p);
   const rel = path.relative(norm(root), norm(child));
-  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+  return rel === "" || (rel !== ".." && !rel.startsWith(".." + path.sep) && !path.isAbsolute(rel));
 }
 
 /**
@@ -120,7 +120,7 @@ export function isInsideRoot(child: string, root: string, caseInsensitive: boole
  * the rest appended — so an `--out` that does not exist yet, or one reached
  * through a link, is judged by where it would really land.
  */
-function realLocation(p: string): string {
+export function realLocation(p: string): string {
   let current = path.resolve(p);
   const rest: string[] = [];
   while (!existsSync(current)) {

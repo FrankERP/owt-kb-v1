@@ -77,3 +77,51 @@ against today's rules is the same failure in another form.
   (docs/SECRETS.md) — and both write the PRODUCTION dataset, stamped `preview`/`local`.
 - Every amendment to an existing ADR (ADR-0042's «amended under v3» included) is C7's, at the flip
   (parent A31). This record amends none.
+
+## Reconstruction of past months (solver v3 C4)
+
+Added by C4 (spec `docs/superpowers/specs/2026-10-05-solver-v3-c4-record-reconstruction-design.md`); parent
+A31 makes this record the home of the reconstruction's rules, so C4 writes no ADR of its own. Nobody recorded
+who was eligible in the months planned before v3, and a month without a record counts for nothing (F3).
+`scripts/reconstruct-fairness-months.mjs` infers those records once; Frank reviews a private per-person table;
+only the plan whose fingerprint he approved is written — through the one executor, actor `reconstruction`,
+past months only, and only records the script itself wrote. Runbook: `docs/SOLVER_AND_INFRA.md`.
+
+**Inference rules (R4–R9):**
+
+- **Tipo today, applied backward, as hypothetical pool ticks (R4).** C2's resolver runs on today's
+  `solverConfig` — every restriction, exact rule, week exclusion, presence rule and «Mes por medio» unchanged —
+  with each of the three pools replaced by the members whose current Tipo fits it. Today's real ticks feed
+  only two anomalies («not ticked today», «ticked today, never seated»).
+- **Seats may only delay a line's start (R5, parent A21).** Per line (DL, SL, BGV, Coro), the join month is the
+  month of the person's first kept seat — C2's record-free seat step — at a counted service; before it every
+  role of the line is `out`. A seat never makes anyone eligible. A join bound that cuts an exact rule removes
+  the rule whole for that month; a joined role it also covered becomes plainly `in`, and the table says so.
+- **The cadence setting is applied, never inferred (R6).** A «Mes por medio» member's `Sun.Lead` is not
+  join-bounded; the setting beside an exact `Sun.Lead` count refuses the run (in the rules: through the
+  resolver; introduced by a correction: through the record validator).
+- **Today's exact rules apply from the join month (R7)**, and every month whose seats held differ from the
+  rule's count is listed.
+- **Frank's corrections win (R8):** a file keyed by member `_id`, validated in full before any record is built;
+  a correction replaces an exact rule whole (A38) and may add a worship member who has lost `voz`. It never
+  edits the configuration the resolver reads (D11).
+- **Availability is what is stored today (R9)**, plus today's week exclusions on weekend dates and the
+  corrections' blocked dates.
+
+**Rejected:**
+
+- **Seats as eligibility** — reads occasional leads as owed (ADR-0046) and turns the record into a copy of the
+  seats.
+- **Starting the ledger empty** — every first v3 run would balance against nothing: the gap the program exists
+  to close.
+- **Everyone eligible from the first stored month (April 2026)** — an earlier attempt showed late joiners owing
+  large, false debts and Saturday-only singers owing Sundays.
+- **A second, correction-edited configuration for the resolver (D11)** — it would record rule sets the live
+  solver refuses, and needs a reverse map from roles to patterns that does not exist.
+
+**Consequences:** the inference is lossy, so every case it cannot settle is listed as an anomaly, never chosen
+silently; consent attaches to bytes — the plan binds the bodies, the revisions read, the backups, the preview
+figures and digests of every service and member input — so any edit between the dry run and the apply sends
+Frank back to the table; after a seat edit, a date move, a «cuenta» change or an availability edit in a
+reconstructed month the dry run must be re-run, because nothing else prompts it. The script retires at solver
+v3 C7 Step 12.
