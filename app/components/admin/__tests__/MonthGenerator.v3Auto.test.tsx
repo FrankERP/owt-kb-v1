@@ -235,6 +235,26 @@ describe("after the press, the LATEST render (review fixes: the derived path's r
     expect(cellAt(container, "lead", "2026-11-08").textContent).toContain("Bruno");
   });
 
+  it("a horizon changed during the READ solves nothing and fills nothing over the new horizon's board", async () => {
+    const solve = solveRoute((r) => ({ status: 200, body: echoV3(r) }));
+    const { mock } = routeFetch(ledgerRoute(), historyRoute, solve.route);
+    const hold = holdFetch(mock, (url) => url.startsWith("/api/admin/fairness?month=2026-11&horizon=1"));
+    const { container } = renderV3({ config: POOLS });
+    deselectAll(container, "saturday");
+    preview();
+    hold.on = true;
+    runAuto();
+    await waitFor(() => expect(hold.sent).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: "← Volver" }));
+    fireEvent.click(within(screen.getByRole("radiogroup", { name: "Planear" })).getByRole("radio", { name: "2 meses" }));
+    preview();
+    place(container, "lead", "2026-11-08", "Bruno");                       // a seat on the NEW board
+    await act(async () => { hold.release(); });
+    await waitFor(() => expect(screen.queryByText("Calculando...")).toBeNull());
+    expect(solve.requests).toHaveLength(0);
+    expect(cellAt(container, "lead", "2026-11-08").textContent).toContain("Bruno");
+  });
+
   it("a horizon changed during the SOLVE gets nothing: not the old horizon's seats, drafts or report", async () => {
     const solve = solveRoute((r) => ({ status: 200, body: echoV3(r) }));
     const { mock } = routeFetch(ledgerRoute(), historyRoute, solve.route);

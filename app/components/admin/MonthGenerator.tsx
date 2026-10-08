@@ -4404,7 +4404,11 @@ export default function MonthGenerator({
     applySpecialFill(config, cells, undefined, fillEmptyOnly, countedSpecialIds());
   }
 
-  /** Every exit fills uncounted specials and instruments as today (AD-7); counted specials are the pre-fill's. */
+  /**
+   * Every exit of THIS horizon (refusal, transport, handshake, success) fills uncounted specials and
+   * instruments as today (AD-7); counted specials are the pre-fill's. A horizon changed during the read
+   * or the solve is not one: nothing is applied or filled (RQ-1).
+   */
   function applyV3AutoResult(config: SolverConfig, result: V3AutoResult, horizonKey: string) {
     // RQ-1, at both ends: a horizon changed during the read («stale») OR during the solve gets nothing —
     // no fill, no frozen entries, no report — as the derived path does for a changed month. AD-7's fill

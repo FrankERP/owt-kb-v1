@@ -9,7 +9,8 @@
 //   3. the pure builder (its refusals are Auto's);
 //   4. `POST /api/admin/solve`, aborted by the client at 58 s (the route answers first, at 55 s);
 //   5. AD-3's classification and AD-4's handshake. The caller applies (AD-5) and fills uncounted
-//      specials and instruments at every exit (AD-7).
+//      specials and instruments at every exit of the horizon Auto was pressed on (AD-7); a horizon
+//      changed during the read («stale») or the solve gets nothing applied or filled (RQ-1).
 // SP-5: a refusal before the pre-fill ran adds the counted-specials line when any were waiting (the
 // builder adds it for its own refusals).
 
