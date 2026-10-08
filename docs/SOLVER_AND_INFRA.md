@@ -824,8 +824,9 @@ Both of the first two are listed by exact `file + operation` in the protected-re
   person, what changed, for a fresh consent.
 - **Months:** strictly before the current CDMX month — October 2026 only on or after 2026-11-01. A month
   with no record and no stored weekend service or counted special is skipped («sin servicios guardados»). A
-  month whose record a v3 Auto confirm wrote reads «no lo escribió la reconstrucción: no se toca» —
-  expected, not a failure. Exit codes: `0` done · `2` refused before any write · `1` failed or partial.
+  month whose record a v3 Auto confirm wrote reads «no lo escribió la reconstrucción: no se toca», and one
+  whose reconstructed record was edited by hand since reads «editado después de reconstruir: no se toca» —
+  both expected, not failures. Exit codes: `0` done · `2` refused before any write · `1` failed or partial.
 - The protected-read audit lists the CLI file in `OPERATOR_TOOLING_ALLOWLIST` (the one caller of C2's
   executor outside `app/`); `serviceCommitCallers.test.ts` pins it and `lib/reconstructDecide.ts` as the
   write-request module's only importers under `scripts/`. Retirement (the gate, the registry move, the
