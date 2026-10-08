@@ -5,6 +5,9 @@
 // (`d-<name>-<name>`, C6 spec §3) built from those fictitious names, for the key-hygiene tests:
 // none of its keys may ever reach a request, a rendered line, a log or KH-3's table.
 import type { PersonRestriction, RestrictionCap, SolverConfig } from "../plannerModel";
+import type {
+  FairnessLedgerResponse, FairnessPerson, Figures, LogicalRecord, RoleKey, Status,
+} from "@/app/utils/fairnessVocabulary";
 
 export const ANA = { _id: "m-ana", member_name: "Ana Ruiz", alias: "Ana", memberType: ["voz", "sunday_lead"] };
 export const BRUNO = { _id: "m-bruno", member_name: "Bruno Díaz", alias: "Bruno", memberType: ["voz", "sunday_lead"] };
@@ -41,3 +44,45 @@ export const NAME_SHAPED: SolverConfig = config({
 export const NAME_SHAPED_KEYS = [
   "d-ana", "d-ana-sun-lead", "d-bruno", "d-bruno-a", "d-bruno-b", "d-bruno-dani", "d-ana-bruno", "d-carla-dani",
 ];
+
+// ─── C2 IF2-8 bodies (shapes are C2's; values fictitious) ────────────────────
+
+export const ALL_IN: Record<RoleKey, Status> = {
+  "Sun.Lead": "in", "Sat.Lead": "in", "Sun.BGV": "in", "Sat.BGV": "in", "Sun.Choir": "in", "Sat.Choir": "in",
+};
+
+/** A `Figures` with explicit tenths — tests state display values, they never derive them. */
+export const figures = (balance: number, seats = 0, tenths = { share: 0, balance: 0 }): Figures => ({
+  share: balance + seats * 100, received: seats * 100, balance, seats, tenths,
+});
+
+export function ledgerPerson(memberId: string, name: string, over: Partial<FairnessPerson> = {}): FairnessPerson {
+  return {
+    memberId, name, exists: true, window: {}, cumulative: {}, tabs: { window: {}, cumulative: {} }, sang: 0,
+    exempt: false, months: [], countedSundayLeads: [], firstRecordedIn: {}, ...over,
+  };
+}
+
+export function record(month: string, people: LogicalRecord["people"], over: Partial<LogicalRecord> = {}): LogicalRecord {
+  return {
+    month, rev: `rev-${month}`, contentHash: "sha256:0", source: "auto", engine: "v3", environment: "local",
+    recordedAt: `${month}-02T18:00:00.000Z`, people, presence: [], ...over,
+  };
+}
+
+export function ledgerResponse(
+  months: string[],
+  opts: {
+    currentMonth?: string;
+    horizon?: Array<Partial<FairnessLedgerResponse["horizon"][number]>>;
+    people?: FairnessPerson[];
+  } = {},
+): FairnessLedgerResponse {
+  return {
+    v: 1, engine: "v3", environment: "local", currentMonth: opts.currentMonth ?? "2026-10", target: months[0],
+    window: [], recordsSince: null,
+    horizon: months.map((month, i) => ({ month, record: null, storedServices: 0, recordBinds: false, ...(opts.horizon?.[i] ?? {}) })),
+    people: opts.people ?? [],
+    diagnostics: { duplicateTargets: [], notInRecordSeats: 0, unknownMembers: [] },
+  };
+}
