@@ -49,7 +49,7 @@ import { solverConfigFromDocument } from "../../app/utils/solverConfigWriteReque
 import { fairnessRecordEnvironment } from "../../app/utils/solverDeployment";
 import { joinAnomalies, lostBlocks, monthAnomalies, poolAnomalies, sortAnomalies } from "./reconstructAnomalies";
 import { USAGE, defaultPreviewRun, notPastMonths, parseReconstructArgs, privatePathRefusals, type ReconstructArgs, type RunMode } from "./reconstructArgs";
-import { decideWrite, hashOfBody, parseRecord, summarizeStored, validateReconstructionBody, type StoredSummary } from "./reconstructDecide";
+import { RECORDED_BY, decideWrite, hashOfBody, parseRecord, summarizeStored, validateReconstructionBody, type StoredSummary } from "./reconstructDecide";
 import {
   dedupeRefusals,
   hypotheticalConfig,
@@ -61,13 +61,26 @@ import {
   type TransformResult,
 } from "./reconstructInference";
 import { outOfRunEntries, parseOverrides, type Overrides } from "./reconstructOverrides";
-import { backupText, fingerprintOf, hashText, memberInputDigest, serializePlan, serviceInputDigest, type WriteMonthPlan, type WritePlanContent } from "./reconstructPlanFile";
+import {
+  backupText,
+  fingerprintOf,
+  hashText,
+  memberInputDigest,
+  parsePlanFile,
+  planDifferences,
+  serializePlan,
+  serviceInputDigest,
+  type PlanFile,
+  type WriteMonthPlan,
+  type WritePlanContent,
+} from "./reconstructPlanFile";
 import { ledgerMembers, monthLedger, plannedLogicalRecord, previewFigures, previewWindow, seatsPerLine } from "./reconstructPreview";
 import {
   ACTION_LABEL,
   SERVICE_TYPE_LABEL,
   anomalyText,
   refusalLine,
+  renderApplyReport,
   renderRefusalReport,
   renderTable,
   replaceChanges,
@@ -190,7 +203,15 @@ async function run(argv: readonly string[], deps: RunDeps): Promise<number> {
   const today = deps.now().toLocaleDateString("sv", { timeZone: "America/Mexico_City" });
   const currentMonth = today.slice(0, 7);
 
-  const months = args.months ?? [];
+  // R15, R19 — an apply runs only the reviewed plan, under the fingerprint Frank approved: a local read, before any Sanity read.
+  const plan = args.plan ? readPlan(args) : null;
+  const months = args.months ?? plan?.content.inputs.months ?? [];
+  if (plan && args.months && args.months.join(",") !== plan.content.inputs.months.join(",")) {
+    throw new Refusal(["--months no coincide con los meses del plan revisado"]);
+  }
+  if (plan && plan.content.mode === "write" && args.previewRun !== null && args.previewRun !== plan.content.inputs.previewRun) {
+    throw new Refusal(["--preview-run no coincide con la corrida del plan revisado"]);
+  }
 
   const notPast = notPastMonths(months, currentMonth);
   if (notPast.length > 0) {
@@ -232,9 +253,10 @@ async function run(argv: readonly string[], deps: RunDeps): Promise<number> {
     overridesText,
     runDir: runDirFor(args.out, deps.now(), args.mode),
   };
-  // ── Modes (C4 Tasks 8 and 9 wire the apply and the rollback here).
-  if (args.mode !== "dry-run") throw new Refusal([`${args.mode}: modo no disponible todavía en esta versión`]);
-  return dryRun(ctx);
+  // ── Modes (C4 Task 9 wires the rollback here).
+  if (args.mode === "dry-run") return dryRun(ctx);
+  if (args.mode === "apply" && plan) return apply(ctx, plan);
+  throw new Refusal([`${args.mode}: modo no disponible todavía en esta versión`]);
 }
 
 function readLocal(file: string, flag: string): string {
@@ -650,4 +672,132 @@ function reportRefusals(ctx: Ctx, refusals: readonly RunRefusal[], nameOf: (id: 
   refusals.forEach((r, i) => ctx.deps.err(refusalLine(r, i + 1, refusals.length, file)));
   ctx.deps.err("Nada se escribió en Sanity, ni tabla ni plan.");
   return 2;
+}
+
+// ─── The apply (R14–R17, R19) ───────────────────────────────────────────────────
+
+/** The reviewed plan file, under the fingerprint the consent named (R19). A local read — no Sanity data yet. */
+function readPlan(args: ReconstructArgs): PlanFile {
+  const parsed = parsePlanFile(readLocal(args.plan ?? "", "--plan"));
+  if (!parsed.ok) throw new Refusal([`--plan: ${parsed.reason}`]);
+  if (parsed.plan.fingerprint !== args.fingerprint) {
+    throw new Refusal(["--fingerprint no es la huella de ese plan: solo se aplica el plan cuya huella aprobó Frank (R19)"]);
+  }
+  const wanted = args.mode === "apply" ? "write" : "rollback";
+  if (parsed.plan.content.mode !== wanted) {
+    throw new Refusal([
+      `--plan es un plan de ${parsed.plan.content.mode === "write" ? "escritura" : "borrado"}; esta corrida necesita uno de ${wanted === "write" ? "escritura" : "borrado"}`,
+    ]);
+  }
+  return parsed.plan;
+}
+
+function bindingRefusal(differences: readonly string[]): RunRefusal {
+  return {
+    reason: "plan_binding",
+    kind: "plan",
+    rules: [],
+    detail: `Lo que se lee hoy ya no es lo que dice el plan revisado; difiere: ${differences.join(", ")}.`,
+    fix: "Corre el dry run otra vez, revisa la tabla nueva y pide a Frank un consentimiento nuevo a la huella nueva (R15).",
+  };
+}
+
+function backupRefusal(month: string): RunRefusal {
+  return {
+    reason: "backup_missing",
+    kind: "plan",
+    rules: [],
+    month,
+    detail: "El respaldo del registro que se reemplazaría o borraría no está junto al plan, o cambió (R18).",
+    fix: "Aplica el plan desde la carpeta donde lo escribió el dry run, o corre el dry run otra vez.",
+  };
+}
+
+/** R18: every backup the plan names must sit beside the plan file with the bytes the plan hashed; the first month without one, else null. */
+function missingBackup(ctx: Ctx, entries: ReadonlyArray<{ month: string; backup: { file: string; hash: string } | null }>): string | null {
+  const dir = path.dirname(ctx.args.plan ?? "");
+  for (const entry of entries) {
+    if (!entry.backup) continue;
+    let text: string | null;
+    try {
+      text = readFileSync(path.join(dir, entry.backup.file), "utf8");
+    } catch {
+      text = null;
+    }
+    if (text === null || hashText(text) !== entry.backup.hash) return entry.month;
+  }
+  return null;
+}
+
+async function apply(ctx: Ctx, plan: PlanFile): Promise<number> {
+  if (plan.content.mode !== "write") throw new Refusal(["--plan no es un plan de escritura"]);
+  const content = plan.content;
+  // R15 — re-derive EVERYTHING from live data and the same corrections; any difference refuses the whole run.
+  const reads = await readWorld(ctx.read, content.inputs.months, content.inputs.previewRun);
+  const outcome = derive({
+    reads,
+    months: content.inputs.months,
+    previewRun: content.inputs.previewRun,
+    overridesText: ctx.overridesText,
+    currentMonth: ctx.currentMonth,
+    environment: ctx.environment,
+  });
+  if (outcome.kind === "absent_config") throw new Refusal(["ya no existe solverConfig: el plan no se puede volver a derivar. Nada se escribió."]);
+  if (outcome.kind === "refused") {
+    return reportRefusals(ctx, [bindingRefusal(["la derivación en vivo ahora se rechaza"]), ...outcome.refusals], outcome.nameOf);
+  }
+  const differences = planDifferences(content, outcome.derived.content);
+  if (differences.length > 0) return reportRefusals(ctx, [bindingRefusal(differences)], () => "");
+  const missing = missingBackup(ctx, content.months);
+  if (missing !== null) return reportRefusals(ctx, [backupRefusal(missing)], () => "");
+
+  // R16 — oldest first, ONE month per executor call, stop at the first refusal or thrown error.
+  const stamps: FairnessStamps = { recordedBy: RECORDED_BY, now: ctx.deps.now().toISOString(), currentMonth: ctx.currentMonth, environment: ctx.environment };
+  const writes = content.months.filter((m) => m.action === "create" || m.action === "replace");
+  const results: Array<{ month: string; verdict: string; memberIds?: string[] }> = [];
+  let stopped = false;
+  for (const m of writes) {
+    if (!m.body) throw new Error("a planned write without a body");
+    const entry = { month: m.month, expectedRev: m.body.expectedRev, people: m.body.people, presence: m.body.presence };
+    let result: FairnessExecution | undefined;
+    try {
+      [result] = await ctx.deps.execute({ clients: { read: ctx.read, write: ctx.write! }, actor: "reconstruction", op: "write", months: [entry], stamps });
+    } catch (e) {
+      results.push({ month: m.month, verdict: `error ${errorClass(e)}` });
+      stopped = true;
+      break;
+    }
+    const verdict = result?.verdict;
+    if (verdict === "created" || verdict === "replaced" || verdict === "unchanged") {
+      results.push({ month: m.month, verdict });
+      continue;
+    }
+    results.push({
+      month: m.month,
+      verdict: verdict && typeof verdict === "object" ? verdict.refused : "sin respuesta",
+      ...(result?.memberIds ? { memberIds: result.memberIds } : {}),
+    });
+    stopped = true;
+    break;
+  }
+  return finishWrites(ctx, results, writes.map((m) => m.month), stopped);
+}
+
+/** R16's report: what landed, what was refused, what was never attempted — and the one repair: the dry run again. */
+function finishWrites(ctx: Ctx, results: Array<{ month: string; verdict: string; memberIds?: string[] }>, planned: string[], stopped: boolean): number {
+  const notAttempted = planned.filter((month) => !results.some((r) => r.month === month));
+  const report = writeRunFile(ctx, "aplicado.md", renderApplyReport({ generatedAt: ctx.deps.now().toISOString(), mode: ctx.args.mode, results, notAttempted }));
+  for (const r of results) ctx.deps.out(`${r.month} · ${r.verdict}`);
+  if (notAttempted.length > 0) ctx.deps.out(`sin intentar: ${notAttempted.join(", ")}`);
+  ctx.deps.out(`informe: ${report}`);
+  if (stopped) {
+    ctx.deps.out("Una escritura fallida pudo haber llegado: corre el dry run otra vez antes de cualquier reparación; los meses que sí llegaron dirán «sin cambios» (R16).");
+    return 1;
+  }
+  ctx.deps.out(
+    ctx.args.mode === "apply"
+      ? "Listo. Corre el dry run otra vez: cada mes escrito debe decir «sin cambios» (R17)."
+      : "Listo. Esos meses ahora dicen «sin registro, no cuenta» (F3).",
+  );
+  return 0;
 }
