@@ -49,7 +49,16 @@ import { solverConfigFromDocument } from "../../app/utils/solverConfigWriteReque
 import { fairnessRecordEnvironment } from "../../app/utils/solverDeployment";
 import { joinAnomalies, lostBlocks, monthAnomalies, poolAnomalies, sortAnomalies } from "./reconstructAnomalies";
 import { USAGE, defaultPreviewRun, notPastMonths, parseReconstructArgs, privatePathRefusals, type ReconstructArgs, type RunMode } from "./reconstructArgs";
-import { RECORDED_BY, decideWrite, hashOfBody, parseRecord, summarizeStored, validateReconstructionBody, type StoredSummary } from "./reconstructDecide";
+import {
+  RECORDED_BY,
+  decideDelete,
+  decideWrite,
+  hashOfBody,
+  parseRecord,
+  summarizeStored,
+  validateReconstructionBody,
+  type StoredSummary,
+} from "./reconstructDecide";
 import {
   dedupeRefusals,
   hypotheticalConfig,
@@ -71,17 +80,21 @@ import {
   serializePlan,
   serviceInputDigest,
   type PlanFile,
+  type RollbackMonthPlan,
+  type RollbackPlanContent,
   type WriteMonthPlan,
   type WritePlanContent,
 } from "./reconstructPlanFile";
 import { ledgerMembers, monthLedger, plannedLogicalRecord, previewFigures, previewWindow, seatsPerLine } from "./reconstructPreview";
 import {
   ACTION_LABEL,
+  ROLLBACK_LABEL,
   SERVICE_TYPE_LABEL,
   anomalyText,
   refusalLine,
   renderApplyReport,
   renderRefusalReport,
+  renderRollbackTable,
   renderTable,
   replaceChanges,
   targetLine,
@@ -90,7 +103,17 @@ import {
   type TableMonth,
   type TableRow,
 } from "./reconstructReport";
-import { ReadFailure, type Anomaly, type Correction, type Line, type MonthAction, type ReconstructionBody, type RosterRow, type RunRefusal } from "./reconstructTypes";
+import {
+  ReadFailure,
+  type Anomaly,
+  type Correction,
+  type Line,
+  type MonthAction,
+  type ReconstructionBody,
+  type RollbackAction,
+  type RosterRow,
+  type RunRefusal,
+} from "./reconstructTypes";
 import type { GitFs } from "./solverHistoryDiffRun";
 
 /** `sanity/env.ts`'s default, when NEXT_PUBLIC_SANITY_API_VERSION is unset. */
@@ -253,10 +276,11 @@ async function run(argv: readonly string[], deps: RunDeps): Promise<number> {
     overridesText,
     runDir: runDirFor(args.out, deps.now(), args.mode),
   };
-  // ── Modes (C4 Task 9 wires the rollback here).
+  // ── Modes.
   if (args.mode === "dry-run") return dryRun(ctx);
-  if (args.mode === "apply" && plan) return apply(ctx, plan);
-  throw new Refusal([`${args.mode}: modo no disponible todavía en esta versión`]);
+  if (args.mode === "rollback") return rollbackDry(ctx);
+  if (!plan) throw new Refusal(["--apply necesita el plan revisado (--plan)"]);
+  return args.mode === "apply" ? apply(ctx, plan) : rollbackApply(ctx, plan);
 }
 
 function readLocal(file: string, flag: string): string {
@@ -800,4 +824,105 @@ function finishWrites(ctx: Ctx, results: Array<{ month: string; verdict: string;
       : "Listo. Esos meses ahora dicen «sin registro, no cuenta» (F3).",
   );
   return 0;
+}
+
+// ─── The rollback (R18) ─────────────────────────────────────────────────────────
+
+/**
+ * A rollback infers nothing: it reads only the requested months' records (IF2-25, on
+ * the token-carrying client) — no roster, no rules, no services, no resolver, no
+ * ledger — so a later rule refusal or a stale name can never block it. It reads `_id`,
+ * `_rev`, `source` and IF2-19's recomputed hash, without the parser (a malformed record
+ * can still be listed and refused).
+ */
+async function rollbackContent(ctx: Ctx, months: string[]): Promise<{ content: RollbackPlanContent; backups: Array<{ file: string; text: string }> }> {
+  const rows = asRows(await fetchStep(ctx.read, "records", fairnessMonthsThroughQuery(months[months.length - 1])), "records");
+  const byMonth = new Map<string, Record<string, unknown>>();
+  for (const doc of rows) {
+    const month = monthOfRecord(doc);
+    if (months.includes(month)) byMonth.set(month, doc);
+  }
+  const backups: Array<{ file: string; text: string }> = [];
+  const plans = months.map((month): RollbackMonthPlan => {
+    const doc = byMonth.get(month) ?? null;
+    const summary = doc ? summarizeStored(doc) : null;
+    const decision = decideDelete({ month, currentMonth: ctx.currentMonth, stored: summary });
+    const action: RollbackAction =
+      decision === "delete"
+        ? "delete"
+        : typeof decision === "object" && (decision.refused === "not_reconstruction_owned" || decision.refused === "record_edited")
+          ? decision.refused
+          : "none";
+    let backup: { file: string; hash: string } | null = null;
+    if (action === "delete" && doc) {
+      const text = backupText(doc);
+      const file = `backup-${month}.json`;
+      backups.push({ file, text });
+      backup = { file, hash: hashText(text) };
+    }
+    return {
+      month,
+      action,
+      stored: summary
+        ? { id: summary.id, rev: summary.rev, source: summary.source, contentHash: summary.contentHash, recomputedHash: summary.recomputedHash }
+        : null,
+      backup,
+    };
+  });
+  return { content: { mode: "rollback", inputs: { months }, months: plans }, backups };
+}
+
+async function rollbackDry(ctx: Ctx): Promise<number> {
+  const d = await rollbackContent(ctx, ctx.months);
+  for (const b of d.backups) writeRunFile(ctx, b.file, b.text); // R18: every backup before the plan
+  const generatedAt = ctx.deps.now().toISOString();
+  const tablePath = writeRunFile(ctx, "tabla.md", renderRollbackTable({ generatedAt, projectId: ctx.projectId, dataset: ctx.dataset, content: d.content }));
+  const planPath = writeRunFile(ctx, "plan.json", serializePlan(d.content, generatedAt));
+  for (const m of d.content.months) ctx.deps.out(`${m.month} · ${ROLLBACK_LABEL[m.action]}`);
+  ctx.deps.out(`huella del plan: ${fingerprintOf(d.content)}`);
+  ctx.deps.out(`tabla: ${tablePath}`);
+  ctx.deps.out(`plan: ${planPath}`);
+  ctx.deps.out("Nada se borró. --rollback --apply solo después del consentimiento explícito de Frank a esta huella (R19).");
+  return 0;
+}
+
+async function rollbackApply(ctx: Ctx, plan: PlanFile): Promise<number> {
+  if (plan.content.mode !== "rollback") throw new Refusal(["--plan no es un plan de borrado"]);
+  const content = plan.content;
+  const live = await rollbackContent(ctx, content.inputs.months);
+  const differences = planDifferences(content, live.content);
+  if (differences.length > 0) return reportRefusals(ctx, [bindingRefusal(differences)], () => "");
+  const missing = missingBackup(ctx, content.months);
+  if (missing !== null) return reportRefusals(ctx, [backupRefusal(missing)], () => "");
+
+  const stamps: FairnessStamps = { recordedBy: RECORDED_BY, now: ctx.deps.now().toISOString(), currentMonth: ctx.currentMonth, environment: ctx.environment };
+  const deletes = content.months.filter((m) => m.action === "delete");
+  const results: Array<{ month: string; verdict: string }> = [];
+  let stopped = false;
+  for (const m of deletes) {
+    if (!m.stored) throw new Error("a planned delete without a stored record");
+    let result: FairnessExecution | undefined;
+    try {
+      [result] = await ctx.deps.execute({
+        clients: { read: ctx.read, write: ctx.write! },
+        actor: "reconstruction",
+        op: "delete",
+        months: [{ month: m.month, expectedRev: m.stored.rev }],
+        stamps,
+      });
+    } catch (e) {
+      results.push({ month: m.month, verdict: `error ${errorClass(e)}` });
+      stopped = true;
+      break;
+    }
+    const verdict = result?.verdict;
+    if (verdict === "deleted") {
+      results.push({ month: m.month, verdict });
+      continue;
+    }
+    results.push({ month: m.month, verdict: verdict && typeof verdict === "object" ? verdict.refused : String(verdict ?? "sin respuesta") });
+    stopped = true;
+    break;
+  }
+  return finishWrites(ctx, results, deletes.map((m) => m.month), stopped);
 }
