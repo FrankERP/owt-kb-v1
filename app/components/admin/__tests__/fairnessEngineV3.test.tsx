@@ -1,11 +1,9 @@
 /** @vitest-environment jsdom */
 // Solver v3 C1-R11, parent U7 — «aplica con el nuevo solver» shows exactly while the
-// engine is v2. Here the constant is mocked to "v3": every surface keeps its Switch
-// and drops the note. (The v2 side is asserted beside each surface's own tests.)
+// engine is v2. Here the server-resolved engine prop is "v3" (C6 CTL-1): every surface keeps its Switch and drops the note. (The v2 side is asserted beside each surface's own tests.)
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../solverEngine", () => ({ SOLVER_ENGINE: "v3" }));
 
 import MonthCalendar from "../MonthCalendar";
 import PlannerGrid from "../PlannerGrid";
@@ -22,15 +20,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('the note under SOLVER_ENGINE "v3"', () => {
+describe('the note under engine "v3" (the prop)', () => {
   it("the note component renders nothing", () => {
-    const { container } = render(<FairnessEngineNote />);
+    const { container } = render(<FairnessEngineNote engine="v3" />);
     expect(container.textContent).toBe("");
   });
 
   it("the grid keeps its switches and drops the note", () => {
     render(
       <PlannerGrid
+        engine="v3"
         rows={buildRows()}
         columns={buildColumns({ sundayDates: ["2026-08-09"], activeSatDates: [] })}
         cells={[]}
@@ -58,6 +57,7 @@ describe('the note under SOLVER_ENGINE "v3"', () => {
   it("the special composer keeps its switch and drops the note", () => {
     const { container } = render(
       <MonthCalendar
+        engine="v3"
         year={2026}
         month={8}
         selectedSundays={[]}

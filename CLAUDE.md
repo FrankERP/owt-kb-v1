@@ -172,6 +172,9 @@ looks wrong** — several exist to stop a plausible-looking change.
   for the target month on every Auto (never `localStorage`, never cached — ADR-0042), a failed
   read refuses the solve, no panel is handed `[]` as a stand-in, and `owt_solver_history_v2` is
   written only on confirm. The Historial chips are read-only.
+- **Two solver parsers, never crossed (solver v3 C6, U8):** client branches read the server-resolved
+  `engine` prop, never `SOLVER_ENGINE`; a v3 answer goes only through `v3SolveResponse.ts`, a v2 one
+  only through v2's parsers; v3 copy only in `v3Copy.ts`; no rule key on the wire, a line or a log.
 - **Client mutation handlers** wrap `fetch` in try/catch/finally, check `res.ok`, reset their
   loading flag, and never close-as-success on failure.
 - **`/api/cron/*` stays excluded from the `proxy.ts` matcher** (those routes check
@@ -256,6 +259,9 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `lyricMarkers.tsx`, `TutorialPoster`, `RehearsalPlayer`/`Waveform` (URLs always
   `/api/audio/[song]/[key]`), `PracticeCluster`.
 - **Availability:** `useAvailability` is the ONLY client-side writer — one hook call per page.
+- **Solver v3 planner (C6, behind the engine prop):** `buildV3SolveRequest` (the ONE v3 request
+  builder), `runV3Auto`, `freezeConfirmEntries`/`runV3ConfirmAttempt` (the ONE v3 confirm —
+  critical), `v3Copy.ts`, `prefillCountedSpecials`.
 - Motion tokens are `--motion-*`/`--ease-*`; `motion` is importable only under
   `app/components/ui/**` (`docs/MOTION.md`, ADR-0031).
 

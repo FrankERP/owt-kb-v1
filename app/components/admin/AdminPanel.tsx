@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useReducer, useRef, useMemo } from "r
 import dynamic from "next/dynamic";
 import { useSession } from "next-auth/react";
 import ServicesPanel from "./ServicesPanel";
+import type { SolverEngine } from "./solverEngine";
 import IntegrityQueuePanel from "./IntegrityQueuePanel";
 import PanelSkeleton from "./PanelSkeleton";
 import PanelBoundary from "./PanelBoundary";
@@ -53,8 +54,15 @@ export default function AdminPanel({
   role = "super-admin",
   initialTab,
   tabNamedInUrl = false,
+  engine = "v2",
 }: {
   role?: OWTRole;
+  /**
+   * The effective solver engine, resolved by `/admin`'s Server Component (C6 ENG-3). The literal
+   * default is for tests only; the page always passes it, and `engineProp.test.ts` fails a mount
+   * that does not.
+   */
+  engine?: SolverEngine;
   /** Resolved from `?tab=` on the server; see `adminTabs.resolveAdminTab`. */
   initialTab?: Tab;
   /** True only when the URL actually named that tab, rather than falling back. */
@@ -223,7 +231,7 @@ export default function AdminPanel({
                 target={integrityTarget}
                 onResolved={integrity.resolve}
               />
-              <ServicesPanel />
+              <ServicesPanel engine={engine} />
             </div>
           </ServiceHandoffProvider>
         );

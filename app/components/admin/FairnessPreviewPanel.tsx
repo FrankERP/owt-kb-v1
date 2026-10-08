@@ -50,6 +50,9 @@ import {
   type PreviewRow,
 } from "./fairnessPreviewModel";
 import type { SolverConfig } from "./plannerModel";
+import type { SolverEngine } from "./solverEngine";
+import { ledgerDiagnosticsLines, planCells, type EquidadPlan } from "./v3Equidad";
+import { V3_LINES } from "./v3Copy";
 
 export const FAIRNESS_ENDPOINT = "/api/admin/fairness";
 export const FAIRNESS_MONTHS_ENDPOINT = "/api/admin/fairness/months";
@@ -67,9 +70,22 @@ export interface FairnessPreviewPanelProps {
   storedServices: ReadonlyArray<{ _type: string; date: string; countsForFairness?: boolean }>;
   /** Whether the on-screen rules differ from the saved ones. */
   rulesDirty: boolean;
+  /**
+   * The server-resolved engine (solver v3 C6 EQ-2). The banner shows exactly when it is "v2"; under
+   * "v3" the two plan columns appear. Every mount passes it (`engineProp.test.ts`); the literal
+   * default serves C2's own tests only.
+   */
+  engine?: SolverEngine;
+  /** C6 EQ-3/EQ-4: the last v3 run of this horizon; `null` before any run (the plan columns read «—»). */
+  plan?: EquidadPlan | null;
 }
 
-function FiguresTable({ rows, total, sinceLabel }: { rows: PreviewRow[]; total: boolean; sinceLabel: string }) {
+function FiguresTable({ rows, total, sinceLabel, plan, tab }: {
+  rows: PreviewRow[]; total: boolean; sinceLabel: string;
+  /** C6: present (possibly `null`) only under v3 — then the two plan columns render. */
+  plan?: EquidadPlan | null; tab: TabKey;
+}) {
+  const showPlan = plan !== undefined;
   return (
     <>
       {/* Desktop: never widens the page — its own horizontal scroller (ADR-0035). */}
@@ -82,6 +98,8 @@ function FiguresTable({ rows, total, sinceLabel }: { rows: PreviewRow[]; total: 
               <th className="py-1 pr-3">{COPY.columns.tuvo}</th>
               <th className="py-1 pr-3">{COPY.columns.saldo}</th>
               <th className="py-1 pr-3">{COPY.columns.desde(sinceLabel)}</th>
+              {showPlan && <th className="py-1 pr-3">{V3_LINES.colEnEstePlan}</th>}
+              {showPlan && <th className="py-1 pr-3">{V3_LINES.colQueda}</th>}
               {total && <th className="py-1 pr-3">{COPY.columns.canto}</th>}
               <th className="py-1">{COPY.columns.motivo}</th>
             </tr>
@@ -94,6 +112,8 @@ function FiguresTable({ rows, total, sinceLabel }: { rows: PreviewRow[]; total: 
                 <td className="py-1 pr-3 tabular-nums">{r.tuvo}</td>
                 <td className="py-1 pr-3">{r.saldo}</td>
                 <td className="py-1 pr-3">{r.desde}</td>
+                {showPlan && <td className="py-1 pr-3 tabular-nums">{planCells(plan, r.memberId, tab).enEstePlan}</td>}
+                {showPlan && <td className="py-1 pr-3">{planCells(plan, r.memberId, tab).queda}</td>}
                 {total && <td className="py-1 pr-3 tabular-nums">{r.canto}</td>}
                 <td className="py-1 text-mono-500">{r.motivo}</td>
               </tr>
@@ -113,6 +133,11 @@ function FiguresTable({ rows, total, sinceLabel }: { rows: PreviewRow[]; total: 
             <p className="text-mono-500">
               {COPY.columns.desde(sinceLabel)}: {r.desde}
             </p>
+            {showPlan && (
+              <p className="text-mono-500">
+                {V3_LINES.colEnEstePlan} {planCells(plan, r.memberId, tab).enEstePlan} · {V3_LINES.colQueda} {planCells(plan, r.memberId, tab).queda}
+              </p>
+            )}
             {r.motivo && <p className="text-mono-500">{r.motivo}</p>}
           </li>
         ))}
@@ -166,7 +191,10 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
   const countedSundays = useMemo(() => onScreenCountedSundays(month, props.storedServices), [month, props.storedServices]);
 
   const data = load.status === "ready" ? load.data : null;
+  const engine = props.engine ?? "v2";
   const extraMotivo = (person: FairnessPerson) => {
+    // C6 EQ-4: after a v3 run of this horizon, the row's reason (cadence from RQ-4's values) is the run's.
+    if (engine === "v3" && props.plan) return props.plan.reason(person.memberId, tab);
     if (!data || tab !== "DL") return "";
     const live = props.members.find((m) => m._id === person.memberId)?.unavailableDates ?? [];
     return (
@@ -222,7 +250,12 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
         {COPY.disclosure}
       </Button>
       <Collapse id={bodyId} open={open} className="space-y-3">
-        <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
+        {engine === "v2" && (
+          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
+        )}
+        {engine === "v3" && data && ledgerDiagnosticsLines(data.diagnostics).map((line) => (
+          <p key={line} className="font-body text-xs text-warning-strong">{line}</p>
+        ))}
         {load.status === "loading" && (
           <SkeletonGroup label={COPY.loading} className="space-y-2">
             <Skeleton className="h-4 w-2/3" />
@@ -260,14 +293,14 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
               onChange={setTab}
               options={TABS.map((t) => ({ value: t.key, label: t.label }))}
             />
-            <FiguresTable rows={rows} total={tab === "TOTAL"} sinceLabel={sinceLabel} />
+            <FiguresTable rows={rows} total={tab === "TOTAL"} sinceLabel={sinceLabel} tab={tab} {...(engine === "v3" ? { plan: props.plan ?? null } : {})} />
             {out.length > 0 && (
               <div className="space-y-1">
                 <Button variant="ghost" size="sm" onClick={() => setOutOpen((v) => !v)} aria-expanded={outOpen} aria-controls={outId}>
                   {COPY.outGroup(out.length)}
                 </Button>
                 <Collapse id={outId} open={outOpen}>
-                  <FiguresTable rows={out} total={tab === "TOTAL"} sinceLabel={sinceLabel} />
+                  <FiguresTable rows={out} total={tab === "TOTAL"} sinceLabel={sinceLabel} tab={tab} {...(engine === "v3" ? { plan: props.plan ?? null } : {})} />
                 </Collapse>
               </div>
             )}

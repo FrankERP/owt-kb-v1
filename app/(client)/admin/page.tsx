@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Navbar from "@/app/components/Navbar";
 import AdminPanel from "@/app/components/admin/AdminPanel";
 import { resolveAdminTab } from "@/app/components/admin/adminTabs";
+import { resolveSolverEngine } from "@/app/utils/solverDeployment";
 
 export const metadata = { title: "Admin — Oasis Worship Team" };
 
@@ -16,6 +17,10 @@ export default async function AdminPage({
   const session = await requireActiveManager();
   if (!session) redirect("/");
   const role = session.user.role as OWTRole;
+  // Solver v3 C6 ENG-3: the effective engine is THIS deployment's (C2 IF2-14 — the constant, or
+  // the Preview-only override on the `preview` branch deployment and locally). Resolved here, on
+  // the server, and handed down as a plain string: no client module may read the override.
+  const engine = resolveSolverEngine(process.env);
   // Resolved here rather than in the panel so the server HTML and the first
   // client render agree, and so the role filter runs where the role is known
   // for certain. `resolveAdminTab` lives in a neutral module for the same
@@ -45,7 +50,7 @@ export default async function AdminPage({
         <header className="mx-auto max-w-7xl">
           <h1 className="font-display text-3xl font-semibold text-ink md:text-4xl">Control Room</h1>
         </header>
-        <AdminPanel role={role} initialTab={initialTab} tabNamedInUrl={tabNamedInUrl} />
+        <AdminPanel role={role} initialTab={initialTab} tabNamedInUrl={tabNamedInUrl} engine={engine} />
       </div>
     </>
   );

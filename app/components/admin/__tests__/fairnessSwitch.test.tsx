@@ -72,7 +72,7 @@ describe("FairnessSwitch", () => {
 
 describe("FairnessEngineNote", () => {
   it('shows the note while the engine is "v2"', () => {
-    render(<FairnessEngineNote />);
+    render(<FairnessEngineNote engine="v2" />);
     expect(screen.getByText(FAIRNESS_ENGINE_NOTE)).toBeTruthy();
   });
 });

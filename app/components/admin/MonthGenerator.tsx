@@ -95,6 +95,7 @@ import {
 import { SOLVER_HISTORY_SOURCE, SOLVER_SENDS_HISTORY } from "./solverHistorySource";
 import { fetchDerivedHistory, type DerivedHistoryFetchResult } from "./derivedHistoryClient";
 import { useDerivedSolverHistory, type DerivedHistoryHandle } from "./useDerivedSolverHistory";
+import type { SolverEngine } from "./solverEngine";
 import type { SolverHistoryDiagnostics, SolverHistoryMonth } from "@/app/utils/solverHistory";
 import { exactCapOverlaps } from "@/app/utils/solverConfigWriteRequest";
 import {
@@ -135,6 +136,22 @@ import {
   type StoredGridColumn,
   type StoredGridTranslation,
 } from "./storedRoleReadModel";
+import { cdmxCurrentMonth, horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
+import { monthNameCap, monthsList, V3_LINES, V3_ROUTE_COPY, transportLine, type V3Names } from "./v3Copy";
+import { runV3Auto, type V3AutoResult } from "./v3AutoRun";
+import { buildV3SolveRequest, preReadRefusals } from "./v3SolveRequest";
+import { applyV3Assignments, v3OutcomeLine, v3RetryOffered } from "./v3SolveResponse";
+import { buildV3RunReport, v3Names, type V3RunReport } from "./v3RunReport";
+import { renderRuleRefTable } from "./v3RuleIds";
+import V3RunPanel from "./V3RunPanel";
+import { displayedMonthStates, resolveMonthSources } from "./v3MonthSources";
+import { isLedgerBody, V3_LEDGER_TIMEOUT_MS } from "./v3AutoRun";
+import { confirmGuard, draftsByMonth, freezeConfirmEntries, guardLine, monthReportLines, twoMonthSummaryLine, type MonthProgress, type V3ConfirmEntry } from "./v3Confirm";
+import { INITIAL_V3_CONFIRM_STATE, progressFrom, runV3ConfirmAttempt, type V3ConfirmResult, type V3ConfirmState } from "./v3ConfirmRun";
+import V3IncompleteDialog from "./V3IncompleteDialog";
+import { buildEquidadPlan, type EquidadPlan } from "./v3Equidad";
+import type { FairnessLedgerResponse } from "@/app/utils/fairnessVocabulary";
+import type { V3Success } from "./v3Wire";
 import {
   classifyPatchOutcome,
   freezeSaveAttempt,
@@ -278,6 +295,12 @@ interface Props {
    * it closed for a record-bound month.
    */
   showCadencePoolWarning?: boolean;
+  /**
+   * The effective solver engine, resolved by `/admin`'s Server Component and threaded through
+   * `AdminPanel` → `ServicesPanel` (solver v3 C6 ENG-3). EVERY engine-dependent branch in this
+   * file reads this prop, never `SOLVER_ENGINE` (ENG-4). Under `"v2"` nothing changes.
+   */
+  engine?: SolverEngine;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -440,6 +463,29 @@ const SAVED_WINDOW_DAYS = 56;
 
 const uid = () => Math.random().toString(36).slice(2, 9);
 
+/** C6 ST-2: a service's target — a weekend type and date, or a special's date and normalized name (ADR-0011). */
+function v3TargetOf(c: Pick<GridColumn, "type" | "date" | "serviceName">): string {
+  return c.type === "special_role" ? `special_role|${c.date}|${normalizeServiceName(c.serviceName) ?? ""}` : `${c.type}|${c.date}`;
+}
+
+/** The draft create POST, shared by the v2 confirm (unchanged) and the v3 confirm (CF-5: today's mechanism). */
+async function postDraftToRoles(body: unknown): Promise<{ ok: boolean; status: number; error?: string }> {
+  const res = await fetch("/api/admin/roles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  let error: string | undefined;
+  if (!res.ok) {
+    try {
+      error = (await res.json())?.error;
+    } catch {
+      error = undefined;
+    }
+  }
+  return { ok: res.ok, status: res.status, error };
+}
+
 function getDates(year: number, month: number, day: 0 | 6): string[] {
   const dates: string[] = [];
   const d = new Date(year, month - 1, 1);
@@ -561,7 +607,9 @@ function savedWindowFor(year: number, month: number, allRoles: SavedRole[]): Sav
 
 // ─── MemberPool — extracted to module level to prevent scroll-reset on remount ──
 
-function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search, onSearch }: {
+function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search, onSearch, readOnly = false }: {
+  /** C6 ST-8: shown read-only when every horizon month is bound (its record decides). */
+  readOnly?: boolean;
   field: "sundayLeads" | "saturdayLeads" | "support";
   label: string;
   pool: MemberOption[];
@@ -581,7 +629,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
       <div className="flex items-center justify-between mb-1">
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</p>
         <button
-          type="button" onClick={onSelectAll}
+          type="button" onClick={onSelectAll} disabled={readOnly}
           className="font-label text-[10px] uppercase tracking-widest text-accent/70 hover:text-accent transition-colors"
         >
           {allSelected ? "Ninguno" : "Todos"}
@@ -600,6 +648,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         {visible.length === 0 && <p className="px-2 py-1 font-body text-xs text-mono-600 italic">Sin resultados</p>}
         {visible.map(m => (
           <Checkbox
+            disabled={readOnly}
             key={m._id}
             className={`w-full px-2 py-1 text-xs transition-colors ${config[field].includes(m._id) ? "bg-accent/10" : "hover:bg-accent/5"}`}
             checked={config[field].includes(m._id)}
@@ -639,8 +688,10 @@ function cadenceNameChip(issue: CadenceNameIssue): string {
     : "Nombre no reconocido en Alabanza";
 }
 
-function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
+function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole, engine = "v2" }: {
   r: PersonRestriction;
+  /** C6 CTL-1: C3's chip note shows only under v2. */
+  engine?: SolverEngine;
   onDelete: () => void;
   onEdit: () => void;
   nameIssue?: CadenceNameIssue;
@@ -683,7 +734,9 @@ function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
               <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30">
                 Mes por medio
               </span>
-              <span className="font-body text-[10px] text-mono-500 self-center">{CADENCE_V2_NOTE}</span>
+              {engine === "v2" && (
+                <span className="font-body text-[10px] text-mono-500 self-center">{CADENCE_V2_NOTE}</span>
+              )}
             </>
           )}
           {r.sundayCadence === "alternate" && nameIssue && (
@@ -1155,8 +1208,10 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
 
 // ─── Rule builder — main orchestrator ────────────────────────────────────────
 
-function RuleBuilder({ config, onChange, members, source, cadenceNameIssues }: {
+function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, engine = "v2" }: {
   config: SolverConfig;
+  /** C6 CTL-1, forwarded to each `RestrictionCard`. */
+  engine?: SolverEngine;
   onChange: (c: SolverConfig) => void;
   /** The PERSONA dropdown's list — `voz` members. Never what a name is resolved against. */
   members: MemberOption[];
@@ -1287,7 +1342,7 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues }: {
             siblings={config.restrictions.filter(x => x.id !== r.id)}
             onAdd={saveRestriction} onCancel={cancelEdit} />
         ) : (
-          <RestrictionCard key={r.id} r={r}
+          <RestrictionCard key={r.id} r={r} engine={engine}
             nameIssue={cadenceNameIssues.get(r.id)}
             exactOverlapRole={exactOverlapRole.get(r.id)}
             onDelete={() => rmRestriction(r.id)}
@@ -1796,7 +1851,15 @@ function historyMonthsLabel(months: SolverHistoryMonth[]): string {
     .join(" · ");
 }
 
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, fairnessServices }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, fairnessServices, engine = "v2", cadencePoolWarningMonths, poolsReadOnly = false, equidadPlan = null }: {
+  /** C6 ENG-3: forwarded to the rule cards (CTL-1). */
+  engine?: SolverEngine;
+  /** C6 WN-1: the horizon months the warning applies to (v3); named beside C3's heading. */
+  cadencePoolWarningMonths?: string[];
+  /** C6 ST-8: every horizon month is bound — the pool checkboxes are read-only. */
+  poolsReadOnly?: boolean;
+  /** C6 EQ-3/EQ-4: forwarded to the «Equidad» panel. */
+  equidadPlan?: EquidadPlan | null;
   members: MemberOption[];
   /** The month's stored services, for the «Equidad» preview's counted Sundays (C2 UI-5). */
   fairnessServices: ExistingRole[];
@@ -1878,7 +1941,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 
       <div className="grid grid-cols-3 gap-3">
         <MemberPool
-          field="sundayLeads" label="Líderes Domingo"
+          field="sundayLeads" label="Líderes Domingo" readOnly={poolsReadOnly}
           pool={sundayPool} config={config}
           onToggle={id => toggleMember("sundayLeads", id)}
           onSelectAll={() => selectAll("sundayLeads", sundayPool)}
@@ -1886,7 +1949,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
           onSearch={q => setSearches(s => ({ ...s, sundayLeads: q }))}
         />
         <MemberPool
-          field="saturdayLeads" label="Líderes Sábado"
+          field="saturdayLeads" label="Líderes Sábado" readOnly={poolsReadOnly}
           pool={saturdayPool} config={config}
           onToggle={id => toggleMember("saturdayLeads", id)}
           onSelectAll={() => selectAll("saturdayLeads", saturdayPool)}
@@ -1894,7 +1957,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
           onSearch={q => setSearches(s => ({ ...s, saturdayLeads: q }))}
         />
         <MemberPool
-          field="support" label="Soporte"
+          field="support" label="Soporte" readOnly={poolsReadOnly}
           pool={supportPool} config={config}
           onToggle={id => toggleMember("support", id)}
           onSelectAll={() => selectAll("support", supportPool)}
@@ -1935,6 +1998,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         <div className="rounded-lg border border-warning-strong/30 bg-warning-strong/10 px-3 py-2 space-y-1">
           <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">
             {CADENCE_OUTSIDE_HEADING}
+            {cadencePoolWarningMonths && cadencePoolWarningMonths.length > 0 && ` — ${monthsList(cadencePoolWarningMonths, true)}`}
           </p>
           <ul className="space-y-1">
             {cadenceOutside.map(x => (
@@ -1946,7 +2010,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         </div>
       )}
 
-      {derived ? (
+      {engine !== "v2" ? null : derived ? (
         <DerivedLeadPoolHistory config={config} members={members} history={derived} year={year} month={month} />
       ) : (
         <LeadPoolHistoryPanel
@@ -1966,6 +2030,8 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         members={members}
         storedServices={fairnessServices}
         rulesDirty={rulesDirtyOf(rules, config)}
+        engine={engine}
+        plan={engine === "v3" ? equidadPlan : undefined}
       />
 
       <RuleBuilder
@@ -1974,6 +2040,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         members={members.filter(m => m.memberType?.includes("voz"))}
         source={rules.source}
         cadenceNameIssues={cadenceNameIssues}
+        engine={engine}
       />
 
       {/*
@@ -1985,7 +2052,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
       <SolverConfigSaveBar config={config} rules={rules} />
 
       {/* Solver history indicator */}
-      {derived ? <DerivedHistoryBlock history={derived} /> : history.length > 0 && (
+      {engine !== "v2" ? null : derived ? <DerivedHistoryBlock history={derived} /> : history.length > 0 && (
         <div>
           <p className="font-label text-[11px] uppercase tracking-widest text-mono-500 mb-1">
             Historial ({history.length})
@@ -2016,6 +2083,7 @@ export default function MonthGenerator({
   mode = "create", members, existingRoles, onClose, onCreated, rules, capability, preflight, allRoles,
   initialMonth, focusRoleId, openComposerInitially = false, storedSource, storedCapabilities, onCleared,
   showCadencePoolWarning = false,
+  engine = "v2",
 }: Props) {
   const storedMode = mode === "stored";
   const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
@@ -2047,6 +2115,74 @@ export default function MonthGenerator({
   const [activeSatDates, setActiveSatDates] = useState<string[]>([]);
   /** E2's weekday specials for THIS month — reset whenever year/month changes. */
   const [specials, setSpecials] = useState<{ date: string; name: string; countsForFairness: boolean }[]>([]);
+  // Solver v3 C6 HZ-1/HZ-2 — the horizon: 1 or 2 consecutive months under v3; under v2 (and in the
+  // stored editor) exactly the selected month, so every v2 derivation below is unchanged.
+  const isV3 = engine === "v3";
+  const [horizonLength, setHorizonLength] = useState<HorizonLength>(1);
+  const firstMonth = `${year}-${String(month).padStart(2, "0")}`;
+  const horizon = useMemo(
+    () => horizonMonths(firstMonth, isV3 && !storedMode ? horizonLength : 1),
+    [firstMonth, isV3, storedMode, horizonLength],
+  );
+  const previousHorizon = useRef<string[]>([]);
+  // C6 RQ-1: a v3 Auto solves nothing if the horizon changed during its read.
+  const horizonKeyRef = useRef("");
+  useLayoutEffect(() => { horizonKeyRef.current = horizon.join(","); });
+  // The last v3 run of THIS horizon (EQ-3/EQ-4 read it; a horizon change makes it stale).
+  const [v3Run, setV3Run] = useState<{
+    build: Extract<ReturnType<typeof buildV3SolveRequest>, { ok: true }>;
+    response: V3Success;
+    report: V3RunReport;
+    names: V3Names;
+    horizonKey: string;
+  } | null>(null);
+  const [autoRetry, setAutoRetry] = useState<(() => void) | null>(null);
+  // §4 «Displayed state before a run»: one display read of the ledger per horizon change (v3 only).
+  // Banners, the read-only pools and WN-1's gate read it; every Auto still reads fresh (RQ-1). A
+  // failed or pending read shows every month as not bound, so banners and gates err toward showing.
+  const [displayLedger, setDisplayLedger] = useState<{ key: string; body: FairnessLedgerResponse } | null>(null);
+  const horizonKey = horizon.join(",");
+  useEffect(() => {
+    if (!isV3 || storedMode) return;
+    const months = horizonKey.split(",");
+    const controller = new AbortController();
+    fetch(`/api/admin/fairness?month=${months[0]}&horizon=${months.length}`, { cache: "no-store", signal: controller.signal })
+      .then(async (res) => {
+        const body: unknown = res.ok ? await res.json() : null;
+        if (isLedgerBody(body, months)) setDisplayLedger({ key: horizonKey, body });
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [isV3, storedMode, horizonKey]);
+  const shownLedger = displayLedger && displayLedger.key === horizonKey ? displayLedger.body : null;
+  const monthStates = displayedMonthStates(horizon, shownLedger);
+  const unboundMonths = horizon.filter((m) => monthStates.get(m) !== "bound");
+  const allBound = isV3 && !storedMode && unboundMonths.length === 0;
+  // C6 CF-2: the record entries frozen by the LAST v3 run of each horizon this session (a run of
+  // another horizon never evicts them — «if no v3 Auto ran for this horizon in this session»), and the
+  // confirm in progress (its frozen entries never change across retries; CF-7).
+  const v3EntriesRef = useRef(new Map<string, V3ConfirmEntry[]>());
+  type V3ConfirmSession = { key: string; entries: V3ConfirmEntry[]; state: V3ConfirmState; retry: boolean; publish: boolean };
+  const [v3Confirm, setV3Confirm] = useState<V3ConfirmSession | null>(null);
+  // The last attempt's lines, shown only while their own horizon is on screen (like «Reintentar»).
+  const [v3Report, setV3Report] = useState<{ key: string; lines: string[] } | null>(null);
+  // CF-10: the months this session's confirms left incomplete, by month, across horizons — those gaps
+  // exist in the dataset whichever horizon is on screen, so a horizon change never clears them; only a
+  // later attempt that completes a month removes it.
+  const [v3Gaps, setV3Gaps] = useState<Array<{ month: string; missing: number }>>([]);
+  const [incompleteOpen, setIncompleteOpen] = useState(false);
+  const reportV3 = (key: string, lines: readonly string[]) => setV3Report(lines.length > 0 ? { key, lines: [...lines] } : null);
+  function mergeV3Gaps(progress: readonly MonthProgress[]) {
+    setV3Gaps((prev) => {
+      const next = new Map(prev.map((g) => [g.month, g.missing] as const));
+      for (const p of progress) {
+        if (p.created < p.total) next.set(p.month, p.total - p.created);
+        else next.delete(p.month);
+      }
+      return [...next].sort(([a], [b]) => a.localeCompare(b)).map(([month, missing]) => ({ month, missing }));
+    });
+  }
+  const [participationChoice, setParticipationChoice] = useState<string>("both");
   /**
    * «Cuenta para equidad» edits on create-mode columns (solver v3 C1 §6.1), by
    * `columnId`. Held for as long as the column stays in the selection — across the
@@ -2149,6 +2285,25 @@ export default function MonthGenerator({
       .map(translateStoredRole)
       .filter((entry): entry is StoredGridTranslation => entry !== null);
   }, [storedInventory, storedMode]);
+  // Solver v3 C6 ST-1: under v3, every stored service of a horizon month, from the SAME full-roster
+  // read and the SAME coherence verdict the stored editor uses, shown read-only («Guardado»). A read
+  // that is not ready or not coherent, or a horizon role whose translation is refused, is not ready:
+  // Auto refuses on it (Task 15).
+  const v3Stored = useMemo((): { ready: boolean; translations: StoredGridTranslation[] } => {
+    if (!isV3 || storedMode) return { ready: true, translations: [] };
+    const ready = storedSource?.rolesStatus === "ready" && storedSource?.integrityStatus === "ready" && storedInventory.coherent;
+    if (!ready) return { ready: false, translations: [] };
+    const translated = storedInventory.roles
+      .filter((o) => horizon.includes(o.role.date.slice(0, 7)))
+      .map(translateStoredRole);
+    if (translated.some((t) => t === null)) return { ready: false, translations: [] };
+    return {
+      ready: true,
+      translations: (translated as StoredGridTranslation[]).map((t) => ({ ...t, column: { ...t.column, admission: "readOnly" as const } })),
+    };
+  }, [isV3, storedMode, storedSource?.rolesStatus, storedSource?.integrityStatus, storedInventory, horizon]);
+  const v3StoredIds = useMemo(() => new Set(v3Stored.translations.map((t) => t.column.columnId)), [v3Stored]);
+  const v3StoredTargets = useMemo(() => new Set(v3Stored.translations.map((t) => v3TargetOf(t.column))), [v3Stored]);
   const storedTranslations = useMemo(() => {
     const prefix = `${year}-${String(month).padStart(2, "0")}`;
     return allStoredTranslations.filter((entry) => entry.column.date.slice(0, 7) === prefix);
@@ -2364,11 +2519,22 @@ export default function MonthGenerator({
    * `buildColumns`' dedupe is per-date and does not catch it; nothing does.
    */
   useEffect(() => {
+    if (isV3 && !storedMode) {
+      // HZ-2: a month that leaves the horizon drops its selections; a month that enters starts as a
+      // month change starts today (its Saturdays selected, every Sunday selected, no specials).
+      const entering = monthsEntering(previousHorizon.current, horizon);
+      previousHorizon.current = horizon;
+      setActiveSatDates((prev) => [...retainInHorizon(prev, horizon), ...entering.flatMap((m) => weekendDatesOfMonth(m).saturdays)]);
+      setDeselectedSundays((prev) => retainInHorizon(prev, horizon));
+      setSpecials((prev) => retainInHorizon(prev, horizon));
+      setCreateCountsEdits((prev) => new Map([...prev].filter(([columnId]) => horizon.includes(columnId.slice(-10, -3)))));
+      return;
+    }
     setActiveSatDates(getDates(year, month, 6));
     setDeselectedSundays([]);
     setSpecials([]);
     setCreateCountsEdits(new Map());
-  }, [year, month]);
+  }, [year, month, isV3, storedMode, horizon]);
 
   /**
    * D10: moving out of `CueDialog` into a full-width panel silently dropped
@@ -2459,7 +2625,11 @@ export default function MonthGenerator({
 
   // Unconditional (D9/E21): the solve always addresses the full month's
   // Sundays — only RENDERING/CREATION is gated by `columns` below.
-  const sundayDatesFull = useMemo(() => getDates(year, month, 0), [year, month]);
+  const sundayDatesFull = useMemo(
+    // Under v3 the horizon's own Sundays, month by month (HZ-3); v2 reads only the selected month.
+    () => (isV3 && !storedMode ? horizon.flatMap((m) => weekendDatesOfMonth(m).sundays) : getDates(year, month, 0)),
+    [isV3, storedMode, horizon, year, month],
+  );
 
   /**
    * **E21's whole point.** The calendar's Sunday picks are a RENDER/CREATE
@@ -2521,13 +2691,27 @@ export default function MonthGenerator({
     ),
     [selectedSundays, activeSatDates, specials, createCountsEdits, todayIso],
   );
+  // ST-2: under v3 a planned column is never built for a target a stored service occupies; the
+  // stored service shows as its own «Guardado» column instead, keyed by its document `_id`.
+  const plannedCreateColumns = isV3 && !storedMode
+    ? createColumns.filter((c) => !v3StoredTargets.has(v3TargetOf(c)))
+    : createColumns;
   const columns = storedMode
     ? storedTranslations.map((entry) => {
         const edited: StoredGridColumn = { ...entry.column, ...(storedHeaderEdits.get(entry.column.roleId) ?? {}) };
         // C1 §6.0: while past, the stored value — a held toggle edit is neither shown nor sent.
         return { ...edited, countsForFairness: effectiveStoredCounts(edited, todayIso) };
       })
-    : createColumns;
+    : plannedCreateColumns;
+  /** HZ-5, ST-1: what the v3 create grid shows — planned columns and the «Guardado» ones, by date. */
+  const v3GridColumns: GridColumn[] = isV3 && !storedMode
+    ? [...columns, ...v3Stored.translations.map((t) => t.column)]
+        .sort((a, b) => a.date.localeCompare(b.date) || a.columnId.localeCompare(b.columnId))
+    : columns;
+  const v3StoredCells = v3Stored.translations.flatMap((t) => t.cells);
+  const monthBands = isV3 && !storedMode && horizon.length === 2
+    ? horizon.map((m) => ({ month: m, label: monthNameCap(m), columnIds: v3GridColumns.filter((c) => c.date.slice(0, 7) === m).map((c) => c.columnId) }))
+    : undefined;
   /**
    * «+ Nuevo servicio»'s effective «Cuenta para equidad» (C1 §6.5): the Tipo's
    * default until the admin touches the Switch, then the admin's value until the
@@ -2614,6 +2798,7 @@ export default function MonthGenerator({
    * long-standing ref-during-render errors elsewhere in this file. Those are
    * worth addressing, but not silently, inside a fix for a discard prompt.
    */
+  const v3HasGaps = isV3 && v3Gaps.length > 0;
   const closeWouldDiscard = storedMode
     ? storedHasUnresolvedWork
     : step === "grid" && assignmentCount > 0;
@@ -2626,6 +2811,11 @@ export default function MonthGenerator({
       // Escape must not leap past a destructive prompt to close the editor.
       if (clearPending) { setClearPending(false); clearTriggerRef.current?.focus(); return; }
       if (groupFillOpen) { setGroupFillOpen(false); groupFillTriggerRef.current?.focus(); return; }
+      // C6 CF-10: leaving with gaps after a partial v3 confirm asks first.
+      if (v3HasGaps) {
+        setIncompleteOpen(true);
+        return;
+      }
       if (closeWouldDiscard) {
         setPendingDiscard("close");
         return;
@@ -2634,7 +2824,7 @@ export default function MonthGenerator({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [clearPending, closeWouldDiscard, groupFillOpen, onClose, storedTransportActive]);
+  }, [clearPending, closeWouldDiscard, groupFillOpen, onClose, storedTransportActive, v3HasGaps]);
 
   useEffect(() => {
     if (!storedMode || !focusRoleId) return;
@@ -2826,12 +3016,12 @@ export default function MonthGenerator({
    * request would be refused pre-flight or there are no rules yet — Auto sends nothing then.
    */
   const requestSaturdayWeeks = useMemo(() => {
-    if (storedMode || !solverConfig) return undefined;
+    if (storedMode || !solverConfig || isV3) return undefined;
     const built = buildSolveRequest({
       config: solverConfig, members, sundayDates: sundayDatesFull, activeSatDates, historyEntries: [], year, month,
     });
     return built.ok ? built.request.weekends_with_saturday : undefined;
-  }, [storedMode, solverConfig, members, sundayDatesFull, activeSatDates, year, month]);
+  }, [storedMode, solverConfig, members, sundayDatesFull, activeSatDates, year, month, isV3]);
 
   const savedWindow = useMemo(
     () => savedWindowFor(year, month, allRoles ?? []),
@@ -2840,7 +3030,7 @@ export default function MonthGenerator({
 
   /** Spec §3.3 — what the board says about each seat that will be pinned; only with the switch on. */
   const pinBoard = useMemo(() => {
-    if (storedMode || !fillEmptyOnly || !solverConfig) return undefined;
+    if (storedMode || !fillEmptyOnly || !solverConfig || isV3) return undefined;
     const collected = collectPins({
       cells, columns, rows, members, sundayDates: sundayDatesFull, weekendsWithSaturday: requestSaturdayWeeks,
     });
@@ -2851,7 +3041,7 @@ export default function MonthGenerator({
       members,
       pools: { sundayLeads: p.sundayLeadNames, saturdayLeads: p.saturdayLeadNames, support: [...p.supportNames, ...p.extraSupport] },
     });
-  }, [storedMode, fillEmptyOnly, solverConfig, cells, columns, rows, members, sundayDatesFull, requestSaturdayWeeks]);
+  }, [storedMode, fillEmptyOnly, solverConfig, cells, columns, rows, members, sundayDatesFull, requestSaturdayWeeks, isV3]);
 
   /**
    * The SAVED half of the participation rail: everything stored in the month
@@ -2884,10 +3074,13 @@ export default function MonthGenerator({
    * (`YYYY-MM-DD`), so its first seven characters ARE its calendar month. No
    * `new Date` anywhere near it, so there is no UTC day-flip to get wrong.
    */
+  // HZ-6: under v3 the sidebar counts the months the admin picks («Ambos» by default); v2: the month.
+  const participationMonths = isV3 && !storedMode ? participationMonthsOf(horizon, participationChoice) : [firstMonth];
+  const participationKey = participationMonths.join(",");
   const participationSaved = useMemo(() => {
-    const prefix = `${year}-${String(month).padStart(2, "0")}`;
-    return (allRoles ?? []).filter(r => r.date.slice(0, 7) === prefix);
-  }, [allRoles, year, month]);
+    const months = participationKey.split(",");
+    return (allRoles ?? []).filter(r => months.includes(r.date.slice(0, 7)));
+  }, [allRoles, participationKey]);
 
 
   /**
@@ -3013,6 +3206,8 @@ export default function MonthGenerator({
   function confirmPendingDiscard() {
     if (storedTransportActive) return;
     if (!storedMode && pendingDiscard === "back") goBackToConfig();
+    // C6 CF-10: a close with gaps asks first, whichever control started it.
+    else if (v3HasGaps) { setPendingDiscard(null); setIncompleteOpen(true); }
     else onClose();
   }
 
@@ -3764,8 +3959,11 @@ export default function MonthGenerator({
   function applySpecialFill(
     config: SolverConfig,
     baseCells: GridCell[],
-    solverUnfilled?: { columnId: string; rowId: string }[],
+    solverUnfilled?: { columnId: string; rowId: string; reason?: string }[],
     fillEmpty = false,
+    // C6 SP-4/SP-5: under v3, counted specials are the pre-fill's (filled before the solve, or left
+    // as they are on a refusal) — today's filler never touches them. v2 passes nothing.
+    skipSpecialIds?: ReadonlySet<string>,
   ) {
     const specialColumnIds = new Set(
       columns.filter(c => c.type === "special_role").map(c => c.columnId),
@@ -3773,7 +3971,7 @@ export default function MonthGenerator({
     let next = baseCells;
     const filled: { columnId: string; rowId: string }[] = [];
     for (const column of columns) {
-      if (column.type !== "special_role") continue;
+      if (column.type !== "special_role" || skipSpecialIds?.has(column.columnId)) continue;
       // Fed the ACCUMULATED cells, so the second special of a month ranks
       // against the load the first one just created (`cellsToParticipantRoles`
       // iterates `columns`), instead of re-picking the same people.
@@ -3951,6 +4149,15 @@ export default function MonthGenerator({
       } else if (res.status === 422) {
         // The solver's refusal — its body carries the reason (`solverRefusalMessage`).
         response = await res.json().catch(() => null);
+      } else if (res.status === 409) {
+        // Solver v3 C6 AD-8 — the ONE v2 client change: the server's engine changed under this page.
+        // Never «sin solución», never the trailing retry; the specials still fill.
+        const mismatch = await res.json().catch(() => null);
+        if (mismatch?.error === "solver_version_mismatch") {
+          setAutoError(V3_ROUTE_COPY.versionMismatch);
+          applySpecialFill(config, cells, undefined, prepared.fillEmpty);
+          return;
+        }
       }
       if (!res.ok || !response || !response.ok || !response.schedule) {
         const { request } = prepared;
@@ -4088,6 +4295,9 @@ export default function MonthGenerator({
       setAutoError("No se pudieron cargar las reglas compartidas. Recárgalas antes de usar Auto.");
       return;
     }
+    // C6: under v3 a press during a confirm starts no run (`handleAutoV3`'s lock), so it must not
+    // withdraw a «Borrar» undo either — refused here, before the withdrawal.
+    if (isV3 && pushing) return;
     // A «Borrar» undo is withdrawn once Auto runs (spec §3.2): restoring after a solve would
     // write the pre-solve seats over the solver's answer.
     withdrawUndos();
@@ -4095,6 +4305,12 @@ export default function MonthGenerator({
     // moment — its own path, below — or, with `SOLVER_SENDS_HISTORY` off (what
     // ships, ADR-0046), on none at all. Everything after this line is the
     // per-browser path, unchanged but for the same switch.
+    // Solver v3 C6 AD-1: dispatch on the server-resolved engine BEFORE anything is read or built;
+    // under v3 no v2 builder, parser or retry is reachable.
+    if (isV3) {
+      await handleAutoV3(config);
+      return;
+    }
     if (SOLVER_HISTORY_SOURCE === "derived") {
       await handleAutoDerived();
       return;
@@ -4107,6 +4323,131 @@ export default function MonthGenerator({
     } finally {
       setAutoPending(false);
     }
+  }
+
+  /** C6 SP-4: the planned counted specials, which today's after-solve filler leaves to the pre-fill. */
+  function countedSpecialIds(): Set<string> {
+    return new Set(columns.filter((c) => c.type === "special_role" && c.countsForFairness).map((c) => c.columnId));
+  }
+
+  /** The planned columns that will exist: not skipped and creatable (RQ-3) — never a «Guardado» one. */
+  function v3PlannedColumns(): GridColumn[] {
+    return columns.filter((c) => {
+      if (skippedColumnIds.has(c.columnId)) return false;
+      const draft = draftByTarget.get(draftTargetKey(c.type, c.date));
+      return !draft || isCreatable(draft);
+    });
+  }
+
+  async function handleAutoV3(config: SolverConfig) {
+    // C6 CF-2/CF-7: no run starts while a v3 confirm is in flight, and (the other half, in `confirmV3`
+    // and on the v3 Crear buttons) no confirm starts while a run is pending. A run re-freezes the
+    // entries and resets the confirm; a confirm overlapping it either way would re-install its old
+    // session (`recordsDone: true`) over the new run, and the next confirm would post the new board
+    // under the old record without a PUT. Each side's `finally` and its bookkeeping run in one tick, and
+    // each refuses while the other's flag is up, so the two-way lock leaves no gap. (v2's `handleAuto`
+    // path is untouched.)
+    if (pushing) return;
+    const requested = horizon.join(",");
+    const months = [...horizon];
+    setAutoPending(true);
+    setAutoError(null);
+    setAutoNotices([]);
+    setAutoRetry(null);
+    setDiagnostics(null);
+    try {
+      const currentMonth = cdmxCurrentMonth(new Date());
+      const result = await runV3Auto({
+        months,
+        preRead: () => preReadRefusals({ months, currentMonth, config, members }),
+        storedReady: () => v3Stored.ready,
+        specialsWaiting: countedSpecialIds().size > 0,
+        readLedger: async (signal) => {
+          const res = await fetch(`/api/admin/fairness?month=${months[0]}&horizon=${months.length}`, { cache: "no-store", signal });
+          return { status: res.status, body: await res.json().catch(() => null) };
+        },
+        isCurrent: () => horizonKeyRef.current === requested,
+        // After the read, the board comes from the LATEST render (`v3LatestRef`); the config stays
+        // the one `preRead` checked at the press.
+        build: (ledger) => v3LatestRef.current.build({ months, currentMonth, ledger, config }),
+        postSolve: async (request, signal) => {
+          const res = await fetch("/api/admin/solve", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request), signal,
+          });
+          return { status: res.status, text: await res.text() };
+        },
+      });
+      v3LatestRef.current.apply(config, result, requested);
+    } catch {
+      v3LatestRef.current.threw(config, requested);
+    } finally {
+      setAutoPending(false);
+    }
+  }
+
+  /** The board half of a v3 request, from the render that calls it — through `v3LatestRef`, the latest. */
+  function buildV3FromBoard(input: { months: string[]; currentMonth: string; ledger: FairnessLedgerResponse; config: SolverConfig }) {
+    return buildV3SolveRequest({
+      ...input, members,
+      storedRoles: storedSource?.roles ?? [],
+      planned: { columns: v3PlannedColumns(), cells, rows },
+      savedWindow, fillEmpty: fillEmptyOnly,
+      seed: crypto.getRandomValues(new Uint32Array(1))[0] % 2147483648,
+      requestId: newCreationRequestId(),
+    });
+  }
+
+  /** A throw past `runV3Auto` (unreachable by construction: every transport is caught where it happens). */
+  function v3AutoThrew(config: SolverConfig, horizonKey: string) {
+    if (horizonKeyRef.current !== horizonKey) return;
+    setAutoError(V3_ROUTE_COPY.connection);
+    applySpecialFill(config, cells, undefined, fillEmptyOnly, countedSpecialIds());
+  }
+
+  /**
+   * Every exit of THIS horizon (refusal, transport, handshake, success) fills uncounted specials and
+   * instruments as today (AD-7); counted specials are the pre-fill's. A horizon changed during the read
+   * or the solve is not one: nothing is applied or filled (RQ-1).
+   */
+  function applyV3AutoResult(config: SolverConfig, result: V3AutoResult, horizonKey: string) {
+    // RQ-1, at both ends: a horizon changed during the read («stale») OR during the solve gets nothing —
+    // no fill, no frozen entries, no report — as the derived path does for a changed month. AD-7's fill
+    // is for the board Auto was pressed on, and the board on screen now belongs to another horizon:
+    // applying there would set its drafts from the old horizon's columns.
+    if (result.kind === "stale" || horizonKeyRef.current !== horizonKey) return;
+    const skip = countedSpecialIds();
+    if (result.kind === "refused") {
+      setAutoError(result.lines[0]);
+      setAutoNotices(result.lines.slice(1));
+      setV3Run(null);
+      applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
+      return;
+    }
+    const { build, outcome } = result;
+    // CF-2: the entries are frozen with the request, from this run's snapshot — whatever the solve says.
+    // A run writes nothing, so the session's gaps (CF-10) stay as they are.
+    v3EntriesRef.current.set(horizonKey, freezeConfirmEntries(build.snapshot.sources, "auto"));
+    setV3Confirm(null);
+    setV3Report(null);
+    if (outcome.kind !== "success") {
+      setAutoError(v3OutcomeLine(outcome));
+      if (v3RetryOffered(outcome)) setAutoRetry(() => () => { void v3LatestRef.current.auto(); });
+      setV3Run(null);
+      applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
+      return;
+    }
+    const applied = applyV3Assignments({ response: outcome.response, request: build.request, cells: build.cells, rows, pinnedCellKeys: build.boardPinnedCellKeys });
+    if (!applied.ok) {
+      setAutoError(transportLine("unknown_service"));
+      setV3Run(null);
+      applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
+      return;
+    }
+    const names = v3Names({ members, serviceLabels: build.serviceLabels, ruleLabels: build.ruleLabels });
+    const report = buildV3RunReport({ response: outcome.response, request: build.request, storedServiceIds: build.storedServiceIds, names });
+    setAutoNotices([...build.notices, ...report.solverNotices]);              // NT-3: C6's own first
+    setV3Run({ build, response: outcome.response, report, names, horizonKey });
+    applySpecialFill(config, applied.cells, applied.unfilled, fillEmptyOnly, skip);
   }
 
   /**
@@ -4202,12 +4543,164 @@ export default function MonthGenerator({
   useLayoutEffect(() => {
     solveWithDerivedHistoryRef.current = solveWithDerivedHistory;
   });
+  // C6: what a v3 Auto does after its ledger read — and Auto's «Reintentar» — runs in the LATEST render,
+  // for the derived path's reason (above): the grid stays editable during the read and after a failed
+  // run, and a press-time closure would build from, and write back, the board as it was at the press.
+  // «Reintentar» through the latest `handleAuto` also reads the latest `pushing`, so the confirm lock
+  // covers it.
+  const v3LatestRef = useRef({ auto: handleAuto, build: buildV3FromBoard, apply: applyV3AutoResult, threw: v3AutoThrew });
+  useLayoutEffect(() => {
+    v3LatestRef.current = { auto: handleAuto, build: buildV3FromBoard, apply: applyV3AutoResult, threw: v3AutoThrew };
+  });
   // «Deshacer» fires from a toast up to 10 s later: the ref hands it the LATEST render's
   // `undoClear`, so it restores onto the live cells rather than the ones the clear saw.
   const undoClearRef = useRef(undoClear);
   useLayoutEffect(() => {
     undoClearRef.current = undoClear;
   });
+
+  /**
+   * CF-2's no-Auto path: a fresh read, bound months from their records, every other month from IF2-15.
+   * Copy: §7.8 defines no confirm-side line for a failed read or a resolver refusal, so these reuse
+   * Auto's (`V3_ROUTE_COPY.ledgerFailed`, «… Auto no corrió …»; the resolver's «No se puede correr
+   * Auto: …»). Recorded as a spec gap for the C6 spec owner; the plan invents no line.
+   */
+  async function freezeEntriesWithoutAuto(months: string[]): Promise<{ ok: true; entries: V3ConfirmEntry[] } | { ok: false; lines: string[] }> {
+    if (!solverConfig) return { ok: false, lines: [V3_ROUTE_COPY.ledgerFailed] };
+    const controller = new AbortController();
+    const ceiling = setTimeout(() => controller.abort(), V3_LEDGER_TIMEOUT_MS);
+    try {
+      const res = await fetch(`/api/admin/fairness?month=${months[0]}&horizon=${months.length}`, { cache: "no-store", signal: controller.signal });
+      const body: unknown = await res.json().catch(() => null);
+      if (res.status !== 200 || !isLedgerBody(body, months)) return { ok: false, lines: [V3_ROUTE_COPY.ledgerFailed] };
+      const sources = resolveMonthSources({ months, ledger: body, config: solverConfig, members, exactLeadLabel: () => null });
+      if (!sources.ok) return { ok: false, lines: sources.lines };
+      return { ok: true, entries: freezeConfirmEntries(sources.sources, "manual") };
+    } catch {
+      return { ok: false, lines: [V3_ROUTE_COPY.ledgerFailed] };
+    } finally {
+      clearTimeout(ceiling);
+    }
+  }
+
+  /** §5.11 wired. Client-mutation invariant (CF-11): try/catch/finally, `res.ok` checked by the executor, the flag always reset, never closed as success on failure. */
+  async function confirmV3(toCreateNow: DraftCard[], publish: boolean) {
+    // The lock's other half (see `handleAutoV3`): never overlap a pending v3 Auto. The Crear buttons and
+    // «Reintentar» are disabled on the same flag; this is the protocol-level refusal behind them.
+    if (autoPending) return;
+    const key = horizon.join(",");
+    const months = [...horizon];
+    setPushing(true);
+    setPushError(null);
+    setV3Report(null);
+    // A session (and so its frozen entries, CF-2: the set never changes) outlives every refusal. After a
+    // refusal that offers no «Reintentar» — a conflict, a past month — a later Crear resends the same
+    // entries and repeats the refusal; only a new v3 Auto (which re-freezes and resets) or closing the
+    // planner leaves it. That is the spec's own remedy («vuelve a correr Auto», §7.8), not a gap; on the
+    // no-Auto path it means running Auto once.
+    // The pressed button decides this attempt's publish — and so what «Reintentar» repeats: the session
+    // keeps the LAST button pressed, never the first.
+    let current: V3ConfirmSession | null = v3Confirm && v3Confirm.key === key ? { ...v3Confirm, publish } : null;
+    let attemptDrafts: DraftCard[] = toCreateNow;
+    let posted = 0;
+    let result: V3ConfirmResult | null = null;
+    try {
+      const currentMonth = cdmxCurrentMonth(new Date());
+      if (!current) {
+        let entries = v3EntriesRef.current.get(key) ?? null;
+        if (!entries) {
+          // CF-1's placement holds on the no-Auto path too: the guard comes before the fresh read.
+          const guard = confirmGuard(months, currentMonth);
+          if (guard) { reportV3(key, [guardLine(guard, false)]); return; }
+          const fresh = await freezeEntriesWithoutAuto(months);
+          if (!fresh.ok) { reportV3(key, fresh.lines); return; }
+          entries = fresh.entries;
+        }
+        current = { key, entries, state: INITIAL_V3_CONFIRM_STATE, retry: false, publish };
+      }
+      const session = current;
+      // Totals stay stable across retries: this confirm's created drafts plus what is still to create.
+      attemptDrafts = [...drafts.filter((d) => session.state.createdLocalIds.has(d.localId)), ...toCreateNow];
+      result = await runV3ConfirmAttempt({
+        entries: session.entries,
+        months,
+        drafts: attemptDrafts,
+        published: publish && months.length === 1,                           // CF-8: never in a 2-month confirm
+        state: session.state,
+        currentMonth,
+        putRecords: async (body) => {
+          const res = await fetch("/api/admin/fairness/months", {
+            method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+          });
+          return { status: res.status, body: await res.json().catch(() => null) };
+        },
+        postDraft: async (body) => {
+          posted += 1;
+          return postDraftToRoles(body);
+        },
+      });
+    } catch {
+      // Unreachable by construction — the read, the PUT and every POST are caught where they happen —
+      // but never silent and never a false line. A resend is always safe (the PUT replays
+      // byte-identical and answers `unchanged`, C2 WR-8 row 1; each draft keeps its creationRequestId),
+      // so the confirm stays retryable with the state it had, and a line says «No se creó nada» only
+      // when no draft of this confirm can exist.
+      if (!current) {
+        reportV3(key, [V3_ROUTE_COPY.ledgerFailed]);                        // only the fresh read precedes the session
+      } else if (posted === 0 && current.state.createdLocalIds.size === 0) {
+        setV3Confirm({ ...current, retry: true });
+        reportV3(key, [V3_LINES.recordOtherFailure]);
+      } else {
+        // Unknown outcomes count as not created (today's rule); «Reintentar» replays them by request id.
+        const progress = progressFrom(attemptDrafts, months, current.state.createdLocalIds);
+        setV3Confirm({ ...current, retry: true });
+        reportV3(key, monthReportLines(progress));
+        mergeV3Gaps(progress);
+      }
+    } finally {
+      setPushing(false);
+    }
+    // Today's order: the flag resets, then the bookkeeping (`handleConfirm` does the same).
+    if (result && current) afterV3Attempt(result, current, toCreateNow);
+  }
+
+  function afterV3Attempt(result: V3ConfirmResult, session: V3ConfirmSession, attemptDrafts: DraftCard[]) {
+    const createdNow = new Set(result.kind === "drafts" ? result.createdNow : []);
+    // CF-6: only confirmed successes become `exists`, paired with the `createdTargets` growth (P3 invariant).
+    if (createdNow.size > 0) {
+      setDrafts((prev) => prev.map((d) => (createdNow.has(d.localId) ? { ...d, exists: true } : d)));
+      for (const d of attemptDrafts) if (createdNow.has(d.localId)) createdTargets.current.add(draftTargetKey(d._type, d.date));
+      // CF-9 (Q4): one history entry PER MONTH with a weekend draft created this session, built as today.
+      for (const m of horizon) {
+        const monthDrafts = drafts.filter((d) =>
+          d._type !== "special_role" && d.date.slice(0, 7) === m &&
+          (createdNow.has(d.localId) || createdTargets.current.has(draftTargetKey(d._type, d.date))));
+        const entry = historyEntryFromDrafts(monthDrafts, members, Number(m.slice(0, 4)), Number(m.slice(5, 7)));
+        if (!entry) continue;
+        if (SOLVER_HISTORY_SOURCE === "derived") appendLocalHistoryEntry(entry);
+        else saveHistoryEntry(entry.year, entry.month, entry.total_counts, entry.role_counts);
+      }
+    }
+    // CF-10: once the records landed, every month still missing drafts is a gap, and a month this
+    // attempt completed stops being one (a guard refusal or a record failure adds none: the first wrote
+    // nothing new, the second nothing at all — the gaps an earlier attempt found are kept).
+    if (result.kind === "drafts") {
+      onCreated();
+      mergeV3Gaps(result.progress);
+    }
+    if (result.kind === "drafts" && result.complete) {
+      // Full success closes as today (CF-10, spec-literal), whatever an earlier horizon's attempt left.
+      // Deliberately asymmetric with «Cancelar»/Escape, which ask while `v3Gaps` is non-empty: a gap in a
+      // month outside this horizon (e.g. a 2-month confirm left November short, then December alone
+      // completed) closes without the dialog. Those services stay as created and «Editar mes» completes
+      // them; asking here would add a behaviour CF-10 does not name.
+      setV3Confirm(null);
+      onClose();
+      return;
+    }
+    setV3Confirm({ ...session, state: result.state, retry: result.retry });
+    reportV3(session.key, result.lines);
+  }
 
   async function handleConfirm(publish: boolean) {
     // Confirmation re-check: a source that failed since the preview blocks the
@@ -4263,6 +4756,13 @@ export default function MonthGenerator({
     // "the button offered a create the confirm path had already ruled out" —
     // pressed, told nothing, given nothing.
     if (!toCreateNow.length) return;
+    // Solver v3 C6 §5.11: under v3 the confirm writes every horizon month's record first (one PUT),
+    // then the drafts month by month — after the SAME gate, nameless-special and preflight re-checks
+    // as today. v2 continues below, byte-identical.
+    if (isV3) {
+      await confirmV3(toCreateNow, publish);
+      return;
+    }
     setPushing(true);
     setPushError(null);
     let result;
@@ -4272,22 +4772,7 @@ export default function MonthGenerator({
       result = await runDraftCreateBatch({
         drafts: toCreateNow,
         published: publish,
-        post: async (body) => {
-          const res = await fetch("/api/admin/roles", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          let error: string | undefined;
-          if (!res.ok) {
-            try {
-              error = (await res.json())?.error;
-            } catch {
-              error = undefined;
-            }
-          }
-          return { ok: res.ok, status: res.status, error };
-        },
+        post: postDraftToRoles,
       });
     } finally {
       setPushing(false);
@@ -4405,7 +4890,7 @@ export default function MonthGenerator({
   const creatableColumns = columns.filter((c) => creatingColumnIds.has(c.columnId));
   const participationRoles = plannerParticipationRoles({
     saved: participationSaved,
-    creatableColumns: storedMode ? columns : creatableColumns,
+    creatableColumns: storedMode ? columns : creatableColumns.filter((c) => participationMonths.includes(c.date.slice(0, 7))),
     cells,
     members,
   });
@@ -4428,11 +4913,50 @@ export default function MonthGenerator({
     return draftByTarget.get(key)?.isExisting ? "existing" : null;
   };
 
-  const autoState: AutoState = { pending: autoPending, error: autoError, notices: autoNotices, disabledReason: gateBlocked };
+  const autoState: AutoState = {
+    pending: autoPending, error: autoError, notices: autoNotices, disabledReason: gateBlocked,
+    // C6: Auto's «Reintentar» is offered only while no v3 confirm is in flight (the lock's Auto half).
+    ...(isV3 && autoRetry && !pushing ? { retry: autoRetry } : {}),
+  };
+  const v3RunCurrent = v3Run && v3Run.horizonKey === horizon.join(",") ? v3Run : null;
+  const equidadPlan = isV3 && v3RunCurrent
+    ? buildEquidadPlan({ response: v3RunCurrent.response, request: v3RunCurrent.build.request, cadence: v3RunCurrent.build.cadence, ledger: shownLedger, names: v3RunCurrent.names, members })
+    : null;
+  const recordedOn = (m: string) => {
+    const at = shownLedger?.horizon.find((h) => h.month === m)?.record?.recordedAt;
+    return at ? dayLabel(at.slice(0, 10)) : "";
+  };
+  // ST-8 banners (v3, create mode).
+  const v3Banners: string[] = !isV3 || storedMode ? [] : allBound
+    ? [V3_LINES.allBound(horizon)]
+    : horizon.flatMap((m) => {
+        const state = monthStates.get(m);
+        if (state === "bound") return [V3_LINES.bound(m, recordedOn(m))];
+        if (state === "recorded_unbound") return [V3_LINES.recordedUnbound(m, recordedOn(m))];
+        if (state === "anchored_unrecorded") return [V3_LINES.anchoredUnrecorded(m)];
+        return [];
+      });
+  // C6 ST-9: the confirm's count under v3 — the planned weekend columns' empty voice seats.
+  const v3EmptyVoiceSeats = columns
+    .filter((c) => c.type !== "special_role")
+    .reduce((sum, c) => sum + rows.filter((r) => r.category === "voz" && r.target !== null && !(r.id === "coro" && c.type === "saturday_role"))
+      .reduce((acc, r) => acc + Math.max(0, (r.target ?? 0) - (cells.find((x) => x.columnId === c.columnId && x.rowId === r.id)?.occupants.length ?? 0)), 0), 0);
 
   // ── Step 1: Configure ────────────────────────────────────────────────────────
+  // C6 CF-10: one dialog element for both step branches (the config step returns early).
+  const incompleteDialog = isV3 ? (
+    <V3IncompleteDialog
+      open={incompleteOpen}
+      gaps={v3Gaps}
+      onStay={() => setIncompleteOpen(false)}
+      onLeave={() => { setIncompleteOpen(false); onClose(); }}
+    />
+  ) : null;
+  const v3ShownLines = isV3 && v3Report && v3Report.key === horizon.join(",") ? v3Report.lines : [];
+
   if (step === "config") return (
     <div className="space-y-5">
+      {incompleteDialog}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Select id="mg-month" label="Mes" size="md" value={month} onChange={e => setMonth(Number(e.target.value))}>
@@ -4445,16 +4969,27 @@ export default function MonthGenerator({
         </div>
       </div>
 
+      {isV3 && (
+        <SegmentedControl
+          label="Planear"
+          value={horizonLength === 2 ? "2" : "1"}
+          onChange={(v) => setHorizonLength(v === "2" ? 2 : 1)}
+          options={[{ value: "1", label: "1 mes" }, { value: "2", label: "2 meses" }]}
+        />
+      )}
+
       {/*
         E1/E2/P3: the calendar REPLACES the Domingos/Sábados checkboxes and the
         Saturday pill row, and lives on this setup step only. `key` remounts it
         per month so no composer state (or refusal notice) can survive a month
         change and offer a date that is no longer on screen.
       */}
+      {/* HZ-4: one calendar per horizon month, stacked, each keyed by its month (v2: exactly one). */}
+      {horizon.map((calendarMonth) => (
       <MonthCalendar
-        key={`${year}-${month}`}
-        year={year}
-        month={month}
+        key={calendarMonth}
+        year={Number(calendarMonth.slice(0, 4))}
+        month={Number(calendarMonth.slice(5, 7))}
         selectedSundays={selectedSundays}
         selectedSaturdays={activeSatDates}
         specials={specials}
@@ -4473,6 +5008,7 @@ export default function MonthGenerator({
           the same confirm.
         */
         createdTargets={createdTargets.current}
+        engine={engine}
         onToggleWeekend={date => {
           // Local noon, never a bare `new Date(iso)` — a UTC parse day-flips and
           // would route a Sunday's toggle into the Saturday branch.
@@ -4501,6 +5037,7 @@ export default function MonthGenerator({
           setCreateCountsEdits(prev => withoutCountsEdit(prev, createColumnId("special_role", date)));
         }}
       />
+      ))}
 
       {/*
         D13: the `useSolver` toggle is retired — the grid always offers Auto,
@@ -4514,6 +5051,12 @@ export default function MonthGenerator({
         `DEFAULT_SOLVER_CONFIG` there would present a rule set nobody wrote as
         this team's — with a save control underneath offering to make it so.
       */}
+      {v3Banners.map((line) => (
+        <p key={line} data-v3-month-state="" className="font-body text-xs text-ink-muted bg-accent/5 rounded-lg px-3 py-2">{line}</p>
+      ))}
+      {isV3 && solverConfig && solverConfig.saturdayLeads.length > 0 && (
+        <p className="font-body text-xs text-warning-strong bg-warning-fg/10 rounded-lg px-3 py-2">{V3_LINES.saturdayPool}</p>
+      )}
       {solverConfig ? (
         <SolverConfigPanel
           members={members}
@@ -4525,8 +5068,14 @@ export default function MonthGenerator({
           year={year}
           month={month}
           derived={derivedMode ? derivedHistory : undefined}
-          showCadencePoolWarning={showCadencePoolWarning}
+          // WN-1: open exactly when the engine is v3 (the parent's half) AND some horizon month is not
+          // bound; under v3 each line names the months it applies to (C3's sentences unchanged).
+          showCadencePoolWarning={showCadencePoolWarning && unboundMonths.length > 0}
+          cadencePoolWarningMonths={isV3 ? unboundMonths : undefined}
+          poolsReadOnly={allBound}
+          equidadPlan={equidadPlan}
           fairnessServices={existingRoles}
+          engine={engine}
         />
       ) : (
         <SolverConfigUnavailable source={rules.source} onReload={rules.reload} />
@@ -4537,7 +5086,7 @@ export default function MonthGenerator({
       )}
 
       <div className="flex gap-3">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
+        <button type="button" onClick={() => { if (v3HasGaps) { setIncompleteOpen(true); return; } onClose(); }} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
           Cancelar
         </button>
         {/*
@@ -4726,7 +5275,7 @@ export default function MonthGenerator({
                   ariaLabel={FAIRNESS_LABEL}
                   help={createType === "special_role" ? FAIRNESS_SPECIAL_HELP : undefined}
                 />
-                <FairnessEngineNote />
+                <FairnessEngineNote engine={engine} />
               </div>
             </div>
           )}
@@ -4829,7 +5378,7 @@ export default function MonthGenerator({
         editor's only view of the history (there is no «Historial» block beside
         it), so the same rule holds: no leader list until the read is `ready`.
       */}
-      {solverConfig && (derivedMode ? (
+      {solverConfig && !isV3 && (derivedMode ? (
         <DerivedLeadPoolHistory config={solverConfig} members={members} history={derivedHistory} year={year} month={month} />
       ) : (
         <LeadPoolHistoryPanel
@@ -4850,6 +5399,8 @@ export default function MonthGenerator({
           members={members}
           storedServices={existingRoles}
           rulesDirty={rulesDirtyOf(rules, solverConfig)}
+          engine={engine}
+          plan={isV3 && !storedMode ? equidadPlan : undefined}
         />
       )}
 
@@ -4939,8 +5490,8 @@ export default function MonthGenerator({
         <PlannerGrid
           mode={storedMode ? "stored" : "create"}
           rows={rows}
-          columns={columns}
-          cells={cells}
+          columns={v3GridColumns}
+          cells={isV3 && !storedMode ? [...cells, ...v3StoredCells] : cells}
           members={members}
           savedWindow={savedWindow}
           preflightFor={col => storedMode ? null : (preflight ? preflight(col.type, col.date) : null)}
@@ -4958,16 +5509,27 @@ export default function MonthGenerator({
           skipped={skippedColumnIds}
           unresolvedNames={allUnresolvedNames}
           unfilled={unfilled}
-          onCellsChange={handleCellsChange}
+          // ST-3: a «Guardado» column's cells never enter the board's state.
+          onCellsChange={(next) => handleCellsChange(isV3 ? next.filter((c) => !v3StoredIds.has(c.columnId)) : next)}
+          monthBands={monthBands}
           onRowsChange={handleRowsChange}
           onToggleSkip={handleToggleSkip}
           onStoredHeaderChange={handleStoredHeaderChange}
           fairness={{ onChange: handleFairnessChange, createInFlight: pushing || autoPending }}
+          engine={engine}
           storedDateBlockedReason={storedDateBlocked}
           mutationLocked={storedMutationLocked || createAutoLocked}
           onAuto={handleAuto}
           autoState={autoState}
-          diagnostics={diagnostics}
+          diagnostics={isV3 ? null : diagnostics}
+          v3Report={isV3 && v3RunCurrent ? (
+            <V3RunPanel
+              report={v3RunCurrent.report}
+              requestId={v3RunCurrent.build.snapshot.requestId}
+              ruleTable={renderRuleRefTable(v3RunCurrent.build.snapshot.requestId, v3RunCurrent.build.snapshot.ruleTable)}
+            />
+          ) : undefined}
+          autoConfirmText={isV3 ? V3_LINES.autoConfirm(horizon) : undefined}
           config={solverConfig ?? undefined}
           sundayDates={sundayDatesFull}
           // INLINE ON PURPOSE, for now — and worth knowing before "fixing" it.
@@ -5002,6 +5564,16 @@ export default function MonthGenerator({
             is the chart's own content floor either way.
           */
           participation={
+            <div className="space-y-2">
+            {isV3 && !storedMode && horizon.length === 2 && (
+              <SegmentedControl
+                label="Cuenta"
+                size="sm"
+                value={horizon.includes(participationChoice) ? participationChoice : "both"}
+                onChange={setParticipationChoice}
+                options={[...horizon.map((m) => ({ value: m, label: monthNameCap(m) })), { value: "both", label: "Ambos" }]}
+              />
+            )}
             <ParticipationSidebar
               roles={participationRoles}
               // The month IS the scope now (`participationSaved`), so the month
@@ -5010,18 +5582,21 @@ export default function MonthGenerator({
               // stored. The old label had to warn that January was in a
               // February total; nothing from another month can reach this chart
               // any more.
-              monthLabel={`${MONTHS[month - 1]} ${year} · guardados + borradores`}
+              monthLabel={isV3 && !storedMode
+                ? `${monthsList(participationMonths, true)} · guardados + borradores`
+                : `${MONTHS[month - 1]} ${year} · guardados + borradores`}
             />
+            </div>
           }
           monthLabel={`${MONTHS[month - 1]} ${year}`}
           fillEmpty={storedMode ? undefined : {
             enabled: fillEmptyOnly,
             onChange: (next) => { if (!autoPending) setFillEmptyOnly(next); },
-            emptyVoiceSeats: emptyVoiceSeats({
+            emptyVoiceSeats: isV3 ? v3EmptyVoiceSeats : emptyVoiceSeats({
               cells, columns, rows, sundayDates: sundayDatesFull, weekendsWithSaturday: requestSaturdayWeeks,
             }),
           }}
-          pinConflicts={pinBoard}
+          pinConflicts={isV3 ? undefined : pinBoard}
           clear={storedMode ? undefined : {
             countFor: (scope, what) => planClear({ cells, rows, columns, scope, what }).seats,
             onClear: handleClear,
@@ -5188,11 +5763,26 @@ export default function MonthGenerator({
           </button>
         </div>
       ) : (
+        <>
+        {isV3 && horizon.length === 2 && toCreate.length > 0 && (
+          <p className="font-body text-xs text-ink-muted">{twoMonthSummaryLine(draftsByMonth(toCreate, horizon))}</p>
+        )}
+        {v3ShownLines.length > 0 && (
+          <div data-v3-confirm-report="" className="space-y-1">
+            {v3ShownLines.map((line) => <p key={line} className="font-body text-xs text-negative-fg">{line}</p>)}
+            {v3Confirm?.retry && v3Confirm.key === horizon.join(",") && (
+              <Button variant="secondary" size="sm" disabled={pushing || autoPending} onClick={() => { void handleConfirm(v3Confirm.publish); }}>
+                {V3_LINES.retry(toCreate.length)}
+              </Button>
+            )}
+          </div>
+        )}
         <div className="flex gap-3">
           <button
             type="button"
             onClick={() => {
               if (storedTransportActive) return;
+              if (v3HasGaps) { setIncompleteOpen(true); return; }
               if (closeWouldDiscard) { setPendingDiscard("close"); return; }
               onClose();
             }}
@@ -5200,14 +5790,20 @@ export default function MonthGenerator({
           >
             Cancelar
           </button>
-          <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          {/* The lock's other half (`handleAutoV3`): no v3 confirm starts while a v3 Auto is pending. `isV3 &&` leaves v2's buttons behaving exactly as today. */}
+          <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
             {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
           </button>
-          <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          {/* CF-8: a 2-month confirm creates drafts only — the publish button is absent, not disabled. */}
+          {!(isV3 && horizon.length === 2) && (
+          <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
             Crear y publicar
           </button>
+          )}
         </div>
+        </>
       )}
+      {incompleteDialog}
     </div>
   );
 }

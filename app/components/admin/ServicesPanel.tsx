@@ -103,6 +103,7 @@ import { upcomingMonthPills } from "./monthPills";
 // ─── Setlist types ────────────────────────────────────────────────────────────
 
 import { SetlistEditor } from "./SetlistEditor";
+import type { SolverEngine } from "./solverEngine";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -191,7 +192,7 @@ function Modal({
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
-export default function ServicesPanel() {
+export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine } = {}) {
   const [roles, setRoles]       = useState<ServiceRole[]>([]);
   const [members, setMembers]   = useState<MemberOption[]>([]);
   // The five read domains are tracked INDEPENDENTLY: a failure in one never
@@ -984,6 +985,7 @@ export default function ServicesPanel() {
           <MonthGenerator
             key={`stored:${monthEditor.month}:${monthEditor.focusRoleId ?? "month"}`}
             mode="stored"
+            engine={engine}
             initialMonth={monthEditor.month}
             focusRoleId={monthEditor.focusRoleId}
             openComposerInitially={monthEditor.openComposerInitially}
@@ -1038,6 +1040,8 @@ export default function ServicesPanel() {
         </div>
         <PanelBoundary>
           <MonthGenerator
+            engine={engine}
+            showCadencePoolWarning={engine === "v3"}
             members={members}
             existingRoles={roles}
             // `ServiceRole` is a structural superset of `ParticipantRole` (richer
@@ -1055,6 +1059,17 @@ export default function ServicesPanel() {
             capability={{ enabled: generateGate.enabled, reason: generateGate.reason }}
             // Per-target A1/A2 preflight: only proven-`creatable` targets are posted.
             preflight={preflightTarget}
+            // Solver v3 C6 ST-1: under v3 the create grid shows the horizon's stored services read-only,
+            // from the same roles + integrity read (and coherence verdict) the stored editor uses.
+            storedSource={{
+              roles,
+              integrity: summaries.roles,
+              rolesStatus: sourceRecords.roles.status,
+              integrityStatus: sourceRecords.roleTargets.status,
+              rolesGeneration: sourceRecords.roles.generation,
+              integrityGeneration: sourceRecords.roleTargets.generation,
+              reload: async () => (await loadSources(["roles", "roleTargets"])).length === 0,
+            }}
             onClose={() => setShowGenerator(false)}
             onCreated={async () => {
               showToast(mutationOutcomeMessage("Servicios generados.", await loadSources()));

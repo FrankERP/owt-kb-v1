@@ -9,7 +9,7 @@
 // tenths — never from hundredths (A17).
 
 import { countsForFairness } from "@/app/utils/countsForFairness";
-import { cadenceStates } from "@/app/utils/fairnessLedger";
+import { cadenceStates, type CadenceReason } from "@/app/utils/fairnessLedger";
 import { formatFairnessTenths, saldoWords } from "@/app/utils/fairnessFormat";
 import type { EligibilityResult } from "@/app/utils/fairnessEligibility";
 import {
@@ -307,12 +307,22 @@ export function cadenceLine(input: {
       },
     ],
   });
-  const mes = monthShort(input.month);
-  switch (state.reason) {
+  return x1LineText(input.month, state.reason, led.length > 0 ? led[led.length - 1] : null);
+}
+
+/**
+ * C2 §8's X1 sentences, keyed on the IF2-12 reason — exported (solver v3 C6 EQ-4) so the v3 panel
+ * renders RQ-4's computed states through THIS copy and adds none of its own. `assumed_led_previous_month`
+ * has no sentence of its own here (C6 renders §7.7's «Mes por medio: no dirige domingo en {mes}.» line
+ * for it — sibling issue S-19).
+ */
+export function x1LineText(month: string, reason: CadenceReason, ledDate: string | null): string {
+  const mes = monthShort(month);
+  switch (reason) {
     case "on":
       return `En ${mes} le toca domingo (previsto).`;
     case "led_previous_month":
-      return `En ${mes} no dirige domingo: ya dirigió el ${dayMonth(led[led.length - 1])}.`;
+      return `En ${mes} no dirige domingo: ya dirigió el ${ledDate ? dayMonth(ledDate) : "—"}.`;
     case "not_eligible":
       return `En ${mes} no dirige domingo: no está en la lista de Dom Lead.`;
     default:
