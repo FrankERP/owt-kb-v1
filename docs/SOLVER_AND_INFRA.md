@@ -771,6 +771,63 @@ Both of the first two are listed by exact `file + operation` in the protected-re
   Next.js"), and checks its `ortools` version against `gcf/requirements.txt`'s pin before
   running anything.
 
+### Fairness-record reconstruction (solver v3 C4 — a consented production writer)
+- `reconstruct-fairness-months.mjs` (run with `tsx`) + `lib/reconstruct*.ts`. **Purpose:** give each past
+  month planned before any v3 writer existed a `fairnessMonth` record with `source: "reconstructed"`, so
+  the first v3 runs balance against a real past instead of an empty one
+  (`docs/superpowers/specs/2026-10-05-solver-v3-c4-record-reconstruction-design.md`). Each record says who
+  was eligible, inferred from today's Tipo and rules, join months from the stored seats, the «Mes por
+  medio» setting and Frank's corrections; ADR-0050's «Reconstruction of past months» records the rules.
+  Every write goes through C2's one write executor (actor `reconstruction`), past months only, and only
+  ever creates, replaces or deletes a record this script wrote.
+- **Tokens, checked before any client is built:** a dry run needs `SANITY_API_READ_TOKEN` (a record's id is
+  dotted, so without the token a record would read as «sin registro»); an apply or a rollback-apply also
+  needs `SANITY_WRITE_TOKEN`. Both already exist in `.env.local` (`docs/SECRETS.md`); C4 adds no variable.
+  Run it from a checkout whose `.env.local` points at the dataset you mean — the first stdout line prints
+  project · dataset · mode before any read.
+- **Private paths, and names never enter the repository:** `--out`, `--overrides` and `--plan` are refused
+  inside any working tree of this repository (use e.g. `~/owt-private/c4/`). The table, the plan, the
+  backups and the refusal report hold member names, member ids and rule keys; stdout and stderr hold none
+  of them — a rule is named by its ordinal («restricción 3 de 8»), a corrections entry by its position.
+- **The sequence.** Each step is separate. Step 3 runs only after Frank's explicit consent in chat to the
+  fingerprint step 1 printed — diagnosing is not consent, and one consent never carries to a second plan.
+  1. **Dry run:** `npx tsx --env-file=.env.local scripts/reconstruct-fairness-months.mjs --months 2026-08,2026-09 --out ~/owt-private/c4 [--overrides ~/owt-private/c4/correcciones.json] [--preview-run YYYY-MM]`.
+     It writes `<out>/<time>-dry-run/`: `tabla.md` (per month the services with «cuenta»; per person each
+     role's status, reason and «corregido» mark, join months, seats, blocked dates, «Exenta», «Mes por
+     medio»; for a «reemplazar» month, what it changes in the stored record, person by person; the presence
+     rules as stored; the balance preview for the run month; the anomalies),
+     `plan.json`, and a `backup-YYYY-MM.json` of every record a replace would overwrite. Stdout: the action
+     per month with counts, how many «Mes por medio» settings it found (a loud warning at zero), the plan's
+     fingerprint and the two paths.
+  2. **Review:** Frank reads `tabla.md`; corrections go in the corrections file (schema v1, keyed by member
+     `_id` copied from the table — see the header of `lib/reconstructOverrides.ts`), then step 1 again,
+     until the table is right.
+  3. **Apply:** `npx tsx --env-file=.env.local scripts/reconstruct-fairness-months.mjs --apply --plan <out>/<time>-dry-run/plan.json --fingerprint <hex> --out ~/owt-private/c4 [--overrides <the same file>]`.
+     It re-derives everything and refuses with zero writes if anything differs from the plan (a voice seat,
+     a «cuenta» flag, an availability date, a correction, a record revision) or a replace's backup is
+     missing; then it writes month by month, oldest first, and stops at the first refusal or error (exit 1).
+  4. **Dry run again:** every written month must read «sin cambios»; then the «Equidad» preview should show
+     those months «reconstruido». After a failed or partial apply this is the repair: a write that failed
+     may have landed.
+- **Rollback:** `… --rollback --months 2026-08 --out ~/owt-private/c4` plans the deletion of intact records
+  the reconstruction wrote (any other is refused and listed), backing each up before its plan; after the
+  same consent, `… --rollback --apply --plan <…>/plan.json --fingerprint <hex> --out ~/owt-private/c4`. A
+  rollback reads only the records — no rules, roster or services — and refuses `--overrides` and
+  `--preview-run`. Afterwards those months read «sin registro, no cuenta».
+- **Standing instruction: after any seat edit, date move, «cuenta» flag change or member availability edit
+  that touches a reconstructed month, re-run the dry run for that month** — nothing else prompts it (the
+  past-month rule on «cuenta» is client-side, so a hand-built request or a date move can still change a past
+  month). A «reemplazar» row and its «Cambios frente al registro guardado» section then show, person by
+  person, what changed, for a fresh consent.
+- **Months:** strictly before the current CDMX month — October 2026 only on or after 2026-11-01. A month
+  with no record and no stored weekend service or counted special is skipped («sin servicios guardados»). A
+  month whose record a v3 Auto confirm wrote reads «no lo escribió la reconstrucción: no se toca» —
+  expected, not a failure. Exit codes: `0` done · `2` refused before any write · `1` failed or partial.
+- The protected-read audit lists the CLI file in `OPERATOR_TOOLING_ALLOWLIST` (the one caller of C2's
+  executor outside `app/`); `serviceCommitCallers.test.ts` pins it and `lib/reconstructDecide.ts` as the
+  write-request module's only importers under `scripts/`. Retirement (the gate, the registry move, the
+  seven → eight pins) is solver v3 C7 Step 12's.
+
 ### Accounts / auth
 - `set-password.ts` (tsx) — `MEMBER_ID=… PASSWORD=… npx tsx scripts/set-password.ts` — bcrypt a
   member's password (bootstrap first admin / reset).
@@ -794,7 +851,10 @@ evaluation, backup naming, fixture verifiers), `sr-verification-runtime.mjs` (th
 constructs a client, acquires the dataset lease, and writes backups), `sr-cleanup.mjs` (pure cleanup
 plan/refusal decisions), `sr-feasibility-checks.mjs`, `sr-retired-writer.mjs` (the retirement gate),
 `memberInstruments.mjs` (pure grouping/normalization for the instruments backfill; mirrors
-`seatModel.ts`'s vocabulary, pinned by test).
+`seatModel.ts`'s vocabulary, pinned by test). Solver v3 C4: `reconstruct*.ts` — the fairness-record
+reconstruction's core (arguments and private paths, the corrections file, the plan file, inference,
+anomalies, the ledger runs, the reports, the runner); `reconstructDecide.ts` is its one importer of C2's
+write-request module, and no `lib` file calls the executor.
 Tests in `scripts/lib/__tests__/`; CLI-level tests in `scripts/__tests__/`.
 
 ---
