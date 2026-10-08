@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { SOLVER_ENGINE } from "@/app/components/admin/solverEngine";
 import { createFakeFairnessSanity, type FakeDoc } from "@/app/utils/__tests__/__fixtures__/fakeFairnessSanity";
 import { RECONSTRUCTION_RECORDED_BY, buildFairnessMonthDocument } from "@/app/utils/fairnessMonthWriteRequest";
 import type { FairnessMonthWrite, RoleKey, Status } from "@/app/utils/fairnessVocabulary";
@@ -112,7 +113,7 @@ describe("the payload (RD-1, RD-3, RD-5)", () => {
     expect(res.headers.get("Cache-Control")).toBe("no-store");
     expect(res.body).toMatchObject({
       v: 1,
-      engine: "v2",
+      engine: SOLVER_ENGINE,
       environment: "local",
       currentMonth: "2026-10",
       target: "2026-11",
