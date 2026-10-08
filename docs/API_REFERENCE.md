@@ -456,6 +456,16 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   that is not JSON) carries `transport_error: true`; the solver's own refusals never do, and only
   those may make Auto retry without the trailing Saturday (ADR-0048, ruling Q19). No Sanity
   writes. See [SOLVER_AND_INFRA.md](SOLVER_AND_INFRA.md).
+  **Engine (solver v3 C6).** After auth and the JSON parse the route resolves the deployment's
+  effective engine (`resolveSolverEngine`); a body of the other contract (`contract: 3` under v2, or
+  anything else under v3) answers `409 { ok: false, error: "solver_version_mismatch", engine }`
+  before any other check. Under v3 a `contract: 3` body goes to `OWT_SOLVER_V3_URL` with `X-Api-Key`
+  (or, off Vercel, `gcf_v3/owt_solver_v3.py --json-mode`), aborted at 55 s: a success is forwarded
+  verbatim (200); the solver's coded failure (`ok: false, contract: 3, engine: "v3", code`) at any
+  status is forwarded as 422; everything else is `{ ok: false, transport_error: true, transport }`
+  (422) with `transport` ∈ `timeout`, `unreachable`, `http_status`, `not_json`, `not_configured`,
+  `contract_echo` — never a 500, and the log line carries only engine, outcome, status and timing.
+  The v2 path above is unchanged.
 - **`GET /api/admin/solver-config`** — the shared planner rule set (`_id: solverConfig`).
   Returns `{ present, rev, config, configVersion }` — `configVersion` is the document shape this
   deployment speaks (`SOLVER_CONFIG_VERSION`); a client that speaks another disables its save.
