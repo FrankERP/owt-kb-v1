@@ -95,6 +95,7 @@ import {
 import { SOLVER_HISTORY_SOURCE, SOLVER_SENDS_HISTORY } from "./solverHistorySource";
 import { fetchDerivedHistory, type DerivedHistoryFetchResult } from "./derivedHistoryClient";
 import { useDerivedSolverHistory, type DerivedHistoryHandle } from "./useDerivedSolverHistory";
+import type { SolverEngine } from "./solverEngine";
 import type { SolverHistoryDiagnostics, SolverHistoryMonth } from "@/app/utils/solverHistory";
 import { exactCapOverlaps } from "@/app/utils/solverConfigWriteRequest";
 import {
@@ -278,6 +279,12 @@ interface Props {
    * it closed for a record-bound month.
    */
   showCadencePoolWarning?: boolean;
+  /**
+   * The effective solver engine, resolved by `/admin`'s Server Component and threaded through
+   * `AdminPanel` → `ServicesPanel` (solver v3 C6 ENG-3). EVERY engine-dependent branch in this
+   * file reads this prop, never `SOLVER_ENGINE` (ENG-4). Under `"v2"` nothing changes.
+   */
+  engine?: SolverEngine;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -639,8 +646,10 @@ function cadenceNameChip(issue: CadenceNameIssue): string {
     : "Nombre no reconocido en Alabanza";
 }
 
-function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
+function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole, engine = "v2" }: {
   r: PersonRestriction;
+  /** C6 CTL-1: C3's chip note shows only under v2. */
+  engine?: SolverEngine;
   onDelete: () => void;
   onEdit: () => void;
   nameIssue?: CadenceNameIssue;
@@ -683,7 +692,9 @@ function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
               <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30">
                 Mes por medio
               </span>
-              <span className="font-body text-[10px] text-mono-500 self-center">{CADENCE_V2_NOTE}</span>
+              {engine === "v2" && (
+                <span className="font-body text-[10px] text-mono-500 self-center">{CADENCE_V2_NOTE}</span>
+              )}
             </>
           )}
           {r.sundayCadence === "alternate" && nameIssue && (
@@ -1155,8 +1166,10 @@ function PresenceForm({ members, onAdd, onCancel, initialValues }: {
 
 // ─── Rule builder — main orchestrator ────────────────────────────────────────
 
-function RuleBuilder({ config, onChange, members, source, cadenceNameIssues }: {
+function RuleBuilder({ config, onChange, members, source, cadenceNameIssues, engine = "v2" }: {
   config: SolverConfig;
+  /** C6 CTL-1, forwarded to each `RestrictionCard`. */
+  engine?: SolverEngine;
   onChange: (c: SolverConfig) => void;
   /** The PERSONA dropdown's list — `voz` members. Never what a name is resolved against. */
   members: MemberOption[];
@@ -1287,7 +1300,7 @@ function RuleBuilder({ config, onChange, members, source, cadenceNameIssues }: {
             siblings={config.restrictions.filter(x => x.id !== r.id)}
             onAdd={saveRestriction} onCancel={cancelEdit} />
         ) : (
-          <RestrictionCard key={r.id} r={r}
+          <RestrictionCard key={r.id} r={r} engine={engine}
             nameIssue={cadenceNameIssues.get(r.id)}
             exactOverlapRole={exactOverlapRole.get(r.id)}
             onDelete={() => rmRestriction(r.id)}
@@ -1796,7 +1809,9 @@ function historyMonthsLabel(months: SolverHistoryMonth[]): string {
     .join(" · ");
 }
 
-function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, fairnessServices }: {
+function SolverConfigPanel({ members, config, onChange, rules, history, onRemoveHistory, year, month, derived, showCadencePoolWarning = false, fairnessServices, engine = "v2" }: {
+  /** C6 ENG-3: forwarded to the rule cards (CTL-1). */
+  engine?: SolverEngine;
   members: MemberOption[];
   /** The month's stored services, for the «Equidad» preview's counted Sundays (C2 UI-5). */
   fairnessServices: ExistingRole[];
@@ -1974,6 +1989,7 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
         members={members.filter(m => m.memberType?.includes("voz"))}
         source={rules.source}
         cadenceNameIssues={cadenceNameIssues}
+        engine={engine}
       />
 
       {/*
@@ -2016,6 +2032,7 @@ export default function MonthGenerator({
   mode = "create", members, existingRoles, onClose, onCreated, rules, capability, preflight, allRoles,
   initialMonth, focusRoleId, openComposerInitially = false, storedSource, storedCapabilities, onCleared,
   showCadencePoolWarning = false,
+  engine = "v2",
 }: Props) {
   const storedMode = mode === "stored";
   const gateBlocked = capability && !capability.enabled ? capability.reason ?? "Datos incompletos." : null;
@@ -4473,6 +4490,7 @@ export default function MonthGenerator({
           the same confirm.
         */
         createdTargets={createdTargets.current}
+        engine={engine}
         onToggleWeekend={date => {
           // Local noon, never a bare `new Date(iso)` — a UTC parse day-flips and
           // would route a Sunday's toggle into the Saturday branch.
@@ -4527,6 +4545,7 @@ export default function MonthGenerator({
           derived={derivedMode ? derivedHistory : undefined}
           showCadencePoolWarning={showCadencePoolWarning}
           fairnessServices={existingRoles}
+          engine={engine}
         />
       ) : (
         <SolverConfigUnavailable source={rules.source} onReload={rules.reload} />
@@ -4726,7 +4745,7 @@ export default function MonthGenerator({
                   ariaLabel={FAIRNESS_LABEL}
                   help={createType === "special_role" ? FAIRNESS_SPECIAL_HELP : undefined}
                 />
-                <FairnessEngineNote />
+                <FairnessEngineNote engine={engine} />
               </div>
             </div>
           )}
@@ -4963,6 +4982,7 @@ export default function MonthGenerator({
           onToggleSkip={handleToggleSkip}
           onStoredHeaderChange={handleStoredHeaderChange}
           fairness={{ onChange: handleFairnessChange, createInFlight: pushing || autoPending }}
+          engine={engine}
           storedDateBlockedReason={storedDateBlocked}
           mutationLocked={storedMutationLocked || createAutoLocked}
           onAuto={handleAuto}

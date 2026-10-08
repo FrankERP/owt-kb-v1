@@ -10,7 +10,7 @@
 import { useId } from "react";
 import Switch from "@/app/components/ui/Switch";
 import { FAIRNESS_ENGINE_NOTE, FAIRNESS_LABEL, FAIRNESS_PAST_REASON } from "./fairnessToggleModel";
-import { SOLVER_ENGINE } from "./solverEngine";
+import type { SolverEngine } from "./solverEngine";
 
 export function FairnessSwitch({
   checked,
@@ -55,9 +55,12 @@ export function FairnessSwitch({
   );
 }
 
-/** «Cuenta para equidad: aplica con el nuevo solver…» — once per surface, only while the engine is v2. */
-export function FairnessEngineNote() {
-  if (SOLVER_ENGINE !== "v2") return null;
+/**
+ * «Cuenta para equidad: aplica con el nuevo solver…» — once per surface, only while the engine is
+ * v2. The engine is the server-resolved prop (C6 CTL-1, ENG-4), never the constant.
+ */
+export function FairnessEngineNote({ engine }: { engine: SolverEngine }) {
+  if (engine !== "v2") return null;
   return (
     <p data-fairness-engine-note="" className="font-body text-[11px] text-mono-500">
       {FAIRNESS_ENGINE_NOTE}

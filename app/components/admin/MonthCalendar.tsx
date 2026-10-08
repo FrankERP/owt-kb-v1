@@ -5,6 +5,7 @@ import { useState } from "react";
 import { draftTargetKey } from "./plannerModel";
 import Select from "@/app/components/ui/Select";
 import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";
+import type { SolverEngine } from "./solverEngine";
 import {
   FAIRNESS_LABEL,
   FAIRNESS_SPECIAL_HELP,
@@ -76,6 +77,8 @@ export interface MonthCalendarProps {
    */
   onAddSpecial: (date: string, name: string, countsForFairness: boolean) => void;
   onRemoveSpecial: (date: string) => void;
+  /** The server-resolved engine (C6 ENG-3); gates C1's note in the special composer. */
+  engine?: SolverEngine;
 }
 
 const WEEKDAY_HEADERS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -206,6 +209,7 @@ export default function MonthCalendar({
   onToggleWeekend,
   onAddSpecial,
   onRemoveSpecial,
+  engine = "v2",
 }: MonthCalendarProps) {
   const [composerDate, setComposerDate] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -428,7 +432,7 @@ export default function MonthCalendar({
             ariaLabel={FAIRNESS_LABEL}
             help={FAIRNESS_SPECIAL_HELP}
           />
-          <FairnessEngineNote />
+          <FairnessEngineNote engine={engine} />
           <div className="flex gap-2">
             <button
               type="button"

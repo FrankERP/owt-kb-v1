@@ -157,6 +157,7 @@ import { CLEAR_WHAT_LABEL, type ClearScope, type ClearWhat } from "./clearCells"
 // declarations used only at event time, so nothing is read during module
 // evaluation.
 import { moveOccupant, type MoveOccupantEndpoint, type MoveOccupantSource } from "./moveOccupant";
+import type { SolverEngine } from "./solverEngine";
 import {
   canTouchColumn,
   createMoveGate,
@@ -269,6 +270,8 @@ export interface PlannerGridProps {
    * block. Either mode disables it on a past month (§6.0).
    */
   fairness?: { onChange: (columnId: string, next: boolean) => void; createInFlight: boolean };
+  /** The server-resolved engine (C6 ENG-3); gates C1's note. Literal default for tests and the gallery only. */
+  engine?: SolverEngine;
   storedDateBlockedReason?: string | null;
   /** Prevent every stored-grid mutation while another stored mutation is unresolved. */
   mutationLocked?: boolean;
@@ -638,6 +641,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
     pinConflicts,
     clear,
     fairness,
+    engine = "v2",
   } = props;
 
   const [openCell, setOpenCell] = useState<{ rowId: string; columnId: string } | null>(null);
@@ -1822,7 +1826,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const centre = (
     <div className="min-w-0 flex-1 space-y-4 xl:order-2">
       {/* C1 §6.6: once per grid, never per column; above the grid, so it never moves a cell mid-drag. */}
-      {fairness && <FairnessEngineNote />}
+      {fairness && <FairnessEngineNote engine={engine} />}
       {gridBlock}
       {/*
         The drag's only words: a refusal the gate produced (C1/C2/C3, or a

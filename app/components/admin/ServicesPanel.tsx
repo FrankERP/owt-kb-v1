@@ -103,6 +103,7 @@ import { upcomingMonthPills } from "./monthPills";
 // ─── Setlist types ────────────────────────────────────────────────────────────
 
 import { SetlistEditor } from "./SetlistEditor";
+import type { SolverEngine } from "./solverEngine";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -191,7 +192,7 @@ function Modal({
 
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
-export default function ServicesPanel() {
+export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine } = {}) {
   const [roles, setRoles]       = useState<ServiceRole[]>([]);
   const [members, setMembers]   = useState<MemberOption[]>([]);
   // The five read domains are tracked INDEPENDENTLY: a failure in one never
@@ -984,6 +985,7 @@ export default function ServicesPanel() {
           <MonthGenerator
             key={`stored:${monthEditor.month}:${monthEditor.focusRoleId ?? "month"}`}
             mode="stored"
+            engine={engine}
             initialMonth={monthEditor.month}
             focusRoleId={monthEditor.focusRoleId}
             openComposerInitially={monthEditor.openComposerInitially}
@@ -1038,6 +1040,7 @@ export default function ServicesPanel() {
         </div>
         <PanelBoundary>
           <MonthGenerator
+            engine={engine}
             members={members}
             existingRoles={roles}
             // `ServiceRole` is a structural superset of `ParticipantRole` (richer

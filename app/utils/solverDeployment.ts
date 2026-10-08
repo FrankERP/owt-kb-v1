@@ -21,9 +21,11 @@
 // engine from the GET's `engine` (IF2-8) or C6's server-resolved prop. Guarded by
 // `solverDeployment.test.ts`. The variable's entry is in docs/SECRETS.md.
 
-import { SOLVER_ENGINE } from "@/app/components/admin/solverEngine";
+import { SOLVER_ENGINE, type SolverEngine } from "@/app/components/admin/solverEngine";
 
-export type SolverEngine = "v2" | "v3";
+// Moved to `solverEngine.ts` (C6 ENG-1: one definition, client-importable); re-exported so every
+// existing importer of this module keeps the name.
+export type { SolverEngine };
 
 type Env = Readonly<Record<string, string | undefined>>;
 
