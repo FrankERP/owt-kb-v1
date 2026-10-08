@@ -201,6 +201,8 @@ export interface AutoState {
    */
   notices?: string[];
   disabledReason: string | null;
+  /** Solver v3 C6 AD-6: «Reintentar» beside the error, only where a retry can heal it. v2 never sets it. */
+  retry?: () => void;
 }
 
 /** A stored column's header edit: Fecha, Nombre, Hora and «Cuenta para equidad» (solver v3 C1 §6.4). */
@@ -253,8 +255,12 @@ export interface PlannerGridProps {
   /** By opaque column id. */
   skipped: Set<string>;
   unresolvedNames: string[];
-  /** `mapUnfilledSeats` output. */
-  unfilled: { columnId: string; rowId: string }[];
+  /** `mapUnfilledSeats` output, or (v3) the adapter's markers with their reason's copy (AD-5). */
+  unfilled: { columnId: string; rowId: string; reason?: string }[];
+  /** Solver v3 C6 NT-1: the run panel, in place of v2's diagnostics strip (NT-5). */
+  v3Report?: ReactNode;
+  /** Solver v3 C6 ST-9: replaces the v2 confirm sentence when «Solo llenar vacíos» is off. */
+  autoConfirmText?: string;
   onCellsChange: (next: GridCell[]) => void;
   /** Add/remove instrument and FOH rows. */
   onRowsChange: (next: GridRow[]) => void;
@@ -644,6 +650,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
     participation,
     monthLabel,
     monthBands,
+    v3Report,
+    autoConfirmText,
     fillEmpty,
     pinConflicts,
     clear,
@@ -758,6 +766,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // through untouched — computed once here so both readers agree by
   // construction rather than by two call sites staying in sync.
   const visibleUnfilled = useMemo(() => renderableUnfilled(unfilled, cells), [unfilled, cells]);
+
+  const unfilledReasonByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of unfilled) if (u.reason && !m.has(cellKey(u.columnId, u.rowId))) m.set(cellKey(u.columnId, u.rowId), u.reason);
+    return m;
+  }, [unfilled]);
 
   const unfilledByKey = useMemo(() => {
     const set = new Set<string>();
@@ -1806,6 +1820,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             columns={columns}
             cellsByKey={cellsByKey}
             unfilledByKey={unfilledByKey}
+            unfilledReasonByKey={unfilledReasonByKey}
             duplicatesByColumnId={(columnId) =>
               duplicatesByColumnId.get(columnId) ?? emptyDuplicates
             }
@@ -2175,6 +2190,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <p className="font-body text-xs text-warning-strong">{autoState.disabledReason}</p>
         )}
         {mode === "create" && autoState.error && <p className="font-body text-xs text-negative-fg">{autoState.error}</p>}
+        {mode === "create" && autoState.error && autoState.retry && (
+          <Button variant="secondary" size="sm" onClick={autoState.retry}>Reintentar</Button>
+        )}
         {mode === "create" && (autoState.notices ?? []).length > 0 && (
           <div className="basis-full space-y-1" data-auto-notices="">
             {(autoState.notices ?? []).map((line, i) => (
@@ -2189,7 +2207,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <p className="font-body text-xs text-warning-soft">
             {fillEmpty?.enabled
               ? `${fillEmpty.emptyVoiceSeats === 1 ? "Solo se llenará 1 lugar de voz vacío" : `Solo se llenarán los ${fillEmpty.emptyVoiceSeats} lugares de voz vacíos`} (Lead, BGV, Coro); lo que ya está puesto se respeta y se envía al solver como fijo. Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca.`
-              : "Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes. Las asignaciones manuales de instrumentos y FOH no se tocan."}
+              : (autoConfirmText ?? "Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes. Las asignaciones manuales de instrumentos y FOH no se tocan.")}
           </p>
           {/* E5: a special never goes to the solver, so its fill is a DIFFERENT
               mechanism and has to be named as one — greedy, local, rules-first,
@@ -2249,6 +2267,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
           Revísalo antes de crear.
         </p>
       )}
+
+      {mode === "create" && v3Report}
 
       {unresolvedNames.length > 0 && (
         <p className="font-body text-xs text-negative-fg">
@@ -2657,6 +2677,7 @@ function RowGroup({
   columns,
   cellsByKey,
   unfilledByKey,
+  unfilledReasonByKey,
   duplicatesByColumnId,
   violationsByColumnId,
   pinConflicts,
@@ -2679,6 +2700,7 @@ function RowGroup({
   columns: GridColumn[];
   cellsByKey: Map<string, GridCell>;
   unfilledByKey: Set<string>;
+  unfilledReasonByKey?: ReadonlyMap<string, string>;
   duplicatesByColumnId: (columnId: string) => Map<string, string[]>;
   /** E13, by `violationKey(rowId, memberId)` — that service column only. */
   violationsByColumnId: (columnId: string) => Map<string, SeatedViolation>;
@@ -2770,6 +2792,7 @@ function RowGroup({
             violations={violationsByColumnId(column.columnId)}
             pinConflicts={pinConflicts}
             unfilled={unfilledByKey.has(cellKey(column.columnId, row.id))}
+            unfilledReason={unfilledReasonByKey?.get(cellKey(column.columnId, row.id)) ?? null}
             onOpen={() => onOpen(column.columnId)}
             onCopy={onCopy ? () => onCopy(column.columnId) : undefined}
             mutationLocked={mutationLocked}
@@ -2817,6 +2840,7 @@ function GridCellView({
   violations,
   pinConflicts,
   unfilled,
+  unfilledReason = null,
   onOpen,
   onCopy,
   mutationLocked,
@@ -2838,6 +2862,7 @@ function GridCellView({
   /** «Solo llenar vacíos», by `pinSeatKey` — shown, never blocking (spec §3.3). */
   pinConflicts?: ReadonlyMap<string, PinConflictKind[]>;
   unfilled: boolean;
+  unfilledReason?: string | null;
   onOpen: () => void;
   onCopy?: () => void;
   mutationLocked: boolean;
@@ -3149,6 +3174,9 @@ function GridCellView({
         })}
         {unfilled && (
           <p className="font-label text-[9px] uppercase tracking-widest text-warning-strong">Sin cubrir</p>
+        )}
+        {unfilled && unfilledReason && (
+          <p className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>{unfilledReason}</p>
         )}
         {onCopy && memberIds.length > 0 && (
           <button

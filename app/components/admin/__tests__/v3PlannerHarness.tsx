@@ -88,3 +88,38 @@ export function renderV3(opts: {
     </AdminProviders>,
   );
 }
+
+import type { V3SolveRequest, V3Success } from "../v3Wire";
+
+/** A v3 solver that seats every pin and, on each planned service, the first person eligible for Lead. */
+export function echoV3(request: V3SolveRequest): V3Success {
+  const assignments: V3Success["assignments"] = {};
+  for (const s of request.services) {
+    const pinned = request.pins.filter((p) => p.service === s.id);
+    const byRole = { Lead: pinned.filter((p) => p.role === "Lead").map((p) => p.person), BGV: pinned.filter((p) => p.role === "BGV").map((p) => p.person), Choir: pinned.filter((p) => p.role === "Choir").map((p) => p.person) };
+    if (!s.fixed && byRole.Lead.length === 0) {
+      const lead = request.people.find((p) => (p.eligibility[s.id] ?? []).includes("Lead"));
+      if (lead) byRole.Lead.push(lead.id);
+    }
+    assignments[s.id] = s.kind === "saturday" && !s.fixed ? { Lead: byRole.Lead, BGV: byRole.BGV } : byRole;
+  }
+  return {
+    ok: true, contract: 3, engine: "v3", solver_version: "3.0.0", build: "test", request_id: request.request_id, seed: request.seed,
+    months: request.months, reproducible: true, assignments, unfilled: [],
+    pins: { requested: request.pins.length, honored: request.pins.length }, violations: [], violation_ceiling: { value: 0, proven: true },
+    stages: [{ id: "rules", status: "proven", value: 0, bound: 0, limit: "none", ms: 1, det_milli: 1 }], total_ms: 5,
+    fairness: { scale: 100, tolerance: 35, lines: [], people: [] }, cadence: [], missed: [], notices: [],
+  };
+}
+
+/** A route for `POST /api/admin/solve` that records each v3 request and answers `respond(request, n)`. */
+export function solveRoute(respond: (request: V3SolveRequest, n: number) => { status: number; body: unknown }) {
+  const requests: V3SolveRequest[] = [];
+  const route = (url: string, init?: RequestInit) => {
+    if (url !== "/api/admin/solve") return undefined;
+    const request = JSON.parse(String(init?.body ?? "{}")) as V3SolveRequest;
+    requests.push(request);
+    return respond(request, requests.length);
+  };
+  return { route, requests };
+}

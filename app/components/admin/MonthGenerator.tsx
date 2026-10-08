@@ -136,8 +136,15 @@ import {
   type StoredGridColumn,
   type StoredGridTranslation,
 } from "./storedRoleReadModel";
-import { horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
-import { monthNameCap, monthsList } from "./v3Copy";
+import { cdmxCurrentMonth, horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
+import { monthNameCap, monthsList, V3_LINES, V3_ROUTE_COPY, transportLine, type V3Names } from "./v3Copy";
+import { runV3Auto, type V3AutoResult } from "./v3AutoRun";
+import { buildV3SolveRequest, preReadRefusals } from "./v3SolveRequest";
+import { applyV3Assignments, v3OutcomeLine, v3RetryOffered } from "./v3SolveResponse";
+import { buildV3RunReport, v3Names, type V3RunReport } from "./v3RunReport";
+import { renderRuleRefTable } from "./v3RuleIds";
+import V3RunPanel from "./V3RunPanel";
+import type { V3Success } from "./v3Wire";
 import {
   classifyPatchOutcome,
   freezeSaveAttempt,
@@ -2081,6 +2088,18 @@ export default function MonthGenerator({
     [firstMonth, isV3, storedMode, horizonLength],
   );
   const previousHorizon = useRef<string[]>([]);
+  // C6 RQ-1: a v3 Auto solves nothing if the horizon changed during its read.
+  const horizonKeyRef = useRef("");
+  useLayoutEffect(() => { horizonKeyRef.current = horizon.join(","); });
+  // The last v3 run of THIS horizon (EQ-3/EQ-4 read it; a horizon change makes it stale).
+  const [v3Run, setV3Run] = useState<{
+    build: Extract<ReturnType<typeof buildV3SolveRequest>, { ok: true }>;
+    response: V3Success;
+    report: V3RunReport;
+    names: V3Names;
+    horizonKey: string;
+  } | null>(null);
+  const [autoRetry, setAutoRetry] = useState<(() => void) | null>(null);
   const [participationChoice, setParticipationChoice] = useState<string>("both");
   /**
    * «Cuenta para equidad» edits on create-mode columns (solver v3 C1 §6.1), by
@@ -3850,8 +3869,11 @@ export default function MonthGenerator({
   function applySpecialFill(
     config: SolverConfig,
     baseCells: GridCell[],
-    solverUnfilled?: { columnId: string; rowId: string }[],
+    solverUnfilled?: { columnId: string; rowId: string; reason?: string }[],
     fillEmpty = false,
+    // C6 SP-4/SP-5: under v3, counted specials are the pre-fill's (filled before the solve, or left
+    // as they are on a refusal) — today's filler never touches them. v2 passes nothing.
+    skipSpecialIds?: ReadonlySet<string>,
   ) {
     const specialColumnIds = new Set(
       columns.filter(c => c.type === "special_role").map(c => c.columnId),
@@ -3859,7 +3881,7 @@ export default function MonthGenerator({
     let next = baseCells;
     const filled: { columnId: string; rowId: string }[] = [];
     for (const column of columns) {
-      if (column.type !== "special_role") continue;
+      if (column.type !== "special_role" || skipSpecialIds?.has(column.columnId)) continue;
       // Fed the ACCUMULATED cells, so the second special of a month ranks
       // against the load the first one just created (`cellsToParticipantRoles`
       // iterates `columns`), instead of re-picking the same people.
@@ -4037,6 +4059,15 @@ export default function MonthGenerator({
       } else if (res.status === 422) {
         // The solver's refusal — its body carries the reason (`solverRefusalMessage`).
         response = await res.json().catch(() => null);
+      } else if (res.status === 409) {
+        // Solver v3 C6 AD-8 — the ONE v2 client change: the server's engine changed under this page.
+        // Never «sin solución», never the trailing retry; the specials still fill.
+        const mismatch = await res.json().catch(() => null);
+        if (mismatch?.error === "solver_version_mismatch") {
+          setAutoError(V3_ROUTE_COPY.versionMismatch);
+          applySpecialFill(config, cells, undefined, prepared.fillEmpty);
+          return;
+        }
       }
       if (!res.ok || !response || !response.ok || !response.schedule) {
         const { request } = prepared;
@@ -4181,6 +4212,12 @@ export default function MonthGenerator({
     // moment — its own path, below — or, with `SOLVER_SENDS_HISTORY` off (what
     // ships, ADR-0046), on none at all. Everything after this line is the
     // per-browser path, unchanged but for the same switch.
+    // Solver v3 C6 AD-1: dispatch on the server-resolved engine BEFORE anything is read or built;
+    // under v3 no v2 builder, parser or retry is reachable.
+    if (isV3) {
+      await handleAutoV3(config);
+      return;
+    }
     if (SOLVER_HISTORY_SOURCE === "derived") {
       await handleAutoDerived();
       return;
@@ -4208,6 +4245,100 @@ export default function MonthGenerator({
    * at once, whatever the transport is doing, and a timeout takes the same
    * refusal as any other failed read.
    */
+  /** C6 SP-4: the planned counted specials, which today's after-solve filler leaves to the pre-fill. */
+  function countedSpecialIds(): Set<string> {
+    return new Set(columns.filter((c) => c.type === "special_role" && c.countsForFairness).map((c) => c.columnId));
+  }
+
+  /** The planned columns that will exist: not skipped and creatable (RQ-3) — never a «Guardado» one. */
+  function v3PlannedColumns(): GridColumn[] {
+    return columns.filter((c) => {
+      if (skippedColumnIds.has(c.columnId)) return false;
+      const draft = draftByTarget.get(draftTargetKey(c.type, c.date));
+      return !draft || isCreatable(draft);
+    });
+  }
+
+  async function handleAutoV3(config: SolverConfig) {
+    const requested = horizon.join(",");
+    const months = [...horizon];
+    setAutoPending(true);
+    setAutoError(null);
+    setAutoNotices([]);
+    setAutoRetry(null);
+    setDiagnostics(null);
+    try {
+      const currentMonth = cdmxCurrentMonth(new Date());
+      const result = await runV3Auto({
+        months,
+        preRead: () => preReadRefusals({ months, currentMonth, config, members }),
+        storedReady: () => v3Stored.ready,
+        specialsWaiting: countedSpecialIds().size > 0,
+        readLedger: async (signal) => {
+          const res = await fetch(`/api/admin/fairness?month=${months[0]}&horizon=${months.length}`, { cache: "no-store", signal });
+          return { status: res.status, body: await res.json().catch(() => null) };
+        },
+        isCurrent: () => horizonKeyRef.current === requested,
+        build: (ledger) => buildV3SolveRequest({
+          months, currentMonth, ledger, config, members,
+          storedRoles: storedSource?.roles ?? [],
+          planned: { columns: v3PlannedColumns(), cells, rows },
+          savedWindow, fillEmpty: fillEmptyOnly,
+          seed: crypto.getRandomValues(new Uint32Array(1))[0] % 2147483648,
+          requestId: newCreationRequestId(),
+        }),
+        postSolve: async (request, signal) => {
+          const res = await fetch("/api/admin/solve", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(request), signal,
+          });
+          return { status: res.status, text: await res.text() };
+        },
+      });
+      applyV3AutoResult(config, result, requested);
+    } catch {
+      setAutoError(V3_ROUTE_COPY.connection);
+      applySpecialFill(config, cells, undefined, fillEmptyOnly, countedSpecialIds());
+    } finally {
+      setAutoPending(false);
+    }
+  }
+
+  /** Every exit fills uncounted specials and instruments as today (AD-7); counted specials are the pre-fill's. */
+  function applyV3AutoResult(config: SolverConfig, result: V3AutoResult, horizonKey: string) {
+    const skip = countedSpecialIds();
+    if (result.kind === "stale") {
+      applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
+      return;
+    }
+    if (result.kind === "refused") {
+      setAutoError(result.lines[0]);
+      setAutoNotices(result.lines.slice(1));
+      setV3Run(null);
+      applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
+      return;
+    }
+    const { build, outcome } = result;
+    if (outcome.kind !== "success") {
+      setAutoError(v3OutcomeLine(outcome));
+      if (v3RetryOffered(outcome)) setAutoRetry(() => () => { void handleAuto(); });
+      setV3Run(null);
+      applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
+      return;
+    }
+    const applied = applyV3Assignments({ response: outcome.response, request: build.request, cells: build.cells, rows, pinnedCellKeys: build.boardPinnedCellKeys });
+    if (!applied.ok) {
+      setAutoError(transportLine("unknown_service"));
+      setV3Run(null);
+      applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
+      return;
+    }
+    const names = v3Names({ members, serviceLabels: build.serviceLabels, ruleLabels: build.ruleLabels });
+    const report = buildV3RunReport({ response: outcome.response, request: build.request, storedServiceIds: build.storedServiceIds, names });
+    setAutoNotices([...build.notices, ...report.solverNotices]);              // NT-3: C6's own first
+    setV3Run({ build, response: outcome.response, report, names, horizonKey });
+    applySpecialFill(config, applied.cells, applied.unfilled, fillEmptyOnly, skip);
+  }
+
   async function handleAutoDerived() {
     const target = { year, month };
     setAutoPending(true);
@@ -4514,7 +4645,16 @@ export default function MonthGenerator({
     return draftByTarget.get(key)?.isExisting ? "existing" : null;
   };
 
-  const autoState: AutoState = { pending: autoPending, error: autoError, notices: autoNotices, disabledReason: gateBlocked };
+  const autoState: AutoState = {
+    pending: autoPending, error: autoError, notices: autoNotices, disabledReason: gateBlocked,
+    ...(isV3 && autoRetry ? { retry: autoRetry } : {}),
+  };
+  const v3RunCurrent = v3Run && v3Run.horizonKey === horizon.join(",") ? v3Run : null;
+  // C6 ST-9: the confirm's count under v3 — the planned weekend columns' empty voice seats.
+  const v3EmptyVoiceSeats = columns
+    .filter((c) => c.type !== "special_role")
+    .reduce((sum, c) => sum + rows.filter((r) => r.category === "voz" && r.target !== null && !(r.id === "coro" && c.type === "saturday_role"))
+      .reduce((acc, r) => acc + Math.max(0, (r.target ?? 0) - (cells.find((x) => x.columnId === c.columnId && x.rowId === r.id)?.occupants.length ?? 0)), 0), 0);
 
   // ── Step 1: Configure ────────────────────────────────────────────────────────
   if (step === "config") return (
@@ -5070,7 +5210,15 @@ export default function MonthGenerator({
           mutationLocked={storedMutationLocked || createAutoLocked}
           onAuto={handleAuto}
           autoState={autoState}
-          diagnostics={diagnostics}
+          diagnostics={isV3 ? null : diagnostics}
+          v3Report={isV3 && v3RunCurrent ? (
+            <V3RunPanel
+              report={v3RunCurrent.report}
+              requestId={v3RunCurrent.build.snapshot.requestId}
+              ruleTable={renderRuleRefTable(v3RunCurrent.build.snapshot.requestId, v3RunCurrent.build.snapshot.ruleTable)}
+            />
+          ) : undefined}
+          autoConfirmText={isV3 ? V3_LINES.autoConfirm(horizon) : undefined}
           config={solverConfig ?? undefined}
           sundayDates={sundayDatesFull}
           // INLINE ON PURPOSE, for now — and worth knowing before "fixing" it.
@@ -5133,7 +5281,7 @@ export default function MonthGenerator({
           fillEmpty={storedMode ? undefined : {
             enabled: fillEmptyOnly,
             onChange: (next) => { if (!autoPending) setFillEmptyOnly(next); },
-            emptyVoiceSeats: emptyVoiceSeats({
+            emptyVoiceSeats: isV3 ? v3EmptyVoiceSeats : emptyVoiceSeats({
               cells, columns, rows, sundayDates: sundayDatesFull, weekendsWithSaturday: requestSaturdayWeeks,
             }),
           }}
