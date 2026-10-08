@@ -17,4 +17,11 @@
 // "v3" in a consumer becomes a TS2367 "no overlap" error instead of the branch it
 // is meant to be.
 
+/**
+ * The engine as a VALUE the server resolves and threads as a prop (solver v3 C6 ENG-1). The ONE
+ * definition of the union: `app/utils/solverDeployment.ts` re-exports it, and client modules import
+ * it from here because they may not import the resolver's module. A type adds no import.
+ */
+export type SolverEngine = "v2" | "v3";
+
 export const SOLVER_ENGINE: "v2" | "v3" = "v2";

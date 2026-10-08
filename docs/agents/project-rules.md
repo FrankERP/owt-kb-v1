@@ -254,6 +254,16 @@ several exist precisely to stop a plausible-looking change.
   built from `localStorage`'s own contents, never from React state) as the rollback target
   until the dual-write is removed (D3), and READ only if the switch is flipped back to
   `"local"`. The Historial chips are read-only: no manual month exclusion.
+- **Two solver parsers, never crossed (solver v3 C6, U8).** Every engine-dependent client branch reads
+  the `engine` prop `/admin`'s Server Component resolves (`resolveSolverEngine`), never
+  `SOLVER_ENGINE` (`engineProp.test.ts`). Auto dispatches on it BEFORE reading anything: a v3 answer
+  goes only through `v3SolveResponse.ts` (classifier, handshake, apply by service id, retry keyed on
+  codes) and a v2 answer only through v2's parsers, pin cap (100) and trailing retry —
+  `MonthGenerator.v3Auto.test.tsx` spies on both sides. Under v2 the one client change is the 409
+  `solver_version_mismatch` reload line. v3 copy lives only in `v3Copy.ts`, keyed on C5's
+  `gcf_v3/owt_v3/codes.json` (`v3CodesSync.test.ts`); the v3 pin cap mirrors C5's `PIN_CAP`
+  (`v3PinCapSync.test.ts`); no rule key or `ruleKey` ever reaches the v3 wire, a rendered line or a
+  log — ids are minted (`v3RuleIds.ts`, `v3KeyHygiene.test.ts`).
 - **Client mutation handlers** must wrap `fetch` in try/catch/finally, check
   `res.ok`, reset their loading flag, and never close-as-success on failure.
 - **`/api/cron/*` stays excluded from the `proxy.ts` middleware matcher** — those
@@ -510,6 +520,13 @@ hook, and by every Auto only while `SOLVER_SENDS_HISTORY` is true), `SOLVER_HIST
 (`app/components/admin/solverHistorySource.ts` — the deployment-wide switch, `"derived"`; `"local"`
 is the rollback until D3), `SOLVER_SENDS_HISTORY` (same file — `false`: Auto sends `history: []`,
 ADR-0046; `true` is the rollback), `countsForFairness`/`countsForFairnessDefault`/`COUNTS_FOR_FAIRNESS_GROQ` (`app/utils/countsForFairness.ts` — the ONE «Cuenta para equidad» read rule; neutral; nothing else spells the fragment or the default), `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts` — the engine constant only, `"v2"`; the effective engine is `resolveSolverEngine`'s (`app/utils/solverDeployment.ts`), parent A1), `FairnessSwitch`/`FairnessEngineNote` (`app/components/admin/FairnessSwitch.tsx` — the ONE «Cuenta para equidad» control and its v2 note on all four surfaces; the past-month rule and effective values live in `fairnessToggleModel.ts`), `trailingSaturday`/`rolesOfPattern` (`app/components/admin/plannerModel.ts` — the ONE definition of the Saturday after the last Sunday, solver week `weeks + 1`, ADR-0048; and the ONE pattern → solver-roles map, mirroring the solver's `expand_pattern`, guarded by `patternRolesSync.test.ts`), `rolesOfPatternV3` (`plannerModel.ts` — the ONE v3 six-key pattern map; equals `rolesOfPattern` on the five v2 keys and adds `Sat.Choir`; synced by `patternRolesV3Sync.test.ts`), `capValueForMonth` (`app/components/admin/serviceRuleContext.ts` — the ONE per-month count resolution, over `resolvedCapValue`, a typed result never rounded or clamped), `memberFitsRoleKey` (`plannerModel.ts` — the ONE does-this-Tipo-fit-this-v3-role-key predicate, shared by the eligibility resolver and the record writer), `resolveMonthEligibility` (`app/utils/fairnessEligibility.ts` — the ONE v3 eligibility resolver; client-callable; an `ok` body always passes the record validator), `formatFairnessTenths`/`saldoWords` (`app/utils/fairnessFormat.ts` — the ONLY fairness-figure formatter: one decimal from a tenths figure computed from the exact value, never from hundredths), `resolveSolverEngine` (`app/utils/solverDeployment.ts` — the ONE reader of `OWT_SOLVER_ENGINE`; it overrides `SOLVER_ENGINE` (`app/components/admin/solverEngine.ts`, C1's constant) only on the `preview` branch deployment and locally; never imported by a client module), `parseStoredFairnessMonth` (`app/utils/fairnessMonthWriteRequest.ts` — the ONE record-schema check for `fairnessMonth`; the reader and C4's script both call it), `keepVoiceSeats` (`app/utils/fairnessLedger.ts` — the ONE seat rule: duplicate weekend targets dropped, uncounted services out, one kept seat per person per service), `executeFairnessMonthWrites` (`fairnessMonthWriteRequest.ts` — the only mutation path for `fairnessMonth`, clients injected; every reader of the type carries the read token or fails closed).
+**Solver v3 planner (C6, behind the engine prop):** `buildV3SolveRequest` (`app/components/admin/v3SolveRequest.ts`
+— the ONE v3 request builder, pure: planner state + ledger GET + roles read + CDMX month in; request, notices,
+refusals and the run snapshot out; C7's rehearsal uses the same code), `runV3Auto` (`v3AutoRun.ts` — refusals
+before any read, the fresh 20 s ledger read, the 58 s solve), `freezeConfirmEntries`/`runV3ConfirmAttempt`
+(`v3Confirm.ts`/`v3ConfirmRun.ts` — the ONE v3 confirm: every month's record in one PUT, then drafts month by
+month; critical, reviewed as such), `v3Copy.ts` (the ONLY v3 copy, keyed on codes), `prefillCountedSpecials`
+(`v3Prefill.ts` — counted specials before the solve; uncounted ones keep `fillColumn`).
 Motion tokens are `--motion-*` /
 `--ease-*`; `motion` is
 importable only under `app/components/ui/**` — see `docs/MOTION.md` and

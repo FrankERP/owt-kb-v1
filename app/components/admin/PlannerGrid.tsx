@@ -157,6 +157,7 @@ import { CLEAR_WHAT_LABEL, type ClearScope, type ClearWhat } from "./clearCells"
 // declarations used only at event time, so nothing is read during module
 // evaluation.
 import { moveOccupant, type MoveOccupantEndpoint, type MoveOccupantSource } from "./moveOccupant";
+import type { SolverEngine } from "./solverEngine";
 import {
   canTouchColumn,
   createMoveGate,
@@ -200,6 +201,8 @@ export interface AutoState {
    */
   notices?: string[];
   disabledReason: string | null;
+  /** Solver v3 C6 AD-6: «Reintentar» beside the error, only where a retry can heal it. v2 never sets it. */
+  retry?: () => void;
 }
 
 /** A stored column's header edit: Fecha, Nombre, Hora and «Cuenta para equidad» (solver v3 C1 §6.4). */
@@ -252,8 +255,12 @@ export interface PlannerGridProps {
   /** By opaque column id. */
   skipped: Set<string>;
   unresolvedNames: string[];
-  /** `mapUnfilledSeats` output. */
-  unfilled: { columnId: string; rowId: string }[];
+  /** `mapUnfilledSeats` output, or (v3) the adapter's markers with their reason's copy (AD-5). */
+  unfilled: { columnId: string; rowId: string; reason?: string }[];
+  /** Solver v3 C6 NT-1: the run panel, in place of v2's diagnostics strip (NT-5). */
+  v3Report?: ReactNode;
+  /** Solver v3 C6 ST-9: replaces the v2 confirm sentence when «Solo llenar vacíos» is off. */
+  autoConfirmText?: string;
   onCellsChange: (next: GridCell[]) => void;
   /** Add/remove instrument and FOH rows. */
   onRowsChange: (next: GridRow[]) => void;
@@ -269,6 +276,8 @@ export interface PlannerGridProps {
    * block. Either mode disables it on a past month (§6.0).
    */
   fairness?: { onChange: (columnId: string, next: boolean) => void; createInFlight: boolean };
+  /** The server-resolved engine (C6 ENG-3); gates C1's note. Literal default for tests and the gallery only. */
+  engine?: SolverEngine;
   storedDateBlockedReason?: string | null;
   /** Prevent every stored-grid mutation while another stored mutation is unresolved. */
   mutationLocked?: boolean;
@@ -305,6 +314,12 @@ export interface PlannerGridProps {
   participation?: ReactNode;
   /** Named on the full-screen bar, where the page's own month header is gone. */
   monthLabel?: string;
+  /**
+   * Solver v3 C6 HZ-5: one band per horizon month above the column headers, INSIDE the grid's own
+   * horizontal scroller (ADR-0035), with a visible boundary at the second month's first column.
+   * Columns arrive in date order, so each band's columns are contiguous. Omitted under v2.
+   */
+  monthBands?: ReadonlyArray<{ month: string; label: string; columnIds: readonly string[] }>;
   /**
    * «Solo llenar vacíos» (create mode, spec 2026-09-29 §3). Omitted ⇒ no switch. `MonthGenerator`
    * owns the state (E2: per run, never persisted); this renders it and words the confirm.
@@ -634,10 +649,14 @@ export default function PlannerGrid(props: PlannerGridProps) {
     sundayDatesForColumn,
     participation,
     monthLabel,
+    monthBands,
+    v3Report,
+    autoConfirmText,
     fillEmpty,
     pinConflicts,
     clear,
     fairness,
+    engine = "v2",
   } = props;
 
   const [openCell, setOpenCell] = useState<{ rowId: string; columnId: string } | null>(null);
@@ -747,6 +766,12 @@ export default function PlannerGrid(props: PlannerGridProps) {
   // through untouched — computed once here so both readers agree by
   // construction rather than by two call sites staying in sync.
   const visibleUnfilled = useMemo(() => renderableUnfilled(unfilled, cells), [unfilled, cells]);
+
+  const unfilledReasonByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of unfilled) if (u.reason && !m.has(cellKey(u.columnId, u.rowId))) m.set(cellKey(u.columnId, u.rowId), u.reason);
+    return m;
+  }, [unfilled]);
 
   const unfilledByKey = useMemo(() => {
     const set = new Set<string>();
@@ -1752,9 +1777,25 @@ export default function PlannerGrid(props: PlannerGridProps) {
         className="grid"
         style={{ gridTemplateColumns: `${labelTrack} repeat(${columns.length}, ${dateTrack})` }}
       >
+        {monthBands && (
+          <>
+            <div className={`${labelMinW} ${stickyLabel}`} />
+            {monthBands.map((band, i) => band.columnIds.length > 0 && (
+              <div
+                key={band.month}
+                data-month-band={band.month}
+                style={{ gridColumn: `span ${band.columnIds.length}` }}
+                className={`px-1 pb-1 font-label text-[11px] uppercase tracking-widest text-accent ${i > 0 ? "border-l-2 border-accent/40" : ""}`}
+              >
+                {band.label}
+              </div>
+            ))}
+          </>
+        )}
         <div className={`${labelMinW} ${stickyLabel}`} />
         {columns.map((column) => (
           <ColumnHeader
+            guardado={mode === "create" && "admission" in column}
             key={column.columnId}
             column={column}
             preflight={preflightFor(column)}
@@ -1779,6 +1820,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
             columns={columns}
             cellsByKey={cellsByKey}
             unfilledByKey={unfilledByKey}
+            unfilledReasonByKey={unfilledReasonByKey}
             duplicatesByColumnId={(columnId) =>
               duplicatesByColumnId.get(columnId) ?? emptyDuplicates
             }
@@ -1792,7 +1834,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
             onOpen={(columnId) => {
               if (mutationLocked) return;
               const column = columnById.get(columnId);
-              if (mode === "stored" && column && "admission" in column && column.admission === "readOnly") return;
+              // C6 ST-3: in create mode a stored column («Guardado», v3) is never edited.
+              if (column && "admission" in column && (mode === "create" || column.admission === "readOnly")) return;
               openPicker(row, columnId);
             }}
             onRemove={row.category !== "voz" ? () => removeRow(row.id) : undefined}
@@ -1822,7 +1865,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const centre = (
     <div className="min-w-0 flex-1 space-y-4 xl:order-2">
       {/* C1 §6.6: once per grid, never per column; above the grid, so it never moves a cell mid-drag. */}
-      {fairness && <FairnessEngineNote />}
+      {fairness && <FairnessEngineNote engine={engine} />}
       {gridBlock}
       {/*
         The drag's only words: a refusal the gate produced (C1/C2/C3, or a
@@ -2147,6 +2190,9 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <p className="font-body text-xs text-warning-strong">{autoState.disabledReason}</p>
         )}
         {mode === "create" && autoState.error && <p className="font-body text-xs text-negative-fg">{autoState.error}</p>}
+        {mode === "create" && autoState.error && autoState.retry && (
+          <Button variant="secondary" size="sm" onClick={autoState.retry}>Reintentar</Button>
+        )}
         {mode === "create" && (autoState.notices ?? []).length > 0 && (
           <div className="basis-full space-y-1" data-auto-notices="">
             {(autoState.notices ?? []).map((line, i) => (
@@ -2161,7 +2207,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
           <p className="font-body text-xs text-warning-soft">
             {fillEmpty?.enabled
               ? `${fillEmpty.emptyVoiceSeats === 1 ? "Solo se llenará 1 lugar de voz vacío" : `Solo se llenarán los ${fillEmpty.emptyVoiceSeats} lugares de voz vacíos`} (Lead, BGV, Coro); lo que ya está puesto se respeta y se envía al solver como fijo. Los instrumentos vacíos se completan sin mover a nadie; FOH no se toca.`
-              : "Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes. Las asignaciones manuales de instrumentos y FOH no se tocan."}
+              : (autoConfirmText ?? "Esto reemplazará toda asignación de voz (Lead, BGV, Coro) que el solver pueda resolver en este mes. Las asignaciones manuales de instrumentos y FOH no se tocan.")}
           </p>
           {/* E5: a special never goes to the solver, so its fill is a DIFFERENT
               mechanism and has to be named as one — greedy, local, rules-first,
@@ -2221,6 +2267,8 @@ export default function PlannerGrid(props: PlannerGridProps) {
           Revísalo antes de crear.
         </p>
       )}
+
+      {mode === "create" && v3Report}
 
       {unresolvedNames.length > 0 && (
         <p className="font-body text-xs text-negative-fg">
@@ -2436,7 +2484,10 @@ function ColumnHeader({
   minWClass,
   clear,
   fairness,
+  guardado = false,
 }: {
+  /** C6 ST-1: a stored service shown read-only in the v3 create grid — date, type, name and «Guardado» only. */
+  guardado?: boolean;
   column: GridColumn;
   preflight: TargetPreflight | null;
   createBlock: "existing" | "created" | null;
@@ -2472,6 +2523,23 @@ function ColumnHeader({
           : CREATE_BLOCK_COPY.existingWeekend
         : null;
 
+  if (guardado) {
+    return (
+      <div data-grid-column-id={column.columnId} className={`${minWClass} space-y-1 px-1`}>
+        <div className="flex items-center gap-1.5">
+          <span className="font-display text-base leading-none">{day}</span>
+          <span className="font-label text-xs uppercase tracking-widest text-mono-500">{month}</span>
+        </div>
+        <span className="font-label text-xs uppercase tracking-widest text-mono-500">{typeLabel}</span>
+        {column.serviceName && (
+          <span className={`block font-body text-[11px] text-ink-muted/80 ${CARD_STYLE.longText}`}>{column.serviceName}</span>
+        )}
+        <span data-guardado="" className="inline-block rounded-full border border-accent/30 px-1.5 py-0.5 font-label text-[10px] uppercase tracking-widest text-accent">
+          Guardado
+        </span>
+      </div>
+    );
+  }
   return (
     <div data-grid-column-id={column.columnId} className={`${minWClass} space-y-1 px-1 ${skipped || blockCopy ? "opacity-40" : ""}`}>
       {/* Legibility pass: the header's date, month and service type were
@@ -2609,6 +2677,7 @@ function RowGroup({
   columns,
   cellsByKey,
   unfilledByKey,
+  unfilledReasonByKey,
   duplicatesByColumnId,
   violationsByColumnId,
   pinConflicts,
@@ -2631,6 +2700,7 @@ function RowGroup({
   columns: GridColumn[];
   cellsByKey: Map<string, GridCell>;
   unfilledByKey: Set<string>;
+  unfilledReasonByKey?: ReadonlyMap<string, string>;
   duplicatesByColumnId: (columnId: string) => Map<string, string[]>;
   /** E13, by `violationKey(rowId, memberId)` — that service column only. */
   violationsByColumnId: (columnId: string) => Map<string, SeatedViolation>;
@@ -2722,6 +2792,7 @@ function RowGroup({
             violations={violationsByColumnId(column.columnId)}
             pinConflicts={pinConflicts}
             unfilled={unfilledByKey.has(cellKey(column.columnId, row.id))}
+            unfilledReason={unfilledReasonByKey?.get(cellKey(column.columnId, row.id)) ?? null}
             onOpen={() => onOpen(column.columnId)}
             onCopy={onCopy ? () => onCopy(column.columnId) : undefined}
             mutationLocked={mutationLocked}
@@ -2769,6 +2840,7 @@ function GridCellView({
   violations,
   pinConflicts,
   unfilled,
+  unfilledReason = null,
   onOpen,
   onCopy,
   mutationLocked,
@@ -2790,6 +2862,7 @@ function GridCellView({
   /** «Solo llenar vacíos», by `pinSeatKey` — shown, never blocking (spec §3.3). */
   pinConflicts?: ReadonlyMap<string, PinConflictKind[]>;
   unfilled: boolean;
+  unfilledReason?: string | null;
   onOpen: () => void;
   onCopy?: () => void;
   mutationLocked: boolean;
@@ -3101,6 +3174,9 @@ function GridCellView({
         })}
         {unfilled && (
           <p className="font-label text-[9px] uppercase tracking-widest text-warning-strong">Sin cubrir</p>
+        )}
+        {unfilled && unfilledReason && (
+          <p className={`font-body text-[9px] text-warning-strong ${CARD_STYLE.longText}`}>{unfilledReason}</p>
         )}
         {onCopy && memberIds.length > 0 && (
           <button
