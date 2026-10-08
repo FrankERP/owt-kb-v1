@@ -239,6 +239,6 @@ describe("anomaly sentences (R13)", () => {
       if (code !== "duplicate_target" && code !== "presence_no_seat") expect(text, code).toContain("Ana E.");
     }
     expect(anomalyText({ code: "exact_mismatch", month: "2026-08", memberId: "m-beto", roles: ["Sun.BGV"], count: 1, held: 0 }, nameOf)).toContain("regla fija = 1, tuvo 0");
-    expect(anomalyText({ code: "member_gone", month: "2026-08", memberId: "m-hugo" }, nameOf)).toContain("miembro eliminado o fuera de alabanza");
+    expect(anomalyText({ code: "member_gone", month: "2026-08", memberId: "m-julia" }, nameOf)).toContain("miembro eliminado o fuera de alabanza");
   });
 });

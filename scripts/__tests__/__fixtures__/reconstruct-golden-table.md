@@ -137,7 +137,7 @@ Cifras del ledger de C2 con un decimal; «le deben» = le toca más de lo que tu
 
 | Persona | DL | SL | BGV | Coro | Total |
 |---|---|---|---|---|---|
-| Miembro eliminado (`m-hugo`) | al día | al día | al día | al día | al día |
+| Miembro eliminado (`m-julia`) | al día | al día | al día | al día | al día |
 | Ana E. (`m-ana`) | 1.0 de más | al día | al día | al día | 1.0 de más |
 | Beto E. (`m-beto`) | al día | al día | al día | al día | al día |
 | Carla E. (`m-carla`) | al día | al día | al día | al día | al día |
@@ -170,7 +170,7 @@ Cifras del ledger de C2 con un decimal; «le deben» = le toca más de lo que tu
 - 2026-08 · Ana E. (`m-ana`): tiene un lugar Sat.BGV el 2026-08-01 con estado «fuera»; se queda fuera (un lugar nunca da elegibilidad).
 - 2026-08 · Beto E. (`m-beto`): regla fija = 1, tuvo 0 (Sun.BGV).
 - 2026-08 · presencia 1 de 1 (`d-beto-carla`): aplica el 2026-08-02 y nadie de la regla tuvo un lugar de presencia; quizá la regla de hoy no regía entonces.
-- 2026-08 · miembro sin documento (`m-hugo`): miembro eliminado o fuera de alabanza: sus lugares no cuentan y la parte de los demás en esos servicios cambia.
+- 2026-08 · miembro sin documento (`m-julia`): miembro eliminado o fuera de alabanza: sus lugares no cuentan y la parte de los demás en esos servicios cambia.
 - 2026-08 · dos documentos sunday_role el 2026-08-16 (`sun-2026-08-16-a`, `sun-2026-08-16-b`): el ledger descarta los dos.
 - 2026-09 · Carla E. (`m-carla`): tiene un lugar Sun.BGV el 2026-09-13, una fecha marcada como no disponible.
 - 2026-09 · Carla E. (`m-carla`): su primer lugar en BGV (2026-09-13) no es el primer servicio de esa línea en el mes (2026-09-06); si llegó a mitad de mes, corrige con «blockedDates».

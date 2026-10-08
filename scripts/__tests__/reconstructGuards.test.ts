@@ -132,7 +132,7 @@ describe("stdout and stderr carry no name, alias, member id, rule key or key has
     outputs.push(binding.allOutput());
 
     const failed = make(worldDocs());
-    failed.lake.failNext.fetch = new Error("Ana Ejemplo kidsMember-dani d-beto-carla m-hugo");
+    failed.lake.failNext.fetch = new Error("Ana Ejemplo kidsMember-dani d-beto-carla m-julia");
     expect(await failed.dryRun(MONTHS)).toBe(1);
     outputs.push(failed.allOutput());
 

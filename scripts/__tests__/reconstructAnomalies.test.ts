@@ -60,7 +60,7 @@ const AUGUST: FairnessMonthBody = {
 };
 const SERVICES: LedgerService[] = [
   svc("sat-0801", "saturday_role", "2026-08-01", { Lead: ["m-ivan"], BGVs: ["m-ana"] }),
-  svc("sun-0802", "sunday_role", "2026-08-02", { Lead: ["m-ana"], BGVs: ["m-hugo"] }),
+  svc("sun-0802", "sunday_role", "2026-08-02", { Lead: ["m-ana"], BGVs: ["m-julia"] }),
   svc("sat-0808", "saturday_role", "2026-08-08", { Lead: ["m-ivan"] }),
   svc("spe-0808", "special_role", "2026-08-08", { Lead: ["m-ivan"] }, { countsForFairness: true }),
   svc("sun-0809a", "sunday_role", "2026-08-09", { Lead: ["m-ana"] }),
@@ -80,7 +80,7 @@ describe("the month's anomalies (R7, R13)", () => {
       { code: "exact_mismatch", month: "2026-08", memberId: "m-beto", roles: ["Sun.BGV"], count: 1, held: 0 },
       { code: "presence_no_seat", month: "2026-08", ruleKey: "d-beto-carla", ruleOrdinal: "presencia 1 de 1", date: "2026-08-02", serviceId: "sun-0802" },
       { code: "presence_outside", month: "2026-08", ruleKey: "d-beto-carla", ruleOrdinal: "presencia 1 de 1", memberId: "m-carla", dates: ["2026-08-16"] },
-      { code: "member_gone", month: "2026-08", memberId: "m-hugo" },
+      { code: "member_gone", month: "2026-08", memberId: "m-julia" },
       { code: "duplicate_target", month: "2026-08", type: "sunday_role", date: "2026-08-09", roleIds: ["sun-0809a", "sun-0809b"] },
       { code: "second_seat", month: "2026-08", memberId: "m-ana", date: "2026-08-16", roleKey: "Sun.Choir", serviceId: "sun-0816" },
     ];

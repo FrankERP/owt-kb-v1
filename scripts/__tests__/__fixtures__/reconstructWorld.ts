@@ -12,7 +12,7 @@
 //   Fausto Ejemplo m-fausto         sunday_lead only — no voz; a Sun.BGV seat on 13 Sep; the corrections file adds him
 //   Iván Ejemplo   m-ivan           voz+saturday_lead; a week-2 Saturday exclusion (rule w3x8, e5m1)
 //   Greta Ejemplo  m-greta          voz+support, ["kids"] — kids-only, ticked (stale) in support; never on the worship roster
-//   m-hugo                          no member document (deleted); a Sun.BGV seat on 2 Aug
+//   m-julia                         no member document (deleted); a Sun.BGV seat on 2 Aug
 // Presence d-beto-carla (Beto + Carla on Sun.BGV); conflict d-ana-beto (Ana, Beto, Sun.Lead) — so the pair is not exclusive.
 // Records: June manual, July reconstructed and intact (content differs; holds a date Ana has since deleted),
 // September reconstructed then hand-edited. August has none.
@@ -32,7 +32,7 @@ export const NAMES = [
   "Elena Ejemplo", "Elena E.", "Fausto Ejemplo", "Fausto E.", "Iván Ejemplo", "Iván E.", "Greta Ejemplo", "Greta E.",
 ];
 /** Every member `_id` of this world. */
-export const MEMBER_IDS = ["m-ana", "m-beto", "m-carla", "kidsMember-dani", "m-elena", "m-fausto", "m-ivan", "m-greta", "m-hugo"];
+export const MEMBER_IDS = ["m-ana", "m-beto", "m-carla", "kidsMember-dani", "m-elena", "m-fausto", "m-ivan", "m-greta", "m-julia"];
 /** Every `solverConfig` rule id of this world (restrictions, caps, week exclusion, conflict, presence). */
 export const RULE_KEYS = ["d-ana", "r7k2", "c1q9", "c9p4", "w3x8", "e5m1", "d-ana-beto", "d-beto-carla"];
 
@@ -124,7 +124,7 @@ export const SERVICES: FakeDoc[] = [
   weekend("sat-2026-07-11", "saturday_role", "2026-07-11", { Lead: ["m-ivan"] }),
   weekend("sun-2026-07-19", "sunday_role", "2026-07-19", { Lead: ["kidsMember-dani"], Chorus: ["m-ana"] }),
   weekend("sat-2026-08-01", "saturday_role", "2026-08-01", { Lead: ["m-ivan"], BGVs: ["m-ana"] }),
-  weekend("sun-2026-08-02", "sunday_role", "2026-08-02", { Lead: ["m-ana"], BGVs: ["m-hugo"] }),
+  weekend("sun-2026-08-02", "sunday_role", "2026-08-02", { Lead: ["m-ana"], BGVs: ["m-julia"] }),
   special("spe-2026-08-08", "2026-08-08", "Campamento", { Lead: ["m-ivan"] }, { countsForFairness: true }),
   weekend("sun-2026-08-16-a", "sunday_role", "2026-08-16", { Lead: ["m-ana"], BGVs: ["m-carla"] }),
   weekend("sun-2026-08-16-b", "sunday_role", "2026-08-16", { Lead: ["m-beto"] }),

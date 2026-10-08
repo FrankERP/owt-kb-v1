@@ -160,7 +160,7 @@ describe("the fictitious world's dry run", () => {
         { code: "seat_while_out", month: "2026-08", memberId: "m-ana", date: "2026-08-01", roleKey: "Sat.BGV", serviceId: "sat-2026-08-01" },
         { code: "seat_rule_excluded", month: "2026-07", memberId: "m-ivan", date: "2026-07-11", roleKey: "Sat.Lead", serviceId: "sat-2026-07-11" },
         { code: "exact_mismatch", month: "2026-08", memberId: "m-beto", roles: ["Sun.BGV"], count: 1, held: 0 },
-        { code: "member_gone", month: "2026-08", memberId: "m-hugo" },
+        { code: "member_gone", month: "2026-08", memberId: "m-julia" },
         { code: "lost_block", month: "2026-07", memberId: "m-ana", date: "2026-07-12" },
         { code: "join_mid_month", month: "2026-09", memberId: "m-carla", line: "BGV", date: "2026-09-13", firstServiceDate: "2026-09-06" },
         { code: "join_mid_month", month: "2026-07", memberId: "m-ana", line: "CORO", date: "2026-07-19", firstServiceDate: "2026-07-05" },
