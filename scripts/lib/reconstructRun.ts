@@ -237,9 +237,6 @@ async function run(argv: readonly string[], deps: RunDeps): Promise<number> {
   if (plan && plan.content.mode === "write" && args.previewRun !== null && args.previewRun !== plan.content.inputs.previewRun) {
     throw new Refusal(["--preview-run no coincide con la corrida del plan revisado"]);
   }
-  if (plan && (plan.content.inputs.projectId !== projectId || plan.content.inputs.dataset !== dataset)) {
-    throw new Refusal(["el plan revisado es de otro destino (proyecto · dataset): solo se aplica donde se hizo su dry run. Nada se leyó."]);
-  }
 
   const notPast = notPastMonths(months, currentMonth);
   if (notPast.length > 0) {
@@ -254,6 +251,10 @@ async function run(argv: readonly string[], deps: RunDeps): Promise<number> {
   const readToken = deps.env.SANITY_API_READ_TOKEN ?? "";
   const writeToken = deps.env.SANITY_WRITE_TOKEN ?? "";
   if (!projectId || !dataset) throw new Refusal(["faltan NEXT_PUBLIC_SANITY_PROJECT_ID o NEXT_PUBLIC_SANITY_DATASET; no se construyó ningún cliente"]);
+  // A plan applies only to the target its dry run read (its fingerprint covers it) — any mode, before any client.
+  if (plan && (plan.content.inputs.projectId !== projectId || plan.content.inputs.dataset !== dataset)) {
+    throw new Refusal(["el plan revisado es de otro destino (proyecto · dataset): solo se aplica donde se hizo su dry run. Nada se leyó."]);
+  }
   if (!readToken) {
     throw new Refusal(["falta SANITY_API_READ_TOKEN: sin él un registro (id privado) se leería como «sin registro» (A2). No se construyó ningún cliente."]);
   }

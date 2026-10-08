@@ -789,8 +789,9 @@ Both of the first two are listed by exact `file + operation` in the protected-re
   inside any working tree of this repository (use e.g. `~/owt-private/c4/`). The table, the plan, the
   backups and the refusal report hold member names, member ids and rule keys; stdout and stderr hold none
   of them — a rule is named by its ordinal («restricción 3 de 8»), a corrections entry by its position.
-  A refusal (exit 2) prints its name-free lines on stdout, beside the private `rechazo.md` when it came
-  after the reads; stderr carries only a failure (exit 1), as its error class.
+  A refusal (exit 2) prints its name-free lines on stdout; one that came after the reads also writes the
+  private `rechazo.md`, except a missing `solverConfig`, which writes no file. stderr carries only a
+  failure (exit 1), as its error class.
 - **The sequence.** Each step is separate. Step 3 runs only after Frank's explicit consent in chat to the
   fingerprint step 1 printed — diagnosing is not consent, and one consent never carries to a second plan.
   1. **Dry run:** `npx tsx --env-file=.env.local scripts/reconstruct-fairness-months.mjs --months 2026-08,2026-09 --out ~/owt-private/c4 [--overrides ~/owt-private/c4/correcciones.json] [--preview-run YYYY-MM]`.

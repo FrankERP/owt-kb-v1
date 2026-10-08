@@ -114,6 +114,22 @@ describe("the rollback apply (R18)", () => {
     expect(h.out.join("\n")).toMatch(/plan de escritura/);
   });
 
+  it("refuses a rollback plan under another dataset before any read, deleting nothing", async () => {
+    const h = make(worldDocs());
+    await applied(h);
+    expect(await h.run(["--rollback", "--months", "2026-07", "--out", h.outDir])).toBe(0);
+    expect(rollbackPlan(h).inputs).toMatchObject({ projectId: "proj-test", dataset: "test" });
+    const reads = h.lake.reads.length;
+    const configs = h.configs.length;
+    const commits = h.lake.commits.length;
+    h.deps.env = { ...h.deps.env, NEXT_PUBLIC_SANITY_DATASET: "production" };
+    expect(await h.run(["--rollback", "--apply", "--plan", h.planPath(), "--fingerprint", h.fingerprint(), "--out", h.outDir])).toBe(2);
+    expect(h.configs).toHaveLength(configs);
+    expect(h.lake.reads).toHaveLength(reads);
+    expect(h.lake.commits).toHaveLength(commits);
+    expect(h.out.join("\n")).toMatch(/el plan revisado es de otro destino/);
+  });
+
   it("stops at a failed delete and names the rollback's own repair, not the write's (R16, R18)", async () => {
     let failOn: string | null = null;
     const h = make(worldDocs(), {

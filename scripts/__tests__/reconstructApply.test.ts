@@ -301,6 +301,15 @@ describe("the gate (R11, R19)", () => {
     expect(h.out.join("\n")).toMatch(/el plan revisado es de otro destino/);
   });
 
+  it("names a missing dataset as missing, not as another target", async () => {
+    const h = make(worldDocs());
+    await h.dryRun(MONTHS, corrections(h));
+    h.deps.env = { ...ENV, NEXT_PUBLIC_SANITY_DATASET: undefined };
+    expect(await h.applyLast(corrections(h))).toBe(2);
+    expect(h.out.join("\n")).toMatch(/faltan NEXT_PUBLIC_SANITY_PROJECT_ID o NEXT_PUBLIC_SANITY_DATASET/);
+    expect(h.out.join("\n")).not.toMatch(/otro destino/);
+  });
+
   it("refuses a plan of the previous version as foreign", async () => {
     const h = make(worldDocs());
     await h.dryRun(MONTHS, corrections(h));
