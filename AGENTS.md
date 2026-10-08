@@ -81,8 +81,7 @@ the budget goes there, once.
   multi-agent Workflow.
 
 ## Token economy
-- **Workflows only for genuinely parallel, independent work, ≤10 agents** unless Frank asks
-  for more in that message.
+- **Workflows only for genuinely parallel, independent work.**
 - Subagent briefs name the files and the question; reports return conclusions, not dumps.
   Pipe long command output to a file and read the part you need.
 
