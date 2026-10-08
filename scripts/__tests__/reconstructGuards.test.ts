@@ -86,7 +86,8 @@ describe("the real CLI under tsx (R19)", () => {
       });
       expect(result.error).toBeUndefined();
       expect(result.stdout).toContain("reconstruct-fairness-months · proj-test · test · DRY-RUN");
-      expect(result.stderr).toMatch(/falta SANITY_API_READ_TOKEN/);
+      expect(result.stdout).toMatch(/falta SANITY_API_READ_TOKEN/);
+      expect(result.stderr).not.toMatch(/SANITY_API_READ_TOKEN/);
       expect(result.status).toBe(2);
       expect(readdirSync(work)).toEqual([]);
     } finally {
@@ -115,7 +116,7 @@ describe("stdout and stderr carry no name, alias, member id, rule key or key has
       worldDocs({ config: { ...WORLD_CONFIG, restrictions: WORLD_CONFIG.restrictions.map((r) => (r.id === "d-ana" ? { ...r, caps: [cap("q2", "Sun.BGV", 1.5)] } : r)) } }),
     );
     expect(await resolver.dryRun(MONTHS)).toBe(2);
-    expect(resolver.err.join("\n")).toContain("restricción 1 de 4, tope 1");
+    expect(resolver.out.join("\n")).toContain("restricción 1 de 4, tope 1");
     outputs.push(resolver.allOutput());
 
     const corrections = make(worldDocs());

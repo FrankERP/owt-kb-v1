@@ -54,6 +54,11 @@ const bodyOf = (plan: WritePlanContent, month: string) => {
 const personOf = (plan: WritePlanContent, month: string, id: string) => bodyOf(plan, month).people.find((p) => p.memberId === id);
 const withConfig = (patch: (c: SolverConfig) => SolverConfig) => worldDocs({ config: patch(structuredClone(WORLD_CONFIG)) });
 const withoutTime = (text: string) => text.split("\n").filter((line) => !line.includes('"generatedAt"')).join("\n");
+/** R12, R13: a refusal's lines are on stdout, after the target line; stderr stays empty. */
+const refusalLines = (h: Harness) => {
+  expect(h.err).toEqual([]);
+  return h.out.filter((l) => l.startsWith("rechazo "));
+};
 
 describe("the fictitious world's dry run", () => {
   it("plans each month with the executor's own decision and writes the backup, the table and the plan — no Sanity write", async () => {
@@ -278,14 +283,14 @@ describe("reads (R3)", () => {
     expect(await h.dryRun(MONTHS)).toBe(2);
     expect(h.configs).toEqual([]);
     expect(h.lake.reads).toEqual([]);
-    expect(h.err.join("\n")).toMatch(/falta SANITY_API_READ_TOKEN/);
+    expect(h.out.join("\n")).toMatch(/falta SANITY_API_READ_TOKEN/);
   });
 
   it("refuses an absent solverConfig and writes no file — the defaults are not today's rules", async () => {
     const h = make(worldDocs({ config: null }));
     expect(await h.dryRun(MONTHS)).toBe(2);
     expect(h.runDirs()).toEqual([]);
-    expect(h.err.join("\n")).toMatch(/no hay reglas guardadas/);
+    expect(h.out.join("\n")).toMatch(/no hay reglas guardadas/);
   });
 
   it("aborts on a malformed stored record the run needs, writing no file", async () => {
@@ -308,7 +313,7 @@ describe("months (R1)", () => {
     const h = make(worldDocs());
     expect(await h.dryRun("2026-09,2026-10")).toBe(2);
     expect(h.lake.reads).toEqual([]);
-    expect(h.err.join("\n")).toMatch(/--months 2026-10: solo se reconstruyen meses anteriores/);
+    expect(h.out.join("\n")).toMatch(/--months 2026-10: solo se reconstruyen meses anteriores/);
   });
 
   it("skips an empty month and one whose only service is an uncounted special — never a month with a record", async () => {
@@ -344,7 +349,7 @@ describe("refusals after the reads (R6, R8, R12, R13)", () => {
     const docs = withConfig((c) => ({ ...c, restrictions: c.restrictions.map((r) => (r.id === "c9p4" ? { ...r, caps: [cap("c9c", "Sun.Lead", 2)] } : r)) }));
     const h = make(docs);
     expect(await h.dryRun(MONTHS)).toBe(2);
-    expect(h.err[0]).toBe(`rechazo 1 de 1 · cadence_and_exact · mes por medio · restricción 3 de 4; restricción 3 de 4, tope 1 · 2026-06 · informe: ${path.join(h.outDir, h.runDirs()[0], "rechazo.md")}`);
+    expect(refusalLines(h)[0]).toBe(`rechazo 1 de 1 · cadence_and_exact · mes por medio · restricción 3 de 4; restricción 3 de 4, tope 1 · 2026-06 · informe: ${path.join(h.outDir, h.runDirs()[0], "rechazo.md")}`);
     const report = refusedOnlyWithReport(h);
     expect(report).toContain("clave `c9p4`");
     expect(report).toContain("Dani E. · `kidsMember-dani`");
@@ -353,7 +358,7 @@ describe("refusals after the reads (R6, R8, R12, R13)", () => {
     const file = path.join(g.work, "normal.json");
     writeFileSync(file, JSON.stringify({ schemaVersion: 1, members: { "kidsMember-dani": { sundayCadence: "normal" } } }));
     expect(await g.dryRun(MONTHS, ["--overrides", file])).toBe(2);
-    expect(g.err[0]).toMatch(/cadence_and_exact/);
+    expect(refusalLines(g)[0]).toMatch(/cadence_and_exact/);
   });
 
   it("case (b) refuses through the validator; removing the correction clears it; case (c) passes", async () => {
@@ -365,7 +370,7 @@ describe("refusals after the reads (R6, R8, R12, R13)", () => {
     };
     const b = make(docs);
     expect(await b.dryRun(MONTHS, ["--overrides", writeFile(b, { schemaVersion: 1, members: { "m-elena": { sundayCadence: "alternate" } } })])).toBe(2);
-    expect(b.err[0]).toMatch(/^rechazo 1 de 4 · invalid_body · corrección · entrada 1 del archivo · 2026-06 · people\[\d+\]\.sundayCadence: cadence_and_exact · informe: /);
+    expect(refusalLines(b)[0]).toMatch(/^rechazo 1 de 4 · invalid_body · corrección · entrada 1 del archivo · 2026-06 · people\[\d+\]\.sundayCadence: cadence_and_exact · informe: /);
     const clean = make(docs);
     expect(await clean.dryRun(MONTHS)).toBe(0);
     const c = make(docs);
@@ -378,7 +383,7 @@ describe("refusals after the reads (R6, R8, R12, R13)", () => {
   it("prints a refusal over the seed-shaped d-ana restriction by its ordinal, never its key (R12)", async () => {
     const h = make(withConfig((c) => ({ ...c, restrictions: c.restrictions.map((r) => (r.id === "d-ana" ? { ...r, caps: [cap("q2", "Sun.BGV", 1.5)] } : r)) })));
     expect(await h.dryRun(MONTHS)).toBe(2);
-    expect(h.err[0]).toContain("exact_count_range · regla fija · restricción 1 de 4, tope 1");
+    expect(refusalLines(h)[0]).toContain("exact_count_range · regla fija · restricción 1 de 4, tope 1");
     expect(h.allOutput()).not.toMatch(/d-ana|Ana Ejemplo|Ana E.|m-ana/);
     expect(refusedOnlyWithReport(h)).toContain("restricción 1 de 4, tope 1 · clave `q2`");
   });
@@ -394,9 +399,9 @@ describe("refusals after the reads (R6, R8, R12, R13)", () => {
     mutate(w);
     const h = make(worldDocs({ config: w.config, extra: w.extra }));
     expect(await h.dryRun(MONTHS)).toBe(2);
-    expect(h.err.some((l) => l.includes(` · ${reason} · `))).toBe(true);
+    expect(refusalLines(h).some((l) => l.includes(` · ${reason} · `))).toBe(true);
     refusedOnlyWithReport(h);
-    expect(h.err.join("\n")).not.toMatch(/Ejemplo|Ana E.|Beto E.|d-ana|d-beto-carla|m-ana/);
+    expect(h.allOutput()).not.toMatch(/Ejemplo|Ana E.|Beto E.|d-ana|d-beto-carla|m-ana/);
   });
 
   it("refuses a corrections entry off the worship roster, by its position", async () => {
@@ -404,7 +409,7 @@ describe("refusals after the reads (R6, R8, R12, R13)", () => {
     const file = path.join(h.work, "greta.json");
     writeFileSync(file, JSON.stringify({ schemaVersion: 1, members: { "m-greta": { exempt: true } } }));
     expect(await h.dryRun(MONTHS, ["--overrides", file])).toBe(2);
-    expect(h.err[0]).toMatch(/^rechazo 1 de 1 · override_member_unknown · corrección · entrada 1 del archivo · informe: /);
+    expect(refusalLines(h)[0]).toMatch(/^rechazo 1 de 1 · override_member_unknown · corrección · entrada 1 del archivo · informe: /);
     expect(refusedOnlyWithReport(h)).toContain("`m-greta`");
   });
 });

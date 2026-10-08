@@ -103,13 +103,13 @@ describe("the rollback apply (R18)", () => {
     const commits = h.lake.commits.length;
     expect(await h.run(["--rollback", "--apply", "--plan", h.planPath(), "--fingerprint", h.fingerprint(), "--out", h.outDir])).toBe(2);
     expect(h.lake.commits).toHaveLength(commits);
-    expect(h.err.join("\n")).toMatch(/plan_binding/);
+    expect(h.out.join("\n")).toMatch(/plan_binding/);
   });
 
   it("refuses a write plan handed to --rollback --apply", async () => {
     const h = make(worldDocs());
     expect(await h.dryRun(MONTHS)).toBe(0);
     expect(await h.run(["--rollback", "--apply", "--plan", h.planPath(), "--fingerprint", h.fingerprint(), "--out", h.outDir])).toBe(2);
-    expect(h.err.join("\n")).toMatch(/plan de escritura/);
+    expect(h.out.join("\n")).toMatch(/plan de escritura/);
   });
 });

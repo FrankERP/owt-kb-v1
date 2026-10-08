@@ -87,7 +87,7 @@ describe("the writes (R10, R14, R16)", () => {
     expect(planOf(h).months.map((m) => m.action)).toEqual(["not_reconstruction_owned", "unchanged", "unchanged", "record_edited"]);
     expect(await h.run(["--apply", "--plan", planPath, "--fingerprint", fingerprint, "--out", h.outDir, ...corrections(h)])).toBe(2);
     expect(h.lake.commits).toHaveLength(commits);
-    expect(h.err.join("\n")).toMatch(/plan_binding/);
+    expect(h.out.join("\n")).toMatch(/plan_binding/);
   });
 
   it("stops at a thrown error: the first month landed, the second failed, the third was never attempted (R16)", async () => {
@@ -205,7 +205,8 @@ describe("the plan binding (R15)", () => {
   const refusedWithZeroWrites = async (h: Harness) => {
     expect(await h.applyLast(corrections(h))).toBe(2);
     expect(h.lake.commits).toEqual([]);
-    expect(h.err.join("\n")).toMatch(/plan_binding/);
+    expect(h.out.join("\n")).toMatch(/plan_binding/);
+    expect(h.err).toEqual([]); // R12, R13: a refusal prints on stdout
   };
 
   it.each<[string, (h: Harness) => void]>([
@@ -249,7 +250,7 @@ describe("the plan binding (R15)", () => {
     await h.dryRun(MONTHS, corrections(h));
     rmSync(path.join(path.dirname(h.planPath()), "backup-2026-07.json"));
     expect(await h.applyLast(corrections(h))).toBe(2);
-    expect(h.err.join("\n")).toMatch(/backup_missing/);
+    expect(h.out.join("\n")).toMatch(/backup_missing/);
     expect(h.lake.commits).toEqual([]);
   });
 });
@@ -261,7 +262,7 @@ describe("the gate (R11, R19)", () => {
     h.deps.env = { ...ENV, SANITY_WRITE_TOKEN: undefined };
     expect(await h.applyLast(corrections(h))).toBe(2);
     expect(h.configs).toHaveLength(1);
-    expect(h.err.join("\n")).toMatch(/SANITY_WRITE_TOKEN/);
+    expect(h.out.join("\n")).toMatch(/SANITY_WRITE_TOKEN/);
   });
 
   it("refuses a fingerprint the plan does not carry, an edited plan, other months, and a plan inside the repository — before any read", async () => {
@@ -277,9 +278,10 @@ describe("the gate (R11, R19)", () => {
     expect(await h.run(["--apply", "--plan", planPath, "--fingerprint", fingerprint, "--months", "2026-07", "--out", h.outDir])).toBe(2);
     expect(await h.run(["--apply", "--plan", path.join(REPO_ROOT, "plan.json"), "--fingerprint", fingerprint, "--out", h.outDir])).toBe(2);
     expect(h.lake.reads).toHaveLength(reads);
-    expect(h.err.join("\n")).toMatch(/--fingerprint no es la huella/);
-    expect(h.err.join("\n")).toMatch(/su huella no coincide/);
-    expect(h.err.join("\n")).toMatch(/--months no coincide/);
-    expect(h.err.join("\n")).toMatch(/--plan está dentro del repositorio/);
+    expect(h.out.join("\n")).toMatch(/--fingerprint no es la huella/);
+    expect(h.out.join("\n")).toMatch(/su huella no coincide/);
+    expect(h.out.join("\n")).toMatch(/--months no coincide/);
+    expect(h.out.join("\n")).toMatch(/--plan está dentro del repositorio/);
+    expect(h.err).toEqual([]);
   });
 });

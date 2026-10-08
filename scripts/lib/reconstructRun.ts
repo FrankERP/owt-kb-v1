@@ -181,7 +181,8 @@ export async function runReconstruction(argv: readonly string[], deps: RunDeps):
     return await run(argv, deps);
   } catch (e) {
     if (e instanceof Refusal) {
-      for (const line of e.lines) deps.err(`reconstruct-fairness-months: ${line}`);
+      // R12, R13: a refusal prints on stdout, name-free; stderr carries only the exit-1 failure below.
+      for (const line of e.lines) deps.out(`reconstruct-fairness-months: ${line}`);
       return 2;
     }
     deps.err(
@@ -690,11 +691,11 @@ async function dryRun(ctx: Ctx): Promise<number> {
   return 0;
 }
 
-/** R13: one name-free line per refusal on stderr, and the private report beside them (exit 2). */
+/** R13: one name-free line per refusal on stdout, and the private report beside them (exit 2). */
 function reportRefusals(ctx: Ctx, refusals: readonly RunRefusal[], nameOf: (id: string) => string): number {
   const file = writeRunFile(ctx, "rechazo.md", renderRefusalReport({ generatedAt: ctx.deps.now().toISOString(), refusals, nameOf }));
-  refusals.forEach((r, i) => ctx.deps.err(refusalLine(r, i + 1, refusals.length, file)));
-  ctx.deps.err("Nada se escribió en Sanity, ni tabla ni plan.");
+  refusals.forEach((r, i) => ctx.deps.out(refusalLine(r, i + 1, refusals.length, file)));
+  ctx.deps.out("Nada se escribió en Sanity, ni tabla ni plan.");
   return 2;
 }
 
