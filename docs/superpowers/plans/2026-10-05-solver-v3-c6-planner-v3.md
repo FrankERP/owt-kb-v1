@@ -42,7 +42,7 @@ Every task's requirements include this section.
 - **`colour-inventory.json` tracks the tree:** every task that adds a non-test file under `app/` regenerates `app/utils/__tests__/__fixtures__/colour-inventory.json` with `node scripts/colour-inventory.mjs` in the same commit.
 - **`CLAUDE.md` and `AGENTS.md` stay byte-identical** outside their title and «## Continuous improvement» (`agentDocsParity.test.ts`): Task 18 makes every edit in both.
 - **No production write by the delivery or any agent.** `preview` writes the production dataset. On dev nobody presses «Guardar», «Confirmar», «Crear … borradores», «Crear y publicar» or «Registrar»; the dev-verify bot is read-only by construction. Setting `OWT_SOLVER_V3_URL` anywhere is **C7's** consented write (W0, W4); C6 sets nothing.
-- **ADR numbers:** C6 writes two records (DOC-2). Numbers follow the order records reach `main`: at Task 0 take the next two free numbers on `origin/main` (`0051` and `0052` at replay: C3 holds `0049`, C2 `0050`, and C5 writes no record); if another record lands first, renumber in the merge of `main` into this branch — file names, titles, index rows and every pointer — and let `adrIndex.test.ts` confirm.
+- **ADR numbers:** C6 writes two records (DOC-2). Numbers follow the order records reach `main`: at Task 0 take the next two free numbers on `origin/main` (`0052` and `0053` on `c0375d7d`: C3 holds `0049`, C2 `0050`, C5 `0051`; renumbered at Task 0 on 2026-10-07 — the replay's `0051`/`0052` assumed C5 wrote no record); if another record lands first, renumber in the merge of `main` into this branch — file names, titles, index rows and every pointer — and let `adrIndex.test.ts` confirm.
 
 ---
 
@@ -99,7 +99,7 @@ Every task's requirements include this section.
 | `app/components/admin/v3Confirm.ts` | **[CRITICAL]** Frozen PUT entries per month state, the confirm guard, the PUT outcome classifier, draft grouping and §7.8's lines | CF-1–CF-4, CF-6, CF-8 |
 | `app/components/admin/v3ConfirmRun.ts` | **[CRITICAL]** `runV3ConfirmAttempt` — one attempt: guard, one atomic PUT (until it succeeds), drafts month by month, per-month report, retry state | CF-1, CF-4–CF-7, CF-11 |
 | `app/components/admin/V3IncompleteDialog.tsx` | `"use client"`. CF-10's «El plan quedó incompleto» `CueDialog` | CF-10 |
-| `docs/adr/0051-the-planner-learns-the-solver-engine-from-the-server.md`, `docs/adr/0052-auto-plans-one-or-two-months-with-stored-services-fixed.md` | DOC-2's two records (numbers taken at Task 0) | DOC-2 |
+| `docs/adr/0052-the-planner-learns-the-solver-engine-from-the-server.md`, `docs/adr/0053-auto-plans-one-or-two-months-with-stored-services-fixed.md` | DOC-2's two records (numbers taken at Task 0) | DOC-2 |
 
 **Created — tests**
 
@@ -206,7 +206,7 @@ Expected: every symbol found; two `<FairnessPreviewPanel` mounts in `MonthGenera
 - [ ] **Step 5: Take the ADR numbers**
 
 Run: `ls docs/adr | grep -E '^[0-9]{4}-' | sort | tail -3`
-Expected: the highest number on `main` (`0050` at replay-base: C3 `0049`, C2 `0050`; C5 writes no record). C6's two records take the next two numbers. **If they are not `0051` and `0052`, replace BOTH numbers everywhere before Task 1** (each as `NNNN`, `ADR-NNNN` and in file names): Global Constraints («ADR numbers»), the File Structure row for the two records, Task 20's **Files** list, Step 1 and Step 2 (file names and titles), Step 3's two index rows, the Coverage row ENG-5, and Self-review item 2. The «Replay» section's mentions are history and stay. `adrIndex.test.ts` (Task 20 Step 7) confirms the result.
+Expected: the highest number on `main` (`0051` on `c0375d7d`: C3 `0049`, C2 `0050`, C5 `0051` — at replay-base it was `0050`, and the numbers below were renumbered from `0051`/`0052` on 2026-10-07). C6's two records take the next two numbers. **If they are not `0052` and `0053`, replace BOTH numbers everywhere before Task 1** (each as `NNNN`, `ADR-NNNN` and in file names): Global Constraints («ADR numbers»), the File Structure row for the two records, Task 20's **Files** list, Step 1 and Step 2 (file names and titles), Step 3's two index rows, the Coverage row ENG-5, and Self-review item 2. The «Replay» section's mentions are history and stay. `adrIndex.test.ts` (Task 20 Step 7) confirms the result.
 
 ---
 
@@ -9979,15 +9979,15 @@ while a confirm is in flight. Under v2 the confirm is unchanged."
 ## Task 20: The documentation in the same delivery (DOC-2, DOC-3; DOC-1 landed in Task 2) — [standard; docs-audit material]
 
 **Files:**
-- Create: `docs/adr/0051-the-planner-learns-the-solver-engine-from-the-server.md` and `docs/adr/0052-auto-plans-one-or-two-months-with-stored-services-fixed.md` — `0051` is the first free number on `main` recorded at Task 0 Step 5 and `0052` the next one (numbers follow the order records reach `main`; if another record lands first, renumber in the merge of `main` and let `adrIndex.test.ts` confirm)
+- Create: `docs/adr/0052-the-planner-learns-the-solver-engine-from-the-server.md` and `docs/adr/0053-auto-plans-one-or-two-months-with-stored-services-fixed.md` — `0052` is the first free number on `main` recorded at Task 0 Step 5 and `0053` the next one (numbers follow the order records reach `main`; if another record lands first, renumber in the merge of `main` and let `adrIndex.test.ts` confirm)
 - Modify: `docs/adr/README.md` (two index rows), `docs/API_REFERENCE.md` (the solve route), `CLAUDE.md` and `AGENTS.md` (identical edits — `agentDocsParity.test.ts`), `docs/UTILITIES_AND_COMPONENTS.md`
 
 **Interfaces:** none (documentation only).
 
-- [ ] **Step 1: Write the engine ADR** — Create `docs/adr/0051-the-planner-learns-the-solver-engine-from-the-server.md`
+- [ ] **Step 1: Write the engine ADR** — Create `docs/adr/0052-the-planner-learns-the-solver-engine-from-the-server.md`
 
 ```markdown
-# ADR-0051: The planner learns the solver engine from the server
+# ADR-0052: The planner learns the solver engine from the server
 
 **Date:** 2026-10-06 · **Status:** Accepted
 
@@ -10035,10 +10035,10 @@ flips the constant (and C1's pin test) and touches no client code to do it; a cl
 changes with the constant is a defect (C7 S8).
 ```
 
-- [ ] **Step 2: Write the horizon ADR** — Create `docs/adr/0052-auto-plans-one-or-two-months-with-stored-services-fixed.md`
+- [ ] **Step 2: Write the horizon ADR** — Create `docs/adr/0053-auto-plans-one-or-two-months-with-stored-services-fixed.md`
 
 ```markdown
-# ADR-0052: Auto plans one or two months, with stored services and counted specials as fixed services
+# ADR-0053: Auto plans one or two months, with stored services and counted specials as fixed services
 
 **Date:** 2026-10-06 · **Status:** Accepted (behind `SOLVER_ENGINE`; production stays v2 until C7)
 
@@ -10094,10 +10094,10 @@ Deleting the v2 history surfaces is C7's, after the rollback window.
 
 - [ ] **Step 3: Index the two records** — `docs/adr/README.md`
 
-After the index's last ADR row — at the replay base the `- [ADR-0050: El saldo de equidad …` line, add:
+After the index's last ADR row — on `c0375d7d` C5's record (at the replay base it was C2's `ADR-0050` row), the `- [ADR-0051: The v3 solver is a second function …` line, add:
 ```markdown
-- [ADR-0051: The planner learns the solver engine from the server](0051-the-planner-learns-the-solver-engine-from-the-server.md) — solver v3 C6. Why `/admin` resolves the effective engine (C2's resolver: the constant, or the Preview-only override) on the server and threads it as a prop to every engine-dependent surface, why the solve route answers a body of the other contract `409 solver_version_mismatch`, and why a client fetch, a `NEXT_PUBLIC_` variable or reading the constant in client code were rejected.
-- [ADR-0052: Auto plans one or two months, with stored services and counted specials as fixed services](0052-auto-plans-one-or-two-months-with-stored-services-fixed.md) — solver v3 C6, behind the engine switch. The 1–2-month horizon, stored services sent fixed by document id, counted specials pre-filled then fixed, minted rule ids with a name-free ordinal table, and the confirm that writes every month's eligibility record in one PUT before any draft (A27, A40); what ADR-0010 and ADR-0047 will need amended at C7's flip.
+- [ADR-0052: The planner learns the solver engine from the server](0052-the-planner-learns-the-solver-engine-from-the-server.md) — solver v3 C6. Why `/admin` resolves the effective engine (C2's resolver: the constant, or the Preview-only override) on the server and threads it as a prop to every engine-dependent surface, why the solve route answers a body of the other contract `409 solver_version_mismatch`, and why a client fetch, a `NEXT_PUBLIC_` variable or reading the constant in client code were rejected.
+- [ADR-0053: Auto plans one or two months, with stored services and counted specials as fixed services](0053-auto-plans-one-or-two-months-with-stored-services-fixed.md) — solver v3 C6, behind the engine switch. The 1–2-month horizon, stored services sent fixed by document id, counted specials pre-filled then fixed, minted rule ids with a name-free ordinal table, and the confirm that writes every month's eligibility record in one PUT before any draft (A27, A40); what ADR-0010 and ADR-0047 will need amended at C7's flip.
 ```
 
 - [ ] **Step 4: The solve route** — `docs/API_REFERENCE.md`
@@ -10261,7 +10261,7 @@ git log $BASE..HEAD --format=%B | grep -ci "co-authored" || true                
 | ENG-2 | — (C2's) | C2's resolver table tests, relied on unchanged |
 | ENG-3 | 1, 14 | `engineProp.test.ts` (server-only importers; the page resolves and passes it); `MonthGenerator.v3Horizon.test.tsx` › HZ-1 (v3 controls iff the prop says v3) |
 | ENG-4 | 1 | `engineProp.test.ts` › no client module mentions `SOLVER_ENGINE` |
-| ENG-5 | 20 | ADR-0051 (C7 flips; no code here) |
+| ENG-5 | 20 | ADR-0052 (C7 flips; no code here) |
 | RT-1 | 2 | `solveRouteV3.test.ts` › RT-1 both directions, no upstream call |
 | RT-2 | 2 | `solveRoute.test.ts` (unedited) + `solveRouteV3.test.ts` › forwarded body equals received |
 | RT-3 | 2 | `solverV3Upstream.test.ts` › remote with `X-Api-Key`, local off Vercel, `not_configured` on Vercel; `solveRouteV3.test.ts` |
@@ -10365,7 +10365,7 @@ git log $BASE..HEAD --format=%B | grep -ci "co-authored" || true                
 ## Self-review (writing-plans checklist)
 
 1. **Spec coverage.** Every row of §5 (ENG, RT, HZ, ST, SP, RQ, AD, NT, EQ, WN, CTL, CF, DOC, KH) and §14's acceptance table maps to a task and a named test above; the gaps are listed with their reason.
-2. **Placeholder scan.** No «TBD»/«TODO»/«similar to Task N». The only deferred values are the two ADR numbers (`0051`, `0052`), fixed at Task 0 Step 5 by the repository's numbering rule. The anchors from C2 Tasks 11–17 and C5 Tasks 10–15 were re-verified at replay (2026-10-07, against `4c50309b`) and are re-checked against the merged `main` at Task 0 Step 4.
+2. **Placeholder scan.** No «TBD»/«TODO»/«similar to Task N». The only deferred values are the two ADR numbers (`0052`, `0053`), fixed at Task 0 Step 5 by the repository's numbering rule. The anchors from C2 Tasks 11–17 and C5 Tasks 10–15 were re-verified at replay (2026-10-07, against `4c50309b`) and are re-checked against the merged `main` at Task 0 Step 4.
 3. **Type consistency.** Names cross-checked across tasks: `MonthSource`/`MonthState` (6) → 8, 9, 10, 11, 17; `RunCadence` (8) → 10, 11, 16; `CollectedRules`/`mintInputOf`/`emitV3Rules`/`ruleReferences` (9) → 11; `MintedIds`/`RuleRefEntry`/`renderRuleRefTable` (5) → 9, 11, 15; `V3BuildResult`/`V3Snapshot` (11) → 13, 15, 19; `V3Outcome` (12) → 13, 15; `V3ConfirmEntry`/`MonthProgress` (17) → 18, 19; `V3ConfirmState`/`runV3ConfirmAttempt`/`progressFrom` (18) → 19; `EquidadPlan` (16) → `FairnessPreviewPanel`; `flagDisagreementLines` (8) → 11.
 
 ## Execution handoff
