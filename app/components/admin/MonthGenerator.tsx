@@ -144,8 +144,11 @@ import { applyV3Assignments, v3OutcomeLine, v3RetryOffered } from "./v3SolveResp
 import { buildV3RunReport, v3Names, type V3RunReport } from "./v3RunReport";
 import { renderRuleRefTable } from "./v3RuleIds";
 import V3RunPanel from "./V3RunPanel";
-import { displayedMonthStates } from "./v3MonthSources";
-import { isLedgerBody } from "./v3AutoRun";
+import { displayedMonthStates, resolveMonthSources } from "./v3MonthSources";
+import { isLedgerBody, V3_LEDGER_TIMEOUT_MS } from "./v3AutoRun";
+import { confirmGuard, draftsByMonth, freezeConfirmEntries, guardLine, monthReportLines, twoMonthSummaryLine, type MonthProgress, type V3ConfirmEntry } from "./v3Confirm";
+import { INITIAL_V3_CONFIRM_STATE, progressFrom, runV3ConfirmAttempt, type V3ConfirmResult, type V3ConfirmState } from "./v3ConfirmRun";
+import V3IncompleteDialog from "./V3IncompleteDialog";
 import { buildEquidadPlan, type EquidadPlan } from "./v3Equidad";
 import type { FairnessLedgerResponse } from "@/app/utils/fairnessVocabulary";
 import type { V3Success } from "./v3Wire";
@@ -463,6 +466,24 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 /** C6 ST-2: a service's target — a weekend type and date, or a special's date and normalized name (ADR-0011). */
 function v3TargetOf(c: Pick<GridColumn, "type" | "date" | "serviceName">): string {
   return c.type === "special_role" ? `special_role|${c.date}|${normalizeServiceName(c.serviceName) ?? ""}` : `${c.type}|${c.date}`;
+}
+
+/** The draft create POST, shared by the v2 confirm (unchanged) and the v3 confirm (CF-5: today's mechanism). */
+async function postDraftToRoles(body: unknown): Promise<{ ok: boolean; status: number; error?: string }> {
+  const res = await fetch("/api/admin/roles", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  let error: string | undefined;
+  if (!res.ok) {
+    try {
+      error = (await res.json())?.error;
+    } catch {
+      error = undefined;
+    }
+  }
+  return { ok: res.ok, status: res.status, error };
 }
 
 function getDates(year: number, month: number, day: 0 | 6): string[] {
@@ -2137,6 +2158,30 @@ export default function MonthGenerator({
   const monthStates = displayedMonthStates(horizon, shownLedger);
   const unboundMonths = horizon.filter((m) => monthStates.get(m) !== "bound");
   const allBound = isV3 && !storedMode && unboundMonths.length === 0;
+  // C6 CF-2: the record entries frozen by the LAST v3 run of each horizon this session (a run of
+  // another horizon never evicts them — «if no v3 Auto ran for this horizon in this session»), and the
+  // confirm in progress (its frozen entries never change across retries; CF-7).
+  const v3EntriesRef = useRef(new Map<string, V3ConfirmEntry[]>());
+  type V3ConfirmSession = { key: string; entries: V3ConfirmEntry[]; state: V3ConfirmState; retry: boolean; publish: boolean };
+  const [v3Confirm, setV3Confirm] = useState<V3ConfirmSession | null>(null);
+  // The last attempt's lines, shown only while their own horizon is on screen (like «Reintentar»).
+  const [v3Report, setV3Report] = useState<{ key: string; lines: string[] } | null>(null);
+  // CF-10: the months this session's confirms left incomplete, by month, across horizons — those gaps
+  // exist in the dataset whichever horizon is on screen, so a horizon change never clears them; only a
+  // later attempt that completes a month removes it.
+  const [v3Gaps, setV3Gaps] = useState<Array<{ month: string; missing: number }>>([]);
+  const [incompleteOpen, setIncompleteOpen] = useState(false);
+  const reportV3 = (key: string, lines: readonly string[]) => setV3Report(lines.length > 0 ? { key, lines: [...lines] } : null);
+  function mergeV3Gaps(progress: readonly MonthProgress[]) {
+    setV3Gaps((prev) => {
+      const next = new Map(prev.map((g) => [g.month, g.missing] as const));
+      for (const p of progress) {
+        if (p.created < p.total) next.set(p.month, p.total - p.created);
+        else next.delete(p.month);
+      }
+      return [...next].sort(([a], [b]) => a.localeCompare(b)).map(([month, missing]) => ({ month, missing }));
+    });
+  }
   const [participationChoice, setParticipationChoice] = useState<string>("both");
   /**
    * «Cuenta para equidad» edits on create-mode columns (solver v3 C1 §6.1), by
@@ -2753,6 +2798,7 @@ export default function MonthGenerator({
    * long-standing ref-during-render errors elsewhere in this file. Those are
    * worth addressing, but not silently, inside a fix for a discard prompt.
    */
+  const v3HasGaps = isV3 && v3Gaps.length > 0;
   const closeWouldDiscard = storedMode
     ? storedHasUnresolvedWork
     : step === "grid" && assignmentCount > 0;
@@ -2765,6 +2811,11 @@ export default function MonthGenerator({
       // Escape must not leap past a destructive prompt to close the editor.
       if (clearPending) { setClearPending(false); clearTriggerRef.current?.focus(); return; }
       if (groupFillOpen) { setGroupFillOpen(false); groupFillTriggerRef.current?.focus(); return; }
+      // C6 CF-10: leaving with gaps after a partial v3 confirm asks first.
+      if (v3HasGaps) {
+        setIncompleteOpen(true);
+        return;
+      }
       if (closeWouldDiscard) {
         setPendingDiscard("close");
         return;
@@ -2773,7 +2824,7 @@ export default function MonthGenerator({
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [clearPending, closeWouldDiscard, groupFillOpen, onClose, storedTransportActive]);
+  }, [clearPending, closeWouldDiscard, groupFillOpen, onClose, storedTransportActive, v3HasGaps]);
 
   useEffect(() => {
     if (!storedMode || !focusRoleId) return;
@@ -3155,6 +3206,8 @@ export default function MonthGenerator({
   function confirmPendingDiscard() {
     if (storedTransportActive) return;
     if (!storedMode && pendingDiscard === "back") goBackToConfig();
+    // C6 CF-10: a close with gaps asks first, whichever control started it.
+    else if (v3HasGaps) { setPendingDiscard(null); setIncompleteOpen(true); }
     else onClose();
   }
 
@@ -4297,6 +4350,14 @@ export default function MonthGenerator({
   }
 
   async function handleAutoV3(config: SolverConfig) {
+    // C6 CF-2/CF-7: no run starts while a v3 confirm is in flight, and (the other half, in `confirmV3`
+    // and on the v3 Crear buttons) no confirm starts while a run is pending. A run re-freezes the
+    // entries and resets the confirm; a confirm overlapping it either way would re-install its old
+    // session (`recordsDone: true`) over the new run, and the next confirm would post the new board
+    // under the old record without a PUT. Each side's `finally` and its bookkeeping run in one tick, and
+    // each refuses while the other's flag is up, so the two-way lock leaves no gap. (v2's `handleAuto`
+    // path is untouched.)
+    if (pushing) return;
     const requested = horizon.join(",");
     const months = [...horizon];
     setAutoPending(true);
@@ -4355,6 +4416,11 @@ export default function MonthGenerator({
       return;
     }
     const { build, outcome } = result;
+    // CF-2: the entries are frozen with the request, from this run's snapshot — whatever the solve says.
+    // A run writes nothing, so the session's gaps (CF-10) stay as they are.
+    v3EntriesRef.current.set(horizonKey, freezeConfirmEntries(build.snapshot.sources, "auto"));
+    setV3Confirm(null);
+    setV3Report(null);
     if (outcome.kind !== "success") {
       setAutoError(v3OutcomeLine(outcome));
       if (v3RetryOffered(outcome)) setAutoRetry(() => () => { void handleAuto(); });
@@ -4463,6 +4529,147 @@ export default function MonthGenerator({
     undoClearRef.current = undoClear;
   });
 
+  /**
+   * CF-2's no-Auto path: a fresh read, bound months from their records, every other month from IF2-15.
+   * Copy: §7.8 defines no confirm-side line for a failed read or a resolver refusal, so these reuse
+   * Auto's (`V3_ROUTE_COPY.ledgerFailed`, «… Auto no corrió …»; the resolver's «No se puede correr
+   * Auto: …»). Recorded as a spec gap for the C6 spec owner; the plan invents no line.
+   */
+  async function freezeEntriesWithoutAuto(months: string[]): Promise<{ ok: true; entries: V3ConfirmEntry[] } | { ok: false; lines: string[] }> {
+    if (!solverConfig) return { ok: false, lines: [V3_ROUTE_COPY.ledgerFailed] };
+    const controller = new AbortController();
+    const ceiling = setTimeout(() => controller.abort(), V3_LEDGER_TIMEOUT_MS);
+    try {
+      const res = await fetch(`/api/admin/fairness?month=${months[0]}&horizon=${months.length}`, { cache: "no-store", signal: controller.signal });
+      const body: unknown = await res.json().catch(() => null);
+      if (res.status !== 200 || !isLedgerBody(body, months)) return { ok: false, lines: [V3_ROUTE_COPY.ledgerFailed] };
+      const sources = resolveMonthSources({ months, ledger: body, config: solverConfig, members, exactLeadLabel: () => null });
+      if (!sources.ok) return { ok: false, lines: sources.lines };
+      return { ok: true, entries: freezeConfirmEntries(sources.sources, "manual") };
+    } catch {
+      return { ok: false, lines: [V3_ROUTE_COPY.ledgerFailed] };
+    } finally {
+      clearTimeout(ceiling);
+    }
+  }
+
+  /** §5.11 wired. Client-mutation invariant (CF-11): try/catch/finally, `res.ok` checked by the executor, the flag always reset, never closed as success on failure. */
+  async function confirmV3(toCreateNow: DraftCard[], publish: boolean) {
+    // The lock's other half (see `handleAutoV3`): never overlap a pending v3 Auto. The Crear buttons and
+    // «Reintentar» are disabled on the same flag; this is the protocol-level refusal behind them.
+    if (autoPending) return;
+    const key = horizon.join(",");
+    const months = [...horizon];
+    setPushing(true);
+    setPushError(null);
+    setV3Report(null);
+    // A session (and so its frozen entries, CF-2: the set never changes) outlives every refusal. After a
+    // refusal that offers no «Reintentar» — a conflict, a past month — a later Crear resends the same
+    // entries and repeats the refusal; only a new v3 Auto (which re-freezes and resets) or closing the
+    // planner leaves it. That is the spec's own remedy («vuelve a correr Auto», §7.8), not a gap; on the
+    // no-Auto path it means running Auto once.
+    let current: V3ConfirmSession | null = v3Confirm && v3Confirm.key === key ? v3Confirm : null;
+    let attemptDrafts: DraftCard[] = toCreateNow;
+    let posted = 0;
+    let result: V3ConfirmResult | null = null;
+    try {
+      const currentMonth = cdmxCurrentMonth(new Date());
+      if (!current) {
+        let entries = v3EntriesRef.current.get(key) ?? null;
+        if (!entries) {
+          // CF-1's placement holds on the no-Auto path too: the guard comes before the fresh read.
+          const guard = confirmGuard(months, currentMonth);
+          if (guard) { reportV3(key, [guardLine(guard, false)]); return; }
+          const fresh = await freezeEntriesWithoutAuto(months);
+          if (!fresh.ok) { reportV3(key, fresh.lines); return; }
+          entries = fresh.entries;
+        }
+        current = { key, entries, state: INITIAL_V3_CONFIRM_STATE, retry: false, publish };
+      }
+      const session = current;
+      // Totals stay stable across retries: this confirm's created drafts plus what is still to create.
+      attemptDrafts = [...drafts.filter((d) => session.state.createdLocalIds.has(d.localId)), ...toCreateNow];
+      result = await runV3ConfirmAttempt({
+        entries: session.entries,
+        months,
+        drafts: attemptDrafts,
+        published: publish && months.length === 1,                           // CF-8: never in a 2-month confirm
+        state: session.state,
+        currentMonth,
+        putRecords: async (body) => {
+          const res = await fetch("/api/admin/fairness/months", {
+            method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+          });
+          return { status: res.status, body: await res.json().catch(() => null) };
+        },
+        postDraft: async (body) => {
+          posted += 1;
+          return postDraftToRoles(body);
+        },
+      });
+    } catch {
+      // Unreachable by construction — the read, the PUT and every POST are caught where they happen —
+      // but never silent and never a false line. A resend is always safe (the PUT replays
+      // byte-identical and answers `unchanged`, C2 WR-8 row 1; each draft keeps its creationRequestId),
+      // so the confirm stays retryable with the state it had, and a line says «No se creó nada» only
+      // when no draft of this confirm can exist.
+      if (!current) {
+        reportV3(key, [V3_ROUTE_COPY.ledgerFailed]);                        // only the fresh read precedes the session
+      } else if (posted === 0 && current.state.createdLocalIds.size === 0) {
+        setV3Confirm({ ...current, retry: true });
+        reportV3(key, [V3_LINES.recordOtherFailure]);
+      } else {
+        // Unknown outcomes count as not created (today's rule); «Reintentar» replays them by request id.
+        const progress = progressFrom(attemptDrafts, months, current.state.createdLocalIds);
+        setV3Confirm({ ...current, retry: true });
+        reportV3(key, monthReportLines(progress));
+        mergeV3Gaps(progress);
+      }
+    } finally {
+      setPushing(false);
+    }
+    // Today's order: the flag resets, then the bookkeeping (`handleConfirm` does the same).
+    if (result && current) afterV3Attempt(result, current, toCreateNow);
+  }
+
+  function afterV3Attempt(result: V3ConfirmResult, session: V3ConfirmSession, attemptDrafts: DraftCard[]) {
+    const createdNow = new Set(result.kind === "drafts" ? result.createdNow : []);
+    // CF-6: only confirmed successes become `exists`, paired with the `createdTargets` growth (P3 invariant).
+    if (createdNow.size > 0) {
+      setDrafts((prev) => prev.map((d) => (createdNow.has(d.localId) ? { ...d, exists: true } : d)));
+      for (const d of attemptDrafts) if (createdNow.has(d.localId)) createdTargets.current.add(draftTargetKey(d._type, d.date));
+      // CF-9 (Q4): one history entry PER MONTH with a weekend draft created this session, built as today.
+      for (const m of horizon) {
+        const monthDrafts = drafts.filter((d) =>
+          d._type !== "special_role" && d.date.slice(0, 7) === m &&
+          (createdNow.has(d.localId) || createdTargets.current.has(draftTargetKey(d._type, d.date))));
+        const entry = historyEntryFromDrafts(monthDrafts, members, Number(m.slice(0, 4)), Number(m.slice(5, 7)));
+        if (!entry) continue;
+        if (SOLVER_HISTORY_SOURCE === "derived") appendLocalHistoryEntry(entry);
+        else saveHistoryEntry(entry.year, entry.month, entry.total_counts, entry.role_counts);
+      }
+    }
+    // CF-10: once the records landed, every month still missing drafts is a gap, and a month this
+    // attempt completed stops being one (a guard refusal or a record failure adds none: the first wrote
+    // nothing new, the second nothing at all — the gaps an earlier attempt found are kept).
+    if (result.kind === "drafts") {
+      onCreated();
+      mergeV3Gaps(result.progress);
+    }
+    if (result.kind === "drafts" && result.complete) {
+      // Full success closes as today (CF-10, spec-literal), whatever an earlier horizon's attempt left.
+      // Deliberately asymmetric with «Cancelar»/Escape, which ask while `v3Gaps` is non-empty: a gap in a
+      // month outside this horizon (e.g. a 2-month confirm left November short, then December alone
+      // completed) closes without the dialog. Those services stay as created and «Editar mes» completes
+      // them; asking here would add a behaviour CF-10 does not name.
+      setV3Confirm(null);
+      onClose();
+      return;
+    }
+    setV3Confirm({ ...session, state: result.state, retry: result.retry });
+    reportV3(session.key, result.lines);
+  }
+
   async function handleConfirm(publish: boolean) {
     // Confirmation re-check: a source that failed since the preview blocks the
     // whole post rather than creating against a stale observation.
@@ -4517,6 +4724,13 @@ export default function MonthGenerator({
     // "the button offered a create the confirm path had already ruled out" —
     // pressed, told nothing, given nothing.
     if (!toCreateNow.length) return;
+    // Solver v3 C6 §5.11: under v3 the confirm writes every horizon month's record first (one PUT),
+    // then the drafts month by month — after the SAME gate, nameless-special and preflight re-checks
+    // as today. v2 continues below, byte-identical.
+    if (isV3) {
+      await confirmV3(toCreateNow, publish);
+      return;
+    }
     setPushing(true);
     setPushError(null);
     let result;
@@ -4526,22 +4740,7 @@ export default function MonthGenerator({
       result = await runDraftCreateBatch({
         drafts: toCreateNow,
         published: publish,
-        post: async (body) => {
-          const res = await fetch("/api/admin/roles", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-          let error: string | undefined;
-          if (!res.ok) {
-            try {
-              error = (await res.json())?.error;
-            } catch {
-              error = undefined;
-            }
-          }
-          return { ok: res.ok, status: res.status, error };
-        },
+        post: postDraftToRoles,
       });
     } finally {
       setPushing(false);
@@ -4711,8 +4910,20 @@ export default function MonthGenerator({
       .reduce((acc, r) => acc + Math.max(0, (r.target ?? 0) - (cells.find((x) => x.columnId === c.columnId && x.rowId === r.id)?.occupants.length ?? 0)), 0), 0);
 
   // ── Step 1: Configure ────────────────────────────────────────────────────────
+  // C6 CF-10: one dialog element for both step branches (the config step returns early).
+  const incompleteDialog = isV3 ? (
+    <V3IncompleteDialog
+      open={incompleteOpen}
+      gaps={v3Gaps}
+      onStay={() => setIncompleteOpen(false)}
+      onLeave={() => { setIncompleteOpen(false); onClose(); }}
+    />
+  ) : null;
+  const v3ShownLines = isV3 && v3Report && v3Report.key === horizon.join(",") ? v3Report.lines : [];
+
   if (step === "config") return (
     <div className="space-y-5">
+      {incompleteDialog}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <Select id="mg-month" label="Mes" size="md" value={month} onChange={e => setMonth(Number(e.target.value))}>
@@ -4842,7 +5053,7 @@ export default function MonthGenerator({
       )}
 
       <div className="flex gap-3">
-        <button type="button" onClick={onClose} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
+        <button type="button" onClick={() => { if (v3HasGaps) { setIncompleteOpen(true); return; } onClose(); }} className="flex-1 py-2 rounded-lg border border-surface-accent-30 font-label text-xs uppercase tracking-widest hover:border-accent dark:hover:border-surface-accent-30 transition-colors">
           Cancelar
         </button>
         {/*
@@ -5519,11 +5730,26 @@ export default function MonthGenerator({
           </button>
         </div>
       ) : (
+        <>
+        {isV3 && horizon.length === 2 && toCreate.length > 0 && (
+          <p className="font-body text-xs text-ink-muted">{twoMonthSummaryLine(draftsByMonth(toCreate, horizon))}</p>
+        )}
+        {v3ShownLines.length > 0 && (
+          <div data-v3-confirm-report="" className="space-y-1">
+            {v3ShownLines.map((line) => <p key={line} className="font-body text-xs text-negative-fg">{line}</p>)}
+            {v3Confirm?.retry && v3Confirm.key === horizon.join(",") && (
+              <Button variant="secondary" size="sm" disabled={pushing || autoPending} onClick={() => { void handleConfirm(v3Confirm.publish); }}>
+                {V3_LINES.retry(toCreate.length)}
+              </Button>
+            )}
+          </div>
+        )}
         <div className="flex gap-3">
           <button
             type="button"
             onClick={() => {
               if (storedTransportActive) return;
+              if (v3HasGaps) { setIncompleteOpen(true); return; }
               if (closeWouldDiscard) { setPendingDiscard("close"); return; }
               onClose();
             }}
@@ -5531,14 +5757,20 @@ export default function MonthGenerator({
           >
             Cancelar
           </button>
-          <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          {/* The lock's other half (`handleAutoV3`): no v3 confirm starts while a v3 Auto is pending. `isV3 &&` leaves v2's buttons behaving exactly as today. */}
+          <button type="button" onClick={() => handleConfirm(false)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
             {pushing ? "Creando..." : `Crear ${toCreate.length} borrador${toCreate.length !== 1 ? "es" : ""}`}
           </button>
-          <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
+          {/* CF-8: a 2-month confirm creates drafts only — the publish button is absent, not disabled. */}
+          {!(isV3 && horizon.length === 2) && (
+          <button type="button" onClick={() => handleConfirm(true)} disabled={pushing || (isV3 && autoPending) || toCreate.length === 0 || !!gateBlocked} title={gateBlocked ?? undefined} className="flex-1 py-2 rounded-lg bg-surface-accent-solid text-on-fill hover:bg-accent-deep/80 dark:hover:bg-accent/30 font-label text-xs uppercase tracking-widest transition-colors disabled:opacity-50">
             Crear y publicar
           </button>
+          )}
         </div>
+        </>
       )}
+      {incompleteDialog}
     </div>
   );
 }
