@@ -1,6 +1,6 @@
 # ADR-0004: Solve with 1 search worker to stay on free-tier CPU
 
-**Date:** 2026-06-30 · **Status:** Accepted, amended by ADR-0046 (the function runs on 1 vCPU; 1 worker, the 5 s cap and the 40 s budget stand)
+**Date:** 2026-06-30 · **Status:** Accepted, amended by ADR-0046 (the function runs on 1 vCPU; 1 worker, the 5 s cap and the 40 s budget stand) and, under v3, by ADR-0051
 
 ## Context
 
@@ -45,3 +45,13 @@ instead of failing outright.
 function runs on 1 vCPU. The reason changed, not the measurement: with no history sent the
 fairness objective runs again, and at 0.33 vCPU production measured ~4× a Mac core plus 11–19 s
 cold starts against the route's 60 s. One worker is still right on one core.
+
+## Under v3 (2026-10-09, ADR-0051)
+
+Since 2026-10-09 Auto runs solver v3 (`owt-solver-v3`, ADR-0054). v2, the rollback engine, keeps
+this decision as written, and nothing above changes. v3 keeps one search worker on its 1 vCPU and
+adds (ADR-0051; C5 §7, S3): `linearization_level = 2`, a deterministic limit per stage
+(`STAGE_DET_LIMIT`) under a wall guard of about 2.5 s per stage, and a 25 s total budget from model
+build. A stage stopped by a limit keeps its solution and reports `unproven`. Measured on the real
+container on 2026-10-08 (five request shapes, ten warm runs each): every stage proven, no
+wall-guard stop, `total_ms` p95 at most 2.7 s (`docs/SOLVER_AND_INFRA.md` «Cutover record»).

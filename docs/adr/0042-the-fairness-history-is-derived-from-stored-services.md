@@ -1,6 +1,6 @@
 # ADR-0042: The solver's fairness history is derived from stored role documents, not `localStorage`
 
-**Date:** 2026-09-25 · **Status:** Accepted, amended by ADR-0046 (the history is still derived and shown, but Auto no longer sends it)
+**Date:** 2026-09-25 · **Status:** Accepted, amended by ADR-0046 (the history is still derived and shown, but Auto no longer sends it) and, under v3, by ADR-0050 (in force since 2026-10-09)
 
 > **The number is final.** ADR numbers follow the order in which records reach `main`. PR #102
 > ("solver-pinned-assignments") merged first and took 0041, so this record was renumbered to
@@ -120,3 +120,19 @@ difference by difference, before deciding on cutover (Gate C).
   `historyEntryFromDrafts`, rolling back needs new implementation work, not a flag flip. Once
   the MCP connector's `solve_month` (P4) ships against the derived builder, rolling back also
   withdraws that tool, since it has no local-history fallback of its own.
+
+## Under v3 (2026-10-09, ADR-0050)
+
+Since 2026-10-09 Auto runs solver v3 (ADR-0054), and its fairness input is not this history: it is
+C2's ledger (`app/utils/fairnessLedger.ts`), read fresh by every Auto through
+`GET /api/admin/fairness`. It differs from the decision above in three ways:
+
+- **Keyed by member id,** not by `member_name`.
+- **A stored eligibility record per month** (`fairnessMonth`) is the denominator; seats are still
+  derived from the stored role documents, as decided above.
+- **A three-month window before the run,** carried as a balance per line.
+
+v2, the rollback engine, keeps this decision as written and as ADR-0046 amended it — the
+derivation, `SOLVER_HISTORY_SOURCE` and the read-only chips are unchanged — and nothing above
+changes. MCP P4, which was to call `loadSolverHistory`, is blocked on a v3 re-baseline (ADR-0054).
+C2 wrote no amendment here (parent A31); this section is the cutover's.

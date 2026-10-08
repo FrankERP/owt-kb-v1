@@ -1,6 +1,6 @@
 # ADR-0041: Pins are fixed variables, and the rules they contradict go soft under a proven ceiling
 
-**Date:** 2026-09-25 · **Status:** Accepted
+**Date:** 2026-09-25 · **Status:** Accepted, amended under v3 by ADR-0051
 
 ## Context
 
@@ -93,3 +93,15 @@ solver**, not by argument; rejection 7 is Frank's ruling on E3. Spec: `docs/supe
   role-keyed and rules-stay-hard controls, the instance-scoping cases and the pinned-only guard.
 - Pins name people by `member_name`; two members sharing one would swap a pinned occupant for
   the namesake. Pre-existing for the solver's own picks, newly consequential here, out of scope.
+
+## Under v3 (2026-10-09, ADR-0051 and ADR-0050)
+
+Since 2026-10-09 Auto runs solver v3 (ADR-0054). v2, the rollback engine, keeps every decision
+above as written — pins as fixed variables, `pin_slack`, `relaxation_enabled` and the byte-for-byte
+pinless model — and nothing above changes. v3 keeps this record's core, a ceiling on broken rules
+solved first and never raised for fairness, and differs in three ways:
+
+- **Rules are soft per instance in every v3 run,** pins or not (ADR-0051).
+- **A pinned seat counts as received** on a fairness line when its holder is in that line;
+  otherwise it is set aside, never charged to the line (C2's ledger, ADR-0050).
+- **Pin slack is gone:** v3 has no hard spreads to loosen; the per-line balances replace them.

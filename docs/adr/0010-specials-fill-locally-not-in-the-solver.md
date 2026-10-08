@@ -1,6 +1,6 @@
 # ADR-0010: Fill special services locally; move the rules to Sanity
 
-**Date:** 2026-08-01 · **Status:** Accepted, amended by ADR-0042 · P6 implemented 2026-08-03 (seeded 2026-08-02)
+**Date:** 2026-08-01 · **Status:** Accepted, amended by ADR-0042 and, under v3, by ADR-0053 · P6 implemented 2026-08-03 (seeded 2026-08-02)
 
 > **2026-08-05 UI supersession:** `SeatBoard`/Tablero is no longer mounted;
 > `PlannerGrid` is the sole free-form roster editor. References below to two
@@ -15,7 +15,7 @@
 > load scoped to that group only. Still local, still never the solver, still empty
 > seats only; the one-service composer stays manual.
 
-> **2026-10-05 forward note (solver v3, C1):** role documents now carry
+> **2026-10-05 forward note (solver v3, C1) — in force since 2026-10-09** (see «Under v3» below): role documents now carry
 > `countsForFairness` («Cuenta para equidad»; on by default for weekend services, off for
 > specials), read through `app/utils/countsForFairness.ts`. It is **inert under v2**:
 > specials still never reach CP-SAT, and no decision below changes. Decision 3 is amended
@@ -207,3 +207,17 @@ one piece of Tablero coverage worth checking before deletion. It is pinned on
 the grid at `PlannerGrid.test.tsx` ("a non-solvable Drums cell with two
 occupants never replaces a third addition"), and structurally by
 `seatModel.ts`'s `max: null` and its test. No coverage was lost.
+
+## Under v3 (2026-10-09, ADR-0053)
+
+Since 2026-10-09 Auto runs solver v3 (ADR-0054). v2, the rollback engine, keeps all three
+decisions as written, and nothing above changes. Under v3 two of them read differently:
+
+- **Decision 1:** a *counted* special (its «Cuenta para equidad» on) reaches the solver, but only
+  as a fixed service: the planner fills it first, by this record's protections and then the
+  balances, and sends it with its seats fixed (ADR-0053). An uncounted special never reaches the
+  solver and keeps this record's local filler.
+- **Decision 3:** a special counts toward fairness exactly when its toggle says so
+  (`countsForFairness`, off by default for specials, on for weekend services;
+  `app/utils/countsForFairness.ts` is the one read rule). The 2026-10-05 forward note above is in
+  force from this date.

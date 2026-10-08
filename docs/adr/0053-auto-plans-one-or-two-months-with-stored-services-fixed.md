@@ -1,6 +1,6 @@
 # ADR-0053: Auto plans one or two months, with stored services and counted specials as fixed services
 
-**Date:** 2026-10-06 · **Status:** Accepted (behind `SOLVER_ENGINE`; production stays v2 until C7)
+**Date:** 2026-10-06 · **Status:** Accepted (behind `SOLVER_ENGINE`; in production since the 2026-10-09 cutover, ADR-0054)
 
 ## Context
 

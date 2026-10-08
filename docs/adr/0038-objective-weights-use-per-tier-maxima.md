@@ -1,6 +1,6 @@
 # ADR-0038: The lexicographic objective's weights use per-tier maxima
 
-**Date:** 2026-09-16 · **Status:** Accepted, amended by ADR-0046 (Auto sends no history, so the ladder fits; the sequential follow-on is not built) · **Amended 2026-09-23** — before release, a review found this record's account of `main` partly false; the ceiling moved to CP-SAT's real one, and the trade-off Frank accepted is recorded below
+**Date:** 2026-09-16 · **Status:** Accepted, amended by ADR-0046 (Auto sends no history, so the ladder fits; the sequential follow-on is not built) and, under v3, by ADR-0051 · **Amended 2026-09-23** — before release, a review found this record's account of `main` partly false; the ceiling moved to CP-SAT's real one, and the trade-off Frank accepted is recorded below
 
 ## Context
 
@@ -149,3 +149,13 @@ and chose not to build an explicit floating-point objective in this change.
   months: every run came back `objective_skipped`, the ladder bounding at ~4.9e19. Whether a
   month overflows depends on how large its weighted history is, so a thin quarter may still
   optimise, but a production month is expected to skip routinely, not as an edge case.)*
+
+## Under v3 (2026-10-09, ADR-0051)
+
+Since 2026-10-09 Auto runs solver v3 (ADR-0054), which has no weighted ladder: its objectives are
+sequential stages, each solved and then fixed as a constraint before the next (rules → fill →
+cadence → … → per-line balances → tie-break), so no tier's weight has to exceed another's and the
+integer ceiling this record measures does not arise. v2, the rollback engine, keeps this decision,
+its per-tier maxima and the 2026-09-23 trade-off exactly as written; nothing above changes. The
+sequential follow-on this record and ADR-0046 left unbuilt was not built in v2: v3 is a separate
+function.

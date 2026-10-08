@@ -1,6 +1,6 @@
 # ADR-0046: Auto sends no fairness history; an exact count leaves its role's band
 
-**Date:** 2026-09-30 · **Status:** Accepted
+**Date:** 2026-09-30 · **Status:** Accepted, amended under v3 by ADR-0050
 
 > **Numbering.** ADR numbers follow the order records reach `main`; this is the next free
 > number on `main` when written. Amends ADR-0042 (the history is still derived and shown, but
@@ -69,3 +69,17 @@ Frank reported Auto giving two Sundays to two lead-only members while others led
   `objective_skipped` on every history-bearing month again unless the sequential objective ships.
 - MCP P4's `solve_month` mirrors Auto, so it sends no history either (P4 plan, post-approval
   change 13).
+
+## Under v3 (2026-10-09, ADR-0050)
+
+Since 2026-10-09 Auto runs solver v3 (ADR-0054). v2, the rollback engine, keeps this record
+unchanged — `SOLVER_SENDS_HISTORY = false`, `exact_count_roles` and every consequence above — and
+nothing above changes. Under v3:
+
+- **Balances with a denominator replace `history: []`.** Each person carries a balance per line,
+  measured against the eligibility recorded for each month (ADR-0050), so an occasional leader's
+  rare Sundays are no longer read as Sundays owed.
+- **Decision 2 generalises to set-asides.** Every exact `==` count fixes that person's seats for
+  the role and sets them aside from the line's balance; an exact-count lead is outside both monthly
+  caps.
+- Decision 3 (1 vCPU) holds for both functions.

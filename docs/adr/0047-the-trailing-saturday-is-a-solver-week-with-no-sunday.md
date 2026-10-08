@@ -1,6 +1,6 @@
 # ADR-0047: The trailing Saturday is a solver week with no Sunday
 
-**Date:** 2026-09-30 · **Status:** Accepted
+**Date:** 2026-09-30 · **Status:** Accepted, amended by ADR-0053 (superseded under v3; v2, the rollback engine, keeps it)
 
 > **Numbering.** ADR numbers follow the order records reach `main`; this is the next free
 > number on `main` when written (0046 is the highest). Delivery 1 of 3: the solver. The planner
@@ -119,3 +119,11 @@ redeploy of identical code. The spec's §7 is amended to say so.
   request; `ok: false` means the old revision still serves, so redeploy). Rollback is one-sided: the
   planner stops sending `weeks + 1` first, then the function if ever both.
 - **The python gate grows by about 29 s** (the `TrailingSaturday` class, 15 tests, and the fixture).
+
+## Under v3 (2026-10-09, ADR-0053)
+
+Since 2026-10-09 Auto runs solver v3 (ADR-0054), which has no solver weeks: a request is a list of
+dated services, so the trailing Saturday is a dated Saturday service of its calendar month
+(ADR-0048), with no `weeks + 1` index. This decision is superseded under v3 only. v2, the rollback
+engine, keeps it exactly as written — its identity and trailing fingerprints still guard v2's
+suite — and nothing above changes.
