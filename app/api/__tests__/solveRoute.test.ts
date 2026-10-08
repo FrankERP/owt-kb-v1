@@ -22,6 +22,10 @@ vi.mock("child_process", () => ({
   spawn: (...a: unknown[]) => h.spawn(...a),
 }));
 
+// These are v2's route tests. Since the cutover (ADR-0054) the shipped constant is "v3", so the
+// file pins the rollback engine itself rather than reading the default (solverEngine.ts's header).
+vi.mock("@/app/components/admin/solverEngine", () => ({ SOLVER_ENGINE: "v2" }));
+
 import { POST } from "@/app/api/admin/solve/route";
 
 const BODY = { weeks: 4, weekends_with_saturday: [5], sunday_leads: ["Ana"], saturday_leads: [], support: [], dsl_rules: [], history: [] };

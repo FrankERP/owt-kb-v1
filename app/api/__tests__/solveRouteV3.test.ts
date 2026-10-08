@@ -1,6 +1,7 @@
 // Solver v3 C6 RT-1, RT-2, KH-2 — the solve route under each engine. The engine comes from C2's
-// resolver: the constant ("v2"), or OWT_SOLVER_ENGINE with VERCEL_ENV unset (local), which is
-// how these tests pick v3. Existing v2 behaviour stays pinned by `solveRoute.test.ts`, unedited.
+// resolver: the constant ("v3" since the cutover, ADR-0054), or OWT_SOLVER_ENGINE with VERCEL_ENV
+// unset (local), which is how these tests pick each engine explicitly. Existing v2 behaviour stays
+// pinned by `solveRoute.test.ts`, which mocks the constant to "v2".
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 
@@ -38,6 +39,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+const asV2 = () => { vi.stubEnv("OWT_SOLVER_ENGINE", "v2"); vi.stubEnv("VERCEL_ENV", ""); };
 const asV3 = () => { vi.stubEnv("OWT_SOLVER_ENGINE", "v3"); vi.stubEnv("VERCEL_ENV", ""); };
 
 describe("maxDuration (spec ceiling)", () => {
@@ -46,6 +48,7 @@ describe("maxDuration (spec ceiling)", () => {
 
 describe("RT-1 — a body of the other contract is a 409 before anything else", () => {
   it("v3 body under v2: 409 with the engine, no upstream call", async () => {
+    asV2();
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     vi.stubEnv("OWT_SOLVER_URL", "https://v2.example/solve");
@@ -70,6 +73,7 @@ describe("RT-1 — a body of the other contract is a 409 before anything else", 
 
 describe("RT-2 — v2 under v2 is today's path", () => {
   it("forwards the received body upstream unchanged", async () => {
+    asV2();
     vi.stubEnv("OWT_SOLVER_URL", "https://v2.example/solve");
     const fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true, schedule: {} }) }));
     vi.stubGlobal("fetch", fetchMock);

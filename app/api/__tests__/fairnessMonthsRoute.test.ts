@@ -30,6 +30,10 @@ vi.mock("@/sanity/lib/serverClient", () => ({
   serverClient: { fetch: vi.fn() },
   writeClient: { transaction: () => h.lake.write.transaction() },
 }));
+// WR-6's gate is proven against a "v2" constant. Since the cutover (ADR-0054) the shipped constant
+// is "v3", so the file pins the rollback engine rather than reading the default; every other test
+// picks v3 by the local override (beforeEach).
+vi.mock("@/app/components/admin/solverEngine", () => ({ SOLVER_ENGINE: "v2" }));
 
 import { PUT } from "@/app/api/admin/fairness/months/route";
 
