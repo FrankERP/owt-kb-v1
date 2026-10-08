@@ -81,13 +81,7 @@ the budget goes there, once.
   multi-agent Workflow.
 
 ## Token economy
-- **One session per phase, not per project** (spec → plan → each implementation slice →
-  release). A phase ends in a file (spec, plan, ledger, handoff) and the next session starts
-  by reading only that file. When context passes ~250k tokens, or the work is about to pause
-  for more than an hour, write the handoff and say so — resuming a large context after the
-  cache expires re-bills all of it.
-- **Workflows only for genuinely parallel, independent work, ≤10 agents** unless Frank asks
-  for more in that message.
+- **Workflows only for genuinely parallel, independent work.**
 - Subagent briefs name the files and the question; reports return conclusions, not dumps.
   Pipe long command output to a file and read the part you need.
 
