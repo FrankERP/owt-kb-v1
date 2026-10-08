@@ -232,8 +232,9 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   ([sundayCadence.ts](../app/utils/sundayCadence.ts), neutral) — exactly one worship member per
   rule name or a named refusal (`unresolved`/`ambiguous`), over the unfiltered roster minus
   non-worship members (the functions apply `normalizeMinistries` themselves). v2 keeps its
-  first-match `resolveToMemberName`. Copy: `CADENCE_V2_NOTE`, `SLACK_V3_NOTE`,
-  `CADENCE_OUTSIDE_HEADING`, `CADENCE_OUTSIDE_SENTENCE`.
+  first-match `resolveToMemberName`. Copy: `SLACK_V3_NOTE`, `CADENCE_OUTSIDE_HEADING`,
+  `CADENCE_OUTSIDE_SENTENCE` (C3's v2-only `CADENCE_V2_NOTE` went at the cutover, ADR-0054; a
+  flip-back restores it).
 - **`v2View(config)`** ([plannerModel.ts](../app/components/admin/plannerModel.ts)) — the config
   v2 sees: `sundayCadence` stripped and cadence-only restrictions removed; applied in
   `solverPools` and `isExcludedFromLead`. `cadenceV2Inert.test.ts` is the guard.

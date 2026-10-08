@@ -24,7 +24,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import MonthGenerator from "../MonthGenerator";
 import { readyRules, type RulesHarness } from "./rulesHarness";
 import { AdminProviders } from "./providersHarness";
-import { CADENCE_V2_NOTE, SLACK_V3_NOTE } from "@/app/utils/sundayCadence";
+import { SLACK_V3_NOTE } from "@/app/utils/sundayCadence";
 import type { PersonRestriction, SolverConfig } from "../plannerModel";
 
 afterEach(cleanup);
@@ -131,10 +131,11 @@ describe("the «Domingo» control (C3 §6.6, T11 — removed with the control on
     expect(add().disabled).toBe(false);
     expect(
       screen.getByText(
-        "Solo cambia cuántas veces dirige domingo; en BGV y Coro participa igual que todos. Dirige domingo un mes sí y uno no: le toca el mes siguiente a uno en que no dirigió domingo, si puede al menos un domingo. En el mes que no le toca, de preferencia dirige un sábado. Solo aplica si está en Líderes Domingo. Aplica con el nuevo solver; el solver actual no lo usa.",
+        "Solo cambia cuántas veces dirige domingo; en BGV y Coro participa igual que todos. Dirige domingo un mes sí y uno no: le toca el mes siguiente a uno en que no dirigió domingo, si puede al menos un domingo. En el mes que no le toca, de preferencia dirige un sábado. Solo aplica si está en Líderes Domingo.",
       ),
     ).toBeTruthy();
-    expect(screen.getByText(/Aplica con el nuevo solver; el solver actual no lo usa\./)).toBeTruthy();
+    // C3's v2-only closing sentence went at the cutover (C7, ADR-0054).
+    expect(screen.queryByText(/el solver actual no lo usa/)).toBeNull();
 
     fireEvent.click(add());
     expect(container.textContent).toContain("Mes por medio");
@@ -168,10 +169,11 @@ describe("the «Domingo» control (C3 §6.6, T11 — removed with the control on
 });
 
 describe("the card and the «Holgura» notes (C3 §6.6, §6.8, T11)", () => {
-  it("shows «Mes por medio» followed by its note", () => {
+  it("shows «Mes por medio» with no v2-only note after it (C7, ADR-0054)", () => {
     renderGen(configWith(CADENCE_ONLY));
     const chip = within(card(/Ana/)).getByText("Mes por medio");
-    expect(chip.nextElementSibling?.textContent).toBe(CADENCE_V2_NOTE);
+    expect(chip.nextElementSibling?.textContent).not.toBe("aplica con el nuevo solver");
+    expect(within(card(/Ana/)).queryByText("aplica con el nuevo solver")).toBeNull();
   });
 
   it("shows no cadence chip on a «Normal» card", () => {

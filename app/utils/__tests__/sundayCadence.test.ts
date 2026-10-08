@@ -9,10 +9,10 @@
 // config must resolve the same for both.
 import { describe, expect, it } from "vitest";
 
+import * as sundayCadenceModule from "../sundayCadence";
 import {
   CADENCE_OUTSIDE_HEADING,
   CADENCE_OUTSIDE_SENTENCE,
-  CADENCE_V2_NOTE,
   SLACK_V3_NOTE,
   cadenceMembers,
   cadenceOutsideSundayPool,
@@ -176,9 +176,12 @@ describe("cadenceOutsideSundayPool (C3 T10)", () => {
   });
 });
 
-describe("the copy C6 gates (C3 §7 item 5)", () => {
+describe("the copy (C3 §7 item 5)", () => {
+  it("no longer exports C3's v2-only chip note: it went at the cutover (ADR-0054)", () => {
+    expect(sundayCadenceModule).not.toHaveProperty("CADENCE_V2_NOTE");
+  });
+
   it("has one wording", () => {
-    expect(CADENCE_V2_NOTE).toBe("aplica con el nuevo solver");
     expect(SLACK_V3_NOTE).toBe("no aplica con el nuevo solver");
     expect(CADENCE_OUTSIDE_HEADING).toBe("Mes por medio fuera de Líderes Domingo");
     expect(CADENCE_OUTSIDE_SENTENCE.not_ticked("Ana")).toBe(

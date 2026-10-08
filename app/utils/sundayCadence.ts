@@ -127,10 +127,9 @@ export function cadenceOutsideSundayPool(
 
 // ─── Copy (C3 §6.6–§6.7, §7 item 5) ──────────────────────────────────────────
 //
-// Exported so C6 gates exactly these strings and every test asserts one wording.
-
-/** Beside the «Mes por medio» chip. Rendered unconditionally by C3; C6 hides it under v3 (CTL-1). */
-export const CADENCE_V2_NOTE = "aplica con el nuevo solver";
+// Exported so every test asserts one wording. C3's v2-only note beside the «Mes por medio» chip
+// (`CADENCE_V2_NOTE`, «aplica con el nuevo solver») went at the cutover (ADR-0054); a flip-back
+// restores it.
 
 /** Beside «holgura N» — true under both engines (parent A10, Q2). */
 export const SLACK_V3_NOTE = "no aplica con el nuevo solver";

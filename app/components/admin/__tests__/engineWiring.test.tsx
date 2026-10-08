@@ -1,8 +1,9 @@
 /** @vitest-environment jsdom */
 // Solver v3 C6 CTL-1 — the surfaces C6 gates on its server-resolved prop: C1's note
-// «Cuenta para equidad: aplica con el nuevo solver…» and C3's card-chip note
-// (`CADENCE_V2_NOTE`), each shown only under v2. Not gated (C3 owns them, under both engines):
-// the «Holgura» note (`SLACK_V3_NOTE`). C7's flip rewrites the «CTL-1 card chip» tests below.
+// «Cuenta para equidad: aplica con el nuevo solver…», shown only under v2. C3's card-chip note
+// (`CADENCE_V2_NOTE`), which CTL-1 also gated, went at the cutover (C7, ADR-0054): the
+// «CTL-1 card chip» tests below now assert it is absent under both engines. Not gated (C3 owns
+// it, under both engines): the «Holgura» note (`SLACK_V3_NOTE`).
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,7 +14,10 @@ import { FAIRNESS_ENGINE_NOTE } from "../fairnessToggleModel";
 import type { PersonRestriction, SolverConfig } from "../plannerModel";
 import { AdminProviders } from "./providersHarness";
 import { readyRules } from "./rulesHarness";
-import { CADENCE_V2_NOTE, SLACK_V3_NOTE } from "@/app/utils/sundayCadence";
+import { SLACK_V3_NOTE } from "@/app/utils/sundayCadence";
+
+/** C3's v2-only chip note, removed at the cutover (ADR-0054). Only its absence is asserted. */
+const REMOVED_CADENCE_V2_NOTE = "aplica con el nuevo solver";
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -78,17 +82,12 @@ describe("C1's note follows the engine prop", () => {
   });
 });
 
-describe("CTL-1 card chip: C3's `CADENCE_V2_NOTE` follows the engine prop", () => {
-  it("v2: the chip is followed by its note", () => {
-    renderGenerator("v2");
+describe("CTL-1 card chip: C3's v2-only note is gone under both engines (C7, ADR-0054)", () => {
+  it.each(["v2", "v3"] as const)("%s: the chip stays and no note follows it", (engine) => {
+    renderGenerator(engine);
     const chip = within(card()).getByText("Mes por medio");
-    expect(chip.nextElementSibling?.textContent).toBe(CADENCE_V2_NOTE);
-  });
-
-  it("v3: the chip stays and its note is gone", () => {
-    renderGenerator("v3");
-    expect(within(card()).getByText("Mes por medio")).toBeTruthy();
-    expect(within(card()).queryByText(CADENCE_V2_NOTE)).toBeNull();
+    expect(chip.nextElementSibling?.textContent).not.toBe(REMOVED_CADENCE_V2_NOTE);
+    expect(within(card()).queryByText(REMOVED_CADENCE_V2_NOTE)).toBeNull();
   });
 
   it("the «Holgura» note is C3's under both engines (not gated)", () => {

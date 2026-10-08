@@ -76,7 +76,6 @@ import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import {
   CADENCE_OUTSIDE_HEADING,
   CADENCE_OUTSIDE_SENTENCE,
-  CADENCE_V2_NOTE,
   SLACK_V3_NOTE,
   cadenceOutsideSundayPool,
   resolveRulePersonId,
@@ -688,9 +687,12 @@ function cadenceNameChip(issue: CadenceNameIssue): string {
     : "Nombre no reconocido en Alabanza";
 }
 
-function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole, engine = "v2" }: {
+function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole }: {
   r: PersonRestriction;
-  /** C6 CTL-1: C3's chip note shows only under v2. */
+  /**
+   * C6 CTL-1 threads the engine here (`engineProp.test.ts` pins the mount). Nothing reads it since
+   * the cutover removed C3's v2-only chip note (ADR-0054); a flip-back restores the gate on it.
+   */
   engine?: SolverEngine;
   onDelete: () => void;
   onEdit: () => void;
@@ -728,16 +730,11 @@ function RestrictionCard({ r, onDelete, onEdit, nameIssue, exactOverlapRole, eng
               {`holgura ${r.fairnessSlack} · ${SLACK_V3_NOTE}`}
             </span>
           )}
-          {/* C3 §6.6: the note is its own span so C6 can hide it under v3 (CTL-1). */}
+          {/* C3's v2-only note beside this chip went at the cutover (ADR-0054); a flip-back restores it. */}
           {r.sundayCadence === "alternate" && (
-            <>
-              <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30">
-                Mes por medio
-              </span>
-              {engine === "v2" && (
-                <span className="font-body text-[10px] text-mono-500 self-center">{CADENCE_V2_NOTE}</span>
-              )}
-            </>
+            <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30">
+              Mes por medio
+            </span>
           )}
           {r.sundayCadence === "alternate" && nameIssue && (
             <span className="font-label text-[10px] px-1.5 py-0.5 rounded-full bg-warning-strong/10 text-warning-strong border border-warning-strong/30">
@@ -951,7 +948,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
             Solo cambia cuántas veces dirige domingo; en BGV y Coro participa igual que todos. Dirige domingo
             un mes sí y uno no: le toca el mes siguiente a uno en que no dirigió domingo, si puede al menos un
             domingo. En el mes que no le toca, de preferencia dirige un sábado. Solo aplica si está en Líderes
-            Domingo. Aplica con el nuevo solver; el solver actual no lo usa.
+            Domingo.
           </p>
         )}
       </div>
