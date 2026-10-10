@@ -124,7 +124,7 @@ export const authOptions: NextAuthOptions = {
 
         // A3 §4: `srVerification` is present only when the credentials
         // authorization above proved isolated-verification run ownership. With it
-        // absent the created document is byte-for-byte the historical one.
+        // absent the created document is the historical one plus its private dotted id.
         await createLoginEvent({
           client: writeClient,
           memberId: member._id,

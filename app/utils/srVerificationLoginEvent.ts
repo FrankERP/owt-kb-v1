@@ -3,7 +3,7 @@ import "server-only";
 // Service Readiness A3 §4 "Run-owned credentials login events".
 //
 // A real credentials sign-in fires `auth.ts`'s `events.signIn`, which creates a
-// random-id `loginEvent`. During deployed verification those documents are RUN
+// `loginEvent` with a random private dotted id (`loginEvent.<uuid>`). During deployed verification those documents are RUN
 // SIDE EFFECTS, and the run must be able to delete exactly its own — by explicit
 // `_id`, never by a broad `*[_type == "loginEvent"]`, email, member or time-range
 // query. That requires stamping ownership at creation time, which is what this
@@ -11,8 +11,8 @@ import "server-only";
 //
 // The ownership stamp is applied ONLY when every one of these holds:
 //   1. the request carried the dedicated verification headers (an ordinary
-//      sign-in with no headers keeps today's behaviour byte-for-byte, and does
-//      not even read the lease);
+//      sign-in with no headers keeps today's behaviour apart from the private
+//      dotted id, and does not even read the lease);
 //   2. the header marker equals the published verification marker value;
 //   3. the deployment's own environment passes the full isolated-verification
 //      check (marker, project `scbxomq9`, dataset
@@ -311,6 +311,8 @@ export function evaluateVerificationOwnership({
  * ------------------------------------------------------------------ */
 
 export interface LoginEventDocument {
+  /** `loginEvent.<uuid v4>`: dotted, so private — Sanity never serves it without a token. */
+  _id: string;
   _type: "loginEvent";
   member: { _type: "reference"; _ref: string };
   email: string;
@@ -336,9 +338,19 @@ export function verificationOwnershipFields(
 }
 
 /**
- * Build the document. With `ownership: null` the result is byte-for-byte the
- * document `auth.ts` has always written — the ordinary sign-in path gains no
- * field, no marker and no behaviour change.
+ * The default id source: a random UUID v4 from the runtime's global Web Crypto. It is
+ * reached through a parameter, never `import … from "node:crypto"`, so this module
+ * keeps no static import (see the header).
+ */
+function randomLoginEventUuid(): string {
+  return globalThis.crypto.randomUUID();
+}
+
+/**
+ * Build the document. With `ownership: null` the result is the document `auth.ts`
+ * has always written plus a private dotted `_id` (`loginEvent.<uuid>`), which
+ * encodes nothing about the member, email, provider or time — the ordinary
+ * sign-in path gains no other field, no marker and no behaviour change.
  */
 export function buildLoginEventDocument({
   memberId,
@@ -346,14 +358,17 @@ export function buildLoginEventDocument({
   provider,
   timestamp,
   ownership = null,
+  newId = randomLoginEventUuid,
 }: {
   memberId: string;
   email: string;
   provider: string;
   timestamp: string;
   ownership?: VerificationOwnership | null;
+  newId?: () => string;
 }): LoginEventDocument {
   return {
+    _id: `loginEvent.${newId()}`,
     _type: "loginEvent",
     member: { _type: "reference", _ref: memberId },
     email,
@@ -397,6 +412,9 @@ export interface LoginEventWriter {
  * Create the login event and CAPTURE the returned `_id`. For an owned event the
  * redacted `verification_login_event_created` record is emitted so the harness
  * can reconcile the exact created ids against its expected attempt ids.
+ *
+ * One `create`, never retried and never `createIfNotExists`: a failure (an id that
+ * already exists included) rejects, and `auth.ts` logs it without failing sign-in.
  */
 export async function createLoginEvent({
   client,
@@ -406,6 +424,7 @@ export async function createLoginEvent({
   timestamp,
   ownership = null,
   logger = console,
+  newId = randomLoginEventUuid,
 }: {
   client: LoginEventWriter;
   memberId: string;
@@ -414,9 +433,10 @@ export async function createLoginEvent({
   timestamp: string;
   ownership?: VerificationOwnership | null;
   logger?: Pick<Console, "log">;
+  newId?: () => string;
 }): Promise<string | null> {
   const created = await client.create(
-    buildLoginEventDocument({ memberId, email, provider, timestamp, ownership }),
+    buildLoginEventDocument({ memberId, email, provider, timestamp, ownership, newId }),
   );
   const eventId = typeof created?._id === "string" && created._id.length ? created._id : null;
   if (ownership) {

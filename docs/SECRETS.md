@@ -292,7 +292,9 @@ cannot be recovered — see [Retrievability](#retrievability-assume-nothing-is-r
   dry-run half of `scripts/` migrations. **Needed to read `fairnessMonth`** (solver v3
   C2): its ids are dotted, so private — without the token they are invisible, so the
   fairness ledger GET fails closed (`500 fairness_unavailable`) and, after C6, Auto refuses
-  to solve; the record writer refuses to read without it too.
+  to solve; the record writer refuses to read without it too. **Needed to read `loginEvent`**:
+  new ids are dotted, so private — without the token Actividad (`GET /api/admin/login-events`)
+  fails closed (`500 activity_unavailable`).
 - **Role needed:** Viewer.
 - **Platforms:** same two Vercel scopes as above, plus local `.env.local`. **Not**
   in GitHub Actions. The fairness ledger reads it on the `Preview, Production` pair and in

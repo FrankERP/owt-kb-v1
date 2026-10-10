@@ -13,11 +13,15 @@
 // assertion that catches that is the LEGACY member — no `ministries` field at
 // all, which is every member predating the kids feature. A bare
 // `"worship" in ministries` hides all of them.
+//
+// The login-events route also fails CLOSED without `SANITY_API_READ_TOKEN`: login
+// events have private (dotted) ids, so an untokened read would answer an empty list
+// with no error. The token is stubbed for every test in this file.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { evaluate, parse } from "groq-js";
 
-const h = vi.hoisted(() => ({ requireActiveManager: vi.fn() }));
+const h = vi.hoisted(() => ({ requireActiveManager: vi.fn(), serverFetch: vi.fn() }));
 
 vi.mock("@/app/utils/authGuards", () => ({
   requireActiveManager: () => h.requireActiveManager(),
@@ -30,7 +34,7 @@ async function groq(query: string, params: Record<string, unknown> = {}) {
 }
 
 vi.mock("@/sanity/lib/serverClient", () => ({
-  serverClient: { fetch: (q: string, p?: Record<string, unknown>) => groq(q, p) },
+  serverClient: { fetch: (q: string, p?: Record<string, unknown>) => h.serverFetch(q, p) },
   writeClient: { create: vi.fn(), patch: vi.fn() },
 }));
 
@@ -49,6 +53,8 @@ const DATASET = [
   { _id: "m-empty", _type: "teamMembers", member_name: "Dani Vacío", email: "dani@example.com", role: "member", ministries: [] },
   { _id: "ev-1", _type: "loginEvent", member: { _ref: "m-kids" }, email: "beto@example.com", provider: "google", timestamp: "2026-08-18T10:00:00Z" },
   { _id: "ev-2", _type: "loginEvent", member: { _ref: "m-legacy" }, email: "ana@example.com", provider: "google", timestamp: "2026-08-19T10:00:00Z" },
+  // A private (dotted) id, the shape every new event has: read alongside the undotted ones.
+  { _id: "loginEvent.33333333-3333-4333-8333-333333333333", _type: "loginEvent", member: { _ref: "m-legacy" }, email: "ana@example.com", provider: "credentials", timestamp: "2026-08-20T10:00:00Z" },
 ];
 
 import { GET as membersGET } from "@/app/api/admin/members/route";
@@ -65,6 +71,12 @@ async function idsFrom(res: Response): Promise<string[]> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  h.serverFetch.mockImplementation((q: string, p?: Record<string, unknown>) => groq(q, p));
+  vi.stubEnv("SANITY_API_READ_TOKEN", "test-read-token");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("GET /api/admin/members — ministry scoping", () => {
@@ -115,6 +127,43 @@ describe("GET /api/admin/login-events — ministry scoping", () => {
   it("still joins login events onto the members it does return", async () => {
     signedInAs("admin");
     const body = (await (await loginEventsGET()).json()) as { _id: string; loginCount: number }[];
-    expect(body.find((m) => m._id === "m-legacy")!.loginCount).toBe(1);
+    expect(body.find((m) => m._id === "m-legacy")!.loginCount).toBe(2);
+  });
+
+  it("reads dotted and undotted events alike, newest first", async () => {
+    signedInAs("admin");
+    const body = (await (await loginEventsGET()).json()) as {
+      _id: string;
+      providers: string[];
+      events: { _id: string }[];
+    }[];
+    const legacy = body.find((m) => m._id === "m-legacy")!;
+    expect(legacy.providers.sort()).toEqual(["credentials", "google"]);
+    expect(legacy.events[0]._id).toBe("loginEvent.33333333-3333-4333-8333-333333333333");
+  });
+});
+
+describe("GET /api/admin/login-events — read token (fail closed)", () => {
+  it.each([
+    ["admin", ""],
+    ["admin", undefined],
+    ["super-admin", ""],
+    ["super-admin", undefined],
+  ])("as %s with the read token %j: 500 activity_unavailable and no data read", async (role, token) => {
+    signedInAs(role);
+    vi.stubEnv("SANITY_API_READ_TOKEN", token as string);
+    const res = await loginEventsGET();
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "activity_unavailable" });
+    expect(h.serverFetch).not.toHaveBeenCalled();
+  });
+
+  it.each([["test-read-token"], [undefined]])("still answers 403 first when unauthorized (read token %j)", async (token) => {
+    vi.stubEnv("SANITY_API_READ_TOKEN", token as string);
+    h.requireActiveManager.mockResolvedValue(null);
+    expect((await loginEventsGET()).status).toBe(403);
+    signedInAs("content-editor");
+    expect((await loginEventsGET()).status).toBe(403);
+    expect(h.serverFetch).not.toHaveBeenCalled();
   });
 });

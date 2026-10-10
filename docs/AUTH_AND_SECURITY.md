@@ -51,8 +51,8 @@ members (`isMemberActive`).
 
 ## Sign-in side effects (`events.signIn`)
 
-- Writes a `loginEvent` doc (member ref, email, provider, timestamp) — powers the admin activity
-  dashboard.
+- Writes a `loginEvent` doc with a private dotted id (`loginEvent.<uuid>`) (member ref, email,
+  provider, timestamp) — powers the admin activity dashboard.
 - On Google sign-in with an image, validates the host is exactly `lh3.googleusercontent.com`,
   then patches `googlePhotoUrl` on the member. All best-effort (try/catch, log-only).
 
