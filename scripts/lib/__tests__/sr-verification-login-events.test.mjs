@@ -4,7 +4,7 @@
 // cleanup half, offline.
 //
 // What these tests defend: a verification run creates `loginEvent` documents with
-// RANDOM ids (auth.ts does not control them), so cleanup is the one place where a
+// RANDOM ids the harness cannot predict, so cleanup is the one place where a
 // broad delete would be tempting. The rules proven here are that the ONLY query
 // issued is the exact run + deployment ownership predicate, that the only ids ever
 // deleted are ids that predicate returned AND that revalidated against the full

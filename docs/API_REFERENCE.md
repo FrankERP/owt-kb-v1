@@ -215,8 +215,8 @@ document byte-for-byte unchanged.
 `app/api/auth/[...nextauth]/route.ts` re-exports `GET, POST` from [`auth.ts`](../auth.ts).
 NextAuth handler with three providers (Google web OAuth, `google-native` credentials verifying a
 native Google ID token, email/password bcrypt). **Public** (this *is* the auth endpoint), but
-each provider rejects non-members / disabled members. Side effects: writes a `loginEvent` on
-every sign-in; patches `googlePhotoUrl` on Google sign-in; the `jwt` callback enforces
+each provider rejects non-members / disabled members. Side effects: writes a `loginEvent` (private
+dotted id) on every sign-in; patches `googlePhotoUrl` on Google sign-in; the `jwt` callback enforces
 super-admin-only impersonation and live role/revocation refresh. Full detail in
 [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md).
 
@@ -445,7 +445,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 | `/api/admin/members/[id]` | PATCH, DELETE | **super-admin** | PATCH validates role/`memberType`/`instruments`/`ministries`/`managesMinistries` (each applied only when present, so an unrelated edit cannot wipe a privilege), sets `notifPrefs.email` → `revalidateServiceViews()` + `revalidatePath("/me")`. DELETE removes. |
 | `/api/admin/members/[id]/photo` | POST | **super-admin** | Same photo validation as `/api/me/photo`; sets target's `profilePhoto`. (No revalidation.) |
 | `/api/admin/set-password` | POST | **super-admin** | `{sanityMemberId, password}` (≥8) → sets `passwordHash` (cost 12). |
-| `/api/admin/login-events` | GET | admin/super-admin | Per-member last login/active, count, providers, recent 20 events. |
+| `/api/admin/login-events` | GET | admin/super-admin | Per-member last login/active, count, providers, recent 20 events. 500 `activity_unavailable` without `SANITY_API_READ_TOKEN`. |
 
 ### Solver
 - **`POST /api/admin/solve`** (`maxDuration=60`) — the auto-scheduler. If `OWT_SOLVER_URL` is

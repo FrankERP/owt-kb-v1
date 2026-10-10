@@ -469,11 +469,13 @@ mints every `_key`, the hash and the stamps; Studio governs it read-only like `s
 ## `loginEvent` — Auth audit log
 
 File: [`loginEvent.ts`](../sanity/schemas/loginEvent.ts). Append-only. `{ member → teamMembers,
-email, provider, timestamp }`. Created programmatically by the app on every sign-in (never through
-the Studio UI). Powers the admin login/activity dashboard (`/api/admin/login-events`). It still
-declares `__experimental_actions: ["read", "delete"]`, but that property was **removed in Sanity v5
-and is inert** — it is not restricting anything. See [Studio](#studio) for the mechanisms that
-actually work.
+email, provider, timestamp }`. Created programmatically by the app on every
+sign-in (never through the Studio UI). New events have a private dotted id (`loginEvent.<uuid>`,
+minted by `buildLoginEventDocument` in `app/utils/srVerificationLoginEvent.ts`), so they are never
+served without a token; readers use `SANITY_API_READ_TOKEN`. Powers the admin login/activity
+dashboard (`/api/admin/login-events`), which fails closed (`500 activity_unavailable`) without that
+token. Studio governs it delete-only through `app/utils/studioProtection.ts` and `readOnly: true` on
+the schema (see [Studio](#studio)).
 
 ---
 
@@ -747,8 +749,7 @@ The internal types are additionally `hidden: true`, and the internal *fields*
 `last_transition`, and the special coordinator body) are `hidden` + `readOnly` individually.
 
 > **⚠️ `__experimental_actions` is NOT the mechanism.** It was removed in Sanity v5 and is **inert**
-> — a test asserts no protected schema file contains it. The one remaining occurrence, on
-> `loginEvent`, therefore does nothing and is not load-bearing. Do not "fix" protection by adding it.
+> — a test asserts no protected schema file contains it. Do not "fix" protection by adding it.
 
 **Deploy note:** the Studio protection lives in app code and is active as soon as the app deploys,
 but internal schema *types* only appear in a deployed Studio after a Sanity schema deploy — see

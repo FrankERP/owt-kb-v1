@@ -13,6 +13,14 @@ export async function GET() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Login events have private (dotted) ids: without the read token the events query
+  // below answers an empty list with no error, which would show every member as
+  // never having signed in. Refuse instead (the fairnessLedgerRead.ts precedent).
+  if (!process.env.SANITY_API_READ_TOKEN) {
+    console.error("[login-events] SANITY_API_READ_TOKEN is not set: login events are private, refusing to read");
+    return NextResponse.json({ error: "activity_unavailable" }, { status: 500 });
+  }
+
   const [members, events] = await Promise.all([
     // Same ministry scoping as GET /api/admin/members: worship admins see
     // worship members only, super-admins see everyone.

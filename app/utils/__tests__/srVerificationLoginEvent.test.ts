@@ -1,8 +1,10 @@
 // Service Readiness A3 §4 "Run-owned credentials login events".
 //
 // What these tests defend:
-//   · an ordinary credentials sign-in is byte-for-byte unchanged, and performs no
-//     extra read at all;
+//   · an ordinary credentials sign-in is unchanged apart from its private dotted
+//     `_id`, and performs no extra read at all;
+//   · every document gets a fresh random `loginEvent.<uuid>` id that encodes nothing
+//     about the member, email, provider or time;
 //   · ownership is stamped ONLY when the deployment is the isolated verification
 //     deployment AND the claimed candidate SHA / deployment id are this
 //     deployment's own AND the live dataset lease owner is exactly
@@ -42,6 +44,7 @@ import {
   resolveVerificationOwnership,
   verificationOwnershipFields,
   type LeaseLike,
+  type LoginEventDocument,
   type VerificationOwnership,
 } from "../srVerificationLoginEvent";
 
@@ -59,6 +62,9 @@ const OWNERSHIP: VerificationOwnership = {
 };
 
 const NOW = "2026-07-25T18:00:00.000Z";
+
+/** `loginEvent.` + a random UUID v4: the dotted (private) id every new event gets. */
+const DOTTED_UUID_V4 = /^loginEvent\.[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 function verificationEnv(over: Record<string, string | undefined> = {}) {
   return {
@@ -162,22 +168,36 @@ describe("verification header contract", () => {
 // ── Ordinary sign-in is untouched ───────────────────────────────────────────
 
 describe("ordinary credentials sign-in", () => {
-  it("builds the historical document byte-for-byte", () => {
+  it("builds the historical document plus its private dotted id", () => {
     const doc = buildLoginEventDocument({
       memberId: "member-1",
       email: "someone@example.com",
       provider: "credentials",
       timestamp: NOW,
+      newId: () => "11111111-1111-4111-8111-111111111111",
     });
     expect(doc).toEqual({
+      _id: "loginEvent.11111111-1111-4111-8111-111111111111",
       _type: "loginEvent",
       member: { _type: "reference", _ref: "member-1" },
       email: "someone@example.com",
       provider: "credentials",
       timestamp: NOW,
     });
-    expect(Object.keys(doc)).toEqual(["_type", "member", "email", "provider", "timestamp"]);
+    expect(Object.keys(doc)).toEqual(["_id", "_type", "member", "email", "provider", "timestamp"]);
     for (const field of LOGIN_EVENT_OWNERSHIP_FIELDS) expect(doc).not.toHaveProperty(field);
+  });
+
+  it("mints a fresh random dotted id with the default generator", () => {
+    const input = { memberId: "member-1", email: "someone@example.com", provider: "credentials", timestamp: NOW };
+    const a = buildLoginEventDocument(input);
+    const b = buildLoginEventDocument(input);
+    expect(a._id).toMatch(DOTTED_UUID_V4);
+    expect(b._id).toMatch(DOTTED_UUID_V4);
+    expect(a._id).not.toBe(b._id);
+    for (const id of [a._id, b._id]) {
+      for (const leak of ["member-1", "someone", "example.com", "credentials", NOW]) expect(id).not.toContain(leak);
+    }
   });
 
   it("resolves no ownership and performs NO lease read when there are no headers", async () => {
@@ -239,7 +259,9 @@ describe("valid verification markers", () => {
     expect(doc.attemptId).toBe(ATTEMPT_ID);
     expect(doc.candidateSha).toBe(SHA);
     expect(doc.deploymentId).toBe(DEPLOYMENT_ID);
+    expect(doc._id).toMatch(DOTTED_UUID_V4);
     expect(Object.keys(doc)).toEqual([
+      "_id",
       "_type",
       "member",
       "email",
@@ -298,6 +320,45 @@ describe("valid verification markers", () => {
       }),
     ).resolves.toBeNull();
     expect(JSON.parse(log.mock.calls[0][0] as string).eventId).toBeNull();
+  });
+
+  it("returns the id the store reports for a provided dotted id", async () => {
+    const log = vi.fn();
+    const create = vi.fn(async (doc: LoginEventDocument) => ({ _id: doc._id }));
+    const id = await createLoginEvent({
+      client: { create },
+      memberId: "m",
+      email: "e@sr-verify.invalid",
+      provider: "credentials",
+      timestamp: NOW,
+      ownership: OWNERSHIP,
+      logger: { log },
+      newId: () => "22222222-2222-4222-8222-222222222222",
+    });
+    expect(id).toBe("loginEvent.22222222-2222-4222-8222-222222222222");
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create.mock.calls[0][0]._id).toBe("loginEvent.22222222-2222-4222-8222-222222222222");
+    expect(JSON.parse(log.mock.calls[0][0] as string).eventId).toBe(id);
+  });
+
+  it("does not retry a create that fails because the id exists", async () => {
+    const conflict = Object.assign(new Error("Document by ID loginEvent.x already exists"), { statusCode: 409 });
+    const create = vi.fn().mockRejectedValue(conflict);
+    const log = vi.fn();
+    await expect(
+      createLoginEvent({
+        client: { create },
+        memberId: "m",
+        email: "e@sr-verify.invalid",
+        provider: "credentials",
+        timestamp: NOW,
+        ownership: OWNERSHIP,
+        logger: { log },
+      }),
+    ).rejects.toBe(conflict);
+    expect(create).toHaveBeenCalledTimes(1);
+    // No record for an event that does not exist.
+    expect(log).not.toHaveBeenCalled();
   });
 
   it("keeps the redacted record shape closed", () => {
