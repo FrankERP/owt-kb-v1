@@ -281,11 +281,17 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
                   key={w.month}
                   className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-accent/25 text-mono-500"
                 >
-                  {chipText(w)}
+                  {chipText(w, data.balanceStart)}
                 </li>
               ))}
             </ul>
-            {data.recordsSince === null && <p className="font-body text-xs text-mono-500">{COPY.empty}</p>}
+            {data.recordsSince === null && (
+              <p className="font-body text-xs text-mono-500">
+                {data.balanceStart !== null && data.window.some((w) => monthIndex(w.month) < monthIndex(data.balanceStart!))
+                  ? COPY.beforeStart(monthYear(data.balanceStart))
+                  : COPY.empty}
+              </p>
+            )}
             <SegmentedControl
               label="Línea"
               size="sm"

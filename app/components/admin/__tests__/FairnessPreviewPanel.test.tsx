@@ -51,6 +51,7 @@ function ledger(patch: Partial<FairnessLedgerResponse> = {}): FairnessLedgerResp
       { month: "2026-10", record: { rev: "r10", source: "auto", engine: "v3", environment: "production", recordedAt: "2026-10-03T15:00:00Z" } },
     ],
     recordsSince: "2026-10",
+    balanceStart: null,
     horizon: [{ month: "2026-11", record: null, storedServices: 0, recordBinds: false }],
     people: [
       person("m-alma", "Alma", { tabs: { window: { DL: fig(8, 0), BGV: fig(13, 2) }, cumulative: { DL: fig(8, 0) } } }),

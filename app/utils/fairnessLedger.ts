@@ -5,7 +5,8 @@
 // eligibility records, the stored voice services and the members, it computes for every
 // person and line the exact share of the seats she was owed, the seats she received and
 // the balance, per month, over the 3-month window and cumulatively; and X1's cadence
-// state. `fixtures/fairness/golden.json` is its contract with the v3 solver (C5), which
+// state. A month before the balance start (`LedgerInput.balanceStart`, ADR-0054) is read
+// for who was listed and when a line began, and counts toward no balance. `fixtures/fairness/golden.json` is its contract with the v3 solver (C5), which
 // computes the same formula for its plan: both suites assert the file.
 //
 // NEUTRAL AND DETERMINISTIC (LG-16): no "use client", no `server-only`, no Sanity client,
@@ -68,6 +69,14 @@ export interface LedgerService {
 
 export interface LedgerInput {
   target: string;
+  /**
+   * The first month whose record counts toward a balance (`YYYY-MM`; ADR-0054), or absent /
+   * `null` for no cut. A record before it still names the people, their first Sunday-lead
+   * month (`firstRecordedIn`) and their exemption; it adds nothing to `window`,
+   * `cumulative`, `tabs` or `sang`, and its month carries the `before_balance_start` note.
+   * The GET passes `FAIRNESS_BALANCE_START`; the golden fixture and C4's preview pass none.
+   */
+  balanceStart?: string | null;
   records: LogicalRecord[];
   services: LedgerService[];
   members: Array<{ id: string; name: string; unavailableDates: string[] }>;
@@ -603,7 +612,7 @@ function sumLines(
 }
 
 interface LedgerRun {
-  output: Pick<FairnessLedgerResponse, "window" | "recordsSince" | "people" | "diagnostics">;
+  output: Pick<FairnessLedgerResponse, "window" | "recordsSince" | "balanceStart" | "people" | "diagnostics">;
   zeroChecks: Array<{ month: string; serviceId: string; key: string; sum: Q }>;
 }
 
@@ -620,7 +629,11 @@ function run(input: LedgerInput): LedgerRun {
     if (monthIndex(r.month) < targetIndex) records.set(r.month, r);
   }
   const recordedMonths = [...records.keys()].sort(compareCodepoint);
-  const recordsSince = recordedMonths[0] ?? null;
+  // ADR-0054 — a record before the balance start is read, but its month counts for nothing.
+  const balanceStart = input.balanceStart ?? null;
+  const counts = (month: string) => balanceStart === null || monthIndex(month) >= monthIndex(balanceStart);
+  const countingMonths = recordedMonths.filter(counts);
+  const recordsSince = countingMonths[0] ?? null;
 
   const { kept, secondSeats, duplicateTargets, counted } = seatStep(input.services);
   const before = (date: string) => monthIndex(date.slice(0, 7)) < targetIndex;
@@ -654,8 +667,8 @@ function run(input: LedgerInput): LedgerRun {
     for (const p of r.people) latestNames.set(p.memberId, p.name);
   }
 
-  const windowResults = windowMonths.map((m) => monthResults.get(m)).filter((m): m is MonthResult => !!m);
-  const cumulativeResults = [...monthResults.values()];
+  const windowResults = windowMonths.filter(counts).map((m) => monthResults.get(m)).filter((m): m is MonthResult => !!m);
+  const cumulativeResults = countingMonths.map((m) => monthResults.get(m)!);
   const latestWindowRecord = [...windowMonths].reverse().map((m) => records.get(m)).find((r) => !!r);
 
   const people: FairnessPerson[] = [...ids].sort(compareCodepoint).map((id) => {
@@ -667,7 +680,8 @@ function run(input: LedgerInput): LedgerRun {
       for (const x of [...kept, ...secondSeats]) {
         if (x.memberId === id && x.date.slice(0, 7) === month) held[x.roleKey] = (held[x.roleKey] ?? 0) + 1;
       }
-      const lines: Partial<Record<LineKey, Figures>> = result ? sumLines([result], id).lines : {};
+      const counted = counts(month);
+      const lines: Partial<Record<LineKey, Figures>> = result && counted ? sumLines([result], id).lines : {};
       return {
         month,
         recorded: !!record,
@@ -680,9 +694,11 @@ function run(input: LedgerInput): LedgerRun {
           .sort((a, b) => compareCodepoint(a.date, b.date) || compareCodepoint(a.serviceId, b.serviceId) || ROLE_KEYS.indexOf(a.roleKey) - ROLE_KEYS.indexOf(b.roleKey)),
         notes: !record
           ? [{ code: "unrecorded_month" }]
-          : record.people.some((p) => p.memberId === id)
-            ? (result?.notes.get(id) ?? [])
-            : sortNotes([{ code: "not_listed" }, ...(result?.notes.get(id) ?? [])]),
+          : !counted
+            ? [{ code: "before_balance_start" }]
+            : record.people.some((p) => p.memberId === id)
+              ? (result?.notes.get(id) ?? [])
+              : sortNotes([{ code: "not_listed" }, ...(result?.notes.get(id) ?? [])]),
       };
     });
     const windowSum = sumLines(windowResults, id);
@@ -692,7 +708,7 @@ function run(input: LedgerInput): LedgerRun {
       const person = records.get(month)!.people.find((p) => p.memberId === id);
       for (const k of ROLE_KEYS) if (person?.roles[k] === "in" && !firstRecordedIn[k]) firstRecordedIn[k] = month;
     }
-    const recordedWindow = windowMonths.filter((m) => records.has(m));
+    const recordedWindow = windowMonths.filter((m) => records.has(m) && counts(m));
     return {
       memberId: id,
       name: exists ? members.get(id)!.name : (latestNames.get(id) ?? ""),
@@ -715,6 +731,7 @@ function run(input: LedgerInput): LedgerRun {
     output: {
       window: windowMonths.map((month) => ({ month, record: records.has(month) ? summary(records.get(month)!) : null })),
       recordsSince,
+      balanceStart,
       people,
       diagnostics: {
         duplicateTargets,
@@ -727,10 +744,10 @@ function run(input: LedgerInput): LedgerRun {
 }
 
 /**
- * IF2-10 — the ledger's entry point: the GET's `window`, `recordsSince`, `people` and
- * `diagnostics` (RD-3). Same input → same output (LG-16).
+ * IF2-10 — the ledger's entry point: the GET's `window`, `recordsSince`, `balanceStart`,
+ * `people` and `diagnostics` (RD-3). Same input → same output (LG-16).
  */
-export function computeFairnessLedger(input: LedgerInput): Pick<FairnessLedgerResponse, "window" | "recordsSince" | "people" | "diagnostics"> {
+export function computeFairnessLedger(input: LedgerInput): Pick<FairnessLedgerResponse, "window" | "recordsSince" | "balanceStart" | "people" | "diagnostics"> {
   return run(input).output;
 }
 

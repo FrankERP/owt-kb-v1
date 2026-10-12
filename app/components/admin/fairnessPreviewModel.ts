@@ -15,6 +15,7 @@ import type { EligibilityResult } from "@/app/utils/fairnessEligibility";
 import {
   FAIRNESS_PUT_REFUSALS,
   NOTE_CODES,
+  monthIndex,
   shiftMonth,
   tabOfLine,
   type FairnessLedgerResponse,
@@ -85,6 +86,7 @@ export const COPY = {
   error: "No se pudo leer el saldo de equidad.",
   retry: "Reintentar",
   empty: "Todavía no hay meses registrados: el saldo empieza con el primer registro.",
+  beforeStart: (start: string) => `El saldo empieza en ${start}: los meses anteriores no cuentan.`,
   outGroup: (n: number) => `Fuera de esta línea (${n})`,
   deleted: "Miembro eliminado",
   footer:
@@ -112,10 +114,14 @@ export const ROLE_LABEL: Readonly<Record<RoleKey, string>> = {
   "Sat.Choir": "Sáb Coro",
 };
 
-/** A window chip (§8): «{ago}: registrado» · «{sep}: reconstruido» · «{oct}: sin registro, no cuenta». */
-export function chipText(entry: FairnessLedgerResponse["window"][number]): string {
+/**
+ * A window chip (§8): «{ago}: registrado» · «{sep}: reconstruido» · «{oct}: sin registro, no cuenta»,
+ * and «{oct}: antes del inicio, no cuenta» for a recorded month before the balance start (ADR-0054).
+ */
+export function chipText(entry: FairnessLedgerResponse["window"][number], balanceStart: string | null = null): string {
   const month = monthShort(entry.month);
   if (!entry.record) return `${month}: sin registro, no cuenta`;
+  if (balanceStart !== null && monthIndex(entry.month) < monthIndex(balanceStart)) return `${month}: antes del inicio, no cuenta`;
   if (entry.record.source === "reconstructed") return `${month}: reconstruido`;
   const suffix = entry.record.environment === "preview" ? " · desde dev" : entry.record.environment === "local" ? " · local" : "";
   return `${month}: registrado${suffix}`;
@@ -139,6 +145,8 @@ function noteSentence(note: Note, month: string, nameOf: (id: string) => string,
   switch (note.code) {
     case "unrecorded_month":
       return `${mes}: sin registro, no cuenta.`;
+    case "before_balance_start":
+      return `${mes}: antes del inicio del saldo, no cuenta.`;
     case "not_listed":
       return `No aparece en el registro de ${mes}.`;
     case "role_out":

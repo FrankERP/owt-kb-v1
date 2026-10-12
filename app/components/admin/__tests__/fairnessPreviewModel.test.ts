@@ -75,6 +75,7 @@ function response(people: FairnessPerson[], patch: Partial<FairnessLedgerRespons
       { month: "2026-10", record: { rev: "r10", source: "auto", engine: "v3", environment: "preview", recordedAt: "x" } },
     ],
     recordsSince: "2026-09",
+    balanceStart: null,
     horizon: [{ month: "2026-11", record: null, storedServices: 0, recordBinds: false }],
     people,
     diagnostics: { duplicateTargets: [], notInRecordSeats: 0, unknownMembers: [] },
@@ -104,7 +105,7 @@ describe("labels (§8)", () => {
   });
 
   it("writes the window chips, the environment suffix only on a registered month", () => {
-    expect(response([]).window.map(chipText)).toEqual(["ago: sin registro, no cuenta", "sep: reconstruido", "oct: registrado · desde dev"]);
+    expect(response([]).window.map((w) => chipText(w))).toEqual(["ago: sin registro, no cuenta", "sep: reconstruido", "oct: registrado · desde dev"]);
     expect(chipText({ month: "2026-10", record: { rev: "r", source: "manual", engine: "v3", environment: "local", recordedAt: "x" } })).toBe(
       "oct: registrado · local",
     );

@@ -235,6 +235,12 @@ several exist precisely to stop a plausible-looking change.
   the ONLY mutation path of the type (`createOrReplace` never; the reconstruction actor's guarded
   delete the only delete). Every reader of `fairnessMonth` carries `SANITY_API_READ_TOKEN` or fails
   closed: the ids are dotted, so private, and an untokened read answers «no record» with no error.
+  **Balances count from `FAIRNESS_BALANCE_START`** (`"2026-11"`, `fairnessVocabulary.ts`; ADR-0054):
+  August–October 2026 were planned by v2 with no history, and v3 paid their gaps back in one plan.
+  `computeFairnessLedger` takes it as `balanceStart` and only the ledger GET passes it — never make
+  it a default (the golden fixture and C4's reconstruction preview are August–October). A record
+  before it still feeds who is listed, `firstRecordedIn`, the exemption and `countedSundayLeads`;
+  it adds nothing to `window`, `cumulative`, `tabs` or `sang`. Moving it reopens old balances.
 - **Cache:** admin/API routes that mutate content must call the matching
   `revalidate*` util in `app/utils/revalidate.ts` (or `revalidatePath`), or the
   ISR page stays stale.

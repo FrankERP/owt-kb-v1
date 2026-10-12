@@ -530,7 +530,8 @@ unchanged and remains the engine.
 
 - **Contract `3`.** One request staffs the weekend voice seats of 1–2 calendar months: dated
   services (opaque `id`, `kind`, `fixed`, `counts`, `seats`), people with eligibility already
-  resolved per service, carried balances per line (hundredths), cadence states (`on`/`off`/`out`),
+  resolved per service, carried balances per line (hundredths; the ledger GET's window, counted
+  from November 2026, ADR-0054), cadence states (`on`/`off`/`out`),
   rules (`count`/`pair`/`presence`/`consecutive`, role keys and values resolved by the caller), pins
   by service id, the previous month's facts (`prior`) and a seed. The response carries the
   assignment, unfilled seats with reasons, the pin handshake, violations under a ceiling, every
