@@ -246,7 +246,8 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   `fixtures/fairness/golden.json` is its contract with the v3 solver (C5): both suites assert it.
   `balanceStart` cuts every balance at a month (ADR-0054); **`FAIRNESS_BALANCE_START`**
   ([fairnessVocabulary.ts](../app/utils/fairnessVocabulary.ts), `"2026-11"`) is the ONE value, passed
-  only by the ledger GET's reader.
+  only by the ledger GET's reader, and **`countsTowardBalance`** the ONE boundary rule (the ledger and
+  the panel's chips both read it).
 - **`formatFairnessTenths`, `saldoWords`** ([fairnessFormat.ts](../app/utils/fairnessFormat.ts)) — the ONLY
   fairness-figure formatter: one decimal from a tenths figure computed from the exact value, never
   from hundredths (a sweep refuses code that divides a figure by 10 or 100).

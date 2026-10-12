@@ -776,7 +776,9 @@ Both of the first two are listed by exact `file + operation` in the protected-re
 - `reconstruct-fairness-months.mjs` (run with `tsx`) + `lib/reconstruct*.ts`. **Purpose:** give each past
   month planned before any v3 writer existed a `fairnessMonth` record with `source: "reconstructed"`, so
   the first v3 runs balance against a real past instead of an empty one
-  (`docs/superpowers/specs/2026-10-05-solver-v3-c4-record-reconstruction-design.md`). Each record says who
+  (`docs/superpowers/specs/2026-10-05-solver-v3-c4-record-reconstruction-design.md`). **Since ADR-0054**
+  balances count from November 2026, so the reconstructed months (August, September) now feed only who
+  is listed and `firstRecordedIn`, not a balance; the script itself is unchanged and passes no start. Each record says who
   was eligible, inferred from today's Tipo and rules, join months from the stored seats, the «Mes por
   medio» setting and Frank's corrections; ADR-0050's «Reconstruction of past months» records the rules.
   Every write goes through C2's one write executor (actor `reconstruction`), past months only, and only
@@ -799,7 +801,9 @@ Both of the first two are listed by exact `file + operation` in the protected-re
      It writes `<out>/<time>-dry-run/`: `tabla.md` (per month the services with «cuenta»; per person each
      role's status, reason and «corregido» mark, join months, seats, blocked dates, «Exenta», «Mes por
      medio»; for a «reemplazar» month, what it changes in the stored record, person by person; the presence
-     rules as stored; the balance preview for the run month; the anomalies),
+     rules as stored; the balance preview for the run month — what the records alone imply, with no
+     balance start, so for a run month from November 2026 to January 2027 it is not what Auto carries
+     (ADR-0054); the anomalies),
      `plan.json`, and a `backup-YYYY-MM.json` of every record a replace would overwrite. Stdout: the action
      per month with counts, how many «Mes por medio» settings it found (a loud warning at zero), the plan's
      fingerprint and the two paths.
@@ -812,7 +816,8 @@ Both of the first two are listed by exact `file + operation` in the protected-re
      plan (a voice seat, a «cuenta» flag, an availability date, a correction, a record revision) or a
      replace's backup is missing; then it writes month by month, oldest first, and stops at the first refusal or error (exit 1).
   4. **Dry run again:** every written month must read «sin cambios»; then the «Equidad» preview should show
-     those months «reconstruido». After a failed or partial apply this is the repair: a write that failed
+     those months «reconstruido» (a month before the balance start reads «antes del inicio, no cuenta»
+     instead, ADR-0054). After a failed or partial apply this is the repair: a write that failed
      may have landed.
 - **Rollback:** `… --rollback --months 2026-08 --out ~/owt-private/c4` plans the deletion of intact records
   the reconstruction wrote (any other is refused and listed), backing each up before its plan; after the

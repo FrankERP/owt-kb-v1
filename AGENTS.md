@@ -164,8 +164,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   `executeFairnessMonthWrites` (`fairnessMonthCommit`'s PUT or C4's consented reconstruction
   script; never `createOrReplace`; the reconstruction actor's guarded delete is the only delete). Every reader carries `SANITY_API_READ_TOKEN` or fails
   closed — the dotted ids are private, and an untokened read answers «no record» with no error.
-  Balances count from `FAIRNESS_BALANCE_START` (`2026-11`, ADR-0054), passed only by the GET;
-  an earlier record still feeds who is listed, `firstRecordedIn` and «Mes por medio».
+  Balances count from `FAIRNESS_BALANCE_START` (`2026-11`, ADR-0054), passed only by the GET; an
+  earlier month still feeds who is listed and `firstRecordedIn` (its record) and «Mes por medio» (its seats).
 - **Cache:** admin/API routes that mutate content call the matching `revalidate*`
   (`app/utils/revalidate.ts`) or `revalidatePath`, or the ISR page stays stale.
 - **Auto sends the solver NO fairness history** (`SOLVER_SENDS_HISTORY = false`, ADR-0046):

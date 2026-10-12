@@ -236,6 +236,11 @@ export interface RecordSummary {
  */
 export const FAIRNESS_BALANCE_START = "2026-11";
 
+/** ADR-0054 — whether a month counts toward a balance: the ONE boundary rule, read by the ledger and the panel. */
+export function countsTowardBalance(month: string, balanceStart: string | null): boolean {
+  return balanceStart === null || monthIndex(month) >= monthIndex(balanceStart);
+}
+
 /** IF2-9 — the closed set of notes, in their display order (§8). */
 export const NOTE_CODES = [
   "unrecorded_month",

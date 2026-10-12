@@ -26,13 +26,17 @@ the first month v3 plans. `computeFairnessLedger` takes it as `balanceStart`; th
 (`app/utils/fairnessLedgerRead.ts`) is the one caller that passes it, so the «Equidad · vista
 previa» panel and Auto's carried balances (`v3People.ts`) read the same figures.
 
-A record before the start is still read, for what it says about people and not as a debt:
-who is listed (RD-5), `firstRecordedIn` (the new-lead protection's `dl_since`), the exemption,
-`countedSundayLeads` («Mes por medio» and `prev_dl_leads`) and the seats `held`. It adds
-nothing to `window`, `cumulative`, `tabs`, `sang` or `notInRecordSeats`. Its month carries the
-`before_balance_start` note, and the panel's chip reads «antes del inicio, no cuenta».
-`recordsSince` is the first *counted* recorded month, and the GET returns `balanceStart`.
-No record is deleted or rewritten.
+A month before the start is still read, for what it says about people and not as a debt.
+Its record gives who is listed (RD-5), `firstRecordedIn` (the new-lead protection's `dl_since`)
+and the exemption. Its stored seats give `countedSundayLeads` («Mes por medio» and
+`prev_dl_leads`) and `held`; those never depended on a record. The month adds nothing to
+`window`, `cumulative`, `tabs`, `sang`, `setAsides` or `notInRecordSeats`. A recorded one carries
+the `before_balance_start` note, and the panel's chip reads «antes del inicio, no cuenta».
+`recordsSince` is the first *counted* recorded month, and the GET returns `balanceStart`. One
+function, `countsTowardBalance`, draws the boundary for the ledger and the panel. A person the
+last v3 run planned on a tab is listed in the panel's table even with no window figure, or the
+first month after the start would list everyone as out of the line. No record is deleted or
+rewritten.
 
 ## Rejected
 
@@ -45,11 +49,12 @@ No record is deleted or rewritten.
 - **Accept it.** The window would even out by February, but November and December would be
   planned to pay for v2's months.
 - **Delete or rewrite the August–October records.** Only the reconstruction actor deletes. The
-  records are true, and the new-lead protection and «Mes por medio» need them.
+  records are true, and the new-lead protection needs them.
 - **Make the start a default inside the ledger, or a solver constant.**
   `fixtures/fairness/golden.json` (the contract with C5) is August–October with target
-  November, and C4's reconstruction preview judges August and September themselves. A default
-  would empty both, so the cut is an input that only the GET passes. The solver never sees
+  November, and C4's reconstruction judges August and September themselves. A default would
+  empty both, so the cut is an input that only the GET passes. (C4's balance preview passes no
+  start either: it shows what the records alone imply, and the reconstruction is done.) The solver never sees
   records, only the carried balances the GET already cut.
 - **An environment variable or a Sanity setting.** It is one fixed date. Preview and
   production read the same records, so they must agree, and nothing calls for changing it
@@ -57,9 +62,8 @@ No record is deleted or rewritten.
 
 ## Consequences
 
-Whoever was owed seats in August–October also starts at zero. The largest such balance, 4.8
-seats, belongs to someone who already sings every Sunday. A plan for January
-balances against November and December only, and the window holds three counted months again
+Whoever was owed seats in August–October also starts at zero. A plan for January balances
+against November and December only, and the window holds three counted months again
 from the February plan on. Moving the constant later reopens every balance before it, so
 treat it as fixed history. Removing the cut, or passing no `balanceStart` from the GET, brings
 back the rehearsal's result: November and December paying for v2's months.

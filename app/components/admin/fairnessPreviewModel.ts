@@ -15,7 +15,7 @@ import type { EligibilityResult } from "@/app/utils/fairnessEligibility";
 import {
   FAIRNESS_PUT_REFUSALS,
   NOTE_CODES,
-  monthIndex,
+  countsTowardBalance,
   shiftMonth,
   tabOfLine,
   type FairnessLedgerResponse,
@@ -121,7 +121,7 @@ export const ROLE_LABEL: Readonly<Record<RoleKey, string>> = {
 export function chipText(entry: FairnessLedgerResponse["window"][number], balanceStart: string | null = null): string {
   const month = monthShort(entry.month);
   if (!entry.record) return `${month}: sin registro, no cuenta`;
-  if (balanceStart !== null && monthIndex(entry.month) < monthIndex(balanceStart)) return `${month}: antes del inicio, no cuenta`;
+  if (!countsTowardBalance(entry.month, balanceStart)) return `${month}: antes del inicio, no cuenta`;
   if (entry.record.source === "reconstructed") return `${month}: reconstruido`;
   const suffix = entry.record.environment === "preview" ? " · desde dev" : entry.record.environment === "local" ? " · local" : "";
   return `${month}: registrado${suffix}`;
@@ -185,11 +185,15 @@ export function tabIncludesLine(tab: TabKey, line: LineKey): boolean {
   return tab === "TOTAL" || tabOfLine(line) === tab;
 }
 
-/** One «Motivo» line: the person's window notes for this tab, in the closed set's order, each once. */
+/**
+ * One «Motivo» line: the person's window notes for this tab, in the closed set's order, each once.
+ * `before_balance_start` is left out: it is every person's, and the chips and `COPY.beforeStart` say it once.
+ */
 export function motivo(person: FairnessPerson, tab: TabKey, nameOf: (id: string) => string): string {
   const items: Array<{ order: number; month: string; text: string }> = [];
   for (const m of person.months) {
     for (const note of m.notes) {
+      if (note.code === "before_balance_start") continue;
       if (note.line && !tabIncludesLine(tab, note.line)) continue;
       if (note.code === "exempt" && tab !== "TOTAL") continue;
       items.push({ order: NOTE_CODES.indexOf(note.code), month: m.month, text: noteSentence(note, m.month, nameOf, person.memberId) });
@@ -213,11 +217,16 @@ export interface PreviewRow {
   balance: number;
 }
 
-/** The tab's rows (people in its population at least once in the window), most owed first, and the rest. */
+/**
+ * The tab's rows (people in its population at least once in the window, or given a figure on the
+ * tab by the last v3 run — `planned`), most owed first, and the rest. Without `planned`, the first
+ * month after the balance start (ADR-0054) would list everyone as out of the line.
+ */
 export function tabRows(
   response: FairnessLedgerResponse,
   tab: TabKey,
   extraMotivo: (person: FairnessPerson) => string = () => "",
+  planned: (memberId: string) => boolean = () => false,
 ): { rows: PreviewRow[]; out: PreviewRow[] } {
   const names = new Map(response.people.map((p) => [p.memberId, displayName(p)]));
   const nameOf = (id: string) => names.get(id) ?? COPY.deleted;
@@ -236,7 +245,7 @@ export function tabRows(
       balance: figures ? figures.balance : 0,
     };
   };
-  const inTab = (p: FairnessPerson) => p.tabs.window[tab] !== undefined && !(tab === "TOTAL" && p.exempt);
+  const inTab = (p: FairnessPerson) => (p.tabs.window[tab] !== undefined || planned(p.memberId)) && !(tab === "TOTAL" && p.exempt);
   const rows = response.people
     .filter(inTab)
     .map((p) => row(p, p.tabs.window[tab]))

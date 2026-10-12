@@ -114,6 +114,14 @@ describe("labels (§8)", () => {
     );
   });
 
+  it("marks a recorded month before the balance start, whatever its source (ADR-0054)", () => {
+    expect(response([]).window.map((w) => chipText(w, "2026-10"))).toEqual([
+      "ago: sin registro, no cuenta",
+      "sep: antes del inicio, no cuenta",
+      "oct: registrado · desde dev",
+    ]);
+  });
+
   it("names a deleted member", () => {
     expect(displayName({ name: "Elena", exists: false })).toBe("Elena · ya no está en el equipo");
     expect(displayName({ name: "", exists: false })).toBe("Miembro eliminado");
@@ -146,6 +154,12 @@ describe("«Motivo» (UI-5)", () => {
     ]);
     expect(motivo(twice, "DL", nameOf)).toBe("Mes por medio: sus domingos no cuentan en Dom Lead.");
   });
+
+  it("leaves out the balance start, which the chips say once for everyone", () => {
+    const before = withNotes(alma, "2026-09", [{ code: "before_balance_start" }]);
+    expect(motivo(before, "DL", nameOf)).toBe(motivo(alma, "DL", nameOf));
+    expect(motivo(before, "TOTAL", nameOf)).not.toContain("antes del inicio");
+  });
 });
 
 describe("rows (UI-4)", () => {
@@ -171,6 +185,15 @@ describe("rows (UI-4)", () => {
       person("m-carmen-a", "Carmen Ávila", { tabs: { window: { BGV: fig(2) }, cumulative: {} } }),
     ];
     expect(tabRows(response(tied), "BGV").rows.map((r) => r.name)).toEqual(["Carmen Ávila", "Carmen Soto"]);
+  });
+
+  it("lists a person the last v3 run gave a figure on the tab, with no window figure (ADR-0054)", () => {
+    const planned = (id: string) => id === "m-carmen";
+    const { rows, out } = tabRows(response(people), "BGV", undefined, planned);
+    expect(rows.map((r) => r.name)).toEqual(["Alma", "Iván", "Carmen", "Bruno"]);
+    expect(rows[2]).toMatchObject({ leTocaba: "—", saldo: "—", desde: "—" });
+    expect(out).toEqual([]);
+    expect(tabRows(response(people), "TOTAL", undefined, () => true).out.map((r) => r.name)).toEqual(["Alma"]);
   });
 
   it("leaves an exempt person out of Total", () => {

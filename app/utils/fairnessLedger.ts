@@ -28,6 +28,7 @@ import {
   SATURDAY_KEYS,
   SUNDAY_KEYS,
   compareCodepoint,
+  countsTowardBalance,
   monthIndex,
   roleClassOf,
   tabOfLine,
@@ -73,7 +74,9 @@ export interface LedgerInput {
    * The first month whose record counts toward a balance (`YYYY-MM`; ADR-0054), or absent /
    * `null` for no cut. A record before it still names the people, their first Sunday-lead
    * month (`firstRecordedIn`) and their exemption; it adds nothing to `window`,
-   * `cumulative`, `tabs` or `sang`, and its month carries the `before_balance_start` note.
+   * `cumulative`, `tabs`, `sang`, `setAsides` or `notInRecordSeats`, and its month carries
+   * the `before_balance_start` note. The month's stored seats still feed `held` and
+   * `countedSundayLeads`, which never depended on a record.
    * The GET passes `FAIRNESS_BALANCE_START`; the golden fixture and C4's preview pass none.
    */
   balanceStart?: string | null;
@@ -631,7 +634,7 @@ function run(input: LedgerInput): LedgerRun {
   const recordedMonths = [...records.keys()].sort(compareCodepoint);
   // ADR-0054 — a record before the balance start is read, but its month counts for nothing.
   const balanceStart = input.balanceStart ?? null;
-  const counts = (month: string) => balanceStart === null || monthIndex(month) >= monthIndex(balanceStart);
+  const counts = (month: string) => countsTowardBalance(month, balanceStart);
   const countingMonths = recordedMonths.filter(counts);
   const recordsSince = countingMonths[0] ?? null;
 
@@ -680,21 +683,21 @@ function run(input: LedgerInput): LedgerRun {
       for (const x of [...kept, ...secondSeats]) {
         if (x.memberId === id && x.date.slice(0, 7) === month) held[x.roleKey] = (held[x.roleKey] ?? 0) + 1;
       }
-      const counted = counts(month);
-      const lines: Partial<Record<LineKey, Figures>> = result && counted ? sumLines([result], id).lines : {};
+      const inBalance = counts(month);
+      const lines: Partial<Record<LineKey, Figures>> = result && inBalance ? sumLines([result], id).lines : {};
       return {
         month,
         recorded: !!record,
         listed: !!record?.people.some((p) => p.memberId === id),
         lines,
         held,
-        setAsides: (result?.setAsides ?? [])
+        setAsides: (result && inBalance ? result.setAsides : [])
           .filter((x) => x.memberId === id)
           .map(({ date, serviceId, roleKey, reason }) => ({ date, serviceId, roleKey, reason }))
           .sort((a, b) => compareCodepoint(a.date, b.date) || compareCodepoint(a.serviceId, b.serviceId) || ROLE_KEYS.indexOf(a.roleKey) - ROLE_KEYS.indexOf(b.roleKey)),
         notes: !record
           ? [{ code: "unrecorded_month" }]
-          : !counted
+          : !inBalance
             ? [{ code: "before_balance_start" }]
             : record.people.some((p) => p.memberId === id)
               ? (result?.notes.get(id) ?? [])

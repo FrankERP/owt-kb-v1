@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FairnessLedgerResponse, FairnessPerson, Figures } from "@/app/utils/fairnessVocabulary";
 import FairnessPreviewPanel, { type FairnessPreviewPanelProps } from "../FairnessPreviewPanel";
 import type { SolverConfig } from "../plannerModel";
+import type { EquidadPlan } from "../v3Equidad";
+import type { V3FairnessPerson } from "../v3Wire";
 import { AdminProviders } from "./providersHarness";
 
 const fig = (shareTenths: number, seats: number): Figures => ({
@@ -185,6 +187,27 @@ describe("the content (UI-3, UI-4, UI-5)", () => {
     renderPanel();
     openPanel();
     expect(await screen.findByText("Todavía no hay meses registrados: el saldo empieza con el primer registro.")).toBeTruthy();
+  });
+
+  it("says the balance starts later when every recorded month is before it (ADR-0054)", async () => {
+    answer = async () => ({ ok: true, status: 200, json: async () => ledger({ recordsSince: null, balanceStart: "2026-11" }) });
+    renderPanel();
+    openPanel();
+    expect(await screen.findByText("El saldo empieza en nov 2026: los meses anteriores no cuentan.")).toBeTruthy();
+    expect(screen.getByText("oct: antes del inicio, no cuenta")).toBeTruthy();
+    expect(screen.queryByText("Todavía no hay meses registrados: el saldo empieza con el primer registro.")).toBeNull();
+  });
+
+  it("lists, under v3, a person the last run planned on the tab even with no window figure", async () => {
+    const plan: EquidadPlan = {
+      people: new Map([["m-diego", { tabs: { DL: { seats: 2, tenths: { after: 0 } } } } as unknown as V3FairnessPerson]]),
+      reason: () => "",
+    };
+    renderPanel({ engine: "v3", plan });
+    openPanel();
+    const table = (await screen.findAllByRole("table"))[0];
+    expect(within(table).getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("cell")[0].textContent)).toEqual(["Alma", "Diego", "Bruno"]);
+    expect(screen.queryByRole("button", { name: /Fuera de esta línea/ })).toBeNull();
   });
 
   it("offers no «Registrar» under v2", async () => {

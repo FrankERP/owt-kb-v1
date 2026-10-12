@@ -271,6 +271,24 @@ describe("computeFairnessLedger — properties outside the fixture", () => {
     expect(alma.months[0].held).toEqual({ "Sun.BGV": 2 });
   });
 
+  it("keeps a pre-start month's stored seats (Sunday leads, held) and drops its set-asides", () => {
+    const input: LedgerInput = {
+      ...SPAN,
+      services: [...SPAN.services, service("2026-07-s3", "sunday_role", "2026-07-19", { Lead: ["m-alma"], BGVs: ["m-diego"] })],
+    };
+    const whole = computeFairnessLedger(input);
+    const cut = computeFairnessLedger({ ...input, balanceStart: "2026-08" });
+    const july = (out: typeof whole, id: string) => out.people.find((p) => p.memberId === id)!.months.find((m) => m.month === "2026-07")!;
+    // Seats feed «Mes por medio» and `held` whatever the start: they never came from a record.
+    expect(cut.people.find((p) => p.memberId === "m-alma")!.countedSundayLeads).toEqual(["2026-07-19"]);
+    expect(july(cut, "m-alma").held).toEqual(july(whole, "m-alma").held);
+    // A set-aside explains a balance; before the start there is none to explain.
+    expect(july(whole, "m-diego").setAsides.length).toBeGreaterThan(0);
+    expect(july(cut, "m-diego").setAsides).toEqual([]);
+    expect(whole.diagnostics.notInRecordSeats).toBeGreaterThan(0);
+    expect(cut.diagnostics.notInRecordSeats).toBe(0);
+  });
+
   it("answers no balance at all when every recorded month is before the start", () => {
     const out = computeFairnessLedger({ ...SPAN, balanceStart: "2026-09" });
     expect(out.recordsSince).toBeNull();
