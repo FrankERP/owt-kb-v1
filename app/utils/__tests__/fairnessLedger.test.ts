@@ -237,6 +237,76 @@ describe("computeFairnessLedger — properties outside the fixture", () => {
     expect(alma.sang).toBe(6);
   });
 
+  // ADR-0054 — the balance start: a record before it is read, but its month counts for nothing.
+  it("counts no month before the balance start, and keeps what the records say about people", () => {
+    const withLead: LedgerInput = {
+      ...SPAN,
+      records: SPAN.records.map((r) =>
+        r.month === "2026-06" ? { ...r, people: r.people.map((p) => (p.memberId === "m-alma" ? { ...p, roles: { ...p.roles, "Sun.Lead": "in" as const } } : p)) } : r,
+      ),
+    };
+    const out = computeFairnessLedger({ ...withLead, balanceStart: "2026-08" });
+    expect(out.balanceStart).toBe("2026-08");
+    expect(out.recordsSince).toBe("2026-08");
+    // The window still names all three months and their records.
+    expect(out.window.map((w) => [w.month, w.record?.rev ?? null])).toEqual([
+      ["2026-06", "rev-2026-06"],
+      ["2026-07", "rev-2026-07"],
+      ["2026-08", "rev-2026-08"],
+    ]);
+    const alma = out.people.find((p) => p.memberId === "m-alma")!;
+    // Only August counts: 4/3 → 133; 2 seats.
+    expect(alma.window.BGV).toEqual({ share: 133, received: 200, balance: -67, seats: 2, tenths: { share: 13, balance: -7 } });
+    expect(alma.cumulative.BGV).toEqual(alma.window.BGV);
+    expect(alma.tabs.window.TOTAL).toEqual(alma.window.BGV);
+    expect(alma.sang).toBe(2);
+    expect(alma.months.map((m) => [m.month, m.notes.some((n) => n.code === "before_balance_start"), Object.keys(m.lines)])).toEqual([
+      ["2026-06", true, []],
+      ["2026-07", true, []],
+      ["2026-08", false, ["BGV"]],
+    ]);
+    expect(alma.months[0].notes).toEqual([{ code: "before_balance_start" }]);
+    // What the records say about people is untouched: the first Sunday-lead month, the seats held.
+    expect(alma.firstRecordedIn["Sun.Lead"]).toBe("2026-06");
+    expect(alma.months[0].held).toEqual({ "Sun.BGV": 2 });
+  });
+
+  it("keeps a pre-start month's stored seats (Sunday leads, held) and drops its set-asides", () => {
+    const input: LedgerInput = {
+      ...SPAN,
+      services: [...SPAN.services, service("2026-07-s3", "sunday_role", "2026-07-19", { Lead: ["m-alma"], BGVs: ["m-diego"] })],
+    };
+    const whole = computeFairnessLedger(input);
+    const cut = computeFairnessLedger({ ...input, balanceStart: "2026-08" });
+    const july = (out: typeof whole, id: string) => out.people.find((p) => p.memberId === id)!.months.find((m) => m.month === "2026-07")!;
+    // Seats feed «Mes por medio» and `held` whatever the start: they never came from a record.
+    expect(cut.people.find((p) => p.memberId === "m-alma")!.countedSundayLeads).toEqual(["2026-07-19"]);
+    expect(july(cut, "m-alma").held).toEqual(july(whole, "m-alma").held);
+    // A set-aside explains a balance; before the start there is none to explain.
+    expect(july(whole, "m-diego").setAsides.length).toBeGreaterThan(0);
+    expect(july(cut, "m-diego").setAsides).toEqual([]);
+    expect(whole.diagnostics.notInRecordSeats).toBeGreaterThan(0);
+    expect(cut.diagnostics.notInRecordSeats).toBe(0);
+  });
+
+  it("answers no balance at all when every recorded month is before the start", () => {
+    const out = computeFairnessLedger({ ...SPAN, balanceStart: "2026-09" });
+    expect(out.recordsSince).toBeNull();
+    for (const p of out.people) {
+      expect(p.window).toEqual({});
+      expect(p.cumulative).toEqual({});
+      expect(p.tabs).toEqual({ window: {}, cumulative: {} });
+      expect(p.sang).toBe(0);
+    }
+  });
+
+  it("cuts nothing without a balance start (the golden fixture's case)", () => {
+    const out = computeFairnessLedger(SPAN);
+    expect(out.balanceStart).toBeNull();
+    expect(computeFairnessLedger({ ...SPAN, balanceStart: null })).toEqual(out);
+    expect(computeFairnessLedger({ ...SPAN, balanceStart: "2026-05" })).toEqual({ ...out, balanceStart: "2026-05" });
+  });
+
   it("is independent of input order (LG-16)", () => {
     const reversed: LedgerInput = {
       ...SPAN,

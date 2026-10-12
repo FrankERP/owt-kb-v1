@@ -514,8 +514,12 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   (C2 RD-1 … RD-5; [ADR-0050](adr/0050-the-fairness-balance-is-measured-against-recorded-eligibility.md)):
   for the 3 months before `month`, each person's per-line share, received seats and balance (all
   integer hundredths, positive = owed, `balance = share − received`, plus display `tenths` and the
-  seat count), the cumulative balance since the earliest record, per-month notes and set-asides,
-  `countedSundayLeads` and `firstRecordedIn`; the horizon month(s) with their full logical record
+  seat count), the cumulative balance since the earliest counted record, per-month notes and
+  set-asides, `countedSundayLeads` and `firstRecordedIn`. Balances count only from `balanceStart`
+  (`FAIRNESS_BALANCE_START`, `"2026-11"`; [ADR-0054](adr/0054-the-fairness-balance-starts-in-november-2026.md)):
+  an earlier month adds to no figure and lists no set-aside, an earlier *recorded* month carries the
+  `before_balance_start` note (an unrecorded one keeps `unrecorded_month`), and `recordsSince` is the
+  first counted recorded month; the horizon month(s) with their full logical record
   (or `null`), freezing-service count and `recordBinds`; the effective `engine` and this
   deployment's `environment`. Gated **exactly like `solver-history`** (no session or a
   content-editor → `403`); a malformed `month` or a `horizon` other than `1`/`2` → `400

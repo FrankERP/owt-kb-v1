@@ -1,6 +1,6 @@
 # ADR-0050: El saldo de equidad se mide contra la elegibilidad registrada
 
-**Date:** 2026-10-06 · **Status:** Accepted
+**Date:** 2026-10-06 · **Status:** Accepted, amended by ADR-0054 (balances count from November 2026)
 
 ## Context
 

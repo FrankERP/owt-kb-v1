@@ -8,8 +8,8 @@ import "server-only";
 // imported DIRECTLY (published perspective, no CDN, the read token), every query a
 // `serviceReadQueries.ts` builder with no `published` filter (prior-month drafts count),
 // passes each record through the ONE record-schema check (`parseStoredFairnessMonth`)
-// and hands everything to THE ledger (`computeFairnessLedger`). It performs no
-// authorization: the route gates.
+// and hands everything to THE ledger (`computeFairnessLedger`) with the balance start
+// (`FAIRNESS_BALANCE_START`, ADR-0054). It performs no authorization: the route gates.
 //
 // FAIL CLOSED (RD-2): a record's id is DOTTED, so a read made WITHOUT the read token
 // answers zero records with no error and the past would read as «sin registro» — the
@@ -28,6 +28,7 @@ import { operationalClient } from "@/sanity/lib/operationalClient";
 import { computeFairnessLedger, type LedgerService } from "./fairnessLedger";
 import { parseStoredFairnessMonth } from "./fairnessMonthWriteRequest";
 import {
+  FAIRNESS_BALANCE_START,
   FAIRNESS_UNAVAILABLE_MESSAGE,
   compareCodepoint,
   monthIndex,
@@ -165,7 +166,7 @@ export async function loadFairnessLedger(input: {
     unavailableDates: Array.isArray(m.unavailableDates) ? m.unavailableDates.filter((d): d is string => typeof d === "string") : [],
   }));
 
-  const ledger = computeFairnessLedger({ target, records, services, members });
+  const ledger = computeFairnessLedger({ target, balanceStart: FAIRNESS_BALANCE_START, records, services, members });
   const freezing = new Map<string, number>();
   for (const row of countRows) {
     if (isObj(row) && typeof row.month === "string") freezing.set(row.month, Number(row.weekend ?? 0) + Number(row.countedSpecials ?? 0));
@@ -178,6 +179,7 @@ export async function loadFairnessLedger(input: {
     target,
     window: ledger.window,
     recordsSince: ledger.recordsSince,
+    balanceStart: ledger.balanceStart,
     horizon: horizonMonths.map((month) => {
       const record = records.find((r) => r.month === month) ?? null;
       const storedServices = freezing.get(month) ?? 0;

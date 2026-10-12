@@ -81,7 +81,7 @@ describe("fairness vocabulary (C2 IF2-1)", () => {
       "record_edited",
       "invalid_body",
     ]);
-    expect(NOTE_CODES).toHaveLength(14);
+    expect(NOTE_CODES).toHaveLength(15);
     expect(SET_ASIDE_REASONS).toEqual(["second_seat", "exact", "cadence", "not_in_record", "outside_population", "floor"]);
   });
 });
