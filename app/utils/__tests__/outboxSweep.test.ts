@@ -134,6 +134,10 @@ interface World {
   proposals: Record<string, Doc>;
   admins: string[];
   members: Record<string, Doc>;
+  /** Whole `teamMembers` documents the listeners query runs over (ADR-0054).
+   *  Separate from `members`, which answers the by-id reads, so a suite that
+   *  never populates it keeps a participants-only audience. */
+  team: Doc[];
   titles: Record<string, string>;
 }
 
@@ -229,6 +233,7 @@ function emptyWorld(): World {
     proposals: {},
     admins: [],
     members: {},
+    team: [],
     titles: {},
   };
 }
@@ -294,6 +299,9 @@ function routeRead(query: string, params: Doc): unknown {
       .filter((id) => world.titles[id] !== undefined)
       .map((id) => ({ _id: id, title: world.titles[id] }));
   }
+  // The setlist listeners query (ADR-0054), EXECUTED like the proposal read: the
+  // roles ride along so its `published != false` subquery resolves for real.
+  if (query.includes("$everyone")) return runGroq(query, [...world.team, ...Object.values(world.roles)], params);
   if (query.includes("teamMembers")) {
     return (p.ids ?? []).map((id) => world.members[id]).filter(Boolean);
   }
@@ -530,6 +538,92 @@ describe("sweepOutbox — grouping and fan-out", () => {
 
     expect(report.emailed).toBe(1);
     expect((sendEmailMock.mock.calls[0][0] as { html: string }).html).toContain("Sigue");
+  });
+});
+
+describe("sweepOutbox — setlist listeners beyond the participants (ADR-0054)", () => {
+  /** A whole `teamMembers` document, as the listeners query reads it. */
+  const teamDoc = (id: string, over: Doc = {}): Doc => ({ _id: id, _type: "teamMembers", ...over });
+
+  function saturdayWithSongs(): void {
+    world.roles = { r2: roleDoc({ _id: "r2", _type: "saturday_role", week: "2026-08-08" }) };
+    world.recipients = { r2: ["m1"] };
+    world.weekendSongs = { "saturdarSongs:2026-08-08": [storedSong("song1"), storedSong("song2", "D")] };
+    world.titles = { song1: "Santo", song2: "Digno" };
+  }
+
+  const sentTo = () => sendEmailMock.mock.calls.map((c) => (c[0] as { to: string }).to).sort();
+  const subjectFor = (to: string) =>
+    (sendEmailMock.mock.calls.find((c) => (c[0] as { to: string }).to === to)?.[0] as { subject: string }).subject;
+
+  it("sends «Setlist listo» to the whole worship team, serving or not", async () => {
+    saturdayWithSongs();
+    world.notices = [setlistNotice({ knownRecipients: ["m1"] })];
+    world.team = [
+      teamDoc("m1", { memberType: ["voz"] }),
+      teamDoc("v1", { memberType: ["voz"] }),
+      teamDoc("c1", { memberType: ["foh"] }),
+      // No Tipo and no `ministries`: still worship, still the team.
+      teamDoc("n1"),
+      // Kids-only: not the worship team.
+      teamDoc("k1", { ministries: ["kids"], memberType: ["voz"] }),
+    ];
+    world.members = members(["m1", "v1", "c1", "n1", "k1"]);
+
+    const report = await sweepOutbox();
+
+    expect(sentTo()).toEqual(["c1@example.com", "m1@example.com", "n1@example.com", "v1@example.com"]);
+    for (const to of sentTo()) expect(subjectFor(to)).toContain("Setlist listo");
+    expect(report.consumed).toBe(1);
+  });
+
+  it("sends «El setlist cambió» to the participants and the console team only", async () => {
+    saturdayWithSongs();
+    world.notices = [
+      setlistNotice({ before: { beforeSongs: [snapshotRow("song1")] }, knownRecipients: ["m1"] }),
+    ];
+    world.team = [
+      teamDoc("m1", { memberType: ["voz"] }),
+      teamDoc("v1", { memberType: ["voz", "instrumento"] }),
+      teamDoc("c1", { memberType: ["foh"] }),
+      teamDoc("c2", { memberType: ["instrumento", "foh"] }),
+    ];
+    world.members = members(["m1", "v1", "c1", "c2"]);
+
+    await sweepOutbox();
+
+    expect(sentTo()).toEqual(["c1@example.com", "c2@example.com", "m1@example.com"]);
+    // A listener is not re-introduced by a change: they get the diff, like a participant.
+    for (const to of sentTo()) expect(subjectFor(to)).toContain("El setlist cambió");
+  });
+
+  it("gives a draft service no listeners", async () => {
+    saturdayWithSongs();
+    world.roles.r2 = { ...world.roles.r2, published: false };
+    world.notices = [setlistNotice({ knownRecipients: ["m1"] })];
+    world.team = [teamDoc("v1", { memberType: ["voz"] }), teamDoc("c1", { memberType: ["foh"] })];
+    world.members = members(["v1", "c1"]);
+
+    await sweepOutbox();
+
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    const listenerReads = readsMatching("$everyone");
+    expect(listenerReads.length).toBeGreaterThan(0);
+    // Gated at the query, not only by the classifier.
+    for (const r of listenerReads) {
+      expect(await runGroq(r.query, [...world.team, ...Object.values(world.roles)], r.params)).toEqual([]);
+    }
+  });
+
+  it("honours a listener's own setlist email opt-out", async () => {
+    saturdayWithSongs();
+    world.notices = [setlistNotice({ knownRecipients: ["m1"] })];
+    world.team = [teamDoc("m1"), teamDoc("v1"), teamDoc("off1")];
+    world.members = { ...members(["m1", "v1"]), ...members(["off1"], { emailSetlist: false }) };
+
+    await sweepOutbox();
+
+    expect(sentTo()).toEqual(["m1@example.com", "v1@example.com"]);
   });
 });
 

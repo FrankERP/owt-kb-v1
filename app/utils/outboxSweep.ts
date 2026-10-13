@@ -36,6 +36,7 @@
 import "server-only";
 
 import { operationalClient } from "@/sanity/lib/operationalClient";
+import { WORSHIP_AUDIENCE_GROQ_FILTER } from "@/app/ministries";
 import { ADMIN_RECIPIENTS_QUERY, PROPOSAL_QUERY } from "./proposalNotifyQueries";
 import { writeClient } from "@/sanity/lib/serverClient";
 
@@ -231,6 +232,21 @@ const SETLIST_RECIPIENTS_QUERY = assignedMemberRefsQuery(
   "_type == $roleType && _id == $roleId && published != false",
 );
 
+/**
+ * The setlist's LISTENERS: worship members who hear about it without serving on
+ * it (ADR-0054). A NEW setlist («Setlist listo», `$everyone`) goes to the whole
+ * worship team; a CHANGE («El setlist cambió») only to the console team (Tipo
+ * `foh`), who prepare the mix per song whether or not they run it that day.
+ * Changes stay narrow because they repeat with every edit and the sender is a
+ * free Gmail account (~500 recipients a day for ALL mail, not only this).
+ *
+ * The role's own `published != false` gates this list exactly as it gates the
+ * participants, so a draft service has no listeners at the query. Same audience
+ * filter as the setlist push (`notifySetlistSaved`): a Kids-only volunteer is
+ * not part of the worship team.
+ */
+const SETLIST_LISTENERS_QUERY = `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER} && ($everyone || "foh" in memberType) && count(*[_type == $roleType && _id == $roleId && published != false]) > 0]._id`;
+
 /** One projection for both role-shaped notices: seats for `role`, songs for a
  * special-service `setlist`, the publication/date state both classify on, and a
  * special's name and time for the email header. */
@@ -313,12 +329,27 @@ async function resolveRecipients(notice: StoredNotice): Promise<string[]> {
     const rows = await operationalClient.fetch<string[] | null>(ADMIN_RECIPIENTS_QUERY, {});
     return minusServed(unique(rows ?? []), notice);
   }
-  if (!notice.roleId || !notice.roleType) return [];
-  const rows = await operationalClient.fetch<string[] | null>(SETLIST_RECIPIENTS_QUERY, {
-    roleType: notice.roleType,
-    roleId: notice.roleId,
-  });
-  return minusServed(unique(rows ?? []), notice);
+  const { participants, listeners } = await resolveSetlistAudience(notice);
+  return minusServed(unique([...participants, ...listeners]), notice);
+}
+
+/**
+ * A `setlist` notice's audience in its two halves: the service's PARTICIPANTS
+ * (all five seats) and its LISTENERS (`SETLIST_LISTENERS_QUERY`). Which
+ * listeners depends on what the flush will say, and that is fixed by the
+ * snapshot: an empty `beforeSongs` can only classify as «Setlist listo».
+ */
+async function resolveSetlistAudience(
+  notice: StoredNotice,
+): Promise<{ participants: string[]; listeners: string[] }> {
+  if (!notice.roleId || !notice.roleType) return { participants: [], listeners: [] };
+  const params = { roleType: notice.roleType, roleId: notice.roleId };
+  const everyone = normalizeSnapshotRows(notice.before?.beforeSongs).length === 0;
+  const [participants, listeners] = await Promise.all([
+    operationalClient.fetch<string[] | null>(SETLIST_RECIPIENTS_QUERY, params),
+    operationalClient.fetch<string[] | null>(SETLIST_LISTENERS_QUERY, { ...params, everyone }),
+  ]);
+  return { participants: participants ?? [], listeners: listeners ?? [] };
 }
 
 // ── Stage 4: classification against live state ──────────────────────────────
@@ -433,11 +464,16 @@ async function classifySetlistNotice(notice: StoredNotice, today: string): Promi
   // The AUTHORITATIVE recipient set, re-read after the claim: a member added
   // five minutes after the setlist changed still gets the email (§1). Stage 2's
   // read was only a count, taken before anything was claimed.
-  const recipients = await resolveRecipients(notice);
+  const { participants, listeners } = await resolveSetlistAudience(notice);
+  // A listener is never INTRODUCED by a change: «Setlist listo» already went to
+  // the whole team when the setlist was new, and the change email shows the full
+  // current setlist anyway. Only a participant new to the service is introduced.
+  const listening = new Set(listeners);
+  const recipients = minusServed(unique([...participants, ...listeners]), notice);
   return recipients.map((recipientId) => ({
     noticeId: notice._id,
     recipientId,
-    line: known.has(recipientId) ? changed : (introduced ?? changed),
+    line: known.has(recipientId) || listening.has(recipientId) ? changed : (introduced ?? changed),
   }));
 }
 

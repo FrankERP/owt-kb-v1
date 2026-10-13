@@ -2,6 +2,10 @@
 
 Members get an email when the setlist of a service they serve appears or
 changes, and when they are added to, removed from, or moved within a service.
+**A new setlist («Setlist listo») also goes to the whole worship team, serving or
+not, and every setlist change to the console team (Tipo FOH)** — see "Who hears
+about a setlist" below and
+[ADR-0054](adr/0054-the-whole-team-hears-a-new-setlist-the-console-hears-every-change.md).
 Changes are debounced 5 minutes per subject (15 until 2026-09-10) and grouped into one email per
 person. **Publishing is the one exception: it is not debounced at all.** A
 single-service publish goes out in the same request, within seconds; a whole-month
@@ -135,6 +139,25 @@ debounce used to collapse them into one. Ordinary edits on an already-published
 service are untouched and still debounce.
 [ADR-0037](adr/0037-the-publish-notice-is-not-debounced.md) has the rejected
 alternatives — a global debounce retune, and a `*/1` Scheduler.
+
+### Who hears about a setlist
+
+A `setlist` notice's audience is resolved at flush (`resolveSetlistAudience` in
+`outboxSweep.ts`) in two halves, both gated on the role being published:
+
+| | participants (all five seats) | worship team | console team (Tipo `foh`) |
+|---|---|---|---|
+| «Setlist listo» (empty `beforeSongs`) | yes | **yes** | yes |
+| «El setlist cambió» | yes | no | **yes** |
+
+Only a participant new to the service is *introduced* by a change; a listener gets
+the diff, which lists the whole current setlist anyway. Each member's «Setlist»
+email switch still applies. Changes stay narrow because the sender is a free Gmail
+account (~500 recipients a day for all mail) and changes repeat with every edit.
+
+**Consequence for the publish path:** a «Setlist listo» to ~36 people exceeds
+layer 2's limit of 20, so it is taken alone and the clock bounds it — about 32
+go out in the publish request, the rest on the next layer-1 tick (lossless).
 
 ## Send throughput on Gmail — MEASURED 2026-08-27
 

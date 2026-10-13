@@ -600,9 +600,9 @@ Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
 | Tool / path | Immediate | Queued in the outbox | Never |
 |---|---|---|---|
 | `edit_setlist`, draft or role-less week | — | — | push, email |
-| `edit_setlist`, published | push «Setlist de la semana» to worship members whose setlist preference is `all`, plus members assigned to any **published** service that week (`notifySetlistSaved`, fire-and-forget, listed from its descriptor) | a `setlist` notice to the service's participants, if it has songs, after the debounce window; recipients are resolved at flush with `published != false` | — |
+| `edit_setlist`, published | push «Setlist de la semana» to worship members whose setlist preference is `all`, plus members assigned to any **published** service that week (`notifySetlistSaved`, fire-and-forget, listed from its descriptor) | a `setlist` notice to the service's participants plus the console team (plus the whole worship team when the setlist is new — ADR-0054), if it has songs, after the debounce window; recipients are resolved at flush with `published != false` | — |
 | `swap_assignment`, per published role | push «Servicio actualizado» to the members **added** to that role | a `role` notice to the union of before and after assignees, after the window | anything for a draft role |
-| `publish_service` | push «Nuevo servicio asignado» to every current assignee; the consolidated assignment email to the members `sendAssignmentEmailsBatch` itself derives from the service body (`assigneesOf` + `rolesForMember`), reported as that derivation | «Setlist listo» (`debounceMs: 0`) to the participants if there are songs, flushed in the same `after()` | — |
+| `publish_service` | push «Nuevo servicio asignado» to every current assignee; the consolidated assignment email to the members `sendAssignmentEmailsBatch` itself derives from the service body (`assigneesOf` + `rolesForMember`), reported as that derivation | «Setlist listo» (`debounceMs: 0`) to the participants and the whole worship team (ADR-0054) if there are songs, flushed in the same `after()` | — |
 | `unpublish_service` | — | — | everything; there is no sweep |
 
 All of these pass the downstream filters: device tokens and push preferences, `EMAIL_ALLOWLIST`,
