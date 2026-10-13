@@ -1039,12 +1039,19 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
                 <option value=">=">≥</option>
                 <option value="==">= </option>
               </Select>
+              {/* Both number fields are w-14 (56 px). Safari on the Mac paints the
+                  spin arrows inside a number input all the time (Chrome only on
+                  hover), ~15 px, on top of `rbIn`'s 16 px of padding and 2 px of
+                  border: the old w-8 left the digit nothing and clipped «2» on the
+                  sem− field, and w-10 left 7 px, so «10» was cut too. 56 px holds
+                  two digits beside the arrows, and one width for both modes keeps
+                  the row from jumping when «sem» is toggled. */}
               {cap.relative ? (
                 <div className="flex items-center gap-0.5 flex-none">
                   <span className="font-label text-[10px] text-accent/70">sem−</span>
                   <input
                     type="number" min={0} max={4}
-                    className={`${rbIn} w-8 text-center`}
+                    className={`${rbIn} w-14 text-center`}
                     value={cap.relOffset}
                     onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, relOffset: Number(e.target.value) } : x))}
                   />
@@ -1052,7 +1059,7 @@ function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblin
               ) : (
                 <input
                   type="number" min={0} max={10}
-                  className={`${rbIn} w-10 flex-none text-center`}
+                  className={`${rbIn} w-14 flex-none text-center`}
                   value={cap.value}
                   onChange={e => setCaps(cs => cs.map(x => x.id === cap.id ? { ...x, value: Number(e.target.value) } : x))}
                 />
