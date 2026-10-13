@@ -21,8 +21,9 @@ The `setlist` outbox notice keeps its participants and adds LISTENERS, resolved 
 
 - **A new setlist** (empty `beforeSongs` snapshot, i.e. «Setlist listo» — the publish transition
   or the first songs on a published service) goes to **the whole worship team**: worship ministry
-  (`WORSHIP_AUDIENCE_GROQ_FILTER`), a non-empty Tipo (an empty Tipo is in no seat and no pool,
-  ADR-0029) and app access (`disabled != true`).
+  (`WORSHIP_AUDIENCE_GROQ_FILTER`) and app access (`disabled != true`), **with or without a Tipo**
+  (Frank, 2026-10-13: someone with no Tipo serves in no seat but still hears about the setlist).
+  The two system accounts (`service-account-*`, `member-dev-verify`) are never listeners.
 - **A change** («El setlist cambió») goes to the participants **plus the console team** only.
 - Listeners are gated on the role being published, at the query, like the participants.
 - Anyone the listeners query returns gets the diff on a change, never an introduction (the diff
@@ -46,15 +47,15 @@ The `setlist` outbox notice keeps its participants and adds LISTENERS, resolved 
 
 ## Consequences
 
-- A «Setlist listo» notice now has ~30 recipients, above layer 2's `emailLimit` of 20, so it is
+- A «Setlist listo» notice now has ~34 recipients, above layer 2's `emailLimit` of 20, so it is
   selected ALONE and the clock bounds it: 24–32 go out in the publish request itself (3–4 waves,
   set by the read phase) and the rest re-pend losslessly to the next layer-1 tick (≤ 5 min). Two
   services published together: the second goes on the next tick.
 - **Unpublish then republish re-announces** to the whole team (each publish is a new
-  `[] -> songs`), about 30 emails each time where it used to be the participants only.
+  `[] -> songs`), about 34 emails each time where it used to be the participants only.
 - Residual duplicate: an edit committed during the few seconds a sweep is SENDING the
   announcement makes that sweep's re-pend lose its revision check, so `announcedRecipients` is
   not updated and the next sweep announces again. Accepted: the window is the send itself.
-- Gmail volume rises by ~36 per new setlist (~100/week) plus ~5 per change.
+- Gmail volume rises by ~34 per new setlist (~100/week) plus ~5 per change.
 - Undoing the listeners puts non-serving members, including the console team, back to hearing
   nothing.
