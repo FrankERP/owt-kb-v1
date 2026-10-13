@@ -114,7 +114,7 @@ describe("labels (§8)", () => {
     );
   });
 
-  it("marks a recorded month before the balance start, whatever its source (ADR-0054)", () => {
+  it("marks a recorded month before the balance start, whatever its source (ADR-0055)", () => {
     expect(response([]).window.map((w) => chipText(w, "2026-10"))).toEqual([
       "ago: sin registro, no cuenta",
       "sep: antes del inicio, no cuenta",
@@ -187,7 +187,7 @@ describe("rows (UI-4)", () => {
     expect(tabRows(response(tied), "BGV").rows.map((r) => r.name)).toEqual(["Carmen Ávila", "Carmen Soto"]);
   });
 
-  it("lists a person the last v3 run gave a figure on the tab, with no window figure (ADR-0054)", () => {
+  it("lists a person the last v3 run gave a figure on the tab, with no window figure (ADR-0055)", () => {
     const planned = (id: string) => id === "m-carmen";
     const { rows, out } = tabRows(response(people), "BGV", undefined, planned);
     expect(rows.map((r) => r.name)).toEqual(["Alma", "Iván", "Carmen", "Bruno"]);

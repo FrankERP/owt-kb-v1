@@ -9,7 +9,7 @@ import "server-only";
 // `serviceReadQueries.ts` builder with no `published` filter (prior-month drafts count),
 // passes each record through the ONE record-schema check (`parseStoredFairnessMonth`)
 // and hands everything to THE ledger (`computeFairnessLedger`) with the balance start
-// (`FAIRNESS_BALANCE_START`, ADR-0054). It performs no authorization: the route gates.
+// (`FAIRNESS_BALANCE_START`, ADR-0055). It performs no authorization: the route gates.
 //
 // FAIL CLOSED (RD-2): a record's id is DOTTED, so a read made WITHOUT the read token
 // answers zero records with no error and the past would read as «sin registro» — the

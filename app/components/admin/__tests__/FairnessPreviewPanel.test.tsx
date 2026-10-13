@@ -189,7 +189,7 @@ describe("the content (UI-3, UI-4, UI-5)", () => {
     expect(await screen.findByText("Todavía no hay meses registrados: el saldo empieza con el primer registro.")).toBeTruthy();
   });
 
-  it("says the balance starts later when every recorded month is before it (ADR-0054)", async () => {
+  it("says the balance starts later when every recorded month is before it (ADR-0055)", async () => {
     answer = async () => ({ ok: true, status: 200, json: async () => ledger({ recordsSince: null, balanceStart: "2026-11" }) });
     renderPanel();
     openPanel();

@@ -116,7 +116,7 @@ describe("the payload (RD-1, RD-3, RD-5)", () => {
       environment: "local",
       currentMonth: "2026-10",
       target: "2026-11",
-      // ADR-0054: the balance starts in November 2026, so October's record counts for nothing.
+      // ADR-0055: the balance starts in November 2026, so October's record counts for nothing.
       recordsSince: null,
       balanceStart: "2026-11",
       horizon: [{ month: "2026-11", record: null, storedServices: 0, recordBinds: false }],
