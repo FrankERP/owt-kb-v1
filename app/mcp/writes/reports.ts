@@ -100,10 +100,6 @@ const EMAIL_BATCH_CONDITIONS: readonly string[] = [
   "si EMAIL_REDIRECT_TO está definida, todo se redirige a esa dirección",
 ];
 
-/** ADR-0054: the setlist notices reach more than the participants they are offered. */
-const SETLIST_LISTENERS_CONDITION =
-  "al enviar se suma todo el equipo de alabanza si el setlist es nuevo, o solo el equipo de consola (Tipo FOH) si cambió";
-
 function outboxConditions(extra: string[] = []): string[] {
   return [
     ...extra,
@@ -220,8 +216,8 @@ export function setlistSaveNotifications(effects: SetlistSaveEffects): PendingNo
           memberIds: [...effects.notice.knownRecipients],
           when: WHEN_DEBOUNCED,
           date: effects.week,
-          audienceNote: "participantes del servicio ofrecidos al aviso",
-          conditions: outboxConditions(["solo mientras el servicio siga publicado", SETLIST_LISTENERS_CONDITION]),
+          audienceNote: "participantes del servicio ofrecidos al aviso; al enviar se suma el equipo de consola (o todo el equipo si el setlist es nuevo)",
+          conditions: outboxConditions(["solo mientras el servicio siga publicado"]),
         }
       : {
           channel: "outbox_email",
@@ -367,9 +363,9 @@ export function publishNotifications(effects: PublishReadyEffects): PendingNotif
         memberIds: [...subject.knownRecipients],
         when: WHEN_IMMEDIATE,
         ...(observation?.serviceDate ? { date: observation.serviceDate } : {}),
-        audienceNote: "participantes del servicio ofrecidos al aviso",
+        audienceNote: "participantes del servicio ofrecidos al aviso; al enviar se suma todo el equipo de alabanza",
         note: "Se encola solo si el servicio tiene canciones; eso se decide al encolar, después de la respuesta.",
-        conditions: outboxConditions([SETLIST_LISTENERS_CONDITION]),
+        conditions: outboxConditions(),
       });
     }
   } else {

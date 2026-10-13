@@ -184,6 +184,8 @@ interface StoredNotice {
   } | null;
   knownRecipients?: string[] | null;
   servedRecipients?: string[] | null;
+  /** `setlist` only — see the schema field and ADR-0054. */
+  announcedRecipients?: string[] | null;
   firstQueuedAt: string;
   notifyAfter: string;
   deadline: string;
@@ -220,7 +222,7 @@ interface Pair {
  */
 const DUE_NOTICES_QUERY = `*[_type == "notificationOutbox" && (status == "sending" || notifyAfter <= $now || deadline <= $now)] | order(firstQueuedAt asc) [0...${SCAN_LIMIT}] {
   _id, _rev, kind, subjectKey, memberId, roleId, proposalId, serviceDate, roleType,
-  before, knownRecipients, servedRecipients, firstQueuedAt, notifyAfter, deadline, status, claimedAt
+  before, knownRecipients, servedRecipients, announcedRecipients, firstQueuedAt, notifyAfter, deadline, status, claimedAt
 }`;
 
 /**
@@ -240,12 +242,13 @@ const SETLIST_RECIPIENTS_QUERY = assignedMemberRefsQuery(
  * Changes stay narrow because they repeat with every edit and the sender is a
  * free Gmail account (~500 recipients a day for ALL mail, not only this).
  *
- * The role's own `published != false` gates this list exactly as it gates the
- * participants, so a draft service has no listeners at the query. Same audience
- * filter as the setlist push (`notifySetlistSaved`): a Kids-only volunteer is
- * not part of the worship team.
+ * "The team" is who is on it: a Tipo (an empty Tipo is in no seat and no pool —
+ * ADR-0029) and app access (`disabled != true`). Kids-only volunteers are not
+ * part of it (`WORSHIP_AUDIENCE_GROQ_FILTER`, the setlist push's own filter).
+ * The role's `published != false` gates this list exactly as it gates the
+ * participants, so a draft service has no listeners at the query.
  */
-const SETLIST_LISTENERS_QUERY = `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER} && ($everyone || "foh" in memberType) && count(*[_type == $roleType && _id == $roleId && published != false]) > 0]._id`;
+const SETLIST_LISTENERS_QUERY = `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER} && count(memberType) > 0 && disabled != true && ($everyone || "foh" in memberType) && count(*[_type == $roleType && _id == $roleId && published != false]) > 0]{ _id, "console": "foh" in memberType }`;
 
 /** One projection for both role-shaped notices: seats for `role`, songs for a
  * special-service `setlist`, the publication/date state both classify on, and a
@@ -338,6 +341,12 @@ async function resolveRecipients(notice: StoredNotice): Promise<string[]> {
  * (all five seats) and its LISTENERS (`SETLIST_LISTENERS_QUERY`). Which
  * listeners depends on what the flush will say, and that is fixed by the
  * snapshot: an empty `beforeSongs` can only classify as «Setlist listo».
+ *
+ * A listener the announcement already reached (`announcedRecipients`) is left
+ * out unless they are console: an edit landing while a large announcement is
+ * part-sent clears `servedRecipients`, and without this the whole team would get
+ * «Setlist listo» twice. The console team still hears that edit, as they hear
+ * every change; participants are untouched (pre-existing behaviour).
  */
 async function resolveSetlistAudience(
   notice: StoredNotice,
@@ -345,11 +354,18 @@ async function resolveSetlistAudience(
   if (!notice.roleId || !notice.roleType) return { participants: [], listeners: [] };
   const params = { roleType: notice.roleType, roleId: notice.roleId };
   const everyone = normalizeSnapshotRows(notice.before?.beforeSongs).length === 0;
-  const [participants, listeners] = await Promise.all([
+  const [participants, rows] = await Promise.all([
     operationalClient.fetch<string[] | null>(SETLIST_RECIPIENTS_QUERY, params),
-    operationalClient.fetch<string[] | null>(SETLIST_LISTENERS_QUERY, { ...params, everyone }),
+    operationalClient.fetch<{ _id: string; console?: boolean }[] | null>(SETLIST_LISTENERS_QUERY, {
+      ...params,
+      everyone,
+    }),
   ]);
-  return { participants: participants ?? [], listeners: listeners ?? [] };
+  const announced = new Set(notice.announcedRecipients ?? []);
+  const listeners = (rows ?? [])
+    .filter((r) => r.console || !announced.has(r._id))
+    .map((r) => r._id);
+  return { participants: participants ?? [], listeners };
 }
 
 // ── Stage 4: classification against live state ──────────────────────────────
@@ -465,9 +481,11 @@ async function classifySetlistNotice(notice: StoredNotice, today: string): Promi
   // five minutes after the setlist changed still gets the email (§1). Stage 2's
   // read was only a count, taken before anything was claimed.
   const { participants, listeners } = await resolveSetlistAudience(notice);
-  // A listener is never INTRODUCED by a change: «Setlist listo» already went to
-  // the whole team when the setlist was new, and the change email shows the full
-  // current setlist anyway. Only a participant new to the service is introduced.
+  // Anyone the listeners query returns gets the diff on a change, never an
+  // introduction: «Setlist listo» already went to the whole team when the setlist
+  // was new, and the change email lists the full current setlist anyway. That
+  // includes a console member newly seated on the service. Only a participant
+  // who is neither known nor a listener is introduced.
   const listening = new Set(listeners);
   const recipients = minusServed(unique([...participants, ...listeners]), notice);
   return recipients.map((recipientId) => ({
@@ -619,6 +637,8 @@ async function consume(claimed: ClaimedNotice[]): Promise<number> {
 interface RependInput {
   notice: ClaimedNotice;
   servedRecipients?: string[];
+  /** `setlist` only: `servedRecipients` ∪ the stored list (ADR-0054). */
+  announcedRecipients?: string[];
 }
 
 /**
@@ -636,6 +656,7 @@ async function repend(inputs: RependInput[]): Promise<number> {
       notifyAfter: new Date().toISOString(),
     };
     if (input.servedRecipients) patch.servedRecipients = input.servedRecipients;
+    if (input.announcedRecipients) patch.announcedRecipients = input.announcedRecipients;
     try {
       await writeClient
         .patch(input.notice.notice._id)
@@ -684,9 +705,13 @@ function partitionClaimed(
       toConsume.push(c);
       continue;
     }
+    const servedRecipients = unique([...(c.notice.servedRecipients ?? []), ...attemptedHere]);
     toRepending.push({
       notice: c,
-      servedRecipients: unique([...(c.notice.servedRecipients ?? []), ...attemptedHere]),
+      servedRecipients,
+      ...(c.notice.kind === "setlist"
+        ? { announcedRecipients: unique([...(c.notice.announcedRecipients ?? []), ...servedRecipients]) }
+        : {}),
     });
   }
 

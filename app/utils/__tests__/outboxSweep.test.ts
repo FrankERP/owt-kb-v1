@@ -563,16 +563,21 @@ describe("sweepOutbox — setlist listeners beyond the participants (ADR-0054)",
       teamDoc("m1", { memberType: ["voz"] }),
       teamDoc("v1", { memberType: ["voz"] }),
       teamDoc("c1", { memberType: ["foh"] }),
-      // No Tipo and no `ministries`: still worship, still the team.
+      // No `ministries` is worship (absent ⇒ worship).
+      teamDoc("w1", { memberType: ["instrumento"] }),
+      // No Tipo: in no seat and no pool (ADR-0029), so not on the team.
       teamDoc("n1"),
+      teamDoc("e1", { memberType: [] }),
+      // No app access.
+      teamDoc("d1", { memberType: ["voz"], disabled: true }),
       // Kids-only: not the worship team.
       teamDoc("k1", { ministries: ["kids"], memberType: ["voz"] }),
     ];
-    world.members = members(["m1", "v1", "c1", "n1", "k1"]);
+    world.members = members(["m1", "v1", "c1", "w1", "n1", "e1", "d1", "k1"]);
 
     const report = await sweepOutbox();
 
-    expect(sentTo()).toEqual(["c1@example.com", "m1@example.com", "n1@example.com", "v1@example.com"]);
+    expect(sentTo()).toEqual(["c1@example.com", "m1@example.com", "v1@example.com", "w1@example.com"]);
     for (const to of sentTo()) expect(subjectFor(to)).toContain("Setlist listo");
     expect(report.consumed).toBe(1);
   });
@@ -615,10 +620,54 @@ describe("sweepOutbox — setlist listeners beyond the participants (ADR-0054)",
     }
   });
 
+  it("does not re-announce to the team after an edit lands on a part-sent announcement", async () => {
+    // The writer's re-queue cleared `servedRecipients`; `announcedRecipients`
+    // survived it. v1/v2 were reached; v3 was not yet. The console member and the
+    // participant hear the edit; v1/v2 do not get «Setlist listo» a second time.
+    saturdayWithSongs();
+    world.notices = [
+      setlistNotice({ knownRecipients: ["m1"], servedRecipients: [], announcedRecipients: ["m1", "v1", "v2", "c1"] }),
+    ];
+    world.team = [
+      teamDoc("m1", { memberType: ["voz"] }),
+      teamDoc("v1", { memberType: ["voz"] }),
+      teamDoc("v2", { memberType: ["voz"] }),
+      teamDoc("v3", { memberType: ["voz"] }),
+      teamDoc("c1", { memberType: ["foh"] }),
+    ];
+    world.members = members(["m1", "v1", "v2", "v3", "c1"]);
+
+    await sweepOutbox();
+
+    expect(sentTo()).toEqual(["c1@example.com", "m1@example.com", "v3@example.com"]);
+  });
+
+  it("records who the announcement reached when it re-pends the tail", async () => {
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    saturdayWithSongs();
+    world.notices = [
+      setlistNotice({ knownRecipients: ["m1"], servedRecipients: ["v1"], announcedRecipients: ["v0", "v1"] }),
+    ];
+    world.team = [teamDoc("v1", { memberType: ["voz"] }), teamDoc("v2", { memberType: ["voz"] })];
+    world.members = members(["m1", "v1", "v2"]);
+
+    const report = await sweepOutbox({ sendBudgetMs: 0 });
+
+    expect(report.repended).toBe(1);
+    const repend = claimPatches.find((p) => p.set.status === "pending");
+    expect(repend?.set.servedRecipients).toEqual(["v1"]);
+    expect(repend?.set.announcedRecipients).toEqual(["v0", "v1"]);
+    logSpy.mockRestore();
+  });
+
   it("honours a listener's own setlist email opt-out", async () => {
     saturdayWithSongs();
     world.notices = [setlistNotice({ knownRecipients: ["m1"] })];
-    world.team = [teamDoc("m1"), teamDoc("v1"), teamDoc("off1")];
+    world.team = [
+      teamDoc("m1", { memberType: ["voz"] }),
+      teamDoc("v1", { memberType: ["voz"] }),
+      teamDoc("off1", { memberType: ["voz"] }),
+    ];
     world.members = { ...members(["m1", "v1"]), ...members(["off1"], { emailSetlist: false }) };
 
     await sweepOutbox();
