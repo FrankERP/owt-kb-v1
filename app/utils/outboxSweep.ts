@@ -235,6 +235,13 @@ const SETLIST_RECIPIENTS_QUERY = assignedMemberRefsQuery(
 );
 
 /**
+ * The member documents that are accounts, not people: the UX-review service
+ * account (`service-account-*`, docs/SOLVER_AND_INFRA.md §Accounts) and the
+ * dev-verify bot «Verificador (bot)» (docs/DEV_VERIFY.md).
+ */
+const SYSTEM_MEMBER_IDS_GROQ = `(string::startsWith(_id, "service-account-") || _id == "member-dev-verify")`;
+
+/**
  * The setlist's LISTENERS: worship members who hear about it without serving on
  * it (ADR-0054). A NEW setlist («Setlist listo», `$everyone`) goes to the whole
  * worship team; a CHANGE («El setlist cambió») only to the console team (Tipo
@@ -242,13 +249,16 @@ const SETLIST_RECIPIENTS_QUERY = assignedMemberRefsQuery(
  * Changes stay narrow because they repeat with every edit and the sender is a
  * free Gmail account (~500 recipients a day for ALL mail, not only this).
  *
- * "The team" is who is on it: a Tipo (an empty Tipo is in no seat and no pool —
- * ADR-0029) and app access (`disabled != true`). Kids-only volunteers are not
- * part of it (`WORSHIP_AUDIENCE_GROQ_FILTER`, the setlist push's own filter).
+ * "The team" is every worship member with app access (`disabled != true`),
+ * WITH OR WITHOUT a Tipo — Frank's call on 2026-10-13: someone with no Tipo
+ * serves in no seat but still hears about the setlist. The two system accounts
+ * (`SYSTEM_MEMBER_IDS_GROQ`) are not people and are never listeners. Kids-only
+ * volunteers are not part of it (`WORSHIP_AUDIENCE_GROQ_FILTER`, the setlist
+ * push's own filter).
  * The role's `published != false` gates this list exactly as it gates the
  * participants, so a draft service has no listeners at the query.
  */
-const SETLIST_LISTENERS_QUERY = `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER} && count(memberType) > 0 && disabled != true && ($everyone || "foh" in memberType) && count(*[_type == $roleType && _id == $roleId && published != false]) > 0]{ _id, "console": "foh" in memberType }`;
+const SETLIST_LISTENERS_QUERY = `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER} && !${SYSTEM_MEMBER_IDS_GROQ} && disabled != true && ($everyone || "foh" in memberType) && count(*[_type == $roleType && _id == $roleId && published != false]) > 0]{ _id, "console": coalesce("foh" in memberType, false) }`;
 
 /** One projection for both role-shaped notices: seats for `role`, songs for a
  * special-service `setlist`, the publication/date state both classify on, and a

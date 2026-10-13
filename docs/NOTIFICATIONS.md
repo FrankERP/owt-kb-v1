@@ -150,8 +150,9 @@ A `setlist` notice's audience is resolved at flush (`resolveSetlistAudience` in
 | «Setlist listo» (empty `beforeSongs`) | yes | **yes** | yes |
 | «El setlist cambió» | yes | no | **yes** |
 
-"The worship team" is a worship member with a non-empty Tipo and app access
-(`disabled != true`). Only a participant new to the service is *introduced* by a
+"The worship team" is a worship member with app access (`disabled != true`),
+with or without a Tipo; the two system accounts (`service-account-*`,
+`member-dev-verify`) are excluded. Only a participant new to the service is *introduced* by a
 change; a listener gets the diff, which lists the whole current setlist anyway.
 Each member's «Setlist» email switch still applies. Changes stay narrow because the
 sender is a free Gmail account (~500 recipients a day for all mail) and changes
@@ -162,7 +163,7 @@ the announcement reached and, unlike `servedRecipients`, survives a writer's
 re-queue, so an edit during a part-sent announcement does not announce it to the
 team twice (console and participants still hear the edit).
 
-**Consequence for the publish path:** a «Setlist listo» to ~30 people exceeds
+**Consequence for the publish path:** a «Setlist listo» to ~34 people exceeds
 layer 2's limit of 20, so it is taken alone and the clock bounds it — 24–32 go
 out in the publish request (set by the read phase), the rest on the next
 layer-1 tick (lossless). Unpublish-then-republish announces again.
