@@ -235,6 +235,13 @@ const SETLIST_RECIPIENTS_QUERY = assignedMemberRefsQuery(
 );
 
 /**
+ * The member documents that are accounts, not people: the UX-review service
+ * account (`service-account-*`, docs/SOLVER_AND_INFRA.md §Accounts) and the
+ * dev-verify bot «Verificador (bot)» (docs/DEV_VERIFY.md).
+ */
+const SYSTEM_MEMBER_IDS_GROQ = `(string::startsWith(_id, "service-account-") || _id == "member-dev-verify")`;
+
+/**
  * The setlist's LISTENERS: worship members who hear about it without serving on
  * it (ADR-0054). A NEW setlist («Setlist listo», `$everyone`) goes to the whole
  * worship team; a CHANGE («El setlist cambió») only to the console team (Tipo
@@ -251,13 +258,6 @@ const SETLIST_RECIPIENTS_QUERY = assignedMemberRefsQuery(
  * The role's `published != false` gates this list exactly as it gates the
  * participants, so a draft service has no listeners at the query.
  */
-/**
- * The member documents that are accounts, not people: the UX-review service
- * account (`service-account-*`, docs/SOLVER_AND_INFRA.md §Accounts) and the
- * dev-verify bot «Verificador (bot)» (docs/DEV_VERIFY.md).
- */
-const SYSTEM_MEMBER_IDS_GROQ = `(string::startsWith(_id, "service-account-") || _id == "member-dev-verify")`;
-
 const SETLIST_LISTENERS_QUERY = `*[_type == "teamMembers" && ${WORSHIP_AUDIENCE_GROQ_FILTER} && !${SYSTEM_MEMBER_IDS_GROQ} && disabled != true && ($everyone || "foh" in memberType) && count(*[_type == $roleType && _id == $roleId && published != false]) > 0]{ _id, "console": coalesce("foh" in memberType, false) }`;
 
 /** One projection for both role-shaped notices: seats for `role`, songs for a

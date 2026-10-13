@@ -37,7 +37,7 @@ The `setlist` outbox notice keeps its participants and adds LISTENERS, resolved 
 ## Rejected
 
 - **Every change to everyone.** Changes repeat with every edit burst (each is its own email after
-  the 5-minute debounce). At 36 recipients a busy weekend — two publishes and a handful of edits —
+  the 5-minute debounce). At ~34 recipients a busy weekend — two publishes and a handful of edits —
   approaches Gmail's daily cap, and hitting it silences ALL mail for a day, assignments included.
   A new setlist happens once per service, so it is bounded.
 - **«Setlist listo» to everyone, changes to participants only.** The console team would hold a
@@ -47,7 +47,7 @@ The `setlist` outbox notice keeps its participants and adds LISTENERS, resolved 
 
 ## Consequences
 
-- A «Setlist listo» notice now has ~34 recipients, above layer 2's `emailLimit` of 20, so it is
+- A «Setlist listo» notice now has ~34 recipients (counted read-only in production on 2026-10-13: 36 worship members minus the two system accounts, none disabled), above layer 2's `emailLimit` of 20, so it is
   selected ALONE and the clock bounds it: 24–32 go out in the publish request itself (3–4 waves,
   set by the read phase) and the rest re-pend losslessly to the next layer-1 tick (≤ 5 min). Two
   services published together: the second goes on the next tick.
