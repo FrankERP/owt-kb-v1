@@ -843,7 +843,8 @@ Both of the first two are listed by exact `file + operation` in the protected-re
 - `set-password.ts` (tsx) — `MEMBER_ID=… PASSWORD=… npx tsx scripts/set-password.ts` — bcrypt a
   member's password (bootstrap first admin / reset).
 - `create-service-account.mjs`, `sa-roster.mjs` — a credentials service account for UX-review
-  automation.
+  automation. Its member id starts with `service-account-` (live: `service-account-claude`); the
+  setlist email's listeners query excludes that prefix (ADR-0054), so keep it if it is re-created.
 
 ### Diagnostics / UX screenshots (Playwright)
 - `ux-shots*.mjs`, `ux-verify.mjs`, `maya-shots.mjs`, `skeptic-desktop.mjs` — drive the local app

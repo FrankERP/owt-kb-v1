@@ -565,19 +565,26 @@ describe("sweepOutbox — setlist listeners beyond the participants (ADR-0054)",
       teamDoc("c1", { memberType: ["foh"] }),
       // No `ministries` is worship (absent ⇒ worship).
       teamDoc("w1", { memberType: ["instrumento"] }),
-      // No Tipo: in no seat and no pool (ADR-0029), so not on the team.
+      // No Tipo: in no seat, but still on the team for this announcement.
       teamDoc("n1"),
       teamDoc("e1", { memberType: [] }),
       // No app access.
       teamDoc("d1", { memberType: ["voz"], disabled: true }),
       // Kids-only: not the worship team.
       teamDoc("k1", { ministries: ["kids"], memberType: ["voz"] }),
+      // Accounts, not people.
+      teamDoc("service-account-claude"),
+      teamDoc("member-dev-verify"),
     ];
-    world.members = members(["m1", "v1", "c1", "w1", "n1", "e1", "d1", "k1"]);
+    world.members = members([
+      "m1", "v1", "c1", "w1", "n1", "e1", "d1", "k1", "service-account-claude", "member-dev-verify",
+    ]);
 
     const report = await sweepOutbox();
 
-    expect(sentTo()).toEqual(["c1@example.com", "m1@example.com", "v1@example.com", "w1@example.com"]);
+    expect(sentTo()).toEqual([
+      "c1@example.com", "e1@example.com", "m1@example.com", "n1@example.com", "v1@example.com", "w1@example.com",
+    ]);
     for (const to of sentTo()) expect(subjectFor(to)).toContain("Setlist listo");
     expect(report.consumed).toBe(1);
   });
@@ -592,8 +599,10 @@ describe("sweepOutbox — setlist listeners beyond the participants (ADR-0054)",
       teamDoc("v1", { memberType: ["voz", "instrumento"] }),
       teamDoc("c1", { memberType: ["foh"] }),
       teamDoc("c2", { memberType: ["instrumento", "foh"] }),
+      // No Tipo: hears new setlists, not changes.
+      teamDoc("n1"),
     ];
-    world.members = members(["m1", "v1", "c1", "c2"]);
+    world.members = members(["m1", "v1", "c1", "c2", "n1"]);
 
     await sweepOutbox();
 
