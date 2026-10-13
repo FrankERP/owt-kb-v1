@@ -116,7 +116,7 @@ export const ROLE_LABEL: Readonly<Record<RoleKey, string>> = {
 
 /**
  * A window chip (§8): «{ago}: registrado» · «{sep}: reconstruido» · «{oct}: sin registro, no cuenta»,
- * and «{oct}: antes del inicio, no cuenta» for a recorded month before the balance start (ADR-0054).
+ * and «{oct}: antes del inicio, no cuenta» for a recorded month before the balance start (ADR-0055).
  */
 export function chipText(entry: FairnessLedgerResponse["window"][number], balanceStart: string | null = null): string {
   const month = monthShort(entry.month);
@@ -220,7 +220,7 @@ export interface PreviewRow {
 /**
  * The tab's rows (people in its population at least once in the window, or given a figure on the
  * tab by the last v3 run — `planned`), most owed first, and the rest. Without `planned`, the first
- * month after the balance start (ADR-0054) would list everyone as out of the line.
+ * month after the balance start (ADR-0055) would list everyone as out of the line.
  */
 export function tabRows(
   response: FairnessLedgerResponse,

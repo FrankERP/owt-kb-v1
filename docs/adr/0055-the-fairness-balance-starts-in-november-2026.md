@@ -1,4 +1,4 @@
-# ADR-0054: The fairness balance starts in November 2026
+# ADR-0055: The fairness balance starts in November 2026
 
 **Date:** 2026-10-12 · **Status:** Accepted
 

@@ -237,7 +237,7 @@ describe("computeFairnessLedger — properties outside the fixture", () => {
     expect(alma.sang).toBe(6);
   });
 
-  // ADR-0054 — the balance start: a record before it is read, but its month counts for nothing.
+  // ADR-0055 — the balance start: a record before it is read, but its month counts for nothing.
   it("counts no month before the balance start, and keeps what the records say about people", () => {
     const withLead: LedgerInput = {
       ...SPAN,

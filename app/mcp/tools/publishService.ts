@@ -78,7 +78,7 @@ export const PUBLISH_SERVICE_DESCRIPTION =
   "después de publicar también se rechaza, porque la revisión ya cambió. Al publicar: a cada asignado actual se le " +
   "envían, después de responder y según sus preferencias, una notificación push «Nuevo servicio asignado» y un " +
   "correo de asignación consolidado (el resultado dice a quién se le envían, nunca que le llegaron); si el servicio tiene " +
-  "canciones también se encola, de inmediato, un aviso «Setlist listo» a sus participantes (eso se decide después " +
+  "canciones también se encola, de inmediato, un aviso «Setlist listo» por correo a todo el equipo de alabanza, participe o no (eso se decide después " +
   "de responder); y /, /schedule y /me se actualizan. serviceId y rev son observaciones (observations.roleId y " +
   "observations.roleRev de get_service, o serviceId y roleRev de list_services): pásalas SIN CAMBIOS, tal como " +
   "llegaron; nunca las construyas a mano. Solo publica: no acepta ningún modo de forzar ni de recuperar un " +

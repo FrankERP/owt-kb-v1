@@ -216,7 +216,7 @@ export function setlistSaveNotifications(effects: SetlistSaveEffects): PendingNo
           memberIds: [...effects.notice.knownRecipients],
           when: WHEN_DEBOUNCED,
           date: effects.week,
-          audienceNote: "participantes del servicio ofrecidos al aviso",
+          audienceNote: "participantes del servicio ofrecidos al aviso; al enviar se suma el equipo de consola (o todo el equipo si el setlist es nuevo)",
           conditions: outboxConditions(["solo mientras el servicio siga publicado"]),
         }
       : {
@@ -363,7 +363,7 @@ export function publishNotifications(effects: PublishReadyEffects): PendingNotif
         memberIds: [...subject.knownRecipients],
         when: WHEN_IMMEDIATE,
         ...(observation?.serviceDate ? { date: observation.serviceDate } : {}),
-        audienceNote: "participantes del servicio ofrecidos al aviso",
+        audienceNote: "participantes del servicio ofrecidos al aviso; al enviar se suma todo el equipo de alabanza",
         note: "Se encola solo si el servicio tiene canciones; eso se decide al encolar, después de la respuesta.",
         conditions: outboxConditions(),
       });

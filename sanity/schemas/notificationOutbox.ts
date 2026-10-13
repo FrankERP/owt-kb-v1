@@ -150,6 +150,19 @@ export const notificationOutbox = defineType({
         "Recipients this notice already attempted. Later sweeps skip them. Cleared when a writer re-queues the same subject.",
     },
 
+    // `setlist` only: everyone a «Setlist listo» on this notice already reached,
+    // across sweeps. Unlike `servedRecipients` a writer's re-queue does NOT clear
+    // it, so an edit while the team announcement is part-sent does not announce
+    // it a second time to the members who only hear new setlists (ADR-0054).
+    {
+      name: "announcedRecipients",
+      title: "Announced recipients",
+      type: "array",
+      of: [{ type: "string" }],
+      description:
+        "Setlist only: who already got «Setlist listo» from this notice. Survives a writer's re-queue.",
+    },
+
     { name: "firstQueuedAt", title: "First queued at", type: "datetime" },
     { name: "notifyAfter", title: "Notify after", type: "datetime" },
     { name: "deadline", title: "Deadline", type: "datetime" },

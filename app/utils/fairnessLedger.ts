@@ -5,7 +5,7 @@
 // eligibility records, the stored voice services and the members, it computes for every
 // person and line the exact share of the seats she was owed, the seats she received and
 // the balance, per month, over the 3-month window and cumulatively; and X1's cadence
-// state. A month before the balance start (`LedgerInput.balanceStart`, ADR-0054) is read
+// state. A month before the balance start (`LedgerInput.balanceStart`, ADR-0055) is read
 // for who was listed and when a line began, and counts toward no balance. `fixtures/fairness/golden.json` is its contract with the v3 solver (C5), which
 // computes the same formula for its plan: both suites assert the file.
 //
@@ -71,7 +71,7 @@ export interface LedgerService {
 export interface LedgerInput {
   target: string;
   /**
-   * The first month whose record counts toward a balance (`YYYY-MM`; ADR-0054), or absent /
+   * The first month whose record counts toward a balance (`YYYY-MM`; ADR-0055), or absent /
    * `null` for no cut. A record before it still names the people, their first Sunday-lead
    * month (`firstRecordedIn`) and their exemption; it adds nothing to `window`,
    * `cumulative`, `tabs`, `sang`, `setAsides` or `notInRecordSeats`, and its month carries
@@ -632,7 +632,7 @@ function run(input: LedgerInput): LedgerRun {
     if (monthIndex(r.month) < targetIndex) records.set(r.month, r);
   }
   const recordedMonths = [...records.keys()].sort(compareCodepoint);
-  // ADR-0054 — a record before the balance start is read, but its month counts for nothing.
+  // ADR-0055 — a record before the balance start is read, but its month counts for nothing.
   const balanceStart = input.balanceStart ?? null;
   const counts = (month: string) => countsTowardBalance(month, balanceStart);
   const countingMonths = recordedMonths.filter(counts);
