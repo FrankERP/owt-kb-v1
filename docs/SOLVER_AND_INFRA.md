@@ -610,11 +610,11 @@ The release that made v3 Auto's engine
 `docs/superpowers/plans/2026-10-05-solver-v3-c7-cutover.md`). No names, no per-person figures, and
 no `solverConfig` key or anything derived from one: a stage is named by its kind.
 
-- **Flip:** PR <!-- C7-PENDING: flip PR number -->, `main` merge
+- **Flip:** PR #147, `main` merge
   <!-- C7-PENDING: main merge SHA -->, production alias and `githubCommitSha` verified
   <!-- C7-PENDING: verification date -->.
 - **Function:** `owt-solver-v3` build `f939f5ba` (the C5 merge, PR #136, the last `gcf_v3/**`
-  change on `main`). Minimum instances: 0 <!-- C7-PENDING: confirm after cold runs #2 and #3 -->.
+  change on `main`). Minimum instances: 0 (no W1: the cold start passed, see below).
 - **`FAIRNESS_TOLERANCE`:** 35 hundredths of a seat (`gcf_v3/owt_v3/constants.py`) — the bound on
   `|planned − share|` per line for a pinless, all-proven, fully filled run; a pinned run's gap is
   reported, not bound.
@@ -631,8 +631,9 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
   | D (92 pins requested, all honoured) | 266 / 403 | 0.47 / 0.62 |
   | E (real Nov+Dec 2026) | 1676 / 1910 | 1.88 / 2.17 |
 
-  Cold runs (≥ 20 min idle): #1 7.97 s, every stage proven; #2 and #3
-  <!-- C7-PENDING: cold runs #2 and #3 (time_total, stages proven) -->. Cloud Run memory p99 at most
+  Cold runs (≥ 20 min idle): #1 7.97 s, every stage proven; #2 and #3 waived by Frank on
+  2026-10-14 (#1 sat at under a fifth of the 45 s pass line, and v2's measured cold starts were
+  11–19 s, so two more runs could not change the outcome). Cloud Run memory p99 at most
   42 % of 512 MB. Median ms per `det_milli` by stage kind was about 4.7–16.8 on the container (max
   25) — the figure that calibrates `STAGE_DET_LIMIT` for the real container — and every stage
   finished far inside its budget. C5 §13's pass lines (all stages proven warm, `total_ms` p95 ≤ 8 s,
