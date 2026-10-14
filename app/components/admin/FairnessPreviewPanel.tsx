@@ -29,6 +29,7 @@ import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import { resolveMonthEligibility, type EligibilityMember } from "@/app/utils/fairnessEligibility";
 import {
   RECORD_LIMITS,
+  countsTowardBalance,
   monthIndex,
   type FairnessLedgerResponse,
   type FairnessPerson,
@@ -201,7 +202,8 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
       cadenceLine({ person, response: data, month, resolved, countedSundays, liveUnavailable: live.map((d) => d.slice(0, 10)) }) ?? ""
     );
   };
-  const { rows, out } = data ? tabRows(data, tab, extraMotivo) : { rows: [], out: [] };
+  const planned = (memberId: string) => engine === "v3" && !!props.plan?.people.get(memberId)?.tabs[tab];
+  const { rows, out } = data ? tabRows(data, tab, extraMotivo, planned) : { rows: [], out: [] };
   const sinceLabel = data?.recordsSince ? monthYear(data.recordsSince) : "—";
 
   // UI-6 — «Registrar»: v3 only, and only for a month the record writer accepts.
@@ -281,11 +283,17 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
                   key={w.month}
                   className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-accent/25 text-mono-500"
                 >
-                  {chipText(w)}
+                  {chipText(w, data.balanceStart)}
                 </li>
               ))}
             </ul>
-            {data.recordsSince === null && <p className="font-body text-xs text-mono-500">{COPY.empty}</p>}
+            {data.recordsSince === null && (
+              <p className="font-body text-xs text-mono-500">
+                {data.balanceStart !== null && data.window.some((w) => !countsTowardBalance(w.month, data.balanceStart))
+                  ? COPY.beforeStart(monthYear(data.balanceStart))
+                  : COPY.empty}
+              </p>
+            )}
             <SegmentedControl
               label="Línea"
               size="sm"

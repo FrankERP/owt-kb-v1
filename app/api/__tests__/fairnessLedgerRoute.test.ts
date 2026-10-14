@@ -116,7 +116,9 @@ describe("the payload (RD-1, RD-3, RD-5)", () => {
       environment: "local",
       currentMonth: "2026-10",
       target: "2026-11",
-      recordsSince: "2026-10",
+      // ADR-0055: the balance starts in November 2026, so October's record counts for nothing.
+      recordsSince: null,
+      balanceStart: "2026-11",
       horizon: [{ month: "2026-11", record: null, storedServices: 0, recordBinds: false }],
     });
     expect(res.body.window.map((w: { month: string; record: unknown }) => [w.month, w.record !== null])).toEqual([
@@ -124,13 +126,36 @@ describe("the payload (RD-1, RD-3, RD-5)", () => {
       ["2026-09", false],
       ["2026-10", true],
     ]);
+    const alma = res.body.people.find((p: { memberId: string }) => p.memberId === "m-alma");
+    expect(alma).toMatchObject({ name: "Alma", exists: true, window: {}, cumulative: {}, sang: 0 });
+    expect(alma.months[2]).toMatchObject({
+      month: "2026-10", recorded: true, listed: true, lines: {}, held: { "Sun.BGV": 2 }, notes: [{ code: "before_balance_start" }],
+    });
+    // What the record says about people still reads: the first month in each role.
+    expect(alma).toMatchObject({ exempt: false, countedSundayLeads: [], firstRecordedIn: { "Sun.BGV": "2026-10" } });
+    expect(res.body.people.map((p: { memberId: string }) => p.memberId)).toEqual(["m-alma", "m-bruno", "m-carmen"]);
+  });
+
+  it("counts a recorded month from the balance start on, a draft service included", async () => {
+    h.lake = createFakeFairnessSanity([
+      ...MEMBERS,
+      { _id: "sun-1101", _type: "sunday_role", week: "2026-11-01", published: false, BGVs: [{ _key: "a", _ref: "m-alma" }, { _key: "b", _ref: "m-bruno" }] },
+      { _id: "sun-1108", _type: "sunday_role", week: "2026-11-08", BGVs: [{ _key: "a", _ref: "m-alma" }, { _key: "c", _ref: "m-carmen" }] },
+      stored("2026-10"),
+      stored("2026-11"),
+    ]);
+    const res = await get("month=2026-12");
+    expect(res.body).toMatchObject({ target: "2026-12", recordsSince: "2026-11", balanceStart: "2026-11" });
     // The draft (published: false) counts: Alma sat both Sundays, Bruno and Carmen one each.
     const alma = res.body.people.find((p: { memberId: string }) => p.memberId === "m-alma");
-    expect(alma).toMatchObject({ name: "Alma", exists: true });
     expect(alma.window.BGV).toEqual({ share: 133, received: 200, balance: -67, seats: 2, tenths: { share: 13, balance: -7 } });
-    expect(alma.months[2]).toMatchObject({ month: "2026-10", recorded: true, listed: true, held: { "Sun.BGV": 2 } });
-    expect(alma).toMatchObject({ sang: 2, exempt: false, countedSundayLeads: [], firstRecordedIn: { "Sun.BGV": "2026-10" } });
-    expect(res.body.people.map((p: { memberId: string }) => p.memberId)).toEqual(["m-alma", "m-bruno", "m-carmen"]);
+    expect(alma).toMatchObject({ sang: 2, firstRecordedIn: { "Sun.BGV": "2026-10" } });
+    // Only the month before the start is marked so; the counted month carries its own notes.
+    const marked = (code: string) =>
+      alma.months.filter((m: { notes: Array<{ code: string }> }) => m.notes.some((n) => n.code === code)).map((m: { month: string }) => m.month);
+    expect(marked("unrecorded_month")).toEqual(["2026-09"]);
+    expect(marked("before_balance_start")).toEqual(["2026-10"]);
+    expect(alma.months.find((m: { month: string }) => m.month === "2026-11").lines.BGV).toBeDefined();
   });
 
   it("names the horizon's records and decides recordBinds from freezing services only (A5, A6)", async () => {

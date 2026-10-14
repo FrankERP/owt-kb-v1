@@ -228,9 +228,23 @@ export interface RecordSummary {
   recordedAt: string;
 }
 
+/**
+ * ADR-0055 — the first month whose record counts toward a fairness balance. August–October
+ * 2026 were planned by v2, which sent the solver no history (ADR-0046): their records stay
+ * (they still name people and their first Sunday-lead month) but their seats are no debt.
+ * The ledger GET is the one caller that passes it, so the panel and Auto read one balance.
+ */
+export const FAIRNESS_BALANCE_START = "2026-11";
+
+/** ADR-0055 — whether a month counts toward a balance: the ONE boundary rule, read by the ledger and the panel. */
+export function countsTowardBalance(month: string, balanceStart: string | null): boolean {
+  return balanceStart === null || monthIndex(month) >= monthIndex(balanceStart);
+}
+
 /** IF2-9 — the closed set of notes, in their display order (§8). */
 export const NOTE_CODES = [
   "unrecorded_month",
+  "before_balance_start",
   "not_listed",
   "role_out",
   "unavailable",
@@ -249,6 +263,7 @@ export type NoteCode = (typeof NOTE_CODES)[number];
 
 export type Note = { line?: LineKey } & (
   | { code: "unrecorded_month" }
+  | { code: "before_balance_start" }
   | { code: "not_listed" }
   | { code: "role_out" }
   | { code: "unavailable"; dates: string[] }
@@ -297,6 +312,8 @@ export interface FairnessLedgerResponse {
   target: string;
   window: Array<{ month: string; record: RecordSummary | null }>;
   recordsSince: string | null;
+  /** ADR-0055 — the first month that counts toward a balance (`FAIRNESS_BALANCE_START`), or `null` for no cut. */
+  balanceStart: string | null;
   horizon: Array<{ month: string; record: LogicalRecord | null; storedServices: number; recordBinds: boolean }>;
   people: FairnessPerson[];
   diagnostics: {

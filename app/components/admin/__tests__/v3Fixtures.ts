@@ -80,7 +80,7 @@ export function ledgerResponse(
 ): FairnessLedgerResponse {
   return {
     v: 1, engine: "v3", environment: "local", currentMonth: opts.currentMonth ?? "2026-10", target: months[0],
-    window: [], recordsSince: null,
+    window: [], recordsSince: null, balanceStart: null,
     horizon: months.map((month, i) => ({ month, record: null, storedServices: 0, recordBinds: false, ...(opts.horizon?.[i] ?? {}) })),
     people: opts.people ?? [],
     diagnostics: { duplicateTargets: [], notInRecordSeats: 0, unknownMembers: [] },

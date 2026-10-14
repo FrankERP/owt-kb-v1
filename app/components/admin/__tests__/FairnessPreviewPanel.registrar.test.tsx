@@ -38,6 +38,7 @@ function ledger(patch: Partial<FairnessLedgerResponse> = {}, horizon: Partial<Fa
       { month: "2026-10", record: null },
     ],
     recordsSince: null,
+    balanceStart: null,
     horizon: [{ month: "2026-11", record: RECORD, storedServices: 0, recordBinds: false, ...horizon }],
     people: [],
     diagnostics: { duplicateTargets: [], notInRecordSeats: 0, unknownMembers: [] },
