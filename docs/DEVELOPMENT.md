@@ -15,13 +15,15 @@ Everything you need to run, verify, and contribute to `owt-kb-v1`.
 - For the **native apps**: Xcode + CocoaPods (iOS), Android Studio + JDK 17 (Android). See
   [MOBILE.md](MOBILE.md).
 - For the **solver locally** (optional): a Python env with `ortools==9.15.6755` (else set
-  `OWT_SOLVER_URL` to use the deployed function).
+  `OWT_SOLVER_V3_URL` to use the deployed v3 function, the engine Auto runs since the C7 cutover;
+  `OWT_SOLVER_URL` is v2's, used only with `OWT_SOLVER_ENGINE=v2` — docs/SECRETS.md).
 
 ### Required env vars (local dev minimum)
 From `.env.local`: `NEXT_PUBLIC_SANITY_PROJECT_ID`, `NEXT_PUBLIC_SANITY_DATASET`,
 `NEXT_PUBLIC_SANITY_API_VERSION`, `SANITY_WRITE_TOKEN`, `SANITY_API_READ_TOKEN`, `NEXTAUTH_URL`,
-`NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Optional: `OWT_SOLVER_URL` +
-`OWT_SOLVER_API_KEY` (else the solver runs as a local Python subprocess). Full catalog in
+`NEXTAUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`. Optional: `OWT_SOLVER_V3_URL` +
+`OWT_SOLVER_API_KEY` (else the solver runs as a local Python subprocess); `OWT_SOLVER_ENGINE` and
+`OWT_SOLVER_URL` only to run v2 locally. Full catalog in
 [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#environment-variables).
 
 ---

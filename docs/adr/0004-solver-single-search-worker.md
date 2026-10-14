@@ -54,4 +54,4 @@ adds (ADR-0051; C5 §7, S3): `linearization_level = 2`, a deterministic limit pe
 (`STAGE_DET_LIMIT`) under a wall guard of about 2.5 s per stage, and a 25 s total budget from model
 build. A stage stopped by a limit keeps its solution and reports `unproven`. Measured on the real
 container on 2026-10-08 (five request shapes, ten warm runs each): every stage proven, no
-wall-guard stop, `total_ms` p95 at most 2.7 s (`docs/SOLVER_AND_INFRA.md` «Cutover record»).
+wall-guard stop, `total_ms` p95 at most 2.74 s (`docs/SOLVER_AND_INFRA.md` «Cutover record»).

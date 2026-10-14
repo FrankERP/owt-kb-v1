@@ -541,8 +541,8 @@ secret.
 **Purpose.** The only barrier on each publicly invokable function (`allUsers` holds
 `run.invoker`). Without it on a function, its handler (`gcf/main.py`, `gcf_v3/main.py`) answers
 **503** to every call (fails
-closed); with a value that differs from Vercel's, **401** — either way «Generar mes» fails with
-"Solver service returned HTTP …" in both environments.
+closed); with a value that differs from Vercel's, **401** — either way «Generar mes» fails in both environments: under v2 with "Solver service returned HTTP …",
+under v3 with the coded `unauthorized` or `misconfigured` line (`v3Copy.ts`).
 
 **Where the value came from.** The Secret Manager entry was created 2026-06-30, when the
 function moved to GitHub continuous deployment, but the value itself was carried over from an

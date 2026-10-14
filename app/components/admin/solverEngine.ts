@@ -2,9 +2,10 @@
 //
 // THE solver-engine constant (solver v3, parent amendment A1). C1 created it with
 // the value "v2"; C2 added the effective-engine resolver and its Preview-only
-// override beside it, C6 wired the server-resolved engine into the planner, and C7
-// flipped this value to "v3" at cutover (ADR-0056). v2 is the rollback engine:
-// flipping back is this one value plus a revert of C7's copy hunks, through a PR.
+// override in app/utils/solverDeployment.ts (kept apart on purpose), C6 wired
+// the server-resolved engine into the planner, and C7 flipped this value to "v3"
+// at cutover (ADR-0056). v2 is the rollback engine: flipping back is this one
+// value plus a revert of C7's copy hunks, through a PR.
 //
 // A CODE CONSTANT, not an environment variable: one value in every bundle, so no
 // docs/SECRETS.md entry.
