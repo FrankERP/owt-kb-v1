@@ -292,7 +292,9 @@ Full list (names only — never print values; `.env.local` is git/claude-ignored
 | `EMAIL_REDIRECT_TO` | Dev/test: reroute all mail to one inbox |
 | `FIREBASE_SERVICE_ACCOUNT` | Firebase Admin JSON (FCM push) |
 | `CRON_SECRET` | Auth for the cron route |
-| `OWT_SOLVER_URL` / `OWT_SOLVER_API_KEY` / `OWT_SOLVER_PYTHON` | Solver endpoint/key/local python path |
+| `OWT_SOLVER_URL` / `OWT_SOLVER_API_KEY` / `OWT_SOLVER_PYTHON` | Solver endpoint (v2)/key (both functions)/local python path |
+| `OWT_SOLVER_V3_URL` | v3 solver endpoint, required on Production and Preview since the C7 cutover; see [SECRETS.md](SECRETS.md) («`OWT_SOLVER_V3_URL`») |
+| `OWT_SOLVER_ENGINE` | Preview-branch/local engine override for rehearsals, ignored on Production; see [SECRETS.md](SECRETS.md) («`OWT_SOLVER_ENGINE`») |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Production URL fallback for email links |
 | `MCP_OAUTH_SECRET` | Signs every MCP/OAuth client id, code and token; see [SECRETS.md](SECRETS.md#mcp_oauth_secret) |
 | `MCP_DISABLED` | MCP/OAuth kill switch, not a secret; see [SECRETS.md](SECRETS.md#mcp_disabled) |

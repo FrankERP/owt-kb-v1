@@ -33,10 +33,14 @@ describe("resolveSolverEngine (C2 EN-2)", () => {
     ["vercel dev (development is not «unset»)", { VERCEL_ENV: "development" }],
     ["an unknown VERCEL_ENV", { VERCEL_ENV: "staging" }],
   ])("answers the constant on %s", (_label, base) => {
-    expect(resolveSolverEngine({ ...base, OWT_SOLVER_ENGINE: "v3" })).toBe(SOLVER_ENGINE);
+    // Both overrides: whichever one differs from the constant is the case that proves it is
+    // ignored (since the C7 cutover that is a stray "v2", ADR-0056).
+    for (const override of ["v2", "v3"]) {
+      expect(resolveSolverEngine({ ...base, OWT_SOLVER_ENGINE: override })).toBe(SOLVER_ENGINE);
+    }
   });
 
-  it.each([undefined, "", "V3", "v3 ", "true"])("answers the constant for the non-exact value %j", (value) => {
+  it.each([undefined, "", "V2", "V3", "v2 ", "v3 ", "true"])("answers the constant for the non-exact value %j", (value) => {
     expect(resolveSolverEngine({ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "preview", OWT_SOLVER_ENGINE: value })).toBe(
       SOLVER_ENGINE,
     );
