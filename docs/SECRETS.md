@@ -731,7 +731,7 @@ redeploy after both. If the new value is wrong, v3 Auto on that deployment answe
 error until it is corrected — no record or draft is ever written by a failed solve.
 
 **Status.** Set on Vercel Preview **since 2026-10-08** (C7 W0; Preview-wide, `--type config`, so
-`verify/service-readiness` has it too) and on Vercel Production **since <!-- C7-PENDING: W4 date -->** (C7 W4, before the flip merges). Not
+`verify/service-readiness` has it too) and on Vercel Production **since 2026-10-14** (C7 W4, before the flip merges). Not
 set in `.env.local`, CI or the iOS build, which do not need it.
 
 ---
