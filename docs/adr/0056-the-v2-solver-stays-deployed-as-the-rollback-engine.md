@@ -1,6 +1,6 @@
 # ADR-0056: The v2 solver stays deployed as the rollback engine
 
-**Date:** 2026-10-09 · **Status:** Accepted
+**Date:** C7-FLIP-DATE · **Status:** Accepted
 
 > Solver v3 C7, the cutover (plan `docs/superpowers/plans/2026-10-05-solver-v3-c7-cutover.md`,
 > decisions K1, K3, K5–K7; parent amendments A28–A31). Amends nothing by itself: the seven
@@ -9,7 +9,7 @@
 
 ## Context
 
-Since 2026-10-09 Auto runs solver v3: `SOLVER_ENGINE = "v3"` (`app/components/admin/solverEngine.ts`),
+Since C7-FLIP-DATE Auto runs solver v3: `SOLVER_ENGINE = "v3"` (`app/components/admin/solverEngine.ts`),
 the function `owt-solver-v3` (ADR-0051), the ledger and its eligibility records (ADR-0050), the
 planner's horizon and confirm (ADR-0053). v3 cannot be rehearsed against production data without
 writing it — `preview` shares the one dataset and the one `solverConfig` — so the cutover had to be

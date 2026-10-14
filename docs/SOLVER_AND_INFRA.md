@@ -10,7 +10,7 @@ the test setup.
 A Python 3.12 + **OR-Tools CP-SAT** constraint solver deployed as a **Gen-2 Google Cloud
 Function** named `owt-solver`. It builds a **fair monthly worship-team roster**.
 
-> **Since 2026-10-09 this is the rollback engine.** Auto runs solver v3 (`owt-solver-v3`, «Solver
+> **Since C7-FLIP-DATE this is the rollback engine.** Auto runs solver v3 (`owt-solver-v3`, «Solver
 > v3 (`gcf_v3/`)» in §2 below; `SOLVER_ENGINE = "v3"`,
 > [ADR-0056](adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md)).
 > This section describes v2, which stays deployed, byte-identical and selectable: it serves Auto
@@ -527,12 +527,12 @@ holds for the trailing Saturday, now that the planner sends `weeks + 1`: the pla
 first (the solver's non-trailing path is unchanged by the invariant), then the function if ever
 both — an old function refuses a request that names it.
 
-### Solver v3 (`gcf_v3/`) — `owt-solver-v3`, serves Auto since 2026-10-09
+### Solver v3 (`gcf_v3/`) — `owt-solver-v3`, serves Auto since C7-FLIP-DATE
 
 The date-based v3 solver (spec `docs/superpowers/specs/2026-10-05-solver-v3-c5-solver-function-design.md`,
 ADR-0051) lives in `gcf_v3/` (package `owt_v3`) and imports nothing from `gcf/`. **Auto calls it**
 through `app/api/admin/solve/route.ts` (`app/utils/solverV3Upstream.ts`, URL `OWT_SOLVER_V3_URL`) on
-every deployment whose effective engine is v3 — production and dev since the 2026-10-09 cutover
+every deployment whose effective engine is v3 — production and dev since the C7-FLIP-DATE cutover
 (ADR-0056, «Cutover record» below). v2 above is unchanged and is the rollback engine.
 
 - **Contract `3`.** One request staffs the weekend voice seats of 1–2 calendar months: dated
@@ -603,7 +603,7 @@ the engine back to v2 (ADR-0056). Disabling `owt-solver-v3-deploy` or deleting t
 only after a flip-back has been released and verified, and is Frank's call. Records written under
 v3 stay; they are inert under v2.
 
-#### Cutover record (solver v3 C7, 2026-10-09)
+#### Cutover record (solver v3 C7, C7-FLIP-DATE)
 
 The release that made v3 Auto's engine
 ([ADR-0056](adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md); plan
@@ -637,8 +637,15 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
   25) — the figure that calibrates `STAGE_DET_LIMIT` for the real container — and every stage
   finished far inside its budget. C5 §13's pass lines (all stages proven warm, `total_ms` p95 ≤ 8 s,
   `time_total` p95 ≤ 20 s, cold ≤ 45 s, memory < 75 %) hold on every run measured so far.
-- **Preview rehearsal** (aggregates): <!-- C7-PENDING: runs; stages proven by stage kind; misses
-  by code and cause; capacity notice yes/no -->.
+- **Preview rehearsal** (aggregates; Nov+Dec 2026 on dev, build `f939f5ba`, contract 3). The run
+  Frank accepted, 2026-10-13, on the ledger with ADR-0055's balance start: every one of its 20
+  stages `proven` (`fill`, `rules`, `sunday_cap`, `saturday_cap`, `no_consecutive`, `cadence`,
+  `compensation`, `dl_floor`, `voice_floor`, `balance_max` ×5 and `balance_sq` ×5 over the four
+  role lines and one presence line, `tiebreak`), none stopped by a limit, `total_ms` 1 693; 0
+  unfilled seats, 0 violations (ceiling 0, proven), 0 misses, no capacity notice, no pins,
+  `reproducible: true`. C5's independent checker passes it, the largest in-line gap 9 of the 35
+  hundredths `FAIRNESS_TOLERANCE` allows. The 2026-10-12 run before ADR-0055 also passed the
+  checker; what it showed (balances repaying August–October in one plan) is why ADR-0055 exists.
 - **Private snapshots** (`owt-agent-logs`, file names only): rehearsal
   `backups/solverConfig-2026-10-08-rehearsal.json`; pre-step
   <!-- C7-PENDING: backups/solverConfig-<date>-before-v3-flip.json -->; post-step
@@ -655,7 +662,7 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
   reached by C2's «Registrar elegibilidad» (create and stored mode) and by C6's v3 confirm in
   create mode — and C4's reconstruction script. Stored mode's «Guardar» writes no record.
 - **Preview override:** `OWT_SOLVER_ENGINE` removed from Preview
-  <!-- C7-PENDING: date (planned 2026-10-09, plan Step 9) -->.
+  <!-- C7-PENDING: date (plan Step 9, right after the flip) -->.
 
 ---
 

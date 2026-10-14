@@ -210,8 +210,9 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   default (`countsForFairness.test.ts` evaluates both with `groq-js` and sweeps `app/` and
   `sanity/` for a second spelling). `ROLE_PROJECTION` does not carry the field.
 - **`SOLVER_ENGINE: "v2" | "v3"`** ([solverEngine.ts](../app/components/admin/solverEngine.ts)) —
-  the engine constant and nothing else (parent A1), `"v2"`; neutral, no imports, pinned by
-  `solverEngine.test.ts`. C2 adds the effective-engine resolver beside it; C7 flips it.
+  the engine constant and nothing else (parent A1), `"v3"` since the C7 cutover (`"v2"` is the
+  rollback, ADR-0056); neutral, no imports, pinned by `solverEngine.test.ts`. C2's
+  effective-engine resolver (`resolveSolverEngine`) sits beside it.
 - **`fairnessToggleModel.ts`** ([source](../app/components/admin/fairnessToggleModel.ts)) — the
   four copy strings, the past-month rule (`isPastServiceMonth`, CDMX via `serviceTodayIso`)
   and the effective-value helpers every surface and every request body go through

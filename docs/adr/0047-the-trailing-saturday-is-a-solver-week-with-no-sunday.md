@@ -120,9 +120,9 @@ redeploy of identical code. The spec's §7 is amended to say so.
   planner stops sending `weeks + 1` first, then the function if ever both.
 - **The python gate grows by about 29 s** (the `TrailingSaturday` class, 15 tests, and the fixture).
 
-## Under v3 (2026-10-09, ADR-0053)
+## Under v3 (C7-FLIP-DATE, ADR-0053)
 
-Since 2026-10-09 Auto runs solver v3 (ADR-0056), which has no solver weeks: a request is a list of
+Since C7-FLIP-DATE Auto runs solver v3 (ADR-0056), which has no solver weeks: a request is a list of
 dated services, so the trailing Saturday is a dated Saturday service of its calendar month
 (ADR-0048), with no `weeks + 1` index. This decision is superseded under v3 only. v2, the rollback
 engine, keeps it exactly as written — its identity and trailing fingerprints still guard v2's
