@@ -15,7 +15,7 @@
 > load scoped to that group only. Still local, still never the solver, still empty
 > seats only; the one-service composer stays manual.
 
-> **2026-10-05 forward note (solver v3, C1) — in force since C7-FLIP-DATE** (see «Under v3» below): role documents now carry
+> **2026-10-05 forward note (solver v3, C1) — in force since 2026-10-15** (see «Under v3» below): role documents now carry
 > `countsForFairness` («Cuenta para equidad»; on by default for weekend services, off for
 > specials), read through `app/utils/countsForFairness.ts`. It is **inert under v2**:
 > specials still never reach CP-SAT, and no decision below changes. Decision 3 is amended
@@ -208,9 +208,9 @@ the grid at `PlannerGrid.test.tsx` ("a non-solvable Drums cell with two
 occupants never replaces a third addition"), and structurally by
 `seatModel.ts`'s `max: null` and its test. No coverage was lost.
 
-## Under v3 (C7-FLIP-DATE, ADR-0053)
+## Under v3 (2026-10-15, ADR-0053)
 
-Since C7-FLIP-DATE Auto runs solver v3 (ADR-0056). v2, the rollback engine, keeps all three
+Since 2026-10-15 Auto runs solver v3 (ADR-0056). v2, the rollback engine, keeps all three
 decisions as written, and nothing above changes. Under v3 two of them read differently:
 
 - **Decision 1:** a *counted* special (its «Cuenta para equidad» on) reaches the solver, but only

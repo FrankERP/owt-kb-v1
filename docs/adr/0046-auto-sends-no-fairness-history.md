@@ -70,9 +70,9 @@ Frank reported Auto giving two Sundays to two lead-only members while others led
 - MCP P4's `solve_month` mirrors Auto, so it sends no history either (P4 plan, post-approval
   change 13).
 
-## Under v3 (C7-FLIP-DATE, ADR-0050)
+## Under v3 (2026-10-15, ADR-0050)
 
-Since C7-FLIP-DATE Auto runs solver v3 (ADR-0056). v2, the rollback engine, keeps this record
+Since 2026-10-15 Auto runs solver v3 (ADR-0056). v2, the rollback engine, keeps this record
 unchanged — `SOLVER_SENDS_HISTORY = false`, `exact_count_roles` and every consequence above — and
 nothing above changes. Under v3:
 

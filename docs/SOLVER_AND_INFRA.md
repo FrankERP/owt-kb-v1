@@ -10,7 +10,7 @@ the test setup.
 A Python 3.12 + **OR-Tools CP-SAT** constraint solver deployed as a **Gen-2 Google Cloud
 Function** named `owt-solver`. It builds a **fair monthly worship-team roster**.
 
-> **Since C7-FLIP-DATE this is the rollback engine.** Auto runs solver v3 (`owt-solver-v3`, «Solver
+> **Since 2026-10-15 this is the rollback engine.** Auto runs solver v3 (`owt-solver-v3`, «Solver
 > v3 (`gcf_v3/`)» in §2 below; `SOLVER_ENGINE = "v3"`,
 > [ADR-0056](adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md)).
 > This section describes v2, which stays deployed, byte-identical and selectable: it serves Auto
@@ -527,12 +527,12 @@ holds for the trailing Saturday, now that the planner sends `weeks + 1`: the pla
 first (the solver's non-trailing path is unchanged by the invariant), then the function if ever
 both — an old function refuses a request that names it.
 
-### Solver v3 (`gcf_v3/`) — `owt-solver-v3`, serves Auto since C7-FLIP-DATE
+### Solver v3 (`gcf_v3/`) — `owt-solver-v3`, serves Auto since 2026-10-15
 
 The date-based v3 solver (spec `docs/superpowers/specs/2026-10-05-solver-v3-c5-solver-function-design.md`,
 ADR-0051) lives in `gcf_v3/` (package `owt_v3`) and imports nothing from `gcf/`. **Auto calls it**
 through `app/api/admin/solve/route.ts` (`app/utils/solverV3Upstream.ts`, URL `OWT_SOLVER_V3_URL`) on
-every deployment whose effective engine is v3 — production and dev since the C7-FLIP-DATE cutover
+every deployment whose effective engine is v3 — production and dev since the 2026-10-15 cutover
 (ADR-0056, «Cutover record» below). v2 above is unchanged and is the rollback engine.
 
 - **Contract `3`.** One request staffs the weekend voice seats of 1–2 calendar months: dated
@@ -603,18 +603,18 @@ the engine back to v2 (ADR-0056). Disabling `owt-solver-v3-deploy` or deleting t
 only after a flip-back has been released and verified, and is Frank's call. Records written under
 v3 stay; they are inert under v2.
 
-#### Cutover record (solver v3 C7, C7-FLIP-DATE)
+#### Cutover record (solver v3 C7, 2026-10-15)
 
 The release that made v3 Auto's engine
 ([ADR-0056](adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md); plan
 `docs/superpowers/plans/2026-10-05-solver-v3-c7-cutover.md`). No names, no per-person figures, and
 no `solverConfig` key or anything derived from one: a stage is named by its kind.
 
-- **Flip:** PR <!-- C7-PENDING: flip PR number -->, `main` merge
+- **Flip:** PR #147, `main` merge
   <!-- C7-PENDING: main merge SHA -->, production alias and `githubCommitSha` verified
   <!-- C7-PENDING: verification date -->.
 - **Function:** `owt-solver-v3` build `f939f5ba` (the C5 merge, PR #136, the last `gcf_v3/**`
-  change on `main`). Minimum instances: 0 <!-- C7-PENDING: confirm after cold runs #2 and #3 -->.
+  change on `main`). Minimum instances: 0 (no W1: the cold start passed, see below).
 - **`FAIRNESS_TOLERANCE`:** 35 hundredths of a seat (`gcf_v3/owt_v3/constants.py`) — the bound on
   `|planned − share|` per line for a pinless, all-proven, fully filled run; a pinned run's gap is
   reported, not bound.
@@ -631,8 +631,9 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
   | D (92 pins requested, all honoured) | 266 / 403 | 0.47 / 0.62 |
   | E (real Nov+Dec 2026) | 1676 / 1910 | 1.88 / 2.17 |
 
-  Cold runs (≥ 20 min idle): #1 7.97 s, every stage proven; #2 and #3
-  <!-- C7-PENDING: cold runs #2 and #3 (time_total, stages proven) -->. Cloud Run memory p99 at most
+  Cold runs (≥ 20 min idle): #1 7.97 s, every stage proven; #2 and #3 waived by Frank on
+  2026-10-14 (#1 sat at under a fifth of the 45 s pass line, and v2's measured cold starts were
+  11–19 s, so two more runs could not change the outcome). Cloud Run memory p99 at most
   42 % of 512 MB. Median ms per `det_milli` by stage kind was about 4.7–16.8 on the container (max
   25) — the figure that calibrates `STAGE_DET_LIMIT` for the real container — and every stage
   finished far inside its budget. C5 §13's pass lines (all stages proven warm, `total_ms` p95 ≤ 8 s,

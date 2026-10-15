@@ -170,7 +170,7 @@ looks wrong** — several exist to stop a plausible-looking change.
   earlier month still feeds who is listed and `firstRecordedIn` (its record) and «Mes por medio» (its seats).
 - **Cache:** admin/API routes that mutate content call the matching `revalidate*`
   (`app/utils/revalidate.ts`) or `revalidatePath`, or the ISR page stays stale.
-- **Auto runs solver v3** (`SOLVER_ENGINE = "v3"` since C7-FLIP-DATE, ADR-0056): every Auto reads
+- **Auto runs solver v3** (`SOLVER_ENGINE = "v3"` since 2026-10-15, ADR-0056): every Auto reads
   `GET /api/admin/fairness` fresh for its own horizon and refuses on a failed read; carried
   balances come only from the ledger (above); the confirm writes the eligibility records before
   any draft. The override `OWT_SOLVER_ENGINE` is honoured only on the `preview` branch deployment

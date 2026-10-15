@@ -150,9 +150,9 @@ and chose not to build an explicit floating-point objective in this change.
   month overflows depends on how large its weighted history is, so a thin quarter may still
   optimise, but a production month is expected to skip routinely, not as an edge case.)*
 
-## Under v3 (C7-FLIP-DATE, ADR-0051)
+## Under v3 (2026-10-15, ADR-0051)
 
-Since C7-FLIP-DATE Auto runs solver v3 (ADR-0056), which has no weighted ladder: its objectives are
+Since 2026-10-15 Auto runs solver v3 (ADR-0056), which has no weighted ladder: its objectives are
 sequential stages, each solved and then fixed as a constraint before the next (rules → fill →
 cadence → … → per-line balances → tie-break), so no tier's weight has to exceed another's and the
 integer ceiling this record measures does not arise. v2, the rollback engine, keeps this decision,

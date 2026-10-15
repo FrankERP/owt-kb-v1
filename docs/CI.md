@@ -168,7 +168,7 @@ way; «v3 solver steps» is setup-python through «Solver tests». The 374204303
 
 ### Solver inertness goldens (`gcf/test_inertness.py`)
 
-The v2 Cloud Function deploys from `main` with no `preview` rehearsal, and since the C7-FLIP-DATE
+The v2 Cloud Function deploys from `main` with no `preview` rehearsal, and since the 2026-10-15
 cutover it is the rollback engine (ADR-0056): it serves both environments again the moment
 `SOLVER_ENGINE` is flipped back, with no rehearsal of its own. So a solver change is safe to ship
 only if a request with no `pinned` key builds the model **and runs the search** it did before.
