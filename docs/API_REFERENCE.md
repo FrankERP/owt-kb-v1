@@ -264,6 +264,7 @@ endpoint needs a **signed code plus its PKCE verifier** (or a signed refresh tok
 | `/api/me/availability` | GET, PATCH | GET returns `{_rev, unavailableDates[], unavailabilityNotes[]}`. PATCH **requires `_rev`** (400 if missing — never a fallback to an unconditional write) and commits under `ifRevisionId`; **409 `{error:"stale_revision", _rev, …}` means the write did NOT land** and carries the winner's state, 200 returns the new `_rev`. Validates ISO dates, unique per date (`_key`=date). No revalidation. **`unavailableDates` has exactly two writers — this route and `/api/kids/members/[id]/availability` — and both are now revision-guarded;** before that, whichever saved second silently deleted the other's dates. The client rebases **once** when the conflicting state's base is byte-identical (a sibling `/api/me*` write from the same page, where re-issuing cannot delete anything) and discards on any further conflict. |
 | `/api/me/notif-prefs` | PATCH | `{email?, assignments?, proposals?, reminders?, setlist?}` (booleans; `setlist` bool → `"all"`/`"off"`). Writes `notifPrefs.*`. |
 | `/api/me/theme` | PATCH | `{theme: "dark" \| "light" \| "system"}` → writes `themePref`. **403 while impersonating — deliberately stricter than `PATCH /api/me`, do not "harmonise" it:** impersonation rewrites `session.user.sanityId` to the target, so without the guard a super-admin would persist their theme onto someone else's record from a UI action that looks local. A name correction is plausibly made on a member's behalf; a theme is not. `"system"` became legal at Child F, together with the `enableSystem` flip that makes it resolvable — the two are one change, and the 400 body is derived from the accepted set so it cannot drift. No `revalidate*` — per-member chrome, no ISR page renders it. |
+| `/api/me/calendar-feed` | POST | «Generar un enlace nuevo» (ADR-0057): increments the member's `calendarFeed.<id>` generation (`createIfNotExists` + `inc`, one transaction, `returnDocuments`) and returns `{urls}` signed with the generation the transaction returned. **403 while impersonating** (a super-admin never resets or receives a member's private link) and for a kids-only member; 503 without `CALENDAR_FEED_SECRET`, the read token or a canonical origin. No `revalidate*` (credential state, no ISR page renders it). |
 | `/api/me/password` | POST | `{currentPassword?, newPassword}` (≥8 chars). Verifies current via bcrypt if a hash exists; sets `passwordHash` (cost 12). |
 | `/api/me/photo` | POST | multipart `photo`. 5 MB max, MIME whitelist + **magic-byte** check (413/415). Uploads Sanity asset, sets own `profilePhoto` → `revalidateServiceViews()` + `revalidatePath("/me")`. |
 | `/api/me/proposals` | GET, POST | GET proposals for every service the user Leads (incl. `_rev`). POST creates/updates the **one shared proposal** (Leads only): `{roleId, observed, songs, leadNotes?, teamNotes?, status: "draft"\|"pending"}`. Resolution uses A1's **two** indexes (`service_ref` + target key), never an arbitrary `[0]`; deterministic `_id` `setlistProposal.<roleId>` is the first-create mutex (`tx.create`, so a co-lead race is a real conflict); `observed` gates every update; the weekend lock or the special-role revision is asserted in the same transaction; `service_type`/`service_date` are **refreshed from the authorized canonical role**, never accepted from the client. Fires `notifyProposalSubmitted` when `status="pending"`. **A proposal save refuses `leadIds`** — a
@@ -273,6 +274,26 @@ of format; proposals never carry per-song leaders (ADR-0036). **`leadNotes` beco
 | `/api/admin/proposals/[id]/messages` | POST | Same shape for an `admin_change_request`. `requireActiveManager`, not `content-editor`. **Does NOT touch `admin_notes`** — that field is the change-request archive the rollback leans on, and **nothing mirrors it any more** — the transition was its last writer and Child B stopped that too. **Pushes the LEAD + contributors** via `notifyProposalReview` with NEW copy (`Nuevo mensaje`), the posting admin excluded through its optional third parameter — applied BEFORE the empty-audience guard, or a proposal whose only recipient is the author would push them. No ministry check, inherited from the transition route beside it (`FrankERP/owt-kb-v1#8`). |
 | `/api/me/push-token` | POST, DELETE | Register/remove an FCM `deviceToken` (token validated against `/^[A-Za-z0-9_:.-]{1,4096}$/`, GROQ-injection guard). |
 | `/api/me/songs` | GET | `?q=` search of `post` by title/author (prefix); up to 30/50 results. |
+
+---
+
+## Calendar feed (public; HMAC-gated)
+
+### `GET /api/calendar/<memberId>/<generation>/<token>.ics[?solo=mios]`
+
+A member's calendar subscription (ADR-0057; spec `docs/superpowers/specs/2026-10-15-member-calendar-feed-design.md`).
+Excluded from the `proxy.ts` matcher: calendar apps fetch it with no session. Order: 503 without
+`CALENDAR_FEED_SECRET` (≥ 32 bytes) or `SANITY_API_READ_TOKEN` → 404 for any non-canonical spelling
+(the `.ics` suffix is required, the query is empty or exactly `?solo=mios`, generation canonical
+decimal, token 43 base64url chars) → 404 unless the HMAC verifies (**no Sanity request before
+this**) → one tokened read of the member and the stored generation → 404 unless the member exists,
+is not disabled, is in worship and the generation is current (503 if the read throws or the counter
+is corrupt) → the schedule read (`operationalClient`, `published != false`, CDMX today − 60 d …
++ 365 d). 200 `text/calendar`: every published service (or only the member's with `?solo=mios`),
+the member's own marked «⭐ <servicio> · <lugar>», songs with key and the team by section in the
+description, weekends all-day, specials with a valid time timed (`TZID=America/Mexico_City`,
+PT2H). No `team_notes`. `Cache-Control: private, max-age=300`, `Vercel-CDN-Cache-Control:
+max-age=3600`.
 
 ---
 
@@ -610,7 +631,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
   history, and `notifyProposalSubmitted` sends nothing.
 - **Protected mutations have no alternate path:** the API routes above are the only writers. The
-  embedded Studio strips every mutating action from all sixteen protected types, and the seven historical
+  embedded Studio strips every mutating action from all seventeen protected types, and the seven historical
   one-shot scripts fail closed before constructing a client — see
   [DATA_MODEL → Studio](DATA_MODEL.md#studio) and
   [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).

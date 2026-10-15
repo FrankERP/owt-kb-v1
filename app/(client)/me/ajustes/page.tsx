@@ -7,6 +7,7 @@ import Button from "@/app/components/ui/Button";
 import SettingsCard from "@/app/components/SettingsCard";
 import { revealProps } from "@/app/utils/reveal";
 import { MEMBER_PROFILE_QUERY } from "../queries";
+import { loadCalendarFeedState } from "@/app/utils/calendarFeedState";
 
 // Ajustes, alone (R3 F3). Tema, Tamaño de texto and Perfil used to sit at the
 // bottom of `/me`, below the services, the availability calendar and the Kids
@@ -16,8 +17,10 @@ import { MEMBER_PROFILE_QUERY } from "../queries";
 //
 // MINISTRY-NEUTRAL: a theme, a text size and an email address belong to the
 // person, not to a ministry, so a kids-only volunteer reaches this page and gets
-// the whole card. No `requireWorshipPage`, and nothing here reads a Tipo, an
-// assignment or a ministry.
+// the whole card. No `requireWorshipPage`, and nothing here reads a Tipo or an
+// assignment. The one ministry read is the «Calendario» block's
+// (`loadCalendarFeedState`): the feed is worship-only for now, so a kids-only
+// volunteer sees one line saying so instead of links.
 
 export const metadata: Metadata = {
   title: "Ajustes — Oasis Worship Team",
@@ -46,6 +49,11 @@ export default async function AjustesPage() {
     hasPassword: boolean;
   } | null>(MEMBER_PROFILE_QUERY, { id: sanityId });
 
+  // The «Calendario» block: URLs signed on the server with the member's current generation
+  // (ADR-0057). Per-member and secret, which is safe on this page only because it is rendered per
+  // request — `requireActiveSession` reads the session cookie, so `revalidate` never shares it.
+  const calendarFeed = await loadCalendarFeedState(session.user);
+
   return (
     <div>
       <Navbar title={member?.alias?.trim() || "Ajustes"} />
@@ -66,7 +74,7 @@ export default async function AjustesPage() {
             /api/me/theme and reports its own write failure. Only Perfil goes,
             because it has nothing to edit. */}
         {member ? (
-          <SettingsCard member={member} {...revealProps(1)} />
+          <SettingsCard member={member} calendarFeed={calendarFeed} {...revealProps(1)} />
         ) : (
           <>
             {/* No live-region role: this is server-rendered and present at first
@@ -82,7 +90,7 @@ export default async function AjustesPage() {
                 Recarga la página; si sigue igual, avísale a un administrador.
               </p>
             </section>
-            <SettingsCard member={null} {...revealProps(2)} />
+            <SettingsCard member={null} calendarFeed={calendarFeed} {...revealProps(2)} />
           </>
         )}
       </div>
