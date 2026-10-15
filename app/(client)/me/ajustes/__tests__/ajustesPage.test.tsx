@@ -40,6 +40,17 @@ vi.mock("@/app/components/ui/ThemeControl", () => ({
 vi.mock("@/app/components/TextSizeControl", () => ({ default: () => <p>Tamaño de texto</p> }));
 vi.mock("@/app/components/ProfilePanel", () => ({ default: () => <p>PERFIL</p> }));
 
+// The «Calendario» block (ADR-0057) is decided by its own loader, which is the ONE place that reads
+// a ministry (the feed is worship-only). It decides only that block — never whether the page renders
+// — so the page-level assertion below («without reading a ministry») still holds for the page.
+const loadCalendarFeedState = vi.fn();
+vi.mock("@/app/utils/calendarFeedState", () => ({
+  loadCalendarFeedState: (u: unknown) => loadCalendarFeedState(u),
+}));
+vi.mock("@/app/components/CalendarFeedPanel", () => ({
+  default: ({ initial }: { initial: { kind: string } }) => <p>CALENDARIO:{initial.kind}</p>,
+}));
+
 import AjustesPage from "../page";
 import { MEMBER_PROFILE_QUERY } from "../../queries";
 
@@ -66,6 +77,8 @@ beforeEach(() => {
   getMemberAccess.mockReset();
   serverFetch.mockReset();
   serverFetch.mockResolvedValue(profile);
+  loadCalendarFeedState.mockReset();
+  loadCalendarFeedState.mockResolvedValue({ kind: "unavailable", message: "solo alabanza" });
 });
 
 describe("/me/ajustes", () => {
@@ -113,6 +126,20 @@ describe("/me/ajustes", () => {
     // The calendar's fields belong to `/me/disponibilidad`.
     expect(query).not.toContain("unavailableDates");
     expect(query).not.toContain("unavailabilityNotes");
+  });
+
+  it("renders the «Calendario» block from the loader, for the session's own user", async () => {
+    loadCalendarFeedState.mockResolvedValue({ kind: "ready", urls: { all: "https://x" } });
+    const html = await renderPage();
+    expect(loadCalendarFeedState).toHaveBeenCalledWith(session.user);
+    expect(html).toContain('id="calendario"');
+    expect(html).toContain("CALENDARIO:ready");
+  });
+
+  it("still renders the «Calendario» block when the profile read fails", async () => {
+    serverFetch.mockResolvedValue(null);
+    const html = await renderPage();
+    expect(html).toContain("CALENDARIO:unavailable");
   });
 
   it("carries no revision: no profile write takes ifRevisionId", () => {

@@ -49,6 +49,13 @@
 // stay OUT of this list — the consent screen needs the real member session, and
 // NextAuth's default `redirect` callback round-trips its full query string
 // through sign-in unchanged, so gating it costs nothing.
+// `api/calendar(?:/|$)` is the member calendar feed (ADR-0057): calendar apps —
+// Google's servers, iOS Calendar — fetch it with no session at all, so a session
+// gate could only ever redirect them to sign-in. The handler is its own gate: it
+// verifies an HMAC signature over the member id and generation (zero I/O) before
+// it reads anything, and answers 404 otherwise. Prefix-anchored because the
+// handler owns everything under it; `/api/calendarx` stays gated. The rotate
+// route lives under `/api/me/calendar-feed` precisely so it stays session-gated.
 // `\.well-known(?:/|$)` opens the public `/.well-known/*` request path that
 // `proxy.ts` sees before `next.config.mjs`'s `beforeFiles` rewrites run —
 // discovery (RFC 8414 / RFC 9728) must be reachable before any login exists.
@@ -56,7 +63,7 @@
 // ordinary route files under `/api`, so they stay gated; they are reachable
 // only through the rewrite, never directly.
 export const MIDDLEWARE_MATCHER =
-  "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|api/mcp(?:/|$)|api/oauth/register$|api/oauth/token$|\\.well-known(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)";
+  "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|api/calendar(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|api/mcp(?:/|$)|api/oauth/register$|api/oauth/token$|\\.well-known(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)";
 
 // Mirrors Next.js matcher semantics (full-path match) so the exclusion logic
 // can be unit-tested without importing the middleware runtime.

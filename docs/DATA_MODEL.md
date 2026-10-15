@@ -11,13 +11,13 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (21)
+## Registered document types (22)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
 `teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, the two Oasis Kids types
-`kidsPair` and `kidsSchedule`, and eight **internal** types never authored by hand:
+`kidsPair` and `kidsSchedule`, and nine **internal** types never authored by hand:
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
-`solverConfig`, `fairnessMonth`, `mcpOauthGrant`, `mcpOauthCodeRedemption`.
+`solverConfig`, `fairnessMonth`, `mcpOauthGrant`, `mcpOauthCodeRedemption`, `calendarFeed`.
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -343,6 +343,18 @@ hash nor a refresh `jti` is usable without `MCP_OAUTH_SECRET`. See
 writes nothing at all.
 
 ---
+
+## `calendarFeed` — a member's calendar-feed generation (ADR-0057)
+
+One document per member who ever pressed «Generar un enlace nuevo», `_id` `calendarFeed.<memberId>`
+(**dotted** — never served untokened; every reader requires `SANITY_API_READ_TOKEN` and fails
+closed, because an untokened read answers «absent» = generation 0 and would resurrect revoked
+URLs). Fields: `member` (weak reference to `teamMembers`), `generation` (number; absent document =
+0), `rotatedAt` (datetime). **Nothing secret:** the feed URL is an HMAC under
+`CALENDAR_FEED_SECRET` (Vercel only) over the member id and this counter. One writer:
+`POST /api/me/calendar-feed` (`createIfNotExists` + `inc` in one transaction). Hidden, read-only
+and protected in Studio. Lives in the dataset `preview` shares with production, so a rotation on
+dev also revokes the production link. Not deleted with the member (inert once the member is gone).
 
 ## `solverConfig` — the shared planner rule set (singleton)
 
