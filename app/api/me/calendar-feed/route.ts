@@ -46,16 +46,21 @@ export async function POST() {
   }
 
   const _id = calendarFeedDocId(memberId);
-  const committed = await writeClient
-    .transaction()
-    .createIfNotExists({
+  let committed: unknown;
+  try {
+    committed = await writeClient
+      .transaction()
+      .createIfNotExists({
       _id,
       _type: "calendarFeed",
       member: { _type: "reference", _ref: memberId, _weak: true },
       generation: 0,
     })
-    .patch(_id, (p) => p.inc({ generation: 1 }).set({ rotatedAt: new Date().toISOString() }))
-    .commit({ returnDocuments: true });
+      .patch(_id, (p) => p.inc({ generation: 1 }).set({ rotatedAt: new Date().toISOString() }))
+      .commit({ returnDocuments: true });
+  } catch {
+    return NextResponse.json({ error: "Calendar feed unavailable" }, { status: 503 });
+  }
 
   // The generation this transaction produced, from its own result — not a follow-up read, which
   // could lag behind a concurrent rotation and hand back a URL that is already revoked.

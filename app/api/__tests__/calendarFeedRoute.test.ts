@@ -53,14 +53,18 @@ const { signFeedToken } = await import("@/app/utils/calendarFeedToken");
 const SECRET = "s".repeat(40);
 const MEMBER = "member-1";
 
-function feedReq(search = ""): NextRequest {
-  return { nextUrl: new URL(`https://owt-backstage.vercel.app/api/calendar/x${search}`) } as unknown as NextRequest;
+// A request as Next hands it to the handler: `nextUrl`/`url` keep the RAW path (percent-escapes
+// as sent), while `params` arrive DECODED — the route must not trust the decoded params alone.
+function feedReq(rawPath: string, search = ""): NextRequest {
+  const url = `https://owt-backstage.vercel.app${rawPath}${search}`;
+  return { url, nextUrl: new URL(url) } as unknown as NextRequest;
 }
-function call(opts: { member?: string; generation?: string; token?: string; search?: string } = {}) {
+function call(opts: { member?: string; generation?: string; token?: string; search?: string; rawPath?: string } = {}) {
   const member = opts.member ?? MEMBER;
   const generation = opts.generation ?? "0";
   const token = opts.token ?? `${signFeedToken(SECRET, member, Number(generation))}.ics`;
-  return GET(feedReq(opts.search), { params: Promise.resolve({ memberId: member, generation, token }) });
+  const rawPath = opts.rawPath ?? `/api/calendar/${encodeURIComponent(member)}/${generation}/${token}`;
+  return GET(feedReq(rawPath, opts.search), { params: Promise.resolve({ memberId: member, generation, token }) });
 }
 
 const SCHEDULE = {
@@ -123,6 +127,13 @@ describe("GET /api/calendar — no I/O before the signature verifies", () => {
     ["a negative generation", { generation: "-1" }],
     ["an extra query string (cache bypass)", { search: "?solo=mios&x=1" }],
     ["an unknown query string", { search: "?x=1" }],
+    ["a bare trailing ? (another edge-cache key)", { search: "?" }],
+    ["a percent-encoded .ics suffix (Next decodes params; the raw path is pinned)", {
+      rawPath: `/api/calendar/${MEMBER}/0/${signFeedToken(SECRET, MEMBER, 0)}%2Eics`,
+    }],
+    ["a percent-encoded member id character", {
+      rawPath: `/api/calendar/member%2D1/0/${signFeedToken(SECRET, MEMBER, 0)}.ics`,
+    }],
   ];
   for (const [name, opts] of cases) {
     it(`404s ${name} with zero Sanity requests`, async () => {
@@ -268,6 +279,14 @@ describe("POST /api/me/calendar-feed", () => {
     expect(urls.mine).toBe(`${urls.all}?solo=mios`);
     expect(urls.webcalAll.startsWith("webcal://owt-backstage.vercel.app/")).toBe(true);
     expect(urls.googleAll).toBe(`https://calendar.google.com/calendar/r?cid=${encodeURIComponent(urls.webcalAll)}`);
+  });
+
+  it("503s (JSON) when the commit throws", async () => {
+    h.requireActiveSession.mockResolvedValue(SESSION);
+    h.commit.mockRejectedValue(new Error("boom"));
+    const res = await POST();
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "Calendar feed unavailable" });
   });
 
   it("503s instead of returning a URL when the transaction result carries no new generation", async () => {

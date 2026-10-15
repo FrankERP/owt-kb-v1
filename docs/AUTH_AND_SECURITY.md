@@ -139,14 +139,15 @@ closed with a 404; the theme gallery is prerendered and reads nothing (ADR-0017)
 routes read no session — the discovery documents are public by design, registration only signs
 allowlisted redirect URIs into a client id, the token endpoint needs a signed code plus its PKCE
 verifier (or a signed refresh token), and `/api/mcp` checks its own bearer token — see
-[MCP / OAuth](#mcp--oauth) below. The member calendar feed (`/api/calendar/<memberId>/<generation>/<token>.ics`)
-is fetched by calendar apps with no session; its handler verifies an HMAC under
-`CALENDAR_FEED_SECRET` over the member id and generation with zero I/O before any read, then
-checks the member is active, in worship, and that the generation is current (ADR-0057). Its
-rotate route, `POST /api/me/calendar-feed`, stays session-gated. The first three had been public for some time without
+[MCP / OAuth](#mcp--oauth) below. Cron, the identity route and the theme gallery had been public for some time without
 appearing in this list.
 Each excluded prefix is anchored with `(?:/|$)` so `/author` is **not** mistaken for the public
 `/auth` route (this was a real login-gate-bypass bug — the anchor is the fix).
+The member calendar feed (`/api/calendar/<memberId>/<generation>/<token>.ics`)
+is fetched by calendar apps with no session; its handler verifies an HMAC under
+`CALENDAR_FEED_SECRET` over the member id and generation with zero I/O before any read, then
+checks the member is active, in worship, and that the generation is current (ADR-0057). Its
+rotate route, `POST /api/me/calendar-feed`, stays session-gated.
 
 > **Invariant:** the matcher string is inlined in `proxy.ts` (Next requires a statically
 > analyzable literal) but must stay **byte-for-byte equal** to `MIDDLEWARE_MATCHER` in

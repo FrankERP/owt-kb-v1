@@ -41,7 +41,7 @@ export default function CalendarFeedPanel({ initial }: { initial: CalendarFeedSt
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const body = (await res.json()) as { urls?: FeedUrls };
       if (!body?.urls?.all) throw new Error("respuesta sin enlace");
-      setState({ kind: "ready", urls: body.urls });
+      setState((prev) => ({ kind: "ready", urls: body.urls!, preview: prev.kind === "ready" ? prev.preview : undefined }));
       setConfirmOpen(false);
       toast({ message: "Listo. Suscríbete otra vez con el enlace nuevo.", tone: "ok", duration: 4000 });
     } catch {

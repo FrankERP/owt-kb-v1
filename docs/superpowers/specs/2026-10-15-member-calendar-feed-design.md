@@ -281,3 +281,7 @@ Adopted from the approving rounds' non-blocking notes; see the review log.
 7. **Rollback wording.** After a revert the middleware answers a redirect to sign-in (307), not a
    404; calendar clients treat both as an error.
 8. **Several instrument seats** show only the first in ⭐/«Tu lugar» (`[0]`, inherited from `/me`).
+9. **Raw-path pinning (merge-range code review, MEDIUM).** Next decodes dynamic params, so a
+   percent-encoded spelling (`%2Eics`, an encoded token or id character) verified too and missed
+   the edge cache. After the HMAC (still zero I/O) the route requires the raw `pathname` to equal
+   the minted one, and refuses a bare trailing `?`.

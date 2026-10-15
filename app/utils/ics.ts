@@ -1,7 +1,7 @@
 // Minimal iCalendar (.ics) builder (RFC 5545) for service events.
 //
 // Two callers: the one-shot download on `/me` (`AddToCalendarButton`, all-day events) and the
-// member calendar feed (`app/api/calendar/[memberId]/[token]/route.ts`, all-day weekends plus
+// member calendar feed (`app/api/calendar/[memberId]/[generation]/[token]/route.ts`, all-day weekends plus
 // timed specials). NEUTRAL module — no "use client", no imports — so both a client component and
 // a route handler may call it.
 

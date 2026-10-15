@@ -73,6 +73,12 @@ export async function GET(
   if (!rawToken?.endsWith(".ics") || !isCanonicalFeedSearch(req.nextUrl.search)) return NOT_FOUND();
   if (!memberId || generation === null || !FEED_TOKEN_RE.test(token)) return NOT_FOUND();
   if (!verifyFeedToken(secret, memberId, generation, token)) return NOT_FOUND();
+  // Next decodes dynamic params, so `%2Eics` or a percent-encoded token character would verify
+  // too. Pin the RAW path to the one spelling `feedUrls` mints (still zero I/O), and refuse a bare
+  // trailing `?` (its `search` is "" but the edge cache key may differ).
+  const canonicalPath = `/api/calendar/${encodeURIComponent(memberId)}/${generation}/${token}.ics`;
+  if (req.nextUrl.pathname !== canonicalPath) return NOT_FOUND();
+  if (req.nextUrl.search === "" && req.url.includes("?")) return NOT_FOUND();
 
   let gate: Gate;
   try {

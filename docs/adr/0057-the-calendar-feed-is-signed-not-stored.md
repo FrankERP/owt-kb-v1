@@ -25,8 +25,8 @@ and its review log.
   atomically, which kills every earlier URL. Absent document = generation 0.
 - Fail closed: no secret, or no `SANITY_API_READ_TOKEN` (a token-less read of a dotted id answers
   «absent», which would read as 0 and resurrect revoked URLs) → 503. A corrupt stored counter → 503.
-- One spelling per URL (the `.ics` suffix required, the query empty or exactly `?solo=mios`), so
-  the one-hour edge cache (`Vercel-CDN-Cache-Control`) cannot be bypassed by a URL holder.
+- One spelling per URL (the `.ics` suffix required, the query empty or exactly `?solo=mios`, and
+  the raw path — percent-escapes included — equal to the minted one), so the one-hour edge cache (`Vercel-CDN-Cache-Control`) cannot be bypassed by a URL holder.
 - `/api/calendar` is excluded from the `proxy.ts` matcher; the rotate route stays session-gated.
 
 ## Rejected

@@ -285,8 +285,9 @@ A member's calendar subscription (ADR-0057; spec `docs/superpowers/specs/2026-10
 Excluded from the `proxy.ts` matcher: calendar apps fetch it with no session. Order: 503 without
 `CALENDAR_FEED_SECRET` (≥ 32 bytes) or `SANITY_API_READ_TOKEN` → 404 for any non-canonical spelling
 (the `.ics` suffix is required, the query is empty or exactly `?solo=mios`, generation canonical
-decimal, token 43 base64url chars) → 404 unless the HMAC verifies (**no Sanity request before
-this**) → one tokened read of the member and the stored generation → 404 unless the member exists,
+decimal, token 43 base64url chars) → 404 unless the HMAC verifies, and unless the RAW path equals
+the one spelling `feedUrls` mints (Next decodes params, so `%2Eics` would otherwise verify too; a
+bare trailing `?` is refused as well) — **no Sanity request before this** → one tokened read of the member and the stored generation → 404 unless the member exists,
 is not disabled, is in worship and the generation is current (503 if the read throws or the counter
 is corrupt) → the schedule read (`operationalClient`, `published != false`, CDMX today − 60 d …
 + 365 d). 200 `text/calendar`: every published service (or only the member's with `?solo=mios`),
