@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
   if (v3Body) {
     const started = Date.now();
     // The transport is `server-only` and loaded on the v3 branch alone: the v2 path never loads it,
-    // so it stays byte-for-byte today's and `solveRoute.test.ts` runs unedited (no `server-only` mock).
+    // so it stays byte-for-byte v2's and `solveRoute.test.ts` needs no `server-only` mock.
     const { solveV3 } = await import("@/app/utils/solverV3Upstream");
     const result = await solveV3(body);
     // KH-2: engine, outcome class, status and timing — never a byte of the request or response.

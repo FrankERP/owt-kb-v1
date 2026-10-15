@@ -448,8 +448,9 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 | `/api/admin/login-events` | GET | admin/super-admin | Per-member last login/active, count, providers, recent 20 events. 500 `activity_unavailable` without `SANITY_API_READ_TOKEN`. |
 
 ### Solver
-- **`POST /api/admin/solve`** (`maxDuration=60`) — the auto-scheduler. If `OWT_SOLVER_URL` is
-  set, calls the remote solver with `X-Api-Key`; else spawns the local Python subprocess
+- **`POST /api/admin/solve`** (`maxDuration=60`) — the auto-scheduler. It runs the deployment's effective engine: v3 since the 2026-10-15
+  cutover (ADR-0056; «Engine» below), with v2, described first, as the rollback engine. Under v2, if
+  `OWT_SOLVER_URL` is set, it calls the remote solver with `X-Api-Key`; else spawns the local Python subprocess
   (`gcf/owt_solver_v2.py --json-mode`, 120s hard kill). Body is a `SolveRequest`; requires
   `sunday_leads`. Returns a `SolveResponse` — **200 if `ok`, else 422**. An `ok: false` the route
   made itself (the service's HTTP status, the local timeout, a failed start, no output, output
@@ -535,7 +536,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   forbidden`). Body `{ months: [{ month, source: "auto"|"manual", expectedRev, people, presence }] }`,
   strict: unknown fields, server stamps, `_key`, `name` and `contentHash` are refused (`400
   invalid_request`, `details.issues` naming each path by field and index only). Under engine v2 —
-  every deployment until C7's flip, unless `OWT_SOLVER_ENGINE` is set on the `preview` branch or
+  only after a flip-back (ADR-0056), or with `OWT_SOLVER_ENGINE=v2` on the `preview` branch or
   locally (docs/SECRETS.md) — refused with a 409 whose `details.detail` is `engine_not_v3`, before
   anything is read. **The wire `error` of a refusal is not, in general, the refusal's own name
   (only `stale_revision` carries its own):** it is `stale_revision` for `details.detail`

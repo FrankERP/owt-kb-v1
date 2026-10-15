@@ -17,7 +17,7 @@ server answering v3, or the reverse.
 - `/admin`'s Server Component resolves the effective engine with C2's resolver at render and passes
   it as a plain string prop: `AdminPanel` → `ServicesPanel` → `MonthGenerator`, and on to the
   surfaces it gates (C1's «aplica con el nuevo solver» note, C3's card-chip note, C2's preview
-  banner, C3's warning gate). Every engine-dependent client branch reads that prop; no client module
+  banner, C3's warning gate). *(2026-10-15: C3's card-chip note was removed at the cutover, ADR-0056.)* Every engine-dependent client branch reads that prop; no client module
   reads `SOLVER_ENGINE` or imports the resolver (`engineProp.test.ts`, C2's `solverDeployment.test.ts`).
   The client props default to the literal `"v2"` for tests only; the guard fails a production mount
   that omits `engine=`.

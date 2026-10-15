@@ -38,7 +38,7 @@ routes, the service-readiness identity route and the theme gallery — see ADR-0
 | CMS / DB | **Sanity v5** via `next-sanity` | Project `ebb8vcnk`, dataset `production`. Studio embedded at `/studio`. |
 | Auth | **NextAuth v4** | JWT sessions (7-day), Google SSO (web + native), email/password (bcrypt). |
 | Search | **Fuse.js** + `normalizeText` | Accent-insensitive fuzzy search over songs/members. |
-| Solver | **Python 3.12 + OR-Tools CP-SAT** | Deployed as a Gen-2 Google Cloud Function (`owt-solver`). |
+| Solver | **Python 3.12 + OR-Tools CP-SAT** | Two Gen-2 Google Cloud Functions: `owt-solver-v3` serves Auto since the 2026-10-15 cutover; `owt-solver` (v2) stays deployed as the rollback engine (ADR-0056). |
 | Email | **nodemailer (SMTP)** primary, **Resend** fallback | Live via Gmail SMTP as `dev.raccoon.labs@gmail.com`. |
 | Push | **Firebase Admin (FCM)** | Self-healing dead-token pruning. |
 | Mobile | **Capacitor 8** | Wraps the web app; iOS + Android projects committed. |
@@ -69,7 +69,7 @@ flowchart TB
   end
 
   subgraph Google[Google Cloud]
-    GCF[owt-solver Gen2 Function\nPython + OR-Tools]
+    GCF[owt-solver-v3 Gen2 Function - Auto\nowt-solver v2 - rollback\nPython + OR-Tools]
     SM[Secret Manager]
   end
 
