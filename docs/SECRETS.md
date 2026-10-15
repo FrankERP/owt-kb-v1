@@ -454,8 +454,12 @@ the rest of the app, are unaffected — nothing here touches a session cookie or
 Optional in local `.env.local` (without it the feed answers 503 and «Calendario» in `/me/ajustes`
 says «no disponible»). Not needed in: GitHub Actions, the iOS build, GCF.**
 
-**Status: NOT SET yet** (2026-10-15) — added with the member calendar feed (ADR-0057). Until it is
-set in an environment, that environment's feed answers 503 and no member sees a link.
+**Status: SET in Vercel Preview and Production** (2026-10-15, two separate values, type
+*sensitive*) — added with the member calendar feed (ADR-0057). Generated with `openssl rand -hex 32`
+in a Claude cloud session at Frank's request and entered through the Vercel API, so both values
+passed through that session's transcript: rotate both at the next secrets rotation. Takes effect
+on each environment's next deployment. Without it, an environment's feed answers 503 and no
+member sees a link.
 
 **Purpose.** The HMAC-SHA256 key that signs every member calendar-feed URL
 (`app/utils/calendarFeedToken.ts`): `HMAC(secret, "owt-calendar-feed:v1\n" + memberId + "\n" +
@@ -468,8 +472,9 @@ sign the team out or break the MCP connector, and rotating either of those must 
 subscribed calendar. **Separate per environment** so a dev-minted URL never verifies on
 production (each environment builds its links from its own canonical origin).
 
-**Where the value came from.** `openssl rand -hex 32`, generated and entered directly into Vercel
-(`printf '%s' "$SECRET" | npx vercel env add CALENDAR_FEED_SECRET <env>`) — no dashboard issues it.
+**Where the value came from.** `openssl rand -hex 32`, entered directly into Vercel (preferably
+`printf '%s' "$SECRET" | npx vercel env add CALENDAR_FEED_SECRET <env> --sensitive`, which keeps it
+out of any log) — no dashboard issues it.
 
 **How to rotate.** Same as `MCP_OAUTH_SECRET`: `npx vercel env rm CALENDAR_FEED_SECRET <env>`, add
 the new value, **redeploy that environment** (env vars bind at build time).
