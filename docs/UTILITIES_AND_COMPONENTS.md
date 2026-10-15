@@ -359,7 +359,8 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   `DayCardDisclosure`, the calendar feed route.
 - **Member calendar feed** (ADR-0057) — [calendarFeed.ts](../app/utils/calendarFeed.ts) (neutral,
   pure: `calendarFeedQuery(scope)`, `buildFeedEvents(data, origin)`, `feedWindow()`,
-  `isCanonicalFeedSearch`, the `FeedUrls`/`CalendarFeedState` types),
+  `isCanonicalFeedSearch`, `WEEKEND_SERVICE_TIME` — the weekend start times, Sáb 18:00 / Dom 11:00,
+  the feed's only source for them — the `FeedUrls`/`CalendarFeedState` types),
   [calendarFeedToken.ts](../app/utils/calendarFeedToken.ts) (server-only: `signFeedToken`,
   `verifyFeedToken` — constant-time, `feedSecret`, `hasReadToken`, `feedUrls`, the generation
   parsers) and [calendarFeedState.ts](../app/utils/calendarFeedState.ts) (server-only:

@@ -292,8 +292,9 @@ is not disabled, is in worship and the generation is current (503 if the read th
 is corrupt) → the schedule read (`operationalClient`, `published != false`, CDMX today − 60 d …
 + 365 d). 200 `text/calendar`: every published service (or only the member's with `?solo=mios`),
 the member's own marked «⭐ <servicio> · <lugar>», songs with key and the team by section in the
-description, weekends all-day, specials with a valid time timed (`TZID=America/Mexico_City`,
-PT2H). No `team_notes`. `Cache-Control: private, max-age=300`, `Vercel-CDN-Cache-Control:
+description, weekends timed at the standing times (Sáb 18:00, Dom 11:00 — `WEEKEND_SERVICE_TIME`),
+specials with a valid time timed at it, both `TZID=America/Mexico_City`, PT2H; a special without
+one is all-day. No `team_notes`. `Cache-Control: private, max-age=300`, `Vercel-CDN-Cache-Control:
 max-age=3600`.
 
 ---

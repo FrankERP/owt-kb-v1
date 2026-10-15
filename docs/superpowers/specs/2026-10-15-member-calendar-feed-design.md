@@ -123,8 +123,9 @@ Per role document, one `VEVENT`:
 - `SUMMARY`: the service label — «Domingo», «Sábado», or the special's `service_name`
   (fallback «Servicio especial»), plus «· Oasis Worship». When the member holds a seat:
   `⭐ <label> · <seatLabel(doc)>` (`app/utils/myWeek.ts:seatLabel`, the same wording as `/me`).
-- **Time:** weekend services are all-day (`DTSTART;VALUE=DATE`), because no time is stored.
-  A special with a valid `time` (`isServiceTime`) is a timed event:
+- **Time:** weekend roles store no time, so weekend services start at the team's standing times
+  (`WEEKEND_SERVICE_TIME`: Saturday 18:00, Sunday 11:00 — change 10 below; they were all-day
+  until then). A special with a valid `time` (`isServiceTime`) is a timed event:
   `DTSTART;TZID=America/Mexico_City:<YYYYMMDD>T<HHmm>00` with `DURATION:PT2H` and a `VTIMEZONE`
   block (fixed UTC−6, Mexico has had no DST since 2022). Pure string formatting — the time is never
   combined into a JS `Date` (CLAUDE.md invariant on special `time`); a special without a valid time
@@ -218,7 +219,7 @@ token to the environment that minted it.
 | CF3 | No `CALENDAR_FEED_SECRET` (or < 32 bytes), or no `SANITY_API_READ_TOKEN` → 503 before any read; a throwing or malformed generation read → 503. | route tests |
 | CF4 | Rotation bumps the generation atomically; the old URL 404s, the new one 200s; impersonating → 403; no session → 401. | route tests |
 | CF5 | Seated services carry `⭐` + `seatLabel`, decided by member id across all five seat paths. | pure test |
-| CF6 | Events: stable UID per role doc, all-day for weekends, timed (TZID, PT2H) for specials with a valid time; songs with key, team by section, no `team_notes`. | pure tests |
+| CF6 | Events: stable UID per role doc, weekends timed at Sáb 18:00 / Dom 11:00 (change 10), timed (TZID, PT2H) for specials with a valid time; songs with key, team by section, no `team_notes`. | pure tests |
 | CF7 | ICS lines ≤ 75 octets, folded on UTF-8 boundaries, CRLF, escaped. | pure tests |
 | CF8 | Middleware excludes exactly `/api/calendar` and below, anchored; `proxy.ts` byte-identical. | `routeMatcher.test.ts` |
 | CF9 | Existing download button output unchanged. | existing tests + a pin |
@@ -244,7 +245,7 @@ Vercel and redeploy → every feed answers 503.
 
 ## Out of scope / follow-ups
 
-Kids schedule feed; weekend service times (need a stored time or a constant — asked Frank);
+Kids schedule feed; a stored per-service weekend time (today a constant, change 10);
 `team_notes` in the event; reminders (`VALARM` — Google ignores alarms in subscribed calendars).
 
 ## Accepted residuals
@@ -285,3 +286,8 @@ Adopted from the approving rounds' non-blocking notes; see the review log.
    percent-encoded spelling (`%2Eics`, an encoded token or id character) verified too and missed
    the edge cache. After the HMAC (still zero I/O) the route requires the raw `pathname` to equal
    the minted one, and refuses a bare trailing `?`.
+10. **Weekend start times (2026-10-15, after release).** Frank gave the standing times: Saturday
+    18:00, Sunday 11:00. Weekend events are now timed (`DTSTART;TZID=America/Mexico_City`, PT2H)
+    from the constant `WEEKEND_SERVICE_TIME` in `app/utils/calendarFeed.ts`; nothing is stored.
+    A special keeps its own time, and stays all-day without a valid one. A different time for one
+    weekend would need a stored field; not built.
