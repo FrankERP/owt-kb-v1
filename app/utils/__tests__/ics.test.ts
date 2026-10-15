@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildICS } from "../ics";
+import { buildICS, foldLine } from "../ics";
 
 const line = (ics: string, prefix: string) =>
   ics.split("\r\n").find((l) => l.startsWith(prefix));
@@ -48,5 +48,57 @@ describe("buildICS", () => {
   it("uses the provided calendar name", () => {
     const ics = buildICS([], "Mis Servicios");
     expect(line(ics, "X-WR-CALNAME")).toBe("X-WR-CALNAME:Mis Servicios");
+  });
+});
+
+describe("buildICS — subscription feed additions", () => {
+  const raw = (ics: string) => ics.split("\r\n");
+
+  it("writes a timed event with TZID and a duration, plus one VTIMEZONE, from text alone", () => {
+    const ics = buildICS([{ uid: "s", date: "2026-10-18", title: "Noche", time: "19:30" }]);
+    expect(line(ics, "DTSTART;TZID")).toBe("DTSTART;TZID=America/Mexico_City:20261018T193000");
+    expect(line(ics, "DURATION")).toBe("DURATION:PT2H");
+    expect(ics).not.toContain("DTEND");
+    expect((ics.match(/BEGIN:VTIMEZONE/g) ?? []).length).toBe(1);
+    expect(ics).toContain("TZOFFSETTO:-0600");
+  });
+
+  it("emits no VTIMEZONE when every event is all-day (the download stays as it was)", () => {
+    expect(buildICS([{ uid: "a", date: "2026-07-05", title: "Domingo" }])).not.toContain("VTIMEZONE");
+  });
+
+  it("honours a custom duration and UID domain", () => {
+    const ics = buildICS([{ uid: "s", date: "2026-10-18", title: "x", time: "09:00", durationMinutes: 90 }], "c", { uidDomain: "owt-backstage" });
+    expect(line(ics, "DURATION")).toBe("DURATION:PT1H30M");
+    expect(line(ics, "UID")).toBe("UID:s@owt-backstage");
+  });
+
+  it("adds the refresh hints only when asked (a feed, not the download)", () => {
+    expect(buildICS([])).not.toContain("REFRESH-INTERVAL");
+    const ics = buildICS([], "c", { refreshMinutes: 180 });
+    expect(line(ics, "REFRESH-INTERVAL")).toBe("REFRESH-INTERVAL;VALUE=DURATION:PT3H");
+    expect(line(ics, "X-PUBLISHED-TTL")).toBe("X-PUBLISHED-TTL:PT3H");
+    expect(line(ics, "X-WR-TIMEZONE")).toBe("X-WR-TIMEZONE:America/Mexico_City");
+  });
+
+  it("escapes CR and CRLF as \\n, so a description can never inject a property", () => {
+    const ics = buildICS([{ uid: "d", date: "2026-07-05", title: "t", description: "a\r\nb\rc\nEND:VEVENT" }]);
+    expect(line(ics, "DESCRIPTION")).toBe("DESCRIPTION:a\\nb\\nc\\nEND:VEVENT");
+    expect((ics.match(/^END:VEVENT$/gm) ?? []).length).toBe(1);
+  });
+
+  it("folds every line at 75 octets without splitting a multi-byte character", () => {
+    const title = "⭐ Noche de alabanza · Bajo eléctrico · " + "canción ".repeat(20);
+    const ics = buildICS([{ uid: "f", date: "2026-07-05", title }]);
+    const enc = new TextEncoder();
+    for (const l of raw(ics)) expect(enc.encode(l).length).toBeLessThanOrEqual(75);
+    // Unfolding (CRLF + one space removed) restores the exact escaped text.
+    const unfolded = ics.replace(/\r\n /g, "");
+    expect(line(unfolded, "SUMMARY")).toBe(`SUMMARY:${title}`);
+    expect(unfolded).not.toContain("�");
+  });
+
+  it("leaves short lines untouched", () => {
+    expect(foldLine("SUMMARY:Domingo")).toBe("SUMMARY:Domingo");
   });
 });

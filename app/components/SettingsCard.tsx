@@ -18,12 +18,16 @@ import type { ComponentPropsWithoutRef } from "react";
 import ProfilePanel, { type MemberProfile } from "@/app/components/ProfilePanel";
 import TextSizeControl from "@/app/components/TextSizeControl";
 import ThemeControl from "@/app/components/ui/ThemeControl";
+import CalendarFeedPanel from "@/app/components/CalendarFeedPanel";
+import type { CalendarFeedState } from "@/app/utils/calendarFeed";
 
 type Props = ComponentPropsWithoutRef<"section"> & {
   member?: MemberProfile | null;
+  /** The «Calendario» subsection (signed feed URLs from the server). Absent → not rendered. */
+  calendarFeed?: CalendarFeedState | null;
 };
 
-export default function SettingsCard({ member, className = "", ...rest }: Props) {
+export default function SettingsCard({ member, calendarFeed, className = "", ...rest }: Props) {
   return (
     <section
       id="ajustes"
@@ -40,6 +44,12 @@ export default function SettingsCard({ member, className = "", ...rest }: Props)
         <div className="p-5">
           <h3 className="font-display text-lg font-bold mb-3">Perfil</h3>
           <ProfilePanel initialMember={member} bare />
+        </div>
+      )}
+      {calendarFeed && (
+        <div className="p-5" id="calendario">
+          <h3 className="font-display text-lg font-bold mb-3">Calendario</h3>
+          <CalendarFeedPanel initial={calendarFeed} />
         </div>
       )}
     </section>

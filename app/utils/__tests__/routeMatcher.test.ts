@@ -33,6 +33,7 @@ function appRoutes(): string[] {
  */
 const PUBLIC_ROUTES = [
   "/api/auth/sample", // NextAuth's own catch-all — it IS the login flow
+  "/api/calendar/sample/sample/sample", // member calendar feed — HMAC over member id + generation verified with zero I/O before any read; 404 otherwise (ADR-0057)
   "/api/cron/flush-notifications", // Bearer CRON_SECRET, checked in-handler
   "/api/cron/service-reminders", // Bearer CRON_SECRET, checked in-handler
   "/api/cron/smtp-probe", // Bearer CRON_SECRET, checked in-handler; sends no mail
@@ -177,6 +178,15 @@ describe("auth middleware route matcher", () => {
     expect(middlewareRuns("/api/oauth/token")).toBe(false);
     // Near-misses stay gated.
     for (const p of ["/api/mcpx", "/api/oauth/registerx", "/api/oauth/register/x", "/api/oauth/tokens"]) {
+      expect(middlewareRuns(p)).toBe(true);
+    }
+  });
+
+  it("excludes the member calendar feed, anchored, and keeps its rotate route gated (ADR-0057)", () => {
+    for (const p of ["/api/calendar", "/api/calendar/", "/api/calendar/m1/0/abc.ics"]) {
+      expect(middlewareRuns(p)).toBe(false);
+    }
+    for (const p of ["/api/calendarx", "/api/calendar-admin", "/api/me/calendar-feed", "/calendar"]) {
       expect(middlewareRuns(p)).toBe(true);
     }
   });

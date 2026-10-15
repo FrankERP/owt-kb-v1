@@ -38,6 +38,8 @@ export const config = {
   // (checked above). `api/cron/*` is excluded because it authenticates with
   // `Authorization: Bearer ${CRON_SECRET}` inside each handler; a session gate
   // in front of a machine caller only ever redirects it to the sign-in page.
+  // `api/calendar/*` is the member calendar feed: calendar apps fetch it without a
+  // session and the handler verifies its own HMAC signature first (ADR-0057).
   // `api/mcp`, `api/oauth/register` and `api/oauth/token` (P0 plan step 5, spec
   // I11) authenticate themselves — bearer token, signed client id, signed code
   // — and `/.well-known/*` must be reachable before any login exists so
@@ -51,6 +53,6 @@ export const config = {
   // sync guard (routeMatcher.test.ts). Each excluded prefix is anchored with
   // `(?:/|$)` so `/author` is not mistaken for a public `/auth` route.
   matcher: [
-    "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|api/mcp(?:/|$)|api/oauth/register$|api/oauth/token$|\\.well-known(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)",
+    "/((?!auth(?:/|$)|api/auth(?:/|$)|api/cron(?:/|$)|api/calendar(?:/|$)|theme-gallery(?:/|$)|api/service-readiness-verification/identity$|api/mcp(?:/|$)|api/oauth/register$|api/oauth/token$|\\.well-known(?:/|$)|_next/static(?:/|$)|_next/image(?:/|$)|favicon\\.ico$|LogoOasis\\.png$|icons(?:/|$)|manifest\\.webmanifest$).*)",
   ],
 };

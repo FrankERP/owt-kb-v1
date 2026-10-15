@@ -448,6 +448,46 @@ the rest of the app, are unaffected — nothing here touches a session cookie or
 
 ---
 
+## `CALENDAR_FEED_SECRET`
+
+**Needed in: Vercel preview AND production — each generated SEPARATELY (`openssl rand -hex 32`).
+Optional in local `.env.local` (without it the feed answers 503 and «Calendario» in `/me/ajustes`
+says «no disponible»). Not needed in: GitHub Actions, the iOS build, GCF.**
+
+**Status: SET in Vercel Preview and Production** (2026-10-15, two separate values, type
+*sensitive*) — added with the member calendar feed (ADR-0057). Generated with `openssl rand -hex 32`
+in a Claude cloud session at Frank's request and entered through the Vercel API, so both values
+passed through that session's transcript: rotate both at the next secrets rotation. Takes effect
+on each environment's next deployment. Without it, an environment's feed answers 503 and no
+member sees a link.
+
+**Purpose.** The HMAC-SHA256 key that signs every member calendar-feed URL
+(`app/utils/calendarFeedToken.ts`): `HMAC(secret, "owt-calendar-feed:v1\n" + memberId + "\n" +
+generation)`. The token is never stored anywhere — the server recomputes it — so this value is the
+whole credential. A missing or under-length (< 32 bytes) value fails closed: every feed request
+503s before any Sanity read. It is also the feed's **kill switch**: remove it and redeploy.
+
+**Its own value, never `NEXTAUTH_SECRET` or `MCP_OAUTH_SECRET`:** rotating it after a leak must not
+sign the team out or break the MCP connector, and rotating either of those must not kill every
+subscribed calendar. **Separate per environment** so a dev-minted URL never verifies on
+production (each environment builds its links from its own canonical origin).
+
+**Where the value came from.** `openssl rand -hex 32`, entered directly into Vercel (preferably
+`printf '%s' "$SECRET" | npx vercel env add CALENDAR_FEED_SECRET <env> --sensitive`, which keeps it
+out of any log) — no dashboard issues it.
+
+**How to rotate.** Same as `MCP_OAUTH_SECRET`: `npx vercel env rm CALENDAR_FEED_SECRET <env>`, add
+the new value, **redeploy that environment** (env vars bind at build time).
+
+**Blast radius / what breaks mid-rotation.** Every calendar URL of that environment stops working
+(404) the moment the new deployment is live, and members must subscribe again from «Calendario».
+Subscribed calendars do not error loudly — they simply stop updating — so announce it. The edge
+cache may keep serving an old URL's last body for up to an hour. Nothing else in the app reads
+this variable. To revoke ONE member's link, do not rotate this: the member uses «Generar un enlace
+nuevo» (it bumps their `calendarFeed.<memberId>` generation).
+
+---
+
 ## `MCP_DISABLED`
 
 **Needed in: Vercel production and preview, ONLY when switching MCP off — leave unset otherwise.

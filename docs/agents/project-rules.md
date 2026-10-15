@@ -294,7 +294,12 @@ several exist precisely to stop a plausible-looking change.
 - **`/api/cron/*` stays excluded from the `proxy.ts` middleware matcher** — those
   routes authenticate with `CRON_SECRET` themselves. The matcher is duplicated in
   `app/utils/routeMatcher.ts` and the two must stay byte-identical (sync guard in
-  `routeMatcher.test.ts`).
+  `routeMatcher.test.ts`). `/api/calendar/*` (the member calendar feed, ADR-0057) is excluded
+  too: calendar apps fetch it with no session. The handler checks configuration, then the URL's
+  one canonical spelling, then the HMAC over member id + generation — all with zero I/O — and only
+  then reads Sanity. That order is what keeps junk traffic from spending the Free-plan quota the
+  production app shares (and, in the first draft, from filling `getMemberAccess`'s never-evicted
+  cache); `calendarFeedRoute.test.ts` asserts zero fetches for every pre-signature refusal.
 - **Notification emails: `before` is captured PRE-COMMIT** and threaded into
   `after()`. Reading live state inside `after()` gives post-write state and the
   system silently sends nothing. See `docs/NOTIFICATIONS.md`.
