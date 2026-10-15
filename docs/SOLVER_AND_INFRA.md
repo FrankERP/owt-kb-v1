@@ -10,7 +10,7 @@ the test setup.
 A Python 3.12 + **OR-Tools CP-SAT** constraint solver deployed as a **Gen-2 Google Cloud
 Function** named `owt-solver`. It builds a **fair monthly worship-team roster**.
 
-> **Since C7-FLIP-DATE this is the rollback engine.** Auto runs solver v3 (`owt-solver-v3`, «Solver
+> **Since 2026-10-15 this is the rollback engine.** Auto runs solver v3 (`owt-solver-v3`, «Solver
 > v3 (`gcf_v3/`)» in §2 below; `SOLVER_ENGINE = "v3"`,
 > [ADR-0056](adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md)).
 > This section describes v2, which stays deployed, byte-identical and selectable: it serves Auto
@@ -527,12 +527,12 @@ holds for the trailing Saturday, now that the planner sends `weeks + 1`: the pla
 first (the solver's non-trailing path is unchanged by the invariant), then the function if ever
 both — an old function refuses a request that names it.
 
-### Solver v3 (`gcf_v3/`) — `owt-solver-v3`, serves Auto since C7-FLIP-DATE
+### Solver v3 (`gcf_v3/`) — `owt-solver-v3`, serves Auto since 2026-10-15
 
 The date-based v3 solver (spec `docs/superpowers/specs/2026-10-05-solver-v3-c5-solver-function-design.md`,
 ADR-0051) lives in `gcf_v3/` (package `owt_v3`) and imports nothing from `gcf/`. **Auto calls it**
 through `app/api/admin/solve/route.ts` (`app/utils/solverV3Upstream.ts`, URL `OWT_SOLVER_V3_URL`) on
-every deployment whose effective engine is v3 — production and dev since the C7-FLIP-DATE cutover
+every deployment whose effective engine is v3 — production and dev since the 2026-10-15 cutover
 (ADR-0056, «Cutover record» below). v2 above is unchanged and is the rollback engine.
 
 - **Contract `3`.** One request staffs the weekend voice seats of 1–2 calendar months: dated
@@ -603,7 +603,7 @@ the engine back to v2 (ADR-0056). Disabling `owt-solver-v3-deploy` or deleting t
 only after a flip-back has been released and verified, and is Frank's call. Records written under
 v3 stay; they are inert under v2.
 
-#### Cutover record (solver v3 C7, C7-FLIP-DATE)
+#### Cutover record (solver v3 C7, 2026-10-15)
 
 The release that made v3 Auto's engine
 ([ADR-0056](adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md); plan

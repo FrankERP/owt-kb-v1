@@ -46,9 +46,9 @@ function runs on 1 vCPU. The reason changed, not the measurement: with no histor
 fairness objective runs again, and at 0.33 vCPU production measured ~4× a Mac core plus 11–19 s
 cold starts against the route's 60 s. One worker is still right on one core.
 
-## Under v3 (C7-FLIP-DATE, ADR-0051)
+## Under v3 (2026-10-15, ADR-0051)
 
-Since C7-FLIP-DATE Auto runs solver v3 (`owt-solver-v3`, ADR-0056). v2, the rollback engine, keeps
+Since 2026-10-15 Auto runs solver v3 (`owt-solver-v3`, ADR-0056). v2, the rollback engine, keeps
 this decision as written, and nothing above changes. v3 keeps one search worker on its 1 vCPU and
 adds (ADR-0051; C5 §7, S3): `linearization_level = 2`, a deterministic limit per stage
 (`STAGE_DET_LIMIT`) under a wall guard of about 2.5 s per stage, and a 25 s total budget from model

@@ -37,7 +37,7 @@
 > `revise_proposal`, `apply_schedule`) plan approved at critical tier 2026-09-28
 > ([plan](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply.md),
 > [review log](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply-review-log.md)), not
-> implemented — blocked since C7-FLIP-DATE: its parity target (the browser's v2 request) and its
+> implemented — blocked since 2026-10-15: its parity target (the browser's v2 request) and its
 > apply order (drafts without an eligibility record) do not hold under v3
 > ([ADR-0056](adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md)). Re-baseline onto
 > v3 as a new critical plan before any implementation.**

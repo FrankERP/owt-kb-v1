@@ -448,7 +448,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
 | `/api/admin/login-events` | GET | admin/super-admin | Per-member last login/active, count, providers, recent 20 events. 500 `activity_unavailable` without `SANITY_API_READ_TOKEN`. |
 
 ### Solver
-- **`POST /api/admin/solve`** (`maxDuration=60`) — the auto-scheduler. It runs the deployment's effective engine: v3 since the C7-FLIP-DATE
+- **`POST /api/admin/solve`** (`maxDuration=60`) — the auto-scheduler. It runs the deployment's effective engine: v3 since the 2026-10-15
   cutover (ADR-0056; «Engine» below), with v2, described first, as the rollback engine. Under v2, if
   `OWT_SOLVER_URL` is set, it calls the remote solver with `X-Api-Key`; else spawns the local Python subprocess
   (`gcf/owt_solver_v2.py --json-mode`, 120s hard kill). Body is a `SolveRequest`; requires

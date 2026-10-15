@@ -1,6 +1,6 @@
 # ADR-0042: The solver's fairness history is derived from stored role documents, not `localStorage`
 
-**Date:** 2026-09-25 · **Status:** Accepted, amended by ADR-0046 (the history is still derived and shown, but Auto no longer sends it) and, under v3, by ADR-0050 (in force since C7-FLIP-DATE)
+**Date:** 2026-09-25 · **Status:** Accepted, amended by ADR-0046 (the history is still derived and shown, but Auto no longer sends it) and, under v3, by ADR-0050 (in force since 2026-10-15)
 
 > **The number is final.** ADR numbers follow the order in which records reach `main`. PR #102
 > ("solver-pinned-assignments") merged first and took 0041, so this record was renumbered to
@@ -121,9 +121,9 @@ difference by difference, before deciding on cutover (Gate C).
   the MCP connector's `solve_month` (P4) ships against the derived builder, rolling back also
   withdraws that tool, since it has no local-history fallback of its own.
 
-## Under v3 (C7-FLIP-DATE, ADR-0050)
+## Under v3 (2026-10-15, ADR-0050)
 
-Since C7-FLIP-DATE Auto runs solver v3 (ADR-0056), and its fairness input is not this history: it is
+Since 2026-10-15 Auto runs solver v3 (ADR-0056), and its fairness input is not this history: it is
 C2's ledger (`app/utils/fairnessLedger.ts`), read fresh by every Auto through
 `GET /api/admin/fairness`. It differs from the decision above in three ways:
 
