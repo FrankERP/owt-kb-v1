@@ -174,14 +174,31 @@ function serviceSongs(role: FeedRole, kind: "weekend" | "special"): FeedSong[] {
 }
 
 /**
+ * Weekend start times, wall-clock America/Mexico_City (Frank, 2026-10-15). Weekend roles store no
+ * time, so the feed uses the team's standing times: Saturday 18:00, Sunday 11:00. Feed display
+ * only, like a special's `time` — never identity, never combined into a `Date`.
+ */
+export const WEEKEND_SERVICE_TIME = { saturday: "18:00", sunday: "11:00" } as const;
+
+/**
  * One `ICSEvent` per role document that paints something (a seat filled or a song), in date
  * order. A seated member's title leads with ⭐ and their seat (`seatLabel`, `/me`'s wording); the
  * seat is decided by member ID in the query (`seated`), never by comparing names.
  */
 export function buildFeedEvents(data: FeedData, origin: string): ICSEvent[] {
-  const rows: Array<{ role: FeedRole; label: string; kind: "weekend" | "special" }> = [
-    ...(data?.sundays ?? []).map((role) => ({ role, label: "Domingo", kind: "weekend" as const })),
-    ...(data?.saturdays ?? []).map((role) => ({ role, label: "Sábado", kind: "weekend" as const })),
+  const rows: Array<{ role: FeedRole; label: string; kind: "weekend" | "special"; weekendTime?: string }> = [
+    ...(data?.sundays ?? []).map((role) => ({
+      role,
+      label: "Domingo",
+      kind: "weekend" as const,
+      weekendTime: WEEKEND_SERVICE_TIME.sunday,
+    })),
+    ...(data?.saturdays ?? []).map((role) => ({
+      role,
+      label: "Sábado",
+      kind: "weekend" as const,
+      weekendTime: WEEKEND_SERVICE_TIME.saturday,
+    })),
     ...(data?.specials ?? []).map((role) => ({
       role,
       label: role?.service_name?.replace(/\s+/g, " ").trim() || SPECIAL_SERVICE_FALLBACK,
@@ -190,7 +207,7 @@ export function buildFeedEvents(data: FeedData, origin: string): ICSEvent[] {
   ];
 
   const events: Array<ICSEvent & { sortTime: string }> = [];
-  for (const { role, label, kind } of rows) {
+  for (const { role, label, kind, weekendTime } of rows) {
     if (!role?._id) continue;
     const date = serviceDayKey(role.date);
     if (!date) continue;
@@ -217,7 +234,9 @@ export function buildFeedEvents(data: FeedData, origin: string): ICSEvent[] {
     description.push("Equipo", ...(team.length ? team : ["Sin asignar"]));
     if (origin) description.push("", `Abrir en la app: ${origin}/me`);
 
-    const time = kind === "special" && isServiceTime(role.time) ? role.time : undefined;
+    // A special carries its own time (all-day when it has none or a malformed one); a weekend
+    // role stores none, so it takes the team's standing start time.
+    const time = kind === "special" ? (isServiceTime(role.time) ? role.time : undefined) : weekendTime;
     events.push({
       uid: role._id,
       date,

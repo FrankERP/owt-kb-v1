@@ -72,9 +72,10 @@ describe("buildFeedEvents", () => {
     expect(buildFeedEvents({ sundays: [empty] }, ORIGIN)).toEqual([]);
   });
 
-  it("makes weekends all-day and a special with a valid time a timed event", () => {
+  it("times weekends at the standing times (Sáb 18:00, Dom 11:00) and a special at its own", () => {
     const events = buildFeedEvents({
       saturdays: [sunday({ _id: "sat-1", date: "2026-10-17" })],
+      sundays: [sunday({ _id: "sun-1", date: "2026-10-18" })],
       specials: [
         { ...sunday({ _id: "sp-1", date: "2026-10-17", setlists: undefined }), time: "19:00", service_name: "  Noche  de alabanza ",
           songs: [{ title: "Santo", leads: [{ member_name: "Ana" }, { member_name: "Luis", alias: "Lu" }] }] },
@@ -82,14 +83,16 @@ describe("buildFeedEvents", () => {
       ],
     }, ORIGIN);
     expect(events.map((e) => [e.uid, e.date, e.time])).toEqual([
-      ["sat-1", "2026-10-17", undefined],
+      ["sat-1", "2026-10-17", "18:00"],
       ["sp-1", "2026-10-17", "19:00"],
-      ["sp-2", "2026-10-19", undefined], // invalid time → all-day, never guessed
+      ["sun-1", "2026-10-18", "11:00"],
+      ["sp-2", "2026-10-19", undefined], // a special's invalid time → all-day, never guessed
     ]);
     expect(events[0].title).toBe("Sábado · Oasis Worship");
     expect(events[1].title).toBe("Noche de alabanza · Oasis Worship");
     expect(events[1].description).toContain("1. Santo · dirige Ana y Lu");
-    expect(events[2].title).toBe("Servicio especial · Oasis Worship");
+    expect(events[2].title).toBe("Domingo · Oasis Worship");
+    expect(events[3].title).toBe("Servicio especial · Oasis Worship");
   });
 
   it("drops a role with a malformed date instead of throwing", () => {
