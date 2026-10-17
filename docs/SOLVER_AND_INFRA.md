@@ -650,11 +650,15 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
 - **Private snapshots** (`owt-agent-logs`, file names only): rehearsal
   `backups/solverConfig-2026-10-08-rehearsal.json`; pre-step
   `backups/solverConfig-2026-10-15-before-v3-flip.json`; post-step
-  `backups/solverConfig-2026-10-15-after-v3-flip.json`. The pre-step and post-step files are
-  byte-identical: W6's pools had already been saved on 2026-10-13 (Frank confirmed that save as
-  his on 2026-10-15), so Step 7 wrote nothing. Restore script
-  `backups/restore-before-v3-flip-2026-10-15.ts`, dry runs only, never applied. A restore against
-  the rehearsal snapshot would also revert later rule fixes, so a flip-back picks its paths by hand.
+  `backups/solverConfig-2026-10-15-after-v3-flip.json`. The two are byte-identical, because W6's
+  pools and rule edits were saved on 2026-10-13, two days **before** the flip: the reverse of
+  Decision K1's order (flip first, pools after). Frank confirmed that save as his on 2026-10-15; no
+  service or eligibility record was written between it and the flip, so no v2 plan was confirmed
+  with the v3 pools, and W6 (Step 7.4) wrote nothing. Consequence for a flip-back: the restore
+  script `backups/restore-before-v3-flip-2026-10-15.ts` (dry runs only, never applied) restores the
+  pre-step snapshot, which already holds the v3 pools, so it reverts nothing. The v2-era pools are
+  in the rehearsal snapshot, and a restore against it would also revert rule fixes made since
+  2026-10-08, so CLAUDE.md's «targeted `solverConfig` restore» means choosing its paths by hand.
 - **Entry findings, read from the merged code (2026-10-08).** Parent A27 (a v3 confirm creates
   the record of every recordless horizon month), A39 (integer seat counts in the response and the
   panel) and the plan's AS8 (the minted-id → config-ordinal map is captured with each run) hold.
@@ -679,7 +683,9 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
   both the request and the ledger GET, as ADR-0055 expects for November. The fairness GET answered
   `engine: "v3"`, `environment: "production"`, and neither horizon month had a record. **Not yet
   confirmed:** the record read-back (`source: "auto"`, `engine: "v3"`, `environment:
-  "production"` for each confirmed month) follows Frank's confirm.
+  "production"` for each confirmed month) follows Frank's confirm and is the last item of Step 8;
+  it is recorded here by the next change to this record, at the latest the retirement PR (plan
+  Step 12), which cannot open before November is published (Step 11).
 
 ---
 
