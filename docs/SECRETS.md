@@ -702,7 +702,7 @@ locally with `VERCEL_ENV` unset, a local server writes production records stampe
 mid-change: a deployment reads the value it was built with.
 
 **Status.** Set on Vercel Preview (branch `preview` only) for solver v3 C7's rehearsal, and
-**removed right after the cutover** (C7 Step 9; its date is in `docs/SOLVER_AND_INFRA.md`'s
+**removed on 2026-10-16, the day after the cutover** (C7 Step 9; `docs/SOLVER_AND_INFRA.md`'s
 «Cutover record»), so dev follows `SOLVER_ENGINE` and a flip-back reaches dev and production alike. Never set on Production or `verify/service-readiness` (both ignore it by code);
 honoured locally only when `VERCEL_ENV` is unset.
 
