@@ -610,9 +610,9 @@ The release that made v3 Auto's engine
 `docs/superpowers/plans/2026-10-05-solver-v3-c7-cutover.md`). No names, no per-person figures, and
 no `solverConfig` key or anything derived from one: a stage is named by its kind.
 
-- **Flip:** PR #147, `main` merge
-  <!-- C7-PENDING: main merge SHA -->, production alias and `githubCommitSha` verified
-  <!-- C7-PENDING: verification date -->.
+- **Flip:** PR #147, `main` merge `d3c85912`, production alias and `githubCommitSha` verified
+  2026-10-15 (deployment `dpl_BhySRc1KBVXEkKZ24382naz58ogS`). Frank checked `/admin` in production
+  the same day and saved nothing.
 - **Function:** `owt-solver-v3` build `f939f5ba` (the C5 merge, PR #136, the last `gcf_v3/**`
   change on `main`). Minimum instances: 0 (no W1: the cold start passed, see below).
 - **`FAIRNESS_TOLERANCE`:** 35 hundredths of a seat (`gcf_v3/owt_v3/constants.py`) — the bound on
@@ -649,8 +649,16 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
   checker; what it showed (balances repaying August–October in one plan) is why ADR-0055 exists.
 - **Private snapshots** (`owt-agent-logs`, file names only): rehearsal
   `backups/solverConfig-2026-10-08-rehearsal.json`; pre-step
-  <!-- C7-PENDING: backups/solverConfig-<date>-before-v3-flip.json -->; post-step
-  <!-- C7-PENDING: backups/solverConfig-<date>-after-v3-flip.json -->.
+  `backups/solverConfig-2026-10-15-before-v3-flip.json`; post-step
+  `backups/solverConfig-2026-10-15-after-v3-flip.json`. The two are byte-identical, because W6's
+  pools and rule edits were saved on 2026-10-13, two days **before** the flip: the reverse of
+  Decision K1's order (flip first, pools after). Frank confirmed that save as his on 2026-10-15; no
+  service or eligibility record was written between it and the flip, so no v2 plan was confirmed
+  with the v3 pools, and W6 (Step 7.4) wrote nothing. Consequence for a flip-back: the restore
+  script `backups/restore-before-v3-flip-2026-10-15.ts` (dry runs only, never applied) restores the
+  pre-step snapshot, which already holds the v3 pools, so it reverts nothing. The v2-era pools are
+  in the rehearsal snapshot, and a restore against it would also revert rule fixes made since
+  2026-10-08, so CLAUDE.md's «targeted `solverConfig` restore» means choosing its paths by hand.
 - **Entry findings, read from the merged code (2026-10-08).** Parent A27 (a v3 confirm creates
   the record of every recordless horizon month), A39 (integer seat counts in the response and the
   panel) and the plan's AS8 (the minted-id → config-ordinal map is captured with each run) hold.
@@ -662,8 +670,22 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
   comes in a separate, later PR. Writers of a `fairnessMonth` record: the fairness months route —
   reached by C2's «Registrar elegibilidad» (create and stored mode) and by C6's v3 confirm in
   create mode — and C4's reconstruction script. Stored mode's «Guardar» writes no record.
-- **Preview override:** `OWT_SOLVER_ENGINE` removed from Preview
-  <!-- C7-PENDING: date (plan Step 9, right after the flip) -->.
+- **Preview override:** `OWT_SOLVER_ENGINE` removed from Preview on 2026-10-16 (plan Step 9, on
+  Frank's yes); the Vercel API no longer lists the key. Its value equalled the constant, so no
+  redeploy was needed: from the next Preview build dev follows `SOLVER_ENGINE`.
+- **First production run** (plan Step 8; aggregates only). Frank's Nov+Dec 2026 Auto on
+  production, 2026-10-16, solve only: `ok: true`, build `f939f5ba`, contract 3, 17 people in the
+  request, no pins, route 6.8 s, `total_ms` 1 814. Every one of its 20 stages `proven`, none stopped
+  by a limit; 0 unfilled seats, 0 violations (ceiling 0, proven), 0 misses, no notice,
+  `reproducible: true`. C5's independent checker passes it, the largest in-line gap 26 of the 35
+  hundredths `FAIRNESS_TOLERANCE` allows. The 3 cadence members each have one `on` and one `off`
+  month, `met` in both, with compensation given in the `off` month. Carried balances are empty on
+  both the request and the ledger GET, as ADR-0055 expects for November. The fairness GET answered
+  `engine: "v3"`, `environment: "production"`, and neither horizon month had a record. **Not yet
+  confirmed:** the record read-back (`source: "auto"`, `engine: "v3"`, `environment:
+  "production"` for each confirmed month) follows Frank's confirm and is the last item of Step 8;
+  it is recorded here by the next change to this record, at the latest the retirement PR (plan
+  Step 12), which cannot open before November is published (Step 11).
 
 ---
 
