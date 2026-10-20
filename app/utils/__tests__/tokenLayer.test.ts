@@ -68,7 +68,7 @@ const BASE_ROLES = [
   "badge-azure-fg", "badge-azure-deep",
 ] as const;
 
-/** The 30 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
+/** The 32 Layer-2 composed tokens. Stored as `--<name>`, alpha already baked in. */
 const COMPOSED = [
   "surface-accent-solid", "surface-accent-30", "surface-accent-hover", "edge-accent-subtle",
   "surface-accent-20", "surface-accent-faint", "surface-accent-wash",
@@ -100,6 +100,11 @@ const COMPOSED = [
   // the pair above — the conic gradient's alpha-bearing stop belongs to the
   // token layer, not to a literal in `.brand-lit-card[data-lit]::after`'s body.
   "lit-beam",
+
+  // Opaque cards and the page glow (2026-10-20, the «premium» audit). Each
+  // resolves to a different role or alpha per theme — see brand.css.
+  "surface-card",    // `.brand-surface`'s solid ground
+  "atmosphere-glow", // `.brand-atmosphere`'s one radial
 ] as const;
 
 const UTILITY_PREFIXES = [
@@ -338,7 +343,12 @@ describe("brand.css rule bodies — B2's invariant, which later slices must not 
     // 70 → 62 (R5 Task 1, ADR-0035: `.brand-admin-shell` spent five of these
     // — border, two backgrounds, an inset highlight, and the `::before` wash —
     // and `.brand-admin-tabs` the other three; both classes are deleted.)
-    expect(all.length).toBe(62);
+    // 62 → 42 (2026-10-20, the «premium» audit: `.brand-atmosphere` went from
+    // six layers to one radial over the flat ground, and `.brand-surface`,
+    // `.brand-library-module` and `.brand-search-console` became opaque through
+    // the composed `--surface-card` — their translucent gradients and inset
+    // highlights spent the other twenty).
+    expect(all.length).toBe(42);
     expect(all.filter((o) => o.alpha === "none").length).toBe(4);
   });
 

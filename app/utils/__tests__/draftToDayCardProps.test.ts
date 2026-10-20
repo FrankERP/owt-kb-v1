@@ -42,7 +42,7 @@ describe("draftToDayCardProps", () => {
   });
 
   it("labels special_role as Especial, NOT Domingo — the old ternary called every non-Saturday draft a Sunday", () => {
-    // `DayCard` reads this as a plain `string` and falls back to SPECIAL_THEME /
+    // `DayCard` reads this as a plain `string` and falls back to the special tone (`serviceTone`) /
     // setlist type "special" for an unrecognised label, so widening the union is
     // safe (see `DayCardData.day`).
     expect(draftToDayCardProps({ ...baseDraft, _type: "special_role" }, members).day).toBe("Especial");

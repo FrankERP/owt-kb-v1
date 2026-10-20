@@ -17,7 +17,7 @@ export interface DayCardData {
    *
    * **Safe, deliberately, not dodged.** `DayCard`'s own prop is already
    * `day: string` (`app/components/DayCard.tsx:14`), and both selectors that
-   * read it fall back for an unrecognised label: the theme to `SPECIAL_THEME`
+   * read it fall back for an unrecognised label: the tone (`serviceTone`) to `"special"`
    * and the setlist type to `"special"` (`:79`, `:81-82`). Narrowing this back
    * to a two-member union, or adding a third hardcoded ternary below to keep it
    * narrow, would re-introduce exactly the label duplication `SERVICE_LABEL`

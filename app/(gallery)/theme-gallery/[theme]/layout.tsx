@@ -61,14 +61,12 @@ export default async function ThemeGalleryLayout({
         The <body> class list is load-bearing, not cosmetic.
 
         `.brand-atmosphere` IS the opaque page wash — `background-color:
-        rgb(var(--surface-base-rgb))` plus six gradient layers. 14 of the 15
-        colour-carrying `.brand-*` classes are alpha-composited over whatever sits
-        behind them (`.brand-surface` alone is a gradient at 0.68/0.82/0.76 over
-        `rgb(var(--surface-console-rgb) / 0.72)`; `brand.css` carries 65 such
-        occurrences). Slice B2 rewrote these bodies off `--brand-blackout` and
-        `--brand-console` onto the roles; the spellings above are the current ones
-        and the 65 is unchanged, since B2 renamed variables without adding or
-        removing an occurrence.
+        rgb(var(--surface-base-rgb))` plus one radial glow (six gradient layers
+        until 2026-10-20). Most colour-carrying `.brand-*` classes are still
+        alpha-composited over whatever sits behind them (`brand.css` carries 42
+        `rgb(var(--role) / a)` occurrences, pinned in tokenLayer.test.ts); the cards
+        (`.brand-surface`, `.brand-library-module`, `.brand-search-console`) became
+        opaque through `--surface-card` then.
         Without this, every swatch paints over the bare UA canvas and every baseline is
         wrong in a way a reviewer cannot see by looking at it.
 
