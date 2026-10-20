@@ -25,6 +25,8 @@ import {
   auditViolations,
   describeSite,
   isAuditedQuerySiteFile,
+  resolveQueryExpression,
+  sanityClientIdentifiers,
   scanSource,
   stripComments,
   type ProtectedSite,
@@ -663,7 +665,6 @@ describe("git-tracked protected read inventory", () => {
       "app/api/me/songs/route.ts",
       "app/api/notifications/count/route.ts",
       "app/api/cue/route.ts",
-      "app/api/admin/roles/route.ts",
       "app/api/admin/proposals/route.ts",
       "app/api/me/proposals/route.ts",
     ];
@@ -678,6 +679,20 @@ describe("git-tracked protected read inventory", () => {
       }
       expect(reads.some((s) => s.compliant), `${file} has no canonical protected read`).toBe(true);
     }
+  });
+
+  it("runs the admin roles GET through the shared builder on the canonical client", () => {
+    // MCP P4 step 1 moved this GET's GROQ into `adminRolesQuery()`. A helper-sourced
+    // read on a canonical client records no site, so the migrated list above cannot
+    // see it; this pins the same property directly. Running the builder through a
+    // raw client instead is still flagged by the audit itself.
+    const file = "app/api/admin/roles/route.ts";
+    const code = stripComments(readFileSync(path.join(REPO_ROOT, file), "utf8"));
+    const info = sanityClientIdentifiers(code);
+    expect(code).toMatch(/const q = adminRolesQuery\(\);\s*const roles = await operationalClient\.fetch\(q\.query, q\.params\);/);
+    expect(info.operational.has("operationalClient")).toBe(true);
+    expect(resolveQueryExpression("q.query", code, info).helperSourced).toBe(true);
+    expect(REAL_SITES.filter((s) => s.file === file && s.operation === "GET")).toEqual([]);
   });
 
   it("does not flag files that merely mention protected type names", () => {

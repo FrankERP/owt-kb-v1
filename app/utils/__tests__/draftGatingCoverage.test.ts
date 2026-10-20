@@ -94,13 +94,16 @@ const KIDS_TYPE = /["']kidsSchedule["']/;
  * property of the path, not a convenience — "it was failing" is not a reason.
  */
 const MAY_SEE_DRAFTS: Record<string, string> = {
-  "api/admin":
-    "Every route under it is behind `requireActiveManager`. Showing an admin " +
-    "their own drafts is the draft/publish feature, not a leak of it.",
+  // `api/admin` was exempt until its last unfiltered role read, the roles GET, moved
+  // into `adminRolesQuery` below (MCP P4 step 1), and an entry that shields nothing
+  // is dead. Re-add it only with a route that reads roles itself.
   "utils/serviceReadQueries.ts":
     "The admin/write read model. Its unfiltered queries are consumed by " +
-    "`api/admin/setlists` and by `roleWriteOps` — the write path, which must " +
-    "see a draft in order to publish it. Do NOT add a member-facing query here.",
+    "`api/admin/setlists`, by `roleWriteOps` — the write path, which must " +
+    "see a draft in order to publish it — and by `adminRolesQuery`, the `/admin` " +
+    "panel's rows (behind `requireActiveManager`; showing an admin their own " +
+    "drafts is the draft/publish feature) shared with the MCP month planner. " +
+    "Do NOT add a member-facing query here.",
 };
 
 /**
@@ -316,9 +319,9 @@ describe("draft services stay invisible to members", () => {
   });
 
   it("filters it on every `assignedMemberRefsQuery` argument — the exact check", () => {
-    // Same exemption list as the scans above: `api/admin` may legitimately resolve
-    // an audience over drafts, and a future admin-only helper calling this with an
-    // unfiltered predicate must not force the check to be weakened.
+    // Same exemption list as the scans above: an exempt path may legitimately
+    // resolve an audience over drafts, and a future admin-only helper calling this
+    // with an unfiltered predicate must not force the check to be weakened.
     const args = sourceFiles(APP_DIR)
       .filter((file) => !exemptionFor(path.relative(APP_DIR, file)))
       .flatMap((file) =>
