@@ -30,17 +30,25 @@
 > be proven for any path**, `/admin`'s included, because production has no registered device (see
 > the record); email is the delivery proof.
 >
+> **P4 status (on solver v3): implemented on its branch, not released.** The two month tools
+> (`solve_month`, `apply_schedule`, see [Month tools](#month-tools-p4-on-solver-v3)) follow the
+> critical-tier plan approved 2026-10-20
+> ([plan](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md),
+> [review log](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply-review-log.md),
+> [ADR-0061](adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md)).
+> Release (preview, then `main`) and the live proof with Frank present are still ahead.
+> `revise_proposal` is a separate, later plan.
+
 > **Summary: P0 released 2026-09-24; P1 released 2026-09-25 (PR #98, `main` `a04edb43`),
 > acceptance complete 2026-09-28; P3 (four write tools) released 2026-09-28 (PR #106, `main`
 > `7c65f2eb`), live proof passed; P2 (the solver's fairness history, derived from stored
 > services) cut over 2026-09-28 (PR #108, `main` `98aa67a9`), Gate D pending; P4 (`solve_month`,
-> `revise_proposal`, `apply_schedule`) plan approved at critical tier 2026-09-28
-> ([plan](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply.md),
-> [review log](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply-review-log.md)), not
-> implemented — blocked since 2026-10-15: its parity target (the browser's v2 request) and its
-> apply order (drafts without an eligibility record) do not hold under v3
-> ([ADR-0056](adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md)). Re-baseline onto
-> v3 as a new critical plan before any implementation.**
+> `revise_proposal`, `apply_schedule`): the 2026-09-28 v2 plan
+> ([plan](superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply.md)) was never implemented and is
+> superseded; P4 was re-baselined onto v3
+> ([plan](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md), approved 2026-10-20) and
+> `solve_month` + `apply_schedule` are implemented on its branch, not released; `revise_proposal`
+> is a separate, later plan.**
 
 This app exposes itself to Claude as an [MCP](https://modelcontextprotocol.io) server, so Frank
 can ask Claude questions against a live OWT Backstage deployment from his phone or desktop. The
@@ -49,7 +57,9 @@ tools are exposed — P0 shipped one health check (`ping`); P1 adds seven read-o
 same service/song/member/proposal data `/admin` shows (released to production 2026-09-25); P3 adds
 four write tools that make the same changes `/admin` makes, through the same domain writers
 ([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md); released to production
-2026-09-28). See the status banner above. See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
+2026-09-28); P4 adds two month tools that plan a month with `/admin`'s own v3 Auto and create it
+as drafts with its own confirm ([ADR-0061](adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md);
+not released yet). See the status banner above. See [ADR-0039](adr/0039-mcp-client-registration-is-stateless-dcr.md) for why client
 registration is stateless, and [AUTH_AND_SECURITY.md](AUTH_AND_SECURITY.md#mcp--oauth) /
 [API_REFERENCE.md](API_REFERENCE.md) for the route-level contract.
 
@@ -112,10 +122,11 @@ response therefore means Frank reconnects from Claude; there is no partial-recov
 
 ### Tools
 
-Twelve tools: `ping` (P0, released to production 2026-09-24), seven read tools
+Twelve tools in production: `ping` (P0, released to production 2026-09-24), seven read tools
 (P1, **released to production 2026-09-25** — PR #98, `main` `a04edb43`), and four write tools
 (P3, **released to production 2026-09-28** — PR #106, `main` `7c65f2eb`; dev and production both
-expose all twelve). Every tool is
+expose all twelve). P4's branch adds two month tools, fourteen in all, registered after the writes
+(see [Month tools](#month-tools-p4-on-solver-v3); not released). Every tool is
 registered the same way — one file per tool in `app/mcp/tools/`, exporting a
 `register<Tool>(server, deps?)` function that `app/api/mcp/route.ts` calls inside its handler
 init, the writes after the reads. `ping` and every read declare
@@ -596,6 +607,64 @@ Hides ONE published service (`published: false`), exactly as «Ocultar» does.
 - **Notifies nobody and runs no outbox sweep** (see [Known behaviours](#known-behaviours)).
 - **Revalidates** `/`, `/schedule` and `/me` when it hid something.
 
+### Month tools (P4 on solver v3)
+
+Two tools plan and create a month. Not released yet: they are on P4's branch. The plan is
+[2026-10-20-owt-mcp-p4-v3-solve-apply.md](superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md);
+the decisions and the rejected alternatives are
+[ADR-0061](adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md).
+
+| Tool | `/admin` counterpart | What it runs |
+|---|---|---|
+| `solve_month` | «Generar mes» → Auto, under v3 | `planV3Month` (`app/utils/v3MonthPlan.ts`): the planner's own functions over the server reads (`loadV3PlanSources`, `loadV3Ledger`) |
+| `apply_schedule` | «Crear N borradores», under v3 | `runV3ConfirmAttempt` with `commitFairnessMonths` (the records) and `createRole` (`app/utils/roleCreateCommit.ts`, each draft) as transports |
+
+- **v3 only.** Both refuse `engine_not_v3` before any read when the deployment's engine is not
+  v3; on Production that is the code constant (`SOLVER_ENGINE`), so a flip-back disables them.
+- **`solve_month`** takes `month` (`YYYY-MM`), `months` (1 or 2), `excludeSundays` and
+  `excludeSaturdays` (dates of those months) and `specials` (date, name, optional
+  `countsForFairness`; default as in `/admin`). It uses the STORED rules and plans around the
+  stored services. On success with at least one creatable service it stores a **proposal** and
+  answers its handle, the expiry, the run line and stages, the notices, every service with its
+  seats by name, the unfilled seats, the refused specials, the services left out with their
+  reasons, the unavailability notices (worship members only) and each person's fairness line. Any
+  other exit stores nothing and says why and whether a retry helps (`retry`). It writes no service,
+  no record and notifies nobody. Annotations: `{ readOnlyHint: false, destructiveHint: false,
+  idempotentHint: false, openWorldHint: false }`.
+- **`apply_schedule`** takes `proposal` (the handle). It re-reads everything first; a date that
+  stopped being creatable, a special stored on a planned special's date, a change to the horizon's
+  stored services, or changed rules refuse the WHOLE call before any write («vuelve a correr
+  solve_month»). Then it writes every month's eligibility record in one PUT and creates the drafts
+  month by month, oldest first, always `published: false` (nobody is notified). Annotations: the
+  write tools' (`destructiveHint: true`).
+- **Time.** A solve works under a 52 s soft deadline inside the route's 60 s: the solver gets at
+  most 45 s and is not called with under 10 s left (`time_budget`). An apply is bounded by its
+  cut-offs instead: it starts no create after 40 s (the rest is «pendiente» and the next call
+  continues) and sweeps nothing after 45 s. Its reads and its one record PUT run uncut; if the
+  route kills a call there, the answer is lost and calling again is safe (the PUT answers
+  `unchanged` on a replay).
+- **Recovery is by receipt.** A draft whose role carries its own creation receipt id is created,
+  whatever the proposal's saved progress says. So calling `apply_schedule` again after a time-out,
+  a lost answer or a failed progress save is always safe and never creates a service twice; the
+  answer says, per month and per service, «creado», «ya estaba creado (confirmado por su recibo)»,
+  «pendiente», «sin confirmar», «rechazado», «bloqueado» or that it was created and later deleted
+  or modified in `/admin`, and whether the proposal is complete.
+- **One refusal for a proposal you cannot use.** An unknown, expired, malformed, other-origin or
+  other-member handle all answer «No encontré esa propuesta o ya venció. Vuelve a correr
+  solve_month.»
+- **Copy.** All lines live in `V3_CONNECTOR_LINES` (`app/components/admin/v3Copy.ts`). A negative
+  claim is about the current call only («En esta llamada no se escribió nada.»); an answer that was lost
+  is «sin confirmar», never «falló». Nothing names a member id, a rule key, a role id or a rules
+  revision; people are named by alias or name.
+- **Logs.** The timing line, one line per solve (`{route:"mcp/solve_month", engine, outcome,
+  status, ms}`) and fixed tags on a store, state or sweep failure. Never an id, a name, a rule key
+  or a body.
+- **Proof.** `monthToolParity.test.tsx` runs `/admin`'s `MonthGenerator` and the two tools over
+  one groq-js dataset in seven cases and requires byte-identical solve bodies and identical PUT and
+  create bodies. `applySchedule.test.ts` covers recovery and concurrency, `monthToolGates.test.ts`
+  indexes every row of the plan's admin-surface tables, `monthToolHygiene.test.ts` covers key
+  hygiene and both time zones.
+
 ### Notification audiences (the write tools)
 
 Confirmed from the code at `963cd736` (P3 plan, § «Notification audiences»):
@@ -690,7 +759,7 @@ mode.
 
 ### Stored state
 
-Two Sanity document types, both hidden and read-only in `/studio`
+Three Sanity document types, all hidden and read-only in `/studio`
 (`app/utils/studioProtection.ts`) — see [DATA_MODEL.md](DATA_MODEL.md#studio) for the full field
 list:
 
@@ -698,11 +767,20 @@ list:
   HASH of the client id (never the raw value), the issuing origin, timestamps, the current
   refresh `jti`, the revocation flag.
 - **`mcpOauthCodeRedemption`** (`mcpOauthCode.<sha256(jti)>`) — a replay guard, `redeemedAt` only.
+- **`mcpProposal`** (`mcpProposal.<handle>`, P4, not released) — one per stored `solve_month`
+  result: origin, member id, `createdAt`, `expiresAt` (7 days), engine, the rules `_rev`, months,
+  request id, one JSON `payload` (frozen record entries, drafts, the stored service ids at solve)
+  under a SHA-256 `digest`, and the mutable JSON `state` (`recordsDone`, created drafts). Written
+  only by `app/mcp/monthProposals/proposalStore.ts` (`create`, `ifRevisionId` merges, and a sweep
+  that deletes up to 25 records more than 24 h past expiry after each solve, and after an apply's
+  confirm — not on its refusals or when the proposal was already complete).
 
 Nothing stored is secret or replayable on its own — the dataset answers unauthenticated
-published reads, and both types are safe to be world-readable (a member id is already public;
+published reads, and the two grant types are safe to be world-readable (a member id is already public;
 neither a client hash nor a refresh `jti` is usable without the signing secret). Dotted `_id`s
-are not surfaced by the public reader regardless.
+are not surfaced by the public reader regardless, which is what keeps a proposal private: it holds
+member ids and the frozen eligibility entries (with their rule keys, as the `fairnessMonth`
+records they become do), and it is never returned to the model.
 
 ---
 
@@ -806,9 +884,11 @@ By default the smoke calls only `ping`, and its `tools/list` check requires only
 registered — it passes against BOTH a P0-only deployment and a P1 one (production and dev have
 both carried P1 since 2026-09-25), since the plain smoke's job is proving the handshake and
 `ping`, not P1's or P3's registration. **`--reads`** adds a sub-step right after `ping` and before
-refresh. Its OWN `tools/list` check (`checkToolList`) requires the full twelve tools, in order,
-each with its own annotations: it is about to call the seven reads, and that listing is the ONLY
-proof the four P3 writes get on dev — present, with `destructiveHint: true`. **So `--reads` passes
+refresh. Its OWN `tools/list` check (`checkToolList`) requires the full tool list, in order,
+each with its own annotations — twelve tools, and fourteen on P4's branch (`MONTH_TOOL_NAMES`,
+never called either: a solve stores a record and an apply writes real drafts): it is about to call
+the seven reads, and that listing is the ONLY proof the four P3 writes get on dev — present, with
+`destructiveHint: true`. **So `--reads` passes
 only against a deployment that carries P3** (dev has carried it since 2026-09-28; it passed there
 10/10, see the [P3 release record](#release-record-p3-2026-09-28)); against one that carries only
 P1 it fails at that check, by design. The sub-step makes one call each to `list_services`, `get_service` (selected BY ID from `list_services`'s own first

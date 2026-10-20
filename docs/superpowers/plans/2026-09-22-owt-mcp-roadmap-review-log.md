@@ -103,3 +103,12 @@ Made after `7e42909f` was approved; **not covered by that approval**.
     fails. Rolling P3 back now removes the tools, their
     registration lines and their caller-pin entries in one commit; the registry entries stay and the
     audit stays green. The coverage table is unaffected.
+13. **2026-10-20, P4 re-planned on solver v3 — post-approval, un-reviewed here** (plan
+    `2026-10-20-owt-mcp-p4-v3-solve-apply.md`, approved at critical tier in its own review log;
+    ADR-0061). The plan's «Roadmap amendments», marked `[A-2026-10-20, P4 on v3 — ADR-0061]`:
+    the P4 row re-baselined onto v3 (outputs, no Fluid, acceptance on v3 Auto/confirm parity,
+    rollback, the live run on the next real month with drafts kept — Q3's default); the
+    P2 → P4 transition's P2 part void (ADR-0046); `revise_proposal` its own later delivery (Q1);
+    the `solve_month` contract row (writes only its proposal record; any non-success exit stores
+    nothing, D8; the v3 Auto's inputs) and the `apply_schedule` row (a lost target refuses the call,
+    D7/Q2; the revision report void until revise exists); the 60 s assumption holds under v3.

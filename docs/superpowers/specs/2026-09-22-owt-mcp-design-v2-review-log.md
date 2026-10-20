@@ -147,3 +147,27 @@ re-examined by the child plans' own reviews (P0 owns O1/O2/O3/O7/O8/I10).
 13. P2 open question — the ADR ratifies the specials rule and decides the drafts rule.
 14. I5 — "its solve request can match the browser's" (the schedule is randomly seeded).
 15. Status line and terminal state record the approval.
+
+## Post-approval changes — 2026-10-20, P4 re-planned on solver v3 — un-reviewed here
+
+Made with the P4 v3 implementation (plan `docs/superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md`,
+approved at critical tier in its own review log; [ADR-0061](../../adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md)).
+**Not covered by `1068240f`'s approval**; each is the plan's «Spec amendment» table applied verbatim
+in substance, marked `[A-2026-10-20, P4 on v3 — ADR-0061]` in the spec.
+
+16. I14 — `solve_month` stores only its private, expiring proposal record; declared neither
+    read-only nor destructive. `apply_schedule` destructive.
+17. `solve_month` — the v3 Auto for 1–2 months; refuses under any other engine; any non-success
+    exit stores nothing and returns the browser's line (D8, Frank 2026-10-20). Supersedes item 8.
+    The v2 sentences (positional weeks, `objective_skipped`, P2 history, the 56-day window) are
+    withdrawn.
+18. `revise_proposal` — not in the v3 P4 delivery; its own plan (Q1, Frank 2026-10-20). Item 9's
+    revision number is void until then.
+19. `apply_schedule` — the browser's v3 confirm (records first, then drafts by month); bound by an
+    unguessable handle to a server-stored record scoped to origin and principal, 7-day expiry; a
+    target lost since the solve refuses the call before any write (Q2: the per-service skip is
+    withdrawn); resumable across calls.
+20. B1 and the 60 s assumption — hold under v3 (measured); no ceiling change.
+21. O5a (new, beside O5) — what the proposal record holds, its privacy, and its sweep.
+22. «The split's concurrency contract» — a one-sentence note: the proposal no longer passes
+    through the model, and a lost target refuses rather than skips.

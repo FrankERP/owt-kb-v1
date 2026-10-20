@@ -530,6 +530,21 @@ export function refusalFor(outcome: DomainRefusal): CallToolResult {
 }
 
 /**
+ * ONE draft's create refusal (`apply_schedule`, P4 step 6), as a line for that service: the
+ * code's copy, the detail's and the issues', exactly as `refusalFor` words them — but never
+ * «No se escribió nada.»: the call may have written the records and other services.
+ */
+export function serviceRefusalLine(outcome: DomainRefusal): string {
+  const body: Record<string, unknown> = isObj(outcome.body) ? outcome.body : {};
+  const details: Record<string, unknown> = isObj(body.details) ? body.details : {};
+  if (!isServiceErrorCode(body.error)) return "El servidor no lo aceptó.";
+  const parts = [CODE_COPY[body.error]];
+  if (typeof details.detail === "string" && DETAIL_COPY[details.detail]) parts.push(DETAIL_COPY[details.detail]);
+  parts.push(...issueSentences(strings(details.issues)));
+  return parts.join(" ");
+}
+
+/**
  * A refusal the tool makes itself, before calling the domain (an admission or
  * input gate). `text` names the service and the gate; «No se escribió nada.»
  * is appended — nothing has been written, because the domain was never called.

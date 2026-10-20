@@ -51,7 +51,7 @@ import {
   type ActiveModeSnapshot,
   type ServiceSourceRecords,
 } from "./serviceSourceState";
-import { buildIntegrityQueue } from "./serviceIntegrityQueue";
+import { integrityQueueFor } from "./monthPreflight";
 import {
   CARD_STYLE,
   SERVICE_LABEL,
@@ -66,7 +66,6 @@ import {
   primaryActionRoute,
   proposalHandoffInput,
   serviceCardLabel,
-  serviceCardRefs,
   type CardSourceSummaries,
   type MemberOption,
   type PublishConfirmationPlan,
@@ -833,14 +832,7 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
   // owned issue into the global `Integridad de datos` list. Its `cardIssues`
   // (lock/legacy only) are what `deriveServiceReadiness` consumes.
   const queue = useMemo(
-    () =>
-      buildIntegrityQueue({
-        sources,
-        cards: serviceCardRefs(roles, summaries),
-        roles: summaries.roles,
-        setlists: summaries.setlists,
-        proposals: summaries.proposals,
-      }),
+    () => integrityQueueFor({ sources, roles, summaries }),
     [sources, roles, summaries],
   );
 

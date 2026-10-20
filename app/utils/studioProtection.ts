@@ -85,6 +85,9 @@ export const PROTECTED_STUDIO_TYPES = [
   // The admin assistant's per-admin monthly spend counter (ADR-0059): machine state written only
   // by `POST /api/admin/chat`. Internal, like `calendarFeed`.
   "adminChatUsage",
+  // The MCP month proposal (P4 on solver v3, D6): machine state written only by
+  // `app/mcp/monthProposals/proposalStore.ts`. Internal, like the MCP OAuth state above.
+  "mcpProposal",
 ] as const;
 
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
@@ -182,6 +185,7 @@ export const INTERNAL_STUDIO_TYPES = [
   "mcpOauthCodeRedemption",
   "calendarFeed",
   "adminChatUsage",
+  "mcpProposal",
 ] as const;
 
 /**
@@ -274,6 +278,22 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
   mcpOauthCodeRedemption: ["redeemedAt"],
   calendarFeed: ["member", "generation", "rotatedAt"],
   adminChatUsage: ["member", "month", "spentMicroUsd", "questions", "updatedAt"],
+  // Every field an `mcpProposal` may carry — written only by
+  // `app/mcp/monthProposals/proposalStore.ts`, mirroring `PROPOSAL_FIELDS`
+  // (`app/mcp/monthProposals/documentTypes.ts`); `proposalDocument.test.ts` pins the two equal.
+  mcpProposal: [
+    "origin",
+    "principal",
+    "createdAt",
+    "expiresAt",
+    "engine",
+    "rulesRev",
+    "months",
+    "requestId",
+    "payload",
+    "digest",
+    "state",
+  ],
 });
 
 /**
@@ -534,4 +554,5 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   mcpOauthCodeRedemption: "MCP OAuth — Códigos canjeados (solo lectura)",
   calendarFeed: "Enlaces de calendario (solo lectura)",
   adminChatUsage: "Asistente — Gasto por admin (solo lectura)",
+  mcpProposal: "MCP — Propuestas de mes (solo lectura)",
 });

@@ -64,6 +64,7 @@ import { GET as membersGET } from "@/app/api/admin/members/route";
 import { GET as rolesGET, POST as createPOST } from "@/app/api/admin/roles/route";
 import { PATCH as rolePATCH, DELETE as roleDELETE } from "@/app/api/admin/roles/[id]/route";
 import { POST as publishPOST } from "@/app/api/admin/roles/publish/route";
+import { createRole } from "@/app/utils/roleCreateCommit";
 import type { RoleDomainSummary, RoleTarget } from "@/app/utils/serviceReadSummary";
 import {
   buildStoredGridRows,
@@ -991,6 +992,103 @@ describe("POST /api/admin/roles — create", () => {
     expect((await res.json()).error).toBe("ambiguous_target");
     expect(transactions).toHaveLength(1);
     expect(committedTransactions()).toHaveLength(0);
+  });
+});
+
+// ── One create writer, two callers (MCP P4 step 3) ──────────────────────────
+//
+// `POST /api/admin/roles` delegates to `createRole` (`roleCreateCommit.ts`), which the
+// MCP `apply_schedule` tool also calls. Each scenario runs twice on a fresh store — once
+// through the route, once through the module with the body `req.json()` would hand it —
+// and both must answer the same status and body and record the same transactions (minted
+// ids and clock values normalised), with the same side effects.
+
+describe("POST /api/admin/roles and createRole — one writer", () => {
+  const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
+  const ISO_RE = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z/g;
+  const normalise = (value: unknown) =>
+    JSON.parse(
+      JSON.stringify(value)
+        .replace(UUID_RE, "<uuid>")
+        .replace(ISO_RE, "<now>")
+        .replace(/"_key":"[0-9a-f]{12}"/g, '"_key":"<key>"')
+        // The outbox id hashes the minted role id.
+        .replace(/outbox\.role\.[0-9a-f]{32}/g, "outbox.role.<hash>"),
+    );
+
+  function reset() {
+    vi.clearAllMocks();
+    transactions.length = 0;
+    commitOutcomes.length = 0;
+    afterCallbacks.length = 0;
+    lateReceipts = [];
+    lateRoles = [];
+    receiptReads = 0;
+    store = emptyStore();
+    store.members.push(
+      { _id: "mem-1", member_name: "Uno", memberType: ["vocals"] },
+      { _id: "mem-2", member_name: "Dos", memberType: ["instruments"] },
+    );
+    operationalFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => canonicalRead(q, p));
+    rawFetch.mockImplementation(async (q: string, p: Record<string, unknown> = {}) => rawRead(q, p));
+    requireActiveManagerMock.mockResolvedValue(ADMIN);
+  }
+
+  async function run(setup: () => void, body: unknown, via: "route" | "module") {
+    reset();
+    setup();
+    let status: number;
+    let json: unknown;
+    if (via === "route") {
+      const res = await createPOST(req(body));
+      status = res.status;
+      json = await res.json();
+    } else {
+      const outcome = await createRole(JSON.parse(JSON.stringify(body)));
+      status = outcome.status;
+      json = outcome.body;
+    }
+    await drainAfter();
+    return normalise({
+      status,
+      body: json,
+      transactions: transactions.map((t) => ({ ops: t.ops, committed: t.committed })),
+      revalidated: revalidateServiceViewsMock.mock.calls.length,
+      pushed: sendPushMock.mock.calls.length,
+    });
+  }
+
+  it.each<[string, () => void, Record<string, unknown>]>([
+    ["a weekend create", () => {}, createBody()],
+    ["a published create", () => {}, createBody({ published: true })],
+    ["a special create", () => {}, createBody({ _type: "special_role", date: "2026-08-12", service_name: "Bautizos", instruments: [] })],
+    ["a lost-response replay", () => { store.receipts.push(receipt()); store.roles.push(role()); }, createBody()],
+    ["an idempotency mismatch", () => { store.receipts.push(receipt()); store.roles.push(role()); }, createBody({ date: "2026-08-16" })],
+    ["a retired key", () => { store.receipts.push(receipt({ state: "role_deleted" })); }, createBody()],
+    ["an occupied target", () => { store.roles.push(role()); store.locks.push(lock()); }, createBody({ creationRequestId: "req-other-00000002" })],
+    ["orphaned setlist history", () => { store.setlists.push({ _id: "sl-1", _type: "featuredSongs", week: "2026-08-09", songs: [] }); }, createBody()],
+    ["a raw draft on the target", () => { store.rawRoleDrafts.push({ _id: "drafts.role-x", _type: "sunday_role", week: "2026-08-09" }); }, createBody()],
+    ["a dangling member", () => {}, createBody({ leads: ["mem-9"] })],
+    ["a missing request id", () => {}, createBody({ creationRequestId: undefined })],
+    ["a type the writer may not create", () => {}, createBody({ _type: "featuredSongs" })],
+    ["a commit conflict replaying the winner", () => { commitOutcomes.push(conflictError()); lateReceipts.push(receipt()); lateRoles.push(role()); }, createBody()],
+  ])("%s answers and writes the same through both", async (_name, setup, body) => {
+    const viaRoute = await run(setup, body, "route");
+    const viaModule = await run(setup, body, "module");
+    expect(viaModule).toEqual(viaRoute);
+  });
+
+  it("reports what the create held, and a replay as writing nothing", async () => {
+    reset();
+    const created = await createRole(createBody());
+    expect(created).toMatchObject({ ok: true, status: 201, effects: { kind: "created", notice: null } });
+    if (!created.ok || created.effects.kind !== "created") throw new Error("expected a create");
+    expect(created.effects.roleId).toBe(created.body._id);
+
+    reset();
+    store.receipts.push(receipt());
+    store.roles.push(role());
+    expect(await createRole(createBody())).toMatchObject({ ok: true, status: 200, effects: { kind: "replay", roleId: "role-1" } });
   });
 });
 

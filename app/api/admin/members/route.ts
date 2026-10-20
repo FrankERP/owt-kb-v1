@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { writeClient } from "@/sanity/lib/serverClient";
 import { operationalClient } from "@/sanity/lib/operationalClient";
-import { validateMinistryWrite, WORSHIP_MEMBER_GROQ_FILTER } from "@/app/ministries";
+import { validateMinistryWrite } from "@/app/ministries";
+import { adminMembersQuery } from "@/app/utils/serviceReadQueries";
 import { parseMemberInstruments } from "@/app/components/admin/seatModel";
 
 // Reading the member list is needed by the Servicios/Disponibilidad panels (admin-accessible).
@@ -20,16 +21,8 @@ export async function GET() {
 
   // Worship admins see worship members only; a super-admin sees everyone,
   // because they are the only role that can edit `ministries` at all.
-  const members = await operationalClient.fetch(
-    `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) {
-      _id, member_name, alias, email, role, memberType, instruments, notifPrefs, ministries, managesMinistries,
-      disabled,
-      unavailableDates, unavailabilityNotes,
-      "hasPassword": defined(passwordHash) && passwordHash != "",
-      "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl)
-    }`,
-    { all: session.user.role === "super-admin" }
-  );
+  const q = adminMembersQuery(session.user.role === "super-admin");
+  const members = await operationalClient.fetch(q.query, q.params);
 
   return NextResponse.json(members);
 }

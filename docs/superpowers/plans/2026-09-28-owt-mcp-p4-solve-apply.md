@@ -1,6 +1,6 @@
 # OWT MCP P4 — solve, revise and apply a month (implementation plan)
 
-**Date:** 2026-09-28 · **Status:** Blocked since 2026-10-15: its parity target (the browser's v2 request) and its apply order (drafts without an eligibility record) do not hold under v3 (ADR-0056, `docs/adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md`). Re-baseline onto v3 as a new critical plan before any implementation. Previously: approved at critical tier on digest 93c4e227… (rounds 7 and 8); post-approval changes listed below are un-reviewed; the review log is `docs/superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply-review-log.md`
+**Date:** 2026-09-28 · **Status:** Superseded by `2026-10-20-owt-mcp-p4-v3-solve-apply.md` (P4 re-baselined onto solver v3; ADR-0061). Never implemented. Before that: blocked since 2026-10-15: its parity target (the browser's v2 request) and its apply order (drafts without an eligibility record) do not hold under v3 (ADR-0056, `docs/adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md`). Re-baseline onto v3 as a new critical plan before any implementation. Previously: approved at critical tier on digest 93c4e227… (rounds 7 and 8); post-approval changes listed below are un-reviewed; the review log is `docs/superpowers/plans/2026-09-28-owt-mcp-p4-solve-apply-review-log.md`
 
 ## Original request
 

@@ -84,13 +84,21 @@ const FAILURE_MESSAGE: Record<WritePhase, string> = {
 };
 
 /**
+ * A tool's own fixed text per phase, for a tool whose domain is not one service
+ * (`solve_month`, `apply_schedule`: «vuelve a leer el servicio con get_service»
+ * would point at the wrong recovery). Same rule: never more than the phase knows.
+ */
+export type WriteFailureCopy = Readonly<Record<WritePhase, string>>;
+
+/**
  * Runs a write tool's handler. A returned result passes through untouched (a
  * refusal included); a throw — synchronous or a rejected promise — becomes the
- * fixed Spanish text of the phase it came from.
+ * fixed Spanish text of the phase it came from (`copy`, when given, else P3's).
  */
 export async function runWriteTool(
   toolName: string,
   handler: (ctx: WriteToolContext) => CallToolResult | Promise<CallToolResult>,
+  copy: WriteFailureCopy = FAILURE_MESSAGE,
 ): Promise<CallToolResult> {
   const startedAt = toolTimingStart();
   let phase: WritePhase = "pre";
@@ -111,7 +119,7 @@ export async function runWriteTool(
     return result;
   } catch {
     console.error(FAILURE_TAG[phase], toolName);
-    return { isError: true, content: [{ type: "text", text: FAILURE_MESSAGE[phase] }] };
+    return { isError: true, content: [{ type: "text", text: copy[phase] }] };
   } finally {
     logToolTiming(toolName, outcome, code, startedAt);
   }

@@ -319,6 +319,13 @@ export function rpc(method, params, id = 1) {
  */
 export const WRITE_TOOL_NAMES = ["unpublish_service", "publish_service", "swap_assignment", "edit_setlist"];
 
+/**
+ * MCP P4 on solver v3: the two month tools, after the writes. Never called by
+ * this script either (DV1): `solve_month` writes a proposal record and runs the
+ * solver, `apply_schedule` writes records and services.
+ */
+export const MONTH_TOOL_NAMES = ["solve_month", "apply_schedule"];
+
 /** The registration this deployment is expected to carry (`app/api/mcp/route.ts`), in order. */
 export const EXPECTED_TOOLS = [
   "ping",
@@ -330,6 +337,7 @@ export const EXPECTED_TOOLS = [
   "get_participation",
   "list_proposals",
   ...WRITE_TOOL_NAMES,
+  ...MONTH_TOOL_NAMES,
 ];
 
 /** What `ping` and every read tool declare (spec I14). */
@@ -343,9 +351,18 @@ export const WRITE_ANNOTATIONS = Object.freeze({
   openWorldHint: false,
 });
 
-/** The annotations `name` must declare: a write's, or a read's. Pure. */
+/** What `solve_month` declares (P4 D13): not read-only, but it writes only its own private record. */
+export const SOLVE_MONTH_ANNOTATIONS = Object.freeze({
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+});
+
+/** The annotations `name` must declare: `solve_month`'s, a write's (`apply_schedule` included), or a read's. Pure. */
 export function expectedAnnotations(name) {
-  return WRITE_TOOL_NAMES.includes(name) ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
+  if (name === "solve_month") return SOLVE_MONTH_ANNOTATIONS;
+  return WRITE_TOOL_NAMES.includes(name) || name === "apply_schedule" ? WRITE_ANNOTATIONS : READ_ONLY_ANNOTATIONS;
 }
 
 /**
@@ -442,7 +459,7 @@ export const TOOLS_CALL_METHOD = "tools/call";
  * job, below.
  */
 export function toolCallRequest(name, args, id = 1) {
-  if (WRITE_TOOL_NAMES.includes(name)) {
+  if (WRITE_TOOL_NAMES.includes(name) || MONTH_TOOL_NAMES.includes(name)) {
     throw new Error(`refusing to call the write tool "${name}": the dev smoke never calls a write tool (DV1)`);
   }
   if (!CALLABLE_TOOLS.includes(name)) {

@@ -6,7 +6,7 @@
 // client and scope strictly to `drafts.*`.
 
 import { ROLE_TYPES, SETLIST_TYPES } from "@/app/utils/serviceReadModel";
-import { WORSHIP_AUDIENCE_GROQ_FILTER } from "@/app/ministries";
+import { WORSHIP_AUDIENCE_GROQ_FILTER, WORSHIP_MEMBER_GROQ_FILTER } from "@/app/ministries";
 import { COUNTS_FOR_FAIRNESS_GROQ } from "@/app/utils/countsForFairness";
 import { SOLVER_CONFIG_DOC_ID } from "@/app/utils/solverConfigWriteRequest";
 
@@ -551,5 +551,64 @@ export function solverConfigQuery(): BoundQuery {
   return {
     query: `*[_id == $id][0]`,
     params: { id: SOLVER_CONFIG_DOC_ID },
+  };
+}
+
+// ── Admin panel reads (the planner's sources) ───────────────────────────────
+// The GROQ of `GET /api/admin/roles` and `GET /api/admin/members`, moved here so a
+// server caller (the MCP month planner) reads exactly the rows `/admin` reads.
+// Both routes import these builders; `adminReadQueries.test.ts` pins that they
+// pass the builder's text and params, so an edit to one cannot skip the other.
+
+const ADMIN_SONG_PROJECTION = `{ _id, title, author, key, "slug": slug.current }`;
+const ADMIN_SETLIST_SONGS = `songs[]{ play_key, medley_tag, "song": song->${ADMIN_SONG_PROJECTION} }`;
+
+/**
+ * Every role, drafts included, in the shape the admin panel renders. Every seat
+ * carries its stable stored `_key` alongside the resolved member, so the panel can
+ * address one seat by key — never by rendered index — when it asks the swap writer
+ * to move a person. Dangling references are filtered out exactly as the plain `->`
+ * projection did.
+ */
+export function adminRolesQuery(): BoundQuery {
+  return {
+    query: `
+    *[_type in ["sunday_role", "saturday_role", "special_role"]]
+    | order(coalesce(week, date) asc, time asc) {
+      _id, _rev, _type, service_name, time, format,
+      "published": coalesce(published, true),
+      "countsForFairness": ${COUNTS_FOR_FAIRNESS_GROQ},
+      "date": coalesce(week, date),
+      "leads": Lead[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
+      "bgvs": BGVs[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
+      "chorus": Chorus[defined(@->)]{ _key, ...@->{_id, member_name, alias} },
+      "instruments": instruments[]{_key, instrument, "person": person->{_id, member_name, alias}},
+      "foh": foh_team[]{_key, role, "person": person->{_id, member_name, alias}},
+      "songs": coalesce(select(
+        _type == "sunday_role"   => *[_type == "featuredSongs"  && week == ^.week][0].${ADMIN_SETLIST_SONGS},
+        _type == "saturday_role" => *[_type == "saturdarSongs"  && week == ^.week][0].${ADMIN_SETLIST_SONGS},
+        ${ADMIN_SETLIST_SONGS}
+      ), [])
+    }
+  `,
+    params: {},
+  };
+}
+
+/**
+ * The member list the admin panels read. Worship admins see worship members only;
+ * a super-admin (`all: true`) sees everyone, because they are the only role that
+ * can edit `ministries` at all. The caller binds `all`.
+ */
+export function adminMembersQuery(all: boolean): BoundQuery {
+  return {
+    query: `*[_type == "teamMembers" && ${WORSHIP_MEMBER_GROQ_FILTER}] | order(member_name asc) {
+      _id, member_name, alias, email, role, memberType, instruments, notifPrefs, ministries, managesMinistries,
+      disabled,
+      unavailableDates, unavailabilityNotes,
+      "hasPassword": defined(passwordHash) && passwordHash != "",
+      "photoUrl": coalesce(profilePhoto.asset->url, googlePhotoUrl)
+    }`,
+    params: { all },
   };
 }

@@ -496,6 +496,13 @@ preferences, `EMAIL_ALLOWLIST` and `EMAIL_REDIRECT_TO`. Nothing else in this doc
 an MCP write, and there is no MCP-specific notification path to operate. The per-tool audiences
 are tabled in [MCP.md](MCP.md#notification-audiences-the-write-tools).
 
+**The month tools notify nobody** (MCP P4, not released; ADR-0061). `solve_month` writes only its
+private proposal record. `apply_schedule` creates every service as a draft (`published: false`)
+through the roles POST's own `createRole`, so `notifyRoleAssignments` and `queueRoleNotices` send
+and queue nothing, exactly as «Crear N borradores» in `/admin`; its eligibility-record PUT
+notifies no one either. The team hears about those services only when an admin publishes them,
+through the publish paths above.
+
 **What the live proof could and could not show.** Email delivery was proven: every email in the
 window went to Frank alone, and he confirmed the assignment, «Setlist listo» and grouped-swap emails
 arrived. **Push delivery could not be proven for any path**, `/admin`'s included: production has no

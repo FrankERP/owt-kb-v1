@@ -17,6 +17,8 @@
 
 import type { ServiceErrorBody } from "./serviceMutation";
 
-export type CommitOutcome<E> =
-  | { ok: true; status: 200; body: Record<string, unknown>; effects: E }
+// `S` is the success status: 200 for every module but the create writer
+// (`roleCreateCommit`), which answers 201 on a create and 200 on a replay.
+export type CommitOutcome<E, S extends number = 200> =
+  | { ok: true; status: S; body: Record<string, unknown>; effects: E }
   | { ok: false; status: number; body: ServiceErrorBody | Record<string, unknown> };
