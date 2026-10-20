@@ -363,6 +363,14 @@ from Google, or a bad font entry in the restored cache. Write it down if it
 happens again with a cache-backed retry succeeding or failing; that is the
 observation that separates the two.
 
+**Second occurrence (2026-10-20).** PR #152's merge (`e3d3a221`, a visual-only
+change to the planner) failed with the same signature, under
+`./app/(admin)/layout.tsx`; its tree had built `READY` on `preview` 15 minutes
+earlier and the release diff touched no font, layout, config or lockfile. A
+session's own production redeploy is refused by its permission classifier, so
+the redeploy is Frank's (dashboard, «Use existing Build Cache» unchecked) — or
+the next merge to `main` builds it.
+
 **Recognising it** — all of these, not some:
 
 - every error sits under `[next]/internal/font/google/`;

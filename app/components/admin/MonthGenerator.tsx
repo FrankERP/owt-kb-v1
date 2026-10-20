@@ -5458,7 +5458,9 @@ export default function MonthGenerator({
                 key={col.columnId}
                 type="button"
                 data-swap-date={col.date}
-                onClick={() => handleColumnSwap(col.columnId)}
+                // A closed fold stays clickable for its exit animation (`Collapse` sets `inert` only
+                // when it ends): a tap in that window must not leave a hidden half-made pick.
+                onClick={() => { if (swapOpen) void handleColumnSwap(col.columnId); }}
                 disabled={storedMode && storedSwapInteractionBlocked}
                 className={`min-h-[44px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
                   swapSel === col.columnId

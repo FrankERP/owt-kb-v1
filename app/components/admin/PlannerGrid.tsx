@@ -1791,7 +1791,7 @@ export default function PlannerGrid(props: PlannerGridProps) {
                 key={band.month}
                 data-month-band={band.month}
                 style={{ gridColumn: `span ${band.columnIds.length}` }}
-                className={`px-1 pb-1 font-label text-[11px] uppercase tracking-widest text-accent ${i > 0 ? "border-l-2 border-accent/40" : ""}`}
+                className={`px-1 pb-1 pt-1.5 font-label text-[11px] uppercase tracking-widest text-accent ${i > 0 ? "border-l-2 border-accent/40" : ""}`}
               >
                 {band.label}
               </div>
