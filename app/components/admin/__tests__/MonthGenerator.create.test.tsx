@@ -93,8 +93,8 @@ const FEB_2026_SUNDAYS = ["2026-02-01", "2026-02-08", "2026-02-15", "2026-02-22"
 const noMembers: never[] = [];
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
-// The Mes <select> and Año <input> have no htmlFor/id linking their <label>, so
-// getByLabelText can't reach them (a pre-existing a11y gap, out of scope here).
+// Mes and Año carry ids (`mg-month`, `mg-year`) their labels point at; these helpers still
+// reach them by element type, which is all these tests need.
 
 function setMonthYear(container: HTMLElement, month: number, year: number) {
   const monthSelect = container.querySelector("select") as HTMLSelectElement;
