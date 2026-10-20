@@ -8,21 +8,21 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 317,
+    "literalRows": 319,
     "filesScanned": 457,
-    "filesWithColour": 55,
+    "filesWithColour": 56,
     "byCategory": {
       "2": 2,
-      "4": 75,
-      "8": 89,
+      "4": 76,
+      "8": 90,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 118,
+      "B": 119,
       "exempt": 55,
-      "keep": 245,
+      "keep": 246,
       "C": 5,
       "D": 14
     },
@@ -2496,6 +2496,18 @@
       "reason": null
     },
     {
+      "file": "app/components/admin/FairnessPreviewPanel.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 259,
+      "disposition": "B",
+      "reason": null
+    },
+    {
       "file": "app/components/admin/MembersPanel.tsx",
       "category": 4,
       "categoryName": "colour-keyword",
@@ -2647,7 +2659,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 426,
+      "line": 430,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2683,7 +2695,19 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2628,
+      "line": 2631,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 2637,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2707,7 +2731,7 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1640,
+      "line": 1642,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2719,7 +2743,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2586,
+      "line": 2587,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2731,7 +2755,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 3422,
+      "line": 3423,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3703,7 +3727,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 106,
+      "line": 119,
       "disposition": "B",
       "reason": null
     },
