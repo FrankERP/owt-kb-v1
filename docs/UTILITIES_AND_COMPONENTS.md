@@ -341,7 +341,7 @@ reads «· sin servicios». See [ADR-0042](adr/0042-the-fairness-history-is-deri
   disagree; **`serviceConflicts(entry)`** sums it over voces/instrumentos/foh separately (a person
   seated in two different sections is not a conflict, only a repeat within one), with
   **`conflictLabel(n)`** as the one "N conflicto"/"N conflictos" plural rule the row's chip and its
-  `aria-label` both read. `serviceTone`, `summarizeService`, `agendaRows` (ordering + month breaks
+  `aria-label` both read. `serviceTone`, **`TONE_RAIL`** (the tone → rail-colour map: the agenda's row rail and `DayCard`/`DayCardDisclosure`'s left edge, the card's ONE day-colour device — ADR-0060), `summarizeService`, `agendaRows` (ordering + month breaks
   + the summary/conflict fields, sorted Sábado → Domingo → especial within a date) back
   `AgendaView`; `mondayOf`/`addDays`/`weekStripDays`/`monthStripDays` are the day-strip's UTC date
   arithmetic (`monthStripDays` is unused by any component since the strip became week-only, but

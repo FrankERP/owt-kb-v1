@@ -227,7 +227,7 @@ describe("brand.css — (b) theme parity, dormant until .light carries custom pr
   });
 
   it("counts both sides, so a role added to one block alone cannot pass", () => {
-    // 97 colour properties per side — 67 base roles and 30 composed tokens. The four
+    // 99 colour properties per side — 67 base roles and 32 composed tokens. The four
     // non-colour ones (`--brand-radius-*`, `--brand-duration-*`) are correctly excluded:
     // a light radius is nonsense, and demanding one would make the guard unsatisfiable.
     //
@@ -246,12 +246,15 @@ describe("brand.css — (b) theme parity, dormant until .light carries custom pr
     // same ruling) replaced the one raw alpha literal `.brand-lit-card[data-lit]
     // ::after`'s conic-gradient stop would otherwise have used — this is
     // registration, not a bumped pin: the tokenLayer.test.ts rule-body-literal
-    // pin stays at 69. That edit is the point, not an inconvenience.
+    // pin stays at 69. 99 when `--surface-card` and `--atmosphere-glow` (2026-10-20,
+    // the «premium» audit) made cards opaque and the page ground one glow — each
+    // resolves to a different role or alpha per theme. That edit is the point, not
+    // an inconvenience.
     const root = customProperties(css.slice(css.indexOf(":root {"), css.indexOf("\n}", css.indexOf(":root {"))));
     const light = customProperties(lightBlock(css) ?? "");
     const rootColour = [...root].filter((p) => isColourProperty(p, css));
     expect(light.size).toBe(rootColour.length);
-    expect(light.size).toBe(97);
+    expect(light.size).toBe(99);
   });
 
   it("FIRES on a synthetic .light block with a missing counterpart (the fire-proof)", () => {

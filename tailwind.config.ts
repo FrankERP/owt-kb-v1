@@ -165,6 +165,10 @@ const config: Config = {
 				// The lit card beam (2026-09-10, Task 8, spec §23 decision Q), same
 				// ruling as sheen-highlight above — see brand.css.
 				"lit-beam": "var(--lit-beam)",
+				// Opaque cards and the page glow (2026-10-20, the «premium» audit),
+				// composed for the same reason — see brand.css.
+				"surface-card": "var(--surface-card)",
+				"atmosphere-glow": "var(--atmosphere-glow)",
 			},
 			fontFamily: {
 				display: ["var(--font-display)", "sans-serif"],
