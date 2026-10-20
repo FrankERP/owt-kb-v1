@@ -34,10 +34,18 @@ on every request, never while impersonating. The /admin tab is «Asistente».
 
 Spend, three layers, outermost first: the credit balance itself (no purchased credits, no
 auto-reload) and the Console workspace's spend limit; a per-admin monthly cap,
-`ADMIN_CHAT_MONTHLY_BUDGET_USD` (15 USD), summed from each response's own `usage` into the dotted
-`adminChatUsage.<memberId>.<YYYY-MM>` document and checked before any API call; and the system
+`ADMIN_CHAT_MONTHLY_BUDGET_USD` (15 USD), summed from each response's own `usage` — every attempt in
+`usage.iterations`, so a refusal declined mid-answer and re-run on a fallback model is charged for
+both — into the dotted `adminChatUsage.<memberId>.<YYYY-MM>` document and checked before any API
+call; and the system
 prompt, which limits the assistant to the ministry's topics and declines anything else in one line
 (about a cent). Request limits bound one call's input; six model calls per question at most.
+
+Time: the project is on Vercel Hobby without Fluid compute, so a function lives 60 s at most. The
+route stops itself at 50 s, aborting a call still in flight and charging it as if it had written
+its whole `max_tokens` (8 000), so the spend is always recorded before the platform could kill the
+function. A client that goes away does not abort the call in flight — the API bills it anyway, and
+an aborted call would go uncharged — the route only starts no further call.
 
 Model: Claude Opus 5.5 (Frank's choice) at `effort: "medium"`, with the server-side refusal
 fallback (`fallbacks: "default"`) and automatic prompt caching. Nothing is stored but the spend
@@ -60,8 +68,11 @@ counter: the conversation lives in the browser and is resent, as text only, each
 
 - A fix to an MCP read handler reaches the assistant too; a change to an MCP payload's shape must
   keep `adminChatViews.ts` compiling (it imports the payload types).
-- The per-admin cap is soft: two questions sent at the same moment both pass the check. The hard
-  cap is the Console's.
+- The per-admin cap is soft: two questions sent at the same moment both pass the check, and a
+  spend write that fails twice leaves that answer uncounted (logged). The hard cap is the
+  Console's.
+- Long answers are bounded by the 50 s deadline more than by `max_tokens`. Turning on Fluid
+  compute (a project-wide Vercel setting, Frank's call) would allow up to 300 s.
 - Without `SANITY_API_READ_TOKEN` an untokened read of the dotted counter answers «nothing spent»,
   so the route refuses (503) instead of lifting every cap. Without `ANTHROPIC_API_KEY` the tab says
   «no está configurado».

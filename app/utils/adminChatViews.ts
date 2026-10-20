@@ -83,7 +83,7 @@ export function chatServiceListView(payload: ListServicesPayload): Record<string
   };
 }
 
-/** The lyrics read's row (`songLyricsQuery` in `adminChatTools.ts`). */
+/** The lyrics read's row (`SONG_LYRICS_QUERY` in `adminChatServer.ts`). */
 export interface SongLyricsRow {
   _id: string;
   title: string | null;

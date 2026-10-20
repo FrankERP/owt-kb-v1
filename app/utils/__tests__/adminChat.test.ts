@@ -14,6 +14,7 @@ import {
   encodeChatEvent,
   parseChatRequest,
   parseStoredMicroUsd,
+  responseCostMicroUsd,
   roundUsd,
 } from "../adminChat";
 
@@ -74,17 +75,33 @@ describe("parseChatRequest", () => {
   });
 
   it("enforces the size limits", () => {
-    expect(ok([{ role: "user", text: "a".repeat(ADMIN_CHAT_LIMITS.maxMessageChars + 1) }]).ok).toBe(false);
+    expect(ok([{ role: "user", text: "a".repeat(ADMIN_CHAT_LIMITS.maxQuestionChars + 1) }]).ok).toBe(false);
+    expect(
+      ok([
+        { role: "user", text: "q" },
+        { role: "assistant", text: "a".repeat(ADMIN_CHAT_LIMITS.maxAnswerChars + 1) },
+        { role: "user", text: "q" },
+      ]).ok,
+    ).toBe(false);
     const long = Array.from({ length: ADMIN_CHAT_LIMITS.maxMessages + 1 }, (_, i) => ({
       role: i % 2 === 0 ? "user" : "assistant",
       text: "x",
     }));
     expect(ok(long).ok).toBe(false);
-    const heavy = Array.from({ length: 21 }, (_, i) => ({
+    const heavy = Array.from({ length: 7 }, (_, i) => ({
       role: i % 2 === 0 ? "user" : "assistant",
-      text: "y".repeat(ADMIN_CHAT_LIMITS.maxMessageChars),
+      text: "y".repeat(i % 2 === 0 ? 10 : ADMIN_CHAT_LIMITS.maxAnswerChars),
     }));
     expect(ok(heavy).ok).toBe(false);
+  });
+
+  it("accepts a long answer in the history: a copied-out chord chart must not block the next turn", () => {
+    const parsed = ok([
+      { role: "user", text: "Muéstrame el cifrado" },
+      { role: "assistant", text: "G  D\n".repeat(2_000) },
+      { role: "user", text: "¿Y en A?" },
+    ]);
+    expect(parsed.ok).toBe(true);
   });
 });
 
@@ -110,6 +127,28 @@ describe("costMicroUsd", () => {
     expect(costMicroUsd("claude-opus-5-5", { input_tokens: null, output_tokens: undefined })).toBe(0);
     expect(costMicroUsd("claude-opus-5-5", { input_tokens: -5, output_tokens: 1 })).toBe(20);
     expect(costMicroUsd("claude-opus-5-5", { cache_read_input_tokens: 3 })).toBe(1);
+  });
+});
+
+describe("responseCostMicroUsd", () => {
+  it("is the top-level usage when there are no iterations", () => {
+    const usage = { input_tokens: 1_000, output_tokens: 100 };
+    expect(responseCostMicroUsd("claude-opus-5-5", usage)).toBe(costMicroUsd("claude-opus-5-5", usage));
+    expect(responseCostMicroUsd("claude-opus-5-5", { ...usage, iterations: [] })).toBe(costMicroUsd("claude-opus-5-5", usage));
+  });
+
+  it("charges a declined attempt too, each attempt at its own model's price", () => {
+    const cost = responseCostMicroUsd("claude-opus-5", {
+      input_tokens: 1_000,
+      output_tokens: 50,
+      iterations: [
+        { type: "message", model: null, input_tokens: 1_000, output_tokens: 200 },
+        { type: "fallback_message", model: "claude-opus-5", input_tokens: 1_000, output_tokens: 50 },
+        { type: "compaction", input_tokens: 9_999, output_tokens: 9_999 },
+      ],
+    });
+    // The declined `message` entry has no model of its own: the response's model prices it.
+    expect(cost).toBe(1_000 * 5 + 200 * 25 + 1_000 * 5 + 50 * 25);
   });
 });
 
@@ -140,6 +179,10 @@ describe("the monthly counter", () => {
 });
 
 describe("the event stream", () => {
+  it("passes a rewind through", () => {
+    expect(decodeChatEvents(encodeChatEvent({ type: "rewind", text: "Hola" })).events).toEqual([{ type: "rewind", text: "Hola" }]);
+  });
+
   it("round-trips events and keeps an unfinished line for the next chunk", () => {
     const wire = encodeChatEvent({ type: "text", text: "Hola" }) + encodeChatEvent({ type: "status", text: "Buscando…" });
     const cut = wire.length - 5;

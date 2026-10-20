@@ -121,6 +121,10 @@ export default function AssistantPanel() {
                 setWorking(null);
                 const current = answer;
                 setTurns((prev) => [...prev.slice(0, -1), { role: "assistant", text: current }]);
+              } else if (event.type === "rewind") {
+                answer = event.text;
+                const current = answer;
+                setTurns((prev) => [...prev.slice(0, -1), { role: "assistant", text: current }]);
               } else if (event.type === "status") {
                 setWorking(event.text);
               } else if (event.type === "error") {
@@ -264,7 +268,7 @@ export default function AssistantPanel() {
           aria-label="Tu pregunta"
           className={inputCls}
           rows={3}
-          maxLength={ADMIN_CHAT_LIMITS.maxMessageChars}
+          maxLength={ADMIN_CHAT_LIMITS.maxQuestionChars}
           placeholder="Escribe tu pregunta… (Enter para enviar, Shift+Enter para otra línea)"
           value={draft}
           disabled={blocked}

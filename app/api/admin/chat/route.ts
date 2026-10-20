@@ -10,6 +10,7 @@ import {
   chatMonthKey,
   costMicroUsd,
   encodeChatEvent,
+  responseCostMicroUsd,
   parseChatRequest,
   roundUsd,
   type AdminChatEvent,
@@ -42,12 +43,37 @@ import { getMemberAccess } from "@/app/utils/memberAccess";
  * The cap is a soft one (two questions sent at the same moment both pass the check); the hard cap
  * is the Console workspace's spend limit and the credit balance itself.
  *
+ * Time: the project runs on Vercel Hobby without Fluid compute, so a function gets 60 s at most.
+ * The route stops itself at `ANSWER_DEADLINE_MS` — aborting a call still in flight and charging it
+ * conservatively — so its `finally` always runs and records the spend before the platform would
+ * kill it. A client that goes away does NOT abort the call in flight (the API bills it all the
+ * same, and an abort would leave it uncharged); the route just starts no further call.
+ *
  * No `revalidate*`: nothing here is rendered by an ISR page.
  */
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 /** Model calls one question may make: each tool round is one more. */
 const MAX_MODEL_CALLS = 6;
+
+/** Output bound per call (thinking included); a cut-off answer says so. */
+const MAX_TOKENS = 8_000;
+
+/** The route's own deadline, under `maxDuration`, leaving room to record the spend. */
+const ANSWER_DEADLINE_MS = 50_000;
+
+/** No new call starts with less time than this left: it would only be cut off. */
+const MIN_CALL_MS = 10_000;
+
+/**
+ * What a call aborted at the deadline is charged: its input as far as the stream reported it (or an
+ * estimate from the prompt's length, ~3 characters a token, when nothing arrived), and the whole
+ * `MAX_TOKENS` of output — the most it could have produced, so a cut never undercounts.
+ */
+function abortedCallCostMicroUsd(snapshot: Anthropic.Beta.BetaMessage | undefined, promptChars: number): number {
+  if (snapshot) return costMicroUsd(snapshot.model, { ...snapshot.usage, output_tokens: MAX_TOKENS });
+  return costMicroUsd(ADMIN_CHAT_MODEL, { input_tokens: Math.ceil(promptChars / 3), output_tokens: MAX_TOKENS });
+}
 
 type Authorized = { ok: true; memberId: string } | { ok: false; response: NextResponse };
 
@@ -110,6 +136,7 @@ function apiErrorMessage(err: unknown): string {
 }
 
 export async function POST(req: Request) {
+  const startedAt = Date.now();
   const auth = await authorize();
   if (!auth.ok) return auth.response;
 
@@ -159,15 +186,26 @@ export async function POST(req: Request) {
 
       let spent = 0;
       let calls = 0;
-      let wroteText = false;
+      let answer = "";
+      const deadline = startedAt + ANSWER_DEADLINE_MS;
       try {
         while (calls < MAX_MODEL_CALLS) {
+          // The panel went away: finish nothing new. The call already answered is recorded below.
+          if (calls > 0 && req.signal.aborted) break;
+          const remaining = deadline - Date.now();
+          if (calls > 0 && remaining < MIN_CALL_MS) {
+            send({ type: "text", text: "\n\n(Se acabó el tiempo para esta pregunta. Intenta hacerla más concreta.)" });
+            break;
+          }
           calls += 1;
+          const timer = new AbortController();
+          const timeout = setTimeout(() => timer.abort(), Math.max(remaining, 1));
+          const answerBefore = answer;
           let separated = false;
           const call = client.beta.messages.stream(
             {
               model: ADMIN_CHAT_MODEL,
-              max_tokens: 16_000,
+              max_tokens: MAX_TOKENS,
               // Server-side refusal fallback: a safety classifier's decline is re-run on the model
               // Anthropic recommends for that category instead of reaching the admin as a refusal.
               betas: ["server-side-fallback-2026-07-01"],
@@ -178,23 +216,49 @@ export async function POST(req: Request) {
               tools: ADMIN_CHAT_TOOLS,
               messages,
             },
-            { signal: req.signal },
+            { signal: timer.signal },
           );
+          call.on("streamEvent", (event) => {
+            // A fallback hands the answer to another model mid-call: the declined model's partial
+            // words are dropped from what the admin sees (and from what the panel resends).
+            if (event.type === "content_block_start" && event.content_block.type === "fallback") {
+              answer = answerBefore;
+              separated = false;
+              send({ type: "rewind", text: answer });
+            }
+          });
           call.on("text", (delta) => {
-            if (wroteText && !separated) send({ type: "text", text: "\n\n" });
+            if (answer && !separated) {
+              answer += "\n\n";
+              send({ type: "text", text: "\n\n" });
+            }
             separated = true;
-            wroteText = true;
+            answer += delta;
             send({ type: "text", text: delta });
           });
-          const message = await call.finalMessage();
-          spent += costMicroUsd(message.model, message.usage);
+          let message: Anthropic.Beta.BetaMessage;
+          try {
+            message = await call.finalMessage();
+          } catch (err) {
+            if (!timer.signal.aborted) throw err;
+            spent += abortedCallCostMicroUsd(call.currentMessage, system.length + JSON.stringify(messages).length);
+            send({ type: "error", message: "La respuesta tardó demasiado. Intenta con una pregunta más concreta." });
+            break;
+          } finally {
+            clearTimeout(timeout);
+          }
+          spent += responseCostMicroUsd(message.model, message.usage);
 
           if (message.stop_reason === "refusal") {
             send({ type: "error", message: "No puedo ayudar con esa pregunta." });
             break;
           }
+          if (message.stop_reason === "max_tokens" || message.stop_reason === "model_context_window_exceeded") {
+            // Never run a tool call cut off here: its input may be truncated.
+            send({ type: "text", text: "\n\n(Respuesta recortada: era demasiado larga.)" });
+            break;
+          }
           const toolUses = message.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
-          // A tool call cut off at max_tokens may carry a truncated input: never run it.
           if (message.stop_reason !== "tool_use" || toolUses.length === 0) break;
           if (calls === MAX_MODEL_CALLS) {
             send({ type: "text", text: "\n\n(Esta pregunta necesitó demasiadas consultas. Intenta hacerla más concreta.)" });
@@ -212,16 +276,20 @@ export async function POST(req: Request) {
           messages.push({ role: "user", content: results });
         }
       } catch (err) {
-        if (!req.signal.aborted) {
-          console.error("[admin-chat] answer failed:", err instanceof Anthropic.APIError ? err.status : "unknown");
-          send({ type: "error", message: apiErrorMessage(err) });
-        }
+        console.error("[admin-chat] answer failed:", err instanceof Anthropic.APIError ? err.status : "unknown");
+        send({ type: "error", message: apiErrorMessage(err) });
       } finally {
         if (spent > 0) {
-          try {
-            await recordSpend(memberId, month, spent);
-          } catch {
-            console.error("[admin-chat] spend not recorded");
+          // One retry: a lost write makes the answer free, so it is worth a second try. Still
+          // failing, the cap undercounts by this answer (logged); the workspace limit stays hard.
+          let recorded = false;
+          for (let attempt = 0; attempt < 2 && !recorded; attempt++) {
+            try {
+              await recordSpend(memberId, month, spent);
+              recorded = true;
+            } catch {
+              console.error(`[admin-chat] spend not recorded (attempt ${attempt + 1})`);
+            }
           }
         }
         console.log(`[admin-chat] calls=${calls} microUsd=${spent}`);

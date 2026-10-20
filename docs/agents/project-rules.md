@@ -384,7 +384,10 @@ several exist precisely to stop a plausible-looking change.
   the MCP read handlers in process (`adminChatServer.ts`); do not give it a write tool, and do not
   route it through `/api/mcp` (super-admin OAuth, write tools on the same server). Requests are
   plain text only, so a client cannot forge a tool result or a system turn. Spend is priced from the
-  API's own token counts (`costMicroUsd`; an unknown model is charged at the dearer Opus 5 rate) and
+  API's own token counts, every attempt in `usage.iterations` (`responseCostMicroUsd`; an unknown
+  model is charged at the dearer Opus 5 rate); never pass the request's signal to the SDK (an
+  aborted call goes uncharged) — the route's own 50 s deadline under `maxDuration = 60` aborts and
+  charges a call in full. It is
   capped at `ADMIN_CHAT_MONTHLY_BUDGET_USD` per admin per CDMX month in the dotted, tokened
   `adminChatUsage.<memberId>.<YYYY-MM>`; a failed read refuses the question, never reads as zero.
   `ANTHROPIC_API_KEY` is set by Frank in Vercel only (`docs/SECRETS.md`).

@@ -4,7 +4,8 @@
 // route writes, and the route and its tests validate the same request shape.
 //
 // The money rules live here so one place says what a question costs. Every answer's cost is
-// computed from the API's own `usage` and summed per admin per CDMX month
+// computed from the API's own `usage` (every attempt in it, `responseCostMicroUsd`) and summed per
+// admin per CDMX month
 // (`adminChatUsage.<memberId>.<YYYY-MM>`); an admin at the cap is refused before any API call.
 
 /** The one model the assistant runs (Frank, 2026-10-20: «Sí, con Opus 5.5»). */
@@ -13,11 +14,16 @@ export const ADMIN_CHAT_MODEL = "claude-opus-5-5";
 /** Each admin's monthly spend cap, in USD. The Console workspace limit is the hard cap above it. */
 export const ADMIN_CHAT_MONTHLY_BUDGET_USD = 15;
 
-/** Request limits: a conversation is resent whole on every turn, so these bound one call's input. */
+/**
+ * Request limits: a conversation is resent whole on every turn, so these bound one call's input.
+ * A question is typed, so it is short; an answer the panel resends can be long (a chord chart
+ * copied out), so it has its own, larger bound — one long answer must not refuse every later turn.
+ */
 export const ADMIN_CHAT_LIMITS = {
   maxMessages: 40,
-  maxMessageChars: 4_000,
-  maxTotalChars: 60_000,
+  maxQuestionChars: 4_000,
+  maxAnswerChars: 40_000,
+  maxTotalChars: 100_000,
 } as const;
 
 export type AdminChatRole = "user" | "assistant";
@@ -64,8 +70,11 @@ export function parseChatRequest(body: unknown): ChatRequestParse {
     if (role !== expected || typeof text !== "string") return { ok: false, error: "Mensaje inválido." };
     const trimmed = text.trim();
     if (trimmed.length === 0) return { ok: false, error: "Hay un mensaje vacío." };
-    if (trimmed.length > ADMIN_CHAT_LIMITS.maxMessageChars) {
-      return { ok: false, error: `Cada mensaje puede tener hasta ${ADMIN_CHAT_LIMITS.maxMessageChars} caracteres.` };
+    if (expected === "user" && trimmed.length > ADMIN_CHAT_LIMITS.maxQuestionChars) {
+      return { ok: false, error: `Cada pregunta puede tener hasta ${ADMIN_CHAT_LIMITS.maxQuestionChars} caracteres.` };
+    }
+    if (expected === "assistant" && trimmed.length > ADMIN_CHAT_LIMITS.maxAnswerChars) {
+      return { ok: false, error: "La conversación es demasiado larga. Empieza una nueva." };
     }
     total += trimmed.length;
     messages.push({ role: expected, text: trimmed });
@@ -100,6 +109,16 @@ export interface ChatUsage {
   cache_creation_input_tokens?: number | null;
 }
 
+/** One sampling attempt inside a response (`usage.iterations`): the served one, or a declined one. */
+export interface ChatIterationUsage extends ChatUsage {
+  type: string;
+  model?: string | null;
+}
+
+export interface ChatResponseUsage extends ChatUsage {
+  iterations?: ChatIterationUsage[] | null;
+}
+
 const count = (n: number | null | undefined): number => (typeof n === "number" && Number.isFinite(n) && n > 0 ? n : 0);
 
 /**
@@ -116,6 +135,19 @@ export function costMicroUsd(model: string, usage: ChatUsage): number {
     count(usage.cache_read_input_tokens) * price.cacheRead +
     count(usage.cache_creation_input_tokens) * price.cacheWrite;
   return Math.ceil(micro);
+}
+
+/**
+ * What one whole response cost. With a server-side fallback the top-level `usage` covers only the
+ * attempt that served the answer, while a declined attempt that had started writing is billed
+ * too; each attempt is its own `message` / `fallback_message` entry in `usage.iterations`, priced
+ * by its own model (a `message` entry without one ran on the response's model). Without
+ * iterations, the top-level `usage` is the whole response.
+ */
+export function responseCostMicroUsd(model: string, usage: ChatResponseUsage): number {
+  const attempts = (usage.iterations ?? []).filter((it) => it.type === "message" || it.type === "fallback_message");
+  if (attempts.length === 0) return costMicroUsd(model, usage);
+  return attempts.reduce((sum, it) => sum + costMicroUsd(it.model || model, it), 0);
 }
 
 export const MICRO_PER_USD = 1_000_000;
@@ -150,6 +182,8 @@ export interface AdminChatStatus {
 export type AdminChatEvent =
   | { type: "status"; text: string }
   | { type: "text"; text: string }
+  /** The answer so far is exactly `text`: a fallback replaced the declined model's partial words. */
+  | { type: "rewind"; text: string }
   | { type: "done"; spentUsd: number; budgetUsd: number }
   | { type: "error"; message: string };
 
@@ -169,7 +203,7 @@ export function decodeChatEvents(buffer: string): { events: AdminChatEvent[]; re
     if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line) as { type?: unknown };
-      if (parsed && (parsed.type === "status" || parsed.type === "text" || parsed.type === "done" || parsed.type === "error")) {
+      if (parsed && (parsed.type === "status" || parsed.type === "text" || parsed.type === "rewind" || parsed.type === "done" || parsed.type === "error")) {
         events.push(parsed as AdminChatEvent);
       }
     } catch {

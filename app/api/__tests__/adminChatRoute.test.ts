@@ -3,7 +3,8 @@
 // What must hold: only a live worship admin (never while impersonating) gets an answer; a
 // missing key or read token, or a spent monthly cap, refuses BEFORE any API call; the model
 // reaches exactly five read tools, which run the MCP's own read handlers; and every completed
-// API call's cost lands on the admin's monthly counter, even when a later call fails.
+// API call's cost lands on the admin's monthly counter, even when a later call fails, the
+// client goes away, or the route's own deadline cuts a call.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,7 +25,16 @@ const h = vi.hoisted(() => ({
   commit: vi.fn(),
   txOps: [] as Array<{ op: string; arg: unknown }>,
   streamCalls: [] as Array<Record<string, unknown>>,
-  script: [] as Array<{ texts?: string[]; message?: FakeMessage; error?: unknown }>,
+  script: [] as Array<{
+    texts?: string[];
+    message?: FakeMessage;
+    error?: unknown;
+    /** Emit a `fallback` content block before `texts[fallbackAt]`. */
+    fallbackAt?: number;
+    /** Never finish: reject when the call's signal aborts, with this as the stream's snapshot. */
+    hang?: { snapshot?: FakeMessage };
+  }>,
+  streamSignals: [] as Array<AbortSignal | undefined>,
   searchSongsResult: vi.fn(),
   getSongResult: vi.fn(),
   listServicesResult: vi.fn(),
@@ -38,19 +48,33 @@ vi.mock("@anthropic-ai/sdk", async (importOriginal) => {
     return {
       beta: {
         messages: {
-          stream: (params: Record<string, unknown>) => {
+          stream: (params: Record<string, unknown>, opts?: { signal?: AbortSignal }) => {
             // Snapshot: the route keeps appending to the same array after the call.
             h.streamCalls.push({ ...params, messages: structuredClone(params.messages) });
+            h.streamSignals.push(opts?.signal);
             const step = h.script.shift() ?? { texts: ["(sin guion)"], message: undefined };
             let onText: ((d: string) => void) | null = null;
+            let onEvent: ((e: unknown) => void) | null = null;
             const api = {
-              on(event: string, cb: (d: string) => void) {
-                if (event === "text") onText = cb;
+              currentMessage: step.hang?.snapshot,
+              on(event: string, cb: (d: never) => void) {
+                if (event === "text") onText = cb as (d: string) => void;
+                if (event === "streamEvent") onEvent = cb as (e: unknown) => void;
                 return api;
               },
               async finalMessage() {
                 if (step.error) throw step.error;
-                for (const t of step.texts ?? []) onText?.(t);
+                if (step.hang) {
+                  await new Promise((_, reject) =>
+                    opts?.signal?.addEventListener("abort", () => reject(new Error("Request was aborted."))),
+                  );
+                }
+                (step.texts ?? []).forEach((t, i) => {
+                  if (i === step.fallbackAt) {
+                    onEvent?.({ type: "content_block_start", index: i, content_block: { type: "fallback" } });
+                  }
+                  onText?.(t);
+                });
                 return (
                   step.message ?? {
                     model: "claude-opus-5-5",
@@ -171,6 +195,7 @@ beforeEach(() => {
   h.txOps.length = 0;
   h.streamCalls.length = 0;
   h.script.length = 0;
+  h.streamSignals.length = 0;
   for (const fn of [h.searchSongsResult, h.getSongResult, h.listServicesResult, h.getServiceResult]) fn.mockReset();
 });
 
@@ -320,6 +345,102 @@ describe("POST /api/admin/chat — the answer", () => {
     expect(evs).toContainEqual({ type: "error", message: "Hay mucha demanda en este momento. Intenta de nuevo en un minuto." });
     expect(h.txOps[1]).toMatchObject({ op: "patch", arg: { inc: { spentMicroUsd: 1_000 * 4 + 50 * 20, questions: 1 } } });
     expect(evs.at(-1)!.type).toBe("done");
+  });
+
+  it("charges every attempt of a response, a declined one included", async () => {
+    h.script.push({
+      texts: ["Hola"],
+      message: {
+        ...answer("Hola"),
+        model: "claude-opus-5",
+        usage: {
+          input_tokens: 2_000,
+          output_tokens: 100,
+          iterations: [
+            { type: "message", input_tokens: 2_000, output_tokens: 300 },
+            { type: "fallback_message", model: "claude-opus-5", input_tokens: 2_000, output_tokens: 100 },
+          ],
+        },
+      } as unknown as FakeMessage,
+    });
+    await events(await ask());
+    expect(h.txOps[1]).toMatchObject({
+      op: "patch",
+      arg: { inc: { spentMicroUsd: (2_000 * 5 + 300 * 25) + (2_000 * 5 + 100 * 25), questions: 1 } },
+    });
+  });
+
+  it("drops the declined model's partial words when a fallback takes over", async () => {
+    h.searchSongsResult.mockResolvedValue({ content: [{ type: "text", text: "{}" }], structuredContent: { songs: [] } });
+    h.script.push(
+      { texts: ["Busco."], message: toolUse("tu-1", "search_songs", { query: "x" }) },
+      { texts: ["Parcial que", "La respuesta."], fallbackAt: 1, message: answer("La respuesta.") },
+    );
+    const evs = await events(await ask());
+    let shown = "";
+    for (const e of evs) {
+      if (e.type === "text") shown += e.text;
+      if (e.type === "rewind") shown = e.text;
+    }
+    expect(evs).toContainEqual({ type: "rewind", text: "Busco." });
+    expect(shown).toBe("Busco.\n\nLa respuesta.");
+  });
+
+  it("says when an answer was cut off at the output limit, and runs no tool call cut with it", async () => {
+    h.script.push({ texts: ["Mucho texto"], message: { ...toolUse("tu-1", "search_songs", { query: "x" }), stop_reason: "max_tokens" } });
+    const evs = await events(await ask());
+    expect(evs).toContainEqual({ type: "text", text: "\n\n(Respuesta recortada: era demasiado larga.)" });
+    expect(h.searchSongsResult).not.toHaveBeenCalled();
+    expect(h.streamCalls).toHaveLength(1);
+  });
+
+  it("never hands the client's disconnect to the API; it starts no further call and charges the one it ran", async () => {
+    const client = new AbortController();
+    h.searchSongsResult.mockImplementation(async () => {
+      client.abort(); // the admin pressed «Nueva conversación» while the tool ran
+      return { content: [{ type: "text", text: "{}" }], structuredContent: { songs: [] } };
+    });
+    h.script.push({ message: toolUse("tu-1", "search_songs", { query: "x" }) }, { texts: ["nunca"] });
+    const res = await POST(
+      new Request("https://owt-backstage.vercel.app/api/admin/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", text: "Hola" }] }),
+        signal: client.signal,
+      }),
+    );
+    await res.text().catch(() => "");
+    // Wait for the stream's own `finally` (it keeps running after the reader is gone).
+    await vi.waitFor(() => expect(h.txOps).toHaveLength(2));
+    expect(h.streamSignals[0]).not.toBe(client.signal);
+    expect(h.streamCalls).toHaveLength(1);
+    expect(h.txOps[1]).toMatchObject({ op: "patch", arg: { inc: { spentMicroUsd: 1_000 * 4 + 50 * 20, questions: 1 } } });
+  });
+
+  it("cuts a call at its own deadline, charges it in full, and still records and closes", async () => {
+    vi.useFakeTimers();
+    try {
+      h.script.push({
+        hang: {
+          snapshot: { model: "claude-opus-5-5", stop_reason: "", content: [], usage: { input_tokens: 3_000, output_tokens: 1 } },
+        },
+      });
+      const pending = ask().then(events);
+      await vi.advanceTimersByTimeAsync(50_000);
+      const evs = await pending;
+      expect(evs).toContainEqual({ type: "error", message: "La respuesta tardó demasiado. Intenta con una pregunta más concreta." });
+      expect(h.txOps[1]).toMatchObject({ op: "patch", arg: { inc: { spentMicroUsd: 3_000 * 4 + 8_000 * 20, questions: 1 } } });
+      expect(evs.at(-1)!.type).toBe("done");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("retries a failed spend write once", async () => {
+    h.commit.mockRejectedValueOnce(new Error("sanity down")).mockResolvedValueOnce({});
+    h.script.push({ texts: ["Hola"] });
+    await events(await ask());
+    expect(h.commit).toHaveBeenCalledTimes(2);
   });
 
   it("turns a final refusal into an error event", async () => {

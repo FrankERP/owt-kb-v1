@@ -7,7 +7,7 @@ import "server-only";
 // process — never `/api/mcp` over the network. That connector is super-admin-only, OAuth-gated
 // and carries write tools; calling the handlers directly keeps the same search, the same
 // payloads and the same Spanish errors without minting an MCP token or exposing a writer. The
-// list below IS the assistant's whole reach: `adminChatServer.test.ts` pins it to these five.
+// list below IS the assistant's whole reach: `app/api/__tests__/adminChatRoute.test.ts` pins it to these five.
 // The one tool the MCP does not have is `get_song_lyrics` — the MCP reports lyrics presence only
 // (its P1 non-goal), while the assistant exists to talk about the words.
 

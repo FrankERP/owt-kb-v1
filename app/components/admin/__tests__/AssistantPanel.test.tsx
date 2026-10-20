@@ -99,6 +99,22 @@ describe("AssistantPanel", () => {
     });
   });
 
+  it("replaces the answer so far on a rewind", async () => {
+    stubFetch([
+      ok([
+        { type: "text", text: "Palabras que se descartan" },
+        { type: "rewind", text: "" },
+        { type: "text", text: "Respuesta final" },
+        { type: "done", spentUsd: 1.6, budgetUsd: 15 },
+      ]),
+    ]);
+    render(<AssistantPanel />);
+    await screen.findByText("Cupo del mes: 1.50 de 15 USD");
+    ask("Algo");
+    await screen.findByText("Respuesta final");
+    expect(screen.queryByText(/se descartan/)).toBeNull();
+  });
+
   it("shows a streamed error instead of a partial answer", async () => {
     stubFetch([
       ok([
