@@ -483,7 +483,7 @@ describe("A2 handoff allowlist", () => {
         "app/api/admin/roles/copy-instruments/route.ts#POST",
         "app/api/admin/roles/publish/route.ts#POST",
         "app/utils/publishReadyCommit.ts#module",
-        "app/api/admin/roles/route.ts#POST",
+        "app/utils/roleCreateCommit.ts#module",
         "app/utils/roleSwapCommit.ts#module",
         "app/utils/roleUnpublishCommit.ts#module",
         "app/utils/roleWriteOps.ts#module",

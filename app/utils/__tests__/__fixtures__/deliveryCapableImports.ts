@@ -22,6 +22,7 @@ export const DELIVERY_CAPABLE_IMPORTS: readonly string[] = [
   "proposalNotify",
   "setlistSaveCommit",
   "roleSwapCommit",
+  "roleCreateCommit",
   "publishReadyCommit",
   "roleUnpublishCommit",
   // Solver v3 C2 (ADR-0043's rule for every `*Commit`): the eligibility-record writer
