@@ -38,7 +38,7 @@ Q1 exactly what changes if he picks the other.
   horizon month's eligibility record and then the drafts, exactly as `/admin`'s v3 confirm does —
   nothing published, nobody notified.
 - **Preconditions (step 0):** this plan approved with its review log; Frank's go-ahead to
-  implement; Q2 answered (or its default accepted) before step 6.
+  implement; Q2 and Q4 answered (or their defaults accepted) before step 6.
 - **Safe ending state:** `/api/mcp` registers **14 tools** (P0–P3's 12 + `solve_month` +
   `apply_schedule`), `maxDuration` still **60**; no platform setting changed; the only new stored
   data is `mcpProposal.*` records (private, 7-day, swept); each new tool proven once on production
@@ -148,9 +148,9 @@ Verified at `d65871e2` unless marked «measured».
 | D3 | Parity | **By construction.** The connector calls `preReadRefusals`, `runV3Auto`, `buildV3SolveRequest`, `classifyV3Answer`/`v3HandshakeHolds`, `applyV3Assignments`, `buildV3RunReport`, `freezeConfirmEntries`, `cellsToDrafts`, and the inline helpers of F5 after step 2 moves them. A parity test still runs both surfaces on one fixture (step 7) | Two compositions of the same pieces drift; one composition cannot. The old plan's dataset-level jsdom parity test is kept, narrowed to what the shared calls do not already guarantee: that the **inputs** each surface hands those functions are equal |
 | D4 | Apply | **`runV3ConfirmAttempt` itself**, with server transports: `putRecords` → `commitFairnessMonths(body, { recordedBy: sub })`; `postDraft` → `createRole(normalised body)` from the new `roleCreateCommit`; `published: false`; `currentMonth` from the server's CDMX clock | It is «the ONE v3 confirm»: records first and atomic, the month-by-month rule, the past-month and ceiling guards on every attempt, replay-safe resends. A second implementation would be a second contract to review and keep in step |
 | D5 | Time | **Solve:** the `solveV3` timeout is `min(45 000, 52 000 − elapsed − 4 000)` ms; under 10 000 ms left, the solver is not called: `postSolve` sets a flag in its closure and throws, and the tool answers `time_budget` from the flag (never the generic transport line), nothing stored. `runV3Auto`'s own bounds stay as they are: the ledger read at `V3_LEDGER_TIMEOUT_MS` (20 s) and an outer 58 s on the solve (`v3AutoRun.ts:23-24,70,79`), which the shorter `solveV3` timeout always beats. **Apply:** `postDraft` starts no create after 40 000 ms of the call; a draft past the cut-off is **deferred** (not posted, reported «pendiente») and the next call continues | 52 s leaves 8 s for the response inside the 60 s kill. 45 s still exceeds v3's 25 s internal budget plus a cold start (F1); only when slow reads and a near-20 s ledger read shrink the clamp below ~33 s can a cold solve time out where the browser's would finish — a transport failure with `retry` offered, nothing stored, and the re-call is warm. At 1.2–2.4 s per create (F13) a call covers ~15 creates; a 2-month horizon (~18–22 drafts) takes two calls. A deferral reuses the browser's own retry path: deferred drafts are simply not yet in `createdLocalIds`, so CF-5 blocks the later months exactly as a failure would, and the next call resends only what is missing (CF-7) |
-| D6 | Store and concurrency | `mcpProposal.<handle>`: immutable fields written once at solve — origin, principal, `createdAt`, `expiresAt` (+7 days), `engine: "v3"`, the bound rules `rev`, `months`, `requestId`, and **one JSON string `payload`** (the frozen entries, the drafts, each draft's solve-time preflight state, the horizon's stored service ids at solve) with its SHA-256 — plus one mutable JSON string `state` = `{ recordsDone, created: { localId → roleId } }`. **No lease.** Every `state` write is a patch under `ifRevisionId`; on a revision conflict the writer re-reads, merges (`recordsDone` OR, `created` set-union) and retries, at most 3 times | Without revise the proposal never changes after solve, and every domain write apply makes is replay-safe on its own (F11, F12). The only shared mutable data is therefore a set of facts that only grow; a union of two applies' facts is always true, so a lost update is impossible and no mutual exclusion is needed. The old plan's lease (W1–W7, the most-reviewed part of it) existed to serialize revise against apply. JSON strings, not structured fields: the payload is written once and parsed on load, so it needs no `_key`s, no Studio sub-schema and adds no attribute paths to the dataset; it is validated (digest, schema) on every load |
-| D7 | A target lost since the solve | **Refuse the whole apply call before any write** when a not-yet-created draft whose target was `creatable` at solve is no longer `creatable` — exactly the browser's fresh-preflight abort (F8). One exception, **proven from data, never from this proposal's own bookkeeping**: a pending draft whose target now reads `exists` because the canonical role there is **this draft's own landed create** — that role's `creationReceiptId` (projected by the snapshot's `ROLE_PROJECTION`, `serviceReadQueries.ts:20-22`) equals `receiptIdForRequestId(draft.creationRequestId)` (`roleCreationReceipt.ts:257`) — is admitted and posted again, and the route replays it (F11). Any other occupant, or an occupant whose receipt id is absent or different, refuses the whole call before any write. A special's preflight is name-blind (M9), and the route refuses only a special of the same normalised name (identity = date + name, ADR-0011), so apply adds its own check (step 6.4 b): any special stored on a pending special's date refuses, unless it is this proposal's own landed create. **One proof, one function:** `ownLandedRoleIds(roles, pendingDrafts)` = the ids of the fresh canonical roles whose `creationReceiptId` equals `receiptIdForRequestId(d.creationRequestId)` for some pending draft `d`; checks (a), (b) and (c) of step 6.4 all exempt exactly that set and nothing else | Under v3 the plan is a whole: a date taken by someone else changes the fixed services the solver balanced around, and the frozen eligibility records are for that plan. Re-solving is cheap (F1) and the new solve takes the new service as fixed. The spec's per-service skip predates v3 and was justified by a costly re-solve; that premise is gone (Q2: a spec amendment Frank confirms). The exception is narrower than «we tried it before» on purpose: a mark written before a post (or before a PUT that then failed) proves nothing about who occupies the date, and admitting such a draft would land the records and create the rest of the month around a foreign service. The receipt id is minted per draft at solve and stamped on the role by the create transaction itself, so only this draft's own create can match it. With it the connector recovers a lost create answer, which the browser cannot until a reload refreshes its snapshot |
-| D8 | Solver failure | **No proposal is stored** on any exit but success: refusal, transport, coded failure, handshake failure, an `assignments` id the request did not send, `time_budget`. The answer carries the browser's own line (`v3OutcomeLine`, `transportLine`, the refusal lines) and whether a retry is useful (`v3RetryOffered`) | The browser fills uncounted specials and instruments on a failed run so the admin keeps a board to finish by hand. The connector has no hand surface (Q1), so a fills-only proposal would only invite applying a month with empty weekends. A declared difference (Table M, M12) |
+| D6 | Store and concurrency | `mcpProposal.<handle>`: immutable fields written once at solve — origin, principal, `createdAt`, `expiresAt` (+7 days), `engine: "v3"`, the bound rules `rev`, `months`, `requestId`, and **one JSON string `payload`** (the frozen entries, the drafts, each draft's solve-time preflight state, the horizon's stored service ids at solve, from the snapshot's canonical role rows — the rows apply's `O` reads) with its SHA-256 — plus one mutable JSON string `state` = `{ recordsDone, created: { localId → roleId } }`. **No lease.** Every `state` write is a patch under `ifRevisionId`; on a revision conflict the writer re-reads, merges (`recordsDone` OR, `created` set-union) and retries, at most 3 times | Without revise the proposal never changes after solve, and every domain write apply makes is replay-safe on its own (F11, F12). The only shared mutable data is therefore a set of facts that only grow; a union of two applies' facts is always true, so a lost update is impossible and no mutual exclusion is needed. The old plan's lease (W1–W7, the most-reviewed part of it) existed to serialize revise against apply. JSON strings, not structured fields: the payload is written once and parsed on load, so it needs no `_key`s, no Studio sub-schema and adds no attribute paths to the dataset; it is validated (digest, schema) on every load |
+| D7 | A target lost since the solve | **Refuse the whole apply call before any write** when a `pending` draft (creatable at solve, not yet created) is no longer `creatable` — exactly the browser's fresh-preflight abort (F8) — plus two connector-only checks the 7-day window needs: any special stored on a pending special's date (the preflight is name-blind and the route refuses only the same normalised name, ADR-0011), and any change to the horizon's stored service ids. **A draft whose own create landed is never pending:** the observation `O` (step 6, `apply_schedule`) recognises it from data — its role's `creationReceiptId` equals `receiptIdForRequestId(d.creationRequestId)` — and counts it as created, so it is neither re-posted nor mistaken for a foreign occupant by any of the three checks | Under v3 the plan is a whole: a date taken by someone else changes the fixed services the solver balanced around, and the frozen eligibility records are for that plan. Re-solving is cheap (F1) and the new solve takes the new service as fixed. The spec's per-service skip predates v3 and was justified by a costly re-solve; that premise is gone (Q2: a spec amendment Frank confirms). Recognising an own create by its receipt id, not by a mark this proposal wrote, is the point: a mark written before a post (or before a PUT that then failed) proves nothing about who occupies the date, while the receipt id is stamped on the role by that draft's own create transaction. With it the connector recovers a lost create answer, which the browser cannot until a reload refreshes its snapshot |
+| D8 | Solver failure | **No proposal is stored** on any exit but success: refusal, transport, coded failure, handshake failure, an `assignments` id the request did not send, `time_budget`. The answer carries the browser's own line (`v3OutcomeLine`, `transportLine`, the refusal lines) and whether a retry is useful (`v3RetryOffered`) | The browser fills uncounted specials and instruments on a failed run so the admin keeps a board to finish by hand. The connector has no hand surface (Q1), so a fills-only proposal would only invite applying a month with empty weekends. A declared difference (Table M, M12) that Frank confirms (Q4) |
 | D9 | Handle | 26 lowercase Crockford base32 characters (128 bits) from `crypto.getRandomValues`, validated before any read | Short enough for a model to copy, unguessable (old D13, kept) |
 | D10 | Binding | Apply refuses — with **one** fixed answer, «No encontré esa propuesta o ya venció. Vuelve a correr solve_month.» — an unknown handle, an expired record, another origin, another principal, or a payload whose digest or schema fails | The model holds only the handle. One answer never confirms that another principal's proposal exists |
 | D11 | Rules | The proposal binds the stored `solverConfig` `_rev` (`null` when absent). Apply refuses `stale_revision` detail `rules_changed` when it differs | The browser lets an admin confirm a board after editing rules within one session; a connector proposal lives 7 days, and the spec requires this refusal (`apply_schedule` row). Cheap and strictly safer |
@@ -194,7 +194,7 @@ writer refuses it; the tool returns its code), **declared** (a stated difference
 | A1 | Sources ready at confirm (`gateBlocked`) | `MonthGenerator.tsx:2093,4712` | **mirror**: a fresh snapshot (the five sources) and the rules `rev`; any failed read refuses the call before any write |
 | A2 | Only drafts creatable in the preview snapshot are candidates | `isDraftCreatable`, `MonthGenerator.tsx:569-586` | **mirror**: a draft whose `atSolve` state was not `creatable` is never posted (it was never in the request either, M9) |
 | A3 | Nameless special | `MonthGenerator.tsx:4720-4735` | **structural**: refused at solve (M6); the payload parser refuses a record carrying one |
-| A4 | Fresh preflight; a dropped candidate aborts the whole confirm | `MonthGenerator.tsx:4737-4756` | **mirror (D7)**, with the exception for a draft whose occupant carries its own receipt id. Tests: a candidate turned `blocked` ⇒ refusal, zero PUTs, zero creates; a foreign occupant on a never-posted draft after a failed PUT ⇒ refusal, zero PUTs, zero creates; the same after a deferral (month 2) ⇒ refusal, zero creates; an occupant carrying another receipt id or none ⇒ refusal; the draft's own landed create (weekend and special), unrecorded in `state` ⇒ passes (a), (b) and (c) together, posted, replay, «creado (confirmado por su recibo)» |
+| A4 | Fresh preflight; a dropped candidate aborts the whole confirm | `MonthGenerator.tsx:4737-4756` | **mirror (D7)** over `pending`, whose own landed creates are already counted as created (`O`). Tests: a candidate turned `blocked` ⇒ refusal, zero PUTs, zero creates; a foreign occupant on a never-posted draft after a failed PUT ⇒ refusal, zero PUTs, zero creates; the same after a deferral (month 2) ⇒ refusal, zero creates; an occupant carrying another receipt id or none ⇒ refusal; the draft's own landed create (weekend and special), absent from `state` ⇒ counted as created by `O`, not posted, checks (a), (b), (c) pass, reported «creado (confirmado por su recibo)» |
 | A5 | CF-1 past month and ceiling, CF-4 record refusals, CF-5 month order, CF-7 replay | `v3ConfirmRun.ts:60-129` | **inherited** (same function); the copy is the browser's (`V3_CONFIRM_REFUSAL`, `V3_LINES`) |
 | A6 | The create route's refusals (receipt, members, occupancy, history on the date, lock, coordinator, races) | `app/api/admin/roles/route.ts:103-401` | **inherited** through `roleCreateCommit`; each failed draft carries the route's code and a per-service Spanish line (`serviceRefusalLine`, step 6) |
 | A7 | «Crear y publicar» | `MonthGenerator.tsx:5803` | **structural**: always `published: false` |
@@ -279,8 +279,9 @@ release. `claude/*` pushes build nothing (`scripts/vercel-ignore-build.mjs`).
 
 - `v3MonthPlanReads.ts`: `loadServiceSnapshot()` (P1), the members (`adminMembersQuery` bound
   `{ all: true }`), the roles rows (`adminRolesQuery`), the stored rules (`loadStored` of
-  `solver-config/route.ts`, moved to `app/utils/solverConfigRead.ts` and called by the route too) with
-  its `_rev`, and the ledger (`loadFairnessLedger` with the route's arguments).
+  `solver-config/route.ts`, moved to `app/utils/solverConfigRead.ts` and called by the route too — a behaviour-preserving move
+  inside a production writer's route, since the rules POST reads its `_rev` check through it: the
+  solver-config route tests pass unchanged) with its `_rev`, and the ledger (`loadFairnessLedger` with the route's arguments).
 - `app/utils/v3MonthPlan.ts` (`server-only`): `planV3Month(input, deps)` — validates the input
   (M4–M7), builds the stored inventory and planned columns through `v3Board`, runs the preflight per
   planned target (M9), then `runV3Auto` with `preRead` = `preReadRefusals`, `storedReady` = the
@@ -292,7 +293,9 @@ release. `claude/*` pushes build nothing (`scripts/vercel-ignore-build.mjs`).
   `loadFairnessLedger` takes no signal, so the wrapper rejects on `abort` (a test: a never-settling
   read refuses at 20 s). A throw or an abort is `runV3Auto`'s «ledger failed» refusal, as a non-200 is
   in the browser; `isLedgerBody` still checks the body. `build` =
-  `buildV3SolveRequest` with `cells: []`, `fillEmpty: false`, a random seed and `requestId`, and
+  `buildV3SolveRequest` with `cells: []`, `rows` = `buildRows()` (as at preview,
+  `MonthGenerator.tsx:3318`; the same `rows` feed `applyV3Assignments` and `cellsToDrafts`),
+  `fillEmpty: false`, a random seed and `requestId`, and
   `postSolve` = `solveV3(request, process.env, fetch, budget)`; on success `settleV3AutoResult` +
   `runLocalFills` + `cellsToDrafts` + `freezeConfirmEntries(sources, "auto")`.
 - No React, no `fetch` of an app route, no client import (`clientBoundary.test.ts`).
@@ -326,65 +329,58 @@ create (the browser's «Crear» is disabled in that case).
 
 **`apply_schedule`** — input `{ proposal }` (the handle).
 
-1. Engine gate (D2, before any read), then handle format, `loadProposal`, the D10 checks.
-2. Fresh reads — **the same reads as the solve** (`v3MonthPlanReads.ts`, minus the ledger): the
-   snapshot (sources and summaries), the members, the admin roles rows and the stored rules with
-   their `rev` (A1, A9). The preflight of step 4 builds its queue from them through
-   `integrityQueueFor`, exactly as at solve (M9).
-3. If every draft is created: the report, no write.
-4. Fresh checks, all before any write; any failure ⇒ the whole call refused with the services named
-   and `next: solve_month`: first `own = ownLandedRoleIds(fresh roles, pending drafts)` (D7); then (a) the fresh preflight of
-   every pending draft (A4, D7), a draft whose target reads `exists` admitted only when the occupant
-   is in `own`; (b) for every pending special, `refuseSpecialOn`'s stored-special rule over the fresh
-   roles minus `own` — a special of any name stored on that date since the solve refuses, which closes
-   the name-blind preflight's gap over the 7-day window (E19); (c) the horizon's stored service ids,
-   minus the roles in `state.created` **and minus `own`**, equal the set stored in the payload at
-   solve — so a create that landed unseen (a killed call, a lost answer, a failed `state` write) is
-   never mistaken for a foreign service — a stored service added on an unplanned date or deleted since the solve changes
-   what the solver balanced around. A seat edit inside a stored service is not detected (browser
-   parity, declared in the ADR).
-5. `runV3ConfirmAttempt` (D4) inside `callDomain`, its `state` = `{ recordsDone: false, createdLocalIds:
-   keys of state.created }`: **every call resends the PUT**. For this proposal's own records it answers
-   `unchanged` (WR-8 row 1) at no cost, and a record replaced by someone else since the last call is
-   refused by the PUT rather than trusted from the proposal's bookkeeping (D7's principle). `recordsDone`
-   in the stored `state` is kept for the report only. `postDraft` is deadline-gated (D5) and records
-   each created draft's `roleId`.
-6. `writeState(recordsDone, created ∪= createdNow)`, then the D12 sweep if under 45 s (so records
-   expire even in a week with no solve). Its failure is reported, never hidden: «Se
-   crearon N servicios pero no pude guardar el avance; vuelve a llamar apply_schedule con la misma
-   propuesta: no se duplicará nada.»
-7. Report (D14), with one report read through `safeReportRead` — skipped after 50 s of the call, the
-   report then built from `state` alone and saying so: the fresh roles, so a created draft
-   whose role is gone reads «creado y luego eliminado en /admin» and one at another date or name
-   «creado y luego modificado en /admin» — both failures for `complete`.
+An apply may take several calls (D5), and any call may be killed, lose its answer or fail to save its
+progress. So every decision and every sentence of an apply call obeys **two rules**, and the table
+below is the whole protocol:
 
-**One answer rule (every apply outcome).** The answer is composed from **one observation taken from
-data in step 4**, never from the stored `state` alone and never from a browser line that asserts what
-was not created: `exists` = `state.created` ∪ `own` (the receipt-proven roles, D7) — the services of
-this proposal that exist now — and, per month, whether this call's PUT verdict for it was `created`,
-`replaced` or `unchanged`. `state` is a cache of the same facts and is never the evidence for a «nothing
-exists» claim.
+- **R-OBS — cumulative facts come from one observation read from data at the start of the call.**
+  The stored `state` is a cache that may lag (a failed `state` write, a killed call); it can add
+  facts (a created draft later deleted in `/admin` stays «created»), never stand in for a read.
+- **R-CALL — negative claims are about this call only, and only when this call knows them.** «En
+  esta llamada no se escribió nada» (team data: records and services; the proposal's own `state` is
+  not team data) is said only when this call made no domain write, or its only one answered a refusal. A write whose answer was lost (a throw, an abort, a 5xx) is **unknown**, never
+  «falló» or «no se creó». No connector line says «No se creó nada» / «ningún servicio» about the
+  proposal as a whole, and none attributes a conflict to «otro administrador» (it may be a concurrent
+  call of this same proposal). The browser lines that do (`V3_CONFIRM_REFUSAL`, `recordOtherFailure`,
+  the guard lines, `monthPartial`; `v3Copy.ts:342-352,445,451`) are true in the browser only because
+  its session lives in memory and CF-7 never resends a landed PUT; the connector uses their
+  `V3_CONNECTOR_LINES` twins.
 
-- No connector answer uses a browser line that says «No se creó nada» / «No se creó ningún servicio»
-  (`V3_CONFIRM_REFUSAL`, `recordOtherFailure`, the guard lines; `v3Copy.ts:342-352,445`): those are
-  true in the browser only because its session state is in memory and CF-7 never resends a landed PUT.
-  Their `V3_CONNECTOR_LINES` twins state the reason, then list `exists` per month and service («ya
-  existen: …», or «ninguno de esta propuesta» when `exists` is empty — a fact read from data), and say
-  of the records only what this call observed («el registro de {mes} quedó guardado» on a `created`,
-  `replaced` or `unchanged` verdict; otherwise nothing is claimed about it).
-- No twin attributes a record conflict to «otro administrador»: `record_exists`, `stale_revision` and
-  `record_missing` can come from a concurrent call of this same proposal, so the twin says the record
-  changed while applying and adds «si otra llamada de apply_schedule con esta propuesta está en curso,
-  vuelve a llamarla en un momento; si no, vuelve a correr solve_month» — a re-call then finds the
-  record `unchanged` and continues.
-- `refused_guard` ⇒ the guard's reason plus `exists`, no retry (every call passes `recordsDone: false`,
-  so `v3ConfirmRun.ts:76-86` never adds the per-month lines itself). `record_failed` ⇒ the twin above,
-  `retry` per `recordRetryOffered`, else `next: solve_month`. `drafts` ⇒ per month and service; a
-  deferred draft is «pendiente: vuelve a llamar apply_schedule» and never counted as a failure —
-  `V3_LINES.monthPartial` (`v3Copy.ts:451`) counts every uncreated draft as «fallaron», so the tool
-  composes a month's line from the created/failed/deferred split and uses `monthPartial` only when
-  nothing was deferred. Every role in `own` that this call did not create is reported «creado
-  (confirmado por su recibo)».
+**The observation `O`** (phase 1, one read set — the same reads as the solve, `v3MonthPlanReads.ts`
+minus the ledger): the snapshot (sources, summaries and its canonical role rows, which carry
+`_id`, type, date, name and `creationReceiptId` through `ROLE_PROJECTION`, `serviceReadQueries.ts:20-22`),
+the members, the admin roles rows (only for `integrityQueueFor`, M9) and the stored rules with their
+`rev`. From the snapshot role rows alone:
+
+- `own` = each draft `d` of the proposal whose `receiptIdForRequestId(d.creationRequestId)`
+  (`roleCreationReceipt.ts:257`) equals some row's `creationReceiptId` → that row. Only `d`'s own
+  create transaction stamps that id (`roleWriteRequest.ts:231,296`), so `own` is proof, not inference.
+- `created` = `own` ∪ `state.created` (by `localId`). A `state.created` entry with no row is
+  «creado y luego eliminado en /admin»; one whose row's type, date or name differs from its draft is
+  «creado y luego modificado en /admin». Both are failures for `complete` and are never re-created.
+- `pending` = the drafts creatable at solve (`atSolve`, A2) not in `created`.
+- `stored` = the ids of the rows dated in the horizon months, minus every row of `created`.
+
+| Phase | Reads / does | Refuses (whole call) when | Writes | Answer |
+|---|---|---|---|---|
+| 0. Gate | engine (D2, before any read); handle format; `loadProposal`; the D10 checks | engine not v3; D10 | none | the refusal; «en esta llamada no se escribió nada» |
+| 1. Observe | `O` as above | any read fails or any source not ready (A1); rules `rev` ≠ the bound one (A9, D11) | none | the refusal; no-write line |
+| 2. Done? | `pending` empty | — | none | the report from `O` (created, deleted, modified); `complete` per I9 |
+| 3. Check | (a) the fresh preflight of every `pending` draft through `integrityQueueFor` (A4, D7); (b) for every `pending` special, `refuseSpecialOn`'s stored-special rule over the rows minus `created` (E19: the preflight is name-blind and the route refuses only the same name); (c) `stored` = the horizon's stored ids frozen in the payload at solve | (a) a draft not `creatable`; (b) any special stored on its date; (c) a stored service added on an unplanned date or deleted | none | the refusal naming the services, `next: solve_month`, plus `created` from `O` («ya existen: …»); no-write line |
+| 4. Confirm | `runV3ConfirmAttempt` (D4) inside `callDomain` with `state = { recordsDone: false, createdLocalIds: created }`, so **every call resends the PUT** (this proposal's own records answer `unchanged`, WR-8 row 1; a record replaced by someone else is refused, never trusted from `state`) and posts only `pending`. Both transports record what they **know**: `putRecords` the commit's answer (status 200 with per-month outcomes; a 4xx refusal, which wrote nothing; or unknown — a throw, an abort, a 5xx); `postDraft` each draft's answer (created with its `roleId`, refused with the route's code, unknown, or deferred by the D5 cut-off without posting) | — (the confirm's own refusals are outcomes, below) | the records PUT (atomic across the horizon); the creates | per the outcome rows below |
+| 5. Save | `writeState`: `recordsDone` if the PUT answered 200, `created` ∪= `own` ∪ this call's known creates (merge under `ifRevisionId`, D6); then the D12 sweep if under 45 s | — | the `mcpProposal` state | if it fails: the outcome answer plus «no pude guardar el avance; volver a llamar apply_schedule es seguro: lo creado se reconoce por su recibo» |
+
+**Outcome rows of phase 4** (each answer also lists `created` from `O` plus this call's known creates):
+
+| Confirm result | What this call knows | Answer |
+|---|---|---|
+| `refused_guard` (CF-1: a horizon month passed, or the ceiling) | it wrote nothing (the guard runs before the PUT) | the guard's reason through its twin; «en esta llamada no se escribió nada»; `next: solve_month` |
+| `record_failed`, a 4xx refusal (CF-4's 409s, or a 400) | the PUT wrote nothing in this call (a refusal is decided before the one transaction) | the reason through its twin (no «otro administrador»); for `record_exists`, `stale_revision`, `record_missing`: «si otra llamada de apply_schedule con esta propuesta está en curso, vuelve a llamarla en un momento; si no, vuelve a correr solve_month» — a re-call then finds the record `unchanged`; `retry` per `recordRetryOffered`, else `next: solve_month` |
+| `record_failed`, unknown (threw, aborted, 5xx, or a 200 whose outcomes `classifyRecordPut` does not accept) | **nothing**: the records may have landed | «No pude confirmar si el registro de elegibilidad quedó guardado; volver a llamar apply_schedule es seguro (si quedó, responde sin cambios)»; `retry: true` |
+| `drafts` | per draft: created (with `roleId`), refused (route code), unknown, deferred; the PUT answered 200 | «el registro de {meses} quedó guardado»; per month and service: created now, already created (`O`), refused with `serviceRefusalLine`, «sin confirmar: vuelve a llamar; si quedó creado se reconoce por su recibo», «pendiente: vuelve a llamar apply_schedule». A month's line is composed from that split; `V3_LINES.monthPartial` is never used (it calls every uncreated draft «fallaron»). Later months blocked by CF-5 are «pendiente» |
+
+`complete` (I9) is true only when every draft creatable at solve is in `created`, none deleted or
+modified, and nothing is unknown, refused or pending.
 
 ### 7. Tests that close the plan
 
@@ -396,9 +392,10 @@ exists» claim.
   are compared by position), and the same proposal content the roadmap's acceptance names: unfilled
   seats, refused specials and the services left out of the request with their reasons. Cases: one month; two months with a stored service and a counted
   special; an uncounted special (the local fills); a planned date that is not creatable (left out of
-  the request, still in the fills and the drafts, never posted); a bound month; a recorded, unbound
+  the request, still in the fills and the drafts, never posted); an excluded Sunday and an excluded
+  Saturday (the input mapping the roadmap's acceptance names); a bound month; a recorded, unbound
   month.
-- **Apply recovery**: kill between the PUT and the first create; kill mid-month; a deferral at the
+- **Apply recovery** (each answer checked against R-OBS and R-CALL: no «No se creó nada», no «otro administrador», no «falló» for an unknown): kill between the PUT and the first create; kill mid-month; a PUT that lands but whose answer throws ⇒ «no pude confirmar», `retry`; a create that lands but whose answer throws ⇒ «sin confirmar», next call counts it from `O`; a deferral at the
   cut-off; two concurrent applies of one proposal (zero duplicate creates, state is the union);
   CF-1 across a month boundary (fixed clock); each `details.detail` of CF-4; **call 1 lands the
   records and some drafts, a foreign writer replaces a record, call 2 ⇒ an answer naming what exists
@@ -459,24 +456,26 @@ exists» claim.
 | `apply_schedule` | reads + preflight ≤ ~5 s; PUT ≤ ~5 s; creates start until 40 s and one in flight may end ~45 s; two `state` writes ≤ ~2 s | one call per ~15 drafts |
 
 A call killed at 60 s anyway leaves the same state a lost answer does: the PUT is replay-safe, every
-create is replay-safe through its receipt, and the next call finishes (a draft whose create landed unseen is recognised by its receipt id, D7).
+create is replay-safe through its receipt, and the next call's observation counts a create that landed unseen as created by its receipt id (D7).
 
 ## Data and failure safety
 
 | Moment | What exists | What Frank is told | Recovery |
 |---|---|---|---|
-| Any refusal before the PUT | Nothing new | The refusal | As it says (re-solve, retry, wait) |
+| Any refusal before the PUT | Nothing new from this call | The refusal | As it says (re-solve, retry, wait) |
 | PUT refused (CF-4) or failed, any call | Whatever earlier calls left (records, drafts) | The reason (connector twin) plus `exists`, read from data (the one answer rule); never «No se creó nada» | Re-solve (conflict, team changed, past month), retry (other), or re-call if another apply of this proposal is running |
 | Seven days pass: Tipo, availability or a stored service's seats change | The proposal as solved | Team or Tipo changes refuse the PUT on create/replace (CF-4 `member_unknown`/`member_not_worship`); availability and seat edits are not re-checked (the spec's bounded window) | Re-solve when in doubt; the report shows the solve date |
-| PUT landed, answer lost / call killed | The records | «No se pudo confirmar…» with `apply_schedule` named | Call again: the PUT answers `unchanged` |
-| Some drafts created, call killed or cut off | Records, those drafts | Per month and service; «pendiente» | Call again: created drafts are not resent; one whose create landed unseen is recognised by its receipt id and replays |
+| PUT landed, answer lost / call killed | The records | «No pude confirmar si el registro… quedó guardado; volver a llamar es seguro» | Call again: the PUT answers `unchanged` |
+| Some drafts created, call killed or cut off | Records, those drafts | Per month and service; «pendiente» or «sin confirmar» | Call again: every created draft, seen or not, is counted from data by its receipt id and not resent |
 | A date taken by someone else since the solve | Records maybe, earlier drafts | The refusal naming it (D7) | Re-solve: the new solve fixes that service and the already-created drafts |
 | A created draft deleted in `/admin` | The rest | «creado y luego eliminado en /admin», not complete | Re-solve if wanted; this proposal never re-creates it |
-| `state` write fails after creates | Records, drafts | The D6 failure line | Call again (replays) |
+| `state` write fails after creates | Records, drafts | The outcome plus the phase-5 failure line | Call again: the observation finds the drafts by their receipt ids |
 | Proposal expired | Whatever was applied | The D10 refusal | Re-solve |
-| A deploy between solve and apply changed the create body or its canonical form | Whatever was applied | A replayed create answers `idempotency_mismatch` (inherited, per service) | Re-solve; the receipt never lets a changed body create twice |
+| A deploy between solve and apply changed the create body or its canonical form | Whatever was applied | A pending draft whose earlier post's answer was lost and whose role was then deleted (its key retired) is refused by the route per service; a landed one is counted by `O` and never re-posted | Re-solve |
 
-Nothing is deleted or rewritten to compensate (CF-6). The live proof's leftovers: Q3.
+Nothing is deleted or rewritten to compensate (CF-6). The live proof's leftovers: Q3. If L4 finds the
+live-proof month's drafts or record wrong: Frank deletes the drafts in `/admin`, which leaves the
+month recorded and unbound, and the next `/admin` Auto plus confirm replaces the record (C2 WR-8).
 
 ## Verification (requirement coverage)
 
@@ -487,7 +486,7 @@ Nothing is deleted or rewritten to compensate (CF-6). The live proof's leftovers
 | Each service created at most once across retries and concurrent applies | F11, F12, D6; step 7 |
 | Refusal parity (I15) | Tables M and A; gate replay |
 | Drafts only, nobody notified (I8, F10) | A7; a test asserting zero outbox upserts and zero pushes |
-| Honest outcomes (I9) | Every apply answer per month and service; `complete` false on any pending, failed, deleted or moved |
+| Honest outcomes (I9) | R-OBS and R-CALL (step 6, `apply_schedule`); every apply answer per month and service; `complete` false on any pending, refused, unknown, deleted or modified; the recovery tests |
 | Worship scope (I5) | M15; the request is worship-only by RES-5 |
 | Key hygiene | step 7 |
 | `/admin` unchanged | the move proofs (steps 1–3) |
@@ -517,6 +516,7 @@ Nothing is deleted or rewritten to compensate (CF-6). The live proof's leftovers
 |---|---|---|---|
 | **Q1** (asked 2026-10-20): `revise_proposal` here or in its own plan? | **Its own plan.** Editing stays possible in `/admin` on the drafts before publishing. If Frank picks «here»: the plan gains the old step 9 re-based on v3 (the `rankCandidates` gate, a revision counter), and D6 gains back a lease, because revise would mutate the payload apply reads | own plan | step 0 |
 | **Q2**: confirm the spec amendment of D7 (refuse the apply when a date was taken since the proposal, instead of skipping that service) | **Confirm.** Under v3 a re-solve takes seconds and treats the new service as fixed; skipping would create a month the solver did not plan, under records frozen for another plan | D7 | step 6 (apply's protocol depends on it; a «skip» answer reopens this plan's review) |
+| **Q4**: confirm D8 (a failed solve stores no proposal, where the spec says «a bound proposal… marked as partial» on a solver failure and the browser keeps a fills-only board) | **Confirm.** The connector has no hand surface to finish a fills-only board, so applying one would create weekends with empty voices; a failed solve answers with the browser's own line and Frank re-solves or finishes in `/admin` | D8 | step 6 |
 | **Q3**: the live-proof month and its cleanup | **The next month Frank actually plans** (one with no services yet), solved and applied from the Claude app, the drafts **kept** as real work, reviewed in `/admin` before he publishes. Nothing needs cleaning, and the record is the real one. Alternative: a far month (≤ current + 12, HZ-9) whose drafts Frank deletes in `/admin`; its record **stays** (only C4's reconstruction actor deletes one), and the real Auto months later finds it «recorded, unbound» and replaces it, so nothing is lost but the dataset carries a proof record until then | the next real month, kept | step 9 |
 
 ## Spec amendment (post-approval, to be recorded in the spec review log)
