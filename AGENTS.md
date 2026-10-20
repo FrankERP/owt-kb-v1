@@ -283,7 +283,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `app/components/ui/**` (`docs/MOTION.md`, ADR-0031).
 
 ## Colour tokens
-**67 base roles + 30 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
+**67 base roles + 32 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
 retired `--brand-*` colour variables are gone. **Never build a colour by string
 concatenation** — use `themeColour(rgbVar, alpha?)`. **`var()` is not substituted in SVG
 presentation attributes** — set `color` on an ancestor and inherit `currentColor`. **Composed

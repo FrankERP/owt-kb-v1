@@ -118,6 +118,8 @@ describe("app/(client)/page.tsx — data-lit", () => {
   });
 
   it("data-lit sits on the brand-lit-card wrapper, which carries the elevation the clip eats", () => {
-    expect(src).toMatch(/className="brand-lit-card shadow-xl shadow-accent\/10"\s+data-lit\b/);
+    // Neutral since 2026-10-20 (the «premium» audit): an accent glow under the hero
+    // was one more colour on the most-seen card.
+    expect(src).toMatch(/className="brand-lit-card shadow-md shadow-elevation\/10"\s+data-lit\b/);
   });
 });

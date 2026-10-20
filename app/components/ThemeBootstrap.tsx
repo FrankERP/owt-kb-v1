@@ -56,7 +56,7 @@ export function useThemePref(): ThemePrefContext {
 const META_DARK = "#010b17";
 /** `--surface-base`'s light triplet — the page wash itself. */
 // eslint-disable-next-line no-restricted-syntax -- pre-CSS <meta> colour, cannot take a var(); see parent invariant 17
-const META_LIGHT = "#eef3f9";
+const META_LIGHT = "#f5f7fa";
 
 export function ThemeBootstrap({ children }: { children: React.ReactNode }) {
   const { setTheme, resolvedTheme } = useTheme();
