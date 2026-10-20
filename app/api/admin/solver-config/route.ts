@@ -3,13 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireActiveManager } from "@/app/utils/authGuards";
 import { sanityConflictKind } from "@/app/utils/roleWriteRequest";
 import { serviceError } from "@/app/utils/serviceMutation";
-import { operationalClient } from "@/sanity/lib/operationalClient";
+import { loadStoredSolverConfig, solverConfigGetBody } from "@/app/utils/solverConfigRead";
 import { writeClient } from "@/sanity/lib/serverClient";
 import {
   SOLVER_CONFIG_DOC_ID,
   SOLVER_CONFIG_VERSION,
   parseSolverConfigWrite,
-  solverConfigFromDocument,
 } from "@/app/utils/solverConfigWriteRequest";
 
 /**
@@ -76,18 +75,8 @@ async function gate() {
   return session;
 }
 
-interface StoredSolverConfigDoc {
-  _id?: string;
-  _rev?: string;
-}
-
-async function loadStored(): Promise<(StoredSolverConfigDoc & Record<string, unknown>) | null> {
-  const doc = await operationalClient.fetch<Record<string, unknown> | null>(
-    `*[_id == $id][0]`,
-    { id: SOLVER_CONFIG_DOC_ID },
-  );
-  return doc ?? null;
-}
+// The raw read, shared with the MCP month planner (`app/utils/solverConfigRead.ts`).
+const loadStored = loadStoredSolverConfig;
 
 /**
  * The rule set, or an explicit "absent".
@@ -106,18 +95,8 @@ export async function GET() {
   const session = await gate();
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const doc = await loadStored();
-  // `configVersion` on every answer, absent included: a client that speaks
-  // another version disables its own save on reading it (C3 §6.2).
-  if (!doc) {
-    return NextResponse.json({ present: false, rev: null, config: null, configVersion: SOLVER_CONFIG_VERSION });
-  }
-  return NextResponse.json({
-    present: true,
-    rev: typeof doc._rev === "string" ? doc._rev : null,
-    config: solverConfigFromDocument(doc),
-    configVersion: SOLVER_CONFIG_VERSION,
-  });
+  // `configVersion` on every answer, absent included (`solverConfigGetBody`).
+  return NextResponse.json(solverConfigGetBody(await loadStored()));
 }
 
 /**
