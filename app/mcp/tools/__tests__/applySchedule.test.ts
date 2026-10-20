@@ -19,6 +19,7 @@ vi.mock("@/sanity/env", () => ({ apiVersion: "2024-07-23", dataset: "test", proj
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { V3_CONNECTOR_LINES as L } from "@/app/components/admin/v3Copy";
 import { snapshot } from "@/app/utils/__tests__/v3MonthPlanFixtures";
+import { FAIRNESS_PUT_REFUSALS } from "@/app/utils/fairnessVocabulary";
 import { APPLY_SCHEDULE_COPY, APPLY_SCHEDULE_INPUT, applyScheduleResult } from "../applySchedule";
 import { solveMonthResult, type SolveMonthArgs } from "../solveMonth";
 import { draftLabel } from "../../monthProposals/labels";
@@ -294,6 +295,9 @@ describe("concurrency", () => {
     answers.push(a, b);
     expect(w.roles).toHaveLength(creatableCount(proposal));
     expect(new Set(w.roles.map((r) => r.creationReceiptId)).size).toBe(creatableCount(proposal));
+    // The saved state is the union of both calls' facts.
+    expect(Object.keys(w.proposal!.state.created).sort()).toEqual(
+      proposal.payload.drafts.filter((d) => d.atSolve === "creatable").map((d) => d.draft.localId).sort());
     const third = await apply(w);
     expect(third.structuredContent).toMatchObject({ complete: true });
   });
@@ -307,6 +311,136 @@ describe("a throw before the confirm", () => {
     expect(out.isError).toBe(true);
     // `todayIso` is read before `callDomain`: the pre side.
     expect(textOf(out)).toBe(APPLY_SCHEDULE_COPY.pre);
+  });
+});
+
+describe("recovery across calls (step 7)", () => {
+  const sorted = (p: StoredProposal) =>
+    p.payload.drafts.filter((d) => d.atSolve === "creatable").map((d) => d.draft).sort((a, b) => a.date.localeCompare(b.date));
+  const statelessFail = (w: ReturnType<typeof applyWorld>) =>
+    w.deps.writeState.mockResolvedValueOnce({ ok: false, reason: "server_error", cause: null });
+
+  it("killed between the PUT and the first create: the next call creates every draft once", async () => {
+    const { proposal, w } = await setup({ failFrom: 1 });
+    statelessFail(w);
+    await apply(w);                                    // its answer never arrives (killed)
+    expect(w.roles).toHaveLength(0);
+    const healthy = applyWorld(proposal);
+    healthy.roles = w.roles;
+    const out = await apply(healthy);
+    expect(out.structuredContent).toMatchObject({ complete: true });
+    expect(healthy.roles).toHaveLength(creatableCount(proposal));
+  });
+
+  it("killed mid-month with no state saved: the next call recognises the landed ones by receipt", async () => {
+    const { proposal, w } = await setup({ failFrom: 4 });
+    statelessFail(w);
+    await apply(w);
+    expect(w.roles).toHaveLength(3);
+    const healthy = applyWorld(proposal);
+    healthy.roles = w.roles;
+    const out = await apply(healthy);
+    const first = sorted(proposal)[0];
+    expect(textOf(out)).toContain(L.serviceAlready(draftLabel(first)));
+    expect(healthy.deps.createRole).toHaveBeenCalledTimes(creatableCount(proposal) - 3);
+    expect(healthy.roles).toHaveLength(creatableCount(proposal));
+  });
+
+  it.each(FAIRNESS_PUT_REFUSALS)("CF-4 «%s»: the connector's line, zero creates", async (detail) => {
+    const { w } = await setup();
+    w.deps.commitRecords.mockResolvedValueOnce({
+      ok: false, status: 409, body: { error: "stale_revision", details: { detail, months: [{ month: "2026-11", verdict: detail }] } },
+    });
+    const out = await apply(w);
+    expect(textOf(out)).toContain(L.recordRefusal[detail]("2026-11"));
+    expect(out.structuredContent).toMatchObject({ code: "record_refused", detail });
+    expect(w.deps.createRole).not.toHaveBeenCalled();
+  });
+
+  it("call 1 lands the records and some drafts; a foreign writer replaces the record; call 2 names what exists", async () => {
+    const { proposal, w } = await setup({ createMs: 15_000 });
+    await apply(w);                                    // three created, the rest deferred
+    w.clock.t = BASE_MS + 120_000;
+    w.deps.commitRecords.mockResolvedValueOnce({
+      ok: false, status: 409, body: { error: "stale_revision", details: { detail: "record_exists", months: [{ month: "2026-11", verdict: "record_exists" }] } },
+    });
+    const out = await apply(w);
+    const created = sorted(proposal).slice(0, 3).map(draftLabel);
+    expect(textOf(out)).toContain(L.exists(created));
+    expect(textOf(out)).not.toMatch(/No se creó nada/);
+  });
+
+  it.each([
+    ["the PUT fails «other»", (w: ReturnType<typeof applyWorld>) => w.deps.commitRecords.mockResolvedValueOnce({ ok: false, status: 500, body: {} }), L.recordUnknown],
+    ["record_exists", (w: ReturnType<typeof applyWorld>) => w.deps.commitRecords.mockResolvedValueOnce({
+      ok: false, status: 409, body: { error: "stale_revision", details: { detail: "record_exists", months: [{ month: "2026-11", verdict: "record_exists" }] } },
+    }), L.recordRefusal.record_exists("2026-11")],
+    ["the guard refuses a past month", (w: ReturnType<typeof applyWorld>) => { w.deps.todayIso = () => "2026-12-01"; }, L.guardPast("2026-11")],
+  ])("call 1's state lost, then %s: the answer lists the receipt-proven drafts", async (_name, arrange, line) => {
+    const { proposal, w } = await setup({ failFrom: 4 });
+    statelessFail(w);
+    await apply(w);
+    expect(Object.keys(w.proposal!.state.created)).toHaveLength(0);
+    const next = applyWorld(proposal);
+    next.roles = w.roles;
+    arrange(next);
+    const out = await apply(next);
+    const text = textOf(out);
+    expect(text).toContain(line);
+    expect(text).toContain(L.exists(sorted(proposal).slice(0, 3).map(draftLabel)));
+    expect(text).not.toMatch(/No se creó nada|ningún servicio/);
+    expect(next.deps.createRole).not.toHaveBeenCalled();
+  });
+
+  it("A4: a pending candidate turned blocked refuses the whole call", async () => {
+    const { proposal, w } = await setup({
+      readinessOver: {
+        roleSummary: {
+          targets: [], recordIssues: [],
+          lockIssues: [{ kind: "orphan_lock", lockId: "roleTarget.sunday_role.2026-11-15", targetKey: "sunday_role:2026-11-15", roleId: "role-ghost" }],
+        },
+      },
+    });
+    const out = await apply(w);
+    const sunday15 = sorted(proposal).find((d) => d.date === "2026-11-15")!;
+    expect(textOf(out)).toMatch(new RegExp(`^${draftLabel(sunday15)} ya no se puede crear`, "m"));
+    expect(w.deps.commitRecords).not.toHaveBeenCalled();
+    expect(w.deps.createRole).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["no receipt", undefined],
+    ["another receipt", "roleCreate.someone-else"],
+  ])("A4: a foreign weekend occupant (%s) on a never-posted date refuses, zero writes", async (_name, receipt) => {
+    const { w } = await setup({
+      roles: [{ _id: "role-foreign", _type: "sunday_role", week: "2026-11-15", ...(receipt ? { creationReceiptId: receipt } : {}) }],
+    });
+    const out = await apply(w);
+    expect(textOf(out)).toContain(L.storedChanged(["2026-11"]));
+    expect(w.deps.commitRecords).not.toHaveBeenCalled();
+    expect(w.deps.createRole).not.toHaveBeenCalled();
+  });
+
+  it("a stored service added on an unplanned date refuses, zero writes", async () => {
+    const { w } = await setup({ roles: [{ _id: "role-new", _type: "special_role", date: "2026-11-11", service_name: "Retiro" }] });
+    const out = await apply(w);
+    expect(textOf(out)).toContain(L.storedChanged(["2026-11"]));
+    expect(w.deps.commitRecords).not.toHaveBeenCalled();
+  });
+
+  it("A4: the draft's own landed creates (weekend and special), absent from state, pass every check", async () => {
+    const { proposal, w } = await setup({ failFrom: 99 }, { month: "2026-11", specials: [SPECIAL] });
+    // Land the special and the first Sunday through the world's own create, with no state saved.
+    const special = proposal.payload.drafts.find((d) => d.draft._type === "special_role")!.draft;
+    const sunday = sorted(proposal).find((d) => d._type === "sunday_role")!;
+    for (const d of [special, sunday]) await w.deps.createRole({ creationRequestId: d.creationRequestId, _type: d._type, date: d.date, service_name: d.service_name });
+    w.deps.createRole.mockClear();
+    const out = await apply(w);
+    expect(out.isError).toBeFalsy();
+    expect(textOf(out)).toContain(L.serviceAlready(draftLabel(special)));
+    expect(textOf(out)).toContain(L.serviceAlready(draftLabel(sunday)));
+    expect(w.deps.createRole).toHaveBeenCalledTimes(creatableCount(proposal) - 2);
+    expect(out.structuredContent).toMatchObject({ complete: true });
   });
 });
 

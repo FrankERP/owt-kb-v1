@@ -25,8 +25,8 @@ export const PRINCIPAL: McpPrincipal = { sub: "m-admin", origin: "https://owt.ex
 
 type Row = Record<string, unknown>;
 
-/** The solver's answer: Ana leads the first service, so the report has a name to print. */
-export const solveWithAna = vi.fn(async (request: V3SolveRequest) => ({
+/** The solver's answer: Ana leads the first service, so the report has a name to print. A fresh spy per use. */
+export const solveWithAna = () => vi.fn(async (request: V3SolveRequest) => ({
   status: 200,
   text: successFor(request, { [request.services[0].id]: { Lead: ["m-ana"] } }),
 }));
@@ -40,7 +40,7 @@ export type SpiedSolveDeps = SolveMonthDeps & {
 };
 
 export function solveDeps(over: Partial<SolveMonthDeps> = {}): SpiedSolveDeps {
-  const base = planDeps({ solve: solveWithAna });
+  const base = planDeps({ solve: solveWithAna() });
   const stored: NewProposalDocument[] = [];
   return {
     engine: () => "v3",
@@ -91,6 +91,10 @@ export interface ApplyWorldOptions {
   createMs?: number;
   /** Called after a role is inserted; may throw to lose the answer. */
   afterInsert?: (n: number) => void;
+  /** From this create attempt on (1-based), the create throws BEFORE inserting (a killed call). */
+  failFrom?: number;
+  /** Merged into the snapshot's readiness (summaries the preflight reads). */
+  readinessOver?: Record<string, unknown>;
   sourcesOver?: Partial<V3PlanSources>;
 }
 
@@ -98,6 +102,7 @@ export function applyWorld(proposal: StoredProposal, opts: ApplyWorldOptions = {
   const w = { roles: [...(opts.roles ?? [])], proposal: proposal as StoredProposal | null, clock: { t: BASE_MS } } as ApplyWorld;
   let next = 0;
   let inserted = 0;
+  let attempts = 0;
   w.deps = {
     engine: () => "v3",
     nowMs: () => w.clock.t,
@@ -109,7 +114,7 @@ export function applyWorld(proposal: StoredProposal, opts: ApplyWorldOptions = {
       ok: true as const,
       value: sources({
         rules: { rev: opts.rulesRev === undefined ? proposal.header.rulesRev : opts.rulesRev, config: sources().rules.config },
-        snapshot: snapshot({ roles: w.roles.map((r) => ({ ...r })) }),
+        snapshot: withReadiness(snapshot({ roles: w.roles.map((r) => ({ ...r })) }), opts.readinessOver),
         ...(opts.sourcesOver ?? {}),
       }),
     })),
@@ -121,6 +126,7 @@ export function applyWorld(proposal: StoredProposal, opts: ApplyWorldOptions = {
     })),
     createRole: vi.fn(async (body: Row) => {
       await Promise.resolve();
+      if (opts.failFrom !== undefined && ++attempts >= opts.failFrom) throw new Error("killed");
       // Check and insert in one turn: the receipt is the create mutex.
       const receipt = receiptIdForRequestId(body.creationRequestId as string);
       const existing = w.roles.find((r) => r.creationReceiptId === receipt);
@@ -146,6 +152,10 @@ export function applyWorld(proposal: StoredProposal, opts: ApplyWorldOptions = {
     sweepExpired: vi.fn(async () => ({ ok: true as const, deleted: 0 })),
   } as unknown as ApplyWorld["deps"];
   return w;
+}
+
+function withReadiness(snap: ReturnType<typeof snapshot>, over: Record<string, unknown> | undefined): ReturnType<typeof snapshot> {
+  return over ? ({ ...snap, readiness: { ...snap.readiness, ...over } } as ReturnType<typeof snapshot>) : snap;
 }
 
 export const textOf = (r: { content: Array<{ type: string; text?: string }> }): string =>

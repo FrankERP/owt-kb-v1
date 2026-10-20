@@ -7,8 +7,9 @@ import { render } from "@testing-library/react";
 import { vi } from "vitest";
 
 import MonthGenerator from "../MonthGenerator";
-import type { ServiceRole } from "../serviceCardModel";
+import type { ServiceRole, ServiceType } from "../serviceCardModel";
 import type { SolverConfig } from "../plannerModel";
+import type { TargetPreflight } from "../serviceReadiness";
 import type { RoleDomainSummary, RoleTarget } from "@/app/utils/serviceReadSummary";
 import { AdminProviders } from "./providersHarness";
 import { readyRules } from "./rulesHarness";
@@ -68,6 +69,10 @@ export function renderV3(opts: {
   engine?: "v2" | "v3";
   members?: typeof MEMBERS;
   onClose?: () => void;
+  /** ServicesPanel's per-target preflight; absent = the standalone dialog's `!draft.exists` fallback. */
+  preflight?: (type: ServiceType, date: string) => TargetPreflight;
+  /** The stored read as ServicesPanel passes it; absent = `storedSourceOf(roles)`. */
+  storedSource?: ReturnType<typeof storedSourceOf>;
 } = {}) {
   const roles = opts.roles ?? [];
   return render(
@@ -79,7 +84,8 @@ export function renderV3(opts: {
         members={opts.members ?? MEMBERS}
         existingRoles={roles}
         allRoles={roles}
-        storedSource={storedSourceOf(roles, opts.storedStatus)}
+        storedSource={opts.storedSource ?? storedSourceOf(roles, opts.storedStatus)}
+        preflight={opts.preflight}
         rules={readyRules(opts.config)}
         initialMonth={opts.initialMonth ?? "2026-11"}
         onClose={opts.onClose ?? vi.fn()}
