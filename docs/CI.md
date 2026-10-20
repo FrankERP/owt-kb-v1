@@ -368,8 +368,12 @@ change to the planner) failed with the same signature, under
 `./app/(admin)/layout.tsx`; its tree had built `READY` on `preview` 15 minutes
 earlier and the release diff touched no font, layout, config or lockfile. A
 session's own production redeploy is refused by its permission classifier, so
-the redeploy is Frank's (dashboard, «Use existing Build Cache» unchecked) — or
-the next merge to `main` builds it.
+it would have been Frank's to click. Nobody redeployed: PR #153 (docs only)
+merged on top about 15 minutes later as `76fdaac0`, and that build — the
+normal cache-backed `main` build, not a no-cache redeploy — went `READY` and
+took the alias, carrying #152 with it. So a later commit's ordinary build is
+also a fix, and that build kept the cache: one data point for "a failed fetch
+from Google", against "a bad font entry in the restored cache".
 
 **Recognising it** — all of these, not some:
 
