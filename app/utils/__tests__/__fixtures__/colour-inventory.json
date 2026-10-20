@@ -8,19 +8,19 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 319,
+    "literalRows": 320,
     "filesScanned": 457,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
       "4": 76,
-      "8": 90,
+      "8": 91,
       "9": 10,
       "11": 7,
       "12": 134
     },
     "byDisposition": {
-      "B": 119,
+      "B": 120,
       "exempt": 55,
       "keep": 246,
       "C": 5,
@@ -2671,7 +2671,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 638,
+      "line": 639,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2683,7 +2683,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 790,
+      "line": 791,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2695,7 +2695,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2631,
+      "line": 2636,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2707,19 +2707,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2637,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/MonthGenerator.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "disabled:hover:bg",
-      "carrier": null,
-      "line": 1480,
+      "line": 2642,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2731,7 +2719,43 @@
       "alpha": null,
       "utility": "disabled:hover:bg",
       "carrier": null,
-      "line": 1642,
+      "line": 1481,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "disabled:hover:bg",
+      "carrier": null,
+      "line": 1643,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/MonthGenerator.tsx",
+      "category": 8,
+      "categoryName": "svg-attribute",
+      "value": "stroke=\"currentColor\"",
+      "alpha": null,
+      "utility": null,
+      "carrier": "stroke",
+      "line": 5451,
+      "disposition": "B",
+      "reason": null
+    },
+    {
+      "file": "app/components/admin/PlannerGrid.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 2593,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2743,19 +2767,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2587,
-      "disposition": "keep",
-      "reason": "Already theme-agnostic"
-    },
-    {
-      "file": "app/components/admin/PlannerGrid.tsx",
-      "category": 4,
-      "categoryName": "colour-keyword",
-      "value": "bg-transparent",
-      "alpha": null,
-      "utility": "bg",
-      "carrier": null,
-      "line": 3423,
+      "line": 3429,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

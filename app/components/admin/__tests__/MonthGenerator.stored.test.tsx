@@ -857,6 +857,7 @@ describe("MonthGenerator — stored mode", () => {
       expect((screen.getByRole("button", { name }) as HTMLButtonElement).disabled).toBe(true);
       fireEvent.click(screen.getByRole("button", { name }));
     }
+    fireEvent.click(container.querySelector("[data-swap-toggle]")!);
     const teamButtons = container.querySelectorAll<HTMLButtonElement>("[data-swap-date]");
     expect([...teamButtons].every((button) => button.disabled)).toBe(true);
     teamButtons.forEach((button) => fireEvent.click(button));
@@ -985,6 +986,7 @@ describe("MonthGenerator — stored mode", () => {
     const fetchMock = vi.fn();
     stubFetchWithHistory(fetchMock);
     const { container } = renderStored([role(), saturday]);
+    fireEvent.click(container.querySelector("[data-swap-toggle]")!);
     const swapButtons = container.querySelectorAll<HTMLButtonElement>("[data-swap-date]");
 
     fireEvent.click(swapButtons[0]!);

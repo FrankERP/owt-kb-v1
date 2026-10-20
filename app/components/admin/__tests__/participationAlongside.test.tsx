@@ -838,10 +838,11 @@ describe("the grid's chart placement — an in-flow column, at every width", () 
     // Menu buttons are excluded: a `Menu` trigger («Borrar», spec 2026-09-29 §3.2) is a real
     // `aria-haspopup="menu"` disclosure and always carries `aria-expanded`, as ARIA wants.
     // So is the «Equidad · vista previa» toggle (solver v3 C2 UI-3), a real disclosure
-    // mounted beside the lead history, outside the grid this test is about.
+    // mounted beside the lead history, outside the grid this test is about, and so is the folded
+    // «⇄ Intercambiar equipos» toggle above the grid (`data-swap-toggle`).
     const disclosures = (root: ParentNode) =>
       [...root.querySelectorAll('[aria-expanded]:not([aria-haspopup="menu"])')].filter(
-        (el) => !el.closest("[data-fairness-preview]"),
+        (el) => !el.closest("[data-fairness-preview]") && !el.hasAttribute("data-swap-toggle"),
       );
     stubWideViewport();
     const { container } = goToGrid([]);
