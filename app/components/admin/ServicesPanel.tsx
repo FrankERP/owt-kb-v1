@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import PanelSkeleton from "./PanelSkeleton";
 import PanelBoundary from "./PanelBoundary";
+import ServicesOverview from "./ServicesOverview";
 // «Generar mes»/«Editar mes» replace this whole panel via an early `return`
 // below (D10 — a full-width panel, never an overlay), so this chunk was
 // already never fetched until one of those two states goes true. `dynamic`
@@ -201,6 +202,9 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
   const [submitting, setSubmitting] = useState(false);
   const [selectedMonths, setSelectedMonths] = useState<Set<string>>(new Set());
   const [showPastMonths, setShowPastMonths] = useState(false);
+  // «Pantalla completa»: the visible services as a read-only grid (ServicesOverview).
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const closeOverview = useCallback(() => setOverviewOpen(false), []);
   const { toast } = useToast();
   const showToast = useCallback((msg: string) => toast({ message: msg }), [toast]);
   // «Limpiar mes» outcome with at least one refused delete. A toast is too
@@ -1215,6 +1219,22 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
                 <span className={`transition-transform duration-base ${showPastMonths ? "rotate-180" : ""}`}>▾</span>
               </Button>
             )}
+            {/*
+              The filter decides what full screen shows — «Próximos», one month,
+              or several (the pills are multi-select) — so the button lives on
+              the filter's own line. Read-only by construction: no write path
+              reaches `ServicesOverview`.
+            */}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="ml-auto"
+              data-services-overview-opener=""
+              onClick={() => setOverviewOpen(true)}
+              disabled={view !== "cards" || visibleCards.length === 0}
+            >
+              ⛶ Pantalla completa
+            </Button>
           </div>
           {pastMonths.length > 0 && (
             <Collapse id="services-past-months" open={showPastMonths} className="mt-2 flex items-center gap-2 flex-wrap pl-12">
@@ -1224,6 +1244,14 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
             </Collapse>
           )}
         </div>
+      )}
+
+      {overviewOpen && view === "cards" && (
+        <ServicesOverview
+          roles={visibleCards.map(c => c.role)}
+          title={monthLabel}
+          onClose={closeOverview}
+        />
       )}
 
       {/* Availability conflict summary */}
