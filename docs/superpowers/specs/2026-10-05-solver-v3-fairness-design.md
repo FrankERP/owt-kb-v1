@@ -86,7 +86,7 @@ production member data and stay out of this repository.
 |---|---|
 | D1 | Approach B: a **new date-based v3 solver side by side with v2**, cut over by a switch; four deliveries (ledger and persistence → solver v3 → planner → cutover). |
 | D2 | Evenness is measured **per role separately** — Dom Lead, Sáb Lead, BGV, Coro — in that priority order. |
-| D3 | **Total participation** is also balanced, as a **voice floor** (nobody available and in a pool goes a calendar month without a voice seat) plus Total shown as the sum of the four lines. |
+| D3 | **Total participation** is also balanced, as a **voice floor** (nobody available and in a pool goes a calendar month without a voice seat) plus Total shown as the sum of the four lines. *Amended 2026-10-20 (ADR-0058): Total is also a balance stage pair after the lines.* |
 | D4 | The solver always considers prior roles; the **lookback is the 3 calendar months** before the run's first month. |
 | D5 | The admin chooses **1 or 2 months** per run. |
 | D6 | Every service gets a toggle **«Cuenta para equidad»**, visible when creating a service and when editing the month, specials included. |
@@ -173,7 +173,8 @@ they disagree (F14).
   to BGV, its Chorus to CORO — and it counts toward the same protections (F7, F10, F11) as the line it
   maps to. Plus one **presence sub-line** per presence rule (F5), folded into BGV for display.
   **Total** = the sum of a person's lines, for display; it is enforced only through the voice floor
-  (F9). Instruments and FOH never count.
+  (F9). Instruments and FOH never count. *Amended 2026-10-20 (ADR-0058): solver v3 also balances
+  Total, in a stage pair after every line's, so line fairness is unchanged.*
 - **F2 — Balance.** `saldo = le tocaba − recibió`, summed over counted services in the lookback.
   **Positive means owed** («le deben»), negative means ahead («X de más»). One sign convention in every
   layer, payload and string.

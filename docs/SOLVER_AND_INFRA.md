@@ -548,7 +548,10 @@ every deployment whose effective engine is v3 — production and dev since the 2
 - **Stages** (each solved, then fixed): rules (the violation ceiling) → fill → cadence →
   compensation Saturday → voice floor → DL floor → Sunday cap → Saturday cap → no consecutive
   Sundays → per line (DL, SL, BGV, each presence sub-line, CORO) most-owed then sum of squares →
-  tie-break. One search worker, `linearization_level = 2`, a deterministic limit per stage
+  the same pair on each person's Total (`balance_max:TOTAL`, `balance_sq:TOTAL`: her planned
+  share over every line against her seats on every line, no carried balance, exempt people out;
+  ADR-0058) →
+  tie-break. The Total pair runs after every line is fixed, so it only breaks the lines' ties. One search worker, `linearization_level = 2`, a deterministic limit per stage
   (`STAGE_DET_LIMIT`) under a 2.5 s wall guard, a 25 s budget.
 - **Local run:** `python gcf_v3/owt_solver_v3.py --json-mode < request.json` from the repository root.
 - **Tests:** the `solver-v3` CI job (`python -m unittest discover -s gcf_v3 -t gcf_v3 -v`), which
@@ -615,9 +618,9 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
   the same day and saved nothing.
 - **Function:** `owt-solver-v3` build `f939f5ba` (the C5 merge, PR #136, the last `gcf_v3/**`
   change on `main`). Minimum instances: 0 (no W1: the cold start passed, see below).
-- **`FAIRNESS_TOLERANCE`:** 35 hundredths of a seat (`gcf_v3/owt_v3/constants.py`) — the bound on
-  `|planned − share|` per line for a pinless, all-proven, fully filled run; a pinned run's gap is
-  reported, not bound.
+- **`FAIRNESS_TOLERANCE`:** 50 hundredths of a seat (`gcf_v3/owt_v3/constants.py`; 35 until the
+  Total stage pair, ADR-0058, re-measured it) — the bound on `|planned − share|` per line for a
+  pinless, all-proven, fully filled run; a pinned run's gap is reported, not bound.
 - **Real-container timing gate** (C5 §13; 2026-10-08, build `f939f5ba`, ten warm runs per shape;
   shapes A–D from C5's harness, E the real Nov+Dec 2026 request built by C5's private converter).
   Every stage `proven` on every warm run of every shape (10/10 on A–E), and no stage stopped by

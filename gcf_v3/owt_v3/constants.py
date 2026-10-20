@@ -6,11 +6,12 @@ C5-13): that line must appear exactly once in this package, spelled exactly as i
 
 CONTRACT = 3
 ENGINE = "v3"
-SOLVER_VERSION = "3.0.0"
+SOLVER_VERSION = "3.1.0"
 
 PIN_CAP = 250
 
 SCALE = 100  # hundredths of a seat: every fairness figure on the wire
+TOTAL_LINE = "TOTAL"  # the Total stage pair's line name (ADR-0058); the response's `tabs.TOTAL`
 
 MAX_SERVICES = 40
 MAX_PEOPLE = 100
@@ -36,4 +37,6 @@ STAGE_DET_LIMIT = 0.6
 # F13 (spec §12.4 as amended at the F13 gate): the smallest multiple of 5 hundredths at or above
 # the largest |planned - share| over the pinless, all-proven, fully filled runs of the `full`
 # matrix and of the private re-run. A pinned run's gap is reported, not bound by it.
-FAIRNESS_TOLERANCE = 35
+# Re-measured on the `full` matrix with the Total stage pair (ADR-0058; the private re-run was not
+# repeated): 47, one floor-status flip, → 50 (was 35).
+FAIRNESS_TOLERANCE = 50

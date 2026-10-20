@@ -101,7 +101,7 @@ class Answers(unittest.TestCase):
         with mock.patch.dict(os.environ, {"OWT_SOLVER_V3_BUILD": "abc1234"}):
             status, body, _ = call(main, FakeRequest(headers={"X-Api-Key": "secret"},
                                                      body=json.dumps({"contract": 3, "ping": True}).encode()))
-        self.assertEqual((status, body), (200, {"ok": True, "contract": 3, "engine": "v3", "solver_version": "3.0.0",
+        self.assertEqual((status, body), (200, {"ok": True, "contract": 3, "engine": "v3", "solver_version": "3.1.0",
                                                 "build": "abc1234", "pin_cap": 250}))
 
     def test_a_500_carries_no_stack_trace(self):
