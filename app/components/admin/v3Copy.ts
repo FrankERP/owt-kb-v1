@@ -61,8 +61,10 @@ export interface V3Names {
   service(id: string): string;
 }
 
-/** «Dom Lead», «Sáb Lead», «BGV», «Coro»; a presence sub-line «BGV ({regla})». */
+/** «Dom Lead», «Sáb Lead», «BGV», «Coro», «Total» (the Total stage pair, ADR-0058); a presence
+ *  sub-line «BGV ({regla})». */
 export function lineLabel(line: string, n: Pick<V3Names, "rule">): string {
+  if (line === "TOTAL") return "Total";
   if (line === "DL") return "Dom Lead";
   if (line === "SL") return "Sáb Lead";
   if (line === "BGV") return "BGV";

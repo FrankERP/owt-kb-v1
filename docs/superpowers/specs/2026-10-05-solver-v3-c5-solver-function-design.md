@@ -645,6 +645,7 @@ seats there. V(p, m) is her voice seats there.
 | 8 | `saturday_cap` | Minimise Σ over (p, m) of max(0, S(p, m) − 1), for each p for whom `Sat.Lead` is not «exact» in m | F11, X3 (cadence members included) and A16 (exact-count leads excluded, as on Sundays) |
 | 9 | `no_consecutive` | Minimise Σ over (p, d) of [p holds a DL-mapped lead at a counted service on Sunday d and on d + 7]. d + 7 is in the horizon; d may come from `prior.services` | D12 puts this **above balances**. The prototype placed it after them (its stage 18); §12.3 re-measures |
 | 10… | `balance_max:<line>`, then `balance_sq:<line>`, for each line in the order `DL`, `SL`, `BGV`, each `P:<id>` in request order, `CORO` | `balance_max`: minimise M, with M ≥ K_p − 100·n_p for every p in the line's stage set. `balance_sq`: minimise Σ_p (K_p − 100·n_p)². K_p = carried + planned, in hundredths; n_p = the seats she received in the line | The stage set is the people in the line's population at one or more horizon services. People with only a carried balance are reported but not optimised |
+| after the lines | `balance_max:TOTAL`, then `balance_sq:TOTAL` | The same two objectives over each person's Total: K_p = her lines' planned shares summed exactly and rounded once (no carried balance: each line's stage repays its own); n_p = her received seats over every line | **Amendment T-1 (2026-10-20, ADR-0058, `2026-10-20-solver-v3-total-balance-design.md`).** The set is every non-exempt person in some line's stage set. The ids fall under the `balance_*:{line}` templates (§9); `TOTAL` is the response's Total tab |
 | last | `tiebreak` | Minimise Σ w·x, with weights w ∈ {0…9} drawn from the seed over the decision variables in canonical order | Not fixed |
 
 A stage with no terms is reported `proven` with value 0 and is not solved.
@@ -1293,6 +1294,13 @@ plan did so only for pins and for exact rules with no slack; (2) F6 for pins is 
 Cost if wrong: a few people's planned figure differs from the realised one by up to 0.35 seat on
 unpinned runs (C6 may need one sentence explaining `planned` for them if it shows it — noted for C6's
 plan); pinned runs can differ more, which the parent's X4 already makes visible.
+
+**Amendment T-1 (2026-10-20, ADR-0058).** Re-measured on the `full` matrix with the Total stage
+pair: 47, a single person-line whose floor status flipped (planned no, realised yes) in a chained
+cell; the distribution is unchanged (mean 3.04 against 3.06, 99th percentile 21 against 21, 9
+person-lines above 30 against 6, of 4 859). Four real Nov + Dec 2026 requests: 20–24. →
+`FAIRNESS_TOLERANCE = 50`. The private re-run was not repeated. The «up to 0.35 seat» above
+reads «up to 0.50 seat» since T-1.
 
 ## 13. Real-container timing gate (definition; C7 runs it)
 

@@ -31,6 +31,7 @@ describe("formatters", () => {
     expect(lineLabel("DL", names)).toBe("Dom Lead");
     expect(lineLabel("SL", names)).toBe("Sáb Lead");
     expect(lineLabel("CORO", names)).toBe("Coro");
+    expect(lineLabel("TOTAL", names)).toBe("Total");
     expect(lineLabel("P:r1", names)).toBe("BGV (Ana, Bruno en Sun.BGV c/sem)");
   });
 });
@@ -40,6 +41,8 @@ describe("registry-keyed lines (§7.1–§7.5)", () => {
     expect(stageLabel("sunday_cap", names)).toBe("Un domingo al mes");
     expect(stageLabel("balance_max:DL", names)).toBe("Equidad Dom Lead: el más pendiente");
     expect(stageLabel("balance_sq:P:r1", names)).toBe("Equidad BGV (Ana, Bruno en Sun.BGV c/sem): reparto");
+    expect(stageLabel("balance_max:TOTAL", names)).toBe("Equidad Total: el más pendiente");
+    expect(stageLabel("balance_sq:TOTAL", names)).toBe("Equidad Total: reparto");
   });
 
   it("a missed protection carries its cause as a suffix", () => {

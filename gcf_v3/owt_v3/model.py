@@ -8,6 +8,7 @@ spec's (§7.1). Variables are created in canonical order (services, roles, peopl
 
 import random
 from collections import defaultdict
+from fractions import Fraction
 
 from ortools.sat.python import cp_model
 
@@ -329,6 +330,32 @@ class Model:
             k = carried(p, line) + hundredths(self.plan.planned(p, line))
             n = self.n.get((p, line), 0)
             out.append((p, k, n, self.n_upper.get((p, line), 0)))
+        return out
+
+    def total_inputs(self):
+        """[(person, K, n, U)] for the Total stage set (ADR-0058): every person in some line's stage
+        set who is not exempt. K = her lines' exact planned shares summed and rounded once; n = her
+        received seats over every line. No carried balance: each line's own stage repays it, and
+        counting it here too would repay a line's debt on another line as well (ADR-0058)."""
+        F, plan = self.F, self.plan
+        lines_of = defaultdict(set)
+        for (_, p, line) in plan.in_population:
+            lines_of[p].add(line)
+        keys_of = defaultdict(list)
+        for key in sorted(self.n):
+            keys_of[key[0]].append(key)
+        out = []
+        for p in F.pids:
+            if p not in lines_of or F.people[p].exempt:
+                continue
+            exact = sum((plan.planned(p, line) for line in sorted(lines_of[p])), Fraction(0))
+            k = hundredths(exact)
+            u = sum(self.n_upper.get(key, 0) for key in keys_of[p])
+            n = 0
+            if keys_of[p]:
+                n = self._int(0, max(1, u), "n_total")
+                self.m.Add(n == sum(self.n[key] for key in keys_of[p]))
+            out.append((p, k, n, u))
         return out
 
     def obj_balance_max(self, inputs):

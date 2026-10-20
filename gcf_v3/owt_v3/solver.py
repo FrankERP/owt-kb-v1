@@ -1,9 +1,13 @@
 """The stage pipeline (spec §7.1): validation and planned shares before the budget, then
 model build, the stages in order, and the report after it.
+
+Each line's balance pair runs before the Total pair (ADR-0058), so the Total stages choose only
+among plans that are already as even per line as they were without them.
 """
 
 import time
 
+from .constants import TOTAL_LINE
 from .facts import Facts
 from .instances import build_instances
 from .model import Model
@@ -19,7 +23,7 @@ def stage_ids(problem):
     ids = ["rules", "fill", *PROTECTION_STAGES]
     for line in problem.lines:
         ids += [f"balance_max:{line}", f"balance_sq:{line}"]
-    return ids + ["tiebreak"]
+    return ids + [f"balance_max:{TOTAL_LINE}", f"balance_sq:{TOTAL_LINE}", "tiebreak"]
 
 
 def solve_problem(problem, clock=time.perf_counter, solver_for=None, consecutive_last=False):
@@ -48,6 +52,9 @@ def solve_problem(problem, clock=time.perf_counter, solver_for=None, consecutive
         runner.run(f"balance_sq:{line}", *model.obj_balance_sq(inputs))
     if consecutive_last:
         runner.run("no_consecutive", *model.obj_no_consecutive())
+    total = model.total_inputs()
+    runner.run(f"balance_max:{TOTAL_LINE}", *model.obj_balance_max(total))
+    runner.run(f"balance_sq:{TOTAL_LINE}", *model.obj_balance_sq(total))
     runner.run("tiebreak", *model.obj_tiebreak(problem.seed), fix=False)
     values = runner.values
     if values is None:  # every stage had no terms: the only seats are pins

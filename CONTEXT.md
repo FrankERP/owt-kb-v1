@@ -21,7 +21,8 @@ _Avoid_: deuda, score
 
 **Línea**:
 One of the four fairness ledgers a person carries: Dom Lead (`DL`), Sáb Lead (`SL`),
-BGV and Coro. Instruments and FOH have none. «Total» is their sum, for display only.
+BGV and Coro. Instruments and FOH have none. «Total» is their sum; solver v3 balances it
+after every line, choosing only among plans already even per line (ADR-0058).
 _Avoid_: rol (a role key is finer: Sun.BGV and Sat.BGV are both the BGV line)
 
 **Sub-línea de presencia** (`P:<regla>`):

@@ -464,7 +464,7 @@ IF2-8 `engine` (UI-6).
 Parameters are rendered by the planner: a member id → alias or name; a month → «noviembre»
 («Noviembre» at the start of a sentence); a date → «8 nov»; a list → «8 y 15 nov»; a rule id → the
 rule card's own label; a line → «Dom Lead», «Sáb Lead», «BGV», «Coro», a presence sub-line →
-«BGV ({regla})»; a service → «domingo 8 nov» / «sábado 7 nov» / «{nombre} 12 nov».
+«BGV ({regla})», and the Total stage pair's `TOTAL` → «Total» (ADR-0058, 2026-10-20); a service → «domingo 8 nov» / «sábado 7 nov» / «{nombre} 12 nov».
 
 ### 7.1 Stages (`stages[].id`, `stages[].status`)
 
