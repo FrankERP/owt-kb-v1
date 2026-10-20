@@ -46,6 +46,13 @@
      it (same pattern as --impersonation-h above). Not a colour. */
   --bottom-nav-h: 0px;
 
+  /* Height of the audio transport while it shows, so the assistant bubble sits
+     above it; AudioPlayer publishes the measured value. And the bubble's own
+     footprint, which the song FAB steps aside by; AssistantBubble publishes it
+     while on screen. 0 otherwise. Not colours. */
+  --audio-player-h: 0px;
+  --assistant-fab-w: 0px;
+
   /* One beat of the song hero's tempo pill. TempoPill publishes the song's own
      period inline (60000/bpm ms) over this default, which stands in for a song
      with no BPM — 750ms is 80 BPM, the practice default. Not a colour. */

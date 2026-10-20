@@ -16,6 +16,7 @@ import Image from "next/image";
 import { urlFor } from "@/sanity/lib/image";
 import { notFound } from "next/navigation";
 import { songSections, type SongSection } from "@/app/utils/songSections";
+import AssistantPageContext from "@/app/components/assistant/AssistantPageContext";
 import Navbar from "@/app/components/Navbar";
 import SectionNav from "@/app/components/SectionNav";
 import ChordChart from "@/app/components/ChordChart";
@@ -226,6 +227,8 @@ const Page = async ({ params }: Params) => {
   return (
     <div>
       <Navbar title={post?.title} author={post?.author} />
+      {/* Tells the assistant bubble which song is on screen (ADR-0060). */}
+      <AssistantPageContext label={`Canción: ${post.title}`} refs={[{ kind: "song", id: post._id, label: post.title }]} />
 
       {/* ONE transposition seat for the whole page (R4 ruling 2): the hero's key
           picker and ChordChart's ± pair write the same value, so the key shown

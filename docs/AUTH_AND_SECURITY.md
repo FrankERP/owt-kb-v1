@@ -219,6 +219,16 @@ Applied to all routes:
   `/api/cron/service-reminders`.
 - **Solver auth** is a shared `X-Api-Key` (`OWT_SOLVER_API_KEY`); the Cloud Function **fails
   closed** (503) if the key is unset.
+- **Admin assistant** (`/api/admin/chat`, ADR-0060): stricter than `requireActiveManager` —
+  `super-admin`, or `admin` with the `worship` ministry, read from the live access snapshot; never
+  while impersonating. The model gets five READ-ONLY tools that call the MCP read handlers in
+  process; there is no write path from a conversation, and the MCP connector (super-admin OAuth,
+  with write tools) is not used. Requests carry plain text only, so a forged `tool_result` or a
+  `system` turn is a `400`. The page context a question carries is ids and labels only, validated
+  to a strict shape (`parsePageContext`: a bare pathname, one-line labels, ≤4 refs with plain ids)
+  and framed to the model as information, never an instruction — never the screen's text, so
+  nothing someone else typed into the app reaches the model as the admin's words. Spend is capped per admin per month (`adminChatUsage`, fail closed on a
+  failed read). `ANTHROPIC_API_KEY` lives only in Vercel — see [SECRETS.md](SECRETS.md#anthropic_api_key).
 - **Fetch resilience (audited):** every client mutation handler wraps `fetch` in
   try/catch/finally, checks `res.ok`, resets its loading flag, and never closes-as-success on
   failure. Keep this intact for any new mutation handler.
@@ -301,6 +311,7 @@ Full list (names only — never print values; `.env.local` is git/claude-ignored
 | `OWT_SOLVER_V3_URL` | v3 solver endpoint, required on Production and Preview since the C7 cutover; see [SECRETS.md](SECRETS.md) («`OWT_SOLVER_V3_URL`») |
 | `OWT_SOLVER_ENGINE` | Preview-branch/local engine override for rehearsals, ignored on Production; see [SECRETS.md](SECRETS.md) («`OWT_SOLVER_ENGINE`») |
 | `VERCEL_PROJECT_PRODUCTION_URL` | Production URL fallback for email links |
+| `ANTHROPIC_API_KEY` | The admin assistant's Claude API key (prod and preview each its own workspace); see [SECRETS.md](SECRETS.md#anthropic_api_key) |
 | `MCP_OAUTH_SECRET` | Signs every MCP/OAuth client id, code and token; see [SECRETS.md](SECRETS.md#mcp_oauth_secret) |
 | `MCP_DISABLED` | MCP/OAuth kill switch, not a secret; see [SECRETS.md](SECRETS.md#mcp_disabled) |
 | `VERCEL_ENV` / `VERCEL_GIT_COMMIT_SHA` | Vercel system vars (not configured by hand), read by the MCP/OAuth routes to pick this deployment's canonical origin and report its commit — see the matching entry in [SECRETS.md](SECRETS.md) |

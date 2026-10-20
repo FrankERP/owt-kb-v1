@@ -234,6 +234,10 @@ looks wrong** — several exist to stop a plausible-looking change.
 - **The four admin write routes** (setlists PUT, swap, publish-ready, unpublish) delegate
   everything after authorization to `app/utils/*Commit.ts`; MCP writes go only through them
   (`serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
+- **The admin assistant (`/api/admin/chat`, a bubble on every page) is READ-ONLY**: super-admin or
+  worship admin, never impersonating; its tools call the MCP read handlers in process, never a write
+  tool or the connector; spend is capped per admin per CDMX month in `adminChatUsage.*` (fail
+  closed); page context is ids and labels on each user turn, never screen text or the system prompt. ADR-0060.
 
 ## Reusable utils (don't reinvent)
 Before writing a helper, hook or UI primitive, check this list, the long form's section (what

@@ -1,4 +1,4 @@
-// Studio protection policy for the seventeen protected stored types
+// Studio protection policy for the eighteen protected stored types
 // (Service Readiness A2 §8 / A3 §4) — pure, exported, and unit-testable.
 //
 // WHY a code-owned policy instead of UI configuration alone: the Studio is an
@@ -24,7 +24,7 @@
 // look at a lock, a receipt, or a malformed role while diagnosing.
 
 /**
- * The seventeen protected stored types. `saturdarSongs` is a deliberate stored typo —
+ * The eighteen protected stored types. `saturdarSongs` is a deliberate stored typo —
  * never rename.
  *
  * Membership here is what earns a type a pane in `sanity/structure.ts`'s
@@ -82,6 +82,9 @@ export const PROTECTED_STUDIO_TYPES = [
   // The member calendar feed's generation counter (ADR-0057): machine state written only by
   // `POST /api/me/calendar-feed`. Internal, like the MCP OAuth state above.
   "calendarFeed",
+  // The admin assistant's per-admin monthly spend counter (ADR-0060): machine state written only
+  // by `POST /api/admin/chat`. Internal, like `calendarFeed`.
+  "adminChatUsage",
 ] as const;
 
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
@@ -178,6 +181,7 @@ export const INTERNAL_STUDIO_TYPES = [
   "mcpOauthGrant",
   "mcpOauthCodeRedemption",
   "calendarFeed",
+  "adminChatUsage",
 ] as const;
 
 /**
@@ -269,6 +273,7 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
   ],
   mcpOauthCodeRedemption: ["redeemedAt"],
   calendarFeed: ["member", "generation", "rotatedAt"],
+  adminChatUsage: ["member", "month", "spentMicroUsd", "questions", "updatedAt"],
 });
 
 /**
@@ -528,4 +533,5 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   mcpOauthGrant: "MCP OAuth — Concesiones (solo lectura)",
   mcpOauthCodeRedemption: "MCP OAuth — Códigos canjeados (solo lectura)",
   calendarFeed: "Enlaces de calendario (solo lectura)",
+  adminChatUsage: "Asistente — Gasto por admin (solo lectura)",
 });
