@@ -495,8 +495,11 @@ workspaces. Optional in local `.env.local` (without it the /admin «Asistente» 
 todavía no está configurado» and its route answers 503). Not needed in: GitHub Actions, the iOS
 build, GCF.**
 
-**Status: NOT SET yet** (2026-10-20) — added with the admin assistant (ADR-0059). Frank creates both
-keys and pastes them into Vercel himself, so the values never pass through a session transcript.
+**Status: SET 2026-10-20 ~22:05 UTC** in Vercel Preview and Production (type *Sensitive*), added
+with the admin assistant (ADR-0059). Frank created both keys in the Console and pasted them into
+Vercel himself, so the values never passed through a session transcript. Each key is linked to
+Frank's own account («Requests act as you» — the plan's credits are the account holder's) and
+**expires 2027-10-20 23:00 CST: rotate both before then** (steps below).
 
 **Purpose.** The Claude API key `/api/admin/chat` sends to the Messages API
 (`app/api/admin/chat/route.ts`). Server-only: never `NEXT_PUBLIC_`, never sent to the browser.
@@ -506,8 +509,8 @@ It is also the assistant's **kill switch**: remove it and redeploy, and the tab 
 to Frank's Max plan (claude.ai → Settings → Billing → API credits), whose monthly API credits
 (100 USD on Max 5x, no rollover) pay for it. One key per workspace:
 
-- **Production:** workspace «Backstage chat», spend limit ≈ 80 USD/month.
-- **Preview:** workspace «Backstage chat dev», spend limit 5 USD/month — dev tests never spend
+- **Production:** its own workspace, spend limit ≈ 80 USD/month.
+- **Preview:** workspace «Backstage - Dev» (key «dev-app-key»), spend limit 5 USD/month — dev tests never spend
   production's balance.
 
 Keep **no purchased credits and no auto-reload** on that organization: with only the plan's
