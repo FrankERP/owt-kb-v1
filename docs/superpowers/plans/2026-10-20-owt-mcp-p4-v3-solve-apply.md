@@ -1,6 +1,6 @@
 # OWT MCP P4 on solver v3 — solve and apply a month from the connector (implementation plan)
 
-**Date:** 2026-10-20 · **Status:** draft for adversarial review (critical tier) · **Replaces:**
+**Date:** 2026-10-20 · **Status:** approved at critical tier — two sequential fresh `APPROVED` on digest `4d6383ce…8559` (rounds 7–8 of 8); the post-approval edits are listed, un-reviewed, in [the review log](2026-10-20-owt-mcp-p4-v3-solve-apply-review-log.md). **Not authorized for implementation** · **Replaces:**
 [`2026-09-28-owt-mcp-p4-solve-apply.md`](2026-09-28-owt-mcp-p4-solve-apply.md), blocked since the
 v3 flip ([ADR-0056](../../adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md), K7).
 That plan stays in the tree as history; nothing in it is implemented.
@@ -296,15 +296,25 @@ release. `claude/*` pushes build nothing (`scripts/vercel-ignore-build.mjs`).
   `buildV3SolveRequest` with `cells: []`, `rows` = `buildRows()` (as at preview,
   `MonthGenerator.tsx:3318`; the same `rows` feed `applyV3Assignments` and `cellsToDrafts`),
   `fillEmpty: false`, a random seed and `requestId`, and
-  `postSolve` = `solveV3(request, process.env, fetch, budget)`; on success `settleV3AutoResult` +
+  `postSolve` = `solveV3(request, process.env, fetch, budget)`. The stored services the solver fixes
+  come from the admin roles rows and the stored-id set frozen for apply's check (c) from the snapshot
+  rows: the core asserts the two id sets agree for the horizon and refuses `integrity_conflict`
+  `sources:roles` (nothing stored, re-solve) when a role landed between the two reads. On success `settleV3AutoResult` +
   `runLocalFills` + `cellsToDrafts` + `freezeConfirmEntries(sources, "auto")`.
-- No React, no `fetch` of an app route, no client import (`clientBoundary.test.ts`).
+- No React, no `fetch` of an app route, no client import (`clientBoundary.test.ts`). The
+  protected-read audit's treatment of `v3MonthPlanReads.ts` (its reads go through
+  `operationalClient` and the shared builders) is confirmed when the file is written.
+- Apply reads the snapshot **after** the admin roles rows, so a concurrent call's create that lands
+  between the two is in the rows `own` is computed from; the reverse order could refuse the
+  proposal's own service as taken (safe, but false).
 
 ### 5. The proposal store
 
 - `mcpProposal` Studio type: hidden, every field read-only, governed in `studioProtection.ts` like
   `mcpOauthGrant`.
-- `proposalDocument.ts`: `buildProposal`, `parseProposal` (digest check, a strict schema for
+- `proposalDocument.ts`: `buildProposal`, `parseProposal` (digest check; draft types checked against
+  the imported `ROLE_TYPES`, never spelled in `app/mcp/**` (`mcpProtectedTypeLiterals.test.ts`);
+  duplicate `localId`s refused; a strict schema for
   `payload` and `state`, months and drafts bounded: ≤ 2 months, ≤ 40 drafts, payload ≤ 1 MB),
   `mergeState(a, b)`.
 - `proposalStore.ts`: `createProposal` (`create`, never `createOrReplace`), `loadProposal` (one
@@ -322,7 +332,9 @@ release. `claude/*` pushes build nothing (`scripts/vercel-ignore-build.mjs`).
 80 characters, so a successful solve can never exceed the store's bounds (step 5).
 
 1. Engine gate (D2). 2. `planV3Month`. 3. On a non-success exit: the lines, `retry` per
-`v3RetryOffered`, nothing stored (D8). 4. On success with at least one creatable draft: `createProposal`, then the sweep — skipped once 45 s of
+`v3RetryOffered`, nothing stored (D8). 4. On success with at least one creatable draft: `createProposal` — if it throws or its outcome is
+unknown, the answer is the solve's report **without a handle** plus «no pude guardar la propuesta;
+vuelve a correr solve_month» (an orphan record, if one landed, is unreachable and swept) — then the sweep — skipped once 45 s of
 the call have passed, and its failure logged by a fixed tag, never failing the call — then the D14
 report. A success with **zero** creatable drafts stores nothing and answers that there is nothing to
 create (the browser's «Crear» is disabled in that case).
@@ -348,7 +360,10 @@ below is the whole protocol:
 
 **The observation `O`** (phase 1, one read set — the same reads as the solve, `v3MonthPlanReads.ts`
 minus the ledger): the snapshot (sources, summaries and its canonical role rows, which carry
-`_id`, type, date, name and `creationReceiptId` through `ROLE_PROJECTION`, `serviceReadQueries.ts:20-22`),
+`_id`, type, `week`/`date`, name and `creationReceiptId` through `ROLE_PROJECTION`, `serviceReadQueries.ts:20-22`;
+a row's service day is always `serviceDayKey(coalesce(week, date))` — weekends store it in `week`,
+specials in `date`, `roleWriteRequest.ts:178-180`, `serviceReadSelect.ts:35` — for the horizon filter,
+the «modificado» comparison and check (b)),
 the members, the admin roles rows (only for `integrityQueueFor`, M9) and the stored rules with their
 `rev`. From the snapshot role rows alone:
 
@@ -356,8 +371,8 @@ the members, the admin roles rows (only for `integrityQueueFor`, M9) and the sto
   (`roleCreationReceipt.ts:257`) equals some row's `creationReceiptId` → that row. Only `d`'s own
   create transaction stamps that id (`roleWriteRequest.ts:231,296`), so `own` is proof, not inference.
 - `created` = `own` ∪ `state.created` (by `localId`). A `state.created` entry with no row is
-  «creado y luego eliminado en /admin»; one whose row's type, date or name differs from its draft is
-  «creado y luego modificado en /admin». Both are failures for `complete` and are never re-created.
+  «creado y luego eliminado en /admin»; **any** entry of `created` (from `own` or from `state`) whose
+  row's type, service day or name differs from its draft is «creado y luego modificado en /admin». Both are failures for `complete` and are never re-created.
 - `pending` = the drafts creatable at solve (`atSolve`, A2) not in `created`.
 - `stored` = the ids of the rows dated in the horizon months, minus every row of `created`.
 
@@ -377,7 +392,7 @@ the members, the admin roles rows (only for `integrityQueueFor`, M9) and the sto
 | `refused_guard` (CF-1: a horizon month passed, or the ceiling) | it wrote nothing (the guard runs before the PUT) | the guard's reason through its twin; «en esta llamada no se escribió nada»; `next: solve_month` |
 | `record_failed`, a 4xx refusal (CF-4's 409s, or a 400) | the PUT wrote nothing in this call (a refusal is decided before the one transaction) | the reason through its twin (no «otro administrador»); for `record_exists`, `stale_revision`, `record_missing`: «si otra llamada de apply_schedule con esta propuesta está en curso, vuelve a llamarla en un momento; si no, vuelve a correr solve_month» — a re-call then finds the record `unchanged`; `retry` per `recordRetryOffered`, else `next: solve_month` |
 | `record_failed`, unknown (threw, aborted, 5xx, or a 200 whose outcomes `classifyRecordPut` does not accept) | **nothing**: the records may have landed | «No pude confirmar si el registro de elegibilidad quedó guardado; volver a llamar apply_schedule es seguro (si quedó, responde sin cambios)»; `retry: true` |
-| `drafts` | per draft: created (with `roleId`), refused (route code), unknown, deferred; the PUT answered 200 | «el registro de {meses} quedó guardado»; per month and service: created now, already created (`O`), refused with `serviceRefusalLine`, «sin confirmar: vuelve a llamar; si quedó creado se reconoce por su recibo», «pendiente: vuelve a llamar apply_schedule». A month's line is composed from that split; `V3_LINES.monthPartial` is never used (it calls every uncreated draft «fallaron»). Later months blocked by CF-5 are «pendiente» |
+| `drafts` | per draft: created (with `roleId`), refused (route code), unknown, deferred; the PUT answered 200 | «el registro de {meses} quedó guardado»; per month and service: created now, already created (`O`), refused with `serviceRefusalLine`, «sin confirmar: vuelve a llamar; si quedó creado se reconoce por su recibo», «pendiente: vuelve a llamar apply_schedule». A month's line is composed from that split; `V3_LINES.monthPartial` is never used (it calls every uncreated draft «fallaron»). Later months blocked by CF-5 are «pendiente» when the earlier month was cut off by time, and «bloqueado: un servicio anterior fue rechazado; vuelve a correr solve_month» when it holds a refusal (a re-call would repeat it). A call that reaches the cut-off having created nothing says so and asks Frank to report it if it happens again (reads plus the PUT should take seconds, F1, F13) |
 
 `complete` (I9) is true only when every draft creatable at solve is in `created`, none deleted or
 modified, and nothing is unknown, refused or pending.
@@ -560,4 +575,4 @@ month recorded and unbound, and the next `/admin` Auto plus confirm replaces the
 
 ## Terminal state
 
-READY_FOR_ADVERSARIAL_REVIEW
+APPROVED (critical tier) — awaiting Frank's go-ahead to implement and his answers to Q1, Q2 and Q4
