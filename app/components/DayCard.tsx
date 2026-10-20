@@ -65,7 +65,7 @@ export interface DayCardProps {
    family, so the most-seen card in the app read as an alert, and one card carried
    amber, green and cyan at once. Everything else on the card is neutral now; cyan
    is for what can be pressed, green for «tú» (the «premium» audit, approved by Frank
-   as "superficies y color"; ADR-0060). */
+   as "superficies y color"; ADR-0059). */
 
 /** The neutral the card's quiet chrome (medley spine, instrument chips) is drawn in. */
 const NEUTRAL = "--ink-dim-rgb";

@@ -1,4 +1,4 @@
-# ADR-0060: A service card takes its day colour only on its rail
+# ADR-0059: A service card takes its day colour only on its rail
 
 **Date:** 2026-10-20 · **Status:** Accepted
 
