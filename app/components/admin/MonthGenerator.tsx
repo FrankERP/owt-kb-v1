@@ -35,8 +35,7 @@ import {
 } from "./clearMonthModel";
 import { mutationErrorMessage } from "./serviceMutationErrors";
 import type { RoleDomainSummary } from "@/app/utils/serviceReadSummary";
-import { fillColumn } from "./localFill";
-import { fillInstruments, isInstrumentRowId } from "./instrumentFill";
+import { isInstrumentRowId } from "./instrumentFill";
 import { fillSpecialGroup, orderGroup } from "./groupFill";
 import {
   PIN_HANDSHAKE_REFUSAL,
@@ -129,6 +128,13 @@ import {
   type SolverHistoryEntry,
 } from "./plannerModel";
 import {
+  MAX_YEAR,
+  MIN_YEAR,
+  buildUnavailabilityNotices,
+  getDates,
+  savedWindowFor,
+} from "./plannerMonth";
+import {
   buildStoredGridRows,
   storedRowsDiffer,
   joinStoredRoleInventory,
@@ -137,11 +143,19 @@ import {
   type StoredGridTranslation,
 } from "./storedRoleReadModel";
 import { cdmxCurrentMonth, horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
-import { horizonTitle, monthNameCap, monthsList, V3_LINES, V3_ROUTE_COPY, transportLine, type V3Names } from "./v3Copy";
+import { horizonTitle, monthNameCap, monthsList, V3_LINES, V3_ROUTE_COPY, type V3Names } from "./v3Copy";
 import { runV3Auto, type V3AutoResult } from "./v3AutoRun";
+import {
+  countedSpecialIdsOf,
+  runLocalFills,
+  settleV3AutoResult,
+  v3PlannedColumnsFor,
+  v3PlannedCreateColumns,
+  v3StoredFor,
+  v3TargetOf,
+} from "./v3Board";
 import { buildV3SolveRequest, preReadRefusals } from "./v3SolveRequest";
-import { applyV3Assignments, v3OutcomeLine, v3RetryOffered } from "./v3SolveResponse";
-import { buildV3RunReport, v3Names, type V3RunReport } from "./v3RunReport";
+import type { V3RunReport } from "./v3RunReport";
 import { renderRuleRefTable } from "./v3RuleIds";
 import V3RunPanel from "./V3RunPanel";
 import { displayedMonthStates, resolveMonthSources } from "./v3MonthSources";
@@ -456,17 +470,9 @@ const DERIVED_HISTORY_AUTO_TIMEOUT_MS = 20_000;
 const DERIVED_HISTORY_AUTO_REFUSAL = "No se pudo leer el historial de equidad. Auto no corrió; reintenta.";
 const DERIVED_HISTORY_READ_ERROR = "No se pudo leer el historial de equidad.";
 
-/** 56 days — matches the historical candidate-load window used by Servicios. */
-const SAVED_WINDOW_DAYS = 56;
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const uid = () => Math.random().toString(36).slice(2, 9);
-
-/** C6 ST-2: a service's target — a weekend type and date, or a special's date and normalized name (ADR-0011). */
-function v3TargetOf(c: Pick<GridColumn, "type" | "date" | "serviceName">): string {
-  return c.type === "special_role" ? `special_role|${c.date}|${normalizeServiceName(c.serviceName) ?? ""}` : `${c.type}|${c.date}`;
-}
 
 /** The draft create POST, shared by the v2 confirm (unchanged) and the v3 confirm (CF-5: today's mechanism). */
 async function postDraftToRoles(body: unknown): Promise<{ ok: boolean; status: number; error?: string }> {
@@ -486,49 +492,10 @@ async function postDraftToRoles(body: unknown): Promise<{ ok: boolean; status: n
   return { ok: res.ok, status: res.status, error };
 }
 
-function getDates(year: number, month: number, day: 0 | 6): string[] {
-  const dates: string[] = [];
-  const d = new Date(year, month - 1, 1);
-  while (d.getMonth() === month - 1) {
-    if (d.getDay() === day) {
-      dates.push(`${year}-${String(month).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`);
-    }
-    d.setDate(d.getDate() + 1);
-  }
-  return dates;
-}
-
 function fmtDate(iso: string) {
   return new Date(iso + "T12:00:00").toLocaleDateString("es-MX", {
     weekday: "short", day: "numeric", month: "short",
   });
-}
-
-/**
- * Who is unavailable on a date this month will actually GENERATE.
- *
- * Fed the SELECTED Sundays (never `sundayDatesFull`) plus the specials, per
- * work item 6: once Sundays are individually deselectable, the full spine would
- * report notices for dates that produce no column at all — and a special, which
- * does produce one, would go unreported. The rule is "one entry per column",
- * which is why the three arguments here mirror `buildColumns`' three inputs.
- */
-function buildUnavailabilityNotices(
-  sundayDates: string[],
-  activeSatDates: string[],
-  specials: { date: string; name: string }[],
-  allMembers: MemberOption[]
-): { name: string; date: string; service: string }[] {
-  const out: { name: string; date: string; service: string }[] = [];
-  for (const m of allMembers) {
-    if (!m.unavailableDates?.length) continue;
-    const unavailable = new Set(m.unavailableDates);
-    const name = m.alias?.trim() || m.member_name;
-    for (const d of sundayDates)    if (unavailable.has(d)) out.push({ name, date: d, service: "Dom" });
-    for (const d of activeSatDates) if (unavailable.has(d)) out.push({ name, date: d, service: "Sáb" });
-    for (const s of specials)       if (unavailable.has(s.date)) out.push({ name, date: s.date, service: s.name });
-  }
-  return out.sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
 }
 
 /**
@@ -584,25 +551,6 @@ export function isDraftCreatable(input: {
   if (draft.skipped) return false;
   if (createdTargets.has(draftTargetKey(draft._type, draft.date))) return false;
   return hasPreflight ? preflights.get(draft.localId)?.state === "creatable" : !draft.exists;
-}
-
-/**
- * `allRoles` bounded to `SAVED_WINDOW_DAYS` days ending at the target month's
- * first Sunday (D12's `savedWindow`, fact 24) — both compared at local noon.
- * Empty when the month has no first Sunday (defensive; `getDates` always
- * returns at least one for a real calendar month) or when the caller has no
- * history to offer.
- */
-function savedWindowFor(year: number, month: number, allRoles: SavedRole[]): SavedRole[] {
-  const firstSunday = getDates(year, month, 0)[0];
-  if (!firstSunday) return [];
-  const noon = (iso: string) => new Date(iso.slice(0, 10) + "T12:00:00").getTime();
-  const anchor = noon(firstSunday);
-  const start = anchor - SAVED_WINDOW_DAYS * 86_400_000;
-  return allRoles.filter(r => {
-    const t = noon(r.date);
-    return t >= start && t <= anchor;
-  });
 }
 
 // ─── MemberPool — extracted to module level to prevent scroll-reset on remount ──
@@ -1485,9 +1433,6 @@ function AddRuleButton({ label, title, tone, disabled, onClick }: {
   );
 }
 
-const MIN_YEAR = 2024;
-const MAX_YEAR = 2035;
-
 /**
  * The year field — which never hands out a half-typed year.
  *
@@ -2299,16 +2244,12 @@ export default function MonthGenerator({
   // Auto refuses on it (Task 15).
   const v3Stored = useMemo((): { ready: boolean; translations: StoredGridTranslation[] } => {
     if (!isV3 || storedMode) return { ready: true, translations: [] };
-    const ready = storedSource?.rolesStatus === "ready" && storedSource?.integrityStatus === "ready" && storedInventory.coherent;
-    if (!ready) return { ready: false, translations: [] };
-    const translated = storedInventory.roles
-      .filter((o) => horizon.includes(o.role.date.slice(0, 7)))
-      .map(translateStoredRole);
-    if (translated.some((t) => t === null)) return { ready: false, translations: [] };
-    return {
-      ready: true,
-      translations: (translated as StoredGridTranslation[]).map((t) => ({ ...t, column: { ...t.column, admission: "readOnly" as const } })),
-    };
+    return v3StoredFor({
+      rolesReady: storedSource?.rolesStatus === "ready",
+      integrityReady: storedSource?.integrityStatus === "ready",
+      inventory: storedInventory,
+      horizon,
+    });
   }, [isV3, storedMode, storedSource?.rolesStatus, storedSource?.integrityStatus, storedInventory, horizon]);
   const v3StoredIds = useMemo(() => new Set(v3Stored.translations.map((t) => t.column.columnId)), [v3Stored]);
   const v3StoredTargets = useMemo(() => new Set(v3Stored.translations.map((t) => v3TargetOf(t.column))), [v3Stored]);
@@ -2713,7 +2654,7 @@ export default function MonthGenerator({
   // ST-2: under v3 a planned column is never built for a target a stored service occupies; the
   // stored service shows as its own «Guardado» column instead, keyed by its document `_id`.
   const plannedCreateColumns = isV3 && !storedMode
-    ? createColumns.filter((c) => !v3StoredTargets.has(v3TargetOf(c)))
+    ? v3PlannedCreateColumns(createColumns, v3StoredTargets)
     : createColumns;
   const columns = storedMode
     ? storedTranslations.map((entry) => {
@@ -3987,42 +3928,14 @@ export default function MonthGenerator({
     const specialColumnIds = new Set(
       columns.filter(c => c.type === "special_role").map(c => c.columnId),
     );
-    let next = baseCells;
-    const filled: { columnId: string; rowId: string }[] = [];
-    for (const column of columns) {
-      if (column.type !== "special_role" || skipSpecialIds?.has(column.columnId)) continue;
-      // Fed the ACCUMULATED cells, so the second special of a month ranks
-      // against the load the first one just created (`cellsToParticipantRoles`
-      // iterates `columns`), instead of re-picking the same people.
-      const out = fillColumn({
-        column,
-        columns,
-        rows,
-        cells: next,
-        members,
-        savedWindow,
-        config,
-      });
-      next = out.cells;
-      filled.push(...out.unfilled);
-    }
-    // Instrument seats (spec 2026-09-09 §6.3): after the specials, before the
-    // three setters, on the accumulated cells — so it runs on EVERY exit exactly
-    // as the specials do, and there is still one owner of the setters.
-    const weekendInDateOrder = columns
-      .filter(c => c.type === "sunday_role" || c.type === "saturday_role")
-      .sort((a, b) => a.date.localeCompare(b.date));
-    const instr = fillInstruments({
-      columns,
-      ...(fillEmpty ? { fillColumns: weekendInDateOrder } : {}),
-      rows,
-      cells: next,
-      members,
-      savedWindow,
-      config,
+    // The fill itself is `runLocalFills` (v3Board.ts), shared with the MCP month planner:
+    // the uncounted specials on the ACCUMULATED cells (the second special of a month ranks
+    // against the load the first one just created), then the instrument seats (spec
+    // 2026-09-09 §6.3) — before the three setters, so it runs on EVERY exit exactly as
+    // the specials do, and there is still one owner of the setters.
+    const { cells: next, filled } = runLocalFills({
+      config, baseCells, columns, rows, members, savedWindow, fillEmpty, skipSpecialIds,
     });
-    next = instr.cells;
-    filled.push(...instr.unfilled);
 
     setCells(next);
     // On a non-success exit the previous run's entries survive EXCEPT the ones a
@@ -4346,16 +4259,12 @@ export default function MonthGenerator({
 
   /** C6 SP-4: the planned counted specials, which today's after-solve filler leaves to the pre-fill. */
   function countedSpecialIds(): Set<string> {
-    return new Set(columns.filter((c) => c.type === "special_role" && c.countsForFairness).map((c) => c.columnId));
+    return countedSpecialIdsOf(columns);
   }
 
   /** The planned columns that will exist: not skipped and creatable (RQ-3) — never a «Guardado» one. */
   function v3PlannedColumns(): GridColumn[] {
-    return columns.filter((c) => {
-      if (skippedColumnIds.has(c.columnId)) return false;
-      const draft = draftByTarget.get(draftTargetKey(c.type, c.date));
-      return !draft || isCreatable(draft);
-    });
+    return v3PlannedColumnsFor({ columns, skippedColumnIds, draftByTarget, isCreatable });
   }
 
   async function handleAutoV3(config: SolverConfig) {
@@ -4435,37 +4344,31 @@ export default function MonthGenerator({
     // applying there would set its drafts from the old horizon's columns.
     if (result.kind === "stale" || horizonKeyRef.current !== horizonKey) return;
     const skip = countedSpecialIds();
-    if (result.kind === "refused") {
-      setAutoError(result.lines[0]);
-      setAutoNotices(result.lines.slice(1));
+    // The decision is `settleV3AutoResult` (v3Board.ts), shared with the MCP month planner;
+    // the setters stay here, in the order they always ran.
+    const settled = settleV3AutoResult({ result, rows, members });
+    if (settled.kind === "refused") {
+      setAutoError(settled.error);
+      setAutoNotices(settled.notices);
       setV3Run(null);
       applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
       return;
     }
-    const { build, outcome } = result;
     // CF-2: the entries are frozen with the request, from this run's snapshot — whatever the solve says.
     // A run writes nothing, so the session's gaps (CF-10) stay as they are.
-    v3EntriesRef.current.set(horizonKey, freezeConfirmEntries(build.snapshot.sources, "auto"));
+    v3EntriesRef.current.set(horizonKey, settled.entries);
     setV3Confirm(null);
     setV3Report(null);
-    if (outcome.kind !== "success") {
-      setAutoError(v3OutcomeLine(outcome));
-      if (v3RetryOffered(outcome)) setAutoRetry(() => () => { void v3LatestRef.current.auto(); });
+    if (settled.kind === "failed") {
+      setAutoError(settled.error);
+      if (settled.retry) setAutoRetry(() => () => { void v3LatestRef.current.auto(); });
       setV3Run(null);
       applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
       return;
     }
-    const applied = applyV3Assignments({ response: outcome.response, request: build.request, cells: build.cells, rows, pinnedCellKeys: build.boardPinnedCellKeys });
-    if (!applied.ok) {
-      setAutoError(transportLine("unknown_service"));
-      setV3Run(null);
-      applySpecialFill(config, cells, undefined, fillEmptyOnly, skip);
-      return;
-    }
-    const names = v3Names({ members, serviceLabels: build.serviceLabels, ruleLabels: build.ruleLabels });
-    const report = buildV3RunReport({ response: outcome.response, request: build.request, storedServiceIds: build.storedServiceIds, names });
-    setAutoNotices([...build.notices, ...report.solverNotices]);              // NT-3: C6's own first
-    setV3Run({ build, response: outcome.response, report, names, horizonKey });
+    const { build, response, report, names, applied } = settled;
+    setAutoNotices(settled.notices);              // NT-3: C6's own first
+    setV3Run({ build, response, report, names, horizonKey });
     applySpecialFill(config, applied.cells, applied.unfilled, fillEmptyOnly, skip);
   }
 
