@@ -125,7 +125,7 @@ import { songResponder } from "@/app/mcp/reads/__tests__/songFixtures";
 // The dev-smoke script's own expectation of the route's registration — imported,
 // never re-typed, so the two can't drift apart silently (a 9th tool would fail
 // THIS test, not just surface on Frank's next `--reads` run).
-import { EXPECTED_TOOLS, WRITE_TOOL_NAMES, expectedAnnotations } from "@/scripts/mcp-dev-smoke.mjs";
+import { EXPECTED_TOOLS, MONTH_TOOL_NAMES, WRITE_TOOL_NAMES, expectedAnnotations } from "@/scripts/mcp-dev-smoke.mjs";
 import { WRITE_REREAD_RULE } from "@/app/mcp/writes/runWriteTool";
 import { NOTHING_WRITTEN, STALE_COPY } from "@/app/mcp/writes/refusals";
 import { serviceError } from "@/app/utils/serviceMutation";
@@ -630,7 +630,7 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(result.capabilities).toMatchObject({ tools: { listChanged: false } });
   });
 
-  it("tools/list shows exactly the twelve tools — ping, the seven reads, then the four writes — each with its own annotations (I14), strict (I13), described in Spanish", async () => {
+  it("tools/list shows exactly the fourteen tools — ping, the seven reads, the four writes, then the two month tools — each with its own annotations (I14), strict (I13), described in Spanish", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(await POST(mcpRequest(rpc("tools/list"), { token })));
     const tools = result.tools as Record<string, unknown>[];
@@ -638,17 +638,20 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     // re-derived from this very `tools/list` result, so a drift between the
     // route's registration and the script's expectation fails HERE.
     expect(tools.map((t) => t.name)).toEqual(EXPECTED_TOOLS);
-    expect(tools.slice(-4).map((t) => t.name)).toEqual(WRITE_TOOL_NAMES);
+    expect(tools.slice(8, 12).map((t) => t.name)).toEqual(WRITE_TOOL_NAMES);
+    expect(tools.slice(-2).map((t) => t.name)).toEqual(MONTH_TOOL_NAMES);
     // The same per-tool annotations the smoke checks on dev. Written out here as
     // well, so a change to the smoke's own map cannot quietly redefine what a
     // read or a destructive write declares.
     for (const tool of tools) {
       const name = String(tool.name);
-      const write = (WRITE_TOOL_NAMES as string[]).includes(name);
+      const write = (WRITE_TOOL_NAMES as string[]).includes(name) || name === "apply_schedule";
       expect(tool.annotations, name).toEqual(
-        write
-          ? { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
-          : { readOnlyHint: true, openWorldHint: false },
+        name === "solve_month"
+          ? { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false }
+          : write
+            ? { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
+            : { readOnlyHint: true, openWorldHint: false },
       );
       expect(tool.annotations, name).toEqual(expectedAnnotations(name));
       expect(tool.inputSchema, name).toMatchObject({ type: "object", additionalProperties: false });
