@@ -1772,7 +1772,13 @@ export default function PlannerGrid(props: PlannerGridProps) {
   const stickyLabel = "sticky left-0 z-10 bg-surface-base";
 
   const gridBlock = (
-    <div data-planner-scroller="" className={fullScreen ? undefined : "overflow-x-auto"}>
+    // In the page the scroller wears the sticky column's own opaque background (and a rounded edge),
+    // so the label column reads as part of one panel. Over the page's gradient alone, that column was
+    // a dark slab with no frame around it. Full screen already sits on an opaque surface.
+    <div
+      data-planner-scroller=""
+      className={fullScreen ? undefined : "overflow-x-auto rounded-xl border border-accent/15 bg-surface-base"}
+    >
       <div
         className="grid"
         style={{ gridTemplateColumns: `${labelTrack} repeat(${columns.length}, ${dateTrack})` }}

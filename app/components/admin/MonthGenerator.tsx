@@ -67,6 +67,7 @@ import { ParticipationSidebar } from "./ParticipationSidebar";
 import LeadPoolHistoryPanel from "./LeadPoolHistoryPanel";
 import FairnessPreviewPanel from "./FairnessPreviewPanel";
 import Button from "@/app/components/ui/Button";
+import Collapse from "@/app/components/ui/Collapse";
 import CueDialog from "@/app/components/ui/CueDialog";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import Checkbox from "@/app/components/ui/Checkbox";
@@ -2381,6 +2382,10 @@ export default function MonthGenerator({
 
   const [viewMode, setViewMode]   = useState<"edit" | "view">("edit");
   const [swapSel, setSwapSel]     = useState<string | null>(null);
+  // «Intercambiar equipos» is folded: one chip per date is 17 chips (3 rows on a laptop, 6 on a
+  // phone) for a step that is taken now and then. Closing it drops a half-made pick.
+  const [swapOpen, setSwapOpen]   = useState(false);
+  const swapRegionId = useId();
   /**
    * The swap toast is the app's one TWO-CHANNEL toast, so it takes both the
    * persistent `hold` (as `setSwapToast`) and the timed `show` (as
@@ -5429,25 +5434,43 @@ export default function MonthGenerator({
       )}
 
       {viewMode === "edit" && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-label text-[11px] uppercase tracking-widest text-mono-500">⇄ Intercambiar equipos:</span>
-          {columns.map(col => (
-            <button
-              key={col.columnId}
-              type="button"
-              data-swap-date={col.date}
-              onClick={() => handleColumnSwap(col.columnId)}
-              disabled={storedMode && storedSwapInteractionBlocked}
-              className={`min-h-[44px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
-                swapSel === col.columnId
-                  ? "border-accent bg-accent/20 text-accent"
-                  : "border-accent/15 text-mono-500 hover:text-accent"
-              }`}
-            >
-              {fmtDate(col.date)}
-            </button>
-          ))}
-          {swapSel && <span className="font-label text-[11px] uppercase tracking-widest text-accent animate-pulse">Selecciona otra columna ⇄</span>}
+        <div>
+          <Button
+            data-swap-toggle=""
+            variant="ghost"
+            size="sm"
+            aria-expanded={swapOpen}
+            aria-controls={swapRegionId}
+            onClick={() => {
+              if (swapOpen) setSwapSel(null);
+              setSwapOpen((open) => !open);
+            }}
+          >
+            ⇄ Intercambiar equipos
+            <svg aria-hidden="true" viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 transition-transform duration-fast ${swapOpen ? "rotate-180" : ""}`}>
+              <path d="M6 8l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </Button>
+          <Collapse id={swapRegionId} open={swapOpen} className="flex flex-wrap items-center gap-2 pt-2">
+            <span className="w-full font-body text-xs text-mono-500">Toca dos fechas para intercambiar todo su equipo.</span>
+            {columns.map(col => (
+              <button
+                key={col.columnId}
+                type="button"
+                data-swap-date={col.date}
+                onClick={() => handleColumnSwap(col.columnId)}
+                disabled={storedMode && storedSwapInteractionBlocked}
+                className={`min-h-[44px] px-2 py-1 rounded-full border text-[10px] font-label uppercase tracking-widest transition-colors ${
+                  swapSel === col.columnId
+                    ? "border-accent bg-accent/20 text-accent"
+                    : "border-accent/15 text-mono-500 hover:text-accent"
+                }`}
+              >
+                {fmtDate(col.date)}
+              </button>
+            ))}
+            {swapSel && <span className="font-label text-[11px] uppercase tracking-widest text-accent animate-pulse">Selecciona otra columna ⇄</span>}
+          </Collapse>
         </div>
       )}
 
