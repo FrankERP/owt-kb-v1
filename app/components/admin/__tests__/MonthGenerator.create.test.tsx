@@ -96,6 +96,9 @@ const noMembers: never[] = [];
 // Mes and Año carry ids (`mg-month`, `mg-year`) their labels point at; these helpers still
 // reach them by element type, which is all these tests need.
 
+/** «⇄ Intercambiar equipos» is folded: open it before picking dates (a closed fold ignores taps). */
+const openSwap = (container: HTMLElement) => fireEvent.click(container.querySelector("[data-swap-toggle]")!);
+
 function setMonthYear(container: HTMLElement, month: number, year: number) {
   const monthSelect = container.querySelector("select") as HTMLSelectElement;
   fireEvent.change(monthSelect, { target: { value: String(month) } });
@@ -1365,6 +1368,7 @@ describe("MonthGenerator — create path", () => {
     expect(firstA.body.leads).toEqual(["lead-a"]);
     expect(firstB.body.leads).toEqual(["lead-b"]);
 
+    openSwap(container);
     fireEvent.click(container.querySelector('[data-swap-date="2026-02-01"]')!);
     fireEvent.click(container.querySelector('[data-swap-date="2026-02-08"]')!);
     fail = false;
@@ -1377,6 +1381,29 @@ describe("MonthGenerator — create path", () => {
     expect(retryB.body.leads).toEqual(["lead-a"]);
     expect(retryA.body.creationRequestId).toBe(firstA.body.creationRequestId);
     expect(retryB.body.creationRequestId).toBe(firstB.body.creationRequestId);
+  });
+
+  it("«Intercambiar equipos» is a fold: closed it ignores a tap, and closing drops a half-made pick", () => {
+    stubRolesFetch(() => ({ ok: true }));
+    const { container } = render(<Gen members={[]} existingRoles={[]} onClose={vi.fn()} onCreated={vi.fn()} />);
+    goToPreview(container, 2, 2026);
+    const toggle = container.querySelector<HTMLButtonElement>("[data-swap-toggle]")!;
+    const chip = () => container.querySelector<HTMLButtonElement>('[data-swap-date="2026-02-01"]')!;
+    const hint = () => screen.queryByText("Selecciona otra columna ⇄");
+
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(chip());
+    expect(hint()).toBeNull();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(chip());
+    expect(hint()).not.toBeNull();
+
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(hint()).toBeNull();
+    expect(chip().className).not.toContain("bg-accent/20");
   });
 
   it("refuses to swap a Sunday column with a Saturday column, so a Coro assignment is never silently dropped", () => {
@@ -1397,6 +1424,7 @@ describe("MonthGenerator — create path", () => {
     ).toContain("Ana");
 
     // Try to swap that Sunday with the first Saturday of the month (2026-02-07).
+    openSwap(container);
     fireEvent.click(container.querySelector('[data-swap-date="2026-02-01"]')!);
     fireEvent.click(container.querySelector('[data-swap-date="2026-02-07"]')!);
 
@@ -1698,6 +1726,7 @@ describe("MonthGenerator — create path", () => {
     fireEvent.click(within(container.querySelector('[data-candidate-picker]')!).getByText("Ana"));
     fireEvent.click(screen.getByText("Cerrar"));
 
+    openSwap(container);
     fireEvent.click(container.querySelector(`[data-swap-date="${SPECIAL_DATE}"]`)!);
     fireEvent.click(container.querySelector('[data-swap-date="2026-02-12"]')!);
 
