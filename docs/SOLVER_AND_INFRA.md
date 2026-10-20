@@ -618,8 +618,8 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
   the same day and saved nothing.
 - **Function:** `owt-solver-v3` build `f939f5ba` at the flip (the C5 merge, PR #136). Redeployed
   on 2026-10-20 as build `d65871e2` (PR #151, the Total stage pair, ADR-0058; `solver_version`
-  3.1.0), the last `gcf_v3/**` change on `main`; the next production Auto answered with both (see
-  «Total stage release» below). Minimum instances: 0 (no W1: the cold start passed, see below).
+  3.1.0), the last `gcf_v3/**` change on `main`; the next production Auto reported build
+  `d65871e2` and `solver_version` 3.1.0 (see «Total stage release» below). Minimum instances: 0 (no W1: the cold start passed, see below).
 - **`FAIRNESS_TOLERANCE`:** 50 hundredths of a seat (`gcf_v3/owt_v3/constants.py`; 35 until the
   Total stage pair, ADR-0058, re-measured it) — the bound on `|planned − share|` per line for a
   pinless, all-proven, fully filled run; a pinned run's gap is reported, not bound.
@@ -690,23 +690,23 @@ no `solverConfig` key or anything derived from one: a stage is named by its kind
   not confirm that run; the confirm came after the Total stage release, below.
 - **Total stage release** (PR #151, ADR-0058; aggregates only). Production alias and
   `githubCommitSha` verified 2026-10-20 on `d65871e2` (deployment
-  `dpl_DxdtuVrZHhVNeyrDjqZr6YPUaXNh`). Frank's next Nov+Dec Auto on production, solve only:
+  `dpl_DxdtuVrZHhVNeyrDjqZr6YPUaXNh`). Frank's next Nov+Dec Auto on production, 2026-10-20, solve only:
   `ok: true`, build `d65871e2`, `solver_version` 3.1.0, contract 3, no pins, `total_ms` 1 808.
   Every one of its 22 stages `proven` (the 20 above plus `balance_max:TOTAL` and
   `balance_sq:TOTAL`), none stopped by a limit; 0 unfilled seats, 0 violations,
   `reproducible: true`. C5's independent checker passes it, the largest in-line gap 20 of the 50
   hundredths `FAIRNESS_TOLERANCE` allows. Against that morning's last run on 3.0.0, with the same
   request (other seed), every per-line stage value is identical and the Total sum of squares fell
-  74 %. The 2 misses are both `compensation_missed` with cause `unavailable`: December has no
+  74 % (seeds differ here; ADR-0058's 51–68 % compares same-seed runs). The 2 misses are both `compensation_missed` with cause `unavailable`: December has no
   Saturday service, by Frank's decision.
 - **Step 8 closed** (2026-10-20). Frank saved one more conflict rule, ran Auto again, changed
   seats by hand in the grid, and confirmed at 17:04 UTC. Read back from production: the
   `fairnessMonth` records for 2026-11 and 2026-12 carry `source: "auto"`, `engine: "v3"` and
   `environment: "production"`, and C6's confirm created 10 service drafts (9 Sundays, 1 Saturday),
-  all `published: false` at the read-back. Evaluated as a fixed assignment on the request with
-  that rule added, the saved roster has 0 unfilled seats, 0 violations and every per-line stage
-  value at the solver's optimum; Frank's hand edits leave its Total less even than the solver's,
-  by his choice.
+  all `published: false` at the read-back. Evaluated as a fixed assignment on the solve-only
+  request above plus that rule, the saved roster has 0 unfilled seats, 0 violations and every
+  per-line stage value at the solver's optimum; its Total is less even than a fresh solve's on that
+  request, which Frank confirmed comes from his hand edits, made on purpose.
 
 ---
 
