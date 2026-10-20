@@ -155,17 +155,20 @@ function AssistantDock({ pathname }: { pathname: string }) {
 
   return (
     <>
-      <Button
-        ref={bubbleRef}
-        variant="primary"
-        onClick={toggle}
-        aria-label={open ? "Cerrar el asistente" : "Abrir el asistente"}
-        aria-expanded={open}
-        className={`fixed right-4 sm:right-6 z-40 h-14 w-14 !rounded-full p-0 shadow-lg ${open ? "max-sm:hidden" : ""}`}
-        style={{ bottom: BOTTOM }}
-      >
-        {open ? <CloseIcon /> : <ChatIcon />}
-      </Button>
+      {/* The wrapper is what is fixed: a primary Button's sheen sets `position: relative` in
+          brand.css, which beats a `fixed` utility on the button itself and left it in the flow. */}
+      <div className={`fixed right-4 sm:right-6 z-40 ${open ? "max-sm:hidden" : ""}`} style={{ bottom: BOTTOM }}>
+        <Button
+          ref={bubbleRef}
+          variant="primary"
+          onClick={toggle}
+          aria-label={open ? "Cerrar el asistente" : "Abrir el asistente"}
+          aria-expanded={open}
+          className="h-14 w-14 !rounded-full p-0 shadow-lg"
+        >
+          {open ? <CloseIcon /> : <ChatIcon />}
+        </Button>
+      </div>
 
       <Presence
         show={open}

@@ -2875,7 +2875,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 289,
+      "line": 292,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

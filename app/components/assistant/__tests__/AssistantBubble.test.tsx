@@ -224,6 +224,18 @@ describe("AssistantBubble — the conversation", () => {
   });
 });
 
+describe("AssistantBubble — placement", () => {
+  it("fixes a wrapper, never the button: the primary sheen's `position: relative` would win over `fixed`", () => {
+    stubFetch([]);
+    render(<AssistantBubble />);
+    const bubble = screen.getByRole("button", { name: "Abrir el asistente" });
+    expect(bubble.className).toContain("brand-btn-sheen");
+    expect(bubble.className).not.toMatch(/\bfixed\b/);
+    expect(bubble.parentElement!.className).toMatch(/\bfixed\b/);
+    expect(bubble.parentElement!.style.bottom).toContain("--bottom-nav-h");
+  });
+});
+
 describe("AssistantBubble — the song FAB", () => {
   it("publishes its footprint while on screen and clears it when gone", () => {
     stubFetch([]);
