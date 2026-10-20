@@ -26,6 +26,8 @@ import useLongPress from "./ui/useLongPress";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { buildICS, type ICSEvent } from "@/app/utils/ics";
 import { normalizeText } from "@/app/utils/normalizeText";
+import { serviceTone, TONE_RAIL } from "@/app/utils/agenda";
+import type { ActiveDay } from "./CalendarView";
 
 export default function DayCardDisclosure(props: DayCardProps) {
   const [open, setOpen] = useState(false);
@@ -74,7 +76,9 @@ export default function DayCardDisclosure(props: DayCardProps) {
   ];
 
   return (
-    <div className="rounded-[var(--brand-radius-panel)] border border-ink-dim/15">
+    // Opaque like the card it opens onto, with the same tone rail (2026-10-20).
+    <div className="brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]">
+      <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[serviceTone(props as ActiveDay)]}`} />
       {/* A raw <button>, not the house Button: this is a disclosure row (the row is
         the affordance), the same exemption SongRow and LibraryRow carry. */}
     <button

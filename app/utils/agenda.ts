@@ -11,6 +11,14 @@ export function findDuplicates(names: string[]): Set<string> {
   return new Set([...counts].filter(([, c]) => c > 1).map(([k]) => k));
 }
 
+/** A service's tone as a 2–3 px rail: the agenda's rows and `DayCard`'s left edge.
+ *  The day's ONE colour device — nothing else on either surface takes the tone. */
+export const TONE_RAIL: Record<Tone, string> = {
+  sun: "bg-accent",
+  sat: "bg-warning-fg",
+  special: "bg-info-fg",
+};
+
 export function serviceTone(e: ActiveDay): Tone {
   if (e.roleId) return "special";
   if (e.day === "Sábado") return "sat";

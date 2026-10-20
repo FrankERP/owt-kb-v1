@@ -20,19 +20,12 @@
 // (`mySeats`/`myNameFromSession`, `app/utils/agenda.ts`) — the agenda had dropped it
 // when it replaced the stacked `DayCard`s the old «Lista» mode rendered.
 import { useSession } from "next-auth/react";
-import { agendaRows, conflictLabel, mySeats, myNameFromSession, type Tone } from "../utils/agenda";
+import { agendaRows, conflictLabel, mySeats, myNameFromSession, TONE_RAIL } from "../utils/agenda";
 import type { ActiveDay } from "./CalendarView";
 import { daysUntil, formatCountdown } from "../utils/daysUntil";
 import { monthLabel } from "../utils/scheduleMonths";
 import NumberRoll from "./ui/NumberRoll";
 import { haptic } from "../utils/haptics";
-
-/** The 2 px rail: the same tone vocabulary the strip and the grid use. */
-const RAIL: Record<Tone, string> = {
-  sun: "bg-accent",
-  sat: "bg-warning-fg",
-  special: "bg-info-fg",
-};
 
 /** Local-noon render, never a bare `new Date(iso)` — the UTC day-flip rule. */
 const fmt = (iso: string, options: Intl.DateTimeFormatOptions) =>
@@ -105,7 +98,7 @@ export default function AgendaView({
             >
               <span
                 aria-hidden
-                className={`absolute bottom-2 left-0 top-2 w-0.5 rounded-full ${RAIL[row.tone]}${
+                className={`absolute bottom-2 left-0 top-2 w-0.5 rounded-full ${TONE_RAIL[row.tone]}${
                   seats.length ? " shadow-[0_0_10px_rgb(var(--positive-fg-rgb)/0.6)]" : ""
                 }`}
               />
@@ -120,13 +113,14 @@ export default function AgendaView({
                     <span className="min-w-0 truncate font-body text-sm text-ink-dim">{row.entry.day}</span>
                   )}
                   {upcoming && (
-                    <span className="rounded-full bg-accent/10 px-2 py-px font-label text-[10px] uppercase tracking-widest text-accent">
+                    <span className="rounded-full border border-ink-dim/30 px-2 py-px font-label text-[10px] uppercase tracking-widest text-ink-muted">
                       <NumberRoll value={countdown} />
                     </span>
                   )}
-                  {/* DayCard's «you» tone — the same positive pill/glow the seats
-                      themselves glow with there, so the two surfaces read as one
-                      signal. */}
+                  {/* DayCard's «you» tone — the same positive green its seats take
+                      there, so the two surfaces read as one signal. The countdown
+                      beside it is neutral, as on the card: cyan is for what can be
+                      pressed, green only for «tú» (2026-10-20). */}
                   {seats.length > 0 && (
                     <span className="rounded-full border border-positive-fg/35 bg-positive-fg/10 px-2.5 py-0.5 font-label text-[10px] uppercase tracking-widest text-positive-fg">
                       Tú · {seats.join(", ")}

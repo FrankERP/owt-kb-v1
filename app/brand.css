@@ -443,6 +443,19 @@
      (tokenLayer.test.ts) counts `rgb(var(--role-rgb) / a)` occurrences, and a
      bare `var(--lit-beam)` in the rule body does not add to it. */
   --lit-beam:                       rgb(var(--accent-rgb) / 0.9);          /* light: accent-deep @90% */
+
+  /* --- Opaque cards and the page glow, added 2026-10-20 (the «premium» audit) ---
+     COMPOSED because each resolves to a DIFFERENT role or alpha per theme, which a
+     triplet plus one opacity modifier cannot say.
+     --surface-card: the raised-alt navy in dark, NOT --surface-raised: on raised
+     (13 34 52) mono-600 text measured 4.3:1, under the 4.5 floor that the
+     2026-08-12 raise was tuned for; on raised-alt (10 25 41) it is 4.7. In light
+     it is white (--surface-raised), on a near-white page.
+     --atmosphere-glow: `.brand-atmosphere`'s one radial. Cyan carries light at
+     16% over near-black; the same alpha of light's navy is a grey haze, so light
+     takes 5%. */
+  --surface-card:                   rgb(var(--surface-raised-alt-rgb));
+  --atmosphere-glow:                rgb(var(--accent-rgb) / 0.16);
 }
 
 /* Light branch. `:root` above hardcodes `color-scheme: dark`, which is masked in the
@@ -498,7 +511,7 @@
   --ink-rgb: 10 25 41;                    /* #0a1929  <- dark 215 231 246 */
   --ink-muted-rgb: 31 50 71;              /* #1f3247  <- dark 200 216 235 */
   --ink-dim-rgb: 74 92 114;               /* #4a5c72  <- dark 127 148 168 */
-  --surface-base-rgb: 238 243 249;        /* #eef3f9  <- dark 1 11 23 */
+  --surface-base-rgb: 245 247 250;        /* #f5f7fa  <- dark 1 11 23 (was #eef3f9 until 2026-10-20: white cards need a near-white page to read as objects) */
   --surface-raised-rgb: 255 255 255;      /* #ffffff  <- dark 13 34 52 */
   --surface-raised-alt-rgb: 200 216 235;  /* #c8d8eb  <- dark 10 25 41 */
   --surface-console-rgb: 221 231 243;     /* #dde7f3  <- dark 7 22 36 */
@@ -599,17 +612,21 @@
   --skeleton-sweep: rgb(var(--accent-rgb) / 0.18);
   --sheen-highlight: rgb(var(--on-fill-rgb) / 0.22);
   --lit-beam: rgb(var(--accent-rgb) / 0.9);                     /* light: accent-deep @90% */
+  --surface-card: rgb(var(--surface-raised-rgb));               /* white */
+  --atmosphere-glow: rgb(var(--accent-rgb) / 0.05);
 }
 
+/* One cyan glow at the top of the page, over a flat ground (2026-10-20, the
+   «premium» audit, Frank's approval of "superficies y color"). The six layers
+   this replaced — three radials and three diagonal bands — painted a hard
+   diagonal edge THROUGH every translucent card, and on a long list (Biblioteca,
+   Calendario) the band cut the rows in half. Cards are opaque now
+   (`--surface-card`), so the ground only has to give the top of the page some
+   light; anything more is noise behind text. The glow's alpha is per theme
+   (`--atmosphere-glow`): accent is cyan in dark and navy in light. */
 .brand-atmosphere {
   background-color: rgb(var(--surface-base-rgb));
-  background-image:
-    radial-gradient(ellipse 54rem 40rem at 8% 26%, rgb(var(--accent-rgb) / 0.11), transparent 70%),
-    radial-gradient(circle at 78% -10%, rgb(var(--accent-rgb) / 0.2), transparent 38rem),
-    radial-gradient(ellipse 62rem 44rem at 56% 110%, rgb(var(--accent-rgb) / 0.095), transparent 72%),
-    linear-gradient(122deg, transparent 0 45%, rgb(var(--accent-rgb) / 0.035) 45.15%, rgb(var(--accent-rgb) / 0.075) 56%, rgb(var(--accent-rgb) / 0.025) 68%, transparent 77%),
-    linear-gradient(64deg, transparent 0 67%, rgb(var(--accent-rgb) / 0.04) 75%, transparent 88%),
-    linear-gradient(180deg, rgb(var(--surface-raised-rgb) / 0.24), rgb(var(--surface-base-rgb) / 0.08) 52%, rgb(var(--surface-console-rgb) / 0.32));
+  background-image: radial-gradient(ellipse 64rem 30rem at 50% -8rem, var(--atmosphere-glow), transparent 72%);
   background-repeat: no-repeat;
 }
 
@@ -767,26 +784,21 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
   animation: brand-rail-draw var(--motion-reveal) var(--ease-out) both;
 }
 
+/* OPAQUE since 2026-10-20 (same approval as `.brand-atmosphere`). It was a
+   145° gradient at 0.68–0.82 alpha over the page, so whatever the page painted
+   showed through and the card's edge went soft; a top highlight (`::after`) sat
+   on that. A card is an object: one solid ground (`--surface-card` — the
+   raised-alt navy in dark, white in light), a hairline, and a shadow that only
+   shows where shadows read, in light (`--elevation-rgb` is black in dark, where
+   5% of it is invisible by design: dark elevation is the lightness step). */
 .brand-surface {
   position: relative;
   isolation: isolate;
-  border: 1px solid rgb(var(--ink-dim-rgb) / 0.14);
-  background:
-    linear-gradient(145deg, rgb(var(--surface-raised-rgb) / 0.68), rgb(var(--surface-console-rgb) / 0.82) 44%, rgb(var(--surface-base-rgb) / 0.76)),
-    rgb(var(--surface-console-rgb) / 0.72);
+  border: 1px solid rgb(var(--ink-rgb) / 0.08);
+  background: var(--surface-card);
   box-shadow:
-    inset 0 1px 0 rgb(var(--ink-rgb) / 0.035),
-    0 18px 55px rgb(var(--elevation-rgb) / 0.2);
-}
-
-.brand-surface::after {
-  position: absolute;
-  z-index: -1;
-  inset: 0.5px 8% auto 8%;
-  height: 1px;
-  content: "";
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgb(var(--ink-rgb) / 0.13), transparent);
+    0 1px 2px rgb(var(--elevation-rgb) / 0.06),
+    0 4px 12px rgb(var(--elevation-rgb) / 0.05);
 }
 
 .brand-surface-interactive {
@@ -814,12 +826,9 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid rgb(var(--ink-dim-rgb) / 0.14);
+  border: 1px solid rgb(var(--ink-rgb) / 0.08);
   border-radius: 14px;
-  background:
-    linear-gradient(135deg, rgb(var(--surface-raised-rgb) / 0.52), transparent 58%),
-    rgb(var(--surface-console-rgb) / 0.6);
-  box-shadow: inset 0 1px 0 rgb(var(--ink-rgb) / 0.035);
+  background: var(--surface-card); /* opaque, as `.brand-surface` */
 }
 
 .brand-library-module::before {
@@ -844,7 +853,7 @@ html.has-bottom-nav .audio-player { padding-bottom: 0; }
   position: relative;
   border: 1px solid rgb(var(--ink-dim-rgb) / 0.16);
   border-radius: 12px;
-  background: rgb(var(--surface-base-rgb) / 0.64);
+  background: var(--surface-card); /* opaque, as `.brand-surface` */
   box-shadow:
     inset 0 1px 0 rgb(var(--ink-rgb) / 0.04),
     0 12px 32px rgb(var(--elevation-rgb) / 0.16);
