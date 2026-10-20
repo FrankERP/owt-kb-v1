@@ -637,9 +637,12 @@ the decisions and the rejected alternatives are
   solve_month»). Then it writes every month's eligibility record in one PUT and creates the drafts
   month by month, oldest first, always `published: false` (nobody is notified). Annotations: the
   write tools' (`destructiveHint: true`).
-- **Time.** Each call works under a 52 s soft deadline inside the route's 60 s. The solver gets at
-  most 45 s and is not called with under 10 s left (`time_budget`). An apply starts no create after
-  40 s: the rest is «pendiente» and the next call continues.
+- **Time.** A solve works under a 52 s soft deadline inside the route's 60 s: the solver gets at
+  most 45 s and is not called with under 10 s left (`time_budget`). An apply is bounded by its
+  cut-offs instead: it starts no create after 40 s (the rest is «pendiente» and the next call
+  continues) and sweeps nothing after 45 s. Its reads and its one record PUT run uncut; if the
+  route kills a call there, the answer is lost and calling again is safe (the PUT answers
+  `unchanged` on a replay).
 - **Recovery is by receipt.** A draft whose role carries its own creation receipt id is created,
   whatever the proposal's saved progress says. So calling `apply_schedule` again after a time-out,
   a lost answer or a failed progress save is always safe and never creates a service twice; the
@@ -650,7 +653,7 @@ the decisions and the rejected alternatives are
   other-member handle all answer «No encontré esa propuesta o ya venció. Vuelve a correr
   solve_month.»
 - **Copy.** All lines live in `V3_CONNECTOR_LINES` (`app/components/admin/v3Copy.ts`). A negative
-  claim is about the current call only («Esta llamada no escribió nada»); an answer that was lost
+  claim is about the current call only («En esta llamada no se escribió nada.»); an answer that was lost
   is «sin confirmar», never «falló». Nothing names a member id, a rule key, a role id or a rules
   revision; people are named by alias or name.
 - **Logs.** The timing line, one line per solve (`{route:"mcp/solve_month", engine, outcome,
@@ -769,7 +772,8 @@ list:
   request id, one JSON `payload` (frozen record entries, drafts, the stored service ids at solve)
   under a SHA-256 `digest`, and the mutable JSON `state` (`recordsDone`, created drafts). Written
   only by `app/mcp/monthProposals/proposalStore.ts` (`create`, `ifRevisionId` merges, and a sweep
-  that deletes up to 25 records more than 24 h past expiry on each solve and apply).
+  that deletes up to 25 records more than 24 h past expiry after each solve, and after an apply's
+  confirm — not on its refusals or when the proposal was already complete).
 
 Nothing stored is secret or replayable on its own — the dataset answers unauthenticated
 published reads, and the two grant types are safe to be world-readable (a member id is already public;

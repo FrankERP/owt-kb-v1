@@ -360,7 +360,7 @@ dev also revokes the production link. Not deleted with the member (inert once th
 ## `mcpProposal` — a stored month plan of the connector (MCP P4, ADR-0061)
 
 One document per `solve_month` that stored a plan, `_id` **`mcpProposal.<handle>`**, the handle 26
-lowercase Crockford base32 characters (128 random bits) that the connector hands the model.
+lowercase Crockford base32 characters (130 random bits) that the connector hands the model.
 **Dotted**, so never served untokened. Files:
 [`documentTypes.ts`](../app/mcp/monthProposals/documentTypes.ts) (import-free names and fields),
 [`proposalDocument.ts`](../app/mcp/monthProposals/proposalDocument.ts) (build, strict parse,
@@ -380,8 +380,8 @@ writer). Hidden, read-only and protected in Studio. Not released yet (P4's branc
 | `digest` | string | SHA-256 over every field above in one fixed order. A mismatch reads as no record. |
 | `state` | string (JSON) | `{ recordsDone, created: { localId → roleId } }`, the only mutable field: facts that only grow, written under `ifRevisionId` and merged by union on a conflict (≤ 3 retries). |
 
-Writes: `create` at solve (never `createOrReplace`), the `state` patch at apply, and a sweep on
-each solve and apply that deletes up to 25 records more than 24 h past their expiry. Nothing reads
+Writes: `create` at solve (never `createOrReplace`), the `state` patch at apply, and a sweep
+after each solve and after an apply's confirm (not on its refusals) that deletes up to 25 records more than 24 h past their expiry. Nothing reads
 it but `apply_schedule`, and nothing in it is ever returned to the model.
 
 ## `solverConfig` — the shared planner rule set (singleton)

@@ -39,10 +39,11 @@ Plan: `docs/superpowers/plans/2026-10-20-owt-mcp-p4-v3-solve-apply.md` (critical
   (`app/utils/roleCreateCommit.ts`, the roles POST's own domain body). Always `published: false`:
   nobody is notified. A parity test (`monthToolParity.test.tsx`) runs both surfaces over one groq-js
   dataset and demands byte-identical solve bodies and identical PUT and create bodies.
-- **No Fluid compute; a time budget instead (D1, D5).** Each call has a 52 s soft deadline. The
-  solve's timeout is `min(45 s, 52 s − elapsed − 4 s)`, and under 10 s left the solver is not called
-  (`time_budget`). An apply starts no create after 40 s; the rest is «pendiente» and the next call
-  continues.
+- **No Fluid compute; a time budget instead (D1, D5).** A solve has a 52 s soft deadline: its
+  timeout is `min(45 s, 52 s − elapsed − 4 s)`, and under 10 s left the solver is not called
+  (`time_budget`). An apply is bounded by its cut-offs: no create starts after 40 s (the rest is
+  «pendiente» and the next call continues) and no sweep after 45 s; its reads and its one PUT run
+  uncut, and a call killed there is safe to repeat.
 - **A proposal is a private, expiring record with no lease (D6).** `mcpProposal.<handle>` (a
   26-character unguessable handle, 7-day expiry) holds the frozen entries and drafts as one JSON
   payload under a SHA-256 digest, bound to the caller's origin and member id, plus a mutable

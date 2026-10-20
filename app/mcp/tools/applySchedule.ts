@@ -345,7 +345,9 @@ export async function applyScheduleResult(
 
       const rows = serviceRows(proposal, obs, posts);
       const complete = isComplete(rows);
-      const createdNow = rows.filter((r) => r.status === "created").length;
+      // R-CALL: «before creating a new service» only when no post of this call may have landed — a lost
+      // answer or a replay without a role id is `unknown`, never «nothing created».
+      const mayHaveCreated = [...posts.values()].some((p) => p.kind === "created" || p.kind === "unknown");
       const deferred = [...posts.values()].some((p) => p.kind === "deferred");
       const owesSolve = rows.some((r) => r.status === "refused" || r.status === "blocked" || r.status === "deleted" || r.status === "modified");
       const owesCall = rows.some((r) => r.status === "pending" || r.status === "unknown");
@@ -353,7 +355,7 @@ export async function applyScheduleResult(
         ...(complete ? [L.complete] : []),
         ...(recordsLanded ? [L.recordsSaved(months)] : []),
         ...serviceLines(rows),
-        ...(deferred && createdNow === 0 ? [L.cutoffNothing] : []),
+        ...(deferred && !mayHaveCreated ? [L.cutoffNothing] : []),
         ...tail,
       ];
       return answer(false, lines, {

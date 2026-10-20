@@ -801,6 +801,18 @@ describe("/api/mcp — a valid token reaches the MCP server", () => {
     expect(result.isError).toBeFalsy();
   });
 
+  it("the month tools receive the caller's identity: an unknown handle is «not found», never «no principal» (D10)", async () => {
+    // `principalOf` needs the grant's `sub` and `resource` as a URL from the `authInfo` the route
+    // builds. Every month-tool suite injects the principal; this proves the registered path keeps it.
+    const token = await accessToken(await liveGrant());
+    const result = await rpcResult(await POST(mcpRequest(
+      rpc("tools/call", { name: "apply_schedule", arguments: { proposal: "0123456789abcdefghjkmnpqrs" } }), { token },
+    )));
+    expect(result.isError).toBe(true);
+    expect(result.structuredContent).toMatchObject({ code: "not_found", detail: "proposal" });
+    expect(JSON.stringify(result)).not.toContain("no_principal");
+  });
+
   it("refuses any argument to ping as a tool error (I13)", async () => {
     const token = await accessToken(await liveGrant());
     const result = await rpcResult(

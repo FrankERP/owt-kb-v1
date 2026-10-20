@@ -202,6 +202,19 @@ describe("D5 — the create cut-off", () => {
     expect(textOf(out)).toContain(L.cutoffNothing);
     expect(out.structuredContent).toMatchObject({ complete: false, next: "apply_schedule", retry: true });
   });
+
+  it("a first create whose answer is lost, then the cut-off: «sin confirmar», never «antes de crear»", async () => {
+    // The create lands (the role is inserted) but its answer is lost, and it ends past 40 s.
+    const { w } = await setup({ createMs: 41_000, afterInsert: (n) => { if (n === 1) throw new Error("socket"); } });
+    const out = await apply(w);
+    expect(w.deps.createRole).toHaveBeenCalledTimes(1);
+    expect(w.roles).toHaveLength(1);
+    const text = textOf(out);
+    expect(text).toContain("sin confirmar");
+    expect(text).not.toContain(L.cutoffNothing);
+    expect(text).not.toMatch(/No se creó nada|ningún servicio|falló/);
+    expect(out.structuredContent).toMatchObject({ complete: false, next: "apply_schedule", retry: true });
+  });
 });
 
 describe("phase 4 — the records", () => {
