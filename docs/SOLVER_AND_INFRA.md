@@ -535,6 +535,16 @@ through `app/api/admin/solve/route.ts` (`app/utils/solverV3Upstream.ts`, URL `OW
 every deployment whose effective engine is v3 — production and dev since the 2026-10-15 cutover
 (ADR-0056, «Cutover record» below). v2 above is unchanged and is the rollback engine.
 
+**A second caller: the MCP connector's `solve_month`** (P4, not released; ADR-0061). It runs the
+same Auto on the server — `planV3Month` (`app/utils/v3MonthPlan.ts`) composes the planner's own
+request builder, response handshake and fills — and posts through the same `solveV3` with the same
+`OWT_SOLVER_V3_URL` and `OWT_SOLVER_API_KEY`, under a timeout of `min(45 s, 52 s − elapsed − 4 s)`
+inside `/api/mcp`'s 60 s (no solve with under 10 s left). It logs one line per solve
+(`{route:"mcp/solve_month", engine, outcome, status, ms}`), never a body. Its `apply_schedule`
+runs the browser's v3 confirm (`runV3ConfirmAttempt`): the records first, through the fairness
+PUT's own `commitFairnessMonths`, then the drafts. Both refuse under any engine but v3. Parity with
+the browser's request is pinned by `app/mcp/tools/__tests__/monthToolParity.test.tsx`.
+
 - **Contract `3`.** One request staffs the weekend voice seats of 1–2 calendar months: dated
   services (opaque `id`, `kind`, `fixed`, `counts`, `seats`), people with eligibility already
   resolved per service, carried balances per line (hundredths; the ledger GET's window, counted

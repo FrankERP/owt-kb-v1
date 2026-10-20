@@ -186,3 +186,13 @@ markers. That is an evidence gap, not a safety hole: blocking never depends on a
 - **Rolling P3 back** removes the tools and their pin rows. The registry entries stay with the
   extraction, because the transactions stay in the modules.
 - An MCP write's delivery evidence carries no SR-verification run markers (D15).
+
+## Amendment (2026-10-20, MCP P4 on solver v3, ADR-0061)
+
+- `roleCreateCommit.ts` joins the commit modules: the roles POST keeps authorization and the JSON
+  parse and hands the rest to `createRole(body)`. Its registry entry, its name in
+  `DELIVERY_CAPABLE_IMPORTS` and its pin row in `serviceCommitCallers.test.ts` came with the move.
+- The MCP's `apply_schedule` calls two commit modules: `createRole` (each draft) and
+  `commitFairnessMonths` (the month records). Both pin rows list `app/mcp/tools/applySchedule.ts`.
+  So the admin write paths the MCP shares are six: the four of P3, the roles create and the
+  fairness PUT.

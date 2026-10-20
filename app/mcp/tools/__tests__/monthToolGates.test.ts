@@ -27,7 +27,8 @@
 //   A4  fresh preflight aborts the whole call .. applySchedule.test.ts («recovery across calls», A4 rows)
 //   A5  CF-1, CF-4, CF-5, CF-7 ................. applySchedule.test.ts (guard, CF-4 table, cut-off, replay)
 //   A6  the create route's refusals ............ below
-//   A7  always drafts .......................... applySchedule.test.ts (happy path: `published: false`)
+//   A7  always drafts, nobody notified ......... applySchedule.test.ts (happy path: `published: false`);
+//                                               roleWriteRoutes.test.ts («only when published»: a draft create pushes and queues nothing)
 //   A8  declared: no history dual-write ........ (nothing reads it under v3; nothing to test)
 //   A9  rules changed .......................... applySchedule.test.ts (D11)
 //   A10 engine not v3 .......................... applySchedule.test.ts, solveMonth.test.ts

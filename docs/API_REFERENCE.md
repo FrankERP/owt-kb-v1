@@ -252,7 +252,7 @@ endpoint needs a **signed code plus its PKCE verifier** (or a signed refresh tok
 | `/oauth/authorize` | GET | **gated** — `requireActiveSession` + live `super-admin` | The consent screen. Streams (`app/(client)/loading.tsx`); a foreign host or refused request never redirects the caller anywhere it didn't come from. |
 | `/api/oauth/authorize` | POST, GET | **gated**, same as above, plus same-origin check | The ONLY thing that mints an authorization code (303 to the verified `redirect_uri`). GET is 405 — a code is never minted by a link, prefetch or redirect. |
 | `/api/oauth/token` | POST | public — the signed code plus its PKCE verifier (or a signed refresh token and its live grant), and the signed client id | `authorization_code` and `refresh_token` grants. Public clients only (`token_endpoint_auth_method: "none"`), so client authentication is `invalid_client`: a `client_secret` in the body is a **400**; an `Authorization: Basic` header is a **401** with `WWW-Authenticate: Basic realm="owt-backstage"` (RFC 6749 §5.2). Creates the `mcpOauthGrant` and rotates its refresh `jti` on every use; a reused refresh token revokes the whole grant. |
-| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live super-admin lookup — gate every request before it reaches the MCP server; see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. Released to production: twelve tools, `ping` (P0, 2026-09-24), seven read tools (P1, 2026-09-25 — see [`docs/MCP.md`](MCP.md#tools)), each declaring `readOnlyHint: true, openWorldHint: false`, and four write tools after them (P3, 2026-09-28), each declaring `readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false` and calling the admin route's own `*Commit` module (ADR-0043). Every tool has a strict input schema, which the SDK validates before the tool runs. Every SSE response is read to its end before the route returns, so a tool's revalidation and `after()` work finish inside the handler. |
+| `/api/mcp` | GET, POST, DELETE | public — its own bearer-token check | The MCP endpoint (Streamable HTTP via `mcp-handler`). Six ordered checks — the preflight (kill switch, host, secret), the bearer token, its signature/`aud`/`iss`, its grant (30 s cache), the grant's subject/origin match, and a live super-admin lookup — gate every request before it reaches the MCP server; see `app/api/mcp/route.ts`'s header comment. The MCP server then gets a copy carrying only an allowlist of headers — no `Authorization`, cookie or Vercel bypass header reaches a tool. Released to production: twelve tools, `ping` (P0, 2026-09-24), seven read tools (P1, 2026-09-25 — see [`docs/MCP.md`](MCP.md#tools)), each declaring `readOnlyHint: true, openWorldHint: false`, and four write tools after them (P3, 2026-09-28), each declaring `readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false` and calling the admin route's own `*Commit` module (ADR-0043). P4's branch (not released) registers two more after the writes: `solve_month` (`destructiveHint: false`; stores only its private `mcpProposal` record) and `apply_schedule` (the write annotations; the v3 confirm through `commitFairnessMonths` and `createRole`, ADR-0061). Every tool has a strict input schema, which the SDK validates before the tool runs. Every SSE response is read to its end before the route returns, so a tool's revalidation and `after()` work finish inside the handler. |
 
 ---
 
@@ -362,14 +362,17 @@ protection (spec 2026-09-20 decision D2).
 
 ### Setlists & services (roles)
 
-**Four of these routes are authorization plus one call.** `PUT /api/admin/setlists`,
-`POST /api/admin/roles/swap`, `POST /api/admin/roles/publish-ready` and
-`POST /api/admin/roles/unpublish` check the session and parse the JSON, then hand the raw body to
-their domain module — `app/utils/setlistSaveCommit.ts`, `roleSwapCommit.ts`,
-`publishReadyCommit.ts`, `roleUnpublishCommit.ts` — and send back exactly what it returns. The MCP
-write tools call the same modules with the same bodies, after `/api/mcp`'s bearer check, so the
-responses, refusals, notices and revalidations below are theirs too
-([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md);
+**Five of these routes are authorization plus one call.** `PUT /api/admin/setlists`,
+`POST /api/admin/roles` (create), `POST /api/admin/roles/swap`,
+`POST /api/admin/roles/publish-ready` and `POST /api/admin/roles/unpublish` check the session and
+parse the JSON, then hand the raw body to their domain module — `app/utils/setlistSaveCommit.ts`,
+`roleCreateCommit.ts`, `roleSwapCommit.ts`, `publishReadyCommit.ts`, `roleUnpublishCommit.ts` —
+and send back exactly what it returns. The MCP write tools call the same modules with the same
+bodies, after `/api/mcp`'s bearer check, so the responses, refusals, notices and revalidations
+below are theirs too; `apply_schedule` (MCP P4, not released) calls `createRole` for each draft,
+always `published: false`
+([ADR-0043](adr/0043-admin-writes-delegate-to-commit-modules.md),
+[ADR-0061](adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md);
 `serviceCommitCallers.test.ts` pins every caller).
 
 | Route | Methods | Notes |
@@ -579,7 +582,10 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   an opaque `500`: the handler throws `FairnessMonthWriteFailedError` (fixed message, no `cause`),
   and the server log carries only the original error's class, status and stack frames, never its
   message, which can hold the request URL and member ids. No notification, no revalidation, and
-  never a delete.
+  never a delete. The handler's domain body is `commitFairnessMonths`
+  (`app/utils/fairnessMonthCommit.ts`); its other caller is the MCP's `apply_schedule` (P4, not
+  released), with the same body the browser's confirm sends, actor `route` and `recordedBy` the
+  grant's member id.
 
 ---
 

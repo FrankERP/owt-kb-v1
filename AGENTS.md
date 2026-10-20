@@ -163,8 +163,8 @@ looks wrong** — several exist to stop a plausible-looking change.
   `app/utils/fairnessLedger.ts` is the only TS definition of F2–F7 and X1;
   `fixtures/fairness/golden.json` is asserted by vitest and `gcf_v3/tests/test_golden.py` and
   is hand-computed — never regenerated from output. `fairnessMonth` is mutated only through
-  `executeFairnessMonthWrites` (`fairnessMonthCommit`'s PUT or C4's consented reconstruction
-  script; never `createOrReplace`; the reconstruction actor's guarded delete is the only delete). Every reader carries `SANITY_API_READ_TOKEN` or fails
+  `executeFairnessMonthWrites` (`fairnessMonthCommit` — the PUT and the MCP's `apply_schedule` —
+  or C4's consented reconstruction script; never `createOrReplace`; the reconstruction actor's guarded delete is the only delete). Every reader carries `SANITY_API_READ_TOKEN` or fails
   closed — the dotted ids are private, and an untokened read answers «no record» with no error.
   Balances count from `FAIRNESS_BALANCE_START` (`2026-11`, ADR-0055), passed only by the GET; an
   earlier month still feeds who is listed and `firstRecordedIn` (its record) and «Mes por medio» (its seats).
@@ -231,9 +231,10 @@ looks wrong** — several exist to stop a plausible-looking change.
   `MCP_OAUTH_SECRET`, and are excluded from `proxy.ts`; `/oauth/authorize` is not, and depends
   on NextAuth's DEFAULT `redirect` callback keeping its query — never add a custom `redirect`
   callback that drops it (`authRedirectCallback.test.ts`; `docs/MCP.md`).
-- **The four admin write routes** (setlists PUT, swap, publish-ready, unpublish) delegate
-  everything after authorization to `app/utils/*Commit.ts`; MCP writes go only through them
-  (`serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
+- **The six admin write paths** (setlists PUT, roles create, swap, publish-ready, unpublish, the
+  fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`; MCP writes go
+  only through them (`apply_schedule`: roles create + fairness PUT, ADR-0061;
+  `serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
 
 ## Reusable utils (don't reinvent)
 Before writing a helper, hook or UI primitive, check this list, the long form's section (what

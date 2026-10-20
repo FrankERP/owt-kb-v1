@@ -1,6 +1,6 @@
 # OWT MCP P4 on solver v3 — solve and apply a month from the connector (implementation plan)
 
-**Date:** 2026-10-20 · **Status:** approved at critical tier — two sequential fresh `APPROVED` on digest `4d6383ce…8559` (rounds 7–8 of 8); the post-approval edits are listed, un-reviewed, in [the review log](2026-10-20-owt-mcp-p4-v3-solve-apply-review-log.md). **Not authorized for implementation** · **Replaces:**
+**Date:** 2026-10-20 · **Status:** approved at critical tier — two sequential fresh `APPROVED` on digest `4d6383ce…8559` (rounds 7–8 of 8); the post-approval edits are listed, un-reviewed, in [the review log](2026-10-20-owt-mcp-p4-v3-solve-apply-review-log.md). **Implementation authorized by Frank 2026-10-20 20:44Z** («Puedes empezar»); Q1 own plan, Q4 confirmed (D8), Q2 option A (D7) applied · **Implemented** on `claude/project-thread-j7kvyq` (steps 1–8); release and live proof (step 9) pending · ADR: [0061](../../adr/0061-the-connector-plans-months-only-on-v3-through-the-browsers-own-auto-and-confirm.md) · **Replaces:**
 [`2026-09-28-owt-mcp-p4-solve-apply.md`](2026-09-28-owt-mcp-p4-solve-apply.md), blocked since the
 v3 flip ([ADR-0056](../../adr/0056-the-v2-solver-stays-deployed-as-the-rollback-engine.md), K7).
 That plan stays in the tree as history; nothing in it is implemented.
@@ -575,4 +575,4 @@ month recorded and unbound, and the next `/admin` Auto plus confirm replaces the
 
 ## Terminal state
 
-APPROVED (critical tier) — awaiting Frank's go-ahead to implement and his answers to Q2 and Q4 (Q1 answered)
+APPROVED (critical tier); implementation authorized by Frank 2026-10-20 20:44Z. Q1: its own plan (20:41Z). Q4: D8 confirmed («solo notifica la falla y por qué falló», 20:44Z). Q2: D7 applied — Frank's answer (20:45Z) noted that the solver can fill only the empty dates; refusing and re-solving does exactly that, since a re-solve takes the newly stored service as fixed. Steps 1–8 implemented; step 9 (release, live proof with Frank present) pending.
