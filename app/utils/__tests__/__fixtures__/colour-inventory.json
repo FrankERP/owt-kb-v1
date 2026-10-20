@@ -8,12 +8,12 @@
     "An unrecognised disposition is an error, not a silent inclusion."
   ],
   "summary": {
-    "literalRows": 320,
-    "filesScanned": 457,
-    "filesWithColour": 56,
+    "literalRows": 321,
+    "filesScanned": 462,
+    "filesWithColour": 57,
     "byCategory": {
       "2": 2,
-      "4": 76,
+      "4": 77,
       "8": 91,
       "9": 10,
       "11": 7,
@@ -22,7 +22,7 @@
     "byDisposition": {
       "B": 120,
       "exempt": 55,
-      "keep": 246,
+      "keep": 247,
       "C": 5,
       "D": 14
     },
@@ -2432,6 +2432,18 @@
       "utility": null,
       "carrier": null,
       "line": 81,
+      "disposition": "keep",
+      "reason": "Already theme-agnostic"
+    },
+    {
+      "file": "app/components/admin/AssistantPanel.tsx",
+      "category": 4,
+      "categoryName": "colour-keyword",
+      "value": "bg-transparent",
+      "alpha": null,
+      "utility": "bg",
+      "carrier": null,
+      "line": 44,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },

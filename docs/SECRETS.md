@@ -488,6 +488,42 @@ nuevo» (it bumps their `calendarFeed.<memberId>` generation).
 
 ---
 
+## `ANTHROPIC_API_KEY`
+
+**Needed in: Vercel production AND preview — a DIFFERENT key each, from different Console
+workspaces. Optional in local `.env.local` (without it the /admin «Asistente» tab says «El asistente
+todavía no está configurado» and its route answers 503). Not needed in: GitHub Actions, the iOS
+build, GCF.**
+
+**Status: NOT SET yet** (2026-10-20) — added with the admin assistant (ADR-0059). Frank creates both
+keys and pastes them into Vercel himself, so the values never pass through a session transcript.
+
+**Purpose.** The Claude API key `/api/admin/chat` sends to the Messages API
+(`app/api/admin/chat/route.ts`). Server-only: never `NEXT_PUBLIC_`, never sent to the browser.
+It is also the assistant's **kill switch**: remove it and redeploy, and the tab says it is not set up.
+
+**Where the value came from.** Claude Console (`platform.claude.com`), in the organization linked
+to Frank's Max plan (claude.ai → Settings → Billing → API credits), whose monthly API credits
+(100 USD on Max 5x, no rollover) pay for it. One key per workspace:
+
+- **Production:** workspace «Backstage chat», spend limit ≈ 80 USD/month.
+- **Preview:** workspace «Backstage chat dev», spend limit 5 USD/month — dev tests never spend
+  production's balance.
+
+Keep **no purchased credits and no auto-reload** on that organization: with only the plan's
+credits, an exhausted balance makes the API stop (the tab shows «Se acabó el saldo de este mes»)
+instead of charging a card.
+
+**How to rotate.** Create a new key in the same workspace, then `npx vercel env rm
+ANTHROPIC_API_KEY <env>`, `npx vercel env add ANTHROPIC_API_KEY <env> --sensitive` (paste it at the
+prompt), **redeploy that environment**, and only then delete the old key in the Console.
+
+**Blast radius / what breaks mid-rotation.** Only the assistant: between deleting the old key and
+the new deployment going live, questions answer «La llave del asistente no es válida». Nothing else
+in the app reads this variable. Spend counters (`adminChatUsage.*`) are unaffected.
+
+---
+
 ## `MCP_DISABLED`
 
 **Needed in: Vercel production and preview, ONLY when switching MCP off — leave unset otherwise.
