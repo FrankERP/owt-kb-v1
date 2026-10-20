@@ -74,7 +74,10 @@ describe("HZ-5 / HZ-6 — the grid spans the horizon", () => {
     twoMonths();
     preview();
     const scope = screen.getByRole("radiogroup", { name: "Cuenta" });
-    expect(within(scope).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Noviembre", "Diciembre", "Ambos"]);
+    // Short names on screen so the three fit one row of the 216 px sidebar; the full month is the name.
+    expect(within(scope).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Nov", "Dic", "Ambos"]);
+    expect(within(scope).getByRole("radio", { name: "Noviembre" })).toBeTruthy();
+    expect(within(scope).getByRole("radio", { name: "Diciembre" })).toBeTruthy();
     expect(within(scope).getByRole("radio", { name: "Ambos" }).getAttribute("aria-checked")).toBe("true");
     expect(screen.getByText("Noviembre y diciembre · guardados + borradores")).toBeTruthy();
   });

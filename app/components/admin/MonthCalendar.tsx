@@ -314,11 +314,14 @@ export default function MonthCalendar({
 
   return (
     <div className="space-y-2">
-      <label className="font-label text-xs uppercase tracking-widest text-mono-500">Fechas</label>
-      <p className="font-body text-xs text-mono-500">
-        Domingos y sábados se generan por defecto: toca una fecha para quitarla. Toca cualquier otro
-        día para crear un servicio especial.
-      </p>
+      {/*
+        Each calendar names its own month: a two-month horizon stacks two of them, and two
+        identical «Fechas» headings left the admin counting rows to tell November from December.
+        The section label and its instructions are the planner's, said once above the stack.
+      */}
+      <h3 className="font-label text-xs uppercase tracking-widest text-accent">
+        {noon(`${year}-${String(month).padStart(2, "0")}-01`).toLocaleDateString("es-MX", { month: "long", year: "numeric" })}
+      </h3>
 
       <div className="grid grid-cols-7 gap-1">
         {WEEKDAY_HEADERS.map((h) => (
@@ -423,7 +426,7 @@ export default function MonthCalendar({
             placeholder="Nombre (p. ej. Bautizos)"
             value={draftName}
             onChange={(e) => setDraftName(e.target.value)}
-            className="min-h-[44px] w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors"
+            className="min-h-[44px] w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-[16px] sm:text-sm focus:outline-none focus:border-accent transition-colors"
           />
           <FairnessSwitch
             checked={effectiveCreateCounts("special_role", openDate, draftCounts)}

@@ -247,92 +247,102 @@ export default function FairnessPreviewPanel(props: FairnessPreviewPanelProps) {
   };
 
   return (
-    <section className="rounded-lg border border-accent/15 bg-surface-raised-alt/40 p-3 space-y-2" data-fairness-preview="">
-      <Button variant="ghost" size="sm" onClick={toggle} aria-expanded={open} aria-controls={bodyId}>
+    <section className="rounded-lg border border-accent/15 bg-surface-raised-alt/40 p-1.5" data-fairness-preview="">
+      {/*
+        The whole row is the toggle, with a chevron, so a closed panel reads as something that
+        opens — it used to be a bare label in an empty box. No `space-y` on the section: the
+        closed Collapse is still a child, and its margin left a blank strip under the label.
+      */}
+      <Button variant="ghost" size="sm" onClick={toggle} aria-expanded={open} aria-controls={bodyId} className="w-full justify-between">
         {COPY.disclosure}
+        <svg aria-hidden="true" viewBox="0 0 20 20" className={`h-4 w-4 shrink-0 transition-transform duration-fast ${open ? "rotate-180" : ""}`}>
+          <path d="M6 8l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </Button>
-      <Collapse id={bodyId} open={open} className="space-y-3">
-        {engine === "v2" && (
-          <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
-        )}
-        {engine === "v3" && data && ledgerDiagnosticsLines(data.diagnostics).map((line) => (
-          <p key={line} className="font-body text-xs text-warning-strong">{line}</p>
-        ))}
-        {load.status === "loading" && (
-          <SkeletonGroup label={COPY.loading} className="space-y-2">
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-24 w-full" rounded="lg" />
-          </SkeletonGroup>
-        )}
-        {load.status === "error" && (
-          <div className="flex flex-wrap items-center gap-2">
-            <p role="alert" className="font-body text-xs text-negative-fg mr-auto">
-              {COPY.error}
-            </p>
-            <Button variant="secondary" size="sm" onClick={() => void read()}>
-              {COPY.retry}
-            </Button>
-          </div>
-        )}
-        {data && (
-          <>
-            <p className="font-body text-xs text-mono-500">{COPY.subheader(windowSpan(data.window))}</p>
-            <ul className="flex flex-wrap gap-1.5" aria-label="Meses">
-              {data.window.map((w) => (
-                <li
-                  key={w.month}
-                  className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-accent/25 text-mono-500"
-                >
-                  {chipText(w, data.balanceStart)}
-                </li>
-              ))}
-            </ul>
-            {data.recordsSince === null && (
-              <p className="font-body text-xs text-mono-500">
-                {data.balanceStart !== null && data.window.some((w) => !countsTowardBalance(w.month, data.balanceStart))
-                  ? COPY.beforeStart(monthYear(data.balanceStart))
-                  : COPY.empty}
+      <Collapse id={bodyId} open={open}>
+        <div className="space-y-3 px-1.5 pb-1.5 pt-2">
+          {engine === "v2" && (
+            <p className="font-label text-[10px] uppercase tracking-widest text-warning-strong">{COPY.banner}</p>
+          )}
+          {engine === "v3" && data && ledgerDiagnosticsLines(data.diagnostics).map((line) => (
+            <p key={line} className="font-body text-xs text-warning-strong">{line}</p>
+          ))}
+          {load.status === "loading" && (
+            <SkeletonGroup label={COPY.loading} className="space-y-2">
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-24 w-full" rounded="lg" />
+            </SkeletonGroup>
+          )}
+          {load.status === "error" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <p role="alert" className="font-body text-xs text-negative-fg mr-auto">
+                {COPY.error}
               </p>
-            )}
-            <SegmentedControl
-              label="Línea"
-              size="sm"
-              value={tab}
-              onChange={setTab}
-              options={TABS.map((t) => ({ value: t.key, label: t.label }))}
-            />
-            <FiguresTable rows={rows} total={tab === "TOTAL"} sinceLabel={sinceLabel} tab={tab} {...(engine === "v3" ? { plan: props.plan ?? null } : {})} />
-            {out.length > 0 && (
-              <div className="space-y-1">
-                <Button variant="ghost" size="sm" onClick={() => setOutOpen((v) => !v)} aria-expanded={outOpen} aria-controls={outId}>
-                  {COPY.outGroup(out.length)}
-                </Button>
-                <Collapse id={outId} open={outOpen}>
-                  <FiguresTable rows={out} total={tab === "TOTAL"} sinceLabel={sinceLabel} tab={tab} {...(engine === "v3" ? { plan: props.plan ?? null } : {})} />
-                </Collapse>
-              </div>
-            )}
-            <p className="font-body text-[11px] text-mono-500">{tab === "TOTAL" ? COPY.totalFooter : COPY.footer}</p>
-            {registrable &&
-              (horizon?.recordBinds ? (
-                <p className="font-body text-xs text-mono-500">{REGISTRAR.monthHasServices(month)}</p>
-              ) : (
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setRefusal(null);
-                      setDialogOpen(true);
-                    }}
+              <Button variant="secondary" size="sm" onClick={() => void read()}>
+                {COPY.retry}
+              </Button>
+            </div>
+          )}
+          {data && (
+            <>
+              <p className="font-body text-xs text-mono-500">{COPY.subheader(windowSpan(data.window))}</p>
+              <ul className="flex flex-wrap gap-1.5" aria-label="Meses">
+                {data.window.map((w) => (
+                  <li
+                    key={w.month}
+                    className="font-label text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full border border-accent/25 text-mono-500"
                   >
-                    {REGISTRAR.button(month)}
+                    {chipText(w, data.balanceStart)}
+                  </li>
+                ))}
+              </ul>
+              {data.recordsSince === null && (
+                <p className="font-body text-xs text-mono-500">
+                  {data.balanceStart !== null && data.window.some((w) => !countsTowardBalance(w.month, data.balanceStart))
+                    ? COPY.beforeStart(monthYear(data.balanceStart))
+                    : COPY.empty}
+                </p>
+              )}
+              <SegmentedControl
+                label="Línea"
+                size="sm"
+                value={tab}
+                onChange={setTab}
+                options={TABS.map((t) => ({ value: t.key, label: t.label }))}
+              />
+              <FiguresTable rows={rows} total={tab === "TOTAL"} sinceLabel={sinceLabel} tab={tab} {...(engine === "v3" ? { plan: props.plan ?? null } : {})} />
+              {out.length > 0 && (
+                <div className="space-y-1">
+                  <Button variant="ghost" size="sm" onClick={() => setOutOpen((v) => !v)} aria-expanded={outOpen} aria-controls={outId}>
+                    {COPY.outGroup(out.length)}
                   </Button>
+                  <Collapse id={outId} open={outOpen}>
+                    <FiguresTable rows={out} total={tab === "TOTAL"} sinceLabel={sinceLabel} tab={tab} {...(engine === "v3" ? { plan: props.plan ?? null } : {})} />
+                  </Collapse>
                 </div>
-              ))}
-            {success && <span className="font-body text-xs text-accent">{success}</span>}
-          </>
-        )}
+              )}
+              <p className="font-body text-[11px] text-mono-500">{tab === "TOTAL" ? COPY.totalFooter : COPY.footer}</p>
+              {registrable &&
+                (horizon?.recordBinds ? (
+                  <p className="font-body text-xs text-mono-500">{REGISTRAR.monthHasServices(month)}</p>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setRefusal(null);
+                        setDialogOpen(true);
+                      }}
+                    >
+                      {REGISTRAR.button(month)}
+                    </Button>
+                  </div>
+                ))}
+              {success && <span className="font-body text-xs text-accent">{success}</span>}
+            </>
+          )}
+        </div>
       </Collapse>
       <CueDialog
         open={dialogOpen}

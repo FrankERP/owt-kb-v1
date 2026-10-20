@@ -135,7 +135,7 @@ import {
   type StoredGridColumn,
   type StoredGridTranslation,
 } from "./storedRoleReadModel";
-import { cdmxCurrentMonth, horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
+import { cdmxCurrentMonth, horizonMonths, horizonTitle, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
 import { monthNameCap, monthsList, V3_LINES, V3_ROUTE_COPY, transportLine, type V3Names } from "./v3Copy";
 import { runV3Auto, type V3AutoResult } from "./v3AutoRun";
 import { buildV3SolveRequest, preReadRefusals } from "./v3SolveRequest";
@@ -625,7 +625,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-1">
+      <div className="flex items-center justify-between gap-2 mb-1">
         <p className="font-label text-[11px] uppercase tracking-widest text-mono-500">{label}</p>
         <button
           type="button" onClick={onSelectAll} disabled={readOnly}
@@ -635,7 +635,7 @@ function MemberPool({ field, label, pool, config, onToggle, onSelectAll, search,
         </button>
       </div>
       <input
-        className="w-full px-2 py-1 mb-1 rounded border border-edge-control bg-transparent font-body text-xs focus:outline-none focus:border-accent placeholder-mono-600"
+        className="w-full px-2 py-1 mb-1 rounded border border-edge-control bg-transparent font-body text-[16px] sm:text-xs focus:outline-none focus:border-accent placeholder-mono-600"
         placeholder="Buscar..." value={search} onChange={e => onSearch(e.target.value)}
       />
       {/*
@@ -787,7 +787,7 @@ function PresenceCard({ r, onDelete, onEdit }: { r: PresenceRule; onDelete: () =
 
 // ─── Rule builder — add forms ─────────────────────────────────────────────────
 
-const rbIn  = "px-2 py-1 rounded border border-accent/15 bg-transparent font-body text-xs focus:outline-none focus:border-accent";
+const rbIn  = "px-2 py-1 rounded border border-accent/15 bg-transparent font-body text-[16px] sm:text-xs focus:outline-none focus:border-accent";
 
 function PersonRestrictionForm({ members, onAdd, onCancel, initialValues, siblings }: {
   members: MemberOption[];
@@ -1503,7 +1503,8 @@ const MAX_YEAR = 2035;
  * the typist: "2027" typed over a selection lands on 2024 at the first digit and
  * cannot recover.
  */
-function YearInput({ value, onChange, className }: {
+function YearInput({ id, value, onChange, className }: {
+  id?: string;
   value: number;
   onChange: (year: number) => void;
   className?: string;
@@ -1513,6 +1514,7 @@ function YearInput({ value, onChange, className }: {
   const clamp = (n: number) => Math.min(MAX_YEAR, Math.max(MIN_YEAR, n));
   return (
     <input
+      id={id}
       className={className}
       type="number"
       value={text}
@@ -1943,7 +1945,8 @@ function SolverConfigPanel({ members, config, onChange, rules, history, onRemove
 
       <SolverConfigReloadNotice source={rules.source} onReload={rules.reload} />
 
-      <div className="grid grid-cols-3 gap-3">
+      {/* One pool per row on a phone: three side by side left ~100 px each, and the headings ran into «Todos». */}
+      <div className="grid gap-4 sm:grid-cols-3 sm:gap-3">
         <MemberPool
           field="sundayLeads" label="Líderes Domingo" readOnly={poolsReadOnly}
           pool={sundayPool} config={config}
@@ -2626,6 +2629,9 @@ export default function MonthGenerator({
   }
 
   const inCls  = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors";
+  // Matches `Select`'s `lg` trigger (the house secondary `Button`) beside it. 16 px on a phone: iOS
+  // zooms into any focused field under 16 px and never zooms back.
+  const yearCls = "min-h-[44px] w-full rounded-lg border border-surface-accent-30 bg-transparent px-4 font-label text-[16px] sm:text-xs uppercase tracking-widest text-ink focus:outline-none focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 transition-[border-color,box-shadow]";
 
   // Unconditional (D9/E21): the solve always addresses the full month's
   // Sundays — only RENDERING/CREATION is gated by `columns` below.
@@ -4961,15 +4967,18 @@ export default function MonthGenerator({
   if (step === "config") return (
     <div className="space-y-5">
       {incompleteDialog}
+      {/*
+        Mes and Año are one pair, so they share one look: the same label (`Select`'s own), the
+        same 44 px height and the same label font. The year stays a typed field (`YearInput`):
+        a twelve-entry year menu would be slower than typing four digits.
+      */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Select id="mg-month" label="Mes" size="md" value={month} onChange={e => setMonth(Number(e.target.value))}>
-            {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <label className="font-label text-xs uppercase tracking-widest text-mono-500">Año</label>
-          <YearInput className={inCls} value={year} onChange={setYear} />
+        <Select id="mg-month" label="Mes" size="lg" value={month} onChange={e => setMonth(Number(e.target.value))}>
+          {MONTHS.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+        </Select>
+        <div>
+          <label htmlFor="mg-year" className="mb-1 block font-label text-[10px] uppercase tracking-widest text-mono-500">Año</label>
+          <YearInput id="mg-year" className={yearCls} value={year} onChange={setYear} />
         </div>
       </div>
 
@@ -4988,6 +4997,13 @@ export default function MonthGenerator({
         per month so no composer state (or refusal notice) can survive a month
         change and offer a date that is no longer on screen.
       */}
+      <div className="space-y-1">
+        <p className="font-label text-xs uppercase tracking-widest text-mono-500">Fechas</p>
+        <p className="font-body text-xs text-mono-500">
+          Domingos y sábados se generan por defecto: toca una fecha para quitarla. Toca cualquier otro
+          día para crear un servicio especial.
+        </p>
+      </div>
       {/* HZ-4: one calendar per horizon month, stacked, each keyed by its month (v2: exactly one). */}
       {horizon.map((calendarMonth) => (
       <MonthCalendar
@@ -5118,7 +5134,7 @@ export default function MonthGenerator({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="font-label text-xs uppercase tracking-widest text-mono-500">{MONTHS[month - 1]} {year}</p>
+          <p className="font-label text-xs uppercase tracking-widest text-mono-500">{horizonTitle(horizon)}</p>
           {storedMode ? (
             <p className="font-body text-sm">
               <span className="text-accent font-semibold">{storedColumns.length}</span> servicio{storedColumns.length !== 1 ? "s" : ""}
@@ -5570,12 +5586,16 @@ export default function MonthGenerator({
           participation={
             <div className="space-y-2">
             {isV3 && !storedMode && horizon.length === 2 && (
+              // One row, in the sidebar's own segmented look (as «Voces | Instrumentos» under it): three
+              // full month names in pills overflowed the 216 px column and «Ambos» wrapped alone.
+              // The short name is only what shows; the accessible name stays the full month.
               <SegmentedControl
                 label="Cuenta"
                 size="sm"
+                tone="filled"
                 value={horizon.includes(participationChoice) ? participationChoice : "both"}
                 onChange={setParticipationChoice}
-                options={[...horizon.map((m) => ({ value: m, label: monthNameCap(m) })), { value: "both", label: "Ambos" }]}
+                options={[...horizon.map((m) => ({ value: m, label: monthNameCap(m).slice(0, 3), ariaLabel: monthNameCap(m) })), { value: "both", label: "Ambos" }]}
               />
             )}
             <ParticipationSidebar
