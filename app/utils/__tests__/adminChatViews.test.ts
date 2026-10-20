@@ -1,4 +1,4 @@
-// What the admin assistant's tools hand the model (ADR-0059): the MCP payloads minus everything
+// What the admin assistant's tools hand the model (ADR-0060): the MCP payloads minus everything
 // only a write tool needs, and the lyrics as the song page shows them (ADR-0018).
 
 import { describe, expect, it } from "vitest";

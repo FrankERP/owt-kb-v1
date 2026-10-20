@@ -1,4 +1,4 @@
-// `/api/admin/chat` — the admin assistant (ADR-0059).
+// `/api/admin/chat` — the admin assistant (ADR-0060).
 //
 // What must hold: only a live worship admin (never while impersonating) gets an answer; a
 // missing key or read token, or a spent monthly cap, refuses BEFORE any API call; the model
@@ -317,6 +317,38 @@ describe("POST /api/admin/chat — the answer", () => {
     ]);
     expect(params.system).toContain("Hoy es 2026-10-20");
     expect(params.messages).toEqual([{ role: "user", content: "¿Qué significa Salmo 23?" }]);
+  });
+
+  it("puts each question's page note before it, as its own block, and leaves a turn without one plain", async () => {
+    h.script.push({ texts: ["Habla de la fidelidad de Dios."] });
+    const song = { path: "/posts/way-maker", label: "Canción: Way Maker", refs: [{ kind: "song", id: "abc123", label: "Way Maker" }] };
+    await events(
+      await post({
+        messages: [
+          { role: "user", text: "¿De qué habla esta canción?", page: song },
+          { role: "assistant", text: "De un Dios que abre camino." },
+          { role: "user", text: "¿Y qué pasaje la inspira?" },
+        ],
+      }),
+    );
+    const sent = h.streamCalls[0]!.messages as Array<{ role: string; content: unknown }>;
+    expect(sent[0]).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: expect.stringContaining("canción «Way Maker» (songId: abc123)") },
+        { type: "text", text: "¿De qué habla esta canción?" },
+      ],
+    });
+    expect(sent[1]).toEqual({ role: "assistant", content: "De un Dios que abre camino." });
+    expect(sent[2]).toEqual({ role: "user", content: "¿Y qué pasaje la inspira?" });
+  });
+
+  it("answers a question whose page context is malformed, without the note", async () => {
+    h.script.push({ texts: ["Hola"] });
+    const res = await post({ messages: [{ role: "user", text: "Hola", page: { path: "no-slash", label: "x" } }] });
+    expect(res.status).toBe(200);
+    await events(res);
+    expect(h.streamCalls[0]!.messages).toEqual([{ role: "user", content: "Hola" }]);
   });
 
   it("answers an unknown tool with an error result instead of failing the question", async () => {

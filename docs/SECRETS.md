@@ -491,12 +491,12 @@ nuevo» (it bumps their `calendarFeed.<memberId>` generation).
 ## `ANTHROPIC_API_KEY`
 
 **Needed in: Vercel production AND preview — a DIFFERENT key each, from different Console
-workspaces. Optional in local `.env.local` (without it the /admin «Asistente» tab says «El asistente
+workspaces. Optional in local `.env.local` (without it the assistant bubble says «El asistente
 todavía no está configurado» and its route answers 503). Not needed in: GitHub Actions, the iOS
 build, GCF.**
 
 **Status: SET 2026-10-20 ~22:05 UTC** in Vercel Preview and Production (type *Sensitive*), added
-with the admin assistant (ADR-0059). Frank created both keys in the Console and pasted them into
+with the admin assistant (ADR-0060). Frank created both keys in the Console and pasted them into
 Vercel himself, so the values never passed through a session transcript. Each key is linked to
 Frank's own account («Requests act as you» — the plan's credits are the account holder's) and
 **expires 2027-10-20 23:00 CST: rotate both before then** (steps below).

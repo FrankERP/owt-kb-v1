@@ -357,7 +357,7 @@ URLs). Fields: `member` (weak reference to `teamMembers`), `generation` (number;
 and protected in Studio. Lives in the dataset `preview` shares with production, so a rotation on
 dev also revokes the production link. Not deleted with the member (inert once the member is gone).
 
-## `adminChatUsage` — an admin's monthly assistant spend (ADR-0059)
+## `adminChatUsage` — an admin's monthly assistant spend (ADR-0060)
 
 One document per admin per CDMX month they asked the assistant anything, `_id`
 `adminChatUsage.<memberId>.<YYYY-MM>` (**dotted** — every reader requires `SANITY_API_READ_TOKEN`

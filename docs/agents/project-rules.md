@@ -378,7 +378,7 @@ several exist precisely to stop a plausible-looking change.
   everything after authorization to `app/utils/*Commit.ts`; `serviceCommitCallers.test.ts` pins
   their callers and `publishVerdict`'s; MCP writes go only through them; `/api/mcp` buffers SSE so
   a tool finishes inside the handler.**
-- **The admin assistant (`/api/admin/chat`, `AssistantPanel`) is READ-ONLY** (ADR-0059). Access:
+- **The admin assistant (`/api/admin/chat`, the `AssistantBubble` on every page) is READ-ONLY** (ADR-0060). Access:
   `super-admin`, or `admin` with the `worship` ministry (`canUseAdminChat`), from the live access
   snapshot, never while impersonating — the spend would land on someone else. Its five tools call
   the MCP read handlers in process (`adminChatServer.ts`); do not give it a write tool, and do not
@@ -390,6 +390,10 @@ several exist precisely to stop a plausible-looking change.
   charges a call in full. It is
   capped at `ADMIN_CHAT_MONTHLY_BUDGET_USD` per admin per CDMX month in the dotted, tokened
   `adminChatUsage.<memberId>.<YYYY-MM>`; a failed read refuses the question, never reads as zero.
+  Page context is ids and labels only, never the screen's text (`parsePageContext`, ≤4 refs; a
+  malformed one is dropped, never refused); it rides on each user turn as its own block before the
+  question, never in the system prompt, and every turn keeps its own so the cached prefix holds. A
+  page adds detail with `<AssistantPageContext>`.
   `ANTHROPIC_API_KEY` is set by Frank in Vercel only (`docs/SECRETS.md`).
 
 ## Reusable utils (don't reinvent)

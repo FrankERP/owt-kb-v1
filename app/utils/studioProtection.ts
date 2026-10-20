@@ -82,7 +82,7 @@ export const PROTECTED_STUDIO_TYPES = [
   // The member calendar feed's generation counter (ADR-0057): machine state written only by
   // `POST /api/me/calendar-feed`. Internal, like the MCP OAuth state above.
   "calendarFeed",
-  // The admin assistant's per-admin monthly spend counter (ADR-0059): machine state written only
+  // The admin assistant's per-admin monthly spend counter (ADR-0060): machine state written only
   // by `POST /api/admin/chat`. Internal, like `calendarFeed`.
   "adminChatUsage",
 ] as const;

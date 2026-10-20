@@ -18,9 +18,6 @@ export const TAB_CATALOG: ReadonlyArray<{ id: AdminTabId; label: string; roles: 
   { id: "availability", label: "Disponibilidad", roles: ["super-admin", "admin"] },
   { id: "activity",     label: "Actividad",      roles: ["super-admin", "admin"] },
   { id: "content",      label: "Contenido",      roles: ["super-admin", "admin", "content-editor"] },
-  // The admin assistant (ADR-0059). Its route checks again, live, and also refuses an admin
-  // outside the worship ministry and anyone impersonating.
-  { id: "assistant",    label: "Asistente",      roles: ["super-admin", "admin"] },
 ];
 
 /** The tabs this role may open, in bar order. */

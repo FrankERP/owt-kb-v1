@@ -9,6 +9,7 @@ import IntegrityQueuePanel from "./IntegrityQueuePanel";
 import PanelSkeleton from "./PanelSkeleton";
 import PanelBoundary from "./PanelBoundary";
 import AdminRail, { ADMIN_TAB_ICON } from "./AdminRail";
+import AssistantPageContext from "../assistant/AssistantPageContext";
 import { useIntegrityQueue } from "./useIntegrityQueue";
 import { ServiceHandoffProvider, type ServiceHandoffApi } from "./serviceHandoffContext";
 import {
@@ -39,7 +40,6 @@ const ContentPanel = dynamic(() => import("./ContentPanel"), { ssr: false, loadi
 const AvailabilityPanel = dynamic(() => import("./AvailabilityPanel"), { ssr: false, loading: PanelSkeleton });
 const ProposalsPanel = dynamic(() => import("./ProposalsPanel"), { ssr: false, loading: PanelSkeleton });
 const MembersPanel = dynamic(() => import("./MembersPanel"), { ssr: false, loading: PanelSkeleton });
-const AssistantPanel = dynamic(() => import("./AssistantPanel"), { ssr: false, loading: PanelSkeleton });
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -262,12 +262,6 @@ export default function AdminPanel({
             <ContentPanel canDelete={role === "super-admin" || role === "admin"} />
           </PanelBoundary>
         );
-      case "assistant":
-        return (
-          <PanelBoundary>
-            <AssistantPanel />
-          </PanelBoundary>
-        );
       default:
         // The Miembros body is its OWN component since R5 Task 3 — it holds the
         // member list, every member write and four dialogs, and it renders only
@@ -287,6 +281,8 @@ export default function AdminPanel({
     // `space-y-6` is the phone's gap between the strip and the body — below `lg`
     // this is a plain block and the grid's `gap` does not apply.
     <div className="mt-6 space-y-6 lg:grid lg:grid-cols-[var(--admin-rail-w,200px)_1fr] lg:gap-8 lg:space-y-0">
+      {/* Tells the assistant bubble which admin tab is open (ADR-0060). */}
+      <AssistantPageContext label={`Panel de admin · ${railTabs.find((t) => t.id === tab)?.label ?? "Admin"}`} />
       <AdminRail
         tabs={railTabs}
         active={tab}

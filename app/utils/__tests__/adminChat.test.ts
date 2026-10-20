@@ -1,4 +1,4 @@
-// The admin assistant's shared contract (ADR-0059): who may use it, what a request may carry,
+// The admin assistant's shared contract (ADR-0060): who may use it, what a request may carry,
 // what an answer costs, and the streamed event lines the panel parses.
 
 import { describe, expect, it } from "vitest";
@@ -12,7 +12,9 @@ import {
   costMicroUsd,
   decodeChatEvents,
   encodeChatEvent,
+  pageContextNote,
   parseChatRequest,
+  parsePageContext,
   parseStoredMicroUsd,
   responseCostMicroUsd,
   roundUsd,
@@ -49,9 +51,9 @@ describe("parseChatRequest", () => {
     expect(parsed).toEqual({
       ok: true,
       messages: [
-        { role: "user", text: "Hola" },
+        { role: "user", text: "Hola", page: null },
         { role: "assistant", text: "¿En qué te ayudo?" },
-        { role: "user", text: "¿Qué significa Salmo 23?" },
+        { role: "user", text: "¿Qué significa Salmo 23?", page: null },
       ],
     });
   });
@@ -102,6 +104,85 @@ describe("parseChatRequest", () => {
       { role: "user", text: "¿Y en A?" },
     ]);
     expect(parsed.ok).toBe(true);
+  });
+});
+
+describe("parsePageContext", () => {
+  const song = { kind: "song", id: "abc123", label: "Way Maker" };
+
+  it("keeps a well-formed page with its references", () => {
+    expect(parsePageContext({ path: "/posts/way-maker", label: "Canción: Way Maker", refs: [song] })).toEqual({
+      path: "/posts/way-maker",
+      label: "Canción: Way Maker",
+      refs: [song],
+    });
+    expect(parsePageContext({ path: "/admin", label: "Panel de admin" })).toEqual({ path: "/admin", label: "Panel de admin", refs: [] });
+  });
+
+  it("accepts an accented slug", () => {
+    expect(parsePageContext({ path: "/posts/canción-de-cuna", label: "x" })?.path).toBe("/posts/canción-de-cuna");
+  });
+
+  it("collapses a label's whitespace onto one line", () => {
+    expect(parsePageContext({ path: "/", label: "  Inicio\n\n  hoy " })?.label).toBe("Inicio hoy");
+  });
+
+  it.each([
+    ["absent", undefined],
+    ["not an object", "/admin"],
+    ["a relative path", { path: "admin", label: "x" }],
+    ["a path with a query", { path: "/admin?tab=x", label: "x" }],
+    ["a path with whitespace", { path: "/a b", label: "x" }],
+    ["a path too long", { path: "/" + "a".repeat(200), label: "x" }],
+    ["no label", { path: "/", label: "  " }],
+    ["a label too long", { path: "/", label: "x".repeat(161) }],
+    ["refs not a list", { path: "/", label: "x", refs: song }],
+    ["too many refs", { path: "/", label: "x", refs: [song, song, song, song, song] }],
+    ["an unknown ref kind", { path: "/", label: "x", refs: [{ ...song, kind: "member" }] }],
+    ["a ref id with spaces", { path: "/", label: "x", refs: [{ ...song, id: "a b" }] }],
+    ["a ref without a label", { path: "/", label: "x", refs: [{ kind: "song", id: "a" }] }],
+  ])("drops %s (null, never a refusal)", (_name, raw) => {
+    expect(parsePageContext(raw)).toBeNull();
+  });
+
+  it("rides along each question without ever refusing it, and never on an answer", () => {
+    const inicio = { path: "/", label: "Inicio" };
+    const parsed = parseChatRequest({
+      messages: [
+        { role: "user", text: "Hola", page: inicio },
+        { role: "assistant", text: "¿Sí?", page: inicio },
+        { role: "user", text: "¿Y esto?", page: { path: 42 } },
+      ],
+    });
+    expect(parsed).toEqual({
+      ok: true,
+      messages: [
+        { role: "user", text: "Hola", page: { ...inicio, refs: [] } },
+        { role: "assistant", text: "¿Sí?" },
+        { role: "user", text: "¿Y esto?", page: null },
+      ],
+    });
+  });
+});
+
+describe("pageContextNote", () => {
+  it("frames the page as reference data on one line, with the ids the tools take", () => {
+    const note = pageContextNote({
+      path: "/posts/way-maker",
+      label: "Canción: Way Maker",
+      refs: [{ kind: "song", id: "abc123", label: "Way Maker" }],
+    });
+    expect(note).toBe(
+      "[Contexto de la app, no es parte de la pregunta: estoy viendo «Canción: Way Maker» (/posts/way-maker); " +
+        "en pantalla: canción «Way Maker» (songId: abc123). Tómalo en cuenta solo si la pregunta se refiere a lo que estoy viendo.]",
+    );
+    expect(note).not.toContain("\n");
+  });
+
+  it("names only the page when nothing on it has an id", () => {
+    expect(pageContextNote({ path: "/me", label: "Mi semana", refs: [] })).toBe(
+      "[Contexto de la app, no es parte de la pregunta: estoy viendo «Mi semana» (/me). Tómalo en cuenta solo si la pregunta se refiere a lo que estoy viendo.]",
+    );
   });
 });
 

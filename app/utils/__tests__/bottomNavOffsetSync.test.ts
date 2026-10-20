@@ -35,8 +35,33 @@ describe("bottom nav offset sync", () => {
     ["app/components/ui/Toast.tsx"],
     ["app/components/AudioPlayer.tsx"],
     ["app/components/EditSongButton.tsx"],
+    ["app/components/assistant/AssistantBubble.tsx"],
   ])("%s offsets its fixed bottom by the variable", (rel) => {
     expect(read(rel)).toMatch(/var\(--bottom-nav-h(, 0px)?\)/);
+  });
+
+  // The assistant bubble sits above the audio transport too, and the song FAB steps aside for it.
+  // Each half publishes a variable and clears it; nothing else connects them.
+  it("the audio transport publishes its measured height and clears it", () => {
+    const audio = read("app/components/AudioPlayer.tsx");
+    expect(/export const AUDIO_H_VAR = "([^"]+)"/.exec(audio)?.[1]).toBe("--audio-player-h");
+    expect(audio).toMatch(/setProperty\(AUDIO_H_VAR, `\$\{[^}]+\}px`\)/);
+    expect(audio).toMatch(/removeProperty\(AUDIO_H_VAR\)/);
+  });
+
+  it("the bubble clears the transport and publishes the footprint the song FAB steps aside by", () => {
+    const bubble = read("app/components/assistant/AssistantBubble.tsx");
+    expect(bubble).toMatch(/var\(--audio-player-h, ?0px\)/);
+    expect(/export const ASSISTANT_FAB_VAR = "([^"]+)"/.exec(bubble)?.[1]).toBe("--assistant-fab-w");
+    expect(bubble).toMatch(/setProperty\(ASSISTANT_FAB_VAR,/);
+    expect(bubble).toMatch(/removeProperty\(ASSISTANT_FAB_VAR\)/);
+    expect(read("app/components/EditSongButton.tsx")).toMatch(/right: "calc\(1\.5rem \+ var\(--assistant-fab-w, 0px\)\)"/);
+  });
+
+  it("the client layout mounts the bubble inside Provider", () => {
+    const layout = read("app/(client)/layout.tsx");
+    expect(layout.indexOf("<Provider>")).toBeLessThan(layout.indexOf("<AssistantBubble />"));
+    expect(layout.indexOf("<AssistantBubble />")).toBeLessThan(layout.indexOf("</Provider>"));
   });
 
   it("the client layout mounts BottomNav inside Provider", () => {

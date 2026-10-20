@@ -1,6 +1,6 @@
-// The six secondary admin tabs + `MonthGenerator` load on demand (Task 6).
+// The five secondary admin tabs + `MonthGenerator` load on demand (Task 6).
 //
-// A source scan, not a render: it proves each of the seven names is imported
+// A source scan, not a render: it proves each of the six names is imported
 // through `next/dynamic` in exactly the file that is allowed to gate it
 // (`AdminPanel.tsx` for the tabs, `ServicesPanel.tsx` for the generator), and
 // that no OTHER file under `app/**` imports one of them statically — a static
@@ -25,7 +25,6 @@ const GATED = [
   { name: "AvailabilityPanel", gatedBy: "app/components/admin/AdminPanel.tsx" },
   { name: "ProposalsPanel", gatedBy: "app/components/admin/AdminPanel.tsx" },
   { name: "MembersPanel", gatedBy: "app/components/admin/AdminPanel.tsx" },
-  { name: "AssistantPanel", gatedBy: "app/components/admin/AdminPanel.tsx" },
   { name: "MonthGenerator", gatedBy: "app/components/admin/ServicesPanel.tsx" },
 ] as const;
 
@@ -47,7 +46,7 @@ function listSourceFiles(dir: string): string[] {
 
 const SOURCE_FILES = listSourceFiles(APP_ROOT);
 
-describe("admin: the six secondary tabs and MonthGenerator load on demand", () => {
+describe("admin: the five secondary tabs and MonthGenerator load on demand", () => {
   for (const { name, gatedBy } of GATED) {
     it(`${name} is imported through next/dynamic, only in ${gatedBy}`, () => {
       const gatedByPath = path.join(REPO_ROOT, gatedBy);

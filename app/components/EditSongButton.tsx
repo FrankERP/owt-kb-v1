@@ -247,8 +247,9 @@ export default function EditSongButton({ post, inline }: { post: Post; inline?: 
           ref={triggerRef}
           type="button"
           onClick={handleOpen}
-          className="fixed right-6 z-40 flex items-center gap-2 rounded-full border border-accent/30 bg-surface-accent-solid text-on-fill px-4 py-2.5 font-label text-xs uppercase tracking-widest shadow-lg transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
-          style={{ bottom: "calc(1.5rem + var(--bottom-nav-h, 0px))" }}
+          className="fixed z-40 flex items-center gap-2 rounded-full border border-accent/30 bg-surface-accent-solid text-on-fill px-4 py-2.5 font-label text-xs uppercase tracking-widest shadow-lg transition-colors hover:bg-accent-deep/80 dark:hover:bg-accent/30"
+          // Steps left of the assistant bubble when it is on screen (`--assistant-fab-w`).
+          style={{ bottom: "calc(1.5rem + var(--bottom-nav-h, 0px))", right: "calc(1.5rem + var(--assistant-fab-w, 0px))" }}
           aria-label={`Editar canción ${post.title}`}
         >
           <PencilIcon />

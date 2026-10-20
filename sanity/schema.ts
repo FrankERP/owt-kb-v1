@@ -37,7 +37,7 @@ import { mcpOauthCodeRedemption } from './schemas/mcpOauthCodeRedemption';
 // The member calendar feed's per-member generation counter (ADR-0057): hidden/read-only,
 // written only by POST /api/me/calendar-feed. See sanity/schemas/calendarFeed.ts.
 import { calendarFeed } from './schemas/calendarFeed';
-// The admin assistant's per-admin monthly spend counter (ADR-0059), internal machine state
+// The admin assistant's per-admin monthly spend counter (ADR-0060), internal machine state
 // written only by POST /api/admin/chat. See sanity/schemas/adminChatUsage.ts.
 import { adminChatUsage } from './schemas/adminChatUsage';
 

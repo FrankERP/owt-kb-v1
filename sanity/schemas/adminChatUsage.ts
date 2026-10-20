@@ -1,7 +1,7 @@
 import { defineType } from "sanity";
 
 /**
- * Internal: one admin's spend on the admin assistant in one CDMX month (ADR-0059).
+ * Internal: one admin's spend on the admin assistant in one CDMX month (ADR-0060).
  *
  * `_id` is `adminChatUsage.<memberId>.<YYYY-MM>` — dotted, so an untokened read never serves it.
  * Written only by `POST /api/admin/chat` (`recordSpend` in `app/utils/adminChatServer.ts`):

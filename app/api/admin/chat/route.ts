@@ -10,6 +10,7 @@ import {
   chatMonthKey,
   costMicroUsd,
   encodeChatEvent,
+  pageContextNote,
   responseCostMicroUsd,
   parseChatRequest,
   roundUsd,
@@ -29,7 +30,7 @@ import { requireActiveSession } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
 
 /**
- * /api/admin/chat — the admin assistant (ADR-0059).
+ * /api/admin/chat — the admin assistant (ADR-0060).
  *
  * GET answers the panel's status line (set up? how much of this month's cap is used?).
  * POST takes the conversation so far and streams the answer as newline-delimited JSON events
@@ -169,7 +170,20 @@ export async function POST(req: Request) {
   const memberId = auth.memberId;
   const client = new Anthropic({ apiKey: key, maxRetries: 1 });
   const system = adminChatSystemPrompt(serviceTodayIso());
-  const messages: Anthropic.Beta.BetaMessageParam[] = parsed.messages.map((m) => ({ role: m.role, content: m.text }));
+  // Each question goes with the page it was asked from, as its own text block before it. Every turn
+  // keeps its own note, so the conversation resent next turn is byte-identical up to the new
+  // question and the cached prefix survives moving around the app.
+  const messages: Anthropic.Beta.BetaMessageParam[] = parsed.messages.map((m) =>
+    m.role === "user" && m.page
+      ? {
+          role: "user",
+          content: [
+            { type: "text", text: pageContextNote(m.page) },
+            { type: "text", text: m.text },
+          ],
+        }
+      : { role: m.role, content: m.text },
+  );
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({

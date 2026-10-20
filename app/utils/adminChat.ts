@@ -1,4 +1,4 @@
-// The admin assistant's shared contract (ADR-0059): who may use it, what a request may carry,
+// The admin assistant's shared contract (ADR-0060): who may use it, what a request may carry,
 // what one answer costs, and the line-delimited events the route streams back. NEUTRAL — no
 // `server-only`, no Sanity, no SDK import — because the /admin panel parses the same events the
 // route writes, and the route and its tests validate the same request shape.
@@ -30,6 +30,8 @@ export type AdminChatRole = "user" | "assistant";
 export interface AdminChatMessage {
   role: AdminChatRole;
   text: string;
+  /** User turns only: what was on screen when it was asked (`parsePageContext`), or absent. */
+  page?: AdminChatPage | null;
 }
 
 /**
@@ -47,9 +49,87 @@ export type ChatRequestParse =
   | { ok: false; error: string };
 
 /**
- * The request body is `{ messages: [{ role, text }] }`: the conversation so far, oldest first,
- * alternating, starting and ending with the user. Only text crosses the wire — the route never
- * accepts tool results, system text or any block a client could forge.
+ * What the admin is looking at when they ask (the bubble sends it with every question): the
+ * page's path, a short label, and up to a few references the tools can follow (a song id, a
+ * service date, a month). Ids and labels only — never the screen's text — so the context costs a
+ * line, not a page, and nothing written on the page (a lyric, a note) reaches the model as if the
+ * admin had typed it.
+ */
+export type AdminChatRefKind = "song" | "service" | "month";
+export interface AdminChatPageRef {
+  kind: AdminChatRefKind;
+  id: string;
+  label: string;
+}
+export interface AdminChatPage {
+  path: string;
+  label: string;
+  refs: AdminChatPageRef[];
+}
+
+export const ADMIN_CHAT_PAGE_LIMITS = { pathChars: 200, labelChars: 160, refs: 4, refIdChars: 100 } as const;
+
+const REF_KINDS: readonly AdminChatRefKind[] = ["song", "service", "month"];
+const REF_ID = /^[A-Za-z0-9._:-]+$/;
+/** A pathname: no query, no whitespace, nothing that could break out of the note's one line. */
+const PATH = /^\/[\p{L}\p{N}._~%\/-]*$/u;
+
+const cleanLabel = (value: unknown): string | null => {
+  if (typeof value !== "string") return null;
+  const text = value.replace(/\s+/g, " ").trim();
+  return text && text.length <= ADMIN_CHAT_PAGE_LIMITS.labelChars ? text : null;
+};
+
+/**
+ * The page context, or null when absent or malformed. It is advisory: a bad one is dropped, never
+ * a reason to refuse the question.
+ */
+export function parsePageContext(raw: unknown): AdminChatPage | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const { path, label, refs } = raw as { path?: unknown; label?: unknown; refs?: unknown };
+  if (typeof path !== "string" || !PATH.test(path) || path.length > ADMIN_CHAT_PAGE_LIMITS.pathChars) return null;
+  const pageLabel = cleanLabel(label);
+  if (!pageLabel) return null;
+  const list = refs === undefined ? [] : refs;
+  if (!Array.isArray(list) || list.length > ADMIN_CHAT_PAGE_LIMITS.refs) return null;
+  const parsedRefs: AdminChatPageRef[] = [];
+  for (const item of list) {
+    if (typeof item !== "object" || item === null) return null;
+    const { kind, id, label: refLabel } = item as { kind?: unknown; id?: unknown; label?: unknown };
+    const refName = cleanLabel(refLabel);
+    if (!REF_KINDS.includes(kind as AdminChatRefKind) || typeof id !== "string" || !refName) return null;
+    if (id.length === 0 || id.length > ADMIN_CHAT_PAGE_LIMITS.refIdChars || !REF_ID.test(id)) return null;
+    parsedRefs.push({ kind: kind as AdminChatRefKind, id, label: refName });
+  }
+  return { path, label: pageLabel, refs: parsedRefs };
+}
+
+const REF_NOUN: Record<AdminChatRefKind, { noun: string; key: string }> = {
+  song: { noun: "canción", key: "songId" },
+  service: { noun: "servicio", key: "fecha" },
+  month: { noun: "mes", key: "mes" },
+};
+
+/**
+ * The line the route puts before a question: what was on the admin's screen, framed as reference
+ * data. It goes in that user turn, not the system prompt, so the cached prefix (system prompt,
+ * tools, earlier turns with their own notes) stays the same however the admin moves around the app.
+ */
+export function pageContextNote(page: AdminChatPage): string {
+  const refs = page.refs.map((r) => `${REF_NOUN[r.kind].noun} «${r.label}» (${REF_NOUN[r.kind].key}: ${r.id})`);
+  return (
+    `[Contexto de la app, no es parte de la pregunta: estoy viendo «${page.label}» (${page.path})` +
+    (refs.length ? `; en pantalla: ${refs.join("; ")}` : "") +
+    ". Tómalo en cuenta solo si la pregunta se refiere a lo que estoy viendo.]"
+  );
+}
+
+/**
+ * The request body is `{ messages: [{ role, text, page? }] }`: the conversation so far, oldest
+ * first, alternating, starting and ending with the user. A user turn may carry the page it was asked
+ * from (`parsePageContext`) — every turn keeps its own, so a resent conversation is byte-identical
+ * to the last one and the prompt cache holds. Only text crosses the wire — the route never accepts
+ * tool results, system text or any block a client could forge.
  */
 export function parseChatRequest(body: unknown): ChatRequestParse {
   if (typeof body !== "object" || body === null || !Array.isArray((body as { messages?: unknown }).messages)) {
@@ -66,7 +146,7 @@ export function parseChatRequest(body: unknown): ChatRequestParse {
     const item = raw[i];
     const expected: AdminChatRole = i % 2 === 0 ? "user" : "assistant";
     if (typeof item !== "object" || item === null) return { ok: false, error: "Mensaje inválido." };
-    const { role, text } = item as { role?: unknown; text?: unknown };
+    const { role, text, page } = item as { role?: unknown; text?: unknown; page?: unknown };
     if (role !== expected || typeof text !== "string") return { ok: false, error: "Mensaje inválido." };
     const trimmed = text.trim();
     if (trimmed.length === 0) return { ok: false, error: "Hay un mensaje vacío." };
@@ -77,7 +157,7 @@ export function parseChatRequest(body: unknown): ChatRequestParse {
       return { ok: false, error: "La conversación es demasiado larga. Empieza una nueva." };
     }
     total += trimmed.length;
-    messages.push({ role: expected, text: trimmed });
+    messages.push(expected === "user" ? { role: expected, text: trimmed, page: parsePageContext(page) } : { role: expected, text: trimmed });
   }
   if (messages[messages.length - 1]!.role !== "user") return { ok: false, error: "Falta la pregunta." };
   if (total > ADMIN_CHAT_LIMITS.maxTotalChars) {

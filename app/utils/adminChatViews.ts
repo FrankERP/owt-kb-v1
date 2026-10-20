@@ -1,4 +1,4 @@
-// What the admin assistant's tools hand the model (ADR-0059). NEUTRAL and pure: the server
+// What the admin assistant's tools hand the model (ADR-0060). NEUTRAL and pure: the server
 // module runs the MCP's own read handlers and passes their payloads through these, so a test
 // can pin exactly what reaches the model without Sanity or the API.
 //

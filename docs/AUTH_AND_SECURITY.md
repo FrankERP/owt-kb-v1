@@ -219,12 +219,15 @@ Applied to all routes:
   `/api/cron/service-reminders`.
 - **Solver auth** is a shared `X-Api-Key` (`OWT_SOLVER_API_KEY`); the Cloud Function **fails
   closed** (503) if the key is unset.
-- **Admin assistant** (`/api/admin/chat`, ADR-0059): stricter than `requireActiveManager` —
+- **Admin assistant** (`/api/admin/chat`, ADR-0060): stricter than `requireActiveManager` —
   `super-admin`, or `admin` with the `worship` ministry, read from the live access snapshot; never
   while impersonating. The model gets five READ-ONLY tools that call the MCP read handlers in
   process; there is no write path from a conversation, and the MCP connector (super-admin OAuth,
   with write tools) is not used. Requests carry plain text only, so a forged `tool_result` or a
-  `system` turn is a `400`. Spend is capped per admin per month (`adminChatUsage`, fail closed on a
+  `system` turn is a `400`. The page context a question carries is ids and labels only, validated
+  to a strict shape (`parsePageContext`: a bare pathname, one-line labels, ≤4 refs with plain ids)
+  and framed to the model as information, never an instruction — never the screen's text, so
+  nothing someone else typed into the app reaches the model as the admin's words. Spend is capped per admin per month (`adminChatUsage`, fail closed on a
   failed read). `ANTHROPIC_API_KEY` lives only in Vercel — see [SECRETS.md](SECRETS.md#anthropic_api_key).
 - **Fetch resilience (audited):** every client mutation handler wraps `fetch` in
   try/catch/finally, checks `res.ok`, resets its loading flag, and never closes-as-success on

@@ -84,7 +84,7 @@ describe("studio protection policy", () => {
       "mcpOauthCodeRedemption",
       // The member calendar feed's generation counter (ADR-0057): written only by the rotate route.
       "calendarFeed",
-      // The admin assistant's monthly spend counter (ADR-0059): written only by the chat route.
+      // The admin assistant's monthly spend counter (ADR-0060): written only by the chat route.
       "adminChatUsage",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");
