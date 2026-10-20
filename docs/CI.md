@@ -363,6 +363,18 @@ from Google, or a bad font entry in the restored cache. Write it down if it
 happens again with a cache-backed retry succeeding or failing; that is the
 observation that separates the two.
 
+**Second occurrence (2026-10-20).** PR #152's merge (`e3d3a221`, a visual-only
+change to the planner) failed with the same signature, under
+`./app/(admin)/layout.tsx`; its tree had built `READY` on `preview` 15 minutes
+earlier and the release diff touched no font, layout, config or lockfile. A
+session's own production redeploy is refused by its permission classifier, so
+it would have been Frank's to click. Nobody redeployed: PR #153 (docs only)
+merged on top about 15 minutes later as `76fdaac0`, and that build — the
+normal cache-backed `main` build, not a no-cache redeploy — went `READY` and
+took the alias, carrying #152 with it. So a later commit's ordinary build is
+also a fix, and that build kept the cache: one data point for "a failed fetch
+from Google", against "a bad font entry in the restored cache".
+
 **Recognising it** — all of these, not some:
 
 - every error sits under `[next]/internal/font/google/`;
