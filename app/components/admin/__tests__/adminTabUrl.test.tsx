@@ -18,7 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TAB_CATALOG, resolveAdminTab, visibleAdminTabs } from "../adminTabs";
 
 vi.mock("next-auth/react", () => ({ useSession: () => ({ update: vi.fn() }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/admin" }));
 vi.mock("../ServicesPanel", () => ({ default: () => null }));
 vi.mock("../ActivityPanel", () => ({ default: () => null }));
 vi.mock("../ContentPanel", () => ({ default: () => null }));

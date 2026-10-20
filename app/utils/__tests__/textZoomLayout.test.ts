@@ -91,7 +91,7 @@ describe("the voices grid reflows instead of overlapping", () => {
     // Bounded at BOTH ends. `function VocalCol` is 230 lines down, so an
     // open-ended slice was the whole card: planting these classes on any other
     // element satisfied the assertions while the header itself had lost them.
-    const header = src.slice(src.indexOf("t.headerBg"), src.indexOf("space-y-5 p-5"));
+    const header = src.slice(src.indexOf("border-b border-ink/[0.08] px-5 py-4"), src.indexOf("space-y-5 p-5"));
     expect(header).toMatch(/flex flex-wrap items-center justify-between/);
     expect(header, "a lone item on a wrapped justify-between line goes LEFT").toMatch(
       /className="ml-auto flex flex-wrap items-center justify-end gap-2"/,

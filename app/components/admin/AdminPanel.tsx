@@ -9,6 +9,7 @@ import IntegrityQueuePanel from "./IntegrityQueuePanel";
 import PanelSkeleton from "./PanelSkeleton";
 import PanelBoundary from "./PanelBoundary";
 import AdminRail, { ADMIN_TAB_ICON } from "./AdminRail";
+import AssistantPageContext from "../assistant/AssistantPageContext";
 import { useIntegrityQueue } from "./useIntegrityQueue";
 import { ServiceHandoffProvider, type ServiceHandoffApi } from "./serviceHandoffContext";
 import {
@@ -280,6 +281,8 @@ export default function AdminPanel({
     // `space-y-6` is the phone's gap between the strip and the body — below `lg`
     // this is a plain block and the grid's `gap` does not apply.
     <div className="mt-6 space-y-6 lg:grid lg:grid-cols-[var(--admin-rail-w,200px)_1fr] lg:gap-8 lg:space-y-0">
+      {/* Tells the assistant bubble which admin tab is open (ADR-0060). */}
+      <AssistantPageContext label={`Panel de admin · ${railTabs.find((t) => t.id === tab)?.label ?? "Admin"}`} />
       <AdminRail
         tabs={railTabs}
         active={tab}

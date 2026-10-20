@@ -384,6 +384,23 @@ several exist precisely to stop a plausible-looking change.
   `runV3ConfirmAttempt` itself, and `solve_month` runs `planV3Month`, which composes the planner's
   own v3 functions: never re-implement either on the server; `monthToolParity.test.tsx` pins
   byte-identical solve bodies against `MonthGenerator`.
+- **The admin assistant (`/api/admin/chat`, the `AssistantBubble` on every page) is READ-ONLY** (ADR-0060). Access:
+  `super-admin`, or `admin` with the `worship` ministry (`canUseAdminChat`), from the live access
+  snapshot, never while impersonating — the spend would land on someone else. Its five tools call
+  the MCP read handlers in process (`adminChatServer.ts`); do not give it a write tool, and do not
+  route it through `/api/mcp` (super-admin OAuth, write tools on the same server). Requests are
+  plain text only, so a client cannot forge a tool result or a system turn. Spend is priced from the
+  API's own token counts, every attempt in `usage.iterations` (`responseCostMicroUsd`; an unknown
+  model is charged at the dearer Opus 5 rate); never pass the request's signal to the SDK (an
+  aborted call goes uncharged) — the route's own 50 s deadline under `maxDuration = 60` aborts and
+  charges a call in full. It is
+  capped at `ADMIN_CHAT_MONTHLY_BUDGET_USD` per admin per CDMX month in the dotted, tokened
+  `adminChatUsage.<memberId>.<YYYY-MM>`; a failed read refuses the question, never reads as zero.
+  Page context is ids and labels only, never the screen's text (`parsePageContext`, ≤4 refs; a
+  malformed one is dropped, never refused); it rides on each user turn as its own block before the
+  question, never in the system prompt, and every turn keeps its own so the cached prefix holds. A
+  page adds detail with `<AssistantPageContext>`.
+  `ANTHROPIC_API_KEY` is set by Frank in Vercel only (`docs/SECRETS.md`).
 
 ## Reusable utils (don't reinvent)
 `normalizeText` (accent-insensitive search), `assignedMemberRefsQuery`,
@@ -569,7 +586,7 @@ importable only under `app/components/ui/**` — see `docs/MOTION.md` and
 ADR-0031.
 
 ## Colour tokens
-Colour lives in **67 base roles + 30 composed tokens** (`app/brand.css` `:root`,
+Colour lives in **67 base roles + 32 composed tokens** (`app/brand.css` `:root`,
 `tailwind.config.ts`). The seven retired `--brand-*` COLOUR variables and their `brand.*`
 Tailwind keys are **gone**; the four non-colour ones (`--brand-radius-*`,
 `--brand-duration-*`) survive.

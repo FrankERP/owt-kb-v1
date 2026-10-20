@@ -12,6 +12,7 @@ import BottomNav from "../components/BottomNav";
 import NativeAuthBootstrap from "../components/NativeAuthBootstrap";
 import TextScaleBootstrap from "../components/TextScaleBootstrap";
 import PullToRefresh from "../components/ui/PullToRefresh";
+import AssistantBubble from "../components/assistant/AssistantBubble";
 
 export const metadata: Metadata = {
   title: "Oasis Worship Team",
@@ -100,6 +101,7 @@ export default function RootLayout({
           <AudioPlayer />
           <SongSheet />
           <BottomNav />
+          <AssistantBubble />
         </Provider>
       </body>
     </html>

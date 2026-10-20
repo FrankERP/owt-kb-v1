@@ -235,6 +235,10 @@ looks wrong** — several exist to stop a plausible-looking change.
   fairness PUT) delegate everything after authorization to `app/utils/*Commit.ts`; MCP writes go
   only through them (`apply_schedule`: roles create + fairness PUT, ADR-0061;
   `serviceCommitCallers.test.ts`); `/api/mcp` buffers SSE so a tool finishes in the handler.
+- **The admin assistant (`/api/admin/chat`, a bubble on every page) is READ-ONLY**: super-admin or
+  worship admin, never impersonating; its tools call the MCP read handlers in process, never a write
+  tool or the connector; spend is capped per admin per CDMX month in `adminChatUsage.*` (fail
+  closed); page context is ids and labels on each user turn, never screen text or the system prompt. ADR-0060.
 
 ## Reusable utils (don't reinvent)
 Before writing a helper, hook or UI primitive, check this list, the long form's section (what
@@ -280,7 +284,7 @@ each one owns, and its rules) and `docs/UTILITIES_AND_COMPONENTS.md`. Most are "
   `app/components/ui/**` (`docs/MOTION.md`, ADR-0031).
 
 ## Colour tokens
-**67 base roles + 30 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
+**67 base roles + 32 composed tokens** (`app/brand.css` `:root`, `tailwind.config.ts`); the
 retired `--brand-*` colour variables are gone. **Never build a colour by string
 concatenation** — use `themeColour(rgbVar, alpha?)`. **`var()` is not substituted in SVG
 presentation attributes** — set `color` on an ancestor and inherit `currentColor`. **Composed

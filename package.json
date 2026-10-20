@@ -15,6 +15,7 @@
     "test:vr": "playwright test -c playwright.vr.config.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.132.1",
     "@capacitor/core": "^8.4.0",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/text-zoom": "^8.0.1",

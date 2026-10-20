@@ -11,14 +11,14 @@ exact strings used in GROQ `_type` filters.
 
 ---
 
-## Registered document types (22)
+## Registered document types (24)
 
 `post`, `tag`, `author`, `featuredSongs`, `saturdarSongs`, `saturday_role`, `sunday_role`,
 `teamMembers`, `special_role`, `loginEvent`, `setlistProposal`, the two Oasis Kids types
-`kidsPair` and `kidsSchedule`, and ten **internal** types never authored by hand:
+`kidsPair` and `kidsSchedule`, and eleven **internal** types never authored by hand:
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `mcpOauthGrant`, `mcpOauthCodeRedemption`, `calendarFeed`,
-`mcpProposal`.
+`adminChatUsage`, `mcpProposal`.
 
 **Not registered** (present but intentionally unused — do not wire in):
 - `sanity/schemas/youtubeType/youtubeType.ts` — object type `youtube`.
@@ -356,6 +356,20 @@ URLs). Fields: `member` (weak reference to `teamMembers`), `generation` (number;
 `POST /api/me/calendar-feed` (`createIfNotExists` + `inc` in one transaction). Hidden, read-only
 and protected in Studio. Lives in the dataset `preview` shares with production, so a rotation on
 dev also revokes the production link. Not deleted with the member (inert once the member is gone).
+
+## `adminChatUsage` — an admin's monthly assistant spend (ADR-0060)
+
+One document per admin per CDMX month they asked the assistant anything, `_id`
+`adminChatUsage.<memberId>.<YYYY-MM>` (**dotted** — every reader requires `SANITY_API_READ_TOKEN`
+and fails closed, because an untokened read answers «absent» = nothing spent and would lift the
+cap). Fields: `member` (weak reference to `teamMembers`), `month` (`YYYY-MM`), `spentMicroUsd`
+(integer, millionths of a dollar, priced by `costMicroUsd` from the API's own token counts),
+`questions` (integer), `updatedAt`. One writer: `POST /api/admin/chat`, one transaction of
+`createIfNotExists` + `inc`, so two answers finishing together both count. Nothing is stored about
+the conversation itself. The cap (`ADMIN_CHAT_MONTHLY_BUDGET_USD`) is compared with this number
+before each question; a new month is a new document, so it resets on the 1st. Hidden, read-only
+and protected in Studio. Shared with `preview` (same dataset), so questions asked on dev count
+toward the same admin's production cap.
 
 ## `mcpProposal` — a stored month plan of the connector (MCP P4, ADR-0061)
 
@@ -746,16 +760,16 @@ require a Studio deploy to appear in the Studio UI (the app reads/writes via GRO
 
 The Studio is a *second* writer into the same dataset, so it would otherwise bypass every guard in
 [API_REFERENCE → the protected mutation contract](API_REFERENCE.md#the-protected-mutation-contract).
-**Eighteen** types are closed to it — the six protected service types, the ten internal types
+**Nineteen** types are closed to it — the six protected service types, the eleven internal types
 (`notificationOutbox` keeps `delete` alone, so an operator can prune a stray entry) **plus** the two
 Oasis Kids types, whose writer is the app (`/api/kids/pairs`, `/api/kids/schedules`):
 
 `sunday_role`, `saturday_role`, `special_role`, `featuredSongs`, `saturdarSongs`, `setlistProposal`,
 `roleTargetLock`, `roleCreationReceipt`, `notificationOutbox`, `specialIdentityCoordinator`,
 `solverConfig`, `fairnessMonth`, `kidsPair`, `kidsSchedule`, `mcpOauthGrant`, `mcpOauthCodeRedemption`,
-`calendarFeed`, `mcpProposal`.
+`calendarFeed`, `adminChatUsage`, `mcpProposal`.
 
-`calendarFeed` and `mcpProposal` are described in their own sections above. `mcpOauthGrant` and
+`calendarFeed` and `adminChatUsage` are per-member counters, and `mcpProposal` a stored month plan (see their sections above). `mcpOauthGrant` and
 `mcpOauthCodeRedemption` hold OAuth state for the MCP connector (P0 auth): `mcpOauthGrant` is one document per
 authorized connection (member id, a HASH of the client id, origin, timestamps, the current refresh
 `jti`, the revocation flag); `mcpOauthCodeRedemption` is a replay guard, `redeemedAt` only, keyed by

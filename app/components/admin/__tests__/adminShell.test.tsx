@@ -27,7 +27,7 @@ import { act, cleanup, fireEvent, render, waitFor, within } from "@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next-auth/react", () => ({ useSession: () => ({ update: vi.fn() }) }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }), usePathname: () => "/admin" }));
 vi.mock("../ServicesPanel", () => ({ default: () => <div data-panel="services" /> }));
 vi.mock("../ActivityPanel", () => ({ default: () => <div data-panel="activity" /> }));
 vi.mock("../ContentPanel", () => ({ default: () => <div data-panel="content" /> }));

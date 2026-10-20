@@ -1,9 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { usePlayer } from "@/app/context/PlayerContext";
 import AudioTransport from "./AudioTransport";
 import Presence from "./ui/Presence";
+
+/** The transport's MEASURED height, published on <html> while it shows, so a fixed-bottom element
+ *  that must sit above it (the assistant bubble) clears it the way everything clears the tab bar. */
+export const AUDIO_H_VAR = "--audio-player-h";
 
 export default function AudioPlayer() {
   const { player, togglePlay, closePlayer, seek, getAudio, audioReady, sheet, sheetLoading, sheetError } = usePlayer();
@@ -37,6 +41,24 @@ export default function AudioPlayer() {
   }, [player.track]);
 
   const visible = !!player.track && !sheet && !sheetLoading && !sheetError;
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = bodyRef.current;
+    if (!visible || !body) {
+      root.style.removeProperty(AUDIO_H_VAR);
+      return;
+    }
+    const publish = () => root.style.setProperty(AUDIO_H_VAR, `${body.offsetHeight}px`);
+    publish();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(publish) : null;
+    ro?.observe(body);
+    return () => {
+      ro?.disconnect();
+      root.style.removeProperty(AUDIO_H_VAR);
+    };
+  }, [visible]);
 
   return (
     <Presence
@@ -49,6 +71,7 @@ export default function AudioPlayer() {
       {/* Presence keeps rendering this last-committed subtree while it exits, so
           `player.track` never goes null mid-fade — but guard anyway: it stays the
           cheapest way to satisfy the type checker without a stale-track ref. */}
+      <div ref={bodyRef}>
       {player.track && (
         <AudioTransport
           track={player.track}
@@ -61,6 +84,7 @@ export default function AudioPlayer() {
           onClose={() => closePlayer()}
         />
       )}
+      </div>
     </Presence>
   );
 }

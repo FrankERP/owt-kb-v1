@@ -988,6 +988,12 @@ Measured at implementation time (steps 1 and 9):
 
 A few things that look like bugs at first glance and are not:
 
+- **The read handlers have a second caller.** The in-app assistant (`/api/admin/chat`, ADR-0060)
+  calls `searchSongsResult`, `getSongResult`, `listServicesResult` and `getServiceResult` in
+  process, through `app/utils/adminChatServer.ts`, instead of going through this connector — so a
+  change to a read tool's payload reaches the assistant too (its views in `adminChatViews.ts` trim
+  what it does not need). The assistant never calls a write tool.
+
 - **The consent page streams.** `/oauth/authorize` lives under `app/(client)/`, which has its own
   `loading.tsx` — so Next streams the route rather than blocking on it. A concrete consequence:
   `notFound()` (the foreign-host refusal) arrives to the browser as an HTTP 200 with the 404 body

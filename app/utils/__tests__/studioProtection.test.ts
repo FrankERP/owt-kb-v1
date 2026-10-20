@@ -2,7 +2,7 @@
 // without a browser.
 //
 // The point of these tests: "we configured the Studio" is not evidence. The
-// policy is code, so every capability of every one of the eighteen protected types
+// policy is code, so every capability of every one of the nineteen protected types
 // is asserted here, plus the wiring in `sanity.config.ts` / `sanity/structure.ts`
 // that actually installs it — and the fact that the v5-inert
 // `__experimental_actions` is used nowhere.
@@ -58,7 +58,7 @@ function gitTracked(): string[] {
 // ── The policy ──────────────────────────────────────────────────────────────
 
 describe("studio protection policy", () => {
-  it("covers exactly the eighteen protected types, keeping the saturdarSongs typo", () => {
+  it("covers exactly the nineteen protected types, keeping the saturdarSongs typo", () => {
     expect([...PROTECTED_STUDIO_TYPES]).toEqual([
       "sunday_role",
       "saturday_role",
@@ -84,6 +84,8 @@ describe("studio protection policy", () => {
       "mcpOauthCodeRedemption",
       // The member calendar feed's generation counter (ADR-0057): written only by the rotate route.
       "calendarFeed",
+      // The admin assistant's monthly spend counter (ADR-0060): written only by the chat route.
+      "adminChatUsage",
       // The MCP month proposal (P4 on solver v3, D6): written only by proposalStore.ts.
       "mcpProposal",
     ]);
@@ -107,6 +109,7 @@ describe("studio protection policy", () => {
       "mcpOauthGrant",
       "mcpOauthCodeRedemption",
       "calendarFeed",
+      "adminChatUsage",
       "mcpProposal",
     ]);
   });
@@ -188,6 +191,7 @@ describe("studio protection policy", () => {
       "mcpOauthGrant",
       "mcpOauthCodeRedemption",
       "calendarFeed",
+      "adminChatUsage",
       "mcpProposal",
     ]);
     for (const type of INTERNAL_STUDIO_TYPES) {
@@ -482,7 +486,7 @@ describe("studio config installs the policy", () => {
     expect(structure).toContain("PROTECTED_STUDIO_TYPES");
   });
 
-  it("marks all eighteen protected schema types read-only", () => {
+  it("marks all nineteen protected schema types read-only", () => {
     const files: Record<string, string> = {
       sunday_role: "sanity/schemas/sunRole.ts",
       saturday_role: "sanity/schemas/satRole.ts",
@@ -501,6 +505,7 @@ describe("studio config installs the policy", () => {
       mcpOauthGrant: "sanity/schemas/mcpOauthGrant.ts",
       mcpOauthCodeRedemption: "sanity/schemas/mcpOauthCodeRedemption.ts",
       calendarFeed: "sanity/schemas/calendarFeed.ts",
+      adminChatUsage: "sanity/schemas/adminChatUsage.ts",
       mcpProposal: "sanity/schemas/mcpProposal.ts",
     };
     expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
@@ -549,6 +554,7 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/mcpOauthGrant.ts",
       "sanity/schemas/mcpOauthCodeRedemption.ts",
       "sanity/schemas/calendarFeed.ts",
+      "sanity/schemas/adminChatUsage.ts",
       "sanity/schemas/mcpProposal.ts",
     ]) {
       const src = read(file);
@@ -570,6 +576,7 @@ describe("studio config installs the policy", () => {
         "mcpOauthGrant",
         "mcpOauthCodeRedemption",
         "calendarFeed",
+        "adminChatUsage",
         "mcpProposal",
       ].sort(),
     );

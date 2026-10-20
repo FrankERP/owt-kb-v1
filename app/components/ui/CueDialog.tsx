@@ -489,7 +489,7 @@ export default function CueDialog({
                 </div>
               )}
               {title && (
-                <div className="flex items-start justify-between gap-4 border-b border-accent/10 bg-surface-raised/35 px-5 py-5 sm:px-6">
+                <div className="flex items-start justify-between gap-4 border-b border-accent/10 bg-surface-lift/[0.03] px-5 py-5 sm:px-6">
                   <h2 id={titleId} className="min-w-0 font-display text-2xl leading-tight text-ink">
                     {title}
                   </h2>
