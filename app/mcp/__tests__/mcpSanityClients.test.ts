@@ -47,6 +47,13 @@ const ALLOWED: Record<string, { clients: string[]; reason: string }> = {
       "documents, which are not protected service types and need the write token. It " +
       "never reads a protected type; `protectedReadAudit` still scans it.",
   },
+  "app/mcp/monthProposals/proposalStore.ts": {
+    clients: ["writeClient"],
+    reason:
+      "P4's month-proposal store: the only writer of `mcpProposal.*` documents, which are not " +
+      "protected service types and need the write token (create, `state` patch, sweep). It never " +
+      "reads a protected type; `protectedReadAudit` still scans it.",
+  },
 };
 
 /** True when `spec` is a Sanity client module other than `sanity/lib/operationalClient`. */

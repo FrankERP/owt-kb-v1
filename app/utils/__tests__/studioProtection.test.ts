@@ -84,6 +84,8 @@ describe("studio protection policy", () => {
       "mcpOauthCodeRedemption",
       // The member calendar feed's generation counter (ADR-0057): written only by the rotate route.
       "calendarFeed",
+      // The MCP month proposal (P4 on solver v3, D6): written only by proposalStore.ts.
+      "mcpProposal",
     ]);
     expect(PROTECTED_STUDIO_TYPES).toContain("saturdarSongs");
     expect(PROTECTED_STUDIO_TYPES as readonly string[]).not.toContain("saturdaySongs");
@@ -105,6 +107,7 @@ describe("studio protection policy", () => {
       "mcpOauthGrant",
       "mcpOauthCodeRedemption",
       "calendarFeed",
+      "mcpProposal",
     ]);
   });
 
@@ -185,6 +188,7 @@ describe("studio protection policy", () => {
       "mcpOauthGrant",
       "mcpOauthCodeRedemption",
       "calendarFeed",
+      "mcpProposal",
     ]);
     for (const type of INTERNAL_STUDIO_TYPES) {
       expect(isInternalStudioType(type)).toBe(true);
@@ -478,7 +482,7 @@ describe("studio config installs the policy", () => {
     expect(structure).toContain("PROTECTED_STUDIO_TYPES");
   });
 
-  it("marks all seventeen protected schema types read-only", () => {
+  it("marks all eighteen protected schema types read-only", () => {
     const files: Record<string, string> = {
       sunday_role: "sanity/schemas/sunRole.ts",
       saturday_role: "sanity/schemas/satRole.ts",
@@ -497,6 +501,7 @@ describe("studio config installs the policy", () => {
       mcpOauthGrant: "sanity/schemas/mcpOauthGrant.ts",
       mcpOauthCodeRedemption: "sanity/schemas/mcpOauthCodeRedemption.ts",
       calendarFeed: "sanity/schemas/calendarFeed.ts",
+      mcpProposal: "sanity/schemas/mcpProposal.ts",
     };
     expect(Object.keys(files).sort()).toEqual([...PROTECTED_STUDIO_TYPES].sort());
     // The two MCP OAuth types declare `name:` as an IMPORTED constant
@@ -506,6 +511,7 @@ describe("studio config installs the policy", () => {
     const NAME_DECLARATION: Partial<Record<string, RegExp>> = {
       mcpOauthGrant: /name:\s*MCP_OAUTH_GRANT_TYPE\b/,
       mcpOauthCodeRedemption: /name:\s*MCP_OAUTH_CODE_REDEMPTION_TYPE\b/,
+      mcpProposal: /name:\s*MCP_PROPOSAL_TYPE\b/,
     };
     for (const type of PROTECTED_STUDIO_TYPES) {
       const src = read(files[type]);
@@ -543,6 +549,7 @@ describe("studio config installs the policy", () => {
       "sanity/schemas/mcpOauthGrant.ts",
       "sanity/schemas/mcpOauthCodeRedemption.ts",
       "sanity/schemas/calendarFeed.ts",
+      "sanity/schemas/mcpProposal.ts",
     ]) {
       const src = read(file);
       expect(src, `${file} must be a hidden type`).toMatch(/^\s*hidden:\s*true,\s*$/m);
@@ -563,6 +570,7 @@ describe("studio config installs the policy", () => {
         "mcpOauthGrant",
         "mcpOauthCodeRedemption",
         "calendarFeed",
+        "mcpProposal",
       ].sort(),
     );
   });

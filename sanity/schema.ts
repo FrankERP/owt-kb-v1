@@ -37,7 +37,10 @@ import { mcpOauthCodeRedemption } from './schemas/mcpOauthCodeRedemption';
 // The member calendar feed's per-member generation counter (ADR-0057): hidden/read-only,
 // written only by POST /api/me/calendar-feed. See sanity/schemas/calendarFeed.ts.
 import { calendarFeed } from './schemas/calendarFeed';
+// The MCP month proposal (P4 on solver v3): hidden/read-only, written only by
+// app/mcp/monthProposals/proposalStore.ts. See sanity/schemas/mcpProposal.ts.
+import { mcpProposal } from './schemas/mcpProposal';
 
 export const schema: { types: SchemaTypeDefinition[] } = {
-  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox, specialIdentityCoordinator, solverConfig, fairnessMonth, kidsPair, kidsSchedule, mcpOauthGrant, mcpOauthCodeRedemption, calendarFeed],
+  types: [post, tag, author, featuredSongs, saturdaySongs, saturdayRole, sundayRole, teamMembers, specialRole, loginEvent, setlistProposal, roleTargetLock, roleCreationReceipt, notificationOutbox, specialIdentityCoordinator, solverConfig, fairnessMonth, kidsPair, kidsSchedule, mcpOauthGrant, mcpOauthCodeRedemption, calendarFeed, mcpProposal],
 }

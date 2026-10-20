@@ -82,6 +82,9 @@ export const PROTECTED_STUDIO_TYPES = [
   // The member calendar feed's generation counter (ADR-0057): machine state written only by
   // `POST /api/me/calendar-feed`. Internal, like the MCP OAuth state above.
   "calendarFeed",
+  // The MCP month proposal (P4 on solver v3, D6): machine state written only by
+  // `app/mcp/monthProposals/proposalStore.ts`. Internal, like the MCP OAuth state above.
+  "mcpProposal",
 ] as const;
 
 export type ProtectedStudioType = (typeof PROTECTED_STUDIO_TYPES)[number];
@@ -178,6 +181,7 @@ export const INTERNAL_STUDIO_TYPES = [
   "mcpOauthGrant",
   "mcpOauthCodeRedemption",
   "calendarFeed",
+  "mcpProposal",
 ] as const;
 
 /**
@@ -269,6 +273,22 @@ export const INTERNAL_STUDIO_FIELDS: Readonly<Record<string, readonly string[]>>
   ],
   mcpOauthCodeRedemption: ["redeemedAt"],
   calendarFeed: ["member", "generation", "rotatedAt"],
+  // Every field an `mcpProposal` may carry — written only by
+  // `app/mcp/monthProposals/proposalStore.ts`, mirroring `PROPOSAL_FIELDS`
+  // (`app/mcp/monthProposals/documentTypes.ts`); `proposalDocument.test.ts` pins the two equal.
+  mcpProposal: [
+    "origin",
+    "principal",
+    "createdAt",
+    "expiresAt",
+    "engine",
+    "rulesRev",
+    "months",
+    "requestId",
+    "payload",
+    "digest",
+    "state",
+  ],
 });
 
 /**
@@ -528,4 +548,5 @@ export const PROTECTED_STUDIO_TITLES: Readonly<Record<ProtectedStudioType, strin
   mcpOauthGrant: "MCP OAuth — Concesiones (solo lectura)",
   mcpOauthCodeRedemption: "MCP OAuth — Códigos canjeados (solo lectura)",
   calendarFeed: "Enlaces de calendario (solo lectura)",
+  mcpProposal: "MCP — Propuestas de mes (solo lectura)",
 });
