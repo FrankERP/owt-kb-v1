@@ -19,7 +19,7 @@ export const TONE_RAIL: Record<Tone, string> = {
   special: "bg-info-fg",
 };
 
-export function serviceTone(e: ActiveDay): Tone {
+export function serviceTone(e: Pick<ActiveDay, "day" | "roleId">): Tone {
   if (e.roleId) return "special";
   if (e.day === "Sábado") return "sat";
   if (e.day === "Domingo") return "sun";

@@ -27,7 +27,6 @@ import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { buildICS, type ICSEvent } from "@/app/utils/ics";
 import { normalizeText } from "@/app/utils/normalizeText";
 import { serviceTone, TONE_RAIL } from "@/app/utils/agenda";
-import type { ActiveDay } from "./CalendarView";
 
 export default function DayCardDisclosure(props: DayCardProps) {
   const [open, setOpen] = useState(false);
@@ -76,9 +75,10 @@ export default function DayCardDisclosure(props: DayCardProps) {
   ];
 
   return (
-    // Opaque like the card it opens onto, with the same tone rail (2026-10-20).
+    // Opaque, with the card's tone rail (2026-10-20). The row's focus ring is
+    // `ring-inset`: this wrapper clips, and an outset ring would vanish.
     <div className="brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]">
-      <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[serviceTone(props as ActiveDay)]}`} />
+      <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[serviceTone(props)]}`} />
       {/* A raw <button>, not the house Button: this is a disclosure row (the row is
         the affordance), the same exemption SongRow and LibraryRow carry. */}
     <button
@@ -87,7 +87,7 @@ export default function DayCardDisclosure(props: DayCardProps) {
         aria-expanded={open}
         aria-controls={id}
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/60"
       >
         <span className="font-display text-lg uppercase text-ink">
           {props.day}
@@ -117,7 +117,9 @@ export default function DayCardDisclosure(props: DayCardProps) {
       {/* The padding rides on Collapse's inner div: a padded animated element
           floors its own height under border-box and never closes to zero. */}
       <Collapse open={open} id={id} className="px-2 pb-2">
-        <DayCard {...props} />
+        {/* `nested`: this wrapper already is the card (ground, hairline, rail), so the
+            inner one drops its own chrome — two rails 5 px apart otherwise. */}
+        <DayCard {...props} nested />
       </Collapse>
       <QuickActions
         open={actionsOpen}

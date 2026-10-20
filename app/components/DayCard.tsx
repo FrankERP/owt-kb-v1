@@ -13,7 +13,6 @@ import { themeColour } from "@/app/utils/themeColour";
 import { paintsDayCard } from "@/app/utils/paintsDayCard";
 import { daysUntil, formatCountdown } from "@/app/utils/daysUntil";
 import { findDuplicates, myNameFromSession, serviceTone, TONE_RAIL } from "@/app/utils/agenda";
-import type { ActiveDay } from "./CalendarView";
 import { formatLeadNames } from "@/app/utils/songLeads";
 import NumberRoll from "./ui/NumberRoll";
 import QuickActions, { type QuickAction } from "./ui/QuickActions";
@@ -54,6 +53,9 @@ export interface DayCardProps {
    * rail, so the same affordance never appears twice on one card.
    */
   hero?: boolean;
+  /** Rendered inside `DayCardDisclosure`, which already draws the card's ground,
+   *  hairline and rail: drop this card's own so there is one card, not two. */
+  nested?: boolean;
 }
 
 /* The day's identity is ONE device: the 3 px rail down the card's left edge, in the
@@ -68,7 +70,7 @@ export interface DayCardProps {
 /** The neutral the card's quiet chrome (medley spine, instrument chips) is drawn in. */
 const NEUTRAL = "--ink-dim-rgb";
 
-export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false }: DayCardProps) {
+export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instruments, fohTeam, bgvs, chorus, roleId, isNext, layout = "card", hero = false, nested = false }: DayCardProps) {
   const { openSheet } = usePlayer();
   const { data: session } = useSession();
   const { toast } = useToast();
@@ -109,7 +111,7 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
 
   if (!paintsDayCard({ setlist, leads, instruments, fohTeam, bgvs, chorus })) return null;
 
-  const tone = serviceTone({ day, roleId } as ActiveDay);
+  const tone = serviceTone({ day, roleId });
   const canEdit = ["super-admin", "admin"].includes(session?.user?.role as string);
   const setlistType: "sunday" | "saturday" | "special" =
     roleId ? "special" : day === "Sábado" ? "saturday" : day === "Domingo" ? "sunday" : "special";
@@ -156,8 +158,8 @@ export function DayCard({ day, date, time, setlist, leads, myLeadSongs, instrume
 
   return (
     <>
-      <div className="brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]">
-        <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[tone]}`} />
+      <div className={nested ? "relative overflow-hidden rounded-[var(--brand-radius-panel)]" : "brand-facet-panel brand-surface overflow-hidden rounded-[var(--brand-radius-panel)]"}>
+        {!nested && <span aria-hidden className={`absolute inset-y-0 left-0 z-[1] w-[3px] ${TONE_RAIL[tone]}`} />}
         {/* Header — day · date, and at most two things on the right: the
             countdown (next service only) and the hero's one action. §18 keeps
             one eyebrow per surface, so the `Servicio` label and the long date
