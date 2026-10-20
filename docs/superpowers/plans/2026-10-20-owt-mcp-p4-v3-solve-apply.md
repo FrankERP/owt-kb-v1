@@ -529,7 +529,7 @@ month recorded and unbound, and the next `/admin` Auto plus confirm replaces the
 
 | Question | Recommendation | Default | Blocks |
 |---|---|---|---|
-| **Q1** (asked 2026-10-20): `revise_proposal` here or in its own plan? | **Its own plan.** Editing stays possible in `/admin` on the drafts before publishing. If Frank picks «here»: the plan gains the old step 9 re-based on v3 (the `rankCandidates` gate, a revision counter), and D6 gains back a lease, because revise would mutate the payload apply reads | own plan | step 0 |
+| **Q1** (asked 2026-10-20; **answered by Frank 2026-10-20 20:41Z: its own plan**): `revise_proposal` here or in its own plan? | **Its own plan.** Editing stays possible in `/admin` on the drafts before publishing. If Frank picks «here»: the plan gains the old step 9 re-based on v3 (the `rankCandidates` gate, a revision counter), and D6 gains back a lease, because revise would mutate the payload apply reads | own plan | step 0 |
 | **Q2**: confirm the spec amendment of D7 (refuse the apply when a date was taken since the proposal, instead of skipping that service) | **Confirm.** Under v3 a re-solve takes seconds and treats the new service as fixed; skipping would create a month the solver did not plan, under records frozen for another plan | D7 | step 6 (apply's protocol depends on it; a «skip» answer reopens this plan's review) |
 | **Q4**: confirm D8 (a failed solve stores no proposal, where the spec says «a bound proposal… marked as partial» on a solver failure and the browser keeps a fills-only board) | **Confirm.** The connector has no hand surface to finish a fills-only board, so applying one would create weekends with empty voices; a failed solve answers with the browser's own line and Frank re-solves or finishes in `/admin` | D8 | step 6 |
 | **Q3**: the live-proof month and its cleanup | **The next month Frank actually plans** (one with no services yet), solved and applied from the Claude app, the drafts **kept** as real work, reviewed in `/admin` before he publishes. Nothing needs cleaning, and the record is the real one. Alternative: a far month (≤ current + 12, HZ-9) whose drafts Frank deletes in `/admin`; its record **stays** (only C4's reconstruction actor deletes one), and the real Auto months later finds it «recorded, unbound» and replaces it, so nothing is lost but the dataset carries a proof record until then | the next real month, kept | step 9 |
@@ -575,4 +575,4 @@ month recorded and unbound, and the next `/admin` Auto plus confirm replaces the
 
 ## Terminal state
 
-APPROVED (critical tier) — awaiting Frank's go-ahead to implement and his answers to Q1, Q2 and Q4
+APPROVED (critical tier) — awaiting Frank's go-ahead to implement and his answers to Q2 and Q4 (Q1 answered)

@@ -148,5 +148,6 @@ Made after round 8 on top of the approved digest `4d6383ce…8559`. **They are o
    ids. Apply reads the snapshot after the admin roles rows. The protected-read audit for
    `v3MonthPlanReads.ts` is confirmed when the file is written. (Rounds 7 and 8.)
 7. The plan's status line and terminal state record the approval.
+8. Q1 marked answered (Frank, 2026-10-20 20:41Z: `revise_proposal` in its own plan, the plan's default).
 
-The implementation's merge-range code review should read these seven items first.
+The implementation's merge-range code review should read these eight items first.
