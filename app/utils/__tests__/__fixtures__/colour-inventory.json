@@ -9,7 +9,7 @@
   ],
   "summary": {
     "literalRows": 319,
-    "filesScanned": 455,
+    "filesScanned": 457,
     "filesWithColour": 56,
     "byCategory": {
       "2": 2,
@@ -2659,7 +2659,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 429,
+      "line": 430,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -2707,7 +2707,7 @@
       "alpha": null,
       "utility": "bg",
       "carrier": null,
-      "line": 2634,
+      "line": 2637,
       "disposition": "keep",
       "reason": "Already theme-agnostic"
     },
@@ -3727,7 +3727,7 @@
       "alpha": null,
       "utility": null,
       "carrier": "stroke",
-      "line": 106,
+      "line": 119,
       "disposition": "B",
       "reason": null
     },
