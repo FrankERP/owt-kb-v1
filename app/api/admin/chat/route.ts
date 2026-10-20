@@ -10,6 +10,7 @@ import {
   chatMonthKey,
   costMicroUsd,
   encodeChatEvent,
+  pageContextNote,
   responseCostMicroUsd,
   parseChatRequest,
   roundUsd,
@@ -29,7 +30,7 @@ import { requireActiveSession } from "@/app/utils/authGuards";
 import { getMemberAccess } from "@/app/utils/memberAccess";
 
 /**
- * /api/admin/chat — the admin assistant (ADR-0059).
+ * /api/admin/chat — the admin assistant (ADR-0060).
  *
  * GET answers the panel's status line (set up? how much of this month's cap is used?).
  * POST takes the conversation so far and streams the answer as newline-delimited JSON events
@@ -73,6 +74,26 @@ const MIN_CALL_MS = 10_000;
 function abortedCallCostMicroUsd(snapshot: Anthropic.Beta.BetaMessage | undefined, promptChars: number): number {
   if (snapshot) return costMicroUsd(snapshot.model, { ...snapshot.usage, output_tokens: MAX_TOKENS });
   return costMicroUsd(ADMIN_CHAT_MODEL, { input_tokens: Math.ceil(promptChars / 3), output_tokens: MAX_TOKENS });
+}
+
+/**
+ * The assistant turn to echo back. After a mid-answer fallback the declined attempt's partial stays
+ * in `content` before the last `fallback` block; of it only text may be echoed — thinking and
+ * tool calls from before the boundary must be left out (the API's echo rule).
+ */
+function echoableContent(content: Anthropic.Beta.BetaContentBlock[]): Anthropic.Beta.BetaContentBlock[] {
+  const boundary = content.findLastIndex((b) => b.type === "fallback");
+  if (boundary < 0) return content;
+  return content.filter((b, i) => i >= boundary || b.type === "text");
+}
+
+/** `work`, or `fallback` once `ms` have passed. */
+function withinMs<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
 }
 
 type Authorized = { ok: true; memberId: string } | { ok: false; response: NextResponse };
@@ -169,7 +190,20 @@ export async function POST(req: Request) {
   const memberId = auth.memberId;
   const client = new Anthropic({ apiKey: key, maxRetries: 1 });
   const system = adminChatSystemPrompt(serviceTodayIso());
-  const messages: Anthropic.Beta.BetaMessageParam[] = parsed.messages.map((m) => ({ role: m.role, content: m.text }));
+  // Each question goes with the page it was asked from, as its own text block before it. Every turn
+  // keeps its own note, so the conversation resent next turn is byte-identical up to the new
+  // question and the cached prefix survives moving around the app.
+  const messages: Anthropic.Beta.BetaMessageParam[] = parsed.messages.map((m) =>
+    m.role === "user" && m.page
+      ? {
+          role: "user",
+          content: [
+            { type: "text", text: pageContextNote(m.page) },
+            { type: "text", text: m.text },
+          ],
+        }
+      : { role: m.role, content: m.text },
+  );
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
@@ -200,7 +234,6 @@ export async function POST(req: Request) {
           calls += 1;
           const timer = new AbortController();
           const timeout = setTimeout(() => timer.abort(), Math.max(remaining, 1));
-          const answerBefore = answer;
           let separated = false;
           const call = client.beta.messages.stream(
             {
@@ -218,15 +251,6 @@ export async function POST(req: Request) {
             },
             { signal: timer.signal },
           );
-          call.on("streamEvent", (event) => {
-            // A fallback hands the answer to another model mid-call: the declined model's partial
-            // words are dropped from what the admin sees (and from what the panel resends).
-            if (event.type === "content_block_start" && event.content_block.type === "fallback") {
-              answer = answerBefore;
-              separated = false;
-              send({ type: "rewind", text: answer });
-            }
-          });
           call.on("text", (delta) => {
             if (answer && !separated) {
               answer += "\n\n";
@@ -240,7 +264,12 @@ export async function POST(req: Request) {
           try {
             message = await call.finalMessage();
           } catch (err) {
-            if (!timer.signal.aborted) throw err;
+            // A call that failed after it started streaming was billed for what it wrote: charge it
+            // like an aborted one. One that never started (no snapshot) cost nothing.
+            if (!timer.signal.aborted) {
+              if (call.currentMessage) spent += abortedCallCostMicroUsd(call.currentMessage, 0);
+              throw err;
+            }
             spent += abortedCallCostMicroUsd(call.currentMessage, system.length + JSON.stringify(messages).length);
             send({ type: "error", message: "La respuesta tardó demasiado. Intenta con una pregunta más concreta." });
             break;
@@ -258,18 +287,29 @@ export async function POST(req: Request) {
             send({ type: "text", text: "\n\n(Respuesta recortada: era demasiado larga.)" });
             break;
           }
-          const toolUses = message.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
+          // After a mid-answer fallback only what follows the last `fallback` block is the answering
+          // model's: a tool call the declined model started is neither run nor echoed.
+          const content = echoableContent(message.content);
+          const toolUses = content.slice(content.findLastIndex((b) => b.type === "fallback") + 1).filter(
+            (b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use",
+          );
           if (message.stop_reason !== "tool_use" || toolUses.length === 0) break;
           if (calls === MAX_MODEL_CALLS) {
             send({ type: "text", text: "\n\n(Esta pregunta necesitó demasiadas consultas. Intenta hacerla más concreta.)" });
             break;
           }
 
-          messages.push({ role: "assistant", content: message.content });
+          messages.push({ role: "assistant", content });
+          // The reads share the answer's deadline: a hung read must not outlive the function and
+          // take the spend record with it.
+          const toolBudget = Math.max(deadline - Date.now(), 1);
           const results = await Promise.all(
             toolUses.map(async (use): Promise<Anthropic.Beta.BetaToolResultBlockParam> => {
               send({ type: "status", text: toolStatus(use.name) });
-              const out = await runAdminChatTool(use.name, use.input);
+              const out = await withinMs(runAdminChatTool(use.name, use.input), toolBudget, {
+                text: "La consulta tardó demasiado.",
+                isError: true,
+              });
               return { type: "tool_result", tool_use_id: use.id, content: out.text, is_error: out.isError };
             }),
           );

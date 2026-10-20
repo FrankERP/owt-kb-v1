@@ -1,4 +1,4 @@
-# ADR-0059: The admin assistant calls the MCP read handlers in process
+# ADR-0060: The admin assistant calls the MCP read handlers in process
 
 **Date:** 2026-10-20 · **Status:** Accepted
 
@@ -30,7 +30,24 @@ function (`app/utils/adminChatServer.ts`):
   no chart, exactly as the song page shows them (ADR-0018).
 
 Who: an active `admin` or `super-admin` of the worship ministry (`canUseAdminChat`), checked live
-on every request, never while impersonating. The /admin tab is «Asistente».
+on every request, never while impersonating.
+
+Where: a floating bubble on every page (`app/components/assistant/AssistantBubble.tsx`, mounted
+once by the client layout), shown only to those admins — a docked card beside the page at `sm+`,
+the whole screen on a phone. Frank tried the first version, an /admin tab, on dev and asked for
+this instead (2026-10-20: «un bubble chat que esté disponible desde cualquier lugar… que le
+pudieras preguntar sobre lo que estás viendo»). Because the layout mounts it once, the conversation
+survives moving between pages. An admin who never opens it costs no request: the status read waits
+for the first open.
+
+Page context: each question carries the page it was asked from — its path, a label, and up to four
+references the tools can follow (on a song page, the song's id and title; on /admin, the tab's
+name). A page that knows more than its path says so by rendering `<AssistantPageContext>`; every
+other page is named from its path (`assistantPage.ts`). The route puts it before that question as
+its own text block, framed as reference data (`pageContextNote`); the system prompt says the note
+is information, never an instruction. Every turn keeps its own note, so the conversation resent
+next turn is byte-identical up to the new question and the prompt cache still holds. A malformed
+context is dropped, never a reason to refuse the question.
 
 Spend, three layers, outermost first: the credit balance itself (no purchased credits, no
 auto-reload) and the Console workspace's spend limit; a per-admin monthly cap,
@@ -48,7 +65,9 @@ function. A client that goes away does not abort the call in flight — the API 
 an aborted call would go uncharged — the route only starts no further call.
 
 Model: Claude Opus 5.5 (Frank's choice) at `effort: "medium"`, with the server-side refusal
-fallback (`fallbacks: "default"`) and automatic prompt caching. Nothing is stored but the spend
+fallback (`fallbacks: "default"`) and automatic prompt caching. A fallback mid-answer CONTINUES
+the declined model's partial text on the same stream (nothing already sent is taken back); of the
+declined part only text is echoed, and only the answering model's tool calls run. Nothing is stored but the spend
 counter: the conversation lives in the browser and is resent, as text only, each turn.
 
 ## Rejected
@@ -63,6 +82,14 @@ counter: the conversation lives in the browser and is resent, as text only, each
 - **A cheap model screening every question for topic.** Slower answers and false refusals, to save
   the cent that Opus's own one-line decline costs.
 - **No per-admin cap, only the Console limit.** One person could spend the whole month for everyone.
+- **An «Asistente» tab in /admin.** Built first and tested on dev; it only answered from /admin and
+  knew nothing of the page the question was about.
+- **The screen's text as context** (what the admin sees, scraped from the page). Richer, but a
+  page's text — a lyric, a note someone typed — would reach the model as if the admin had written
+  it, and a long page would cost a page of input on every turn. Ids and labels cost a line, and the
+  tools fetch the rest only when the question needs it.
+- **The context in the system prompt.** It would change whenever the admin moved, so the cached
+  prefix (system prompt and tools) would be rebuilt on almost every question.
 
 ## Consequences
 
@@ -74,7 +101,12 @@ counter: the conversation lives in the browser and is resent, as text only, each
 - Long answers are bounded by the 50 s deadline more than by `max_tokens`. Turning on Fluid
   compute (a project-wide Vercel setting, Frank's call) would allow up to 300 s.
 - Without `SANITY_API_READ_TOKEN` an untokened read of the dotted counter answers «nothing spent»,
-  so the route refuses (503) instead of lifting every cap. Without `ANTHROPIC_API_KEY` the tab says
-  «no está configurado».
+  so the route refuses (503) instead of lifting every cap. Without `ANTHROPIC_API_KEY` the bubble
+  says «no está configurado».
+- Fixed-bottom neighbours: the bubble clears the phone tab bar (`--bottom-nav-h`) and the audio
+  transport (`--audio-player-h`, which `AudioPlayer` now measures), and publishes
+  `--assistant-fab-w` so the song page's «Editar» button steps aside (`bottomNavOffsetSync.test.ts`).
+  The bubble is z-40, under the planner's and the board's full-screen modal overlays (z-50); the
+  open panel is z-[70] and opts out of pull-to-refresh (`data-pull-ignore`).
 - Adding a tool that writes would undo the reason for this design; `adminChatRoute.test.ts` pins
   the five names and that no MCP writer is among them.

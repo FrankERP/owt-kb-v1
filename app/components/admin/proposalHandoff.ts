@@ -328,8 +328,7 @@ export type AdminTabId =
   | "proposals"
   | "availability"
   | "activity"
-  | "content"
-  | "assistant";
+  | "content";
 
 /** Which tab each target kind opens in. Integrity details live beside Servicios. */
 export const HANDOFF_TAB: Record<AdminReviewTarget["kind"], AdminTabId> = {

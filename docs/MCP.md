@@ -988,7 +988,7 @@ Measured at implementation time (steps 1 and 9):
 
 A few things that look like bugs at first glance and are not:
 
-- **The read handlers have a second caller.** The in-app assistant (`/api/admin/chat`, ADR-0059)
+- **The read handlers have a second caller.** The in-app assistant (`/api/admin/chat`, ADR-0060)
   calls `searchSongsResult`, `getSongResult`, `listServicesResult` and `getServiceResult` in
   process, through `app/utils/adminChatServer.ts`, instead of going through this connector — so a
   change to a read tool's payload reaches the assistant too (its views in `adminChatViews.ts` trim

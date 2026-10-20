@@ -84,7 +84,7 @@ describe("studio protection policy", () => {
       "mcpOauthCodeRedemption",
       // The member calendar feed's generation counter (ADR-0057): written only by the rotate route.
       "calendarFeed",
-      // The admin assistant's monthly spend counter (ADR-0059): written only by the chat route.
+      // The admin assistant's monthly spend counter (ADR-0060): written only by the chat route.
       "adminChatUsage",
       // The MCP month proposal (P4 on solver v3, D6): written only by proposalStore.ts.
       "mcpProposal",

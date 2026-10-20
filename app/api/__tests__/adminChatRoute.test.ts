@@ -1,4 +1,4 @@
-// `/api/admin/chat` — the admin assistant (ADR-0059).
+// `/api/admin/chat` — the admin assistant (ADR-0060).
 //
 // What must hold: only a live worship admin (never while impersonating) gets an answer; a
 // missing key or read token, or a spent monthly cap, refuses BEFORE any API call; the model
@@ -29,8 +29,8 @@ const h = vi.hoisted(() => ({
     texts?: string[];
     message?: FakeMessage;
     error?: unknown;
-    /** Emit a `fallback` content block before `texts[fallbackAt]`. */
-    fallbackAt?: number;
+    /** The stream's snapshot (`currentMessage`) when the call fails. */
+    snapshot?: FakeMessage;
     /** Never finish: reject when the call's signal aborts, with this as the stream's snapshot. */
     hang?: { snapshot?: FakeMessage };
   }>,
@@ -54,12 +54,10 @@ vi.mock("@anthropic-ai/sdk", async (importOriginal) => {
             h.streamSignals.push(opts?.signal);
             const step = h.script.shift() ?? { texts: ["(sin guion)"], message: undefined };
             let onText: ((d: string) => void) | null = null;
-            let onEvent: ((e: unknown) => void) | null = null;
             const api = {
-              currentMessage: step.hang?.snapshot,
+              currentMessage: step.snapshot ?? step.hang?.snapshot,
               on(event: string, cb: (d: never) => void) {
                 if (event === "text") onText = cb as (d: string) => void;
-                if (event === "streamEvent") onEvent = cb as (e: unknown) => void;
                 return api;
               },
               async finalMessage() {
@@ -69,12 +67,7 @@ vi.mock("@anthropic-ai/sdk", async (importOriginal) => {
                     opts?.signal?.addEventListener("abort", () => reject(new Error("Request was aborted."))),
                   );
                 }
-                (step.texts ?? []).forEach((t, i) => {
-                  if (i === step.fallbackAt) {
-                    onEvent?.({ type: "content_block_start", index: i, content_block: { type: "fallback" } });
-                  }
-                  onText?.(t);
-                });
+                (step.texts ?? []).forEach((t) => onText?.(t));
                 return (
                   step.message ?? {
                     model: "claude-opus-5-5",
@@ -319,6 +312,38 @@ describe("POST /api/admin/chat — the answer", () => {
     expect(params.messages).toEqual([{ role: "user", content: "¿Qué significa Salmo 23?" }]);
   });
 
+  it("puts each question's page note before it, as its own block, and leaves a turn without one plain", async () => {
+    h.script.push({ texts: ["Habla de la fidelidad de Dios."] });
+    const song = { path: "/posts/way-maker", label: "Canción: Way Maker", refs: [{ kind: "song", id: "abc123", label: "Way Maker" }] };
+    await events(
+      await post({
+        messages: [
+          { role: "user", text: "¿De qué habla esta canción?", page: song },
+          { role: "assistant", text: "De un Dios que abre camino." },
+          { role: "user", text: "¿Y qué pasaje la inspira?" },
+        ],
+      }),
+    );
+    const sent = h.streamCalls[0]!.messages as Array<{ role: string; content: unknown }>;
+    expect(sent[0]).toEqual({
+      role: "user",
+      content: [
+        { type: "text", text: expect.stringContaining("canción «Way Maker» (songId: abc123)") },
+        { type: "text", text: "¿De qué habla esta canción?" },
+      ],
+    });
+    expect(sent[1]).toEqual({ role: "assistant", content: "De un Dios que abre camino." });
+    expect(sent[2]).toEqual({ role: "user", content: "¿Y qué pasaje la inspira?" });
+  });
+
+  it("answers a question whose page context is malformed, without the note", async () => {
+    h.script.push({ texts: ["Hola"] });
+    const res = await post({ messages: [{ role: "user", text: "Hola", page: { path: "no-slash", label: "x" } }] });
+    expect(res.status).toBe(200);
+    await events(res);
+    expect(h.streamCalls[0]!.messages).toEqual([{ role: "user", content: "Hola" }]);
+  });
+
   it("answers an unknown tool with an error result instead of failing the question", async () => {
     h.script.push({ message: toolUse("tu-1", "publish_service", { serviceId: "x" }) }, { texts: ["No puedo."] });
     const evs = await events(await ask());
@@ -370,20 +395,64 @@ describe("POST /api/admin/chat — the answer", () => {
     });
   });
 
-  it("drops the declined model's partial words when a fallback takes over", async () => {
+  it("keeps a declined partial that a fallback continues: the words run on, nothing is taken back", async () => {
+    // The fallback model continues the partial text it is handed; already-streamed words stay.
+    h.script.push({
+      texts: ["El Salmo 23 ", "habla del pastor."],
+      message: {
+        model: "claude-opus-5",
+        stop_reason: "end_turn",
+        content: [
+          { type: "text", text: "El Salmo 23 " },
+          { type: "fallback", from: { model: "claude-opus-5-5" }, to: { model: "claude-opus-5" } },
+          { type: "text", text: "habla del pastor." },
+        ],
+        usage: { input_tokens: 100, output_tokens: 10 },
+      } as unknown as FakeMessage,
+    });
+    const evs = await events(await ask());
+    const shown = evs.filter((e) => e.type === "text").map((e) => (e as { text: string }).text).join("");
+    expect(shown).toBe("El Salmo 23 habla del pastor.");
+  });
+
+  it("after a mid-answer fallback runs and echoes only the answering model's tool call", async () => {
     h.searchSongsResult.mockResolvedValue({ content: [{ type: "text", text: "{}" }], structuredContent: { songs: [] } });
     h.script.push(
-      { texts: ["Busco."], message: toolUse("tu-1", "search_songs", { query: "x" }) },
-      { texts: ["Parcial que", "La respuesta."], fallbackAt: 1, message: answer("La respuesta.") },
+      {
+        texts: ["Busco."],
+        message: {
+          model: "claude-opus-5",
+          stop_reason: "tool_use",
+          content: [
+            { type: "thinking", thinking: "…", signature: "s" },
+            { type: "text", text: "Busco." },
+            { type: "tool_use", id: "tu-declined", name: "get_song", input: { id: "x" } },
+            { type: "fallback", from: { model: "claude-opus-5-5" }, to: { model: "claude-opus-5" } },
+            { type: "tool_use", id: "tu-1", name: "search_songs", input: { query: "x" } },
+          ],
+          usage: { input_tokens: 1_000, output_tokens: 50 },
+        } as unknown as FakeMessage,
+      },
+      { texts: ["Listo."] },
     );
+    await events(await ask());
+    expect(h.getSongResult).not.toHaveBeenCalled();
+    expect(h.searchSongsResult).toHaveBeenCalledWith({ query: "x" });
+    const second = h.streamCalls[1]!.messages as Array<{ role: string; content: Array<{ type: string; id?: string }> }>;
+    expect(second.at(-2)!.content.map((b) => b.id ?? b.type)).toEqual(["text", "fallback", "tu-1"]);
+  });
+
+  it("charges a call that failed after it started streaming, and not one that never started", async () => {
+    const snapshot = { model: "claude-opus-5-5", stop_reason: null, content: [], usage: { input_tokens: 1_000, output_tokens: 1 } };
+    h.script.push({ error: new Error("stream reset"), snapshot: snapshot as unknown as FakeMessage });
     const evs = await events(await ask());
-    let shown = "";
-    for (const e of evs) {
-      if (e.type === "text") shown += e.text;
-      if (e.type === "rewind") shown = e.text;
-    }
-    expect(evs).toContainEqual({ type: "rewind", text: "Busco." });
-    expect(shown).toBe("Busco.\n\nLa respuesta.");
+    expect(evs.some((e) => e.type === "error")).toBe(true);
+    expect(h.txOps[1]).toMatchObject({ op: "patch", arg: { inc: { spentMicroUsd: 1_000 * 4 + 8_000 * 20 } } });
+
+    h.txOps.length = 0;
+    h.script.push({ error: new Error("overloaded") });
+    await events(await ask());
+    expect(h.txOps).toHaveLength(0);
   });
 
   it("says when an answer was cut off at the output limit, and runs no tool call cut with it", async () => {
