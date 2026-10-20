@@ -358,23 +358,33 @@ create (the browser's «Crear» is disabled in that case).
    whose role is gone reads «creado y luego eliminado en /admin» and one at another date or name
    «creado y luego modificado en /admin» — both failures for `complete`.
 
-The result kinds of `runV3ConfirmAttempt` map to the answer: `refused_guard` ⇒ on a call where `state`
-shows progress, composed from `state` plus the guard's reason (every call passes `recordsDone: false`,
-so `v3ConfirmRun.ts:76-86` never adds the per-month lines itself), else its lines; no retry;
-`record_failed` ⇒ on a call where the stored `state` shows nothing landed (no `recordsDone`, no
-`created`), the browser's line (twin per the copy rule), `retry` per `recordRetryOffered`, else
-`next: solve_month`; **on any later call, never the browser's line** — every `V3_CONFIRM_REFUSAL` line
-and `recordOtherFailure` say «No se creó nada» (`v3Copy.ts:344-352,445`), true in the browser only
-because CF-7 never resends a landed PUT. There the answer is composed from the stored `state` (per
-month: record registered; per service: created, pending) plus the refusal's reason through
-`V3_CONNECTOR_LINES.recordFailedAfterProgress`, with the same `retry`/`next`; `drafts` ⇒
-per month and service, deferred drafts «pendiente: vuelve a llamar apply_schedule». A deferral is
-never counted as a failure: `V3_LINES.monthPartial` (`v3Copy.ts:451`) counts every uncreated draft as
-«fallaron», so the tool composes a month's line from the created/failed/deferred split itself and
-uses `monthPartial` only when nothing was deferred. A `record_exists` refusal (CF-4) on a first call keeps the
-browser's reason without its «Otro administrador…» attribution, which may be false: when two
-applies of one proposal race on an unrecorded month the loser can see it, and the tool's answer adds «si otra llamada de apply_schedule con esta propuesta está en curso, vuelve
-a llamarla en un momento» — a re-call then finds the record `unchanged` and continues.
+**One answer rule (every apply outcome).** The answer is composed from **one observation taken from
+data in step 4**, never from the stored `state` alone and never from a browser line that asserts what
+was not created: `exists` = `state.created` ∪ `own` (the receipt-proven roles, D7) — the services of
+this proposal that exist now — and, per month, whether this call's PUT verdict for it was `created`,
+`replaced` or `unchanged`. `state` is a cache of the same facts and is never the evidence for a «nothing
+exists» claim.
+
+- No connector answer uses a browser line that says «No se creó nada» / «No se creó ningún servicio»
+  (`V3_CONFIRM_REFUSAL`, `recordOtherFailure`, the guard lines; `v3Copy.ts:342-352,445`): those are
+  true in the browser only because its session state is in memory and CF-7 never resends a landed PUT.
+  Their `V3_CONNECTOR_LINES` twins state the reason, then list `exists` per month and service («ya
+  existen: …», or «ninguno de esta propuesta» when `exists` is empty — a fact read from data), and say
+  of the records only what this call observed («el registro de {mes} quedó guardado» on a `created`,
+  `replaced` or `unchanged` verdict; otherwise nothing is claimed about it).
+- No twin attributes a record conflict to «otro administrador»: `record_exists`, `stale_revision` and
+  `record_missing` can come from a concurrent call of this same proposal, so the twin says the record
+  changed while applying and adds «si otra llamada de apply_schedule con esta propuesta está en curso,
+  vuelve a llamarla en un momento; si no, vuelve a correr solve_month» — a re-call then finds the
+  record `unchanged` and continues.
+- `refused_guard` ⇒ the guard's reason plus `exists`, no retry (every call passes `recordsDone: false`,
+  so `v3ConfirmRun.ts:76-86` never adds the per-month lines itself). `record_failed` ⇒ the twin above,
+  `retry` per `recordRetryOffered`, else `next: solve_month`. `drafts` ⇒ per month and service; a
+  deferred draft is «pendiente: vuelve a llamar apply_schedule» and never counted as a failure —
+  `V3_LINES.monthPartial` (`v3Copy.ts:451`) counts every uncreated draft as «fallaron», so the tool
+  composes a month's line from the created/failed/deferred split and uses `monthPartial` only when
+  nothing was deferred. Every role in `own` that this call did not create is reported «creado
+  (confirmado por su recibo)».
 
 ### 7. Tests that close the plan
 
@@ -392,7 +402,10 @@ a llamarla en un momento» — a re-call then finds the record `unchanged` and c
   cut-off; two concurrent applies of one proposal (zero duplicate creates, state is the union);
   CF-1 across a month boundary (fixed clock); each `details.detail` of CF-4; **call 1 lands the
   records and some drafts, a foreign writer replaces a record, call 2 ⇒ an answer naming what exists
-  and never containing «No se creó nada»**; a special of another name stored on a pending special's
+  and never containing «No se creó nada»**; **the same with call 1's `state` write failing (or the
+  call killed) so `state` is empty, then call 2's PUT failing «other», `record_exists`, or the guard
+  refusing a past month ⇒ the answer lists the receipt-proven drafts and contains neither «No se creó
+  nada» nor «ningún servicio»**; a special of another name stored on a pending special's
   date ⇒ refusal, zero writes; a stored service deleted or added on an unplanned date ⇒ refusal, zero
   writes.
 - **Gate replay**: each row of the two tables, as stated under them.
@@ -453,8 +466,7 @@ create is replay-safe through its receipt, and the next call finishes (a draft w
 | Moment | What exists | What Frank is told | Recovery |
 |---|---|---|---|
 | Any refusal before the PUT | Nothing new | The refusal | As it says (re-solve, retry, wait) |
-| PUT refused (CF-4), first call | Nothing new | The browser's reason for that `detail` (connector twin) | Re-solve (conflict, team changed, past month) or retry (other) |
-| PUT refused on a later call (record replaced, transient failure) | Records and drafts from earlier calls | What exists, per month and service, plus the reason (never «No se creó nada») | Re-solve, or retry when the failure is «other» |
+| PUT refused (CF-4) or failed, any call | Whatever earlier calls left (records, drafts) | The reason (connector twin) plus `exists`, read from data (the one answer rule); never «No se creó nada» | Re-solve (conflict, team changed, past month), retry (other), or re-call if another apply of this proposal is running |
 | Seven days pass: Tipo, availability or a stored service's seats change | The proposal as solved | Team or Tipo changes refuse the PUT on create/replace (CF-4 `member_unknown`/`member_not_worship`); availability and seat edits are not re-checked (the spec's bounded window) | Re-solve when in doubt; the report shows the solve date |
 | PUT landed, answer lost / call killed | The records | «No se pudo confirmar…» with `apply_schedule` named | Call again: the PUT answers `unchanged` |
 | Some drafts created, call killed or cut off | Records, those drafts | Per month and service; «pendiente» | Call again: created drafts are not resent; one whose create landed unseen is recognised by its receipt id and replays |
