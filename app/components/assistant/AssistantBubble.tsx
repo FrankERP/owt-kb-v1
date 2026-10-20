@@ -9,6 +9,9 @@
 // The bubble shows for a super-admin or an admin of worship (`canUseAdminChat`, from the session),
 // never while impersonating, never on the sign-in, Studio or OAuth pages.
 //
+// The bubble sits at z-40 like the song FAB, under the planner's and the board's full-screen
+// overlays (z-50, modal); the open panel is z-[70], over the tab bar.
+//
 // Fixed-bottom like the toasts and the song FAB, it clears the phone tab bar (`--bottom-nav-h`)
 // and the audio transport (`--audio-player-h`), and publishes its own width as
 // `--assistant-fab-w` so the song FAB steps aside instead of hiding under it
@@ -98,9 +101,16 @@ function AssistantDock({ pathname }: { pathname: string }) {
     };
   }, []);
 
-  // Focus moves on the OPEN edge only (ADR-0034): never on a re-render while typing.
+  // Focus moves on the open EDGES only (ADR-0034): never on a re-render while typing. Back to the
+  // bubble on closing — after this render, since on a phone the bubble is hidden while open.
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      if (wasOpen.current) bubbleRef.current?.focus({ preventScroll: true });
+      wasOpen.current = false;
+      return;
+    }
+    wasOpen.current = true;
     const frame = requestAnimationFrame(() => inputRef.current?.focus({ preventScroll: true }));
     return () => cancelAnimationFrame(frame);
   }, [open]);
@@ -113,10 +123,7 @@ function AssistantDock({ pathname }: { pathname: string }) {
     setEverOpened(true);
     setOpen((v) => !v);
   };
-  const close = () => {
-    setOpen(false);
-    bubbleRef.current?.focus({ preventScroll: true });
-  };
+  const close = () => setOpen(false);
 
   const ask = async (question: string) => {
     if (!question.trim() || chat.sending) return;
@@ -141,7 +148,9 @@ function AssistantDock({ pathname }: { pathname: string }) {
 
   const status = chat.status;
   const exhausted = !!status && status.spentUsd >= status.budgetUsd;
-  const blocked = !status || !status.configured || exhausted;
+  // The input stays usable while the status loads (so the entry focus lands on it); only sending waits.
+  const closed = !!status && (!status.configured || exhausted);
+  const blocked = !status || closed;
   const lastIndex = chat.turns.length - 1;
 
   return (
@@ -152,7 +161,7 @@ function AssistantDock({ pathname }: { pathname: string }) {
         onClick={toggle}
         aria-label={open ? "Cerrar el asistente" : "Abrir el asistente"}
         aria-expanded={open}
-        className={`fixed right-4 sm:right-6 z-[70] h-14 w-14 !rounded-full p-0 shadow-lg ${open ? "max-sm:hidden" : ""}`}
+        className={`fixed right-4 sm:right-6 z-40 h-14 w-14 !rounded-full p-0 shadow-lg ${open ? "max-sm:hidden" : ""}`}
         style={{ bottom: BOTTOM }}
       >
         {open ? <CloseIcon /> : <ChatIcon />}
@@ -163,6 +172,8 @@ function AssistantDock({ pathname }: { pathname: string }) {
         as="aside"
         variant="rise"
         aria-label="Asistente"
+        // Full screen on a phone: a drag in the conversation scrolls it, never pulls to refresh.
+        data-pull-ignore=""
         onKeyDown={onPanelKeyDown}
         className={
           "fixed inset-0 z-[70] flex flex-col bg-surface-raised-alt " +
@@ -280,7 +291,7 @@ function AssistantDock({ pathname }: { pathname: string }) {
               maxLength={ADMIN_CHAT_LIMITS.maxQuestionChars}
               placeholder="Escribe tu pregunta…"
               value={draft}
-              disabled={blocked}
+              disabled={closed}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={onInputKeyDown}
             />

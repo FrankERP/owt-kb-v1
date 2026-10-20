@@ -2,7 +2,7 @@
 //
 // The assistant bubble (ADR-0060): who sees it, that an admin who never opens it costs no request,
 // that every question goes with the page it was asked from, and the panel rules carried over from
-// the old tab (a failed question restored and left out, a rewind, a blocked input).
+// the old tab (a failed question restored and left out, a blocked input).
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -165,21 +165,6 @@ describe("AssistantBubble — the conversation", () => {
     expect(posted(calls)[2].messages.map((m: { text: string }) => m.text)).toEqual(["Uno", "Primera respuesta", "Tres"]);
   });
 
-  it("replaces the answer so far on a rewind", async () => {
-    stubFetch([
-      ok([
-        { type: "text", text: "Palabras que se descartan" },
-        { type: "rewind", text: "" },
-        ...answer("Respuesta final"),
-      ]),
-    ]);
-    render(<AssistantBubble />);
-    await openBubble();
-    ask("Algo");
-    await screen.findByText("Respuesta final");
-    expect(screen.queryByText(/se descartan/)).toBeNull();
-  });
-
   it("blocks the input when not configured, or once the month's cap is spent", async () => {
     stubFetch([], { configured: false, spentUsd: 0, budgetUsd: 15 });
     render(<AssistantBubble />);
@@ -193,6 +178,23 @@ describe("AssistantBubble — the conversation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Abrir el asistente" }));
     await screen.findByText("Ya usaste tu cupo de este mes. Se renueva el día 1.");
     expect((screen.getByLabelText("Tu pregunta") as HTMLTextAreaElement).disabled).toBe(true);
+  });
+
+  it("lets a drag in the conversation scroll it instead of pulling to refresh", async () => {
+    stubFetch([]);
+    render(<AssistantBubble />);
+    await openBubble();
+    expect(screen.getByRole("complementary", { name: "Asistente" }).hasAttribute("data-pull-ignore")).toBe(true);
+  });
+
+  it("keeps the input focusable while the month's usage is still loading", async () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+    render(<AssistantBubble />);
+    fireEvent.click(screen.getByRole("button", { name: "Abrir el asistente" }));
+    const input = screen.getByLabelText("Tu pregunta") as HTMLTextAreaElement;
+    expect(input.disabled).toBe(false);
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect((screen.getByRole("button", { name: "Enviar" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("closes on Escape and gives focus back to the bubble", async () => {

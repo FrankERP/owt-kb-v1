@@ -74,9 +74,11 @@ const REF_ID = /^[A-Za-z0-9._:-]+$/;
 /** A pathname: no query, no whitespace, nothing that could break out of the note's one line. */
 const PATH = /^\/[\p{L}\p{N}._~%\/-]*$/u;
 
+// The note's own delimiters are taken out of a label: a song title is written by editors, and one
+// must not be able to close the bracketed note and continue as if the admin were speaking.
 const cleanLabel = (value: unknown): string | null => {
   if (typeof value !== "string") return null;
-  const text = value.replace(/\s+/g, " ").trim();
+  const text = value.replace(/[«»[\]]/g, "").replace(/\s+/g, " ").trim();
   return text && text.length <= ADMIN_CHAT_PAGE_LIMITS.labelChars ? text : null;
 };
 
@@ -262,8 +264,6 @@ export interface AdminChatStatus {
 export type AdminChatEvent =
   | { type: "status"; text: string }
   | { type: "text"; text: string }
-  /** The answer so far is exactly `text`: a fallback replaced the declined model's partial words. */
-  | { type: "rewind"; text: string }
   | { type: "done"; spentUsd: number; budgetUsd: number }
   | { type: "error"; message: string };
 
@@ -283,7 +283,7 @@ export function decodeChatEvents(buffer: string): { events: AdminChatEvent[]; re
     if (!line.trim()) continue;
     try {
       const parsed = JSON.parse(line) as { type?: unknown };
-      if (parsed && (parsed.type === "status" || parsed.type === "text" || parsed.type === "rewind" || parsed.type === "done" || parsed.type === "error")) {
+      if (parsed && (parsed.type === "status" || parsed.type === "text" || parsed.type === "done" || parsed.type === "error")) {
         events.push(parsed as AdminChatEvent);
       }
     } catch {

@@ -130,9 +130,6 @@ export function useAssistantChat(active: boolean): AssistantChat {
                 answer += event.text;
                 setWorking(null);
                 showAnswer();
-              } else if (event.type === "rewind") {
-                answer = event.text;
-                showAnswer();
               } else if (event.type === "status") {
                 setWorking(event.text);
               } else if (event.type === "error") {

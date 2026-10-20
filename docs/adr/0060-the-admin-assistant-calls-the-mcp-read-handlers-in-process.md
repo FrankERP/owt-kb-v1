@@ -65,7 +65,9 @@ function. A client that goes away does not abort the call in flight — the API 
 an aborted call would go uncharged — the route only starts no further call.
 
 Model: Claude Opus 5.5 (Frank's choice) at `effort: "medium"`, with the server-side refusal
-fallback (`fallbacks: "default"`) and automatic prompt caching. Nothing is stored but the spend
+fallback (`fallbacks: "default"`) and automatic prompt caching. A fallback mid-answer CONTINUES
+the declined model's partial text on the same stream (nothing already sent is taken back); of the
+declined part only text is echoed, and only the answering model's tool calls run. Nothing is stored but the spend
 counter: the conversation lives in the browser and is resent, as text only, each turn.
 
 ## Rejected
@@ -104,5 +106,7 @@ counter: the conversation lives in the browser and is resent, as text only, each
 - Fixed-bottom neighbours: the bubble clears the phone tab bar (`--bottom-nav-h`) and the audio
   transport (`--audio-player-h`, which `AudioPlayer` now measures), and publishes
   `--assistant-fab-w` so the song page's «Editar» button steps aside (`bottomNavOffsetSync.test.ts`).
+  The bubble is z-40, under the planner's and the board's full-screen modal overlays (z-50); the
+  open panel is z-[70] and opts out of pull-to-refresh (`data-pull-ignore`).
 - Adding a tool that writes would undo the reason for this design; `adminChatRoute.test.ts` pins
   the five names and that no MCP writer is among them.
