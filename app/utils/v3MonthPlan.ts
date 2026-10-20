@@ -22,6 +22,7 @@ import "server-only";
 
 import type { FairnessLedgerResponse } from "@/app/utils/fairnessVocabulary";
 import { countsForFairnessDefault } from "@/app/utils/countsForFairness";
+import { normalizeMinistries } from "@/app/ministries";
 import { serviceDayKey } from "@/app/utils/serviceReadSelect";
 import { newCreationRequestId } from "@/app/utils/monthDraftCreate";
 import { monthDays, refuseSpecialOn } from "@/app/components/admin/plannerCalendar";
@@ -324,6 +325,9 @@ export async function planV3Month(input: V3MonthPlanInput, deps: V3MonthPlanDeps
     skipSpecialIds: countedSpecialIdsOf(columns),
   });
   const drafts = cellsToDrafts(filled.cells, columns, new Set(), previewDrafts, adminRoles);
+  // M15 narrowed by I5: a super-admin's members read binds `all: true`, so kids-only members
+  // are in it; their unavailability is not worship's to report.
+  const worship = members.filter((mm) => normalizeMinistries(mm.ministries).includes("worship"));
 
   return {
     kind: "success",
@@ -343,7 +347,7 @@ export async function planV3Month(input: V3MonthPlanInput, deps: V3MonthPlanDeps
       unfilled: [...settled.applied.unfilled, ...filled.filled],
       refusedSpecials,
       leftOut,
-      unavailability: buildUnavailabilityNotices(selectedSundays, selectedSaturdays, specials, members),
+      unavailability: buildUnavailabilityNotices(selectedSundays, selectedSaturdays, specials, worship),
       report: settled.report,
       names: settled.names,
       notices: settled.notices,

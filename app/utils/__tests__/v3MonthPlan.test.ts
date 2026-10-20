@@ -216,6 +216,16 @@ describe("success", () => {
     expect(d.readLedger).toHaveBeenCalledWith(["2026-11"]);
   });
 
+  it("reports unavailability for worship members only (M15, I5)", async () => {
+    const kidsOnly = { _id: "m-kid", member_name: "Kiki Paz", ministries: ["kids"], unavailableDates: ["2026-11-01"] };
+    const ana = { ...MEMBERS[0], unavailableDates: ["2026-11-08"] };
+    const members = [ana, ...MEMBERS.slice(1), kidsOnly] as unknown as V3PlanSources["members"];
+    const d = deps({ reads: vi.fn(async () => ({ ok: true as const, value: sources({ members }) })) });
+    const out = await planV3Month(NOV, d);
+    if (out.kind !== "success") throw new Error("expected success");
+    expect(out.plan.unavailability).toEqual([{ name: "Ana", date: "2026-11-08", service: "Dom" }]);
+  });
+
   it("the defaults solve with a null revision", async () => {
     const d = deps({ reads: vi.fn(async () => ({ ok: true as const, value: sources({ rules: { rev: null, config: POOLS } }) })) });
     const out = await planV3Month(NOV, d);
