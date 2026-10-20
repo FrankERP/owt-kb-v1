@@ -32,6 +32,21 @@ export function monthNameCap(month: string): string {
   return n.charAt(0).toUpperCase() + n.slice(1);
 }
 
+/**
+ * The heading of a planned stretch, naming every month in it: «Noviembre 2026», «Noviembre y
+ * diciembre 2026», or «Diciembre 2026 y enero 2027» across a year. The grid uses it for the whole
+ * horizon (a two-month plan headed by its first month alone read as if the second were not in it)
+ * and each calendar for its own month, so the two always spell a month the same way.
+ */
+export function horizonTitle(horizon: readonly string[]): string {
+  const year = (ym: string) => ym.slice(0, 4);
+  const [first, second] = horizon;
+  if (!second) return `${monthNameCap(first)} ${year(first)}`;
+  return year(first) === year(second)
+    ? `${monthNameCap(first)} y ${monthName(second)} ${year(first)}`
+    : `${monthNameCap(first)} ${year(first)} y ${monthName(second)} ${year(second)}`;
+}
+
 export function joinEs(items: readonly string[]): string {
   if (items.length <= 1) return items[0] ?? "";
   return `${items.slice(0, -1).join(", ")} y ${items[items.length - 1]}`;

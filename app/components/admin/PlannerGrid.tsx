@@ -2551,7 +2551,8 @@ function ColumnHeader({
         <span className="font-display text-base leading-none">{day}</span>
         <span className="font-label text-xs uppercase tracking-widest text-mono-500">{month}</span>
       </div>
-      <span className="font-label text-xs uppercase tracking-widest text-mono-500">{typeLabel}</span>
+      {/* `block`: inline, the «Omitir» checkbox below sat glued to the end of «DOMINGO». */}
+      <span className="block font-label text-xs uppercase tracking-widest text-mono-500">{typeLabel}</span>
       {/* E6/E18 — a special is identified by date AND name (`special_role:date:name`),
           and two differently-named specials can share a date. Without the name
           on screen the two columns are indistinguishable, and the header's own
