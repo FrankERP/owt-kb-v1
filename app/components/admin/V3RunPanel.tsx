@@ -17,8 +17,9 @@ export default function V3RunPanel({ report, ruleTable }: { report: V3RunReport;
   return (
     <div data-v3-run="" className="space-y-1">
       <p className="font-body text-xs text-ink-muted">{report.runLine}</p>
+      {/* «Todas las etapas quedaron probadas» is the good outcome: it does not wear the warning colour. */}
       {report.stageSummary.map((line, i) => (
-        <p key={i} className="font-body text-xs text-warning-strong">{line}</p>
+        <p key={i} className={`font-body text-xs ${line === V3_LINES.allProven ? "text-positive-strong" : "text-warning-strong"}`}>{line}</p>
       ))}
       <Button variant="ghost" size="sm" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)}>
         {V3_LINES.seeStages}
