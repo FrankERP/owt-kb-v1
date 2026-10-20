@@ -850,9 +850,13 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
   );
 
   // No filter selected → show upcoming only (default). Months selected → exactly those.
-  const visibleCards = selectedMonths.size === 0
-    ? cards.filter(c => !c.isPast)
-    : cards.filter(c => selectedMonths.has(c.role.date.slice(0, 7)));
+  const visibleCards = useMemo(
+    () => selectedMonths.size === 0
+      ? cards.filter(c => !c.isPast)
+      : cards.filter(c => selectedMonths.has(c.role.date.slice(0, 7))),
+    [cards, selectedMonths],
+  );
+  const visibleRoles = useMemo(() => visibleCards.map(c => c.role), [visibleCards]);
 
   const monthLabel =
     selectedMonths.size === 0 ? "Próximos"
@@ -1231,7 +1235,10 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
               className="ml-auto"
               data-services-overview-opener=""
               onClick={() => setOverviewOpen(true)}
-              disabled={view !== "cards" || visibleCards.length === 0}
+              // Not disabled by an EMPTY filter: a reload that empties it while
+              // the view is open would leave a disabled opener, and focus on the
+              // way out would fall to <body>. The view says «No hay servicios».
+              disabled={view !== "cards"}
             >
               ⛶ Pantalla completa
             </Button>
@@ -1246,9 +1253,15 @@ export default function ServicesPanel({ engine = "v2" }: { engine?: SolverEngine
         </div>
       )}
 
-      {overviewOpen && view === "cards" && (
+      {/*
+        Keyed on `overviewOpen` ALONE: gating it on `view` too would hide it on a
+        failed reload but leave the flag set, and it would pop back up by itself
+        after «Reintentar carga». An empty or failed load reads as «No hay
+        servicios en este filtro.» until the admin closes it.
+      */}
+      {overviewOpen && (
         <ServicesOverview
-          roles={visibleCards.map(c => c.role)}
+          roles={visibleRoles}
           title={monthLabel}
           onClose={closeOverview}
         />

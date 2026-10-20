@@ -10,8 +10,9 @@
 //     several — because the filter is the board's, not a second one.
 //  3. It is read only: opening, reading and closing it issues no request that
 //     is not a GET.
-//  4. It is a real full-screen layer: Escape and the visible button close it,
-//     and focus returns to the button that opened it.
+//  4. It is a real full-screen layer: Escape typed inside it and the visible
+//     button close it (an Escape from a layer above it does not), and focus
+//     returns to the button that opened it.
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -205,7 +206,13 @@ describe("«Pantalla completa» on the Servicios board", () => {
     expect(screen.getByRole("dialog", { name: /pantalla completa/ })).toBeTruthy();
     expect(document.body.style.overflow).toBe("hidden");
 
-    fireEvent.keyDown(document, { key: "Escape" });
+    // Escape from OUTSIDE the layer (a dialog raised above it owns its own) is not ours.
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(screen.getByRole("dialog", { name: /pantalla completa/ })).toBeTruthy();
+
+    // Focus is inside the layer (on its exit button); Escape there closes it.
+    expect(screen.getByRole("dialog", { name: /pantalla completa/ }).contains(document.activeElement)).toBe(true);
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
     await waitFor(() => expect(screen.queryByRole("dialog", { name: /pantalla completa/ })).toBeNull());
     expect(document.body.style.overflow).toBe("");
     expect(document.activeElement).toBe(screen.getByRole("button", { name: /Pantalla completa/ }));

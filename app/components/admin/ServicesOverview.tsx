@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "@/app/utils/useFocusTrap";
+import Button from "@/app/components/ui/Button";
 import { buildServicesOverview } from "./servicesOverviewModel";
 import { CARD_STYLE, type ServiceRole } from "./serviceCardModel";
 
@@ -59,6 +60,10 @@ export default function ServicesOverview({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
+      // Only an Escape typed INSIDE this layer. A `CueDialog` raised above it
+      // (an async «Limpiar mes» outcome, say) traps focus in itself and owns its
+      // own Escape; closing the view underneath it would be the wrong layer.
+      if (!(event.target instanceof Node) || !overlayRef.current?.contains(event.target)) return;
       event.preventDefault();
       event.stopPropagation();
       onCloseRef.current();
@@ -110,13 +115,9 @@ export default function ServicesOverview({
             {model.columns.length} servicio{model.columns.length === 1 ? "" : "s"} · solo lectura
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="min-h-[44px] rounded-lg border border-accent/20 px-3 font-label text-xs uppercase tracking-widest hover:border-accent"
-        >
+        <Button variant="secondary" size="sm" className="min-h-[44px]" onClick={onClose}>
           Salir de pantalla completa (Esc)
-        </button>
+        </Button>
       </div>
 
       {model.columns.length === 0 ? (

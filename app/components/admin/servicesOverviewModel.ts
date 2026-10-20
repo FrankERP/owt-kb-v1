@@ -74,7 +74,11 @@ export function buildServicesOverview(roles: readonly ServiceRole[]): ServicesOv
     cells.set(key(columnId, rowId), list);
   };
   // A stored instrument/FOH label the default rows do not carry (a "Sax", a
-  // second console role) gets its own row, exactly as the month editor adds it.
+  // second console role) gets its own row, as in the month editor. One
+  // difference, harmless for reading: labels go through `normalizeSeatName`, so
+  // a stored "bass" lands on the «Bass» row, where the editor (exact
+  // `normalizeLabel`) would show a second «bass» row. And a Saturday keeps no
+  // Coro row even if a stray `Chorus` was stored on one — `rowAppliesTo`.
   const extraRow = (def: { id: string; label: string; category: GridRow["category"] }) => {
     if (rowIds.has(def.id)) return;
     rows.push({ id: def.id, label: def.label, category: def.category, target: 1 });
