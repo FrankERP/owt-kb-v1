@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   V3_CAP_REFUSAL, V3_CONFIRM_REFUSAL, V3_LINES, V3_RESOLVER_ISSUE, V3_RESOLVER_REFUSAL, V3_ROUTE_COPY,
-  datesList, lineLabel, missedLine, monthName, monthNameCap, monthsList, noticeLine, refusalLine, stageLabel,
+  datesList, horizonTitle, lineLabel, missedLine, monthName, monthNameCap, monthsList, noticeLine, refusalLine, stageLabel,
   transportLine, violationLine, type V3Names,
 } from "../v3Copy";
 
@@ -106,5 +106,13 @@ describe("C6's own lines", () => {
     expect(V3_CONFIRM_REFUSAL.month_has_services("2026-11"))
       .toBe("Se guardaron servicios en noviembre mientras planeabas, así que su registro ya no se puede reemplazar. No se creó nada; vuelve a correr Auto.");
     expect(V3_CONFIRM_REFUSAL.engine_not_v3("2026-11")).toBe("El solver cambió de versión. Recarga la página; no se creó nada.");
+  });
+});
+
+describe("horizonTitle — the grid's heading names every planned month", () => {
+  it("one month, two in one year, and two across a year end", () => {
+    expect(horizonTitle(["2026-11"])).toBe("Noviembre 2026");
+    expect(horizonTitle(["2026-11", "2026-12"])).toBe("Noviembre y diciembre 2026");
+    expect(horizonTitle(["2026-12", "2027-01"])).toBe("Diciembre 2026 y enero 2027");
   });
 });

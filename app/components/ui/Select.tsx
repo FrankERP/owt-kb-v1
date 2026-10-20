@@ -59,6 +59,19 @@ function subscribeFine(onChange: () => void) {
 const fineSnapshot = () => mql()?.matches ?? false;
 const fineServerSnapshot = () => false;
 
+/** True on a mouse/trackpad: the pointer test `Select` uses to pick the house menu over the OS one. */
+export function useFinePointer(): boolean {
+  return useSyncExternalStore(subscribeFine, fineSnapshot, fineServerSnapshot);
+}
+
+/**
+ * The native control's classes — what `Select` paints on a touch screen — for a sibling text field
+ * that must sit beside one and look the same (the planner's «Año» beside «Mes»).
+ */
+export function nativeControlClass(size: keyof typeof SIZE): string {
+  return `${CHROME} ${SIZE[size]}`;
+}
+
 // `popover` is Omitted, not just shadowed: React's own `popover` attribute is
 // `"" | "auto" | "manual"`, and an intersection with `boolean` collapses to
 // `undefined` — the prop would type-check as unusable. No consumer puts the HTML
@@ -110,7 +123,7 @@ function Chevron({ className }: { className: string }) {
 
 export default function Select({ label, size = "md", className = "", popover = true, children, ...select }: Props) {
   const nativeRef = useRef<HTMLSelectElement | null>(null);
-  const fine = useSyncExternalStore(subscribeFine, fineSnapshot, fineServerSnapshot) && popover;
+  const fine = useFinePointer() && popover;
   // The value the native element actually carries, for the UNCONTROLLED case; a
   // controlled consumer's `value` prop wins over it below.
   const [live, setLive] = useState<string | null>(null);
@@ -169,7 +182,7 @@ export default function Select({ label, size = "md", className = "", popover = t
     </label>
   ) : null;
 
-  const nativeClass = `${CHROME} ${SIZE[size]}`;
+  const nativeClass = nativeControlClass(size);
 
   if (!popover || !fine) {
     return (

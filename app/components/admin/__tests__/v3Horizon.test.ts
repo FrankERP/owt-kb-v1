@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  HORIZON_MONTHS_AHEAD, cdmxCurrentMonth, cdmxTodayIso, horizonMonths, horizonRefusal, horizonTitle, monthOfDate,
+  HORIZON_MONTHS_AHEAD, cdmxCurrentMonth, cdmxTodayIso, horizonMonths, horizonRefusal, monthOfDate,
   monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth,
 } from "../v3Horizon";
 
@@ -11,14 +11,6 @@ describe("horizonMonths (HZ-2)", () => {
   it("is the first month, or the first two consecutive months — across a year end too", () => {
     expect(horizonMonths("2026-11", 1)).toEqual(["2026-11"]);
     expect(horizonMonths("2026-12", 2)).toEqual(["2026-12", "2027-01"]);
-  });
-});
-
-describe("horizonTitle — the grid's heading names every planned month", () => {
-  it("one month, two in one year, and two across a year end", () => {
-    expect(horizonTitle(["2026-11"])).toBe("Noviembre 2026");
-    expect(horizonTitle(["2026-11", "2026-12"])).toBe("Noviembre y diciembre 2026");
-    expect(horizonTitle(["2026-12", "2027-01"])).toBe("Diciembre 2026 y enero 2027");
   });
 });
 

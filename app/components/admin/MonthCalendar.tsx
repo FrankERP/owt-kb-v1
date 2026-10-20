@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { draftTargetKey } from "./plannerModel";
+import { horizonTitle } from "./v3Copy";
 import Select from "@/app/components/ui/Select";
 import { FairnessEngineNote, FairnessSwitch } from "./FairnessSwitch";
 import type { SolverEngine } from "./solverEngine";
@@ -320,7 +321,7 @@ export default function MonthCalendar({
         The section label and its instructions are the planner's, said once above the stack.
       */}
       <h3 className="font-label text-xs uppercase tracking-widest text-accent">
-        {noon(`${year}-${String(month).padStart(2, "0")}-01`).toLocaleDateString("es-MX", { month: "long", year: "numeric" })}
+        {horizonTitle([`${year}-${String(month).padStart(2, "0")}`])}
       </h3>
 
       <div className="grid grid-cols-7 gap-1">

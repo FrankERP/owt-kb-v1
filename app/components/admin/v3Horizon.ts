@@ -19,26 +19,6 @@ export function horizonMonths(first: string, length: HorizonLength): string[] {
   return length === 2 ? [first, shiftMonth(first, 1)] : [first];
 }
 
-const MONTH_NAMES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-];
-
-/**
- * The planner grid's heading, naming every month of the horizon: «Noviembre 2026», «Noviembre y
- * diciembre 2026», or «Diciembre 2026 y enero 2027» across a year. A two-month plan headed by its
- * first month alone read as if the second were not in it.
- */
-export function horizonTitle(horizon: readonly string[]): string {
-  const name = (ym: string) => MONTH_NAMES[Number(ym.slice(5, 7)) - 1];
-  const year = (ym: string) => ym.slice(0, 4);
-  const [first, second] = horizon;
-  if (!second) return `${name(first)} ${year(first)}`;
-  return year(first) === year(second)
-    ? `${name(first)} y ${name(second).toLowerCase()} ${year(first)}`
-    : `${name(first)} ${year(first)} y ${name(second).toLowerCase()} ${year(second)}`;
-}
-
 /** HZ-3: a date's month is its own `YYYY-MM` prefix — never through a `Date`. */
 export function monthOfDate(date: string): string {
   return date.slice(0, 7);

@@ -71,7 +71,7 @@ import CueDialog from "@/app/components/ui/CueDialog";
 import Skeleton, { SkeletonGroup } from "@/app/components/ui/Skeleton";
 import Checkbox from "@/app/components/ui/Checkbox";
 import DateField from "@/app/components/ui/DateField";
-import Select from "@/app/components/ui/Select";
+import Select, { nativeControlClass, useFinePointer } from "@/app/components/ui/Select";
 import SegmentedControl from "@/app/components/ui/SegmentedControl";
 import {
   CADENCE_OUTSIDE_HEADING,
@@ -135,8 +135,8 @@ import {
   type StoredGridColumn,
   type StoredGridTranslation,
 } from "./storedRoleReadModel";
-import { cdmxCurrentMonth, horizonMonths, horizonTitle, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
-import { monthNameCap, monthsList, V3_LINES, V3_ROUTE_COPY, transportLine, type V3Names } from "./v3Copy";
+import { cdmxCurrentMonth, horizonMonths, monthsEntering, participationMonthsOf, retainInHorizon, weekendDatesOfMonth, type HorizonLength } from "./v3Horizon";
+import { horizonTitle, monthNameCap, monthsList, V3_LINES, V3_ROUTE_COPY, transportLine, type V3Names } from "./v3Copy";
 import { runV3Auto, type V3AutoResult } from "./v3AutoRun";
 import { buildV3SolveRequest, preReadRefusals } from "./v3SolveRequest";
 import { applyV3Assignments, v3OutcomeLine, v3RetryOffered } from "./v3SolveResponse";
@@ -2628,10 +2628,14 @@ export default function MonthGenerator({
     });
   }
 
-  const inCls  = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-sm focus:outline-none focus:border-accent transition-colors";
-  // Matches `Select`'s `lg` trigger (the house secondary `Button`) beside it. 16 px on a phone: iOS
-  // zooms into any focused field under 16 px and never zooms back.
-  const yearCls = "min-h-[44px] w-full rounded-lg border border-surface-accent-30 bg-transparent px-4 font-label text-[16px] sm:text-xs uppercase tracking-widest text-ink focus:outline-none focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 transition-[border-color,box-shadow]";
+  const inCls  = "w-full px-3 py-2 rounded-lg border border-accent/20 bg-transparent font-body text-[16px] sm:text-sm focus:outline-none focus:border-accent transition-colors";
+  // «Año» wears whatever «Mes» beside it wears. With a mouse, `Select` is the house menu, so the year
+  // copies its `lg` trigger (the secondary `Button`); on a touch screen `Select` is the native control
+  // (16 px, so iOS never zooms in), and the year takes those same classes.
+  const finePointer = useFinePointer();
+  const yearCls = finePointer
+    ? "min-h-[44px] w-full rounded-lg border border-surface-accent-30 bg-transparent px-4 font-label text-xs uppercase tracking-widest text-ink focus:outline-none focus:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 transition-[border-color,box-shadow]"
+    : nativeControlClass("lg");
 
   // Unconditional (D9/E21): the solve always addresses the full month's
   // Sundays — only RENDERING/CREATION is gated by `columns` below.
