@@ -374,4 +374,10 @@ export const ADMIN_TAB_ICON: Record<AdminTabId, React.ReactNode> = {
       <circle cx="18" cy="16" r="3" />
     </svg>
   ),
+  assistant: (
+    <svg {...ICON_PROPS}>
+      <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
+      <path d="M9 11h.01M13 11h.01M17 11h.01" />
+    </svg>
+  ),
 };

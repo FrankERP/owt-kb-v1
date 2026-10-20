@@ -378,6 +378,16 @@ several exist precisely to stop a plausible-looking change.
   everything after authorization to `app/utils/*Commit.ts`; `serviceCommitCallers.test.ts` pins
   their callers and `publishVerdict`'s; MCP writes go only through them; `/api/mcp` buffers SSE so
   a tool finishes inside the handler.**
+- **The admin assistant (`/api/admin/chat`, `AssistantPanel`) is READ-ONLY** (ADR-0059). Access:
+  `super-admin`, or `admin` with the `worship` ministry (`canUseAdminChat`), from the live access
+  snapshot, never while impersonating — the spend would land on someone else. Its five tools call
+  the MCP read handlers in process (`adminChatServer.ts`); do not give it a write tool, and do not
+  route it through `/api/mcp` (super-admin OAuth, write tools on the same server). Requests are
+  plain text only, so a client cannot forge a tool result or a system turn. Spend is priced from the
+  API's own token counts (`costMicroUsd`; an unknown model is charged at the dearer Opus 5 rate) and
+  capped at `ADMIN_CHAT_MONTHLY_BUDGET_USD` per admin per CDMX month in the dotted, tokened
+  `adminChatUsage.<memberId>.<YYYY-MM>`; a failed read refuses the question, never reads as zero.
+  `ANTHROPIC_API_KEY` is set by Frank in Vercel only (`docs/SECRETS.md`).
 
 ## Reusable utils (don't reinvent)
 `normalizeText` (accent-insensitive search), `assignedMemberRefsQuery`,

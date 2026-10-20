@@ -581,6 +581,12 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   message, which can hold the request URL and member ids. No notification, no revalidation, and
   never a delete.
 
+### Assistant (ADR-0059) — narrower than this section's header
+
+| Route | Methods | Notes |
+|-------|---------|-------|
+| `/api/admin/chat` | GET, POST | **Who:** an active session, not impersonating, whose stored access passes `canUseAdminChat` (`app/utils/adminChat.ts`): `super-admin`, or `admin` with the `worship` ministry. A content-editor, a member and a kids-only admin get `403` («El asistente es solo para los admins del equipo de alabanza.»); an impersonating super-admin gets `403` too, so the spend is never charged to someone else. **GET** → `{configured, spentUsd, budgetUsd}` (`no-store`); `configured` is false without `ANTHROPIC_API_KEY` or without both Sanity tokens; a failed spend read is `503`, never a zero. **POST** `{messages: [{role, text}]}` — plain text only, alternating, starting and ending with `user`, ≤40 messages, ≤4 000 chars each, ≤60 000 in all (`parseChatRequest`), else `400`; not configured → `503`; month's spend ≥ the cap (`ADMIN_CHAT_MONTHLY_BUDGET_USD`, 15 USD per admin per CDMX month) → `429`. Otherwise `200` `application/x-ndjson`: `status` / `text` / `error` lines and one final `done {spentUsd, budgetUsd}` (`encodeChatEvent`/`decodeChatEvents`). The route runs the model (`claude-opus-5-5`, server-side fallback) in a manual tool loop of at most six calls over five **read-only** tools that call the MCP read handlers in process (`app/utils/adminChatServer.ts`), and records the answer's cost in `adminChatUsage.<memberId>.<YYYY-MM>` (`createIfNotExists` + `inc`) in `finally`, failed answers included. No revalidation (nothing public changes). `maxDuration=120`. |
+
 ---
 
 ## Cron / Webhook
@@ -633,7 +639,7 @@ empty "clean" result**. `memberVisibleCount` appears on roles only — setlist d
   as a non-editable `targetState`, `/api/song/[id]` and `/api/me/songs` drop it from play
   history, and `notifyProposalSubmitted` sends nothing.
 - **Protected mutations have no alternate path:** the API routes above are the only writers. The
-  embedded Studio strips every mutating action from all seventeen protected types, and the seven historical
+  embedded Studio strips every mutating action from all eighteen protected types, and the seven historical
   one-shot scripts fail closed before constructing a client — see
   [DATA_MODEL → Studio](DATA_MODEL.md#studio) and
   [SOLVER_AND_INFRA §3](SOLVER_AND_INFRA.md#3-scripts--one-off-migrations-imports--ops).

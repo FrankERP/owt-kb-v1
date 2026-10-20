@@ -1,0 +1,185 @@
+// The admin assistant's shared contract (ADR-0059): who may use it, what a request may carry,
+// what one answer costs, and the line-delimited events the route streams back. NEUTRAL — no
+// `server-only`, no Sanity, no SDK import — because the /admin panel parses the same events the
+// route writes, and the route and its tests validate the same request shape.
+//
+// The money rules live here so one place says what a question costs. Every answer's cost is
+// computed from the API's own `usage` and summed per admin per CDMX month
+// (`adminChatUsage.<memberId>.<YYYY-MM>`); an admin at the cap is refused before any API call.
+
+/** The one model the assistant runs (Frank, 2026-10-20: «Sí, con Opus 5.5»). */
+export const ADMIN_CHAT_MODEL = "claude-opus-5-5";
+
+/** Each admin's monthly spend cap, in USD. The Console workspace limit is the hard cap above it. */
+export const ADMIN_CHAT_MONTHLY_BUDGET_USD = 15;
+
+/** Request limits: a conversation is resent whole on every turn, so these bound one call's input. */
+export const ADMIN_CHAT_LIMITS = {
+  maxMessages: 40,
+  maxMessageChars: 4_000,
+  maxTotalChars: 60_000,
+} as const;
+
+export type AdminChatRole = "user" | "assistant";
+export interface AdminChatMessage {
+  role: AdminChatRole;
+  text: string;
+}
+
+/**
+ * Who may open the assistant: an `admin` or `super-admin` of the worship ministry. A super-admin
+ * spans every ministry; a plain `admin` must belong to worship (absent `ministries` already
+ * normalizes to worship upstream). `content-editor` is deliberately out (Frank: «solo los admins»).
+ */
+export function canUseAdminChat(access: { role: string | null | undefined; ministries: readonly string[] }): boolean {
+  if (access.role === "super-admin") return true;
+  return access.role === "admin" && access.ministries.includes("worship");
+}
+
+export type ChatRequestParse =
+  | { ok: true; messages: AdminChatMessage[] }
+  | { ok: false; error: string };
+
+/**
+ * The request body is `{ messages: [{ role, text }] }`: the conversation so far, oldest first,
+ * alternating, starting and ending with the user. Only text crosses the wire — the route never
+ * accepts tool results, system text or any block a client could forge.
+ */
+export function parseChatRequest(body: unknown): ChatRequestParse {
+  if (typeof body !== "object" || body === null || !Array.isArray((body as { messages?: unknown }).messages)) {
+    return { ok: false, error: "Falta la conversación." };
+  }
+  const raw = (body as { messages: unknown[] }).messages;
+  if (raw.length === 0) return { ok: false, error: "Falta la pregunta." };
+  if (raw.length > ADMIN_CHAT_LIMITS.maxMessages) {
+    return { ok: false, error: "La conversación es demasiado larga. Empieza una nueva." };
+  }
+  const messages: AdminChatMessage[] = [];
+  let total = 0;
+  for (let i = 0; i < raw.length; i++) {
+    const item = raw[i];
+    const expected: AdminChatRole = i % 2 === 0 ? "user" : "assistant";
+    if (typeof item !== "object" || item === null) return { ok: false, error: "Mensaje inválido." };
+    const { role, text } = item as { role?: unknown; text?: unknown };
+    if (role !== expected || typeof text !== "string") return { ok: false, error: "Mensaje inválido." };
+    const trimmed = text.trim();
+    if (trimmed.length === 0) return { ok: false, error: "Hay un mensaje vacío." };
+    if (trimmed.length > ADMIN_CHAT_LIMITS.maxMessageChars) {
+      return { ok: false, error: `Cada mensaje puede tener hasta ${ADMIN_CHAT_LIMITS.maxMessageChars} caracteres.` };
+    }
+    total += trimmed.length;
+    messages.push({ role: expected, text: trimmed });
+  }
+  if (messages[messages.length - 1]!.role !== "user") return { ok: false, error: "Falta la pregunta." };
+  if (total > ADMIN_CHAT_LIMITS.maxTotalChars) {
+    return { ok: false, error: "La conversación es demasiado larga. Empieza una nueva." };
+  }
+  return { ok: true, messages };
+}
+
+/** USD per million tokens. Cache writes are the 5-minute kind (1.25 × input). */
+interface ModelPrice {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
+const OPUS_5_PRICE: ModelPrice = { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 };
+
+const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = {
+  "claude-opus-5-5": { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5 },
+  "claude-opus-5": OPUS_5_PRICE,
+  "claude-opus-4-8": OPUS_5_PRICE,
+};
+
+export interface ChatUsage {
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+}
+
+const count = (n: number | null | undefined): number => (typeof n === "number" && Number.isFinite(n) && n > 0 ? n : 0);
+
+/**
+ * What one API response cost, in micro-USD (USD × 10⁶), rounded up. A token at P USD per million
+ * costs exactly P micro-USD, so the sum stays an integer the usage document can `inc`. A model
+ * this table does not know — a refusal fallback the API chose — is charged at Opus 5's rates, the
+ * dearest a default fallback can land on, so an unknown model never undercounts.
+ */
+export function costMicroUsd(model: string, usage: ChatUsage): number {
+  const price = MODEL_PRICES[model] ?? OPUS_5_PRICE;
+  const micro =
+    count(usage.input_tokens) * price.input +
+    count(usage.output_tokens) * price.output +
+    count(usage.cache_read_input_tokens) * price.cacheRead +
+    count(usage.cache_creation_input_tokens) * price.cacheWrite;
+  return Math.ceil(micro);
+}
+
+export const MICRO_PER_USD = 1_000_000;
+
+export function budgetMicroUsd(): number {
+  return ADMIN_CHAT_MONTHLY_BUDGET_USD * MICRO_PER_USD;
+}
+
+/** The CDMX calendar month a spend belongs to, `YYYY-MM`. */
+export function chatMonthKey(now: Date = new Date()): string {
+  return now.toLocaleDateString("sv", { timeZone: "America/Mexico_City" }).slice(0, 7);
+}
+
+/** Dotted, so an untokened read never serves it. */
+export function adminChatUsageDocId(memberId: string, month: string): string {
+  return `adminChatUsage.${memberId}.${month}`;
+}
+
+/** A stored micro-USD counter, or null when it is not a non-negative integer. */
+export function parseStoredMicroUsd(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+/** The status the panel shows before any question: is it set up, and how much is left. */
+export interface AdminChatStatus {
+  configured: boolean;
+  spentUsd: number;
+  budgetUsd: number;
+}
+
+/** One line of the streamed answer. */
+export type AdminChatEvent =
+  | { type: "status"; text: string }
+  | { type: "text"; text: string }
+  | { type: "done"; spentUsd: number; budgetUsd: number }
+  | { type: "error"; message: string };
+
+export function encodeChatEvent(event: AdminChatEvent): string {
+  return `${JSON.stringify(event)}\n`;
+}
+
+/**
+ * Splits a buffered chunk of the stream into whole events and the unfinished tail. A line that is
+ * not a known event is skipped rather than thrown on: the panel must never die on one bad line.
+ */
+export function decodeChatEvents(buffer: string): { events: AdminChatEvent[]; rest: string } {
+  const lines = buffer.split("\n");
+  const rest = lines.pop() ?? "";
+  const events: AdminChatEvent[] = [];
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const parsed = JSON.parse(line) as { type?: unknown };
+      if (parsed && (parsed.type === "status" || parsed.type === "text" || parsed.type === "done" || parsed.type === "error")) {
+        events.push(parsed as AdminChatEvent);
+      }
+    } catch {
+      // A malformed line is dropped; the next one still parses.
+    }
+  }
+  return { events, rest };
+}
+
+/** USD with two decimals, for the panel's «cupo» line. */
+export function roundUsd(micro: number): number {
+  return Math.round(micro / 10_000) / 100;
+}

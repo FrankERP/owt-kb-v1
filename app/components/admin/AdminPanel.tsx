@@ -39,6 +39,7 @@ const ContentPanel = dynamic(() => import("./ContentPanel"), { ssr: false, loadi
 const AvailabilityPanel = dynamic(() => import("./AvailabilityPanel"), { ssr: false, loading: PanelSkeleton });
 const ProposalsPanel = dynamic(() => import("./ProposalsPanel"), { ssr: false, loading: PanelSkeleton });
 const MembersPanel = dynamic(() => import("./MembersPanel"), { ssr: false, loading: PanelSkeleton });
+const AssistantPanel = dynamic(() => import("./AssistantPanel"), { ssr: false, loading: PanelSkeleton });
 
 type OWTRole = "super-admin" | "admin" | "content-editor" | "member";
 
@@ -259,6 +260,12 @@ export default function AdminPanel({
         return (
           <PanelBoundary>
             <ContentPanel canDelete={role === "super-admin" || role === "admin"} />
+          </PanelBoundary>
+        );
+      case "assistant":
+        return (
+          <PanelBoundary>
+            <AssistantPanel />
           </PanelBoundary>
         );
       default:
